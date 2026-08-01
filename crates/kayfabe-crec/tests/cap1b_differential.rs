@@ -304,12 +304,53 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         .filter_map(|(_, c)| control_cmd(c).and_then(WantedTable::from_cmd))
         .collect();
     let universe = WantedTable::ALL.iter().copied().collect::<BTreeSet<_>>();
-    assert_eq!(
-        reached, universe,
-        "a served control the differential never sees is a served control no differential \
-         can regress"
+
+    // ★★★ **The exception set, and it is an admission rather than a narrowing.**
+    //
+    // `cap1b`'s closure limit falls at `rpc.sequence` 51, in the MIDDLE of
+    // `kgraphicsLoadStaticInfo_KERNEL`'s straight-line run of controls: the oracle asks
+    // `0x20800a1f` (seq 49) and `0x20800a26` (seq 51) inside the limit and then the replay
+    // stops, so `0x20800a22`, `0x20800a3d` and `0x20800a48` — the same function's next
+    // three mandatory controls — are unreachable by this capture. ⊘ No editing of this test
+    // can change that; only a longer capture can.
+    //
+    // ⚠ **They are not uncovered, they are covered by a DIFFERENT artifact.** All three are
+    // byte-compared against the C's captured GA106 init-control table in
+    // `kayfabe-abi/tests/gr_static_info.rs`, which is a different recording of the same
+    // real hardware. What they lack is *reply-plane* coverage — nothing checks that this
+    // port's answer reaches the guest's queue in the right envelope — and that is a real
+    // gap, stated rather than closed.
+    //
+    // ★ Pinned as an exact set, so adding a served control silently to it is a red test in
+    // the same way shortening the universe would be.
+    let outside_the_closure_limit: BTreeSet<WantedTable> = [
+        WantedTable::GrGlobalSmOrder,
+        WantedTable::GrFecsRecordSize,
+        WantedTable::GrPdbProperties,
+    ]
+    .into_iter()
+    .collect();
+    assert!(
+        outside_the_closure_limit.is_subset(&universe),
+        "an exception for a control this port does not serve is an exception for nothing"
     );
-    assert_eq!(universe.len(), 14, "non-vacuity: the universe is not empty");
+    assert_eq!(
+        reached,
+        universe
+            .difference(&outside_the_closure_limit)
+            .copied()
+            .collect::<BTreeSet<_>>(),
+        "a served control the differential never sees — and that is not named above as \
+         being past the capture's closure limit — is a served control no differential can \
+         regress"
+    );
+    assert_eq!(universe.len(), 20, "non-vacuity: the universe is not empty");
+    assert_eq!(
+        outside_the_closure_limit.len(),
+        3,
+        "non-vacuity in the other direction: the exception set is SMALL, and every entry \
+         costs reply-plane coverage"
+    );
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.
@@ -389,19 +430,35 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
         .filter(|c| WantedTable::from_cmd(**c).is_some())
         .map(|c| format!("{c:#010x}"))
         .collect();
-    assert_eq!(served_here.len(), 14);
+    // ⚠ 14 -> 17: `0x20800a9f` (seq 45), `0x20800a1f` (seq 49) and `0x20800a26` (seq 51)
+    // crossed from triaged to served at the state-load rung. Their three siblings in the
+    // same GR run — `0x20800a22`, `0x20800a3d`, `0x20800a48` — are served too but fall
+    // PAST this capture's closure limit, so they cannot appear in `asked`.
+    assert_eq!(served_here.len(), 17);
     let triaged_here: Vec<&str> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_none())
         .map(|c| triage_for(*c).expect("accounted for above").engine)
         .collect();
-    assert_eq!(triaged_here.len(), 14);
+    // ⚠ 14 -> 11, the mirror of the three above. The sum is unchanged, which is the point:
+    // this pair partitions the SAME asked set, so a control cannot leave one without
+    // entering the other.
+    assert_eq!(triaged_here.len(), 11);
 
     // ⊘ A control the oracle asks may not be triaged `AmputationIntended`: that disposition
     // means "the chip lacks the engine", and the oracle's board demonstrably had it.
     // `0x20800a87` (NVLink) and `0x2080017e` (VMMU) are the two exceptions the argument
     // itself names — the caller tolerates the status by hand in both — and they are listed
     // rather than exempted by a predicate, so a third would be red.
+    //
+    // ⚠ And a third IS here now: `0x20800a2a` (GR info), added at the state-load rung. It
+    // qualifies under the SECOND clause of `AmputationIntended`'s own definition — "the
+    // caller's own tolerance of the status" — because `kgraphicsLoadStaticInfo` takes it
+    // into a bare `if (status == NV_OK)` with no `else` arm (`ogkm-580:
+    // kernel_graphics.c:1228-1248`). ⊘ It is NOT `RefusalIsInvisible`: the oracle's board
+    // answered it with 3712 real bytes, so refusing leaves `pGrInfo` NULL where a real GSP
+    // left it populated, and that difference is visible to anything that later reads it.
+    // The list grew by one **with an argument**, which is the only way it may grow.
     let intended: Vec<String> = asked
         .iter()
         .filter(|c| {
@@ -409,7 +466,7 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
         })
         .map(|c| format!("{c:#010x}"))
         .collect();
-    assert_eq!(intended, vec!["0x2080017e", "0x20800a87"]);
+    assert_eq!(intended, vec!["0x2080017e", "0x20800a2a", "0x20800a87"]);
 }
 
 #[test]
@@ -525,6 +582,15 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             // `confComputeStatePostLoad_IMPL` rather than `StateInitLocked`.
             (WantedTable::FifoNumChannels, 34, 76, 0),
             (WantedTable::ConfComputeStaticInfo, 44, 76, 0),
+            // ★★★ The three the state-load rung added, and the reason this list is
+            // itemised rather than counted: seq 45 is the page-table PUBLICATION
+            // (`0x20800a9f`) — the only entry here whose reply is a function of the request
+            // rather than of the chip — and 49/51 are GR's caps and floorsweeping masks.
+            // ⊘ Seq 50 (`0x20800a2a`, GR info) is deliberately absent: it is asked between
+            // them and refused, which is why this list is not a contiguous run.
+            (WantedTable::GvaspaceServerReservedPdes, 45, 76, 0),
+            (WantedTable::GrCaps, 49, 76, 0),
+            (WantedTable::GrFloorsweepingMasks, 51, 76, 0),
         ]
     );
 }

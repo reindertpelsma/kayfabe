@@ -41,10 +41,14 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
         .iter()
         .filter(|c| c.disposition.must_be_served())
         .collect();
+    // ⚠ 5 -> 11 at the state-load rung. Five of the six new members are GR's mandatory
+    // static-info controls; the sixth is `0x20800a9f`, which MOVED here out of
+    // `RefusalHalts` because the gmmu1 boot showed `gpuStatePostLoad` swallows its status.
+    // ⊘ The count is not the point — the membership below is. See `sweep.rs`.
     assert_eq!(
         must.len(),
-        5,
-        "three unsurvivable amputations and two silent fail-opens"
+        11,
+        "eight unsurvivable amputations and three silent fail-opens"
     );
     let cmds: Vec<u32> = must.iter().map(|c| c.cmd).collect();
     assert_eq!(
@@ -54,7 +58,13 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             0x2080_0a1c,
             0x2080_0af3,
             0x2080_0aac,
-            0x2080_0a59
+            0x2080_0a59,
+            0x2080_0a9f,
+            0x2080_0a1f,
+            0x2080_0a26,
+            0x2080_0a22,
+            0x2080_0a3d,
+            0x2080_0a48,
         ]
     );
     let engines: Vec<&str> = must.iter().map(|c| c.engine).collect();
@@ -65,7 +75,13 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             "KernelMemorySystem",
             "ConfidentialCompute",
             "KernelBif",
-            "KernelGmmu"
+            "KernelGmmu",
+            "OBJGVASPACE",
+            "KernelGraphics",
+            "KernelGraphics",
+            "KernelGraphics",
+            "KernelGraphics",
+            "KernelGraphics",
         ]
     );
     for cmd in cmds {
@@ -77,9 +93,16 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
 }
 
 #[test]
-fn the_unsurvivable_class_still_names_the_three_measured_crashes() {
-    // ★ The class the two named boots produced, kept separately from the fail-open class
-    // so that widening the second cannot quietly shrink the first.
+fn the_unsurvivable_class_still_names_the_measured_crashes() {
+    // ★ The class the named boots produced, kept separately from the fail-open class so
+    // that widening the second cannot quietly shrink the first.
+    //
+    // ⚠ 3 -> 8 at the state-load rung, and the five new ones are ONE crash rather than
+    // five: `gmmu1` at `12b001f` failed `RmInitAdapter (0x25:0x40:1249)` because GR's
+    // static info was NULL, and all five of `kgraphicsLoadStaticInfo_KERNEL`'s
+    // `NV_CHECK_OK_OR_GOTO(cleanup)` controls reach that same `cleanup:` label. They are
+    // listed separately because each is separately refusable, not because each was
+    // separately measured — only `0x20800a1f`, the first, was ever the one that fired.
     let unsurvivable: Vec<u32> = SWEEP_TRIAGE
         .iter()
         .filter(|c| c.disposition == SweepDisposition::AmputationUnsurvivable)
@@ -87,8 +110,18 @@ fn the_unsurvivable_class_still_names_the_three_measured_crashes() {
         .collect();
     assert_eq!(
         unsurvivable,
-        vec![0x2080_0a40, 0x2080_0a1c, 0x2080_0a59],
-        "t135a's KernelFifo, t134a's KernelMemorySystem, and KernelGmmu's freed pStaticInfo"
+        vec![
+            0x2080_0a40,
+            0x2080_0a1c,
+            0x2080_0a59,
+            0x2080_0a1f,
+            0x2080_0a26,
+            0x2080_0a22,
+            0x2080_0a3d,
+            0x2080_0a48,
+        ],
+        "t135a's KernelFifo, t134a's KernelMemorySystem, KernelGmmu's freed pStaticInfo, \
+         and gmmu1's five GR static-info controls"
     );
 }
 
@@ -99,7 +132,7 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
     //
     // ⊘ The order is the oracle's own `rpc.sequence` order, so a reader can line this list
     // up against `cargo run -p kayfabe-crec --example cap1b_report` directly.
-    assert_eq!(SWEEP_TRIAGE.len(), 23, "the triaged universe's size");
+    assert_eq!(SWEEP_TRIAGE.len(), 31, "the triaged universe's size");
     let cmds: Vec<u32> = SWEEP_TRIAGE.iter().map(|c| c.cmd).collect();
     assert_eq!(
         cmds,
@@ -123,9 +156,21 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
             0x2080_2a0d, // seq 41  KernelCE — PCE/LCE mappings
             0x2080_017e, // seq 43  VMMU segment size
             0x2080_0a9f, // seq 45  GVASPACE reserved PDEs
-            0x2080_0a1f, // seq 49  KernelGraphics — caps
+            0x2080_0a1f, // seq 49  KernelGraphics — caps                   SERVED
             0x2080_0a2a, // seq 50  KernelGraphics — info
-            0x2080_0a26, // seq 51  KernelGraphics — floorsweeping
+            0x2080_0a26, // seq 51  KernelGraphics — floorsweeping           SERVED
+            // ── past the oracle's closure limit: gpuStateLoad's own GR static-info run.
+            // ⊘ These are NOT in cap1b and so have no reply-plane coverage from it; their
+            // corroboration is the C's captured init-control table instead, which is a
+            // different artifact of the same real GA106. See kayfabe_abi::grstatic.
+            0x2080_0a22, // KernelGraphics — global SM order                 SERVED
+            0x2080_0a30, // KernelGraphics — PPC masks
+            0x2080_0a2c, // KernelGraphics — zcull info
+            0x2080_0a2e, // KernelGraphics — ROP info
+            0x2080_0a3d, // KernelGraphics — FECS record size                SERVED
+            0x2080_0a3f, // KernelGraphics — FECS trace defines
+            0x2080_0a48, // KernelGraphics — PDB properties                  SERVED
+            0x2080_0a38, // KernelGraphics — FECS trace HW enable (teardown)
             0x2080_0a4b, // NOT in the oracle's prefix — KernelDisplay
         ]
     );
@@ -238,7 +283,15 @@ fn a_halting_refusal_may_be_served_or_not_and_the_table_says_which() {
     );
     // ⚠ 13 -> 12: `0x20800a70` LEFT this class (to `RefusalIsInvisible`) at the same rung,
     // and it left because its argument was wrong rather than because the port changed.
-    assert_eq!(halts.len(), 12, "non-vacuity: the class is the roadmap");
+    // ⚠⚠ 12 -> 8 at the state-load rung, and FOUR MORE left for the same reason: their
+    // rows claimed a local `NV_ASSERT_OK_OR_RETURN` / `NV_CHECK_OK_OR_GOTO` "halts the
+    // boot at a named statement", and `gmmu1` at `12b001f` showed it does not — every one
+    // of those statuses lands in `gpuStatePostLoad`, which maps `NV_ERR_NOT_SUPPORTED` to
+    // `NV_OK` at `gpu.c:3438`. ⊘ Four rows in this class were therefore claims about a
+    // FUNCTION dressed as claims about a BOOT. `0x20800a9f` went to `RefusalFailsOpen`;
+    // `0x20800a1f` and `0x20800a26` to `AmputationUnsurvivable`; `0x20800a2a` to
+    // `AmputationIntended`.
+    assert_eq!(halts.len(), 8, "non-vacuity: the class is the roadmap");
 }
 
 #[test]

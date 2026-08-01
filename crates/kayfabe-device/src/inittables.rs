@@ -72,6 +72,8 @@ use kayfabe_abi::fifochannels::{
 use kayfabe_abi::gmmustatic::{
     self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
 };
+use kayfabe_abi::grstatic;
+use kayfabe_abi::gvaspacepdes;
 use kayfabe_abi::inittables::{
     self, DEVICE_INFO_PARAMS_SIZE, INTR_PARAMS_SIZE, NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE,
     NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
@@ -396,6 +398,51 @@ pub enum WantedTable {
     /// bytes (`C: mode2_initctrl_ga106.h:6245`, `psize = 4, dlen = 0`). Both sources agree
     /// on a zero-filled body, so that is what is encoded.
     MemsysL2InvalidateEvict,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS` — the first of the **five
+    /// structurally mandatory** GR static-info controls, and the first this port answers
+    /// about the shader core. See [`kayfabe_abi::grstatic`] for why these five and not the
+    /// fourteen `kgraphicsLoadStaticInfo_KERNEL` issues, and for the ZCULL/ROP correction
+    /// (their `0x56` is clobbered by the next call's assignment, so they are *not*
+    /// mandatory however the `else if` reads).
+    ///
+    /// ★★★ Refusing any of the five is the sweep's signature failure at its purest: the
+    /// refusal is silent (`gpu.c:3438` maps `NV_ERR_NOT_SUPPORTED` to `NV_OK`), GR's static
+    /// info becomes permanently `NULL` (`kernel_graphics.c:1544`, `:556-564`), and the bill
+    /// arrives twenty-one engines later inside **`KernelFifo`**'s `statePostLoad` as
+    /// `NV_ERR_INVALID_STATE` (`kernel_graphics.c:485`) — which `gpu.c:3440` does not
+    /// swallow. `[measured]` run `gmmu1` at `12b001f`: `RmInitAdapter failed!
+    /// (0x25:0x40:1249)`.
+    GrCaps,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS` — ★ the one whose
+    /// `gpcMask` is load-bearing twice over. `_kgraphicsPostSchedulingEnableHandler` returns
+    /// `NV_OK` immediately when it is `0x0` (`kernel_graphics.c:486`), so a zero here would
+    /// carry the boot past `gpuStatePostLoad` by *skipping* the golden-image channel. ⊘ That
+    /// shortcut is named and rejected in [`kayfabe_abi::grstatic`]'s header; this device
+    /// publishes `0x7`, which is what a GA106 has.
+    GrFloorsweepingMasks,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER` — 34 592 bytes, ★ the
+    /// largest reply this port encodes, and nine of 580's 4 096-byte message-queue elements.
+    /// It fits: the guest's receive staging buffer is `element_size_max` = 65 536
+    /// (`kayfabe_abi::versions`), and `encode_message`'s `max_elements` guard is what says
+    /// so rather than an assumption.
+    GrGlobalSmOrder,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE` — 32 bytes, one `NvU32`
+    /// per engine. Mandatory (`NV_CHECK_OK_OR_GOTO`, `kernel_graphics.c:1467`).
+    GrFecsRecordSize,
+    /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES` — 8 bytes, and the control
+    /// whose success sets `bInitialized = NV_TRUE` on the very next line
+    /// (`kernel_graphics.c:1521`). It is the last mandatory one, so it is the one that
+    /// decides whether GR has static info at all.
+    GrPdbProperties,
+    /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` — ★★★
+    /// the only control this port serves in which the guest is **telling us** something
+    /// rather than asking: the physical addresses of the page-directory levels it reserved
+    /// for the split VA space. See [`kayfabe_abi::gvaspacepdes`].
+    ///
+    /// ⚠ Its refusal is survivable (`gpuStatePostLoad` swallows the `0x56`), so it is served
+    /// for what refusing *leaves behind* — a GPU group whose `pGlobalVASpace` was assigned
+    /// before its constructor failed — and not for what it returns.
+    GvaspaceServerReservedPdes,
 }
 
 impl WantedTable {
@@ -426,7 +473,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 14] = [
+    pub const ALL: [WantedTable; 20] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -441,6 +488,12 @@ impl WantedTable {
         Self::GmmuStaticInfo,
         Self::EventSetNotification,
         Self::MemsysL2InvalidateEvict,
+        Self::GrCaps,
+        Self::GrFloorsweepingMasks,
+        Self::GrGlobalSmOrder,
+        Self::GrFecsRecordSize,
+        Self::GrPdbProperties,
+        Self::GvaspaceServerReservedPdes,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -472,6 +525,22 @@ impl WantedTable {
             Self::MemsysL2InvalidateEvict => {
                 kayfabe_abi::l2evict::NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT
             }
+            Self::GrCaps => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CAPS,
+            Self::GrFloorsweepingMasks => {
+                grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS
+            }
+            Self::GrGlobalSmOrder => {
+                grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER
+            }
+            Self::GrFecsRecordSize => {
+                grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE
+            }
+            Self::GrPdbProperties => {
+                grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES
+            }
+            Self::GvaspaceServerReservedPdes => {
+                gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
+            }
         }
     }
 
@@ -495,6 +564,12 @@ impl WantedTable {
                 kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
             }
             Self::MemsysL2InvalidateEvict => kayfabe_abi::l2evict::L2_INVALIDATE_EVICT_PARAMS_SIZE,
+            Self::GrCaps => grstatic::GR_CAPS_PARAMS_SIZE,
+            Self::GrFloorsweepingMasks => grstatic::FLOORSWEEPING_PARAMS_SIZE,
+            Self::GrGlobalSmOrder => grstatic::SM_ORDER_PARAMS_SIZE,
+            Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
+            Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
+            Self::GvaspaceServerReservedPdes => gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE,
         }
     }
 
@@ -844,6 +919,57 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 };
                 l2evict::encode_l2_invalidate_evict(&evict)
+            }
+            // ★★★ The five GR static-info arms. Each is a pure function of the chip's own
+            // GR profile — no request field is read, because none of these controls carries
+            // one — so the only failure mode is a profile that describes no silicon, and
+            // `GrStaticProfile::validate` is what turns that into a refusal instead of a
+            // plausible reply. See `kayfabe_abi::grstatic`.
+            WantedTable::GrCaps => match grstatic::encode_gr_caps(&self.chip.gr_static) {
+                Ok(p) => p,
+                Err(_) => return refuse(),
+            },
+            WantedTable::GrFloorsweepingMasks => {
+                match grstatic::encode_floorsweeping_masks(&self.chip.gr_static) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            WantedTable::GrGlobalSmOrder => {
+                match grstatic::encode_global_sm_order(&self.chip.gr_static) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            WantedTable::GrFecsRecordSize => {
+                match grstatic::encode_fecs_record_size(&self.chip.gr_static) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            WantedTable::GrPdbProperties => {
+                match grstatic::encode_pdb_properties(&self.chip.gr_static) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The publication arm — the one control here whose reply is a function of
+            // the REQUEST rather than of the chip. It is decoded, validated against
+            // `ctrl90f1.h`'s own stated rules, and re-encoded from the decoded fields; an
+            // echo would have made the decode dead code no test could notice was dead.
+            //
+            // ⊘ `refuse()` is the safe direction and it is loud: the copyout is skipped on a
+            // non-`NV_OK` status (`ogkm-580: rpc.c:11066-11070`), so the guest's own
+            // `globalCopyParams` is untouched and `NV_ASSERT_OK_OR_RETURN` fails at
+            // `gpu_vaspace.c:4148` by name.
+            WantedTable::GvaspaceServerReservedPdes => {
+                let at = req.params_at;
+                let Ok(pdes) = gvaspacepdes::decode_server_reserved_pdes(
+                    &cmd.payload[at..at + gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE],
+                ) else {
+                    return refuse();
+                };
+                gvaspacepdes::encode_server_reserved_pdes(&pdes)
             }
         };
 
