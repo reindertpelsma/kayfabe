@@ -387,9 +387,15 @@ pub enum BridgeRefusal {
     /// the two that is still a refusal after every decoder is written.
     ///
     /// ★ That distinction is the whole gap being closed. Before this variant, the only
-    /// thing standing between a guest and an arbitrary class was whether we happened to
-    /// decode it, so *adding a decoder widened the security boundary as a side effect*.
-    /// The gate now runs first and the two are independent.
+    /// thing standing between a guest and an arbitrary class *in this port* was whether we
+    /// happened to decode it, so *adding a decoder widened what this port admitted, as a
+    /// side effect*. The gate now runs first and the two are independent.
+    ///
+    /// ⊘ **F5: that is an admission boundary, not THE security boundary.** RM re-derives
+    /// privilege on every ioctl and refuses 613 of 1359 exported entries to any userspace
+    /// caller on its own (`docs/design/guest_blast_radius.md` §3.4), so widening what we
+    /// decode never widened what a guest could actually reach. Worth fixing anyway — a
+    /// port should not admit what it cannot describe — but it does not carry P.
     ///
     /// Carries the [`Denial`] so a census can tell a class we deliberately refuse (with a
     /// reason, e.g. `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) from one nobody has ever seen.

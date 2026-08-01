@@ -47,7 +47,17 @@
 //! `the_gss_legacy_rule_passes_half_the_command_space` pins the fact so nobody has to
 //! rediscover it. Narrowing it is a design decision on evidence nobody has yet.
 //!
-//! ## Ordering, which is a security property
+//! ## Ordering, which is a COHERENCE property of this table
+//!
+//! ⊘ **Not the security property, and F5 corrected an earlier heading that said it was.**
+//! All six controls this table denies are `NON_PRIVILEGED` in RM, so **the denylist does
+//! not carry P** (the blast-radius property). What carries P is that RM re-derives
+//! privilege on *every* ioctl (`ogkm-580: escape.c:304`) and its control dispatch is
+//! kernel-privileged by default, closing **613 of 1359** exported entries (45.1%) to any
+//! userspace caller regardless of anything decided here — see
+//! `docs/design/guest_blast_radius.md` §3.4. This table is **defence in depth over a
+//! decision the driver makes again anyway**; the ordering below is what keeps the *table*
+//! coherent, which is worth having and is a smaller claim.
 //!
 //! [`CapabilityTable::control`] answers in this order, and the order is what the
 //! `deny_beats_the_rule_based_passthrough` test pins:
