@@ -436,6 +436,15 @@ pub enum GrStaticError {
         /// The GPC id it names.
         gpc_id: u16,
     },
+    /// A context buffer that is PRESENT declares a zero alignment. `memdescAlloc` is
+    /// handed this value directly; zero is not a weak alignment, it is an invalid one.
+    /// ⊘ Deliberately not checked for `CONTEXT_BUFFER_ABSENT` rows: a real GA106 reports
+    /// `alignment == NV_U32_MAX` alongside `size == NV_U32_MAX` for the seven engines it
+    /// does not have, and demanding a sane alignment there would refuse real hardware.
+    ContextBufferAlignmentZero {
+        /// `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*` of the row.
+        id: usize,
+    },
     /// The FECS record size is zero — `fecsBufferMap` divides by it
     /// (`ogkm-580: fecs_event_list.c`), so zero is a divide, not a small buffer.
     FecsRecordSizeZero,
@@ -692,5 +701,134 @@ pub fn encode_pdb_properties(p: &GrStaticProfile) -> Result<Vec<u8>, GrStaticErr
     p.validate()?;
     let mut out = vec![0u8; PDB_PROPERTIES_PARAMS_SIZE];
     out[0] = u8::from(p.per_subctx_header_supported);
+    Ok(out)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// The DEFERRED half — `0x20800a32`, and why it needed a boot to be sure of
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+//
+// ★★★ This section exists because a boot answered a question this module had deliberately
+// left open. The header above says of `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_-
+// BUFFERS_INFO`:
+//
+//   "`[assumed]`, and named as such: this port has not established which way
+//    `kgraphicsShouldDeferContextInit` goes on GA106, and it is deliberately *not* being
+//    guessed at, because the boot settles it for free."
+//
+// `[measured]` run `stateload1`, a stock 580.159.04 guest at `041b4f1`:
+//
+//   NVRM: nvCheckOkFailedNoLog: Check failed: NV_ERR_NOT_SUPPORTED (0x56) returned from
+//         pRmApi->Control(..., NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO,
+//         pParams, sizeof(*pParams)) @ kernel_graphics.c:743
+//   NVRM: ... returned from kgraphicsInitializeDeferredStaticData(...) @ kernel_graphics.c:1527
+//
+// ⇒ `kgraphicsShouldDeferContextInit` is **FALSE** on this chip, the `:1524-1529` branch IS
+// taken, and `0x20800a32` is the **sixth** mandatory GR static-info control. ⊘ The guess
+// would have gone either way; the boot cost nothing extra because the two outcomes are
+// distinguishable in the log, which is the whole reason it was left open rather than
+// resolved by argument.
+
+/// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO`
+/// (`ogkm-580: ctrl/ctrl2080/ctrl2080internal.h:530`).
+pub const NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO: u32 = 0x2080_0a32;
+
+/// `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_COUNT`
+/// (`ogkm-580: ctrl/ctrl0080/ctrl0080fifo.h:147`) — 26, and the array bound of
+/// `NV2080_CTRL_INTERNAL_STATIC_GR_CONTEXT_BUFFERS_INFO`.
+pub const CONTEXT_BUFFER_ID_COUNT: usize = 0x1a;
+
+/// `sizeof(NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS)` —
+/// `8 * 26 * (size + alignment)`.
+pub const CONTEXT_BUFFERS_INFO_PARAMS_SIZE: usize = GR_MAX_ENGINES * CONTEXT_BUFFER_ID_COUNT * 8;
+
+/// ★★★ `NV_U32_MAX` is **"this buffer does not exist on this chip"**, not a very large
+/// buffer.
+///
+/// `kgraphicsInitializeDeferredStaticData`'s consumer tests for it by hand:
+/// `if (pKernelGraphicsStaticInfo->pContextBuffersInfo->engine[i].size != NV_U32_MAX)`
+/// (`ogkm-580: kernel_graphics.c:2485`). ⊘ So a row this port does not know must be
+/// `ABSENT` and never `0` — zero is a real, allocatable, empty buffer and two of GA106's
+/// rows genuinely are zero (`GFXP_POOL` and `SETUP`), which is exactly why the two spellings
+/// cannot be merged.
+pub const CONTEXT_BUFFER_ABSENT: u32 = u32::MAX;
+
+/// One context buffer's size and alignment, indexed by
+/// `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ContextBuffer {
+    /// Bytes, or [`CONTEXT_BUFFER_ABSENT`].
+    pub size: u32,
+    /// Required alignment in bytes.
+    pub alignment: u32,
+}
+
+const ABSENT: ContextBuffer = ContextBuffer {
+    size: CONTEXT_BUFFER_ABSENT,
+    alignment: CONTEXT_BUFFER_ABSENT,
+};
+const fn buf(size: u32, alignment: u32) -> ContextBuffer {
+    ContextBuffer { size, alignment }
+}
+
+/// GA106's twenty-six context buffers, in `ENGINE_ID` order — the index **is** the id, and
+/// the names in the comments are `ctrl0080fifo.h:121-146`.
+///
+/// `[measured]` from `C: mode2_initctrl_ga106.h`'s `ctl_20800a32` (`psize` 1664, `dlen`
+/// 1664 — nothing trimmed). ⚠ Ids 1-7 are the non-graphics engines (`VLD`, `VIDEO`, `MPEG`,
+/// `CAPTURE`, `DISPLAY`, `ENCRYPTION`, `POSTPROCESS`) and a real GA106 reports every one of
+/// them [`CONTEXT_BUFFER_ABSENT`].
+pub const GA106_CONTEXT_BUFFERS: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT] = [
+    buf(0x000a_9700, 0x1000), // 0x00 GRAPHICS
+    ABSENT,                   // 0x01 VLD
+    ABSENT,                   // 0x02 VIDEO
+    ABSENT,                   // 0x03 MPEG
+    ABSENT,                   // 0x04 CAPTURE
+    ABSENT,                   // 0x05 DISPLAY
+    ABSENT,                   // 0x06 ENCRYPTION
+    ABSENT,                   // 0x07 POSTPROCESS
+    buf(0x0007_8600, 0x1000), // 0x08 GRAPHICS_ZCULL
+    buf(0x0000_8600, 0x1000), // 0x09 GRAPHICS_PM
+    buf(0x0070_0000, 0x1000), // 0x0a COMPUTE_PREEMPT
+    buf(0x0011_8c00, 0x1000), // 0x0b GRAPHICS_PREEMPT
+    buf(0x0010_6800, 0x0100), // 0x0c GRAPHICS_SPILL
+    buf(0x0002_0000, 0x0100), // 0x0d GRAPHICS_PAGEPOOL
+    buf(0x0032_9a80, 0x1000), // 0x0e GRAPHICS_BETACB
+    buf(0x0008_2000, 0x0100), // 0x0f GRAPHICS_RTV
+    buf(0x0000_4000, 0x1000), // 0x10 GRAPHICS_PATCH
+    buf(0x0000_3000, 0x0100), // 0x11 GRAPHICS_BUNDLE_CB
+    buf(0x0002_0000, 0x0100), // 0x12 GRAPHICS_PAGEPOOL_GLOBAL
+    buf(0x0085_1200, 0x1000), // 0x13 GRAPHICS_ATTRIBUTE_CB
+    buf(0x0008_0000, 0x0100), // 0x14 GRAPHICS_RTV_CB_GLOBAL
+    buf(0x0000_0000, 0x1000), // 0x15 GRAPHICS_GFXP_POOL   ⚠ zero, and PRESENT
+    buf(0x0000_0464, 0x1000), // 0x16 GRAPHICS_GFXP_CTRL_BLK
+    buf(0x0001_0000, 0x1000), // 0x17 GRAPHICS_FECS_EVENT
+    buf(0x0008_0000, 0x1000), // 0x18 GRAPHICS_PRIV_ACCESS_MAP
+    buf(0x0000_0000, 0x1000), // 0x19 GRAPHICS_SETUP       ⚠ zero, and PRESENT
+];
+
+/// `NV2080_CTRL_INTERNAL_STATIC_GR_GET_CONTEXT_BUFFERS_INFO_PARAMS`.
+///
+/// ⚠ Unlike the other five this is **not** a function of [`GrStaticProfile`]'s geometry —
+/// the sizes are the chip's own context-buffer table, so they are passed in directly. That
+/// asymmetry is deliberate: pretending these could be derived from GPC and TPC counts would
+/// be inventing a relationship this port has not established.
+///
+/// # Errors
+/// [`GrStaticError::ContextBufferAlignmentZero`] for a present buffer with no alignment —
+/// `memdescAlloc`'s alignment argument is not permitted to be zero, and a zero here would
+/// reach it.
+pub fn encode_context_buffers_info(
+    buffers: &[ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
+) -> Result<Vec<u8>, GrStaticError> {
+    let mut out = vec![0u8; CONTEXT_BUFFERS_INFO_PARAMS_SIZE];
+    for (i, b) in buffers.iter().enumerate() {
+        if b.size != CONTEXT_BUFFER_ABSENT && b.alignment == 0 {
+            return Err(GrStaticError::ContextBufferAlignmentZero { id: i });
+        }
+        put32(&mut out, i * 8, b.size);
+        put32(&mut out, i * 8 + 4, b.alignment);
+    }
     Ok(out)
 }

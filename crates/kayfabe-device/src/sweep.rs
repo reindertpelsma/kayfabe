@@ -585,6 +585,25 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               kgraphicsSetPerSubcontextContextHeaderSupported. Served",
     },
     SweepControl {
+        cmd: 0x2080_0a32,
+        engine: "KernelGraphics",
+        // ★★★ The row `#150` REFUSED to write, and the boot wrote it. That rung left
+        // `kgraphicsShouldDeferContextInit` unevaluated on purpose — `bInitialized` is set
+        // at :1521 BEFORE the branch, so the two outcomes are distinguishable in one log
+        // and an argument was not needed. [measured] run `stateload1` at `041b4f1`: the
+        // branch IS taken and this control IS issued. ⊘ Recording the absence of a
+        // measurement beat borrowing one, and it cost nothing.
+        disposition: SweepDisposition::AmputationUnsurvivable,
+        why: "GET_CONTEXT_BUFFERS_INFO, reached from kgraphicsInitializeDeferredStaticData \
+              under NV_CHECK_OK_OR_GOTO (ogkm-580: kernel_graphics.c:743-751) which \
+              kgraphicsLoadStaticInfo calls at :1527 behind \
+              !kgraphicsShouldDeferContextInit — FALSE on this chip, [measured] run \
+              stateload1 at 041b4f1. Refusing sends the whole function to cleanup: and \
+              un-sets bInitialized, so it is the same KernelFifo NV_ERR_INVALID_STATE as \
+              0x20800a1f by a different route. 1664 bytes \
+              (C: mode2_initctrl_ga106.h:6226). Served",
+    },
+    SweepControl {
         cmd: 0x2080_0a38,
         engine: "KernelGraphics",
         disposition: SweepDisposition::AmputationIntended,

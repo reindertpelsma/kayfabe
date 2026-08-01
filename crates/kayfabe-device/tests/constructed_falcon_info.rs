@@ -471,6 +471,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: FalconInventoryRow {
             // Inside RM's 71-slot check, outside the 64-entry table it indexes.
             falcons: &SIXTY_FIVE,
@@ -590,6 +591,7 @@ const fn copy_of_ga106() -> ChipProfile {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: FalconInventoryRow::NONE,
         fb_length: 0,
     }

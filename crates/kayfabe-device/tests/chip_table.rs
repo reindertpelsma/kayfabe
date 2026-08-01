@@ -246,6 +246,7 @@ static OTHER: ChipProfile = ChipProfile {
     fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
     gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
     gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+    gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
     constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
     fb_length: OTHER_FB_LENGTH,
 };
@@ -404,6 +405,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -452,6 +454,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -724,6 +727,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -776,6 +780,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -1194,6 +1199,7 @@ fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
         fifo_channels: kayfabe_device::ga10x::GA106_FIFO_CHANNELS,
         gmmu_static: kayfabe_device::ga10x::GA106_GMMU_STATIC,
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
+        gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };

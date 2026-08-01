@@ -327,6 +327,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
         WantedTable::GrPdbProperties,
+        WantedTable::GrContextBuffersInfo,
     ]
     .into_iter()
     .collect();
@@ -344,10 +345,10 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
          being past the capture's closure limit — is a served control no differential can \
          regress"
     );
-    assert_eq!(universe.len(), 20, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 21, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        3,
+        4,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

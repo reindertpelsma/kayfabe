@@ -280,3 +280,79 @@ fn num_sm_and_num_tpc_sit_after_the_full_240_entry_array() {
     assert_eq!(u16::from_le_bytes([sm[at], sm[at + 1]]), 28, "numSm");
     assert_eq!(u16::from_le_bytes([sm[at + 2], sm[at + 3]]), 14, "numTpc");
 }
+
+// ═══════ the deferred half — the control a boot, not an argument, proved mandatory ═══════
+
+use kayfabe_abi::grstatic::{
+    CONTEXT_BUFFER_ABSENT, CONTEXT_BUFFER_ID_COUNT, CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
+    ContextBuffer, GA106_CONTEXT_BUFFERS, encode_context_buffers_info,
+};
+
+#[test]
+fn context_buffers_info_matches_the_real_ga106_reply() {
+    let ours = encode_context_buffers_info(&GA106_CONTEXT_BUFFERS).expect("GA106 encodes");
+    assert_eq!(ours.len(), CONTEXT_BUFFERS_INFO_PARAMS_SIZE);
+    assert_eq!(
+        ours.len(),
+        1664,
+        "8 engines x 26 buffers x (size + alignment)"
+    );
+    assert_prefix_matches(
+        "GR context buffers info",
+        &ours,
+        &oracle("ga106_ctl_20800a32.bin"),
+    );
+}
+
+/// ★★★ `NV_U32_MAX` means **absent** and `0` means **present and empty**, and the two are
+/// not interchangeable: RM tests for the sentinel by hand
+/// (`ogkm-580: kernel_graphics.c:2485`), so collapsing them would make two real GA106
+/// buffers — `GFXP_POOL` and `SETUP` — vanish from the allocation walk.
+///
+/// ⊘ This is the property the fixture comparison alone cannot state, because a table that
+/// wrote `0` for the absent rows would also have to differ from the capture somewhere else
+/// to be caught. Here it is stated directly.
+#[test]
+fn absent_and_empty_are_different_context_buffers() {
+    assert_eq!(CONTEXT_BUFFER_ABSENT, u32::MAX);
+    let absent: Vec<usize> = (0..CONTEXT_BUFFER_ID_COUNT)
+        .filter(|i| GA106_CONTEXT_BUFFERS[*i].size == CONTEXT_BUFFER_ABSENT)
+        .collect();
+    assert_eq!(
+        absent,
+        vec![1, 2, 3, 4, 5, 6, 7],
+        "VLD, VIDEO, MPEG, CAPTURE, DISPLAY, ENCRYPTION, POSTPROCESS — the non-graphics \
+         engines a GA106 does not carry a GR context buffer for"
+    );
+    let empty: Vec<usize> = (0..CONTEXT_BUFFER_ID_COUNT)
+        .filter(|i| GA106_CONTEXT_BUFFERS[*i].size == 0)
+        .collect();
+    assert_eq!(
+        empty,
+        vec![0x15, 0x19],
+        "GFXP_POOL and SETUP are PRESENT with size 0 — if these ever read as absent the \
+         two spellings have been collapsed"
+    );
+    assert_eq!(
+        GA106_CONTEXT_BUFFERS[0].size, 0x000a_9700,
+        "ENGINE_ID_GRAPHICS, the one kgraphicsAllocGrGlobalCtxBuffers sizes the main \
+         context buffer from"
+    );
+}
+
+/// A present buffer with no alignment reaches `memdescAlloc` as a zero alignment.
+#[test]
+fn a_present_context_buffer_with_zero_alignment_is_refused() {
+    let mut t = GA106_CONTEXT_BUFFERS;
+    t[0] = ContextBuffer {
+        size: 0x1000,
+        alignment: 0,
+    };
+    assert_eq!(
+        encode_context_buffers_info(&t),
+        Err(GrStaticError::ContextBufferAlignmentZero { id: 0 })
+    );
+    // ⚠ …but the ABSENT rows carry `alignment == NV_U32_MAX`, not a sane alignment, and a
+    // checker that demanded one from them would refuse real hardware.
+    assert!(encode_context_buffers_info(&GA106_CONTEXT_BUFFERS).is_ok());
+}

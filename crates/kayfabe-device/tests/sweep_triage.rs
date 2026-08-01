@@ -47,8 +47,8 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
     // ⊘ The count is not the point — the membership below is. See `sweep.rs`.
     assert_eq!(
         must.len(),
-        11,
-        "eight unsurvivable amputations and three silent fail-opens"
+        12,
+        "nine unsurvivable amputations and three silent fail-opens"
     );
     let cmds: Vec<u32> = must.iter().map(|c| c.cmd).collect();
     assert_eq!(
@@ -65,6 +65,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             0x2080_0a22,
             0x2080_0a3d,
             0x2080_0a48,
+            0x2080_0a32,
         ]
     );
     let engines: Vec<&str> = must.iter().map(|c| c.engine).collect();
@@ -77,6 +78,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             "KernelBif",
             "KernelGmmu",
             "OBJGVASPACE",
+            "KernelGraphics",
             "KernelGraphics",
             "KernelGraphics",
             "KernelGraphics",
@@ -119,9 +121,10 @@ fn the_unsurvivable_class_still_names_the_measured_crashes() {
             0x2080_0a22,
             0x2080_0a3d,
             0x2080_0a48,
+            0x2080_0a32,
         ],
         "t135a's KernelFifo, t134a's KernelMemorySystem, KernelGmmu's freed pStaticInfo, \
-         and gmmu1's five GR static-info controls"
+         and gmmu1's five GR static-info controls plus stateload1's sixth"
     );
 }
 
@@ -132,7 +135,7 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
     //
     // ⊘ The order is the oracle's own `rpc.sequence` order, so a reader can line this list
     // up against `cargo run -p kayfabe-crec --example cap1b_report` directly.
-    assert_eq!(SWEEP_TRIAGE.len(), 31, "the triaged universe's size");
+    assert_eq!(SWEEP_TRIAGE.len(), 32, "the triaged universe's size");
     let cmds: Vec<u32> = SWEEP_TRIAGE.iter().map(|c| c.cmd).collect();
     assert_eq!(
         cmds,
@@ -170,6 +173,7 @@ fn the_triage_universe_is_pinned_so_shortening_it_is_a_red_test() {
             0x2080_0a3d, // KernelGraphics — FECS record size                SERVED
             0x2080_0a3f, // KernelGraphics — FECS trace defines
             0x2080_0a48, // KernelGraphics — PDB properties                  SERVED
+            0x2080_0a32, // KernelGraphics — context buffers info              SERVED
             0x2080_0a38, // KernelGraphics — FECS trace HW enable (teardown)
             0x2080_0a4b, // NOT in the oracle's prefix — KernelDisplay
         ]
