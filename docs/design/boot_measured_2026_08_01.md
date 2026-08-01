@@ -1098,3 +1098,177 @@ rung's own evidence.
   proves the driver now gets far enough to *care*, and nothing more.
 - ⊘ **One boot each**, on one 4-core box. `#98` records a Mode-2 symptom that was 1/3 one day
   and 9/9 the next on a bit-identical binary.
+
+---
+
+# 41. Boot `irq1` — `[measured]` at `bb4f48d`, `#151`
+
+| | |
+|---|---|
+| Rust archive | `cargo build --release -p kayfabe-qemu-raw` in `/workspace/kf-irq`, rc 0 |
+| revision | `strings /workspace/bench/qemu-build/qemu-system-x86_64 \| grep kayfabe-rev` → **`kayfabe-rev:bb4f48d4de429f370cc341af523b81dbaa4aba97`**, clean (no `-dirty`) |
+| link | `scripts/build_qom_shim.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build`, rc 0 |
+| guest | Ubuntu 24.04, **stock unpatched** NVIDIA 580.159.04 open kernel module |
+| evidence | `/workspace/bench/run_irq1_dmesg.log` (31 lines, 28 `NVRM`, 3 adapter), `_qemu.log`, `_probe.log` |
+| verdict | `RmInitAdapter failed! (0x25:0x1f:1249)` — was `(0x11:0x45:2134)` at `stateload2` |
+
+## 41.1 ★★★ The verdict moved BACKWARDS, and that is the finding
+
+`0x11:0x45` was `RM_INIT_SYS_ENVIRONMENT_FAILED` + `NV_ERR_IRQ_NOT_FIRING`, from
+`osVerifySystemEnvironment` — which runs **after** `gpuStateLoad` returns. `0x25:0x1f` is
+`RM_INIT_GPU_LOAD_FAILED` + `NV_ERR_INVALID_ARGUMENT`, from `RmInitNvDevice: *** Cannot
+load state into the device`. ⇒ **the boot now stops EARLIER in the sequence than it did
+before this rung**, and it is not a regression.
+
+⚠ **Serving a control converted a survivable amputation into a fatal error**, and this is
+the sweep's own rule running in the direction nobody plans for. `gpu.c:3438` maps
+`NV_ERR_NOT_SUPPORTED` → `NV_OK` past `gpuPreInit`; it maps nothing else. At `stateload2`
+the scrubber's post-scheduling callback failed with `0x56` (a refused control) and was
+**swallowed**; state load "completed" with the scrubber, the CE utility channel and the
+device VA space destroyed. Now the same callback gets further and fails with `0x1f`, which
+is **not** in the swallowed set — so `kernel_fifo.c:3129` aborts state load for real.
+
+⇒ ★ *"the verdict advanced"* is not a measure of progress on this driver, and *"the verdict
+retreated"* is not a measure of regression. Only the cascade in the dmesg is.
+
+## 41.2 What Candidate A established — CONFIRMED CAUSAL by run `irq1` at `bb4f48d`
+
+`0x90f10106` was causal for the VA-space chain, and run `irq1` at `bb4f48d` says so by
+**subtraction** against run `stateload2` at `7819839`.
+Every one of these lines was in `run_stateload2_dmesg.log:12-22` and is **absent** from
+`run_irq1_dmesg.log`:
+
+```
+gpu_vaspace.c:5187 / :4129 / :611     ← the RPC, and its two callers
+device_share.c:260                    ← vmmCreateVaspace failed
+virtual_mem.c:133                     ← vaspaceGetByHandleOrDeviceDefault → 0x56
+mem_utils_gm107.c:322                 ← NV50_MEMORY_VIRTUAL alloc failed
+kernel_channel_group_api.c:224        ← the TSG's vaspace lookup
+```
+
+⇒ **the device default VA space now constructs**, the TSG allocation now gets a VAS, and the
+CE utility channel now gets as far as its *method buffer*. `roots published 2` in the
+device's own report, up from a boot that published none through this path.
+
+## 41.3 ⊘ What Candidate B established — NOTHING. The path was NEVER REACHED.
+
+```
+nvkvm: interrupts: 0 vectors delivered, 0 undeliverable (guest had not enabled the table),
+                   86 status-queue requests dropped
+```
+
+**Zero.** `CPU_INTR_LEAF_TRIGGER` was never written, because `osVerifySystemEnvironment`
+runs after a `gpuStateLoad` that now fails. ⊘ So this boot says **nothing whatsoever** about
+whether interrupt delivery works:
+
+- ⊘ not that `msix_notify` reaches the guest;
+- ⊘ not that the guest's MSI-X table was enabled when we would have needed it (the
+  `undeliverable` counter is 0 because nothing was attempted, **not** because everything
+  succeeded — two very different facts behind one zero);
+- ⊘ not that the leaf reads back pending in the ISR's own context.
+
+★ What exists is `crates/kayfabe-device/tests/cpu_interrupt_tree.rs`, which replays
+`_osVerifyInterrupts` write-for-write against the real `RegPlane` — and that is a test, not
+a boot. Per `only_live_boots_are_proof`, the interrupt tree is **INFERRED** (an `ogkm`
+reading, tested against itself) and the class is stated rather than borrowed.
+
+★ One thing IS measurable from this boot: `nv.c:1405-1412` prints *"No interrupts of any
+type are available. Cannot use this GPU."* when the device offers neither a message-signalled
+capability nor a legacy line, and that line is **absent**. This device advertises MSI-X and
+nothing else — no `msi_init`, no `PCI_INTERRUPT_PIN` — so `nv_init_msix` succeeded and
+`NV_FLAG_USES_MSIX` is set. `[inferred]` from `ogkm-580: kernel-open/nvidia/nv.c:1385-1412`
+plus an absence measured in run `irq1` at `bb4f48d`
+(`/workspace/bench/run_irq1_dmesg.log` contains no such line) — the strongest form available
+without reaching the test, and stated as INFERRED rather than MEASURED because an absent log
+line is evidence about the branch, not about the vector.
+
+## 41.4 ★★★ The new wall, and the value this rung REFUSED to invent
+
+```
+kernel_ce.c:843                       NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE → 0x56
+kernel_channel_group_gv100.c:78       NV_ASSERT((bufSizeInBytes > 0))
+kchangrpInit_IMPL                     "Fault method buffer allocation failed … status 0x1f"
+kernel_channel_group_api.c:273 → kernel_channel.c:381 → mem_utils_gm107.c:1301 → :857
+ce_utils.c:286 → mem_scrub.c:181 → mem_mgr_scrub_gp100.c:63 → mem_mgr.c:487
+kernel_fifo.c:3129                    NV_ASSERT(0) — and 0x1f is NOT swallowed
+```
+
+`NV2080_CTRL_CE_GET_FAULT_METHOD_BUFFER_SIZE_PARAMS` is **one `NvU32`**
+(`ogkm-580: ctrl/ctrl2080/ctrl2080ce.h:283-285`). It is the cheapest struct on the board and
+this rung did **not** serve it.
+
+⊘ **Because the oracle does not know the answer either.** The C artifact's captured GA106
+init-control table has the row and an EMPTY body:
+
+```c
+{0x20802a08u, 0x0u, 4u, 0u, ctl_20802a08},   /* C: src/qemu/mode2_initctrl_ga106.h:6233 */
+static const unsigned char ctl_20802a08[] = { };          /*                       :3270 */
+```
+
+out-size **0**. There is no captured value from real silicon to copy. And this number is not
+inert: RM allocates a buffer of exactly that many bytes, maps it, and programs it into the
+channel group as the destination the copy engine's fault records are **DMA'd into**. A
+plausible-looking wrong size is not a wrong reply — it is a buffer overrun with a hardware
+writer. ⇒ named, left unserved, and the next rung's first question is where a real value
+comes from.
+
+## 41.5 ⊘ A second early-out found and REFUSED
+
+`kernel_channel_group_gv100.c:60-72` returns `NV_OK` and skips the whole method-buffer
+allocation when any of `IS_GFID_VF`, `RMCFG_FEATURE_PLATFORM_GSP`,
+`IS_VIRTUAL_WITHOUT_SRIOV` or `IS_SRIOV_HEAVY_GUEST` holds. `IS_VIRTUAL_WITHOUT_SRIOV` is
+reachable from *our* side: it is decided by `NV_PMC_BOOT_1`'s `VGPU` field, which this device
+answers. Claiming to be a legacy vGPU would make this wall vanish for free.
+
+⊘ **Rejected, and this one is worse than "a lie about the die" — it is self-defeating.**
+`IS_VIRTUAL_WITHOUT_SRIOV` also makes `intrSetStall_TU102` return immediately
+(`intr_tu102.c:390-393`) and `intrGetStallInterruptMode_TU102` report `pending = NV_FALSE`
+unconditionally (`intr_swintr_tu102.c:124-129`). ⇒ taking this shortcut would make
+`_osVerifyInterrupts` **impossible to pass**, permanently, in exchange for skipping one
+allocation. The same posture is already recorded in the C tree's
+`docs/design/mode2_vgpu_posture_decision.md`: default bare-metal.
+
+## 41.6 The unserviced ledger and the device's own numbers
+
+```
+commands: 87 decoded, 22 UNSERVICED, 18 distinct
+registers: 3641 reads / 55060 writes (UNCLAIMED 750r/750w), faults 0, guest-RAM refusals 0
+BAR2 (translated): 101 reads / 19896 writes resolved, 0 REFUSED; roots published 2
+framebuffer: 112 reads / 53874 writes through the BAR0 window, 0 refusals, resident 147456 B
+interrupts: 0 delivered, 0 undeliverable, 86 status-queue requests dropped
+```
+
+⚠ `18 distinct` unserviced, down from `stateload2`'s 20 — ⊘ and **cardinality is not the
+finding**, per §40.4. `0x90f10106` left the list; the boot stops earlier, so the tail of
+state load that produced the other new entries is no longer reached.
+
+## 41.7 Triage, in `SWEEP_TRIAGE`'s vocabulary
+
+⚠ No rows were added to `kayfabe_device::sweep::SWEEP_TRIAGE`. Its universe is the **measured
+prefix of `cap1b` up to `rpc.sequence` 51**, which sits inside `gpuStateInit`; every control
+below is issued during state **load**, hundreds of sequences later. Widening that table with
+rows no trace covers would make its own non-vacuity gate a smaller true statement. The
+classifications are recorded here, where the evidence is.
+
+| control | disposition | why, and the line |
+|---|---|---|
+| `0x90f10106` `VASPACE_COPY_SERVER_RESERVED_PDES` | **`RefusalFailsOpen`** | the refusal is invisible — `kernel_fifo.c:3129`'s `0x56` is swallowed at `gpu.c:3438` — **and** the state left behind is wrong: `pGpuGrp->pGlobalVASpace` is assigned before `vaspaceConstruct_` runs (`virt_mem_mgr.c:126` vs `:134`), so a failed construct leaves the group with no device VA space for every later `vaspaceGetByHandleOrDeviceDefault`. `[measured]` by subtraction, §41.2. |
+| `0x20802a08` `CE_GET_FAULT_METHOD_BUFFER_SIZE` | **`AmputationUnsurvivable`** | `[measured]` this boot: refusing it does *not* amputate a CE — `kernel_channel_group_gv100.c:78` turns the zero size into `NV_ERR_INVALID_ARGUMENT`, which `gpu.c:3438` does **not** swallow, so state load aborts at `kernel_fifo.c:3129`. ⚠ It was `RefusalIsInvisible`-shaped for four rungs *only because nothing reached it*. |
+
+⚠ **This is the fourth-and-fifth instance of the lesson that "halts" is a claim about where a
+status ENDS UP.** `0x20802a08`'s refusal returns `0x56` at `kernel_ce.c:843` and would read
+as survivable from that line alone. It is fatal because a caller **eleven frames up**
+converts it into a different status that the swallow does not cover.
+
+## 41.8 ⊘ What boot `irq1` does NOT establish
+
+- ⊘ **Interrupt delivery is UNTESTED.** §41.3. The register model, the shim wiring and the
+  `msix_notify` call are built, gated and unit-tested; not one of them ran in a guest.
+- ⊘ **`nvidia-smi` still fails.** `SMI_RC` non-zero, no devices.
+- ⊘ **The VA space CONSTRUCTS; nothing says it TRANSLATES.** `roots published 2` is a count
+  of publications accepted, not of addresses resolved. The CE channel that would have used
+  it never allocated.
+- ⊘ **The scrubber is still not working** — it now fails *later*, on its channel's method
+  buffer instead of on its VA space.
+- ⊘ **One boot, one 4-core box.** `#98` records a Mode-2 symptom that was 1/3 one day and
+  9/9 the next on a bit-identical binary.
