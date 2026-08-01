@@ -102,8 +102,11 @@ it.**
   they already disagree about the GSP queue. Cite the 580 tag.
 
 ⚠ Second-place risk, named because it is *cheap to underestimate*: **E5**, for a reason
-that is not correctness but shape. `read_at_invalidate_is_false_on_compute_path` measured
-**zero** for both invalidate transports on the Mode-2 GSP-emulated compute path, so the
+that is not correctness but shape. `[measured]` on the C artifact, 2026-07-22, audit S3 —
+recorded as the ★ CORRECTION in `C: docs/design/mode2_address_table.md` §5 and carried in
+memory `read_at_invalidate_is_false_on_compute_path`: on the Mode-2 GSP-emulated compute
+path **both** invalidate transports counted **zero** (`INVALIDATE_TLB` RPC fn=200 = 0;
+`MEM_OP`/`MMU_TLB_INVALIDATE` pushbuffer method = 0), as did `DMA_FILL_PTE_MEM`. So the
 table's second populate source is the **observed CE page-table write**, latched at the CE
 release semaphore. E5 therefore cannot be built as "watch for invalidates"; it has to
 witness a CE write, and that is a dependency on E4 that the row above does not show.

@@ -38,7 +38,7 @@
 #   `/proc`; the namespace only changes what IT can see.
 # - ★ The isolate is spawned mid-`nvidia-smi` and is reaped when the guest's proc is
 #   reaped or QEMU exits, so a single post-hoc `ps` can miss it entirely. Hence a sampler
-#   that runs for the whole boot and latches the FIRST sighting.
+#   that runs for the whole boot rather than a `ps` at the end.
 set -uo pipefail
 
 BENCH=${BENCH_DIR:-/workspace/bench}
@@ -74,29 +74,37 @@ DIRTY=$(git -C "$REPO" status --porcelain | wc -l)
 } > "$OUT"
 
 # ---- the sampler --------------------------------------------------------------------
-# Latches the FIRST sighting of an isolate child and dumps everything about it, then keeps
-# counting sightings so a child that dies immediately is distinguishable from one that
+# Dumps EVERY distinct isolate-child pid once, with the time it first appeared, and keeps a
+# running sample count so a child that dies immediately is distinguishable from one that
 # lives.
 sampler() {
-  local latched=0 seen=0
+  local seen=0
+  local -A latched=()
   while :; do
     for c in /proc/[0-9]*/cmdline; do
       p=${c%/cmdline}; p=${p#/proc/}
-      # cmdline is NUL-separated and is NOT truncated the way comm is.
+      # ★ cmdline is NUL-separated and, unlike `comm`, is NOT truncated. `2>/dev/null`
+      # because a pid can exit between the glob and the read; that is not a finding.
       cl=$(tr '\0' ' ' < "$c" 2>/dev/null) || continue
       case "$cl" in
         *kayfabe-isolate*)
           seen=$((seen + 1))
-          if [ "$latched" -eq 0 ]; then
-            latched=1
+          # ★★ EVERY distinct pid is dumped, not just the first. Which spawns happen and
+          # WHEN is the whole question E0's evidence turns on: a child that appears before
+          # the guest driver is even loaded was spawned by device REALIZE, and one that
+          # appears during the device open was spawned by GUEST traffic. A sampler that
+          # latched only the first sighting cannot tell those apart, and the first version
+          # of this script could not.
+          if [ -z "${latched[$p]:-}" ]; then
+            latched[$p]=1
             {
-              echo "=== FIRST SIGHTING at $(date -Is): pid $p ==="
+              echo "=== ISOLATE CHILD pid $p  at $(date -Is)  (t+$(( $(date +%s) - T0 ))s from witness start) ==="
               echo "cmdline: $cl"
               echo "ppid   : $(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)"
-              echo "ppid is: $(tr '\0' ' ' < /proc/$(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)/cmdline 2>/dev/null | cut -c1-120)"
+              echo "ppid is: $(tr '\0' ' ' < /proc/$(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)/cmdline 2>/dev/null | cut -c1-100)"
               echo "--- open descriptors (the RM nodes are the point) ---"
               ls -l /proc/$p/fd 2>/dev/null | sed 's/^/  /'
-              echo "--- mappings naming an nvidia node (an RM-served mmap) ---"
+              echo "--- mappings naming an nvidia node (an RM-SERVED mmap) ---"
               grep -i nvidia /proc/$p/maps 2>/dev/null | sed 's/^/  /' || echo "  (none)"
               echo "--- containment ---"
               grep -E '^(Name|Uid|Gid|NoNewPrivs|Seccomp|CapEff|CapPrm|CapBnd|Threads)' \
@@ -117,14 +125,24 @@ sampler() {
   done
 }
 
+T0=$(date +%s)
+export T0 OUT
 echo 0 > /tmp/e0_seen_$TAG
 sampler &
 SPID=$!
 trap 'kill -9 $SPID 2>/dev/null' EXIT
 
 say "sampling for isolate children; plane=${KAYFABE_ISOLATES:-<unset>} rev=$REV"
-"$REPO/scripts/bench/boot_capture.sh" "$TAG"
-BOOT_RC=$?
+# ★★ boot_capture's own phase lines are TIMESTAMPED into the same file as the sightings.
+# Without that correlation "an isolate child existed" cannot be attributed to a cause:
+# `boot_capture` loads the guest driver ~30 s after QEMU starts, so a sighting's t+ places
+# it on one side or the other of the only guest action in the run.
+echo "=== boot_capture phases (t+ seconds from witness start) ===" >> "$OUT"
+"$REPO/scripts/bench/boot_capture.sh" "$TAG" 2>&1 \
+  | while IFS= read -r line; do
+      printf 't+%-4s %s\n' "$(( $(date +%s) - T0 ))" "$line" | tee -a "$OUT"
+    done
+BOOT_RC=${PIPESTATUS[0]}
 
 sleep 2
 kill -9 $SPID 2>/dev/null; trap - EXIT
@@ -134,9 +152,16 @@ SEEN=$(cat /tmp/e0_seen_$TAG 2>/dev/null || echo 0)
   echo "=== summary ==="
   echo "boot_capture rc: $BOOT_RC"
   echo "isolate-child samples: $SEEN   (0 = never seen alive)"
+  echo "distinct isolate-child pids: $(grep -c '^=== ISOLATE CHILD pid ' "$OUT")"
 } >> "$OUT"
 
 say "boot_capture rc=$BOOT_RC ; isolate-child samples=$SEEN"
 say "witness → $OUT"
-grep -q 'FIRST SIGHTING' "$OUT" && say "★ AN ISOLATE CHILD EXISTED" || say "⊘ no isolate child ever existed"
+N=$(grep -c '^=== ISOLATE CHILD pid ' "$OUT")
+if [ "$N" -gt 0 ]; then
+  say "★ $N DISTINCT ISOLATE CHILD(REN) EXISTED — see the t+ stamps for WHICH PHASE spawned each"
+  grep -E '^=== ISOLATE CHILD pid |opening the device|guest is up|booting' "$OUT" | sed 's/^/    /'
+else
+  say "⊘ no isolate child ever existed"
+fi
 exit "$BOOT_RC"
