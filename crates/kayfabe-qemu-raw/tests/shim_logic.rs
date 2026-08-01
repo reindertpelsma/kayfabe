@@ -477,9 +477,20 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // list of what nobody answered has to cross the seam or it costs a boot per entry.
     // ★ 15 -> 17 at `#102` stage C: a framebuffer-window access is device memory and not
     // an unclaimed register, and the difference has to be readable from the C side.
+    // ★ 17 -> 19 counters plus a second, WIDER list at the event-notification rung: the
+    // object bridge's refusals ANSWER the guest's command, so they reach no ledger, and
+    // boot `alloc1` had to be diagnosed by `fn 103` being ABSENT from six lines. Each row
+    // carries the FaultTag's name by value — see `KayfabeBridgeRefusal` for why a pointer
+    // was not available.
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>(),
+        kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_TAG_LEN + 2 * size_of::<u64>()
+    );
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (17 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (19 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+            + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
     );
 }
 

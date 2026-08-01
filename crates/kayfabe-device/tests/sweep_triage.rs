@@ -213,10 +213,17 @@ fn a_halting_refusal_may_be_served_or_not_and_the_table_says_which() {
         .map(|c| (c.cmd, WantedTable::from_cmd(c.cmd).is_some()))
         .collect();
     let served: Vec<u32> = halts.iter().filter(|(_, s)| *s).map(|(c, _)| *c).collect();
+    // ★★★ `0x20800301` joined this list at the event-notification rung, and it is the
+    // FIRST entry whose triage row argued AGAINST serving it. That row said accepting a
+    // notification registration "would promise an interrupt nothing raises"; the argument
+    // conflated registering an arming with delivering an event, and the cost of an
+    // undelivered notification is only paid for an event that can occur. See
+    // `kayfabe_abi::eventnotify::SILENT_NOTIFIERS`, which scopes the promise to exactly the
+    // notifiers this device can defend it for.
     assert_eq!(
         served,
-        vec![0x2080_0a61],
-        "the only halting refusal this port has spent a rung on"
+        vec![0x2080_0a61, 0x2080_0301],
+        "the halting refusals this port has spent a rung on, in SWEEP_TRIAGE's own order"
     );
     assert_eq!(halts.len(), 13, "non-vacuity: the class is the roadmap");
 }

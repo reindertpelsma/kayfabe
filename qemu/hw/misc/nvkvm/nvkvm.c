@@ -1153,6 +1153,34 @@ static void nvkvm_report_registers(NvkvmState *s)
             }
         }
     }
+
+    /*
+     * ★★★ THE OTHER HALF OF THE LIST.  Printed unconditionally and INCLUDING when it is
+     * zero, for the same reason the block above is: a bridge refusal answers the guest's
+     * command, so it reaches no ledger, and boot `alloc1` had to be diagnosed by a
+     * function number being ABSENT from six lines.  "bridge refusals: 0" is a POSITIVE
+     * statement that the bridge refused nothing; the absence of a line is not.
+     */
+    info_report("nvkvm: bridge refusals: %" PRIu64 " total, %" PRIu64 " distinct "
+                "(these ANSWER the command and so never reach the unserviced list)",
+                a.bridge_refusals, a.bridge_refusal_len);
+    {
+        uint64_t i, shown = a.bridge_refusal_len;
+
+        if (shown > KAYFABE_BRIDGE_REFUSAL_SLOTS) {
+            shown = KAYFABE_BRIDGE_REFUSAL_SLOTS;
+        }
+        for (i = 0; i < shown; i++) {
+            const KayfabeBridgeRefusal *r = &a.bridge_refusal[i];
+            int len = (int)(r->tag_len > KAYFABE_BRIDGE_REFUSAL_TAG_LEN
+                            ? KAYFABE_BRIDGE_REFUSAL_TAG_LEN : r->tag_len);
+
+            /* %.*s, never %s: the tag is NUL-PADDED and a name that exactly fills the
+             * array carries no terminator. */
+            info_report("nvkvm:   bridge refusal %.*s x%" PRIu64,
+                        len, (const char *)r->tag, r->count);
+        }
+    }
 }
 
 static void nvkvm_exit_notify(Notifier *n, void *data)

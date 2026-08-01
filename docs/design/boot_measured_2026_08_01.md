@@ -222,3 +222,108 @@ had rewritten `Cargo.lock` and nothing had committed it.
   unit-test claim, not a boot claim.
 - ⊘ **One boot each, one guest, one driver version.** `#98` records a Mode-2 symptom that
   was 1/3 one day and 9/9 the next on a bit-identical binary.
+
+---
+
+# The `EVENT_SET_NOTIFICATION` rung — what was built, and the two things §7 got slightly wrong
+
+> Written at the rung, **before** the boot that tests it. Everything below that is not
+> marked `[measured]` is a source reading, said as one.
+
+## 10. ★★★ §7 named the right control for a slightly wrong reason
+
+§7 concluded *"memmgr state init does not complete, because `0x20800301` is refused at
+`mem_mgr.c:625`, followed by `memmgrRegisterSuspendCallbacks` at `:777`"*. The **control is
+right** and the differential that identified it stands. Two details of the mechanism are
+not:
+
+1. **`:625` and `:777` are not two steps — `:625` is *inside* `:777`.**
+   `memmgrRegisterSuspendCallbacks` is `mem_mgr.c:601-634`; line 625 is the
+   `NV_ASSERT_OK_OR_RETURN` around the control, and line 777 is its **only** call site,
+   inside `memmgrStateInitLocked_IMPL`. There is exactly one `0x20800301` in the file.
+
+2. **The heap is created and then TORN DOWN — it is never "starved".**
+   `memmgrCreateHeap` runs at `mem_mgr.c:684`, *ninety lines before* the control, and sets
+   `pMemoryManager->pHeap` (`:1113`). The refusal takes `NV_ASSERT_OK_OR_GOTO(…, failed)`
+   at `:775-778`, and the `failed:` label calls `memmgrStateDestroy`, which does
+   `objDelete(pHeap); pMemoryManager->pHeap = NULL;` (`:963-975`) under a comment that calls
+   itself a WAR for `Bug 3482892: Need a way to roll back StateInit steps`.
+
+⇒ The end state is indistinguishable from "no heap", which is why §3's inference was
+plausible. But a port that read the null heap as *"the guest needs memory"* would be
+chasing a symptom ninety lines downstream of the statement that actually failed. ⊘ The
+lesson is §3's lesson again, one level finer: adjacency in a log is not a mechanism.
+
+## 11. ★★★ The reply may not be empty — a transport fact, not a control fact
+
+`NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS` has **zero `[OUT]` fields**
+(`ogkm-580: ctrl2080event.h:83-94`), and `subdeviceCtrlCmdEventSetNotification_IMPL`
+consumes the RPC only through `NV_CHECK_OK_OR_RETURN(LEVEL_WARNING, …)`
+(`subdevice_ctrl_event_kernel.c:110-117`). By `kayfabe_device::inert`'s own rule — *"the
+guest reads nothing but the status"* — this is an inert command, and the obvious
+implementation is an empty body.
+
+⊘ **That implementation is silently wrong**, and the reason belongs to the transport:
+
+```c
+if (paramsSize != 0)
+{
+    portMemCopy(pParamStructPtr, paramsSize, rpc_params->params, paramsSize);
+}
+```
+
+(`ogkm-580: rpc.c:11085-11090`) — `pParamStructPtr` **is** the caller's own
+`eventNotificationParams`, and the caller reads `->event` and `->action` out of it *after*
+the RPC returns, to drive its `notifyActions[]` switch
+(`subdevice_ctrl_event_kernel.c:119-146`). So an all-zero reply rewrites
+`event = 194, action = REPEAT` into `event = 0, action = ACTION_DISABLE`, arms the wrong
+notifier, and returns `NV_OK`.
+
+★ This port therefore **re-encodes the decoded request** rather than echoing its bytes: the
+guest's field values come back because they must, and both pad runs come back zero because
+nothing unmodelled may be reflected. On the *failure* path the copyout is skipped entirely
+(`rpc.c:11066-11070`; this control carries no `RMCTRL_FLAGS_COPYOUT_ON_ERROR` — flags
+`0x10118`, `g_subdevice_nvoc.c:1606`), so a refusal leaves the guest's struct untouched.
+
+## 12. ★★ Why accepting the registration is honest, and the scope that makes it so
+
+The triage row for `0x20800301` argued against serving it: *"this port gates event delivery
+off after `GSP_INIT_DONE` … so accepting a notification registration would promise an
+interrupt nothing raises."* The observation (`IrqRaise == 1` across `cap1`, zero `IRQSCLR`)
+is correct; the inference is not. It conflates **registering** an arming with **delivering**
+an event, and an undelivered notification costs something only for an event that can occur.
+
+The registration `memmgrRegisterSuspendCallbacks` sends is
+`NV2080_NOTIFIERS_POWER_RESUME` = 194, action `REPEAT`, callback
+`memmgrSuspendResumeCallback` (`mem_mgr.c:567-599`) — which requeues `MemoryMapper` work on
+resume from a power-state transition. **This device performs none.** So the number of
+`POWER_RESUME` events it will fail to deliver is zero.
+
+⊘ Which is why the promise is scoped to a **list**
+(`kayfabe_abi::eventnotify::SILENT_NOTIFIERS`) and not to the control. A rule shaped
+*"anything below `NV2080_NOTIFIERS_MAXCOUNT`"* would quietly cover fault and completion
+notifiers whose silence is a hang nobody could attribute. Forgetting a row costs one loud
+boot; widening the rule costs an unexplained one.
+
+## 13. ★★ The instrument `alloc1` did without
+
+§6's diagnosis turned on `fn 103` being **absent** from the unserviced ledger's six lines.
+That works, and it is diagnosis-by-absence — the reasoning `UnservicedLedger` exists to
+abolish for the other half of the chain. The gap was **ownership**, not instrumentation:
+`ObjectPolicy` owns its `Gpu` and is installed as `Box<dyn CommandPolicy>`, so its census
+was unreachable the moment the composition root boxed it.
+
+`kayfabe_rmrpc::SharedRefusalCensus` is a clonable handle taken *before* boxing and kept by
+`kayfabe_qemu_raw::shim::Regs`, and `KayfabeRegAudit` now carries the census across the seam
+— one row per `FaultTag`, **name by value** (the host-pointer gate forbids an address
+outside `*_unsafe.rs`, and smuggling one as a `u64` would defeat the gate rather than
+satisfy it). The C shell prints it unconditionally, including when it is zero:
+
+```text
+nvkvm: bridge refusals: N total, M distinct (these ANSWER the command and so never reach
+                                             the unserviced list)
+nvkvm:   bridge refusal BridgeRefusal::<Tag> xK
+```
+
+★ `bridge refusals: 0` is a **positive** statement that the bridge refused nothing. The
+absence of a line was never one.

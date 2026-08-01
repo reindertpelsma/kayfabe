@@ -100,6 +100,7 @@ pub mod capability;
 pub mod chipinfo;
 pub mod confcompute;
 pub mod deviceinfo;
+pub mod eventnotify;
 pub mod falconinfo;
 pub mod faultbuffer;
 pub mod fifochannels;

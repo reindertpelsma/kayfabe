@@ -1,5 +1,5 @@
-//! The command policy that answers the twelve `GSP_RM_CONTROL`s the guest's RM cannot get
-//! past, from the chip row's own tables.
+//! The command policy that answers the thirteen `GSP_RM_CONTROL`s the guest's RM cannot get
+//! past — twelve from the chip row's own tables, and one from the request itself.
 //!
 //! ⚠ The type names say *table* and most of them are not one:
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity,
@@ -7,7 +7,13 @@
 //! and `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` is an **instruction to construct**
 //! — none of which is a list. The names are kept because what actually unifies them is
 //! the property the module is about — **`[OUT]`-only, and a pure function of the chip
-//! row** — and that holds for all eight.
+//! row** — and that held for all twelve.
+//!
+//! ⚠ **It no longer holds for all of them.** [`WantedTable::EventSetNotification`] is a
+//! *verb on the event plane*: nothing about it is `[OUT]`, no chip row could answer it, and
+//! serving it changes this policy's state. It is here because [`WantedTable::ALL`] is the
+//! universe every coverage gate quantifies over, not because it is a table — its own
+//! rustdoc argues that trade rather than eliding it.
 //!
 //! ## ★★ Why this is here and not in a logic crate
 //!
@@ -20,8 +26,11 @@
 //!
 //! ## ★★★ What it does NOT do, deliberately
 //!
-//! Twelve controls, eleven of them `[OUT]`-only, all answered from the chip row. It touches no RM graph
-//! state, allocates no handle, and remembers nothing between commands. Every other command
+//! Thirteen controls, twelve of them `[OUT]`-only and answered from the chip row. It
+//! touches no RM graph state and allocates no handle. ⚠ It no longer *remembers nothing*:
+//! [`InitTablePolicy::notify_actions`] is one action per notifier index, keyed by a bounded
+//! small integer and by nothing a guest can mint — see that field for why the bound is
+//! structural. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
 //! semantic policy the compute path will need.
@@ -50,6 +59,7 @@ use kayfabe_abi::confcompute::{
 use kayfabe_abi::deviceinfo::{
     self, INTERNAL_DEVICE_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,
 };
+use kayfabe_abi::eventnotify;
 use kayfabe_abi::falconinfo::{
     self, FALCON_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO,
 };
@@ -157,6 +167,21 @@ const NV_OK: u32 = 0;
 pub struct InitTablePolicy {
     chip: &'static ChipProfile,
     driver: DriverAbiTable,
+    /// ★★★ **The only state this policy holds** — one action per notifier index, mirroring
+    /// the `pSubdevice->notifyActions[NV2080_NOTIFIERS_MAXCOUNT]` array RM keeps on both
+    /// sides of the RPC (`ogkm-580: subdevice_ctrl_event_kernel.c:119-146`).
+    ///
+    /// ⊘ The module's "remembers nothing between commands" rule is narrowed by this, not
+    /// broken, and the distinction is worth being precise about: this is keyed by a
+    /// **notifier index** — a small integer bounded by
+    /// [`NV2080_NOTIFIERS_MAXCOUNT`](kayfabe_abi::eventnotify::NV2080_NOTIFIERS_MAXCOUNT) —
+    /// and by nothing the guest can mint. There is no handle in it, no client, no sequence
+    /// number, so it cannot grow, cannot alias two guest processes, and cannot refuse a
+    /// legal recycle. A fixed-size array is the shape that makes all of that true by
+    /// construction rather than by a bound check.
+    ///
+    /// ★ It keeps the type `Copy`, which is why the array is `[u8; N]` and not a map.
+    notify_actions: [u8; eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
 }
 
 /// Which of the two tables a command asked for. Returned by [`InitTablePolicy::wanted`] so
@@ -293,6 +318,44 @@ pub enum WantedTable {
     /// first time — see [`kayfabe_abi::gmmustatic`], which states that boundary rather than
     /// eliding it.
     GmmuStaticInfo,
+    /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` — ★★★ the first variant that is **not a
+    /// table**, and the only one whose reply is a function of the *request* alone.
+    ///
+    /// # ⊘ Why it lives in this enum anyway
+    ///
+    /// Every variant above answers a description of silicon out of a
+    /// [`ChipProfile`](kayfabe_device::ChipProfile) row. This one answers a **verb on the
+    /// event plane**: the guest asks to arm a notifier, and there is no chip row that could
+    /// have the answer. The name `WantedTable` fits it badly and that is a cost worth
+    /// paying, because this enum is not merely a taxonomy — it is the universe every
+    /// coverage gate quantifies over
+    /// (`crates/kayfabe-crec/tests/cap1b_differential.rs::every_control_this_port_serves_is_exercised_by_the_replay`,
+    /// and [`WantedTable::ALL`]'s own docs on why *"in `ALL`"* and *"served"* are one
+    /// fact). A control served through a policy of its own would be a served control no
+    /// differential could regress, which is the defect shape `ALL` exists to close.
+    ///
+    /// # ★★★ Refusing it is what stops the boot, and it is MEASURED
+    ///
+    /// `[measured]` two boots one commit apart, `docs/design/boot_measured_2026_08_01.md`
+    /// §6 and §7: `alloc1` (`2ced035`) refused every object allocation, `alloc2`
+    /// (`a6412c0`) served every one of them — and both died in `kbusInitBar2_HAL` with a
+    /// null heap, identically. That differential is the only reason this can be stated as
+    /// cause: `memmgrRegisterSuspendCallbacks` issues this control under
+    /// `NV_ASSERT_OK_OR_RETURN` (`ogkm-580: mem_mgr.c:625`) and its caller
+    /// `memmgrStateInitLocked_IMPL` rolls the whole phase back through `memmgrStateDestroy`
+    /// (`:777`, `:963-975`), which deletes the heap it created ninety lines earlier.
+    ///
+    /// # ★★ And the reply may NOT be empty, which is why it is not `kayfabe_device::inert`
+    ///
+    /// The guest reads nothing but the status *from the control* — but
+    /// `rpcRmApiControl_GSP` copies the reply's params back over the caller's struct
+    /// (`ogkm-580: rpc.c:11085-11090`) and the caller then switches on
+    /// `pSetEventParams->action`. An all-zero body silently rewrites `event = 194,
+    /// action = REPEAT` into `event = 0, action = DISABLE` and returns `NV_OK`. See
+    /// [`kayfabe_abi::eventnotify`], which carries the full reading and the
+    /// [`SILENT_NOTIFIERS`](kayfabe_abi::eventnotify::SILENT_NOTIFIERS) scope that decides
+    /// which armings this port may accept at all.
+    EventSetNotification,
 }
 
 impl WantedTable {
@@ -323,7 +386,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 12] = [
+    pub const ALL: [WantedTable; 13] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -336,6 +399,7 @@ impl WantedTable {
         Self::BifStaticInfo,
         Self::FifoNumChannels,
         Self::GmmuStaticInfo,
+        Self::EventSetNotification,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -361,6 +425,9 @@ impl WantedTable {
             Self::BifStaticInfo => NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO,
             Self::FifoNumChannels => NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS,
             Self::GmmuStaticInfo => NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
+            Self::EventSetNotification => {
+                kayfabe_abi::eventnotify::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION
+            }
         }
     }
 
@@ -380,6 +447,9 @@ impl WantedTable {
             Self::BifStaticInfo => BIF_STATIC_INFO_PARAMS_SIZE,
             Self::FifoNumChannels => FIFO_NUM_CHANNELS_PARAMS_SIZE,
             Self::GmmuStaticInfo => GMMU_STATIC_INFO_PARAMS_SIZE,
+            Self::EventSetNotification => {
+                kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
+            }
         }
     }
 
@@ -405,7 +475,14 @@ impl InitTablePolicy {
     /// Build the policy for one chip and one guest driver's wire table.
     #[must_use]
     pub fn new(chip: &'static ChipProfile, driver: DriverAbiTable) -> InitTablePolicy {
-        InitTablePolicy { chip, driver }
+        InitTablePolicy {
+            chip,
+            driver,
+            // Every notifier starts disabled, which is what RM's own zeroed `Subdevice`
+            // starts at and therefore the only starting state that agrees with the guest.
+            notify_actions: [eventnotify::ACTION_DISABLE as u8;
+                eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+        }
     }
 
     /// Which table this command asks for, if any — the classification step on its own.
@@ -642,6 +719,57 @@ impl CommandPolicy for InitTablePolicy {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }
+            }
+            // ★★★ The event-plane arm — the only one that CHANGES this policy's state, and
+            // the only one whose reply is a function of the request alone.
+            //
+            // Four gates, in the order the guest's own handler applies them, and every one
+            // of them is transcription rather than invention:
+            //
+            // 1. The wire decode, which enforces `event < NV2080_NOTIFIERS_MAXCOUNT` and
+            //    `event != NV2080_NOTIFIERS_TIMER` — the two checks
+            //    `subdeviceCtrlCmdEventSetNotification_IMPL` makes *before* the RPC
+            //    (`ogkm-580: subdevice_ctrl_event_kernel.c:96-106`), so a request that
+            //    fails them cannot legitimately have reached us at all.
+            // 2. `SILENT_NOTIFIERS`, which is this port's OWN policy and the only gate here
+            //    that RM does not have: we deliver no events, so we may only accept an
+            //    arming for one that cannot occur. See `kayfabe_abi::eventnotify`.
+            // 3. The already-armed transition rule, which the physical RM on a real GSP
+            //    keeps for its own subdevice exactly as the guest keeps it for its copy
+            //    (`subdevice_ctrl_event_kernel.c:124-131`).
+            // 4. The re-encode, which is NOT an echo — see `encode_event_set_notification`.
+            //
+            // ⊘ `refuse()` on every failure, and refusing is clean here in a way it is not
+            // for the amputating controls above: the copyout is skipped on a non-`NV_OK`
+            // status (`ogkm-580: rpc.c:11066-11070`), so the guest's own params struct is
+            // left exactly as it wrote it and `NV_CHECK_OK_OR_RETURN` returns at a named
+            // statement.
+            WantedTable::EventSetNotification => {
+                let at = req.params_at;
+                let Ok(reg) = eventnotify::decode_event_set_notification(
+                    &cmd.payload[at..at + eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE],
+                ) else {
+                    return refuse();
+                };
+                if !eventnotify::is_silent_notifier(reg.event) {
+                    return refuse();
+                }
+                // The index is bounded by the decode, so this cannot be out of range.
+                let slot = match self.notify_actions.get_mut(reg.event as usize) {
+                    Some(s) => s,
+                    None => return refuse(),
+                };
+                if reg.action != eventnotify::ACTION_DISABLE
+                    && *slot != eventnotify::ACTION_DISABLE as u8
+                {
+                    return refuse();
+                }
+                // ⚠ Recorded BEFORE the reply is built, and it is the port's own state
+                // rather than a cache of the guest's: the day this device can raise an
+                // interrupt, this array is what says which notifier was armed with what.
+                // Until then it is what makes the transition rule above enforceable.
+                *slot = u8::try_from(reg.action).unwrap_or(0);
+                eventnotify::encode_event_set_notification(&reg)
             }
         };
 

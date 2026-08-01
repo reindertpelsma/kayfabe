@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 6u
+#define KAYFABE_SHIM_ABI 7u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -270,6 +270,19 @@ typedef struct KayfabeRegWrite {
 #define KAYFABE_UNSERVICED_SLOTS 32u
 #define KAYFABE_UNSERVICED_NO_CMD 0xFFFFFFFFu
 
+/* How many distinct BRIDGE-REFUSAL tags KayfabeRegAudit carries, and how many bytes of
+ * each tag's name it holds.  The name crosses BY VALUE rather than as a pointer: the Rust
+ * side's host-pointer gate forbids a host address outside its *_unsafe.rs files, and
+ * passing one as an integer would defeat that gate rather than satisfy it. */
+#define KAYFABE_BRIDGE_REFUSAL_SLOTS 32u
+#define KAYFABE_BRIDGE_REFUSAL_TAG_LEN 64u
+
+typedef struct KayfabeBridgeRefusal {
+    uint8_t tag[KAYFABE_BRIDGE_REFUSAL_TAG_LEN];  /* NUL-PADDED, not NUL-terminated */
+    uint64_t tag_len;
+    uint64_t count;
+} KayfabeBridgeRefusal;
+
 typedef struct KayfabeRegAudit {
     uint64_t reads;
     uint64_t writes;
@@ -315,6 +328,20 @@ typedef struct KayfabeRegAudit {
     uint64_t commands_unserviced;
     uint64_t unserviced_len;
     uint64_t unserviced[KAYFABE_UNSERVICED_SLOTS];
+    /* ★★★ REFUSALS RAISED INSIDE THE OBJECT BRIDGE — AND WHY THEY NEED THEIR OWN FIELDS.
+     *
+     * The list above is "commands NO policy answered".  A bridge refusal DOES answer the
+     * command — with a non-zero rpc_result — so it can never appear there, and before
+     * these fields the port had no channel that said one had happened at all.
+     *
+     * MEASURED, boot `alloc1` at rev 2ced035 (docs/design/boot_measured_2026_08_01.md §6):
+     * every GSP_RM_ALLOC was refused ParamsSizeExceedsPayload inside the bridge, and the
+     * only evidence was that `fn 103` was ABSENT from a list of six.  Diagnosis by absence
+     * is precisely what the unserviced ledger exists to abolish for the other half of the
+     * chain; these fields finish the job. */
+    uint64_t bridge_refusals;
+    uint64_t bridge_refusal_len;
+    KayfabeBridgeRefusal bridge_refusal[KAYFABE_BRIDGE_REFUSAL_SLOTS];
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

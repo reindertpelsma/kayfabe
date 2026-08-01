@@ -309,7 +309,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         "a served control the differential never sees is a served control no differential \
          can regress"
     );
-    assert_eq!(universe.len(), 12, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 13, "non-vacuity: the universe is not empty");
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.
@@ -370,22 +370,27 @@ fn every_control_the_oracle_asks_is_either_served_or_triaged() {
     );
 
     // ★★ And the split is counted on both sides, so a control MOVING between the two is a
-    // visible change rather than an invisible one. Twelve served, sixteen refused with a
-    // written argument. ⊘ The triage table has 23 rows, not 16+12: six of the twelve served
-    // controls are ALSO triaged (that is what makes the must-serve gate possible), and
-    // `0x20800a4b` is triaged without the oracle ever asking it.
+    // visible change rather than an invisible one. Thirteen served, fifteen refused with a
+    // written argument. ⊘ The triage table has 23 rows, not 15+13: seven of the thirteen
+    // served controls are ALSO triaged (that is what makes the must-serve gate possible),
+    // and `0x20800a4b` is triaged without the oracle ever asking it.
+    //
+    // ★★★ `0x20800301` is the control that most recently CROSSED this line, and the pair of
+    // numbers is the whole reason that is visible: it went 12/16 -> 13/15 in one commit.
+    // Its triage row is kept and corrected rather than deleted, so the argument for
+    // refusing it and the argument that overturned it sit side by side.
     let served_here: Vec<String> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_some())
         .map(|c| format!("{c:#010x}"))
         .collect();
-    assert_eq!(served_here.len(), 12);
+    assert_eq!(served_here.len(), 13);
     let triaged_here: Vec<&str> = asked
         .iter()
         .filter(|c| WantedTable::from_cmd(**c).is_none())
         .map(|c| triage_for(*c).expect("accounted for above").engine)
         .collect();
-    assert_eq!(triaged_here.len(), 16);
+    assert_eq!(triaged_here.len(), 15);
 
     // ⊘ A control the oracle asks may not be triaged `AmputationIntended`: that disposition
     // means "the chip lacks the engine", and the oracle's board demonstrably had it.
@@ -476,6 +481,19 @@ fn the_served_replies_are_the_ones_posted_and_each_carries_the_result_it_earned(
             (WantedTable::FifoNumChannels, 15, 76, 0),
             (WantedTable::FifoNumChannels, 16, 76, 0),
             (WantedTable::FifoNumChannels, 17, 76, 0),
+            // ★★★ The **event-plane** entry, and the only line here whose reply is a
+            // function of the request rather than of a chip row. `paylen 60` = 40 header +
+            // 20 params, which is an independent confirmation of
+            // `EVENT_SET_NOTIFICATION_PARAMS_SIZE` against the oracle's own wire.
+            //
+            // ⚠ `rc == 0` is doing more work here than on any other line. This control's
+            // reply body is copied back over the guest's own params struct
+            // (`ogkm-580: rpc.c:11085-11090`) and the guest then switches on
+            // `pSetEventParams->action` — so an `NV_OK` carrying an EMPTY body would pass
+            // this assertion and still silently re-register notifier 0. What rules that
+            // out is `kayfabe_abi::eventnotify`'s own round-trip tests, not this line;
+            // this line establishes only that the reply was posted and accepted.
+            (WantedTable::EventSetNotification, 25, 76, 0),
             // ★★★ The one whose refusal leaves `pKernelGmmu->pStaticInfo` pointing at
             // memory `_kgmmuInitStaticInfo` already freed (`ogkm-580: kern_gmmu.c:139-166`).
             (WantedTable::GmmuStaticInfo, 26, 76, 0),

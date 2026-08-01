@@ -76,8 +76,15 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// layout and this archive would write 16 bytes past the end of it. Nothing but the version
 /// stands between those two — the `sizeof` handshake does not cover this structure.
 ///
+///
+/// ★ Bumped to **7** when [`KayfabeRegAudit`] gained the object bridge's refusal census
+/// (`bridge_refusals`, `bridge_refusal_len`, `bridge_refusal`). Same ABI-3 reason a third
+/// time, and the growth is the largest yet — an ABI-6 shim would allocate a structure
+/// [`BRIDGE_REFUSAL_SLOTS`] rows short and this archive would write well past the end of
+/// it. The `sizeof` handshake still does not cover this structure; the version does.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 6;
+pub const ABI_VERSION: u32 = 7;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -698,6 +705,54 @@ pub const UNSERVICED_SLOTS: usize = 32;
 /// decode it"* must not read as *"command zero"*.
 pub const UNSERVICED_NO_CMD: u32 = 0xFFFF_FFFF;
 
+/// How many distinct bridge-refusal tags [`KayfabeRegAudit`] carries.
+///
+/// ★ Sized against the **whole** closed set: `kayfabe_rmrpc::BridgeRefusal` has fewer than
+/// this many `FaultTag`s, so a boot cannot overflow it. `bridge_refusal_len` reports the
+/// truth regardless, for the same reason [`UNSERVICED_SLOTS`]'s does.
+pub const BRIDGE_REFUSAL_SLOTS: usize = 32;
+
+/// How many bytes of a refusal's [`kayfabe_trace::FaultTag`] [`KayfabeBridgeRefusal`] holds.
+///
+/// ★★ The name crosses the seam **by value**, not as a pointer, and that is not a style
+/// choice: the host-pointer gate forbids a host address in any file that is not
+/// `*_unsafe.rs`, and smuggling one through as a `u64` would defeat the gate rather than
+/// satisfy it. Copying 64 bytes once per boot teardown is free, and it means the C shell
+/// prints a **name** without this crate publishing a second table of numeric codes that
+/// could drift from `BridgeRefusal::fault_tag`'s match.
+pub const BRIDGE_REFUSAL_TAG_LEN: usize = 64;
+
+/// One row of the bridge's refusal census: a `FaultTag`, and how many carried it.
+///
+/// ★★★ **The instrument boot `alloc1` did without.** `[measured]` 2026-08-01, boot
+/// `alloc1` at **rev `2ced035`** (`docs/design/boot_measured_2026_08_01.md` §6): a refusal
+/// raised *inside* the bridge answers the guest's command, so it never reaches the
+/// unserviced ledger, and the only evidence it happened was `fn 103` being **absent** from
+/// a list of six. Diagnosis-by-absence is exactly what the ledger exists to abolish. See
+/// `kayfabe_rmrpc::SharedRefusalCensus` for why the obstruction was ownership.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabeBridgeRefusal {
+    /// The tag's bytes, NUL-padded. Not NUL-*terminated* when the name is exactly
+    /// [`BRIDGE_REFUSAL_TAG_LEN`] long, so the C side prints with an explicit precision
+    /// rather than trusting a terminator.
+    pub tag: [u8; BRIDGE_REFUSAL_TAG_LEN],
+    /// How many bytes of [`Self::tag`] are the name. Never more than the array.
+    pub tag_len: u64,
+    /// How many refusals carried it.
+    pub count: u64,
+}
+
+impl Default for KayfabeBridgeRefusal {
+    fn default() -> KayfabeBridgeRefusal {
+        KayfabeBridgeRefusal {
+            tag: [0; BRIDGE_REFUSAL_TAG_LEN],
+            tag_len: 0,
+            count: 0,
+        }
+    }
+}
+
 /// The register plane's counters, in the wire shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(C)]
@@ -750,6 +805,17 @@ pub struct KayfabeRegAudit {
     /// logs `NV_ERR_NOT_SUPPORTED` quietly, so without this the list costs one boot per
     /// entry.
     pub unserviced: [u64; UNSERVICED_SLOTS],
+    /// ★★★ Refusals raised **inside the object bridge**, across every tag.
+    ///
+    /// ⊘ Disjoint from [`Self::commands_unserviced`] by construction, and the disjointness
+    /// is the whole point: a bridge refusal *answers* the command (with a non-zero
+    /// `rpc_result`), so the chain's terminal ledger never sees it. Before this field the
+    /// two together did not cover the command stream, and the gap was invisible.
+    pub bridge_refusals: u64,
+    /// How many entries of [`KayfabeRegAudit::bridge_refusal`] are populated.
+    pub bridge_refusal_len: u64,
+    /// The census, one row per tag, in tag order.
+    pub bridge_refusal: [KayfabeBridgeRefusal; BRIDGE_REFUSAL_SLOTS],
 }
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
@@ -880,6 +946,11 @@ impl NanoClock for HostMonotonicClock {
 #[derive(Debug)]
 pub struct Regs {
     plane: RegPlane,
+    /// ★★★ The object bridge's refusal census, kept **here** because the policy that owns
+    /// it is boxed into the chain and is unreachable afterwards. See
+    /// [`kayfabe_rmrpc::SharedRefusalCensus`] for the boot that had to be diagnosed by the
+    /// absence of a line instead.
+    refusals: kayfabe_rmrpc::SharedRefusalCensus,
 }
 
 impl Regs {
@@ -898,14 +969,15 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
+        let (objects, refusals) = object_policy(abi.driver)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
             Box::new(HostMonotonicClock::new()),
-            Some(object_policy(abi.driver)?),
+            Some(objects),
         )
         .map_err(|e| classify_chip(&e))?;
-        Ok(Regs { plane })
+        Ok(Regs { plane, refusals })
     }
 
     /// The plane, for a caller that needs more than this seam exposes.
@@ -1006,6 +1078,25 @@ impl Regs {
         for (slot, e) in unserviced.iter_mut().zip(sample.iter()) {
             *slot = (u64::from(e.function) << 32) | u64::from(e.cmd.unwrap_or(UNSERVICED_NO_CMD));
         }
+        // ★★★ The bridge's own refusals, which reach NO ledger — see
+        // [`KayfabeBridgeRefusal`]. Names cross by value; the truncation arm is a real
+        // branch rather than a silent `min`, because a clipped tag that still looked like
+        // a tag would be the quiet kind of wrong this whole struct exists to prevent.
+        let census = self.refusals.snapshot();
+        let bridge_refusals = census.total() as u64;
+        let mut bridge_refusal = [KayfabeBridgeRefusal::default(); BRIDGE_REFUSAL_SLOTS];
+        let mut bridge_refusal_len = 0u64;
+        for (row, (tag, n)) in bridge_refusal.iter_mut().zip(census.tags()) {
+            let bytes = tag.0.as_bytes();
+            let take = bytes.len().min(BRIDGE_REFUSAL_TAG_LEN);
+            row.tag[..take].copy_from_slice(&bytes[..take]);
+            row.tag_len = take as u64;
+            row.count = n as u64;
+            bridge_refusal_len += 1;
+        }
+        // ⊘ Reported from the census, not from the loop: a set larger than the array must
+        // say so, exactly as `unserviced_len` does.
+        let bridge_refusal_len = bridge_refusal_len.max(census.tags().count() as u64);
         KayfabeRegAudit {
             reads,
             writes,
@@ -1025,6 +1116,9 @@ impl Regs {
             commands_unserviced,
             unserviced_len: sample.len() as u64,
             unserviced,
+            bridge_refusals,
+            bridge_refusal_len,
+            bridge_refusal,
         }
     }
 }
@@ -1066,9 +1160,14 @@ impl Regs {
 /// realize the device**, not a degraded mode: a register plane whose alloc link is missing
 /// answers every `GSP_RM_ALLOC` with the named refusal that stopped the last boot, and
 /// serving that silently is how a port comes to be measured for something it is not doing.
+type ObjectLink = (
+    Box<dyn kayfabe_gsp::CommandPolicy>,
+    kayfabe_rmrpc::SharedRefusalCensus,
+);
+
 fn object_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
-) -> Result<Box<dyn kayfabe_gsp::CommandPolicy>, (Status, &'static str)> {
+) -> Result<ObjectLink, (Status, &'static str)> {
     let isolates = kayfabe_isolate::StillbornIsolates::new(
         "this build has no forwarding plane: the object model accepts protocol facts and \
          no host verb can be issued",
@@ -1085,7 +1184,7 @@ fn object_policy(
              the system proc an arena",
         )
     })?;
-    Ok(Box::new(kayfabe_rmrpc::ObjectPolicy::new(
+    let policy = kayfabe_rmrpc::ObjectPolicy::new(
         &driver,
         // ★ The fourth axis, DECLARED and never sniffed. The guest OS is a `#define` in
         // the guest driver's build and is undetectable on the wire, so a port that
@@ -1094,7 +1193,12 @@ fn object_policy(
         // this becomes a realize-time property beside the driver version — not an `if`.
         kayfabe_abi::GuestOs::Linux,
         gpu,
-    )))
+    );
+    // ★ The handle is taken BEFORE the policy is boxed, because afterwards there is no
+    // `ObjectPolicy` left to ask — that is the whole reason the census had to become a
+    // shared store rather than a field behind `&self`.
+    let refusals = policy.refusal_census();
+    Ok((Box::new(policy), refusals))
 }
 
 /// The object model's guest-physical window. See [`object_policy`] for why it is a

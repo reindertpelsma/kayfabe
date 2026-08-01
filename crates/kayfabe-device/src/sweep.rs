@@ -286,10 +286,23 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               engine's static description; its GSP-side arm is issued under \
               NV_CHECK_OK_OR_RETURN(LEVEL_WARNING) from \
               subdeviceCtrlCmdEventSetNotification_IMPL (ogkm-580: \
-              subdevice_ctrl_event_kernel.c:110-118). ⊘ This port gates event delivery off \
-              after GSP_INIT_DONE — IrqRaise == 1 across the whole of cap1 with ZERO IRQSCLR \
-              writes (C: traces/mode2_c_reference/README.md) — so accepting a notification \
-              registration would promise an interrupt nothing raises",
+              subdevice_ctrl_event_kernel.c:110-117). ★★★ SERVED as of the \
+              event-notification rung, and this row's original argument is CORRECTED rather \
+              than deleted. It read: 'this port gates event delivery off after \
+              GSP_INIT_DONE — IrqRaise == 1 across the whole of cap1 with ZERO IRQSCLR \
+              writes — so accepting a notification registration would promise an interrupt \
+              nothing raises'. The observation is right and the inference is not: it \
+              conflates REGISTERING an arming with DELIVERING an event, and an undelivered \
+              notification costs something only for an event that can occur. The one this \
+              control registers is NV2080_NOTIFIERS_POWER_RESUME (ogkm-580: \
+              cl2080_notification.h:235), which fires from a power-state transition this \
+              device never performs. ⊘ The promise is scoped to a LIST for exactly that \
+              reason — kayfabe_abi::eventnotify::SILENT_NOTIFIERS — and every other \
+              notifier index is still refused. Refusing this one halts the boot: it is the \
+              last statement of memmgrStateInitLocked_IMPL, whose failure path rolls the \
+              phase back through memmgrStateDestroy and DELETES the heap created ninety \
+              lines earlier (ogkm-580: mem_mgr.c:625, :777, :684, :963-975). [measured] \
+              2026-08-01, boots alloc1 (2ced035) and alloc2 (a6412c0)",
     },
     // ── seq 26 ─────────────────────────────────────────────────────────────────────
     SweepControl {

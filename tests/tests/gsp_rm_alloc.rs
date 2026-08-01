@@ -693,6 +693,59 @@ fn refusals_are_countable_by_tag() {
     assert_eq!(tags.len(), 1, "both refusals share one tag: {tags:?}");
 }
 
+/// ★★★ **A refusal must stay countable after the policy has been GIVEN AWAY** — the
+/// instrument boot `alloc1` did without.
+///
+/// # The measurement that motivates this test
+///
+/// `[measured]` boot `alloc1` at rev `2ced035` (`docs/design/boot_measured_2026_08_01.md`
+/// §6): every `GSP_RM_ALLOC` was refused `ParamsSizeExceedsPayload` **inside the bridge**,
+/// and the port's teardown audit printed six unserviced controls, all `fn 76`. The refusal
+/// appeared **nowhere**. It was diagnosed only because `fn 103` was *absent* from that list
+/// — diagnosis-by-absence, which is exactly the reasoning
+/// `kayfabe_device::unserviced::UnservicedLedger` exists to abolish for the other half of
+/// the chain.
+///
+/// ⊘ The obstruction was **ownership**, not instrumentation. The census existed and was
+/// correct; `ObjectPolicy` owns its `Gpu` and is installed as a `Box<dyn CommandPolicy>`,
+/// so the moment the composition root boxed it there was no `&ObjectPolicy` left to ask.
+/// A test that only ever calls `policy.census()` on a policy it still holds cannot see
+/// that gap — which is why this test **boxes the policy first** and then reads the census
+/// through a handle taken beforehand.
+#[test]
+fn the_refusal_census_is_readable_through_a_handle_after_the_policy_is_boxed() {
+    let policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    // The handle the composition root keeps — see `kayfabe_qemu_raw::shim::Regs`.
+    let census = policy.refusal_census();
+    assert!(
+        census.snapshot().is_empty(),
+        "nothing refused yet, and the handle says so rather than saying nothing"
+    );
+
+    // ★ Give the policy away, exactly as the composition root does. After this line there
+    // is no `ObjectPolicy` to call `census()` on.
+    let mut boxed: Box<dyn kayfabe_gsp::CommandPolicy> = Box::new(policy);
+    let cmd = alloc(1, BOOT_HCLIENT, 0xdead_0005, 0x1234);
+    let reply = boxed.respond(&cmd).expect("the bridge answers alloc");
+    assert_ne!(
+        reply.rpc_result, 0,
+        "and it answers with a REFUSAL, which is why no ledger will ever see it"
+    );
+
+    let after = census.snapshot();
+    assert_eq!(
+        after.total(),
+        1,
+        "the refusal must be visible through the handle — this is the whole instrument"
+    );
+    let tags: Vec<(FaultTag, usize)> = after.tags().collect();
+    assert_eq!(tags.len(), 1);
+    assert!(
+        tags[0].0.0.starts_with("BridgeRefusal::"),
+        "and it must be NAMED, not merely counted: {tags:?}"
+    );
+}
+
 /// ★★★ **A Device that declares no `deviceId` is REFUSED, never defaulted to GPU 0.**
 ///
 /// This is the arm the first draft of this file tripped over, and it is worth a test of

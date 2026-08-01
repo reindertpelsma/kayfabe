@@ -276,7 +276,7 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // array is not served at all, and the guest gets the ordinary named refusal. This test
     // pins the two things that remain assertions rather than construction — the size, and
     // that no two variants claim one id.
-    assert_eq!(WantedTable::ALL.len(), 12, "the served universe's size");
+    assert_eq!(WantedTable::ALL.len(), 13, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

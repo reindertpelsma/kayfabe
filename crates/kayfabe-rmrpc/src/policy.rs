@@ -108,9 +108,55 @@ impl RefusalCensus {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+}
 
-    fn record(&mut self, r: &BridgeRefusal) {
-        *self.0.entry(r.fault_tag()).or_default() += 1;
+/// ★★★ **The refusal census as a handle the composition root can still read after it has
+/// given the policy away** — the instrument the 2026-08-01 `alloc1` boot did without.
+///
+/// # Why this type exists, and what it costs to not have it
+///
+/// `[measured]` boot `alloc1` at rev `2ced035` (`docs/design/boot_measured_2026_08_01.md`
+/// §6): every `GSP_RM_ALLOC` was refused `ParamsSizeExceedsPayload` **inside the bridge**,
+/// and the only way anyone could tell was that `fn 103` was *missing* from the unserviced
+/// ledger's six lines. A bridge refusal answers the command — with a non-zero
+/// `rpc_result` — so it never reaches [`crate::policy`]'s terminal recorders, and the port
+/// had no channel that said *"the bridge refused something"*. The diagnosis was
+/// **by absence**, which is precisely what `kayfabe_device::unserviced::UnservicedLedger`
+/// was built to abolish for the other half of the chain.
+///
+/// ⊘ The obstruction was ownership, not instrumentation. `ObjectPolicy` **owns** its
+/// `Gpu`, is installed as a `Box<dyn CommandPolicy>`, and is therefore unreachable from
+/// the composition root the moment it is boxed — so a census that lived only behind
+/// `&self` could be read by a test and by nothing else. This handle is clonable and is
+/// kept by the root, exactly as `UnservicedLog` is.
+///
+/// ★ **One store, not two.** [`Bridge`] records here and nowhere else, and
+/// [`ObjectPolicy::census`] is a *snapshot* taken from this. A mirror kept beside the
+/// original would be the "two lists that agree today" shape this repository has been
+/// bitten by repeatedly; there is nothing here to drift from.
+///
+/// The bound argument in [`RefusalCensus`]'s docs is unweakened: the key is still a
+/// [`FaultTag`] from a fixed finite set and still nothing the guest supplies.
+#[derive(Debug, Clone, Default)]
+pub struct SharedRefusalCensus(std::sync::Arc<std::sync::Mutex<BTreeMap<FaultTag, usize>>>);
+
+impl SharedRefusalCensus {
+    /// A fresh, empty census.
+    #[must_use]
+    pub fn new() -> SharedRefusalCensus {
+        SharedRefusalCensus::default()
+    }
+
+    /// A point-in-time copy — the value form every existing reader asserts against.
+    #[must_use]
+    pub fn snapshot(&self) -> RefusalCensus {
+        let g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        RefusalCensus(g.clone())
+    }
+
+    fn record(&self, r: &BridgeRefusal) {
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        *g.entry(r.fault_tag()).or_default() += 1;
     }
 }
 
@@ -149,7 +195,7 @@ struct Bridge {
     /// the graph's or a counter. Bounded two ways and keyed by nothing the guest supplies
     /// — see [`Reassembler`].
     reasm: Reassembler,
-    census: RefusalCensus,
+    census: SharedRefusalCensus,
     applied: u64,
     inert: u64,
     held: u64,
@@ -162,7 +208,7 @@ impl Bridge {
             abi,
             guest_os,
             reasm: Reassembler::with_limits(limits),
-            census: RefusalCensus::default(),
+            census: SharedRefusalCensus::default(),
             applied: 0,
             inert: 0,
             held: 0,
@@ -226,10 +272,21 @@ impl<'a> GraphPolicy<'a> {
         &self.bridge.reasm
     }
 
-    /// The refusal census — see [`RefusalCensus`].
+    /// The refusal census, as a point-in-time snapshot — see [`RefusalCensus`].
+    ///
+    /// ★ By value since the census became a [`SharedRefusalCensus`]: the store is behind a
+    /// handle the composition root also holds, so there is no `&` to hand out that would
+    /// still be a single owner's. A snapshot is what every reader wanted anyway.
     #[must_use]
-    pub fn census(&self) -> &RefusalCensus {
-        &self.bridge.census
+    pub fn census(&self) -> RefusalCensus {
+        self.bridge.census.snapshot()
+    }
+
+    /// The census as a **handle**, for the composition root that must keep reading it after
+    /// boxing this policy — see [`SharedRefusalCensus`].
+    #[must_use]
+    pub fn refusal_census(&self) -> SharedRefusalCensus {
+        self.bridge.census.clone()
     }
 
     /// How many commands produced an `RmEvent` the graph **accepted**.
@@ -567,10 +624,21 @@ impl ObjectPolicy {
         OBJECT_VERBS.contains(&f)
     }
 
-    /// The refusal census — see [`RefusalCensus`].
+    /// The refusal census, as a point-in-time snapshot — see [`RefusalCensus`].
+    ///
+    /// ★ By value since the census became a [`SharedRefusalCensus`]: the store is behind a
+    /// handle the composition root also holds, so there is no `&` to hand out that would
+    /// still be a single owner's. A snapshot is what every reader wanted anyway.
     #[must_use]
-    pub fn census(&self) -> &RefusalCensus {
-        &self.bridge.census
+    pub fn census(&self) -> RefusalCensus {
+        self.bridge.census.snapshot()
+    }
+
+    /// The census as a **handle**, for the composition root that must keep reading it after
+    /// boxing this policy — see [`SharedRefusalCensus`].
+    #[must_use]
+    pub fn refusal_census(&self) -> SharedRefusalCensus {
+        self.bridge.census.clone()
     }
 
     /// How many commands produced an `RmEvent` the graph **accepted** — the non-vacuity
