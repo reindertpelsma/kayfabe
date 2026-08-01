@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ★★★ E0's witness: does a GUEST device-path action cause a REAL host RM verb?
+# ★★★ E0/E0b's witness: does a GUEST action cause a REAL host RM verb?
 #
 #   usage: scripts/bench/e0_isolate_witness.sh <tag> <stillborn|loopback|real|unset>
 #
@@ -206,4 +206,79 @@ if [ "$N" -gt 0 ]; then
 else
   say "⊘ no isolate child ever existed"
 fi
+
+# =====================================================================================
+# ★★★ E0b — THE ATTRIBUTION, ASSERTED AND NOT LEFT TO A READER
+# =====================================================================================
+#
+# E0's evidence contained both numbers and a human compared them. That is one step better
+# than the FIRST version of this script, which latched only the first sighting and printed
+# "★ AN ISOLATE CHILD EXISTED" — a sentence compatible with both the strong claim and the
+# weak one — but it is still not a check. E0b's whole content is an ORDERING, so the
+# ordering is what this asserts.
+#
+# ★★ **The timeline is not produced by the thing under test.** The sighting times come from
+# scanning the host's /proc at 2 Hz; the phase times come from `boot_capture.sh`'s own
+# stdout, stamped by this wrapper. Neither is written by the device, the archive, or the
+# core. The device's own `isolates: N materialized` line (E1, below) is a corroborating
+# reading and is deliberately NOT what decides this.
+#
+# ⊘ **It cannot pass vacuously.** For a plane that is supposed to spawn, a missing phase
+# line, a missing sighting, or an unparseable stamp is a FAILURE — not a skip. The one
+# thing worse than a red check here is a green one that measured nothing.
+E0B="not applicable (plane=$PLANE spawns nothing by design)"
+case "$PLANE" in
+  real|loopback)
+    # The MINIMUM over every sighting, not the first line in the file: the sampler appends
+    # sightings directly while the phase lines arrive through a pipe, so file ORDER is racy
+    # and only the stamps are authoritative.
+    FIRST_T=$(sed -n 's/^=== ISOLATE CHILD pid .*(t+\([0-9]\{1,\}\)s from witness start).*/\1/p' "$OUT" \
+              | sort -n | head -1)
+    OPEN_T=$(sed -n 's/^t+\([0-9]\{1,\}\) *.*opening the device.*/\1/p' "$OUT" | head -1)
+    if [ -z "$OPEN_T" ]; then
+      E0B="★ FAILED: boot_capture never printed its 'opening the device' phase line, so
+            there is no timeline to attribute a spawn against. ⊘ This is an INSTRUMENT
+            failure, not a green."
+    elif [ -z "$FIRST_T" ]; then
+      E0B="★ FAILED: no isolate child was ever sighted, so the lazy spawn cannot be
+            distinguished from a spawn that never happens (t_open=${OPEN_T}s)"
+    elif [ "$FIRST_T" -lt "$OPEN_T" ]; then
+      E0B="★ FAILED: the isolate child appeared at t+${FIRST_T}s, BEFORE the guest opened
+            the device at t+${OPEN_T}s. The spawn is realize-time — this is exactly the
+            state E0 measured (child t+3s, device open t+30-34s) and E0b exists to change."
+    else
+      E0B="ok — first isolate child at t+${FIRST_T}s, guest opened the device at
+            t+${OPEN_T}s ⇒ the spawn FOLLOWS the guest's action"
+    fi
+    ;;
+esac
+echo "E0b lazy-spawn check: $E0B" >> "$OUT"
+say "E0b lazy-spawn check: $E0B"
+case "$E0B" in "★ FAILED"*) BOOT_RC=5 ;; esac
+
+# =====================================================================================
+# ★★★ E1 — THE DEVICE'S OWN REPORT OF ITS ISOLATE PLANE
+# =====================================================================================
+#
+# `bench_rebuild_notes.md` §5 row 7: a FAILED real isolate was indistinguishable from a
+# deliberately plane-less one at the seam, so a spawn failure presented to every layer above
+# as "nothing happened". The archive now prints the census at teardown. This lifts those
+# lines out of the QEMU log into the witness, so an evidence file carries them.
+#
+# ⊘ It is a REPORT, not the E0b check: the device writes it, so it cannot attribute
+# anything. What it CAN do is turn a silent absence into a named line, which is E1's
+# entire content.
+QLOG=$BENCH/run_${TAG}_qemu.log
+{
+  echo "=== E1: the device's own isolate-plane census (from $QLOG) ==="
+  if grep -q 'nvkvm: isolates:' "$QLOG" 2>/dev/null; then
+    grep -E 'nvkvm: +isolates:|nvkvm: +isolate refusal' "$QLOG" | sed 's/^/  /'
+  else
+    echo "  ⊘ NO 'nvkvm: isolates:' LINE. Either this archive predates E1 (check the"
+    echo "    embedded rev above) or the teardown report did not run — do not read the"
+    echo "    absence as 'the plane is healthy'."
+  fi
+} >> "$OUT"
+grep -E 'nvkvm: +isolates:|nvkvm: +isolate refusal' "$QLOG" 2>/dev/null | sed 's/^/    /'
+
 exit "$BOOT_RC"
