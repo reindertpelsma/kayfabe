@@ -410,9 +410,12 @@ two guest processes ⇒ **three** distinct isolate sessions, **zero** of them at
 
 ⊘ **What the bench could NOT show, stated because it is the honest half.** The boot stops at
 `RmInitAdapter`, long before a second guest process exists, so every hardware arm below has
-exactly **one** `Proc` — the system one. The multi-process claim above is carried by the
-suite and by the code's key, **not** by any measurement on this hardware. The first arm that
-could show it is E6 with two guest processes, and nothing here has been run against one.
+exactly **one** `Proc` — the system one. On hardware the multi-process property is therefore
+**`[unmeasured]`**, and it is recorded as unmeasured rather than borrowed from the suite:
+what carries it is the test named above (green at `853a311`, and bitten — `BL9` collapses
+the per-process id onto `SYSTEM_PROC` and it goes red) plus `[src]` the anchor-client key in
+`Spine::plan_refresh`. The first arm that could measure it is E6 driven by two guest
+processes, and nothing here has been run against one.
 
 ### 3.8 E1 — BUILT. What became visible, and where
 
