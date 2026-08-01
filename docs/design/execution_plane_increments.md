@@ -776,6 +776,19 @@ A check that could not produce that sentence would not be a check.
 
 #### Suite, gates, bites
 
+- **Suite**, `[measured]` at `d8a5a6e` on the **RTX 3060 box** (the KVM bench):
+  `cargo test --workspace --no-fail-fast` with `KAYFABE_NO_KVM` **unset** → **1884 passed,
+  0 failed, 1 ignored**, `KVM-GATE: RAN` markers **56**, `SANDBOX-GATE: RAN` **10**.
+  ★ The run **before** the fix was `1883 passed, 1 failed` — `shim_logic.rs`'s wire-size
+  mirror, which `cargo check --workspace --all-targets` compiles and never runs. It is
+  recorded here rather than quietly fixed: it is the one gate that covers a C-layout change
+  this ABI's runtime `struct_size` handshake does not reach.
+- **Gates**, `[measured]` at `d8a5a6e` on the RTX 3060 box:
+  `./scripts/ci_gates.sh --all` → `ALL GATES CLEAN (21 steps, floor 21 for --all mode)`.
+- **Claim ledger**: `scripts/claim_ledger.py --gate` → **382 unattributed / 66 conflated /
+  17 bare-hardware**, i.e. the baseline, unmoved. ⊘ It went **red at 384** on the first
+  draft of this section and was fixed by **attributing** the two sites — naming the runs and
+  the evidence file — never by raising the ceiling.
 - **Bites:** `scripts/bite_e2_doorbell.py` — **10/10 caught**, restored-tree sanity GREEN,
   and the *split* is the finding: B3 (token not masked) and B8 (the default port becomes a
   silent sink) are caught by the **device** arm only; B9 (the root never installs the port)
