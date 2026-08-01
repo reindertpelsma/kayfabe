@@ -250,7 +250,8 @@ pub struct TpcRow {
 }
 
 /// SMs per TPC on Ampere consumer parts. Two, and the capture's 28 SMs over 14 TPCs is what
-/// says so `[measured]`.
+/// says so — `[measured]` on a real GA106, `C: src/qemu/mode2_initctrl_ga106.h:6221`, and
+/// re-derived by `tests/gr_static_info.rs`, which fails if the pairing stops holding.
 pub const SMS_PER_TPC: u16 = 2;
 
 /// GA106's three GPCs. `[measured]` from `C: mode2_initctrl_ga106.h`'s `ctl_20800a26`.
@@ -282,8 +283,9 @@ pub const GA106_GPCS: [GpcRow; 3] = [
 /// three are written from this one constant so they cannot drift apart.
 pub const GA106_GPC_MASK: u32 = 0b111;
 
-/// `tpcToPesMap[10]` — which PES each local TPC hangs off. `[measured]`; the tail past
-/// `tpc_count` is zero in the capture and zero here.
+/// `tpcToPesMap[10]` — which PES each local TPC hangs off. `[measured]` on a real GA106
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6220`), pinned by `tests/gr_static_info.rs`; the
+/// tail past `tpc_count` is zero in the capture and zero here.
 pub const GA106_TPC_TO_PES_MAP: [u32; MAX_TPC_PER_GPC] = [0, 0, 1, 1, 2, 2, 0, 0, 0, 0];
 
 /// GA106's fourteen TPCs in `globalTpcId` order — the index **is** the `globalTpcId`.
@@ -369,18 +371,21 @@ pub const GA106_TPCS: [TpcRow; 14] = [
 /// ⊘ **Opaque, and deliberately not decomposed.** `NV0080_CTRL_GR_CAPS_TBL_SIZE` is a
 /// bitfield table whose bits are named by `NV0080_CTRL_GR_CAPS_*` macros that this port has
 /// no consumer for; naming twenty of them here would be transcription dressed as modelling.
-/// It is carried as bytes, `[measured]` from `ctl_20800a1f`, and the fixture test is what
-/// pins it.
+/// It is carried as bytes, `[measured]` on a real GA106 from `ctl_20800a1f`
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6218`), and `tests/gr_static_info.rs` is the test
+/// that fails if a byte of it changes.
 pub const GA106_GR_CAPS: [u8; GR_CAPS_TBL_SIZE] = [
     0xb0, 0x62, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x10, 0x01, 0x08, 0x00, 0x10,
     0x10, 0x00, 0x00, 0x00, 0x04, 0xc0, 0x05,
 ];
 
-/// `fecsRecordSize` — 128 bytes per FECS trace record on this part. `[measured]`.
+/// `fecsRecordSize` — 128 bytes per FECS trace record on this part. `[measured]` on a real
+/// GA106 (`C: src/qemu/mode2_initctrl_ga106.h:6246`), pinned by `tests/gr_static_info.rs`.
 pub const GA106_FECS_RECORD_SIZE: u32 = 128;
 
 /// `bPerSubCtxheaderSupported` — Ampere supports the per-subcontext context header.
-/// `[measured]` (`ctl_20800a48` is `01 00 00 00 00 00 00 00`), and it is consumed
+/// `[measured]` on a real GA106 (`ctl_20800a48` is `01 00 00 00 00 00 00 00`,
+/// `C: src/qemu/mode2_initctrl_ga106.h:6252`, pinned by `tests/gr_static_info.rs`), and it is consumed
 /// immediately: `kgraphicsSetPerSubcontextContextHeaderSupported` (`kernel_graphics.c:1518`).
 pub const GA106_PER_SUBCTX_HEADER_SUPPORTED: bool = true;
 

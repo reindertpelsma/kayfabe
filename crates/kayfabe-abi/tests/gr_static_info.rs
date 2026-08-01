@@ -282,6 +282,10 @@ fn num_sm_and_num_tpc_sit_after_the_full_240_entry_array() {
 }
 
 // ═══════ the deferred half — the control a boot, not an argument, proved mandatory ═══════
+//
+// ★ The boot is `stateload1`, rev `041b4f1`, 2026-08-01, evidence at
+// `/workspace/bench/run_stateload1_dmesg.log`. See `docs/design/boot_measured_2026_08_01.md`
+// §39, and `kayfabe_abi::grstatic`'s deferred-half section for the reading it settled.
 
 use kayfabe_abi::grstatic::{
     CONTEXT_BUFFER_ABSENT, CONTEXT_BUFFER_ID_COUNT, CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
