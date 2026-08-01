@@ -69,7 +69,11 @@ want_all=0
 # measurement word must name its run rather than a source read. It reads only the tree,
 # produces no artifact and consumes none, so unlike the VBIOS-ORACLE step it runs in BOTH
 # modes and BOTH literals move together.
-GATE_STEPS_ALL_MIN=19
+# ★ 19 -> 20: the GMMU-ORACLE reached-count step (the tests that run NVIDIA's own GMMU
+# page-table format encoder over our GA10x decoder). Like the VBIOS-ORACLE step it READS
+# the test log, so the extractor defers it out of the default mode — which is why only the
+# `--all` literal moves and `GATE_STEPS_FAST_MIN` stays where it was.
+GATE_STEPS_ALL_MIN=20
 GATE_STEPS_FAST_MIN=11
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.

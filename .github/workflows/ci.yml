@@ -250,6 +250,52 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This machine has the vendored ogkm trees: $ran oracle tests actually executed."
           fi
+      # ★★ GMMU-ORACLE-gate non-vacuity — the same argument again, for the tests that run
+      # NVIDIA's OWN GMMU page-table format encoder (`tests/oracle/gmmu_fmt_oracle.c`,
+      # compiled by `tests/build.rs` out of the vendored open-kernel-modules trees, with the
+      # per-chip HAL binding DERIVED from the driver's own dispatch table).
+      #
+      # ★ Its honest limit, stated rather than glossed: GitHub's runners do not have those
+      # trees, so on THIS runner the suite is counted and never passes. Developer-box and
+      # bench gate; the floor is the only thing that stops it vanishing from both at once.
+      #
+      # Why it is worth a step: `#149` resolved 12 402 guest writes and 56 reads through
+      # `kayfabe_chips::Ga10xGmmu`, and SIXTEEN of them were checked by anything. The
+      # decoder and its test corpus were both written by reading the same C — the exact
+      # shape of `#13`, where `PD1` being a 512 MiB leaf level on GA10x (and nowhere else)
+      # was misread and cost weeks. No amount of Rust-side testing reaches that class.
+      #
+      # Floor 15 = the fifteen tests in the suite; a floor, not an equality, because the
+      # set grows. Raise it only when tests are added, and say which.
+      - name: GMMU-ORACLE-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
+                 "(scripts/ci_gates.sh does) and re-run."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'GMMU-ORACLE-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'GMMU-ORACLE-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "GMMU-oracle gate: ran=$ran skipped=$skipped total=$total (floor 15)"
+          if [ "$total" -lt 15 ]; then
+            echo "::error::GMMU-oracle tests were not reached: $total < 15." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the ONLY tests that judge our GA10x page-table decoder against" \
+                 "the real driver's own encoder rather than against a transcription of it;" \
+                 "a silent skip is worse than a red build."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This machine has a vendored ogkm tree: $ran oracle tests actually executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check

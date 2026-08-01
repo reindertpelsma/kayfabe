@@ -19,10 +19,10 @@
 # number and buys false confidence. Two live instances:
 #
 #   * the ~51 KVM-gated tests — CI counts them via a reached-count floor and never runs one;
-#   * the 10 VBIOS-oracle tests — they need the vendored open-kernel-modules trees, which
-#     GitHub runners do not have, so there they are counted and never pass.
+#   * the VBIOS-oracle and GMMU-oracle tests — they need the vendored open-kernel-modules
+#     trees, which GitHub runners do not have, so there they are counted and never pass.
 #
-# Both are *honest* about it, because both print a `…-GATE: SKIPPED <test> — <reason>` line
+# All are *honest* about it, because each prints a `…-GATE: SKIPPED <test> — <reason>` line
 # on the skipping arm. That discipline is the standard this script generalises: it does not
 # know the gate families by name, it **derives** them from the markers the run emits, and on
 # a box that is supposed to have the capability a single SKIPPED marker is a red run.

@@ -283,10 +283,10 @@ fn a_reached_count_of_zero_names_which_kind_of_zero_it_is() {
         .matches("INFRASTRUCTURE FAILURE, NOT A TEST RESULT")
         .count();
     assert!(
-        guards >= 3,
-        "★ only {guards} reached-count step(s) refuse over an unreadable log; there are three \
-         (KVM, SANDBOX, VBIOS-ORACLE). A step without the guard reports a count of zero and \
-         calls it a regression."
+        guards >= 4,
+        "★ only {guards} reached-count step(s) refuse over an unreadable log; there are four \
+         (KVM, SANDBOX, VBIOS-ORACLE, GMMU-ORACLE). A step without the guard reports a count \
+         of zero and calls it a regression."
     );
     assert!(
         src.contains("${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"),
