@@ -68,6 +68,8 @@ RM. A content diff is right for both because it is not keyed on an order at all.
 entry that is reachable from the root is never uninitialised* — and that invariant is what makes
 the reachability closure meaningful rather than a walk through garbage.
 
+`[test]` `tests/tests/reachability.rs::a_leaf_written_valid_before_its_parent_binds_only_when_the_link_is_published`
+
 ---
 
 ## 2. The two gates
@@ -142,6 +144,7 @@ happen **beyond** unbinding, and they are the part a leaf-watching design cannot
    *"or we misparse the recycled page's next contents as PTE writes."* Once the level is
    forgotten, a later write to that recycled page is **deferred** by
    `kayfabe_fwd::plan_pt_decode` — level unknown — instead of being decoded as a page table.
+   `[test]` `tests/tests/reachability.rs::the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred`
 
 ★ **Retirement is keyed on `was reachable and is not`, never on `is not reachable`.** The
 distinction is load-bearing: a page-table page filled *before* anything points at it — §12.1(i)'s
@@ -159,7 +162,9 @@ through invalid.
 
 **Under a content diff it fires**, because the diff compares what the slot *says* rather than what
 a store *did*. That is not a claim about hardware and it does not need one: it is a property of
-the comparison. ⚠ What remains open is not the mechanism but the **observation**: no downgrade
+the comparison.
+`[test]` `tests/tests/reachability.rs::a_remap_that_never_passes_through_invalid_still_fires`
+⚠ What remains open is not the mechanism but the **observation**: no downgrade
 appears anywhere in the C oracle's captures — all 786 invalidates across `cap1_coldboot_hermetic`,
 `cap3_matmul_forwarding` and `cap2b_stalequeue_nofn47` are upgrades `[meas]`
 (`resume_from_fault.md` §4.2, scan of 2026-08-01) — so the transport by which a downgrade would
@@ -358,6 +363,32 @@ stays unbound whether or not a future miss is allowed to walk, because a walk wo
 unwitnessed entry. If walk-on-fault is later adopted, it becomes a *third* populate source feeding
 the same shadow through the same `observe`, with the fault as its trigger condition — and §2.1's
 residue argument is what would keep it honest.
+
+---
+
+## 8.5 The bite ledger — each fix removed, each test watched going red
+
+A test that passes both with and without its fix is decoration. So every closure above was
+un-done in the tree, compiled, and its named test run; the table records what happened, on
+2026-08-01, on the 38-core build box, against this branch.
+
+| the fix, removed | the test that went RED |
+|---|---|
+| the reachability gate in `settle` (bind an unreachable leaf) | `a_leaf_written_valid_before_its_parent_binds_only_when_the_link_is_published` |
+| the witness gate in `settle` (bind an unwitnessed leaf) | `residue_can_make_a_page_reachable_but_never_binds_a_leaf_out_of_it` |
+| retirement altogether | `a_pde_clear_retires_the_whole_subtree_and_an_orphan_is_not_retired_with_it` |
+| `ever_reachable` in the retirement predicate (so an orphan retires too) | the same test, on its second half |
+| `pt_meta.remove` for a retired page, in the commit | `the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred` |
+| the protection-only arm of the diff | `a_protection_only_change_is_reported_and_never_silently_unchanged` |
+| the root comparison in `audit_root` | `a_shadow_whose_root_is_not_the_vas_s_pdb_is_a_loud_refusal` |
+| the `audit_root` call in the commit | `the_pass_refuses_a_shadow_whose_root_is_not_the_address_spaces` |
+| `PteDecode::Sparse` folded back into `Invalid` at the decoder | `sparse_is_a_third_state_and_the_three_transitions_differ` |
+| the dual slot's second edge, dropped at the decoder | `a_dual_directory_slot_names_two_sub_tables_and_both_are_followed` |
+| the host-published guard on an unbind | `an_unbind_of_a_host_published_range_is_refused_not_performed` |
+
+Eleven planted, eleven fired, and the tree was re-run green afterwards. ⊘ What this does **not**
+say: that the model is right. A bite ledger says each test depends on the code it names, which is
+the weakest thing worth having and the one this project has been bitten by not having.
 
 ---
 

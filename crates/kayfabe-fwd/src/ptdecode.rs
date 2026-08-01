@@ -464,7 +464,8 @@ pub fn commit_pt_decode(
         for phys in &s.retired {
             vas.pt_meta.remove(phys);
         }
-        let po = kayfabe_mmu::reach::apply_settlement(fmt, &mut vas.table, &mut vas.reach, key.1, &s);
+        let po =
+            kayfabe_mmu::reach::apply_settlement(fmt, &mut vas.table, &mut vas.reach, key.1, &s);
         out.bound += po.bound;
         out.unchanged += po.unchanged;
         out.repointed += po.repointed;

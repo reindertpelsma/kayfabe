@@ -59,7 +59,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use kayfabe_arch::ids::{GpuVa, Pdb};
 use kayfabe_arch::{Aperture, GmmuFmt, PageSize};
 
-use crate::walker::{DecodedLeaf, DropReason, LeafDisposition, PageDecode, PtPage, leaf_disposition};
+use crate::walker::{
+    DecodedLeaf, DropReason, LeafDisposition, PageDecode, PtPage, leaf_disposition,
+};
 
 /// How many page-table pages ONE shadow will hold.
 ///
