@@ -70,6 +70,19 @@ DIRTY=$(git -C "$REPO" status --porcelain | wc -l)
   strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null \
     | grep -o 'kayfabe-rev:[0-9a-f]*' | sort -u | sed 's/^/  /'
   echo "host gpu: $(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>&1)"
+  # ★★ THE ARCHIVE UNDER TEST IS NOT NECESSARILY HEAD. A bench once served a binary built
+  # from a revision weeks behind the tree and every result was attributed to the wrong one.
+  # This does not fail the run — a doc-only commit after the build is legitimate — it lists
+  # exactly WHICH files differ, so a reader can judge instead of assuming.
+  BINREV=$(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null \
+           | grep -o 'kayfabe-rev:[0-9a-f]\{40\}' | sed 's/kayfabe-rev://' | sort -u | head -1)
+  if [ -n "$BINREV" ] && [ "$BINREV" != "$REV" ]; then
+    echo "⚠ ARCHIVE REV != SOURCE REV. Files differing ${BINREV:0:8}..${REV:0:8}:"
+    git -C "$REPO" diff --name-only "$BINREV" "$REV" 2>/dev/null | sed 's/^/    /'
+    echo "  ⊘ If any line above is under crates/ or Cargo.lock, this run does NOT measure $REV."
+  else
+    echo "archive rev == source rev"
+  fi
   echo
 } > "$OUT"
 
