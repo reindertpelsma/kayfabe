@@ -386,7 +386,13 @@ un-done in the tree, compiled, and its named test run; the table records what ha
 | the dual slot's second edge, dropped at the decoder | `a_dual_directory_slot_names_two_sub_tables_and_both_are_followed` |
 | the host-published guard on an unbind | `an_unbind_of_a_host_published_range_is_refused_not_performed` |
 
-Eleven planted, eleven fired, and the tree was re-run green afterwards. ⊘ What this does **not**
+Eleven planted, eleven fired, and the tree was re-run green afterwards. The harness is
+`scripts/bite_reachability.py` and it is committed rather than run once: a bite ledger in a
+commit message is a claim about a tree that has since moved, and a re-runnable one is the
+difference between *eleven bites fired once* and *eleven bites fire*. It reports three
+outcomes that look like success from a distance and are not — a pattern that no longer
+matches (the bite was never applied), a removal the compiler rejected (the test never ran),
+and a genuine non-biter. ⊘ What this does **not**
 say: that the model is right. A bite ledger says each test depends on the code it names, which is
 the weakest thing worth having and the one this project has been bitten by not having.
 
