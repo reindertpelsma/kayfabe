@@ -390,10 +390,13 @@ fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandl
     // `g_subdevice_nvoc.c:4996`). Asking anyway costs one ioctl and converts *"we did not
     // measure the runlist id"* into *"we asked and RM refused, with this status"*.
     {
-        // `baseIndex + numEntries + bMore` then 32 entries of 16+2+2 NvU32 and a 16-byte
-        // name — the size is not load-bearing here because the call is expected to fail
-        // before the payload is read; what is recorded is the STATUS.
-        let mut p = vec![0u8; 12];
+        // ★ The size IS load-bearing, and getting it wrong cost a run: a 12-byte payload
+        // came back `NV_ERR_INVALID_ARGUMENT` (0x1F) from RM's paramSize check, which
+        // reads exactly like a refusal and is not one. `NV2080_CTRL_FIFO_GET_DEVICE_INFO_
+        // TABLE_PARAMS` is `NvU32 baseIndex`, `NvU32 numEntries`, `NvBool bMore` (padded
+        // to 4), then 32 × `NV2080_CTRL_FIFO_DEVICE_ENTRY` of (16+2+2+1) `NvU32` and a
+        // 16-byte name = 100 bytes: 12 + 3200.
+        let mut p = vec![0u8; 12 + 32 * 100];
         let r = rm.control(subdevice, ControlCmd(0x2080_1112), &mut p);
         println!("FACT device_info_table={r:?}");
     }
