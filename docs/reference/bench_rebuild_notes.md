@@ -200,6 +200,50 @@ already records that **forwarding-mode traces are non-hermetic by construction**
 is an uninstrumented channel, the host GPU DMAs into guest RAM behind every recorder. A green
 forwarding diff will not mean what a green emulation diff means.
 
+### 5b. ★★ Two things this box measured at rev `419afe8` that no other box could have
+
+Both **[measured]** 2026-08-01 at rev `419afe8` on the RTX 3060 box, host 580.159.04 open.
+Transcripts: `bench_evidence/rm-ladder-concurrency-419afe8.out`,
+`bench_evidence/sandbox-probe-419afe8.out`.
+
+**(a) RM serialization is DEVICE-WIDE, not per-client.** `kayfabe-rm-ladder --concurrency`
+(rung R12, another binary path nothing had ever run) drives 4 threads × 200 `alloc_vaspace` +
+`free` verbs:
+
+```
+ok    R12 1 thread (base)  = 800 verbs sequential, 1496 ms
+ok    R12 one client       = 430 overlapping pairs, 1602 ms
+ok    R12 4 clients      = 454 overlapping pairs, 1594 ms
+★     R12 SPEEDUP         = one client x4 workers: 0.93x   |   4 clients: 0.94x   (ideal 4.00x)
+```
+
+The overlap counters prove the requests really were in flight together — 430 and 454
+overlapping pairs — and the wall clock did not move. `rm_semantics_measured.md` records "RM
+serializes ALL ioctls **per client**"; ★ that is **too weak**. Four *separate* RM clients get
+**0.94x**, statistically the same as one client's 0.93x, so the lock is not the client's.
+
+⇒ **[inferred], and load-bearing for the ExecPlane:** an isolate *pool* cannot buy verb
+throughput on one GPU, at any client granularity. Its value is isolation and fault
+containment, not parallelism, and any design that budgets N× from N workers is budgeting
+against a measurement that says 1×. ⊘ This does **not** generalise to the data plane — in the
+same 2026-08-01 run at rev `419afe8`, R15/R17 show the GPU consuming pushbuffers, which is a
+different path from the ioctl one.
+
+**(b) The `O_PATH` `/dev` escape is CLOSED here.** `o_path_dev_escape` records the C finding
+that `openat(devfd, "../etc/shadow")` **opens**, and that the Rust re-opened it. On this box,
+in the real sandboxed child, all eight traversal probes are refused:
+
+```
+SANDBOX ok
+PROBE nvidiactl OPENED          PROBE kvm DENIED 2        PROBE mem DENIED 2
+PROBE ../etc/shadow DENIED 2    PROBE ../root DENIED 2    PROBE ../proc/1/maps DENIED 2
+PRIV eff=0…0 prm=0…0 inh=0…0 bnd=0…0 amb=0…0 nnp=1 dumpable=0
+```
+
+All five capability sets empty, `NoNewPrivs=1`, `dumpable=0`, and the *only* thing reachable
+under `/dev` is `nvidiactl`. ⚠ `Seccomp: 0` — there is no syscall filter, so the containment
+here is namespace + capability + dirfd, not seccomp. Say which one you mean when citing this.
+
 ### 6. Traps encoded, so the next rebuild does not pay for them again
 
 - ★★ **apt holds** — §2. The symptom is the C file's documented `.run` refusal; the cause is not.
