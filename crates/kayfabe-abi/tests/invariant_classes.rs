@@ -59,6 +59,9 @@ fn the_invariant_set_is_exactly_the_three_that_were_sourced() {
             "CONTEXT_SHARE" => inv::CONTEXT_SHARE,
             other => panic!("unlisted member {other}"),
         };
-        assert_eq!(*value, expect, "{name} in the list disagrees with the constant");
+        assert_eq!(
+            *value, expect,
+            "{name} in the list disagrees with the constant"
+        );
     }
 }

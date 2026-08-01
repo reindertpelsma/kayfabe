@@ -181,7 +181,8 @@ fn each_profile_names_the_class_the_drivers_own_rule_selects_for_that_chip() {
             ("ce_object", newest(chip.ce), profile.ce_object().0),
         ] {
             assert_eq!(
-                got, expect,
+                got,
+                expect,
                 "★ {} :: {role} — the profile {:?} answers {got:#06x}, but the newest \
                  member of that family in {}'s own class list \
                  (g_gpu_class_list.c) is {expect:#06x}. A wrong class id here is an \
@@ -387,9 +388,9 @@ fn every_generation_decodes_a_work_submit_token_the_same_way_and_none_uses_the_m
         0x0000_0FFF,
         0x007F_0FFF,
         0x0003_0001,
-        0x0000_1000,      // bit 12 — in the 15:12 hole
-        0x0080_0000,      // bit 23 — above RUNLIST_ID
-        0x1_0000_0000,    // wider than the u32 RM writes
+        0x0000_1000,   // bit 12 — in the 15:12 hole
+        0x0080_0000,   // bit 23 — above RUNLIST_ID
+        0x1_0000_0000, // wider than the u32 RM writes
     ];
     let mut refusals = 0usize;
     for t in probes {

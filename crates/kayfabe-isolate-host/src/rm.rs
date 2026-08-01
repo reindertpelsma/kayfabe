@@ -116,23 +116,22 @@ use kayfabe_abi::generated::classes::{
 // not which chip has it") and is why this crate can be SCOPED by that gate rather than
 // excused from it — a name scan cannot distinguish `KEPLER_CHANNEL_GROUP_A`, whose
 // generation word is vestigial, from `AMPERE_DMA_COPY_B`, whose is not.
-use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::generated::nvos::{
     NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA,
     NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
     Nvos47Parameters, Nvos54Parameters,
 };
+use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
-    ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams,
-    ENGINE_TYPE_COPY0, ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams,
-    NV_ESC_RM_MAP_MEMORY, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
-    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
-    NvMemoryAllocationParams, Nvos33ParametersWithFd, SET_OBJECT, USERD_GP_GET, USERD_GP_PUT,
-    USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce,
-    engine_type_copy, fifo, gp_entry, method_header_inc,
+    ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
+    ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
+    NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
+    SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE,
+    WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry, method_header_inc,
 };
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::HostClasses;
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{
     CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle,
     IsolateId, RmBackend, RmError,
@@ -2174,12 +2173,10 @@ impl HostRmBackend {
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
-        let tsg = match self.conn.raw_alloc(
-            self.conn.device,
-            want,
-            CHANNEL_GROUP,
-            &mut tsg_params,
-        ) {
+        let tsg = match self
+            .conn
+            .raw_alloc(self.conn.device, want, CHANNEL_GROUP, &mut tsg_params)
+        {
             Ok(h) => {
                 self.conn.remember(h, self.conn.device);
                 h
@@ -2219,10 +2216,12 @@ impl HostRmBackend {
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
-        let chan = match self
-            .conn
-            .raw_alloc(tsg, want, self.conn.classes.gpfifo_channel().0, &mut chan_params)
-        {
+        let chan = match self.conn.raw_alloc(
+            tsg,
+            want,
+            self.conn.classes.gpfifo_channel().0,
+            &mut chan_params,
+        ) {
             Ok(h) => {
                 self.conn.remember(h, tsg);
                 h
