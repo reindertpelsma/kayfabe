@@ -90,45 +90,73 @@ DIRTY=$(git -C "$REPO" status --porcelain | wc -l)
 # Dumps EVERY distinct isolate-child pid once, with the time it first appeared, and keeps a
 # running sample count so a child that dies immediately is distinguishable from one that
 # lives.
+
+# One child's whole observable state, at one instant. `$1` = pid, `$2` = header.
+dump_child() {
+  local p=$1 hdr=$2
+  {
+    echo "$hdr"
+    echo "cmdline: $( { tr '\0' ' ' < /proc/$p/cmdline; } 2>/dev/null )"
+    echo "ppid   : $(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)"
+    echo "ppid is: $( { tr '\0' ' ' < /proc/$(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)/cmdline; } 2>/dev/null | cut -c1-100)"
+    echo "--- open descriptors (the RM nodes are the point) ---"
+    ls -l /proc/$p/fd 2>/dev/null | sed 's/^/  /'
+    echo "--- mappings naming an nvidia node (an RM-SERVED mmap) ---"
+    grep -i nvidia /proc/$p/maps 2>/dev/null | sed 's/^/  /' || echo "  (none)"
+    echo "--- containment ---"
+    grep -E '^(Name|Uid|Gid|NoNewPrivs|Seccomp|CapEff|CapPrm|CapBnd|Threads)' \
+         /proc/$p/status 2>/dev/null | sed 's/^/  /'
+    echo "  namespaces (vs this shell's):"
+    for ns in user pid net mnt ipc uts; do
+      printf '    %-5s child=%s  host=%s\n' "$ns" \
+        "$(readlink /proc/$p/ns/$ns 2>/dev/null)" "$(readlink /proc/self/ns/$ns)"
+    done
+    echo
+  } >> "$OUT"
+}
+
+# How long after a first sighting the SETTLED re-dump is taken. See `sampler`.
+SETTLE_S=${SETTLE_S:-6}
+
 sampler() {
   local seen=0
   local -A latched=()
+  local -A settled=()
   while :; do
     for c in /proc/[0-9]*/cmdline; do
       p=${c%/cmdline}; p=${p#/proc/}
-      # ★ cmdline is NUL-separated and, unlike `comm`, is NOT truncated. `2>/dev/null`
-      # because a pid can exit between the glob and the read; that is not a finding.
-      cl=$(tr '\0' ' ' < "$c" 2>/dev/null) || continue
+      # ★ cmdline is NUL-separated and, unlike `comm`, is NOT truncated. The whole
+      # redirection is wrapped so that a pid exiting between the glob and the read is
+      # silent — bash reports a failed `<` itself, so `2>/dev/null` on the command is not
+      # enough, and the noise it made drowned the findings.
+      cl=$( { tr '\0' ' ' < "$c"; } 2>/dev/null ) || continue
       case "$cl" in
         *kayfabe-isolate*)
           seen=$((seen + 1))
+          now=$(( $(date +%s) - T0 ))
           # ★★ EVERY distinct pid is dumped, not just the first. Which spawns happen and
-          # WHEN is the whole question E0's evidence turns on: a child that appears before
-          # the guest driver is even loaded was spawned by device REALIZE, and one that
-          # appears during the device open was spawned by GUEST traffic. A sampler that
-          # latched only the first sighting cannot tell those apart, and the first version
-          # of this script could not.
+          # WHEN is the whole question E0/E0b's evidence turns on: a child that appears
+          # before the guest driver is even loaded was spawned by device REALIZE, and one
+          # that appears during the device open was spawned by GUEST traffic. A sampler
+          # that latched only the first sighting cannot tell those apart, and the first
+          # version of this script could not.
           if [ -z "${latched[$p]:-}" ]; then
-            latched[$p]=1
-            {
-              echo "=== ISOLATE CHILD pid $p  at $(date -Is)  (t+$(( $(date +%s) - T0 ))s from witness start) ==="
-              echo "cmdline: $cl"
-              echo "ppid   : $(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)"
-              echo "ppid is: $(tr '\0' ' ' < /proc/$(awk '/^PPid:/{print $2}' /proc/$p/status 2>/dev/null)/cmdline 2>/dev/null | cut -c1-100)"
-              echo "--- open descriptors (the RM nodes are the point) ---"
-              ls -l /proc/$p/fd 2>/dev/null | sed 's/^/  /'
-              echo "--- mappings naming an nvidia node (an RM-SERVED mmap) ---"
-              grep -i nvidia /proc/$p/maps 2>/dev/null | sed 's/^/  /' || echo "  (none)"
-              echo "--- containment ---"
-              grep -E '^(Name|Uid|Gid|NoNewPrivs|Seccomp|CapEff|CapPrm|CapBnd|Threads)' \
-                   /proc/$p/status 2>/dev/null | sed 's/^/  /'
-              echo "  namespaces (vs this shell's):"
-              for ns in user pid net mnt ipc uts; do
-                printf '    %-5s child=%s  host=%s\n' "$ns" \
-                  "$(readlink /proc/$p/ns/$ns 2>/dev/null)" "$(readlink /proc/self/ns/$ns)"
-              done
-              echo
-            } >> "$OUT"
+            latched[$p]=$now
+            dump_child "$p" \
+              "=== ISOLATE CHILD pid $p  at $(date -Is)  (t+${now}s from witness start) ==="
+          # ★★★ AND A SECOND, SETTLED DUMP — added because the FIRST one measured the
+          # wrong thing on run `e0breal1`. The parent's `spawn` blocks on the child's hello
+          # handshake, but the *pid* exists from the `clone`, so a 2 Hz sampler can latch it
+          # MID-BRING-UP: `e0breal1` caught it holding `/dev/nvidiactl` (R0 done) with no
+          # `/dev/nvidia0` and no mapping, and the mapping check called that a failure while
+          # the device's own report said the isolate was live and not refusing. ⊘ The
+          # instrument was wrong, not the run. The FIRST sighting is still what attributes
+          # the spawn (that is E0b's whole content, and it is unaffected); this is what the
+          # containment/RM-node assertions read.
+          elif [ -z "${settled[$p]:-}" ] && [ $(( now - latched[$p] )) -ge "$SETTLE_S" ]; then
+            settled[$p]=1
+            dump_child "$p" \
+              "=== ISOLATE CHILD SETTLED pid $p  (first seen t+${latched[$p]}s, settled at t+${now}s) ==="
           fi
           ;;
       esac
@@ -186,10 +214,19 @@ case "$PLANE" in
       MAPPING="★ FAILED: a child exists but its argv does not carry '--rm $PLANE'"
     fi
     # And, for `real`, the RM nodes it can only hold if RmConnection::open succeeded.
+    # ⊘ Read off the SETTLED dump, never the first sighting: the pid exists from the
+    # `clone`, so a first sighting can legitimately predate the RM bring-up it is being
+    # asked about. A missing settled dump is its own, differently-worded failure — "we
+    # never looked at a settled child" must not read as "the child had no mapping".
     if [ "$PLANE" = real ] && [ "$MAPPING" = ok ]; then
-      grep -q '/dev/nvidiactl' "$OUT" || MAPPING="★ FAILED: no /dev/nvidiactl descriptor"
-      grep -q 'rw-s .*/dev/nvidia0' "$OUT" \
-        || MAPPING="★ FAILED: no RM-served /dev/nvidia0 MAPPING (R6b never completed)"
+      if ! grep -q '^=== ISOLATE CHILD SETTLED pid ' "$OUT"; then
+        MAPPING="★ FAILED (INSTRUMENT): no child survived to a settled dump (+${SETTLE_S}s),
+              so its RM nodes were never observed. This is not a statement about the child."
+      else
+        grep -q '/dev/nvidiactl' "$OUT" || MAPPING="★ FAILED: no /dev/nvidiactl descriptor"
+        grep -q 'rw-s .*/dev/nvidia0' "$OUT" \
+          || MAPPING="★ FAILED: no RM-served /dev/nvidia0 MAPPING (R6b never completed)"
+      fi
     fi
     ;;
   stillborn|unset)
