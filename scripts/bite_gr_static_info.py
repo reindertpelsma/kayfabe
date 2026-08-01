@@ -70,8 +70,8 @@ BITES = [
     (
         "PDE publication: the alignment rule read as `hi` rather than `hi + 1`",
         "crates/kayfabe-abi/src/gvaspacepdes.rs",
-        "    if hi_end % page_size != 0 {",
-        "    if virt_addr_hi % page_size != 0 {",
+        "    if !hi_end.is_multiple_of(page_size) {",
+        "    if !virt_addr_hi.is_multiple_of(page_size) {",
         "gvaspace_pdes",
     ),
     (
