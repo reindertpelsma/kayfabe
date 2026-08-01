@@ -1,0 +1,26 @@
+=== e0_isolate_witness tag=e0ctl2 at 2026-08-01T17:31:51+00:00 ===
+REV_UNDER_TEST=e10a6bf48084facf0a99540c6989e1d4d7961412
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=<unset>
+qemu binary: -rwxr-xr-x 1 root root 84146064 Aug  1 17:31 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:e10a6bf48084facf0a99540c6989e1d4d7961412
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+archive rev == source rev
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:e0ctl2] booting (extra args: none)
+t+28   [boot_capture:e0ctl2] guest is up after 28s
+t+29   [boot_capture:e0ctl2] module unloaded and ring buffer cleared; loading cold
+t+30   [boot_capture:e0ctl2] opening the device (this is what runs RmInitAdapter)
+t+36   [boot_capture:e0ctl2] captured 25 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_e0ctl2_dmesg.log
+t+36   [boot_capture:e0ctl2] --- the verdict lines ---
+t+36   [   25.554974] NVRM: RmInitNvDevice: *** Cannot load state into the device
+t+36   [   25.555187] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+t+36   [   26.531126] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+t+36   [boot_capture:e0ctl2] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+51   [boot_capture:e0ctl2] done. serial=/workspace/bench/run_e0ctl2_serial.log qemu=/workspace/bench/run_e0ctl2_qemu.log dmesg=/workspace/bench/run_e0ctl2_dmesg.log probe=/workspace/bench/run_e0ctl2_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 0   (0 = never seen alive)
+distinct isolate-child pids: 0

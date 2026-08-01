@@ -171,6 +171,35 @@ SEEN=$(cat /tmp/e0_seen_$TAG 2>/dev/null || echo 0)
 say "boot_capture rc=$BOOT_RC ; isolate-child samples=$SEEN"
 say "witness → $OUT"
 N=$(grep -c '^=== ISOLATE CHILD pid ' "$OUT")
+
+# ★★ THE PLANE→RmMode MAPPING, ASSERTED ON HARDWARE. Nothing in the pure tests can see it:
+# `isolate_factory` hands back a `Box<dyn IsolateFactory>` and the `RmMode` inside it is not
+# observable from Rust. The child's own argv IS, and this is the only instrument that reads
+# it. `IsolatePlane::Real` building a `RmMode::Loopback` factory would spawn a child that
+# never touches an NVIDIA node and would otherwise look exactly like success here.
+MAPPING=ok
+case "$PLANE" in
+  real|loopback)
+    if [ "$N" -eq 0 ]; then
+      MAPPING="★ FAILED: plane=$PLANE and NO isolate child ever existed"
+    elif ! grep -q -- "--rm $PLANE" "$OUT"; then
+      MAPPING="★ FAILED: a child exists but its argv does not carry '--rm $PLANE'"
+    fi
+    # And, for `real`, the RM nodes it can only hold if RmConnection::open succeeded.
+    if [ "$PLANE" = real ] && [ "$MAPPING" = ok ]; then
+      grep -q '/dev/nvidiactl' "$OUT" || MAPPING="★ FAILED: no /dev/nvidiactl descriptor"
+      grep -q 'rw-s .*/dev/nvidia0' "$OUT" \
+        || MAPPING="★ FAILED: no RM-served /dev/nvidia0 MAPPING (R6b never completed)"
+    fi
+    ;;
+  stillborn|unset)
+    [ "$N" -eq 0 ] || MAPPING="★ FAILED: plane=$PLANE spawned $N isolate child(ren)"
+    ;;
+esac
+echo "plane->RmMode mapping check: $MAPPING" >> "$OUT"
+say "plane->RmMode mapping check: $MAPPING"
+[ "$MAPPING" = ok ] || BOOT_RC=4
+
 if [ "$N" -gt 0 ]; then
   say "★ $N DISTINCT ISOLATE CHILD(REN) EXISTED — see the t+ stamps for WHICH PHASE spawned each"
   grep -E '^=== ISOLATE CHILD pid |opening the device|guest is up|booting' "$OUT" | sed 's/^/    /'
