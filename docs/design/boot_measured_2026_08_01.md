@@ -1583,8 +1583,11 @@ the shim links, both read back rather than assumed. Evidence on disk:
 `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) → `NV_OK`;
 `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) → an **invented** token;
 and an extra `SILENT_NOTIFIERS` row for index 35. The bench was restored to clean
-`4e93f17` afterwards and **verified**: the rebuilt binary stamps `4e93f17` with no `-dirty`,
-and `nm` finds zero probe symbols (`/workspace/bench/build155restore.log`).
+`4e93f17` afterwards and **verified** `[measured]` 2026-08-01, by reading the artifact back:
+the rebuilt binary stamps `kayfabe-rev:4e93f178…` with no `-dirty` suffix, and
+`nm -C /workspace/bench/kayfabe-wt/target/release/libkayfabe_qemu_raw.a | grep -ci probe155`
+returns **0** where it returned **2** for the probe build
+(`/workspace/bench/build155restore.log`).
 
 ## 44.1 What `mem_utils.c:2022` requires, and how the statement was located
 
@@ -1625,7 +1628,9 @@ path) and `mem_utils.c:1901` / `:1920`. It is therefore only ever registered *wi
 (`_gpuEngineEventNotificationListNotify`) keys on `engineNonstallIntrEventNotifications[]`,
 built by the **NV0005 alloc**, never on `pSubdevice->notifyActions[]` — whose only readers are
 `gpu_rmapi.c:572` and `:593`, and **no caller anywhere passes 35 to
-`gpuNotifySubDeviceEvent`** (verified by grep over the tree).
+`gpuNotifySubDeviceEvent`** — `[inferred]` `ogkm-580.159.04`, from an exhaustive grep of
+`NV2080_NOTIFIERS_FIFO_EVENT_MTHD` (3 hits, all named above) and of `gpuNotifySubDeviceEvent`
+(20 call sites, none passing 35).
 
 ⇒ index 194's row says *the event cannot occur*; index 35's would say *the arming is never
 read*. Both are honest, and 35's does **not** expire when the execution plane lands.
@@ -1633,7 +1638,11 @@ read*. Both are honest, and 35's does **not** expire when the execution plane la
 ⊘ **It is not taken.** `0xa06f0103` refuses **fourteen lines earlier in the same function**
 (`:2006` < `:2022`), so landing the row alone moves nothing. It belongs to the set below.
 
-## 44.3 The measurement: three lies bought one step, into the same wall
+## 44.3 Three lies bought one step, into the same wall — `[measured]` boot `evtprobe1`, rev `4e93f17` + probe
+
+`[measured]` 2026-08-01, boot `evtprobe1` at rev `4e93f17` + the throwaway probe;
+`/workspace/bench/run_evtprobe1_dmesg.log` and `run_evtprobe1_qemu.log`, diffed against
+`run_schedprobe1_*` and `run_grinfo1_*` on the same disk.
 
 With all three faked, `mem_utils.c:2022` **clears**. Absent from the new log, present in
 `schedprobe1`'s: `_memmgrMemUtilsScrubInitRegisterCallback`, `mem_utils.c:2022`,

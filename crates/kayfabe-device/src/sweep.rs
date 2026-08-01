@@ -723,7 +723,9 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               bEnable=NV_TRUE echoed back — an [IN] echo and NOT an answer, so even a \
               correct capture of it would license nothing here",
     },
-    // ── ★★★ The two rungs BEHIND 0xa06f0103, measured together in boot evtprobe1 ──────
+    // ── ★★★ The two rungs BEHIND 0xa06f0103, measured together in boot evtprobe1
+    // ([measured] 2026-08-01, rev 4e93f17 + a throwaway probe never landed;
+    // /workspace/bench/run_evtprobe1_dmesg.log). Each row carries its own citation. ──
     SweepControl {
         cmd: 0xc36f_0108,
         engine: "KernelChannel (CE scrubber)",
