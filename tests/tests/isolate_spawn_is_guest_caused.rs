@@ -148,7 +148,7 @@ fn a_refused_event_materializes_nothing() {
     // is raised before anything derived is touched.
     let ev = kayfabe_core::rmgraph::RmEvent::Free {
         client: HClient(0xDEAD),
-        object: kayfabe_arch::ids::HObject(0xBEEF),
+        handle: kayfabe_arch::ids::HObject(0xBEEF),
     };
     let refused = gpu.apply(ev);
     assert!(refused.is_err(), "the fixture must really be refused");
