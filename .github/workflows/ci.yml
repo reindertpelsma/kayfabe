@@ -497,12 +497,26 @@ jobs:
       # pipeline ending in `|| true` (without it, `grep -v` exiting 1 on "everything was
       # filtered" — the SUCCESS case — would abort the step under `set -e` and the gate
       # would pass by crashing), and the verdict as `[ -n "$hits" ]`.
+      # 4. ★★★ **`kayfabe-isolate-host` is IN, as of `#156`** — and it is the one entry
+      #    here that is not a logic crate. It is an adapter, so the gate's own failure
+      #    text ("in a PURE LOGIC crate") reads slightly wrong for it; the property is
+      #    right anyway. This crate ALLOCATES class ids on a real host board, three of
+      #    which differ on a Hopper host, and two of those three are still *allocatable*
+      #    under their Ampere name there — so the wrong id is SERVED, not refused. That is
+      #    the exact silent mis-route a name-scan can catch and nothing else in the tree
+      #    can. It was EXEMPT until `#156` with a comment recording the residue; the
+      #    residue is now behind `kayfabe_arch::HostClasses` and the numbers live in
+      #    `kayfabe-chips`, so the crate is scoped instead of excused.
+      #    ⊘ Adding a crate here LENGTHENS the gate's universe. Removing one shortens it
+      #    with zero red tests, which is `gates_quantified_over_a_list.md`'s whole point —
+      #    `tests/gate_scope.rs` re-derives this list against the tree so a deletion has
+      #    to be a decision somebody writes down.
       - name: Generation-name gate (no concrete chip or driver version in the logic crates)
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
                 crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
-                crates/kayfabe-vmm"
+                crates/kayfabe-vmm crates/kayfabe-isolate-host"
           hits=$(grep -rniE \
             '\b(kepler|maxwell|turing|ampere|lovelace|hopper|blackwell|rubin)|\b(ada|pascal|volta)\b|\b(g[kmpvab][0-9]{3}|tu1[0-9]{2}|ad1[0-9]{2}|gh[0-9]{3}|v[56][0-9]{2})\b' \
             $pure | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)

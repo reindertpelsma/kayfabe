@@ -63,7 +63,9 @@ use kayfabe_arch::gsp::{
     GspModel, GspObservation, GspReg, LibosRegionLayout, RegWrite,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, VChid};
-use kayfabe_arch::{Arch, DoorbellTarget, GmmuFmt, ObjectKind, PushbufferAbi, UserdModel};
+use kayfabe_arch::{
+    Arch, DoorbellTarget, GmmuFmt, HostClasses, ObjectKind, PushbufferAbi, UserdModel,
+};
 use kayfabe_mocks::MockArch;
 
 // ── BAR0 offsets (`ogkm-580: src/common/inc/swref/published/hopper/gh100/`) ───────
@@ -720,6 +722,13 @@ impl Arch for Gh100Arch {
     }
     fn gsp(&self) -> Option<&dyn GspModel> {
         Some(&self.gsp)
+    }
+
+    /// ★★ NOT delegated to `self.inner` — and here the difference is the whole point:
+    /// `MockArch` would answer `None`, and a naive delegation would have made the ONE
+    /// generation whose host classes actually differ report that it has none.
+    fn host_classes(&self) -> Option<&dyn HostClasses> {
+        Some(&crate::host_classes::Gh100HostClasses)
     }
 }
 

@@ -30,7 +30,9 @@
 
 use kayfabe_arch::gsp::{BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kayfabe_arch::ids::{ClassId, ControlCmd, VChid};
-use kayfabe_arch::{Arch, DoorbellTarget, GmmuFmt, ObjectKind, PushbufferAbi, UserdModel};
+use kayfabe_arch::{
+    Arch, DoorbellTarget, GmmuFmt, HostClasses, ObjectKind, PushbufferAbi, UserdModel,
+};
 use kayfabe_gsp::FalconSecureBooterBoot;
 use kayfabe_mocks::MockArch;
 
@@ -341,6 +343,14 @@ impl Arch for Ad10xArch {
     }
     fn gsp(&self) -> Option<&dyn GspModel> {
         Some(&self.gsp)
+    }
+
+    /// ★ NOT delegated to `self.inner`. `MockArch` answers `None` here on purpose, so
+    /// delegating would have made this generation silently host-less while every other
+    /// method looked answered — the same shape as the doorbell decode this crate still
+    /// delegates and records as unbuilt.
+    fn host_classes(&self) -> Option<&dyn HostClasses> {
+        Some(&crate::host_classes::Ad10xHostClasses)
     }
 }
 

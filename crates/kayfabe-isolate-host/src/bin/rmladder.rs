@@ -672,7 +672,10 @@ fn main() -> std::process::ExitCode {
 
     // R0–R6 all happen inside `open`, each carrying its own rung name if it fails. That is
     // the point of `BringUpError::rung` — one message, one layer.
-    let conn = match RmConnection::open(&dev, GpuId(gpu)) {
+    // ★ #156 — same pinned host-class profile the isolate child uses. The ladder is a
+    // diagnostic for the SAME path, so a different profile here would make it a
+    // diagnostic for a different one.
+    let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
         Ok(c) => c,
         Err(e) => {
             println!("FAIL  {}", e);

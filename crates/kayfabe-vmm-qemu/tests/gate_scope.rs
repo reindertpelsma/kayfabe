@@ -181,23 +181,26 @@ const GATE_EXEMPTIONS: &[Exemption] = &[
     ("Generation-name gate", "kayfabe-rt"), // ★ ARGUABLE: clean today, and should never name a chip
     ("Generation-name gate", "kayfabe-shell"), // ★ ARGUABLE: same
     ("Generation-name gate", "kayfabe-linux-raw"),
-    // ⊘ **NOT clean** — this annotation said "★ ARGUABLE: clean today" and that was false.
-    // Measured 2026-08-01 at `419afe8` with the gate's own regex: **10 matching lines**, all in
+    // ★★★ `kayfabe-isolate-host` USED TO BE EXEMPT HERE and no longer is (`#156`,
+    // 2026-08-01). The row it replaced said "★ ARGUABLE: clean today"; that was false, and
+    // the correction is worth keeping because it is why the exemption came off. Measured
+    // 2026-08-01 at `419afe8` with the gate's own regex: **10 matching lines**, all in
     // `rm.rs` — `AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_DMA_COPY_B`, `AMPERE_USERMODE_A`,
-    // `KEPLER_CHANNEL_GROUP_A`, `FERMI_VASPACE_A`. (The gate's first alternation has a leading
-    // `\b` and **no trailing one**, so it matches `AMPERE_DMA_COPY_B`; a `\bampere\b` spot-check
-    // reports 0 and is the wrong instrument.)
+    // `KEPLER_CHANNEL_GROUP_A`, `FERMI_VASPACE_A`. So the exemption was CARRYING something,
+    // and dropping it would have turned the gate red.
     //
-    // ★ Why the distinction is load-bearing rather than pedantic: "clean today" says the
-    // exemption is FREE and could be dropped at no cost. It cannot — dropping it turns the gate
-    // red. This exemption is **carrying** something.
+    // What `#156` did instead of rewording it: three of those five are arch-varying (the
+    // channel, usermode and copy-engine-object classes have different ids on a Hopper
+    // host) and now arrive through `kayfabe_arch::HostClasses` from `kayfabe-chips`. The
+    // other two are NOT — `FERMI_VASPACE_A` and `KEPLER_CHANNEL_GROUP_A` are NVIDIA's
+    // permanent identifiers for classes current on every part through Blackwell, they are
+    // imported from `kayfabe-abi`, and the gate has never scoped `kayfabe-abi`.
     //
-    // What it carries: these are NVIDIA's own class names for objects we allocate on the **host**
-    // GPU. Kepler/Fermi ones are permanent names for still-current classes and are not a
-    // generation claim at all. But `AMPERE_DMA_COPY_B` genuinely differs on a Hopper host, and it
-    // sits on the forwarding path behind no `Arch` trait — so this is a **real residue**, tracked
-    // as task #156, not a settled exemption. Kept as a record of a known gap.
-    ("Generation-name gate", "kayfabe-isolate-host"),
+    // The crate is therefore in the Generation-name gate's `pure=` list in ci.yml and has
+    // no row here. `every_crate_is_either_gated_or_explicitly_exempted` below enforces
+    // that those two statements cannot drift apart: putting the row back without removing
+    // the crate from the list is a BOTH-scoped-and-exempted failure, and removing it from
+    // the list without restoring the row is a neither failure.
     ("Generation-name gate", "kayfabe-vmm-kvm"),
     ("Generation-name gate", "kayfabe-vmm-qemu"),
     ("Generation-name gate", "kayfabe-qemu-raw"),

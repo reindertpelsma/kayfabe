@@ -54,9 +54,14 @@
 pub mod ad10x;
 pub mod ga10x;
 pub mod gh100;
+// ★ #156 — the HOST-forwarding class axis. Not per-chip files, because the axis is one
+// table of three roles and splitting it across three modules would hide that AD10x's
+// answer is IDENTICAL to GA10x's, which is the interesting half of the measurement.
+pub mod host_classes;
 
 pub use ad10x::{Ad10xArch, Ad10xGspModel};
 // ★★ `ga10x` is the ONE module here that is linked into the shipped QEMU archive, and it
 // is deliberately NOT `MockArch`-composed like its two neighbours — see its module docs.
 pub use ga10x::{Ga10xArch, Ga10xGmmu, UnbuiltGmmu, UnbuiltPushbuffer, UnbuiltUserd};
 pub use gh100::{Gh100Arch, Gh100GspModel};
+pub use host_classes::{Ad10xHostClasses, Ga10xHostClasses, Gh100HostClasses, pinned_host_classes};

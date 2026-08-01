@@ -96,9 +96,19 @@ use kayfabe_abi::bringup::{
     NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
 };
+// ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
+// (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_USERMODE_A`, `AMPERE_DMA_COPY_B`) are gone. They
+// now arrive through [`RmConnection::classes`], a `kayfabe_arch::HostClasses` profile.
+// The three that remain are NOT arch-varying: `FERMI_VASPACE_A`,
+// `KEPLER_CHANNEL_GROUP_A` and `NV01_*` are NVIDIA's permanent identifiers for classes
+// that are current on every part from Fermi/Kepler to Blackwell — the generation word in
+// the name is not a generation claim. Sourced, not assumed: all three appear verbatim in
+// GA106's, AD106's and GH100's own class lists (`ogkm-580:
+// src/nvidia/generated/g_gpu_class_list.c` — `FERMI_VASPACE_A` at `:1124`/`:1748`/`:2001`,
+// `KEPLER_CHANNEL_GROUP_A` at `:1134`/`:1758`/`:2031`).
 use kayfabe_abi::generated::classes::{
-    AMPERE_CHANNEL_GPFIFO_A, AMPERE_DMA_COPY_B, FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A,
-    NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters, NvChannelGroupAllocationParameters,
+    FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A, NV01_DEVICE_0, NV01_ROOT_CLIENT,
+    Nv0080AllocParameters, NvChannelGroupAllocationParameters,
 };
 use kayfabe_abi::generated::nvos::{
     NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA,
@@ -106,14 +116,14 @@ use kayfabe_abi::generated::nvos::{
     Nvos47Parameters, Nvos54Parameters,
 };
 use kayfabe_abi::submit::{
-    AMPERE_USERMODE_A, ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams,
-    ENGINE_TYPE_COPY0, ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams,
-    NV_ESC_RM_MAP_MEMORY, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
-    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
-    NvMemoryAllocationParams, Nvos33ParametersWithFd, SET_OBJECT, USERD_GP_GET, USERD_GP_PUT,
-    USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce,
-    engine_type_copy, fifo, gp_entry, method_header_inc,
+    ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
+    ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
+    NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
+    SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE,
+    WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry, method_header_inc,
 };
+use kayfabe_arch::HostClasses;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{
     CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle,
@@ -338,7 +348,7 @@ pub struct RmConnection {
     /// table, and the handle table must not be held across it. Two locks, each held for one
     /// kind of thing, is the R3 lock-rank discipline rather than a convenience.
     rings: Mutex<BTreeMap<u32, ChannelRings>>,
-    /// ★★★ The **doorbell window** — an `AMPERE_USERMODE_A` object and its CPU mapping,
+    /// ★★★ The **doorbell window** — a [`HostClasses::usermode`] object and its CPU mapping,
     /// established once at [`RmConnection::open`] and immutable afterwards.
     ///
     /// A `Result`, deliberately, and it is the honest shape rather than a convenience:
@@ -357,9 +367,27 @@ pub struct RmConnection {
     ///   "unimplemented", which is the difference between *"the sandbox blocked the BAR
     ///   mapping"* and *"nobody wrote this yet"*.
     usermode: Result<UsermodeWindow, RmError>,
+    /// ★★★ **The host GPU's class profile** (`#156`) — the three class ids whose correct
+    /// value depends on which generation the *host* board is, supplied once at
+    /// [`RmConnection::open`] and immutable afterwards.
+    ///
+    /// Before this field, three `AMPERE_*` constants were spelled at eighteen sites in
+    /// this file. That was not merely untidy: two of the three have a **different** id on
+    /// a Hopper host and are still *allocatable* there under the Ampere name, so the
+    /// wrong one would have been served rather than refused. See
+    /// [`kayfabe_arch::HostClasses`] for the table and the sourcing.
+    ///
+    /// ⊘ It is a **pin, not a probe.** Nothing here asks the device what it is; the
+    /// caller passes a profile and today every caller passes the same one
+    /// (`kayfabe_chips::pinned_host_classes`, GA10x — the only part any of this has been
+    /// measured on). The seam's value is that the decision is now ONE call site instead
+    /// of eighteen literals, and that a second generation costs an `impl` and no edit
+    /// here. Turning it into a probe is a separate, hardware-requiring increment and is
+    /// named in `kayfabe_chips::host_classes`' module docs.
+    classes: &'static dyn HostClasses,
 }
 
-/// The `AMPERE_USERMODE_A` object, the node its mmap context is registered against, and
+/// The [`HostClasses::usermode`] object, the node its mmap context is registered against, and
 /// the mapping itself. All three must live exactly as long as each other.
 #[derive(Debug)]
 struct UsermodeWindow {
@@ -637,7 +665,16 @@ impl RmConnection {
     ///
     /// # Errors
     /// [`BringUpError`], naming the rung.
-    pub fn open(dev: &DevDir, gpu: GpuId) -> Result<Self, BringUpError> {
+    ///
+    /// `classes` is the **host** board's class profile (`#156`). It is a parameter rather
+    /// than a constant because the three ids it carries differ on a Hopper host, and a
+    /// caller that has no opinion should pass `kayfabe_chips::pinned_host_classes()`
+    /// rather than have this function invent one.
+    pub fn open(
+        dev: &DevDir,
+        gpu: GpuId,
+        classes: &'static dyn HostClasses,
+    ) -> Result<Self, BringUpError> {
         // R0/R1 — the two nodes, by name, relative to the granted directory. The naming is
         // the C's `dev_id_to_path`: the control node is the literal `nvidiactl`, NOT
         // `nvidia` with an index (`C: src/stub/nvkvm_stub.c:1544-1563`).
@@ -695,6 +732,7 @@ impl RmConnection {
             device: 0,
             subdevice: 0,
             version,
+            classes,
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
@@ -752,7 +790,8 @@ impl RmConnection {
         Ok(RmConnection { usermode, ..conn })
     }
 
-    /// ★★★ Allocate `AMPERE_USERMODE_A` under the **subdevice** and CPU-map its 64 KiB
+    /// ★★★ Allocate the profile's usermode class under the **subdevice** and CPU-map its
+    /// 64 KiB
     /// BAR0 window — the mapping whose existence *is* [`RmBackend::ring_doorbell`].
     ///
     /// Three things here are not obvious and each was read out of the driver or the C:
@@ -763,7 +802,11 @@ impl RmConnection {
     ///    (`C: src/qemu/nvkvm_gpu_emul.c:9532-9546`, alloc under `SUB`, `mm.h_device =
     ///    DEV`). Passing the subdevice as the mapper is the plausible-looking variant.
     /// 2. **No alloc parameters at all**, not a zeroed struct: `clc561.h` defines the
-    ///    class id and nothing else.
+    ///    class id and nothing else. ★ Still correct on a Hopper host, where the class
+    ///    DOES accept optional params: omitting them leaves `bBar1Mapping = NV_FALSE`,
+    ///    which selects the same BAR0 register window every earlier usermode class gives
+    ///    unconditionally (`ogkm-580:
+    ///    src/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`).
     /// 3. ★★ **[`CachePolicy::Uncached`], not write-combining.** This is a BAR0
     ///    *register* range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch and
     ///    calls `nv_encode_caching(…, NV_MEMORY_UNCACHED, NV_MEMORY_TYPE_REGISTERS)`
@@ -775,7 +818,7 @@ impl RmConnection {
     ///    [`RmConnection::map_cpu`] before this call site existed.
     fn open_usermode(&self) -> Result<UsermodeWindow, RmError> {
         let want = self.mint();
-        let object = self.raw_alloc(self.subdevice, want, AMPERE_USERMODE_A, &mut [])?;
+        let object = self.raw_alloc(self.subdevice, want, self.classes.usermode().0, &mut [])?;
         self.remember(object, self.subdevice);
         let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::Uncached)?;
         Ok(UsermodeWindow {
@@ -1258,8 +1301,9 @@ const CE_SUBCHANNEL: u32 = 4;
 /// a source and a destination get swapped.
 #[derive(Debug, Clone, Copy)]
 struct CePush {
-    /// The **class id** for `SET_OBJECT` — `AMPERE_DMA_COPY_B` (`0xc7b5`), and **not** the
-    /// engine object's handle.
+    /// The **class id** for `SET_OBJECT` — the host profile's
+    /// [`HostClasses::ce_object`] (`0xc7b5` on the pinned GA10x profile, `0xc8b5` on a
+    /// Hopper host), and **not** the engine object's handle.
     ///
     /// `NVC56F_SET_OBJECT_NVCLASS` is bits `15:0` of the data word
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:68-71`), i.e. a *class
@@ -1347,7 +1391,7 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
 /// ★★ **This function is the seam audit's GR-1**, and the reason the port makes `engine`
 /// an argument of `alloc_channel` rather than something the adapter guesses. There is
 /// exactly ONE channel class per architecture — a graphics channel and a copy channel are
-/// both `AMPERE_CHANNEL_GPFIFO_A` — so this value is the *only* thing that decides which
+/// both [`HostClasses::gpfifo_channel`] — so this value is the *only* thing that decides which
 /// runlist the channel lands on. The C's proven failure is `engineType = 0`: the channel
 /// binds to runlist 0, the schedule answers `NV_ERR_NOT_READY`, and the visible symptom is
 /// `cuCtxCreate` returning 401 several layers away (`dma_copy_class_alloc_params`).
@@ -1699,7 +1743,7 @@ impl RmBackend for HostRmBackend {
     ///   userd  = NV01_MEMORY_LOCAL_USER (64 KiB)   GP_GET / GP_PUT
     ///   map     ring into the Vas (RM chooses the VA)
     ///   tsg    = KEPLER_CHANNEL_GROUP_A   parent = device,  hVASpace = the SPACE
-    ///   chan   = AMPERE_CHANNEL_GPFIFO_A  parent = tsg,     hVASpace = 0 (inherits)
+    ///   chan   = <profile>.gpfifo_channel parent = tsg,     hVASpace = 0 (inherits)
     ///   BIND(engineType)                  on the TSG   -- must precede the token
     ///   GET_WORK_SUBMIT_TOKEN             on the CHANNEL
     /// ```
@@ -1905,7 +1949,7 @@ impl RmBackend for HostRmBackend {
     /// ## What it does
     ///
     /// A copy-engine channel is built over `vas` on first use and kept
-    /// (`CeChannel`): six RM objects, an `AMPERE_DMA_COPY_B` engine object, and a
+    /// (`CeChannel`): six RM objects, a [`HostClasses::ce_object`] engine object, and a
     /// schedule. Each copy is then one pushbuffer — `SET_OBJECT`, the four address
     /// methods, length and line count, a one-word release semaphore, `LAUNCH_DMA` — one
     /// GPFIFO entry, one doorbell, and a **wait for the engine's own semaphore**.
@@ -2167,10 +2211,12 @@ impl HostRmBackend {
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
-        let chan = match self
-            .conn
-            .raw_alloc(tsg, want, AMPERE_CHANNEL_GPFIFO_A, &mut chan_params)
-        {
+        let chan = match self.conn.raw_alloc(
+            tsg,
+            want,
+            self.conn.classes.gpfifo_channel().0,
+            &mut chan_params,
+        ) {
             Ok(h) => {
                 self.conn.remember(h, tsg);
                 h
@@ -2506,7 +2552,7 @@ impl HostRmBackend {
         let pb_va = parts.ring_va + pb_off;
 
         let words = ce_pushbuffer(CePush {
-            class_id: AMPERE_DMA_COPY_B,
+            class_id: self.conn.classes.ce_object().0,
             src,
             dst: sub.dst,
             len,
@@ -2534,7 +2580,7 @@ impl HostRmBackend {
     ///
     /// ★★ Three RM acts in a fixed order, and the order is the C's proven one: the
     /// channel (which carries `engineType = COPY0` into the group, GR-1), then the
-    /// `AMPERE_DMA_COPY_B` object **under the channel**, then the schedule. Allocating the
+    /// [`HostClasses::ce_object`] object **under the channel**, then the schedule. Allocating the
     /// engine object after scheduling is the variant that looks equivalent and is not.
     ///
     /// ★ The engine object's eight alloc bytes are [`CeAllocParams`] with the **same**
@@ -2561,7 +2607,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(BAD_ENCODE))?;
-        if let Err(e) = self.alloc_engine_object(chan, ClassId(AMPERE_DMA_COPY_B), &params) {
+        if let Err(e) = self.alloc_engine_object(chan, self.conn.classes.ce_object(), &params) {
             let _ = self.free(chan);
             return Err(e);
         }
@@ -2963,6 +3009,15 @@ mod tests {
         );
     }
 
+    /// ★★★ A class id that is **deliberately not a real one** (`#156`).
+    ///
+    /// [`ce_pushbuffer`]'s contract is that `SET_OBJECT` carries *whatever class the host
+    /// profile named*. Feeding it the profile's own answer cannot tell "carried it" from
+    /// "hardcoded it" — the encoder would be acting as its own observer, and a mutation
+    /// that replaced the parameter with a constant would survive. A value no NVIDIA part
+    /// defines can only appear in `w[1]` by having been passed in.
+    const NOT_A_REAL_CLASS: u32 = 0x0000_C0DE;
+
     /// ★★ The copy-engine pushbuffer, word for word. This is the only part of rung 4 that
     /// can be checked without a GPU, and the two things it pins are the two that failed
     /// silently on hardware: **which subchannel** every header names, and that the source
@@ -2970,7 +3025,7 @@ mod tests {
     #[test]
     fn the_ce_pushbuffer_addresses_the_copy_engine_subchannel_and_does_not_swap_operands() {
         let w = ce_pushbuffer(CePush {
-            class_id: AMPERE_DMA_COPY_B,
+            class_id: NOT_A_REAL_CLASS,
             src: 0x1234_5678_9ABC,
             dst: 0x0000_DEAD_0000,
             len: 4096,
@@ -2991,7 +3046,10 @@ mod tests {
             }
         }
         // SET_OBJECT carries the CLASS, and the addresses go out in-then-out, hi-then-lo.
-        assert_eq!(w[1], AMPERE_DMA_COPY_B);
+        assert_eq!(
+            w[1], NOT_A_REAL_CLASS,
+            "SET_OBJECT must carry the class the PROFILE named, not one this encoder knows"
+        );
         assert_eq!(w[3], 0x1234);
         assert_eq!(w[4], 0x5678_9ABC, "source low");
         assert_eq!(w[5], 0x0000);
@@ -3018,7 +3076,7 @@ mod tests {
     #[test]
     fn an_inexpressible_copy_operand_is_refused() {
         let base = CePush {
-            class_id: AMPERE_DMA_COPY_B,
+            class_id: NOT_A_REAL_CLASS,
             src: 0,
             dst: 0,
             len: 4,

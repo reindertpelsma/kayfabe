@@ -122,6 +122,23 @@ const CLA06C_H: &str = "src/common/sdk/nvidia/inc/class/cla06c.h";
 const CLC56F_H: &str = "src/common/sdk/nvidia/inc/class/clc56f.h";
 const CLC7B5_H: &str = "src/common/sdk/nvidia/inc/class/clc7b5.h";
 const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
+// ── The HOST-forwarding class axis (#156) ────────────────────────────────────
+//
+// ★★ These four are here for ONE reason and it is not the emulated GPU: the host
+// isolate ALLOCATES these classes on a real host board, and the three of them that
+// carry a generation in their meaning (channel / usermode / copy-engine object) have a
+// DIFFERENT id on a Hopper host than on an Ampere or Ada one. The values are consumed
+// by `kayfabe_arch::HostClasses`' implementations in `kayfabe-chips`; decision #2's
+// quarantine says only this crate may spell them, so only this crate does.
+//
+// ⊘ `AMPERE_USERMODE_A` used to be a hand-written literal in `submit.rs`. It is
+// generated here now so that the Ampere and the Hopper halves of one seam are pinned
+// against the vendored headers by the SAME mechanism — an asymmetry there is exactly
+// where a transcription typo survives.
+const CLC561_H: &str = "src/common/sdk/nvidia/inc/class/clc561.h";
+const CLC661_H: &str = "src/common/sdk/nvidia/inc/class/clc661.h";
+const CLC86F_H: &str = "src/common/sdk/nvidia/inc/class/clc86f.h";
+const CLC8B5_H: &str = "src/common/sdk/nvidia/inc/class/clc8b5.h";
 const RPC_HDR_H: &str = "src/nvidia/generated/g_rpc-message-header.h";
 const RPC_ENUMS_H: &str = "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h";
 /// The RPC **payload** structs. Deliberately a single entry in the slice
@@ -435,7 +452,37 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
                 c_name: "AMPERE_DMA_COPY_B",
                 rust_name: "AMPERE_DMA_COPY_B",
                 rust_ty: "u32",
-                doc: "`AMPERE_DMA_COPY_B` — the copy-engine object on a CE channel. Same shape\nas [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the\ncore this channel is a CE channel at all.",
+                doc: "`AMPERE_DMA_COPY_B` — the copy-engine object on a CE channel. Same shape\nas [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the\ncore this channel is a CE channel at all.\n\n★★ It is ALSO the class the host isolate allocates on an Ada host: `AD106`'s own\nclass list carries `AMPERE_DMA_COPY_B` for `ENG_CE(0..4)` and defines no\n`ADA_DMA_COPY_*` at all (`ogkm-580:\nsrc/nvidia/generated/g_gpu_class_list.c:1739-1743`). The generation in the NAME is\nnot the generation of the SILICON — which is why `kayfabe_arch::HostClasses` names\nthe ROLE and an arch-impl supplies the number.",
+            },
+            // ── #156: the three ids a HOPPER host wants where an Ampere/Ada host wants
+            // the three above, plus the Ampere usermode id these are paired with.
+            ConstReq {
+                header: CLC561_H,
+                c_name: "AMPERE_USERMODE_A",
+                rust_name: "AMPERE_USERMODE_A",
+                rust_ty: "u32",
+                doc: "`AMPERE_USERMODE_A` — the object whose 64 KiB CPU mapping IS the doorbell\npage. Allocated under the subdevice, with no alloc parameters (`clc561.h` defines\nthe class id and nothing else).\n\n★ Its REGISTER layout is not its own: every USERMODE class from Volta through\nBlackwell inherits `clc361.h`'s offsets, and `clc461/561/661/761.h` each define only\nan id. So `NVC361_NOTIFY_CHANNEL_PENDING` (`0x90`) and `NVC361_NV_USERMODE__SIZE`\n(65536) are NOT arch-varying and are deliberately not behind a seam —\n[`crate::submit::USERMODE_NOTIFY_CHANNEL_PENDING`],\n[`crate::submit::USERMODE_WINDOW_SIZE`].\n\nThe host class list carries this id on GA106 (`ogkm-580:\nsrc/nvidia/generated/g_gpu_class_list.c:1120`) and on AD106 (`:1744`).",
+            },
+            ConstReq {
+                header: CLC661_H,
+                c_name: "HOPPER_USERMODE_A",
+                rust_name: "HOPPER_USERMODE_A",
+                rust_ty: "u32",
+                doc: "`HOPPER_USERMODE_A` — the doorbell-window class on a Hopper host (`ogkm-580:\nsrc/nvidia/generated/g_gpu_class_list.c:2029`).\n\n★★ **A Hopper host also lists `AMPERE_USERMODE_A`** (`:1997`), so allocating the\nAmpere id there SUCCEEDS. That is why this is a seam and not a lint: the wrong pick\nis not refused, it is served.\n\n★ Its alloc params (`NV_HOPPER_USERMODE_A_PARAMS`: `bBar1Mapping`, `bPriv`) are\nOPTIONAL and exist only from this class onward. Passing none selects\n`pKernelFifo->pRegVF` — the BAR0 register window — which is what every USERMODE\nclass before it gives unconditionally, so the host path's existing\n\"no parameters, map uncached\" shape is correct on Hopper too (`ogkm-580:\nsrc/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`).",
+            },
+            ConstReq {
+                header: CLC86F_H,
+                c_name: "HOPPER_CHANNEL_GPFIFO_A",
+                rust_name: "HOPPER_CHANNEL_GPFIFO_A",
+                rust_ty: "u32",
+                doc: "`HOPPER_CHANNEL_GPFIFO_A` — the GPFIFO channel class on a Hopper host\n(`ogkm-580: src/nvidia/generated/g_gpu_class_list.c:2009`).\n\n★★ As with the usermode id, a Hopper host ALSO lists `AMPERE_CHANNEL_GPFIFO_A`\n(`:1996`) and `CliGetChannelClassInfo` has a live arm for it (`ogkm-580:\nsrc/nvidia/src/kernel/gpu/fifo/kernel_channel.c:1588-1594`) — so the Ampere id is\nallocatable there and merely carries the wrong notifier geometry\n(`NVC56F_NOTIFIERS_MAXCOUNT` where the part wants `NVC86F_`).",
+            },
+            ConstReq {
+                header: CLC8B5_H,
+                c_name: "HOPPER_DMA_COPY_A",
+                rust_name: "HOPPER_DMA_COPY_A",
+                rust_ty: "u32",
+                doc: "`HOPPER_DMA_COPY_A` — the copy-engine object class on a Hopper host, for\n`ENG_CE(0..9)` (`ogkm-580: src/nvidia/generated/g_gpu_class_list.c:2018-2027`).\n\n★★★ Unlike the channel and usermode ids, this one is the LOUD member of the three:\n`AMPERE_DMA_COPY_B` is **absent** from GH100's class list entirely, so the wrong\npick fails at alloc rather than silently. It is behind the seam anyway, because\n\"two of three fail loudly\" is not a property anyone should have to re-derive.\n\n★ The METHOD offsets are shared: `clc8b5.h` is a delta header and every method the\nhost CE path emits — `OFFSET_IN/OUT_{UPPER,LOWER}` (`0x400..0x40C`),\n`LINE_LENGTH_IN` (`0x418`), `LINE_COUNT` (`0x41C`, not redefined),\n`SET_SEMAPHORE_A/B/PAYLOAD` (`0x240/0x244/0x248`) and `LAUNCH_DMA` (`0x300`) — has\nthe SAME offset as in `clc7b5.h`. Only the class id varies.",
             },
         ],
         drfs: &[],

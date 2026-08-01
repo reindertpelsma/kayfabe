@@ -668,6 +668,110 @@ pub trait Arch: Send + Sync {
     fn gsp(&self) -> Option<&dyn GspModel> {
         None
     }
+
+    /// The class ids this generation's **host forwarding path** allocates on a real host
+    /// GPU ([`HostClasses`]), or `None` for an architecture with no host-forwarding
+    /// profile.
+    ///
+    /// ★ **`None` is a refusal, exactly as [`Arch::gsp`]'s is.** An arch that has never
+    /// been driven against host silicon says so, and the host adapter fails by name
+    /// rather than falling back to somebody else's class ids. `MockArch` returns `None`
+    /// on purpose: three invented class numbers are precisely the residue this seam
+    /// exists to stop, and a mock that answered would let a wrong id reach a real
+    /// `NV_ESC_RM_ALLOC` while every test stayed green.
+    fn host_classes(&self) -> Option<&dyn HostClasses> {
+        None
+    }
+}
+
+/// # `HostClasses` — the class ids the HOST forwarding path allocates
+///
+/// Three NVIDIA class ids that the unprivileged host isolate passes to a real
+/// `NV_ESC_RM_ALLOC` on a real board, and that **change with the host GPU's
+/// generation**. Everything else the isolate allocates does not (see below).
+///
+/// ## Why this is a sub-trait and not three more methods on [`Arch`]
+///
+/// Because it answers a different question about a different GPU. Every existing [`Arch`]
+/// method describes the *guest's emulated* GPU — how to classify a class id the guest
+/// sent us, how to decode a doorbell token the guest wrote, what the guest's PTEs look
+/// like. These three describe what **we** must say to the *host's* driver when we forward
+/// that intent. The two GPUs are the same generation only by coincidence of a bench.
+///
+/// Splitting it buys three things a flat trait cannot:
+///
+/// 1. **A refusal that costs nothing.** `Option<&dyn HostClasses>` lets an arch with no
+///    host profile decline. Flat methods would force `MockArch` and every future
+///    fixture arch to return *some* class id, and there is no honest one to return.
+/// 2. **One grep for the whole host-class axis.** `impl HostClasses` is the complete
+///    list of places a host class id is decided; `rg 'fn ce_object'` finds every one.
+/// 3. **It does not grow [`Arch`]'s object-safe surface for consumers who never forward.**
+///    `kayfabe-core`/`-mmu`/`-fwd` hold `dyn Arch` and issue no host ioctls at all.
+///
+/// ## ⊘ What is deliberately NOT here, and why the set is exactly three
+///
+/// The rule is **what the name MEANS, not whether it contains a generation word**.
+/// Measured against NVIDIA's own per-chip tables in `ogkm-580`'s
+/// `src/nvidia/generated/g_gpu_class_list.c`:
+///
+/// | class | GA106 | AD106 | GH100 | verdict |
+/// |---|---|---|---|---|
+/// | `FERMI_VASPACE_A` | `:1124` | `:1748` | `:2001` | **invariant** — permanent name |
+/// | `FERMI_CONTEXT_SHARE_A` | `:1122` | `:1746` | `:1999` | **invariant** |
+/// | `KEPLER_CHANNEL_GROUP_A` | `:1134` | `:1758` | `:2031` | **invariant** |
+/// | channel / usermode / CE object | Ampere ids | Ampere ids | **Hopper ids** | **varies** |
+///
+/// The first three carry a generation word in the name and are the *current* class on
+/// every part from Fermi/Kepler to Blackwell. Putting them behind a seam would double
+/// the surface to describe zero variation — the "counted address space, not risk" error.
+///
+/// Two more host-path values were checked for variation and found **invariant**, so they
+/// are not seams either:
+///
+/// - the doorbell register offset and window size. `clc461/561/661/761.h` each define a
+///   class id and nothing else; every USERMODE class from Volta to Blackwell inherits
+///   `NVC361_NOTIFY_CHANNEL_PENDING` = `0x90` and `NVC361_NV_USERMODE__SIZE` = 65536
+///   (`ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:29-33`).
+/// - every copy-engine method the host CE path emits. `clc8b5.h` is a delta header and
+///   redefines none of `OFFSET_IN/OUT_*`, `LINE_LENGTH_IN`, `LINE_COUNT`,
+///   `SET_SEMAPHORE_*` or `LAUNCH_DMA` to a different offset than `clc7b5.h`.
+///
+/// ## ★★ Why the wrong answer is SILENT, which is what makes this a seam
+///
+/// A Hopper host's class list contains `AMPERE_CHANNEL_GPFIFO_A` **and**
+/// `AMPERE_USERMODE_A` (`g_gpu_class_list.c:1996`, `:1997`), and RM has a live
+/// `CliGetChannelClassInfo` arm for the former (`kernel_channel.c:1588-1594`). So two of
+/// the three wrong picks are **served, not refused** — the channel comes back with
+/// `NVC56F` notifier geometry on a part that wants `NVC86F`. Only `AMPERE_DMA_COPY_B` is
+/// absent from GH100 and fails loudly. A silent mis-route on a forwarding path is exactly
+/// the failure mode this port spends its effort making loud.
+///
+/// ## The rule NVIDIA's own client uses, and what this trait is relative to it
+///
+/// RM's own UVM-facing client does not hardcode per-chip either: `findDeviceClasses`
+/// reads `NV0080_CTRL_CMD_GPU_GET_CLASSLIST` off the live device and takes the
+/// **numerically largest** member of each family — `isClassHost`, `isClassCE`,
+/// `isClassCompute` (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8630-8699`,
+/// families at `:8543-8601`). An implementation of this trait is a **compile-time
+/// statement of what that runtime query would return** for one generation. It is
+/// therefore checkable without a GPU — and it is *not* a substitute for the query. See
+/// the crate-level note in `kayfabe-chips` for the increment that would replace it.
+pub trait HostClasses: Send + Sync + core::fmt::Debug {
+    /// Human-readable profile name (diagnostics only — nothing may branch on it).
+    fn name(&self) -> &'static str;
+
+    /// The GPFIFO **channel** class: the object a host channel is allocated as, under a
+    /// TSG. There is exactly one per generation — a GR channel and a CE channel are the
+    /// same class and differ only by `NV_CHANNEL_ALLOC_PARAMS.engineType`.
+    fn gpfifo_channel(&self) -> ClassId;
+
+    /// The **usermode** class whose 64 KiB CPU mapping is the doorbell window, allocated
+    /// under the subdevice.
+    fn usermode(&self) -> ClassId;
+
+    /// The copy-engine **object** class, allocated under a CE channel — and the same
+    /// number the pushbuffer's `SET_OBJECT` carries in its `NVCLASS` field.
+    fn ce_object(&self) -> ClassId;
 }
 
 // The concurrency contract, compile-time-asserted (decision #17): every public type
@@ -697,6 +801,7 @@ kayfabe_util::assert_send_sync!(
     CeWork,
     PushRange,
     dyn Arch,
+    dyn HostClasses,
     dyn GmmuFmt,
     dyn UserdModel,
     dyn PushbufferAbi,

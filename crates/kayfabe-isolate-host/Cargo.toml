@@ -9,6 +9,12 @@ license.workspace = true
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
 kayfabe-abi.workspace = true
+# ★ #156 — the arch-impl crate, for `HostClasses` PROFILES only. This crate holds the
+# host-forwarding path; the three class ids it allocates differ on a Hopper host, so the
+# numbers live behind `kayfabe_arch::HostClasses` and in the crate where a chip's facts
+# are ALLOWED to live. Depending on it is what lets this crate be SCOPED by the
+# Generation-name gate instead of exempted from it.
+kayfabe-chips.workspace = true
 kayfabe-vmm.workspace = true
 kayfabe-isolate.workspace = true
 kayfabe-linux-raw.workspace = true

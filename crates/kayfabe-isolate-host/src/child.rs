@@ -225,8 +225,14 @@ fn build_backends(
             // reports a startup failure.
             let dev = sandbox::enter(&SandboxPolicy::for_gpu(args.gpu))
                 .map_err(|e| format!("the isolate sandbox could not be built: {e}"))?;
-            let conn =
-                Arc::new(RmConnection::open(&dev, GpuId(args.gpu)).map_err(|e| e.to_string())?);
+            // ★ #156 — the host board's class profile, PINNED. See
+            // `kayfabe_chips::host_classes::pinned_host_classes`: this process does not
+            // ask the device what generation it is, and the pin is to the only part any
+            // of the host path has been measured on.
+            let conn = Arc::new(
+                RmConnection::open(&dev, GpuId(args.gpu), kayfabe_chips::pinned_host_classes())
+                    .map_err(|e| e.to_string())?,
+            );
             Ok((0..args.workers)
                 .map(|_| {
                     Box::new(HostRmBackend::new(

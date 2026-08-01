@@ -71,8 +71,8 @@ use kayfabe_abi::generated::classes as nv;
 use kayfabe_arch::gsp::GspModel;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, RunlistId, VChid};
 use kayfabe_arch::{
-    Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize,
-    PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
+    Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, HostClasses, LevelShift, ObjectKind,
+    PageSize, PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 
 /// The GA10x architecture, as the port ships it: a **real** class table and a **real**
@@ -238,6 +238,16 @@ impl Arch for Ga10xArch {
     /// `ChipProfile`, not through here.
     fn gsp(&self) -> Option<&dyn GspModel> {
         None
+    }
+
+    /// The host-forwarding class profile ([`crate::host_classes::Ga10xHostClasses`]).
+    ///
+    /// ★ This is the ONE `Arch` method that describes a *different* GPU: every other
+    /// answer here is about the emulated board the guest drives, and this one is about
+    /// the real board the isolate forwards to. They are the same generation on this
+    /// bench and that is a coincidence of hardware, not a property.
+    fn host_classes(&self) -> Option<&dyn HostClasses> {
+        Some(&crate::host_classes::Ga10xHostClasses)
     }
 }
 

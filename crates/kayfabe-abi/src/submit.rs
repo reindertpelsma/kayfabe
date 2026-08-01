@@ -745,13 +745,14 @@ pub const fn gp_entry(gpu_va: u64, len_bytes: u64) -> Option<u64> {
     Some(entry0 | (entry1 << 32))
 }
 
-/// `AMPERE_USERMODE_A` — `ogkm-580: src/common/sdk/nvidia/inc/class/clc561.h:27`.
+/// `AMPERE_USERMODE_A` — re-exported from [`crate::generated::classes`].
 ///
-/// The object whose CPU mapping **is** the doorbell page. Allocated under the subdevice;
-/// it has no alloc parameters. Its register layout is the Volta one — `clc561.h` defines
-/// only the class id, and the offsets live at
-/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:30-33`.
-pub const AMPERE_USERMODE_A: u32 = 0xc561;
+/// ★ It was a hand-written literal here until `#156`. It is generated now, for one
+/// reason: its Hopper counterpart `HOPPER_USERMODE_A` had to be pinned against the
+/// vendored headers, and two halves of one seam checked by two different mechanisms is
+/// where a transcription typo survives. This alias stays so that `submit`'s doorbell
+/// vocabulary is still readable in one place.
+pub use crate::generated::classes::AMPERE_USERMODE_A;
 
 /// `NVC361_NV_USERMODE__SIZE` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:31`. The BAR window the usermode

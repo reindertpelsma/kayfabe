@@ -144,8 +144,78 @@ pub const AMPERE_COMPUTE_B: u32 = 0xc7c0;
 /// as [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the
 /// core this channel is a CE channel at all.
 ///
+/// ★★ It is ALSO the class the host isolate allocates on an Ada host: `AD106`'s own
+/// class list carries `AMPERE_DMA_COPY_B` for `ENG_CE(0..4)` and defines no
+/// `ADA_DMA_COPY_*` at all (`ogkm-580:
+/// src/nvidia/generated/g_gpu_class_list.c:1739-1743`). The generation in the NAME is
+/// not the generation of the SILICON — which is why `kayfabe_arch::HostClasses` names
+/// the ROLE and an arch-impl supplies the number.
+///
 /// ogkm `src/common/sdk/nvidia/inc/class/clc7b5.h`.
 pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
+
+/// `AMPERE_USERMODE_A` — the object whose 64 KiB CPU mapping IS the doorbell
+/// page. Allocated under the subdevice, with no alloc parameters (`clc561.h` defines
+/// the class id and nothing else).
+///
+/// ★ Its REGISTER layout is not its own: every USERMODE class from Volta through
+/// Blackwell inherits `clc361.h`'s offsets, and `clc461/561/661/761.h` each define only
+/// an id. So `NVC361_NOTIFY_CHANNEL_PENDING` (`0x90`) and `NVC361_NV_USERMODE__SIZE`
+/// (65536) are NOT arch-varying and are deliberately not behind a seam —
+/// [`crate::submit::USERMODE_NOTIFY_CHANNEL_PENDING`],
+/// [`crate::submit::USERMODE_WINDOW_SIZE`].
+///
+/// The host class list carries this id on GA106 (`ogkm-580:
+/// src/nvidia/generated/g_gpu_class_list.c:1120`) and on AD106 (`:1744`).
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc561.h`.
+pub const AMPERE_USERMODE_A: u32 = 0xc561;
+
+/// `HOPPER_USERMODE_A` — the doorbell-window class on a Hopper host (`ogkm-580:
+/// src/nvidia/generated/g_gpu_class_list.c:2029`).
+///
+/// ★★ **A Hopper host also lists `AMPERE_USERMODE_A`** (`:1997`), so allocating the
+/// Ampere id there SUCCEEDS. That is why this is a seam and not a lint: the wrong pick
+/// is not refused, it is served.
+///
+/// ★ Its alloc params (`NV_HOPPER_USERMODE_A_PARAMS`: `bBar1Mapping`, `bPriv`) are
+/// OPTIONAL and exist only from this class onward. Passing none selects
+/// `pKernelFifo->pRegVF` — the BAR0 register window — which is what every USERMODE
+/// class before it gives unconditionally, so the host path's existing
+/// "no parameters, map uncached" shape is correct on Hopper too (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`).
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc661.h`.
+pub const HOPPER_USERMODE_A: u32 = 0xc661;
+
+/// `HOPPER_CHANNEL_GPFIFO_A` — the GPFIFO channel class on a Hopper host
+/// (`ogkm-580: src/nvidia/generated/g_gpu_class_list.c:2009`).
+///
+/// ★★ As with the usermode id, a Hopper host ALSO lists `AMPERE_CHANNEL_GPFIFO_A`
+/// (`:1996`) and `CliGetChannelClassInfo` has a live arm for it (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:1588-1594`) — so the Ampere id is
+/// allocatable there and merely carries the wrong notifier geometry
+/// (`NVC56F_NOTIFIERS_MAXCOUNT` where the part wants `NVC86F_`).
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc86f.h`.
+pub const HOPPER_CHANNEL_GPFIFO_A: u32 = 0xc86f;
+
+/// `HOPPER_DMA_COPY_A` — the copy-engine object class on a Hopper host, for
+/// `ENG_CE(0..9)` (`ogkm-580: src/nvidia/generated/g_gpu_class_list.c:2018-2027`).
+///
+/// ★★★ Unlike the channel and usermode ids, this one is the LOUD member of the three:
+/// `AMPERE_DMA_COPY_B` is **absent** from GH100's class list entirely, so the wrong
+/// pick fails at alloc rather than silently. It is behind the seam anyway, because
+/// "two of three fail loudly" is not a property anyone should have to re-derive.
+///
+/// ★ The METHOD offsets are shared: `clc8b5.h` is a delta header and every method the
+/// host CE path emits — `OFFSET_IN/OUT_{UPPER,LOWER}` (`0x400..0x40C`),
+/// `LINE_LENGTH_IN` (`0x418`), `LINE_COUNT` (`0x41C`, not redefined),
+/// `SET_SEMAPHORE_A/B/PAYLOAD` (`0x240/0x244/0x248`) and `LAUNCH_DMA` (`0x300`) — has
+/// the SAME offset as in `clc7b5.h`. Only the class id varies.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc8b5.h`.
+pub const HOPPER_DMA_COPY_A: u32 = 0xc8b5;
 
 /// `NV0000_ALLOC_PARAMETERS` — ogkm `src/common/sdk/nvidia/inc/class/cl0000.h:47`.
 #[repr(C)]
