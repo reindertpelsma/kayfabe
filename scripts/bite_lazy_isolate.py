@@ -90,7 +90,7 @@ BITES = [
      "                kind: kayfabe_isolate::RefusalKind::SpawnFailed,",
      "                kind: kayfabe_isolate::RefusalKind::NoPlane,",
      "kayfabe-isolate-host", None,
-     "a_failed_host_isolate_is_distinguishable_from_a_deliberately_planeless_one"),
+     "isolate::tests::a_failed_host_isolate_is_distinguishable_from_a_deliberately_planeless_one"),
 
     ("BL5 ★★★ E1: the shipped plane-less build reports SpawnFailed -- an operator debugs a "
      "host that is fine",
@@ -103,9 +103,9 @@ BITES = [
     ("BL6 ★★ E1: a LIVE isolate reports a refusal -- every healthy boot prints a failure",
      HOST,
      "        self.spawn_error\n            .as_deref()",
-     "        Some(self.spawn_error.as_deref().unwrap_or(\"\"))\n            .as_deref()",
+     "        Some(self.spawn_error.as_deref().unwrap_or(\"a stale reason\"))",
      "kayfabe-isolate-host", None,
-     "a_live_isolate_reports_no_refusal_even_after_retire"),
+     "isolate::tests::a_live_isolate_reports_no_refusal_even_after_retire"),
 
     ("BL7 ★★ E1: the census loses the SpawnFailed precedence -- the actionable sentence is "
      "dropped for the expected one",
@@ -120,7 +120,7 @@ BITES = [
      "            RefusalKind::SpawnFailed => self.spawn_failed = self.spawn_failed.saturating_add(1),",
      "            RefusalKind::SpawnFailed => self.no_plane = self.no_plane.saturating_add(1),",
      "kayfabe-isolate-host", None,
-     "a_failed_host_isolate_is_distinguishable_from_a_deliberately_planeless_one"),
+     "isolate::tests::a_failed_host_isolate_is_distinguishable_from_a_deliberately_planeless_one"),
 
     ("BL9 ★★★ E0b: the per-PROCESS isolate is collapsed onto the system one -- #14, restored "
      "at the seam the owner ruled must not be rewritten",
