@@ -794,3 +794,40 @@ source-quantified test (one `Gpu::new`, one `SharedDevice::new`) and one bite.
 
 Not a question so much as a debt with a name: **E6's acceptance must assert this behaviourally,
 not structurally.** Recorded here so it cannot be lost between increments.
+
+## ★★★ Q25 — THIS ONE BLOCKS THE CRITICAL PATH: a CE copy is undecodable at the arch seam
+
+**E5 cannot start until this is answered.** Full write-up with three options and the cost of
+each is `execution_plane_increments.md` §8.2; this is the pointer and the one-paragraph version.
+
+A real `AMPERE_DMA_COPY_B` copy is **five separate method runs**, and `LAUNCH_DMA` carries
+**none** of its operands — the offsets, the line length and the semaphore were written by
+*earlier, separate* methods. `PushbufferAbi::decode_method(&self, header, args)` is per-method
+and **stateless**, so it is structurally incapable of producing a `CeLaunchDma` whose `dst`,
+`src` and `len` are anything but invented. E4 therefore refuses: `LAUNCH_DMA → Opaque`.
+
+⇒ **The address plane cannot be populated from a CE page-table write while a CE write is
+undecodable** — and that CE write is the *only* populate source the C artifact ever established
+on the compute path, where both invalidate transports came back at zero
+(`mode2_address_table.md` §5's ★ CORRECTION, audit S3, 2026-07-22). E5 and E6 did not know
+they had this dependency.
+
+The three options are: **(1)** give `PushbufferAbi` a run-aware entry point that accumulates
+across methods (additive, no mock breakage; cost is that a run split across two GPFIFO ranges
+needs a rule, and the safe rule is "a partial run means nothing"); **(2)** move accumulation
+into `kayfabe-fwd` (cost: the core becomes arch-shaped, which the Axis-B split exists to
+prevent); **(3)** leave it refusing and drive E6 from the isolate's own encoder (cost: E6's
+green would then say nothing about the *guest's* pushbuffer, which is the whole north star).
+
+⊘ E4 did not guess between them and did not widen its own scope to decide. **Option 1 is what
+the increments doc's author would pick.**
+
+★★ **The reason this is worth reading even if the answer is obvious:** `MockArch` hid the
+problem for the entire life of the seam by packing both operands, a length and a work kind into
+**one** method's arguments — an encoding no NVIDIA chip has. The seam looked sufficient for
+exactly as long as its only implementer was the mock. That is **the third time** a mock's
+invented encoding has made a seam look finished (after `MockArch::token_for` at E3, and the
+mock-guest `rpc_length` floor at Q21) — except that this time the mock was **more capable** than
+hardware, where Q21's was **stricter**. ⇒ **Both directions are the same defect, and neither is
+caught by a green suite.** If there is one systemic thing to fix beyond this question, it is
+that our doubles are not held to "encodes what the hardware encodes, no more and no less."

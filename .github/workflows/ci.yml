@@ -341,6 +341,58 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This machine has a vendored ogkm tree: $ran token-oracle tests executed."
           fi
+      # ★★ PUSHBUFFER-ORACLE-gate non-vacuity — increment E4, and the residue E4 could
+      # not close itself because another agent held this file at the time.
+      #
+      # Why it needs its own step rather than riding on the others: these are the tests
+      # that judge our GA10x pushbuffer/USERD decode against NVIDIA's OWN packing macros
+      # (`tests/oracle/pushbuffer_abi_oracle.c` packs with `DRF_NUM`/`DRF_DEF` over
+      # `clc56f.h`/`clc7b5.h` and unpacks with `DRF_VAL`), so an assertion compares our
+      # decode against *the driver's* decode rather than against a number we chose.
+      #
+      # ★ Its honest limit, same as the GMMU and TOKEN oracles: GitHub's runners do not
+      # carry the vendored ogkm trees, so on THIS runner the family is counted and never
+      # passes. Developer boxes and the bench are where it actually runs — which is
+      # precisely why the floor matters. Without it the whole family can vanish from CI
+      # and from a dev box at the same time and nothing goes red.
+      #
+      # ⊘ 12 is the gated oracle family only. The 8 HOSTILE tests are deliberately
+      # ungated and run everywhere, because the control — garbage must FAULT, not decode
+      # to a plausible method — is the half that must never be skipped.
+      - name: PUSHBUFFER-ORACLE-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'PUSHBUFFER-ORACLE-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'PUSHBUFFER-ORACLE-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          # ★ ONE literal, not three. The three sibling oracle steps each spell their floor
+          # out in the echo, the comparison AND the error string, so a hand-edit can move
+          # two of the three — I did exactly that while proving this step fires, and it
+          # printed the nonsense verdict "12 < 12". A floor must still be a fact someone
+          # consciously changes; it does not have to be a fact stated three times.
+          floor=12
+          echo "PUSHBUFFER-oracle gate: ran=$ran skipped=$skipped total=$total (floor $floor)"
+          if [ "$total" -lt "$floor" ]; then
+            echo "::error::PUSHBUFFER-oracle tests were not reached: $total < $floor." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the ONLY tests that judge the GA10x pushbuffer and USERD" \
+                 "decode against NVIDIA's own packing macros; a wrong decode invents" \
+                 "guest intent, which fails SILENTLY and is worse than a refusal."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This machine has a vendored ogkm tree: $ran pushbuffer-oracle tests executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check

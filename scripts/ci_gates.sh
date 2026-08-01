@@ -77,7 +77,15 @@ want_all=0
 # `Ga10xArch::decode_doorbell` against NVIDIA's own work-submit-token encoder, increment
 # E3). Like the other two oracle steps it READS the test log, so the extractor defers it
 # out of the default mode — only the `--all` literal moves.
-GATE_STEPS_ALL_MIN=21
+# ★ 21 -> 22: the PUSHBUFFER-ORACLE reached-count step (the tests that judge the GA10x
+# pushbuffer and USERD decode against NVIDIA's own `DRF_NUM`/`DRF_DEF`/`DRF_VAL` packing
+# over `clc56f.h`/`clc7b5.h`, increment E4). Same shape as the three above — it READS the
+# test log, so the extractor defers it and only the `--all` literal moves.
+# ⚠ E4 shipped WITHOUT this step and said so, because another agent held `ci.yml` and
+# moving a pinned floor under them would have been worse. Until it existed, that whole
+# oracle family could have vanished from CI and from a dev box at once with nothing red —
+# which is the exact failure this floor was invented for.
+GATE_STEPS_ALL_MIN=22
 GATE_STEPS_FAST_MIN=11
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
