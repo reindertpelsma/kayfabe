@@ -1173,6 +1173,59 @@ fn the_ownership_index_survives_a_proc_teardown() {
     );
 }
 
+/// ★★ **The ownership index is DERIVED, and a proc teardown is the wrong place to look.**
+///
+/// Retiring a proc does not free its RM objects — the guest's graph still holds the
+/// client and its channels — so `ctx_vas` keeping A's rows across
+/// [`the_ownership_index_survives_a_proc_teardown`] is the index tracking the projection,
+/// not accreting. The property only becomes observable when a context object leaves the
+/// **graph**, and a stale row is unreachable through [`route_promote_ctx`] anyway (the
+/// handle no longer resolves, so `node.id()` is never produced), which is exactly why
+/// nothing saw it.
+///
+/// Found by `scripts/bite_promote_ctx.py` at rev 4a93d54: deleting `Spine::refresh`'s
+/// `ctx_vas.clear()` was a NON-BITER against all 25 tests this target had. Unlike §9.5's
+/// redundant filter, the line is not deletable — without it the map keeps one row per
+/// context object ever seen, for the lifetime of the device — so the answer is the test
+/// that pins it rather than the deletion.
+#[test]
+fn a_freed_context_object_leaves_the_ownership_index() {
+    let mut gpu = world();
+    let rows = |g: &Gpu, pdb: Pdb| g.spine.ctx_vas.values().filter(|&&(_, p)| p == pdb).count();
+    let before = rows(&gpu, A_PDB);
+    assert!(before >= 1, "A's context objects are indexed to begin with");
+    assert_eq!(rows(&gpu, B_PDB), before, "…and so are B's, identically");
+
+    gpu.apply(RmEvent::Free {
+        client: A_CLIENT,
+        handle: H_GR_CHANNEL,
+    })
+    .expect("the guest frees its channel");
+
+    assert_eq!(
+        rows(&gpu, A_PDB),
+        before - 1,
+        "★ the freed channel's row is GONE from the index, not merely unreachable",
+    );
+    assert_eq!(
+        rows(&gpu, B_PDB),
+        before,
+        "★ …and B's rows are untouched, so the count above is not measuring a clear-all",
+    );
+    // The promotion that named it is refused BY NAME — never routed by a stale row.
+    assert_eq!(
+        gpu.promote_ctx(&promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![gr_range(GR_VA, 0x2_ef94_6000)]
+        )),
+        Err(PromoteFault::UnknownContextObject {
+            client: A_CLIENT,
+            object: H_GR_CHANNEL,
+        }),
+    );
+}
+
 // =================================================================================
 // 3. MEAN — through the L1 shell, both lock modes
 // =================================================================================

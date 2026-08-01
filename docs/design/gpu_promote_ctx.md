@@ -803,3 +803,42 @@ and the exclusion lives in exactly one place. Recorded here so it is not re-adde
 - Nothing forwards a promotion to the host, and nothing should: the host kernel-RM allocates
   and self-promotes its own GR context buffers on the Case-1 engine-object forward. §0 is
   unchanged.
+
+### 9.7 The bite ledger, committed — and the one guard nothing could see
+
+`scripts/bite_promote_ctx.py` (added 2026-08-01) plants **18** defect shapes in the tree,
+one per subtraction this control makes, compiles, and runs the single test that names each.
+§9.4's *"each has a test that was seen to fail"* is a claim about a tree that has since
+moved — 17 gate steps when §9 was written, 19 now — so the ledger is re-runnable rather
+than historical, which is the same argument `bite_reachability.py` makes for itself.
+
+Every bite is a shape someone could plausibly write, not a random mutation: D1 plants the
+C's literal clamp of `64`, D2 its 32-bit read reaching the flag bytes at +30, D4 its
+collapse of `physAttr` to one bit, D7 its write-back over the caller's params, and §6.1's
+trap is planted verbatim by filing a promote binding under `rpc_bound`.
+
+At `rev 4a93d54` the first run measured **16 of 18** firing, and both misses were findings.
+
+* **A one-proc world cannot witness a wrong-owner bug.** The bite that replaces
+  `by_pdb.get(&(gpu, pdb))` with *"take whatever is first"* was pointed at
+  `a_promotion_naming_a_dead_vas_is_refused`, whose `by_pdb` holds exactly one entry —
+  where the guessed owner and the correct owner are the same proc. Against
+  `two_procs_identical_vas_land_in_two_tables` the same bite fails three tests.
+
+* **`Spine::refresh`'s `ctx_vas.clear()` was covered by nothing.** Deleting it was a
+  NON-BITER against every one of the target's 25 tests.
+  `the_ownership_index_survives_a_proc_teardown` structurally cannot see it: retiring a
+  proc does **not** free its RM objects, so A's rows are *supposed* to survive that — the
+  index is tracking the projection, not accreting. And a genuinely stale row is
+  unreachable through `route_promote_ctx`, because the freed handle no longer resolves and
+  `node.id()` is never produced.
+
+  Unlike §9.5's redundant filter this line is **not** deletable — without it the map keeps
+  one row per context object ever seen, for the lifetime of the device — so the answer is
+  the test that makes it observable rather than the deletion.
+  `a_freed_context_object_leaves_the_ownership_index` frees the channel and pins that its
+  row leaves the index while the other proc's rows stay. 18/18 after, at 26 tests in the
+  target.
+
+★ Neither miss is a defect in the port: the join's behaviour did not change. What changed
+is that two of its properties stopped being asserted by nothing.
