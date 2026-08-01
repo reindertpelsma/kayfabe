@@ -266,11 +266,13 @@ name = "kayfabe-qemu-raw"
 version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
+ "kayfabe-arch",
  "kayfabe-chips",
  "kayfabe-core",
  "kayfabe-device",
  "kayfabe-gsp",
  "kayfabe-isolate",
+ "kayfabe-isolate-host",
  "kayfabe-rmrpc",
  "kayfabe-vmm",
  "kayfabe-vmm-qemu",
