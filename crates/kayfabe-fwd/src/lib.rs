@@ -73,7 +73,7 @@
 //! (disjoint borrows, no shared lock).
 
 use kayfabe_arch::Aperture;
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, RunlistId, VChid};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
@@ -1215,8 +1215,14 @@ pub struct DoorbellRoute {
     pub chan: ChanId,
     /// The target GPU the doorbell addressed (the BAR that trapped).
     pub gpu: GpuId,
-    /// The decoded vChid (per-GPU runlist index).
+    /// The decoded vChid — the chid **within [`Self::runlist`]**, not a per-GPU index.
     pub vchid: VChid,
+    /// ★★ The decoded runlist. Carried, **not** routed on: [`Spine::by_vchid`] is keyed
+    /// `(GpuId, VChid)` and cannot express it. See `doorbell_token_encoding.md` §4 — on a
+    /// real GA106 five channels held chid 7 on four different runlists, so this is a
+    /// measured ambiguity in the index, recorded here rather than hidden by dropping the
+    /// bits at the decoder.
+    pub runlist: RunlistId,
     /// The raw token (recorded per-proc for poll-kick replay).
     pub token: u64,
 }
@@ -1256,6 +1262,7 @@ pub fn route_doorbell(
         chan: cid,
         gpu: target_gpu,
         vchid: target.vchid,
+        runlist: target.runlist,
         token,
     })
 }

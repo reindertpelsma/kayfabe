@@ -224,6 +224,161 @@ fn engines(rm: &mut HostRmBackend, gpu: u32) {
     }
 }
 
+/// ★★★ R13c — **the doorbell-token census: what `(runlist, chid)` did RM put in there?**
+///
+/// This rung exists for increment **E3** (`execution_plane_increments.md` §2.1), whose
+/// whole argument is that a wrong doorbell decode **cannot fail loudly** — we are the GSP
+/// on the Mode-2 path, so a ring sent to the wrong channel has no second party to notice.
+/// The two standing oracles are both blind to it: `MockArch::token_for` is the inverse of
+/// the mock's own decode, and `c_rust_trace_differential.md` records that the completion
+/// plane has **no** C oracle. So the expected value has to come from hardware, and — this
+/// is the whole design of this rung — **from a part of hardware the token cannot have
+/// leaked into**.
+///
+/// ## ⊘ Why R13/R13b's own `(runlist N chid M)` annotations are NOT that
+///
+/// They are `(token >> 16)` and `(token & 0xFFFF)` — the token restated. Printing them
+/// beside the token and calling the pair an agreement is measuring nothing, and R13b's
+/// verdict line leans on exactly that (it is still *sound* for what it claims — that the
+/// upper field VARIES with `engineType` — and it is not sound as evidence about which
+/// field is the runlist).
+///
+/// ## What this rung does instead
+///
+/// [`NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS`] takes a **`runlistId` as input** and
+/// returns a bitmask of the chids allocated on it, walked out of that runlist's
+/// `CHID_MGR` (`ogkm-580: kernel_fifo.c:3371-3443`). Snapshot every runlist, allocate one
+/// channel, snapshot again: the bit that appeared **is** the `(runlist, chid)` RM's
+/// allocator just handed out. Nothing in that path reads a work-submit token.
+///
+/// ★★ The before/after pair is the point, not the after-snapshot. A bitmask read once
+/// cannot distinguish *"this channel is at chid 7"* from *"some channel is at chid 7"* —
+/// the boolean-witness failure — and this box has an X server and a `nvidia-persistenced`
+/// on it, so other channels genuinely do exist. A diff attributes the bit to **our**
+/// allocation. If the diff is not exactly one bit, this rung says so and marks the sample
+/// **AMBIGUOUS** rather than picking one.
+///
+/// ## Output contract
+///
+/// One `SAMPLE` line per channel, machine-readable, because a committed file is what the
+/// suite can be keyed on (a gate keyed on a *word* is satisfied by writing the word):
+///
+/// ```text
+/// SAMPLE engine_type=0x9 token=0x00000007 runlist=0 chid=7
+/// ```
+///
+/// plus `SAMPLE-AMBIGUOUS` / `SAMPLE-REFUSED` lines that carry no `runlist=`/`chid=` and
+/// are therefore unusable as evidence by construction.
+fn doorbell_census(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle, gpu: u32) {
+    use kayfabe_abi::submit::{
+        ALLOCATED_CHANNELS_MAX, ALLOCATED_CHANNELS_PARAMS_SIZE, ENGINE_TYPE_GRAPHICS,
+        NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS, engine_type_copy,
+    };
+
+    /// How many runlist ids to sweep. `NV_CTRL_VF_DOORBELL_RUNLIST_ID` is 7 bits wide, but
+    /// an id past this part's `kfifoGetMaxNumRunlists` answers `NV_ERR_OUT_OF_RANGE`
+    /// (`kernel_fifo.c:3403-3406`) — which is itself reported, so the sweep's end is
+    /// measured rather than assumed.
+    const RUNLISTS: u32 = 24;
+
+    /// Read every runlist's allocated-chid bitmask. `None` for a runlist the control
+    /// refused — recorded per-runlist so a refusal cannot masquerade as "no channels".
+    fn snapshot(
+        rm: &mut HostRmBackend,
+        subdevice: kayfabe_isolate::HostHandle,
+    ) -> Vec<Option<Vec<u32>>> {
+        let mut out = Vec::new();
+        for runlist in 0..RUNLISTS {
+            let mut payload = vec![0u8; ALLOCATED_CHANNELS_PARAMS_SIZE];
+            payload[..4].copy_from_slice(&runlist.to_le_bytes());
+            match rm.control(
+                subdevice,
+                ControlCmd(NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS),
+                &mut payload,
+            ) {
+                Ok(()) => out.push(Some(
+                    payload[4..]
+                        .chunks_exact(4)
+                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                        .collect(),
+                )),
+                Err(_) => out.push(None),
+            }
+        }
+        out
+    }
+
+    /// Every `(runlist, chid)` set in `after` and clear in `before`.
+    fn appeared(before: &[Option<Vec<u32>>], after: &[Option<Vec<u32>>]) -> Vec<(u32, u32)> {
+        let mut new = Vec::new();
+        for (runlist, (b, a)) in before.iter().zip(after).enumerate() {
+            let (Some(b), Some(a)) = (b, a) else { continue };
+            for chid in 0..ALLOCATED_CHANNELS_MAX {
+                let (w, bit) = (chid / 32, 1u32 << (chid % 32));
+                let was = b.get(w).is_some_and(|v| v & bit != 0);
+                let is = a.get(w).is_some_and(|v| v & bit != 0);
+                if is && !was {
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "runlist < RUNLISTS = 24 and chid < 4096"
+                    )]
+                    new.push((runlist as u32, chid as u32));
+                }
+            }
+        }
+        new
+    }
+
+    println!("info  R13c census        = allocated-chid bitmask diff per channel, GPU {gpu}");
+    // ★ The probe FIRST, before any channel exists: a control that is refused (it is
+    // `RMCTRL_FLAGS_PRIVILEGED`) must be reported as a refusal of the INSTRUMENT, never
+    // as an empty census that a reader could mistake for a measurement.
+    let probe = snapshot(rm, subdevice);
+    let live: usize = probe.iter().filter(|r| r.is_some()).count();
+    if live == 0 {
+        println!(
+            "FAIL  R13c instrument    = every runlist refused NV2080_CTRL_CMD_FIFO_\
+             GET_ALLOCATED_CHANNELS (it is PRIVILEGED — run as root); NO SAMPLES TAKEN"
+        );
+        return;
+    }
+    println!("ok    R13c instrument    = {live}/{RUNLISTS} runlist ids answered");
+
+    // GR first, then the copy engines: on this part CE0/CE1 are the graphics copy
+    // engines, so a sweep that skipped GR would never sample the shared runlist.
+    let mut engine_types: Vec<u32> = vec![ENGINE_TYPE_GRAPHICS];
+    engine_types.extend((0..8u32).filter_map(engine_type_copy));
+
+    for engine_type in engine_types {
+        let Ok(vas) = rm.alloc_vaspace() else {
+            println!("SAMPLE-REFUSED engine_type={engine_type:#x} reason=no-vaspace");
+            continue;
+        };
+        let before = snapshot(rm, subdevice);
+        match rm.alloc_channel_on(vas, engine_type) {
+            Ok((chan, token)) => {
+                let after = snapshot(rm, subdevice);
+                let new = appeared(&before, &after);
+                match new.as_slice() {
+                    [(runlist, chid)] => println!(
+                        "SAMPLE engine_type={engine_type:#x} token={token:#010x} \
+                         runlist={runlist} chid={chid}"
+                    ),
+                    other => println!(
+                        "SAMPLE-AMBIGUOUS engine_type={engine_type:#x} token={token:#010x} \
+                         appeared={other:?} — the diff is not one bit, so this allocation \
+                         cannot be attributed and is NOT evidence"
+                    ),
+                }
+                let _ = rm.free(chan);
+            }
+            Err(e) => println!("SAMPLE-REFUSED engine_type={engine_type:#x} reason={e:?}"),
+        }
+        let _ = rm.free(vas);
+    }
+    println!("info  R13c census        = done");
+}
+
 /// ★★★ R18 — **ask the real GPU what a control returns.**
 ///
 /// Some numbers the emulated GSP has to answer are not derivable from anything we hold.
@@ -318,6 +473,7 @@ fn main() -> std::process::ExitCode {
     let mut gpu = 0u32;
     let mut want_concurrency = false;
     let mut want_engines = false;
+    let mut want_census = false;
     let mut want_probe: Option<Vec<(u32, usize)>> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
@@ -337,6 +493,7 @@ fn main() -> std::process::ExitCode {
             }
             "--concurrency" => want_concurrency = true,
             "--engines" => want_engines = true,
+            "--doorbell-census" => want_census = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -396,6 +553,23 @@ fn main() -> std::process::ExitCode {
     if let Some(specs) = want_probe {
         probe_ctrl(&mut rm, subdevice, &specs);
         println!("done — probe only");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R13c runs here and RETURNS, for R18's reason and one more: its instrument is a
+    // *diff*, and every unrelated channel the rest of the ladder allocates is another bit
+    // moving under it. Isolation is what makes the attribution hold.
+    if want_census {
+        println!(
+            "REV_UNDER_TEST={}",
+            // ★★ Stamped at BUILD time, never read from the box's checkout at run time: a
+            // `git rev-parse` in the harness reports whatever the tree says NOW, which is
+            // how a suite result once got attributed to a revision it was not built from.
+            // Absent is printed as `unstamped` and the consumer refuses it.
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        doorbell_census(&mut rm, subdevice, gpu);
+        println!("done — doorbell census only");
         return std::process::ExitCode::SUCCESS;
     }
 

@@ -26,9 +26,21 @@
 //!
 //! GA10x's USERD model and pushbuffer codec are **not built**, and [`UnbuiltUserd`] /
 //! [`UnbuiltPushbuffer`] say so in the vocabulary the core already reads: zero size,
-//! `Opaque` for every method, no GPFIFO entries. `decode_doorbell` answers `None`. Those
-//! are unchanged, and the paragraph they belong to is the one above: a *plausible* answer
-//! on any of them is worse than a refusal.
+//! `Opaque` for every method, no GPFIFO entries. Those are unchanged, and the paragraph
+//! they belong to is the one above: a *plausible* answer on any of them is worse than a
+//! refusal.
+//!
+//! ★★★ **`decode_doorbell` is now built (`E3`), and it is the one seam here that could
+//! not have been closed by reading.** It used to answer `None`. It answers a
+//! `(runlist, chid)` pair now because the encoding was *measured*, not because the
+//! appetite grew: `execution_plane_increments.md` §2.1 argues this is the riskiest
+//! increment in the whole execution plane precisely because a wrong doorbell decode
+//! **cannot fail loudly** — on the Mode-2 path we are the GSP, so a ring routed to the
+//! wrong channel has no second party to notice. The mock cannot catch it
+//! (`MockArch::token_for` is the inverse of the mock's own decode) and the C artifact
+//! cannot either (`c_rust_trace_differential.md`: the completion plane has **no** C
+//! oracle). See [`Ga10xArch::decode_doorbell`] for the two instruments that did, and
+//! `docs/design/doorbell_token_encoding.md` for what they do and do not settle.
 //!
 //! ★★ **The page-table format is now real** ([`Ga10xGmmu`]), and the reason is a boot, not
 //! an appetite. `kbusVerifyBar2_GM107` writes sixteen bytes through the **BAR2 CPU
@@ -40,9 +52,9 @@
 //! (`ogkm-580: kern_gmmu_fmt_gp10x.c`, `kern_gmmu_fmt_ga10x.c`) with its two GA10x traps
 //! encoded rather than commented — see [`Ga10xGmmu`].
 //!
-//! ⊘ This does **not** make the data plane built. Nothing here submits work, decodes a
-//! doorbell or parses a pushbuffer; what exists is an address decoder, and every leaf it
-//! cannot express is still a loud fault.
+//! ⊘ This does **not** make the data plane built. Nothing here submits work or parses a
+//! pushbuffer; what exists is an address decoder and a token decoder, and every leaf
+//! neither can express is still a loud fault.
 //!
 //! ## ⊘ `gsp()` is `None`, deliberately, and it is not the same GSP question
 //!
@@ -57,7 +69,7 @@
 
 use kayfabe_abi::generated::classes as nv;
 use kayfabe_arch::gsp::GspModel;
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, VChid};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, RunlistId, VChid};
 use kayfabe_arch::{
     Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize,
     PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
@@ -87,7 +99,7 @@ impl Arch for Ga10xArch {
     /// model prints. An operator reading "GA10x (GA106)" would have no way to know the
     /// data plane is not there.
     fn name(&self) -> &'static str {
-        "GA10x (GA106, object model + GMMU; USERD/pushbuffer/doorbell unbuilt)"
+        "GA10x (GA106, object model + GMMU + doorbell; USERD/pushbuffer unbuilt)"
     }
 
     /// NVIDIA's real class ids. The constants are `kayfabe-abi`'s, per decision #2's
@@ -144,10 +156,63 @@ impl Arch for Ga10xArch {
         VChid(0)
     }
 
-    /// `None` — no doorbell token decodes. There is no execution plane here to route one
-    /// to, and `Option` means this seam can say so exactly.
-    fn decode_doorbell(&self, _token: u64) -> Option<DoorbellTarget> {
-        None
+    /// ★★★ **E3 — the GA10x work-submit token, decoded.** Two fields and nothing else:
+    /// `VECTOR` = chid in bits **11:0**, `RUNLIST_ID` in bits **22:16**.
+    ///
+    /// # Where the encoding comes from — and which instrument settled it
+    ///
+    /// It is RM's, and RM writes it in two lines
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c`,
+    /// `kfifoGenerateWorkSubmitTokenHal_GA100`):
+    ///
+    /// ```text
+    /// val = FLD_SET_DRF_NUM(_CTRL, _VF_DOORBELL, _RUNLIST_ID, runlistId, val);
+    /// val = FLD_SET_DRF_NUM(_CTRL, _VF_DOORBELL, _VECTOR,     chId,      val);
+    /// ```
+    ///
+    /// with the field positions in the tree's own
+    /// `src/common/inc/swref/published/ampere/ga100/dev_ctrl.h:26-27`, and GA106 bound to
+    /// that `_GA100` implementation by the driver's own dispatch table
+    /// (`g_kernel_fifo_nvoc.c:649-652`, `ChipHal: GA100 | GA102 | … | GA106 | …`).
+    ///
+    /// ⊘ **None of the three sentences above is what makes this decoder trustworthy** —
+    /// they are a reading, and a transcribed reading is the exact failure
+    /// `isolate_the_drivers_own_checks` names. Two instruments do:
+    ///
+    /// 1. `tests/tests/doorbell_token.rs::ga106_hardware_tokens_decode_to_rms_own_chids`
+    ///    replays tokens a **real GA106 handed real channels**, each paired with a
+    ///    `(runlistId, chid)` that came from RM's *channel-ID manager* — a
+    ///    `NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS` bitmask diffed across the
+    ///    allocation — so the expected value never passes through this function, its
+    ///    inverse, or the token.
+    /// 2. `tests/tests/worksubmit_token_oracle.rs` compiles
+    ///    `kfifoGenerateWorkSubmitTokenHal_GA100` *itself* and differentials this decoder
+    ///    against it over the whole field space, which is what pins the two **widths**
+    ///    (hardware only ever showed small values).
+    ///
+    /// # What makes a fabricated token `None`
+    ///
+    /// RM's encoder starts from `val = 0` and sets exactly those two fields, so bits
+    /// **15:12**, **31:23** and everything above 32 are zero in *every* token RM can
+    /// produce. A token with any of them set was not generated by the driver, and the
+    /// refusal is therefore derived from the encoder rather than invented as a
+    /// plausibility rule. ⊘ It is a **necessary**, not sufficient, condition: 0x0000_0004
+    /// is well-formed whether or not any channel holds chid 4, and only the core's
+    /// exec-plane index can answer that (`FwdFault::UnknownVchid`).
+    fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
+        let raw = u32::try_from(token).ok()?;
+        // The two fields RM defines…
+        let vector = raw & 0x0000_0FFF; // NV_CTRL_VF_DOORBELL_VECTOR      11:0
+        let runlist = (raw >> 16) & 0x0000_007F; // NV_CTRL_VF_DOORBELL_RUNLIST_ID 22:16
+        // …and everything RM's encoder cannot have written.
+        if raw & !0x007F_0FFF != 0 {
+            return None;
+        }
+        Some(DoorbellTarget {
+            // Both casts are lossless by the masks above (12 and 7 bits into a u16).
+            vchid: VChid(vector as u16),
+            runlist: RunlistId(runlist as u16),
+        })
     }
 
     fn mmu(&self) -> &dyn GmmuFmt {

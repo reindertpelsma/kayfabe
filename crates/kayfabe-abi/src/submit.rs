@@ -528,6 +528,39 @@ pub const NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN: u32 = 0xc36f_0108;
 pub const WORK_SUBMIT_TOKEN_PARAMS_SIZE: usize = 4;
 
 // =====================================================================================
+// ★★★ The E3 instrument — RM's OWN channel-ID manager, asked directly
+// =====================================================================================
+
+/// `NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS` = `0x20801119`, on the **subdevice** —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:891`.
+///
+/// ★★★ **This is the only control in the tree that reports a channel's `(runlistId,
+/// chid)` without going anywhere near a work-submit token**, which is exactly why it is
+/// here. `subdeviceCtrlCmdFifoGetAllocatedChannels_IMPL` →
+/// `kfifoGetAllocatedChannelMask_IMPL` (`kernel_fifo.c:3371-3443`) takes `runlistId` as an
+/// **input**, walks `chId` over that runlist's `CHID_MGR`, and sets a bit for every
+/// `kfifoChidMgrGetKernelChannel` that is non-NULL. Diffed across one channel allocation
+/// it names the `(runlist, chid)` RM just assigned — from RM's allocator, not from the
+/// token, not from our decoder, and not from our decoder's inverse. `E3` is the increment
+/// whose *wrong answer is silent*, so its expected value had to come from somewhere the
+/// answer could not have leaked into.
+///
+/// ⊘ `RMCTRL_FLAGS_PRIVILEGED` (`flags = 0x4u`, `g_subdevice_nvoc.c:5086`), i.e.
+/// admin-only (`control.h:196-202`). A capability-less isolate is refused it, by design —
+/// this is a **bench instrument**, not a production path, and nothing on the guest path
+/// issues it.
+pub const NV2080_CTRL_CMD_FIFO_GET_ALLOCATED_CHANNELS: u32 = 0x2080_1119;
+
+/// How many channels `NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS::bitMask` covers —
+/// `NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_MAX_CHANNELS`, `ctrl2080fifo.h:898`.
+pub const ALLOCATED_CHANNELS_MAX: usize = 4096;
+
+/// `sizeof(NV2080_CTRL_FIFO_GET_ALLOCATED_CHANNELS_PARAMS)` — `NvU32 runlistId` followed
+/// by `NvU32 bitMask[MAX/32]` (`ctrl2080fifo.h:902-905`). No pointers, no alignment
+/// padding: 4 + 512.
+pub const ALLOCATED_CHANNELS_PARAMS_SIZE: usize = 4 + ALLOCATED_CHANNELS_MAX / 8;
+
+// =====================================================================================
 // Device-local memory — the only kind a ring, a USERD and a semaphore can be built from
 // =====================================================================================
 

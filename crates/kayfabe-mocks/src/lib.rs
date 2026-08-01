@@ -192,6 +192,10 @@ impl Arch for MockArch {
         }
         Some(DoorbellTarget {
             vchid: VChid(((token >> 9) & 0xfff) as u16),
+            // ⊘ Mockingbird has ONE runlist, and this constant is the whole reason
+            // `MockArch` could never have caught a GA10x mis-decode: the invented token
+            // has no runlist field to get wrong. See `Ga10xArch::decode_doorbell`.
+            runlist: kayfabe_arch::ids::RunlistId(0),
         })
     }
 
@@ -3183,13 +3187,26 @@ mod tests {
     // `defer` carries, so the ordering test names it directly.
     use kayfabe_vmm::CoreEventKind;
 
+    /// ⊘⊘ **THIS TEST IS NOT EVIDENCE ABOUT ANY REAL DOORBELL ENCODING, and it never
+    /// was.** [`MockArch::token_for`] is the inverse of [`MockArch::decode_doorbell`], so
+    /// the expected value is produced by the function under test running backwards — the
+    /// shape `never_let_a_test_use_the_thing_under_test_as_its_own_observer` catalogues,
+    /// and the shape that let a planted mutation survive on 2026-08-01. It is kept
+    /// because a mock's two halves *must* agree for every test that builds a token to
+    /// mean anything; it is renamed and annotated so that the agreement is never again
+    /// read as a fact about silicon. The real doorbell encoding is settled elsewhere:
+    /// `Ga10xArch::decode_doorbell`, `tests/tests/doorbell_token.rs` (real GA106 tokens)
+    /// and `tests/tests/worksubmit_token_oracle.rs` (RM's own encoder).
     #[test]
-    fn mock_arch_token_roundtrip_and_malformed_rejected() {
+    fn mock_arch_token_roundtrip_is_self_consistent_only() {
         let a = MockArch::new();
         let v = VChid(0x2a);
         assert_eq!(
             a.decode_doorbell(MockArch::token_for(v)),
-            Some(DoorbellTarget { vchid: v })
+            Some(DoorbellTarget {
+                vchid: v,
+                runlist: kayfabe_arch::ids::RunlistId(0)
+            })
         );
         assert_eq!(a.vchid_from_userd_flags(MockArch::userd_flags_for(v)), v);
         assert_eq!(

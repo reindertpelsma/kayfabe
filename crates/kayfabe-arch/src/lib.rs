@@ -48,7 +48,7 @@ pub use gsp::{
     ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
     BootSteps, GspModel, GspObservation, GspReg, LibosRegionLayout, NoBootSequence, RegWrite,
 };
-use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, VChid};
+use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, RunlistId, VChid};
 
 /// ★ **The privilege a client root DECLARES about itself** — the discriminator that
 /// decides whether a client belongs to a guest *process* or to the guest *kernel*
@@ -158,10 +158,32 @@ pub enum ObjectKind {
 /// E0 (proven on the bench, 2026-07-19): the work-submit token identifies the target
 /// channel; the core demuxes on the decoded [`VChid`] — no CPU-state (CR3) read exists
 /// anywhere in the design.
+///
+/// ## ★★★ `runlist` is not decoration — it is the half a decode used to DROP
+///
+/// This struct used to be `{ vchid }` alone, and on GA10x that is **lossy**: a
+/// work-submit token is `(runlistId, chid)` and a chid is scoped to its runlist. It is
+/// not a theoretical loss. `[measured]` RTX 3060 / GA106 / 580.159.04,
+/// `docs/reference/bench_evidence/rm-ladder-419afe8.out:21-25`, five copy-engine
+/// channels all reported chid **7**, on runlists **0, 1, 2 and 8**. A decoder that
+/// returned only the chid would have answered those four *different* channels
+/// identically — the silent mis-route `execution_plane_increments.md` §2.1 says E3
+/// exists to prevent.
+///
+/// ⊘ Carrying it here is **not** the same as routing on it. `kayfabe_core`'s exec-plane
+/// index is still keyed `(GpuId, VChid)`, so the ambiguity is now *visible and recorded*
+/// rather than closed — see `docs/design/doorbell_token_encoding.md` §4, which names it
+/// as the residual E3 leaves open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DoorbellTarget {
-    /// The virtual channel ID the token addresses.
+    /// The virtual channel ID the token addresses. On GA10x this is the token's
+    /// `NV_CTRL_VF_DOORBELL_VECTOR` field, i.e. the chid **within `runlist`**.
     pub vchid: VChid,
+    /// The runlist the token addresses.
+    ///
+    /// An architecture whose token carries no runlist reports [`RunlistId`]`(0)` — the
+    /// single-runlist reading — and says so at its `decode_doorbell`.
+    pub runlist: RunlistId,
 }
 
 /// GMMU format regime (Axis-B spine, `mode2_abi_agnostic_layer.md` §3.0).
@@ -650,6 +672,7 @@ kayfabe_util::assert_send_sync!(
     ids::HObject,
     ids::Pdb,
     ids::VChid,
+    ids::RunlistId,
     ids::ClassId,
     ids::GpuVa,
     ids::Gpa,

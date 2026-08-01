@@ -56,6 +56,23 @@ id_newtype!(
 );
 
 id_newtype!(
+    /// A **runlist** id — the *other half* of a GA10x work-submit token, and the half
+    /// this project spent its whole life so far calling a property of the [`VChid`].
+    ///
+    /// ★★★ MEASURED, RTX 3060 / GA106 / 580.159.04, `rm-ladder-419afe8.out:21-25`: five
+    /// copy-engine channels reported chid **7** on runlists **0, 1, 2 and 8**. A chid is
+    /// therefore *per-runlist*, not per-GPU: `(GpuId, VChid)` is **not** a channel
+    /// identity on this architecture, and the doc line one screen down
+    /// ([`GpuId`]: *"a vChid a per-GPU runlist index"*) states the model that measurement
+    /// falsifies. See `docs/design/doorbell_token_encoding.md` §4 for what is and is not
+    /// closed about that.
+    ///
+    /// Seven bits wide on GA10x (`NV_CTRL_VF_DOORBELL_RUNLIST_ID 22:16`,
+    /// `ogkm-580: src/common/inc/swref/published/ampere/ga100/dev_ctrl.h:27`).
+    RunlistId(u16)
+);
+
+id_newtype!(
     /// An RM class ID. The *values* are per-generation/per-version (Axis A, codegen'd
     /// in `kayfabe-abi`); the core only ever passes them to `Arch::classify`.
     ClassId(u32)
