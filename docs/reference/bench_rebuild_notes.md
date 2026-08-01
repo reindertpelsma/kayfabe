@@ -288,3 +288,278 @@ cleanly), `qemu-build/qemu-system-x86_64` stamped `kayfabe-rev:419afe8…`, `kay
 `gssh_nv` (tap, bench), `boot_nvkvm.sh`, `boot_prov.sh`, `BUILD_REV.txt`. **No QEMU running**
 (verified with `pgrep -x qemu-system-x86` and `ss -tln`). The provisioning scripts are at
 `/root/prov{1,2b,3}.sh`, `/root/guest{1,2}.sh`, `/root/build{A,L}.sh` with their logs beside them.
+
+---
+
+## 2026-08-01 — REBUILD #3, a THIRD machine. ★ Full parity, in about an hour.
+
+**Why it happened.** Hardware measurement and bench boots were *strictly serial* on one box. A
+second GA106 was rented so they stop being. The mandate was to stop at **a working host driver
++ a running `kayfabe-rm-ladder`** and to add the bench *only if it turned out cheap* — with §1's
+recipe already written, it did (§D), so this box ended up at **full parity with box 1**.
+
+⚠ **Naming.** The ssh alias for this machine is **`vb2`**, which collides with REBUILD #2's
+*boot* names `vb1`/`vb2` (two boots on **one** box, instance 46494693). Throughout this section
+"box2" means the machine and `vb1`/`vb2` keep their §3 meaning as boots. The committed evidence
+is therefore `rm-ladder-box2-*.out`, never `…-vb2-…`.
+
+### A. Provenance, stated first
+
+| | |
+|---|---|
+| box | vast.ai instance **46529600**, `ssh -p 27014 root@184.144.255.144`, RTX 3060 (GA106) at `00:08.0`, **21 cores / 49 GB / 187 GB free**, Ubuntu 22.04 host, kernel **6.8.0-59-generic**, nested (42 `vmx\|svm` CPUs, `/dev/kvm` present) |
+| host driver, as rented | **575.51.03 CLOSED** (`NVRM version: NVIDIA UNIX x86_64 Kernel Module 575.51.03`), apt/dpkg-managed, apt-`hold`ed |
+| host driver, after §B | **580.159.04 Open Kernel Module**, `license: Dual MIT/GPL`, `nvidia-smi` healthy |
+| source revision measured | **`6e4f66f`** (= `origin/master` at the time), clean |
+| hypervisor | QEMU **10.2.4** + `scripts/build_qom_shim.sh` overlay, stamped `kayfabe-rev:6e4f66f5bdcf…` |
+| guest | Ubuntu 24.04 noble cloudimg, kernel **6.8.0-136-generic**, **stock unpatched** 580.159.04 open module built in-guest |
+| wall time, blank → `rm-ladder` exit 0 | **~23 min**, of which ~7 min was the 397 MB `.run` download |
+| wall time, blank → first captured bench boot | **~55 min** |
+
+⚠ The box arrives on **`00:08.0`**, not REBUILD #2's `00:07.0`. Nothing in this phase cares, but
+anything that hardcodes a BDF will.
+
+### B. The host-driver swap — the recipe in §2 is CORRECT and it worked FIRST TRY
+
+★★ **The apt-hold trap of §2 reproduced exactly**, on a different instance of the same template.
+**[measured]** 2026-08-01 on instance 46529600, `apt-mark showhold` **before** touching anything
+returned **nine** held packages:
+
+```
+libnvidia-cfg1-575  libnvidia-common-575  libnvidia-compute-575  libnvidia-decode-575
+libnvidia-encode-575  libnvidia-extra-575  libnvidia-fbc1-575  libnvidia-gl-575
+nvidia-driver-575
+```
+
+⇒ §2's trap is a **property of the "Ubuntu 22.04 VM" template, not of one rental**. Because the
+`apt-mark unhold` line was run *first*, the purge exited **0** and the `.run` installed with **no
+`alternate driver installation` error at all** — the failure §2 documents never appeared. ★ That
+is the whole value of that section: it converted a ~1 h debugging episode into one line.
+
+⚠ **Two refinements §2 does not carry**, both **[measured]** here:
+
+1. `apt-mark showhold` is the *only* honest input to the unhold. §2's `apt-mark unhold $(apt-mark
+   showhold …)` is right precisely because the held set is **not** the set you would guess: it is
+   nine packages, and it does **not** include `nvidia-dkms-575`, `nvidia-utils-575`,
+   `nvidia-kernel-common-575` or `nvidia-firmware-575-575.51.03` even though all four are
+   installed and all four must be purged. A hand-written unhold list would have missed nothing
+   here only by luck — derive the list, never type it.
+2. **`rmmod` the modules before the purge, not after.** The purge runs `update-initramfs` twice
+   and `nvidia-persistenced` may hold `/dev/nvidia*`. The sequence that worked, verbatim:
+   ```sh
+   systemctl stop nvidia-persistenced
+   rmmod nvidia_uvm nvidia_drm nvidia_modeset nvidia      # order matters: dependents first
+   apt-mark unhold $(apt-mark showhold | tr '\n' ' ')
+   apt-get purge -y --allow-change-held-packages nvidia-driver-575 nvidia-dkms-575 \
+       nvidia-kernel-source-575 nvidia-kernel-common-575 nvidia-compute-utils-575 \
+       nvidia-utils-575 'libnvidia-*-575' xserver-xorg-video-nvidia-575 \
+       nvidia-firmware-575-575.51.03 nvidia-settings
+   rm -rf /var/lib/dkms/nvidia /usr/src/nvidia-575.51.03
+   sh NVIDIA-Linux-x86_64-580.159.04.run --silent --no-x-check --no-nouveau-check --dkms -m=kernel-open -j8
+   ```
+   Survivors, and they are the right survivors: `nvidia-container-toolkit{,-base}`,
+   `libnvidia-container{-tools,1}`, `nvidia-modprobe`.
+
+**[measured]** verification, on content and not on exit codes:
+
+```
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build …
+modinfo nvidia → version 580.159.04, license Dual MIT/GPL,
+                 filename /lib/modules/6.8.0-59-generic/updates/dkms/nvidia.ko
+dkms status    → nvidia/580.159.04, 6.8.0-59-generic, x86_64: installed
+nvidia-smi     → NVIDIA GeForce RTX 3060, 580.159.04, 0MiB / 12288MiB, 00000000:00:08.0
+```
+
+★ And the `open()` acceptance §2 insists on, with a 12-line C probe rather than `ls`:
+
+```
+/dev/nvidiactl           OPENED O_RDWR
+/dev/nvidia0             OPENED O_RDWR
+/dev/nvidia-uvm          OPENED O_RDWR
+```
+
+⇒ **no `EIO`** — this GPU completes GFW boot, unlike the project's `vh`
+(`kgspWaitForGfwBootOk_TU102: failed to wait for GFW boot complete: 0x65`). ⚠ **The
+pre-swap 575 driver already proved this**: `nvidia-smi` listed the card *as rented*, before
+anything was changed. **Check GFW health on the driver the box arrives with** — it costs one
+command and it decides whether the next 20 minutes are worth spending.
+
+★ **Stock-module cleanliness, verified rather than assumed** — this box has never carried an
+instrumented module and the check says so:
+
+```
+nm -a on nvidia{,-modeset,-drm,-uvm}.ko, egrep -ic 'kfv_|kayfabe|nvkvm|instrument|kf_probe'
+    → 0, 0, 0, 0
+same pattern over /proc/kallsyms → 0
+/sys/module/{nvidia,nvidia_uvm,nvidia_modeset,nvidia_drm}/taint → OE  (O=out-of-tree, E=unsigned)
+```
+
+⚠ **and one thing that looks like a failure and is not.** `/proc/sys/kernel/tainted` reads
+**12289** = `1 | 4096 | 8192`, and bit 0 is `TAINT_PROPRIETARY_MODULE`. There is **no
+proprietary module loaded** — `grep -l P /sys/module/*/taint` returns **nothing**. The global
+word is **sticky**: bit 0 was set by the **575 closed** driver that autoloaded at boot, before
+the swap, and the kernel never clears it. ⇒ **Read per-module `taint`, never the global word,**
+when the question is "is the open module loaded". A reboot would clear it; nothing else will.
+
+### C. ★★★ `kayfabe-rm-ladder` on a second GA106 — ONE LINE of 33 differs, and it is a handle
+
+Built on the box itself (⊘ never on the 4-core dev box): `rustup` stable + `rustup target add
+x86_64-unknown-linux-musl` + `apt install musl-tools`, then `cargo build --release --bin
+kayfabe-rm-ladder`. ⚠ **That build is 8 crates and 10.2 s** — the tree has essentially no
+external dependencies, so a build that finishes implausibly fast is *correct*, not cached. The
+`build.rs` line `embedded isolate image: 680608 bytes, x86_64-unknown-linux-musl` is the proof
+it did the real work.
+
+**[measured]** `./target/release/kayfabe-rm-ladder --gpu 0 --engines`, rev `6e4f66f`, host
+580.159.04 open, **exit 0**, full transcript `bench_evidence/rm-ladder-box2-6e4f66f.out`:
+
+```
+★     R14 device memory   = wrote 0xa5a51234/0x5a5aedcb through mapping A, read both back through an INDEPENDENT mapping B
+★     R15 SEM LANDED      = sem 0xbeef5ea1 (want 0xbeef5ea1), GP_GET 1 -> caught GP_PUT 1
+★     R17 CE COPY         = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00, dst[last] 0xc0fff1ff (want 0xc0fff1ff)
+★     R13b VERDICT        = 4 DISTINCT runlists {0, 1, 2, 8} — engineType routes
+★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped the ring, USERD and the usermode BAR0 window, and rang channel 0xcafe000c token 0x00000004
+```
+
+★★★ **And then the thing no single box could establish.** `diff bench_evidence/rm-ladder-419afe8.out
+bench_evidence/rm-ladder-box2-6e4f66f.out` — two **different physical GA106s**, two **different
+source revisions** — is **one line**:
+
+```
+2c2
+< ok    R4 hClient         = 0xc1d000c0        (box 1, rev 419afe8)
+> ok    R4 hClient         = 0xc1d00034        (box 2, rev 6e4f66f)
+```
+
+`hClient` is **RM-allocated**, and the *same* one-line diff appears between **two consecutive
+runs of the same binary on the same box** — **[measured]**, `diff /tmp/a.out /tmp/b.out` after
+two back-to-back invocations gave exactly `< 0xc1d0006f` / `> 0xc1d0007a` and nothing else. So
+it is the transcript's one legitimately non-deterministic field, and the cross-machine diff is
+**not larger than the within-machine one**. Everything else — the semaphore value,
+both CE-copy words, the channel tokens `0x00000004`/`0x00000005`, all eight `R13b` engineType
+rows, the runlist set `{0,1,2,8}`, the `Other(87)` refusals for COPY(5..7) — is **byte-identical
+across machines**. ⇒ **[inferred], and it is the whole point of the box:** the RM bring-up
+ladder is a *deterministic* oracle up to handle allocation, so `diff`-ing a future ladder
+transcript against a committed one is a real regression test, with exactly one line to mask.
+
+⚠ **Expected `dmesg` noise, so nobody debugs it later.** The `R13b` sweep deliberately asks for
+`NV2080_ENGINE_TYPE_COPY(5..7)` on a part that has five, and the driver logs
+`nvAssertOkFailedNoLog … kfifoEngineInfoXlate_HAL … kernel_fifo_gm107.c:368` for each. The
+ladder reports those as `info … refused Other(87)` and still exits 0. **The NVRM assertions in
+the ring buffer after an `--engines` run are the ladder working.**
+
+**R12 reproduces §5b(a) on independent hardware.** `--concurrency`, transcript
+`bench_evidence/rm-ladder-concurrency-box2-6e4f66f.out`:
+
+```
+ok    R12 1 thread (base)  = 800 verbs sequential, 1545 ms
+ok    R12 one client       = 456 overlapping pairs, 1645 ms
+ok    R12 4 clients        = 455 overlapping pairs, 1602 ms
+★     R12 SPEEDUP          = one client x4 workers: 0.94x  |  4 clients: 0.96x   (ideal 4.00x)
+```
+
+vs box 1's `0.93x / 0.94x` on **15** cores where this box has **21**. ⇒ §5b(a)'s claim — RM's
+lock is **device-wide, not per-client**, and an isolate pool buys **no** verb throughput — is now
+**[measured] on two machines with different core counts**, which removes "it was that box's
+scheduler" as an explanation.
+
+### D. ★★ The bench got built too — 21 cores made it cheap, so §C is not the end
+
+The task that provisioned this box descoped the hypervisor/guest ("stop at a working host
+driver unless the bench is cheap"). With §1's recipe in hand and 21 cores it was cheap —
+**~25 min wall, both tracks concurrent, no debugging** — so it was built. Deltas from §1:
+
+| track | what changed on this box | time |
+|---|---|---|
+| 1 host deps | §1's apt list verbatim, plus `qemu-system-x86 ovmf` up front; QEMU 10.2.4 + noble cloudimg downloaded in parallel with it | ~4 min |
+| A shim | `scripts/build_qom_shim.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build`, `CARGO_BUILD_JOBS=16` | **~6 min** (vs §1's 13 on 15 cores) |
+| B1 guest disk | as §1. ★ The dual-network netplan of §6 was written **into the cloud-init `user-data`** rather than applied afterwards — `write_files` for `/etc/netplan/01-bench.yaml` + the `99-disable-network-config.cfg`, and a `runcmd` that **deletes `/etc/netplan/50-cloud-init.yaml` then `netplan apply`**. That collapses §6's "write both files AND delete the cloud-init one" trap into the seed image and it worked first try | ~3 min |
+| B2 guest driver | as §1: `build-essential linux-headers-$(uname -r)`, scp the same `.run`, `--silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j8`, clean `poweroff` | ~9 min |
+
+**[measured]** in-guest result, identical to §0's row: kernel **6.8.0-136-generic**, `modinfo
+nvidia` → `version 580.159.04`, `license Dual MIT/GPL`, `vermagic 6.8.0-136-generic`,
+`filename /lib/modules/6.8.0-136-generic/kernel/drivers/video/nvidia.ko`. **Stock, unpatched.**
+
+⚠ **`boot_nvkvm.sh` and `gssh_nv` are NOT in the repo** — §7 lists them as box-1 files and they
+were lost with that box's scope. They had to be **re-derived**, and that is a real gap: the
+harness `scripts/bench/boot_capture.sh` hard-requires both (`die precondition`) and neither is
+version-controlled. What was reconstructed here, and it works:
+
+```sh
+# gssh_nv
+exec ssh -i /workspace/bench/guest_key -o StrictHostKeyChecking=no \
+     -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 ubuntu@192.168.77.2 "$@"
+
+# boot_nvkvm.sh <tag> [extra qemu args]
+exec "$BENCH/qemu-build/qemu-system-x86_64" -enable-kvm -m 8G -smp 8 -machine q35 \
+  -drive file="$BENCH/guest.qcow2",if=virtio,format=qcow2 \
+  -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no -device virtio-net-pci,netdev=n0 \
+  -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0 \
+  -nographic -display none -monitor none \
+  -serial file:"$BENCH/run_${TAG}_serial.log" "$@" 2> "$BENCH/run_${TAG}_qemu.log"
+```
+
+★ **These two files should be promoted into `scripts/bench/`.** A harness that refuses to run
+without two uncommitted files re-invents them on every rebuild, and REBUILD #4 will otherwise
+guess the device line again. ⊘ Not done here — this rebuild was doc-only by mandate.
+
+### D2. ★★★ The boot, MEASURED at `6e4f66f` — and ⊘ what it may NOT be compared to
+
+Two boots, `box2a` and `box2b`, one fresh QEMU each, rev `6e4f66f`, evidence
+`bench_evidence/run_box2a_{dmesg,qemu,probe}.log`:
+
+```
+[boot_capture:box2a] captured 26 dmesg lines, 22 NVRM, 3 adapter
+[   30.002476] NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+[   30.029795] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   30.991971] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+```
+
+`box2a` vs `box2b`: dmesg **IDENTICAL** with timestamps stripped, and the device's own report
+**byte-identical** — `registers: 3630 reads / 56309 writes … interrupt requests dropped 91`,
+`framebuffer: 122r/55106w`, `BAR2: 111r/21128w`, `commands: 92 decoded, 20 UNSERVICED`. ★ Note
+this is *stronger* than §3's within-box pair, where the read counters drifted; here even the
+polls matched.
+
+⊘⊘ **This is NOT a cross-machine reproduction of §3, and must not be cited as one.** §3 was
+rev `419afe8` and stops at `0x11:0x45:2134` (`RM_INIT_SYS_ENVIRONMENT_FAILED` /
+`NV_ERR_IRQ_NOT_FIRING`) in **36** lines; this is rev `6e4f66f` and stops at `0x25:0xffff:1249`
+in **26**. **Two variables moved at once** — the revision, and the fact that `boot_nvkvm.sh`
+here is a *reconstruction* whose QEMU command line may not match box 1's (`-machine q35` is a
+guess; box 1's line was never committed). ⊘ I did not run `419afe8` on this box, and I was not
+permitted to touch box 1, so **the machine variable was never isolated**. Recording that
+absence rather than the comparison it looks like.
+
+★ What *can* be said, and it is worth something: the wall reached here is the one the project's
+own current notes name — the failure is `memmgr`'s scrubber failing to schedule a CE channel,
+**not** `IRQ_NOT_FIRING`, and `0x20800301` (`EVENT_SET_NOTIFICATION`) is **absent from the 17
+distinct unserviced commands**, i.e. it is being serviced now. ⇒ **[inferred]** the boot has
+advanced past §3's wall between `419afe8` and `6e4f66f`, and this independently-built bench
+lands exactly where HEAD is expected to. That is a *consistency* check on the new bench, and a
+good one; it is not a controlled comparison.
+
+### E. Box state left as found
+
+`/workspace/kayfabe` — the repo at `6e4f66f` on a local branch `bench` (fetched from a `git
+bundle` scp'd in, since the box has no GitHub credentials), `target/release/kayfabe-rm-ladder`
+built. `/workspace/bench` — `guest.qcow2` (provisioned, stock 580 open module installed, powered
+down cleanly), `qemu-build/qemu-system-x86_64` **stamped `kayfabe-rev:6e4f66f5bdcf…`, verified
+with `strings` on both it and `libkayfabe_qemu_raw.a`**, `guest_key{,.pub}`, `gssh` (slirp 2222,
+provisioning), `gssh_nv` (tap, bench), `boot_prov.sh`, `boot_nvkvm.sh`, `seed.iso`,
+`run_box2{a,b}_*` captures. `nvktap0` up at `192.168.77.1/24` with NAT (⚠ **not persistent —
+re-run §6's five lines after any host reboot**). `/root`: `dl/NVIDIA-Linux-x86_64-580.159.04.run`
+(**keep it** — a re-install after a kernel bump costs 7 min of download otherwise), and
+`drvswap.sh`, `prov1.sh`, `guest1.sh`, `guest2.sh`, `mkboot.sh`, `openprobe.c` each with its log
+beside it. **No QEMU running** (`pgrep -x qemu-system-x86` empty, `ss -tln` shows no 2222/2223).
+Host driver **580.159.04 open, stock DKMS, zero instrumented symbols** (§B).
+
+### F. §5b(b) re-measured — the `O_PATH` escape is closed on this box too
+
+**[measured]** `kayfabe-sandbox-probe`, rev `6e4f66f`, exit 0,
+`bench_evidence/sandbox-probe-box2-6e4f66f.out`. All ten traversal probes refused, `nvidiactl`
+the only reachable `/dev` entry besides `null`, all five capability sets empty, `NoNewPrivs=1`,
+`dumpable=0`, `Seccomp: 0`. Identical to §5b(b) — ⚠ including its caveat: the containment is
+**namespace + capability + dirfd, not seccomp**, and this run says `Seccomp: 0` too.
+
+⇒ **Every phase of §1's table now exists on this box.** It is equivalent to box 1 and can be
+used for hardware measurement and for bench boots, in parallel with it.

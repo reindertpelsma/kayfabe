@@ -1,0 +1,30 @@
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0003f
+ok    R6 hSubdevice      = 0xcafe0002
+ok    R7 hVaSpace       = 0xcafe0005
+ok    R8 hMemory        = 0xcafe0006 (1048576 bytes)
+ok    R9 host GPU VA    = 0x0000000200200000 (FIXED, as requested)
+info  R+ control          = Other(31) (a status, not a transport failure)
+ok    R+ bogus class      = refused: Other(34)
+ok    R13.1 channel      = 0xcafe000d, engine Ce, token 0x00000004 (runlist 0 chid 4)
+ok    R13.1 schedule     = on the runlist
+ok    R13.2 channel      = 0xcafe0013, engine GrCompute, token 0x00000005 (runlist 0 chid 5)
+ok    R13.2 schedule     = on the runlist
+★     R13 token identity  = 0x00000004 != 0x00000005 (two live channels)
+ok    R13 unknown engine  = refused before any object was allocated
+★     R14 device memory   = wrote 0xa5a51234/0x5a5aedcb through mapping A, read both back through an INDEPENDENT mapping B
+ok    R14 USERD cursors   = GP_GET 0 GP_PUT 0
+ok    R14 ring bound      = a load past the object is refused BY BOUND
+★     R15 SEM LANDED      = sem 0xbeef5ea1 (want 0xbeef5ea1), GP_GET 1 -> caught GP_PUT 1 — the GPU consumed our ring and released our semaphore
+★     R17 CE COPY         = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00, dst[last] 0xc0fff1ff (want 0xc0fff1ff) — read back through an INDEPENDENT mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R13 free channel    = group, ring, USERD and mapping
+ok    R10 isolate         = 4 workers
+ok    R11 through-isolate = host GPU VA 0x0000000200200000, hMemory 0xcafe0006
+★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped the ring, USERD and the usermode BAR0 window, and rang channel 0xcafe000c token 0x00000004
+info  R12 4 threads x 200 verbs, alloc_vaspace + free
+ok    R12 1 thread (base)  = 800 verbs sequential, 1545 ms
+ok    R12 one client       = 456 overlapping pairs, 1645 ms
+ok    R12 4 clients      = 455 overlapping pairs, 1602 ms
+★     R12 SPEEDUP         = one client x4 workers: 0.94x   |   4 clients: 0.96x   (ideal 4.00x, 800 verbs)
+done
