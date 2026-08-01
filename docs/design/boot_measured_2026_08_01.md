@@ -1385,6 +1385,9 @@ enough:** `traces/real_ga106/rpc_transcript_real_ga106.txt` carries
 `NV_OK` with 3712 bytes, of which the transcript captured **8**. Serving it needs a re-measure
 with a full body dump; the recipe is in `traces/real_ga106/README.md`.
 
+★★ **Done, in §43.** The re-measure was taken (`traces/real_ga106/rpc_bodies_real_ga106.txt`,
+all 3712 bytes, twice in one run), the control is served, and this wall is gone.
+
 ## 42.4 ⊘ What boot `fmb1` does NOT establish
 
 - ⊘ **It does not establish that 20480 is right** — only that it is non-zero and that RM
@@ -1393,6 +1396,88 @@ with a full body dump; the recipe is in `traces/real_ga106/README.md`.
 - ⊘ **Nothing was written into the fault method buffer by anything.** No engine faulted.
 - ⊘ **The scrubber still does not work.** It fails one step later — on its channel's
   subcontext heap instead of on its method buffer.
+- ⊘ **Interrupt delivery is still untested** (§41.3 stands unchanged).
+- ⊘ **`nvidia-smi` still fails**, no devices.
+- ⊘ **One boot, one 4-core box**, and `#98` records a Mode-2 symptom that was 1/3 one day and
+  9/9 the next on a bit-identical binary.
+
+---
+
+# §43 — boot `grinfo1`, rev `6b27c1f`: GR's info list is accepted, and the channel now ALLOCATES
+
+**Provenance.** `[measured]` 2026-08-01 16:16 CEST, `scripts/bench/boot_capture.sh grinfo1`,
+this 4-core box. Guest: stock, unpatched NVIDIA open 580.159.04. QEMU: the QOM shim built
+from `libkayfabe_qemu_raw.a` at **`6b27c1f`** — the revision is stamped in
+`/workspace/bench/run_grinfo1_probe.log` line 2 and was read back from it, not assumed.
+Evidence on disk: `/workspace/bench/run_grinfo1_dmesg.log` (25 lines, 22 `NVRM`, 3
+`RmInitAdapter`).
+
+## 43.1 The rung cleared
+
+```
+[   24.599532] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+```
+
+`0x40` → **`0xffff`** (`NV_ERR_GENERIC`). ★★★ **The whole `pGrInfo` chain is absent.** Four
+lines that were in `fmb1` and are gone:
+
+- `Assertion failed: … ->pGrInfo != NULL @ kernel_fifo.c:2789` — **gone, all three
+  occurrences**;
+- `Assertion failed: numMax == numFree && numMax != 0 @ kernel_channel_group_api.c:913` —
+  **gone**;
+- `NV_ERR_INVALID_STATE (0x40) returned from kchangrpapiSetLegacyMode(…) @
+  kernel_channel.c:660` — **gone**;
+- `… returned from pRmApi->AllocWithHandle(… hChannelId, hClass,
+  &channelGPFIFOAllocParams …) @ mem_utils_gm107.c:1301` — **gone**.
+
+⇒ the scrubber's **channel is now allocated**. `mem_utils_gm107.c:1301` is the allocation
+call itself, and it no longer fails. That is the rung, and it is a bigger step than the
+status change suggests: `kfifoGetMaxSubcontextFromGr_KERNEL` now returns 64 instead of 0, the
+subcontext ID heap is constructed at that size, and a `KEPLER_CHANNEL_GPFIFO` object exists.
+
+## 43.2 The new wall, decoded before building anything
+
+```
+[   24.318677] NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+[   24.318844] NVRM: … NV_ERR_GENERIC (0xFFFF) returned from
+               _memmgrMemUtilsScrubInitScheduleChannel(pGpu, pChannel) @ mem_utils.c:2006
+```
+
+`[inferred]` from `ogkm-580.159.04`, and the identification is unambiguous:
+`_memmgrMemUtilsScrubInitScheduleChannel` issues exactly one control —
+**`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`)**, `mem_utils.c:1976-1981` — and turns any
+non-`NV_OK` into a bare `NV_ERR_GENERIC` (`:1985-1988`). The `0x56` in the message is this
+port's own refusal, and the device's unserviced list for this boot carries `fn 76 cmd
+0xa06f0103` to confirm it. The propagation path beyond that point is **unchanged** from
+`fmb1`: `mem_utils_gm107.c:1027` → `ce_utils.c:304` → `mem_scrub.c:181` →
+`mem_mgr_scrub_gp100.c:63` → `mem_mgr.c:487` → `kernel_fifo.c:3129`.
+
+★★★ **The new wall is a member of the class this rung measured.** `0xa06f0103` is one of the
+eleven `dlen = 0` rows of `mode2_initctrl_ga106.h`, and it is one of the nine hardware
+contradicted: a real GA106 answers `psize 3` with `01 00 00`
+(`traces/real_ga106/rpc_bodies_real_ga106.txt`). A port that had read the empty row as
+"three zero bytes" would have served `bEnable = FALSE`.
+
+⚠ **And that is still not a reason to serve it, which is the finding.**
+`NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS` is `{ bEnable, bSkipSubmit, bSkipEnable }` — all `[IN]`
+(`ogkm-580: ctrla06fgpfifo.h:30-70`) — so `01 00 00` is the *guest's own request echoed
+back*, and the load-bearing half of the reply is the **status**, not the body. This control
+is an **action on the FIFO**, not a description of silicon: an `NV_OK` would tell the guest a
+channel is running on a host that has scheduled nothing. It is the `0x20800a6c` question
+again with a much harder answer, and it belongs to the execution-plane rung rather than to
+this one.
+
+## 43.3 ⊘ What boot `grinfo1` does NOT establish
+
+- ⊘ **It does not establish that the 58 GR info values are RIGHT** — only that RM accepted
+  them and that `infoList[0x2c]` was non-zero. The reason to believe the table is that a real
+  GA106 was asked and agreed on all 3712 bytes, not that this boot got further.
+- ⊘ **It does not establish anything about the other ten empty rows.** Nine of them are still
+  refused by this port; this boot exercised none of them.
+- ⊘ **The scrubber still does not work.** It now fails one step later — on *scheduling* its
+  channel rather than on *allocating* it.
+- ⊘ **Nothing has executed.** A channel object exists; no pushbuffer has been fetched, no
+  semaphore released.
 - ⊘ **Interrupt delivery is still untested** (§41.3 stands unchanged).
 - ⊘ **`nvidia-smi` still fails**, no devices.
 - ⊘ **One boot, one 4-core box**, and `#98` records a Mode-2 symptom that was 1/3 one day and

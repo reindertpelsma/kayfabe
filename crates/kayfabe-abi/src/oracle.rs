@@ -40,7 +40,7 @@
 //! | `0xa06f0104` | `psize 4, dlen 0` | `0b 00 00 00` | **contradicted** |
 //! | `0x20800a4b` | `psize 4, dlen 0` | `00 00 01 04` | **contradicted** |
 //! | `0x20800aac` | `psize 4, dlen 0` | `00 00 01 00` | **contradicted** |
-//! | `0x20800a6c` | `psize 4, dlen 0` | `31 00 00 00` **and** `11 00 00 00` | **contradicted**, and *not a constant* |
+//! | `0x20800a6c` | `psize 4, dlen 0` | `31 00 00 00` **and** `11 00 00 00` | **contradicted**, and an `[IN]` **echo** |
 //! | `0x20800a4c` | `psize 4, dlen 0` | `00 00 00 00` | ⚠ coincides |
 //! | `0x20800a70` | `psize 0, dlen 0` | `<empty>` | ⚠ coincides |
 //!
@@ -164,9 +164,13 @@ pub const EMPTY_CAPTURE_ROWS: &[EmptyCaptureRow] = &[
         real: &[],
         coincides: true,
     },
-    // ⚠ NOT A CONSTANT. The same boot answers `0x31` three times during adapter init and
-    // `0x11` afterwards — so even a correct single capture of this row would have been a
-    // statement about one moment. See `crate::l2evict`.
+    // ⚠ NOT A CONSTANT, and not a state either: `flags` is the struct's only field and it
+    // is `[IN]` (`ogkm-580: ctrl2080internal.h:2149-2158`), so the reply is an **echo of the
+    // request**. `0x31` is `ALL | CLEAN | WAIT_FB_PULL` and `0x11` is `ALL | CLEAN` — the
+    // two words `kbusVerifyBar2_GM107`'s call sites pass. ★★★ Even a *correct* single
+    // capture of this row would therefore have been a statement about one caller, and the
+    // empty row it actually carries was read for four rungs as "hardware answers zero".
+    // See `crate::l2evict`, where that reading is corrected.
     EmptyCaptureRow {
         cmd: 0x2080_0a6c,
         psize: 4,

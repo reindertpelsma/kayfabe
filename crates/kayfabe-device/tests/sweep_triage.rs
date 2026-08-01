@@ -280,6 +280,16 @@ fn a_citation_of_an_uncaptured_oracle_row_must_carry_what_hardware_said() {
     //
     // ★ Non-vacuity is asserted below rather than hoped for: if no triaged control is ever
     // an empty-capture row, this test would pass by quantifying over nothing.
+    //
+    // ⊘⊘ AND ITS FIRST VERSION WAS TOO WEAK, found by its own bite harness the same night.
+    // It accepted the loose phrase `"real GA106"` as evidence — and `0x20800a6c`'s row said
+    // *"a real GA106's own GSP answers this NV_OK with a four-zero body (C:
+    // mode2_initctrl_ga106.h:6245)"*, which is a **false claim about hardware manufactured
+    // out of the empty capture**, and it sailed straight through. Hardware echoes the
+    // caller's flags. So the gate now demands `traces/real_ga106`: a path to a **committed
+    // artifact** a reader can open, not a phrase anyone can type. ★★★ That is the same
+    // lesson one turn deeper — a gate that checks for the *vocabulary* of evidence is a
+    // gate that can be satisfied by writing the vocabulary down.
     let mut checked = 0usize;
     for c in SWEEP_TRIAGE {
         let Some(row) = kayfabe_abi::oracle::empty_capture_row(c.cmd) else {
@@ -297,14 +307,18 @@ fn a_citation_of_an_uncaptured_oracle_row_must_carry_what_hardware_said() {
             continue;
         }
         assert!(
-            c.why.contains("traces/real_ga106") || c.why.contains("real GA106"),
+            c.why.contains("traces/real_ga106"),
             "{:#x} ({}) cites mode2_initctrl_ga106.h:{} — a row with psize {} and NO \
-             captured body. That citation is an address, not evidence. Name what a real \
-             GA106 answered ({:02x?}) or do not cite the row at all.",
+             captured body. That citation is an address, not evidence — and saying \
+             \"a real GA106\" is not either, because that phrase is what {:#x}'s own row \
+             used to WRAP a value invented from the empty capture. Cite \
+             traces/real_ga106/ and quote what hardware answered ({:02x?}), or do not cite \
+             the row at all.",
             c.cmd,
             c.engine,
             row.c_line,
             row.psize,
+            c.cmd,
             row.real,
         );
     }

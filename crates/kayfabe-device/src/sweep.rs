@@ -372,9 +372,15 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               and on this device that read cannot be stale — kayfabe_device::fbwin's store IS \
               the framebuffer rather than a cache over one, and the trapped write commits \
               before the vmexit returns. So NV_OK says 'the state you asked for already \
-              holds', not 'we did it'. ★ Corroborated, not proven, by the oracle: a real \
-              GA106's own GSP answers this NV_OK with a four-zero body (C: \
-              mode2_initctrl_ga106.h:6245, {0x20800a6cu, 0x0u, 4u, 0u}). ⊘ Three named \
+              holds', not 'we did it'. ⊘ ★★★ This row USED to add 'Corroborated by the \
+              oracle: a real GA106's own GSP answers this NV_OK with a four-zero body (C: \
+              mode2_initctrl_ga106.h:6245, {0x20800a6cu, 0x0u, 4u, 0u})' — REFUTED. That \
+              row is one of the eleven with NO captured body, and a real GA106 asked \
+              directly ECHOES the flags it was sent: 31 00 00 00 and 11 00 00 00, the two \
+              words kbusVerifyBar2_GM107's call sites pass ([measured] 2026-08-01, \
+              traces/real_ga106/rpc_bodies_real_ga106.txt; kayfabe_abi::oracle). The NV_OK \
+              stands on the argument above alone; the body this port sends is knowingly \
+              this port's own, and unread. ⊘ Three named \
               futures falsify it — real host-GPU forwarding, a write-back layer of this \
               port's own, and any second writer of the framebuffer — and kayfabe_abi::l2evict \
               carries all three plus the flag-by-flag licence. ⚠ It is NOT decided with \

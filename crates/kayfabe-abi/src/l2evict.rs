@@ -127,17 +127,31 @@
 //! value and keeps no struct of its own. The copyout therefore lands in memory nothing
 //! reads.
 //!
-//! ★★ And the oracle says the same thing from the other side. The captured row is
-//! `psize = 4, dlen = 0` with an **empty** `ctl_20800a6c[]`, and the C's own decoder
-//! documents `dlen` as a trailing-zero-trimmed length — *"Any captured tail beyond
-//! `cr->dlen` is zero"* (`C: src/qemu/nvkvm_gpu_emul.c:3422-3425`). ⇒ a real GA106 GSP
-//! returned **four zero bytes**, not the `flags` it was sent. Contrast `0x20800301`, whose
-//! captured row is `psize = 20, dlen = 16` — the same capture *does* record echoed `[IN]`
-//! fields when the firmware sends them back.
+//! ★★★ **REFUTED, 2026-08-01, and this is the correction rather than a deletion.** This
+//! module used to argue the second half of its case from the oracle: *"the captured row is
+//! `psize = 4, dlen = 0` with an empty `ctl_20800a6c[]`, and the C's decoder documents
+//! `dlen` as trailing-zero-trimmed (`C: src/qemu/nvkvm_gpu_emul.c:3422-3425`) ⇒ a real GA106
+//! GSP returned four zero bytes, not the `flags` it was sent."*
 //!
-//! ⇒ [`encode_l2_invalidate_evict`] returns four zeros. Not because *"nobody reads it"*
-//! alone, and not because *"zero is the default"* — because the caller is measured not to
-//! read it **and** the hardware is measured to answer that way, and the two agree.
+//! A real GA106 was then asked. It returns **the flags it was sent**:
+//! `31 00 00 00` three times during adapter init and `11 00 00 00` afterwards
+//! (`[measured]` 2026-08-01, RTX 3060 on open 580.159.04,
+//! `traces/real_ga106/rpc_bodies_real_ga106.txt`). `0x31` is `ALL | CLEAN | WAIT_FB_PULL`
+//! and `0x11` is `ALL | CLEAN` — the two different flag words `kbusVerifyBar2_GM107`'s call
+//! sites pass. `flags` is the struct's only field and it is `[IN]`, so the reply is an
+//! **echo**, and the "two values" are two callers rather than two states.
+//!
+//! ⊘ The `dlen = 0` row was never evidence of anything — see [`crate::oracle`], where nine
+//! of the eleven such rows are measured to be contradicted. This is one of the nine.
+//!
+//! ⇒ **The decision does not change and half its argument is gone.**
+//! [`encode_l2_invalidate_evict`] still returns four zeros, and now for exactly one reason:
+//! the caller is measured not to read its own params (the paragraph above), so the body is
+//! unobservable. ★ That leaves this port **knowingly divergent from silicon on four
+//! unread bytes**, which is recorded here rather than tidied away. Echoing `flags` would
+//! remove the divergence at no cost and is the obvious candidate the day anything reads the
+//! body or a reply-plane differential against a real GSP exists; neither is true today, so
+//! changing it now would be churn dressed as rigour.
 //!
 //! # ★★ The flags this port may say yes to, and the one it may not
 //!
@@ -351,10 +365,12 @@ pub fn decode_l2_invalidate_evict(params: &[u8]) -> Result<L2InvalidateEvict, L2
 /// the transport's status directly (`ogkm-580: kern_mem_sys.c:1079-1093`), so
 /// `rpcRmApiControl_GSP`'s copyout (`rpc.c:11085-11090`) lands in memory nothing reads.
 ///
-/// ★ And a real GA106's GSP is `[measured]` to answer the same way: the captured row is
-/// `{0x20800a6cu, 0x0u, 4u, 0u, ctl_20800a6c}` with an empty array, and the C's decoder
-/// treats `dlen` as trailing-zero-trimmed (`C: mode2_initctrl_ga106.h:6245, :3346`;
-/// `C: src/qemu/nvkvm_gpu_emul.c:3422-3425`). Four zeros, not the flags.
+/// ⊘ ★★★ **And a real GA106's GSP does NOT answer the same way** — this line used to claim
+/// it did, from the C's empty `ctl_20800a6c[]`. Hardware **echoes the flags**
+/// (`31 00 00 00`, `11 00 00 00`; `[measured]` 2026-08-01,
+/// `traces/real_ga106/rpc_bodies_real_ga106.txt`). The four zeros are therefore this port's
+/// own choice, resting solely on the unread-params argument above, and the divergence is
+/// stated in the module header rather than hidden behind a citation of an empty capture.
 ///
 /// ⚠ Takes the decoded request anyway. The body does not depend on it — but a signature
 /// that could not see the request would let a future edit forget that the *decision* to
@@ -450,9 +466,11 @@ mod tests {
 
     #[test]
     fn the_reply_is_four_zeros_and_carries_no_byte_of_the_request() {
-        // ★★★ The measured shape: `psize = 4, dlen = 0` on a real GA106
-        // (C: mode2_initctrl_ga106.h:6245). A reply that echoed `flags` would be a
-        // defensible design and it is NOT the one the hardware uses.
+        // ★★★ This port's own shape, and it is NOT the hardware's: a real GA106 echoes
+        // `flags` (`[measured]` 2026-08-01, traces/real_ga106/rpc_bodies_real_ga106.txt —
+        // and `0x11` below is literally one of the two words it returned). Four zeros are
+        // licensed only by the caller never reading its params; see the module header for
+        // the refutation and for why the divergence is kept rather than papered over.
         for flags in [0x00, 0x01, 0x11, FLAGS_CLEAN_VERIFY_BAR2, 0x3f] {
             let body = encode_l2_invalidate_evict(&L2InvalidateEvict { flags });
             assert_eq!(body.len(), L2_INVALIDATE_EVICT_PARAMS_SIZE);

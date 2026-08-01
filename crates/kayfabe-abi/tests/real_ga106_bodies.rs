@@ -148,15 +148,16 @@ fn every_claimed_hardware_body_is_the_body_in_the_trace() {
                 b.len()
             );
         }
-        // ⚠ `0x20800a6c` answers `0x31` during adapter init and `0x11` afterwards in the
-        // SAME run, so the claim is membership, not equality. Every other row answered one
-        // value however many times it was asked, and that is asserted rather than assumed.
+        // ⚠ `0x20800a6c` echoes its `[IN]` `flags`, so the same run carries `0x31` from one
+        // caller and `0x11` from another and the claim is membership, not equality. Every
+        // other row answered ONE value however many times it was asked, and that is
+        // asserted rather than assumed.
         if row.cmd == 0x2080_0a6c {
             let distinct: std::collections::BTreeSet<&Vec<u8>> = seen.iter().collect();
             assert_eq!(
                 distinct.len(),
                 2,
-                "0x20800a6c is recorded as state-dependent; the trace must show two values"
+                "0x20800a6c echoes its caller's flags; the trace must show two values"
             );
             assert!(
                 seen.iter().any(|b| b.as_slice() == row.real),

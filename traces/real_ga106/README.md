@@ -59,9 +59,10 @@ readable as a short reply — `crates/kayfabe-abi/tests/real_ga106_bodies.rs` as
 that before it compares anything.
 
 ★ Repeated blocks for one command are repeated **calls**, kept verbatim. `0x20800a6c`
-answers `0x31` three times during adapter init and `0x11` afterwards in the same run; a
-deduplication would have hidden it, and the fact that a "constant" is not one is the second
-most useful thing in the file.
+answers `0x31` three times during adapter init and `0x11` afterwards in the same run — it
+**echoes its `[IN]` `flags`**, and those are the two words `kbusVerifyBar2_GM107`'s call
+sites pass. A deduplication would have hidden it, and it is what refuted
+`kayfabe_abi::l2evict`'s claim that a real GSP answers this control with four zeros.
 
 ⚠ `0x20800a4c` (`INTERNAL_GPU_GET_SMC_MODE`) is **not** an `RmInitAdapter` control. It is
 reached only when a client asks `NV2080_CTRL_GPU_INFO_INDEX_GPU_SMC_MODE`
@@ -88,7 +89,7 @@ transcript byte for byte. But every row it recorded with `dlen = 0` is contradic
 | `0xa06f0104` | `psize 4, dlen 0` | `0b 00 00 00` | **contradicted** |
 | `0x20800a4b` | `psize 4, dlen 0` | `00 00 01 04` | **contradicted** |
 | `0x20800aac` | `psize 4, dlen 0` | `00 00 01 00` | **contradicted** |
-| `0x20800a6c` | `psize 4, dlen 0` | `31 00 00 00` **and** `11 00 00 00` | **contradicted**, and *not a constant* |
+| `0x20800a6c` | `psize 4, dlen 0` | `31 00 00 00` **and** `11 00 00 00` | **contradicted**, and an `[IN]` **echo** |
 | `0x20800a4c` | `psize 4, dlen 0` | `00 00 00 00` | ⚠ coincides |
 | `0x20800a70` | `psize 0, dlen 0` | `<empty>` | ⚠ coincides |
 
