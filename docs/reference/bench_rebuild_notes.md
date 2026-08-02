@@ -565,3 +565,44 @@ the only reachable `/dev` entry besides `null`, all five capability sets empty, 
 
 ⇒ **Every phase of §1's table now exists on this box.** It is equivalent to box 1 and can be
 used for hardware measurement and for bench boots, in parallel with it.
+
+---
+
+## 2026-08-02 — the §8.2.2 measurement: a pushbuffer ring address is a GPU VA, not a GPA
+
+**[measured]** rev `c93930d`, vast instance **46529600** (RTX 3060 / GA106 `10de:2504`,
+21 cores / 49 GB, host driver **580.159.04 Open Kernel Module**), guest Ubuntu 24.04 with a
+**stock unpatched** 580.159.04 open kernel module. Two boots through
+`scripts/bench/boot_capture.sh`, one QEMU each, powered down between.
+
+Both boots stop at the same wall as every boot since `5c1f501` —
+`_memmgrMemUtilsScrubInitScheduleChannel … status: 56` → `RmInitAdapter failed! (0x25:0xffff:1249)`
+— so nothing here is a claim about progress.
+
+| tag | `-m` | guest's own `e820` | `nvkvm: gpfifo rings:` |
+|---|---|---|---|
+| `e5ring1` | `8G` | usable `0x1_0000_0000-0x2_7fff_ffff` | `1 declared, 1 with a non-zero address; first 0x0000000120064000 (4096 entries)` |
+| `e5ring2g` | `2G` | usable to `0x7ffd_bfff`; **no entry above 4 GiB** | `1 declared, 1 with a non-zero address; first 0x0000000120064000 (4096 entries)` |
+
+Files: `bench_evidence/c93930d_run_e5ring1_{qemu,dmesg,probe}.log`,
+`bench_evidence/c93930d_run_e5ring2g_{qemu,dmesg,probe}.log`.
+
+⇒ The address the guest names for its GPFIFO ring is **byte-identical across a 4× change in
+guest RAM**, and at 2 GiB it names memory the guest does not have. It is a GPU virtual
+address; it is not a guest-physical one. Full reading, and what it does and does not block,
+in `docs/design/execution_plane_increments.md` §8.2.3.
+
+### ★★ Two bench facts worth having next time
+
+- **The differential is the instrument, not the single boot.** At 8 GiB the ring address
+  `0x1_2006_4000` *is* a legal GPA, so a boot that only asked *"does `gpa_read` succeed?"*
+  reads green. Changing `-m` is what turns a coincidence into a measurement, and it costs
+  one extra four-minute boot.
+- ⚠ **`/workspace/bench/boot_nvkvm.sh` on this box had drifted to `-m 8G`** while
+  `scripts/bench/boot_nvkvm.sh` in the tree says `-m 2048`. `boot_capture.sh` runs the
+  **bench copy**, so the tree's value is not what boots. The 2 GiB run was taken by
+  `sed -i "s/-m 8G/-m 2G/"` on the bench copy with a `.8g.bak` beside it, and the backup was
+  restored afterwards — so the box is as it was found. ⊘ Do not read the repo's boot script
+  as a description of what the bench ran; read the QEMU log's own
+  `memory plane realized (bar0=… bar1=… bar2=…)` line, which moves with the RAM size
+  (`bar1=0x280000000` at 8 GiB, `0xe0000000` at 2 GiB).

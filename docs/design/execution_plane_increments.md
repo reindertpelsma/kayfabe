@@ -971,6 +971,136 @@ cleanly: **bindings populate → VAs resolve → pushbuffers read correctly → 
 the table populates further.** E5's row already says *"populated from the guest's own
 bindings"*; that half has no dependency and can land first.
 
+### 8.2.3 ★★★ THE ANSWER, MEASURED — it does NOT hold, and it is LATENT not LIVE
+
+`[measured]` 2026-08-02, two boots at rev `c93930d` on vast `46529600` (RTX 3060 / GA106,
+host driver 580.159.04 open, guest **stock** 580.159.04, `/dev/kvm`). Evidence on disk:
+`docs/reference/bench_evidence/c93930d_run_e5ring1_*` and `…_e5ring2g_*`.
+
+**The instrument.** §8.2.2 asked for the *entry-named* address, and that turned out to be
+unreachable: the read path is not on any live path (below), so instrumenting it would have
+produced an **empty** capture — and an empty capture is evidence of nothing
+(`c_oracle_empty_rows_are_wrong`). What *is* reachable at this wall is the address one level
+up, and it is the same address: the guest's channel alloc carries `gpFifoOffset`, and
+
+| what | `[src]` |
+|---|---|
+| the field is a **virtual** offset | `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:809`, *"Gpfifo Virtual Offset"* |
+| at *this wall* it is `pChannel->pbGpuVA + pChannel->channelPbSize` | `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:1232` |
+| `pbGpuVA` is the `dmaOffset` an `NV04_MAP_MEMORY_DMA` returned | `:842` |
+| and a GPFIFO **entry**'s `GET` is `pChannel->pbGpuVA + gpOffset`, packed into `GP_ENTRY0_GET`/`GP_ENTRY1_GET_HI` | `:1871-1879` |
+
+⇒ the ring base and every entry address are the **same kind of address in the same
+allocation**, so measuring one measures the other.
+
+**The result.**
+
+| boot | guest RAM (`e820`, the guest's own view) | `gpFifoOffset` the guest declared |
+|---|---|---|
+| `e5ring1` | 8 GiB — usable `0x1_0000_0000-0x2_7fff_ffff` | `0x1_2006_4000` |
+| `e5ring2g` | 2 GiB — usable to `0x7ffd_bfff`, **nothing above 4 GiB at all** | `0x1_2006_4000` |
+
+**Byte-identical across a 4× change in guest RAM, and at 2 GiB it names memory the guest
+does not have.** It is not derived from guest physical layout. ⇒ **VA ≠ GPA. The
+confusion is real.**
+
+★★★ **And the 8 GiB row is the dangerous one, which is why "they matched" would have been
+the wrong reading.** At the bench's normal 8 GiB, `0x1_2006_4000` *is* a legal guest-physical
+address — so `Vmm::gpa_read` **succeeds** and hands back whatever guest RAM lives there. The
+failure is not a fault; it is bytes. A single 8 GiB boot that only asked *"does the read
+succeed?"* would have reported green.
+
+⊘ **LATENT, not live, and that is the whole reason E5 was safe to build on top.** Two
+independent facts:
+
+1. **No live caller.** `kayfabe_rt::device::SharedDevice::parse_pushbuffer` is the only
+   in-lock-legal entry point into `read_pushbuffer`, and nothing in `kayfabe-qemu-raw` or
+   `kayfabe-shell` calls it. No guest byte is fetched through a `PushRange` on a boot.
+2. **The guest never submits.** Both boots report `doorbells: 0 arrived, 0 served, 0
+   REFUSED` across boot + `modprobe` + device open — unchanged from `5c1f501`. The channel
+   `SCHEDULE` fails `0x56` before `kfifoUpdateUsermodeDoorbell` is reached.
+
+⊘ **There is no second number to compare against, and that is a finding of its own.** The
+binding that would resolve this VA is a `MAP_MEMORY_DMA`, and that RPC is a **HAL stub on
+every GSP-client part** — `RmEvent::MapMemoryDma` has no producer on this wire at all
+(`kayfabe-rmrpc` crate docs §2.7). So resolution cannot come from a table lookup of bindings
+we have seen; it needs a **GMMU walk through the issuing channel's PDB**, which is machinery
+`kayfabe_device`'s BAR2 aperture already has (`bar2_reads`/`bar2_writes` resolved 111/21 128
+accesses on the same boots) but which `read_pushbuffer` — a phase that deliberately holds no
+proc — cannot reach today.
+
+⇒ ★ **The top-priority follow-up, stated as a shape rather than a wish:** `PushRange` must
+say *what kind of address it carries*, and `read_pushbuffer` must refuse a virtual one by
+name until a resolver exists. That is a phase-shape change (the resolve needs the channel's
+`Vas`), it vacates the GA10x half of `pushbuffer_ga10x_hostile.rs`'s fault corpus unless the
+corpus moves with it, and it was **out of E5's scope** — recorded here rather than done
+half-way.
+
+### 8.2.4 E5 — BUILT: `decode_run`, and what it refuses
+
+`PushbufferAbi::decode_run(&self, &mut MethodState, &[(u32, Vec<u32>)]) -> Vec<PushMethod>`
+is a **provided** method defaulting to a per-method map onto `decode_method`, so no mock
+and no other generation changed. `Ga10xPushbuffer` overrides it and accumulates
+`SET_OBJECT` → `OFFSET_*` → `LINE_*` → `LAUNCH_DMA` into one `PushMethod::CeLaunchDma` with
+the driver's own operands. `kayfabe_fwd::apply_pushbuffer` calls it with
+`Channel::method_state`.
+
+**The bound, as the ruling demanded — finite, per-channel, reset where the engine resets:**
+`MethodState` is a fixed `SUBCHANNELS(8) × METHOD_SLOTS(16)` array plus a written-bitmap and
+eight class bindings. No heap, no map, no key the guest supplies, so there is no limit to
+enforce and none to get wrong. It lives on `Channel`, so it dies with the channel;
+`SET_OBJECT` clears the subchannel it rebinds, because method `0x400` on a new class is not
+method `0x400` on the old one. Every accessor is total.
+
+**The refusals grew rather than shrank.** A launch decodes to `Opaque` when: nothing is
+bound, the bound class is not `AMPERE_DMA_COPY_B`, `DATA_TRANSFER_TYPE == NONE`,
+`MULTI_LINE_ENABLE == TRUE` (a strided region is not the contiguous `len` the core means),
+`REMAP_ENABLE == TRUE` (the fill pattern is in `SET_REMAP_CONST_A` under a component map we
+do not validate — `CeWork::Fill`'s own docs say the pattern is part of the fact), **or any
+operand was never written**. `0` is a legal offset and a legal length, so written-ness is
+tracked separately from value; a `CeLaunchDma` assembled from `unwrap_or_default()` is E4's
+invented destination one increment later.
+
+★★★ **A C bug found on the way, and it is in the execute predicate.** The C reads
+`bool mscrub = (d >> 23) & 1; /* MEMORY_SCRUB_ENABLE [23] */`
+(`C: src/qemu/nvkvm_gpu_emul.c:6208`) and uses it at `:6310`. `MEMORY_SCRUB_ENABLE` **does
+not exist on `NVC7B5`** — `grep -c MEMORY_SCRUB clc7b5.h` is `0`; it is
+`NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE` at `23:23`, a **Hopper** class
+(`ogkm-580: clc8b5.h:84-86`). On Ampere, bit 23 is the top half of `VPRMODE` (`23:22`,
+`clc7b5.h:146-148`), and neither enumerated `VPRMODE` value sets it — so on the part the C
+actually ran, `mscrub` is a constant `false` and its `!mscrub` conjunct is **vacuous**. ⇒
+this port produces `CeWork::Scrub` from a GA10x launch **never**, and the constant is absent
+rather than present-and-wrong.
+
+**Instruments, and two gaps they found in themselves** (`suspect_the_instrument_first`):
+
+- The compiled oracle (`tests/oracle/pushbuffer_abi_oracle.c`) emits whole CE runs packed
+  with `DRF_NUM`/`DRF_DEF` and their readback with `DRF_VAL`, so every operand assertion
+  compares our accumulator against *the driver's* extraction. 6 new tests, 12 → **18**;
+  `ci.yml`'s `PUSHBUFFER-ORACLE-gate` floor moved 12 → 18. No new gate step, so
+  `GATE_STEPS_ALL_MIN` is untouched.
+- ⊘ **Gap 1, MEASURED.** *"Fill the operands with `unwrap_or_default()` instead of
+  refusing"* was **missed by everything** in the first sweep: every prefix of a complete run
+  stops *before* the launch, so no prefix ever asked a launch to fire with nothing latched.
+  Three explicitly incomplete runs (`refuse_no_operands`, `_no_length`, `_no_offsets`) are
+  what make that bite red.
+- ⊘ **Gap 2, MEASURED.** *"Read `OFFSET_IN_UPPER` as a full 32 bits"* was **missed by
+  everything**, because `DRF_NUM` masks its argument to `16:0` — so no emitted word ever had
+  a bit above 16 and `word & 0x1FFFF` agreed with a bare `word` everywhere. Hardware does not
+  zero that register for you. A `dirty_upper` sweep (bits 17..31 raw-set) is what makes the
+  mask load-bearing. Same shape as the `FETCH`-bit gap E4 records, one class along: *a sweep
+  that varies only the fields you thought of is not a sweep.*
+- The ungated control (`tests/tests/pushbuffer_ga10x_hostile.rs`) gained four tests, and one
+  of them was **rewritten after reporting `launches fired: 0` on both arms** — a random word
+  is a valid `LAUNCH_DMA` header about one time in 2^29, so the assertion inside the loop
+  never executed. It is now a **shadow differential**: real runs at random subchannels in
+  random order with random operand values, and the codec must fire exactly when the stream
+  wrote, with exactly what the stream wrote. `fired=127 refused=1251` — both arms reached,
+  and the numbers are printed so a future vacuity is visible.
+- 10 planted defects, 10 caught (`unwrap_or_default`, the 32-bit and the 8-bit operand mask,
+  no-clear-on-bind, subchannel-0-always, dropped multi-line/remap/transfer/object checks,
+  src↔dst swap, slot off-by-one).
+
 ### 8.3 The instrument: `tests/oracle/pushbuffer_abi_oracle.c`
 
 The fourth compiled oracle in the tree, built exactly as the VBIOS / GMMU / token ones are:

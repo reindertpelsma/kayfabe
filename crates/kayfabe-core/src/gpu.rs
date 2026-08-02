@@ -276,6 +276,20 @@ pub struct Channel {
     pub host_channel: Option<HostHandle>,
     /// Host work-submit token, once materialized.
     pub host_token: Option<u64>,
+    /// ★★★ **E5 — the engine method state this channel's engine holds between runs**
+    /// (`execution_plane_increments.md` §8.2.1).
+    ///
+    /// It lives HERE, on the channel, because that is where the hardware keeps it: a
+    /// copy-engine operation is assembled out of several method runs into the engine's
+    /// own registers, and `LAUNCH_DMA` fires what has accumulated. `kayfabe-fwd` hands it
+    /// to `PushbufferAbi::decode_run` and reads no field of it.
+    ///
+    /// ⊘ **This is the one guest-driven state in `Channel`, and it is bounded
+    /// structurally rather than by a check** — a fixed
+    /// `kayfabe_arch::SUBCHANNELS × kayfabe_arch::METHOD_SLOTS` array, no allocation, no
+    /// key the guest supplies. It resets where the engine resets: per-subchannel on
+    /// `SET_OBJECT`, and wholesale when this channel dies, because the value dies with it.
+    pub method_state: kayfabe_arch::MethodState,
     /// Host engine objects forwarded on this channel, keyed by the guest's declared
     /// engine-object class — the Case-1 forward's **idempotency table**
     /// (`execution_plane.md` §2.2: "the object's Case-1 alloc has been forwarded, so
@@ -1688,6 +1702,11 @@ impl Spine {
                 engine: facts.engine,
                 host_channel: None,
                 host_token: None,
+                // ★ A fresh channel's engine has nothing bound and nothing latched. Not
+                // refreshed below with the other fields: `refresh` re-derives DECLARED
+                // protocol facts, and this is accumulated ENGINE state — re-deriving it
+                // would clear a channel's operands every time an unrelated alloc landed.
+                method_state: kayfabe_arch::MethodState::new(),
                 host_engine_objects: BTreeMap::new(),
                 error_notifier: facts.error_notifier,
             });

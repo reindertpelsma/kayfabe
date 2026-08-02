@@ -1363,6 +1363,55 @@ pub mod ce {
     /// `LAUNCH_DMA_DST_TYPE_VIRTUAL` — field `13:13`, value 0
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:125`).
     pub const LAUNCH_DST_VIRTUAL: u32 = 0;
+
+    // ---------------------------------------------------------------------------------
+    // ★ E5 — the DECODE side. Everything above is what an encoder ORs in; a decoder needs
+    // the field extents, and reading a set bit as a field is how a decoder invents one.
+    // ---------------------------------------------------------------------------------
+
+    /// `LAUNCH_DMA_DATA_TRANSFER_TYPE` — field `1:0`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:85`).
+    pub const LAUNCH_TRANSFER_MASK: u32 = 0x3;
+    /// `LAUNCH_DMA_DATA_TRANSFER_TYPE_NONE` — value 0 (`clc7b5.h:86`). ⊘ A launch with
+    /// this moves **no bytes**; it exists to release a semaphore. Decoding one as a copy
+    /// would report a transfer the engine never performs.
+    pub const LAUNCH_TRANSFER_NONE: u32 = 0;
+    /// `LAUNCH_DMA_MULTI_LINE_ENABLE_TRUE` — field `9:9`, value 1 (`clc7b5.h:112-114`).
+    pub const LAUNCH_MULTI_LINE_ENABLE: u32 = 1 << 9;
+    /// `LAUNCH_DMA_REMAP_ENABLE_TRUE` — field `10:10`, value 1 (`clc7b5.h:115-117`).
+    pub const LAUNCH_REMAP_ENABLE: u32 = 1 << 10;
+    /// `LAUNCH_DMA_SRC_TYPE_PHYSICAL` — field `12:12`, value 1 (`clc7b5.h:123`).
+    pub const LAUNCH_SRC_PHYSICAL: u32 = 1 << 12;
+    /// `LAUNCH_DMA_DST_TYPE_PHYSICAL` — field `13:13`, value 1 (`clc7b5.h:126`).
+    pub const LAUNCH_DST_PHYSICAL: u32 = 1 << 13;
+
+    /// `OFFSET_IN_UPPER_UPPER` / `OFFSET_OUT_UPPER_UPPER` — **`16:0`**, i.e. seventeen
+    /// bits, not thirty-two (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:162,
+    /// :166`). A decoder that took the whole word would report a destination the engine
+    /// cannot address, and one that took eight bits — the GPFIFO entry's width, which is
+    /// the nearby number a reader is likely to reuse — would report a *different page*,
+    /// silently.
+    pub const OFFSET_UPPER_MASK: u32 = 0x1_FFFF;
+
+    /// ★★★ **`MEMORY_SCRUB_ENABLE` DOES NOT EXIST ON THIS CLASS, and the C reads it
+    /// anyway.**
+    ///
+    /// `[src]` `grep -c MEMORY_SCRUB ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h`
+    /// is **0**. The field is `NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE` at `23:23`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc8b5.h:84-86`) — a **Hopper** class.
+    /// On `NVC7B5`, bit 23 is the top half of `VPRMODE` (`23:22`, `clc7b5.h:146-148`).
+    ///
+    /// ⊘ The C artifact reads `bool mscrub = (d >> 23) & 1; /* MEMORY_SCRUB_ENABLE [23] */`
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:6208`) and feeds it to its execute predicate at
+    /// `:6310`. On the Ampere part the C actually ran, that conjunct is reading a video-
+    /// protected-region mode, and since neither enumerated `VPRMODE` value sets bit 23 it
+    /// is a constant `false` — so the C's scrub arm is **unreachable** on GA10x and its
+    /// `!mscrub` conjunct is vacuous.
+    ///
+    /// ⇒ This port therefore cannot produce `CeWork::Scrub` from a GA10x `LAUNCH_DMA`, and
+    /// the constant is deliberately **absent** rather than present-and-wrong. `port_the_c`
+    /// says reproduce the C and subtract its named bugs; this is one of them, named.
+    pub const NO_MEMORY_SCRUB_ON_THIS_CLASS: () = ();
 }
 
 // =====================================================================================

@@ -2790,16 +2790,35 @@ pub fn apply_pushbuffer(
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
-    let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
+    let chan = proc.channels.get_mut(&cid).ok_or(FwdFault::NoVas(cid))?;
     let chan_pdb = chan.vas_pdb;
     let cgpu = chan.gpu;
+    // ★★★ E5 — DECODE THE WHOLE RUN, against THIS CHANNEL'S engine method state
+    // (`execution_plane_increments.md` §8.2.1). A copy-engine operation is five method
+    // runs and `LAUNCH_DMA` carries none of its operands, so a per-method decode cannot
+    // produce a `CeLaunchDma` whose `dst`/`src`/`len` are anything but invented — which
+    // is exactly what `E4` measured and refused.
+    //
+    // ⊘ The state is the ARCH'S; this crate carries it and reads no field. It is
+    // `&mut` because the engine's is: the accumulator is where the operands live between
+    // the run that writes them and the run that fires them.
+    //
+    // ★★ Done here rather than in `read_pushbuffer` for the reason the phase split
+    // already exists: the state is per-CHANNEL, and the read phase holds no proc and
+    // therefore no channel. It is also why a run split across two GPFIFO entries of the
+    // same ring works without a special case — `read_pushbuffer` returns one method list
+    // for the whole ring, and the accumulator would carry it across in any event.
+    let decoded = spine
+        .arch()
+        .pushbuffer()
+        .decode_run(&mut chan.method_state, &methods);
     // The C's `is_user_ce(s->chan_client)` conjunct — a property of the SUBMITTER, read
     // once per parse because a channel belongs to exactly one proc.
     let origin = ChannelOrigin::of(proc.id);
 
     let mut out = PushbufferOutcome::default();
-    for (header, args) in methods {
-        match spine.arch().pushbuffer().decode_method(header, &args) {
+    for method in decoded {
+        match method {
             kayfabe_arch::PushMethod::SetObject { .. } => {
                 // Routing confirmation only — no address/completion state changes.
             }

@@ -356,9 +356,10 @@ jobs:
       # precisely why the floor matters. Without it the whole family can vanish from CI
       # and from a dev box at the same time and nothing goes red.
       #
-      # ⊘ 12 is the gated oracle family only. The 8 HOSTILE tests are deliberately
-      # ungated and run everywhere, because the control — garbage must FAULT, not decode
-      # to a plausible method — is the half that must never be skipped.
+      # ⊘ 18 is the gated oracle family only. The HOSTILE tests are deliberately ungated
+      # and run everywhere, because the control — garbage must FAULT, not decode to a
+      # plausible method, and a hostile stream must never fire a copy whose operands it
+      # did not write — is the half that must never be skipped.
       - name: PUSHBUFFER-ORACLE-gate reached-count (floor, not an exact match)
         run: |
           set -euo pipefail
@@ -380,7 +381,11 @@ jobs:
           # two of the three — I did exactly that while proving this step fires, and it
           # printed the nonsense verdict "12 < 12". A floor must still be a fact someone
           # consciously changes; it does not have to be a fact stated three times.
-          floor=12
+          # ★ 12 -> 18 at E5: six new tests judge the run-aware CE decode
+          # (`PushbufferAbi::decode_run`) against NVIDIA's own `DRF_VAL` extraction of the
+          # same words — the accumulator's operands, its five refusals, its behaviour
+          # across a split run, its per-subchannel and per-bind resets, and its bound.
+          floor=18
           echo "PUSHBUFFER-oracle gate: ran=$ran skipped=$skipped total=$total (floor $floor)"
           if [ "$total" -lt "$floor" ]; then
             echo "::error::PUSHBUFFER-oracle tests were not reached: $total < $floor." \

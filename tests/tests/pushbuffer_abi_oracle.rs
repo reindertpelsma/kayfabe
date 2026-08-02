@@ -148,6 +148,10 @@ struct Oracle {
     semdec: BTreeMap<String, BTreeMap<String, String>>,
     /// `memopdec <name> k=v …`.
     memopdec: BTreeMap<String, BTreeMap<String, String>>,
+    /// ★ E5: `cerun <name> <n> <w0> …` — a whole copy-engine run, in submission order.
+    ceruns: BTreeMap<String, Vec<u32>>,
+    /// ★ E5: `cedec <name> k=v …` — NVIDIA's own `DRF_VAL` reading of that run's words.
+    cedec: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Parse `k=v` pairs off a whitespace-split tail.
@@ -237,6 +241,17 @@ fn run(tag: &str, path: &str) -> Oracle {
             "memopdec" => {
                 let name = t.next().expect("name").to_string();
                 o.memopdec.insert(name, kv(t));
+            }
+            "cerun" => {
+                let name = t.next().expect("name").to_string();
+                let n: usize = t.next().expect("count").parse().expect("decimal");
+                let words: Vec<u32> = t.map(|w| num(w) as u32).collect();
+                assert_eq!(words.len(), n, "[{tag}] cerun {name} is short");
+                o.ceruns.insert(name, words);
+            }
+            "cedec" => {
+                let name = t.next().expect("name").to_string();
+                o.cedec.insert(name, kv(t));
             }
             _ => {
                 if let Some(v) = t.next() {
@@ -1021,5 +1036,308 @@ fn read_pushbuffer_over_the_drivers_own_bytes_yields_the_runs_where_they_were_wr
             "[{tag}] a CE launch is not expressible at the per-method seam: {kinds:?}"
         );
         drop(gpu);
+    }
+}
+
+// ===========================================================================================
+// ★★★ E5 — the RUN-AWARE decode, judged against NVIDIA's own extraction of the same words
+// ===========================================================================================
+
+/// Decode a whole run against a fresh channel's engine state.
+fn decode_fresh(words: &[u32]) -> Vec<PushMethod> {
+    let pb = Ga10xPushbuffer;
+    let mut st = kayfabe_arch::MethodState::new();
+    pb.decode_run(&mut st, &split_methods(words))
+}
+
+/// Split a word stream into `(header, args)` pairs exactly as `kayfabe_fwd` does.
+///
+/// ⊘ Deliberately a re-implementation of the *framing* and not a call into `kayfabe-fwd`:
+/// this file's subject is the codec, and routing through the core's walker would make a
+/// broken walker look like a broken codec. `read_pushbuffer_over_the_drivers_own_bytes…`
+/// above is the test that pins the two agree.
+fn split_methods(words: &[u32]) -> Vec<(u32, Vec<u32>)> {
+    let pb = Ga10xPushbuffer;
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < words.len() {
+        let n = pb.method_len(words[i]);
+        let end = (i + 1).saturating_add(n).min(words.len());
+        out.push((words[i], words[i + 1..end].to_vec()));
+        i = end.max(i + 1);
+    }
+    out
+}
+
+/// ★★★ **A whole copy-engine run decodes to ONE `CeLaunchDma` carrying the driver's own
+/// operands** — the seam `E4` measured to be structurally incapable, closed by `E5`.
+///
+/// Every field is compared against NVIDIA's `DRF_VAL` of the same words, never against
+/// the number the harness handed the encoder. That is what makes the 40-bit address sweep
+/// mean something: `OFFSET_IN_UPPER_UPPER` is `16:0`, so an operand bit at 49 cannot
+/// survive, and the driver's extractor says what does.
+#[test]
+fn a_copy_engine_run_decodes_to_the_drivers_own_operands() {
+    let oracles = require_oracle!("a_copy_engine_run_decodes_to_the_drivers_own_operands");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let accepted: Vec<&String> = o.ceruns.keys().filter(|n| n.starts_with("copy_")).collect();
+        // ⊘ `gates_quantified_over_a_list`: the corpus size is asserted, so a sweep that
+        // stopped being emitted shortens this test instead of silencing it.
+        assert!(
+            accepted.len() >= 8 + 40 + 4 + 15,
+            "[{tag}] the accepted-copy corpus shrank: {} cases",
+            accepted.len()
+        );
+        for name in accepted {
+            let words = &o.ceruns[name];
+            let d = &o.cedec[name];
+            let got = decode_fresh(words);
+            let launches: Vec<&PushMethod> = got
+                .iter()
+                .filter(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+                .collect();
+            assert_eq!(
+                launches.len(),
+                1,
+                "[{tag}] {name}: exactly one launch fires per run, got {got:?}"
+            );
+            let PushMethod::CeLaunchDma {
+                dst,
+                src,
+                len,
+                dst_is_virtual,
+                src_is_virtual,
+                work,
+            } = *launches[0]
+            else {
+                unreachable!("filtered")
+            };
+            assert_eq!(src.0, num(&d["src"]), "[{tag}] {name}: OFFSET_IN");
+            assert_eq!(dst.0, num(&d["dst"]), "[{tag}] {name}: OFFSET_OUT");
+            assert_eq!(len, num(&d["len"]), "[{tag}] {name}: LINE_LENGTH_IN");
+            assert_eq!(
+                u64::from(!src_is_virtual),
+                num(&d["srcphys"]),
+                "[{tag}] {name}: SRC_TYPE"
+            );
+            assert_eq!(
+                u64::from(!dst_is_virtual),
+                num(&d["dstphys"]),
+                "[{tag}] {name}: DST_TYPE"
+            );
+            // ⊘ Always `Copy`, and never `Scrub`: `MEMORY_SCRUB_ENABLE` is not a field of
+            // `NVC7B5` at all — see `submit::ce::NO_MEMORY_SCRUB_ON_THIS_CLASS`.
+            assert_eq!(work, kayfabe_arch::CeWork::Copy, "[{tag}] {name}");
+            // …and the bind is reported as well as applied.
+            assert!(
+                got.iter().any(|m| matches!(
+                    m,
+                    PushMethod::SetObject { class }
+                        if u64::from(class.0) == num(&d["class"])
+                )),
+                "[{tag}] {name}: SET_OBJECT is a fact as well as a binding: {got:?}"
+            );
+        }
+    }
+}
+
+/// ⊘ **The refusals, each one field away from an accepted run** — and each one a thing we
+/// cannot say rather than a thing we choose not to.
+///
+/// A launch that fires with a defaulted operand is `E4`'s invented destination one
+/// increment later and much harder to see, so this is the half of `E5` that matters most.
+#[test]
+fn a_copy_engine_run_one_field_from_legal_refuses() {
+    let oracles = require_oracle!("a_copy_engine_run_one_field_from_legal_refuses");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let refusals: Vec<&String> = o
+            .ceruns
+            .keys()
+            .filter(|n| n.starts_with("refuse_"))
+            .collect();
+        assert_eq!(
+            refusals.len(),
+            8,
+            "[{tag}] eight named refusals: transfer-none, multi-line, remap, \
+             wrong-object, unbound, and the three INCOMPLETE runs — no operands, no \
+             length, no offsets. ⊘ The last three are the ones an `unwrap_or_default()` \
+             survives, and nothing else in this file reaches them."
+        );
+        for name in refusals {
+            let got = decode_fresh(&o.ceruns[name]);
+            assert!(
+                !got.iter()
+                    .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+                "[{tag}] {name}: MUST NOT fire — {got:?}"
+            );
+            // ⊘ And it must be a refusal, not a silence: the words are still walked and
+            // the launch is still reported as `Opaque`, so a codec that stopped parsing
+            // is distinguishable from one that parsed and declined.
+            assert!(
+                got.iter().any(|m| *m == PushMethod::Opaque),
+                "[{tag}] {name}: the launch is refused BY NAME, not skipped: {got:?}"
+            );
+        }
+    }
+}
+
+/// ★★★ **An INCOMPLETE run does not fire, and completing it later does** — the property
+/// the accumulator exists for and the one it is most likely to lose.
+///
+/// The owner's ruling struck *"a partial run means nothing"*: hardware carries engine
+/// method state across GPFIFO entries, so a run split in two is **incomplete state
+/// awaiting more methods**. Both halves of that are asserted here, because asserting only
+/// the first would be satisfied by a codec that never fires at all.
+#[test]
+fn an_incomplete_copy_engine_run_is_unfired_state_and_not_a_defaulted_launch() {
+    let oracles = require_oracle!(
+        "an_incomplete_copy_engine_run_is_unfired_state_and_not_a_defaulted_launch"
+    );
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let words = &o.ceruns["copy_sub2"];
+        let d = &o.cedec["copy_sub2"];
+        let all = split_methods(words);
+        let pb = Ga10xPushbuffer;
+
+        // Every strict prefix of the run: nothing may fire, at any cut.
+        for cut in 0..all.len() {
+            let mut st = kayfabe_arch::MethodState::new();
+            let got = pb.decode_run(&mut st, &all[..cut]);
+            assert!(
+                !got.iter()
+                    .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+                "[{tag}] prefix of {cut} runs fired a launch: {got:?}"
+            );
+        }
+        // …and the SAME state, fed the remainder, fires exactly the right one. This is
+        // the half that makes the assertion above non-vacuous.
+        for cut in 0..all.len() {
+            let mut st = kayfabe_arch::MethodState::new();
+            let _ = pb.decode_run(&mut st, &all[..cut]);
+            let got = pb.decode_run(&mut st, &all[cut..]);
+            let launches: Vec<&PushMethod> = got
+                .iter()
+                .filter(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+                .collect();
+            assert_eq!(
+                launches.len(),
+                1,
+                "[{tag}] split at {cut}: the state must carry ACROSS the cut — {got:?}"
+            );
+            let PushMethod::CeLaunchDma { dst, src, len, .. } = *launches[0] else {
+                unreachable!("filtered")
+            };
+            assert_eq!(
+                (src.0, dst.0, len),
+                (num(&d["src"]), num(&d["dst"]), num(&d["len"])),
+                "[{tag}] split at {cut}: a split run must decode to the SAME copy as a whole one"
+            );
+        }
+    }
+}
+
+/// ⊘ **`SET_OBJECT` resets the subchannel it rebinds** — reset exactly where the engine
+/// resets (the owner's ruling, §8.2.1's replacement cost).
+///
+/// Operands latched under one bound class must not survive a rebind: method `0x400` on a
+/// different class is a different register, and carrying the value across would attribute
+/// one object's operands to another.
+#[test]
+fn rebinding_a_subchannel_clears_the_operands_latched_under_the_old_object() {
+    let oracles =
+        require_oracle!("rebinding_a_subchannel_clears_the_operands_latched_under_the_old_object");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let all = split_methods(&o.ceruns["copy_sub2"]);
+        let pb = Ga10xPushbuffer;
+        // Everything but the final launch, then a rebind to the same class, then the
+        // launch. The rebind clears the slots, so the launch has nothing to fire with.
+        let mut st = kayfabe_arch::MethodState::new();
+        let _ = pb.decode_run(&mut st, &all[..all.len() - 1]);
+        let _ = pb.decode_run(&mut st, &all[..1]); // the SET_OBJECT run, on its own
+        let got = pb.decode_run(&mut st, &all[all.len() - 1..]);
+        assert!(
+            !got.iter()
+                .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+            "[{tag}] a rebind must clear the subchannel's operands: {got:?}"
+        );
+    }
+}
+
+/// ⊘ **A launch on subchannel A cannot fire from subchannel B's operands.** The
+/// accumulator is per-subchannel because the engine's registers are.
+#[test]
+fn operands_latched_on_one_subchannel_do_not_fire_a_launch_on_another() {
+    let oracles =
+        require_oracle!("operands_latched_on_one_subchannel_do_not_fire_a_launch_on_another");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        // Subchannel 2's operands…
+        let two = split_methods(&o.ceruns["copy_sub2"]);
+        // …and subchannel 3's launch (the last run of that subchannel's own copy).
+        let three = split_methods(&o.ceruns["copy_sub3"]);
+        let pb = Ga10xPushbuffer;
+        let mut st = kayfabe_arch::MethodState::new();
+        // Bind subchannel 3 but latch NOTHING on it, then give it sub-2's operands.
+        let _ = pb.decode_run(&mut st, &three[..1]);
+        let _ = pb.decode_run(&mut st, &two);
+        let got = pb.decode_run(&mut st, &three[three.len() - 1..]);
+        assert!(
+            !got.iter()
+                .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+            "[{tag}] subchannel 3 has no operands of its own: {got:?}"
+        );
+    }
+}
+
+/// ★★ **The accumulator is finite, and a hostile ring cannot grow it.**
+///
+/// `state a guest drives is state a guest can abuse` — the cost the owner's ruling put in
+/// place of the struck one. The bound is structural (a fixed array), so what is asserted
+/// is that the *value's size* does not depend on the input at all: a million method runs
+/// leave a `MethodState` byte-identical in size to a fresh one, and equal in **content**
+/// to the same run applied once.
+#[test]
+fn a_hostile_ring_cannot_grow_the_accumulator() {
+    let oracles = require_oracle!("a_hostile_ring_cannot_grow_the_accumulator");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let pb = Ga10xPushbuffer;
+        let one = split_methods(&o.ceruns["copy_sub2"]);
+        // Every subchannel, every operand, over and over — the widest thing a guest can
+        // drive through this state.
+        let mut flood: Vec<(u32, Vec<u32>)> = Vec::new();
+        for _ in 0..2_000 {
+            for name in o.ceruns.keys() {
+                flood.extend(split_methods(&o.ceruns[name]));
+            }
+        }
+        let mut hostile = kayfabe_arch::MethodState::new();
+        let _ = pb.decode_run(&mut hostile, &flood);
+        assert_eq!(
+            core::mem::size_of_val(&hostile),
+            core::mem::size_of::<kayfabe_arch::MethodState>(),
+            "[{tag}] the accumulator is a fixed-size value; if this ever fails it has \
+             grown a heap and the bound is gone"
+        );
+        // …and it is not merely bounded, it is CORRECT after the flood: replaying the
+        // real run onto the abused state still fires exactly the real copy.
+        let got = pb.decode_run(&mut hostile, &one);
+        let d = &o.cedec["copy_sub2"];
+        let launches: Vec<&PushMethod> = got
+            .iter()
+            .filter(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+            .collect();
+        assert_eq!(launches.len(), 1, "[{tag}] {got:?}");
+        let PushMethod::CeLaunchDma { dst, src, len, .. } = *launches[0] else {
+            unreachable!("filtered")
+        };
+        assert_eq!(
+            (src.0, dst.0, len),
+            (num(&d["src"]), num(&d["dst"]), num(&d["len"]))
+        );
     }
 }

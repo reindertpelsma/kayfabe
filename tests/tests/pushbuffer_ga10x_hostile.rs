@@ -569,3 +569,314 @@ fn many_maximal_entries_stop_at_the_total_budget() {
     assert!(methods.len() > 1000, "…and it must still do real work");
     drop(gpu);
 }
+
+// ===========================================================================================
+// ★★★ E5 — the accumulator, controlled here rather than only in the ORACLE family
+// ===========================================================================================
+//
+// The oracle tests judge `decode_run` against NVIDIA's own extraction and are **gated**:
+// on a box with no vendored open-kernel-modules tree they announce SKIPPED and assert
+// nothing. These two are not gated, for the reason this whole file is not: the property
+// that costs a memory-safety fact when it breaks must run on a CI runner too.
+//
+// ⊘ Note which half lives where. *"Does a real copy decode to the driver's own operands"*
+// needs the driver's macros and belongs there. *"Can a hostile ring make us fabricate a
+// destination, or make this state grow"* needs no oracle at all, and would be the wrong
+// thing to gate on one.
+
+/// Build the exact five runs `rm::ce_pushbuffer` writes, as `(header, args)` pairs.
+fn ce_runs(sub: u32, src: u64, dst: u64, len: u32, flags: u32) -> Vec<(u32, Vec<u32>)> {
+    use kayfabe_abi::submit;
+    let hdr = |m, n| submit::method_header_inc(sub, m, n).expect("encodable");
+    vec![
+        (
+            hdr(submit::SET_OBJECT, 1),
+            vec![kayfabe_abi::generated::classes::AMPERE_DMA_COPY_B],
+        ),
+        (
+            hdr(submit::ce::OFFSET_IN_UPPER, 4),
+            vec![
+                (src >> 32) as u32,
+                src as u32,
+                (dst >> 32) as u32,
+                dst as u32,
+            ],
+        ),
+        (hdr(submit::ce::LINE_LENGTH_IN, 2), vec![len, 1]),
+        (hdr(submit::ce::LAUNCH_DMA, 1), vec![flags]),
+    ]
+}
+
+/// The flag word a plain virtual→virtual copy carries.
+fn plain_copy_flags() -> u32 {
+    use kayfabe_abi::submit::ce;
+    ce::LAUNCH_TRANSFER_NON_PIPELINED
+        | ce::LAUNCH_FLUSH_ENABLE
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH
+}
+
+/// ★★★ **A hostile stream may never fire a copy whose operands it did not write** —
+/// checked against a shadow of what the stream actually latched.
+///
+/// # Why a bare "noise never fires a launch" test is worthless here, MEASURED
+///
+/// The first version of this test fed 65 536 random words through the codec with a CE
+/// subchannel legitimately bound and asserted no launch carried an all-default operand
+/// set. It reported **`launches fired: 0`** on both arms: a random word has to be a valid
+/// incrementing header at `LAUNCH_DMA` on the bound subchannel to fire at all, which is
+/// about one in 2^29. The assertion inside the loop never executed. `suspect_the_instrument_first`
+/// — *a gate never seen red is not a gate.*
+///
+/// So the stream is hostile in the way that can actually reach the accumulator: **real
+/// runs, at random subchannels, in random order, with random operand values**, plus noise.
+/// The harness keeps its own trivial shadow of what it wrote, and the assertion is the
+/// strong one:
+///
+/// - a launch fires **exactly** when that subchannel is bound to the copy engine *and*
+///   both operand runs have been written on **it**;
+/// - and every fired copy carries **that subchannel's own last-written values**.
+///
+/// That catches a slot swapped, a subchannel ignored, a stale operand carried across a
+/// rebind, and an operand defaulted — none of which the vacuous version could see.
+#[test]
+fn a_hostile_method_stream_never_fires_a_copy_it_did_not_write() {
+    let pb = Ga10xPushbuffer;
+    let mut rng = Xs(0x5EED_0E5C_0FFE_E001);
+    let mut st = kayfabe_arch::MethodState::new();
+    // The shadow: per subchannel, `(bound_to_ce, offsets, line_len)`.
+    let mut shadow: [(bool, Option<(u64, u64)>, Option<u32>); kayfabe_arch::SUBCHANNELS] =
+        Default::default();
+    let mut fired_total = 0usize;
+    let mut refused_total = 0usize;
+
+    for _ in 0..8192 {
+        let sub = (rng.next() % kayfabe_arch::SUBCHANNELS as u64) as u32;
+        let s = sub as usize;
+        let run: Vec<(u32, Vec<u32>)> = match rng.next() % 6 {
+            // Bind to the copy engine — arms the subchannel and CLEARS its operands.
+            0 => {
+                shadow[s] = (true, None, None);
+                ce_runs(sub, 0, 0, 0, 0)[..1].to_vec()
+            }
+            // Bind to something else — disarms it, and clears just the same.
+            1 => {
+                shadow[s] = (false, None, None);
+                vec![(
+                    kayfabe_abi::submit::method_header_inc(sub, kayfabe_abi::submit::SET_OBJECT, 1)
+                        .expect("encodable"),
+                    vec![kayfabe_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A],
+                )]
+            }
+            // Write the address pair, with values off the hostile stream.
+            2 => {
+                let src = rng.next() & 0x0001_FFFF_FFFF_FFFF;
+                let dst = rng.next() & 0x0001_FFFF_FFFF_FFFF;
+                shadow[s].1 = Some((src, dst));
+                ce_runs(sub, src, dst, 0, 0)[1..2].to_vec()
+            }
+            // Write the length.
+            3 => {
+                let len = (rng.next() % 0x1_0000) as u32;
+                shadow[s].2 = Some(len);
+                ce_runs(sub, 0, 0, len, 0)[2..3].to_vec()
+            }
+            // Fire.
+            4 => ce_runs(sub, 0, 0, 0, plain_copy_flags())[3..].to_vec(),
+            // Pure noise, which must change nothing the shadow tracks.
+            _ => {
+                let words: Vec<u32> = (0..8).map(|_| (rng.next() >> 16) as u32).collect();
+                vec![(words[0], words[1..].to_vec())]
+            }
+        };
+        let got = pb.decode_run(&mut st, &run);
+        let launch = got
+            .iter()
+            .find(|m| matches!(m, PushMethod::CeLaunchDma { .. }));
+        let want = match shadow[s] {
+            (true, Some((src, dst)), Some(len)) => Some((src, dst, u64::from(len))),
+            _ => None,
+        };
+        // Only a FIRE run may produce a launch, and then exactly per the shadow.
+        let is_fire = run.len() == 1
+            && kayfabe_abi::submit::method_header_decode(run[0].0)
+                .is_some_and(|h| h.method == kayfabe_abi::submit::ce::LAUNCH_DMA);
+        if is_fire {
+            match (launch, want) {
+                (Some(PushMethod::CeLaunchDma { dst, src, len, .. }), Some(w)) => {
+                    assert_eq!(
+                        (src.0, dst.0, *len),
+                        w,
+                        "★★★ the launch carried operands this stream never wrote on \
+                         subchannel {sub}"
+                    );
+                    fired_total += 1;
+                }
+                (None, None) => refused_total += 1,
+                (a, b) => panic!(
+                    "subchannel {sub}: codec said {a:?}, the stream wrote {b:?} — the \
+                     accumulator and the guest disagree about what was submitted"
+                ),
+            }
+        } else {
+            assert!(
+                launch.is_none(),
+                "only a LAUNCH_DMA run may fire a copy: {got:?}"
+            );
+        }
+    }
+    // ⊘ **Both arms must be reached**, or the assertion above is the vacuous one this
+    // test was rewritten to stop being.
+    assert!(
+        fired_total > 100 && refused_total > 100,
+        "the corpus must exercise BOTH outcomes: {fired_total} fired, {refused_total} \
+         refused — see this test's own docs for the version that reported 0 and 0"
+    );
+    eprintln!("[hostile-ce] fired={fired_total} refused={refused_total}");
+}
+
+/// ★★ **The accumulator cannot be grown by a guest** — the cost the owner's ruling put in
+/// place of the struck one (`execution_plane_increments.md` §8.2.1).
+///
+/// The bound is structural: `kayfabe_arch::MethodState` is a fixed
+/// `SUBCHANNELS × METHOD_SLOTS` array with no heap in it, so there is no limit to enforce
+/// and none to get wrong. What is asserted is exactly that — the value's size does not
+/// depend on the input — plus the two totality properties every accessor claims.
+#[test]
+fn the_accumulator_is_finite_and_every_accessor_is_total() {
+    let pb = Ga10xPushbuffer;
+    let mut rng = Xs(0xD15EA5E_D15EA5E);
+    let before = core::mem::size_of::<kayfabe_arch::MethodState>();
+    let mut st = kayfabe_arch::MethodState::new();
+    for _ in 0..20_000 {
+        let words: Vec<u32> = (0..8).map(|_| (rng.next() >> 8) as u32).collect();
+        let run: Vec<(u32, Vec<u32>)> = vec![(words[0], words[1..].to_vec())];
+        let _ = pb.decode_run(&mut st, &run);
+    }
+    assert_eq!(
+        core::mem::size_of_val(&st),
+        before,
+        "★★★ the accumulator grew — a guest-driven state with a heap in it is the failure \
+         mode this bound exists against"
+    );
+
+    // Totality: out-of-range subchannel and slot are refusals, not panics and not writes
+    // into somebody else's slot.
+    let mut t = kayfabe_arch::MethodState::new();
+    t.latch(kayfabe_arch::SUBCHANNELS, 0, 0xDEAD);
+    t.latch(0, kayfabe_arch::METHOD_SLOTS, 0xDEAD);
+    t.bind_object(
+        kayfabe_arch::SUBCHANNELS,
+        kayfabe_arch::ids::ClassId(0xC7B5),
+    );
+    assert_eq!(t.latched(kayfabe_arch::SUBCHANNELS, 0), None);
+    assert_eq!(t.latched(0, kayfabe_arch::METHOD_SLOTS), None);
+    assert_eq!(t.object(kayfabe_arch::SUBCHANNELS), None);
+    assert_eq!(
+        t,
+        kayfabe_arch::MethodState::new(),
+        "an out-of-range write must change NOTHING, not spill into slot 0"
+    );
+
+    // …and `written`-ness is a fact of its own: a latched ZERO reads back as `Some(0)`,
+    // never as `None`. That distinction is the whole refusal.
+    let mut z = kayfabe_arch::MethodState::new();
+    assert_eq!(z.latched(1, 2), None, "never written");
+    z.latch(1, 2, 0);
+    assert_eq!(z.latched(1, 2), Some(0), "written, as zero");
+}
+
+/// ⊘ **A `SET_OBJECT` for a class that is not the copy engine leaves the subchannel unable
+/// to launch** — including the case where the *same* subchannel was a working CE
+/// subchannel a moment earlier.
+#[test]
+fn rebinding_to_a_non_copy_class_disarms_the_subchannel() {
+    let pb = Ga10xPushbuffer;
+    let runs = ce_runs(1, 0x1_0000_1000, 0x1_0000_2000, 0x1000, plain_copy_flags());
+    let mut st = kayfabe_arch::MethodState::new();
+    let armed = pb.decode_run(&mut st, &runs);
+    assert!(
+        armed
+            .iter()
+            .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+        "the control must ARM before it can be disarmed: {armed:?}"
+    );
+
+    // Rebind the same subchannel to the channel class and re-issue only the launch.
+    let hdr = kayfabe_abi::submit::method_header_inc;
+    let rebind = vec![(
+        hdr(1, kayfabe_abi::submit::SET_OBJECT, 1).expect("encodable"),
+        vec![kayfabe_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A],
+    )];
+    let _ = pb.decode_run(&mut st, &rebind);
+    let after = pb.decode_run(&mut st, &runs[runs.len() - 1..]);
+    assert!(
+        !after
+            .iter()
+            .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+        "0x300 on a non-CE object is not LAUNCH_DMA: {after:?}"
+    );
+}
+
+/// ⊘ **Only the incrementing framing latches.** A `NON_INC` / `ONE_INC` write to the very
+/// same method addresses is a *different* register-write pattern this codec models none
+/// of, so it must leave the engine unarmed rather than half-armed.
+///
+/// ⚠ The two headers are built by rewriting `SEC_OP` on a word `method_header_inc`
+/// produced, and then **asserted through the port's own decoder** — so the test cannot
+/// silently be feeding the codec a shape it thinks is something else. That check is the
+/// difference between a control and a transcription.
+#[test]
+fn a_non_incrementing_run_at_the_operand_addresses_latches_nothing() {
+    use kayfabe_abi::submit;
+    let pb = Ga10xPushbuffer;
+    let reframe = |sec_op: u32, method: u32, count: u32, want: submit::MethodForm| {
+        let inc = submit::method_header_inc(0, method, count).expect("encodable");
+        // `NVC56F_DMA_SEC_OP` is `31:29`; `method_header_inc` writes `INC_METHOD` there.
+        let w = (inc & !(0x7 << 29)) | (sec_op << 29);
+        let h = submit::method_header_decode(w).expect("the reframed word is sizable");
+        assert_eq!(
+            h.form, want,
+            "the harness built the framing it meant to build"
+        );
+        assert_eq!((h.method, h.arg_words), (method, count as usize));
+        w
+    };
+    let framings = [
+        (
+            "non-incrementing",
+            submit::sec_op::NON_INC_METHOD,
+            submit::MethodForm::NonIncrementing,
+        ),
+        (
+            "increment-once",
+            submit::sec_op::ONE_INC,
+            submit::MethodForm::IncrementOnce,
+        ),
+    ];
+    for (name, sec_op, want) in framings {
+        let mut st = kayfabe_arch::MethodState::new();
+        let bind = ce_runs(0, 0, 0, 0, 0);
+        let _ = pb.decode_run(&mut st, &bind[..1]);
+        let run = vec![
+            (
+                reframe(sec_op, submit::ce::OFFSET_IN_UPPER, 4, want),
+                vec![0, 0x1000, 0, 0x2000],
+            ),
+            (
+                reframe(sec_op, submit::ce::LINE_LENGTH_IN, 2, want),
+                vec![0x40, 1],
+            ),
+            (
+                submit::method_header_inc(0, submit::ce::LAUNCH_DMA, 1).expect("encodable"),
+                vec![plain_copy_flags()],
+            ),
+        ];
+        let got = pb.decode_run(&mut st, &run);
+        assert!(
+            !got.iter()
+                .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+            "{name}: a framing this codec does not model must not latch: {got:?}"
+        );
+    }
+}

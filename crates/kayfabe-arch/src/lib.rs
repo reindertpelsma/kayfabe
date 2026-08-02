@@ -559,6 +559,45 @@ pub enum PushMethod {
 /// One pushbuffer range to walk: a contiguous run of method words a GPFIFO entry
 /// points at. The core walks these; the arch iterates the GPFIFO to produce them.
 ///
+/// # ★★★ MEASURED 2026-08-02 — the address is a GPU VA and it is **NOT** a GPA
+///
+/// Two boots at rev `c93930d` on vast `46529600` (RTX 3060 / GA106, guest driver
+/// 580.159.04 open, stock), evidence in `docs/reference/bench_evidence/`:
+///
+/// | boot | guest RAM | `gpFifoOffset` the guest declared |
+/// |---|---|---|
+/// | `c93930d_run_e5ring1_*` | 8 GiB (`e820` usable to `0x2_7fff_ffff`) | `0x1_2006_4000` |
+/// | `c93930d_run_e5ring2g_*` | 2 GiB (`e820` usable to `0x7ffd_bfff`, **nothing above 4 GiB**) | `0x1_2006_4000` |
+///
+/// **Byte-identical across a 4× change in guest RAM, and at 2 GiB it names memory the
+/// guest does not have.** So it is not derived from the guest's physical layout: it is a
+/// virtual address out of the guest's own VA heap.
+///
+/// ⊘ **And the 8 GiB row is the dangerous one.** There, `0x1_2006_4000` *is* a legal
+/// guest-physical address, so `Vmm::gpa_read` **succeeds** and returns whatever guest RAM
+/// happens to live there. The failure is not a fault; it is bytes.
+///
+/// `gpFifoOffset` is the ring base rather than an entry's `GET`, and they are the same
+/// kind of address in the same allocation: the driver sets
+/// `gpFifoOffset = pChannel->pbGpuVA + pChannel->channelPbSize`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:1232`) and
+/// writes `get = pChannel->pbGpuVA + gpOffset` into `GP_ENTRY0_GET`/`GP_ENTRY1_GET_HI`
+/// (`:1871-1879`), with `pbGpuVA` the `dmaOffset` an `NV04_MAP_MEMORY_DMA` returned
+/// (`:842`). `ogkm-580: ctrl2080fifo.h:809` calls the field *"Gpfifo Virtual Offset"*.
+///
+/// ⊘ **Latent, not live**, which is the only reason this is a recorded defect and not an
+/// incident: nothing in the shipped device path reads a pushbuffer.
+/// `kayfabe_rt::device::SharedDevice::parse_pushbuffer` is the one in-lock-legal entry
+/// point and `kayfabe-qemu-raw`/`kayfabe-shell` never call it, and the same two boots
+/// report `doorbells: 0 arrived` across boot + `modprobe` + device open — the guest never
+/// submits work at this wall.
+///
+/// ⊘ **There is no second number to compare against, and that is a finding too.** The
+/// binding that would resolve this VA is a `MAP_MEMORY_DMA`, and that RPC is a HAL stub on
+/// every GSP-client part, so it never reaches this port (`kayfabe_rmrpc` crate docs §2.7).
+/// Resolving a range therefore needs a GMMU walk through the issuing channel's PDB — the
+/// machinery `kayfabe_device`'s BAR2 aperture already has — not a table lookup.
+///
 /// # ★★★ UNRESOLVED — the field is named `gpa` and a real GPFIFO entry holds a GPU **VA**
 ///
 /// `[src]` A GA10x GPFIFO entry's address is `NVC56F_GP_ENTRY0_GET 31:2` +
@@ -592,6 +631,150 @@ pub struct PushRange {
     pub len: u64,
 }
 
+/// The number of engine-object subchannels one channel has —
+/// `NVC56F_NUMBER_OF_SUBCHANNELS` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/class/clc56f.h:67`), mirrored here rather than imported
+/// because `kayfabe-arch` is the vocabulary crate and depends on no ABI.
+pub const SUBCHANNELS: usize = 8;
+
+/// How many method slots [`MethodState`] holds per subchannel.
+///
+/// ⚠ **This is the bound, and it is the whole of the bound.** It is not tuned to a
+/// workload and it is not a cache size: it is how many *engine registers* an
+/// architecture's decoder is allowed to mirror. A guest that sends a billion methods
+/// rewrites these same slots a billion times and allocates nothing.
+pub const METHOD_SLOTS: usize = 16;
+
+/// ★★★ **The engine method state one channel holds BETWEEN runs** — the accumulator the
+/// owner's 2026-08-02 ruling (`execution_plane_increments.md` §8.2.1) requires, and the
+/// reason it may exist at all.
+///
+/// # Why state, when `decode_method` was stateless
+///
+/// > *"stateless isn't a requirement, it should be following the protocol; if the
+/// > protocol holds a state to emulate an action, so may you."*
+///
+/// A real `AMPERE_DMA_COPY_B` copy is **five separate method runs**, and `LAUNCH_DMA`
+/// carries none of its operands: `OFFSET_IN_UPPER…OFFSET_OUT_LOWER` are one earlier run,
+/// `LINE_LENGTH_IN`/`LINE_COUNT` another, and `LAUNCH_DMA` is a header plus one word of
+/// flags. The engine holds the operands in its own registers and `LAUNCH_DMA` fires what
+/// has accumulated. **Mirroring that is following the protocol**, not working around it;
+/// a seam that cannot hold state cannot express what the hardware does, which is what
+/// `E4` discovered and refused rather than guessed at.
+///
+/// ★★ And the state is not an optimisation — it is the **classification buffer**. At the
+/// moment the methods arrive we do not know the op's *disposition*: whether it is one we
+/// must emulate (a privileged kernel operation — the page-table write) or one we
+/// translate and replay on the host GPU. That question has no answer until the op is
+/// complete, so the operands have to be held somewhere until it is.
+///
+/// ⊘ **A partial run is NOT meaningless.** Engine method state persists across GPFIFO
+/// entries on real hardware, so a run split across two entries is *incomplete state
+/// awaiting more methods* — the C's "a partial run means nothing" was a workaround, and
+/// repeating it would have made this port diverge from the thing it emulates.
+///
+/// # ★★★ The cost this replaces it with: state a guest drives is state a guest can abuse
+///
+/// So it is bounded the way the hardware bounds it, and the bound is **structural rather
+/// than checked**:
+///
+/// - **Finite.** [`SUBCHANNELS`] × [`METHOD_SLOTS`] `u32`s, in a fixed array. No `Vec`, no
+///   map, no key the guest supplies. There is no input that makes this bigger, so there is
+///   no limit to enforce and no limit to get wrong.
+/// - **Per-channel.** It lives on the channel, because engine method state does.
+/// - **Reset exactly where the engine resets.** [`MethodState::bind_object`] clears the
+///   subchannel it rebinds — a `SET_OBJECT` puts a *different class* on that subchannel,
+///   and method `0x400` on the new class is not method `0x400` on the old one, so
+///   carrying operands across a rebind would attribute one object's registers to another.
+///   The whole state dies with the channel, which is the other reset the hardware has.
+///
+/// # ⊘ Opaque to the core, and to every architecture but the one that wrote it
+///
+/// The core carries this value, resets it and hands it back; it reads **no field**. Slot
+/// numbering is an architecture's private business — a method address *is* a register
+/// index — so nothing here is named for a GA10x method, and an architecture that models a
+/// different engine uses the same slots for its own.
+///
+/// Every accessor is **total**: an out-of-range subchannel or slot writes nothing and
+/// reads `None`. A hostile header naming subchannel 7 (the highest `SUBCHANNEL` encodes)
+/// is in range by construction, and an implementation that computed a wider index gets a
+/// refusal rather than a panic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MethodState {
+    /// Latched values, per subchannel.
+    slots: [[u32; METHOD_SLOTS]; SUBCHANNELS],
+    /// Which slots have been *written*, per subchannel — one bit each.
+    ///
+    /// ★★ Not a sentinel value, a **presence bitmap**, and the difference is the refusal
+    /// posture: `0` is a legal destination offset, a legal line length and a legal set of
+    /// flags, so "never written" and "written as zero" have to be distinguishable. A
+    /// decoder that could not tell them apart would fire a `CeLaunchDma` with a defaulted
+    /// destination, which is the invented answer this whole module exists to refuse.
+    written: [u32; SUBCHANNELS],
+    /// The engine-object class bound to each subchannel by `SET_OBJECT`, if any.
+    object: [Option<ClassId>; SUBCHANNELS],
+}
+
+impl Default for MethodState {
+    fn default() -> Self {
+        MethodState::new()
+    }
+}
+
+impl MethodState {
+    /// A channel whose engine has been reset: nothing bound, nothing latched.
+    #[must_use]
+    pub const fn new() -> MethodState {
+        MethodState {
+            slots: [[0; METHOD_SLOTS]; SUBCHANNELS],
+            written: [0; SUBCHANNELS],
+            object: [None; SUBCHANNELS],
+        }
+    }
+
+    /// Bind `class` to `subch` — and **clear that subchannel's latched slots**, because a
+    /// rebind changes what its method addresses mean. See the type docs.
+    ///
+    /// Out-of-range `subch`: nothing happens (total).
+    pub fn bind_object(&mut self, subch: usize, class: ClassId) {
+        if subch >= SUBCHANNELS {
+            return;
+        }
+        self.object[subch] = Some(class);
+        self.written[subch] = 0;
+        self.slots[subch] = [0; METHOD_SLOTS];
+    }
+
+    /// The class currently bound to `subch`, or `None` if nothing has bound one.
+    #[must_use]
+    pub fn object(&self, subch: usize) -> Option<ClassId> {
+        self.object.get(subch).copied().flatten()
+    }
+
+    /// Latch `value` into `slot` of `subch`. Out of range: nothing happens (total).
+    pub fn latch(&mut self, subch: usize, slot: usize, value: u32) {
+        if subch >= SUBCHANNELS || slot >= METHOD_SLOTS {
+            return;
+        }
+        self.slots[subch][slot] = value;
+        self.written[subch] |= 1 << slot;
+    }
+
+    /// The value latched in `slot` of `subch`, or `None` if nothing ever wrote it.
+    #[must_use]
+    pub fn latched(&self, subch: usize, slot: usize) -> Option<u32> {
+        if subch >= SUBCHANNELS || slot >= METHOD_SLOTS {
+            return None;
+        }
+        (self.written[subch] & (1 << slot) != 0).then(|| self.slots[subch][slot])
+    }
+
+    /// Reset the whole engine — every subchannel, every slot, every binding.
+    pub fn reset(&mut self) {
+        *self = MethodState::new();
+    }
+}
+
 /// Axis-B seam: the pushbuffer / method + engine encodings for one GPU generation
 /// (`execution_plane.md` §3.1). The *decode logic* (walk GPFIFO → walk methods →
 /// dispatch on [`PushMethod`]) is **core**; this trait supplies only the per-arch
@@ -614,6 +797,36 @@ pub trait PushbufferAbi: Send + Sync {
     /// The GPFIFO entries of a pushbuffer `ring` (entry stride/format per arch),
     /// each pointing at a [`PushRange`] of method words to walk.
     fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange>;
+
+    /// ★★★ **Decode a RUN of methods — the protocol's own unit** (`E5`, the owner's
+    /// ruling at `execution_plane_increments.md` §8.2.1).
+    ///
+    /// `state` is the channel's engine method state, carried **in** and updated **in
+    /// place**: an architecture whose engine assembles an operation out of several method
+    /// runs latches the operands here and fires when the run that fires it arrives. See
+    /// [`MethodState`] for why the state exists, and for the bound that makes it safe.
+    ///
+    /// ## The default is the old behaviour, exactly
+    ///
+    /// A per-method map onto [`PushbufferAbi::decode_method`], ignoring `state`. So an
+    /// architecture that models no multi-run operation — every mock, and every generation
+    /// this port has not built a codec for — is unchanged by this method existing, which
+    /// is the whole reason it is a *provided* method and not a required one.
+    ///
+    /// ## ⊘ What an implementation may NOT do
+    ///
+    /// Fire an operation whose operands were never latched. An incomplete run is
+    /// **un-fired state awaiting more methods**, and must decode to
+    /// [`PushMethod::Opaque`] — never to a modelled fact with defaulted fields. That is
+    /// `E4`'s posture unchanged (*"a plausible answer is worse than a refusal"*), and it
+    /// is the property the seam is most likely to lose: the operands are *right there* in
+    /// a struct with a `Default`.
+    fn decode_run(&self, state: &mut MethodState, run: &[(u32, Vec<u32>)]) -> Vec<PushMethod> {
+        let _ = state;
+        run.iter()
+            .map(|(header, args)| self.decode_method(*header, args))
+            .collect()
+    }
 }
 
 /// # The Axis-B architecture trait — one impl per GPU generation
@@ -919,6 +1132,7 @@ kayfabe_util::assert_send_sync!(
     PushMethod,
     CeWork,
     PushRange,
+    MethodState,
     dyn Arch,
     dyn HostClasses,
     dyn GmmuFmt,

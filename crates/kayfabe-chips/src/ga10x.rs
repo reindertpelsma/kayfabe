@@ -32,14 +32,26 @@
 //! the vocabulary's own spelling of a refusal, as [`UnbuiltGmmu`] did after `#149`, and
 //! are no longer what this `Arch` answers with.
 //!
-//! ⊘ **One seam inside the codec still refuses, and it is the interesting one.** A real
-//! `LAUNCH_DMA` carries **none** of its operands — they were written by *earlier, separate*
-//! method runs — and [`PushbufferAbi::decode_method`] is handed one `(header, args)` pair
-//! and nothing else. So [`PushMethod::CeLaunchDma`] is **not decodable at this seam at
-//! all**, and `LAUNCH_DMA` is [`PushMethod::Opaque`]. `MockArch` hid that by inventing a
-//! one-method encoding that packs both operands, a length and a work kind into a single
-//! method's arguments. See [`Ga10xPushbuffer`] for the full statement; closing it is `E5`'s
-//! decision, not a detail.
+//! ★★★ **`E5` closed the seam `E4` refused at, and the shape of the fix is the finding.**
+//! A real `LAUNCH_DMA` carries **none** of its operands — they were written by *earlier,
+//! separate* method runs — so [`PushbufferAbi::decode_method`], handed one
+//! `(header, args)` pair and nothing else, was *structurally incapable* of producing a
+//! [`PushMethod::CeLaunchDma`] with real `dst`/`src`/`len`. `MockArch` hid that for the
+//! whole life of the seam by inventing a one-method encoding that packs both operands, a
+//! length and a work kind into a single method's arguments.
+//!
+//! The owner's ruling (`execution_plane_increments.md` §8.2.1) was that statelessness was
+//! never a requirement — *"if the protocol holds a state to emulate an action, so may
+//! you"* — so [`PushbufferAbi::decode_run`] carries the channel's own
+//! [`kayfabe_arch::MethodState`] and [`Ga10xPushbuffer::decode_run`] accumulates
+//! `SET_OBJECT` → `OFFSET_*` → `LINE_*` → `LAUNCH_DMA` into one fact. ⊘ The refusals grew
+//! rather than shrank: a launch whose operands never arrived, a multi-line copy, a
+//! constant fill and a zero-transfer launch all still decode to [`PushMethod::Opaque`].
+//!
+//! ⊘ **And one seam still refuses, upstream of all of it.** A GPFIFO entry names a GPU
+//! **virtual** address and `kayfabe_fwd::read_pushbuffer` reads it as a guest-physical
+//! one. That is no longer a suspicion: it is `[measured]` — see
+//! [`Ga10xPushbuffer::gpfifo_entries`].
 //!
 //! ★★★ **`decode_doorbell` is now built (`E3`), and it is the one seam here that could
 //! not have been closed by reading.** It used to answer `None`. It answers a
@@ -83,8 +95,9 @@ use kayfabe_abi::submit;
 use kayfabe_arch::gsp::GspModel;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, RunlistId, VChid};
 use kayfabe_arch::{
-    Aperture, Arch, DoorbellTarget, GmmuFmt, GmmuVersion, HostClasses, LevelShift, ObjectKind,
-    PageSize, PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
+    Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, HostClasses, LevelShift,
+    MethodState, ObjectKind, PageSize, PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi,
+    UserdModel,
 };
 
 /// The GA10x architecture, as the port ships it: a **real** class table and a **real**
@@ -111,7 +124,8 @@ impl Arch for Ga10xArch {
     /// model prints. An operator reading "GA10x (GA106)" would have no way to know the
     /// data plane is not there.
     fn name(&self) -> &'static str {
-        "GA10x (GA106, object model + GMMU + doorbell + USERD/pushbuffer; CE launch operands unbuilt)"
+        "GA10x (GA106, object model + GMMU + doorbell + USERD/pushbuffer + CE launch operands; \
+         pushbuffer ranges name a GPU VA nothing resolves)"
     }
 
     /// NVIDIA's real class ids. The constants are `kayfabe-abi`'s, per decision #2's
@@ -786,26 +800,25 @@ impl UserdModel for UnbuiltUserd {
 /// | [`PushMethod::SemRelease`] | one **incrementing** run at `SEM_ADDR_LO`, count 5, with `SEM_EXECUTE.OPERATION == RELEASE` | the five words are one fact; six of the eight operations are **acquires**, and decoding one as a release reports a completion the guest is still waiting for |
 /// | [`PushMethod::TlbInvalidate`] | one **incrementing** run at `MEM_OP_A`, count 4, with `MEM_OP_D.OPERATION` an `MMU_TLB_INVALIDATE`, `PDB_ONE` | the class header's own comment is *"MEM_OP_D MUST be preceded by MEM_OPs A-C"*; `PDB_ALL` carries no address at all |
 ///
-/// ⊘ **`LAUNCH_DMA` decodes to [`PushMethod::Opaque`], deliberately, and this is E4's
-/// most important finding.** A real `AMPERE_DMA_COPY_B` launch carries **none** of its
-/// operands: `OFFSET_IN_UPPER…OFFSET_OUT_LOWER` are a *separate earlier run*,
+/// ⊘ **`LAUNCH_DMA` is still [`PushMethod::Opaque`] at THIS entry point, and always will
+/// be.** A real `AMPERE_DMA_COPY_B` launch carries **none** of its operands:
+/// `OFFSET_IN_UPPER…OFFSET_OUT_LOWER` are a *separate earlier run*,
 /// `LINE_LENGTH_IN`/`LINE_COUNT` another, `SET_SEMAPHORE_A/B/PAYLOAD` a third, and
 /// `LAUNCH_DMA` itself is one word of flags (see `kayfabe_isolate_host::rm::ce_pushbuffer`,
 /// which is the encoder a real GA106 executed at rung R17). [`PushbufferAbi::decode_method`]
-/// is **per-method and stateless** — it is handed one `(header, args)` pair and nothing
-/// else — so it *cannot* produce a [`PushMethod::CeLaunchDma`] whose `dst`, `src` and
-/// `len` are anything but invented.
+/// is handed one `(header, args)` pair and nothing else, so it *cannot* produce a
+/// [`PushMethod::CeLaunchDma`] whose `dst`, `src` and `len` are anything but invented —
+/// and a decoder that answered anyway would hand the address plane a destination the
+/// guest never wrote, which is a **silent memory-safety fact about the guest**.
 ///
-/// `MockArch` hid this: `mock_method::CE_LAUNCH_DMA` packs destination, source, length and
-/// work kind into **one** method's arguments, an encoding no NVIDIA chip has. So the seam
-/// looked sufficient for as long as the only implementer was the mock.
+/// ★★★ **[`Ga10xPushbuffer::decode_run`] is where a launch decodes**, because it is the
+/// one that can see the state the engine holds. `E4` recorded this as a seam that had to
+/// change shape rather than a value that had to be filled in, and that is what `E5` did.
 ///
-/// ⇒ The choice here is the one this module's header paragraph mandates — *"a plausible
-/// answer on any of them is worse than a refusal"*. Filling `CeLaunchDma` from a
-/// `LAUNCH_DMA` word alone would hand the address plane a destination the guest never
-/// wrote, which is a **silent memory-safety fact about the guest**. Closing this needs a
-/// seam that can see a *run* of methods, and that is a decision for `E5`, recorded in
-/// `docs/design/execution_plane_increments.md`.
+/// `MockArch` hid the whole question: `mock_method::CE_LAUNCH_DMA` packs destination,
+/// source, length and work kind into **one** method's arguments, an encoding no NVIDIA
+/// chip has. So the seam looked sufficient for as long as the only implementer was the
+/// mock (`mock_fidelity_both_directions`).
 ///
 /// # The refusals, and what each one stops
 ///
@@ -854,6 +867,88 @@ impl Ga10xPushbuffer {
         Some(PushMethod::SemRelease {
             addr: GpuVa(Self::addr40(addr_lo, addr_hi)),
             payload,
+        })
+    }
+
+    /// The engine-register slot [`MethodState`] holds a CE method address in, or `None`
+    /// if this codec mirrors no register for it.
+    ///
+    /// ⊘ **The numbering is private to this codec.** A method address *is* a register
+    /// index on real hardware; this is that index, compacted into the sixteen slots
+    /// `kayfabe_arch::METHOD_SLOTS` allows. Nothing outside this file may assume a slot
+    /// means anything.
+    fn ce_slot(method: u32) -> Option<usize> {
+        match method {
+            // `OFFSET_IN_UPPER`, `_IN_LOWER`, `_OUT_UPPER`, `_OUT_LOWER` — consecutive at
+            // 0x400..0x40c, which is why ONE incrementing header of count 4 writes the
+            // whole source-and-destination pair (`rm::ce_pushbuffer` does exactly that).
+            submit::ce::OFFSET_IN_UPPER => Some(0),
+            submit::ce::OFFSET_IN_LOWER => Some(1),
+            submit::ce::OFFSET_OUT_UPPER => Some(2),
+            submit::ce::OFFSET_OUT_LOWER => Some(3),
+            submit::ce::LINE_LENGTH_IN => Some(4),
+            submit::ce::LINE_COUNT => Some(5),
+            _ => None,
+        }
+    }
+
+    /// Assemble the latched operands on `subch` into a [`PushMethod::CeLaunchDma`], or
+    /// `None` — which the caller turns into [`PushMethod::Opaque`].
+    ///
+    /// # ⊘ Every `None` here is a REFUSAL, and each one is a different thing we cannot say
+    ///
+    /// - **Nothing bound, or a class that is not the copy engine.** A subchannel's method
+    ///   addresses mean whatever its bound object says they mean; `0x300` on a compute
+    ///   object is not `LAUNCH_DMA`. Firing without checking would decode a graphics
+    ///   method as a copy.
+    /// - **`DATA_TRANSFER_TYPE == NONE`.** The engine moves no bytes; the launch exists to
+    ///   release a semaphore. There is no copy to report.
+    /// - **`MULTI_LINE_ENABLE == TRUE`.** Then `LINE_LENGTH_IN` is a *per-line* byte count
+    ///   and the region is `LINE_COUNT` lines separated by `PITCH_IN`/`PITCH_OUT` — which
+    ///   is **not** the contiguous `len` bytes [`PushMethod::CeLaunchDma`] means. Reporting
+    ///   `length × count` would name a span the engine never touches when the pitch
+    ///   exceeds the line, and would *under*-report the destination's extent when it does
+    ///   not. The address plane acts on that number.
+    /// - **`REMAP_ENABLE == TRUE`.** That is a constant fill, and
+    ///   [`kayfabe_arch::CeWork::Fill`]'s own docs say *"the pattern is part of the
+    ///   fact"* — it lives in `SET_REMAP_CONST_A` (`0x700`) selected by a
+    ///   `SET_REMAP_COMPONENTS` (`0x708`) component map this codec does not yet validate.
+    ///   A fill decoded without it could say *that* a fill happened and never *what it
+    ///   wrote*, which is not a forwardable intent.
+    /// - **An operand that was never latched.** The heart of it. `0` is a legal offset and
+    ///   a legal length, so [`MethodState`] tracks *written*-ness separately and this asks
+    ///   for it. A `CeLaunchDma` assembled from `unwrap_or_default()` is precisely the
+    ///   invented destination `E4` refused to produce, one increment later and harder to
+    ///   see.
+    ///
+    /// ⊘ And [`kayfabe_arch::CeWork::Scrub`] is **never** produced: `MEMORY_SCRUB_ENABLE`
+    /// is not a field of this class at all — see
+    /// [`submit::ce::NO_MEMORY_SCRUB_ON_THIS_CLASS`] for the C bug that is.
+    fn ce_launch(state: &MethodState, subch: usize, flags: u32) -> Option<PushMethod> {
+        if state.object(subch)? != ClassId(nv::AMPERE_DMA_COPY_B) {
+            return None;
+        }
+        if flags & submit::ce::LAUNCH_TRANSFER_MASK == submit::ce::LAUNCH_TRANSFER_NONE {
+            return None;
+        }
+        if flags & (submit::ce::LAUNCH_MULTI_LINE_ENABLE | submit::ce::LAUNCH_REMAP_ENABLE) != 0 {
+            return None;
+        }
+        let up = |v: u32| u64::from(v & submit::ce::OFFSET_UPPER_MASK) << 32;
+        let src = up(state.latched(subch, 0)?) | u64::from(state.latched(subch, 1)?);
+        let dst = up(state.latched(subch, 2)?) | u64::from(state.latched(subch, 3)?);
+        // ★ `LINE_COUNT` is deliberately NOT required. With `MULTI_LINE_ENABLE_FALSE` the
+        // engine ignores it, so demanding it would refuse a copy real hardware performs —
+        // and `rm::ce_pushbuffer` writes it only because it shares a header with
+        // `LINE_LENGTH_IN`.
+        let len = u64::from(state.latched(subch, 4)?);
+        Some(PushMethod::CeLaunchDma {
+            dst: GpuVa(dst),
+            src: GpuVa(src),
+            len,
+            dst_is_virtual: flags & submit::ce::LAUNCH_DST_PHYSICAL == 0,
+            src_is_virtual: flags & submit::ce::LAUNCH_SRC_PHYSICAL == 0,
+            work: CeWork::Copy,
         })
     }
 
@@ -924,6 +1019,45 @@ impl PushbufferAbi for Ga10xPushbuffer {
     /// that is not a whole number of entries yields **nothing**, and a control entry
     /// (`LENGTH == 0`) contributes **nothing**. See the type docs.
     ///
+    /// # ★★★ MEASURED 2026-08-02 — the address is a GPU VA and it is **NOT** a GPA
+    ///
+    /// Two boots at rev `c93930d` on vast `46529600` (RTX 3060 / GA106, guest driver
+    /// 580.159.04 open, stock), evidence in `docs/reference/bench_evidence/`:
+    ///
+    /// | boot | guest RAM | `gpFifoOffset` the guest declared |
+    /// |---|---|---|
+    /// | `c93930d_run_e5ring1_*` | 8 GiB (`e820` usable to `0x2_7fff_ffff`) | `0x1_2006_4000` |
+    /// | `c93930d_run_e5ring2g_*` | 2 GiB (`e820` usable to `0x7ffd_bfff`, **nothing above 4 GiB**) | `0x1_2006_4000` |
+    ///
+    /// **Byte-identical across a 4× change in guest RAM, and at 2 GiB it names memory the
+    /// guest does not have.** So it is not derived from the guest's physical layout: it is a
+    /// virtual address out of the guest's own VA heap.
+    ///
+    /// ⊘ **And the 8 GiB row is the dangerous one.** There, `0x1_2006_4000` *is* a legal
+    /// guest-physical address, so `Vmm::gpa_read` **succeeds** and returns whatever guest RAM
+    /// happens to live there. The failure is not a fault; it is bytes.
+    ///
+    /// `gpFifoOffset` is the ring base rather than an entry's `GET`, and they are the same
+    /// kind of address in the same allocation: the driver sets
+    /// `gpFifoOffset = pChannel->pbGpuVA + pChannel->channelPbSize`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:1232`) and
+    /// writes `get = pChannel->pbGpuVA + gpOffset` into `GP_ENTRY0_GET`/`GP_ENTRY1_GET_HI`
+    /// (`:1871-1879`), with `pbGpuVA` the `dmaOffset` an `NV04_MAP_MEMORY_DMA` returned
+    /// (`:842`). `ogkm-580: ctrl2080fifo.h:809` calls the field *"Gpfifo Virtual Offset"*.
+    ///
+    /// ⊘ **Latent, not live**, which is the only reason this is a recorded defect and not an
+    /// incident: nothing in the shipped device path reads a pushbuffer.
+    /// `kayfabe_rt::device::SharedDevice::parse_pushbuffer` is the one in-lock-legal entry
+    /// point and `kayfabe-qemu-raw`/`kayfabe-shell` never call it, and the same two boots
+    /// report `doorbells: 0 arrived` across boot + `modprobe` + device open — the guest never
+    /// submits work at this wall.
+    ///
+    /// ⊘ **There is no second number to compare against, and that is a finding too.** The
+    /// binding that would resolve this VA is a `MAP_MEMORY_DMA`, and that RPC is a HAL stub on
+    /// every GSP-client part, so it never reaches this port (`kayfabe_rmrpc` crate docs §2.7).
+    /// Resolving a range therefore needs a GMMU walk through the issuing channel's PDB — the
+    /// machinery `kayfabe_device`'s BAR2 aperture already has — not a table lookup.
+    ///
     /// ## ★★★ UNRESOLVED — this returns a GPU **VA** into a field the core reads as a GPA
     ///
     /// `[src]` The address decoded out of `GP_ENTRY0_GET` / `GP_ENTRY1_GET_HI` is a **GPU
@@ -949,6 +1083,88 @@ impl PushbufferAbi for Ga10xPushbuffer {
                     gpa: d.gpu_va,
                     len: d.len_bytes,
                 })
+            })
+            .collect()
+    }
+
+    /// ★★★ **E5 — the run-aware decode, and the CE `LAUNCH_DMA` operands with it.**
+    ///
+    /// This is the entry point the owner's 2026-08-02 ruling
+    /// (`execution_plane_increments.md` §8.2.1) chose over the two alternatives, and it is
+    /// what makes [`PushMethod::CeLaunchDma`] producible at all: a real
+    /// `AMPERE_DMA_COPY_B` copy is **five separate method runs** and `LAUNCH_DMA` carries
+    /// none of its operands, so a per-method decoder is not merely inconvenient here —
+    /// it is *structurally incapable*.
+    ///
+    /// `state` is the channel's own engine method state ([`MethodState`]); the operands
+    /// are latched into it as the runs arrive and `LAUNCH_DMA` fires what has
+    /// accumulated. That is the engine's behaviour, mirrored: **following the protocol,
+    /// not working around it.**
+    ///
+    /// # ★★ The three things this walk does, in order
+    ///
+    /// 1. **`SET_OBJECT` binds a subchannel** — and clears its slots, because a method
+    ///    address means whatever the bound class says it means.
+    /// 2. **An incrementing run latches** every argument whose *address* this codec
+    ///    mirrors a register for, at `method + 4·i`. Written as an address walk rather
+    ///    than as a match on the exact runs `rm::ce_pushbuffer` happens to emit — a real
+    ///    driver is free to split them differently and the engine would not care.
+    /// 3. **`LAUNCH_DMA` fires**, if and only if everything it needs is there.
+    ///
+    /// # ⊘ What does NOT latch, and why that is a refusal rather than a gap
+    ///
+    /// Only [`submit::MethodForm::Incrementing`] runs whose argument count matches their
+    /// header exactly. A `NON_INC` run writes `count` words to **one** register (last
+    /// wins), `ONE_INC` writes the first at `method` and the rest at `method + 4`, and
+    /// `IMMD_DATA` carries its datum in the header. Each is a *different* register-write
+    /// pattern, this codec models none of them, and modelling one wrongly would put a
+    /// number in an operand slot — where it is invisible until it becomes a destination
+    /// address. A launch whose operands never arrived does not fire; it stays
+    /// [`PushMethod::Opaque`]. Every real writer in reach (`NV_PUSH_nU`, UVM, and
+    /// `rm::ce_pushbuffer`) uses `SEC_OP_INC_METHOD`.
+    ///
+    /// # ⊘ And the slots are NOT cleared when a launch fires
+    ///
+    /// Because the engine does not clear them. A second `LAUNCH_DMA` with no intervening
+    /// operand run re-runs the same copy on real silicon, so it decodes to the same
+    /// `CeLaunchDma` here. Bounded by `kayfabe_fwd`'s `MAX_PUSH_TOTAL_BYTES` and
+    /// `MAX_CE_SPANS_PER_PARSE`, neither of which this changes.
+    fn decode_run(&self, state: &mut MethodState, run: &[(u32, Vec<u32>)]) -> Vec<PushMethod> {
+        run.iter()
+            .map(|(header, args)| {
+                let Some(h) = submit::method_header_decode(*header) else {
+                    return PushMethod::Opaque;
+                };
+                if h.form != submit::MethodForm::Incrementing || args.len() != h.arg_words {
+                    // ⊘ Not latched, and not decoded either — `decode_method` refuses the
+                    // same two shapes, so this is one rule stated once rather than twice.
+                    return self.decode_method(*header, args);
+                }
+                let subch = h.subchannel as usize;
+                let mut fired = None;
+                for (i, &arg) in args.iter().enumerate() {
+                    // `method + 4·i`: an incrementing header walks consecutive method
+                    // ADDRESSES, and the class headers name methods in bytes.
+                    let addr = h.method.wrapping_add(4 * (i as u32));
+                    if addr == submit::SET_OBJECT {
+                        // ★ Binding CLEARS this subchannel — see `MethodState::bind_object`.
+                        state.bind_object(subch, ClassId(arg & submit::SET_OBJECT_NVCLASS_MASK));
+                    } else if addr == submit::ce::LAUNCH_DMA {
+                        // ★ Evaluated where it arrives, not after the loop: a run may
+                        // legally carry operand writes *and* the launch, and the launch
+                        // must see the state as of its own position in the stream.
+                        fired = Ga10xPushbuffer::ce_launch(state, subch, arg);
+                    } else if let Some(slot) = Ga10xPushbuffer::ce_slot(addr) {
+                        state.latch(subch, slot, arg);
+                    }
+                }
+                // ★ The single-method facts `decode_method` already decoded keep their
+                // decode: `SET_OBJECT` is reported as well as bound, and the host-FIFO
+                // semaphore and TLB-invalidate runs are untouched by the accumulator
+                // (their method addresses are the CHANNEL class's, 0x28 and 0x5c, not the
+                // engine object's). A launch that fired outranks the `Opaque` that
+                // `decode_method` would have answered for it, and nothing else can.
+                fired.unwrap_or_else(|| self.decode_method(*header, args))
             })
             .collect()
     }

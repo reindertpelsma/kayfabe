@@ -280,6 +280,105 @@ static void emit_blob(const char *name, const NvU32 *w, unsigned n)
     printf("\n");
 }
 
+
+/*
+ * ★★★ E5 — ONE WHOLE COPY-ENGINE RUN, emitted as the words a guest writes AND as
+ * NVIDIA's own reading of them.
+ *
+ * `sub` is the subchannel, `flags` the `LAUNCH_DMA` word the caller composed out of
+ * `DRF_DEF`s, and the operands are the caller's own numbers. The `dec_*` fields are
+ * `DRF_VAL` over the driver's extents — so the Rust assertion compares our accumulator's
+ * answer against *the driver's* extraction of the same words, never against the number
+ * the harness was called with. That is what makes an operand swept past a field's end
+ * meaningful: `OFFSET_IN_UPPER_UPPER` is `16:0`, so an address of 2^49 cannot survive it,
+ * and NVIDIA's extractor says exactly what does.
+ *
+ * ⊘ `bind` selects whether the run opens with `SET_OBJECT`. A run without it is the
+ * unbound-subchannel refusal, and it has to be built by the same emitter as the bound one
+ * or the two are not comparable.
+ */
+#define CE_PART_BIND    1u
+#define CE_PART_OFFSETS 2u
+#define CE_PART_LINE    4u
+#define CE_PART_LAUNCH  8u
+#define CE_PART_ALL     (CE_PART_BIND | CE_PART_OFFSETS | CE_PART_LINE | CE_PART_LAUNCH)
+
+static void emit_ce_run_parts(const char *name, NvU32 sub, unsigned parts, NvU32 obj_class,
+                              NvU64 src, NvU64 dst, NvU32 line_len, NvU32 line_count,
+                              NvU32 flags, NvU32 dirty_upper)
+{
+    NvU32 w[32];
+    unsigned n = 0, i;
+    NvU32 in_up, in_lo, out_up, out_lo;
+
+    if (parts & CE_PART_BIND) {
+        w[n++] = hdr_inc(sub, NVC56F_SET_OBJECT, 1);
+        w[n++] = DRF_NUM(C56F, _SET_OBJECT, _NVCLASS, obj_class);
+    }
+    /*
+     * ★★★ `dirty_upper` is OR-ed in AFTER `DRF_NUM`, and it is a MEASURED correction.
+     *
+     * `DRF_NUM` masks its argument to the field, so every operand below bit 49 produced an
+     * `_UPPER` word with nothing above bit 16 set — which made `word & 0x1FFFF` and a bare
+     * `word` agree EVERYWHERE. The bite "read `OFFSET_IN_UPPER` as a full 32 bits" was
+     * MISSED BY EVERYTHING. Hardware does not zero the rest of that register for you.
+     * This is the same shape as the `FETCH`-bit gap `emit_entry_fetch` records, one class
+     * along, and it is why `dec_src`/`dec_dst` are `DRF_VAL` of the word that was actually
+     * written rather than of the number this function was called with.
+     */
+    in_up  = DRF_NUM(C7B5, _OFFSET_IN_UPPER,  _UPPER, (NvU32) (src >> 32)) | dirty_upper;
+    in_lo  = (NvU32) src;
+    out_up = DRF_NUM(C7B5, _OFFSET_OUT_UPPER, _UPPER, (NvU32) (dst >> 32)) | dirty_upper;
+    out_lo = (NvU32) dst;
+    if (parts & CE_PART_OFFSETS) {
+        w[n++] = hdr_inc(sub, NVC7B5_OFFSET_IN_UPPER, 4);
+        w[n++] = in_up;
+        w[n++] = in_lo;
+        w[n++] = out_up;
+        w[n++] = out_lo;
+    }
+    if (parts & CE_PART_LINE) {
+        w[n++] = hdr_inc(sub, NVC7B5_LINE_LENGTH_IN, 2);
+        w[n++] = DRF_NUM(C7B5, _LINE_LENGTH_IN, _VALUE, line_len);
+        w[n++] = DRF_NUM(C7B5, _LINE_COUNT, _VALUE, line_count);
+    }
+    if (parts & CE_PART_LAUNCH) {
+        w[n++] = hdr_inc(sub, NVC7B5_LAUNCH_DMA, 1);
+        w[n++] = flags;
+    }
+
+    printf("cerun %s %u", name, n);
+    for (i = 0; i < n; i++)
+        printf(" 0x%08x", (unsigned) w[i]);
+    printf("\n");
+    printf("cedec %s parts=%u class=0x%x src=0x%llx dst=0x%llx len=0x%x count=0x%x "
+           "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u\n",
+           name, parts,
+           (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, obj_class),
+           (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_IN_UPPER, _UPPER, in_up) << 32)
+                                 | (NvU64) DRF_VAL(C7B5, _OFFSET_IN_LOWER, _VALUE, in_lo)),
+           (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_OUT_UPPER, _UPPER, out_up) << 32)
+                                 | (NvU64) DRF_VAL(C7B5, _OFFSET_OUT_LOWER, _VALUE, out_lo)),
+           (unsigned) DRF_VAL(C7B5, _LINE_LENGTH_IN, _VALUE,
+                              DRF_NUM(C7B5, _LINE_LENGTH_IN, _VALUE, line_len)),
+           (unsigned) DRF_VAL(C7B5, _LINE_COUNT, _VALUE,
+                              DRF_NUM(C7B5, _LINE_COUNT, _VALUE, line_count)),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SRC_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DST_TYPE, flags));
+}
+
+/* The whole five-run shape, which is what every accepted case is. */
+static void emit_ce_run(const char *name, NvU32 sub, int bind, NvU32 obj_class,
+                        NvU64 src, NvU64 dst, NvU32 line_len, NvU32 line_count,
+                        NvU32 flags)
+{
+    emit_ce_run_parts(name, sub, bind ? CE_PART_ALL : (CE_PART_ALL & ~CE_PART_BIND),
+                      obj_class, src, dst, line_len, line_count, flags, 0);
+}
+
 int main(void)
 {
     NvU32 userd_size = 0xDEADBEEFu, userd_shift = 0xDEADBEEFu;
@@ -646,6 +745,130 @@ int main(void)
            (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, 0xFFFFFFFFu));
     printf("class AMPERE_CHANNEL_GPFIFO_A 0x%x\n", (unsigned) AMPERE_CHANNEL_GPFIFO_A);
     printf("class AMPERE_DMA_COPY_B 0x%x\n", (unsigned) AMPERE_DMA_COPY_B);
+
+
+    /* ------------------------------------------------- E5: whole copy-engine runs */
+    /*
+     * ★★★ The accumulator's acceptance. Every case below is built by ONE emitter, so a
+     * refusal and an acceptance differ by exactly the field named in the case name.
+     */
+    {
+        NvU32 base = DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _NON_PIPELINED)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _FLUSH_ENABLE, _TRUE)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, _RELEASE_ONE_WORD_SEMAPHORE)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _SRC_MEMORY_LAYOUT, _PITCH)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _DST_MEMORY_LAYOUT, _PITCH)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, _FALSE)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _SRC_TYPE, _VIRTUAL)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _DST_TYPE, _VIRTUAL);
+        unsigned i;
+        char name[64];
+
+        /* The shape a real GA106 executed at rung R17, on every subchannel the class
+         * enumerates — because the accumulator is per-subchannel and a codec that used
+         * subchannel 0 for everything would pass a one-subchannel corpus. */
+        for (i = 0; i < NVC56F_NUMBER_OF_SUBCHANNELS; i++) {
+            snprintf(name, sizeof(name), "copy_sub%u", i);
+            emit_ce_run(name, i, 1, AMPERE_DMA_COPY_B,
+                        0x00A5000011000ull, 0x00A5000022000ull, 0x1000, 1, base);
+        }
+
+        /* ★ Every address bit the 17-bit `_UPPER` field can hold, and the two past its
+         * end. A decoder with a 32-bit mask agrees with a real trace everywhere and
+         * disagrees here; a decoder with the GPFIFO entry's 8-bit mask — the nearby
+         * number a reader is most likely to reuse — disagrees from bit 40. */
+        for (i = 0; i < 20; i++) {
+            snprintf(name, sizeof(name), "copy_srcbit%u", 32 + i);
+            emit_ce_run(name, 3, 1, AMPERE_DMA_COPY_B,
+                        1ull << (32 + i), 0x2000, 0x40, 1, base);
+            snprintf(name, sizeof(name), "copy_dstbit%u", 32 + i);
+            emit_ce_run(name, 3, 1, AMPERE_DMA_COPY_B,
+                        0x2000, 1ull << (32 + i), 0x40, 1, base);
+        }
+
+        /* The operand-FORM matrix — all four corners, since `src_is_virtual` and
+         * `dst_is_virtual` feed two different decisions in `kayfabe-fwd`. */
+        emit_ce_run("copy_srcphys", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1,
+                    (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_SRC_TYPE))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _SRC_TYPE, _PHYSICAL));
+        emit_ce_run("copy_dstphys", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1,
+                    (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_DST_TYPE))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _DST_TYPE, _PHYSICAL));
+        emit_ce_run("copy_bothphys", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1,
+                    (base & ~(DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_SRC_TYPE)
+                              | DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_DST_TYPE)))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _SRC_TYPE, _PHYSICAL)
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _DST_TYPE, _PHYSICAL));
+        /* PIPELINED is as much a copy as NON_PIPELINED — the field is a scheduling hint,
+         * and a decoder that keyed on the exact value the isolate's encoder writes would
+         * refuse every copy a real driver sends. */
+        emit_ce_run("copy_pipelined", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1,
+                    (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_DATA_TRANSFER_TYPE))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _PIPELINED));
+
+        /* ⊘ The four refusals, each one field away from `copy_sub2`. */
+        emit_ce_run("refuse_transfer_none", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000,
+                    0x1000, 1,
+                    (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_DATA_TRANSFER_TYPE))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _NONE));
+        emit_ce_run("refuse_multiline", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000,
+                    0x1000, 4,
+                    (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_MULTI_LINE_ENABLE))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, _TRUE));
+        emit_ce_run("refuse_remap", 2, 1, AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1,
+                    (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_REMAP_ENABLE))
+                        | DRF_DEF(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, _TRUE));
+        /* ⊘ Bound to the CHANNEL class instead: a subchannel's method addresses mean
+         * whatever its bound object says they mean, so 0x300 there is not `LAUNCH_DMA`,
+         * and a codec that fired anyway would decode another class's method as a copy. */
+        emit_ce_run("refuse_wrong_object", 2, 1, AMPERE_CHANNEL_GPFIFO_A, 0x11000, 0x22000,
+                    0x1000, 1, base);
+        /* ⊘ …and with nothing bound at all. */
+        emit_ce_run("refuse_unbound", 2, 0, AMPERE_DMA_COPY_B, 0x11000, 0x22000,
+                    0x1000, 1, base);
+        /*
+         * ⊘⊘ THE TWO CASES A `unwrap_or_default()` SURVIVES, and they are here because it
+         * DID: bite "fill the operands with `unwrap_or_default()` instead of refusing" was
+         * MISSED BY EVERYTHING in the first sweep. Every prefix of a complete run stops
+         * before the launch, so no prefix ever asked a launch to fire without operands.
+         * These two do — a launch that is BOUND and has nothing to copy with.
+         */
+        emit_ce_run_parts("refuse_no_operands", 2, CE_PART_BIND | CE_PART_LAUNCH,
+                          AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1, base, 0);
+        emit_ce_run_parts("refuse_no_length", 2,
+                          CE_PART_BIND | CE_PART_OFFSETS | CE_PART_LAUNCH,
+                          AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1, base, 0);
+        emit_ce_run_parts("refuse_no_offsets", 2,
+                          CE_PART_BIND | CE_PART_LINE | CE_PART_LAUNCH,
+                          AMPERE_DMA_COPY_B, 0x11000, 0x22000, 0x1000, 1, base, 0);
+
+        /*
+         * ★★★ …and the accepted run whose `_UPPER` words carry EVERY bit above the
+         * field's end. `OFFSET_IN_UPPER_UPPER` is `16:0`; a decoder reading the whole word
+         * agrees with every case above and disagrees here by 2^32 × 0x7FFF.
+         */
+        for (i = 17; i < 32; i++) {
+            snprintf(name, sizeof(name), "copy_dirtyupper%u", i);
+            emit_ce_run_parts(name, 2, CE_PART_ALL, AMPERE_DMA_COPY_B,
+                              0x00A5000011000ull, 0x00A5000022000ull, 0x1000, 1, base,
+                              1u << i);
+        }
+
+        printf("launch TRANSFER_MASK 0x%08x\n",
+               (unsigned) DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_DATA_TRANSFER_TYPE));
+        printf("launch TRANSFER_NONE 0x%08x\n",
+               (unsigned) DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _NONE));
+        printf("launch MULTI_LINE_ENABLE 0x%08x\n",
+               (unsigned) DRF_DEF(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, _TRUE));
+        printf("launch REMAP_ENABLE 0x%08x\n",
+               (unsigned) DRF_DEF(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, _TRUE));
+        printf("launch SRC_PHYSICAL 0x%08x\n",
+               (unsigned) DRF_DEF(C7B5, _LAUNCH_DMA, _SRC_TYPE, _PHYSICAL));
+        printf("launch DST_PHYSICAL 0x%08x\n",
+               (unsigned) DRF_DEF(C7B5, _LAUNCH_DMA, _DST_TYPE, _PHYSICAL));
+        printf("offset_upper_mask 0x%08x\n",
+               (unsigned) DRF_VAL(C7B5, _OFFSET_IN_UPPER, _UPPER, 0xFFFFFFFFu));
+    }
 
     printf("end\n");
     return 0;
