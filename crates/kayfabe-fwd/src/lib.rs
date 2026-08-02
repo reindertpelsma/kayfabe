@@ -2090,9 +2090,16 @@ pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> Result<OsEvent
 // else is opaque and passes through (the anti-emulation boundary, trap-min #6). The
 // decode LOGIC is core; the method ENCODINGS come from `Arch::pushbuffer()`.
 //
-// Two co-equal address-table populate sources meet here (address_table.md, L3): the
-// bind-time RPC bindings (batch 1, `Gpu::sync_rpc_mappings`) and the observed CE
-// PT-writes captured below. Both land in the same per-`Vas` table.
+// Two co-equal address-table populate sources meet here (address_table.md, L3) — but
+// ⚠ NAME THEM AS THIS WIRE HAS THEM, not as the C artifact had them. This comment used
+// to say "the bind-time RPC bindings (batch 1, `Gpu::sync_rpc_mappings`)", and on a
+// GSP-client part THAT SOURCE HAS NO PRODUCER: `MAP_MEMORY_DMA`/`UNMAP_MEMORY_DMA` are
+// HAL stubs there, so `RmEvent::MapMemoryDma` is never constructed from the wire
+// (`kayfabe_rmrpc` module docs, three independent oracles; `decode_map_memory_dma` has
+// no caller outside tests). `sync_rpc_mappings` still runs — over an empty set — which
+// is why the wrong name survived: the code path is live, so it reads as a live source.
+// The two sources here are `GPU_PROMOTE_CTX` (`#93`) and the observed CE PT-writes
+// captured below. Both land in the same per-`Vas` table.
 // =================================================================================
 
 /// Upper bound on a single GPFIFO range's method bytes the parser will read. A

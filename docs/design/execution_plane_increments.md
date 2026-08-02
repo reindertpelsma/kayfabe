@@ -968,12 +968,28 @@ neither the mock fixtures (whose invented entry stores a real GPA) nor the GA10x
 - **If it does not:** it blocks immediately, because a faithful accumulator over bytes read
   from the wrong address is wrong *silently* — the worst shape.
 
-⇒ **This is a one-boot measurement, not an argument**, and it decides build order. ⊘ There is
-no circularity to fear: `mode2_address_table.md` gives the table **two co-equal populate
-sources**, and source (1) — bind-time RPC/ioctl bindings — needs no table. The ordering escapes
-cleanly: **bindings populate → VAs resolve → pushbuffers read correctly → CE writes witnessed →
-the table populates further.** E5's row already says *"populated from the guest's own
-bindings"*; that half has no dependency and can land first.
+⇒ It was settled by experiment rather than argument — two boots differing only in guest RAM,
+`[run: docs/reference/bench_evidence/c93930d_run_e5ring{1,2g}_*.log, 2026-08-02, vast 46529600]`.
+
+★★★ **CORRECTED 2026-08-02, after the owner asked why this blocks anything — IT DOES NOT, and
+the paragraph that stood here had a false premise.** It said *"source (1) — bind-time RPC/ioctl
+bindings — needs no table"*, quoting `mode2_address_table.md`, which describes the **C
+artifact's** model. **On a GSP-client part that source has no producer at all:**
+`MAP_MEMORY_DMA`/`UNMAP_MEMORY_DMA` are HAL stubs, so `RmEvent::MapMemoryDma` is never
+constructed from the wire (`kayfabe_rmrpc` module docs, three independent oracles;
+`decode_map_memory_dma` has no caller outside tests). ⚠ `Gpu::sync_rpc_mappings` still *runs* —
+over an empty set — which is exactly why the wrong name survived in two places: **a live code
+path with no live input reads as a live source.**
+
+**The two populate sources on this wire are `GPU_PROMOTE_CTX` (built, `#93`) and the observed
+CE page-table write (needed `decode_run`, now landed).** Both are done or unblocked.
+
+⇒ **So VA ≠ GPA was never a blocker, and it is not a finding either** — it is the premise the
+address table exists for (`mode2_address_table.md`: the table *is* the guest's TLB, miss =
+fault). What is real is narrower and plainer: **`read_pushbuffer` does not translate**, and that
+is ordinary work (§8.2.3). The genuinely useful part of the measurement was methodological —
+**a single 8 GiB boot reads GREEN because the untranslated address happens to be a legal GPA**,
+so only the RAM differential could see it.
 
 ### 8.2.3 ★★★ THE ANSWER (boots `e5ring1`/`e5ring2g`, rev `c93930d`) — it does NOT hold, and it is LATENT not LIVE
 
