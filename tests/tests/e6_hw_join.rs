@@ -96,24 +96,38 @@ const SENTINEL: u32 = 0x5EED_5EED;
 // The gate
 // =====================================================================================
 
+/// ⚠ The marker goes **straight to the `stderr` descriptor**, not through `eprintln!`.
+/// `libtest` captures a test thread's `print!`/`eprint!` and flushes it only when the test
+/// **fails**, so a gate line written that way is invisible on exactly the runs that need
+/// counting — `libtest_capture_swallows_thread_output`, and the reason `kvm_gate::report`
+/// is written the same way. `[measured]` 2026-08-03, suite run at rev `a1cdfdd` on the
+/// bench: `grep -c "GPU-GATE: RAN"` over a full `cargo test --workspace` was **0** while
+/// the test passed against a real GA106.
+fn gate_line(line: &str) {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
+
 fn gate(test: &str) -> Option<Arc<RmConnection>> {
     let dev = match DevDir::open(c"/dev") {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("GPU-GATE: SKIPPED {test} — /dev could not be opened ({e:?})");
+            gate_line(&format!(
+                "GPU-GATE: SKIPPED {test} — /dev could not be opened ({e:?})"
+            ));
             return None;
         }
     };
     match RmConnection::open(&dev, GPU, kayfabe_chips::pinned_host_classes()) {
         Ok(c) => {
-            eprintln!("GPU-GATE: RAN {test}");
+            gate_line(&format!("GPU-GATE: RAN {test}"));
             Some(Arc::new(c))
         }
         Err(e) => {
-            eprintln!(
+            gate_line(&format!(
                 "GPU-GATE: SKIPPED {test} — no NVIDIA RM connection on this box ({e}). \
                  This test asserts NOTHING here and nothing is substituted for it."
-            );
+            ));
             None
         }
     }
@@ -472,7 +486,9 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
          the engine ran a copy that moved nothing; `after` right and `after_last` wrong \
          means it was truncated; the semaphore not matching means it never retired."
     );
-    println!("★ E6 ACCEPTANCE: CeEvidence::copied() == true — {evidence:?}");
+    gate_line(&format!(
+        "GPU-GATE: E6 ACCEPTANCE CeEvidence::copied() == true — {evidence:?}"
+    ));
 }
 
 /// One guest ring, scripted, bound and submitted through the L1 shell — the whole of
