@@ -6272,3 +6272,145 @@ parked edge (§4), so the two are consistent — but the grouping predicate is n
 a fact established in `apply` rather than one it checks itself. Left as is deliberately:
 narrowing `dups()` to resolved edges only would change what §12.38's DEFER-for-observation
 deferral means for `project`, which is a core-semantics change and not this round's.
+
+---
+
+### 12.47 ★★★ R1 WAS BROKEN ON THE ONE PATH THE SUITE COULD NOT SEE — the isolate SPAWN ran under rank 0, and only a real GPU could say so
+
+**Found by a live boot, and by nothing else.** `KAYFABE_ISOLATES=real` on an archive built
+with `host-isolates`, RTX 3060 / GA106, host driver 580.159.04 open, vast **46529600**,
+2026-08-03 — QEMU **aborted** on the guest's first register write that reached a
+`GSP_RM_ALLOC`. Evidence on disk: `docs/reference/bench_evidence/f0b7efa_run_basereal_qemu.log`.
+
+```text
+thread '<unnamed>' panicked at crates/kayfabe-util/src/lockwitness.rs:125:
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): spawning a sandboxed child
+process while holding rank(s) [0] …
+  19: kayfabe_shim_regs_write   20: nvkvm_trap_write
+```
+
+⊘ **It is PRE-EXISTING.** The archive was rebuilt at the base revision `f0b7efa` with the
+same feature and booted: identical panic. ⊘ **When it broke is [unmeasured]** — E0/E0b/E1's
+live real-isolate results (revs `853a311`, `5c1f501`) do not reproduce, and no bisection was
+run, so no claim is made about which commit did it.
+
+#### 1. The defect, in one sentence
+
+`Spine::apply` is a **spine op** — §2's lock table puts it under the device WRITE lock —
+and E0b (`execution_plane_increments.md` §3.6) made it *the one site that materializes an
+isolate*. Materializing one is `clone` into six namespaces, `execveat` of a sealed memfd, a
+blocking hello handshake and, on the real plane, a chain of host RM ioctls. R1 admits no
+exception for that, and §3.3 already said so.
+
+★ Note the *shape* of the failure, because it is §12.9's twin: the first symptom was **an
+abort inside an `extern "C"` frame**, not a test. A panic that crosses the QEMU shim's
+`extern "C"` boundary is non-unwinding, so the diagnostic is a `SIGABRT` with a backtrace
+and the hypervisor is simply gone.
+
+#### 2. ★★★ Why the suite was blind, which is the more important half
+
+The assert that fired is real, correct, and old: `kayfabe_linux_raw::ChildSpec::spawn`
+calls `assert_lock_free` + `assert_leaf_free` at the syscall itself, exactly as §12.8
+prescribes. **It is reachable only on the host plane.** The whole suite runs on
+`MockIsolateFactory`, whose `spawn` blocks on nothing and asserts nothing, so on every path
+CI can execute the violation was invisible — 1975 green tests over a live R1 breach.
+
+That is the same organ §12.16's gap G3b closed on the **death** side: `IsolateBox::drop`
+asserts lock-freedom precisely because a real isolate's teardown is `waitpid` + namespace
+unwind and no call site names the drop. G3b closed death and left **birth** open.
+
+⇒ **`IsolateBox::new` now asserts too.** It is the only way an isolate enters core state,
+whichever plane made it, so the rule is one mechanism rather than three implementations
+that can drift — and the entire mock-driven suite becomes a live guard for it. ⊘ The assert
+is one frame later than the spawn; nothing can acquire a lock in between, so it is exact.
+
+★★ **The general lesson, and it generalises past this bug:** an invariant asserted only in
+the production adapter is an invariant the test suite does not hold. Where the mock and the
+real implementation differ in *whether they can violate a rule*, the assert belongs at the
+seam they share.
+
+#### 3. The fix — the shape is the repo's, not a new one
+
+DESCRIBE/decide (rank 0) → SPAWN (no locks) → INSTALL + RE-VALIDATE (rank 0, R5). The same
+two-step as `Spine::take_pending_cancels` (§7.1's latch-and-discharge), as
+`SharedDevice::reap_retired` (§12.16 G3b), and as `open_questions_for_the_owner.md`'s
+DESCRIBE → PLAN/APPLY → DRAIN.
+
+| phase | lock | what |
+|---|---|---|
+| decide | rank 0 | `Spine::defer_isolate` latches `Spine::pending_spawns` (promptness) **and** `Proc::pending_isolates` (durability). It spawns nothing. All three former spawn sites go through it |
+| drain | **none** | `SharedDevice::apply` takes the latch inside the guard it already holds and materializes after the guard drops — beside the cancels, for the identical reason |
+| install | rank 0 | `Spine::install_isolate` re-validates and returns the sandbox as **surplus** if it must not be installed |
+
+`IsolateFactory::spawn` takes `&self` so the factory is reachable with zero locks held. ⊘ A
+`&mut` door would have to be guarded, and guarding it *across* the spawn is R1's violation
+wearing a lock the ranked witness cannot even see (`kayfabe_util::leafwitness` exists
+because of exactly that blind spot). A "take the factory out and put it back" scheme was
+rejected for the same reason §4.2 rejects hand-rolled synchronization: it is a mutex built
+out of a lock and a condvar.
+
+★ The **public constructor signature did not change** — `Gpu::new`/`Gpu::realize` still take
+`Box<dyn IsolateFactory>`. The caller still hands ownership over; the `Arc` is behind the
+seam, where the sharing requirement actually lives.
+
+#### 4. R5, and the two shapes it has to tell apart (§12.9 again)
+
+Everything between the decision and the install is lock-free, so the world moves:
+
+| shape | what happened | disposition |
+|---|---|---|
+| **divergent** | the proc left the live set (retired, vacated, reaped) | `Proc::wants_isolate` is false ⇒ surplus. MISS = FAULT; never retried |
+| **converging** | a sibling materialized the same `(proc, gpu)` first | the marker is already cleared ⇒ surplus. ⊘ The loser is **not refused** — it re-plans against the winner's isolate |
+
+The surplus is **returned, not dropped**, because dropping it under the write lock is the
+G3b violation exactly. `IsolateBox`'s own `Drop` assert says so if a caller forgets.
+
+⊘ **The cost of the converging case is one extra sandbox spawned and immediately reaped**,
+at most once per `(Proc, GpuId)` per race. That is deliberately preferred to gating the
+second thread: §12.9's own conclusion is that the loser releases its duplicate, and a gate
+here would be the hand-rolled mutex §3 just rejected.
+
+#### 5. The gap is a NAMED state, and it DEFERS
+
+Between the write guard dropping and the install landing, a proc is **routable and holds no
+isolate**. That is legal, and the one thing it must not be reported as is
+`FwdFault::NoTarget`, whose documented meaning is *"an internal inconsistency"*. So:
+`FwdFault::IsolatePending`, resolved by `SharedDevice::verb_op` — the thread materializes
+the pair itself, lock-free, and re-enters the plan with full R5 re-validation, bounded on
+the same `MAX_COMMIT_RETRIES` counter as the converging-commit retry. Refusing instead would
+turn a legal concurrent state into a guest-visible fault, which §12.9 names as the *worse*
+bug.
+
+★★ **SIX doors needed the discrimination, not two.** `kayfabe_fwd::missing_isolate` is the
+`never_serves` lesson repeated with a bigger number: five of the six are PLAN-phase
+(`plan_publish`, `plan_doorbell`, `parse_pushbuffer`'s route, `plan_control`, `plan_ce`) and
+refuse *before* a checkout is ever attempted. With only the two checkout doors converted,
+`r1_spawn_outside_lock.rs::a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds`
+failed with `NoTarget { proc: ProcId(1) }` — `plan_doorbell` had already refused. **The
+other four were found by that test and by nothing else.** ⊘ The COMMIT-phase target check
+(`commit_control`) is deliberately left alone: there the isolate was present when the plan
+was made, so its absence is divergent staleness (`Stale::Target`) and re-materializing it
+would be finishing what a vanished world started.
+
+#### 6. Tests
+
+`tests/tests/r1_spawn_outside_lock.rs`, 11 tests.
+
+| test | what it pins |
+|---|---|
+| `materializing_an_isolate_under_a_ranked_lock_panics_naming_r1` | the **mechanism**: `IsolateBox::new` fires, on the mock plane, naming R1 |
+| `materializing_an_isolate_with_no_lock_held_is_fine` | ⊘ the control — an assert that always fires is a brick, not a guard |
+| `a_spine_apply_decides_an_isolate_and_spawns_nothing` | the exact path the boot died on: the locked half reaches the factory **zero** times (asserted against a *second object's* witness, not only the device's counter) |
+| `the_composed_single_threaded_apply_materializes_before_it_returns` | `Gpu::apply`'s observable behaviour is unchanged |
+| `the_sharded_shell_materializes_after_its_guard_drops` | and so is `SharedDevice`'s |
+| `an_isolate_spawned_for_a_proc_that_retired_in_the_gap_is_refused` | R5 divergent |
+| `only_one_of_two_racing_materializations_installs` | R5 converging — two spawns, one install, one surplus |
+| `deciding_twice_for_one_pair_materializes_once` | the decision is idempotent; nothing re-spawns |
+| `a_deferred_isolate_is_isolate_pending_and_an_unasked_for_one_is_no_target` | the three-way split: pending / never-asked-for / retired |
+| `a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds` | `verb_op` DEFERS rather than surfacing — and it is what found the other four doors |
+| `two_threads_racing_one_deferral_spawn_twice_and_install_once` | two real threads; `SpawnGate::arrivals == 2` proves the race is **live**, the census proves one install |
+
+⊘ **What none of these can settle.** Every isolate here is a `MockIsolate`; nothing forks,
+so "the spawn really was expensive" is not measured and cannot be by this file. What is
+measured is *where in the lock discipline it happens*, which is the whole defect. The live
+boot is the acceptance (`only_live_boots_are_proof`).

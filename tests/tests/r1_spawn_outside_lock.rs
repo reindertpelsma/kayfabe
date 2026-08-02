@@ -128,7 +128,9 @@ fn materializing_an_isolate_under_a_ranked_lock_panics_naming_r1() {
 
 /// ⊘ **The control, and it is not ceremony.** An assert that fires unconditionally is not
 /// a guard, it is a brick: the test above would pass just as well against
-/// `assert!(false)`. This one is what makes the pair a measurement.
+/// `assert!(false)`. The discriminating arm is
+/// `r1_spawn_outside_lock.rs::materializing_an_isolate_with_no_lock_held_is_fine` — this
+/// one — and it is what turns the pair from an assertion into a check.
 #[test]
 fn materializing_an_isolate_with_no_lock_held_is_fine() {
     let (factory, _rec) = MockIsolateFactory::new();
@@ -441,12 +443,15 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
 }
 
 /// ★★★ **Two threads racing the same deferral, on the shell.** Both find
-/// `IsolatePending`, both spawn — proven by the factory's own witness, so the race is
-/// MEASURED and not merely arranged — and exactly one install lands. Both verbs succeed.
+/// `IsolatePending`, both spawn, and exactly one install lands. Both verbs succeed.
 ///
-/// The gate is what makes it deterministic: the first spawn of the contested id parks
-/// until a second arrives, so neither thread can install before both have spawned. Without
-/// it the test would pass by simply never racing.
+/// ★ **That both really spawned is asserted, not hoped for**: `SpawnGate::arrivals` is the
+/// factory's own count, read at the end of
+/// `r1_spawn_outside_lock.rs::two_threads_racing_one_deferral_spawn_twice_and_install_once`.
+/// The gate is also what makes the race deterministic — the first spawn of the contested id
+/// parks until a second arrives, so neither thread can install before both have spawned.
+/// Without it this test would pass by simply never racing, which is the shape a
+/// concurrency test fails in silently.
 #[test]
 fn two_threads_racing_one_deferral_spawn_twice_and_install_once() {
     let _wd = watchdog(
