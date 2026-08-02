@@ -883,9 +883,10 @@ the compute path) while a CE write is undecodable. Three options, with the cost 
 1. **Give `PushbufferAbi` a run-aware entry point** — e.g. a provided
    `decode_run(&self, &[(u32, Vec<u32>)]) -> Vec<PushMethod>` defaulting to a `decode_method`
    map. Additive, no mock breakage, and the GA10x impl accumulates `SET_OBJECT` →
-   `OFFSET_*` → `LINE_*` → `LAUNCH_DMA` into one `CeLaunchDma`. **Cost:** the accumulator is
+   `OFFSET_*` → `LINE_*` → `LAUNCH_DMA` into one `CeLaunchDma`. ~~**Cost:** the accumulator is
    *state across methods*, so a run split across two GPFIFO ranges needs a decision about
-   what a partial run means (the C's answer, and the safe one, is that it means nothing).
+   what a partial run means (the C's answer, and the safe one, is that it means nothing).~~
+   ★ **CHOSEN, and this stated cost is STRUCK — see §8.2.1.**
 2. **Move the accumulation into `kayfabe-fwd`'s `apply_pushbuffer`** and keep the arch seam
    per-method, with the arch supplying only "which method address is this". **Cost:** the
    accumulation logic becomes core and therefore arch-shaped, which is what the Axis-B split
@@ -895,6 +896,80 @@ the compute path) while a CE write is undecodable. Three options, with the cost 
 
 ⊘ Nothing here guesses between them. Option 1 is the shape this document's author would
 pick; it is not what E4 shipped, and E4 did not widen its own scope to decide it.
+
+### 8.2.1 ★★★ OWNER RULING 2026-08-02 — option 1, and "stateless" was never a requirement
+
+> *"stateless isn't a requirement, it should be following the protocol, so if the protocol
+> holds a state to emulate an action, so may you do, even if later you replay the thing on
+> real hardware after translation whilst before you had to keep it yourself because you
+> genuinely didn't know if this one needs emulation (privileged op of kernel)."*
+
+**Option 1 is chosen.** Two things follow, and the second is the load-bearing one.
+
+**1. The statelessness of `decode_method` was an ARTIFACT, not a principle.** Nobody decided
+it; it is how the trait happened to get written, and §8.2 then reasoned *from* it as though it
+were a constraint. **The protocol is stateful:** the engine holds method state across runs, a
+copy is assembled into it, and `LAUNCH_DMA` fires what has accumulated. Mirroring that is
+*following* the protocol. A seam that cannot hold state cannot express what the hardware does.
+
+**2. ★★★ The accumulator is the CLASSIFICATION BUFFER, and that is WHY the state must be
+held.** At the moment the methods arrive we do not yet know the op's **disposition** — whether
+it is one we must **emulate** (a privileged kernel operation: the page-table write) or one we
+**translate and replay for real** on the host GPU. That is unanswerable until the op is
+*complete*. So the state is kept not as an optimisation but because **the question "does this
+need emulating?" has no answer until all of it has arrived.**
+
+★ This is already latent in the port, which is evidence the shape is right: `kayfabe-fwd`
+carries `plain_copy` / `src_is_virtual` / `dst_is_virtual` / `ChannelOrigin::User`, and the
+note at `lib.rs:2128` records that a page-table write is *"virtual-destination and would pass
+any purely address-based test"*. The classifier exists **and already needs the whole op**.
+
+#### ⊘ The stated cost above is STRUCK, and replaced by a different one
+
+*"A run split across two GPFIFO ranges needs a decision about what a partial run means — the
+C's answer, and the safe one, is that it means nothing."* **Hardware does not do that.** Engine
+method state persists across GPFIFO entries; a partial run is not meaningless, it is
+**incomplete state awaiting more methods**. The C's answer was a workaround, not the protocol,
+and repeating it would have made us diverge from the thing we are emulating in order to avoid a
+cost that is not real. ⇒ Option 1 is **cheaper** than its own write-up claimed.
+
+**The real cost, which replaces it:** state a guest drives is state a guest can abuse. Bound the
+accumulator the way the hardware bounds it — **finite, per-channel, and reset exactly where the
+engine resets**. Unbounded accumulation over a hostile ring is the failure mode to design
+against; "partial runs" never were.
+
+⊘ **This ruling does NOT bear on the VA/GPA defect** (`mock_fidelity_audit.md`, finding A):
+that a GPFIFO entry names a GPU *virtual* address is **upstream** of statefulness. Bytes must be
+fetched from the right address before there is anything to accumulate, and a faithful
+accumulator over bytes read from the wrong place is wrong **silently**. See §8.2.2.
+
+### 8.2.2 ⚠ THE ORDERING QUESTION §8.2.1 DOES NOT ANSWER — is VA == GPA at this wall?
+
+`read_pushbuffer` fetches the method bytes with `guest_read(vmm, r.gpa, &mut buf)`, where
+`r.gpa` came from a GPFIFO entry that holds a **GPU virtual address**
+(`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996,1006`, field `NVC56F_GP_ENTRY0_GET 31:2` /
+`_GET_HI 7:0` at `clc56f.h:270,272`). That the field is virtual is `[inferred]` from those
+citations and nothing else.
+
+Whether the mismatch is currently *live* or merely *latent* is a separate and open question:
+**does the guest's pushbuffer VA equal its GPA at the `RmInitAdapter` wall?** No run has been
+performed either way — this is `[unmeasured]`, and it is why step 1 below exists.
+
+Early in boot, before much is bound, it may hold **by accident** — which is precisely why
+neither the mock fixtures (whose invented entry stores a real GPA) nor the GA10x fixtures
+(which place method bytes *at* the address the entry names) could ever have caught it.
+
+- **If it holds:** `decode_run` can be built and trusted now; the VA→GPA resolution is a
+  correctness debt that detonates later, once real bindings exist.
+- **If it does not:** it blocks immediately, because a faithful accumulator over bytes read
+  from the wrong address is wrong *silently* — the worst shape.
+
+⇒ **This is a one-boot measurement, not an argument**, and it decides build order. ⊘ There is
+no circularity to fear: `mode2_address_table.md` gives the table **two co-equal populate
+sources**, and source (1) — bind-time RPC/ioctl bindings — needs no table. The ordering escapes
+cleanly: **bindings populate → VAs resolve → pushbuffers read correctly → CE writes witnessed →
+the table populates further.** E5's row already says *"populated from the guest's own
+bindings"*; that half has no dependency and can land first.
 
 ### 8.3 The instrument: `tests/oracle/pushbuffer_abi_oracle.c`
 
