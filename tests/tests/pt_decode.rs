@@ -294,7 +294,7 @@ fn the_level_table_is_the_regimes_and_entry_counts_are_not_derived_from_a_page_s
 fn a_leaf_page_filled_before_any_pde_points_at_it_still_decodes_when_the_link_arrives() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -397,7 +397,7 @@ fn a_leaf_page_filled_before_any_pde_points_at_it_still_decodes_when_the_link_ar
 fn the_whole_fb_alias_leaf_is_resolved_by_the_walker_with_its_real_size_and_address() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -530,7 +530,7 @@ fn the_alias_leaf_is_dropped_by_policy_at_the_binding_site_and_a_smaller_leaf_is
 fn a_page_outside_the_aperture_faults_loudly_and_a_page_of_zeros_inside_it_does_not() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -592,7 +592,7 @@ fn a_page_outside_the_aperture_faults_loudly_and_a_page_of_zeros_inside_it_does_
 fn a_descent_straddling_the_aperture_keeps_the_readable_branch_and_reports_the_other() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -664,7 +664,7 @@ fn a_descent_straddling_the_aperture_keeps_the_readable_branch_and_reports_the_o
 fn a_page_rewritten_between_two_decodes_repoints_the_binding_rather_than_restating_it() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -842,7 +842,7 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
 fn a_leaf_whose_size_the_regime_does_not_enumerate_is_a_loud_fault() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -890,7 +890,7 @@ fn a_leaf_whose_size_the_regime_does_not_enumerate_is_a_loud_fault() {
 fn the_child_level_is_the_formats_answer_and_is_not_always_one_deeper() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1038,7 +1038,7 @@ fn a_format_whose_child_level_never_descends_is_stopped_by_the_depth_bound() {
         }
     }
 
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1081,7 +1081,7 @@ fn a_format_whose_child_level_never_descends_is_stopped_by_the_depth_bound() {
 fn a_page_directory_that_points_at_itself_runs_out_of_levels_and_says_so() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1119,7 +1119,7 @@ fn a_page_directory_that_points_at_itself_runs_out_of_levels_and_says_so() {
 fn a_descent_that_outruns_its_budget_refuses_rather_than_returning_what_it_got() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1164,7 +1164,7 @@ fn a_descent_that_outruns_its_budget_refuses_rather_than_returning_what_it_got()
 fn a_transport_failure_is_reported_as_ours_and_not_as_a_page_the_guest_got_wrong() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1278,7 +1278,7 @@ fn pass_fixture_two_vases() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder
 fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut gpu, mut factory, rec) = pass_fixture();
+    let (mut gpu, factory, rec) = pass_fixture();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1420,7 +1420,7 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
 fn a_vas_that_disappeared_during_the_lock_free_phase_is_skipped_and_not_re_homed() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut gpu, mut factory, rec) = pass_fixture_two_vases();
+    let (mut gpu, factory, rec) = pass_fixture_two_vases();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1505,7 +1505,7 @@ fn planning_consumes_the_dirty_set_so_a_second_pass_has_nothing_to_do() {
 fn the_production_source_is_a_connection_and_not_a_cache() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut factory, rec) = aperture_worker();
+    let (factory, rec) = aperture_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1584,7 +1584,7 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
     for mode in [LockMode::Degenerate, LockMode::Sharded] {
         let arch = MockArch::new();
         let fmt = arch.mmu();
-        let (gpu, mut factory, rec) = pass_fixture();
+        let (gpu, factory, rec) = pass_fixture();
         let mut iso = factory.spawn(IsolateId::new(1, GPU));
         let mut worker = iso.checkout().expect("fresh pool");
         let vas = fresh_host_vas(&mut worker);
@@ -1673,7 +1673,7 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
 fn the_page_table_metadata_bound_is_reported_when_it_is_reached() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut gpu, mut factory, rec) = pass_fixture();
+    let (mut gpu, factory, rec) = pass_fixture();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);

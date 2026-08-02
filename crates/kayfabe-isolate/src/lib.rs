@@ -2340,8 +2340,35 @@ pub struct IsolateBox(Box<dyn Isolate>);
 
 impl IsolateBox {
     /// Take ownership of a freshly spawned isolate.
+    ///
+    /// ★★★ **And this is the door R1 is asserted at on the BIRTH side** — the exact
+    /// counterpart of this type's `Drop`, added because the drop half was only ever
+    /// half the rule. A real isolate's birth is `clone` into six namespaces,
+    /// `execveat` of a sealed memfd and a blocking hello handshake; under
+    /// `KAYFABE_ISOLATES=real` it then runs real `NV01_ROOT_CLIENT`/`NV01_DEVICE_0`
+    /// ioctls. That is a blocking call in exactly the sense R1 forbids under a lock,
+    /// and `kayfabe_linux_raw::ChildSpec::spawn` already asserts it — **for the host
+    /// plane only**. The whole suite runs on mocks, so the rule had no mechanism on
+    /// the path the suite exercises, and a regression could only ever be found by a
+    /// live boot. (It was: `f0b7efa_run_basereal_qemu.log`.)
+    ///
+    /// Asserting *here* rather than inside each `IsolateFactory` implementation is
+    /// what makes it one mechanism instead of three that can drift: this constructor
+    /// is the only way an isolate enters core state, whichever plane made it, and
+    /// nothing can acquire a lock between the factory's return and this call.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1) or any adapter leaf lock.
     #[must_use]
     pub fn new(isolate: Box<dyn Isolate>) -> Self {
+        kayfabe_util::lockwitness::assert_lock_free(
+            "materializing an isolate (sandbox spawn: clone into namespaces + execveat + \
+             hello handshake)",
+        );
+        kayfabe_util::leafwitness::assert_leaf_free(
+            "materializing an isolate (sandbox spawn: clone into namespaces + execveat + \
+             hello handshake)",
+        );
         IsolateBox(isolate)
     }
 }
@@ -2385,7 +2412,20 @@ impl Drop for IsolateBox {
 /// Spawns isolates. The composition root holds one; per-`(Proc, GpuId)` isolates are
 /// created through it so the core never knows *how* a sandbox is made.
 ///
-/// `Send + Sync`: owned by the shared `Gpu` (crate docs, #17); spawning takes `&mut`.
+/// `Send + Sync`: owned by the shared `Gpu` (crate docs, #17).
+///
+/// ★★★ **`spawn` takes `&self`, and that is a concurrency requirement rather than a
+/// style choice.** R1 forbids a blocking call under any lock, and a spawn is the most
+/// blocking thing this port does — so the spawn must happen with **zero** locks held,
+/// which means the factory has to be reachable *without* the device lock that owns the
+/// core. A `&mut` door would have to be guarded by something, and guarding it with a
+/// lock held across the spawn is R1's violation wearing a different lock (and one the
+/// ranked witness cannot even see, `kayfabe_util::leafwitness`). `Spine` therefore holds
+/// the factory behind an `Arc` and the L1 shell keeps its own clone.
+///
+/// The only state an implementation wanted `&mut` for was its birth witness, which is
+/// microsecond bookkeeping and takes its own lock **around the push only** — never
+/// across the spawn.
 pub trait IsolateFactory: Send + Sync {
     /// Spawn (or lazily reserve) the isolate for session `id` — one sandboxed host
     /// worker **per guest process per target GPU** (`multi_gpu_and_mig.md` item 3: a
@@ -2398,7 +2438,7 @@ pub trait IsolateFactory: Send + Sync {
     /// built for another" a representable state — and the handles the sandbox then
     /// minted would be stamped with the wrong namespace, which is precisely the fact
     /// [`Worker::execute`]'s gate reads. One argument, no disagreement possible.
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate>;
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate>;
 }
 
 /// ★★★ An [`IsolateFactory`] that spawns **nothing** — the isolate plane's
@@ -2436,7 +2476,12 @@ pub struct StillbornIsolates {
     /// Every id this factory was asked for, in order — the same witness
     /// `MockIsolateFactory::spawned` and `HostIsolateFactory::spawned` publish, so a test
     /// can assert the isolate-per-`(Proc, GpuId)` property against any of the three.
-    pub spawned: Vec<IsolateId>,
+    ///
+    /// ⊘ Behind a `Mutex` because [`IsolateFactory::spawn`] takes `&self` (see the trait
+    /// docs). The lock is taken **around the push and nothing else** — never across a
+    /// spawn — so it is the microsecond bookkeeping R1 permits, not a lock held over a
+    /// blocking call. Read it with [`StillbornIsolates::spawned`].
+    spawned: std::sync::Mutex<Vec<IsolateId>>,
 }
 
 impl StillbornIsolates {
@@ -2449,8 +2494,17 @@ impl StillbornIsolates {
     pub fn new(why: &'static str) -> StillbornIsolates {
         StillbornIsolates {
             why,
-            spawned: Vec::new(),
+            spawned: std::sync::Mutex::new(Vec::new()),
         }
+    }
+
+    /// Every id this factory was asked for, in order (the birth witness).
+    ///
+    /// # Panics
+    /// If the witness mutex was poisoned by a panic inside a `spawn`.
+    #[must_use]
+    pub fn spawned(&self) -> Vec<IsolateId> {
+        self.spawned.lock().expect("the spawn witness").clone()
     }
 
     /// Why every isolate from this factory refuses — the sentence a composition root
@@ -2462,8 +2516,8 @@ impl StillbornIsolates {
 }
 
 impl IsolateFactory for StillbornIsolates {
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
-        self.spawned.push(id);
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate> {
+        self.spawned.lock().expect("the spawn witness").push(id);
         Box::new(StillbornIsolate { id, why: self.why })
     }
 }

@@ -937,7 +937,7 @@ fn pass_fixture() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder) {
 fn the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut gpu, mut factory, rec) = pass_fixture();
+    let (mut gpu, factory, rec) = pass_fixture();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -1043,7 +1043,7 @@ fn the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred() {
 fn the_pass_refuses_a_shadow_whose_root_is_not_the_address_spaces() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let (mut gpu, mut factory, rec) = pass_fixture();
+    let (mut gpu, factory, rec) = pass_fixture();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);

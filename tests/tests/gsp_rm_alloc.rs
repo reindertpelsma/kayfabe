@@ -730,7 +730,7 @@ fn the_shipped_arch_refuses_every_data_plane_seam() {
 /// **answers** nothing — a mock would answer.
 #[test]
 fn the_shipped_isolate_factory_can_never_issue_a_verb() {
-    let mut f = StillbornIsolates::new("test");
+    let f = StillbornIsolates::new("test");
     let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
     assert_eq!(iso.pool_size(), 0);
     assert_eq!(iso.idle_workers(), 0);
@@ -742,7 +742,7 @@ fn the_shipped_isolate_factory_can_never_issue_a_verb() {
         "retired at birth: the refusal is permanent"
     );
     assert_eq!(
-        f.spawned.len(),
+        f.spawned().len(),
         1,
         "the witness records the id it was asked for"
     );

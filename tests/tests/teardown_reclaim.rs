@@ -356,7 +356,7 @@ fn g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced() {
 #[test]
 #[should_panic(expected = "R1 no-blocking-under-lock violation")]
 fn g3b_dropping_an_isolate_under_a_lock_panics_naming_r1() {
-    let (mut factory, _rec) = MockIsolateFactory::new();
+    let (factory, _rec) = MockIsolateFactory::new();
     let iso = IsolateBox::new(factory.spawn(IsolateId::new(1, GPU)));
     kayfabe_util::lockwitness::note_acquired(0); // the device lock, as the reap held it
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(iso)));
@@ -367,7 +367,7 @@ fn g3b_dropping_an_isolate_under_a_lock_panics_naming_r1() {
 /// The success polarity: with zero ranked locks held, the same drop is silent.
 #[test]
 fn g3b_dropping_an_isolate_with_no_lock_held_is_fine() {
-    let (mut factory, _rec) = MockIsolateFactory::new();
+    let (factory, _rec) = MockIsolateFactory::new();
     assert_eq!(kayfabe_rt::lock::held_depth(), 0);
     drop(IsolateBox::new(factory.spawn(IsolateId::new(1, GPU))));
 }
@@ -585,7 +585,7 @@ fn g3_the_reap_defers_a_proc_whose_isolate_is_not_quiesced() {
 /// that never quiesces, a proc that never reaps, an arena that never recycles.
 #[test]
 fn g3_in_flight_is_asked_for_not_derived_from_idle_workers() {
-    let (mut factory, _rec) = MockIsolateFactory::with_pool_size(2);
+    let (factory, _rec) = MockIsolateFactory::with_pool_size(2);
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     assert!(iso.is_quiesced(), "a fresh pool is quiesced");
 
@@ -763,7 +763,7 @@ fn g4_a_cancelled_verb_surfaces_cancelled_not_an_rm_failure() {
 /// non-empty — a failing teardown, which is exactly the case the vocabulary is for.
 #[test]
 fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
-    let (mut factory, rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut w = iso.checkout().expect("fresh pool");
 
@@ -824,7 +824,7 @@ fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
 /// to the caller instead of `let _ =`-ing it.
 #[test]
 fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
-    let (mut factory, rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut w = iso.checkout().expect("fresh pool");
 

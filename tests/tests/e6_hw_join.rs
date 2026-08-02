@@ -155,7 +155,7 @@ struct InProcessIsolate {
 }
 
 impl IsolateFactory for InProcessIsolates {
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate> {
         let backend = HostRmBackend::new(
             id,
             Arc::clone(&self.conn),

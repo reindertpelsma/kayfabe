@@ -99,7 +99,7 @@ impl RingWorkingSet for EverythingPublished {
 
 #[test]
 fn a_real_isolate_serves_a_verb_chain_through_the_port() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut isolate = f.spawn(iso(1));
     assert!(
         !isolate.is_retired(),
@@ -142,7 +142,7 @@ fn a_real_isolate_serves_a_verb_chain_through_the_port() {
 
 #[test]
 fn every_verb_shape_survives_the_round_trip() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut isolate = f.spawn(iso(2));
     let mut w = isolate.checkout().expect("worker");
 
@@ -197,7 +197,7 @@ fn every_verb_shape_survives_the_round_trip() {
 /// **presented** — not as a transport failure.
 #[test]
 fn an_unknown_handle_is_a_bad_handle_and_not_a_wedge() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut isolate = f.spawn(iso(3));
     let mut w = isolate.checkout().expect("worker");
     let bogus = HostHandle::new(iso(3), 0xDEAD_BEEF);
@@ -221,7 +221,7 @@ fn an_unknown_handle_is_a_bad_handle_and_not_a_wedge() {
 /// Nothing downstream would fault. The gate is the only thing that refuses it.
 #[test]
 fn two_real_isolates_mint_colliding_values_and_the_gate_is_what_refuses_them() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut a = f.spawn(iso(10));
     let mut b = f.spawn(iso(11));
     let mut wa = a.checkout().expect("worker a");
@@ -296,8 +296,8 @@ fn parallelism_comes_from_isolates_and_a_parked_client_does_not_stall_its_peers(
     // one factory would park BOTH isolates and the peer would have nothing to prove — the
     // first version of this test did exactly that and hung, which is the honest way to
     // discover that a fixture knob is per-process.
-    let mut parking = factory(ParkVerb::Sysmem);
-    let mut plain = factory(ParkVerb::Nothing);
+    let parking = factory(ParkVerb::Sysmem);
+    let plain = factory(ParkVerb::Nothing);
     let mut a = parking.spawn(iso(20));
     let mut b = plain.spawn(iso(21));
 
@@ -389,12 +389,12 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
     // The first version of this test asserted unconditionally and flaked 1 run in 3 — with
     // the code correct.
     const ATTEMPTS: usize = 12;
-    let mut plain = factory(ParkVerb::Nothing);
+    let plain = factory(ParkVerb::Nothing);
     let mut peer = plain.spawn(iso(31));
     let mut wp = peer.checkout().expect("peer worker");
 
     for _attempt in 0..ATTEMPTS {
-        let mut parking = factory(ParkVerb::Sysmem);
+        let parking = factory(ParkVerb::Sysmem);
         let mut a = parking.spawn(iso(30));
 
         let w0 = a.checkout().expect("worker 0");
@@ -498,7 +498,7 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
 /// first"*. Not an error, and — critically — it must not land on the next operation.
 #[test]
 fn a_cancel_for_a_finished_transaction_is_dropped() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut isolate = f.spawn(iso(40));
 
     let mut w = isolate.checkout().expect("worker");
@@ -539,7 +539,7 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
 /// without a reply**, and the verb it was waiting for is still parked in the child.
 #[test]
 fn abandon_releases_a_wedged_requester_with_wedged() {
-    let mut f = factory(ParkVerb::Sysmem);
+    let f = factory(ParkVerb::Sysmem);
     let mut a = f.spawn(iso(50));
 
     let w = a.checkout().expect("worker");
@@ -602,7 +602,7 @@ fn abandon_releases_a_wedged_requester_with_wedged() {
 /// A retired isolate refuses **new** checkouts — backpressure, not failure.
 #[test]
 fn a_retired_isolate_refuses_new_checkouts() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut isolate = f.spawn(iso(60));
     let w = isolate.checkout().expect("worker");
     isolate.retire();
@@ -626,7 +626,7 @@ fn a_retired_isolate_refuses_new_checkouts() {
 /// checked-out worker, `request_cancel(ProcExit)`"*.
 #[test]
 fn retiring_a_proc_cancels_every_checked_out_worker() {
-    let mut f = factory(ParkVerb::Sysmem);
+    let f = factory(ParkVerb::Sysmem);
     let mut a = f.spawn(iso(70));
 
     let mut parked = Vec::new();
@@ -677,7 +677,7 @@ fn retiring_a_proc_cancels_every_checked_out_worker() {
 /// leave no zombie and no orphaned child.
 #[test]
 fn dropping_an_isolate_mid_verb_does_not_hang() {
-    let mut f = factory(ParkVerb::Sysmem);
+    let f = factory(ParkVerb::Sysmem);
     let mut isolate = f.spawn(iso(80));
     // Put a verb in flight that will NEVER come back, then drop everything. §7.0: the
     // process boundary is the collector, and it must not need the verb's cooperation.
@@ -716,7 +716,7 @@ fn the_isolate_binary_refuses_to_run_standalone() {
 /// backend, so the assert is not a property of the mock.
 #[test]
 fn a_verb_under_a_ranked_lock_panics_naming_r1() {
-    let mut f = factory(ParkVerb::Nothing);
+    let f = factory(ParkVerb::Nothing);
     let mut isolate = f.spawn(iso(90));
     let mut w = isolate.checkout().expect("worker");
     kayfabe_util::lockwitness::note_acquired(1);
@@ -751,7 +751,7 @@ fn a_verb_under_a_ranked_lock_panics_naming_r1() {
 #[test]
 fn the_isolate_child_is_born_in_its_own_namespaces() {
     kayfabe_linux_raw::require_user_namespace!("the_isolate_child_is_born_in_its_own_namespaces");
-    let mut f = HostIsolateFactory::new(RmMode::Loopback);
+    let f = HostIsolateFactory::new(RmMode::Loopback);
     let isolate = f.spawn_host(iso(55));
     assert!(
         !isolate.is_retired(),
@@ -817,7 +817,7 @@ fn an_environment_variable_can_no_longer_redirect_the_isolate() {
 
     if std::env::var_os(INNER).is_some() {
         // ── the inner run: KAYFABE_ISOLATE_BIN names the decoy, and this still works ──
-        let mut f = factory(ParkVerb::Nothing);
+        let f = factory(ParkVerb::Nothing);
         let mut isolate = f.spawn(iso(77));
         assert!(
             !isolate.is_retired(),

@@ -456,7 +456,7 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
 /// which is the only way an absence stays visible.
 #[test]
 fn the_ce_pt_write_source_can_witness_only_a_root_page_today() {
-    let (mut gpu, mut vmm, mut fb_factory, fb_rec, pid, cid) = fixture();
+    let (mut gpu, mut vmm, fb_factory, fb_rec, pid, cid) = fixture();
     let mut iso = fb_factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("a fresh pool");
     let arch = MockArch::new();
@@ -505,7 +505,7 @@ fn the_ce_pt_write_source_can_witness_only_a_root_page_today() {
 /// The three are different planes and they must not report as each other.
 #[test]
 fn a_va_that_was_never_bound_faults_at_every_place_the_law_is_enforced() {
-    let (mut gpu, mut vmm, mut fb_factory, fb_rec, pid, cid) = fixture();
+    let (mut gpu, mut vmm, fb_factory, fb_rec, pid, cid) = fixture();
     let mut iso = fb_factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("a fresh pool");
 
@@ -673,7 +673,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
 /// hand the address plane a page the guest never wrote.
 #[test]
 fn an_unresolvable_ce_destination_is_forwarded_and_can_never_be_guessed_into_a_capture() {
-    let (mut gpu, mut vmm, mut fb_factory, fb_rec, pid, cid) = fixture();
+    let (mut gpu, mut vmm, fb_factory, fb_rec, pid, cid) = fixture();
     let mut iso = fb_factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("a fresh pool");
     promote_ctx_buffer(&mut gpu);

@@ -168,7 +168,7 @@ fn hold(rec: &SharedRecorder, pid: ProcId, worker: u32, verb: VerbKind) -> Arc<V
 #[test]
 #[should_panic(expected = "R1 no-blocking-under-lock violation")]
 fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
-    let (mut factory, _rec) = MockIsolateFactory::new();
+    let (factory, _rec) = MockIsolateFactory::new();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let proc_lock = RankedMutex::new(LockRank::Proc, ());
@@ -187,7 +187,7 @@ fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
 #[test]
 fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
     let _wd = watchdog("r1_legal_path", Duration::from_secs(30));
-    let (mut factory, rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     assert_eq!(kayfabe_rt::lock::held_depth(), 0, "no guard is alive here");
@@ -908,7 +908,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
 fn single_in_flight_per_worker_is_structural() {
     let _wd = watchdog("single_in_flight_per_worker", Duration::from_secs(30));
     const POOL: usize = 3;
-    let (mut factory, _rec) = MockIsolateFactory::with_pool_size(POOL);
+    let (factory, _rec) = MockIsolateFactory::with_pool_size(POOL);
     let mut iso = factory.spawn(IsolateId::new(7, GPU));
     assert_eq!(iso.pool_size(), POOL);
     assert_eq!(iso.idle_workers(), POOL);

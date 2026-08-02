@@ -483,7 +483,7 @@ fn image_after(
 fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issued_whole() {
     let base = 0x2_0000_0000u64;
     let src_base = 0x9_0000_0000u64;
-    let (mut factory, rec) = lone_worker();
+    let (factory, rec) = lone_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);
@@ -595,7 +595,7 @@ fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issue
 fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
     let base = 0x2_0000_0000u64;
     let src_base = 0x9_0000_0000u64;
-    let (mut factory, rec) = lone_worker();
+    let (factory, rec) = lone_worker();
     let mut iso = factory.spawn(IsolateId::new(1, GPU));
     let mut worker = iso.checkout().expect("fresh pool");
     let vas = fresh_host_vas(&mut worker);

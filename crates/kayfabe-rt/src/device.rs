@@ -60,11 +60,11 @@
 //! splits the verb out from under these locks per R1.
 
 use std::collections::BTreeMap;
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
-use kayfabe_core::gpu::{Gpu, GpuError, Proc, ProcSet, Spine};
+use kayfabe_core::gpu::{Gpu, GpuError, PendingSpawn, PendingSpawns, Proc, ProcSet, Spine};
 use kayfabe_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind};
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ChanId, ProcId};
@@ -72,7 +72,10 @@ use kayfabe_fwd::{
     ControlRoute, DoorbellOutcome, EngineObjectForwarded, FwdFault, Orphans, Planned, Published,
     Refusal,
 };
-use kayfabe_isolate::{HostHandle, RmError, VerbPlan, VerbReply, Worker, WorkerId};
+use kayfabe_isolate::{
+    HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError, VerbPlan, VerbReply, Worker,
+    WorkerId,
+};
 use kayfabe_mmu::Binding;
 use kayfabe_util::Instant;
 
@@ -265,6 +268,17 @@ pub struct SharedDevice {
     mode: LockMode,
     state: RankedRwLock<DeviceState>,
     pool: PoolGate,
+    /// ★★★ **The isolate factory, reachable with NO lock held** (R1, `l1_concurrency.md`
+    /// §3.3) — a clone of the `Arc` the wrapped `Gpu` was realized with, so there is one
+    /// factory and this is a second handle on it, never a second factory.
+    ///
+    /// It is a field rather than a read through [`SharedDevice::state`] for a reason the
+    /// alternative makes obvious: the spawn must run with every guard dropped, so reaching
+    /// the factory *through* the device lock would mean acquiring rank 0 purely to learn
+    /// how to do something that must not be done under rank 0 — one extra acquisition on
+    /// a path `rt_shell::spine_ops_acquire_no_proc_lock_via_get_mut` counts, in service of
+    /// nothing.
+    spawner: Arc<dyn IsolateFactory>,
 }
 
 /// ★ **Pool-saturation counters for ONE GPU target** (`l1_concurrency.md` §7.2, §12.29).
@@ -452,9 +466,13 @@ impl SharedDevice {
             system,
             procs,
         } = gpu;
+        // ★ Taken BEFORE the spine goes behind the lock — afterwards, reaching it would
+        // cost a rank-0 acquisition (see [`SharedDevice::spawner`]).
+        let spawner = spine.isolate_factory();
         SharedDevice {
             mode,
             pool: PoolGate::default(),
+            spawner,
             state: RankedRwLock::new(
                 LockRank::Device,
                 DeviceState {
@@ -522,22 +540,95 @@ impl SharedDevice {
     /// latches a break signal for every verb it still has in flight. The latches are
     /// fired **after the guard drops**: firing one is a syscall, and R1 admits no
     /// exception for it.
+    /// ★★★ **And it MATERIALIZES the isolates the event decided on** (R1's spawn
+    /// deferral, `l1_concurrency.md` §3.3; `kayfabe_core::gpu::Spine::defer_isolate`).
+    ///
+    /// Exactly the same two-step, for exactly the same reason, as the cancels above:
+    /// deciding a `(Proc, GpuId)` needs an isolate is pure bookkeeping and belongs under
+    /// the write lock; *spawning* one is `clone` into six namespaces + `execveat` +
+    /// a blocking handshake (+ real host RM ioctls under `KAYFABE_ISOLATES=real`), and R1
+    /// admits no exception for it. Doing it in place aborted QEMU on the guest's first
+    /// register write that reached a `GSP_RM_ALLOC` —
+    /// `docs/reference/bench_evidence/f0b7efa_run_basereal_qemu.log`.
     pub fn apply(&self, ev: RmEvent) -> Result<(), GpuError> {
         // ★ The latches are TAKEN inside the guard this op already holds, never in a
         // second critical section. Taking a fresh write lock to ask "is anything
         // latched?" would add a rank-0 acquisition to the hottest spine path — caught by
         // `rt_shell::spine_ops_acquire_no_proc_lock_via_get_mut`, which counts them.
-        let (out, cancels) = {
+        let (out, cancels, spawns) = {
             let mut g = self.state.write();
             let st = &mut *g;
             let out = st
                 .spine
                 .apply(st.system.get_mut(), &mut ExclusiveProcs(&mut st.procs), ev);
-            (out, st.spine.take_pending_cancels())
+            (
+                out,
+                st.spine.take_pending_cancels(),
+                st.spine.take_pending_spawns(),
+            )
         };
         // Guards dropped (R1): firing one is a syscall.
         cancels.discharge_all();
+        // Guards dropped (R1): spawning a sandbox is many syscalls.
+        self.materialize(spawns);
         out
+    }
+
+    /// ★★★ **The DRAIN half of R1's spawn deferral: spawn lock-free, then re-acquire and
+    /// RE-VALIDATE (R5).**
+    ///
+    /// Idempotent and safe to run from any thread — which it must be, because it is not
+    /// only the accepting thread that runs it. A second vCPU thread can route to a proc in
+    /// the window between the write guard dropping here and the install landing; it gets
+    /// [`FwdFault::IsolatePending`] and materializes the same pair itself
+    /// ([`SharedDevice::verb_op`]). Both spawn; exactly one installs; the loser's sandbox
+    /// is surplus and is dropped with no lock held. That is §12.9's compare-and-swap
+    /// verbatim, and it is deliberately preferred to gating the second thread: a gate
+    /// would be a hand-rolled mutex over a blocking call (§4.2 forbids both halves), and
+    /// §12.9's own conclusion is that the loser releases its duplicate rather than being
+    /// refused.
+    ///
+    /// ⊘ The cost of losing is one extra sandbox spawned and immediately reaped. It is
+    /// paid at most once per `(Proc, GpuId)` per race, and it is a **named** cost, not a
+    /// leak: the surplus is an `IsolateBox`, so if it were ever dropped under a lock the
+    /// assert would say so.
+    fn materialize(&self, spawns: PendingSpawns) {
+        for PendingSpawn { proc, gpu } in spawns {
+            self.materialize_one(proc, gpu);
+        }
+    }
+
+    /// One `(proc, gpu)`: spawn with zero locks held, then install under the write lock
+    /// with full R5 re-validation. See [`SharedDevice::materialize`].
+    fn materialize_one(&self, pid: ProcId, gpu: GpuId) {
+        // ---- SPAWN: no lock held. `IsolateBox::new` asserts exactly that. ----
+        let iso = IsolateBox::new(self.spawner.spawn(IsolateId::new(pid.0, gpu)));
+        // ---- INSTALL: rank 0, and the core decides whether it may (R5). ----
+        //
+        // A spine op, so both lock modes take the write guard and reach the proc through
+        // `get_mut` — installing touches the spine's own census, so there is no sharded
+        // shape here to degenerate from.
+        let surplus = {
+            let mut g = self.state.write();
+            let DeviceState {
+                spine,
+                system,
+                procs,
+            } = &mut *g;
+            let p = if pid == Gpu::SYSTEM_PROC {
+                Some(system.get_mut())
+            } else {
+                procs.get_mut(&pid).map(RankedMutex::get_mut)
+            };
+            match p {
+                // Divergent staleness: the proc left the live set in the gap. Nothing to
+                // install it into, and nothing to retry — MISS = FAULT.
+                None => Some(iso),
+                Some(p) => spine.install_isolate(p, gpu, iso).err(),
+            }
+        };
+        // Guard dropped (R1): an isolate's `Drop` is `waitpid` + namespace teardown.
+        drop(surplus);
     }
 
     /// Compose+post one completion batch for `gpu` if its drain gate is open
@@ -1099,6 +1190,15 @@ impl SharedDevice {
     ///   [`MAX_COMMIT_RETRIES`]: each retry sees a *more* materialized world, so one
     ///   pass normally suffices; exhausting the bound surfaces the fault rather than
     ///   looping, because an unbounded retry is just a spin with extra steps.
+    /// - ★★★ **Isolate pending** — R1's spawn deferral. `stage` refused with
+    ///   [`FwdFault::IsolatePending`]: this `(proc, gpu)`'s sandbox was decided under a
+    ///   write lock elsewhere and has not been installed yet. The thread materializes it
+    ///   **itself** ([`SharedDevice::materialize_one`], lock-free) and re-enters from the
+    ///   top with full R5 re-validation. DEFER, not FAULT — refusing here would turn a
+    ///   legal concurrent state into a guest-visible fault, which is §12.9's "worse bug"
+    ///   exactly. Bounded by [`MAX_COMMIT_RETRIES`] on the same counter, and the bound is
+    ///   provably generous: after one materialization the pair is installed or the proc
+    ///   is gone, and both are terminal.
     fn verb_op<P, T>(
         &self,
         stage: impl Fn() -> Result<Staged<P>, FwdFault>,
@@ -1109,7 +1209,16 @@ impl SharedDevice {
             // Sampled BEFORE any lock is taken, so a return landing in the gap
             // cannot be missed (see `PoolGate`).
             let seen = self.pool.sample();
-            let mut staged = stage()?;
+            let mut staged = match stage() {
+                Ok(s) => s,
+                // ★★★ R1's spawn deferral, RESOLVED rather than surfaced (see the docs).
+                Err(FwdFault::IsolatePending { proc, gpu }) if retries < MAX_COMMIT_RETRIES => {
+                    retries += 1;
+                    self.materialize_one(proc, gpu);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
             let Some(verbs) = staged.verbs else {
                 // No host work at all (an idempotent replay): commit straight
                 // through — the pool is never touched, so no worker to return.

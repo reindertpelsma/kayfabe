@@ -866,7 +866,14 @@ pub struct HostIsolateFactory {
     /// Every id this factory was asked for, in order — the isolate-per-`(Proc, GpuId)`
     /// witness, matching `MockIsolateFactory::spawned` so a test can assert the same
     /// property against either.
-    pub spawned: Vec<IsolateId>,
+    ///
+    /// ⊘ Behind a `Mutex` because [`IsolateFactory::spawn`] takes `&self` (R1: a spawn
+    /// runs with zero locks held, so the factory must be reachable without the device
+    /// lock). ★ The lock is taken **around the push and released before `build_isolate`**
+    /// — holding it across the spawn would be the very inversion the `&self` signature
+    /// exists to prevent, and `kayfabe_util::leafwitness` is blind to it. Read it with
+    /// [`HostIsolateFactory::spawned`].
+    spawned: std::sync::Mutex<Vec<IsolateId>>,
 }
 
 impl HostIsolateFactory {
@@ -878,8 +885,17 @@ impl HostIsolateFactory {
             pool: DEFAULT_POOL_WORKERS,
             rm,
             park: crate::loopback::ParkVerb::Nothing,
-            spawned: Vec::new(),
+            spawned: std::sync::Mutex::new(Vec::new()),
         }
+    }
+
+    /// Every id this factory was asked for, in order (the birth witness).
+    ///
+    /// # Panics
+    /// If the witness mutex was poisoned by a panic inside a `spawn`.
+    #[must_use]
+    pub fn spawned(&self) -> Vec<IsolateId> {
+        self.spawned.lock().expect("the spawn witness").clone()
     }
 
     /// ★ Make one verb park **forever** in the child (loopback only).
@@ -931,8 +947,8 @@ impl HostIsolateFactory {
     /// its namespaces. Without this the only assertions available about
     /// [`ChildSpec::in_new_namespaces`] would be against a `/bin/sh` fixture, and removing
     /// that one line from `build_isolate` would turn nothing red.
-    pub fn spawn_host(&mut self, id: IsolateId) -> HostIsolate {
-        self.spawned.push(id);
+    pub fn spawn_host(&self, id: IsolateId) -> HostIsolate {
+        self.spawned.lock().expect("the spawn witness").push(id);
         let built = self
             .image
             .clone()
@@ -1050,7 +1066,7 @@ fn build_isolate(
 }
 
 impl IsolateFactory for HostIsolateFactory {
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate> {
         Box::new(self.spawn_host(id))
     }
 }
@@ -1127,12 +1143,12 @@ mod tests {
     /// removes.
     #[test]
     fn an_unusable_image_yields_a_retired_isolate_that_names_why() {
-        let mut f = HostIsolateFactory {
+        let f = HostIsolateFactory {
             image: Err("no image in this build".to_owned()),
             pool: 4,
             rm: RmMode::Loopback,
             park: crate::loopback::ParkVerb::Nothing,
-            spawned: Vec::new(),
+            spawned: std::sync::Mutex::new(Vec::new()),
         };
         assert_eq!(f.embedded(), Err("no image in this build".to_owned()));
         let id = IsolateId::new(1, GpuId(0));
@@ -1142,7 +1158,7 @@ mod tests {
         assert!(iso.checkout().is_none());
         assert_eq!(iso.in_flight(), 0);
         assert!(iso.is_quiesced(), "and it is safe to reap immediately");
-        assert_eq!(f.spawned, vec![id]);
+        assert_eq!(f.spawned(), vec![id]);
     }
 
     /// The stillborn isolate carries the reason, on the concrete type that has it.
@@ -1178,7 +1194,7 @@ mod tests {
         const FAILED_WHY: &str = "spawning the embedded isolate: EPERM (clone)";
 
         let mut failed = HostIsolate::stillborn(IsolateId::new(2, GpuId(0)), 4, FAILED_WHY.into());
-        let mut sf = StillbornIsolates::new(NO_PLANE_WHY);
+        let sf = StillbornIsolates::new(NO_PLANE_WHY);
         let mut planeless = sf.spawn(IsolateId::new(3, GpuId(0)));
 
         // ---- gap 7, reproduced: every PRE-E1 observable agrees -----------------------
@@ -1221,7 +1237,7 @@ mod tests {
     /// runner with no GPU.
     #[test]
     fn a_live_isolate_reports_no_refusal_even_after_retire() {
-        let mut f = HostIsolateFactory::new(RmMode::Loopback);
+        let f = HostIsolateFactory::new(RmMode::Loopback);
         let mut iso = f.spawn_host(IsolateId::new(9, GpuId(0)));
         assert_eq!(
             iso.spawn_error(),

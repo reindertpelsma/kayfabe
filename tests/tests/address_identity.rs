@@ -322,7 +322,7 @@ fn a_backend_that_ignores_the_placement_request_is_refused_and_unwound() {
 /// before or after it.
 #[test]
 fn the_worker_itself_refuses_a_drifted_placement() {
-    let (mut factory, rec) = MockIsolateFactory::new();
+    let (factory, rec) = MockIsolateFactory::new();
     let mut iso = factory.spawn(kayfabe_isolate::IsolateId::new(7, GPU));
     let mut w = iso.checkout().expect("fresh pool");
 

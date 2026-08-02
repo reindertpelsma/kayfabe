@@ -1121,7 +1121,7 @@ fn the_stillborn_factory_retires_every_isolate_at_birth() {
     use kayfabe_arch::ids::GpuId;
     use kayfabe_isolate::IsolateId;
 
-    let mut f = isolate_factory(IsolatePlane::Stillborn).expect("the default plane builds");
+    let f = isolate_factory(IsolatePlane::Stillborn).expect("the default plane builds");
     let id = IsolateId::new(7, GpuId(0));
     let mut iso = f.spawn(id);
     assert_eq!(iso.id(), id);

@@ -204,6 +204,27 @@ pub enum FwdFault {
         /// The target GPU whose isolate refuses.
         gpu: GpuId,
     },
+    /// ★★★ **The `(proc, gpu)` isolate is DECIDED and not yet MATERIALIZED** — R1's spawn
+    /// deferral (`l1_concurrency.md` §3.3; `kayfabe_core::gpu::Spine::defer_isolate`).
+    ///
+    /// Spawning a sandbox is a blocking call, so the spine may only *decide* one under the
+    /// device write lock and the shell must spawn it with every guard dropped. Between
+    /// those two moments the proc is routable and holds no isolate — a **legal** state,
+    /// and the one thing it must not be reported as is [`FwdFault::NoTarget`], whose whole
+    /// meaning is *"an internal inconsistency"*.
+    ///
+    /// ⊘ **Converging staleness, in §12.9's sense — DEFER, not FAULT.** The correct
+    /// response is to materialize the pending isolate (lock-free) and re-plan from the
+    /// top, which `kayfabe_rt::SharedDevice::verb_op` does; nothing has failed and the
+    /// guest must never see it. A caller that cannot re-run surfaces it as the fault it is
+    /// for that site — the same per-site categorisation [`checkout`]'s docs make for
+    /// `PoolSaturated`. ⊘ Distinct from [`FwdFault::IsolateRetired`], which is permanent.
+    IsolatePending {
+        /// The proc whose isolate is on its way.
+        proc: ProcId,
+        /// The target GPU it is being materialized for.
+        gpu: GpuId,
+    },
     /// ★★★ **E6 — the channel's declared VAS has no HOST address space**, so there is
     /// nowhere to point a copy engine.
     ///
@@ -671,10 +692,10 @@ pub fn checkout(proc: &mut Proc, gpu: GpuId) -> Result<Option<Worker>, FwdFault>
         return Err(FwdFault::RetiredProc(proc.id));
     }
     let pid = proc.id;
-    let iso = proc
-        .isolates
-        .get_mut(&gpu)
-        .ok_or(FwdFault::NoTarget { proc: pid, gpu })?;
+    // ★★★ R1's deferral: "no isolate" now has TWO meanings and only one of them is an
+    // inconsistency. See [`FwdFault::IsolatePending`] and [`missing_isolate`].
+    let absent = missing_isolate(proc, gpu);
+    let iso = proc.isolates.get_mut(&gpu).ok_or(absent)?;
     match iso.checkout() {
         Some(w) => Ok(Some(w)),
         None if never_serves(&**iso) => Err(FwdFault::IsolateRetired { proc: pid, gpu }),
@@ -700,6 +721,34 @@ fn never_serves(iso: &dyn kayfabe_isolate::Isolate) -> bool {
     iso.is_retired() || iso.pool_size() == 0
 }
 
+/// ★★★ **Which absence is this?** — the R1-deferral counterpart of [`never_serves`], and
+/// it lives in one function for the identical reason, one order of magnitude louder:
+/// [`never_serves`] had **two** doors to keep in step, this has **six**. Five of them are
+/// PLAN-phase (`plan_publish`, `plan_doorbell`, `parse_pushbuffer`'s route, `plan_control`,
+/// `plan_ce`) and refuse *before* the checkout is ever reached, so fixing the checkout
+/// alone is a change that passes every unit test and still refuses a legal state on the
+/// path L1 actually takes.
+///
+/// ⊘ **That is not hypothetical, it is what happened here**: with only the two checkout
+/// doors converted, `a_verb_that_lands_in_the_gap_…` failed with
+/// `NoTarget { proc: ProcId(1) }` — `plan_doorbell` had already refused. The tests are the
+/// only reason the other four were found.
+///
+/// - `Proc::wants_isolate` ⇒ [`FwdFault::IsolatePending`] — decided, spawning, DEFER.
+/// - otherwise ⇒ [`FwdFault::NoTarget`] — nothing ever asked for one, FAULT.
+///
+/// ⊘ **Deliberately NOT applied at the COMMIT-phase target check** (`commit_control`):
+/// there the isolate was present when the plan was made, so its absence is divergent
+/// staleness (`Stale::Target`) and re-materializing it would be finishing what a vanished
+/// world started.
+fn missing_isolate(proc: &Proc, gpu: GpuId) -> FwdFault {
+    if proc.wants_isolate(gpu) {
+        FwdFault::IsolatePending { proc: proc.id, gpu }
+    } else {
+        FwdFault::NoTarget { proc: proc.id, gpu }
+    }
+}
+
 /// ★★ [`checkout`] **plus T0's opportunistic drain** (`l1_os_shell.md` §7.6 T0, gap G2)
 /// — the form every L1 verb-issuing site uses.
 ///
@@ -718,7 +767,9 @@ fn never_serves(iso: &dyn kayfabe_isolate::Isolate) -> bool {
 ///
 /// # Errors
 /// - [`FwdFault::RetiredProc`] — the proc is retired.
-/// - [`FwdFault::NoTarget`] — no isolate for this `(proc, gpu)`.
+/// - [`FwdFault::NoTarget`] — no isolate for this `(proc, gpu)`, and none was asked for.
+/// - [`FwdFault::IsolatePending`] — one was asked for and is still being spawned (R1).
+/// - [`FwdFault::IsolateRetired`] — the isolate is present and can never serve a verb.
 pub fn checkout_and_drain(
     proc: &mut Proc,
     gpu: GpuId,
@@ -727,7 +778,10 @@ pub fn checkout_and_drain(
         return Err(FwdFault::RetiredProc(proc.id));
     }
     if !proc.isolates.contains_key(&gpu) {
-        return Err(FwdFault::NoTarget { proc: proc.id, gpu });
+        // ★★★ R1's deferral — the SAME discrimination [`checkout`] makes, and it has to be
+        // made here too because **this** is the door L1 goes through. See
+        // [`missing_isolate`].
+        return Err(missing_isolate(proc, gpu));
     }
     let pid = proc.id;
     let (worker, orphans) = proc.checkout_with_pending_release(gpu);
@@ -961,8 +1015,13 @@ pub fn plan_publish(
     // The arena and the isolate must both exist BEFORE any host verb runs: a target
     // miss is an internal inconsistency, and finding it after the allocs would mean
     // allocating host state for a target we then refuse.
-    if !proc.arenas.contains_key(&gpu) || !proc.isolates.contains_key(&gpu) {
+    if !proc.arenas.contains_key(&gpu) {
         return Err(FwdFault::NoTarget { proc: pid, gpu });
+    }
+    // ★★★ R1's spawn deferral: a missing isolate has two meanings and only one of them is
+    // an inconsistency (see [`missing_isolate`]).
+    if !proc.isolates.contains_key(&gpu) {
+        return Err(missing_isolate(proc, gpu));
     }
     // ★★★ #102 — refuse an already-bound VA HERE, before a single host verb exists.
     //
@@ -1501,11 +1560,9 @@ pub fn plan_doorbell(
         vchid: route.vchid,
     })?;
     let cgpu = chan.gpu;
+    // ★★★ R1's spawn deferral — see [`missing_isolate`].
     if !proc.isolates.contains_key(&cgpu) {
-        return Err(FwdFault::NoTarget {
-            proc: pid,
-            gpu: cgpu,
-        });
+        return Err(missing_isolate(proc, cgpu));
     }
 
     // ---- The channel's own `Vas`, resolved BEFORE any host op. A declared PDB whose
@@ -1905,11 +1962,9 @@ pub fn plan_engine_object(
         vchid: route.vchid,
     })?;
     let cgpu = chan.gpu;
+    // ★★★ R1's spawn deferral — see [`missing_isolate`].
     if !proc.isolates.contains_key(&cgpu) {
-        return Err(FwdFault::NoTarget {
-            proc: pid,
-            gpu: cgpu,
-        });
+        return Err(missing_isolate(proc, cgpu));
     }
     let channel = chan.host_channel.zip(chan.host_token);
     // A replay is only representable once the channel materialized (the idempotency
@@ -2137,11 +2192,9 @@ pub fn plan_control(
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(pid));
     }
+    // ★★★ R1's spawn deferral — see [`missing_isolate`].
     if !proc.isolates.contains_key(&target_gpu) {
-        return Err(FwdFault::NoTarget {
-            proc: pid,
-            gpu: target_gpu,
-        });
+        return Err(missing_isolate(proc, target_gpu));
     }
     Ok(Planned {
         plan: ControlPlan {
@@ -3203,11 +3256,9 @@ pub fn plan_ce(proc: &Proc, cid: ChanId, spans: &[CeSpan]) -> Result<Planned<CeP
             verbs: None,
         });
     }
+    // ★★★ R1's spawn deferral — see [`missing_isolate`].
     if !proc.isolates.contains_key(&cgpu) {
-        return Err(FwdFault::NoTarget {
-            proc: pid,
-            gpu: cgpu,
-        });
+        return Err(missing_isolate(proc, cgpu));
     }
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc

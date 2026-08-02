@@ -43,6 +43,7 @@ impl Faulted for FwdFault {
             FwdFault::NoVas(_) => FaultTag("FwdFault::NoVas"),
             FwdFault::UnknownChannel { .. } => FaultTag("FwdFault::UnknownChannel"),
             FwdFault::IsolateRetired { .. } => FaultTag("FwdFault::IsolateRetired"),
+            FwdFault::IsolatePending { .. } => FaultTag("FwdFault::IsolatePending"),
             FwdFault::NoHostVas { .. } => FaultTag("FwdFault::NoHostVas"),
             FwdFault::CeTooFragmented { .. } => FaultTag("FwdFault::CeTooFragmented"),
             FwdFault::UnknownPdb { .. } => FaultTag("FwdFault::UnknownPdb"),

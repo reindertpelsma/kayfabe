@@ -97,7 +97,7 @@ fn rm_escapes() -> Vec<(&'static str, u8, usize)> {
 
 /// Spawn a real isolate. `Loopback` because this file is about the crossing, not the driver.
 fn isolate(id: IsolateId) -> HostIsolate {
-    let mut factory = HostIsolateFactory::new(RmMode::Loopback).with_park(ParkVerb::Nothing);
+    let factory = HostIsolateFactory::new(RmMode::Loopback).with_park(ParkVerb::Nothing);
     let iso = factory.spawn_host(id);
     assert!(
         iso.spawn_error().is_none(),

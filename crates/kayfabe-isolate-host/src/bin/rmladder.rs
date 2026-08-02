@@ -89,10 +89,9 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     // worker doing ALL the work, sequentially. If (a) and (b) both match this, then no
     // amount of parallelism buys throughput and the bottleneck is device-global — which is
     // a completely different finding from "the pool does not help".
-    let mut base_f =
-        kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
-            .with_pool_size(1);
-    let mut base = kayfabe_isolate::IsolateFactory::spawn(&mut base_f, id(899));
+    let base_f = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+        .with_pool_size(1);
+    let mut base = kayfabe_isolate::IsolateFactory::spawn(&base_f, id(899));
     if base.is_retired() {
         println!("FAIL  R12 baseline         = it did not start");
         return false;
@@ -104,9 +103,9 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     let (_, t_base) = measure(vec![w], threads * verbs);
 
     // (a) ONE isolate, `threads` workers — one RM client.
-    let mut f = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+    let f = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
         .with_pool_size(threads);
-    let mut one = kayfabe_isolate::IsolateFactory::spawn(&mut f, id(900));
+    let mut one = kayfabe_isolate::IsolateFactory::spawn(&f, id(900));
     if one.is_retired() {
         println!("FAIL  R12 one-isolate      = it did not start");
         return false;
@@ -119,10 +118,10 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     let (same_client, t_same) = measure(ws, verbs);
 
     // (b) `threads` isolates, one worker each — `threads` RM clients.
-    let mut g = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+    let g = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
         .with_pool_size(1);
     let mut many: Vec<_> = (0..threads)
-        .map(|i| kayfabe_isolate::IsolateFactory::spawn(&mut g, id(910 + i as u32)))
+        .map(|i| kayfabe_isolate::IsolateFactory::spawn(&g, id(910 + i as u32)))
         .collect();
     if many.iter().any(|i| i.is_retired()) {
         println!("FAIL  R12 many-isolates    = one did not start");
@@ -1267,9 +1266,9 @@ fn main() -> std::process::ExitCode {
     // because a silent skip is worse than a red run.
     {
         {
-            let mut factory =
+            let factory =
                 kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real);
-            let mut isolate = kayfabe_isolate::IsolateFactory::spawn(&mut factory, id);
+            let mut isolate = kayfabe_isolate::IsolateFactory::spawn(&factory, id);
             if isolate.is_retired() {
                 println!(
                     "FAIL  R10 isolate         = it did not start (its own RM bring-up failed)"

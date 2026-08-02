@@ -14,6 +14,7 @@
 //! `multiproc()` gate and no arming window (lesson L9).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use kayfabe_arch::Arch;
 use kayfabe_arch::fault::ErrorNotifier;
@@ -326,6 +327,62 @@ pub struct PollState {
     pub last_token: Option<u64>,
 }
 
+/// ★★★ One **deferred isolate materialization**: which proc, which target
+/// (`l1_concurrency.md` §3.3 R1).
+///
+/// The whole payload is a pair of ids and deliberately not a reference or a handle:
+/// R5's own rule is *"IDs, never held references"*, because everything this names may be
+/// gone by the time the spawn comes back and the install has to be able to say so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PendingSpawn {
+    /// The proc whose isolate is to be materialized.
+    pub proc: ProcId,
+    /// The target GPU it is to be materialized for (MG-5: one isolate per pair).
+    pub gpu: GpuId,
+}
+
+/// A batch of [`PendingSpawn`]s, latched under a lock and discharged without one.
+///
+/// `#[must_use]` for exactly the reason `Cancels` is: the whole point of returning the
+/// work instead of doing it is that the caller runs it somewhere the invariant permits,
+/// and a batch dropped at the call site is that discipline silently not happening. ⊘ It
+/// is *not* an obligation whose loss corrupts state — see [`Spine::pending_spawns`] — but
+/// a caller that means to drop it should have to say so.
+#[must_use = "a latched spawn must be discharged with no lock held (R1), not dropped"]
+#[derive(Debug, Default)]
+pub struct PendingSpawns(Vec<PendingSpawn>);
+
+impl PendingSpawns {
+    /// Nothing to spawn.
+    pub fn new() -> PendingSpawns {
+        PendingSpawns::default()
+    }
+
+    /// True when there is no deferred spawn in this batch.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// How many deferred spawns this batch carries.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn push(&mut self, proc: ProcId, gpu: GpuId) {
+        self.0.push(PendingSpawn { proc, gpu });
+    }
+}
+
+impl IntoIterator for PendingSpawns {
+    type Item = PendingSpawn;
+    type IntoIter = std::vec::IntoIter<PendingSpawn>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// The per-process container — the unit of ownership for all four planes.
 ///
 /// Also the unit of **parallelism** (concurrency contract, crate docs): the
@@ -394,6 +451,22 @@ pub struct Proc {
     /// one under a lock is loud** (`l1_concurrency.md` §12.16, gap G3b): a real
     /// isolate's `Drop` is a blocking teardown, and reaping a `Proc` is what runs it.
     pub isolates: BTreeMap<GpuId, IsolateBox>,
+    /// ★★★ **Targets this proc needs an isolate for and does not yet have one for** —
+    /// the durable half of the R1 spawn deferral (`l1_concurrency.md` §3.3).
+    ///
+    /// Set by [`Spine::defer_isolate`] under the device write lock, cleared by
+    /// [`Spine::install_isolate`] when the spawn lands, or by [`Proc::vacate`] when the
+    /// proc stops existing. It is what makes the gap between *decided* and *materialized*
+    /// a **nameable** state rather than an anonymous absence: `kayfabe_fwd::checkout`
+    /// answers [`kayfabe_fwd::FwdFault::NoTarget`] ("an internal inconsistency") when
+    /// there is no isolate and none was ever asked for, and
+    /// `kayfabe_fwd::FwdFault::IsolatePending` when one is on its way. The second is
+    /// converging staleness in §12.9's sense — a *legal* concurrent state that resolves
+    /// by materializing and re-planning, never a guest-visible fault.
+    ///
+    /// ⊘ Private: the only writers are the two spine ops above, and a plane that could be
+    /// set from outside them would be a second place that decides an isolate is wanted.
+    pending_isolates: BTreeSet<GpuId>,
     /// ★ MG-5: this proc's per-**target** private GPA arenas (disjoint by
     /// construction, per GPU). Recycled per target at the reap quiesce point (#80).
     pub arenas: BTreeMap<GpuId, GpaArena>,
@@ -456,6 +529,7 @@ impl Proc {
             completion: CompletionQueue::new(),
             fences: FenceArms::new(),
             isolates: BTreeMap::new(),
+            pending_isolates: BTreeSet::new(),
             arenas: BTreeMap::new(),
             targets: BTreeSet::new(),
             poll: PollState::default(),
@@ -637,6 +711,12 @@ impl Proc {
     /// latched break signal per verb this proc still has in flight.
     pub fn vacate(&mut self) -> Cancels {
         self.retired = true;
+        // ★ R1's spawn deferral: a proc that has left the live set wants no isolate. The
+        // marker is dropped here so the state says so, rather than relying on every reader
+        // to remember to check `retired` first — [`Proc::wants_isolate`] checks anyway,
+        // because a race can still hand `install_isolate` a sandbox spawned a moment
+        // before this ran, and that one is refused on the same predicate.
+        self.pending_isolates.clear();
         // ★ §7.6 T2 / §15 amendment 4 — the proc is gone, so every verb still in flight
         // for it is work whose requester no longer exists. Latch a cancel for each; the
         // shell discharges them after the guards drop (R1: firing one is a syscall).
@@ -685,6 +765,19 @@ impl Proc {
     #[must_use]
     pub fn is_retired(&self) -> bool {
         self.retired
+    }
+
+    /// ★★★ **Is an isolate for `gpu` DECIDED-BUT-NOT-YET-MATERIALIZED?** (R1's spawn
+    /// deferral — see [`Self::pending_isolates`].)
+    ///
+    /// The predicate `kayfabe_fwd::checkout` reads to tell converging staleness (*"one is
+    /// on its way; materialize it and re-plan"*) apart from an internal inconsistency
+    /// (*"nothing ever asked for one"*). ⊘ False for a retired proc even while the marker
+    /// is set: a retired proc refuses every op by an earlier arm, and answering "pending"
+    /// for one would send a caller off to spawn a sandbox for a process that is gone.
+    #[must_use]
+    pub fn wants_isolate(&self, gpu: GpuId) -> bool {
+        !self.retired && self.pending_isolates.contains(&gpu)
     }
 
     /// True while this proc has touched no data-plane state (merge legality,
@@ -1004,7 +1097,31 @@ pub struct Spine {
     /// reason `pending_release` is: [`Cancels`] is `#[must_use]`, so a batch that leaves
     /// this struct cannot be dropped on the floor without the compiler saying so.
     pending_cancels: Cancels,
-    isolates: Box<dyn IsolateFactory>,
+    /// ★★★ **Deferred isolate materializations awaiting a lock-free spawn** (R1).
+    ///
+    /// The exact counterpart of [`Self::pending_cancels`], and it exists for the identical
+    /// reason one increment further out: every path that *decides* a `(Proc, GpuId)` needs
+    /// an isolate runs under the device WRITE lock ([`Spine::apply`] and the
+    /// [`Spine::refresh`] it drives), and **spawning one is the most blocking thing this
+    /// port does** — `clone` into six namespaces, `execveat` of a sealed memfd, a blocking
+    /// hello handshake, and under `KAYFABE_ISOLATES=real` a chain of real host RM ioctls.
+    /// R1 admits no exception for it. So the locked phase LATCHES here and the shell
+    /// spawns after the guards drop, then re-acquires and RE-VALIDATES (R5).
+    ///
+    /// ⊘ **Not the authority on whether an isolate is still wanted** — that is
+    /// [`Proc::wants_isolate`], which outlives this latch. This is a *work list*: taking
+    /// it does not cancel the obligation, so a caller that drops it on the floor loses
+    /// nothing except promptness (the next verb to that `(proc, gpu)` refuses with
+    /// [`kayfabe_fwd::FwdFault::IsolatePending`] and materializes it then). Two derivations
+    /// of one fact would be drift; these are two facts with different lifetimes.
+    ///
+    /// Private, with [`Spine::take_pending_spawns`] as the only way out, for the same
+    /// reason `pending_cancels` is: [`PendingSpawns`] is `#[must_use]`.
+    pending_spawns: PendingSpawns,
+    /// ★ The isolate factory, behind an `Arc` because a spawn must be reachable with
+    /// **zero** ranked locks held (`kayfabe_isolate::IsolateFactory`'s own docs). The L1
+    /// shell keeps a clone of this same handle; there is one factory, not two.
+    isolates: Arc<dyn IsolateFactory>,
     /// Geometry template for minting a fresh disjoint per-target window.
     geom: TargetGeom,
     next_proc: u32,
@@ -1373,27 +1490,105 @@ impl Spine {
         Ok(())
     }
 
-    /// ★★★ **Materialize `proc`'s isolate for `gpu` — the ONE spawn site** (E0b).
+    /// ★★★ **Decide that `proc` needs an isolate for `gpu` — the ONE decision site**
+    /// (E0b), and since the R1 fix **only** the decision.
     ///
-    /// Idempotent and **infallible**, which is not a convenience: [`Spine::refresh`]'s
-    /// step 3b installs isolates on a path §12.18 made infallible-by-construction, and
-    /// E0b must not smuggle a failure channel back into it.
-    /// [`kayfabe_isolate::IsolateFactory::spawn`] has no error channel by signature; a
-    /// factory that cannot spawn hands back a **refusing** isolate instead, which is
-    /// what `Isolate::refusal` (E1) makes readable rather than silent.
+    /// ## ⊘ Why this no longer spawns, and what broke when it did
     ///
-    /// Returns `true` if this call is the one that spawned — the fact the audit counts,
-    /// so *"an isolate was materialized during this boot"* is an observable rather than
-    /// an inference from a host-side `ps`.
-    fn materialize_isolate(&mut self, proc: &mut Proc, gpu: GpuId) -> bool {
-        let isolates = &mut self.isolates;
-        let pid = proc.id;
-        let mut spawned = false;
-        proc.isolates.entry(gpu).or_insert_with(|| {
-            spawned = true;
-            IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu)))
-        });
-        spawned
+    /// This runs under the device WRITE lock: [`Spine::apply`] is a spine op and
+    /// [`Spine::refresh`] is inside it. Spawning here therefore ran `clone` into six
+    /// namespaces, `execveat` of a sealed memfd and a blocking hello handshake — and,
+    /// under `KAYFABE_ISOLATES=real`, real host RM ioctls — **with rank 0 held**. That is
+    /// R1's violation exactly, and it was not a theoretical one: it aborted QEMU on the
+    /// first guest register write that reached a `GSP_RM_ALLOC`
+    /// (`docs/reference/bench_evidence/f0b7efa_run_basereal_qemu.log`, and the same panic
+    /// at the base revision, so it is pre-existing rather than caused by E6).
+    ///
+    /// So the decision is latched ([`Spine::pending_spawns`] for promptness,
+    /// [`Proc::pending_isolates`] for durability) and the SPAWN happens in the shell with
+    /// zero locks held, landing back through [`Spine::install_isolate`], which
+    /// re-validates (R5).
+    ///
+    /// Idempotent and **infallible**, which is not a convenience: step 3b installs
+    /// isolates on a path §12.18 made infallible-by-construction, and neither E0b nor this
+    /// may smuggle a failure channel back into it.
+    ///
+    /// Returns `true` if this call is the one that decided — i.e. the pair was neither
+    /// materialized nor already pending.
+    fn defer_isolate(&mut self, proc: &mut Proc, gpu: GpuId) -> bool {
+        if proc.isolates.contains_key(&gpu) || !proc.pending_isolates.insert(gpu) {
+            return false;
+        }
+        self.pending_spawns.push(proc.id, gpu);
+        true
+    }
+
+    /// ★★ **Take the latched spawns** for the shell to discharge with no lock held (R1) —
+    /// the exact counterpart of [`Spine::take_pending_cancels`], and of
+    /// [`crate::reactor::SourceRegistry::take_pending_wake`].
+    ///
+    /// The caller MUST have released every ranked lock before spawning:
+    /// [`kayfabe_isolate::IsolateBox::new`] asserts it, because a sandbox spawn is a
+    /// blocking syscall. Returning them rather than performing them here is what makes
+    /// that assert satisfiable instead of a rule someone has to remember.
+    pub fn take_pending_spawns(&mut self) -> PendingSpawns {
+        core::mem::take(&mut self.pending_spawns)
+    }
+
+    /// ★ A handle on the isolate factory, usable with **no lock held** — the second half
+    /// of the deferral (see [`Spine::take_pending_spawns`]).
+    ///
+    /// A clone of the one `Arc` this device was realized with; there is no second factory
+    /// and no way to install one.
+    #[must_use]
+    pub fn isolate_factory(&self) -> Arc<dyn IsolateFactory> {
+        Arc::clone(&self.isolates)
+    }
+
+    /// ★★★ **Install a spawned isolate — and RE-VALIDATE first (R5).**
+    ///
+    /// The commit half of the deferral. `iso` was spawned with every guard dropped, so
+    /// between the decision and this call the world moved: §12.9's compare-and-swap, with
+    /// the two staleness shapes it names.
+    ///
+    /// - **Divergent** — the proc retired, or stopped wanting an isolate for this target.
+    ///   [`Proc::wants_isolate`] is false; the sandbox is **surplus**.
+    /// - **Converging** — a sibling thread materialized the same `(proc, gpu)` first
+    ///   (both raced the same [`kayfabe_fwd::FwdFault::IsolatePending`], which is the
+    ///   ordinary case for a multi-threaded guest). The marker is already cleared, so
+    ///   `wants_isolate` is false here too and the loser's sandbox is surplus. ⊘ The
+    ///   loser is **not** refused: nothing it was doing has failed, it simply re-plans
+    ///   against the winner's isolate.
+    ///
+    /// The caller's proc must be the LIVE `PendingSpawn::proc`; a proc that left the live
+    /// set in the gap never reaches here and its sandbox is surplus by the same rule.
+    ///
+    /// ⊘ **Returns the surplus rather than dropping it**, and that is not fastidiousness:
+    /// [`kayfabe_isolate::IsolateBox`]'s `Drop` is `waitpid` + namespace teardown + fd
+    /// close, which R1 forbids under the write lock this runs beneath — the very gap
+    /// §12.16 G3b closed for the reap. The caller drops it after its guards fall, and the
+    /// `IsolateBox` assert says so if it does not.
+    ///
+    /// `Ok(())` means installed and counted; `Err(surplus)` means it must not be.
+    pub fn install_isolate(
+        &mut self,
+        proc: &mut Proc,
+        gpu: GpuId,
+        iso: IsolateBox,
+    ) -> Result<(), IsolateBox> {
+        if !proc.wants_isolate(gpu) {
+            return Err(iso);
+        }
+        proc.pending_isolates.remove(&gpu);
+        // Belt and braces against a future caller that clears the marker without filling
+        // the slot: an occupied slot is a winner, and overwriting it would drop a live
+        // isolate — here, under the write lock.
+        if proc.isolates.contains_key(&gpu) {
+            return Err(iso);
+        }
+        proc.isolates.insert(gpu, iso);
+        self.isolates_materialized = self.isolates_materialized.saturating_add(1);
+        Ok(())
     }
 
     /// Apply one RM protocol event and re-sync all derived state to the graph.
@@ -1495,9 +1690,15 @@ impl Spine {
                 // those are step 3b's `or_insert_with`, which was already event-driven and
                 // is unchanged. This covers exactly the one isolate `realize` used to
                 // create behind the guest's back.
-                if self.materialize_isolate(system, GpuId::ZERO) {
-                    self.isolates_materialized = self.isolates_materialized.saturating_add(1);
-                }
+                //
+                // ★★★ **R1: the DECISION is here, the SPAWN is not** (see
+                // [`Spine::defer_isolate`]). This function runs under the device write
+                // lock, so materializing here was a blocking call under rank 0 — the
+                // panic `f0b7efa_run_basereal_qemu.log` records. The count moves with the
+                // *installation*, in [`Spine::install_isolate`], because "the guest caused
+                // a host process to exist" is a fact about the spawn landing, not about
+                // our intention to make one.
+                self.defer_isolate(system, GpuId::ZERO);
                 Ok(())
             }
             Err(e) => {
@@ -2447,18 +2648,13 @@ impl Spine {
             let mut carved = core::mem::take(&mut plan.arenas[i]);
             let p = procs.get_mut(pid).expect("live proc exists");
             for &gpu in &plan.spans[i] {
-                // ★ E0b: routed through the one spawn site so the census counts it. The
+                // ★ E0b: routed through the one decision site so the census counts it. The
                 // `or_insert_with` semantics are unchanged — this pass was already
                 // event-driven and is not what E0b moves.
-                let isolates = &mut self.isolates;
-                let mut spawned = false;
-                p.isolates.entry(gpu).or_insert_with(|| {
-                    spawned = true;
-                    IsolateBox::new(isolates.spawn(IsolateId::new(pid.0, gpu)))
-                });
-                if spawned {
-                    self.isolates_materialized = self.isolates_materialized.saturating_add(1);
-                }
+                //
+                // ★★★ R1: and it DEFERS rather than spawns. This whole function runs under
+                // the device write lock; see [`Spine::defer_isolate`].
+                self.defer_isolate(p, gpu);
                 if let Some(arena) = carved.remove(&gpu) {
                     let prev = p.arenas.insert(gpu, arena);
                     debug_assert!(
@@ -2476,16 +2672,9 @@ impl Spine {
             let mut carved = core::mem::take(plan.arenas.last_mut().expect("system entry"));
             let span = plan.spans.last().expect("system entry").clone();
             for gpu in span {
-                // ★ E0b: same routing as the user-proc pass above, same reason.
-                let isolates = &mut self.isolates;
-                let mut spawned = false;
-                system.isolates.entry(gpu).or_insert_with(|| {
-                    spawned = true;
-                    IsolateBox::new(isolates.spawn(IsolateId::new(Gpu::SYSTEM_PROC.0, gpu)))
-                });
-                if spawned {
-                    self.isolates_materialized = self.isolates_materialized.saturating_add(1);
-                }
+                // ★ E0b: same routing as the user-proc pass above, same reason. ★★★ And
+                // the same R1 deferral.
+                self.defer_isolate(system, gpu);
                 if let Some(arena) = carved.remove(&gpu) {
                     let prev = system.arenas.insert(gpu, arena);
                     debug_assert!(
@@ -3083,7 +3272,12 @@ impl Gpu {
             targets,
             sources: SourceRegistry::new(),
             pending_cancels: Cancels::new(),
-            isolates,
+            pending_spawns: PendingSpawns::new(),
+            // ★ The caller still HANDS the factory over — ownership is unchanged and the
+            // constructor's contract does not leak R1's mechanism. Behind the seam it is
+            // shared, because the L1 shell must reach it with no lock held
+            // (`kayfabe_isolate::IsolateFactory`'s docs).
+            isolates: Arc::from(isolates),
             geom,
             next_proc: 1,
             retired: Vec::new(),
@@ -3111,8 +3305,51 @@ impl Gpu {
     // shape; the sharded L1 calls the `Spine` entry points directly). -------------
 
     /// Apply one RM protocol event (see [`Spine::apply`]).
+    ///
+    /// ★★★ **And it materializes what the apply decided** — the single-threaded half of
+    /// R1's spawn deferral. `Spine::apply` latches the isolates the event calls for
+    /// instead of spawning them, because under the L1 shell it runs holding rank 0. This
+    /// entry point holds **no** lock at all (it reaches its procs by `&mut`, which is the
+    /// whole point of the #35 split), so the spawn happens right here and the observable
+    /// behaviour of a composed single-threaded device is exactly what it was: when this
+    /// returns, every isolate the event called for exists.
     pub fn apply(&mut self, ev: RmEvent) -> Result<(), GpuError> {
-        self.spine.apply(&mut self.system, &mut self.procs, ev)
+        let out = self.spine.apply(&mut self.system, &mut self.procs, ev);
+        self.materialize_pending();
+        out
+    }
+
+    /// ★ Spawn and install every isolate the spine has latched (R1's deferral), with no
+    /// lock held — the single-threaded counterpart of `kayfabe_rt::SharedDevice`'s drain.
+    ///
+    /// Runs on the error path too: [`Spine::apply`]'s rollback re-derives from the
+    /// last-good graph, which can itself decide a target needs an isolate, and a refused
+    /// event must not leave the device in a state where the *next* op refuses for a
+    /// reason the guest cannot act on.
+    ///
+    /// ⊘ A surplus is possible even here — a proc can be decided-for and then vacated by
+    /// the rollback's own re-derivation — so the R5 install is the same one the sharded
+    /// shell uses, not a simplified copy.
+    fn materialize_pending(&mut self) {
+        // One pass is exhaustive: installing an isolate decides nothing, so the latch
+        // cannot refill behind us. A loop here would be a spin waiting to happen.
+        for PendingSpawn { proc: pid, gpu } in self.spine.take_pending_spawns() {
+            let factory = self.spine.isolate_factory();
+            let iso = IsolateBox::new(factory.spawn(IsolateId::new(pid.0, gpu)));
+            let p = if pid == Gpu::SYSTEM_PROC {
+                Some(&mut self.system)
+            } else {
+                self.procs.get_mut(&pid)
+            };
+            // A proc that vanished in the gap is the divergent case; the sandbox is
+            // surplus and falls here, lock-free, exactly as `install_isolate` refusing it
+            // would.
+            let surplus = match p {
+                Some(p) => self.spine.install_isolate(p, gpu, iso).err(),
+                None => Some(iso),
+            };
+            drop(surplus);
+        }
     }
 
     /// ★★★ **E1 — the isolate plane's health, over every isolate this device holds.**

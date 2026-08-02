@@ -3174,7 +3174,12 @@ pub struct MockIsolateFactory {
     pool_size: usize,
     /// Every spawned session id, in order — and an [`IsolateId`] IS a `(proc, GPU)`
     /// pair, so this is still the isolate-per-`(proc, GPU)` witness it always was (N3).
-    pub spawned: Vec<IsolateId>,
+    ///
+    /// ⊘ Behind a `Mutex` because [`IsolateFactory::spawn`] takes `&self` (R1: a spawn
+    /// runs with zero locks held, so the factory must be reachable without the device
+    /// lock). The lock is taken around the push only. Read it with
+    /// [`MockIsolateFactory::spawned`].
+    spawned: Mutex<Vec<IsolateId>>,
 }
 
 impl MockIsolateFactory {
@@ -3200,10 +3205,19 @@ impl MockIsolateFactory {
             MockIsolateFactory {
                 recorder: Arc::clone(&recorder),
                 pool_size,
-                spawned: Vec::new(),
+                spawned: Mutex::new(Vec::new()),
             },
             recorder,
         )
+    }
+
+    /// Every spawned session id, in order (the birth witness).
+    ///
+    /// # Panics
+    /// If the witness mutex was poisoned by a panic inside a `spawn`.
+    #[must_use]
+    pub fn spawned(&self) -> Vec<IsolateId> {
+        self.spawned.lock().expect("the spawn witness").clone()
     }
 }
 
@@ -3214,8 +3228,8 @@ impl Default for MockIsolateFactory {
 }
 
 impl IsolateFactory for MockIsolateFactory {
-    fn spawn(&mut self, id: IsolateId) -> Box<dyn Isolate> {
-        self.spawned.push(id);
+    fn spawn(&self, id: IsolateId) -> Box<dyn Isolate> {
+        self.spawned.lock().expect("the spawn witness").push(id);
         let ns = MockRmBackend::namespace(u64::from(id.proc()) + 1, id.gpu());
         // ★ ONE RM client lock per isolate, shared by its whole pool — and published on
         // the recorder, which is the handle the test keeps (the factory is moved into
@@ -3456,7 +3470,7 @@ mod tests {
     /// fit a change.
     #[test]
     fn mock_rm_map_gpu_va_places_exactly_where_asked_and_collides_only_within_one_vas() {
-        let (mut f, _rec) = MockIsolateFactory::new();
+        let (f, _rec) = MockIsolateFactory::new();
         let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let mut w = iso.checkout().expect("fresh pool has an idle worker");
         w.with_rm(|rm| {
@@ -3498,7 +3512,7 @@ mod tests {
     /// a footgun that only shows up under a slow-gated stress test.
     #[test]
     fn recorder_compact_preserves_the_ledger_exactly() {
-        let (mut f, rec) = MockIsolateFactory::new();
+        let (f, rec) = MockIsolateFactory::new();
         let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let (vas, mem) = iso.checkout().expect("idle worker").with_rm(|rm| {
             let vas = rm.alloc_vaspace().unwrap();
@@ -3566,7 +3580,7 @@ mod tests {
     /// [`a_sibling_clients_live_raw_value_is_served_exactly_as_a_real_host_would`].
     #[test]
     fn mock_rm_handles_are_isolate_scoped() {
-        let (mut f, _rec) = MockIsolateFactory::new();
+        let (f, _rec) = MockIsolateFactory::new();
         let mut a = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let mut b = f.spawn(IsolateId::new(2, GpuId::ZERO));
         let ha = a
@@ -3602,7 +3616,7 @@ mod tests {
     ///    detector: an audit of what happened, not the backend's luck.
     #[test]
     fn a_sibling_clients_live_raw_value_is_served_exactly_as_a_real_host_would() {
-        let (mut f, rec) = MockIsolateFactory::new();
+        let (f, rec) = MockIsolateFactory::new();
         let (ia, ib) = (
             IsolateId::new(1, GpuId::ZERO),
             IsolateId::new(2, GpuId::ZERO),
@@ -3694,7 +3708,7 @@ mod tests {
         let _wd = bounded("the_park_witness_reads_the_real_thread_local_not_a_constant");
         use kayfabe_util::lockwitness;
 
-        let (mut f, rec) = MockIsolateFactory::new();
+        let (f, rec) = MockIsolateFactory::new();
         let id = IsolateId::new(7, GpuId::ZERO);
         let mut iso = f.spawn(id);
         let hold = rec.lock().expect("recorder").hold(HoldSpec::exact(
@@ -3743,7 +3757,7 @@ mod tests {
     #[test]
     fn one_clients_verbs_serialise_and_another_clients_do_not() {
         let _wd = bounded("one_clients_verbs_serialise_and_another_clients_do_not");
-        let (mut f, rec) = MockIsolateFactory::new();
+        let (f, rec) = MockIsolateFactory::new();
         rec.lock().expect("recorder").serialize_per_client = true;
         let (ia, ib) = (
             IsolateId::new(1, GpuId::ZERO),
