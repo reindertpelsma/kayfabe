@@ -276,6 +276,154 @@ fn a_device_reset_clears_the_doorbell_report() {
 }
 
 // =====================================================================================
+// ★★★ E6 (debt Q24) — THE PROPERTY, NOW ASSERTED BY RUNNING
+// =====================================================================================
+
+/// ★★★ **The doorbell port and the object bridge reach the SAME `Gpu`** — measured, not
+/// counted in this file's own source.
+///
+/// # The debt, in E2's own words
+///
+/// > *The behavioural witness would be: declare a channel through the bridge, ring its
+/// > vChid through the doorbell, watch `FwdFault::UnknownVchid` become a served outcome.
+/// > … It is therefore an **E6** assertion.*
+///
+/// This is it. [`Regs::object_model`] hands back the *same* `Arc<SharedDevice>` the boxed
+/// object policy declares into and the *same* one the doorbell port rings, so the channel
+/// declared below and the token rung below cross the real join.
+///
+/// # ★★★ What makes it a WITNESS rather than a tautology
+///
+/// The discriminator is **which** refusal comes back, and the two candidates are on
+/// opposite sides of the routing lookup:
+///
+/// - `FwdFault::UnknownVchid` — the spine's `by_vchid` had no entry. That is what a
+///   **second** `Gpu` behind the doorbell produces, forever, with nothing else going red.
+/// - anything downstream of it — the route **resolved**, so the doorbell found the channel
+///   the bridge declared. Only one object model can produce that.
+///
+/// ⚠ **The token is `0`, and that is forced rather than chosen.**
+/// `Ga10xArch::vchid_from_userd_flags` answers `VChid(0)` for every channel — a stated
+/// refusal until the USERD flag-field decode is settled against silicon the way E3's token
+/// was — so `VChid(0)` is the *only* vChid a GA10x channel can currently be filed under,
+/// and `0x0000_0000` is the token RM's own encoder emits for `(runlist 0, chid 0)`.
+///
+/// ⊘ **This is therefore ALSO the statement of what E6 still cannot do**: a real guest's
+/// scrubber channel is not chid 0 in general, so a *live* boot's doorbell would still miss.
+/// That is the USERD decode's increment, not this one, and it is recorded in §10.
+#[test]
+fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
+    use kayfabe_arch::ClientKind;
+    use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
+    use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+
+    let r = regs();
+    let dev = r.object_model();
+
+    // ---- non-vacuity FIRST: with nothing declared, the ring misses the routing map.
+    let before = r.write(BAR_REGS, DOORBELL, 4, 0);
+    assert_eq!(
+        kind_of(before.doorbell.as_ref().expect("a doorbell")),
+        "FwdFault::UnknownVchid",
+        "★ so the change below is the DECLARATION's doing and not the fixture's"
+    );
+
+    // ---- the guest declares a GA10x process with one channel, through the bridge's own
+    //      object model. NVIDIA's real class ids, because `Ga10xArch` classifies those.
+    const CLIENT: HClient = HClient(0x5c00_0000);
+    const PDB: Pdb = Pdb(0x4E60_0000);
+    let h = |off: u32| HObject(0x5c00_0000 + off);
+    let (root, device, vas, tsg, chan) = (h(0), h(1), h(0x10), h(0x12), h(0x19));
+    use kayfabe_abi::generated::classes as nv;
+    for ev in [
+        RmEvent::Alloc {
+            client: CLIENT,
+            parent: root,
+            handle: root,
+            class: ClassId(nv::NV01_ROOT),
+            facts: AllocFacts {
+                client_kind: Some(ClientKind::User { pid: CLIENT.0 }),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: CLIENT,
+            parent: root,
+            handle: device,
+            class: ClassId(nv::NV01_DEVICE_0),
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: CLIENT,
+            parent: device,
+            handle: vas,
+            class: ClassId(nv::FERMI_VASPACE_A),
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: CLIENT,
+            vaspace: vas,
+            pdb: PDB,
+        },
+        RmEvent::Alloc {
+            client: CLIENT,
+            parent: device,
+            handle: tsg,
+            class: ClassId(nv::KEPLER_CHANNEL_GROUP_A),
+            facts: AllocFacts {
+                h_vaspace: Some(vas),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: CLIENT,
+            parent: tsg,
+            handle: chan,
+            class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
+            facts: AllocFacts {
+                h_vaspace: Some(vas),
+                ..Default::default()
+            },
+        },
+    ] {
+        dev.apply(ev).expect("the bridge's object model accepts it");
+    }
+
+    // ---- ★ THE WITNESS: the same token, now routed.
+    let after = r.write(BAR_REGS, DOORBELL, 4, 0);
+    let report = after.doorbell.as_ref().expect("a doorbell");
+    let kind = kind_of(report);
+    assert_ne!(
+        kind, NO_PORT,
+        "the port is the one the composition root installed"
+    );
+    assert_ne!(
+        kind, "FwdFault::UnknownVchid",
+        "★★★ THE DEBT. The doorbell still cannot see the channel the bridge declared, \
+         which is exactly the shape a SECOND `Gpu` behind the port produces — and it is \
+         invisible to every other test in this crate."
+    );
+    // …and the refusal it DOES give is the one the shipped archive's plane owes: there is
+    // no forwarding isolate, and it says so rather than parking on a pool gate that can
+    // never signal (`kayfabe_fwd::FwdFault::IsolateRetired`).
+    assert_eq!(
+        kind, "FwdFault::IsolateRetired",
+        "★ the route resolved and the refusal came from the ISOLATE plane — the first \
+         refusal in this port's life that is downstream of routing"
+    );
+
+    let a = r.audit();
+    assert_eq!((a.doorbells, a.doorbells_refused), (2, 2));
+    assert_eq!(
+        a.doorbells_served, 0,
+        "⊘ still zero, and correctly: the shipped default plane serves no verb"
+    );
+}
+
+// =====================================================================================
 // ★★★ THE PROPERTY THIS FILE CANNOT ASSERT BY RUNNING, AND HOW IT IS GUARDED INSTEAD
 // =====================================================================================
 

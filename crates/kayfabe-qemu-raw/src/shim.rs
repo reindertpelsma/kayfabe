@@ -1417,15 +1417,13 @@ pub struct Regs {
     /// chain, and unreachable afterwards) and the doorbell port. Before E2 there was one
     /// path and it could own the `Gpu` outright.
     ///
-    /// ⊘ Held for the doorbell port's sake and read by nothing else in this struct: the
-    /// two censuses below are still the shell's own channels, for the reason each states.
+    /// ⊘ Held for the doorbell port's sake, and it is what keeps this device's object
+    /// model alive for exactly as long as the device: a shell that let it go would leave
+    /// the plane's port holding the last handle to a graph nobody can reach.
     ///
-    /// ⚠ `#[allow(dead_code)]` because the *field* is never read — the live reference is the
-    /// clone inside the doorbell port, which the register plane owns. Dropping the field
-    /// would be wrong anyway: it is what keeps this device's object model alive for exactly
-    /// as long as the device, and a shell that let it go would leave the plane's port
-    /// holding the last handle to a graph nobody can reach.
-    #[allow(dead_code)]
+    /// ★ **E6.** It used to carry `#[allow(dead_code)]` because the *field* was never read.
+    /// [`Regs::object_model`] reads it now, which is what makes debt Q24 assertable by
+    /// running rather than by counting `Gpu::new` in this file's own source.
     device: Arc<kayfabe_rt::device::SharedDevice>,
     /// ★★★ The object bridge's refusal census, kept **here** because the policy that owns
     /// it is boxed into the chain and is unreachable afterwards. See
@@ -1534,6 +1532,33 @@ impl Regs {
     #[must_use]
     pub fn plane(&self) -> &RegPlane {
         &self.plane
+    }
+
+    /// ★★★ **E6 (debt Q24) — THE object model this root realized**, handed out so the one
+    /// property E2 could only assert over *source text* can be asserted by **running**.
+    ///
+    /// # What it is for, stated exactly
+    ///
+    /// E2's `⊘ What E2 does NOT establish` item 4 records the gap: the object bridge and
+    /// the doorbell port are `Arc::clone`s of one [`kayfabe_rt::device::SharedDevice`]
+    /// **by construction**, and *"the behavioural witness — declare a channel through the
+    /// bridge, ring its vChid through the doorbell — is an E6 assertion, because nothing
+    /// in this port can inject an `RmEvent` chain."* A second `Gpu` behind the doorbell
+    /// leaves [`kayfabe_fwd::FwdFault::UnknownVchid`] as the permanent answer **with every
+    /// test still green**, which is why a source-quantified check was never enough.
+    ///
+    /// This is that injection point: the handle returned is the *same* `Arc` the boxed
+    /// object policy declares into and the *same* one [`SharedDoorbell`] rings, so a
+    /// channel declared through it and then rung through [`Regs::write`] crosses the join
+    /// under test rather than a reconstruction of it.
+    ///
+    /// ⊘ **Nothing in the archive calls this**, and it grants no authority the guest does
+    /// not already have: every mutation reachable through the returned handle is one the
+    /// object bridge performs on the guest's behalf anyway. It is an *observability* seam,
+    /// in the same sense [`Regs::audit`] is.
+    #[must_use]
+    pub fn object_model(&self) -> Arc<kayfabe_rt::device::SharedDevice> {
+        Arc::clone(&self.device)
     }
 
     /// ★★★ **Stage Q5.** Give the register plane the realized machine's guest memory.

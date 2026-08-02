@@ -1718,6 +1718,61 @@ pub struct HostRmBackend {
     /// every sibling worker: a backing belongs to the isolate, not to the pool slot that
     /// happened to mint it.
     exports: Arc<ChildExports>,
+    /// ★★★ **E6 — the recorder-only CE witness**, `None` unless a diagnostic asked for
+    /// one ([`HostRmBackend::with_ce_witness`]). See [`CeWitness`].
+    ce_witness: Option<Arc<CeWitness>>,
+}
+
+/// ★★★ **E6 — what the LAST [`RmBackend::ce_copy`] this backend performed actually
+/// observed**, so a caller that drove the copy *through the core* can build the very
+/// [`CeEvidence`] rung R17 built, instead of a re-derivation of it.
+///
+/// # Why this exists at all, stated so it is not mistaken for a convenience
+///
+/// [`CeEvidence::copied()`] is a **conjunction of four facts**, and the fourth —
+/// *"the engine said it had retired"* — is not observable from the destination's bytes.
+/// The port's verb answers `Ok(())`/`Err(..)`, which is the right shape for a port and
+/// erases the number. So a caller driving the join from `kayfabe_fwd` can see three of the
+/// four and would have to **assume** the fourth, or invent a weaker predicate.
+///
+/// ⊘ Inventing a weaker predicate is exactly what `execution_plane_increments.md` §1
+/// forbids: *"Nothing below invents a new acceptance instrument, and E6's acceptance is
+/// literally R17's, re-driven."* This is what makes that literal.
+///
+/// ⊘ **Recorder-only, and off by default.** [`HostRmBackend::new`] installs none, so the
+/// shipped isolate child records nothing and pays nothing. It is the same posture — and
+/// the same warning — as the C artifact's `m2rec`: an instrument that is on by default
+/// stops being an instrument.
+///
+/// ⚠ **It cannot cross the sandbox.** A real isolate is a separate process, so a witness
+/// held by a parent is not the one the child's backend writes. A diagnostic that needs it
+/// must drive an **in-process** [`HostRmBackend`], exactly as `kayfabe-rm-ladder`'s R14-R17
+/// rungs already do, and say so.
+#[derive(Debug, Default)]
+pub struct CeWitness {
+    last: Mutex<Option<(SubmitOutcome, u32)>>,
+}
+
+impl CeWitness {
+    /// A fresh witness that has observed nothing.
+    #[must_use]
+    pub fn new() -> CeWitness {
+        CeWitness::default()
+    }
+
+    /// The most recent `(outcome, payload)` — `None` if no copy has run on the backend
+    /// this witness is installed in.
+    ///
+    /// ★ `None` is a real answer and must not be read as a zeroed outcome: *an empty
+    /// capture is evidence of nothing*.
+    #[must_use]
+    pub fn latest(&self) -> Option<(SubmitOutcome, u32)> {
+        *self.last.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn record(&self, outcome: SubmitOutcome, payload: u32) {
+        *self.last.lock().unwrap_or_else(|e| e.into_inner()) = Some((outcome, payload));
+    }
 }
 
 /// A copy-engine channel and the engine object bound into its subchannel 0.
@@ -1821,7 +1876,85 @@ impl HostRmBackend {
             slots: BTreeMap::new(),
             ce_channels: BTreeMap::new(),
             exports,
+            ce_witness: None,
         }
+    }
+
+    /// ★★★ **E6** — install a recorder-only [`CeWitness`]. See that type for why it
+    /// exists, why it is off by default, and why it cannot cross the sandbox.
+    #[must_use]
+    pub fn with_ce_witness(mut self, witness: Arc<CeWitness>) -> Self {
+        self.ce_witness = Some(witness);
+        self
+    }
+
+    /// ★★ **E6 instrument** — fill `memory` with `len` bytes of the ramp
+    /// `first, first+step, first+2*step, …`, one word at a time, through a CPU mapping
+    /// this call opens and drops.
+    ///
+    /// `step == 0` writes a constant, which is how a **sentinel** is written; a non-zero
+    /// step is how a source is filled so that a copy which moved only its first word is
+    /// distinguishable from one that moved all of them.
+    ///
+    /// ★ The mapping is released before returning, and a release fence runs first: the
+    /// stores go into a write-combining mapping and an engine must not be launched while
+    /// they are still in a write-combining buffer. That ordering is not an optimisation —
+    /// getting it wrong makes a *correct* copy read as a failed one.
+    ///
+    /// # Errors
+    /// Whatever the mapping or the stores refuse with; [`RmError::BadHandle`] for a
+    /// `memory` this connection never minted.
+    pub fn fill_words(
+        &self,
+        memory: HostHandle,
+        len: u64,
+        first: u32,
+        step: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(memory)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        for i in 0..(len / 4) {
+            map.store_u32(
+                HostOffset::new(i * 4),
+                first.wrapping_add(step.wrapping_mul(i as u32)),
+            )
+            .map_err(|e| region_error(&e))?;
+        }
+        release_fence();
+        drop(map);
+        drop(node);
+        Ok(())
+    }
+
+    /// ★★ **E6 instrument** — read the words at `offsets` out of `memory` through a
+    /// **freshly opened, independent** mapping: a different device node, a different mmap
+    /// context, a kernel-chosen address.
+    ///
+    /// ⊘ Independence is the whole content of the call. Reading back through the mapping
+    /// the sentinel was written through proves a page is writable and nothing else, which
+    /// is the failure `prove_ring_is_device_memory`'s docs already name one object over.
+    ///
+    /// # Errors
+    /// Whatever the mapping or the loads refuse with; [`RmError::BadHandle`] for a
+    /// `memory` this connection never minted.
+    pub fn read_words_independently(
+        &self,
+        memory: HostHandle,
+        len: u64,
+        offsets: &[u64],
+    ) -> Result<Vec<u32>, RmError> {
+        let raw = self.narrow(memory)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        let mut out = Vec::with_capacity(offsets.len());
+        for &off in offsets {
+            out.push(
+                map.load_u32(HostOffset::new(off))
+                    .map_err(|e| region_error(&e))?,
+            );
+        }
+        drop(map);
+        drop(node);
+        Ok(out)
     }
 
     fn stamp(&self, raw: u32) -> HostHandle {
@@ -2197,6 +2330,12 @@ impl RmBackend for HostRmBackend {
         // and those two have completely different causes. So the body is one level down
         // and this is the port's projection of it.
         let (outcome, payload) = self.ce_copy_outcome(vas, sub)?;
+        // ★★★ E6 — recorded BEFORE the verdict, and unconditionally: the interesting case
+        // is the one where the copy did **not** retire, and a witness that only recorded
+        // successes would be blind to exactly the outcome a diagnostic is run to see.
+        if let Some(w) = &self.ce_witness {
+            w.record(outcome, payload);
+        }
         if outcome.semaphore == payload {
             Ok(())
         } else {

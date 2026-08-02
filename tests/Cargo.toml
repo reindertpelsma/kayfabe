@@ -58,6 +58,11 @@ kayfabe-rmrpc.workspace = true
 kayfabe-abi.workspace = true
 
 [dev-dependencies]
+# ★★★ E6 — the REAL host RM backend, for the hardware acceptance ONLY
+# (`tests/e6_hw_join.rs`). A **dev**-dependency: this crate's library is the mock-driven
+# conformance harness and must not link an adapter that issues real NVIDIA ioctls. The
+# hardware test gates itself on a connection and asserts nothing without one.
+kayfabe-isolate-host.workspace = true
 # Property-based / fuzz testing — DEV-ONLY (never a core dependency). Generates
 # arbitrary + adversarial RM event streams to fuzz the guest→core attack surface.
 proptest = "1.11"

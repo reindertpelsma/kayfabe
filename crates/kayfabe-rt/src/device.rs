@@ -1355,6 +1355,75 @@ impl SharedDevice {
         Ok(out)
     }
 
+    /// ★★★ **E6 — issue a partitioned copy-engine request**, in the three phases R1
+    /// forces: `kayfabe_fwd::plan_ce` (device read → the submitting proc's lock, and the
+    /// worker checked out as the last thing under it) → `Worker::execute` (**no lock
+    /// held**) → `kayfabe_fwd::commit_ce` (re-locked, R5).
+    ///
+    /// `spans` is what [`SharedDevice::parse_pushbuffer`] recovered from the guest's own
+    /// ring. It is passed through rather than re-derived: partitioning again here would be
+    /// a second answer to a question already answered against a table this call no longer
+    /// holds a lock on.
+    ///
+    /// ⊘ **The route is the caller's `pid`, not a spine lookup**, and that is a real
+    /// limitation stated rather than papered over. The submitting proc is whoever owns the
+    /// ring that was parsed, and the parse was already addressed that way. A doorbell-driven
+    /// caller routes through `kayfabe_fwd::route_doorbell` first and hands the `ProcId` it
+    /// resolved; nothing here re-derives it, so nothing here can disagree with it.
+    ///
+    /// # Errors
+    /// [`FwdFault`], by variant — see `kayfabe_fwd::plan_ce` for the three refusals it
+    /// owns, plus staleness from the commit.
+    pub fn forward_ce(
+        &self,
+        pid: ProcId,
+        cid: ChanId,
+        spans: &[kayfabe_fwd::CeSpan],
+    ) -> Result<kayfabe_fwd::CeForwarded, FwdFault> {
+        self.verb_op(
+            || {
+                self.route_act(
+                    |_spine| Ok((pid, ())),
+                    |_spine, proc, ()| {
+                        let planned = kayfabe_fwd::plan_ce(proc, cid, spans)?;
+                        Staged::check_out(proc, planned.plan.gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| kayfabe_fwd::commit_ce(proc, plan, reply),
+        )
+    }
+
+    /// ★★★ **E6 — THE JOIN**: the guest's ring, parsed and then *issued*.
+    /// [`SharedDevice::parse_pushbuffer`] followed by [`SharedDevice::forward_ce`].
+    ///
+    /// Each half takes and releases its own locks, so the two are **not** one critical
+    /// section — and they must not be: the forward's execute phase runs a host verb, and
+    /// `Worker::execute` panics naming R1 if any ranked lock is held. The gap between them
+    /// is therefore real, and what covers it is `commit_ce`'s R5 re-validation, not an
+    /// assumption that nothing moved.
+    ///
+    /// ⊘ **What this does NOT do, stated because a reader will assume it:** it does not
+    /// ring anything, and it does not decode page tables. A copy-engine request is executed
+    /// by the isolate on its own host channel (`kayfabe_isolate_host::rm::ce_copy`), which
+    /// rings its own doorbell; the guest's channel is never given a host ring to replay
+    /// into. And the page-table pages the parse witnessed are latched but not decoded —
+    /// see [`SharedDevice::decode_pt_writes`], which needs a worker and visits other procs.
+    ///
+    /// # Errors
+    /// [`FwdFault`] from either half.
+    pub fn submit_ring(
+        &self,
+        vmm: &mut dyn kayfabe_vmm::Vmm,
+        pid: ProcId,
+        cid: ChanId,
+        ring: &[u8],
+    ) -> Result<(kayfabe_fwd::PushbufferOutcome, kayfabe_fwd::CeForwarded), FwdFault> {
+        let parsed = self.parse_pushbuffer(vmm, pid, cid, ring)?;
+        let forwarded = self.forward_ce(pid, cid, &parsed.ce_spans)?;
+        Ok((parsed, forwarded))
+    }
+
     /// ★★★ **The page-table decode pass** (`#102` stage C3) for one proc, in the three
     /// phases R1 forces — the shell half of `kayfabe_fwd::plan_pt_decode` /
     /// `run_pt_decode` / `commit_pt_decode`.

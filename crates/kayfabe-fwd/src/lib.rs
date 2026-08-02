@@ -154,6 +154,74 @@ pub enum FwdFault {
     /// The channel is not bound to any declared VAS and system routing does not
     /// apply — refusing to guess an address space.
     NoVas(ChanId),
+    /// ★★★ **E6.** The proc this submission was routed to holds no channel with this
+    /// [`ChanId`].
+    ///
+    /// ⊘ Distinct from [`FwdFault::UnknownVchid`] by *which namespace missed*. That one
+    /// is the **device-wide** exec-plane index failing to route a doorbell's decoded
+    /// vChid to any `(proc, chan)` at all; this one is a caller naming a proc-local
+    /// channel slot that proc does not have. Folding them would report a caller/adapter
+    /// wiring error as a guest routing miss, which is `§12.10`'s wrong-reason conflation
+    /// on the arm a bench would be reading.
+    ///
+    /// ⊘ And distinct from [`FwdFault::NoVas`], which `apply_pushbuffer` returns for the
+    /// same absence: that reading predates this variant and is not changed here, because
+    /// changing it would move a refusal three corpora assert on. What is not repeated is
+    /// the conflation — the **new** site names the truth.
+    UnknownChannel {
+        /// The proc that was routed to.
+        proc: ProcId,
+        /// The channel slot it does not hold.
+        chan: ChanId,
+    },
+    /// ★★★ **E6 — the `(proc, gpu)` isolate exists and can NEVER serve a verb.**
+    ///
+    /// # ⊘ The bug this variant is, and it was reachable for the first time in E6
+    ///
+    /// `kayfabe_isolate::Isolate::checkout` answers `None` for **two** conditions its own
+    /// docs run together: *"the pool is saturated (**or** the isolate is retired and
+    /// refuses new checkouts)"*. [`checkout`] used to pass both up as `Ok(None)`, which
+    /// `kayfabe_rt::SharedDevice::verb_op` treats as backpressure — release the locks,
+    /// **park on the pool gate**, re-enter from the top. That is correct for saturation
+    /// and is an **unbounded wait** for the other: a retired isolate (and a
+    /// [`kayfabe_isolate::StillbornIsolates`] one, pool width **zero**) never returns a
+    /// worker, so the generation the waiter is parked on never moves.
+    ///
+    /// ⊘ It was **unreachable before E6** only because nothing ever routed that far: the
+    /// shipped archive's doorbell died at [`FwdFault::UnknownVchid`] before a checkout was
+    /// attempted. The join is what makes a submission reach the pool, and the shipped
+    /// default plane **is** the stillborn one — so E6's own control arm (`KAYFABE_ISOLATES`
+    /// unset) is precisely the configuration that would have hung a vCPU thread instead of
+    /// refusing.
+    ///
+    /// ⊘ Distinct from [`FwdFault::NoTarget`], which is *no isolate at all* — an internal
+    /// inconsistency. This one is *an isolate that is present and permanently dead*, which
+    /// is the ordinary state of an archive with no forwarding plane installed, and it is a
+    /// legitimate answer to give a guest rather than a bug to report.
+    IsolateRetired {
+        /// The proc whose isolate refuses.
+        proc: ProcId,
+        /// The target GPU whose isolate refuses.
+        gpu: GpuId,
+    },
+    /// ★★★ **E6 — the channel's declared VAS has no HOST address space**, so there is
+    /// nowhere to point a copy engine.
+    ///
+    /// The `Vas` is declared (a PDB resolved, [`FwdFault::UnknownPdb`] did not fire) and
+    /// `Vas::host_vas` is still `None`: nothing in this address space has ever been
+    /// host-published, so no host VAS was ever materialized.
+    ///
+    /// ⊘ **A refusal and deliberately not a materialization.** Allocating an empty host
+    /// VAS here would let the chain proceed and point a real copy engine at addresses
+    /// that resolve to nothing in it — `Xid 31 FAULT_PDE`, which is the failure
+    /// [`kayfabe_isolate::CeExecutor`]'s docs name, arrived at by *our* choice rather
+    /// than by the guest's. MISS = FAULT applies to the host plane too.
+    NoHostVas {
+        /// The channel whose submission was refused.
+        chan: ChanId,
+        /// The PDB of the declared-but-unpublished `Vas`.
+        pdb: Pdb,
+    },
     /// ★ A copy-engine request partitioned into more sub-copies than [`MAX_CE_SPANS`]
     /// (`#102` stage C2). Guest-influenced on both axes — the request's length and the
     /// address table's fragmentation — so it is bounded, and the bound is a LOUD refusal
@@ -590,16 +658,46 @@ fn wrong_reply<T>(what: &str) -> Result<T, Refusal> {
 ///
 /// The missing-isolate arm below is unconditionally FAULT: a `(proc, gpu)` with no
 /// isolate is an internal inconsistency, not a fact awaiting arrival.
+///
+/// ★★★ **E6 — and so is the PERMANENTLY DEAD one, which used to be `Ok(None)`.** The
+/// paragraph above chooses the category per *site*; that choice is only sound when the
+/// absence really is *"a fact that will change"*. It is not, for an isolate that is
+/// retired or has pool width zero: [`kayfabe_isolate::Isolate::checkout`]'s own docs fold
+/// saturation and permanent refusal into one `None`, and a caller that parks on the second
+/// one parks forever. See [`FwdFault::IsolateRetired`] for why E6 is where this became
+/// reachable.
 pub fn checkout(proc: &mut Proc, gpu: GpuId) -> Result<Option<Worker>, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
     let pid = proc.id;
-    Ok(proc
+    let iso = proc
         .isolates
         .get_mut(&gpu)
-        .ok_or(FwdFault::NoTarget { proc: pid, gpu })?
-        .checkout())
+        .ok_or(FwdFault::NoTarget { proc: pid, gpu })?;
+    match iso.checkout() {
+        Some(w) => Ok(Some(w)),
+        None if never_serves(&**iso) => Err(FwdFault::IsolateRetired { proc: pid, gpu }),
+        None => Ok(None),
+    }
+}
+
+/// ★★★ **E6 — will this isolate EVER hand out a worker again?** The predicate that
+/// separates [`kayfabe_isolate::Isolate::checkout`]'s two `None`s.
+///
+/// Both conditions are "never", and they are checked rather than assumed of each other: a
+/// [`kayfabe_isolate::StillbornIsolates`] one is retired **and** zero-width, a real isolate
+/// that retired mid-life is retired and non-zero-width, and only a live pool that is
+/// momentarily full is neither. [`kayfabe_isolate::Isolate::pool_size`] is documented to
+/// *"never change over the isolate's life"*, so a zero here cannot become a one.
+///
+/// ⊘ It lives in **one** function because there are **two** checkout doors ([`checkout`]
+/// and [`checkout_and_drain`]) and only the second is on the L1 path. Fixing the first
+/// alone is a change that passes every unit test and leaves the hypervisor hanging — which
+/// is what happened, and is why the mutation had to be shown to change *behaviour* on the
+/// path L1 actually takes rather than merely to change bytes.
+fn never_serves(iso: &dyn kayfabe_isolate::Isolate) -> bool {
+    iso.is_retired() || iso.pool_size() == 0
 }
 
 /// ★★ [`checkout`] **plus T0's opportunistic drain** (`l1_os_shell.md` §7.6 T0, gap G2)
@@ -631,7 +729,25 @@ pub fn checkout_and_drain(
     if !proc.isolates.contains_key(&gpu) {
         return Err(FwdFault::NoTarget { proc: proc.id, gpu });
     }
-    Ok(proc.checkout_with_pending_release(gpu))
+    let pid = proc.id;
+    let (worker, orphans) = proc.checkout_with_pending_release(gpu);
+    // ★★★ E6 — the SAME discrimination [`checkout`] makes, and it has to be made here too
+    // because **this** is the door L1 goes through (`Staged::check_out`). See
+    // [`never_serves`] and [`FwdFault::IsolateRetired`].
+    //
+    // ⊘ Nothing is dropped by refusing here: `Proc::checkout_with_pending_release` only
+    // detaches the pending-release queue when it hands out a worker, so a `None` worker
+    // always carries an empty `Orphans`.
+    if worker.is_none()
+        && proc
+            .isolates
+            .get(&gpu)
+            .is_some_and(|iso| never_serves(&**iso))
+    {
+        debug_assert!(orphans.is_empty(), "a refused checkout detaches no queue");
+        return Err(FwdFault::IsolateRetired { proc: pid, gpu });
+    }
+    Ok((worker, orphans))
 }
 
 /// Return a checked-out worker to its pool slot (proc lock; §7.3). If the target
@@ -2981,6 +3097,223 @@ pub fn plan_ce_split(host_vas: HostHandle, spans: &[CeSpan]) -> Option<VerbPlan>
     })
 }
 
+// =====================================================================================
+// ★★★ E6 — THE JOIN. The three phases that carry a partitioned copy-engine request from
+// the core to a real engine (`execution_plane_increments.md`, the E6 row).
+// =====================================================================================
+
+/// What one forwarded copy-engine request did — the value [`commit_ce`] reports.
+///
+/// ★ The two executor counts are carried **separately** rather than summed, because the
+/// question a caller has is never "how many sub-copies" but *"did any byte of this reach a
+/// real engine"*. [`kayfabe_isolate::CeExecutor`] is deliberately not a `bool` for the
+/// same reason, one layer down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeForwarded {
+    /// The proc whose channel submitted.
+    pub proc: ProcId,
+    /// The channel.
+    pub chan: ChanId,
+    /// Sub-copies a **real copy engine** ran ([`kayfabe_isolate::CeExecutor::HostCe`]).
+    pub host_ce: usize,
+    /// Sub-copies the **isolate** ran itself ([`kayfabe_isolate::CeExecutor::Ours`]).
+    pub ours: usize,
+}
+
+impl CeForwarded {
+    /// Did any sub-copy reach a real copy engine?
+    ///
+    /// ⊘ **Not an acceptance predicate.** It says the plan chose hardware and the verb
+    /// returned `Ok`, which is a fact about *us*. Whether bytes moved is
+    /// `kayfabe_isolate_host::rm::CeEvidence::copied()`'s question, and it is answered by
+    /// reading the destination — never by counting our own decisions.
+    #[must_use]
+    pub fn reached_hardware(&self) -> bool {
+        self.host_ce > 0
+    }
+}
+
+/// The ID-shaped hints [`commit_ce`] re-validates against (R5). Identities only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CePlan {
+    /// The submitting proc.
+    pub proc: ProcId,
+    /// The submitting channel.
+    pub chan: ChanId,
+    /// The channel's OWN target GPU — its isolate/arena key, never the doorbell's.
+    pub gpu: GpuId,
+    /// The channel's declared VAS, when it has one. `None` only for the empty
+    /// partition, which needs no address space because it names no address.
+    pub pdb: Option<Pdb>,
+    /// The host VAS the sub-copies' addresses live in, as observed at plan time.
+    pub host_vas: Option<HostHandle>,
+    /// How many sub-copies the plan carried (so a reply that partitioned differently is
+    /// visible rather than silently adopted).
+    pub subs: usize,
+}
+
+/// PLAN (R1) for a partitioned copy-engine request. A pure `&Proc` read; nothing is
+/// mutated until the commit, and no host verb exists until this has passed.
+///
+/// `spans` is what [`partition_ce`] produced for one guest `LAUNCH_DMA` — or what
+/// [`apply_pushbuffer`] accumulated across a whole ring, in submission order. It is
+/// **not** re-derived here: re-partitioning would be a second, competing answer to a
+/// question `apply_pushbuffer` already answered against the same table.
+///
+/// ## The three refusals, and why each is a refusal rather than a repair
+///
+/// - [`FwdFault::UnknownChannel`] — nothing to submit *on*.
+/// - [`FwdFault::NoTarget`] — the `(proc, gpu)` isolate does not exist, so there is no
+///   executor. Checked **before** any host op, like [`plan_publish`]'s.
+/// - [`FwdFault::NoHostVas`] — the channel's `Vas` has never been host-published, so the
+///   addresses in `spans` denote nothing in any host address space. Materializing an
+///   empty host VAS here would turn a refusal into `Xid 31 FAULT_PDE`.
+///
+/// ## An empty partition issues NO verb and checks out NO worker
+///
+/// [`plan_ce_split`]'s *"a request that covers nothing is not a verb"*, carried up: the
+/// plan's `verbs` is `None`, `Staged::check_out` takes no worker, and the commit runs
+/// straight through. That is the ordinary case for a ring that carried no copy at all,
+/// and it must not cost a pool slot.
+///
+/// # Errors
+/// [`FwdFault`], by variant, as above — plus [`FwdFault::RetiredProc`].
+pub fn plan_ce(proc: &Proc, cid: ChanId, spans: &[CeSpan]) -> Result<Planned<CePlan>, FwdFault> {
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    let pid = proc.id;
+    let chan: &Channel = proc.channels.get(&cid).ok_or(FwdFault::UnknownChannel {
+        proc: pid,
+        chan: cid,
+    })?;
+    let cgpu = chan.gpu;
+    // An empty partition names no address, so it needs neither an executor nor an
+    // address space — and asking for either would refuse a submission that is legal.
+    if spans.is_empty() {
+        return Ok(Planned {
+            plan: CePlan {
+                proc: pid,
+                chan: cid,
+                gpu: cgpu,
+                pdb: chan.vas_pdb,
+                host_vas: None,
+                subs: 0,
+            },
+            verbs: None,
+        });
+    }
+    if !proc.isolates.contains_key(&cgpu) {
+        return Err(FwdFault::NoTarget {
+            proc: pid,
+            gpu: cgpu,
+        });
+    }
+    let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
+    let vas = proc
+        .vases
+        .get(&(cgpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
+    let host_vas = vas.host_vas.ok_or(FwdFault::NoHostVas { chan: cid, pdb })?;
+    let verbs = plan_ce_split(host_vas, spans);
+    debug_assert!(verbs.is_some(), "a non-empty partition is a verb");
+    Ok(Planned {
+        plan: CePlan {
+            proc: pid,
+            chan: cid,
+            gpu: cgpu,
+            pdb: Some(pdb),
+            host_vas: Some(host_vas),
+            subs: spans.len(),
+        },
+        verbs,
+    })
+}
+
+/// COMMIT (R5) for a partitioned copy-engine request: re-resolve the proc, the channel
+/// and the `Vas` through their IDs and report what ran.
+///
+/// ## ★★ It adopts NOTHING, and that is a statement rather than an omission
+///
+/// Every other commit in this file exists to take host handles the execute phase minted
+/// and put them into core state. [`VerbPlan::CeSplit`] mints none: it moves bytes into
+/// memory the guest already owns, through a host VAS the `Vas` already held. So this
+/// phase has no adoption to perform, no orphans to dispose of, and nothing to leak.
+///
+/// What it still owes is **attribution**. The bytes have already moved by the time this
+/// runs — a post-hoc refusal cannot unmove them — so the guard's job is not to undo but
+/// to refuse *reporting the result against a world that no longer exists*: a caller told
+/// "channel C copied" about a channel torn down mid-flight would file the fact on
+/// whatever inherits that slot. That is the same aliasing class `#102`'s latch skips a
+/// retired owner for.
+///
+/// ⊘ The `host_vas` re-check is therefore an **equality**, not a re-read-and-adopt: a
+/// `Vas`'s host VAS is write-once (`commit_publish` refuses [`Stale::Rebound`] when one
+/// is already set), so a differing value means the `Vas` itself was replaced, and the
+/// copy ran against an address space that is not this one's.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::CeSplit`] its plan asked for.
+///
+/// # Errors
+/// [`Refusal`] carrying a [`Stale`] variant. Never retryable: re-running a copy that
+/// already executed would perform it **twice**, and a copy is not idempotent.
+pub fn commit_ce(
+    proc: &mut Proc,
+    plan: &CePlan,
+    reply: Option<VerbReply>,
+) -> Result<CeForwarded, Refusal> {
+    let (host_ce, ours) = match reply {
+        None => {
+            // The no-verb arm: an empty partition. Nothing ran, and nothing may claim to.
+            debug_assert_eq!(plan.subs, 0, "only an empty partition issues no verb");
+            (0, 0)
+        }
+        Some(VerbReply::CeSplit { host_ce, ours }) => (host_ce, ours),
+        Some(_) => return wrong_reply("ce split"),
+    };
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal::bare(FwdFault::Stale(Stale::Proc(plan.proc))));
+    }
+    if !proc.channels.contains_key(&plan.chan) {
+        return Err(Refusal::bare(FwdFault::Stale(Stale::Channel(plan.chan))));
+    }
+    if let (Some(pdb), Some(host_vas)) = (plan.pdb, plan.host_vas) {
+        match proc.vases.get(&(plan.gpu, pdb)) {
+            Some(vas) if vas.host_vas == Some(host_vas) => {}
+            Some(_) | None => {
+                return Err(Refusal::bare(FwdFault::Stale(Stale::Vas {
+                    gpu: plan.gpu,
+                    pdb,
+                })));
+            }
+        }
+    }
+    Ok(CeForwarded {
+        proc: plan.proc,
+        chan: plan.chan,
+        host_ce,
+        ours,
+    })
+}
+
+/// The **single-threaded composition** of [`plan_ce`] / `Worker::execute` / [`commit_ce`]
+/// (R1), for a caller holding a bare `&mut Proc`.
+///
+/// ★ L1 does **not** go through here: `kayfabe_rt::SharedDevice::forward_ce` drives the
+/// three phases itself, interleaved with its lock acquire/release and its pool-full wait
+/// — the same split [`exec_doorbell`]'s docs record.
+///
+/// # Errors
+/// [`FwdFault`] from either the plan or the commit.
+pub fn exec_ce(proc: &mut Proc, cid: ChanId, spans: &[CeSpan]) -> Result<CeForwarded, FwdFault> {
+    let planned = plan_ce(proc, cid, spans)?;
+    let gpu = planned.plan.gpu;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_ce(proc, &planned.plan, reply)
+    })
+}
+
 /// ACT phase of the pushbuffer parse: apply the decoded `methods` of channel `cid`
 /// to **its owning proc only** (`&mut Proc` + the read-only spine for the arch's
 /// method decoder). Feeds: the operand split ([`classify_ce`]) → latched [`PtWrite`]s
@@ -3134,6 +3467,35 @@ pub fn parse_pushbuffer(
     let out = apply_pushbuffer(&gpu.spine, proc, cid, methods)?;
     latch_pt_writes(gpu, &out.pt_writes);
     Ok(out)
+}
+
+/// ★★★ **E6 — THE JOIN, single-threaded**: a guest's ring becomes real work on a real
+/// engine. [`parse_pushbuffer`] recovers what the guest asked for; [`exec_ce`] issues it.
+///
+/// This is the composition the E6 row names, with `Worker::execute` and
+/// `RmBackend::ce_copy` reached through [`exec_ce`]'s round trip. L1's form is
+/// `kayfabe_rt::SharedDevice::submit_ring`, which is the same two steps with each half
+/// taking and releasing its own locks.
+///
+/// ⊘ **The page-table decode is NOT folded in**, deliberately. `parse_pushbuffer` latches
+/// the witnessed page-table pages onto their owners; turning them into bindings is
+/// `plan/run/commit_pt_decode`, which needs a `GmmuFmt` out of the spine and a worker of
+/// its own, and which visits **other procs**. Folding it here would hide a cross-proc pass
+/// inside a per-channel one.
+///
+/// # Errors
+/// [`FwdFault`] from either half — the parse's address/read refusals, or the forward's.
+pub fn submit_ring(
+    gpu: &mut Gpu,
+    vmm: &mut dyn Vmm,
+    pid: ProcId,
+    cid: ChanId,
+    ring: &[u8],
+) -> Result<(PushbufferOutcome, CeForwarded), FwdFault> {
+    let parsed = parse_pushbuffer(gpu, vmm, pid, cid, ring)?;
+    let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    let forwarded = exec_ce(proc, cid, &parsed.ce_spans)?;
+    Ok((parsed, forwarded))
 }
 
 /// ★★★ Route each latched page-table write to the `Vas` that **owns** the page.

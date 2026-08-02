@@ -332,6 +332,7 @@ dependencies = [
  "kayfabe-fwd",
  "kayfabe-gsp",
  "kayfabe-isolate",
+ "kayfabe-isolate-host",
  "kayfabe-linux-raw",
  "kayfabe-mmu",
  "kayfabe-mocks",
