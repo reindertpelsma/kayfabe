@@ -541,9 +541,14 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // redundant — token ZERO is a legal work-submit token (runlist 0, channel 0), so one
     // field could not tell "rang channel 0" from "never rang", which is the same
     // two-fields-for-one-fact argument `fb_landed_valid` already carries.
+    // ★ 42 -> 43 at `#128`: `ptimer_writes_refused`. Its own field rather than a share of
+    // `unclaimed_writes`, because the two mean opposite things — unclaimed is "this port
+    // does not model that offset", this is "it models it and says no" — and a guest RM
+    // issuing `tmrSetCurrentTime` should show up in exactly one of them. This assertion is
+    // the reason the wire ABI had to move to 13: nothing else covers this structure's size.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (42 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (43 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()

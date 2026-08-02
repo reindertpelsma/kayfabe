@@ -1269,7 +1269,15 @@ jobs:
           # A crate is exempt from gate A, permitted *_unsafe.rs files by gate B, and
           # counted by the ratchet if and only if it appears here — so "which crates may
           # contain the unsound surface?" is answered by reading one line.
-          AUDITED="kayfabe-linux-raw:86 kayfabe-qemu-raw:47"
+          # ★ 86 -> 87 at `#128`: `spawn_unsafe.rs` gained `geteuid()`, one `unsafe` block
+          # around a nullary syscall that dereferences nothing. It exists so a DIAGNOSTIC
+          # can label its own output — `#128`'s timer rung is meaningless under root,
+          # because RM skips its mmap range walk entirely for `osIsAdministrator()`, and a
+          # run that cannot say which it was is a number nobody can read. ⊘ Nothing
+          # branches on it to decide whether an operation is permitted; RM re-derives the
+          # caller's privilege on every ioctl (`guest_blast_radius.md` §3.2) and a
+          # userspace pre-check could only ever disagree with the kernel's answer.
+          AUDITED="kayfabe-linux-raw:87 kayfabe-qemu-raw:47"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
