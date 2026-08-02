@@ -161,6 +161,26 @@ impl Arch for Ga10xArch {
     /// channel collide loudly in the core's `by_vchid` index rather than route silently
     /// to the wrong one; the return type has no `Option`, so a loud collision is the
     /// strongest available statement of "unbuilt".
+    ///
+    /// ## ★★ What the encoding IS, recorded so the increment starts from a reading
+    ///
+    /// `[src]` RM splits the chid across two **non-adjacent** subfields with a flag bit
+    /// between them — `NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE 10:8`,
+    /// `_USERD_INDEX_FIXED 11:11`, `_USERD_INDEX_PAGE_VALUE 20:12` (`ogkm-580:
+    /// src/common/sdk/nvidia/inc/alloc/alloc_channel.h:184, 186, 201`) — and fills them
+    /// from the chid as `VALUE = ChID % n` / `PAGE_VALUE = ChID / n`, where
+    /// `n = NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))` = 8 (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793, 2800, 2802`). So the recovery
+    /// is `PAGE_VALUE * 8 + VALUE`.
+    ///
+    /// ⊘ **That reading is not a licence to land it**, and this refusal stays until it is
+    /// settled the way `E3`'s doorbell token was: by compiling RM's own writer as an
+    /// oracle and differentialling the decode against it over the field space
+    /// (`isolate_the_drivers_own_checks`; `worksubmit_token_oracle.rs` is the pattern).
+    /// A transcription of the three lines above is exactly the instrument that has been
+    /// wrong before. Note also that `kayfabe_mocks::MockArch` — the seam's only
+    /// non-refusing implementer — packs the chid into **one** contiguous field, so
+    /// nothing in the suite has ever exercised a split one.
     fn vchid_from_userd_flags(&self, _flags: u32) -> VChid {
         VChid(0)
     }
@@ -900,6 +920,21 @@ impl PushbufferAbi for Ga10xPushbuffer {
     /// Two refusals, both of them whole-ring or whole-entry rather than partial: a ring
     /// that is not a whole number of entries yields **nothing**, and a control entry
     /// (`LENGTH == 0`) contributes **nothing**. See the type docs.
+    ///
+    /// ## ★★★ UNRESOLVED — this returns a GPU **VA** into a field the core reads as a GPA
+    ///
+    /// `[src]` The address decoded out of `GP_ENTRY0_GET` / `GP_ENTRY1_GET_HI` is a **GPU
+    /// virtual address in the channel's address space**, not a guest-physical one: UVM
+    /// computes `pushbuffer_va = uvm_pushbuffer_get_gpu_va_for_push(pushbuffer, push)` and
+    /// hands it to `set_gpfifo_entry` unchanged (`ogkm-580:
+    /// kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`), and
+    /// [`kayfabe_abi::submit::gp_entry_decode`] names its own field `gpu_va`.
+    /// `kayfabe_fwd::read_pushbuffer` then passes it to `Vmm::gpa_read` with no walk.
+    ///
+    /// This codec is **not** the place to fix that — inventing a translation here would be
+    /// the fabricated-pointer failure this module refuses everywhere else, and the walk
+    /// needs a `Vas` no [`PushbufferAbi`] method is handed. See [`PushRange`]'s type note
+    /// and `docs/design/execution_plane_increments.md`.
     fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange> {
         if ring.is_empty() || !ring.len().is_multiple_of(submit::GP_ENTRY_SIZE as usize) {
             return Vec::new();

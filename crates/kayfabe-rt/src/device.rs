@@ -1275,7 +1275,22 @@ impl SharedDevice {
     ///
     /// # ★★★ This is the ONLY in-lock-legal entry point that takes a guest-chosen address
     ///
-    /// Every GPFIFO entry in `ring` names a guest-physical address, and `Vmm::gpa_read`
+    /// ⊘ **This paragraph used to open *"Every GPFIFO entry in `ring` names a
+    /// guest-physical address"*, and `ogkm` refutes it.** A GA10x GPFIFO entry names a
+    /// GPU **virtual** address in the issuing channel's address space — UVM writes
+    /// `uvm_pushbuffer_get_gpu_va_for_push(...)` into it (`ogkm-580:
+    /// kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`; the field is
+    /// `NVC56F_GP_ENTRY0_GET`/`_GET_HI`, `ogkm-580: clc56f.h:270, 272`). The statement was
+    /// true of `kayfabe_mocks::MockPushbuffer`, whose invented entry really does carry a
+    /// GPA, and that is the whole reason it survived. See [`kayfabe_arch::PushRange`]'s
+    /// type note; resolving the range needs the channel's `Vas`, which this phase
+    /// deliberately does not hold, so it is an increment and not an edit.
+    ///
+    /// What is **unchanged** is the lock argument below, because it rests only on the
+    /// value being guest-chosen and on `Vmm::gpa_read` refusing anything that is not host
+    /// RAM — not on what the guest meant by it.
+    ///
+    /// The address in each GPFIFO entry is guest-chosen, and `Vmm::gpa_read`
     /// runs here with a ranked lock held. That combination is legal **only** because the
     /// port refuses a GPA that does not resolve to host RAM
     /// (`kayfabe_vmm::GuestRamMap`): a backend that served a device-aimed GPA would take

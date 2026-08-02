@@ -1153,6 +1153,25 @@ impl Guest {
             // as-is deliberately — the model slices where the driver casts a flexible
             // array, and relaxing it would need a shape change, not a comment — but no
             // test may assert that a 610 guest *rejects* `rpc.length == 0`: it does not.
+            //
+            // ⚠⚠ AND SO IS ITS POSITION, which is a second divergence and a different one.
+            // At BOTH tags the length test is the LAST thing the receive path does and it
+            // gates NOTHING: 580 runs it after the checksum and the seqNum, past the retry
+            // loop, and the `exit:` label then calls `msgqRxMarkConsumed(nElements)` and
+            // `pMQI->rxSeqNum++` regardless of the status it set
+            // (`ogkm-580: message_queue_cpu.c:760-786`); 610 is the same shape
+            // (`ogkm-610: :826-833`). So a real guest handed a bad-length element
+            // CONSUMES it, advances the ring and the sequence, and carries on — while
+            // this model returns and consumes nothing. Two consequences, neither of them
+            // load-bearing today and both of them assertions nobody may make:
+            //   (a) for an element that is bad in more than one way, the driver reports
+            //       BadChecksum or BadSequence where this reports BadLength;
+            //   (b) a bad-length element is not a wedge on a real guest, and it is here.
+            // The two live call sites (`tests/tests/gsp_boot.rs:197, 217`) accept
+            // `BadLength` only inside an `Err(A | B)` disjunction, so nothing currently
+            // pins the wrong refusal. Straightening it means making the model
+            // consume-and-continue, which is the same shape change the `rpc.length` bound
+            // above needs — so both are recorded together and neither is guessed at.
             if rpc_length < 32
                 || msg_len < self.p.hdr() as u32
                 || msg_len > self.p.element_size_max()

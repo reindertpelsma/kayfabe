@@ -128,6 +128,30 @@ impl MockArch {
 
     /// Inverse of [`Arch::vchid_from_userd_flags`] — lets tests declare a channel
     /// with a chosen vChid through the *encoded* form, like a real guest would.
+    ///
+    /// ## ⊘ ONE contiguous field, where RM writes TWO — `mock_method::CE_LAUNCH_DMA`'s
+    /// family, and this seam has no other implementer
+    ///
+    /// `[src]` RM splits the chid across two **non-adjacent** subfields of
+    /// `NVOS04_FLAGS`, with a flag bit between them:
+    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE` is `10:8` and
+    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_VALUE` is `20:12`, separated by
+    /// `_USERD_INDEX_FIXED 11:11` (`ogkm-580:
+    /// src/common/sdk/nvidia/inc/alloc/alloc_channel.h:184, 186, 201`). It fills them from
+    /// the chid as `VALUE = ChID % n`, `PAGE_VALUE = ChID / n` with
+    /// `n = NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))` = 8 (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793, 2800, 2802`), so the recovery
+    /// is `PAGE_VALUE * 8 + VALUE` and is **not** a contiguous field read.
+    ///
+    /// This mock packs it into one 12-bit field at `18:7` — which straddles both real
+    /// fields and RM's `_FIXED` bit. That is fine as an invented encoding and it is
+    /// recorded because of what it makes untestable: `Ga10xArch::vchid_from_userd_flags`
+    /// answers `VChid(0)` for **every** input (a documented refusal), so [`MockArch`] is
+    /// the only implementer of this seam that returns a chid at all, and the shape of what
+    /// it returns has never been driven against a split encoding. ⊘ Unlike `E4`'s
+    /// `LAUNCH_DMA`, the *signature* is not the problem — both real fields live in the one
+    /// `u32` this method is handed — so building the real decode is an increment, not a
+    /// redesign.
     #[must_use]
     pub fn userd_flags_for(vchid: VChid) -> u32 {
         // Fake packing: vchid in bits [18:7], marker bits low.
@@ -342,16 +366,43 @@ impl Arch for WireClassArch {
     }
 }
 
-/// Mockingbird Case-2 (GSP-internal, ack-only) control commands. Deliberately-fake
-/// values; a real arch sources these from its Axis-A tables.
+/// Mockingbird's Case-2 (GSP-internal, ack-only) control commands.
+///
+/// ## ⊘ Two of the three are NVIDIA's REAL command ids, not invented ones
+///
+/// This module's doc said *"deliberately-fake values"* and that was **false of two of the
+/// three constants** — a statement about the double that the double did not have:
+///
+/// | constant | value | what it really is |
+/// |---|---|---|
+/// | [`PROMOTE_CTX`] | `0x2080012b` | `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:984`) |
+/// | [`GET_CTX_BUFFER_INFO`] | `0x20801219` | `NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_INFO` (`ogkm-580: ctrl2080gr.h:1116`) |
+/// | [`FORWARDABLE`] | `0x00001234` | invented, and no NVIDIA control has this id |
+///
+/// ★ Keeping the two real values is deliberate and is why this is a doc fix rather than a
+/// value fix: a **wire-driven** test posts the id `kayfabe_abi::generated::ctrl` carries
+/// (and `kayfabe_rmrpc` translates `0x2080012b` by name), so if these were invented the
+/// mock's ack-only arm would be unreachable from wire bytes and the split would only ever
+/// be provable through hand-built [`kayfabe_arch::ids::ControlCmd`]s. It is the same
+/// reasoning as [`WireClassArch`]'s, one seam over.
+///
+/// ⊘ **What it costs, stated so nobody reads more into the mock than is there.**
+/// [`MockArch`]'s standing property is *"deliberately fake encodings, so any core code
+/// that secretly assumes a real NVIDIA encoding fails the mock-driven tests"*. It does
+/// **not** hold on this seam: core code that hard-coded the literal `0x2080012b` instead
+/// of asking [`Arch::is_case2_control`] would go green here. `Ga10xArch::is_case2_control`
+/// answers `false` for every command, so the two arches disagree about these ids and only
+/// an arch-driven call site behaves the same under both.
 pub mod mock_ctrl {
     use kayfabe_arch::ids::ControlCmd;
 
-    /// `PROMOTE_CTX`-shaped: the host already promoted its own GR ctx (Case-1).
+    /// `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` — the host already promoted its own GR ctx
+    /// (Case-1), so the guest's copy is acked and dropped.
     pub const PROMOTE_CTX: ControlCmd = ControlCmd(0x2080_012b);
-    /// `GET_CTX_BUFFER_INFO`-shaped: re-derived host-side, ack-only.
+    /// `NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_INFO` — re-derived host-side, ack-only.
     pub const GET_CTX_BUFFER_INFO: ControlCmd = ControlCmd(0x2080_1219);
-    /// A forwardable (Case-1) control — NOT ack-only (used to prove the split).
+    /// A forwardable (Case-1) control — NOT ack-only (used to prove the split). ★ The one
+    /// invented value here: no NVIDIA control id is `0x1234`.
     pub const FORWARDABLE: ControlCmd = ControlCmd(0x0000_1234);
 }
 
@@ -502,6 +553,20 @@ impl PushbufferAbi for MockPushbuffer {
         }
     }
 
+    /// ⊘ **This is the encoding that hides [`PushRange`]'s open VA-vs-GPA question, and
+    /// it is `mock_method::CE_LAUNCH_DMA`'s family.** The invented entry below stores a
+    /// genuine **guest-physical** address, so `kayfabe_fwd::read_pushbuffer`'s
+    /// `Vmm::gpa_read` of it is correct by construction in every mock-driven test. A real
+    /// GA10x entry holds a GPU **virtual** address in the channel's VAS
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`). ⊘ Do not "fix" this
+    /// by inventing a VA here: the mock has no VAS to make one meaningful in, and a fake
+    /// VA that resolved nowhere would only convert a silent wrong read into a fixture
+    /// nobody can write. The question belongs to `Ga10xPushbuffer`'s consumer.
+    ///
+    /// ⊘ Two further deliberate divergences from [`kayfabe_chips::Ga10xPushbuffer`], in
+    /// the **more permissive** direction, so no test here is evidence about them: a ring
+    /// whose length is not a whole number of entries yields its **prefix** (the real codec
+    /// yields nothing at all), and there is no `LENGTH == 0` control-entry refusal.
     fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange> {
         // Fake GPFIFO: 16-byte entries, each [gpa: u64 LE, len: u64 LE]. A truncated
         // tail is ignored (a hostile ring must never panic — decode is total).
@@ -520,8 +585,9 @@ impl PushbufferAbi for MockPushbuffer {
 /// on a directory entry, phys in bits [51:12]).
 ///
 /// ★ The split is deliberate and is what makes this double useful for the page-table
-/// decoder: **the geometry is not fake.** [`MockGmmuFmt::level_shift`] is the C's own
-/// table transcribed value-for-value (`C: nvkvm_gpu_emul.c:8706-8708`), because the
+/// decoder: **the geometry is not fake.** [`MockGmmuFmt::level_shift`] is the real VER2
+/// geometry — the C's strides (`C: nvkvm_gpu_emul.c:8706-8708`) with the root's entry
+/// count taken from the driver rather than from the C, see [`MOCK_LEVELS`] — because the
 /// decoder's whole job is to turn *(table page, level)* into *(virtual address, leaf)*
 /// and a made-up stride would make every test about that a test about nothing. Only the
 /// **bit layout** of an entry is invented, and that is the half a decoder is
@@ -544,18 +610,43 @@ pub const MOCK_PAGE_SIZES: [PageSize; 4] = [
     PageSize(0x2000_0000),
 ];
 
-/// ★★★ **The C's level table, transcribed** (`C: nvkvm_gpu_emul.c:8706-8708`):
-/// `{47,512},{38,512},{29,512},{21,256},{12,512},{16,32}`.
+/// ★★★ **The VER2 level table** — the C's strides (`C: nvkvm_gpu_emul.c:8706-8708`), with
+/// the root's entry COUNT taken from the driver instead of from the C.
 ///
 /// Row `n` is the C's `m2_cpt` level `n`: 0..=2 are the three 8-byte page directories,
 /// 3 is the dual-entry directory (16-byte slots, 256 of them), and 4 / 5 are the **two
 /// alternative leaf tables** under it — small pages and big pages. 4 and 5 are siblings,
 /// not a sequence, which is why an edge into one of them carries its own
 /// [`PteDecode::Pde::child_level`] and the walker never increments.
+///
+/// ## ★★★ Row 0's count is **4**, and the C artifact says 512 — the C is wrong there
+///
+/// `[src]` The driver builds this regime's root as `virtAddrBitHi = 48`,
+/// `virtAddrBitLo = 47` (`ogkm-580:`/`ogkm-610:
+/// src/nvidia/src/kernel/gpu/mmu/arch/pascal/kern_gmmu_fmt_gp10x.c:59-60` — byte-identical
+/// and on the same lines at both tags), i.e. **two** VA bits, i.e. **4** entries in a page
+/// that could hold 512. `kayfabe_chips::Ga10xGmmu::level_shift` already reports `(47, 4)`
+/// for `L_PD3`, and `tests/tests/gmmu_fmt_oracle.rs` differentials it against the driver's
+/// own compiled table.
+///
+/// The C's `nvkvm_m2_cpt_lvl[0]` is `{ 47, 512 }` (`C: nvkvm_gpu_emul.c:8709`), which is
+/// `page_bytes / entry_size` — **the derivation [`LevelShift`] exists to forbid**. It makes
+/// the C's own PD3 sweep walk 4 096 bytes of a 32-byte directory and synthesise virtual
+/// addresses at `i << 47` for `i` up to 511, past the top of the 49-bit VA space this
+/// format defines. ⊘ This is a limit of the C oracle, not of the reading:
+/// `c_oracle_empty_rows_are_wrong` records the same lesson one plane over.
+///
+/// ★ Why the mock takes the driver's number rather than the C's, even though every other
+/// value here is the C's: with `512` the root is the one directory at which a decoder that
+/// *derived* the count from a page size would be indistinguishable from one that read it.
+/// With `4` the "`entries` is a count, not a size" property is exhibited at **two** levels
+/// (root 4-of-512, big-page table 32-of-512) instead of one — a strictly larger statement,
+/// through a double that is 128× less capable at the root than it was and exactly as
+/// capable as the regime.
 pub const MOCK_LEVELS: [LevelShift; 6] = [
     LevelShift {
         shift: 47,
-        entries: 512,
+        entries: 4,
     },
     LevelShift {
         shift: 38,
@@ -646,8 +737,10 @@ impl GmmuFmt for MockGmmuFmt {
     }
     fn entry_size(&self, level: u8) -> u8 {
         // The dual-entry directory's slots are 16 bytes wide; every other level's are 8.
-        // `256 * 16` and `512 * 8` are both exactly one 4 KiB page, which is the fact
-        // that makes the geometry self-consistent.
+        // ⊘ A width is NOT a count: `256 * 16` and `512 * 8` each fill one 4 KiB page, but
+        // the root (4 entries) and the big-page table (32) deliberately do not — see
+        // `MOCK_LEVELS`. Anything deriving a count from this width is wrong at two of the
+        // six rows.
         if level == MOCK_DUAL_LEVEL { 16 } else { 8 }
     }
     fn levels(&self) -> u8 {
@@ -952,6 +1045,26 @@ impl Vmm for MockVmm {
         Ok(())
     }
 
+    /// ★★ **[`Prot::ReadOnly`] is refused here because BOTH real backends refuse it**, and
+    /// a double that served it would let a core path be written against an outcome no host
+    /// can produce.
+    ///
+    /// This is the one arm of `map_guest` where the two shipped adapters agree on a
+    /// refusal and the mock used to disagree: `KvmVmm::map_guest`
+    /// (`crates/kayfabe-vmm-kvm/src/lib.rs:1534`) and `QemuVmm::map_guest`
+    /// (`crates/kayfabe-vmm-qemu/src/lib.rs:2016`) both answer
+    /// [`VmmError::Unsupported`], because KVM's read-only flag is a **slot** property and
+    /// cannot be expressed for one object inside a shared read-write window
+    /// (`l2_qemu_adapter.md` §6.7 item 4) — the design answer is to place the object in a
+    /// read-only window, never to mint a slot to make one page read-only. The read-native
+    /// path is [`Vmm::map_read_native`], which is a different verb and stays available.
+    ///
+    /// ⊘ The mock's OTHER two divergences from the real backends are **not** closed here
+    /// and must not be read as closed: it still accepts a `gpa` no installed window covers
+    /// (both real backends answer [`VmmError::BadGpa`]) and two placements overlapping in
+    /// one window (both answer [`VmmError::Unsupported`]). Modelling either needs the mock
+    /// to carry windows, which is a shape change to a double that deliberately has none —
+    /// recorded rather than guessed at.
     fn map_guest(
         &mut self,
         gpa: u64,
@@ -959,6 +1072,12 @@ impl Vmm for MockVmm {
         backing: HostRegion,
         prot: Prot,
     ) -> Result<SlotId, VmmError> {
+        if prot == Prot::ReadOnly {
+            return Err(VmmError::Unsupported(
+                "per-object read-only protection inside a read-write window — protection \
+                 is a WINDOW property; both real backends refuse this",
+            ));
+        }
         let id = SlotId(self.next_slot);
         self.next_slot += 1;
         self.slots.insert(
@@ -3272,6 +3391,36 @@ mod tests {
                 CoreEvent::Deferred(CoreEventKind::DeferredReap),
             ],
             "due in deadline order, deterministically"
+        );
+    }
+
+    /// ★★ **The double refuses the protection both real backends refuse** — the
+    /// mock-fidelity arm of [`MockVmm::map_guest`].
+    ///
+    /// `KvmVmm` and `QemuVmm` each answer [`VmmError::Unsupported`] for
+    /// [`Prot::ReadOnly`]; the mock used to answer `Ok`, so a core path that asked for a
+    /// per-object read-only mapping would have passed every mock-driven test in the
+    /// workspace and been refused by both shipped adapters. Nothing calls it that way
+    /// today, which is exactly why it needs an instrument: the divergence is latent, and
+    /// a latent divergence with no test reads as an absent one.
+    ///
+    /// ⊘ The `ReadWrite` arm is asserted in the same test on purpose — a refusal that
+    /// refused *everything* would pass the first half and be useless.
+    #[test]
+    fn mock_map_guest_refuses_the_protection_both_real_backends_refuse() {
+        let mut vmm = MockVmm::new();
+        let backing = HostRegion { id: 1, offset: 0 };
+        assert!(
+            matches!(
+                vmm.map_guest(0x1000, 0x1000, backing, Prot::ReadOnly),
+                Err(VmmError::Unsupported(_))
+            ),
+            "a per-object read-only placement is refused by KvmVmm and QemuVmm alike"
+        );
+        assert!(
+            vmm.map_guest(0x1000, 0x1000, backing, Prot::ReadWrite)
+                .is_ok(),
+            "…and the ordinary placement still succeeds, so the refusal is not total"
         );
     }
 

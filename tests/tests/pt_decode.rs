@@ -202,40 +202,52 @@ fn only_proc(gpu: &mut Gpu) -> &mut kayfabe_core::gpu::Proc {
 // 0. The geometry the decoder walks with — the C's own table
 // =====================================================================================
 
-/// ★★ The level table is the C's, value for value (`C: nvkvm_gpu_emul.c:8706-8708`), and
-/// it is **self-consistent**: every directory's entries fill exactly one 4 KiB page, and
-/// the big-page table's 32 entries are NOT `page / entry_size`.
+/// ★★ The level table is the real VER2 geometry — the C's strides
+/// (`C: nvkvm_gpu_emul.c:8706-8708`) with the ROOT's entry count taken from the driver —
+/// and **two** of its six rows have a count that is not `page / entry_size`.
 ///
 /// That last clause is the one worth pinning. `entries` being a count rather than a
-/// derived quantity is what stops the decoder reading 3 840 bytes past a big-page table.
+/// derived quantity is what stops the decoder reading 3 840 bytes past a big-page table,
+/// and 4 064 bytes past the root.
+///
+/// ★★★ **Row 0 used to say 512 and that was the C's error, not the driver's.**
+/// `virtAddrBitHi = 48` / `virtAddrBitLo = 47` is two VA bits ⇒ **4** entries
+/// (`ogkm-580:`/`ogkm-610:
+/// src/nvidia/src/kernel/gpu/mmu/arch/pascal/kern_gmmu_fmt_gp10x.c:59-60`, same lines at
+/// both tags), which is what `kayfabe_chips::Ga10xGmmu` reports and what
+/// `gmmu_fmt_oracle.rs` differentials against the driver's own compiled table. The C's
+/// `{ 47, 512 }` is exactly `page_bytes / entry_size`. So this test's own premise had a
+/// hole in it: with a 512-entry root, the root was the one directory at which a decoder
+/// that DERIVED the count was indistinguishable from one that read it.
 #[test]
-fn the_level_table_is_the_c_s_and_entry_counts_are_not_derived_from_a_page_size() {
+fn the_level_table_is_the_regimes_and_entry_counts_are_not_derived_from_a_page_size() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
 
     assert_eq!(
         (0..6u8).map(|l| fmt.level_shift(l)).collect::<Vec<_>>(),
         MOCK_LEVELS.iter().copied().map(Some).collect::<Vec<_>>(),
-        "the geometry the walker asks for is the C's table"
+        "the geometry the walker asks for is the table"
     );
     assert_eq!(
         MOCK_LEVELS.map(|g| (g.shift, g.entries)),
         [
-            (47, 512),
+            (47, 4),
             (38, 512),
             (29, 512),
             (21, 256),
             (12, 512),
             (16, 32)
         ],
-        "C: nvkvm_gpu_emul.c:8706-8708"
+        "strides: C: nvkvm_gpu_emul.c:8706-8708; root count: \
+         ogkm-580:/ogkm-610: kern_gmmu_fmt_gp10x.c:59-60"
     );
     // An un-enumerated level is `None`, not a stride the walker invents.
     assert_eq!(fmt.level_shift(6), None);
     assert_eq!(fmt.level_shift(u8::MAX), None);
 
-    // The four directories each fill exactly one 4 KiB page…
-    for l in 0..=MOCK_DUAL_LEVEL {
+    // The three directories BELOW the root each fill exactly one 4 KiB page…
+    for l in 1..=MOCK_DUAL_LEVEL {
         let g = fmt.level_shift(l).expect("a directory level");
         assert_eq!(
             u64::from(g.entries) * u64::from(fmt.entry_size(l)),
@@ -247,15 +259,18 @@ fn the_level_table_is_the_c_s_and_entry_counts_are_not_derived_from_a_page_size(
     assert_eq!(fmt.entry_size(MOCK_DUAL_LEVEL), 16);
     assert_eq!(fmt.entry_size(small_leaf_level()), 8);
 
-    // ★ The big-page table is 32 entries in a page that would hold 512. A decoder that
-    // derived the count would read 4 096 bytes where 256 exist.
-    let big = fmt.level_shift(5).expect("the big-page table");
-    assert_eq!((big.entries, big.shift), (32, 16));
-    assert_ne!(
-        u64::from(big.entries) * u64::from(fmt.entry_size(5)),
-        0x1000,
-        "if this ever equals a page, the test above stops meaning anything"
-    );
+    // ★ The TWO rows whose count is not the page's capacity. A decoder that derived either
+    // would read 4 064 bytes past the root and 3 840 past the big-page table.
+    for (level, entries, shift) in [(0u8, 4u32, 47u8), (5, 32, 16)] {
+        let g = fmt.level_shift(level).expect("a level the regime has");
+        assert_eq!((g.entries, g.shift), (entries, shift));
+        assert_ne!(
+            u64::from(g.entries) * u64::from(fmt.entry_size(level)),
+            0x1000,
+            "level {level}: if this ever equals a page, the loop above stops meaning \
+             anything"
+        );
+    }
 }
 
 // =====================================================================================

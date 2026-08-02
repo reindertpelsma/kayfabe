@@ -1,4 +1,10 @@
 /target
+# ★ Any sibling build tree an agent points `CARGO_TARGET_DIR` at. Untracked is NOT
+# enough: `scripts/claim_ledger.py`'s universe is `git ls-files -o --exclude-standard`,
+# so an untracked build tree that happens to contain a generated `.rs` lands INSIDE the
+# gate's universe (`gates_quantified_over_a_list`, fourth instance — "tracked" is not
+# "present", and neither is "present" the same as "ours").
+/target-*
 # ★ The ABI generator is a separate cargo workspace run by hand
 # (`crates/kayfabe-abi/gen`), so its build output is NOT under the root `/target`
 # above. Left untracked it made two CI gates fail on `grep: … binary file matches`

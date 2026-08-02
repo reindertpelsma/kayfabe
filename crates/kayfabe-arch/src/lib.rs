@@ -558,9 +558,35 @@ pub enum PushMethod {
 
 /// One pushbuffer range to walk: a contiguous run of method words a GPFIFO entry
 /// points at. The core walks these; the arch iterates the GPFIFO to produce them.
+///
+/// # ★★★ UNRESOLVED — the field is named `gpa` and a real GPFIFO entry holds a GPU **VA**
+///
+/// `[src]` A GA10x GPFIFO entry's address is `NVC56F_GP_ENTRY0_GET 31:2` +
+/// `NVC56F_GP_ENTRY1_GET_HI 7:0` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/class/clc56f.h:270, 272`), and what the driver puts there is
+/// a **GPU virtual address in the channel's own address space**: UVM computes
+/// `pushbuffer_va = uvm_pushbuffer_get_gpu_va_for_push(...)` and hands exactly that to
+/// `set_gpfifo_entry` (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`).
+/// `kayfabe_abi::submit::gp_entry_decode` names its own field `gpu_va` for that reason.
+///
+/// `kayfabe_fwd::read_pushbuffer` passes [`PushRange::gpa`] straight to
+/// `kayfabe_vmm::Vmm::gpa_read`, i.e. treats it as a guest-physical address with no walk.
+/// ⊘ That is right for `kayfabe_mocks::MockPushbuffer`, whose invented 16-byte GPFIFO
+/// entry stores a genuine GPA — which is precisely why no mock-driven test can see the
+/// question — and it is **not established** for `kayfabe_chips::Ga10xPushbuffer`, which
+/// returns the driver's VA verbatim.
+///
+/// Closing it is a shape change, not an edit: resolving the range needs the issuing
+/// channel's `Vas`, and `read_pushbuffer` is documented and locked as a phase that
+/// *"touches no proc"* under the device read lock. Recorded here rather than guessed at —
+/// `docs/design/execution_plane_increments.md`, and the same family as `E4`'s
+/// `LAUNCH_DMA` operands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PushRange {
-    /// Guest-physical (or shared) address of the method words.
+    /// Address of the method words, **as this architecture's GPFIFO entry states it**.
+    ///
+    /// ⊘ Read the type-level note before consuming this as a guest-physical address: on
+    /// GA10x the driver writes a GPU virtual address into that field.
     pub gpa: u64,
     /// Length of the range in bytes.
     pub len: u64,
