@@ -33,7 +33,9 @@ use kayfabe_core::ProcAnchor;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::project::{NO_CONDEMNED, project};
-use kayfabe_core::rmgraph::{AllocFacts, ClientKey, NodeKey, ResourceKey, RmEvent, RmGraph};
+use kayfabe_core::rmgraph::{
+    AllocFacts, ClientKey, GpFifoRing, NodeKey, ResourceKey, RmEvent, RmGraph,
+};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -134,6 +136,19 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                             0x40 => Some(ErrorNotifier::Unreachable),
                             _ => Some(ErrorNotifier::Sysmem {
                                 gpa: 0x1000_0000 | u64::from(flags),
+                            }),
+                        },
+                        // ★ §8.2.2's recorder-only fact. Fuzzed across all three shapes —
+                        // absent, the deliberate zero the driver declares for a
+                        // golden-context channel, and a real address — because the
+                        // invariants below must hold whatever a channel names, and
+                        // NOTHING in the graph may start reading it.
+                        gp_fifo_ring: match flags & 0x300 {
+                            0x000 => None,
+                            0x100 => Some(GpFifoRing { va: 0, entries: 0 }),
+                            _ => Some(GpFifoRing {
+                                va: 0x7f00_0000_0000 | u64::from(flags),
+                                entries: 512,
                             }),
                         },
                     },

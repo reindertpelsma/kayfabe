@@ -404,6 +404,47 @@ pub struct AllocFacts {
     /// refuses an address outside guest RAM by name, and a second opinion here would be a
     /// second source of truth for where guest RAM is.
     pub error_notifier: Option<ErrorNotifier>,
+    /// ★★★ Where a **Channel** declared its GPFIFO ring lives — carried so a boot can
+    /// *state* the address, and read by nothing on the data path.
+    ///
+    /// `None` on every non-channel class, and on a channel whose params did not decode.
+    /// See [`GpFifoRing`] for what the number is and why `Some(GpFifoRing { va: 0, .. })`
+    /// is a real answer rather than an absence.
+    pub gp_fifo_ring: Option<GpFifoRing>,
+}
+
+/// ★★★ **The GPFIFO ring a channel declared, verbatim** — `gpFifoOffset` /
+/// `gpFifoEntries` off `NV_CHANNEL_ALLOC_PARAMS`.
+///
+/// # ⊘ This is a GPU VIRTUAL address, and that is the whole reason it is recorded
+///
+/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:809` names
+/// the field *"Gpfifo Virtual Offset"*. On the driver path this port's wall sits on it is
+/// `pChannel->pbGpuVA + pChannel->channelPbSize`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:1232`),
+/// where `pbGpuVA` is the `dmaOffset` returned by an `NV04_MAP_MEMORY_DMA` (`:842`) —
+/// **an RPC that never reaches this port at all**, because `MAP_MEMORY_DMA` is a HAL stub
+/// on every GSP-client part (`kayfabe_rmrpc` crate docs, §2.7).
+///
+/// The same `pbGpuVA` is what a GPFIFO *entry* names: `get = pChannel->pbGpuVA + gpOffset`,
+/// packed into `GP_ENTRY0_GET`/`GP_ENTRY1_GET_HI` (`:1871-1879`). So this value and
+/// [`kayfabe_arch::PushRange::gpa`] are addresses **of the same kind, in the same
+/// allocation** — which is what makes recording this one a measurement of the other.
+///
+/// ⊘ Nothing in the core reads it. `docs/design/execution_plane_increments.md` §8.2.2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpFifoRing {
+    /// `gpFifoOffset` @ +8 — the ring's base, as the guest named it.
+    ///
+    /// ⚠ **`0` is a value, not a blank**, which is why this whole struct sits behind an
+    /// `Option` instead of the field being a bare `u64`: the driver deliberately declares
+    /// `gpFifoOffset = 0` for the channel it uses only to build a golden context
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2420-2424`, *"Set the
+    /// gpFifoOffset to zero intentionally"*). Same argument as
+    /// `KayfabeRegAudit::doorbell_last_token_valid`.
+    pub va: u64,
+    /// `gpFifoEntries` @ +16 — how many 8-byte entries the ring holds.
+    pub entries: u32,
 }
 
 /// One abstract RM protocol event. Produced by the ABI adapter (or a test),

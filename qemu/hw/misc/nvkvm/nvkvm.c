@@ -1504,6 +1504,26 @@ static void nvkvm_report_registers(NvkvmState *s)
                     tlen, (const char *)a.doorbell_refusal.text);
     }
 
+    /*
+     * ★★★ §8.2.2 — THE GPFIFO RING ADDRESS THE GUEST DECLARED.  Printed unconditionally,
+     * all-zeros included, for the reason every other block here is.
+     *
+     * `declarations` is the number to read FIRST: it says whether the guest got as far as
+     * declaring a ring at all, which is a completely different diagnosis from "it declared
+     * one and it looked wrong".  `nonzero` is the validity flag for the address, because
+     * gpFifoOffset = 0 is a real declaration (ogkm-580: kernel_graphics.c:2420-2424).
+     *
+     * ⊘ The address is a GPU VIRTUAL address, and this line does NOT translate it — there
+     * is nothing here to translate it with.  Read it against the guest's own RAM layout
+     * (the -m size and the machine's PCI hole): that comparison is the measurement.
+     */
+    info_report("nvkvm: gpfifo rings: %" PRIu64 " declared, %" PRIu64 " with a non-zero "
+                "address; first %s0x%016" PRIx64 " (%" PRIu64 " entries) — GPU VIRTUAL, "
+                "untranslated",
+                a.gpfifo_ring_declarations, a.gpfifo_ring_nonzero,
+                a.gpfifo_ring_nonzero ? "" : "n/a ",
+                a.gpfifo_ring_va, a.gpfifo_ring_entries);
+
     if (a.isolate_refusal.kind != KAYFABE_ISOLATE_REFUSAL_NONE) {
         const char *kind = a.isolate_refusal.kind == KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED
                            ? "spawn-failed" : "no-plane";

@@ -50,8 +50,8 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{Boundaries, NO_CONDEMNED, ProcBoundary, project};
 use kayfabe_core::rmgraph::{
-    AllocFacts, Capacity, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey, ResourceKey,
-    RmEvent, RmGraph, RmGraphError,
+    AllocFacts, Capacity, GpFifoRing, MAX_LIVE_HANDLES, MAX_LIVE_MAPPINGS, MAX_PARKED, NodeKey,
+    ResourceKey, RmEvent, RmGraph, RmGraphError,
 };
 use kayfabe_fwd::{FwdFault, handle_doorbell, parse_pushbuffer, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
@@ -188,6 +188,18 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                         0x40 => Some(ErrorNotifier::Unreachable),
                         _ => Some(ErrorNotifier::Sysmem {
                             gpa: 0x1000_0000 | u64::from(flags),
+                        }),
+                    },
+                    // ★ §8.2.2 — A may declare any GPFIFO ring address it likes,
+                    // including one naming B's memory. The field is recorder-only, so
+                    // B's isolation must be indifferent to it; this is what makes that
+                    // indifference a fuzzed property rather than a code reading.
+                    gp_fifo_ring: match flags & 0x300 {
+                        0x000 => None,
+                        0x100 => Some(GpFifoRing { va: 0, entries: 0 }),
+                        _ => Some(GpFifoRing {
+                            va: 0x7f00_0000_0000 | u64::from(flags),
+                            entries: 512,
                         }),
                     },
                 },

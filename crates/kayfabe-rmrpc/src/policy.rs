@@ -160,6 +160,71 @@ impl SharedRefusalCensus {
     }
 }
 
+/// ★★★ **What the guest said its GPFIFO rings live at** — the §8.2.2 measurement, as a
+/// value the composition root can still read after the policy is boxed.
+///
+/// # What this answers, and what it deliberately does not
+///
+/// `kayfabe_arch::PushRange::gpa` is fed to `Vmm::gpa_read` with no walk, while a GA10x
+/// GPFIFO entry names a GPU **virtual** address. Whether that is a *live* defect or a
+/// latent one turns on one number nobody had ever looked at: the address the guest itself
+/// names for a ring, at the wall this port stops at. This census is that number, carried
+/// out of a boot.
+///
+/// ⊘ It cannot say *"and here is the GPA it corresponds to"*, and that absence is a
+/// finding rather than a gap in the instrument: the binding that would answer it is a
+/// `MAP_MEMORY_DMA`, and that RPC is a HAL stub on every GSP-client part, so it never
+/// reaches this port at all (crate docs, §2.7). There is no second number to compare
+/// against because the guest never tells us one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RingCensus {
+    /// Channel allocs that reached the graph carrying a decoded `gpFifoOffset` —
+    /// including the ones that declared `0`.
+    pub declarations: u64,
+    /// Of those, how many named a **non-zero** ring address. ⚠ Not the same number:
+    /// `gpFifoOffset = 0` is a real declaration the driver makes on purpose
+    /// (`ogkm-580: kernel_graphics.c:2420-2424`), so folding the two would report a
+    /// golden-context channel as *"no ring seen"*.
+    pub nonzero: u64,
+    /// The **first** non-zero ring the guest declared: `(va, entries)`.
+    ///
+    /// ⊘ First, not last, for `KayfabeRegAudit::doorbell_refusal`'s reason: a boot that
+    /// declares many rings must not be able to push the first observation out of the one
+    /// line a teardown report has room for.
+    pub first_nonzero: Option<(u64, u32)>,
+}
+
+/// [`RingCensus`] as a handle the composition root keeps after handing the policy away —
+/// same shape, and the same ownership argument, as [`SharedRefusalCensus`].
+#[derive(Debug, Clone, Default)]
+pub struct SharedRingCensus(std::sync::Arc<std::sync::Mutex<RingCensus>>);
+
+impl SharedRingCensus {
+    /// A fresh, empty census.
+    #[must_use]
+    pub fn new() -> SharedRingCensus {
+        SharedRingCensus::default()
+    }
+
+    /// A point-in-time copy.
+    #[must_use]
+    pub fn snapshot(&self) -> RingCensus {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Record one channel alloc's declared ring.
+    fn record(&self, r: kayfabe_core::rmgraph::GpFifoRing) {
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        g.declarations = g.declarations.saturating_add(1);
+        if r.va != 0 {
+            g.nonzero = g.nonzero.saturating_add(1);
+            if g.first_nonzero.is_none() {
+                g.first_nonzero = Some((r.va, r.entries));
+            }
+        }
+    }
+}
+
 /// ★★★ **The object model, as the two mutations a delivered command can make** — the seam
 /// that lets one bridge declare into a bare [`Gpu`] *or* into a shell that owns it behind
 /// ranked locks.
@@ -284,6 +349,8 @@ struct Bridge {
     /// — see [`Reassembler`].
     reasm: Reassembler,
     census: SharedRefusalCensus,
+    /// ★ §8.2.2 — the GPFIFO ring addresses the guest declared. Recorder-only.
+    rings: SharedRingCensus,
     applied: u64,
     inert: u64,
     held: u64,
@@ -297,6 +364,7 @@ impl Bridge {
             guest_os,
             reasm: Reassembler::with_limits(limits),
             census: SharedRefusalCensus::default(),
+            rings: SharedRingCensus::default(),
             applied: 0,
             inert: 0,
             held: 0,
@@ -375,6 +443,14 @@ impl<'a> GraphPolicy<'a> {
     #[must_use]
     pub fn refusal_census(&self) -> SharedRefusalCensus {
         self.bridge.census.clone()
+    }
+
+    /// ★ §8.2.2 — the GPFIFO-ring census as a **handle**, for the same reason
+    /// [`Self::refusal_census`] is one: the composition root keeps reading it after this
+    /// policy is boxed. See [`SharedRingCensus`].
+    #[must_use]
+    pub fn ring_census(&self) -> SharedRingCensus {
+        self.bridge.rings.clone()
     }
 
     /// How many commands produced an `RmEvent` the graph **accepted**.
@@ -467,6 +543,10 @@ impl Bridge {
         // fragment. Every rule `translate` owns is then applied exactly ONCE, to the
         // whole — a reassembler that pre-judged fragments would be a second, weaker copy
         // of the translator running on partial bytes.
+        //
+        // ★ Cloned out ahead of the chain (it is an `Arc`) so the recorder below borrows
+        // this handle and not `self`, which `reasm` already holds mutably.
+        let rings = self.rings.clone();
         let outcome = self
             .reasm
             .accept(&self.abi, cmd)
@@ -482,10 +562,30 @@ impl Bridge {
                 // is what turns it into a non-zero `rpc_result` on the wire. The C's
                 // behaviour is the opposite: it accepted everything and answered `NV_OK`
                 // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
-                Translation::Event(ev) => gpu
-                    .apply(ev)
-                    .map(|()| Translation::Event(ev))
-                    .map_err(BridgeRefusal::Graph),
+                Translation::Event(ev) => {
+                    // ★★★ §8.2.2 — recorded on the TRANSLATION, before the graph is
+                    // asked, and that ordering is the whole of the instrument's honesty.
+                    // The channel alloc at this port's wall is one the projection has
+                    // been observed to refuse (`boot_measured_2026_08_01.md`: hClass
+                    // 0xc56f with a `GpuError::Projection`), so a census taken on the
+                    // `Ok` arm below would report *"no ring was ever declared"* about a
+                    // boot in which the guest declared one and we said no. The question
+                    // is what the GUEST named, not what we accepted.
+                    if let kayfabe_core::rmgraph::RmEvent::Alloc {
+                        facts:
+                            kayfabe_core::rmgraph::AllocFacts {
+                                gp_fifo_ring: Some(r),
+                                ..
+                            },
+                        ..
+                    } = ev
+                    {
+                        rings.record(r);
+                    }
+                    gpu.apply(ev)
+                        .map(|()| Translation::Event(ev))
+                        .map_err(BridgeRefusal::Graph)
+                }
                 // ★★ The ADDRESS-plane apply, and it is deliberately here rather than
                 // left to the caller. A `Translation` variant nothing consumes is the
                 // C's `NV_OK` echo with a Rust type on it — the same argument
@@ -773,6 +873,14 @@ impl ObjectPolicy {
     #[must_use]
     pub fn refusal_census(&self) -> SharedRefusalCensus {
         self.bridge.census.clone()
+    }
+
+    /// ★ §8.2.2 — the GPFIFO-ring census as a **handle**, for the same reason
+    /// [`Self::refusal_census`] is one: the composition root keeps reading it after this
+    /// policy is boxed. See [`SharedRingCensus`].
+    #[must_use]
+    pub fn ring_census(&self) -> SharedRingCensus {
+        self.bridge.rings.clone()
     }
 
     /// How many commands produced an `RmEvent` the graph **accepted** — the non-vacuity

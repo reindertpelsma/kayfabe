@@ -196,7 +196,8 @@ mod reasm;
 
 pub use fault::{FaultEmitRefusal, rc_triggered_for};
 pub use policy::{
-    GraphPolicy, OBJECT_VERBS, ObjectModel, ObjectPolicy, RefusalCensus, SharedRefusalCensus,
+    GraphPolicy, OBJECT_VERBS, ObjectModel, ObjectPolicy, RefusalCensus, RingCensus,
+    SharedRefusalCensus, SharedRingCensus,
 };
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
@@ -1188,6 +1189,13 @@ fn translate_alloc(
                 // will not emit for the channel — the safe direction, since an RC with
                 // no notifier write causes the hang it replaces.
                 error_notifier: abi.decode_channel_error_notifier(params)?,
+                // ★★★ §8.2.2's measurement, and it is carried for exactly one reason:
+                // so a boot can STATE the address the guest named for its GPFIFO ring.
+                // Nothing on the data path reads it. See `GpFifoRing`.
+                gp_fifo_ring: Some(kayfabe_core::rmgraph::GpFifoRing {
+                    va: c.gp_fifo_offset,
+                    entries: c.gp_fifo_entries,
+                }),
                 ..Default::default()
             }
         }

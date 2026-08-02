@@ -875,10 +875,35 @@ fn the_channel_alloc_prefix_stops_where_the_two_trees_stop_agreeing() {
     p[24..28].copy_from_slice(&0xC500_0011u32.to_le_bytes()); // hCtxShare @ +24
     p[28..32].copy_from_slice(&0x7A50_0012u32.to_le_bytes()); // hVASpace  @ +28
     p[32..36].copy_from_slice(&0xDEAD_BEEFu32.to_le_bytes()); // the divergent slot
+    // ★★★ §8.2.2 — and the two fields the prefix ALREADY covered and nobody read:
+    // `gpFifoOffset` @ +8 (8-aligned, so it does start at +8 and not +12) and
+    // `gpFifoEntries` @ +16. `ogkm-580: alloc_channel.h:296-302` /
+    // `ogkm-610: alloc_channel.h:296-302` — hObjectError@0, hObjectBuffer@4,
+    // NV_DECLARE_ALIGNED(NvU64 gpFifoOffset, 8)@8, gpFifoEntries@16 — identical at both,
+    // which is why reading them costs the version contract nothing.
+    p[8..16].copy_from_slice(&0x0000_007F_1234_5000u64.to_le_bytes()); // gpFifoOffset @ +8
+    p[16..20].copy_from_slice(&512u32.to_le_bytes()); //                  gpFifoEntries @ +16
     let f = t.decode_channel_alloc_facts(&p).expect("prefix decodes");
     assert_eq!(f.flags, 0xF105_04A6);
     assert_eq!(f.h_ctx_share, 0xC500_0011);
     assert_eq!(f.h_vaspace, 0x7A50_0012);
+    assert_eq!(
+        f.gp_fifo_offset, 0x0000_007F_1234_5000,
+        "the whole 64-bit gpFifoOffset, not its low half — a ring VA above 4 GiB is the \
+         normal case and truncating it would name a different page"
+    );
+    assert_eq!(f.gp_fifo_entries, 512);
+    // ⊘ And the two must not be reading each other's bytes: a decoder that read
+    // `gpFifoEntries` at +12 (i.e. the high half of the 8-aligned u64) would pass every
+    // assertion above with a zero-filled high word.
+    let mut q = p;
+    q[12..16].copy_from_slice(&0xAABB_CCDDu32.to_le_bytes());
+    let g = t.decode_channel_alloc_facts(&q).expect("prefix decodes");
+    assert_eq!(g.gp_fifo_offset, 0xAABB_CCDD_1234_5000);
+    assert_eq!(
+        g.gp_fifo_entries, 512,
+        "entries live at +16 and nowhere else"
+    );
 
     // …and refuses one byte short of the prefix rather than zero-extending it.
     assert_eq!(

@@ -424,6 +424,25 @@ pub struct CtxShareAllocFacts {
 /// nothing *today* and is recorded because it is a declared fact we discard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChannelAllocFacts {
+    /// ★★★ `gpFifoOffset` @ +8 — **the address of this channel's GPFIFO ring, as the
+    /// guest itself names it**, and it is a GPU **virtual** address.
+    ///
+    /// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:809`
+    /// spells the field *"Gpfifo Virtual Offset"*, and the driver path this port's wall
+    /// sits on computes it as
+    /// `channelGPFIFOAllocParams.gpFifoOffset = pChannel->pbGpuVA + pChannel->channelPbSize`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:1232`),
+    /// where `pbGpuVA` is the `dmaOffset` an `NV04_MAP_MEMORY_DMA` returned (`:842`).
+    ///
+    /// ⊘ Decoded and **read by nobody in the data path**. It exists so a boot can *state*
+    /// the address the guest named, next to the guest-RAM extent, instead of leaving
+    /// `kayfabe_arch::PushRange`'s VA-vs-GPA question `[unmeasured]`. See
+    /// `docs/design/execution_plane_increments.md` §8.2.2.
+    pub gp_fifo_offset: u64,
+    /// `gpFifoEntries` @ +16 — how many 8-byte GPFIFO entries the ring holds. Carried
+    /// beside [`Self::gp_fifo_offset`] because an address without an extent cannot say
+    /// how much of guest memory a ring would span.
+    pub gp_fifo_entries: u32,
     /// `flags` @ +20 — the `NVOS04_FLAGS_*` word. Opaque here: the arch recovers
     /// the channel's `VChid` from it (`kayfabe_arch::Arch::vchid_from_userd_flags`),
     /// and this crate does not interpret a single bit of it.

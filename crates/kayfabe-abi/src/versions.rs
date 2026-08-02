@@ -44,7 +44,7 @@ use crate::view::{
     PromoteEntry, RpcAllocReq, RpcControlReq, RpcEnvelope, SetPageDir, TsgAllocFacts,
     UnmapMemoryDma, classify_promote_entry, rpc_payload_len,
 };
-use crate::wire::{AbiError, u32_at};
+use crate::wire::{AbiError, u32_at, u64_at};
 use crate::{DriverAbi, DriverVersion};
 use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, ControlCmd};
@@ -952,6 +952,11 @@ impl DriverAbiTable {
             });
         }
         Ok(ChannelAllocFacts {
+            // +8 and +16 are INSIDE the agreeing prefix (`hObjectError` @0,
+            // `hObjectBuffer` @4, `gpFifoOffset` @8, `gpFifoEntries` @16), so reading
+            // them costs the version contract nothing. See `ChannelAllocFacts`.
+            gp_fifo_offset: u64_at(bytes, 8)?,
+            gp_fifo_entries: u32_at(bytes, 16)?,
             flags: u32_at(bytes, 20)?,
             h_ctx_share: u32_at(bytes, 24)?,
             h_vaspace: u32_at(bytes, 28)?,

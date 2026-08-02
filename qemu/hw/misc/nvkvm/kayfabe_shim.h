@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 13u
+#define KAYFABE_SHIM_ABI 14u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -532,6 +532,29 @@ typedef struct KayfabeRegAudit {
     uint64_t doorbell_last_token;
     uint64_t doorbell_last_token_valid;
     KayfabeDoorbellRefusal doorbell_refusal;
+
+    /* ★★★ §8.2.2 — THE GPFIFO RING THE GUEST DECLARED.
+     *
+     * `kayfabe_arch::PushRange::gpa` is handed to the guest-RAM port with no walk, while a
+     * GA10x GPFIFO entry names a GPU VIRTUAL address (ogkm-580: clc56f.h:270,272; the
+     * driver path at this wall computes it as pbGpuVA + channelPbSize,
+     * mem_utils_gm107.c:1232, where pbGpuVA is an NV04_MAP_MEMORY_DMA dmaOffset, :842).
+     * Whether that mismatch is LIVE or merely LATENT turns on one number nobody had ever
+     * looked at: the address the guest itself names for a ring, at this wall.  These four
+     * fields are that number, carried out of a boot.
+     *
+     * ⊘ Recorded at TRANSLATION, so an alloc the graph then refused is still counted: the
+     * question is what the GUEST named, not what we accepted.
+     *
+     * `gpfifo_ring_nonzero` is the validity flag for the two below, and it is not
+     * redundant — gpFifoOffset = 0 is a declaration the driver makes ON PURPOSE for its
+     * golden-context channel (ogkm-580: kernel_graphics.c:2420-2424), so a single field
+     * could not tell "declared address zero" from "declared nothing".  Same argument as
+     * doorbell_last_token_valid above. */
+    uint64_t gpfifo_ring_declarations;
+    uint64_t gpfifo_ring_nonzero;
+    uint64_t gpfifo_ring_va;
+    uint64_t gpfifo_ring_entries;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

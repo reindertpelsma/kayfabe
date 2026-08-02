@@ -140,8 +140,18 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// device does not write, and stamping is the whole of the attribution
 /// (`a_boolean_witness_cannot_attribute`).
 ///
+/// ★ Bumped to **14** at `execution_plane_increments.md` **§8.2.2**, the ABI-3 reason a
+/// tenth time: [`KayfabeRegAudit`] gained the four GPFIFO-ring census fields, so an
+/// ABI-13 shim would allocate the old layout and this archive would write 32 bytes past
+/// the end of it.
+///
+/// ⊘ [`KayfabeRegWrite`] did **not** grow, for E1's reason rather than E2's: the address
+/// a channel declares for its ring is a property of an RPC, not of any one register
+/// write, and stamping it per-access would make an operator read it thousands of times
+/// and still not know how many rings there were.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 13;
+pub const ABI_VERSION: u32 = 14;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1094,6 +1104,30 @@ pub struct KayfabeRegAudit {
     /// ⊘ First, not last: a flood of identical rings must not be able to push the
     /// diagnosis out of the one line a teardown report has room for.
     pub doorbell_refusal: KayfabeDoorbellRefusal,
+    /// ★★★ **§8.2.2** — channel allocs whose params declared a GPFIFO ring, decoded and
+    /// counted. See `kayfabe_rmrpc::RingCensus` for what the census is *for*; this is its
+    /// wire shape.
+    ///
+    /// ⊘ Counted at TRANSLATION, so an alloc the graph then refused is still counted. The
+    /// question this instrument asks is what the **guest** named, not what we accepted.
+    pub gpfifo_ring_declarations: u64,
+    /// Of those, how many named a **non-zero** ring address.
+    pub gpfifo_ring_nonzero: u64,
+    /// The first non-zero ring address a channel declared — `gpFifoOffset`, verbatim.
+    ///
+    /// ★★★ **It is a GPU VIRTUAL address** (`ogkm-580: ctrl2080fifo.h:809`,
+    /// `mem_utils_gm107.c:1232`), and printing it beside the guest's RAM extent is the
+    /// whole measurement: `kayfabe_arch::PushRange::gpa` feeds an address of exactly this
+    /// kind to `Vmm::gpa_read` with no walk.
+    pub gpfifo_ring_va: u64,
+    /// `gpFifoEntries` that came with [`Self::gpfifo_ring_va`], or `0` if none did.
+    ///
+    /// ⊘ [`Self::gpfifo_ring_nonzero`] is the validity flag for both, and it is not
+    /// redundant: `gpFifoOffset = 0` is a declaration the driver makes **on purpose**
+    /// (`ogkm-580: kernel_graphics.c:2420-2424`), so a single field could not tell
+    /// *"declared address zero"* from *"declared nothing"*. Same argument as
+    /// [`Self::doorbell_last_token_valid`].
+    pub gpfifo_ring_entries: u64,
 }
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
@@ -1393,6 +1427,10 @@ pub struct Regs {
     /// [`kayfabe_rmrpc::SharedRefusalCensus`] for the boot that had to be diagnosed by the
     /// absence of a line instead.
     refusals: kayfabe_rmrpc::SharedRefusalCensus,
+    /// ★★★ §8.2.2 — the GPFIFO-ring census, kept here for [`Regs::refusals`]'s reason.
+    /// Recorder-only: nothing in this device reads it, and the only thing it changes is
+    /// that a boot can *state* the address the guest named for a ring.
+    rings: kayfabe_rmrpc::SharedRingCensus,
     /// ★★★ E1 — the isolate plane's census, kept here for the reason
     /// [`Regs::refusals`] is: the policy that owns the object model is boxed into the
     /// chain and unreachable afterwards.
@@ -1423,7 +1461,7 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (objects, refusals, isolates, device) = object_policy(abi.driver)?;
+        let (objects, refusals, rings, isolates, device) = object_policy(abi.driver)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -1482,6 +1520,7 @@ impl Regs {
             plane,
             device,
             refusals,
+            rings,
             isolates,
         })
     }
@@ -1668,6 +1707,15 @@ impl Regs {
             doorbell_refusal.text[..take].copy_from_slice(&r.why.as_bytes()[..take]);
             doorbell_refusal.len = take as u64;
         }
+        // ★★★ §8.2.2 — the GPFIFO-ring census. Destructured with no `..` for the reason
+        // the isolate census below is: a field added to `RingCensus` and not wired here
+        // is a number the C shell can never read, and nothing goes red. `rustc` refuses
+        // the pattern instead.
+        let kayfabe_rmrpc::RingCensus {
+            declarations: gpfifo_ring_declarations,
+            nonzero: gpfifo_ring_nonzero,
+            first_nonzero: gpfifo_ring_first,
+        } = self.rings.snapshot();
         KayfabeRegAudit {
             reads,
             writes,
@@ -1719,6 +1767,10 @@ impl Regs {
             doorbell_last_token: last_token.unwrap_or(0),
             doorbell_last_token_valid: u64::from(last_token.is_some()),
             doorbell_refusal,
+            gpfifo_ring_declarations,
+            gpfifo_ring_nonzero,
+            gpfifo_ring_va: gpfifo_ring_first.map_or(0, |(va, _)| va),
+            gpfifo_ring_entries: gpfifo_ring_first.map_or(0, |(_, n)| u64::from(n)),
         }
     }
 }
@@ -1765,6 +1817,8 @@ impl Regs {
 type ObjectLink = (
     Box<dyn kayfabe_gsp::CommandPolicy>,
     kayfabe_rmrpc::SharedRefusalCensus,
+    // ★ §8.2.2 — the GPFIFO-ring census, recorder-only.
+    kayfabe_rmrpc::SharedRingCensus,
     kayfabe_core::gpu::SharedIsolateCensus,
     // ★★★ E2 — and the shell itself, because the doorbell port needs the SAME one.
     Arc<kayfabe_rt::device::SharedDevice>,
@@ -1813,11 +1867,13 @@ fn object_policy(
     // `ObjectPolicy` left to ask — that is the whole reason the census had to become a
     // shared store rather than a field behind `&self`.
     let refusals = policy.refusal_census();
+    // ★ §8.2.2 — same taken-before-boxing reason, one increment on.
+    let rings = policy.ring_census();
     // ★★★ E1 — and the isolate plane's own health, for the same reason and by the same
     // mechanism. Before this the only channel that could say "the forwarding plane you
     // asked for did not come up" was a host-side `ps`.
     let isolates = policy.isolate_census();
-    Ok((Box::new(policy), refusals, isolates, device))
+    Ok((Box::new(policy), refusals, rings, isolates, device))
 }
 
 // =====================================================================================
