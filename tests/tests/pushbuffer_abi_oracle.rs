@@ -1180,7 +1180,7 @@ fn a_copy_engine_run_one_field_from_legal_refuses() {
             // the launch is still reported as `Opaque`, so a codec that stopped parsing
             // is distinguishable from one that parsed and declined.
             assert!(
-                got.iter().any(|m| *m == PushMethod::Opaque),
+                got.contains(&PushMethod::Opaque),
                 "[{tag}] {name}: the launch is refused BY NAME, not skipped: {got:?}"
             );
         }

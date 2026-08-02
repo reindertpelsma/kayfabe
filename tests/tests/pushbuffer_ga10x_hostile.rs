@@ -646,9 +646,18 @@ fn a_hostile_method_stream_never_fires_a_copy_it_did_not_write() {
     let pb = Ga10xPushbuffer;
     let mut rng = Xs(0x5EED_0E5C_0FFE_E001);
     let mut st = kayfabe_arch::MethodState::new();
-    // The shadow: per subchannel, `(bound_to_ce, offsets, line_len)`.
-    let mut shadow: [(bool, Option<(u64, u64)>, Option<u32>); kayfabe_arch::SUBCHANNELS] =
-        Default::default();
+    // The shadow of what the STREAM wrote, per subchannel — deliberately a dumb record of
+    // the harness's own actions and not a second copy of the codec's logic.
+    #[derive(Clone, Copy, Default)]
+    struct Wrote {
+        /// A `SET_OBJECT` bound the copy engine here.
+        ce: bool,
+        /// `(src, dst)`, as the stream wrote them.
+        offsets: Option<(u64, u64)>,
+        /// `LINE_LENGTH_IN`, as the stream wrote it.
+        len: Option<u32>,
+    }
+    let mut shadow = [Wrote::default(); kayfabe_arch::SUBCHANNELS];
     let mut fired_total = 0usize;
     let mut refused_total = 0usize;
 
@@ -658,12 +667,15 @@ fn a_hostile_method_stream_never_fires_a_copy_it_did_not_write() {
         let run: Vec<(u32, Vec<u32>)> = match rng.next() % 6 {
             // Bind to the copy engine — arms the subchannel and CLEARS its operands.
             0 => {
-                shadow[s] = (true, None, None);
+                shadow[s] = Wrote {
+                    ce: true,
+                    ..Wrote::default()
+                };
                 ce_runs(sub, 0, 0, 0, 0)[..1].to_vec()
             }
             // Bind to something else — disarms it, and clears just the same.
             1 => {
-                shadow[s] = (false, None, None);
+                shadow[s] = Wrote::default();
                 vec![(
                     kayfabe_abi::submit::method_header_inc(sub, kayfabe_abi::submit::SET_OBJECT, 1)
                         .expect("encodable"),
@@ -674,13 +686,13 @@ fn a_hostile_method_stream_never_fires_a_copy_it_did_not_write() {
             2 => {
                 let src = rng.next() & 0x0001_FFFF_FFFF_FFFF;
                 let dst = rng.next() & 0x0001_FFFF_FFFF_FFFF;
-                shadow[s].1 = Some((src, dst));
+                shadow[s].offsets = Some((src, dst));
                 ce_runs(sub, src, dst, 0, 0)[1..2].to_vec()
             }
             // Write the length.
             3 => {
                 let len = (rng.next() % 0x1_0000) as u32;
-                shadow[s].2 = Some(len);
+                shadow[s].len = Some(len);
                 ce_runs(sub, 0, 0, len, 0)[2..3].to_vec()
             }
             // Fire.
@@ -696,7 +708,11 @@ fn a_hostile_method_stream_never_fires_a_copy_it_did_not_write() {
             .iter()
             .find(|m| matches!(m, PushMethod::CeLaunchDma { .. }));
         let want = match shadow[s] {
-            (true, Some((src, dst)), Some(len)) => Some((src, dst, u64::from(len))),
+            Wrote {
+                ce: true,
+                offsets: Some((src, dst)),
+                len: Some(len),
+            } => Some((src, dst, u64::from(len))),
             _ => None,
         };
         // Only a FIRE run may produce a launch, and then exactly per the shadow.
