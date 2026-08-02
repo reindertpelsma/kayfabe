@@ -1222,3 +1222,74 @@ fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
     );
     assert!(format!("{e}").contains("never be reached"));
 }
+
+/// ★★★ **The fact that reshaped `#128`, as an assertion: only ONE of the host's two
+/// mappable timer pages can back the guest's timer page, and it is the one with the
+/// doorbell in it.**
+///
+/// A KVM memslot maps a guest page onto a host page. It **cannot re-base within a page** —
+/// the low 12 bits of a guest physical address are the low 12 bits of the host virtual
+/// address, always. So a read-native passthrough is only expressible when the register sits
+/// at the *same offset within its page* on both sides.
+///
+/// The three offsets, and there is no fourth:
+///
+/// | side | where the counter is | page offset |
+/// |---|---|---|
+/// | the **guest** (this chip profile) | `NV_VIRTUAL_FUNCTION_TIME_0` | `0x080` |
+/// | the host's **PTIMER page** (`NV01_TIMER`, no doorbell in it) | `NV_PTIMER_TIME_0` | `0x400` |
+/// | the host's **usermode window** (the doorbell window) | `NVC361_TIME_0` | `0x080` |
+///
+/// ⇒ The doorbell-free page is the one that does **not** line up. The page that does line
+/// up carries [`kayfabe_abi::submit::USERMODE_NOTIFY_CHANNEL_PENDING`] sixteen bytes later.
+/// That is why `#128`'s answer is *read-native + write-trap over one shared page* and not
+/// *pass the timer page through and keep trapping the doorbell page*: there is no
+/// arrangement of pages in which those are different pages.
+///
+/// ⚠ If this ever fails, the design's premise has moved. Re-read
+/// `docs/design/read_native_timer_measured.md`; do not adjust the constants to match.
+#[test]
+fn the_guest_timer_offset_can_only_be_backed_by_the_host_usermode_page() {
+    use kayfabe_abi::submit::{
+        PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0,
+        USERMODE_TIME_1,
+    };
+    const PAGE: u64 = 4096;
+
+    let ptimer = kayfabe_device::default_chip().ptimer;
+
+    // Both halves of the guest's pair are in one page — a pair split across two pages would
+    // need two memslots and could tear across them.
+    assert_eq!(
+        ptimer.lo_off & !(PAGE - 1),
+        ptimer.hi_off & !(PAGE - 1),
+        "the guest's two counter halves must share a page"
+    );
+
+    // ★ The alignment that makes the design expressible.
+    assert_eq!(
+        ptimer.lo_off & (PAGE - 1),
+        USERMODE_TIME_0,
+        "the guest's counter must sit at the host usermode window's page offset, or no \
+         memslot can serve it"
+    );
+    assert_eq!(ptimer.hi_off & (PAGE - 1), USERMODE_TIME_1);
+
+    // ⊘ The non-alignment that rules the doorbell-free page OUT. This assertion is here to
+    // stop a future reader "simplifying" the design to use the clean PTIMER page.
+    assert_ne!(
+        ptimer.lo_off & (PAGE - 1),
+        PTIMER_PAGE_TIME_0 & (PAGE - 1),
+        "if these ever agree, the doorbell-free PTIMER page becomes usable and the design \
+         should be revisited rather than left as-is"
+    );
+    assert_ne!(ptimer.hi_off & (PAGE - 1), PTIMER_PAGE_TIME_1 & (PAGE - 1));
+
+    // ★ And the consequence, stated so it cannot be forgotten: the page that DOES line up
+    // carries the doorbell.
+    assert_eq!(
+        USERMODE_NOTIFY_CHANNEL_PENDING & !(PAGE - 1),
+        USERMODE_TIME_0 & !(PAGE - 1),
+        "the usable host page carries the doorbell — that is the whole write-trap argument"
+    );
+}

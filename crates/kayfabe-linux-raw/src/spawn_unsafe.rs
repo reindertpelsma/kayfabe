@@ -1049,6 +1049,22 @@ fn dup_above(fd: &OwnedFd, floor: i32) -> Result<OwnedFd, RawError> {
     Ok(unsafe { OwnedFd::from_raw_fd(raw) })
 }
 
+/// This process's effective uid.
+///
+/// ⊘ **Not a permission check.** Nothing may branch on this to decide whether an operation
+/// is allowed — `guest_blast_radius.md` §3.2 is that RM re-derives the caller's privilege
+/// on every ioctl, so the kernel's answer is the only one that counts and a userspace
+/// pre-check would only ever disagree with it. It exists so a **diagnostic can label its
+/// own output**: `#128`'s timer rung is meaningless under root (RM's mmap validation walk
+/// is skipped entirely for `osIsAdministrator()`), and a run that cannot say which it was
+/// is a number nobody can read.
+#[must_use]
+pub fn geteuid() -> u32 {
+    // SAFETY: `geteuid` takes no arguments, dereferences nothing, and is documented as
+    // always succeeding.
+    unsafe { libc::geteuid() }
+}
+
 /// Write the child's rootless uid/gid maps, in **the kernel's required order**.
 ///
 /// `setgroups` = `deny` must land before `gid_map` is writable by an unprivileged process;

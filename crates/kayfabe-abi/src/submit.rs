@@ -838,6 +838,143 @@ pub const USERMODE_WINDOW_SIZE: u64 = 65536;
 /// `kayfabe_isolate::RmBackend::ring_doorbell` was a named refusal until a mapping existed.
 pub const USERMODE_NOTIFY_CHANNEL_PENDING: u64 = 0x0000_0090;
 
+/// `NVC361_TIME_0` — `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:31`.
+///
+/// ★★★ **The host GPU's free-running nanosecond counter, low word**, mirrored into the
+/// usermode window. Read-only in hardware (`NV_VIRTUAL_FUNCTION_TIME_0` is `R--4R`,
+/// `ogkm-580: src/common/inc/swref/published/ampere/ga100/dev_vm.h:127`).
+///
+/// ★★★ **It is sixteen bytes from the doorbell** ([`USERMODE_NOTIFY_CHANNEL_PENDING`] at
+/// `0x90`), so the two live in the SAME 4 KiB page and no page-granular mechanism — KVM
+/// memslot, PTE, EPT entry — can separate them. That is not an inconvenience; it is the
+/// reason `#128`'s answer is *read-native, write-trap* on one shared page rather than
+/// *pass through the timer page and trap the doorbell page*. See
+/// `docs/design/read_native_timer.md`.
+pub const USERMODE_TIME_0: u64 = 0x0000_0080;
+
+/// `NVC361_TIME_1` — `ogkm-580: src/common/sdk/nvidia/inc/class/clc361.h:32`. The high
+/// word of [`USERMODE_TIME_0`]'s counter; `NV_PTIMER_TIME_1_NSEC` is `28:0`, so the top
+/// three bits are not part of the value
+/// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_timer.h:42`).
+pub const USERMODE_TIME_1: u64 = 0x0000_0084;
+
+/// `NV_PTIMER_TIME_1_NSEC` is `28:0` — the high word carries 29 significant bits, so the
+/// assembled counter is 61 bits wide
+/// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_timer.h:42`).
+pub const PTIMER_TIME_1_NSEC_MASK: u32 = 0x1fff_ffff;
+
+/// Assemble a PTIMER reading from a `(hi, lo)` pair, applying the 29-bit mask the
+/// hardware field definition demands.
+///
+/// ⊘ The caller owes the *sampling* discipline (read hi, lo, hi again and retry on a
+/// carry); this function only says how the two words compose. Splitting it out is what
+/// lets the composition be tested without a GPU.
+#[must_use]
+pub const fn ptimer_compose(hi: u32, lo: u32) -> u64 {
+    (((hi & PTIMER_TIME_1_NSEC_MASK) as u64) << 32) | (lo as u64)
+}
+
+/// How many `hi, lo, hi` rounds [`ptimer_sample`] will take before giving up.
+///
+/// The low word wraps every 2^32 ns ≈ **4.29 seconds**, so two consecutive rounds both
+/// straddling a carry is not a thing that happens on working hardware; a run of them means
+/// the reads are not reading a counter. Three is a bound that surfaces that as a refusal
+/// rather than as a hang — ⊘ never as a plausible constant.
+pub const PTIMER_SAMPLE_ROUNDS: usize = 3;
+
+/// The reason a [`ptimer_sample`] could not produce a coherent reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PtimerSampleError<E> {
+    /// A read of one of the two words failed; the transport's own error is carried.
+    Read(E),
+    /// [`PTIMER_SAMPLE_ROUNDS`] rounds all straddled a carry.
+    ///
+    /// ★ This is the refusal the standing rule demands. The tempting alternative — return
+    /// the last `(hi, lo)` anyway — is a *plausible* answer off by up to 4.29 s, and a
+    /// plausible wrong time is exactly what nobody can debug.
+    Incoherent,
+}
+
+/// Read a 64-bit PTIMER value out of a pair of 32-bit registers, coherently.
+///
+/// ★★★ **Two 32-bit reads of a free-running counter are not one 64-bit read.** Between
+/// them the low word can wrap and carry into the high word, and the naive `(hi, lo)` pair
+/// is then ~4.29 s in the future or the past. So: read `hi`, read `lo`, read `hi` again,
+/// and accept only when the two `hi` readings agree — the standard non-atomic
+/// wide-counter protocol, and the same one RM itself uses
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/maxwell/timer_gm107.c:100-130`).
+///
+/// `read` is given a byte offset into whatever carries the pair, so the same code serves
+/// the PTIMER page (`0x400`/`0x410` inside [`PTIMER_PAGE_SIZE`]) and the usermode mirror
+/// ([`USERMODE_TIME_0`]/[`USERMODE_TIME_1`]), which are the same counter at two addresses.
+///
+/// # Errors
+/// [`PtimerSampleError::Read`] if the transport refused, [`PtimerSampleError::Incoherent`]
+/// if every round straddled a carry.
+pub fn ptimer_sample<E>(
+    hi_offset: u64,
+    lo_offset: u64,
+    mut read: impl FnMut(u64) -> Result<u32, E>,
+) -> Result<u64, PtimerSampleError<E>> {
+    for _ in 0..PTIMER_SAMPLE_ROUNDS {
+        let hi = read(hi_offset).map_err(PtimerSampleError::Read)?;
+        let lo = read(lo_offset).map_err(PtimerSampleError::Read)?;
+        let hi_again = read(hi_offset).map_err(PtimerSampleError::Read)?;
+        if hi == hi_again {
+            return Ok(ptimer_compose(hi, lo));
+        }
+    }
+    Err(PtimerSampleError::Incoherent)
+}
+
+/// `DRF_BASE(NV_PTIMER)` — `ogkm-580:
+/// src/common/inc/swref/published/turing/tu104/dev_timer.h:26` (`0x00009fff:0x00009000`),
+/// and what `tmrGetTimerBar0MapInfo_PTIMER` reports as the mappable timer range
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/timer/timer_ptimer.c:176-187`).
+///
+/// ★★★ **MEASURED**, not transcribed: `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` on a
+/// real GA106 (RTX 3060, host driver 580.159.04) answers `NV_OK` with exactly this value,
+/// **as an unprivileged uid as well as as root** — see
+/// `docs/reference/bench_evidence/timer-mappability-*.out`.
+pub const PTIMER_BAR0_BASE: u64 = 0x0000_9000;
+
+/// `DRF_SIZE(NV_PTIMER)` — one 4 KiB page, and the whole of it is timer.
+///
+/// ★★★ This is the property that makes `#128` expressible at all: the PTIMER range is
+/// **exactly one page and contains no doorbell**, so a page-granular read-native mapping
+/// of it exposes the counter and nothing else. Contrast [`USERMODE_TIME_0`], which is 16
+/// bytes from [`USERMODE_NOTIFY_CHANNEL_PENDING`].
+pub const PTIMER_PAGE_SIZE: u64 = 0x1000;
+
+/// `NV_PTIMER_TIME_0` relative to [`PTIMER_BAR0_BASE`] — `0x9400 - 0x9000`
+/// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_timer.h:26`). Matches
+/// `Nv01TimerMap::PTimerTime0`, which sits after `Reserved00[0x100]`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/cl0004.h:39-44`).
+pub const PTIMER_PAGE_TIME_0: u64 = 0x0000_0400;
+
+/// `NV_PTIMER_TIME_1` relative to [`PTIMER_BAR0_BASE`] — `0x9410 - 0x9000`
+/// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_timer.h:27`).
+pub const PTIMER_PAGE_TIME_1: u64 = 0x0000_0410;
+
+/// `sizeof(Nv01TimerMap)` — the length `tmrapiGetRegBaseOffsetAndSize_IMPL` reports for an
+/// [`NV01_TIMER`] object (`ogkm-580: src/nvidia/src/kernel/gpu/timer/timer.c:1712-1734`,
+/// struct at `src/common/sdk/nvidia/inc/class/cl0004.h:39-44`):
+/// `Reserved00[0x100]` + `TIME_0` + `Reserved01[3]` + `TIME_1` = `0x414`.
+pub const NV01_TIMER_MAP_SIZE: u64 = 0x414;
+
+/// `NV01_TIMER` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl0004.h:32`.
+///
+/// ⚠ **Hand-written, not generated.** `kayfabe-abi-gen` emits alloc-parameter structs and
+/// the class ids that select them; `NV01_TIMER` takes **no** alloc parameters (
+/// `tmrapiConstruct_IMPL` ignores them, `ogkm-580: .../timer/timer.c:1692-1701`), so the
+/// generator has nothing to hang it off. The citation above is the whole of its sourcing.
+pub const NV01_TIMER: u32 = 0x0000_0004;
+
+/// `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080tmr.h:119`. Answers
+/// `NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS { NvU32 tmr_offset; }`, four bytes.
+pub const NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET: u32 = 0x2080_0404;
+
 // =====================================================================================
 // Pushbuffer method encoding
 // =====================================================================================
@@ -1694,6 +1831,97 @@ mod tests {
         assert_eq!(d.form, MethodForm::Immediate);
         assert_eq!(d.arg_words, 0);
         assert_eq!(d.immd, 0x1234);
+    }
+
+    /// ★★★ **The geography that decides `#128`.** The usermode timer mirror and the
+    /// doorbell are in the SAME 4 KiB page (16 bytes apart), so no page-granular mechanism
+    /// can pass one through and trap the other; the PTIMER page is a whole page of timer
+    /// with no doorbell in it. If this ever stops holding, the read-native design's premise
+    /// has moved and the design must be re-read, not patched.
+    #[test]
+    fn the_usermode_timer_mirror_shares_a_page_with_the_doorbell_but_ptimer_does_not() {
+        const PAGE: u64 = 4096;
+        // The mirror and the doorbell: same page, and adjacent.
+        assert_eq!(USERMODE_TIME_0 / PAGE, USERMODE_NOTIFY_CHANNEL_PENDING / PAGE);
+        assert_eq!(USERMODE_TIME_1 / PAGE, USERMODE_NOTIFY_CHANNEL_PENDING / PAGE);
+        assert_eq!(USERMODE_NOTIFY_CHANNEL_PENDING - USERMODE_TIME_0, 0x10);
+        // The PTIMER page: page-aligned, exactly one page, both words inside it, and the
+        // doorbell's offset within the usermode window is NOT a timer register here.
+        assert_eq!(PTIMER_BAR0_BASE % PAGE, 0);
+        assert_eq!(PTIMER_PAGE_SIZE, PAGE);
+        assert!(PTIMER_PAGE_TIME_1 + 4 <= PTIMER_PAGE_SIZE);
+        assert_eq!(PTIMER_BAR0_BASE + PTIMER_PAGE_TIME_0, 0x9400);
+        assert_eq!(PTIMER_BAR0_BASE + PTIMER_PAGE_TIME_1, 0x9410);
+        // `Nv01TimerMap` stops well short of the page it lives in — the mapping RM sizes
+        // for an `NV01_TIMER` object is NOT the whole range the mmap whitelist permits.
+        assert!(NV01_TIMER_MAP_SIZE < PTIMER_PAGE_SIZE);
+        assert_eq!(NV01_TIMER_MAP_SIZE, PTIMER_PAGE_TIME_1 + 4);
+    }
+
+    /// The high word carries 29 bits, so bits 61..63 of a composed reading are always
+    /// zero however the register is decorated.
+    #[test]
+    fn compose_masks_the_high_word_to_its_29_significant_bits() {
+        assert_eq!(ptimer_compose(0xffff_ffff, 0xffff_ffff), 0x1fff_ffff_ffff_ffff);
+        assert_eq!(ptimer_compose(0xe000_0000, 0), 0);
+        assert_eq!(ptimer_compose(1, 2), (1 << 32) | 2);
+    }
+
+    /// A stable counter is read in one round, with exactly three register reads.
+    #[test]
+    fn a_stable_counter_is_sampled_in_one_round() {
+        let mut reads = 0usize;
+        let v = ptimer_sample::<()>(PTIMER_PAGE_TIME_1, PTIMER_PAGE_TIME_0, |off| {
+            reads += 1;
+            Ok(if off == PTIMER_PAGE_TIME_1 { 7 } else { 42 })
+        })
+        .expect("stable");
+        assert_eq!(v, ptimer_compose(7, 42));
+        assert_eq!(reads, 3);
+    }
+
+    /// ★ A carry between the two words is RETRIED, not returned. Round 1 straddles (the
+    /// second `hi` differs); round 2 is clean. Returning round 1's `(hi, lo)` would have
+    /// been wrong by ~4.29 s and perfectly plausible.
+    #[test]
+    fn a_carry_between_the_words_is_retried_rather_than_returned() {
+        // hi, lo, hi' | hi, lo, hi'
+        let mut script = [5u32, 0xffff_ffff, 6, 6, 0x0000_0001, 6].into_iter();
+        let v = ptimer_sample::<()>(PTIMER_PAGE_TIME_1, PTIMER_PAGE_TIME_0, |_| {
+            Ok(script.next().expect("script"))
+        })
+        .expect("second round is coherent");
+        assert_eq!(v, ptimer_compose(6, 1));
+    }
+
+    /// ⊘ A counter that carries on every single round REFUSES. It does not fall back to
+    /// the last pair, and it does not return zero — the two answers that read as a working
+    /// timer. `PTIMER_SAMPLE_ROUNDS` rounds of three reads is the whole budget.
+    #[test]
+    fn a_counter_that_never_settles_refuses_rather_than_guessing() {
+        let mut reads = 0usize;
+        let e = ptimer_sample::<()>(PTIMER_PAGE_TIME_1, PTIMER_PAGE_TIME_0, |off| {
+            reads += 1;
+            // Every `hi` read differs from the previous one.
+            Ok(if off == PTIMER_PAGE_TIME_1 {
+                reads as u32
+            } else {
+                0
+            })
+        })
+        .expect_err("must not invent a reading");
+        assert_eq!(e, PtimerSampleError::Incoherent);
+        assert_eq!(reads, PTIMER_SAMPLE_ROUNDS * 3);
+    }
+
+    /// A transport refusal is carried out, not swallowed into a zero.
+    #[test]
+    fn a_failed_register_read_propagates_instead_of_reading_as_zero() {
+        let e = ptimer_sample::<&str>(PTIMER_PAGE_TIME_1, PTIMER_PAGE_TIME_0, |_| {
+            Err("the mapping was refused")
+        })
+        .expect_err("must not answer");
+        assert_eq!(e, PtimerSampleError::Read("the mapping was refused"));
     }
 
     /// USERD is 512 bytes and both cursors are inside it — a model answering less would

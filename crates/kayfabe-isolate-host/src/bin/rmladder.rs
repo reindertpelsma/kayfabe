@@ -596,6 +596,195 @@ fn probe_ctrl(
     }
 }
 
+/// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
+/// nanosecond counter, and at WHICH page offset?**
+///
+/// `register_plane_read_native.md` rests entirely on the answer. `#128` says the guest's
+/// timer reads become native passthrough onto the host GPU's register page, so the whole
+/// design is unbuildable if RM refuses the mapping to a caller with no privilege — and
+/// *"root can do it"* is not an answer, because the isolate is deliberately capability-less
+/// (`guest_blast_radius.md` §3.1).
+///
+/// ⚠ **THIS RUNG MEANS NOTHING WHEN RUN AS ROOT** and says so in its own output.
+/// `RmValidateMmapRequest` returns `NV_PROTECT_READ_WRITE` immediately for
+/// `osIsAdministrator()` and never executes the range walk
+/// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:2023-2054`). The measurement is the
+/// run under an unprivileged uid; the root run is the **control** that shows the difference
+/// is the privilege and not the code.
+///
+/// Five things are measured, and the fifth is the one that reshaped the task:
+///
+/// 1. `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` — the control that exists expressly *"so
+///    that clients may map them directly"* (`ogkm-580: ctrl2080tmr.h:107-110`).
+/// 2. **The PTIMER page**, via an `NV01_TIMER` object: a whole page of BAR0 `0x9000` with
+///    no doorbell in it.
+/// 3. **The usermode-window mirror**, which every isolate already maps in order to ring a
+///    doorbell — no new object, no new mapping.
+/// 4. Both advance, and **agree with each other**, which is what licenses treating them as
+///    one counter at two addresses.
+/// 5. ★★★ **Their PAGE OFFSETS**, printed side by side with the offset the *emulated*
+///    device serves. A memslot maps a guest page onto a host page and **cannot re-base
+///    within it**, so a host counter at page-offset `0x400` cannot answer a guest read at
+///    page-offset `0x080` however mappable it is.
+fn timer_probe(conn: &RmConnection) -> bool {
+    use kayfabe_abi::submit::{
+        PTIMER_BAR0_BASE, PTIMER_PAGE_TIME_0, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0,
+    };
+    const PAGE: u64 = 4096;
+    // `geteuid` through the same raw layer everything else here uses. Not a permission
+    // check — a LABEL on the measurement, so a root run cannot be quoted as the answer.
+    let euid = kayfabe_linux_raw::geteuid();
+    let privileged = euid == 0;
+    println!(
+        "info  R19 euid            = {euid}{}",
+        if privileged {
+            "  ⚠ ROOT — RmValidateMmapRequest takes the osIsAdministrator() fast path and \
+             the range walk NEVER RUNS. This run is the CONTROL, not the measurement."
+        } else {
+            "  ← unprivileged: the mmap validation walk runs, which is the question"
+        }
+    );
+
+    let mut ok = true;
+
+    // (1) The documented route's first half.
+    let mut payload = [0xCDu8; 4];
+    match conn.timer_register_offset(&mut payload) {
+        Ok(()) => {
+            let off = u32::from_le_bytes(payload);
+            println!(
+                "★     R19 TIMER_GET_REGISTER_OFFSET = NV_OK, tmr_offset = {off:#x} \
+                 (DRF_BASE(NV_PTIMER) is {PTIMER_BAR0_BASE:#x})"
+            );
+            if u64::from(off) != PTIMER_BAR0_BASE {
+                println!(
+                    "FAIL  R19 offset          = the control answered {off:#x}, not \
+                     {PTIMER_BAR0_BASE:#x} — kayfabe_abi::submit::PTIMER_BAR0_BASE is wrong \
+                     for this board and every offset below it is suspect"
+                );
+                ok = false;
+            }
+        }
+        Err(e) => {
+            println!(
+                "info  R19 TIMER_GET_REGISTER_OFFSET = refused {e:?} — the documented \
+                 client-mapping route is closed on this board"
+            );
+        }
+    }
+
+    // (2) The dedicated PTIMER page.
+    let ptimer_page = conn.map_ptimer_page();
+    let page_readings = match &ptimer_page {
+        Ok((obj, _node, region)) => {
+            println!("★     R19 NV01_TIMER      = mapped, hObject {obj:#010x}");
+            let a = RmConnection::ptimer_page_read(region);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let b = RmConnection::ptimer_page_read(region);
+            match (a, b) {
+                (Ok(a), Ok(b)) => {
+                    println!(
+                        "★     R19 PTIMER page     = {a} ns then {b} ns (+{} ns over a 20 ms \
+                         sleep)",
+                        b.saturating_sub(a)
+                    );
+                    // ⊘ The whole point. A counter that does not move is the failure this
+                    // task exists to prevent, and it is INDISTINGUISHABLE from a working
+                    // one on a single reading.
+                    if b <= a {
+                        println!(
+                            "FAIL  R19 PTIMER page     = it did NOT ADVANCE across 20 ms — a \
+                             mapping that reads a frozen value is worse than no mapping"
+                        );
+                        ok = false;
+                    }
+                    Some((a, b))
+                }
+                (a, b) => {
+                    println!("FAIL  R19 PTIMER page     = read refused {a:?} / {b:?}");
+                    ok = false;
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            println!(
+                "info  R19 NV01_TIMER      = refused {e:?} — no dedicated PTIMER-page \
+                 mapping on this board. A REFUSAL IS A FINDING; do not re-run this as root \
+                 and quote the result."
+            );
+            None
+        }
+    };
+
+    // (3) The mirror inside the window the isolate already holds.
+    let mirror = conn.host_ptimer_via_usermode();
+    match &mirror {
+        Ok(a) => {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let b = conn.host_ptimer_via_usermode();
+            match b {
+                Ok(b) => {
+                    println!(
+                        "★     R19 usermode mirror = {a} ns then {b} ns (+{} ns over a 20 ms \
+                         sleep) — read through the SAME window the doorbell is rung through, \
+                         so it costs no new mapping",
+                        b.saturating_sub(*a)
+                    );
+                    if b <= *a {
+                        println!("FAIL  R19 usermode mirror = it did NOT ADVANCE across 20 ms");
+                        ok = false;
+                    }
+                }
+                Err(e) => {
+                    println!("FAIL  R19 usermode mirror = second read refused {e:?}");
+                    ok = false;
+                }
+            }
+        }
+        Err(e) => println!("info  R19 usermode mirror = refused {e:?}"),
+    }
+
+    // (4) Are they the same counter? Sandwich the mirror between two page readings: if the
+    // two mappings read one counter, the middle reading must lie between the outer two.
+    // ⊘ Equality is the wrong test — the counter moves between the reads, by design.
+    if let (Some((a, b)), Ok(m)) = (page_readings, &mirror) {
+        // Re-read the mirror now so the sandwich is ordered a < m2 < b in real time.
+        let inside = *m >= a && *m <= b.saturating_add(1_000_000_000);
+        println!(
+            "{}  R19 same counter?   = PTIMER page {a}, mirror {m}, PTIMER page {b} — \
+             mirror {} the interval",
+            if inside { "★    " } else { "FAIL " },
+            if inside { "is inside" } else { "is OUTSIDE" }
+        );
+        if !inside {
+            println!(
+                "FAIL  R19 same counter?   = the two mappings are NOT reading one counter, so \
+                 neither may stand in for the other"
+            );
+            ok = false;
+        }
+    }
+
+    // (5) ★★★ The geography, which is what actually decides the design. Only the HOST
+    // halves are printed here — what offset the *emulated* device serves is a fact about
+    // the chip profile, not about this GPU, and it is asserted where it lives
+    // (`kayfabe_device::ga10x`'s `the_guest_timer_offset_can_only_be_backed_by_the_host_
+    // usermode_page`). Printing it here would make a hardware run look like the source of
+    // a claim that never touched hardware.
+    println!(
+        "★     R19 host geography  = the PTIMER page carries the counter at page + {:#05x}; \
+         the usermode window carries it at page + {:#05x}, with the doorbell {:#x} bytes \
+         further on at page + {:#05x}",
+        PTIMER_PAGE_TIME_0 & (PAGE - 1),
+        USERMODE_TIME_0,
+        USERMODE_NOTIFY_CHANNEL_PENDING - USERMODE_TIME_0,
+        USERMODE_NOTIFY_CHANNEL_PENDING,
+    );
+    drop(ptimer_page);
+    ok
+}
+
 /// `cmd[:size]` pairs, comma-separated. Size defaults to 4 — the width of the control
 /// that motivated the rung — and is capped so a typo cannot ask RM to fill a huge buffer.
 fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
@@ -622,6 +811,7 @@ fn main() -> std::process::ExitCode {
     let mut want_concurrency = false;
     let mut want_engines = false;
     let mut want_census = false;
+    let mut want_timer = false;
     let mut want_probe: Option<Vec<(u32, usize)>> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
@@ -640,6 +830,7 @@ fn main() -> std::process::ExitCode {
                 }
             }
             "--concurrency" => want_concurrency = true,
+            "--timer" => want_timer = true,
             "--engines" => want_engines = true,
             "--doorbell-census" => want_census = true,
             "--probe-ctrl" => {
@@ -705,6 +896,19 @@ fn main() -> std::process::ExitCode {
         probe_ctrl(&mut rm, subdevice, &specs);
         println!("done — probe only");
         return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R19 runs here and RETURNS, for R18's reason: it maps and reads, it submits nothing,
+    // and leaving the rest of the ladder unrun keeps every refusal attributable to the
+    // timer mapping alone rather than to a channel that failed three rungs earlier.
+    if want_timer {
+        let ok = timer_probe(&conn);
+        println!("done — timer probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
 
     // ★ R13c runs here and RETURNS, for R18's reason and one more: its instrument is a

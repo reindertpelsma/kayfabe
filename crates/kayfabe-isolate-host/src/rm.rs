@@ -126,9 +126,11 @@ use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
     NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
-    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
-    SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_WINDOW_SIZE,
-    WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry, method_header_inc,
+    NV01_TIMER_MAP_SIZE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams,
+    Nvos33ParametersWithFd, PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT,
+    USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
+    USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry,
+    method_header_inc, ptimer_sample,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
@@ -876,6 +878,114 @@ impl RmConnection {
             .region
             .store_u32(HostOffset::new(USERMODE_NOTIFY_CHANNEL_PENDING), token)
             .map_err(|e| region_error(&e))
+    }
+
+    /// ★★★ `#128` T3 — the host GPU's PTIMER, read through the **usermode window this
+    /// connection already holds**.
+    ///
+    /// No new RM object and no new mapping: [`USERMODE_TIME_0`]/[`USERMODE_TIME_1`] are
+    /// sixteen bytes below the doorbell in the same 64 KiB window
+    /// [`Self::open_usermode`] maps at bring-up. That is the point of this accessor — it
+    /// proves a **capability-less** process can read a real host nanosecond counter
+    /// *without acquiring anything it did not already need to submit work*.
+    ///
+    /// ⊘ It is **not** the read-native path and must never be mistaken for it. Every call
+    /// here is a function call inside one process; the guest reaching this would be an
+    /// exit plus an IPC, which is the jitter `#128` exists to remove. This is the
+    /// **oracle** — the value a passthrough mapping must agree with — and the fallback
+    /// for a host that refuses the dedicated page.
+    ///
+    /// # Errors
+    /// The refusal [`Self::open_usermode`] kept, if the window never mapped; or
+    /// [`RmError::Other`] if the counter never settled across
+    /// [`kayfabe_abi::submit::PTIMER_SAMPLE_ROUNDS`] rounds — ⊘ never a zero.
+    pub fn host_ptimer_via_usermode(&self) -> Result<u64, RmError> {
+        let window = self.usermode.as_ref().map_err(|e| *e)?;
+        Self::sample(&window.region, USERMODE_TIME_1, USERMODE_TIME_0)
+    }
+
+    /// [`ptimer_sample`] over a [`VolatileRegion`], mapping both refusals onto [`RmError`].
+    fn sample(region: &VolatileRegion, hi: u64, lo: u64) -> Result<u64, RmError> {
+        ptimer_sample(hi, lo, |off| region.load_u32(HostOffset::new(off))).map_err(|e| match e {
+            PtimerSampleError::Read(r) => region_error(&r),
+            // ⊘ The standing rule, at the one place it could be broken: an incoherent
+            // counter is a REFUSAL. Returning the last pair, or zero, would be plausible.
+            PtimerSampleError::Incoherent => RmError::Other(NOT_ON_THIS_RUNG),
+        })
+    }
+
+    /// ★★★ `#128` T4 — allocate an [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) object
+    /// and CPU-map it: **a dedicated mapping of BAR0 `0x9000`, the PTIMER page**.
+    ///
+    /// This is the mapping the read-native design wants, and it differs from
+    /// [`Self::host_ptimer_via_usermode`] in the one way that matters: the range contains
+    /// **only timer registers**, no doorbell, so the whole page may be exposed to a guest
+    /// without exposing a work-submit path. `tmrapiGetRegBaseOffsetAndSize_IMPL` reports
+    /// `DRF_BASE(NV_PTIMER)` and `sizeof(Nv01TimerMap)` for it
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/timer/timer.c:1712-1734`).
+    ///
+    /// ★★★ **The mapping is READ-ONLY, and that is hardware policy rather than ours.**
+    /// `subdeviceCtrlCmdValidateMemMapRequest_IMPL` walks BAR0 range by range for any
+    /// caller that is not `osIsAdministrator()`, and the PTIMER row — the *first* row it
+    /// tries — returns `NV_PROTECT_READABLE`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2905-2917`,
+    /// reached from `RmValidateMmapRequest`, `.../unix/src/osapi.c:2023-2054`).
+    /// So an unprivileged holder of this mapping **cannot** write
+    /// `NV_PTIMER_TIME_0`, and `tmrSetCurrentTime_GV100`'s register is out of reach by
+    /// construction and not by a check we could forget. ⚠ A *root* caller takes the
+    /// `osIsAdministrator()` fast path and gets `NV_PROTECT_READ_WRITE` instead — which is
+    /// why the ladder rung that measures this must be run as an unprivileged uid to mean
+    /// anything.
+    ///
+    /// The [`CharDevice`] is returned with the region because the mmap context lives on it
+    /// and dropping it early makes the unmap unexpressible — same contract as
+    /// [`Self::map_cpu`].
+    ///
+    /// # Errors
+    /// Whatever RM refuses the alloc or the map with. A refusal here is a **finding**, not
+    /// a licence to run the mapper with more privilege.
+    pub fn map_ptimer_page(&self) -> Result<(u32, CharDevice, VolatileRegion), RmError> {
+        let want = self.mint();
+        let object = self.raw_alloc(
+            self.subdevice,
+            want,
+            kayfabe_abi::submit::NV01_TIMER,
+            &mut [],
+        )?;
+        self.remember(object, self.subdevice);
+        // ★ `Uncached`, for the same reason `open_usermode` is: this is a BAR0 *register*
+        // range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch unconditionally
+        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`). A cached mapping of a
+        // free-running counter would read one value forever — the exact failure this task
+        // exists to prevent, arriving through the cache instead of through a trap.
+        let (node, region) = self.map_cpu(object, NV01_TIMER_MAP_SIZE, CachePolicy::Uncached)?;
+        Ok((object, node, region))
+    }
+
+    /// Read the PTIMER pair out of a region produced by [`Self::map_ptimer_page`].
+    ///
+    /// # Errors
+    /// As [`Self::host_ptimer_via_usermode`].
+    pub fn ptimer_page_read(region: &VolatileRegion) -> Result<u64, RmError> {
+        Self::sample(region, PTIMER_PAGE_TIME_1, PTIMER_PAGE_TIME_0)
+    }
+
+    /// `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` on this connection's subdevice — the
+    /// control that exists expressly *"so that clients may map them directly"*
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080tmr.h:107-110`).
+    ///
+    /// `payload` should be four bytes and is left **as the caller seeded it** if RM answers
+    /// without writing — the `#128` rung seeds `0xCD` for exactly the reason R18 does, so
+    /// *"answered `NV_OK` and wrote nothing"* is distinguishable from *"answered zero"*.
+    ///
+    /// # Errors
+    /// Whatever RM refuses the control with.
+    pub fn timer_register_offset(&self, payload: &mut [u8]) -> Result<(), RmError> {
+        self.raw_control(
+            self.subdevice,
+            kayfabe_abi::submit::NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET,
+            payload,
+        )
     }
 
     /// The driver version string the frontend reported, if it answered.
