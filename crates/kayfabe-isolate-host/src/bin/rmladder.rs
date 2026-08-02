@@ -688,23 +688,46 @@ fn timer_probe(conn: &RmConnection) -> bool {
         }
         Ok(obj) => {
             println!("★     R19 NV01_TIMER alloc = hObject {obj:#010x}");
+            // ★★★ The sweep is over (ioctl length, mmap length) PAIRS, not over one length.
+            // The first two rows are the two ways of assuming they are the same number, and
+            // each fails at a DIFFERENT layer; the third is the pair the driver's own code
+            // describes. Running all three is what turns "it did not map" into an
+            // attribution.
             let mut got = Err(RmError::Other(0));
-            for len in [NV01_TIMER_MAP_SIZE, PTIMER_PAGE_SIZE] {
-                match conn.map_object_uncached(obj, len) {
+            for (reg, mm, why) in [
+                (
+                    NV01_TIMER_MAP_SIZE,
+                    NV01_TIMER_MAP_SIZE,
+                    "the object's own size for both",
+                ),
+                (PTIMER_PAGE_SIZE, PTIMER_PAGE_SIZE, "a whole page for both"),
+                (
+                    NV01_TIMER_MAP_SIZE,
+                    PTIMER_PAGE_SIZE,
+                    "the object's size to RM, the rounded size to mmap",
+                ),
+            ] {
+                match conn.map_object_uncached(obj, reg, mm) {
                     Ok((node, region)) => {
-                        println!("★     R19 NV01_TIMER map  = len {len:#x} ACCEPTED");
+                        println!(
+                            "★     R19 NV01_TIMER map  = ioctl {reg:#x} / mmap {mm:#x} \
+                             ACCEPTED  ({why})"
+                        );
                         got = Ok((obj, node, region));
                         break;
                     }
                     Err(e) => println!(
-                        "info  R19 NV01_TIMER map  = len {len:#x} refused {e:?}{}",
+                        "info  R19 NV01_TIMER map  = ioctl {reg:#x} / mmap {mm:#x} refused \
+                         {e:?}  ({why}){}",
                         match e {
-                            RmError::Other(s) if s == 0x4B47 =>
-                                "  ⚠ that is OUR OWN NOT_IN_THIS_OBJECT — the request never \
-                                 reached RM; this length is not page-aligned",
+                            RmError::Other(0x4B47) =>
+                                "  ⚠ OUR OWN NOT_IN_THIS_OBJECT — the request never reached \
+                                 RM; that mmap length is not page-aligned",
+                            RmError::Other(0x2E) =>
+                                "  ← NV_ERR_INVALID_LIMIT: the driver says the length is past \
+                                 the resource's own size — a BOUND, not a privilege",
                             RmError::Other(s) if s & 0x8000_0000 != 0 =>
-                                "  ← an errno from the \
-                                 kernel: the request DID reach the driver",
+                                "  ← an errno: it DID reach the driver",
                             _ => "  ← an NV_STATUS: the driver decided",
                         }
                     ),

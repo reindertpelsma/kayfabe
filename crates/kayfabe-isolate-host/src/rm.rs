@@ -962,14 +962,13 @@ impl RmConnection {
     /// Whatever RM refuses the alloc or the map with — or one of this crate's own local
     /// statuses, which mean the request never reached RM. A refusal here is a **finding**,
     /// not a licence to run the mapper with more privilege.
-    pub fn map_ptimer_page(&self, len: u64) -> Result<(u32, CharDevice, VolatileRegion), RmError> {
+    pub fn map_ptimer_page(
+        &self,
+        register_len: u64,
+        mmap_len: u64,
+    ) -> Result<(u32, CharDevice, VolatileRegion), RmError> {
         let object = self.alloc_timer_object()?;
-        // ★ `Uncached`, for the same reason `open_usermode` is: this is a BAR0 *register*
-        // range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch unconditionally
-        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`). A cached mapping of a
-        // free-running counter would read one value forever — the exact failure this task
-        // exists to prevent, arriving through the cache instead of through a trap.
-        let (node, region) = self.map_cpu(object, len, CachePolicy::Uncached)?;
+        let (node, region) = self.map_object_uncached(object, register_len, mmap_len)?;
         Ok((object, node, region))
     }
 
@@ -993,17 +992,22 @@ impl RmConnection {
         Ok(object)
     }
 
-    /// CPU-map an already-allocated object at `len` bytes. See [`Self::map_ptimer_page`]
-    /// for why the length is the interesting parameter.
+    /// CPU-map an already-allocated object, uncached — the policy every BAR0 register
+    /// range gets (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`). A *cached* mapping of
+    /// a free-running counter would read one value forever, which is this task's failure
+    /// arriving through the cache instead of through a trap.
+    ///
+    /// See [`Self::map_cpu_windowed`] for why the two lengths are separate.
     ///
     /// # Errors
-    /// As [`Self::map_cpu`].
+    /// As [`Self::map_cpu_windowed`].
     pub fn map_object_uncached(
         &self,
         object: u32,
-        len: u64,
+        register_len: u64,
+        mmap_len: u64,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
-        self.map_cpu(object, len, CachePolicy::Uncached)
+        self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::Uncached)
     }
 
     /// Read the PTIMER pair out of a region produced by [`Self::map_ptimer_page`].
@@ -1389,6 +1393,39 @@ impl RmConnection {
         len: u64,
         cache: CachePolicy,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu_windowed(h_memory, len, len, cache)
+    }
+
+    /// [`Self::map_cpu`] with the **ioctl length and the `mmap` length given separately**.
+    ///
+    /// ★★★ **They are not always the same number, and assuming they were cost `#128` a
+    /// wrong finding.** The escape's length is bounded by the RM resource's own size:
+    /// `gpuresMap_IMPL` asks `gpuresGetRegBaseOffsetAndSize` and refuses anything past it
+    /// with `NV_ERR_INVALID_LIMIT` (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_resource.c:126-143`).
+    /// The `mmap` length, by contrast, must be a whole number of host pages — Linux's
+    /// requirement, and independently ours in `Mapping::anywhere`. For an
+    /// [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) those two are `0x414` and `0x1000`,
+    /// so **no single value can satisfy both**: `0x414` never reaches the driver and
+    /// `0x1000` is refused by it.
+    ///
+    /// The two are reconciled inside RM rather than by the caller:
+    /// `nv_align_mmap_offset_length` rounds the range it registers up to a page
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:1976-1986`), and
+    /// `nvidia_mmap_helper` then compares the `mmap` length against that **rounded** size
+    /// (`ogkm-580: kernel-open/nvidia/nv-mmap.c:560-565`). So the correct call passes the
+    /// object's true size to the ioctl and the page-rounded size to `mmap`.
+    ///
+    /// ⚠ Every pre-existing caller passes the same value twice and is unchanged by this:
+    /// their objects are already page multiples. This exists for the one object whose size
+    /// is not.
+    fn map_cpu_windowed(
+        &self,
+        h_memory: u32,
+        register_len: u64,
+        mmap_len: u64,
+        cache: CachePolicy,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        let len = register_len;
         let name = CString::new(format!("nvidia{}", self.gpu_index))
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         let node = CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?;
@@ -1433,7 +1470,7 @@ impl RmConnection {
         // with each call site, which is the least dishonest place available.
         let region = VolatileRegion::map(
             Backing::DeviceFile { fd: node.as_fd() },
-            len,
+            mmap_len,
             cache,
             HostPageSize::query(),
         )
