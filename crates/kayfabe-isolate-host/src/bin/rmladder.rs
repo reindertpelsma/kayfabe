@@ -609,7 +609,7 @@ fn probe_ctrl(
 /// `RmValidateMmapRequest` returns `NV_PROTECT_READ_WRITE` immediately for
 /// `osIsAdministrator()` and never executes the range walk
 /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:2023-2054`). Both arms were run
-/// 2026-08-02 on a GA106 at revision 3413544 and agreed. The measurement is the
+/// 2026-08-02 on a GA106 at revision 9087090 and agreed. The measurement is the
 /// run under an unprivileged uid; the root run is the **control** that shows the difference
 /// is the privilege and not the code.
 ///
@@ -635,7 +635,7 @@ fn timer_probe(conn: &RmConnection) -> bool {
     const PAGE: u64 = 4096;
     // `geteuid` through the same raw layer everything else here uses. Not a permission
     // check — a LABEL on the measurement, so a root run cannot be quoted as the answer.
-    // Both labels appear in the 2026-08-02 GA106 run at revision 3413544.
+    // Both labels appear in the 2026-08-02 GA106 run at revision 9087090.
     let euid = kayfabe_linux_raw::geteuid();
     let privileged = euid == 0;
     println!(

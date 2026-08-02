@@ -763,10 +763,10 @@ discovers it.
   it useful for correlating against GPU events.
 
 - ★★★ **It leaks the host's WALL CLOCK, and the brief for `#128` assumed it leaked uptime.**
-  **[measured]** `docs/reference/bench_evidence/timer-mappability-3413544.out` at
-  `3413544`: the counter read `1 785 632 256 684 049 376` ns, which decodes as Unix time
-  **2026-08-02 00:57:36.684 UTC** — matching the run's own timestamp two seconds earlier,
-  while the host's uptime was 50 465 s (14 h). So on this board RM has set PTIMER to real
+  **[measured]** `docs/reference/bench_evidence/timer-mappability-9087090.out` at
+  `9087090`: the counter read `1 785 633 236 401 525 344` ns, which decodes as Unix time
+  **2026-08-02 01:13:56.401 UTC** — matching the run's own timestamp two seconds earlier,
+  while the host's uptime was 51 144 s (14.2 h). So on this board RM has set PTIMER to real
   time (`tmrSetCurrentTime`), and a guest reading it learns the **host's wall clock to
   nanosecond resolution**, not merely how long the GPU has been up.
 

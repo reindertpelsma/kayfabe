@@ -222,7 +222,7 @@ impl GuestRam for RefusingRam {
 /// host GPU register page under `KVM_MEM_READONLY`, so reads never exit and correlation is
 /// correct by construction. ★ **MEASURED 2026-08-02 on a real GA106 (RTX 3060,
 /// 580.159.04):** an unprivileged, capability-less process *can* map the host counter and
-/// read it live — `docs/reference/bench_evidence/timer-mappability-3413544.out`, decoded in
+/// read it live — `docs/reference/bench_evidence/timer-mappability-9087090.out`, decoded in
 /// `docs/design/read_native_timer_measured.md`. What is not built is the memslot caller.
 ///
 /// ⊘ **The standing rule this port must keep whatever replaces it:** *never answer a
@@ -1883,8 +1883,8 @@ impl RegPlane {
         // separately, RM hands an unprivileged mapper of that range `NV_PROTECT_READABLE`
         // and nothing else
         // (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2905-2917`;
-        // measured 2026-08-02 on a GA106 at revision 3413544,
-        // `docs/reference/bench_evidence/timer-mappability-3413544.out`). This arm
+        // measured 2026-08-02 on a GA106 at revision 9087090,
+        // `docs/reference/bench_evidence/timer-mappability-9087090.out`). This arm
         // exists so the *port* states the policy rather than inheriting it from two
         // mechanisms that live somewhere else.
         //

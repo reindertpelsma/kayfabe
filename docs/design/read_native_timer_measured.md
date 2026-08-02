@@ -15,9 +15,9 @@ Everything below is one of three things and is labelled:
 * **[inferred]** — a deduction from the two above, with the premises named.
 
 The run behind every **[measured]** claim:
-`docs/reference/bench_evidence/timer-mappability-3413544.out`, revision
-`341354489fb3f348450408d75c32705ab3a548fe`, binary sha1 `5bc1372…`, RTX 3060 (GA106),
-host driver 580.159.04 open, kernel 6.8.0-59-generic, 2026-08-02T00:57:34Z. Re-runnable:
+`docs/reference/bench_evidence/timer-mappability-9087090.out`, revision
+`9087090d281d0e25bceea79a5ed98d55a1f7d7db`, binary sha1 `c746957…`, RTX 3060 (GA106),
+host driver 580.159.04 open, kernel 6.8.0-59-generic, 2026-08-02T01:13:54Z. Re-runnable:
 `kayfabe-rm-ladder --gpu 0 --timer`.
 
 ★ It has **two arms and the second one is the control**: arm A runs under uid 65534 with no
@@ -32,7 +32,7 @@ assumption.
 
 > **Can an unprivileged, capability-less isolate map the host GPU's timer registers at all?**
 
-**[measured 2026-08-02, GA106, revision 3413544] Yes — by two independent routes, and root
+**[measured 2026-08-02, GA106, revision 9087090] Yes — by two independent routes, and root
 and non-root get identical results.**
 
 | what | arm A (uid 65534, no caps) | arm B (root) |
@@ -40,13 +40,13 @@ and non-root get identical results.**
 | `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` | `NV_OK`, `tmr_offset = 0x9000` | identical |
 | `NV01_TIMER` alloc | `hObject 0xcafe0004` | identical |
 | `NV01_TIMER` CPU map (ioctl `0x414` / mmap `0x1000`) | **ACCEPTED** | identical |
-| PTIMER page counter over a 20 ms sleep | `+20 118 592 ns` | `+20 174 592 ns` |
-| usermode-window mirror over a 20 ms sleep | `+20 224 480 ns` | `+20 177 184 ns` |
-| the two mappings read one counter | **yes** — mirror `12 μs` after the second page read | yes |
+| PTIMER page counter over a 20 ms sleep | `+20 116 864 ns` | `+20 171 552 ns` |
+| usermode-window mirror over a 20 ms sleep | `+20 100 288 ns` | `+20 207 488 ns` |
+| the two mappings read one counter | **yes** — mirror `25.8 μs` after the second page read | yes |
 
 Both counters advance by the sleep duration to within 1 %, and the mirror reading — taken
-after the second PTIMER-page reading, in that order — is 11 968 ns later than it. Two
-different BAR0 addresses, two different RM objects, agreeing to twelve microseconds in
+after the second PTIMER-page reading, in that order — is 25 792 ns later than it. Two
+different BAR0 addresses, two different RM objects, agreeing to twenty-six microseconds in
 strict temporal order: they are one counter.
 
 **[src] Why RM permits it**, which is the part that survives a driver update:
@@ -79,7 +79,7 @@ its page* on both sides.
 | host, **PTIMER page** — no doorbell in it | `NV_PTIMER_TIME_0` | `0x9400` | **`0x400`** |
 | host, **usermode window** — the doorbell window | `NVC361_TIME_0` | window `+0x080` | **`0x080`** |
 
-⇒ **[inferred; both premises measured 2026-08-02 on a GA106 at revision 3413544, §1]** The
+⇒ **[inferred; both premises measured 2026-08-02 on a GA106 at revision 9087090, §1]** The
 clean, doorbell-free page is the one that does *not*
 line up. The page that does line up carries `NVC361_NOTIFY_CHANNEL_PENDING` — **the doorbell
 — sixteen bytes later**, in the same 4 KiB page [src: `ogkm-580:
@@ -153,7 +153,7 @@ are different numbers. `gpuresMap_IMPL` refuses anything past the resource's own
 Linux requires a page multiple. RM reconciles them itself:
 `nv_align_mmap_offset_length` rounds the *registered* range up to a page [src: `osapi.c:1976-1986`]
 and `nvidia_mmap_helper` then compares the `mmap` length against that **rounded** size [src:
-`nv-mmap.c:560-565`]. **[measured 2026-08-02, GA106, revision 3413544]** `ioctl 0x414 /
+`nv-mmap.c:560-565`]. **[measured 2026-08-02, GA106, revision 9087090]** `ioctl 0x414 /
 mmap 0x1000` is accepted; both
 same-value pairs are refused, at two different layers.
 
@@ -169,7 +169,7 @@ bits read zero and a one-nanosecond step is invisible. The test was the defect.
 
 ## 6. What is NOT built, and what it needs
 
-**[measured 2026-08-02, GA106, revision 3413544] Settled:** the mapping is obtainable,
+**[measured 2026-08-02, GA106, revision 9087090] Settled:** the mapping is obtainable,
 unprivileged, and it is live.
 
 **Not built:** the memslot caller. `Vmm::map_read_native` exists and is tested, `memslot_spans`
