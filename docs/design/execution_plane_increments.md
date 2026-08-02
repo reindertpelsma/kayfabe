@@ -945,6 +945,10 @@ accumulator over bytes read from the wrong place is wrong **silently**. See §8.
 
 ### 8.2.2 ⚠ THE ORDERING QUESTION §8.2.1 DOES NOT ANSWER — is VA == GPA at this wall?
 
+> ★★★ **ANSWERED — see §8.2.3.** It does **not** hold. This section is kept as the
+> statement of the question and of why it had to be a boot; every `[unmeasured]` below is
+> superseded there.
+
 `read_pushbuffer` fetches the method bytes with `guest_read(vmm, r.gpa, &mut buf)`, where
 `r.gpa` came from a GPFIFO entry that holds a **GPU virtual address**
 (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996,1006`, field `NVC56F_GP_ENTRY0_GET 31:2` /

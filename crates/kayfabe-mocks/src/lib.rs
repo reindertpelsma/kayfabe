@@ -563,6 +563,14 @@ impl PushbufferAbi for MockPushbuffer {
     /// VA that resolved nowhere would only convert a silent wrong read into a fixture
     /// nobody can write. The question belongs to `Ga10xPushbuffer`'s consumer.
     ///
+    /// ★★★ **And it is no longer open.** `[measured]` at rev `c93930d`, boots `e5ring1`
+    /// and `e5ring2g`: the guest names its ring at the same address with 8 GiB and with
+    /// 2 GiB of guest RAM, and at 2 GiB that address is outside every `e820` usable range.
+    /// VA ≠ GPA. `docs/design/execution_plane_increments.md` §8.2.3 — and note that at the
+    /// bench's *normal* 8 GiB the address IS a legal GPA, so the read succeeds and returns
+    /// the wrong bytes. This mock is exactly what made that invisible for the life of the
+    /// seam (`mock_fidelity_both_directions`).
+    ///
     /// ⊘ Two further deliberate divergences from [`kayfabe_chips::Ga10xPushbuffer`], in
     /// the **more permissive** direction, so no test here is evidence about them: a ring
     /// whose length is not a whole number of entries yields its **prefix** (the real codec
