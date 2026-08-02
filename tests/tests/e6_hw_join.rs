@@ -394,8 +394,7 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
         &mut vmm,
         pid,
         cid,
-        SRC_VA,
-        DST_VA,
+        (SRC_VA, DST_VA),
         "arm 1",
         |parsed| {
             assert_eq!(
@@ -456,8 +455,7 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
         &mut vmm,
         pid,
         cid,
-        PROBE_SRC_VA,
-        PROBE_DST_VA,
+        (PROBE_SRC_VA, PROBE_DST_VA),
         "arm 2",
         |_| {},
     );
@@ -499,8 +497,8 @@ fn submit_guest_ring(
     vmm: &mut kayfabe_mocks::MockVmm,
     pid: ProcId,
     cid: ChanId,
-    src: GpuVa,
-    dst: GpuVa,
+    // ⊘ Grouped rather than two parameters: a copy has two ends and they are one fact.
+    (src, dst): (GpuVa, GpuVa),
     arm: &str,
     extra: impl FnOnce(&kayfabe_fwd::PushbufferOutcome),
 ) {
