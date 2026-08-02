@@ -619,7 +619,9 @@ fn plain_copy_flags() -> u32 {
 /// ★★★ **A hostile stream may never fire a copy whose operands it did not write** —
 /// checked against a shadow of what the stream actually latched.
 ///
-/// # Why a bare "noise never fires a launch" test is worthless here, MEASURED
+/// # Why a bare "noise never fires a launch" test is worthless here
+///
+/// ⚠ Not an argument — an observed run of this file at rev `ef37d69`.
 ///
 /// The first version of this test fed 65 536 random words through the codec with a CE
 /// subchannel legitimately bound and asserted no launch carried an all-default operand

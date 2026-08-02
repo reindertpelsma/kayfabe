@@ -48,7 +48,7 @@ use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, HClient, HObject, Pdb, VChid
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::project::{Boundaries, NO_CONDEMNED, ProjectionError, project};
-use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraphError};
+use kayfabe_core::rmgraph::{AllocFacts, GpFifoRing, NodeKey, ResourceKey, RmEvent, RmGraphError};
 use kayfabe_fwd::{FwdFault, handle_doorbell};
 use kayfabe_gsp::{RpcCommand, RpcFunction, Transition};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, WireClassArch, mock_classes};
@@ -2885,6 +2885,11 @@ fn scenario_compute() -> Scenario {
         AllocFacts {
             h_vaspace: Some(HObject(cp::VAS)),
             userd_flags: gr_flags(),
+            // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+            // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+            // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+            // declared no ring at all, which no channel does.
+            gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
             ..Default::default()
         },
     ))
@@ -2895,6 +2900,11 @@ fn scenario_compute() -> Scenario {
         AllocFacts {
             h_ctx_share: Some(HObject(cp::CTXSHARE)),
             userd_flags: ce_flags(),
+            // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+            // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+            // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+            // declared no ring at all, which no channel does.
+            gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
             ..Default::default()
         },
     ))
@@ -3057,6 +3067,11 @@ fn the_hand_hex_channel_alloc_becomes_the_declared_event() {
                 // `hContextShare` was `NV01_NULL_OBJECT` on the wire, which is absence.
                 h_ctx_share: None,
                 userd_flags: 0x1085,
+                // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+                // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+                // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+                // declared no ring at all, which no channel does.
+                gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
                 ..Default::default()
             },
         })),
@@ -3158,6 +3173,11 @@ fn every_class_in_the_table_decodes_its_declared_facts_and_only_those() {
                 h_vaspace: Some(HObject(cp::VAS)),
                 h_ctx_share: Some(HObject(cp::CTXSHARE)),
                 userd_flags: gr_flags(),
+                // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+                // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+                // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+                // declared no ring at all, which no channel does.
+                gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
                 ..Default::default()
             }
         ),
@@ -3216,6 +3236,11 @@ fn a_zero_handle_field_declares_nothing_rather_than_object_zero() {
             h_vaspace: None,
             h_ctx_share: None,
             userd_flags: gr_flags(),
+            // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+            // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+            // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+            // declared no ring at all, which no channel does.
+            gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
             ..Default::default()
         },
         "★ hVASpace = 0 is the GSP-managed VAS, which `AllocFacts` models as absence",
@@ -3231,6 +3256,11 @@ fn a_zero_handle_field_declares_nothing_rather_than_object_zero() {
             h_vaspace: Some(HObject(2)),
             h_ctx_share: Some(HObject(1)),
             userd_flags: gr_flags(),
+            // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+            // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+            // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+            // declared no ring at all, which no channel does.
+            gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
             ..Default::default()
         },
     );
@@ -3281,6 +3311,11 @@ fn nothing_past_the_channel_prefix_is_read_however_hostile_it_is() {
         h_vaspace: Some(HObject(cp::VAS)),
         h_ctx_share: Some(HObject(cp::CTXSHARE)),
         userd_flags: gr_flags(),
+        // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+        // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+        // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+        // declared no ring at all, which no channel does.
+        gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
         ..Default::default()
     };
     let exact = w::channel_params(gr_flags(), cp::CTXSHARE, cp::VAS);
@@ -3493,6 +3528,11 @@ fn one_changed_word_of_the_channel_params_moves_exactly_one_fact() {
         h_vaspace: Some(HObject(cp::VAS)),
         h_ctx_share: Some(HObject(cp::CTXSHARE)),
         userd_flags: gr_flags(),
+        // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+        // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+        // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+        // declared no ring at all, which no channel does.
+        gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
         ..Default::default()
     };
     let facts_of = |params: &[u8]| match xlate(&w::message(
@@ -3541,6 +3581,44 @@ fn one_changed_word_of_the_channel_params_moves_exactly_one_fact() {
             ..reference
         },
         "+28 moves `h_vaspace` and nothing else",
+    );
+    // ★★★ §8.2.2 — the two fields the prefix ALWAYS covered and nobody read until now.
+    // `gpFifoOffset` is an 8-aligned `NvU64` at +8, so its two halves are +8 and +12 and
+    // BOTH must move the same fact; `gpFifoEntries` is a separate `NvU32` at +16 and must
+    // move a different one. A decoder that read the entry count at +12 — the u64's high
+    // half, the nearest wrong answer — passes every other assertion in this file.
+    assert_eq!(
+        mutate(8, 0x1234_5000),
+        AllocFacts {
+            gp_fifo_ring: Some(GpFifoRing {
+                va: 0x1234_5000,
+                entries: 0
+            }),
+            ..reference
+        },
+        "+8 moves the ring VA's LOW half and nothing else",
+    );
+    assert_eq!(
+        mutate(12, 0x0000_007F),
+        AllocFacts {
+            gp_fifo_ring: Some(GpFifoRing {
+                va: 0x0000_007F_0000_0000,
+                entries: 0
+            }),
+            ..reference
+        },
+        "+12 moves the ring VA's HIGH half — the same fact, not a different one",
+    );
+    assert_eq!(
+        mutate(16, 4096),
+        AllocFacts {
+            gp_fifo_ring: Some(GpFifoRing {
+                va: 0,
+                entries: 4096
+            }),
+            ..reference
+        },
+        "+16 moves `gpFifoEntries` and nothing else",
     );
 }
 
@@ -3774,6 +3852,11 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
     let undecoded = with_facts(AllocFacts::default());
     let flags_only = with_facts(AllocFacts {
         userd_flags: gr_flags(),
+        // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+        // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+        // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+        // declared no ring at all, which no channel does.
+        gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
         ..Default::default()
     });
     assert_ne!(decoded, undecoded, "the two differ only in `facts`");
@@ -3980,6 +4063,11 @@ fn an_object_handle_recycled_as_a_different_class_is_translated_afresh() {
             facts: AllocFacts {
                 h_vaspace: Some(HObject(cp::VAS)),
                 userd_flags: ce_flags(),
+                // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
+                // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
+                // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
+                // declared no ring at all, which no channel does.
+                gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
                 ..Default::default()
             },
         })),

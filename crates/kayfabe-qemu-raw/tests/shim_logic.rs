@@ -546,9 +546,16 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // does not model that offset", this is "it models it and says no" — and a guest RM
     // issuing `tmrSetCurrentTime` should show up in exactly one of them. This assertion is
     // the reason the wire ABI had to move to 13: nothing else covers this structure's size.
+    // ★ 43 -> 47 at `execution_plane_increments.md` §8.2.2: the GPFIFO-ring census —
+    // `declarations`, `nonzero`, the first non-zero ring `va` and its `entries`. `nonzero`
+    // doubles as the validity flag for the two below it, for the reason
+    // `doorbell_last_token_valid` is a field of its own: `gpFifoOffset = 0` is a
+    // declaration the driver makes ON PURPOSE for its golden-context channel
+    // (`ogkm-580: kernel_graphics.c:2420-2424`), so one field could not tell "declared
+    // address zero" from "declared nothing". This is the reason the wire ABI moved to 14.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (43 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (47 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()

@@ -971,7 +971,7 @@ cleanly: **bindings populate → VAs resolve → pushbuffers read correctly → 
 the table populates further.** E5's row already says *"populated from the guest's own
 bindings"*; that half has no dependency and can land first.
 
-### 8.2.3 ★★★ THE ANSWER, MEASURED — it does NOT hold, and it is LATENT not LIVE
+### 8.2.3 ★★★ THE ANSWER (boots `e5ring1`/`e5ring2g`, rev `c93930d`) — it does NOT hold, and it is LATENT not LIVE
 
 `[measured]` 2026-08-02, two boots at rev `c93930d` on vast `46529600` (RTX 3060 / GA106,
 host driver 580.159.04 open, guest **stock** 580.159.04, `/dev/kvm`). Evidence on disk:

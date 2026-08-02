@@ -1115,10 +1115,15 @@ pub struct KayfabeRegAudit {
     pub gpfifo_ring_nonzero: u64,
     /// The first non-zero ring address a channel declared — `gpFifoOffset`, verbatim.
     ///
-    /// ★★★ **It is a GPU VIRTUAL address** (`ogkm-580: ctrl2080fifo.h:809`,
-    /// `mem_utils_gm107.c:1232`), and printing it beside the guest's RAM extent is the
-    /// whole measurement: `kayfabe_arch::PushRange::gpa` feeds an address of exactly this
-    /// kind to `Vmm::gpa_read` with no walk.
+    /// ★★★ **It is a GPU VIRTUAL address.** `[src]` `ogkm-580: ctrl2080fifo.h:809` names
+    /// the field *"Gpfifo Virtual Offset"*, and `mem_utils_gm107.c:1232` computes it as
+    /// `pbGpuVA + channelPbSize`. That is a reading of the driver, said as one.
+    ///
+    /// What this field is *for* is the other half: `kayfabe_arch::PushRange::gpa` feeds an
+    /// address of exactly this kind to `Vmm::gpa_read` with no walk, so printing the
+    /// number beside the guest's own RAM extent is what turns the reading into an
+    /// observation. `[measured]` at rev `c93930d`, boots `e5ring1` / `e5ring2g` —
+    /// `docs/design/execution_plane_increments.md` §8.2.3.
     pub gpfifo_ring_va: u64,
     /// `gpFifoEntries` that came with [`Self::gpfifo_ring_va`], or `0` if none did.
     ///

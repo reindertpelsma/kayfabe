@@ -427,11 +427,15 @@ pub struct AllocFacts {
 /// on every GSP-client part (`kayfabe_rmrpc` crate docs, §2.7).
 ///
 /// The same `pbGpuVA` is what a GPFIFO *entry* names: `get = pChannel->pbGpuVA + gpOffset`,
-/// packed into `GP_ENTRY0_GET`/`GP_ENTRY1_GET_HI` (`:1871-1879`). So this value and
-/// [`kayfabe_arch::PushRange::gpa`] are addresses **of the same kind, in the same
-/// allocation** — which is what makes recording this one a measurement of the other.
+/// packed into `GP_ENTRY0_GET`/`GP_ENTRY1_GET_HI` (`:1871-1879`). `[src]`, all of it — a
+/// reading of the driver and nothing more.
 ///
-/// ⊘ Nothing in the core reads it. `docs/design/execution_plane_increments.md` §8.2.2.
+/// What follows from the reading is that this value and [`kayfabe_arch::PushRange::gpa`]
+/// are addresses of the same kind in the same allocation, so a boot that states one has
+/// stated the other. `[measured]` at rev `c93930d` — see
+/// `docs/design/execution_plane_increments.md` §8.2.3 for the two boots and the answer.
+///
+/// ⊘ Nothing in the core reads it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpFifoRing {
     /// `gpFifoOffset` @ +8 — the ring's base, as the guest named it.

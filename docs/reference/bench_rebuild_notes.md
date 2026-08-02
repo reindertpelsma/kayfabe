@@ -594,10 +594,11 @@ in `docs/design/execution_plane_increments.md` §8.2.3.
 
 ### ★★ Two bench facts worth having next time
 
-- **The differential is the instrument, not the single boot.** At 8 GiB the ring address
-  `0x1_2006_4000` *is* a legal GPA, so a boot that only asked *"does `gpa_read` succeed?"*
-  reads green. Changing `-m` is what turns a coincidence into a measurement, and it costs
-  one extra four-minute boot.
+- **The differential is the instrument, not the single boot.** `[measured]` boots `e5ring1`
+  and `e5ring2g` at rev `c93930d`: at 8 GiB the ring address `0x1_2006_4000` *is* a legal
+  GPA, so a boot that only asked *"does `gpa_read` succeed?"* reads green. Changing `-m`
+  is what separates a coincidence from an observation, and it costs one extra four-minute
+  boot.
 - ⚠ **`/workspace/bench/boot_nvkvm.sh` on this box had drifted to `-m 8G`** while
   `scripts/bench/boot_nvkvm.sh` in the tree says `-m 2048`. `boot_capture.sh` runs the
   **bench copy**, so the tree's value is not what boots. The 2 GiB run was taken by

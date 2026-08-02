@@ -1162,8 +1162,16 @@ impl PushbufferAbi for Ga10xPushbuffer {
                 // decode: `SET_OBJECT` is reported as well as bound, and the host-FIFO
                 // semaphore and TLB-invalidate runs are untouched by the accumulator
                 // (their method addresses are the CHANNEL class's, 0x28 and 0x5c, not the
-                // engine object's). A launch that fired outranks the `Opaque` that
-                // `decode_method` would have answered for it, and nothing else can.
+                // engine object's).
+                //
+                // ⊘ A fired launch wins, and one `(header, args)` pair still yields one
+                // `PushMethod` — so the pathological run that is long enough to cover BOTH
+                // `SET_OBJECT` (0x0) and `LAUNCH_DMA` (0x300), 193 arguments on, reports
+                // the launch and not the bind. The bind still HAPPENED (the loop above
+                // applied it in address order, which is what the engine does); what is
+                // lost is only the routing-confirmation report, which no core code acts
+                // on. Named rather than left as a surprise; nothing a real writer emits is
+                // shaped like that.
                 fired.unwrap_or_else(|| self.decode_method(*header, args))
             })
             .collect()

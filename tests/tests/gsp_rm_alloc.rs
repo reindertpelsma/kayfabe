@@ -639,11 +639,66 @@ fn the_shipped_arch_refuses_every_data_plane_seam() {
     assert_eq!(a.decode_doorbell(0xd000_0000_0000_0000), None);
     // ⊘ Still refusing, and this is `E4`'s own negative result rather than an unbuilt
     // seam: `0xffff_ffff` is `SEC_OP_END_PB_SEGMENT`, which carries no arguments and no
-    // fact. See `Ga10xPushbuffer` for why a real `LAUNCH_DMA` is Opaque here too.
+    // fact. A real `LAUNCH_DMA` is Opaque here too — see `Ga10xPushbuffer`.
     assert_eq!(
         a.pushbuffer().decode_method(0xffff_ffff, &[]),
         PushMethod::Opaque
     );
+    // ★★★ **CHANGED BY `E5`, and the guard fired first exactly as designed** — the third
+    // time this test's own docs have had to say that (`#149` for the MMU, `E4` for
+    // USERD/pushbuffer). The line that used to sit here asserted the shipped `Arch` names
+    // *"CE launch operands unbuilt"*; `E5` built them, so it must go red then, and it did.
+    //
+    // ⊘ The claim is **narrowed, not deleted.** What replaces it is not "we now decode a
+    // launch" — that would be a tautology over the type — but the two facts a *wrong*
+    // run-aware decoder gets wrong and which this tripwire on the SHIPPED `Arch` can
+    // actually protect: a complete run FIRES with the operands the run wrote, and a run
+    // missing one operand does NOT fire. `tests/tests/pushbuffer_abi_oracle.rs` is what
+    // judges the values against NVIDIA's own macros; these are the generation-swap guards.
+    {
+        use kayfabe_abi::submit;
+        let hdr = |m, n| submit::method_header_inc(0, m, n).expect("encodable");
+        let bind = (
+            hdr(submit::SET_OBJECT, 1),
+            vec![kayfabe_abi::generated::classes::AMPERE_DMA_COPY_B],
+        );
+        let offs = (
+            hdr(submit::ce::OFFSET_IN_UPPER, 4),
+            vec![0x1, 0x1000, 0x1, 0x2000],
+        );
+        let line = (hdr(submit::ce::LINE_LENGTH_IN, 2), vec![0x40, 1]);
+        let fire = (
+            hdr(submit::ce::LAUNCH_DMA, 1),
+            vec![submit::ce::LAUNCH_TRANSFER_NON_PIPELINED],
+        );
+        let mut st = kayfabe_arch::MethodState::new();
+        let whole = a
+            .pushbuffer()
+            .decode_run(&mut st, &[bind.clone(), offs, line, fire.clone()]);
+        assert!(
+            whole.contains(&PushMethod::CeLaunchDma {
+                dst: kayfabe_arch::ids::GpuVa(0x1_0000_2000),
+                src: kayfabe_arch::ids::GpuVa(0x1_0000_1000),
+                len: 0x40,
+                dst_is_virtual: true,
+                src_is_virtual: true,
+                work: kayfabe_arch::CeWork::Copy,
+            }),
+            "★★ a whole copy-engine run must fire with the operands the RUN wrote — a \
+             generation swapped underneath this answers with somebody else's method \
+             offsets and fires nothing, or worse, fires with the wrong ones: {whole:?}"
+        );
+        let mut bare = kayfabe_arch::MethodState::new();
+        let unarmed = a.pushbuffer().decode_run(&mut bare, &[bind, fire]);
+        assert!(
+            !unarmed
+                .iter()
+                .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+            "★★★ a launch whose operands never arrived must NOT fire: a defaulted \
+             destination is a silent memory-safety fact about the guest, which is the \
+             whole posture `E4` refused into and `E5` had to keep: {unarmed:?}"
+        );
+    }
     // A ring of all-ones entries: LENGTH is 0x1fffff dwords, so these DO name ranges —
     // the refusal that matters is the method-level one above and the fault the consumer
     // raises when the named memory does not exist (`pushbuffer_ga10x_hostile.rs`).
@@ -658,10 +713,15 @@ fn the_shipped_arch_refuses_every_data_plane_seam() {
         a.gsp().is_none(),
         "the GSP REGISTER model is the ChipProfile's, never this Arch's"
     );
+    // ⊘ **The name must still say what is NOT built**, because it is what the homogeneity
+    // guard and every `Debug` print report. `E5` changed *which* seam that is: the CE
+    // launch operands are built, and the one left is upstream of the whole codec — a
+    // GPFIFO entry names a GPU VA and nothing resolves it (§8.2.3, `[measured]` at
+    // `c93930d`). A name that stopped saying so would be the quiet kind of wrong.
     assert!(
-        a.name().contains("unbuilt"),
-        "the name must still say which seams are NOT built: it is what the homogeneity \
-         guard and every Debug print reports"
+        a.name().contains("GPU VA nothing resolves"),
+        "the name must still name the unbuilt seam; it says: {}",
+        a.name()
     );
 }
 

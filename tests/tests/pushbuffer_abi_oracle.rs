@@ -1070,7 +1070,11 @@ fn split_methods(words: &[u32]) -> Vec<(u32, Vec<u32>)> {
 }
 
 /// ★★★ **A whole copy-engine run decodes to ONE `CeLaunchDma` carrying the driver's own
-/// operands** — the seam `E4` measured to be structurally incapable, closed by `E5`.
+/// operands** — the seam `E4` refused at, closed by `E5`.
+///
+/// That `decode_method` could not produce this fact is not an opinion:
+/// `the_ce_pushbuffer_is_five_runs_and_launch_dma_carries_no_operands`, in this file,
+/// asserts it out of the class header itself.
 ///
 /// Every field is compared against NVIDIA's `DRF_VAL` of the same words, never against
 /// the number the harness handed the encoder. That is what makes the 40-bit address sweep
