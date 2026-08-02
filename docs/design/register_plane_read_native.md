@@ -87,8 +87,13 @@ through.
 
 ★ **DECIDED, 2026-08-02:** `kayfabe_device::plane::PTIMER_WRITE_REFUSED`, counted in
 `Counters::ptimer_writes_refused` — its own counter, because `unclaimed_writes` means *"this
-port does not model that offset"* and this means *"it models it and says no"*. Rationale and
-the two independent mechanisms that also hold it: `read_native_timer_measured.md` §4.
+port does not model that offset"* and this means *"it models it and says no"*.
+
+⚠ And it is **not redundant today**: the only other mechanism that will hold this write is
+`KVM_MEM_READONLY` on the backing memslot, which is the part of §1 that is **not built**. (A
+third was claimed and withdrawn — RM's read-only grant covers the PTIMER page, and that page
+cannot be the backing page. `read_native_timer_measured.md` §4 carries the correction and the
+table.)
 
 ★★ **And a correction to the table above.** Both rows are real registers, but the guest
 driver reads only the **second**: `tmrReadTimeLoReg_TU102` goes through the virtual-function

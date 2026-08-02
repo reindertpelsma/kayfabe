@@ -154,7 +154,7 @@ through.
 it is wrong, and it is the more dangerous direction: (b) reads as a backstop nobody has to
 maintain. There are two, they are (a) and (c), and (c) is not yet built.
 
-## 5. Two instrument failures, recorded because they were nearly findings
+## 5. The instrument was wrong five times, and each is recorded
 
 ★★★ **The first R19 run reported the driver refusing a mapping it had never been asked
 about.** It printed `refused Other(19271)`; `19271` is `0x4B47` = `NOT_IN_THIS_OBJECT`, one
@@ -178,10 +178,27 @@ same-value pairs are refused, at two different layers.
 produced it is not evidence. (`suspect_the_instrument_first`, and it was the instrument
 twice.)
 
-★ A third, smaller one, in a test rather than on hardware: the first draft of
+★ **A third**, in a test rather than on hardware: the first draft of
 `a_refused_counter_write_leaves_the_counter_readable_and_advancing` stepped the clock by
 1 ns and asserted `0 != 0`. The low half's `NSEC` field is bits **31:5**, so the bottom five
 bits read zero and a one-nanosecond step is invisible. The test was the defect.
+
+★★ **A fourth: the identity check passed on slack.** The rung's first version asked only
+that the mirror reading lie *"inside the interval"* of the two PTIMER-page readings, with a
+**one second** tolerance. It passed — and it would have passed for two unrelated clocks that
+merely happened to be near each other, which is not the claim being made. The bound is now
+1 ms and the measured gap is 25 792 ns. ⚠ The first capture was taken with the loose
+predicate, so it was **re-taken at `9087090`** rather than cited: a transcript that records a
+weaker check than the code performs is the same defect as citing an empty row as
+corroboration.
+
+★★★ **A fifth, and it is the one that would have survived review: §4's safety argument
+counted three mechanisms and one of them guards a different page.** See §4 — the error was in
+the flattering direction, which is the direction that does not get questioned.
+
+⇒ Five, on one small task, and none of them was found by the code failing. Four were found by
+reading the output against what it was supposed to mean, and the fifth by writing the claim
+down as a table and finding a row that could not be filled in.
 
 ## 6. What is NOT built, and what it needs
 
