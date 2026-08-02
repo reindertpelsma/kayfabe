@@ -839,6 +839,41 @@ submission malformed at the *pushbuffer* level (bad method headers, a bogus GPFI
 different input to a different parser and remains untested. VRAM exhaustion, multiple
 simultaneous faulters, and non-GA10x parts also remain untested.
 
+## ★★★ 5.3 MEASURED 2026-08-02 — the THIRD shape is NOT contained, and it is the crude one
+
+§5.1 and §5.2 both came back the same way: a second tenant kept full liveness and correctness.
+Both of those rest on **the GPU's scheduler**. This one rests on nothing — it is ordinary
+allocation, and Q19 named it as the likely easier vector while leaving it untested.
+
+`[run: scripts/bench/gpu_vram_denial.sh, 2026-08-02T00:16Z, vast 46529600, RTX 3060 GA106
+(12 288 MiB), host 580.159.04 open, repo b628df4; full log
+docs/reference/bench_evidence/vram-denial-b628df4-ga106.log]`
+
+| arm | result |
+|---|---|
+| an **unprivileged** hog allocating 256 MiB chunks until refused | **11 776 MiB in 46 chunks — 95.8 % of the board**; free drops to **20 MiB** |
+| ★ a second tenant, twice | **cannot even `cuCtxCreate`** — `CUDA_ERROR_OUT_OF_MEMORY`, in **0.29 s** |
+| aftermath: hog exits | used → **0 MiB**, victim `OK bad=0`, **no Xid, no reset** |
+
+⇒ **Denial is total.** Not "the victim's allocation fails" — **the victim cannot get onto the
+device at all**, which is strictly worse, because a tenant that cannot create a context cannot
+even begin to degrade gracefully.
+
+★ **But it is honest denial, and that distinction is the actionable one.** The refusal is
+**immediate (0.29 s), named (`CUDA_ERROR_OUT_OF_MEMORY`), and fully reversible** — the moment
+the hog exits the board is clean and the next tenant works, with no Xid and no GPU reset. That
+is the opposite of the wedge fear this document was written around: it is a *resource* problem,
+not a *recovery* problem.
+
+⇒ **The mitigation is therefore ordinary and buildable: a per-tenant VRAM quota**, enforced
+where we already broker allocation. Contrast §5's wedge, whose only real mitigations were one
+guest per physical GPU or a privileged reset we do not own. ★ This is the one multi-tenant
+exposure so far that is squarely **inside** our reach.
+
+⊘ Untested here: many small allocations rather than few large (fragmentation may deny at a
+lower total), a hog that grows to fill whatever a victim releases, and whether host-side
+`cuMemAllocManaged`/UVM changes the picture.
+
 ### ★ The instrument was wrong first, and it was wrong in the flattering direction
 
 The first version of this experiment span **1 block × 32 threads** on a 28-SM GPU. The victim

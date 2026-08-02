@@ -210,6 +210,27 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (!strcmp(mode, "hog")) {
+        /* Take VRAM until the driver refuses, then HOLD it.  This is the denial
+         * vector that needs no preemption story at all — §5.1/§5.2 measured the
+         * hang and the fault; this is the third shape and the crude one. */
+        int secs = argc > 2 ? atoi(argv[2]) : 45;
+        size_t chunk = 256ull << 20;
+        CUdeviceptr *held = malloc(sizeof(CUdeviceptr) * 4096);
+        size_t n = 0, total = 0;
+        while (n < 4096) {
+            CUdeviceptr q;
+            if (p_cuMemAlloc(&q, chunk) != 0) break;
+            held[n++] = q; total += chunk;
+        }
+        printf("[hog] took %zu MiB in %zu chunks, holding %d s t=%.2f\n",
+               total >> 20, n, secs, now() - t0);
+        fflush(stdout);
+        while (now() - t0 < secs) { struct timespec ts = {0, 200000000}; nanosleep(&ts, 0); }
+        printf("[hog] releasing t=%.2f\n", now() - t0);
+        return 0;
+    }
+
     if (!strcmp(mode, "loop")) {
         /* A victim that HOLDS A LIVE CONTEXT across the attacker's fault —
          * the arm that matters, because a fresh process would silently get a

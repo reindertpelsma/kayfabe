@@ -713,12 +713,25 @@ RM built it. A submission malformed at the pushbuffer level is a different input
 parser and is still untested — and after E4 we now know our own decoder refuses far more than it
 serves, which changes who would even see such a thing.
 
-**My recommendation, revised:** the containment evidence is now two-for-two on the shapes that
-can be reached from a guest through CUDA. I would still **not** widen v1 scope on it, but the
-reason is no longer "we might deny the GPU to everyone" — it is that **fairness is unmanaged**
-(a 2.1× tax with no mechanism behind it) and that **VRAM exhaustion is an untested and probably
-easier denial vector than either of the two shapes above.** If multi-tenant is wanted, those two
-are the work, not wedge recovery.
+**★★ SECOND UPDATE, same night — I measured the third shape too, and it is NOT contained.**
+`[run: scripts/bench/gpu_vram_denial.sh, 2026-08-02T00:16Z, same box, repo b628df4; §5.3]`
+An **unprivileged** hog takes **11 776 of 12 288 MiB (95.8 %)** and a second tenant then
+**cannot even create a context** — `CUDA_ERROR_OUT_OF_MEMORY` in 0.29 s. Denial is *total*: not
+a failed allocation but no access to the device at all.
+
+★ It is nonetheless **honest** denial — immediate, named, and fully reversible the instant the
+hog exits (0 MiB used, next tenant fine, no Xid, no reset). A **resource** problem, not a
+**recovery** problem.
+
+**My recommendation, final for tonight — and the shape of it changed:** three shapes measured,
+**two contained by the GPU, one not** — and the uncontained one is the crude one that needed no
+scheduler story. So the argument against widening v1 scope is no longer about wedge recovery at
+all. It is that multi-tenant needs **two mechanisms we do not have**: a **per-tenant VRAM quota**
+and some answer to **fairness** (the 2.1 × tax has nothing behind it).
+⇒ ★★ **The good news is that both are squarely inside our reach** — we already broker
+allocation, so a quota is ordinary work, unlike §5's wedge whose only mitigations were one guest
+per physical GPU or a privileged reset we do not own. **If you want multi-tenant, that is the
+work, and it is buildable.**
 
 ## Q20 — is there a repo-wide citation-attribution convention? (`#159` residue)
 
