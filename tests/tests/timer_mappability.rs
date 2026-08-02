@@ -41,6 +41,7 @@ fn capture() -> String {
 }
 
 /// The capture's two arms, split on their banners. Returned as `(measurement, control)`.
+/// Both were run 2026-08-02 on a GA106 at revision 9087090, in that order, into one file.
 ///
 /// ★ The split is the whole instrument. Arm B runs as root, and RM returns
 /// `NV_PROTECT_READ_WRITE` immediately for `osIsAdministrator()` without ever executing the
@@ -60,8 +61,8 @@ fn arms(text: &str) -> (String, String) {
 
 /// ⊘ **The emptiness check, and it comes first.** Every assertion below is a `contains`,
 /// and `contains` on a truncated file fails with "marker not found" — which reads as *the
-/// measurement went the other way*, not as *the file is broken*. Those are opposite
-/// conclusions and they must not share a failure message.
+/// 2026-08-02 GA106 run went the other way*, not as *the file is broken*. Those are
+/// opposite conclusions and they must not share a failure message.
 #[test]
 fn the_capture_is_a_real_capture_before_anything_is_read_out_of_it() {
     let text = capture();
