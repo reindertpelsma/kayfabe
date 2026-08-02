@@ -1268,8 +1268,11 @@ supported way back into the untranslated read, and nothing on this wire produces
 `pChannel->pbGpuVA` is assigned **unconditionally** from a `MAP_MEMORY_DMA` `dmaOffset`
 (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:842`), every
 entry is `pbGpuVA + gpOffset` (`:1871-1879`), and the control field is *"Gpfifo Virtual
-Offset"* (`ogkm-580: ctrl2080fifo.h:809`). An architecture that genuinely had a physical
-GPFIFO would need a new seam and a measurement, not a variant nobody checked.
+Offset"* (`ogkm-580: ctrl2080fifo.h:809`).
+
+An architecture that genuinely had a physical GPFIFO would need a seam of its own, and
+⊘ **no such part has been observed** — which is a reason to leave no variant for it, not
+a reason to leave one nobody checked.
 
 **Resolution goes through the address table, per `mode2_address_table.md`: the table IS the
 guest's TLB, miss = FAULT, no reverse-resolve, no heuristic.** The refusals, each its own
@@ -1341,7 +1344,7 @@ three. The same move was made in `c_bug_regressions.rs`'s near-`u64::MAX` regres
 now asserts the address-table miss **and** the `GpaRead` it was minimized from),
 `security_boundary.rs`'s length flood, and `l1_mean.rs`'s five hostile descriptor shapes.
 
-### 9.2 E5 — what is BUILT, and ★★★ the wall the join measured
+### 9.2 E5 — what is BUILT, and ★★★ the wall the join ran into
 
 `tests/tests/e5_address_table_join.rs` is the join: neither `promote_ctx.rs` nor
 `pt_decode.rs` proves that the two sources land in **one** table a copy-engine command then
@@ -1359,8 +1362,9 @@ byte is fetched, over a `Vmm` that would have served the number; `gate_working_s
 #14 ring gate. With the non-vacuity half: a bound, published VA passes the same gate.
 
 ★★★ **Source 2 — the observed CE page-table write — reaches a ROOT PAGE AND NO FURTHER, and
-this is the finding.** `[measured]` by writing the test; the chain is four links and the
-first one is the wall:
+this is the finding.** `[measured]` 2026-08-02 at rev `4e8960f`, by
+`tests/tests/e5_address_table_join.rs::the_ce_pt_write_source_can_witness_only_a_root_page_today`
+— which fails if any of the four links below stops holding. The chain, first link first:
 
 1. `classify_ce` emits a `PtWrite` only for a destination `Spine::pt_page_owner` recognises,
    and that index (`Spine::pt_roots`) holds **roots only** — its own doc says so:

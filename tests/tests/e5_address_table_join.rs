@@ -425,8 +425,12 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
     );
 }
 
-/// ★★★ **THE WALL IN SOURCE 2, MEASURED AND BANKED — the observed CE page-table write can
-/// witness ONLY A ROOT PAGE today, so no compute leaf binds through it.**
+/// ★★★ **THE WALL IN SOURCE 2 — the observed CE page-table write can witness ONLY A ROOT
+/// PAGE today, so no compute leaf binds through it.**
+///
+/// `[measured]` 2026-08-02 at rev `4e8960f` by this test itself, which is the whole
+/// reason it exists: the assertion below fails the moment any of the four links stops
+/// holding, so the absence is banked rather than remembered.
 ///
 /// This is not a defect of the decoder and it is not a gap in this test. It is the
 /// consequence of one index being root-only, stated in its own doc:
