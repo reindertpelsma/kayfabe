@@ -983,9 +983,12 @@ fn an_uninspected_userspace_ring_is_never_partitioned_and_costs_no_host_verb() {
         bytes.extend_from_slice(&w.to_le_bytes());
     }
     <MockVmm as kayfabe_vmm::Vmm>::gpa_write(&mut vmm, 0x5000_0000, &bytes).unwrap();
+    // ★ The entry names the GPU VA the guest's driver would have named, with the mapping
+    // to `0x5000_0000` bound underneath it (§8.2.3).
     let mut ring = Vec::new();
-    ring.extend_from_slice(&0x5000_0000u64.to_le_bytes());
+    ring.extend_from_slice(&kayfabe_tests::pb_va(0x5000_0000).0.to_le_bytes());
     ring.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+    kayfabe_tests::bind_ring(&mut gpu, pid, cid, &ring);
 
     // NOT parsed: the passthrough path. Zero core state changes, zero host verbs.
     let host_verbs_before = gpu.recorder().lock().expect("recorder").log.len();
@@ -1049,8 +1052,9 @@ fn there_is_no_read_at_invalidate_and_the_table_is_unchanged_across_one() {
     }
     <MockVmm as kayfabe_vmm::Vmm>::gpa_write(&mut vmm, 0x5000_0000, &bytes).unwrap();
     let mut ring = Vec::new();
-    ring.extend_from_slice(&0x5000_0000u64.to_le_bytes());
+    ring.extend_from_slice(&kayfabe_tests::pb_va(0x5000_0000).0.to_le_bytes());
     ring.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+    kayfabe_tests::bind_ring(&mut gpu, pid, cid, &ring);
 
     let before: Vec<(u64, u64)> = gpu.procs[&pid].vases[&(GPU, A_PDB)]
         .table

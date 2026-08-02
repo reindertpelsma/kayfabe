@@ -653,10 +653,26 @@ proptest! {
         }
         // A GPFIFO ring of arbitrary (gpa, bounded-len) entries → arbitrary method
         // decodes over arbitrary bytes, always a bounded parse, never a panic.
+        // ★ One wide binding at `PB_VA_BIAS` so an arbitrary `pb_va(gpa)` entry
+        // translates and reaches guest memory, while an arbitrary raw VA still MISSES —
+        // both arms live (§8.2.3).
+        kayfabe_tests::bind_ring_at(
+            &mut gpu,
+            pid,
+            cid,
+            GpuVa(kayfabe_tests::PB_VA_BIAS),
+            0,
+            1 << 39,
+        );
         let mut ring = Vec::new();
         for (i, &len) in lens.iter().enumerate() {
             let gpa = gpas.get(i).copied().unwrap_or(0x5000_0000);
-            ring.extend_from_slice(&gpa.to_le_bytes());
+            let va = if i % 2 == 0 {
+                kayfabe_tests::pb_va(gpa).0
+            } else {
+                gpa
+            };
+            ring.extend_from_slice(&va.to_le_bytes());
             ring.extend_from_slice(&len.to_le_bytes());
         }
         let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
@@ -1035,11 +1051,18 @@ fn b2_pushbuffer_length_flood_is_bounded() {
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
     let mut vmm = MockVmm::new();
 
-    // 64 GPFIFO entries, each declaring u64::MAX bytes at a wild GPA.
+    // 64 GPFIFO entries, each declaring u64::MAX bytes at a wild VA — all of them BOUND,
+    // because an unbound VA refuses at the address table and the read budget this test
+    // exists to pin would then never be exercised at all (§8.2.3, the corpus moved with
+    // the translation rather than being deleted).
     let mut ring = Vec::new();
     for k in 0..64u64 {
-        ring.extend_from_slice(&(0x9000_0000u64 + k * 0x1_0000).to_le_bytes());
+        let gpa = 0x9000_0000u64 + k * 0x1_0000;
+        ring.extend_from_slice(&kayfabe_tests::pb_va(gpa).0.to_le_bytes());
         ring.extend_from_slice(&u64::MAX.to_le_bytes());
+        // One binding per entry, each far larger than the per-range cap, so what stops
+        // the read is the BUDGET and never the mapping's extent.
+        kayfabe_tests::bind_ring_at(&mut gpu, pid, cid, kayfabe_tests::pb_va(gpa), gpa, 0x1_0000);
     }
     // Bounded work, no panic, no OOM: returns a normal (empty-ish) outcome.
     let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("bounded parse");

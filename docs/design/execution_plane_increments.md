@@ -87,7 +87,7 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | **E2** ✅ | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither. **`[measured]` §7** |
 | **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
 | **E4** ✅ | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes NVIDIA's own macros encode yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method. **DONE — §7, and it REFUTED the seam: `CeLaunchDma` is not decodable per-method at all** |
-| **E5** | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) |
+| **E5** ◐ | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) — **PARTIAL, §9: source 1 whole, source 2 reaches a ROOT PAGE and no further** |
 | **E6** | the join: guest CE copy → `plan_doorbell` → `Worker::execute` → `HostRmBackend::ce_copy_outcome` | `CeEvidence::copied()` — R17's predicate, driven by the guest | the same boot with `KAYFABE_ISOLATES` unset must **not** produce it |
 
 ### 2.1 ★★★ The riskiest increment is E3, and not for the reason it looks
@@ -1253,3 +1253,148 @@ reason the harness exists.**
    first and a header-shaped datum in the second. The codec refuses both (exact-count check;
    whatever the datum sizes to is `Opaque` unless it is genuinely a modelled run), but *that
    the guest never does this* is `[assumed]`, not measured.
+
+## 9. §8.2.3 CLOSED + E5 — the translation, and the wall the join measured
+
+### 9.1 `read_pushbuffer` TRANSLATES, and refuses what it cannot
+
+§8.2.3 recorded the shape of the fix and left it out of E5's scope. It is built now.
+
+**The type is what changed.** `kayfabe_arch::PushRange::gpa: u64` is
+`PushRange::va: GpuVa` — *"a GPA-typed field holding a VA is the whole bug"*.
+
+⊘ **A newtype, deliberately NOT an `enum { Gpa, GpuVa }`.** A `Gpa` arm would be a
+supported way back into the untranslated read, and nothing on this wire produces one:
+`pChannel->pbGpuVA` is assigned **unconditionally** from a `MAP_MEMORY_DMA` `dmaOffset`
+(`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:842`), every
+entry is `pbGpuVA + gpOffset` (`:1871-1879`), and the control field is *"Gpfifo Virtual
+Offset"* (`ogkm-580: ctrl2080fifo.h:809`). An architecture that genuinely had a physical
+GPFIFO would need a new seam and a measurement, not a variant nobody checked.
+
+**Resolution goes through the address table, per `mode2_address_table.md`: the table IS the
+guest's TLB, miss = FAULT, no reverse-resolve, no heuristic.** The refusals, each its own
+name because each is a different plane saying something different:
+
+| what | refusal |
+|---|---|
+| the channel declares no VAS (`vas_pdb == None`), or its `Vas` is gone | `FwdFault::NoVas` / `UnknownPdb` — *there is no table to miss in* |
+| no binding covers the VA | `FwdFault::Address(AddressFault::Miss)`, naming the exact faulting VA |
+| the binding resolves into video or peer memory | **`FwdFault::PushbufferAperture`** (new) — `Binding::phys` is a guest *framebuffer* offset there, and handing it to `Vmm::gpa_read` would read the guest RAM page that happens to share the number |
+| the range cuts into more than `MAX_PUSH_SPANS` (4096) bindings | **`FwdFault::PushTooFragmented`** (new) — loud, never a truncated read |
+| the read itself | `FwdFault::GpaRead` / `NonRamGpa`, unchanged |
+
+★ **A VA range is contiguous; the memory behind it need not be.** `push_range_gpas`
+partitions the (already length-capped) range across bindings and reads each run separately.
+Resolving once and reading `len` bytes from the first binding's physical address would run
+off its end into whatever guest page follows — the same *"the read succeeded, the bytes are
+wrong"* failure as the untranslated read, one level down.
+
+`MAX_PUSH_RANGE_BYTES` / `MAX_PUSH_TOTAL_BYTES` are untouched (boundary-1: a hostile length
+is still a bounded read). The clamp happens **before** translation, so a hostile length
+cannot make the walk traverse the whole table.
+
+#### ★★ The phase-shape change, stated rather than slipped in
+
+Translating needs the issuing channel's `Vas`, which needs the proc, so the guest-memory
+read **moved from `route_act`'s ROUTE phase into its ACT phase**. Three things about that:
+
+1. **No new lock is acquired.** `SharedDevice::route_act` takes device-read (rank 0) then
+   that proc's mutex (rank 1) for one operation; the read moved from between those two
+   acquisitions to after the second. The lock *set* and the rank *order* of the whole entry
+   point are unchanged.
+2. **The in-lock-legality argument is unchanged, because it never mentioned a rank.**
+   `Vmm::gpa_read` is legal here only because the port refuses a GPA that is not host RAM
+   (`FwdFault::NonRamGpa`) — a backend that served a device-aimed GPA would take the VMM's
+   global lock *beneath one of ours*, which is `l1_os_shell.md` §6.3's ABBA whether the lock
+   above it is rank 0 or rank 1.
+3. ⊘ **Deliberately NOT split into plan/execute/commit.** R1 forces that shape for
+   *blocking* calls; `gpa_read` is a bounded copy out of a mapped window. Splitting would
+   mean resolving addresses, dropping the lock, then fetching method bytes through a
+   translation the guest was free to invalidate in the gap — a TOCTOU built on purpose.
+
+★★★ **An instrument noticed the move before any human did.** `l1_mean.rs`'s lock-depth
+witness asserted `(0, 1)` — *"exactly 1: the route phase holds rank 0 and nothing else while
+it reads guest memory"* — and went red at `(0, 2)`. It is updated by **attributing** the
+change, still as an exact equality, and it now differs by lock mode (Sharded 2, Degenerate
+1, which reaches the proc through the single device write guard). The lock-depth field is
+consequently normalised out of the cross-mode differential, because it is a fact about the
+lock *configuration* and the guest cannot observe our lock mode.
+
+#### ★★ The mock's GPFIFO entry now names a VA, and that is the fourth `mock_fidelity` instance
+
+`kayfabe_mocks::MockPushbuffer`'s invented 16-byte entry stored a genuine **GPA** — an
+encoding no NVIDIA chip has — which is precisely why no mock-driven test could ever see the
+question. It names a VA now. Every mock-driven pushbuffer fixture therefore binds its ring
+first (`kayfabe_tests::bind_ring`), which is what the guest's own driver does, and the
+fixture's VA is deliberately **biased away from the GPA** (`kayfabe_tests::PB_VA_BIAS`,
+2^39 — above every fixture GPA, 4-byte aligned, and inside the 40 address bits a real
+`GP_ENTRY0_GET`/`GET_HI` has). An identity fixture could not tell a translating read from
+the untranslated one it replaces.
+
+#### ★ The hostile corpus MOVED rather than shrank
+
+`pushbuffer_ga10x_hostile.rs`'s range-level row (`GpaRead`/`NonRamGpa`) would have become
+**unreachable**: an entry naming an arbitrary number now refuses at the address table, one
+layer earlier. Its fixture grew a GA10x-class process and exactly one wide binding, so both
+layers stay live, and the file's own header now tabulates **four** refusal levels instead of
+three. The same move was made in `c_bug_regressions.rs`'s near-`u64::MAX` regression (which
+now asserts the address-table miss **and** the `GpaRead` it was minimized from),
+`security_boundary.rs`'s length flood, and `l1_mean.rs`'s five hostile descriptor shapes.
+
+### 9.2 E5 — what is BUILT, and ★★★ the wall the join measured
+
+`tests/tests/e5_address_table_join.rs` is the join: neither `promote_ctx.rs` nor
+`pt_decode.rs` proves that the two sources land in **one** table a copy-engine command then
+resolves against, and a composition is exactly what per-source tests cannot assert.
+
+**Source 1 — `GPU_PROMOTE_CTX` — is whole.** A promoted range resolves at its own offset,
+both operands of a CE copy are **found** (`Representability::Fabricated`, neither end
+`Untracked`), publishing moves the operand to `HostBacked` **at the identical VA** (`#102`'s
+identity law, whole-table audited), and a range bound in one `Vas` does not resolve in
+another on the same proc (the C's #12 collision class).
+
+**The control holds at all three places the law is enforced**, asserted by variant:
+`AddressTable::resolve` → `AddressFault::Miss`; `read_pushbuffer` → the same, before a guest
+byte is fetched, over a `Vmm` that would have served the number; `gate_working_set` → the
+#14 ring gate. With the non-vacuity half: a bound, published VA passes the same gate.
+
+★★★ **Source 2 — the observed CE page-table write — reaches a ROOT PAGE AND NO FURTHER, and
+this is the finding.** `[measured]` by writing the test; the chain is four links and the
+first one is the wall:
+
+1. `classify_ce` emits a `PtWrite` only for a destination `Spine::pt_page_owner` recognises,
+   and that index (`Spine::pt_roots`) holds **roots only** — its own doc says so:
+   *"seeded from each live `Vas`'s **root**… Deeper levels are forward-populated by the
+   decode at the guest's commit point (**the next stage**)"*.
+2. `latch_pt_writes` is the only writer of `Vas::pt_pages`.
+3. `plan_pt_decode` drains `pt_pages` and is the only caller of `ReachShadow::witness`.
+4. `settle` binds a leaf only from a page that is reachable **and** witnessed.
+
+⇒ a guest CE write into a *leaf* table is classified as ordinary data, forwarded, and never
+witnessed; every leaf under it stays `unwitnessed`, which is a MISS, which is a FAULT. The
+bytes decode correctly and the metadata chain **is** learned forward — only the binding is
+withheld. So the compute working set's leaves cannot arrive through this source today.
+
+⊘ **Not worked around.** Hand-latching the leaf page — which `pt_decode.rs`'s fixtures do,
+correctly, to exercise the decoder — would have made the join report something the live path
+cannot perform (`mock_fidelity_both_directions`). It is asserted by name
+(`the_ce_pt_write_source_can_witness_only_a_root_page_today`) and goes **red** the day the
+next stage lands, which is the only way an absence stays visible.
+
+⊘ **And it was not built here.** Closing it needs a device-global index of page-table pages
+*learned* by a decode, but `commit_pt_decode` holds only `&mut Proc` (rank 1) and publishing
+into the spine (rank 0) from there inverts the lock order. That is a phase-shape change of
+its own — an increment, not an edit — and inventing one inside E5 is the shape this document
+exists to refuse.
+
+### 9.3 ⊘ What §9 does NOT establish
+
+1. **No boot proves any of it.** `only_live_boots_are_proof`. The guest still never submits
+   (`doorbells: 0 arrived` at this wall), so `read_pushbuffer` remains **latent** on the
+   product path — what changed is that it is now *correct* when it becomes live.
+2. **Nothing about the aperture refusal on real traffic.** `FwdFault::PushbufferAperture` is
+   reachable and tested, but no measurement says whether a real GA106 guest ever puts its
+   pushbuffer in vidmem. `ogkm-580: mem_utils_gm107.c:812-820` has RM refusing *"USERD in
+   sysmem and PushBuffer/GPFIFO in vidmem"* as a WAR, which is suggestive and is **not** the
+   same statement.
+3. **Nothing about E6.** No `VerbPlan` ran, no doorbell was rung, no `ce_copy`.

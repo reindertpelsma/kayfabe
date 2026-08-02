@@ -561,6 +561,79 @@ impl Scenario {
     }
 }
 
+/// ★★★ A **GA10x-class** single-channel process — the same shape
+/// [`Scenario::compute_process`] builds, but declared with NVIDIA's own class ids so it
+/// materializes against `kayfabe_chips::Ga10xArch` rather than against `MockArch`.
+///
+/// Two deliberate narrowings, both forced by the shipped GA10x arch rather than chosen:
+///
+/// - **One channel, not two.** `Ga10xArch::vchid_for` answers `VChid(0)` for every input
+///   until the USERD flag-field decode is settled against silicon, so a second channel
+///   collides loudly in the core's `by_vchid` index. One channel is what this arch can
+///   currently express; asking for two would be testing the refusal, not the process.
+/// - **`AMPERE_CHANNEL_GPFIFO_A` only**, which `Ga10xArch::classify` reads as a
+///   `GrCompute` channel — there is no separate CE channel class on this part.
+///
+/// Returns the channel's [`NodeKey`].
+pub fn ga10x_process(s: &mut Scenario, client: HClient, pdb: Pdb, base: u32) -> NodeKey {
+    use kayfabe_abi::generated::classes as nv;
+    let h = |off: u32| HObject(base + off);
+    let (root, dev, vas, tsg, chan) = (h(0), h(1), h(0x10), h(0x12), h(0x19));
+    s.push(RmEvent::Alloc {
+        client,
+        parent: root,
+        handle: root,
+        class: ClassId(nv::NV01_ROOT),
+        facts: user_client(client),
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: root,
+        handle: dev,
+        class: ClassId(nv::NV01_DEVICE_0),
+        facts: AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: dev,
+        handle: vas,
+        class: ClassId(nv::FERMI_VASPACE_A),
+        facts: AllocFacts::default(),
+    });
+    s.push(RmEvent::SetPageDir {
+        client,
+        vaspace: vas,
+        pdb,
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: dev,
+        handle: tsg,
+        class: ClassId(nv::KEPLER_CHANNEL_GROUP_A),
+        facts: AllocFacts {
+            h_vaspace: Some(vas),
+            ..Default::default()
+        },
+    });
+    s.push(RmEvent::Alloc {
+        client,
+        parent: tsg,
+        handle: chan,
+        class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
+        facts: AllocFacts {
+            h_vaspace: Some(vas),
+            error_notifier: Some(ErrorNotifier::Sysmem {
+                gpa: notifier_gpa(kayfabe_arch::ids::VChid(0)),
+            }),
+            ..Default::default()
+        },
+    });
+    NodeKey::new(client, chan)
+}
+
 /// The handle set for one [`Scenario::compute_process`]. Group these so two
 /// processes can be built with either identical or distinct handles.
 #[derive(Debug, Clone, Copy)]
@@ -794,18 +867,182 @@ impl Vmm for SharedVmm {
     }
 }
 
-/// Lay out a GPFIFO ring naming one range `[gpa, gpa+len)`, **without** writing anything
-/// into guest memory — the hostile shape: the guest points a descriptor wherever it likes.
+/// Lay out a GPFIFO ring naming one range `[va, va+len)`, **without** writing anything
+/// into guest memory and **without** binding anything — the hostile shape: the guest
+/// points a descriptor wherever it likes.
+///
+/// ⊘ The address is a GPU **virtual** address (`kayfabe_arch::PushRange::va`), like every
+/// real GPFIFO entry's. Unless [`bind_ring`] has bound it, `kayfabe_fwd::read_pushbuffer`
+/// will refuse it as an address-table MISS before any guest byte is read.
 #[must_use]
-pub fn gpfifo_ring(gpa: u64, len: u64) -> Vec<u8> {
+pub fn gpfifo_ring(va: u64, len: u64) -> Vec<u8> {
     let mut ring = Vec::new();
-    ring.extend_from_slice(&gpa.to_le_bytes());
+    ring.extend_from_slice(&va.to_le_bytes());
     ring.extend_from_slice(&len.to_le_bytes());
     ring
 }
 
+/// ★★★ The GPU virtual address a test names a pushbuffer at, given the guest-physical
+/// address its bytes actually live at.
+///
+/// **The bias is the point, and it must never be zero.** A fixture that maps a ring's VA
+/// onto the identical GPA cannot tell a translating `read_pushbuffer` from the
+/// untranslated one it replaces — that is precisely the encoding
+/// `kayfabe_mocks::MockPushbuffer` used to bake in, and it hid a wrong-bytes read for the
+/// whole life of the seam (`mock_fidelity_both_directions`,
+/// `execution_plane_increments.md` §8.2.3). With a bias, a regression to reading
+/// `PushRange::va` raw lands on unmapped guest memory and the test goes red.
+///
+/// ★ **512 GiB, and the value is constrained rather than picked.** It must be above every
+/// GPA any fixture here uses (so a VA is never a plausible GPA), 4-byte aligned (a GA10x
+/// `GP_ENTRY0_GET` is bits 31:2), and small enough that `bias + gpa` still fits the **40
+/// address bits** a real GPFIFO entry has (`GP_ENTRY0_GET` + `GP_ENTRY1_GET_HI 7:0`,
+/// `ogkm-580: clc56f.h:270, 272`). 2^39 satisfies all three, so one fixture vocabulary
+/// serves both the mock codec and the real one.
+pub const PB_VA_BIAS: u64 = 0x80_0000_0000;
+
+/// The VA a pushbuffer whose bytes live at `gpa` is named at. See [`PB_VA_BIAS`].
+#[must_use]
+pub fn pb_va(gpa: u64) -> GpuVa {
+    GpuVa(PB_VA_BIAS.wrapping_add(gpa))
+}
+
+/// ★★★ Bind `[va, va+len)` → guest-physical `gpa` in the address table of the VAS that
+/// channel `cid` of proc `pid` issues on — i.e. do for a fixture exactly what the guest's
+/// own `NV04_MAP_MEMORY_DMA` of its pushbuffer does for a real channel (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:842`).
+///
+/// Idempotent: re-binding the same range to the same physical address is a no-op, and
+/// re-binding it elsewhere replaces it, so a test may script several rings at one address.
+///
+/// # Panics
+/// If `va == gpa` (see [`PB_VA_BIAS`] — such a fixture asserts nothing about translation),
+/// if the proc/channel/VAS does not exist, or if the bind is refused.
+pub fn bind_ring_at(
+    gpu: &mut kayfabe_core::gpu::Gpu,
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+    va: GpuVa,
+    gpa: u64,
+    len: u64,
+) {
+    let proc = gpu.procs.get_mut(&pid).expect("the proc is live");
+    let chan = proc.channels.get(&cid).expect("the channel exists");
+    let key = (chan.gpu, chan.vas_pdb.expect("the channel declares a VAS"));
+    let vas = proc.vases.get_mut(&key).expect("the VAS exists");
+    bind_ring_in(vas, va, gpa, len);
+}
+
+/// [`bind_ring_at`] against a [`kayfabe_core::gpu::Vas`] already in hand.
+///
+/// # Panics
+/// If `va == gpa`, or if the bind is refused.
+pub fn bind_ring_in(vas: &mut kayfabe_core::gpu::Vas, va: GpuVa, gpa: u64, len: u64) {
+    assert_ne!(
+        va.0, gpa,
+        "an identity ring binding cannot distinguish a translated read from an \
+         untranslated one — use `pb_va(gpa)`"
+    );
+    let pdb = vas.pdb;
+    if let Some((start, l, b)) = vas.table.binding_at(va)
+        && start == va.0
+        && l == len
+        && b.phys == gpa
+    {
+        return; // already exactly this binding
+    }
+    // ★ Clear EVERY overlapping binding, not just one covering the start address. Two
+    // fixture ranges that straddle each other (a workload probing `X` and `X - 8`) leave
+    // the second bind refused as an `Overlap` if only the start's binding is dropped —
+    // and a fixture that silently fails to bind is a test asserting about a MISS.
+    let stale: Vec<u64> = vas
+        .table
+        .iter()
+        .filter(|(s, l, _)| *s < va.0.saturating_add(len) && va.0 < s.saturating_add(*l))
+        .map(|(s, _, _)| s)
+        .collect();
+    for s in stale {
+        vas.table.unbind(GpuVa(s));
+    }
+    vas.table
+        .bind(
+            pdb,
+            va,
+            len,
+            kayfabe_mmu::Binding {
+                phys: gpa,
+                aperture: kayfabe_arch::Aperture::SysmemCoherent,
+                host: None,
+            },
+        )
+        .expect("the ring range binds");
+}
+
+/// Decode a mock-format `ring` (16-byte entries, `[va u64 LE, len u64 LE]`) into the
+/// `(va, gpa, len)` triples [`script_ring_via`] implied — i.e. undo [`pb_va`].
+///
+/// # Panics
+/// If an entry names a VA below [`PB_VA_BIAS`], which means the fixture did not build it
+/// with [`pb_va`] and the caller must bind it explicitly instead.
+#[must_use]
+pub fn ring_bindings(ring: &[u8]) -> Vec<(GpuVa, u64, u64)> {
+    ring.chunks_exact(16)
+        .map(|e| {
+            let va = u64::from_le_bytes(e[0..8].try_into().expect("8 bytes"));
+            let len = u64::from_le_bytes(e[8..16].try_into().expect("8 bytes"));
+            assert!(
+                va >= PB_VA_BIAS,
+                "ring entry at VA {va:#x} was not built with `pb_va`; bind it explicitly"
+            );
+            (GpuVa(va), va - PB_VA_BIAS, len)
+        })
+        .collect()
+}
+
+/// ★ Bind every range a [`script_ring_via`]-built `ring` names, on the VAS channel `cid`
+/// of proc `pid` issues on. The one-call form of "the guest mapped its pushbuffer before
+/// naming it in a GPFIFO entry".
+///
+/// # Panics
+/// As [`bind_ring_at`] and [`ring_bindings`].
+pub fn bind_ring(
+    gpu: &mut kayfabe_core::gpu::Gpu,
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+    ring: &[u8],
+) {
+    for (va, gpa, len) in ring_bindings(ring) {
+        bind_ring_at(gpu, pid, cid, va, gpa, len);
+    }
+}
+
+/// [`bind_ring`] through a [`kayfabe_rt::device::SharedDevice`] — the locked shell's own accessor,
+/// so an L1 test binds through the same rank-1 path everything else mutates a proc with.
+///
+/// # Panics
+/// If the proc is gone, or as [`bind_ring_in`] / [`ring_bindings`].
+pub fn bind_ring_dev(
+    dev: &kayfabe_rt::device::SharedDevice,
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+    ring: &[u8],
+) {
+    let binds = ring_bindings(ring);
+    dev.with_proc_mut(pid, |proc| {
+        let chan = proc.channels.get(&cid).expect("the channel exists");
+        let key = (chan.gpu, chan.vas_pdb.expect("the channel declares a VAS"));
+        let vas = proc.vases.get_mut(&key).expect("the VAS exists");
+        for (va, gpa, len) in binds {
+            bind_ring_in(vas, va, gpa, len);
+        }
+    })
+    .expect("the proc is live");
+}
+
 /// Script `methods` into guest RAM at `gpa` through `vmm` and return the GPFIFO ring
-/// naming them — the legitimate shape.
+/// naming them **by GPU virtual address** ([`pb_va`]) — the legitimate shape.
+///
+/// ⚠ The ring is not readable until the VA is bound: [`bind_ring`] / [`bind_ring_dev`].
 pub fn script_ring(vmm: &SharedVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
     script_ring_via(&mut vmm.clone(), gpa, methods)
 }
@@ -836,5 +1073,8 @@ pub fn script_ring_via(vmm: &mut dyn Vmm, gpa: u64, methods: &[(u32, Vec<u32>)])
     // held. That is what makes every lock-depth span's LOWER bound a real observation.
     vmm.gpa_write(gpa, &bytes)
         .expect("scripting a legitimate pushbuffer into guest RAM");
-    gpfifo_ring(gpa, bytes.len() as u64)
+    // ★ The entry names the VA, not the GPA — a real GPFIFO entry holds `pbGpuVA +
+    // gpOffset` (`ogkm-580: mem_utils_gm107.c:1871-1879`). The bias is what makes a
+    // regression to the untranslated read observable; see `PB_VA_BIAS`.
+    gpfifo_ring(pb_va(gpa).0, bytes.len() as u64)
 }

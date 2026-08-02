@@ -51,6 +51,8 @@ impl Faulted for FwdFault {
             FwdFault::Arena => FaultTag("FwdFault::Arena"),
             FwdFault::GpaRead { .. } => FaultTag("FwdFault::GpaRead"),
             FwdFault::NonRamGpa { .. } => FaultTag("FwdFault::NonRamGpa"),
+            FwdFault::PushbufferAperture { .. } => FaultTag("FwdFault::PushbufferAperture"),
+            FwdFault::PushTooFragmented { .. } => FaultTag("FwdFault::PushTooFragmented"),
             FwdFault::Rm(e) => e.fault_tag(),
             FwdFault::NotAnEngine(_) => FaultTag("FwdFault::NotAnEngine"),
             FwdFault::WrongArm { .. } => FaultTag("FwdFault::WrongArm"),

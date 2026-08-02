@@ -17,12 +17,12 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
 use kayfabe_core::rmgraph::{NodeKey, RmEvent};
+use kayfabe_core::{ChanId, ProcId};
 use kayfabe_fwd::{
     FwdFault, handle_doorbell, parse_pushbuffer, publish_backing, resolve, signal_golden_capture,
 };
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
 use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
-use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
 const B_PDB: Pdb = Pdb(0x3405_000);
@@ -87,19 +87,20 @@ fn build_proc(
     (pid, cid)
 }
 
-/// Lay out a one-entry GPFIFO ring pointing at method words written to guest RAM.
-fn script_pushbuffer(vmm: &mut MockVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    for (h, args) in methods {
-        bytes.extend_from_slice(&h.to_le_bytes());
-        for a in args {
-            bytes.extend_from_slice(&a.to_le_bytes());
-        }
-    }
-    vmm.gpa_write(gpa, &bytes).unwrap();
-    let mut ring = Vec::new();
-    ring.extend_from_slice(&gpa.to_le_bytes());
-    ring.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+/// Lay out a one-entry GPFIFO ring pointing at method words written to guest RAM, and
+/// bind the range in the issuing channel's address table — the guest's own
+/// `MAP_MEMORY_DMA` of its pushbuffer, which a GPFIFO entry's **virtual** address needs
+/// (`execution_plane_increments.md` §8.2.3). The entry names `pb_va(gpa)`, never `gpa`.
+fn script_pushbuffer(
+    gpu: &mut Gpu,
+    vmm: &mut MockVmm,
+    pid: ProcId,
+    cid: ChanId,
+    gpa: u64,
+    methods: &[(u32, Vec<u32>)],
+) -> Vec<u8> {
+    let ring = kayfabe_tests::script_ring_via(vmm, gpa, methods);
+    kayfabe_tests::bind_ring(gpu, pid, cid, &ring);
     ring
 }
 
@@ -137,7 +138,10 @@ fn cb11_ce_write_never_clobbers_live_binding() {
 
     // A scrubber-shaped CE physical write lands INSIDE the live range.
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5000_0000,
         &[
             MockPushbuffer::set_object(mc::DMA_COPY),
@@ -198,7 +202,10 @@ fn cb12_sema_release_routes_to_owner_never_a_foreign_proc() {
 
     // A's channel releases a sema. ONLY A's queue observes it.
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid_a,
+        cid_a,
         0x5000_0000,
         &[MockPushbuffer::sem_release(0x2_0044_0f00, 0x45)],
     );
@@ -314,7 +321,10 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
     // directory. Nothing is linked, nothing has been swept, no completion has fired.
     let root: u64 = A_PDB.0 & !0xfff;
     let ring1 = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5000_0000,
         &[MockPushbuffer::ce_launch_dma(root + 0x18, 0x40, false)],
     );
@@ -345,7 +355,10 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
     // Push 2, a push LATER, into the same tracked page: captured again, independently.
     // The first capture is undisturbed — no ordering between pushes is required.
     let ring2 = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5001_0000,
         &[MockPushbuffer::ce_launch_dma(root + 0x800, 0x40, false)],
     );
@@ -361,7 +374,10 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
     // guessed into a capture.
     let unknown_page: u64 = 0x1_2340_0000;
     let ring3 = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5002_0000,
         &[MockPushbuffer::ce_launch_dma(unknown_page, 0x1000, false)],
     );
@@ -399,7 +415,10 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
 
     // The minimized crash: one physical CE dst whose page + len wraps u64.
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5000_0000,
         &[MockPushbuffer::ce_launch_dma(
             0xFFFF_FFFF_FFFF_F800,
@@ -425,12 +444,16 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
         (0, 1),
         "a destination that owns no page table is forwarded, not captured"
     );
+    // ★ The only binding in the table is the pushbuffer's own — the fixture's stand-in
+    // for the guest's `MAP_MEMORY_DMA` (§8.2.3). A second one would be the CE arm having
+    // bound something out of a wrapping destination, which is the crash's own shape.
     assert_eq!(
         gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
             .table
             .iter()
-            .count(),
-        0,
+            .map(|(va, _, _)| va)
+            .collect::<Vec<_>>(),
+        vec![kayfabe_tests::pb_va(0x5000_0000).0],
         "no torn partial state"
     );
 
@@ -439,7 +462,10 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
     // must be the page-aligned base — never a wrapped or truncated address.
     let root = A_PDB.0 & !0xfff;
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5001_0000,
         &[MockPushbuffer::ce_launch_dma(
             root + 0xff8,
@@ -482,33 +508,80 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
 /// is a strengthening in the direction `testing_doctrine.md` §2 requires (assert the
 /// variant, and pin which of two near neighbours reports it: `GpaRead` — *nothing is
 /// there* — never `NonRamGpa`, which means *a device is there*).
+///
+/// ★★★ **MOVED, not weakened (§8.2.3).** A GPFIFO entry names a GPU **virtual** address
+/// now, so an entry carrying `0xFFFF_FFFF_FFFF_F000` raw refuses at the address table
+/// before `Vmm::gpa_read` ever sees it — and the `GpaRead` arm this regression exists to
+/// pin would have become **unreachable**. The fix is to reach it the way a guest would:
+/// bind a top-of-space *mapping* whose physical side is the top of guest-physical space,
+/// so the wrap happens exactly where it used to. Both refusals are asserted, and they are
+/// asserted as **different** faults, because they are.
 #[test]
 fn cbfuzz_gpfifo_range_gpa_near_umax_never_panics() {
+    /// The top-of-space page, used as both the VA and (via a separate binding) the GPA.
+    const TOP: u64 = 0xFFFF_FFFF_FFFF_F000;
+
     let (mut gpu, _rec) = fresh_gpu();
     let mut vmm = MockVmm::new();
     let (pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
 
-    // A GPFIFO ring with one entry: base near the top of the 64-bit space, a
-    // multi-page declared length (the parser caps it to 1 MiB, which still wraps).
+    // ARM 0 — the raw entry, unbound: refused one layer earlier, by name, and never read.
+    let mut unbound = Vec::new();
+    unbound.extend_from_slice(&TOP.to_le_bytes());
+    unbound.extend_from_slice(&0x20_0000u64.to_le_bytes());
+    assert_eq!(
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &unbound),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: A_PDB,
+            va: GpuVa(TOP),
+        })),
+        "an unbound top-of-space VA is an address-table MISS, not a guest-memory read"
+    );
+
+    // A GPFIFO ring with one entry: a BOUND VA whose guest-physical base is near the top
+    // of the 64-bit space, with a multi-page declared length (the parser caps it to
+    // 1 MiB, which still wraps).
+    let va = GpuVa(0x40_0000_0000);
+    kayfabe_tests::bind_ring_at(&mut gpu, pid, cid, va, TOP, 0x1000);
     let mut ring = Vec::new();
-    ring.extend_from_slice(&0xFFFF_FFFF_FFFF_F000u64.to_le_bytes());
+    ring.extend_from_slice(&va.0.to_le_bytes());
     ring.extend_from_slice(&0x20_0000u64.to_le_bytes()); // 2 MiB declared
+    // ★ The read is partitioned by the address table, so the wrap arrives at `gpa_read`
+    // as the binding's own 4 KiB — which is exactly the shape that overflowed the mock.
     assert_eq!(
         parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring),
-        Err(FwdFault::GpaRead {
-            gpa: 0xFFFF_FFFF_FFFF_F000
-        }),
+        Err(FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: A_PDB,
+            va: GpuVa(va.0 + 0x1000),
+        })),
+        "past the binding's end there is no mapping, and a MISS is a FAULT — the read \
+         never runs off the end of a binding into the next page"
+    );
+
+    // Non-vacuity: the same VA with a length that fits the binding exactly. The read
+    // reaches `Vmm::gpa_read` at the top of the space, and THAT is where the loud
+    // guest-memory fault lives — `GpaRead` (nothing is there), never `NonRamGpa`
+    // (a device is there), and never a wrap-around read of fabricated zeros.
+    let mut fit_ring = Vec::new();
+    fit_ring.extend_from_slice(&va.0.to_le_bytes());
+    fit_ring.extend_from_slice(&0x1000u64.to_le_bytes());
+    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &fit_ring)
+        .expect("a range ending exactly at the top of the space is formable, so it reads");
+    assert!(out.sem_releases.is_empty() && out.pt_writes.is_empty() && out.invalidates.is_empty());
+
+    // …and one byte past it wraps: the binding is stretched to cover it, so the refusal
+    // is the ADAPTER's and the variant is the one this regression was minimized from.
+    let wrap_va = GpuVa(0x50_0000_0000);
+    kayfabe_tests::bind_ring_at(&mut gpu, pid, cid, wrap_va, TOP, 0x2000);
+    let mut wrap_ring = Vec::new();
+    wrap_ring.extend_from_slice(&wrap_va.0.to_le_bytes());
+    wrap_ring.extend_from_slice(&0x2000u64.to_le_bytes());
+    assert_eq!(
+        parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &wrap_ring),
+        Err(FwdFault::GpaRead { gpa: TOP }),
         "a range that leaves the 64-bit space is UNBACKED (`GpaRead`), not a device \
          window (`NonRamGpa`) — and never a wrap-around read of fabricated zeros"
     );
-    // Non-vacuity: the same ring, one page shorter so it stops exactly at the top of
-    // the space, is served — so the refusal above is about the wrap and nothing else.
-    let mut ok_ring = Vec::new();
-    ok_ring.extend_from_slice(&0xFFFF_FFFF_FFFF_F000u64.to_le_bytes());
-    ok_ring.extend_from_slice(&0x1000u64.to_le_bytes());
-    let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ok_ring)
-        .expect("a range ending exactly at the top of the space is formable, so it reads");
-    assert!(out.sem_releases.is_empty() && out.pt_writes.is_empty() && out.invalidates.is_empty());
 }
 
 // =================================================================================

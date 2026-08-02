@@ -553,36 +553,43 @@ impl PushbufferAbi for MockPushbuffer {
         }
     }
 
-    /// ⊘ **This is the encoding that hides [`PushRange`]'s open VA-vs-GPA question, and
-    /// it is `mock_method::CE_LAUNCH_DMA`'s family.** The invented entry below stores a
-    /// genuine **guest-physical** address, so `kayfabe_fwd::read_pushbuffer`'s
-    /// `Vmm::gpa_read` of it is correct by construction in every mock-driven test. A real
-    /// GA10x entry holds a GPU **virtual** address in the channel's VAS
-    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`). ⊘ Do not "fix" this
-    /// by inventing a VA here: the mock has no VAS to make one meaningful in, and a fake
-    /// VA that resolved nowhere would only convert a silent wrong read into a fixture
-    /// nobody can write. The question belongs to `Ga10xPushbuffer`'s consumer.
+    /// ★★★ **This entry used to store a genuine GPA, and THAT was the fidelity defect.**
     ///
-    /// ★★★ **And it is no longer open.** `[measured]` at rev `c93930d`, boots `e5ring1`
-    /// and `e5ring2g`: the guest names its ring at the same address with 8 GiB and with
-    /// 2 GiB of guest RAM, and at 2 GiB that address is outside every `e820` usable range.
-    /// VA ≠ GPA. `docs/design/execution_plane_increments.md` §8.2.3 — and note that at the
-    /// bench's *normal* 8 GiB the address IS a legal GPA, so the read succeeds and returns
-    /// the wrong bytes. This mock is exactly what made that invisible for the life of the
-    /// seam (`mock_fidelity_both_directions`).
+    /// For the whole life of the seam this mock's invented 16-byte entry carried a
+    /// **guest-physical** address, so `kayfabe_fwd::read_pushbuffer`'s `Vmm::gpa_read` of
+    /// it was correct by construction in every mock-driven test — an encoding **no NVIDIA
+    /// chip has** (`mock_fidelity_both_directions`, fourth instance). A real GA10x entry
+    /// holds a GPU **virtual** address in the channel's VAS (`ogkm-580:
+    /// kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`; `pChannel->pbGpuVA` is assigned
+    /// unconditionally from a `MAP_MEMORY_DMA` `dmaOffset`, `ogkm-580:
+    /// mem_utils_gm107.c:842`, and every entry is `pbGpuVA + gpOffset`, `:1871-1879`).
     ///
-    /// ⊘ Two further deliberate divergences from [`kayfabe_chips::Ga10xPushbuffer`], in
+    /// `[measured]` at rev `c93930d`, boots `e5ring1` and `e5ring2g`: the guest names its
+    /// ring at the same address with 8 GiB and with 2 GiB of guest RAM, and at 2 GiB that
+    /// address is outside every `e820` usable range. VA ≠ GPA
+    /// (`docs/design/execution_plane_increments.md` §8.2.3) — and at the bench's *normal*
+    /// 8 GiB the address IS a legal GPA, so the untranslated read succeeded and returned
+    /// the wrong bytes.
+    ///
+    /// ⊘ The old note here said *"do not fix this by inventing a VA: the mock has no VAS
+    /// to make one meaningful in"*. That was true of the consumer as it stood, and it
+    /// stopped being true when `read_pushbuffer` grew the channel's `Vas`. **The mock now
+    /// names a VA, like every real chip**, so a mock-driven test that wants its ring read
+    /// must bind the range in the issuing channel's address table first — which is
+    /// exactly what the guest's driver does, and exactly what E5's acceptance asserts.
+    ///
+    /// ⊘ Two deliberate divergences from [`kayfabe_chips::Ga10xPushbuffer`] remain, in
     /// the **more permissive** direction, so no test here is evidence about them: a ring
     /// whose length is not a whole number of entries yields its **prefix** (the real codec
     /// yields nothing at all), and there is no `LENGTH == 0` control-entry refusal.
     fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange> {
-        // Fake GPFIFO: 16-byte entries, each [gpa: u64 LE, len: u64 LE]. A truncated
+        // Fake GPFIFO: 16-byte entries, each [gpu_va: u64 LE, len: u64 LE]. A truncated
         // tail is ignored (a hostile ring must never panic — decode is total).
         ring.chunks_exact(16)
             .map(|e| {
-                let gpa = u64::from_le_bytes(e[0..8].try_into().expect("8 bytes"));
+                let va = u64::from_le_bytes(e[0..8].try_into().expect("8 bytes"));
                 let len = u64::from_le_bytes(e[8..16].try_into().expect("8 bytes"));
-                PushRange { gpa, len }
+                PushRange { va: GpuVa(va), len }
             })
             .collect()
     }

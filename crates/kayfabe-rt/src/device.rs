@@ -1268,10 +1268,10 @@ impl SharedDevice {
     }
 
     /// ★★ Parse the pushbuffer `ring` submitted on channel `cid` of proc `pid`, in the
-    /// **route/act** shape `kayfabe_fwd::read_pushbuffer`'s own docs describe: the
-    /// guest-memory read happens under the device **read** lock (rank 0), before the
-    /// owning proc's lock, and the act phase applies the decoded methods to that proc
-    /// only (rank 1).
+    /// **route/act** shape: the ring's GPFIFO entries are decoded under the device
+    /// **read** lock (rank 0) touching no proc, and the act phase — that proc's lock,
+    /// rank 1 — translates each entry's address, reads the method words, and applies
+    /// them.
     ///
     /// # ★★★ This is the ONLY in-lock-legal entry point that takes a guest-chosen address
     ///
@@ -1281,22 +1281,33 @@ impl SharedDevice {
     /// `uvm_pushbuffer_get_gpu_va_for_push(...)` into it (`ogkm-580:
     /// kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`; the field is
     /// `NVC56F_GP_ENTRY0_GET`/`_GET_HI`, `ogkm-580: clc56f.h:270, 272`). The statement was
-    /// true of `kayfabe_mocks::MockPushbuffer`, whose invented entry really does carry a
-    /// GPA, and that is the whole reason it survived. See [`kayfabe_arch::PushRange`]'s
-    /// type note; resolving the range needs the channel's `Vas`, which this phase
-    /// deliberately does not hold, so it is an increment and not an edit.
+    /// true of `kayfabe_mocks::MockPushbuffer`, whose invented entry really did carry a
+    /// GPA, and that is the whole reason it survived.
     ///
-    /// What is **unchanged** is the lock argument below, because it rests only on the
-    /// value being guest-chosen and on `Vmm::gpa_read` refusing anything that is not host
-    /// RAM — not on what the guest meant by it.
+    /// # ★★★ The PHASE MOVED (§8.2.3), and here is exactly what that cost
     ///
-    /// The address in each GPFIFO entry is guest-chosen, and `Vmm::gpa_read`
-    /// runs here with a ranked lock held. That combination is legal **only** because the
-    /// port refuses a GPA that does not resolve to host RAM
-    /// (`kayfabe_vmm::GuestRamMap`): a backend that served a device-aimed GPA would take
-    /// the VMM's global lock beneath rank 0, which is `l1_os_shell.md` §6.3's ABBA
-    /// inversion built to order by the guest. The refusal surfaces as
+    /// Translating the entry's VA needs the issuing channel's `Vas`, which needs the
+    /// proc, so `kayfabe_fwd::read_pushbuffer` moved from the route phase into the act
+    /// phase. **No new lock is taken.** [`SharedDevice::route_act`] acquires device-read
+    /// (rank 0) and then that proc's mutex (rank 1) for one operation; the guest-memory
+    /// read moved from between those two acquisitions to after the second. The lock set
+    /// and the rank order of the whole entry point are unchanged, and nothing was widened
+    /// quietly — this note is the widening, stated.
+    ///
+    /// The lock argument itself is **unchanged, because it never mentioned a rank.** The
+    /// address in each GPFIFO entry is guest-chosen and `Vmm::gpa_read` runs here with a
+    /// ranked lock held; that combination is legal **only** because the port refuses a GPA
+    /// that does not resolve to host RAM (`kayfabe_vmm::GuestRamMap`) — a backend that
+    /// served a device-aimed GPA would take the VMM's global lock beneath one of ours,
+    /// which is `l1_os_shell.md` §6.3's ABBA inversion built to order by the guest,
+    /// whether the lock above it is rank 0 or rank 1. The refusal surfaces as
     /// [`FwdFault::NonRamGpa`].
+    ///
+    /// ⊘ **Not split into plan/execute/commit**, deliberately: R1 forces that shape for
+    /// *blocking* calls, and `gpa_read` is a bounded copy out of a mapped window. The
+    /// split would mean resolving addresses, dropping the lock, then fetching method bytes
+    /// through a translation the guest was free to invalidate in the gap — a TOCTOU built
+    /// on purpose. See `kayfabe_fwd::read_pushbuffer`.
     ///
     /// It is wired here rather than left to callers precisely because it was *not*
     /// reachable through the shell before: `read_pushbuffer`'s docs claimed *"in L1 this
@@ -1311,10 +1322,16 @@ impl SharedDevice {
         ring: &[u8],
     ) -> Result<kayfabe_fwd::PushbufferOutcome, FwdFault> {
         let out = self.route_act(
-            // ROUTE phase — rank 0 held. The guest-memory read lives here, exactly as
-            // `read_pushbuffer` documents, and touches no proc.
-            move |spine| kayfabe_fwd::read_pushbuffer(spine, vmm, ring).map(|m| (pid, m)),
-            |spine, proc, methods| kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods),
+            // ROUTE phase — rank 0 held, no proc, no guest memory: the arch's GPFIFO
+            // entry format and nothing else.
+            move |spine| Ok((pid, kayfabe_fwd::pushbuffer_ranges(spine, ring))),
+            // ACT phase — rank 0 + this proc's rank 1. Translate through the channel's
+            // own address table, read, decode, apply. The read and the apply are one
+            // phase because they must see the same table.
+            move |spine, proc, ranges| {
+                let methods = kayfabe_fwd::read_pushbuffer(spine, proc, cid, vmm, &ranges)?;
+                kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods)
+            },
         )??;
         // ★★★ #102/#13 — LATCH phase, and it needs its own pass for a structural reason.
         //

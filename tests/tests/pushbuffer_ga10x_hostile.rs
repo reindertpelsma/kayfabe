@@ -20,17 +20,27 @@
 //! that costs a memory-safety fact when it breaks. Nothing here needs the driver: it needs
 //! only the codec and bytes that are not a pushbuffer.
 //!
-//! ## The three levels a refusal can live at, and what each stops
+//! ## The FOUR levels a refusal can live at, and what each stops
 //!
 //! | level | vocabulary | what a wrong answer would be |
 //! |---|---|---|
 //! | ring | **no `PushRange` at all** | a pointer into guest memory the guest never named |
+//! | translate | `FwdFault::Address(Miss)` from `read_pushbuffer` | reading the guest RAM that happens to share a VA's number |
 //! | range | `FwdFault::GpaRead` / `NonRamGpa` from `read_pushbuffer` | an out-of-window read served as zeros |
 //! | method | `PushMethod::Opaque` | a fabricated destination, length or fence |
 //!
-//! ★★ The middle row is the one that makes "FAULT" literal, and it needs a `Vmm` whose
-//! guest memory is **narrow**. `MockVmm::new()` declares the whole 64-bit space RAM, so a
-//! random GPFIFO entry would read zeros and succeed; every test below narrows it first, and
+//! ★★★ **The `translate` row is new (§8.2.3) and it is why this corpus MOVED rather than
+//! shrank.** A GPFIFO entry names a GPU virtual address, so `read_pushbuffer` resolves it
+//! through the issuing channel's address table before it fetches anything — which means an
+//! entry naming an arbitrary number now refuses *there*, one layer earlier than it used
+//! to, and the `range` row below would have become **unreachable** if the fixture had not
+//! moved with it. `port_gpu` installs exactly one binding so both rows stay live; read its
+//! docs before adding a test here.
+//!
+//! ★★ The `range` row is the one that makes "FAULT" literal about guest memory, and it
+//! needs a `Vmm` whose guest memory is **narrow**. `MockVmm::new()` declares the whole
+//! 64-bit space RAM, so a bound-but-unbacked GPFIFO entry would read zeros and succeed;
+//! every test below narrows it first, and
 //! `a_narrow_vmm_is_what_makes_the_fault_arm_reachable` is the check that the narrowing
 //! itself is load-bearing.
 //!
@@ -43,27 +53,80 @@
 //!   second is the non-probabilistic half and is the one that would catch a loosened check.
 //! - It says nothing about a live guest (`only_live_boots_are_proof`).
 
-use kayfabe_arch::ids::GpuVa;
+use kayfabe_arch::ids::{GpuId, GpuVa, HClient, Pdb};
 use kayfabe_arch::{PushMethod, PushbufferAbi};
 use kayfabe_chips::{Ga10xArch, Ga10xPushbuffer};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
-use kayfabe_fwd::read_pushbuffer;
+use kayfabe_core::{ChanId, ProcId};
 use kayfabe_isolate::StillbornIsolates;
 use kayfabe_mocks::MockVmm;
+use kayfabe_tests::{PB_VA_BIAS, Scenario, bind_ring_at, ga10x_process, pb_va};
 use kayfabe_vmm::Vmm as _;
 
 /// The only window of guest RAM the hostile tests leave declared.
 const RAM: std::ops::Range<u64> = 0x0002_0000..0x0002_8000;
 
-/// A `Gpu` built exactly as the port builds it, with the shipped `Ga10xArch`.
-fn port_gpu() -> Gpu {
-    Gpu::new(
+/// The address space the scripted GA10x process runs in.
+const PDB: Pdb = Pdb(0x04a0_1000);
+
+/// How much guest-physical space the fixture's one wide binding covers, at [`PB_VA_BIAS`].
+const PB_WINDOW: u64 = 1 << 39;
+
+/// A `Gpu` built exactly as the port builds it, with the shipped `Ga10xArch` — **and one
+/// GA10x-class process**, because `read_pushbuffer` now translates through the issuing
+/// channel's address table and a device with no channel has no table to translate in.
+///
+/// ★★★ **The one binding this fixture installs is what keeps the RANGE-level refusal
+/// reachable at all** (`execution_plane_increments.md` §8.2.3, and the reason this file's
+/// corpus *moved* rather than being deleted). It maps `[PB_VA_BIAS, +512 GiB)` onto
+/// guest-physical `0`, i.e. it realizes `kayfabe_tests::pb_va` as a real GMMU mapping. So:
+///
+/// | a ring entry naming… | refuses at |
+/// |---|---|
+/// | an arbitrary address (the wholly-hostile half) | the **address table** — MISS = FAULT |
+/// | `pb_va(x)` for `x` outside the declared RAM window | the **VMM** — `GpaRead`/`NonRamGpa` |
+///
+/// Both are still exercised, and the corpus now covers two refusal layers where it used
+/// to cover one. Without the binding the second row would be **unreachable** and this
+/// file would silently stop testing the thing it was written for.
+fn port_gpu() -> (Gpu, ProcId, ChanId) {
+    let mut gpu = Gpu::new(
         Box::new(Ga10xArch::new()),
         Box::new(StillbornIsolates::new("test: no forwarding plane")),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )
-    .expect("the port's object model realizes")
+    .expect("the port's object model realizes");
+    let mut s = Scenario::new();
+    ga10x_process(&mut s, HClient(0xA10A), PDB, 0x5c00_0000);
+    for ev in s.events {
+        gpu.apply(ev).expect("the GA10x process materializes");
+    }
+    let pid = *gpu
+        .spine
+        .by_pdb
+        .get(&(GpuId::ZERO, PDB))
+        .expect("the VAS routed");
+    let cid = *gpu.procs[&pid]
+        .chan_ids
+        .values()
+        .next()
+        .expect("the one channel");
+    bind_ring_at(&mut gpu, pid, cid, GpuVa(PB_VA_BIAS), 0, PB_WINDOW);
+    (gpu, pid, cid)
+}
+
+/// `kayfabe_fwd::read_pushbuffer` over a whole ring, in the two phases the shell runs it
+/// in: route (the arch's GPFIFO format, no proc) then act (translate + read).
+fn read_pushbuffer(
+    gpu: &Gpu,
+    pid: ProcId,
+    cid: ChanId,
+    vmm: &mut MockVmm,
+    ring: &[u8],
+) -> Result<Vec<(u32, Vec<u32>)>, kayfabe_fwd::FwdFault> {
+    let ranges = kayfabe_fwd::pushbuffer_ranges(&gpu.spine, ring);
+    kayfabe_fwd::read_pushbuffer(&gpu.spine, &gpu.procs[&pid], cid, vmm, &ranges)
 }
 
 /// A VMM with **one small RAM window** and nothing else backed. See the module docs: a
@@ -108,20 +171,39 @@ fn is_acted_on(m: PushMethod) -> bool {
 /// passing while checking nothing. `suspect_the_instrument_first`.
 #[test]
 fn a_narrow_vmm_is_what_makes_the_fault_arm_reachable() {
-    let gpu = port_gpu();
+    let (gpu, pid, cid) = port_gpu();
     let mut narrow = narrow_vmm();
     let mut wide = MockVmm::new();
-    // One GPFIFO entry naming an address outside the window: 4 bytes at 0x9000_0000.
-    let entry = kayfabe_abi::submit::gp_entry(0x9000_0000, 4).expect("encodable");
+    // One GPFIFO entry naming a BOUND VA whose guest-physical address is outside the
+    // window: 4 bytes at `pb_va(0x9000_0000)` → GPA `0x9000_0000`. The VA resolves, so the
+    // refusal that follows is unambiguously the VMM's and not the address table's.
+    let entry = kayfabe_abi::submit::gp_entry(pb_va(0x9000_0000).0, 4).expect("encodable");
     let ring = entry.to_le_bytes();
     assert!(
-        read_pushbuffer(&gpu.spine, &mut narrow, &ring).is_err(),
+        read_pushbuffer(&gpu, pid, cid, &mut narrow, &ring).is_err(),
         "a range outside declared RAM must FAULT"
     );
     assert!(
-        read_pushbuffer(&gpu.spine, &mut wide, &ring).is_ok(),
+        read_pushbuffer(&gpu, pid, cid, &mut wide, &ring).is_ok(),
         "…and with the whole space declared RAM it does not — which is why the narrowing \
          is what makes this file's fault arm reachable at all"
+    );
+    // ★★★ …and the BINDING is load-bearing the same way. The identical entry, minus the
+    // bias that puts it inside the fixture's one mapping, refuses **one layer earlier** —
+    // at the address table, over a `Vmm` that declares the whole space RAM. Without this
+    // arm, a `read_pushbuffer` that quietly stopped translating would still pass every
+    // test in this file, because a wide `MockVmm` serves any number.
+    let unbound = kayfabe_abi::submit::gp_entry(0x9000_0000, 4).expect("encodable");
+    assert_eq!(
+        read_pushbuffer(&gpu, pid, cid, &mut wide, &unbound.to_le_bytes()),
+        Err(kayfabe_fwd::FwdFault::Address(
+            kayfabe_mmu::AddressFault::Miss {
+                pdb: PDB,
+                va: GpuVa(0x9000_0000),
+            }
+        )),
+        "a GPFIFO entry naming a VA the guest never bound is a MISS, and a MISS is a \
+         FAULT — never a read of the guest RAM that shares the number"
     );
     drop(gpu);
 }
@@ -142,7 +224,7 @@ fn a_narrow_vmm_is_what_makes_the_fault_arm_reachable() {
 /// only exercises one refusal reads exactly like one that exercises both.
 #[test]
 fn garbage_gpfifo_entries_fault_and_never_manufacture_a_method() {
-    let gpu = port_gpu();
+    let (gpu, pid, cid) = port_gpu();
     let pb = Ga10xPushbuffer;
     let mut rng = Xs(0x2026_0802_E4E4_E4E4);
     let mut vmm = narrow_vmm();
@@ -168,11 +250,11 @@ fn garbage_gpfifo_entries_fault_and_never_manufacture_a_method() {
             // field still come from `raw`.
             let off = (raw % ((RAM.end - RAM.start) / 2)) & !0xFu64;
             let len = 4 * (1 + (raw >> 32) % 64);
-            kayfabe_abi::submit::gp_entry(RAM.start + off, len)
+            kayfabe_abi::submit::gp_entry(pb_va(RAM.start + off).0, len)
                 .expect("encodable")
                 .to_le_bytes()
         };
-        match read_pushbuffer(&gpu.spine, &mut vmm, &ring) {
+        match read_pushbuffer(&gpu, pid, cid, &mut vmm, &ring) {
             Err(_) => faulted += 1,
             Ok(methods) => {
                 served += 1;
@@ -225,7 +307,7 @@ fn garbage_gpfifo_entries_fault_and_never_manufacture_a_method() {
 /// is what "the parser did not stall and did not run off the end" means.
 #[test]
 fn garbage_method_words_decode_to_nothing_the_core_acts_on() {
-    let gpu = port_gpu();
+    let (gpu, pid, cid) = port_gpu();
     let pb = Ga10xPushbuffer;
     let mut rng = Xs(0x0BAD_C0DE_0BAD_C0DE);
     let mut vmm = narrow_vmm();
@@ -238,8 +320,9 @@ fn garbage_method_words_decode_to_nothing_the_core_acts_on() {
     let mut acted: Vec<(u32, Vec<u32>)> = Vec::new();
     for _ in 0..2048 {
         let off = (rng.next() % (len as u64 - WORDS * 4)) & !3u64;
-        let entry = kayfabe_abi::submit::gp_entry(RAM.start + off, WORDS * 4).expect("encodable");
-        let methods = read_pushbuffer(&gpu.spine, &mut vmm, &entry.to_le_bytes())
+        let entry =
+            kayfabe_abi::submit::gp_entry(pb_va(RAM.start + off).0, WORDS * 4).expect("encodable");
+        let methods = read_pushbuffer(&gpu, pid, cid, &mut vmm, &entry.to_le_bytes())
             .expect("the range is inside declared RAM");
         // ★ The walk consumes exactly the range: no stall, no overrun.
         assert_eq!(
@@ -534,31 +617,33 @@ fn every_near_miss_of_a_set_object_refuses() {
 /// `gpfifo_entries` is what now produces the length.
 #[test]
 fn a_maximal_gpfifo_length_is_a_bounded_read_and_not_an_allocation() {
-    let gpu = port_gpu();
+    let (gpu, pid, cid) = port_gpu();
     let mut vmm = narrow_vmm();
     let pb = Ga10xPushbuffer;
     // The largest length the field can hold.
-    let entry = kayfabe_abi::submit::gp_entry(RAM.start, 4 * ((1 << 21) - 1)).expect("encodable");
+    let entry =
+        kayfabe_abi::submit::gp_entry(pb_va(RAM.start).0, 4 * ((1 << 21) - 1)).expect("encodable");
     let ranges = pb.gpfifo_entries(&entry.to_le_bytes());
     assert_eq!(ranges.len(), 1);
     assert_eq!(ranges[0].len, 4 * ((1 << 21) - 1), "the entry names 8 MiB");
     // …and the consumer refuses it, because the window is 32 KiB. The point is that it
     // refuses rather than allocating 8 MiB and serving zeros.
-    assert!(read_pushbuffer(&gpu.spine, &mut vmm, &entry.to_le_bytes()).is_err());
+    assert!(read_pushbuffer(&gpu, pid, cid, &mut vmm, &entry.to_le_bytes()).is_err());
     drop(gpu);
 }
 
 /// A ring of many maximal entries stops at the total budget rather than reading them all.
 #[test]
 fn many_maximal_entries_stop_at_the_total_budget() {
-    let gpu = port_gpu();
+    let (gpu, pid, cid) = port_gpu();
     let mut vmm = MockVmm::new(); // all RAM, so nothing faults and the BUDGET is what stops it
-    let one = kayfabe_abi::submit::gp_entry(0x1000, 4 * ((1 << 21) - 1)).expect("encodable");
+    let one =
+        kayfabe_abi::submit::gp_entry(pb_va(0x1000).0, 4 * ((1 << 21) - 1)).expect("encodable");
     let mut ring = Vec::new();
     for _ in 0..64 {
         ring.extend_from_slice(&one.to_le_bytes());
     }
-    let methods = read_pushbuffer(&gpu.spine, &mut vmm, &ring).expect("all RAM");
+    let methods = read_pushbuffer(&gpu, pid, cid, &mut vmm, &ring).expect("all RAM");
     // 8 MiB total budget / 4 bytes per word is the ceiling on how many words were read,
     // and every word of the zero-filled window is one NOP method.
     assert!(

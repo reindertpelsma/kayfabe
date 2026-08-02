@@ -48,10 +48,11 @@
 //! rather than shrank: a launch whose operands never arrived, a multi-line copy, a
 //! constant fill and a zero-transfer launch all still decode to [`PushMethod::Opaque`].
 //!
-//! ⊘ **And one seam still refuses, upstream of all of it.** A GPFIFO entry names a GPU
-//! **virtual** address and `kayfabe_fwd::read_pushbuffer` reads it as a guest-physical
-//! one. That is no longer a suspicion: it is `[measured]` — see
-//! [`Ga10xPushbuffer::gpfifo_entries`].
+//! ★ **And the seam upstream of all of it is CLOSED (§8.2.3).** A GPFIFO entry names a
+//! GPU **virtual** address — `[measured]`, see [`Ga10xPushbuffer::gpfifo_entries`] — and
+//! [`kayfabe_arch::PushRange::va`] now says so in the type. `kayfabe_fwd::read_pushbuffer`
+//! resolves it through the issuing channel's address table, MISS = FAULT, before any
+//! guest byte is fetched.
 //!
 //! ★★★ **`decode_doorbell` is now built (`E3`), and it is the one seam here that could
 //! not have been closed by reading.** It used to answer `None`. It answers a
@@ -1045,20 +1046,7 @@ impl PushbufferAbi for Ga10xPushbuffer {
     /// (`:1871-1879`), with `pbGpuVA` the `dmaOffset` an `NV04_MAP_MEMORY_DMA` returned
     /// (`:842`). `ogkm-580: ctrl2080fifo.h:809` calls the field *"Gpfifo Virtual Offset"*.
     ///
-    /// ⊘ **Latent, not live**, which is the only reason this is a recorded defect and not an
-    /// incident: nothing in the shipped device path reads a pushbuffer.
-    /// `kayfabe_rt::device::SharedDevice::parse_pushbuffer` is the one in-lock-legal entry
-    /// point and `kayfabe-qemu-raw`/`kayfabe-shell` never call it, and the same two boots
-    /// report `doorbells: 0 arrived` across boot + `modprobe` + device open — the guest never
-    /// submits work at this wall.
-    ///
-    /// ⊘ **There is no second number to compare against, and that is a finding too.** The
-    /// binding that would resolve this VA is a `MAP_MEMORY_DMA`, and that RPC is a HAL stub on
-    /// every GSP-client part, so it never reaches this port (`kayfabe_rmrpc` crate docs §2.7).
-    /// Resolving a range therefore needs a GMMU walk through the issuing channel's PDB — the
-    /// machinery `kayfabe_device`'s BAR2 aperture already has — not a table lookup.
-    ///
-    /// ## ★★★ UNRESOLVED — this returns a GPU **VA** into a field the core reads as a GPA
+    /// ## ★★★ CLOSED — this returns a GPU **VA**, and it is now typed as one
     ///
     /// `[src]` The address decoded out of `GP_ENTRY0_GET` / `GP_ENTRY1_GET_HI` is a **GPU
     /// virtual address in the channel's address space**, not a guest-physical one: UVM
@@ -1066,12 +1054,13 @@ impl PushbufferAbi for Ga10xPushbuffer {
     /// hands it to `set_gpfifo_entry` unchanged (`ogkm-580:
     /// kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`), and
     /// [`kayfabe_abi::submit::gp_entry_decode`] names its own field `gpu_va`.
-    /// `kayfabe_fwd::read_pushbuffer` then passes it to `Vmm::gpa_read` with no walk.
     ///
-    /// This codec is **not** the place to fix that — inventing a translation here would be
-    /// the fabricated-pointer failure this module refuses everywhere else, and the walk
-    /// needs a `Vas` no [`PushbufferAbi`] method is handed. See [`PushRange`]'s type note
-    /// and `docs/design/execution_plane_increments.md`.
+    /// This codec is still **not** the place to translate — inventing a translation here
+    /// would be the fabricated-pointer failure this module refuses everywhere else, and
+    /// the walk needs a `Vas` no [`PushbufferAbi`] method is handed. What changed is one
+    /// level up: [`PushRange::va`] is a [`GpuVa`], and `kayfabe_fwd::read_pushbuffer`
+    /// resolves it through the issuing channel's address table before a guest byte is
+    /// fetched (`docs/design/execution_plane_increments.md` §8.2.3).
     fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange> {
         if ring.is_empty() || !ring.len().is_multiple_of(submit::GP_ENTRY_SIZE as usize) {
             return Vec::new();
@@ -1080,7 +1069,7 @@ impl PushbufferAbi for Ga10xPushbuffer {
             .filter_map(|e| {
                 let raw = u64::from_le_bytes(e.try_into().expect("8 bytes"));
                 submit::gp_entry_decode(raw).map(|d| PushRange {
-                    gpa: d.gpu_va,
+                    va: GpuVa(d.gpu_va),
                     len: d.len_bytes,
                 })
             })

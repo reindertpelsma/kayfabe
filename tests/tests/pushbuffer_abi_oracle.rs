@@ -58,7 +58,7 @@
 //! - **Nothing about any other generation.** The bindings are derived for `GA106`.
 
 use kayfabe_abi::submit;
-use kayfabe_arch::ids::{ClassId, GpuVa, Pdb};
+use kayfabe_arch::ids::{ClassId, GpuId, GpuVa, HClient, Pdb};
 use kayfabe_arch::{PushMethod, PushRange, PushbufferAbi, UserdModel};
 use kayfabe_chips::{Ga10xPushbuffer, Ga10xUserd};
 use kayfabe_core::gpa::GpaSpace;
@@ -386,7 +386,7 @@ fn every_gpfifo_entry_decodes_to_what_nvidias_own_extractor_says() {
             assert_eq!(
                 got,
                 vec![PushRange {
-                    gpa: want_va,
+                    va: GpuVa(want_va),
                     len: want_len
                 }],
                 "[{tag}] {name}: entry {entry:#018x}"
@@ -954,26 +954,53 @@ fn read_pushbuffer_over_the_drivers_own_bytes_yields_the_runs_where_they_were_wr
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
 
         const GPA: u64 = 0x0002_0000;
-        let gpu = Gpu::new(
+        const PDB: Pdb = Pdb(0x04a0_1000);
+        let mut gpu = Gpu::new(
             Box::new(kayfabe_chips::Ga10xArch::new()),
             Box::new(StillbornIsolates::new("test: no forwarding plane")),
             GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
         )
         .expect("the port's object model realizes");
+        // ★★★ A GA10x process, because `read_pushbuffer` translates the entry's address
+        // through the ISSUING CHANNEL's address table (§8.2.3). A bare device has no
+        // channel and therefore no table, so this fixture grew a process rather than the
+        // consumer growing an untranslated path.
+        let mut sc = kayfabe_tests::Scenario::new();
+        kayfabe_tests::ga10x_process(&mut sc, HClient(0xA10A), PDB, 0x5c00_0000);
+        for ev in sc.events {
+            gpu.apply(ev).expect("the GA10x process materializes");
+        }
+        let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).expect("routed");
+        let cid = *gpu.procs[&pid]
+            .chan_ids
+            .values()
+            .next()
+            .expect("one channel");
         let mut vmm = MockVmm::new();
         vmm.gpa_write(GPA, &bytes).expect("guest RAM");
 
-        // The ring: one GPFIFO entry, built by NVIDIA's macros.
+        // The ring: one GPFIFO entry, built by NVIDIA's macros — naming the **GPU VA**
+        // the driver would have named, with the mapping to `GPA` bound underneath it.
         let entry = {
             // Reuse the oracle's own encoder shape by asking it for an entry at this GPA
             // is not possible (it is a compiled binary with fixed cases), so the entry is
             // built with our encoder — whose FORMAT is what every test above settled.
-            submit::gp_entry(GPA, bytes.len() as u64).expect("encodable")
+            submit::gp_entry(kayfabe_tests::pb_va(GPA).0, bytes.len() as u64).expect("encodable")
         };
         let ring = ring_of(entry);
+        kayfabe_tests::bind_ring_at(
+            &mut gpu,
+            pid,
+            cid,
+            kayfabe_tests::pb_va(GPA),
+            GPA,
+            bytes.len() as u64,
+        );
 
-        let methods = kayfabe_fwd::read_pushbuffer(&gpu.spine, &mut vmm, &ring)
-            .unwrap_or_else(|e| panic!("[{tag}] read_pushbuffer refused: {e:?}"));
+        let ranges = kayfabe_fwd::pushbuffer_ranges(&gpu.spine, &ring);
+        let methods =
+            kayfabe_fwd::read_pushbuffer(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, &ranges)
+                .unwrap_or_else(|e| panic!("[{tag}] read_pushbuffer refused: {e:?}"));
 
         // One decoded pair per run, in submission order, with the run's own arguments.
         assert_eq!(

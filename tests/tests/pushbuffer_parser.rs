@@ -31,31 +31,31 @@ use kayfabe_mocks::{
     MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, RmVerb, SharedRecorder,
     mock_classes as mc,
 };
-use kayfabe_tests::{Guarded, Scenario, identical_handles};
-use kayfabe_vmm::Vmm;
+use kayfabe_tests::{Guarded, Scenario, bind_ring, identical_handles, pb_va, script_ring_via};
 
 const A_PDB: Pdb = Pdb(0x3401_000);
 const B_PDB: Pdb = Pdb(0x3405_000);
 const SHARED_VA: GpuVa = GpuVa(0x2_0020_0000);
 
-/// Lay out a GPFIFO ring (one entry pointing at `gpa`) + the method words at `gpa`.
-/// Writes the method words into guest RAM and returns the 16-byte GPFIFO ring bytes.
-fn script_pushbuffer(vmm: &mut MockVmm, gpa: u64, methods: &[(u32, Vec<u32>)]) -> Vec<u8> {
-    // Serialize method words as u32 LE into guest RAM at `gpa`.
-    let mut words = Vec::new();
-    for (h, args) in methods {
-        words.push(*h);
-        words.extend_from_slice(args);
-    }
-    let mut bytes = Vec::new();
-    for w in &words {
-        bytes.extend_from_slice(&w.to_le_bytes());
-    }
-    vmm.gpa_write(gpa, &bytes).unwrap();
-    // One GPFIFO entry: [gpa u64 LE, len u64 LE].
-    let mut ring = Vec::new();
-    ring.extend_from_slice(&gpa.to_le_bytes());
-    ring.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+/// Lay out a GPFIFO ring (one entry) + the method words it names, and **bind the range**
+/// in the issuing channel's address table — i.e. do what the guest's own driver does: map
+/// the pushbuffer, then name the resulting GPU VA in the entry.
+///
+/// ★★★ The entry names `pb_va(gpa)`, **not** `gpa`, and the bias is load-bearing. A ring
+/// whose VA equals the GPA its bytes live at cannot distinguish a translating
+/// `read_pushbuffer` from the untranslated one it replaces — which is exactly what
+/// `MockPushbuffer`'s GPA-carrying entry baked in, and what hid a wrong-bytes read for the
+/// whole life of the seam (`execution_plane_increments.md` §8.2.3).
+fn script_pushbuffer(
+    gpu: &mut Gpu,
+    vmm: &mut MockVmm,
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+    gpa: u64,
+    methods: &[(u32, Vec<u32>)],
+) -> Vec<u8> {
+    let ring = script_ring_via(vmm, gpa, methods);
+    bind_ring(gpu, pid, cid, &ring);
     ring
 }
 
@@ -102,7 +102,10 @@ fn scripted_pushbuffer_captures_pt_writes_and_observes_completion() {
     let pt_page: u64 = A_PDB.0 & !0xfff;
     let sem_addr: u64 = 0x2_0030_0000;
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5000_0000,
         &[
             MockPushbuffer::set_object(mc::DMA_COPY),
@@ -270,7 +273,10 @@ fn execute_and_capture_are_two_decisions_and_they_disagree() {
     let pt_page: u64 = A_PDB.0 & !0xfff;
 
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5000_0000,
         &[
             MockPushbuffer::set_object(mc::DMA_COPY),
@@ -332,20 +338,44 @@ fn execute_and_capture_are_two_decisions_and_they_disagree() {
 }
 
 /// A hostile / truncated ring never panics and never desyncs the parser into an
-/// unbounded read.
+/// unbounded read — and ★★★ **an entry naming a VA the guest never bound FAULTS BY NAME**
+/// rather than reading whatever guest RAM shares the number (§8.2.3, the E5 control).
+///
+/// The two arms are the whole point of the pair: the unbound entry is refused before a
+/// byte is fetched, and the *same* nonsense bytes behind a **bound** entry parse fine and
+/// decode to nothing actionable. Without the second arm, "it faulted" would be
+/// indistinguishable from "the parser refuses everything".
 #[test]
 fn hostile_ring_never_panics() {
     let (mut gpu, mut vmm) = one_proc_gpu();
     let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
     let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
 
-    // A ring with a bogus GPFIFO entry pointing at empty RAM + a truncated tail.
+    // ARM 1 — a bogus GPFIFO entry naming an UNBOUND VA + a truncated tail.
     let mut ring = Vec::new();
     ring.extend_from_slice(&0x9000_0000u64.to_le_bytes());
     ring.extend_from_slice(&64u64.to_le_bytes());
     ring.push(0xff); // truncated trailing entry (ignored)
+    let err = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring)
+        .expect_err("an unbound pushbuffer VA is a MISS, and a MISS is a FAULT");
+    assert_eq!(
+        err,
+        FwdFault::Address(kayfabe_mmu::AddressFault::Miss {
+            pdb: A_PDB,
+            va: GpuVa(0x9000_0000),
+        }),
+        "the refusal names the address space and the exact faulting VA — never a zero, \
+         never a read of the guest RAM that happens to share the number"
+    );
+
+    // ARM 2 — the same shape, but the guest bound it first. Now the bytes are read, and
+    // unwritten RAM decodes to nothing actionable. No panic, no desync, no completion.
+    let mut ring = Vec::new();
+    ring.extend_from_slice(&pb_va(0x9000_0000).0.to_le_bytes());
+    ring.extend_from_slice(&64u64.to_le_bytes());
+    kayfabe_tests::bind_ring_at(&mut gpu, pid, cid, pb_va(0x9000_0000), 0x9000_0000, 64);
+    ring.push(0xff); // truncated trailing entry (ignored)
     let out = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("does not panic");
-    // Empty RAM decodes to opaque/invalid methods, never a crash.
     assert!(out.sem_releases.is_empty());
 }
 
@@ -573,7 +603,10 @@ fn soak_submit_complete_loop_loses_no_completion() {
     for iter in 0..64u64 {
         let sem_addr = 0x2_0030_0000 + iter * 0x1000;
         let ring = script_pushbuffer(
+            &mut gpu,
             &mut vmm,
+            pid,
+            cid,
             0x5000_0000,
             &[MockPushbuffer::sem_release(sem_addr, iter)],
         );
@@ -591,14 +624,18 @@ fn soak_submit_complete_loop_loses_no_completion() {
         expected_completions, 64,
         "every iteration's completion was observed"
     );
-    // The address table has no unbounded growth from sema releases (they observe, not bind).
+    // The address table has no unbounded growth from sema releases (they observe, not
+    // bind). ★ The ONE binding present is the pushbuffer's own — the fixture's stand-in
+    // for the guest's `MAP_MEMORY_DMA`, re-bound identically all 64 iterations — so this
+    // is `1` and not `0`, and a 65th entry would mean the parse itself bound something.
     assert_eq!(
         gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
             .table
             .iter()
-            .count(),
-        0,
-        "sema releases do not bind"
+            .map(|(va, _, _)| va)
+            .collect::<Vec<_>>(),
+        vec![pb_va(0x5000_0000).0],
+        "sema releases do not bind; only the ring's own mapping is in the table"
     );
 }
 
@@ -637,6 +674,20 @@ mod fuzz {
                 let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
                 // Back the region GPFIFO entries might point at (0x5000_0000 window).
                 vmm.gpa_write(0x5000_0000, &region).unwrap();
+                // ★ One WIDE binding over the low 4 GiB of the VAS, at a non-zero bias.
+                // Without it every arbitrary GPFIFO entry would refuse as an address-table
+                // MISS and the fuzz would never reach the guest-memory read at all — the
+                // read arm would go quietly vacant, which is the shape a coverage
+                // regression hides in. With it, a VA under 4 GiB translates and reads, and
+                // anything above it still misses, so BOTH arms are reachable.
+                kayfabe_tests::bind_ring_at(
+                    &mut gpu,
+                    pid,
+                    cid,
+                    kayfabe_arch::ids::GpuVa(0),
+                    0x1_0000_0000,
+                    1 << 32,
+                );
 
                 // Never panics — a Result at worst a loud fault.
                 let _ = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring);
@@ -683,18 +734,26 @@ fn total_read_budget_clamps_a_straddling_range_to_what_is_left() {
     /// it fails this test loudly instead of silently weakening the assertion).
     const TOTAL_BUDGET: u64 = 8 << 20;
 
-    let (gpu, mut vmm) = one_proc_gpu();
+    let (mut gpu, mut vmm) = one_proc_gpu();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
     // 12 ranges — enough that the budget is spent before the ring is, so the "ranges
     // past the budget are skipped" arm runs too. Each range sits in its own 4 GiB
     // window so no two ranges can alias.
     let mut ring = Vec::new();
     for i in 0..12u64 {
-        ring.extend_from_slice(&(0x8000_0000 + i * 0x1_0000_0000).to_le_bytes());
+        // ★ The entry names the VA; the binding put there by `bind_ring` is what maps it
+        // to the GPA the bytes (do not) live at. A regression to reading the entry's
+        // number raw lands 0x7000_0000_0000 away from any declared RAM.
+        ring.extend_from_slice(&pb_va(0x8000_0000 + i * 0x1_0000_0000).0.to_le_bytes());
         ring.extend_from_slice(&RANGE.to_le_bytes());
     }
+    bind_ring(&mut gpu, pid, cid, &ring);
 
-    let methods = kayfabe_fwd::read_pushbuffer(&gpu.spine, &mut vmm, &ring)
-        .expect("unwritten guest RAM reads as zeros, never a fault");
+    let ranges = kayfabe_fwd::pushbuffer_ranges(&gpu.spine, &ring);
+    let methods =
+        kayfabe_fwd::read_pushbuffer(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, &ranges)
+            .expect("unwritten guest RAM reads as zeros, never a fault");
 
     // 10 full ranges (7.5 MiB) + a final 512 KiB slice == exactly the budget. With the
     // remaining-budget term removed, the 11th range contributes its whole 768 KiB and
@@ -744,7 +803,7 @@ fn sem_release_completion_identities_mix_both_operands_and_never_collide() {
         .iter()
         .map(|&(addr, payload)| MockPushbuffer::sem_release(addr, payload))
         .collect();
-    let ring = script_pushbuffer(&mut vmm, 0x4_0000_0000, &methods);
+    let ring = script_pushbuffer(&mut gpu, &mut vmm, pid, cid, 0x4_0000_0000, &methods);
     let out =
         parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("the scripted ring parses");
     assert_eq!(out.sem_releases.len(), 3, "all three releases were decoded");
@@ -837,7 +896,10 @@ fn a_virtual_destination_through_the_fb_alias_is_captured_as_a_pt_write() {
 
     // (a) the PHYSICAL form.
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5000_0000,
         &[MockPushbuffer::ce_launch_dma(root + 0x40, 0x40, false)],
     );
@@ -845,7 +907,10 @@ fn a_virtual_destination_through_the_fb_alias_is_captured_as_a_pt_write() {
 
     // (b) the VIRTUAL form, through the alias, naming the SAME physical page.
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5001_0000,
         &[MockPushbuffer::ce_launch_dma(
             ALIAS_BASE.0 + root + 0x40,
@@ -879,7 +944,10 @@ fn a_virtual_destination_through_the_fb_alias_is_captured_as_a_pt_write() {
     // that lands on a page nothing owns is data — forwarded. So the capture above is
     // about the destination, not about the alias.
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid,
+        cid,
         0x5002_0000,
         &[MockPushbuffer::ce_launch_dma(
             ALIAS_BASE.0 + 0x1_2340_0000,
@@ -914,7 +982,10 @@ fn a_pt_write_is_attributed_to_the_vas_that_owns_the_page_not_to_the_writer() {
     let a_root: u64 = A_PDB.0 & !0xfff;
 
     let ring = script_pushbuffer(
+        &mut gpu,
         &mut vmm,
+        pid_b,
+        cid_b,
         0x5000_0000,
         &[MockPushbuffer::ce_launch_dma(
             ALIAS_BASE.0 + a_root + 0x80,

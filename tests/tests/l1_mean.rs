@@ -5703,6 +5703,21 @@ fn dma_machine() -> SharedVmm {
     vmm
 }
 
+/// ★★★ A one-entry GPFIFO ring naming the **GPU virtual address** of `gpa`, with the
+/// mapping bound on `pid`/`cid` first — i.e. what the guest's own `MAP_MEMORY_DMA` of a
+/// pushbuffer does before a GPFIFO entry can name it (`ogkm-580: mem_utils_gm107.c:842`,
+/// `:1871-1879`; `execution_plane_increments.md` §8.2.3).
+///
+/// ⊘ The bind is what keeps the hostile shapes below **reachable**. `read_pushbuffer`
+/// translates before it reads, so an entry naming a raw guest-physical number now refuses
+/// at the address table and would never reach `Vmm::gpa_read` at all — the `NonRamGpa` /
+/// `GpaRead` rows this workload exists to assert would go quietly vacant.
+fn bound_ring(dev: &SharedDevice, pid: ProcId, cid: ChanId, gpa: u64, len: u64) -> Vec<u8> {
+    let ring = gpfifo_ring(kayfabe_tests::pb_va(gpa).0, len);
+    kayfabe_tests::bind_ring_dev(dev, pid, cid, &ring);
+    ring
+}
+
 /// **The DMA-descriptor workload.** Interleaves a legitimate pushbuffer with the four
 /// hostile shapes a guest can build out of one 16-byte GPFIFO entry, and asserts the
 /// EXACT fault for each — including the boundary address of a range that starts in RAM
@@ -5736,6 +5751,7 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
                 MockPushbuffer::method(0xEE, &[1, 2, 3]),
             ],
         );
+        kayfabe_tests::bind_ring_dev(dev, pid, cid, &ring);
         let out = dev
             .parse_pushbuffer(&mut vmm, pid, cid, &ring)
             .expect("a RAM-backed pushbuffer parses while peers hold verbs and DMA at MMIO");
@@ -5758,21 +5774,21 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
         let hostile: (Vec<u8>, Result<kayfabe_fwd::PushbufferOutcome, FwdFault>) = match k % 5 {
             // (a) aimed squarely at ANOTHER device's registers.
             0 => (
-                gpfifo_ring(GPA_PEER_BAR.start, 0x40),
+                bound_ring(dev, pid, cid, GPA_PEER_BAR.start, 0x40),
                 Err(FwdFault::NonRamGpa {
                     gpa: GPA_PEER_BAR.start,
                 }),
             ),
             // (b) aimed at OUR OWN trapped BAR0.
             1 => (
-                gpfifo_ring(GPA_OUR_BAR0.start + 0x800, 8),
+                bound_ring(dev, pid, cid, GPA_OUR_BAR0.start + 0x800, 8),
                 Err(FwdFault::NonRamGpa {
                     gpa: GPA_OUR_BAR0.start + 0x800,
                 }),
             ),
             // (c) aimed at a hole — the NEAR NEIGHBOUR, which must report differently.
             2 => (
-                gpfifo_ring(GPA_HOLE.start + 0x10, 0x20),
+                bound_ring(dev, pid, cid, GPA_HOLE.start + 0x10, 0x20),
                 Err(FwdFault::GpaRead {
                     gpa: GPA_HOLE.start + 0x10,
                 }),
@@ -5782,7 +5798,7 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
             //     the first bytes and take the VMM's global lock on the continuation
             //     step. Reports the BOUNDARY byte, not the requested address.
             3 => (
-                gpfifo_ring(GPA_PEER_BAR.start - 8, 0x40),
+                bound_ring(dev, pid, cid, GPA_PEER_BAR.start - 8, 0x40),
                 Err(FwdFault::NonRamGpa {
                     gpa: GPA_PEER_BAR.start,
                 }),
@@ -5796,7 +5812,7 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
             //     arm that keeps it — so two refusals whose payloads meant different
             //     things went unnoticed. Fixed 2026-07-27; this row is what bites.
             _ => (
-                gpfifo_ring(GPA_HOLE.start - 8, 0x40),
+                bound_ring(dev, pid, cid, GPA_HOLE.start - 8, 0x40),
                 Err(FwdFault::GpaRead {
                     gpa: GPA_HOLE.start,
                 }),
@@ -5956,19 +5972,35 @@ fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_l
              completion against a proc that no longer exists"
         );
         // ★★ THE PREMISE, asserted rather than assumed: the guest-memory reads really
-        // did run with one of OUR ranked locks held. If they did not, every refusal
-        // above is a fact about a lock-free path and the hazard was never exercised at
-        // all — the §1 "green instrument" failure, one level up. Exactly 1: the route
-        // phase holds rank 0 (device read in Sharded, device write in Degenerate) and
-        // nothing else while it reads guest memory.
+        // did run with our ranked locks held. If they did not, every refusal above is a
+        // fact about a lock-free path and the hazard was never exercised at all — the §1
+        // "green instrument" failure, one level up.
+        //
+        // ★★★ **MEASURED 2 SINCE §8.2.3, and it used to be 1 — this instrument is what
+        // noticed the phase move.** A GPFIFO entry names a GPU **virtual** address, so
+        // `read_pushbuffer` must translate through the issuing channel's address table,
+        // which needs the proc. The guest-memory read therefore moved out of
+        // `route_act`'s ROUTE phase (device read, rank 0) into its ACT phase (device read
+        // + that proc's mutex, rank 1) — depth 2. **No new lock is taken**: `route_act`
+        // acquires both for one operation either way, and the read moved from between the
+        // two acquisitions to after the second. The number is updated by ATTRIBUTING the
+        // change, not by loosening the bound: it is still an exact equality, and a read
+        // that drifted back to rank 0 (i.e. stopped translating) would fail here.
+        //
+        // ⊘ **And it is 2 only in Sharded**, which is a fact about the modes rather than
+        // a hedge: Degenerate reaches the proc through the single device WRITE guard
+        // (`route_act`'s `get_mut`), so there is no second ranked lock to hold. Asserting
+        // one number for both would have had to be the weaker one.
+        let want_max = if name == "Sharded" { 2 } else { 1 };
         assert_eq!(
             r.lock_depth_span,
-            (0, 1),
+            (0, want_max),
             "({name}) guest memory was accessed at ranked-lock depths {:?}. BOTH ends \
-             are the claim: max 1 = the pushbuffer reads really ran under rank 0 (device \
-             read in Sharded, device write in Degenerate), so the in-lock hazard was \
-             actually constructed; min 0 = the scripting writes really ran lock-free, so \
-             the witness varies with its caller instead of reporting a constant",
+             are the claim: the max is the pushbuffer reads really running under our \
+             ranked locks — rank 0 plus the owning proc's rank 1 in Sharded, the single \
+             device write guard in Degenerate — so the in-lock hazard was actually \
+             constructed; min 0 = the scripting writes really ran lock-free, so the \
+             witness varies with its caller instead of reporting a constant",
             r.lock_depth_span
         );
     }
@@ -6009,6 +6041,13 @@ impl DmaMeanReport {
     /// that violated it.
     fn mode_independent(mut self) -> Self {
         self.revoke.served = 0;
+        // ★★★ The ranked-lock DEPTH is a fact about the lock CONFIGURATION, not about the
+        // outcome, and since §8.2.3 the two modes genuinely differ: Sharded holds device
+        // read + the owning proc's mutex across `read_pushbuffer`'s translate-and-read
+        // (depth 2), Degenerate reaches the proc through the one device write guard
+        // (depth 1). It is asserted EXACTLY, per mode, above — this equality is about
+        // what the guest observed, and the guest cannot observe our lock mode.
+        self.lock_depth_span = (0, 0);
         self
     }
 }
@@ -6079,7 +6118,7 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
                     .chan;
                 // The ring bytes are OURS (never guest memory), so the only thing the
                 // teardown can change is whether the RANGE resolves.
-                let ring = gpfifo_ring(GPA_REVOKE, 0x40);
+                let ring = bound_ring(dev, pid_ref[P_WITNESS], cid, GPA_REVOKE, 0x40);
                 vmm.gpa_write(GPA_REVOKE, &[0u8; 0x40])
                     .expect("the window is RAM before the teardown");
                 let mut p = RevokeProbe {
@@ -7045,6 +7084,7 @@ fn real_dma_workload(
                 MockPushbuffer::method(0xEE, &[1, 2, 3]),
             ],
         );
+        kayfabe_tests::bind_ring_dev(dev, pid, cid, &ring);
         let out = dev
             .parse_pushbuffer(&mut vmm, pid, cid, &ring)
             .expect("a RAM-backed pushbuffer parses out of a real mmap'd window");
@@ -7066,19 +7106,19 @@ fn real_dma_workload(
         let (ring, expect) = match k % 4 {
             // (a) squarely at our own trapped BAR0 — a region with NO MEMSLOT.
             0 => (
-                gpfifo_ring(RGPA_BAR0, 0x40),
+                bound_ring(dev, pid, cid, RGPA_BAR0, 0x40),
                 Err(FwdFault::NonRamGpa { gpa: RGPA_BAR0 }),
             ),
             // (b) deeper into the same device window.
             1 => (
-                gpfifo_ring(RGPA_BAR0 + 0x800, 8),
+                bound_ring(dev, pid, cid, RGPA_BAR0 + 0x800, 8),
                 Err(FwdFault::NonRamGpa {
                     gpa: RGPA_BAR0 + 0x800,
                 }),
             ),
             // (c) a hole — the NEAR NEIGHBOUR, which must report differently.
             2 => (
-                gpfifo_ring(RGPA_HOLE + 0x10, 0x20),
+                bound_ring(dev, pid, cid, RGPA_HOLE + 0x10, 0x20),
                 Err(FwdFault::GpaRead {
                     gpa: RGPA_HOLE + 0x10,
                 }),
@@ -7103,7 +7143,7 @@ fn real_dma_workload(
             // a REAL mmap'd window and a real KVM memslot, which is the half the mock
             // cannot reach.
             _ => (
-                gpfifo_ring(base + RWIN_PAGES * page - 8, 0x40),
+                bound_ring(dev, pid, cid, base + RWIN_PAGES * page - 8, 0x40),
                 Err(FwdFault::GpaRead {
                     gpa: base + RWIN_PAGES * page,
                 }),
@@ -7324,6 +7364,11 @@ impl RealMeanReport {
         self.revoke_churn.held_slot_id = 0;
         self.revoke_churn.held_slot_after_teardown = None;
         self.audit = kayfabe_vmm_kvm::AuditReport {
+            // ★★★ The ranked-lock depth an accessor was entered at is a fact about the
+            // lock CONFIGURATION, and since §8.2.3 the modes genuinely differ (Sharded:
+            // device read + the owning proc's mutex across the translate-and-read;
+            // Degenerate: the one device write guard). Asserted EXACTLY, per mode, above.
+            accessor_ranked_depth: (0, 0),
             live_placements: 0,
             peak_placements: 0,
             placements_made: 0,
@@ -7487,7 +7532,7 @@ fn real_mean_run(mode: LockMode) -> RealMeanReport {
                     .doorbell(GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
                     .expect("the prober's CE channel rings")
                     .chan;
-                let ring = gpfifo_ring(RGPA_REVOKE, 0x40);
+                let ring = bound_ring(dev, pid_ref[P_WITNESS], cid, RGPA_REVOKE, 0x40);
                 vmm.gpa_write(RGPA_REVOKE, &[0u8; 0x40])
                     .expect("the window is real RAM before the teardown");
                 let mut p = RevokeProbe {
@@ -7628,11 +7673,20 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
              A `min` of u32::MAX would mean no syscall ran at all — which is why the PAIR \
              is asserted, not the max"
         );
+        // ★★★ 2 since §8.2.3, and see the twin note in `dma_workload`'s caller: the
+        // pushbuffer read moved from `route_act`'s route phase (rank 0) to its act phase
+        // (rank 0 + the owning proc's rank 1), because translating a GPFIFO entry's
+        // VIRTUAL address needs the channel's address table and therefore the proc. The
+        // lock SET of the operation is unchanged; only where in it the read sits moved.
+        //
+        // ⊘ 2 in Sharded, 1 in Degenerate — the latter reaches the proc through the
+        // single device write guard, so there is no second ranked lock.
+        let want_max = if name == "Sharded" { 2 } else { 1 };
         assert_eq!(
             a.accessor_ranked_depth,
-            (0, 1),
-            "({name}) ★ and the in-lock-legal accessors really were entered WITH a ranked \
-             lock (max 1, the route phase of parse_pushbuffer) AND lock-free (min 0, the \
+            (0, want_max),
+            "({name}) ★ and the in-lock-legal accessors really were entered WITH ranked \
+             locks (the act phase of parse_pushbuffer) AND lock-free (min 0, the \
              scripting writes). Without both ends this whole run could be green about a \
              lock-free path"
         );

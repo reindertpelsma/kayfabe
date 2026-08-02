@@ -8,8 +8,15 @@
 //!
 //! Input is `arbitrary`-structured so the fuzzer reaches DEEP paths (real GPFIFO
 //! ranges + method words) instead of bouncing off early rejects: a bounded set of
-//! declared `(gpa, len)` GPFIFO entries plus the method-region bytes those entries
+//! declared `(va, len)` GPFIFO entries plus the method-region bytes those entries
 //! point at, all backed into the mock guest RAM before the parse.
+//!
+//! ★★★ A GPFIFO entry names a GPU **virtual** address, and `read_pushbuffer` resolves it
+//! through the issuing channel's address table before it fetches a byte
+//! (`execution_plane_increments.md` §8.2.3). So the harness installs ONE wide binding at
+//! `kayfabe_tests::PB_VA_BIAS` — without it every generated entry would refuse as an
+//! address-table MISS and the guest-memory read would go **unreachable**, which is a
+//! coverage collapse that no assertion here would have noticed.
 
 #![no_main]
 
@@ -21,7 +28,7 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_fwd::parse_pushbuffer;
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm};
-use kayfabe_tests::{Scenario, identical_handles};
+use kayfabe_tests::{PB_VA_BIAS, Scenario, bind_ring_at, identical_handles, pb_va};
 use kayfabe_vmm::Vmm;
 
 const A_PDB: Pdb = Pdb(0x3401_000);
@@ -64,13 +71,15 @@ fn one_proc_gpu() -> (Gpu, MockVmm) {
 fn build_ring(entries: &[(u8, u64)]) -> Vec<u8> {
     let mut ring = Vec::with_capacity(entries.len().min(32) * 16);
     for &(choice, len) in entries.iter().take(32) {
-        let gpa = match choice % 4 {
-            0 => REGION_GPA,
-            1 => REGION_GPA + u64::from(choice) * 4, // mid-region, unaligned
-            2 => 0xFFFF_FFFF_FFFF_F000,              // near-top, probes range caps/wrap
-            _ => 0x9000_0000,                        // unbacked window (reads as zero)
+        // Four VA shapes, and the fourth is deliberately OUTSIDE the harness's binding so
+        // the address-table MISS arm is reached as often as the read arm.
+        let va = match choice % 4 {
+            0 => pb_va(REGION_GPA).0,
+            1 => pb_va(REGION_GPA).0 + u64::from(choice) * 4, // mid-region, unaligned
+            2 => 0xFFFF_FFFF_FFFF_F000,                       // near-top: caps/wrap + MISS
+            _ => pb_va(0x9000_0000).0,                        // bound, unbacked (reads zero)
         };
-        ring.extend_from_slice(&gpa.to_le_bytes());
+        ring.extend_from_slice(&va.to_le_bytes());
         ring.extend_from_slice(&len.to_le_bytes());
     }
     ring
@@ -85,6 +94,9 @@ fuzz_target!(|input: Input| {
     if !input.region.is_empty() {
         vmm.gpa_write(REGION_GPA, &input.region).unwrap();
     }
+    // The one wide binding — see the module docs. `[PB_VA_BIAS, +512 GiB)` -> GPA 0, which
+    // is exactly `pb_va` realized as a mapping.
+    bind_ring_at(&mut gpu, pid, cid, GpuVa(PB_VA_BIAS), 0, 1 << 39);
 
     let ring = if input.use_structured {
         build_ring(&input.entries)

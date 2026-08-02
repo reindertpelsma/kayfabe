@@ -598,7 +598,7 @@ pub enum PushMethod {
 /// Resolving a range therefore needs a GMMU walk through the issuing channel's PDB — the
 /// machinery `kayfabe_device`'s BAR2 aperture already has — not a table lookup.
 ///
-/// # ★★★ UNRESOLVED — the field is named `gpa` and a real GPFIFO entry holds a GPU **VA**
+/// # ★★★ CLOSED, §8.2.3 — the field is a [`GpuVa`] and the consumer TRANSLATES
 ///
 /// `[src]` A GA10x GPFIFO entry's address is `NVC56F_GP_ENTRY0_GET 31:2` +
 /// `NVC56F_GP_ENTRY1_GET_HI 7:0` (`ogkm-580:
@@ -608,25 +608,32 @@ pub enum PushMethod {
 /// `set_gpfifo_entry` (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`).
 /// `kayfabe_abi::submit::gp_entry_decode` names its own field `gpu_va` for that reason.
 ///
-/// `kayfabe_fwd::read_pushbuffer` passes [`PushRange::gpa`] straight to
-/// `kayfabe_vmm::Vmm::gpa_read`, i.e. treats it as a guest-physical address with no walk.
-/// ⊘ That is right for `kayfabe_mocks::MockPushbuffer`, whose invented 16-byte GPFIFO
-/// entry stores a genuine GPA — which is precisely why no mock-driven test can see the
-/// question — and it is **not established** for `kayfabe_chips::Ga10xPushbuffer`, which
-/// returns the driver's VA verbatim.
+/// The field used to be `pub gpa: u64` and `kayfabe_fwd::read_pushbuffer` passed it
+/// straight to `kayfabe_vmm::Vmm::gpa_read` with no walk. **A GPA-typed field holding a
+/// VA was the whole defect**, so the type is what changed: this is a [`GpuVa`], and
+/// `kayfabe_fwd::read_pushbuffer` now resolves it through the issuing channel's
+/// `kayfabe_mmu::AddressTable` before any guest byte is fetched — MISS = FAULT.
 ///
-/// Closing it is a shape change, not an edit: resolving the range needs the issuing
-/// channel's `Vas`, and `read_pushbuffer` is documented and locked as a phase that
-/// *"touches no proc"* under the device read lock. Recorded here rather than guessed at —
-/// `docs/design/execution_plane_increments.md`, and the same family as `E4`'s
-/// `LAUNCH_DMA` operands.
+/// # ⊘ Why this is a newtype and NOT an `enum { Gpa(u64), GpuVa(GpuVa) }`
+///
+/// An enum would let an architecture *declare* that its GPFIFO entry names a
+/// guest-physical address, and that is the exact hole this change closes — a `Gpa` arm is
+/// a supported way back into the untranslated read. Nothing on this wire produces one:
+/// `pChannel->pbGpuVA` is assigned **unconditionally** from the `dmaOffset` an
+/// `NV04_MAP_MEMORY_DMA` returned (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:842`), every entry is
+/// `pbGpuVA + gpOffset` (`:1871-1879`), and the control field is *"Gpfifo Virtual
+/// Offset"* (`ogkm-580: ctrl2080fifo.h:809`). An arch that genuinely had a physical
+/// GPFIFO would need a new seam and a measurement, not a variant nobody checked.
+///
+/// ★ The `kayfabe_mocks::MockPushbuffer` entry names a VA too, **now**. It used to store a
+/// genuine GPA — an encoding no NVIDIA chip has — which is why no mock-driven test could
+/// ever see the question (`mock_fidelity_both_directions`, fourth instance).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PushRange {
-    /// Address of the method words, **as this architecture's GPFIFO entry states it**.
-    ///
-    /// ⊘ Read the type-level note before consuming this as a guest-physical address: on
-    /// GA10x the driver writes a GPU virtual address into that field.
-    pub gpa: u64,
+    /// **The GPU virtual address of the method words, in the ISSUING CHANNEL's address
+    /// space.** Not a guest-physical address; see the type note.
+    pub va: GpuVa,
     /// Length of the range in bytes.
     pub len: u64,
 }

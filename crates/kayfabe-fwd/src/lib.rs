@@ -72,8 +72,8 @@
 //! `&mut Proc` ones ([`publish_backing`], the act phases) parallelize per-proc
 //! (disjoint borrows, no shared lock).
 
-use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, RunlistId, VChid};
+use kayfabe_arch::{Aperture, PushRange};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
@@ -219,6 +219,39 @@ pub enum FwdFault {
         /// The first guest-physical address in the requested range that resolves to a
         /// device region.
         gpa: u64,
+    },
+    /// ★★★ **A GPFIFO range resolved into an aperture whose bytes are not guest RAM.**
+    ///
+    /// The address table answered, and the answer was `Vidmem` (or `Peer`), where
+    /// [`kayfabe_mmu::Binding::phys`] is a guest **framebuffer** offset — a number in a
+    /// different space that happens to be the same width. `Vmm::gpa_read` addresses guest
+    /// RAM, so handing it that number would read an unrelated page and hand the method
+    /// decoder plausible bytes: the exact "the read succeeded and the bytes are wrong"
+    /// failure that [`read_pushbuffer`]'s translation exists to end, one level further in.
+    ///
+    /// ⊘ Distinct from [`FwdFault::NonRamGpa`] by which plane refused. That one is the
+    /// **VMM** saying a guest-physical address names a device; this one is the **address
+    /// table** saying the range was never in guest-physical space at all. They are near
+    /// neighbours over one call (`testing_doctrine.md` §2 rule 3) and folding them would
+    /// lose which plane knew.
+    ///
+    /// ⊘ It is a refusal and **not** a claim that a real GPU cannot fetch methods out of
+    /// video memory. It can; this port serves no framebuffer byte
+    /// ([`kayfabe_arch::FbWindow`]: *"Nothing here serves a byte"*), so the honest answer
+    /// is that we cannot read it, stated by name.
+    PushbufferAperture {
+        /// The virtual address whose binding named the aperture.
+        va: GpuVa,
+        /// The aperture the binding named.
+        aperture: Aperture,
+    },
+    /// A GPFIFO range cut into more address-table spans than [`MAX_PUSH_SPANS`] — a loud
+    /// refusal, never a truncated read. See that constant for why the bound exists.
+    PushTooFragmented {
+        /// The range's start VA.
+        va: GpuVa,
+        /// The length the GPFIFO entry declared.
+        len: u64,
     },
     /// The isolate's RM backend refused the op.
     Rm(RmError),
@@ -2375,34 +2408,203 @@ fn decode_methods(arch: &dyn kayfabe_arch::Arch, bytes: &[u8]) -> Vec<(u32, Vec<
     out
 }
 
-/// ROUTE/read phase of the pushbuffer parse: walk `ring`'s GPFIFO entries (arch
-/// format, a pure spine read) and read each range's method words from guest memory
-/// via `vmm`, bounded (boundary-1: per-range and total caps). Touches no proc — in
-/// L1 this runs under the device *read* lock, before the owning proc's lock.
+/// ROUTE phase of the pushbuffer parse: the `ring`'s GPFIFO entries in the arch's own
+/// entry format. A **pure spine read** — no proc, no guest memory, no `Vmm` — so it is
+/// the half that legitimately runs before the owning proc's lock is taken.
+///
+/// Each [`PushRange`] names a **GPU virtual address in the issuing channel's address
+/// space**; nothing here can or should translate it (see [`read_pushbuffer`]).
+#[must_use]
+pub fn pushbuffer_ranges(spine: &Spine, ring: &[u8]) -> Vec<PushRange> {
+    spine.arch().pushbuffer().gpfifo_entries(ring)
+}
+
+/// ★★★ **Upper bound on how many address-table bindings ONE GPFIFO range may be read
+/// across.**
+///
+/// The guest controls both the range's declared length *and* its address table's
+/// fragmentation (a promotion or a page-table write may bind as little as one byte), so
+/// "how many spans does this range cut into" is guest-influenced and needs a bound
+/// (boundary-1). Exceeding it is a **loud refusal** ([`FwdFault::PushTooFragmented`]) and
+/// never a truncation: a read that silently stops at span 4096 hands the method decoder a
+/// prefix of the guest's pushbuffer and calls it the whole thing, which is `#13 CE-DROP`
+/// with a different transport.
+///
+/// ⊘ It is not a performance knob. With [`MAX_PUSH_RANGE_BYTES`] at 1 MiB and the
+/// smallest page a real mapping uses (4 KiB), a legitimate range cuts into at most 256
+/// spans; the headroom is there so the bound is never the thing that breaks a real guest.
+pub const MAX_PUSH_SPANS: usize = 4096;
+
+/// ★★★ **ACT phase of the pushbuffer parse — and the phase where the GPFIFO entry's
+/// address is TRANSLATED.**
+///
+/// Walks `ranges` (from [`pushbuffer_ranges`]), resolves each one's **GPU virtual**
+/// address through the issuing channel's own address table, reads the method words out of
+/// guest memory via `vmm`, and decodes them. Bounded per range, in total, and in
+/// fragmentation.
+///
+/// # ★★★ Why this is not the route phase any more — §8.2.3, and it is a PHASE-SHAPE change
+///
+/// This function used to take `ring` directly, run `gpfifo_entries` itself and hand
+/// `PushRange::gpa` to `Vmm::gpa_read` **with no walk**, under the device read lock and
+/// touching no proc. That is the defect: a GPFIFO entry holds a GPU **virtual** address
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:996, 1006`; `pChannel->pbGpuVA` is a
+/// `MAP_MEMORY_DMA` `dmaOffset`, `ogkm-580: mem_utils_gm107.c:842`, and every entry is
+/// `pbGpuVA + gpOffset`, `:1871-1879`), `[measured]` at rev `c93930d` — two boots
+/// differing only in guest RAM (8 GiB, 2 GiB) declared the **byte-identical** ring address
+/// `0x1_2006_4000`, which at 2 GiB is outside every usable `e820` range.
+///
+/// Translating needs the channel's `Vas`, which needs the proc, so the read **moved from
+/// the route phase into the act phase**. Three things about that, stated rather than
+/// slipped in:
+///
+/// 1. **No new lock is acquired.** `SharedDevice::route_act` takes device-read (rank 0)
+///    then that proc's mutex (rank 1) for a single operation; the read moved from between
+///    those two acquisitions to after the second. The lock *set* of the whole op is
+///    unchanged and the rank order is unchanged.
+/// 2. **The in-lock-legality argument is unchanged, because it never mentioned a rank.**
+///    `Vmm::gpa_read` is legal here only because the port refuses a GPA that is not host
+///    RAM ([`FwdFault::NonRamGpa`]) — a backend that served a device-aimed GPA would take
+///    the VMM's global lock *beneath one of ours*, which is `l1_os_shell.md` §6.3's ABBA
+///    whether the lock above it is rank 0 or rank 1.
+/// 3. ⊘ **It is deliberately NOT split into plan/execute/commit.** R1 forces that shape
+///    for *blocking* calls; `gpa_read` is a bounded copy out of a mapped window, not a
+///    round trip. Splitting would mean resolving addresses under the lock, dropping it,
+///    reading, and re-taking — i.e. fetching method bytes through a translation the guest
+///    was free to invalidate in the gap. That is a TOCTOU we would be building on purpose.
+///
+/// # The refusals, and why each is its own name
+///
+/// - **No address space** — the channel is GSP-managed with no declared VAS
+///   (`Channel::vas_pdb == None`), or its `Vas` is gone: [`FwdFault::NoVas`] /
+///   [`FwdFault::UnknownPdb`]. There is no table to miss in, which is a different fact
+///   from missing in one.
+/// - **MISS** — no binding covers the VA: [`FwdFault::Address`]`(`[`AddressFault::Miss`]`)`,
+///   naming the exact faulting VA. **This is the whole doctrine** (`mode2_address_table.md`:
+///   the table *is* the guest's TLB, miss = fault, never a reverse-resolve, never a
+///   heuristic). An unresolvable VA is not a zero and not a guess.
+/// - **Wrong aperture** — the binding resolves into video or peer memory:
+///   [`FwdFault::PushbufferAperture`]. `Vmm::gpa_read` addresses *guest RAM*; a vidmem
+///   `Binding::phys` is a guest **framebuffer** offset and handing it to `gpa_read` would
+///   read an unrelated page of guest RAM that happens to share the number — the same
+///   class of silent wrong-bytes failure as the untranslated read this replaces.
+/// - **Too fragmented** — [`FwdFault::PushTooFragmented`], see [`MAX_PUSH_SPANS`].
+/// - **The read itself** — [`FwdFault::GpaRead`] / [`FwdFault::NonRamGpa`], unchanged, and
+///   still the arm that makes "FAULT" literal for an address that resolved but is not RAM.
+///
+/// # Errors
+///
+/// Every bullet above, plus [`FwdFault::RetiredProc`].
 pub fn read_pushbuffer(
     spine: &Spine,
+    proc: &Proc,
+    cid: ChanId,
     vmm: &mut dyn Vmm,
-    ring: &[u8],
+    ranges: &[PushRange],
 ) -> Result<Vec<(u32, Vec<u32>)>, FwdFault> {
-    // Walk the GPFIFO entries (arch format), reading each range's method bytes. A
-    // hostile GPFIFO entry can name any length; cap the per-range read so a bogus
-    // length is a bounded read, never an arbitrary allocation (boundary-1 posture).
-    let ranges = spine.arch().pushbuffer().gpfifo_entries(ring);
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
+    let cgpu = chan.gpu;
+    // A channel with no declared VAS has no table to translate in. MISS = FAULT applies
+    // to the table's ABSENCE too — it is not an invitation to read the number raw.
+    let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
+    let table = &proc
+        .vases
+        .get(&(cgpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
+        .table;
+
     let mut methods = Vec::new();
     let mut total = 0usize;
     for r in ranges {
         if total >= MAX_PUSH_TOTAL_BYTES {
             break; // Total-work budget spent — a hostile many-range ring stops here.
         }
+        // A hostile GPFIFO entry can name any length; cap the per-range read so a bogus
+        // length is a bounded read, never an arbitrary allocation (boundary-1 posture).
         let len = (r.len as usize)
             .min(MAX_PUSH_RANGE_BYTES)
             .min(MAX_PUSH_TOTAL_BYTES - total);
         let mut buf = vec![0u8; len];
-        guest_read(vmm, r.gpa, &mut buf)?;
+        // TRANSLATE, then read. The clamped length is what gets translated, so the cap
+        // above is still the thing that bounds the work — a hostile length cannot make
+        // this walk the whole table.
+        for (gpa, at, take) in push_range_gpas(table, pdb, r, len)? {
+            guest_read(vmm, gpa, &mut buf[at..at + take])?;
+        }
         methods.extend(decode_methods(spine.arch(), &buf));
         total += len;
     }
     Ok(methods)
+}
+
+/// Translate one [`PushRange`]'s first `len` bytes into the guest-physical runs they
+/// occupy, through `table` — `(gpa, offset within the range, length)`, in ascending order
+/// and covering `[0, len)` exactly.
+///
+/// ★ A VA range is contiguous; the memory behind it need not be. So this partitions
+/// rather than resolving once: reading `len` bytes from the *first* binding's physical
+/// address would run off the end of that binding and into whatever guest page follows —
+/// which is the same "the read succeeded, the bytes are wrong" failure as the
+/// untranslated read, one level down.
+///
+/// ⊘ [`AddressTable::binding_at`] rather than [`AddressTable::resolve`], and the choice is
+/// forced rather than stylistic: `resolve` deliberately hides the binding's **extent**, and
+/// without the extent there is no way to know how many bytes may legally be read before
+/// the next lookup. The miss it would have raised is constructed here verbatim, so the
+/// vocabulary a caller sees is the address plane's own.
+fn push_range_gpas(
+    table: &AddressTable,
+    pdb: Pdb,
+    r: &PushRange,
+    len: usize,
+) -> Result<Vec<(u64, usize, usize)>, FwdFault> {
+    let mut out: Vec<(u64, usize, usize)> = Vec::new();
+    let mut at = 0usize;
+    while at < len {
+        // `r.va + at` cannot wrap into a *different* mapping silently: a wrap means the
+        // guest's range ran off the top of the address space, which resolves to nothing
+        // at the bottom because `bind` refuses a wrapping range in the first place.
+        let va = GpuVa(r.va.0.wrapping_add(at as u64));
+        if va.0 < r.va.0 {
+            return Err(FwdFault::Address(AddressFault::Malformed { pdb, va: r.va }));
+        }
+        let (start, b_len, b) = table
+            .binding_at(va)
+            .ok_or(FwdFault::Address(AddressFault::Miss { pdb, va }))?;
+        match b.aperture {
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {}
+            // Vidmem/Peer `phys` is NOT a guest-physical address. Refused by name rather
+            // than handed to `gpa_read`, which would read the guest RAM page that happens
+            // to share the number.
+            other => {
+                return Err(FwdFault::PushbufferAperture {
+                    va,
+                    aperture: other,
+                });
+            }
+        }
+        let off = va.0 - start;
+        let gpa = b
+            .phys
+            .checked_add(off)
+            .ok_or(FwdFault::Address(AddressFault::Malformed { pdb, va }))?;
+        // `binding_at` never returns a zero-length range (`bind` refuses one), so `take`
+        // is always ≥ 1 and this loop always advances.
+        let take = usize::try_from((b_len - off).min((len - at) as u64)).unwrap_or(len - at);
+        debug_assert!(take > 0, "a translation step must consume bytes");
+        if out.len() == MAX_PUSH_SPANS {
+            return Err(FwdFault::PushTooFragmented {
+                va: r.va,
+                len: r.len,
+            });
+        }
+        out.push((gpa, at, take));
+        at += take;
+    }
+    Ok(out)
 }
 
 /// ★★★ **The operand split**, for one decoded copy-engine command.
@@ -2925,7 +3127,9 @@ pub fn parse_pushbuffer(
     cid: ChanId,
     ring: &[u8],
 ) -> Result<PushbufferOutcome, FwdFault> {
-    let methods = read_pushbuffer(&gpu.spine, vmm, ring)?;
+    let ranges = pushbuffer_ranges(&gpu.spine, ring);
+    let proc = gpu.procs.get(&pid).ok_or(FwdFault::RetiredProc(pid))?;
+    let methods = read_pushbuffer(&gpu.spine, proc, cid, vmm, &ranges)?;
     let proc = gpu.procs.get_mut(&pid).ok_or(FwdFault::RetiredProc(pid))?;
     let out = apply_pushbuffer(&gpu.spine, proc, cid, methods)?;
     latch_pt_writes(gpu, &out.pt_writes);
