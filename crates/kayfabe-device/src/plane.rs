@@ -1877,16 +1877,21 @@ impl RegPlane {
         // page went read-native. `register_plane_read_native.md` §5 asks for this policy
         // to be **decided explicitly**, and refuse-by-name is the house form.
         //
-        // ★★★ It is also the one register where the refusal is **doubly** held. Under
-        // `#128` the guest's timer page is backed by a host page mapped `KVM_MEM_READONLY`,
-        // so a guest store cannot reach hardware even if this arm were deleted — and
-        // separately, RM hands an unprivileged mapper of that range `NV_PROTECT_READABLE`
-        // and nothing else
-        // (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2905-2917`;
-        // measured 2026-08-02 on a GA106 at revision 9087090,
-        // `docs/reference/bench_evidence/timer-mappability-9087090.out`). This arm
-        // exists so the *port* states the policy rather than inheriting it from two
-        // mechanisms that live somewhere else.
+        // ★★★ **AND IT IS NOT REDUNDANT TODAY** — an earlier draft of this comment said it
+        // was, and the claim was wrong in the flattering direction. Under `#128` the second
+        // holder is `KVM_MEM_READONLY` on the backing memslot, and **that is not built yet**
+        // (`read_native_timer_measured.md` §6). A third was claimed and does not exist at
+        // all: RM's `NV_PROTECT_READABLE` grant covers the PTIMER page, and §2 of that
+        // document is precisely that the PTIMER page CANNOT be the backing page — the page
+        // that can is the usermode window, which the same whitelist leaves READ-WRITE
+        // because a CUDA process has to ring its doorbell through it
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2903,
+        // :2919-2926`; measured 2026-08-02 on a GA106 at revision 9087090,
+        // `docs/reference/bench_evidence/timer-mappability-9087090.out`).
+        //
+        // ⇒ Right now this arm is the ONLY thing refusing the write. A comment that counts
+        // a mechanism guarding a different page is not conservative; it invites the next
+        // reader to delete the one that is load-bearing.
         //
         // ⊘ It refuses rather than emulating a settable clock. A guest that could move its
         // own counter would break the one property `#128` buys — that guest timestamps and

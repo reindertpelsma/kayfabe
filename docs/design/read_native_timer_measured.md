@@ -132,11 +132,27 @@ point: unclaimed means *"not modelled"*, this means *"modelled, and no"*.
 would destroy the one property §2 buys — that a guest timestamp and a host GPU timestamp are
 in one timebase.
 
-★ It is the one register whose refusal is **triply** held, and the redundancy is deliberate
-rather than sloppy: (a) the port refuses by name; (b) the host mapping is
-`NV_PROTECT_READABLE` for a non-admin, so the store has nowhere to land [§1]; (c) under §2
-the memslot is `KVM_MEM_READONLY`, so the store exits before it reaches anything. Each is
-owned by a different layer, and only (a) *states* the policy.
+★★★ **How many mechanisms actually hold it — corrected, because the comfortable answer was
+wrong.** The first draft of this section said "triply held", counting RM's
+`NV_PROTECT_READABLE` grant among them. That grant applies to the **PTIMER page** [§1] — and
+§2 is that the PTIMER page *cannot be the backing page*. The page that will back the guest
+is the usermode window, and `subdeviceCtrlCmdValidateMemMapRequest_IMPL` returns from that
+row with `protection` left at its default `NV_PROTECT_READ_WRITE` [src: `ogkm-580:
+src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2903, 2919-2926`] — it has
+to be writable, because it is the window an ordinary CUDA process rings its doorbell
+through.
+
+⇒ On the page that ships, the write is held **twice**, not three times:
+
+| # | mechanism | layer | holds on the shipping page? |
+|---|---|---|---|
+| a | `PTIMER_WRITE_REFUSED` | this port | **yes** — and it is the only one that *states* the policy |
+| b | RM's `NV_PROTECT_READABLE` grant | the host driver | ⊘ **no** — that is the PTIMER page, which §2 rules out |
+| c | `KVM_MEM_READONLY` on the memslot | the kernel | **yes** — this is what makes the write trap at all |
+
+⚠ A safety argument that counts a mechanism guarding a *different page* is not conservative,
+it is wrong, and it is the more dangerous direction: (b) reads as a backstop nobody has to
+maintain. There are two, they are (a) and (c), and (c) is not yet built.
 
 ## 5. Two instrument failures, recorded because they were nearly findings
 

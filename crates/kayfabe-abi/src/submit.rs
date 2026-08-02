@@ -1855,12 +1855,12 @@ mod tests {
         // doorbell's offset within the usermode window is NOT a timer register here.
         assert_eq!(PTIMER_BAR0_BASE % PAGE, 0);
         assert_eq!(PTIMER_PAGE_SIZE, PAGE);
-        assert!(PTIMER_PAGE_TIME_1 + 4 <= PTIMER_PAGE_SIZE);
+        const { assert!(PTIMER_PAGE_TIME_1 + 4 <= PTIMER_PAGE_SIZE) };
         assert_eq!(PTIMER_BAR0_BASE + PTIMER_PAGE_TIME_0, 0x9400);
         assert_eq!(PTIMER_BAR0_BASE + PTIMER_PAGE_TIME_1, 0x9410);
         // `Nv01TimerMap` stops well short of the page it lives in — the mapping RM sizes
         // for an `NV01_TIMER` object is NOT the whole range the mmap whitelist permits.
-        assert!(NV01_TIMER_MAP_SIZE < PTIMER_PAGE_SIZE);
+        const { assert!(NV01_TIMER_MAP_SIZE < PTIMER_PAGE_SIZE) };
         assert_eq!(NV01_TIMER_MAP_SIZE, PTIMER_PAGE_TIME_1 + 4);
     }
 
