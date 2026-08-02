@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 12u
+#define KAYFABE_SHIM_ABI 13u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -389,6 +389,8 @@ typedef struct KayfabeRegAudit {
     uint64_t writes;
     uint64_t boot_reg_reads;
     uint64_t ptimer_reads;
+    /* #128 — writes to the free-running counter, REFUSED BY NAME (not dropped). */
+    uint64_t ptimer_writes_refused;
     uint64_t rom_reads;
     uint64_t gsp_reads;
     uint64_t gsp_writes;

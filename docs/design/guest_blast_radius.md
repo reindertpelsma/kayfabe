@@ -743,6 +743,60 @@ What follows:
 
 ---
 
+## ★★★ 5.4 MEASURED 2026-08-02 — read-native timer passthrough leaks the HOST WALL CLOCK, not uptime
+
+Task `#128` makes the guest's free-running nanosecond counter a **read-only passthrough onto
+a host GPU register page** (`register_plane_read_native.md`, measurement in
+`read_native_timer_measured.md`). This section states the exposure that buys, before an audit
+discovers it.
+
+**The exposure is real but small, and it is two separate things:**
+
+- **A high-resolution timing side channel.** The guest gets a counter it can read with **no
+  vmexit**, at the hardware's own 32 ns granularity (`NV_PTIMER_TIME_0_NSEC` is bits 31:5).
+  Removing the trap removes the microseconds-of-jitter that was incidentally blunting every
+  timing attack the guest could mount — against its own workload, against co-tenant GPU
+  activity, and against the host CPU. ⊘ That blunting was never a control: it was a side
+  effect of a mechanism `#128` exists to delete *because* it destroys accuracy, and nothing
+  in this project ever claimed it as mitigation. Note also that a guest already has
+  `rdtsc`; what this adds is a second, independent, **GPU-side** clock, which is what makes
+  it useful for correlating against GPU events.
+
+- ★★★ **It leaks the host's WALL CLOCK, and the brief for `#128` assumed it leaked uptime.**
+  **[measured]** `docs/reference/bench_evidence/timer-mappability-3413544.out` at
+  `3413544`: the counter read `1 785 632 256 684 049 376` ns, which decodes as Unix time
+  **2026-08-02 00:57:36.684 UTC** — matching the run's own timestamp two seconds earlier,
+  while the host's uptime was 50 465 s (14 h). So on this board RM has set PTIMER to real
+  time (`tmrSetCurrentTime`), and a guest reading it learns the **host's wall clock to
+  nanosecond resolution**, not merely how long the GPU has been up.
+
+  ⇒ In a VM whose own clock is deliberately offset, skewed or coarsened, this is a **channel
+  around that**. It is also a *stable, host-wide* value, so two guests on one host can use it
+  as a shared reference — a covert channel needs no more than that. ⚠ Nothing here is
+  hypothetical or dependent on a driver bug; it is what the register contains.
+
+**What follows:**
+
+- **Single-tenant: accepted**, on the same footing as §5's wedge — the tenant learns its own
+  host's clock.
+- **Multi-tenant: state it in the tenancy contract.** ⊘ Do not attempt to "fix" it by going
+  back to a synthetic clock: that is the defect `#128` is closing (a CPU-side clock makes
+  `cudaEventElapsedTime` **wrong**, not slow), and it would trade a disclosed low-severity
+  leak for silent numerical nonsense. If a deployment genuinely cannot disclose the host
+  clock, the answer is one guest per physical GPU — the same lever §5 reaches for.
+- ⊘ **Do not describe this as a violation of P.** P is about what the guest can *do to the
+  host GPU*; this is disclosure, it is read-only, and the read-only-ness is held by RM's own
+  `NV_PROTECT_READABLE` grant and by `KVM_MEM_READONLY` independently
+  (`read_native_timer_measured.md` §1, §4).
+
+⚠ **One prerequisite is [unverified] and gates shipping the passthrough, not this section:**
+a memslot is page-granular, so the guest becomes able to read the **whole** host page — 64
+KiB of usermode window, of which the open tree documents three offsets. What the remaining
+bytes contain on a live GA106 is not measured. ⊘ Do not assume zero
+(`c_oracle_empty_rows_are_wrong`).
+
+---
+
 ## ★★★ 5.1 MEASURED 2026-08-01 — an infinite kernel does NOT deny service, and §5's first shape is REFUTED
 
 §5 above names two shapes: *"a non-terminating kernel **or** a malformed pushbuffer"*. **The
@@ -958,6 +1012,9 @@ Stated as gaps, not padded into guesses.
 ---
 
 ## 8. Where this is cross-referenced
+
+* `docs/design/register_plane_read_native.md` and `docs/design/read_native_timer_measured.md`
+  — task `#128`; §5.4 above is the exposure they defer to this document.
 
 - `core_security_threat_model.md` — the core's logical isolation invariants I1–I4. That document
   is scoped to the pure logic core and defers host-breakout surfaces; **P is the system-level

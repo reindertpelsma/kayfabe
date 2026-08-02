@@ -198,6 +198,38 @@ impl GuestRam for RefusingRam {
 ///   forever. This is the whole point of the type.
 /// - **Nanoseconds.** The driver's timeouts are in microseconds and it converts by
 ///   dividing, so the *unit* is part of the contract even though nothing can check it.
+///
+/// ---
+/// ⚠⚠⚠ **THIS PORT IS A BOOT-ONLY STOPGAP. It is not the finished design, and it must not
+/// be read as intent** (`#128`, `docs/design/register_plane_read_native.md` §4).
+///
+/// It was necessary and it is correct for what it fixed: RM's `gpuCheckTimeout` needs
+/// elapsed time to *exist*, and answering the counter with a defaulted zero produced an
+/// **unkillable silent D-state with no dmesg** on a stock 580.159.04 guest, cleared by
+/// `5b54494` in the same session. But a **synthetic CPU-side clock is the wrong answer for
+/// two independent reasons**:
+///
+/// 1. **Accuracy, not performance.** A vmexit costs microseconds with high variance, so a
+///    *nanosecond* counter read through a trap carries jitter three orders of magnitude
+///    larger than its own resolution. It stops being a nanosecond timer the instant it is
+///    trapped — however rarely it is read. ⊘ Trap volume is irrelevant to this.
+/// 2. **Timebase.** Compute is forwarded to a real host GPU, so every timestamp the GPU
+///    produces (event semaphores, `%globaltimer`) is in the **host GPU's** timebase. This
+///    clock is unrelated to it, so anything correlating the two —
+///    `cudaEventElapsedTime`, every profiler — gets a **wrong answer, not a slow one**.
+///
+/// The finished design is *read-native, write-trap*: the guest's timer page is backed by a
+/// host GPU register page under `KVM_MEM_READONLY`, so reads never exit and correlation is
+/// correct by construction. ★ **MEASURED 2026-08-02 on a real GA106 (RTX 3060,
+/// 580.159.04):** an unprivileged, capability-less process *can* map the host counter and
+/// read it live — `docs/reference/bench_evidence/timer-mappability-3413544.out`, decoded in
+/// `docs/design/read_native_timer_measured.md`. What is not built is the memslot caller.
+///
+/// ⊘ **The standing rule this port must keep whatever replaces it:** *never answer a
+/// free-running counter with a constant.* Zero is **plausible**, so the driver believes it
+/// and spins forever with no diagnostic; a refusal is not plausible and surfaces in one
+/// boot. That is why [`kayfabe_abi::submit::ptimer_sample`] refuses rather than guessing,
+/// and why there is no `Default` impl here.
 pub trait NanoClock: Send + Sync + core::fmt::Debug {
     /// Nanoseconds since an arbitrary, fixed origin.
     fn now_ns(&self) -> u64;
@@ -248,6 +280,13 @@ pub struct Counters {
     pub boot_reg_reads: u64,
     /// Reads answered from the free-running nanosecond counter.
     pub ptimer_reads: u64,
+    /// ★ Writes to the free-running nanosecond counter, **refused by name** (`#128`).
+    ///
+    /// Its own counter rather than a share of [`Self::unclaimed_writes`], because the two
+    /// mean opposite things: unclaimed is *"this port does not model that offset yet"*,
+    /// this is *"this port models it and says no"*. A guest RM issuing
+    /// `tmrSetCurrentTime` should show up here and nowhere else.
+    pub ptimer_writes_refused: u64,
     /// Reads answered from the ROM window.
     pub rom_reads: u64,
     /// Reads answered by the GSP register model.
@@ -685,6 +724,18 @@ impl WriteOutcome {
 pub const FB_WRITE_REFUSED: &str = "the framebuffer store would not take a write through the BAR0 moving window; the \
      bytes did NOT land, and the guest will not be told";
 
+/// The fault tag a write to the **free-running nanosecond counter** carries (`#128`).
+///
+/// ★★★ It is a REFUSAL, not a drop and not an emulated set. The guest's own RM issues
+/// this write — `tmrSetCurrentTime_GV100` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`) — so it will be seen,
+/// and it must be seen as a *decision*. Under `register_plane_read_native.md` the guest
+/// reads this counter natively off the host GPU, and a guest that could also *move* it
+/// would destroy the single property that buys: that a guest timestamp and a host GPU
+/// timestamp are in one timebase.
+pub const PTIMER_WRITE_REFUSED: &str = "a write to the free-running nanosecond counter was refused: the guest reads the \
+     HOST GPU's own counter and may not move it; the value did NOT change";
+
 /// The fault tag a refused **translated** write carries out to the shell.
 ///
 /// ★ Its own sentence, not [`FB_WRITE_REFUSED`] reused, because the two failures have
@@ -819,6 +870,7 @@ struct PlaneCounters {
     writes: AtomicU64,
     boot_reg_reads: AtomicU64,
     ptimer_reads: AtomicU64,
+    ptimer_writes_refused: AtomicU64,
     rom_reads: AtomicU64,
     gsp_reads: AtomicU64,
     gsp_writes: AtomicU64,
@@ -1131,6 +1183,7 @@ impl RegPlane {
             writes,
             boot_reg_reads,
             ptimer_reads,
+            ptimer_writes_refused,
             rom_reads,
             gsp_reads,
             gsp_writes,
@@ -1162,6 +1215,7 @@ impl RegPlane {
             writes: g(writes),
             boot_reg_reads: g(boot_reg_reads),
             ptimer_reads: g(ptimer_reads),
+            ptimer_writes_refused: g(ptimer_writes_refused),
             rom_reads: g(rom_reads),
             gsp_reads: g(gsp_reads),
             gsp_writes: g(gsp_writes),
@@ -1807,6 +1861,43 @@ impl RegPlane {
             return WriteOutcome {
                 claimed: true,
                 raise_cpu_intr: raise,
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★ **A WRITE TO THE FREE-RUNNING COUNTER IS REFUSED BY NAME** (`#128`).
+        //
+        // `tmrSetCurrentTime_GV100` writes `NV_PTIMER_TIME_0/_1`
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`), so
+        // this is a write the guest's own RM really issues, not a hypothetical.
+        //
+        // ⚠ Before this arm the write fell through to `unclaimed_writes` and was dropped.
+        // The *effect* was already right — nothing reached any counter — but the DECISION
+        // was never made: it was indistinguishable from the hundreds of offsets this port
+        // simply does not model yet, and it would have stayed indistinguishable when the
+        // page went read-native. `register_plane_read_native.md` §5 asks for this policy
+        // to be **decided explicitly**, and refuse-by-name is the house form.
+        //
+        // ★★★ It is also the one register where the refusal is **doubly** held. Under
+        // `#128` the guest's timer page is backed by a host page mapped `KVM_MEM_READONLY`,
+        // so a guest store cannot reach hardware even if this arm were deleted — and
+        // separately, RM hands an unprivileged mapper of that range `NV_PROTECT_READABLE`
+        // and nothing else
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2905-2917`;
+        // measured 2026-08-02 on a GA106 at revision 3413544,
+        // `docs/reference/bench_evidence/timer-mappability-3413544.out`). This arm
+        // exists so the *port* states the policy rather than inheriting it from two
+        // mechanisms that live somewhere else.
+        //
+        // ⊘ It refuses rather than emulating a settable clock. A guest that could move its
+        // own counter would break the one property `#128` buys — that guest timestamps and
+        // host GPU timestamps are in the same timebase.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && (off == self.chip.ptimer.lo_off || off == self.chip.ptimer.hi_off)
+        {
+            self.c.ptimer_writes_refused.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome {
+                claimed: true,
+                fault: Some(PTIMER_WRITE_REFUSED),
                 ..WriteOutcome::nothing()
             };
         }

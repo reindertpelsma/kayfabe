@@ -1293,3 +1293,75 @@ fn the_guest_timer_offset_can_only_be_backed_by_the_host_usermode_page() {
         "the usable host page carries the doorbell — that is the whole write-trap argument"
     );
 }
+
+/// ★★★ `#128` — **a write to the free-running counter is REFUSED BY NAME, not dropped.**
+///
+/// `tmrSetCurrentTime_GV100` writes `NV_PTIMER_TIME_0/_1` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/timer/arch/volta/timer_gv100.c:56-82`), so this is a write the
+/// guest's own RM issues. Before `#128` it fell through to `unclaimed_writes` — the same
+/// bucket as every offset this port has simply never modelled — and the *effect* was
+/// already right while the *decision* had never been made.
+///
+/// `register_plane_read_native.md` §5 asks for the policy to be decided explicitly. This is
+/// the check that it was: the write is `claimed`, carries
+/// [`kayfabe_device::plane::PTIMER_WRITE_REFUSED`], and increments its own counter rather
+/// than the unclaimed one.
+#[test]
+fn a_write_to_the_free_running_counter_is_refused_by_name_and_not_merely_dropped() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+    let before = plane.counters();
+
+    for off in [chip.ptimer.lo_off, chip.ptimer.hi_off] {
+        let out = plane.write(0, off, 4, 0xDEAD_BEEF);
+        assert!(
+            out.claimed,
+            "{off:#x}: a refusal is a CLAIM, not a fall-through"
+        );
+        assert_eq!(
+            out.fault,
+            Some(kayfabe_device::plane::PTIMER_WRITE_REFUSED),
+            "{off:#x}: the refusal must name itself"
+        );
+    }
+
+    let after = plane.counters();
+    assert_eq!(
+        after.ptimer_writes_refused - before.ptimer_writes_refused,
+        2,
+        "both halves must land in the counter that means 'modelled and refused'"
+    );
+    // ⊘ The whole point of a separate counter: these must NOT read as unmodelled offsets.
+    assert_eq!(
+        after.unclaimed_writes, before.unclaimed_writes,
+        "a refused counter write is not an unclaimed one — the two mean opposite things"
+    );
+}
+
+/// ★ And the counter still READS after a refused write — i.e. the refusal did not disturb
+/// the source. A policy that silently broke the read path would pass the test above.
+///
+/// ⚠ **The step is 32 ns, and the first draft of this test was wrong because it was 1.**
+/// The low half's `NSEC` field is bits **31:5**, so the bottom five bits of a real register
+/// read zero and a one-nanosecond step is invisible in it — the test failed asserting `0 !=
+/// 0` and the *test* was the defect, not the plane. 32 is the smallest step this register
+/// can express.
+#[test]
+fn a_refused_counter_write_leaves_the_counter_readable_and_advancing() {
+    let chip = kayfabe_device::default_chip();
+    let clock: Box<dyn NanoClock> = Box::new(SteppingClock::new(32));
+    let plane = RegPlane::new(chip, abi(), clock).expect("servable");
+    let first = plane.read(0, chip.ptimer.lo_off, 4);
+    let _ = plane.write(0, chip.ptimer.lo_off, 4, 0);
+    let second = plane.read(0, chip.ptimer.lo_off, 4);
+    assert!(matches!(first, ReadOutcome::Ptimer(_)));
+    assert!(
+        matches!(second, ReadOutcome::Ptimer(_)),
+        "the refusal must not have unhooked the read source"
+    );
+    assert_ne!(
+        first.value(),
+        second.value(),
+        "the clock must still be advancing across a refused write"
+    );
+}

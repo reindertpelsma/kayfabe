@@ -2,8 +2,18 @@
 
 > **Owner directive, 2026-07-31:** *"only write should be trapped to translate doorbell tokens."*
 >
-> Status: **ruled, not yet built.** Task `#128`. What ships today (`5b54494`) is a stopgap and §4
-> says so.
+> Status: **ruled; the blocking question is MEASURED and settled; the memslot caller is not
+> built and needs an owner decision.** Task `#128`. What ships today (`5b54494`) is a stopgap
+> and §4 says so.
+>
+> ★★★ **Read `read_native_timer_measured.md` next.** It carries the 2026-08-02 GA106 run that
+> settled *"can a capability-less process map the host counter at all?"* (**yes**, two routes,
+> live and advancing), and the geography finding that **reshaped §5 of this document**: the
+> guest reads its counter at page offset `0x080`, the host's doorbell-free PTIMER page carries
+> it at `0x400`, and a memslot cannot re-base within a page — so the only host page that can
+> back the guest's timer page is **the one with the doorbell in it**. §1 is therefore one
+> policy over one shared page, not two policies over two pages, and `KVM_MEM_READONLY` is
+> exactly that policy.
 
 ## 1. The rule
 
@@ -75,6 +85,19 @@ reach the host GPU — it would perturb the host. Writes are trapped under §1 a
 must be **decided explicitly** (refuse-by-name is this project's house style) rather than falling
 through.
 
+★ **DECIDED, 2026-08-02:** `kayfabe_device::plane::PTIMER_WRITE_REFUSED`, counted in
+`Counters::ptimer_writes_refused` — its own counter, because `unclaimed_writes` means *"this
+port does not model that offset"* and this means *"it models it and says no"*. Rationale and
+the two independent mechanisms that also hold it: `read_native_timer_measured.md` §4.
+
+★★ **And a correction to the table above.** Both rows are real registers, but the guest
+driver reads only the **second**: `tmrReadTimeLoReg_TU102` goes through the virtual-function
+aperture unconditionally, on a virtual function *and* on the physical one (`ogkm-580:
+src/nvidia/src/kernel/gpu/timer/arch/turing/timer_tu102.c:130-155`). The `0x9400` pair is what
+`NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` hands a *client* — measured `NV_OK, 0x9000` on a
+GA106, and its page is mappable — but it is **not** the pair a bare-metal driver polls, and
+its page offset rules it out as the backing page anyway.
+
 ## 6. What the trace can and cannot settle
 
 ★ **Settled** by the `cap3` decode named in §2: the timer is read during real compute, and those
@@ -88,3 +111,12 @@ traps identically — the trace cannot separate them. §2 holds either way.
 
 A read-only free-running host counter is a **low-risk exposure** but is a **high-resolution timing
 side channel**, and it leaks host GPU uptime. Say so in the security model when this lands.
+
+★ **DONE, and the guess about *what* it leaks was wrong.** `guest_blast_radius.md` §5.4.
+**[measured]** on a GA106 the counter reads Unix wall-clock nanoseconds — `2026-08-02
+00:57:36.684 UTC`, against a host uptime of 14 h — because RM sets it with
+`tmrSetCurrentTime`. So the disclosure is the **host's wall clock at ~32 ns resolution**, not
+uptime: a channel around a deliberately offset guest clock, and a host-wide shared reference
+two co-tenants could use. ⚠ One prerequisite remains `[unverified]` and gates shipping: a
+memslot is page-granular, so the guest reads the *whole* 64 KiB usermode window, and what is
+in the undocumented remainder has not been measured.

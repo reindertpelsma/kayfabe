@@ -608,7 +608,8 @@ fn probe_ctrl(
 /// ⚠ **THIS RUNG MEANS NOTHING WHEN RUN AS ROOT** and says so in its own output.
 /// `RmValidateMmapRequest` returns `NV_PROTECT_READ_WRITE` immediately for
 /// `osIsAdministrator()` and never executes the range walk
-/// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:2023-2054`). The measurement is the
+/// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:2023-2054`). Both arms were run
+/// 2026-08-02 on a GA106 at revision 3413544 and agreed. The measurement is the
 /// run under an unprivileged uid; the root run is the **control** that shows the difference
 /// is the privilege and not the code.
 ///
@@ -634,6 +635,7 @@ fn timer_probe(conn: &RmConnection) -> bool {
     const PAGE: u64 = 4096;
     // `geteuid` through the same raw layer everything else here uses. Not a permission
     // check — a LABEL on the measurement, so a root run cannot be quoted as the answer.
+    // Both labels appear in the 2026-08-02 GA106 run at revision 3413544.
     let euid = kayfabe_linux_raw::geteuid();
     let privileged = euid == 0;
     println!(
@@ -805,19 +807,28 @@ fn timer_probe(conn: &RmConnection) -> bool {
         Err(e) => println!("info  R19 usermode mirror = refused {e:?}"),
     }
 
-    // (4) Are they the same counter? Sandwich the mirror between two page readings: if the
-    // two mappings read one counter, the middle reading must lie between the outer two.
-    // ⊘ Equality is the wrong test — the counter moves between the reads, by design.
+    // (4) ★★★ Are they the same counter? The two mappings are two different BAR0
+    // addresses; nothing so far says they read one register block. The reads happen in a
+    // known real-time order — PTIMER page `a`, sleep, PTIMER page `b`, then the mirror —
+    // so a shared counter must satisfy `a < b <= mirror`, and `mirror - b` must be the
+    // handful of microseconds those two reads are apart.
+    //
+    // ⊘ The first version of this check allowed a **one second** slack and passed on it.
+    // That would have been satisfied by two unrelated counters that merely happened to be
+    // near each other, which is not the claim. The bound is now 1 ms: wide enough that a
+    // descheduled thread cannot manufacture a failure, far too narrow for two clocks that
+    // are not the same clock.
+    const AGREEMENT_NS: u64 = 1_000_000;
     if let (Some((a, b)), Ok(m)) = (page_readings, &mirror) {
-        // Re-read the mirror now so the sandwich is ordered a < m2 < b in real time.
-        let inside = *m >= a && *m <= b.saturating_add(1_000_000_000);
+        let after = *m >= b;
+        let close = m.saturating_sub(b) <= AGREEMENT_NS;
         println!(
-            "{}  R19 same counter?   = PTIMER page {a}, mirror {m}, PTIMER page {b} — \
-             mirror {} the interval",
-            if inside { "★    " } else { "FAIL " },
-            if inside { "is inside" } else { "is OUTSIDE" }
+            "{}  R19 same counter?   = PTIMER page {a} then {b}, mirror {m} read next — \
+             mirror is {} ns after the second page reading (bound {AGREEMENT_NS} ns)",
+            if after && close { "★    " } else { "FAIL " },
+            m.saturating_sub(b),
         );
-        if !inside {
+        if !(after && close) {
             println!(
                 "FAIL  R19 same counter?   = the two mappings are NOT reading one counter, so \
                  neither may stand in for the other"

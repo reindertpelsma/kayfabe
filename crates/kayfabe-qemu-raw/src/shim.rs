@@ -128,6 +128,11 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// `doorbell_token` and the `doorbell_kind` pair. An ABI-11 shim would allocate both old
 /// layouts and this archive would write past the end of each.
 ///
+/// ★ Bumped to **13** at `#128`, the ABI-3 reason a ninth time: [`KayfabeRegAudit`] gained
+/// `ptimer_writes_refused`, so an ABI-12 shim would allocate the old layout and this
+/// archive would write eight bytes past the end of it. The version is the only thing
+/// standing between those two.
+///
 /// ★★ **`KayfabeRegWrite` DID grow this time, unlike at E1, and the difference is the
 /// point.** An isolate refusal is a property of a whole boot; a doorbell is a property of
 /// **one write** — and E2's acceptance is that *this* guest store, at *this* instant,
@@ -136,7 +141,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// (`a_boolean_witness_cannot_attribute`).
 ///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 12;
+pub const ABI_VERSION: u32 = 13;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -935,6 +940,8 @@ pub struct KayfabeRegAudit {
     pub boot_reg_reads: u64,
     /// Reads answered from the free-running nanosecond counter.
     pub ptimer_reads: u64,
+    /// ★ Writes to the free-running nanosecond counter, refused by name (`#128`).
+    pub ptimer_writes_refused: u64,
     /// Reads answered from the ROM window.
     pub rom_reads: u64,
     /// Reads answered by the GSP register model.
@@ -1204,6 +1211,20 @@ pub fn chip_identity(device_id: u16) -> Result<KayfabeChipIdentity, (Status, &'s
 /// guest observes then is a counter that jumped forward, which is a thing real silicon does
 /// to a driver whose vCPU was descheduled. Worth revisiting if a stopped machine ever needs
 /// to look stopped to the guest; not worth a table entry now.
+///
+/// ---
+/// ⚠⚠⚠ **BOOT-ONLY STOPGAP — not the finished design** (`#128`,
+/// `docs/design/register_plane_read_native.md` §4). The whole `HostMonotonicClock` /
+/// `QEMU_CLOCK_VIRTUAL` question above is a debate between two **wrong** answers: both are
+/// CPU-side clocks, and the guest's timestamps have to be in the **host GPU's** timebase
+/// because that is where its compute actually runs. Which CPU clock we pick changes how
+/// wrong `cudaEventElapsedTime` is, not whether it is wrong.
+///
+/// The finished design replaces this port entirely with a read-only memslot over the host
+/// GPU's own register page. ★ **MEASURED 2026-08-02** that the mapping this needs is
+/// obtainable by a capability-less process on a real GA106 —
+/// `docs/design/read_native_timer_measured.md`. See [`kayfabe_device::NanoClock`] for the
+/// full argument and the standing rule that outlives this type.
 #[derive(Debug)]
 struct HostMonotonicClock {
     origin: Instant,
@@ -1542,6 +1563,7 @@ impl Regs {
             writes,
             boot_reg_reads,
             ptimer_reads,
+            ptimer_writes_refused,
             rom_reads,
             gsp_reads,
             gsp_writes,
@@ -1651,6 +1673,7 @@ impl Regs {
             writes,
             boot_reg_reads,
             ptimer_reads,
+            ptimer_writes_refused,
             rom_reads,
             gsp_reads,
             gsp_writes,

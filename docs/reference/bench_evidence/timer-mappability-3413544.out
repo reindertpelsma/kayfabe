@@ -1,0 +1,39 @@
+# task #128 R19 — can an UNPRIVILEGED process read the host GPU's nanosecond counter?
+# revision : 341354489fb3f348450408d75c32705ab3a548fe
+# binary   : sha1 5bc1372093d168e7586342649904063c623cde59
+# host     : NVIDIA GeForce RTX 3060, 580.159.04, kernel 6.8.0-59-generic
+# when     : 2026-08-02T00:57:34Z
+
+===== A. THE MEASUREMENT — unprivileged uid 65534, no capabilities, no_new_privs =====
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d015fb
+ok    R6 hSubdevice      = 0xcafe0002
+info  R19 euid            = 65534  ← unprivileged: the mmap validation walk runs, which is the question
+★     R19 TIMER_GET_REGISTER_OFFSET = NV_OK, tmr_offset = 0x9000 (DRF_BASE(NV_PTIMER) is 0x9000)
+★     R19 NV01_TIMER alloc = hObject 0xcafe0004
+info  R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x414 refused Other(19271)  (the object's own size for both)  ⚠ OUR OWN NOT_IN_THIS_OBJECT — the request never reached RM; that mmap length is not page-aligned
+info  R19 NV01_TIMER map  = ioctl 0x1000 / mmap 0x1000 refused Other(46)  (a whole page for both)  ← NV_ERR_INVALID_LIMIT: the driver says the length is past the resource's own size — a BOUND, not a privilege
+★     R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x1000 ACCEPTED  (the object's size to RM, the rounded size to mmap)
+★     R19 PTIMER page     = 1785632256684049376 ns then 1785632256704167968 ns (+20118592 ns over a 20 ms sleep)
+★     R19 usermode mirror = 1785632256704179936 ns then 1785632256724404416 ns (+20224480 ns over a 20 ms sleep) — read through the SAME window the doorbell is rung through, so it costs no new mapping
+★      R19 same counter?   = PTIMER page 1785632256684049376, mirror 1785632256704179936, PTIMER page 1785632256704167968 — mirror is inside the interval
+★     R19 host geography  = the PTIMER page carries the counter at page + 0x400; the usermode window carries it at page + 0x080, with the doorbell 0x10 bytes further on at page + 0x090
+done — timer probe only
+rc=0
+
+===== B. THE CONTROL — root, which SKIPS RmValidateMmapRequest range walk =====
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d01605
+ok    R6 hSubdevice      = 0xcafe0002
+info  R19 euid            = 0  ⚠ ROOT — RmValidateMmapRequest takes the osIsAdministrator() fast path and the range walk NEVER RUNS. This run is the CONTROL, not the measurement.
+★     R19 TIMER_GET_REGISTER_OFFSET = NV_OK, tmr_offset = 0x9000 (DRF_BASE(NV_PTIMER) is 0x9000)
+★     R19 NV01_TIMER alloc = hObject 0xcafe0004
+info  R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x414 refused Other(19271)  (the object's own size for both)  ⚠ OUR OWN NOT_IN_THIS_OBJECT — the request never reached RM; that mmap length is not page-aligned
+info  R19 NV01_TIMER map  = ioctl 0x1000 / mmap 0x1000 refused Other(46)  (a whole page for both)  ← NV_ERR_INVALID_LIMIT: the driver says the length is past the resource's own size — a BOUND, not a privilege
+★     R19 NV01_TIMER map  = ioctl 0x414 / mmap 0x1000 ACCEPTED  (the object's size to RM, the rounded size to mmap)
+★     R19 PTIMER page     = 1785632258751335296 ns then 1785632258771509888 ns (+20174592 ns over a 20 ms sleep)
+★     R19 usermode mirror = 1785632258771538656 ns then 1785632258791715840 ns (+20177184 ns over a 20 ms sleep) — read through the SAME window the doorbell is rung through, so it costs no new mapping
+★      R19 same counter?   = PTIMER page 1785632258751335296, mirror 1785632258771538656, PTIMER page 1785632258771509888 — mirror is inside the interval
+★     R19 host geography  = the PTIMER page carries the counter at page + 0x400; the usermode window carries it at page + 0x080, with the doorbell 0x10 bytes further on at page + 0x090
+done — timer probe only
+rc=0
