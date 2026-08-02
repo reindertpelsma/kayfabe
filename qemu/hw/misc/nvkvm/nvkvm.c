@@ -1334,6 +1334,17 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.gsp_writes, a.unclaimed_reads, a.unclaimed_writes,
                 a.faults, a.ram_refusals, s->irq_requests_dropped);
 
+    /* ★★★ #128 — THE COUNTER, printed unconditionally for the reason the interrupt line
+     * below is.  `ptimer_reads` at zero is a diagnosis all by itself: a guest that never
+     * read the free-running counter never reached a driver timeout loop, which is a much
+     * earlier failure than whatever else the log is showing.  And `refused-writes` counts
+     * the guest's own `tmrSetCurrentTime` being told no — a DECISION this device makes
+     * (`kayfabe_device::plane::PTIMER_WRITE_REFUSED`), not a drop, so it must be visible
+     * rather than inferable from a gap in the unclaimed count. */
+    info_report("nvkvm: timer: %" PRIu64 " counter reads, %" PRIu64 " writes REFUSED "
+                "(the guest reads the host GPU's counter and may not move it)",
+                a.ptimer_reads, a.ptimer_writes_refused);
+
     /* ★★★ #151 — THE INTERRUPT LINE, printed unconditionally including when every number is
      * zero, for the reason the framebuffer line below is: a boot that stops at
      * NV_ERR_IRQ_NOT_FIRING and a boot that never reached the self-test are the same silence
