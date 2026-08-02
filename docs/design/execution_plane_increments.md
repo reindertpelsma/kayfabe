@@ -1391,11 +1391,61 @@ into the spine (rank 0) from there inverts the lock order. That is a phase-shape
 its own — an increment, not an edit — and inventing one inside E5 is the shape this document
 exists to refuse.
 
-### 9.3 ⊘ What §9 does NOT establish
+### 9.3 Evidence — the boot, and ★ the wall is UNCHANGED
 
-1. **No boot proves any of it.** `only_live_boots_are_proof`. The guest still never submits
-   (`doorbells: 0 arrived` at this wall), so `read_pushbuffer` remains **latent** on the
-   product path — what changed is that it is now *correct* when it becomes live.
+`[measured]` 2026-08-02, rev **`ee3a8c3`**, vast `46529600` (RTX 3060 / GA106, host driver
+580.159.04 open, guest **stock** 580.159.04, `/dev/kvm`). Boot `e5va1`, captured by
+`scripts/bench/boot_capture.sh`; on disk at
+`docs/reference/bench_evidence/ee3a8c3_run_e5va1_{dmesg,probe,qemu}.log`. The QEMU binary
+was verified stamped `kayfabe-rev:ee3a8c3f5015f4b2adcbe9829a0cd7b59b14087d` before the run,
+and the harness's own content check passed (26 dmesg lines, 22 `NVRM`, 3 `RmInitAdapter`).
+
+**The wall is where it was**, and the chain is the one `c93930d`'s boot printed:
+
+```
+NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+NVRM: … memmgrMemUtilsChannelSchedulingSetup … @ mem_utils_gm107.c:1027
+NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ ce_utils.c:304
+NVRM: … objCreate(&pScrubber->pCeUtils, …) @ mem_scrub.c:181
+NVRM: … scrubberConstruct(pGpu, pHeap) @ mem_mgr_scrub_gp100.c:63
+NVRM: RmInitNvDevice: *** Cannot load state into the device
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+```
+
+★ **The `dmesg` is byte-identical to boot `e5ring1` at `c93930d` modulo kernel
+timestamps** — `diff` over both files with the `[    n.nnnnnn]` prefix stripped is **empty**,
+26 lines each. **No new wall, and no regression.** That is the expected outcome and it is
+worth saying plainly rather than implying: `read_pushbuffer` is still **latent** on the
+product path (nothing in `kayfabe-qemu-raw`/`kayfabe-shell` calls `parse_pushbuffer`, and
+the guest still never submits — the channel `SCHEDULE` fails `0x56` before
+`kfifoUpdateUsermodeDoorbell` is reached), so a boot **cannot** have moved. What this run
+buys is the other half of `suspect_the_instrument_first`: the change did not break the boot
+either, and the claim that it is latent is now a measurement rather than a reading.
+
+#### Suite, gates, ledger
+
+- **Suite**, `[measured]` at `ee3a8c3` on the 4-core dev box, `KAYFABE_NO_KVM` unset:
+  `cargo test --workspace --no-fail-fast` → **1960 passed, 0 failed, 1 ignored**;
+  `KVM-GATE: RAN` **56**.
+- **Baseline** for comparison, `[measured]` at `c582da3` on the same box, same command:
+  **1954 passed, 0 failed, 1 ignored**, `KVM-GATE: RAN` **56**. ⇒ **+6**, and all six are
+  `e5_address_table_join.rs`. Every other file in the change was *rewired*, not extended:
+  the corpora moved with the translation rather than growing beside it.
+- **Gates**, `[measured]` at `ee3a8c3`: `./scripts/ci_gates.sh --all` →
+  `ALL GATES CLEAN (22 steps, floor 22 for --all mode)`. No gated oracle family was added,
+  so `GATE_STEPS_ALL_MIN` and `ci.yml`'s floor are both untouched.
+- **Claim ledger**: 382 unattributed / 66 conflated / 17 bare-hardware — the ceiling and
+  both bars, unmoved. The three sites §9 first added were fixed by **attributing** them
+  (a test name, a revision and a date; and by splitting an `ogkm` citation out of the
+  sentence that carried the word *measurement*), never by raising a bar.
+
+### 9.4 ⊘ What §9 does NOT establish
+
+1. **The boot proves the wall did not move, and nothing more.** `only_live_boots_are_proof`
+   cuts both ways: an unchanged `dmesg` says the port still reaches exactly as far as it
+   did, not that any of §9.1's translation ran. The guest never submits at this wall, so
+   `read_pushbuffer` remains **latent** on the product path — what changed is that it is
+   now *correct* when it becomes live.
 2. **Nothing about the aperture refusal on real traffic.** `FwdFault::PushbufferAperture` is
    reachable and tested, but no measurement says whether a real GA106 guest ever puts its
    pushbuffer in vidmem. `ogkm-580: mem_utils_gm107.c:812-820` has RM refusing *"USERD in
