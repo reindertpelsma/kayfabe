@@ -53,7 +53,17 @@ fifth limit in `c_rust_trace_differential.md`, one plane over.
 
 ## ★★★ FINDING A — a real GPFIFO entry names a GPU **VA**; the core reads it as a GPA
 
-**This is the one that is currently load-bearing on the shipped path.**
+> ★★★ **CLOSED 2026-08-02, `execution_plane_increments.md` §9.1.** `PushRange::gpa: u64`
+> is `PushRange::va: GpuVa`, `kayfabe_fwd::read_pushbuffer` resolves it through the
+> issuing channel's address table before a guest byte is fetched (MISS = FAULT), and the
+> read moved from `route_act`'s route phase into its act phase — no new lock, the same
+> ranks, the change stated rather than slipped in. **`MockPushbuffer`'s entry names a VA
+> too now**, and every mock-driven fixture binds its ring at a VA deliberately biased away
+> from the GPA (`kayfabe_tests::PB_VA_BIAS`), so an identity fixture can no longer pass.
+> The "Deferred" row below is likewise closed. The finding is kept in full because the
+> *reason it survived* is the reusable part.
+
+**This was the one that was load-bearing on the shipped path.**
 
 - `kayfabe_fwd::read_pushbuffer` passes `PushRange::gpa` straight to `Vmm::gpa_read`, with
   no walk, under the device read lock.
@@ -289,7 +299,7 @@ catch, and because a clean row is the useful half of an inventory.
 
 | # | what | why it is not an edit |
 |---|---|---|
-| A | GPFIFO `PushRange::gpa` is a GPU VA on GA10x | needs the channel's `Vas` inside a phase locked as "touches no proc" |
+| ~~A~~ | ~~GPFIFO `PushRange::gpa` is a GPU VA on GA10x~~ | ★ **CLOSED 2026-08-02** — the phase moved into `route_act`'s act phase, which holds the proc and takes no new lock (`execution_plane_increments.md` §9.1) |
 | D | `vchid_from_userd_flags` real decode | wants RM's writer compiled as a fifth oracle + a CI reached-count floor |
 | E | mock guest's `BadLength` position and gating | needs consume-and-continue; lands with #85's version-split bound |
 | C′ | `MockVmm::map_guest` unbacked-GPA and overlap refusals | needs the double to carry windows |
