@@ -1888,6 +1888,35 @@ impl HostRmBackend {
         self
     }
 
+    /// ★★★ **E6 instrument** — allocate a **CPU-mappable** device-local buffer, the class
+    /// [`HostRmBackend::prove_ce_copy`] already builds its two buffers from.
+    ///
+    /// # ⊘ Why a diagnostic needs its own allocator at all — this is a MEASURED fact
+    ///
+    /// `[measured]` 2026-08-03 on the RTX 3060 bench: [`RmBackend::alloc_sysmem`] — the
+    /// verb every *published guest backing* is minted by — passes
+    /// [`NVOS02_FLAGS_MAPPING_NO_MAP`], and `NV_ESC_RM_MAP_MEMORY` on the result is refused
+    /// `NV_ERR_INVALID_ARGUMENT` (`0x1F`). That flag is **deliberate and documented**:
+    /// *"right for a data buffer the GPU alone touches"*, and it stops the frontend
+    /// building an `mmap` context around the descriptor at all
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:342-345`).
+    ///
+    /// ⇒ **A published backing is opaque to the CPU in both directions, by design.** So the
+    /// R17 evidence shape — write a sentinel, copy, read back through an independent
+    /// mapping — is *structurally unavailable* on one, and relaxing `NO_MAP` to make a
+    /// diagnostic work would be changing the product to fit its instrument.
+    ///
+    /// ⊘ **This is not a second data path.** Nothing in the forwarding plane calls it; it
+    /// exists so a hardware diagnostic can build an operand it can *see*, exactly as
+    /// `prove_ce_copy` does one method over.
+    ///
+    /// # Errors
+    /// Whatever RM refuses the allocation with.
+    pub fn alloc_probe_local(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        let raw = self.conn.alloc_device_local(len)?;
+        Ok(self.stamp(raw))
+    }
+
     /// ★★ **E6 instrument** — fill `memory` with `len` bytes of the ramp
     /// `first, first+step, first+2*step, …`, one word at a time, through a CPU mapping
     /// this call opens and drops.

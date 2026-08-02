@@ -56,7 +56,8 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::{ChanId, ProcId};
 use kayfabe_isolate::{
-    CancelHandle, CeExecutor, Isolate, IsolateFactory, IsolateId, IsolateRefusal, Worker, WorkerId,
+    CancelHandle, CeExecutor, Isolate, IsolateFactory, IsolateId, IsolateRefusal, RmBackend,
+    Worker, WorkerId,
 };
 use kayfabe_isolate_host::rm::{CeEvidence, CeWitness, HostRmBackend, RmConnection};
 use kayfabe_linux_raw::DevDir;
@@ -72,6 +73,10 @@ const PDB: Pdb = Pdb(0x4E60_0000);
 /// reason a pushbuffer carrying guest VAs can be executed at all.
 const SRC_VA: GpuVa = GpuVa(0x0000_0002_0000_0000);
 const DST_VA: GpuVa = GpuVa(0x0000_0002_0010_0000);
+/// Arm 2's operands. Their own addresses, so arm 1's published ranges keep theirs — two
+/// mappings at one VA in one address space is the `ALREADY-MAPPED` collision, not a test.
+const PROBE_SRC_VA: GpuVa = GpuVa(0x0000_0002_0100_0000);
+const PROBE_DST_VA: GpuVa = GpuVa(0x0000_0002_0110_0000);
 const COPY_LEN: u64 = 4096;
 const WORDS: u64 = COPY_LEN / 4;
 
@@ -274,12 +279,46 @@ fn declare_process(gpu: &mut Gpu) -> (ProcId, ChanId) {
 // ★★★ THE ACCEPTANCE
 // =====================================================================================
 
-/// ★★★ **`CeEvidence::copied()` — driven by a guest's ring, through the core, onto a real
-/// copy engine.**
+/// ★★★ **THE E6 ACCEPTANCE, in two arms — and the second arm exists because the first
+/// arm's destination is UNREADABLE BY DESIGN.**
 ///
-/// ★ Every failure below prints the whole [`CeEvidence`], because *which* conjunct failed
-/// is the diagnosis: bytes that did not change at all is a different fault from bytes that
-/// changed with no semaphore, which is a different fault from a truncated copy.
+/// # Arm 1 — the PRODUCT path: published guest ranges, `HostBacked`, executed
+///
+/// Two ranges published through `SharedDevice::publish_backing` at the **guest's own**
+/// addresses (`#102` identity), a guest ring naming them, and the join. The operands
+/// partition to `Representability::HostBacked`, the plan chooses a real engine, and the
+/// engine's **own release semaphore** — the fourth conjunct of [`CeEvidence::copied()`],
+/// and the one no CPU read can produce — is observed through the join's [`CeWitness`].
+///
+/// ⊘ **What arm 1 cannot show is the bytes.** `[measured]` here, 2026-08-03: a published
+/// backing is minted by `RmBackend::alloc_sysmem`, which passes
+/// `NVOS02_FLAGS_MAPPING_NO_MAP`, and `NV_ESC_RM_MAP_MEMORY` on it is refused
+/// `NV_ERR_INVALID_ARGUMENT` (`0x1F`). That flag is a **documented product decision**
+/// (*"right for a data buffer the GPU alone touches"*), so the object is opaque to the CPU
+/// in both directions — the sentinel cannot be written and the answer cannot be read.
+/// Relaxing it to make this test work would be changing the product to fit its instrument.
+///
+/// # Arm 2 — the BYTES: the same join over operands a CPU can see
+///
+/// Two **device-local** buffers ([`HostRmBackend::alloc_probe_local`], the class R17 itself
+/// uses), mapped by hand into the **same host VAS the channel's `Vas` already holds**, at
+/// their own guest addresses. The same `submit_ring` call, the same decode, the same plan,
+/// the same `Worker::execute`. Then the destination is read back through a freshly opened,
+/// independent mapping and [`CeEvidence::copied()`] is evaluated **in full**.
+///
+/// ⊘ Its operands are `Representability::Untracked` rather than `HostBacked`, because
+/// nothing published them into the core's table — and `Untracked` forwards, by design
+/// (*"MISS = FAULT is about resolving, and we are not resolving it"*). So arm 2 says
+/// nothing about the address plane; arm 1 does. Neither substitutes for the other, which
+/// is why both run and both are asserted.
+///
+/// ⚠ **One test function, not two.** GPU work on this bench is strictly serial and libtest
+/// runs test functions in parallel threads; two `#[test]`s here would put two submissions
+/// on one GPU at once.
+///
+/// ★ Every failure prints the whole [`CeEvidence`], because *which* conjunct failed is the
+/// diagnosis: bytes that never changed is a different fault from bytes that changed with no
+/// semaphore, which is a different fault from a truncated copy.
 #[test]
 fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
     let Some(conn) =
@@ -302,8 +341,16 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
     let (pid, cid) = declare_process(&mut gpu);
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
-    // ---- the guest's two ranges, published into ITS OWN address space at ITS OWN
-    //      addresses. This is what makes the pushbuffer's numbers executable.
+    let mut vmm = kayfabe_mocks::MockVmm::new();
+    let mut probe = HostRmBackend::new(
+        IsolateId::new(0xE6, GPU),
+        Arc::clone(&conn),
+        Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
+
+    // =================================================================================
+    // ARM 1 — the product path
+    // =================================================================================
     let src = dev
         .publish_backing(GPU, PDB, SRC_VA, COPY_LEN)
         .expect("the source range publishes on the host GPU");
@@ -317,68 +364,95 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
          forwarded pushbuffer names nothing"
     );
 
-    // ---- seed and read back, through a SECOND `HostRmBackend` on the same connection.
-    //
-    // ⊘ Deliberately not through the worker: the point of the read-back is that it is
-    // **independent** of the mapping the value was written through, and going back through
-    // the same backend would make that harder to see rather than easier. RM handles are
-    // per-connection, so this probe addresses the same objects the isolate minted while
-    // opening its own device node, its own mmap context and its own address for every
-    // call — which is precisely `prove_ce_copy`'s "freshly opened, independent" mapping.
-    let probe = HostRmBackend::new(
-        IsolateId::new(0xE6, GPU),
-        Arc::clone(&conn),
-        Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    // ⊘ The measured refusal that shapes this whole file, asserted rather than narrated:
+    // a published backing is NOT CPU-mappable.
+    let opaque = probe.fill_words(dst.memory, COPY_LEN, SENTINEL, 0);
+    assert!(
+        opaque.is_err(),
+        "★ a published backing must stay opaque to the CPU — `alloc_sysmem` passes \
+         NVOS02_FLAGS_MAPPING_NO_MAP on purpose, and this assertion is what makes arm 2 \
+         necessary rather than optional. Got {opaque:?}"
     );
+
+    submit_guest_ring(
+        &dev,
+        &mut vmm,
+        pid,
+        cid,
+        SRC_VA,
+        DST_VA,
+        "arm 1",
+        |parsed| {
+            assert_eq!(
+                parsed.ce_spans[0].dst_kind,
+                kayfabe_fwd::Representability::HostBacked,
+                "★ the published destination resolves as HOST-BACKED — this is the arm that \
+             says the address plane did its job"
+            );
+        },
+    );
+    let (submit1, payload1) = witness
+        .latest()
+        .expect("★ arm 1 reached RmBackend::ce_copy, so a submission was observed");
+    assert!(
+        submit1.landed(payload1),
+        "★★★ ARM 1 FAILED: the guest's copy over its own PUBLISHED ranges did not retire \
+         on the host GPU. {submit1:?} want payload {payload1:#010x} — GP_GET not meeting \
+         GP_PUT means the entry was never fetched; a payload mismatch means it was fetched \
+         and the methods did not release."
+    );
+
+    // =================================================================================
+    // ARM 2 — the same join, over operands a CPU can see
+    // =================================================================================
+    let host_vas = dev
+        .with_proc(pid, |p| p.vases[&(GPU, PDB)].host_vas)
+        .expect("live")
+        .expect("arm 1's publish materialized the channel's host VAS");
+    let p_src = probe
+        .alloc_probe_local(COPY_LEN)
+        .expect("a CPU-mappable source");
+    let p_dst = probe
+        .alloc_probe_local(COPY_LEN)
+        .expect("a CPU-mappable destination");
     probe
-        .fill_words(src.memory, COPY_LEN, PATTERN, 1)
+        .map_gpu_va(host_vas, p_src, COPY_LEN, PROBE_SRC_VA)
+        .expect("the probe source maps into the CHANNEL'S OWN host VAS at its guest VA");
+    probe
+        .map_gpu_va(host_vas, p_dst, COPY_LEN, PROBE_DST_VA)
+        .expect("the probe destination maps into the same host VAS at its guest VA");
+
+    probe
+        .fill_words(p_src, COPY_LEN, PATTERN, 1)
         .expect("the source is filled with a ramp");
     probe
-        .fill_words(dst.memory, COPY_LEN, SENTINEL, 0)
+        .fill_words(p_dst, COPY_LEN, SENTINEL, 0)
         .expect("the destination is filled with the sentinel");
-
     let before = probe
-        .read_words_independently(dst.memory, COPY_LEN, &[0])
+        .read_words_independently(p_dst, COPY_LEN, &[0])
         .expect("the destination reads back before the copy")[0];
     assert_eq!(
         before, SENTINEL,
         "★ non-vacuity: the destination provably did not already hold the answer"
     );
 
-    // ---- the guest's ring: bind it, then submit it
-    let mut vmm = kayfabe_mocks::MockVmm::new();
-    let (ring, method_bytes) = ga10x_ring(&mut vmm, &ce_runs(SRC_VA.0, DST_VA.0, COPY_LEN as u32));
-    dev.with_proc_mut(pid, |p| {
-        let chan = p.channels.get(&cid).expect("the channel");
-        let key = (chan.gpu, chan.vas_pdb.expect("it declares a VAS"));
-        let vas = p.vases.get_mut(&key).expect("the VAS");
-        kayfabe_tests::bind_ring_in(vas, RING_VA, RING_GPA, method_bytes);
-    })
-    .expect("live");
-
-    let (parsed, forwarded) = dev
-        .submit_ring(&mut vmm, pid, cid, &ring)
-        .expect("★ the join runs: the guest's ring is read, decoded, planned and executed");
-
-    assert_eq!(
-        parsed.ce_spans.len(),
-        1,
-        "one contiguous copy over two published ranges is one sub-copy, {:?}",
-        parsed.ce_spans
+    submit_guest_ring(
+        &dev,
+        &mut vmm,
+        pid,
+        cid,
+        PROBE_SRC_VA,
+        PROBE_DST_VA,
+        "arm 2",
+        |_| {},
     );
-    assert_eq!(
-        parsed.ce_spans[0].sub.by,
-        CeExecutor::HostCe,
-        "★ both operands are HostBacked, so the plan chose a REAL engine"
-    );
-    assert_eq!((forwarded.host_ce, forwarded.ours), (1, 0));
 
     // ---- ★★★ THE PREDICATE. Not a re-derivation of R17's — R17's.
     let (submit, payload) = witness
         .latest()
-        .expect("★ the join reached RmBackend::ce_copy, so a submission was observed");
+        .expect("★ arm 2 reached RmBackend::ce_copy, so a submission was observed");
     let after = probe
-        .read_words_independently(dst.memory, COPY_LEN, &[0, (WORDS - 1) * 4])
+        .read_words_independently(p_dst, COPY_LEN, &[0, (WORDS - 1) * 4])
         .expect("the destination reads back through an INDEPENDENT mapping");
     let evidence = CeEvidence {
         before,
@@ -397,4 +471,50 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
          the engine ran a copy that moved nothing; `after` right and `after_last` wrong \
          means it was truncated; the semaphore not matching means it never retired."
     );
+    println!("★ E6 ACCEPTANCE: CeEvidence::copied() == true — {evidence:?}");
+}
+
+/// One guest ring, scripted, bound and submitted through the L1 shell — the whole of
+/// `submit_ring`. `extra` gets the parse's outcome so each arm can assert what is
+/// specifically ITS claim.
+fn submit_guest_ring(
+    dev: &SharedDevice,
+    vmm: &mut kayfabe_mocks::MockVmm,
+    pid: ProcId,
+    cid: ChanId,
+    src: GpuVa,
+    dst: GpuVa,
+    arm: &str,
+    extra: impl FnOnce(&kayfabe_fwd::PushbufferOutcome),
+) {
+    let (ring, method_bytes) = ga10x_ring(vmm, &ce_runs(src.0, dst.0, COPY_LEN as u32));
+    dev.with_proc_mut(pid, |p| {
+        let chan = p.channels.get(&cid).expect("the channel");
+        let key = (chan.gpu, chan.vas_pdb.expect("it declares a VAS"));
+        let vas = p.vases.get_mut(&key).expect("the VAS");
+        kayfabe_tests::bind_ring_in(vas, RING_VA, RING_GPA, method_bytes);
+    })
+    .expect("live");
+
+    let (parsed, forwarded) = dev
+        .submit_ring(vmm, pid, cid, &ring)
+        .unwrap_or_else(|e| panic!("[{arm}] the join must run, got {e:?}"));
+    assert_eq!(
+        parsed.ce_spans.len(),
+        1,
+        "[{arm}] one contiguous copy over two mapped ranges is one sub-copy, {:?}",
+        parsed.ce_spans
+    );
+    assert_eq!(
+        (parsed.ce_spans[0].sub.dst, parsed.ce_spans[0].sub.len),
+        (dst.0, COPY_LEN),
+        "[{arm}] ★ the instruction carries the GUEST's own destination and length"
+    );
+    assert_eq!(
+        parsed.ce_spans[0].sub.by,
+        CeExecutor::HostCe,
+        "[{arm}] ★ the plan chose a REAL engine"
+    );
+    assert_eq!((forwarded.host_ce, forwarded.ours), (1, 0), "[{arm}]");
+    extra(&parsed);
 }
