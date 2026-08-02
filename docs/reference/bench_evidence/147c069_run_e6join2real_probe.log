@@ -1,0 +1,9 @@
+=== boot_capture tag=e6join2real at 2026-08-02T22:09:07+00:00 ===
+=== source revision: 147c0692 ===
+=== qemu binary: -rwxr-xr-x 1 root root 85728048 Aug  2 22:08 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+WAS_LOADED
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.

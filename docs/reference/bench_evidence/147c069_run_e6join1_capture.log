@@ -1,0 +1,12 @@
+[boot_capture:e6join1] booting (extra args: none)
+[boot_capture:e6join1] guest is up after 34s
+[boot_capture:e6join1] module unloaded and ring buffer cleared; loading cold
+[boot_capture:e6join1] opening the device (this is what runs RmInitAdapter)
+[boot_capture:e6join1] captured 26 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_e6join1_dmesg.log
+[boot_capture:e6join1] --- the verdict lines ---
+[   31.299873] NVRM: RmInitNvDevice: *** Cannot load state into the device
+[   31.299876] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+[   32.090690] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+[boot_capture:e6join1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:e6join1] done. serial=/workspace/bench/run_e6join1_serial.log qemu=/workspace/bench/run_e6join1_qemu.log dmesg=/workspace/bench/run_e6join1_dmesg.log probe=/workspace/bench/run_e6join1_probe.log
+DONE_BOOT

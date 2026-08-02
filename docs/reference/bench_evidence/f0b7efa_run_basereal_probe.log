@@ -1,0 +1,10 @@
+=== boot_capture tag=basereal at 2026-08-02T22:21:48+00:00 ===
+=== source revision: f0b7efaa ===
+=== qemu binary: -rwxr-xr-x 1 root root 85705736 Aug  2 22:21 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+WAS_LOADED
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+scripts/bench/boot_capture.sh: line 1: 722029 Aborted                 (core dumped) "$BENCH/boot_nvkvm.sh" "$TAG" "$@"
