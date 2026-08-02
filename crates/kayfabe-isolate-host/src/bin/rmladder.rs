@@ -679,7 +679,7 @@ fn timer_probe(conn: &RmConnection) -> bool {
     // (2) The dedicated PTIMER page. ★★ TWO acts, reported separately, and a SWEEP of the
     // two plausible lengths — because the first run of this rung printed our own
     // page-alignment refusal (`NOT_IN_THIS_OBJECT`, 0x4B47) as though the driver had
-    // refused the range. See `RmConnection::map_ptimer_page`.
+    // refused the range. See `RmConnection::alloc_timer_object`.
     let ptimer_page = match conn.alloc_timer_object() {
         Err(e) => {
             println!(

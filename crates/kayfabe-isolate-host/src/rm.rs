@@ -125,12 +125,12 @@ use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
-    NV01_MEMORY_LOCAL_USER, NV01_TIMER_MAP_SIZE, NVA06C_CTRL_CMD_BIND,
-    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
-    NvMemoryAllocationParams, Nvos33ParametersWithFd, PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1,
-    PtimerSampleError, SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING,
-    USERMODE_TIME_0, USERMODE_TIME_1, USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce,
-    engine_type_copy, fifo, gp_entry, method_header_inc, ptimer_sample,
+    NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
+    PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT, USERD_GP_GET,
+    USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
+    USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry,
+    method_header_inc, ptimer_sample,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
@@ -914,69 +914,43 @@ impl RmConnection {
         })
     }
 
-    /// ★★★ `#128` T4 — allocate an [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) object
-    /// and CPU-map it: **a dedicated mapping of BAR0 `0x9000`, the PTIMER page**.
+    /// ★★★ `#128` T4 — allocate an [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) object,
+    /// the handle behind **a dedicated mapping of BAR0 `0x9000`, the PTIMER page**.
     ///
-    /// This is the mapping the read-native design wants, and it differs from
-    /// [`Self::host_ptimer_via_usermode`] in the one way that matters: the range contains
-    /// **only timer registers**, no doorbell, so the whole page may be exposed to a guest
-    /// without exposing a work-submit path. `tmrapiGetRegBaseOffsetAndSize_IMPL` reports
-    /// `DRF_BASE(NV_PTIMER)` and `sizeof(Nv01TimerMap)` for it
+    /// This is the mapping the read-native design first reached for, and it differs from
+    /// [`Self::host_ptimer_via_usermode`] in the one way that looked decisive: the range
+    /// contains **only timer registers**, no doorbell, so the whole page could be exposed
+    /// to a guest without exposing a work-submit path.
+    /// `tmrapiGetRegBaseOffsetAndSize_IMPL` reports `DRF_BASE(NV_PTIMER)` and
+    /// `sizeof(Nv01TimerMap)` for it
     /// (`ogkm-580: src/nvidia/src/kernel/gpu/timer/timer.c:1712-1734`).
     ///
-    /// ★★★ **The mapping is READ-ONLY, and that is hardware policy rather than ours.**
-    /// `subdeviceCtrlCmdValidateMemMapRequest_IMPL` walks BAR0 range by range for any
-    /// caller that is not `osIsAdministrator()`, and the PTIMER row — the *first* row it
-    /// tries — returns `NV_PROTECT_READABLE`
+    /// ⊘ **It cannot actually back the guest's timer page, and that is not a permission
+    /// problem.** The guest reads its counter at page offset `0x080`; this page carries it
+    /// at `0x400`; a memslot cannot re-base within a page. The route is kept because it is
+    /// the *control* for the usermode mirror — two independent mappings agreeing is what
+    /// licenses treating either as the host's counter — and because it is the only route
+    /// that demonstrates a **doorbell-free** BAR0 range is mappable at all. See
+    /// `docs/design/read_native_timer_measured.md` §2.
+    ///
+    /// ★★★ **The mapping RM grants here is READ-ONLY, and that is hardware policy rather
+    /// than ours.** `subdeviceCtrlCmdValidateMemMapRequest_IMPL` walks BAR0 range by range
+    /// for any caller that is not `osIsAdministrator()`, and the PTIMER row — the *first*
+    /// row it tries — returns `NV_PROTECT_READABLE`
     /// (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2905-2917`,
-    /// reached from `RmValidateMmapRequest`, `.../unix/src/osapi.c:2023-2054`).
-    /// So an unprivileged holder of this mapping **cannot** write
-    /// `NV_PTIMER_TIME_0`, and `tmrSetCurrentTime_GV100`'s register is out of reach by
-    /// construction and not by a check we could forget. ⚠ A *root* caller takes the
-    /// `osIsAdministrator()` fast path and gets `NV_PROTECT_READ_WRITE` instead — which is
-    /// why the ladder rung that measures this must be run as an unprivileged uid to mean
-    /// anything.
+    /// reached from `RmValidateMmapRequest`, `.../unix/src/osapi.c:2023-2054`). So an
+    /// unprivileged holder **cannot** write `NV_PTIMER_TIME_0`, and
+    /// `tmrSetCurrentTime_GV100`'s register is out of reach by construction rather than by
+    /// a check we could forget. ⚠ A *root* caller takes the `osIsAdministrator()` fast path
+    /// and gets `NV_PROTECT_READ_WRITE` instead — which is why the ladder rung that measures
+    /// this means nothing unless it is run as an unprivileged uid.
     ///
-    /// The [`CharDevice`] is returned with the region because the mmap context lives on it
-    /// and dropping it early makes the unmap unexpressible — same contract as
-    /// [`Self::map_cpu`].
-    ///
-    /// ★★★ **`len` is a parameter and that is the whole lesson of the first run.**
-    ///
-    /// `tmrapiGetRegBaseOffsetAndSize_IMPL` reports [`NV01_TIMER_MAP_SIZE`] (`0x414`) for
-    /// this object, but `nv_align_mmap_offset_length` rounds the registered range **up to
-    /// a whole page** before storing it (`ogkm-580: .../unix/src/osapi.c:1976-1986`), and
-    /// `nvidia_mmap_helper` then demands the `mmap` length equal that *rounded* size or
-    /// answers `ENXIO` (`ogkm-580: kernel-open/nvidia/nv-mmap.c:560-565`). Our own
-    /// `Mapping::anywhere` independently requires a page-multiple length. So the two
-    /// plausible lengths — the object's and the page's — fail at *different layers*, and
-    /// a caller that hardcodes one cannot tell which layer refused.
-    ///
-    /// ⚠ Asking for `0x414` produced `RmError::Other(0x4B47)` = `NOT_IN_THIS_OBJECT` — **a
-    /// refusal manufactured inside this process before any ioctl was issued**, which the
-    /// first version of `#128`'s rung printed as *"no dedicated PTIMER-page mapping on this
-    /// board"*. It was a statement about our length arithmetic wearing the driver's
-    /// clothes. The rung now sweeps both lengths and prints which layer answered.
-    ///
-    /// # Errors
-    /// Whatever RM refuses the alloc or the map with — or one of this crate's own local
-    /// statuses, which mean the request never reached RM. A refusal here is a **finding**,
-    /// not a licence to run the mapper with more privilege.
-    pub fn map_ptimer_page(
-        &self,
-        register_len: u64,
-        mmap_len: u64,
-    ) -> Result<(u32, CharDevice, VolatileRegion), RmError> {
-        let object = self.alloc_timer_object()?;
-        let (node, region) = self.map_object_uncached(object, register_len, mmap_len)?;
-        Ok((object, node, region))
-    }
-
-    /// Allocate the [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) object alone.
-    ///
-    /// Split out of [`Self::map_ptimer_page`] so a rung can say *which of the two acts*
-    /// failed. Collapsed, "RM would not give me a timer object" and "the mapping was
-    /// refused" are one message, and they are completely different findings.
+    /// ⊘ **There is deliberately no `map_ptimer_page` that does the alloc and the map in one
+    /// call.** There was, and it was dead code by the end of the task that added it: the
+    /// rung has to report *which of the two acts* failed, because the first version of this
+    /// rung (2026-08-02, GA106, revision 6213a24) collapsed them and printed our own length
+    /// arithmetic as a driver refusal.
+    /// A convenience that re-collapses them is the one shape this seam must not offer.
     ///
     /// # Errors
     /// Whatever RM refuses the alloc with.
@@ -1010,7 +984,8 @@ impl RmConnection {
         self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::Uncached)
     }
 
-    /// Read the PTIMER pair out of a region produced by [`Self::map_ptimer_page`].
+    /// Read the PTIMER pair out of a region produced by [`Self::alloc_timer_object`] +
+    /// [`Self::map_object_uncached`].
     ///
     /// # Errors
     /// As [`Self::host_ptimer_via_usermode`].
