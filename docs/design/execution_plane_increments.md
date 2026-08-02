@@ -1540,9 +1540,11 @@ So `VChid(0)` is the only vChid a GA10x channel can be filed under today. See §
 
 ### 10.4 ★★★ The acceptance, ON HARDWARE — `CeEvidence::copied() == true`
 
-`[measured]` 2026-08-03, rev **`147c069`**, vast `46529600` (RTX 3060 / GA106, host driver
-580.159.04 open). On disk: `docs/reference/bench_evidence/147c069_e6_hw_join.out`.
-`tests/tests/e6_hw_join.rs`, `GPU-GATE: RAN`:
+`[measured]` 2026-08-03, vast `46529600` (RTX 3060 / GA106, host driver 580.159.04 open),
+**twice, at two revisions**: rev `147c069`
+(`docs/reference/bench_evidence/147c069_e6_hw_join.out`) and rev **`5511cda`**
+(`…/5511cda_e6_hw_join.out`), byte-identical evidence. `tests/tests/e6_hw_join.rs`,
+`GPU-GATE: RAN`:
 
 ```
 ★ E6 ACCEPTANCE: CeEvidence::copied() == true — CeEvidence { before: 1592614637,
@@ -1595,7 +1597,10 @@ asserted, so the reason arm 2 exists cannot quietly stop being true.
 ### 10.5 ★★★ THE BOOT — and a NEW WALL, on the plane E6 exists to use
 
 **Arm A, the default plane** (`KAYFABE_ISOLATES` unset). `[measured]` rev `147c069`, boot
-`e6join1`, evidence `147c069_run_e6join1_{dmesg,qemu,probe,capture}.log`. **The wall is
+`e6join1`, evidence `147c069_run_e6join1_{dmesg,qemu,probe,capture}.log`.
+⊘ `git diff --name-only 147c069 5511cda` is `docs/…` plus **one test target that is not
+linked into the archive** (`tests/tests/e6_hw_join.rs`), so the binary these boots ran is
+this branch's content — the discipline §7 states. **The wall is
 UNCHANGED**: `diff` of the dmesg against `ee3a8c3`'s `e5va1` with kernel timestamps stripped
 is **empty**, 26 lines each, `RmInitAdapter failed! (0x25:0xffff:1249)`. The device reports
 `doorbells: 0 arrived, 0 served, 0 REFUSED`.
@@ -1654,3 +1659,25 @@ inside E6 is what this document exists to refuse.
    running. The core reads those bytes and the GPU never does.
 4. **Nothing about the completion plane.** `submit_ring` does not ring anything for the
    guest and raises no interrupt; the copy's completion is consumed by `ce_copy`'s own wait.
+
+### 10.7 Suite, gates, ledger
+
+- **Suite**, `[measured]` at `5511cda` on the **RTX 3060 bench** (the KVM box),
+  `KAYFABE_NO_KVM` unset: `cargo test --workspace --no-fail-fast` → **1975 passed, 0
+  failed, 1 ignored**; `KVM-GATE: RAN` **56**, `GPU-GATE: RAN` **1**.
+- **Baseline** at `f0b7efa` on the 4-core dev box, same command: **1960 passed, 0 failed,
+  1 ignored**, `KVM-GATE: RAN` **56**. ⇒ **+15**: 13 in `e6_join.rs`, 1 in `e6_hw_join.rs`,
+  1 in `e2_doorbell.rs` (§10.3's behavioural witness).
+- **Gates**, `[measured]` at `5511cda`: `./scripts/ci_gates.sh --all` →
+  `ALL GATES CLEAN (22 steps, floor 22 for --all mode)`. No gated oracle family was added,
+  so `GATE_STEPS_ALL_MIN` and `ci.yml`'s floor are untouched.
+- **Claim ledger**: 382 unattributed / 66 conflated / 17 bare-hardware — the ceiling and
+  both bars, unmoved. ⊘ It went red **twice** while §10 was written and was fixed by
+  **attributing** both times: once at 384/382 (the two new sites got a run name, a revision
+  and a date) and once at 67 conflated (an `ogkm` citation and the word *measured* sharing
+  a sentence — the conflated bar's exact bite; the reading is now its own paragraph).
+- ★ **Two gate steps went red on the way and neither was silenced.** `GPU-GATE: RAN` counted
+  **0** over a full suite run in which the test passed against a real GA106 —
+  `libtest_capture_swallows_thread_output`, fixed the way `kvm_gate::report` already was.
+  And clippy's `too_many_arguments` (8/7) on the ring helper, fixed by grouping the copy's
+  two ends rather than with an `#[allow]`.

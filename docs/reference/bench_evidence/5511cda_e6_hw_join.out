@@ -1,0 +1,17 @@
+# E6 hardware acceptance — kayfabe rev 5511cda1b243a0f7ef793566907ab723573cf226
+# host: ubuntu, NVIDIA GeForce RTX 3060, 580.159.04, vast 46529600
+# date: 2026-08-02T22:41:26Z
+# cmd: cargo test -p kayfabe-tests --test e6_hw_join -- --test-threads=1
+# git status --porcelain: [?? docs/reference/bench_evidence/5511cda_e6_hw_join.out;]
+
+   Compiling kayfabe-tests v0.1.0 (/workspace/kf159/tests)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+     Running tests/e6_hw_join.rs (target/debug/deps/e6_hw_join-49c4597542373e7c)
+
+running 1 test
+test a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back ... GPU-GATE: RAN a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back
+GPU-GATE: E6 ACCEPTANCE CeEvidence::copied() == true — CeEvidence { before: 1592614637, after: 3237998080, after_last: 3237999103, expect_after: 3237998080, expect_after_last: 3237999103, bytes: 4096, submit: SubmitOutcome { semaphore: 2, gp_get: 2, gp_put: 2 }, payload: 2 }
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.03s
+
