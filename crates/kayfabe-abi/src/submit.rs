@@ -1842,8 +1842,14 @@ mod tests {
     fn the_usermode_timer_mirror_shares_a_page_with_the_doorbell_but_ptimer_does_not() {
         const PAGE: u64 = 4096;
         // The mirror and the doorbell: same page, and adjacent.
-        assert_eq!(USERMODE_TIME_0 / PAGE, USERMODE_NOTIFY_CHANNEL_PENDING / PAGE);
-        assert_eq!(USERMODE_TIME_1 / PAGE, USERMODE_NOTIFY_CHANNEL_PENDING / PAGE);
+        assert_eq!(
+            USERMODE_TIME_0 / PAGE,
+            USERMODE_NOTIFY_CHANNEL_PENDING / PAGE
+        );
+        assert_eq!(
+            USERMODE_TIME_1 / PAGE,
+            USERMODE_NOTIFY_CHANNEL_PENDING / PAGE
+        );
         assert_eq!(USERMODE_NOTIFY_CHANNEL_PENDING - USERMODE_TIME_0, 0x10);
         // The PTIMER page: page-aligned, exactly one page, both words inside it, and the
         // doorbell's offset within the usermode window is NOT a timer register here.
@@ -1862,7 +1868,10 @@ mod tests {
     /// zero however the register is decorated.
     #[test]
     fn compose_masks_the_high_word_to_its_29_significant_bits() {
-        assert_eq!(ptimer_compose(0xffff_ffff, 0xffff_ffff), 0x1fff_ffff_ffff_ffff);
+        assert_eq!(
+            ptimer_compose(0xffff_ffff, 0xffff_ffff),
+            0x1fff_ffff_ffff_ffff
+        );
         assert_eq!(ptimer_compose(0xe000_0000, 0), 0);
         assert_eq!(ptimer_compose(1, 2), (1 << 32) | 2);
     }

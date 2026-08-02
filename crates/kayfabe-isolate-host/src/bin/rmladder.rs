@@ -628,7 +628,8 @@ fn probe_ctrl(
 ///    page-offset `0x080` however mappable it is.
 fn timer_probe(conn: &RmConnection) -> bool {
     use kayfabe_abi::submit::{
-        PTIMER_BAR0_BASE, PTIMER_PAGE_TIME_0, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0,
+        NV01_TIMER_MAP_SIZE, PTIMER_BAR0_BASE, PTIMER_PAGE_SIZE, PTIMER_PAGE_TIME_0,
+        USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0,
     };
     const PAGE: u64 = 4096;
     // `geteuid` through the same raw layer everything else here uses. Not a permission
@@ -673,11 +674,47 @@ fn timer_probe(conn: &RmConnection) -> bool {
         }
     }
 
-    // (2) The dedicated PTIMER page.
-    let ptimer_page = conn.map_ptimer_page();
+    // (2) The dedicated PTIMER page. ★★ TWO acts, reported separately, and a SWEEP of the
+    // two plausible lengths — because the first run of this rung printed our own
+    // page-alignment refusal (`NOT_IN_THIS_OBJECT`, 0x4B47) as though the driver had
+    // refused the range. See `RmConnection::map_ptimer_page`.
+    let ptimer_page = match conn.alloc_timer_object() {
+        Err(e) => {
+            println!(
+                "info  R19 NV01_TIMER alloc = refused {e:?} — RM would not give this client a \
+                 timer object at all, so the mapping question does not arise"
+            );
+            Err(e)
+        }
+        Ok(obj) => {
+            println!("★     R19 NV01_TIMER alloc = hObject {obj:#010x}");
+            let mut got = Err(RmError::Other(0));
+            for len in [NV01_TIMER_MAP_SIZE, PTIMER_PAGE_SIZE] {
+                match conn.map_object_uncached(obj, len) {
+                    Ok((node, region)) => {
+                        println!("★     R19 NV01_TIMER map  = len {len:#x} ACCEPTED");
+                        got = Ok((obj, node, region));
+                        break;
+                    }
+                    Err(e) => println!(
+                        "info  R19 NV01_TIMER map  = len {len:#x} refused {e:?}{}",
+                        match e {
+                            RmError::Other(s) if s == 0x4B47 =>
+                                "  ⚠ that is OUR OWN NOT_IN_THIS_OBJECT — the request never \
+                                 reached RM; this length is not page-aligned",
+                            RmError::Other(s) if s & 0x8000_0000 != 0 =>
+                                "  ← an errno from the \
+                                 kernel: the request DID reach the driver",
+                            _ => "  ← an NV_STATUS: the driver decided",
+                        }
+                    ),
+                }
+            }
+            got
+        }
+    };
     let page_readings = match &ptimer_page {
-        Ok((obj, _node, region)) => {
-            println!("★     R19 NV01_TIMER      = mapped, hObject {obj:#010x}");
+        Ok((_obj, _node, region)) => {
             let a = RmConnection::ptimer_page_read(region);
             std::thread::sleep(std::time::Duration::from_millis(20));
             let b = RmConnection::ptimer_page_read(region);
@@ -707,11 +744,11 @@ fn timer_probe(conn: &RmConnection) -> bool {
                 }
             }
         }
-        Err(e) => {
+        Err(_) => {
             println!(
-                "info  R19 NV01_TIMER      = refused {e:?} — no dedicated PTIMER-page \
-                 mapping on this board. A REFUSAL IS A FINDING; do not re-run this as root \
-                 and quote the result."
+                "info  R19 PTIMER page     = no dedicated PTIMER-page mapping was obtained; \
+                 read the two lines above for WHICH layer refused. A driver refusal is a \
+                 FINDING; do not re-run this as root and quote the result."
             );
             None
         }

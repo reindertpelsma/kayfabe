@@ -125,12 +125,12 @@ use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
-    NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
-    NV01_TIMER_MAP_SIZE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams,
-    Nvos33ParametersWithFd, PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT,
-    USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
-    USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry,
-    method_header_inc, ptimer_sample,
+    NV01_MEMORY_LOCAL_USER, NV01_TIMER_MAP_SIZE, NVA06C_CTRL_CMD_BIND,
+    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+    NvMemoryAllocationParams, Nvos33ParametersWithFd, PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1,
+    PtimerSampleError, SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING,
+    USERMODE_TIME_0, USERMODE_TIME_1, USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce,
+    engine_type_copy, fifo, gp_entry, method_header_inc, ptimer_sample,
 };
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
@@ -941,10 +941,47 @@ impl RmConnection {
     /// and dropping it early makes the unmap unexpressible — same contract as
     /// [`Self::map_cpu`].
     ///
+    /// ★★★ **`len` is a parameter and that is the whole lesson of the first run.**
+    ///
+    /// `tmrapiGetRegBaseOffsetAndSize_IMPL` reports [`NV01_TIMER_MAP_SIZE`] (`0x414`) for
+    /// this object, but `nv_align_mmap_offset_length` rounds the registered range **up to
+    /// a whole page** before storing it (`ogkm-580: .../unix/src/osapi.c:1976-1986`), and
+    /// `nvidia_mmap_helper` then demands the `mmap` length equal that *rounded* size or
+    /// answers `ENXIO` (`ogkm-580: kernel-open/nvidia/nv-mmap.c:560-565`). Our own
+    /// `Mapping::anywhere` independently requires a page-multiple length. So the two
+    /// plausible lengths — the object's and the page's — fail at *different layers*, and
+    /// a caller that hardcodes one cannot tell which layer refused.
+    ///
+    /// ⚠ Asking for `0x414` produced `RmError::Other(0x4B47)` = `NOT_IN_THIS_OBJECT` — **a
+    /// refusal manufactured inside this process before any ioctl was issued**, which the
+    /// first version of `#128`'s rung printed as *"no dedicated PTIMER-page mapping on this
+    /// board"*. It was a statement about our length arithmetic wearing the driver's
+    /// clothes. The rung now sweeps both lengths and prints which layer answered.
+    ///
     /// # Errors
-    /// Whatever RM refuses the alloc or the map with. A refusal here is a **finding**, not
-    /// a licence to run the mapper with more privilege.
-    pub fn map_ptimer_page(&self) -> Result<(u32, CharDevice, VolatileRegion), RmError> {
+    /// Whatever RM refuses the alloc or the map with — or one of this crate's own local
+    /// statuses, which mean the request never reached RM. A refusal here is a **finding**,
+    /// not a licence to run the mapper with more privilege.
+    pub fn map_ptimer_page(&self, len: u64) -> Result<(u32, CharDevice, VolatileRegion), RmError> {
+        let object = self.alloc_timer_object()?;
+        // ★ `Uncached`, for the same reason `open_usermode` is: this is a BAR0 *register*
+        // range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch unconditionally
+        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`). A cached mapping of a
+        // free-running counter would read one value forever — the exact failure this task
+        // exists to prevent, arriving through the cache instead of through a trap.
+        let (node, region) = self.map_cpu(object, len, CachePolicy::Uncached)?;
+        Ok((object, node, region))
+    }
+
+    /// Allocate the [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) object alone.
+    ///
+    /// Split out of [`Self::map_ptimer_page`] so a rung can say *which of the two acts*
+    /// failed. Collapsed, "RM would not give me a timer object" and "the mapping was
+    /// refused" are one message, and they are completely different findings.
+    ///
+    /// # Errors
+    /// Whatever RM refuses the alloc with.
+    pub fn alloc_timer_object(&self) -> Result<u32, RmError> {
         let want = self.mint();
         let object = self.raw_alloc(
             self.subdevice,
@@ -953,13 +990,20 @@ impl RmConnection {
             &mut [],
         )?;
         self.remember(object, self.subdevice);
-        // ★ `Uncached`, for the same reason `open_usermode` is: this is a BAR0 *register*
-        // range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch unconditionally
-        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`). A cached mapping of a
-        // free-running counter would read one value forever — the exact failure this task
-        // exists to prevent, arriving through the cache instead of through a trap.
-        let (node, region) = self.map_cpu(object, NV01_TIMER_MAP_SIZE, CachePolicy::Uncached)?;
-        Ok((object, node, region))
+        Ok(object)
+    }
+
+    /// CPU-map an already-allocated object at `len` bytes. See [`Self::map_ptimer_page`]
+    /// for why the length is the interesting parameter.
+    ///
+    /// # Errors
+    /// As [`Self::map_cpu`].
+    pub fn map_object_uncached(
+        &self,
+        object: u32,
+        len: u64,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu(object, len, CachePolicy::Uncached)
     }
 
     /// Read the PTIMER pair out of a region produced by [`Self::map_ptimer_page`].
