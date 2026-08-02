@@ -1,10 +1,13 @@
 # The execution plane — the increments from here to a guest CE copy on the host GPU
 
-> **Status: PLAN, 2026-08-02.** Written at master `cf3aae9`; increment **E0** built and
-> measured at `e10a6bf` on the RTX 3060 bench, **E3** at `6e4f66f`, **E0b + E1** at
-> `853a311` (§6) and **E2** at `5c1f501` (§7). Every row is `[src]` at `cf3aae9`,
-> `[measured]` with a named run and revision, or explicitly `[assumed]`. **E4–E6 are not
-> built.**
+> **Status: E0-E6 BUILT, 2026-08-03.** Written at master `cf3aae9`; increment **E0** built
+> and measured at `e10a6bf` on the RTX 3060 bench, **E3** at `6e4f66f`, **E0b + E1** at
+> `853a311` (§6), **E2** at `5c1f501` (§7), **E4/E5** at `ee3a8c3` (§8-§9) and **E6** at
+> `147c069` (§10). Every row is `[src]` at its revision, `[measured]` with a named run and
+> revision, or explicitly `[assumed]`.
+> ⚠ **E5 is PARTIAL** (§9.2: the CE-page-table-write source reaches a root page only) and
+> ★★★ **§10.5 arm B is a new wall**: the real isolate plane aborts QEMU under R1, at the
+> base revision as well as at this one.
 
 ## 0. Why this document exists now, and what it replaces
 
@@ -88,7 +91,7 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
 | **E4** ✅ | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes NVIDIA's own macros encode yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method. **DONE — §7, and it REFUTED the seam: `CeLaunchDma` is not decodable per-method at all** |
 | **E5** ◐ | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) — **PARTIAL, §9: source 1 whole, source 2 reaches a ROOT PAGE and no further** |
-| **E6** | the join: guest CE copy → `plan_doorbell` → `Worker::execute` → `HostRmBackend::ce_copy_outcome` | `CeEvidence::copied()` — R17's predicate, driven by the guest | the same boot with `KAYFABE_ISOLATES` unset must **not** produce it |
+| **E6** ✅ | the join: guest CE copy → `plan_ce` → `Worker::execute` → `HostRmBackend::ce_copy_outcome` | `CeEvidence::copied()` — R17's predicate | the same archive with `KAYFABE_ISOLATES` unset must **not** produce it. **`[measured]` §10** — ★ and the control found a HANG |
 
 ### 2.1 ★★★ The riskiest increment is E3, and not for the reason it looks
 
@@ -1452,3 +1455,202 @@ either, and the claim that it is latent is now a measurement rather than a readi
    sysmem and PushBuffer/GPFIFO in vidmem"* as a WAR, which is suggestive and is **not** the
    same statement.
 3. **Nothing about E6.** No `VerbPlan` ran, no doorbell was rung, no `ce_copy`.
+
+## 10. E6 — BUILT. The join, its acceptance on hardware, and ★★★ the wall that replaced it
+
+### 10.1 What was missing, and it was not an algorithm
+
+`PushbufferOutcome::ce_spans` — the partitioned copy-engine request `apply_pushbuffer` has
+produced since `#102` — had **no caller anywhere in the workspace**. `plan_ce_split` built
+the isolate's instruction and nothing called *it* either. So every copy the core recovered
+from a guest ring was computed, asserted about in tests, and dropped.
+
+`[src]` at `147c069`:
+
+| seam | what it is |
+|---|---|
+| `kayfabe_fwd::plan_ce` / `commit_ce` / `exec_ce` | the three R1 phases for a partitioned request |
+| `kayfabe_fwd::submit_ring` | `parse_pushbuffer` + `exec_ce`, single-threaded |
+| `kayfabe_rt::SharedDevice::forward_ce` / `submit_ring` | the L1 form — each half takes and releases its own locks, so the host verb runs lock-free |
+
+**Three refusals `plan_ce` owns**, each a different plane speaking: `UnknownChannel`
+(nothing to submit *on* — deliberately not folded into the doorbell's device-wide
+`UnknownVchid`), `NoTarget` (no executor), and **`NoHostVas`** (the channel's `Vas` was
+never host-published, so the addresses denote nothing in any host address space).
+⊘ The last one is a refusal and **not** a materialization: allocating an empty host VAS to
+let the chain proceed would point a real engine at addresses that resolve to nothing in it,
+which is `Xid 31 FAULT_PDE` arrived at by *our* choice rather than by the guest's.
+
+`commit_ce` adopts **nothing** — `VerbPlan::CeSplit` mints no handle — so its whole content
+is R5 attribution: the bytes have already moved by the time it runs, and refusing is not
+undoing but declining to file the result against a channel that no longer exists. It is
+never retryable: re-running a copy that executed performs it **twice**.
+
+### 10.2 ★★★ The CONTROL found a defect, and it is a HANG rather than a wrong answer
+
+E6's row says *"the same boot with `KAYFABE_ISOLATES` unset must not produce it"*. The
+shipped archive's default plane is `StillbornIsolates`. Writing that control found this:
+
+> `kayfabe_isolate::Isolate::checkout` answers `None` for **two** conditions its own docs
+> run together — *"the pool is saturated (or the isolate is retired and refuses new
+> checkouts)"*. `kayfabe_fwd::checkout` passed both up as `Ok(None)`, and
+> `SharedDevice::verb_op` treats that as **backpressure**: release the locks, park on the
+> pool gate, re-enter. A stillborn isolate has pool width **zero** and is retired at birth,
+> so the generation never moves and **the vCPU thread parks forever**.
+
+It was unreachable before E6 only because nothing had ever routed as far as a checkout: the
+shipped doorbell died at `UnknownVchid` first. The join is what makes a submission reach the
+pool, and the configuration that hangs is the **shipped default**.
+
+⇒ `FwdFault::IsolateRetired`, decided by one predicate (`kayfabe_fwd::never_serves`) used at
+**both** checkout doors.
+
+★★ **And the first fix was wrong in the way this project keeps being bitten.** It changed
+`checkout` only. Every unit test went green — and
+`a_permanently_dead_isolate_is_REFUSED_and_does_not_park_forever` still **timed out**,
+because L1 does not go through `checkout`: `Staged::check_out` calls `checkout_and_drain`,
+which reaches `Proc::checkout_with_pending_release` directly. *A mutation must be shown to
+change BEHAVIOUR on the path the product takes, not merely to change bytes.* The predicate
+is one function now, cited at both doors, for exactly that reason.
+
+### 10.3 ★★★ Debt Q24 — discharged BEHAVIOURALLY
+
+E2 recorded it: *"the behavioural witness — declare a channel through the bridge, ring its
+vChid through the doorbell — is an **E6** assertion, because nothing in this port can inject
+an `RmEvent` chain."* `Regs::object_model()` is that injection point — the composition
+root's own `Arc<SharedDevice>`, the same one the boxed object policy declares into and the
+same one `SharedDoorbell` rings.
+
+`crates/kayfabe-qemu-raw/tests/e2_doorbell.rs::the_doorbell_reaches_the_same_object_model_the_bridge_declares_into`:
+with nothing declared the ring is `FwdFault::UnknownVchid`; after a GA10x channel is
+declared through the object model the **same token** comes back
+`FwdFault::IsolateRetired` — the first refusal downstream of routing in that port's life.
+
+★ `[measured]` 2026-08-02 on the dev box at rev `147c069`, by planting the defect in
+`Regs::create` (a second `object_policy()` whose `SharedDevice` is handed to
+`SharedDoorbell`) and running `cargo test -p kayfabe-qemu-raw --test e2_doorbell`: the new
+behavioural test reads `UnknownVchid` on both sides and goes red, *and* the old
+source-quantified `the_archive_realizes_exactly_one_object_model` goes red. Restored tree:
+8 passed, 0 failed.
+
+⚠ **The token is `0`, and that is forced rather than chosen.**
+`Ga10xArch::vchid_from_userd_flags` answers `VChid(0)` for **every** channel — a stated
+refusal until the USERD flag-field decode is settled against silicon the way E3's token was.
+So `VChid(0)` is the only vChid a GA10x channel can be filed under today. See §10.6.
+
+### 10.4 ★★★ The acceptance, ON HARDWARE — `CeEvidence::copied() == true`
+
+`[measured]` 2026-08-03, rev **`147c069`**, vast `46529600` (RTX 3060 / GA106, host driver
+580.159.04 open). On disk: `docs/reference/bench_evidence/147c069_e6_hw_join.out`.
+`tests/tests/e6_hw_join.rs`, `GPU-GATE: RAN`:
+
+```
+★ E6 ACCEPTANCE: CeEvidence::copied() == true — CeEvidence { before: 1592614637,
+  after: 3237998080, after_last: 3237999103, expect_after: 3237998080,
+  expect_after_last: 3237999103, bytes: 4096,
+  submit: SubmitOutcome { semaphore: 2, gp_get: 2, gp_put: 2 }, payload: 2 }
+```
+
+`before` is the sentinel `0x5EED_5EED`; `after` is `0xC0FF_EE00`; `after_last` is
+`0xC0FF_F1FF` = the ramp's 1024th word; `gp_get` met `gp_put` and the engine released the
+payload. **This is R17's predicate, not a re-derivation of it** — the fourth conjunct comes
+from the join's own `CeWitness`, which records what `ce_copy_outcome` observed.
+
+What differs from R17 is **one thing**: the copy is not hand-built. It is recovered from a
+guest's GA10x GPFIFO entry (`kayfabe_abi::submit::gp_entry`) naming five real CE method
+runs, by `read_pushbuffer` → `decode_run` → `partition_ce` → `plan_ce` → `Worker::execute`.
+
+★ **The predicate was watched to FAIL first**, on the same hardware, with a mutation proven
+live: `partition_ce`'s source set to the destination. The copy still *executed* — semaphore
+2, `gp_get == gp_put == 2` — and the evidence read
+`after: 1592614637, after_last: 1592614637`, i.e. *"the engine ran a copy that moved
+nothing"*. Restored tree: green again. A second mutation (destination + 0x1000) went red one
+guard earlier, at the join itself (`Rm(Other(19275))` — the copy never retired).
+
+#### ⊘ Two arms, because a published backing is CPU-OPAQUE BY DESIGN
+
+`[measured]` on the RTX 3060 bench at rev `5ac789d`, run `e6_hw_join`, and it changed the
+shape of the test: `NV_ESC_RM_MAP_MEMORY` on a backing minted by `RmBackend::alloc_sysmem`
+is refused **`NV_ERR_INVALID_ARGUMENT` (`0x1F`)**, so the first draft of this file died at
+`fill_words`.
+
+The reason is a reading, and it is stated as one. `alloc_sysmem` passes
+`NVOS02_FLAGS_MAPPING_NO_MAP`; that constant's own docs call it *"right for a data buffer
+the GPU alone touches"*, and `[src] ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:342-345`
+is where the frontend declines to build an `mmap` context around the descriptor.
+
+⇒ a published backing is opaque to the CPU **in both directions** — the sentinel cannot be
+written and the answer cannot be read. Relaxing `NO_MAP` to make the diagnostic work would
+be changing the product to fit its instrument.
+
+| arm | operands | what it establishes |
+|---|---|---|
+| **1** | published through `SharedDevice::publish_backing` at the **guest's own** VAs | address identity holds on real hardware (`host_va == guest VA`), the operands resolve **`HostBacked`**, the plan chooses a real engine, and the engine **retires** (`SubmitOutcome::landed`) |
+| **2** | device-local, mapped by hand into the **same** host VAS the channel's `Vas` holds | the **bytes** — `CeEvidence::copied()` in full |
+
+⊘ Arm 2's operands are `Untracked`, not `HostBacked`, so arm 2 says nothing about the
+address plane; arm 1 does. Neither substitutes for the other. The `NO_MAP` refusal is itself
+asserted, so the reason arm 2 exists cannot quietly stop being true.
+
+### 10.5 ★★★ THE BOOT — and a NEW WALL, on the plane E6 exists to use
+
+**Arm A, the default plane** (`KAYFABE_ISOLATES` unset). `[measured]` rev `147c069`, boot
+`e6join1`, evidence `147c069_run_e6join1_{dmesg,qemu,probe,capture}.log`. **The wall is
+UNCHANGED**: `diff` of the dmesg against `ee3a8c3`'s `e5va1` with kernel timestamps stripped
+is **empty**, 26 lines each, `RmInitAdapter failed! (0x25:0xffff:1249)`. The device reports
+`doorbells: 0 arrived, 0 served, 0 REFUSED`.
+
+⊘ **And it could not have moved**, which is worth saying plainly rather than implying: the
+guest never submits at this wall (`kfifoRingChannelDoorBell_HAL` is reached *after* the
+channel schedule that fails `0x56`), and nothing in `kayfabe-qemu-raw`/`kayfabe-shell` calls
+`parse_pushbuffer` or `submit_ring`. E6 is **latent** on the product path for exactly E5's
+reason. What the boot buys is the other half of `suspect_the_instrument_first`: the change
+did not break it either.
+
+**Arm B, the real plane** (`KAYFABE_SHIM_FEATURES=host-isolates`, `KAYFABE_ISOLATES=real`).
+★★★ **QEMU ABORTS on a guest register write.** `[measured]` rev `147c069`, boot
+`e6join2real`, evidence `147c069_run_e6join2real_qemu.log`:
+
+```
+thread '<unnamed>' panicked at crates/kayfabe-util/src/lockwitness.rs:125:5:
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): spawning a sandboxed child
+process while holding rank(s) [0] …
+thread caused non-unwinding panic. aborting.
+  19: kayfabe_shim_regs_write
+  20: nvkvm_trap_write
+```
+
+The lazy isolate spawn (E0b) is a **blocking call made under the device lock**, and the lock
+witness aborts the hypervisor rather than let it convoy. ⇒ **The real isolate plane cannot
+be used on a live boot at all today**, which is the plane E6 exists to reach.
+
+★★ **ATTRIBUTED, not guessed.** The identical panic is present at the **base** revision:
+`[measured]` boot `basereal` at rev **`f0b7efa`**, same box, same feature build,
+`f0b7efa_run_basereal_qemu.log`, `grep -c "R1 no-blocking-under-lock"` = **1**. So this is
+**not E6's regression** — it is a pre-existing wall E6's boot is the first to walk into,
+because E6 is the first increment with a reason to run that plane. ⊘ It also means E0/E0b/E1's
+live real-isolate measurements (revs `853a311`/`5c1f501`) no longer reproduce, and *when*
+between those revisions it broke is **unmeasured**.
+
+⇒ **This is the next increment, and it is a phase-shape change, not an edit**: `Gpu::refresh`
+materializes isolates while the caller holds rank 0, so the spawn must move to a
+plan/execute/commit shape of its own — decide *which* isolates are needed under the lock,
+spawn with **zero** locks held, adopt under the lock with R5 re-validation. Inventing that
+inside E6 is what this document exists to refuse.
+
+### 10.6 ⊘ What E6 does NOT establish
+
+1. **No live guest drove it.** The acceptance is a guest's *bytes* and a guest's
+   *declarations* through the production core, on real silicon — not a booted guest. Three
+   named things still separate them: (a) the boot wall above, unmoved; (b) the real isolate
+   plane aborting QEMU (§10.5 arm B); (c) `Ga10xArch::vchid_from_userd_flags` answering
+   `VChid(0)` for every channel, so a *live* guest's doorbell cannot route to its own
+   channel — the USERD decode is an increment of its own, and its instrument is named in the
+   refusal itself (compile RM's own writer, `kernel_channel.c:2793,2800,2802`).
+2. **Nothing about the sandboxed isolate.** The hardware acceptance runs an **in-process**
+   `HostRmBackend`, because a `CeWitness` and a CPU mapping both die at the process
+   boundary. That the same verb chain survives the sandbox is R10/R11/R16's measurement.
+3. **Nothing about guest RAM.** The method words live in a `MockVmm`; no hypervisor is
+   running. The core reads those bytes and the GPU never does.
+4. **Nothing about the completion plane.** `submit_ring` does not ring anything for the
+   guest and raises no interrupt; the copy's completion is consumed by `ce_copy`'s own wait.

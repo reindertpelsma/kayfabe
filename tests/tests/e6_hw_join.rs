@@ -364,8 +364,9 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
          forwarded pushbuffer names nothing"
     );
 
-    // ⊘ The measured refusal that shapes this whole file, asserted rather than narrated:
-    // a published backing is NOT CPU-mappable.
+    // ⊘ The refusal that shapes this whole file, asserted rather than narrated — a
+    // published backing is NOT CPU-mappable. `[measured]` 2026-08-03 on the RTX 3060 bench
+    // at rev `5ac789d`, run `e6_hw_join`, where the first draft of this file died here.
     let opaque = probe.fill_words(dst.memory, COPY_LEN, SENTINEL, 0);
     assert!(
         opaque.is_err(),
