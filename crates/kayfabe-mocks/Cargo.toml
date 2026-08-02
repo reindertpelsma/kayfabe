@@ -1,6 +1,13 @@
 [package]
 name = "kayfabe-mocks"
-description = "Deterministic in-process mock adapters for every port (MockVmm, MockArch, MockRmBackend, MockIsolate) — the GPU-free test harness of mode2_rust_testing_strategy.md §4. Test-only; never a production dependency."
+# ⊘ This description said "Test-only; never a production dependency" and that was FALSE,
+# and two other files cited it as a reason. `cargo tree -e normal` puts this crate on
+# NORMAL edges under `kayfabe-chips` (whose `Ad10xArch`/`Gh100Arch` compose a `MockArch`
+# for every non-GSP seam) and under `kayfabe-crec` — so `kayfabe-qemu-raw`, the crate that
+# builds the shipped archive, links it. Making the sentence true again means moving that
+# composition, which is a shape change; until then the manifest says what is so.
+# See `docs/design/mock_fidelity_audit.md` finding G.
+description = "Deterministic in-process mock adapters for every port (MockVmm, MockArch, MockRmBackend, MockIsolate) — the GPU-free test harness of mode2_rust_testing_strategy.md §4. Intended for tests; NOT test-only in fact — kayfabe-chips depends on it on a normal edge, so it is in the shipped archive's graph."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

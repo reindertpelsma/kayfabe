@@ -14,9 +14,12 @@
 //!   `NV20_SUBDEVICE_0` (`0x2080`) it answers [`ObjectKind::Unknown`], and an
 //!   `RmGraph` that cannot tell a client root from a subdevice cannot enforce a single
 //!   one of its parenting rules. `kayfabe_mocks::WireClassArch` exists precisely because
-//!   a wire-bytes test needed the real ids — but it is in `kayfabe-mocks`, whose manifest
-//!   says *"Test-only; never a production dependency"*, and it does not name
-//!   `NV20_SUBDEVICE_0` either.
+//!   a wire-bytes test needed the real ids — but it does not name `NV20_SUBDEVICE_0`.
+//!   ⊘ The reason given here used to *begin* *"but it is in `kayfabe-mocks`, whose
+//!   manifest says 'Test-only; never a production dependency'"* — a premise this crate
+//!   itself falsifies, since it depends on `kayfabe-mocks` on a normal edge and
+//!   `kayfabe-qemu-raw` depends on this one. The missing class id is the whole reason,
+//!   and it is enough of one (`docs/design/mock_fidelity_audit.md` finding G).
 //! - **the data-plane seams.** `MockArch`'s `mmu()`, `userd()` and `pushbuffer()` answer
 //!   with made-up geometry and a made-up doorbell encoding. In a *test* that is the point.
 //!   In the product it is the measured "mock wall" in its worst form: a plausible answer

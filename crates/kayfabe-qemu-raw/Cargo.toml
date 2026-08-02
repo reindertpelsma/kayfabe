@@ -32,9 +32,17 @@ kayfabe-core.workspace = true
 # `StillbornIsolates`: there is no forwarding plane in this build and the isolate seam says
 # so by refusing, rather than by a null that something later dereferences.
 kayfabe-isolate.workspace = true
-# `Ga10xArch` — the class table the object model classifies with. ⊘ Chosen over
-# `kayfabe_mocks::WireClassArch` because `kayfabe-mocks` is test-only and this archive
-# ships; see `kayfabe_chips::ga10x`'s module docs for what it refuses and why.
+# `Ga10xArch` — the class table the object model classifies with. Chosen over
+# `kayfabe_mocks::WireClassArch`; see `kayfabe_chips::ga10x`'s module docs for what it
+# refuses and why.
+#
+# ⊘ The reason given here USED TO BE "because `kayfabe-mocks` is test-only and this
+# archive ships", and that premise is FALSE: `cargo tree -p kayfabe-qemu-raw -e normal`
+# shows this crate -> `kayfabe-chips` -> `kayfabe-mocks` on NORMAL edges, because
+# `Ad10xArch`/`Gh100Arch` compose a `MockArch` for their non-GSP seams. `MockArch` is
+# therefore linked into this archive already. The choice of `Ga10xArch` stands on its own
+# merits — a real class table and a real GMMU format — and not on a linkage claim that
+# does not hold. See `docs/design/mock_fidelity_audit.md` finding G.
 kayfabe-chips.workspace = true
 # ★★★ E2 — the L1 shell (`SharedDevice`). The object model now lives behind its ranked
 # locks because TWO paths reach it: the object bridge and the doorbell port. See

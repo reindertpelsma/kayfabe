@@ -223,6 +223,48 @@ fails these tests"*) does **not** hold on this seam.
 
 ---
 
+## ★★ FINDING G — `kayfabe-mocks` is in the shipped archive's graph, and two files argued from the opposite
+
+`crates/kayfabe-mocks/Cargo.toml` described itself as *"Test-only; never a production
+dependency"*. `cargo tree -p kayfabe-qemu-raw -e normal` (run on the build box at
+`09070a1`) puts it two **normal** edges under the crate that builds the QEMU archive:
+
+```text
+kayfabe-qemu-raw
+├── kayfabe-chips
+│   ├── kayfabe-mocks
+```
+
+`Ad10xArch` and `Gh100Arch` are `MockArch` composed with a real `GspModel`, and they still
+delegate `classify`, `mmu`, `userd`, `pushbuffer`, `is_case2_control` and
+`vchid_from_userd_flags` to it. `#156` already pulled `decode_doorbell` and `host_classes`
+off that delegation for exactly this reason and stopped there.
+
+**Two files cited the false sentence as a reason**, which is what makes this worth a
+finding rather than a note: `kayfabe-qemu-raw/Cargo.toml` justified choosing `Ga10xArch`
+*"because `kayfabe-mocks` is test-only and this archive ships"*, and `ga10x.rs`'s module
+docs used the same clause to explain why `WireClassArch` is not the product's class table.
+Both conclusions are right; both reasons were void. ⊘ A reason that does not hold is worth
+correcting even when the conclusion survives — it is the shape `read_at_invalidate` had.
+
+**FIXED as three corrections of record** (manifest description + the two citing comments).
+⊘ **NOT fixed:** making the sentence true again means moving the `Ad10x`/`Gh100`
+composition off `MockArch`, which is the same increment `Ga10xArch`'s module docs already
+argue for (*"in the product it is the mock wall in its worst form: a plausible answer on
+the one axis where a wrong answer is a silent memory-safety fact about the guest"*). Note
+what that would buy: with `MockPushbuffer` behind an Ada or Hopper `Arch`, a real method
+header is decoded by switching on `header >> 24` against invented opcodes, so a real
+method run can decode to a `CeLaunchDma` with a **fabricated** destination, length and
+work kind — which is precisely what `pushbuffer_ga10x_hostile.rs` exists to forbid.
+
+★ **Reachability today, stated exactly so nobody over- or under-reads it:** `Ad10xArch`
+and `Gh100Arch` are constructed only in tests (`kayfabe-chips/tests/host_classes.rs`,
+`tests/tests/arch_axis_second_generation.rs`); no `ChipProfile` selects them. So the
+*linkage* is real and the *reachability* is not — yet. The linkage is what makes the two
+comments wrong; the reachability is what would make it a bug.
+
+---
+
 ## What was checked and found to MATCH
 
 Recorded because "found nothing" from a narrow search is the failure this audit exists to
@@ -252,3 +294,4 @@ catch, and because a clean row is the useful half of an inventory.
 | E | mock guest's `BadLength` position and gating | needs consume-and-continue; lands with #85's version-split bound |
 | C′ | `MockVmm::map_guest` unbacked-GPA and overlap refusals | needs the double to carry windows |
 | — | `MockPushbuffer::gpfifo_entries` prefix-decodes a truncated ring and has no `LENGTH == 0` refusal, both more permissive than `Ga10xPushbuffer` | a per-arch policy choice; recorded at the site so no test there is read as evidence about the real codec |
+| G | `Ad10xArch`/`Gh100Arch` still answer the data-plane seams with `MockArch`'s invented encodings | moving the composition is the increment `Ga10xArch`'s own module docs argue for |
