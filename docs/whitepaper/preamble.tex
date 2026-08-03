@@ -41,6 +41,14 @@
 \newfontfamily\glyphfallback{DejaVu Sans}[Scale=MatchLowercase]
 \newunicodechar{★}{\ensuremath{\bigstar}}
 \newunicodechar{⚠}{{\glyphfallback\char"26A0}}
+% ★ ⊘ (U+2298) was added to this document's vocabulary after the two above and hit the
+% IDENTICAL trap: absent from Pagella and Heros, silently dropped, visible only as a
+% `Missing character:` line in a log nobody reads. It is the project's marker for "this
+% does NOT establish X", so a dropped one inverts the sentence it qualifies — the most
+% expensive glyph in the document to lose. amssymb's \oslash is the real math glyph.
+\newunicodechar{⊘}{\ensuremath{\oslash}}
+% ◐ marks a PARTIAL increment. Same trap a third time; DejaVu Sans carries it.
+\newunicodechar{◐}{{\glyphfallback\char"25D0}}
 
 % ------------------------------------------------------------------ palette --
 \definecolor{kfblue}{HTML}{1D4ED8}
@@ -96,6 +104,12 @@
 \newcommand{\unbuilt}{{\color{kfhostln}\textbf{\textsf{NOT BUILT}}}}
 \newcommand{\measured}{{\color{kfcoreln}\textsf{[measured]}}}
 \newcommand{\unver}{{\color{kfhostln}\textsf{[unverified]}}}
+% ★ The project's vocabulary has three levels, not two, and the middle one is where
+% most of this document's NVIDIA claims sit: read out of the open kernel modules,
+% argued, and never run. Printing it in the same colour as [unverified] would be
+% wrong — a cited reading is not an unchecked assertion — so it gets its own.
+\newcommand{\inferred}{{\color{kfshellln}\textsf{[inferred]}}}
+\newcommand{\assumed}{{\color{kfstubln}\textsf{[assumed]}}}
 
 % ---------------------------------------------------------------- tikz style --
 \tikzset{

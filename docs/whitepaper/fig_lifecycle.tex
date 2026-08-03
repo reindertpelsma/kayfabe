@@ -84,8 +84,9 @@
    reactor $\rightarrow$ \tc{waitpid} (non-blocking) $\rightarrow$ close descriptors, tear down
    every double-mmap, release arenas, drop worker slots. The kernel already released the host
    RM objects by closing the connection.}
-  {\textbf{\color{kfstubln}Designed; the OS half is unexercised} — no real isolate process
-   has ever been spawned.}
+  {\textbf{\color{kfstubln}Designed; the OS half is still unexercised} — but \textbf{real isolate
+   processes ARE spawned now} (\tc{HostIsolate}, a sandboxed child, first sighting \tc{t+42\,s}
+   on a live boot). What is unexercised is the \emph{reaping}: no boot has reached a teardown.}
 
 \row{-33}{T7}{whole-device\\ teardown}
   {An explicit ordered \tc{shutdown()}, never a \tc{Drop}: stop accepting traps, cancel every

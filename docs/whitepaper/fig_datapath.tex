@@ -37,17 +37,20 @@
 % =============================================== EMULATED DEVICE ===========
 \node[box, fill=white, draw=kfcoreln, line width=0.8pt,
       minimum width=106mm, minimum height=15.6mm] (l2) at (-30,77.6)
-  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 3\,828 L, 8 modules (S0--S5)}\;$\rightarrow$\;\tc{RpcCommand}\\[1pt]
+  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 5\,056 L (S0--S5)}\;$\rightarrow$\;\tc{RpcCommand}\\[1pt]
    \tiny falcon boot FSM (\tc{BootPhase}$\times$\tc{QueueState}, E1--E11) $\cdot$ the \tc{msgq} ring algebra
    $\cdot$ element framing + checksum $\cdot$ RPC decode/dispatch\\[2.5pt]
-   \textbf{\color{kfcoreln}★ \tc{kayfabe-rmrpc} — BUILT, 1\,033 L (B0--B4)}\;$\rightarrow$\;\tc{RmEvent}\\[1pt]
+   \textbf{\color{kfcoreln}★ \tc{kayfabe-rmrpc} — BUILT, 3\,265 L}\;$\rightarrow$\;\tc{RmEvent}\\[1pt]
    \tiny \tc{translate} (stateless free fn) $\cdot$ \tc{GraphPolicy}: translate $\rightarrow$ \tc{Gpu::apply}
-   $\rightarrow$ reply $\cdot$ 15 named refusals + a bounded census\\[1.5pt]
-   \tiny \textbf{\color{kfhostln}No \tc{GuestRam} and no \tc{Device} implementor outside \tc{tests/},
-   so nothing feeds it a byte a guest wrote.}};
-\node[box, fill=white, draw=kfhostln, dashed, minimum width=58mm, minimum height=9mm] (bar) at (52,77)
+   $\rightarrow$ reply $\cdot$ named refusals + a bounded census + the capability table\\[1.5pt]
+   \tiny \textbf{\color{kfcoreln}★★★ FED BY A REAL GUEST DRIVER}: \tc{kayfabe-qemu-raw}'s
+   \tc{MachineRam} is a production \tc{GuestRam},\\[-0.5pt]
+   \tiny and a stock 580.159.04 module's bytes arrive here — \textbf{92--95 commands decode per
+   boot.}};
+\node[box, fill=white, draw=kfcoreln, minimum width=58mm, minimum height=9mm] (bar) at (52,77)
   {doorbell BAR decode: offset $\rightarrow$ \tc{(GpuId, token)}\\[1pt]
-   \tiny only implementor in the tree is the test device\\[-0.5pt]\fl{tests/src/guest.rs \tc{DoorbellDevice}}};
+   \tiny built and wired (\tc{SharedDoorbell}); \tc{Ga10xArch::decode\_doorbell}\\[-0.5pt]
+   \tiny \textbf{\color{kfhostln}⊘ every boot to date: \tc{doorbells: 0 arrived}}};
 
 \draw[ar, kfhostln, dashed] (-70,88) -- (-70,86.1)
   node[midway, left=0.8mm, align=center, font=\sffamily\tiny, color=kfhostln]{RM ioctls,\\GSP RPC};
@@ -62,7 +65,8 @@
    \fl{vmm-kvm/src/vcpu.rs \tc{VcpuRunner::dispatch} $\rightarrow$ \tc{Plane::classify\_exit}}};
 \node[shellb, minimum width=44mm, minimum height=11mm] (dev) at (-3,58)
   {\textbf{3}\; \tc{dyn Device::mmio\_write}\\[1pt]\fl{kayfabe-vmm/src/lib.rs \tc{Device::mmio\_write}}\\[2pt]
-   {\color{kfhostln}\textbf{no production implementor exists}}};
+   {\color{kfhostln}\textbf{still test types only}} — the shipped\\[-0.5pt]
+   \tiny QEMU path enters at \tc{kayfabe\_shim\_regs\_write} instead};
 \node[shellb, minimum width=52mm, minimum height=11mm] (sd) at (52,58)
   {\textbf{4}\; \tc{SharedDevice::doorbell} $\rightarrow$ \tc{verb\_op}\\[1pt]
    \fl{kayfabe-rt/src/device.rs \tc{SharedDevice::doorbell}, \tc{verb\_op}}\\[2pt]
@@ -79,10 +83,10 @@
      $\rightarrow$ \tc{AddressTable::bind}\\[-0.5pt]
    \tiny \textbf{forward-populate only} — the table is written from declared protocol facts\\[-0.5pt]
    \tiny and never reverse-resolved out of guest memory; a lookup miss is a fault\\[2pt]
-   \tiny \textbf{\color{kfhostln}★ \tc{sync\_rpc\_mappings} HAS NO PRODUCER HERE —
-   \tc{MAP\_MEMORY\_DMA} is \tc{\_STUB}}\\[-0.5pt]
-   \tiny \textbf{\color{kfhostln}on every GSP-client part; the real sources are
-   \tc{fwd}/\tc{mmu} work and unbuilt.}};
+   \tiny \textbf{\color{kfhostln}★ \tc{sync\_rpc\_mappings} HAS NO PRODUCER (\tc{MAP\_MEMORY\_DMA}
+   is \tc{\_STUB}) and STILL RUNS, over an empty set}\\[-0.5pt]
+   \tiny \textbf{\color{kfshellln}the 2 real sources: \tc{GPU\_PROMOTE\_CTX} (built) $\cdot$ the CE
+   page-table write (PARTIAL — a root page, no further)}};
 \node[coreb, minimum width=88mm, minimum height=9mm] (route) at (44,40)
   {\textbf{5}\; \tc{route\_doorbell} — token $\rightarrow$ \tc{vChid} $\rightarrow$ \tc{(GpuId,VChid)} $\rightarrow$ \tc{(ProcId,ChanId)}\\[1pt]
    \fl{kayfabe-fwd/src/lib.rs \tc{route\_doorbell}} \;— a pure projection lookup; an unknown token is a loud fault};
@@ -113,7 +117,8 @@
 \node[portb, minimum width=62mm, minimum height=10mm, fill=white] (poolgate) at (-52,1)
   {one isolate process per \textbf{(guest process, GPU)} pair\\[1pt]
    \tiny a bounded pool of single-in-flight workers (default 4)\\[-0.5pt]
-   \tiny \textbf{\color{kfhostln}the only \tc{RmBackend} implementation today is the mock}};
+   \tiny \textbf{\color{kfcoreln}★ real now: \tc{HostRmBackend}, a sandboxed child spawned in}\\[-0.5pt]
+   \tiny \textbf{\color{kfcoreln}response to the guest's own action (\tc{t+42\,s} on a live boot)}};
 \draw[ar, line width=1.1pt] (gate.south) -- (44,7.2);
 \draw[ar, dashed] (worker.north west) -- (r5.south east);
 
