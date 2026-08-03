@@ -129,34 +129,65 @@ impl MockArch {
     /// Inverse of [`Arch::vchid_from_userd_flags`] — lets tests declare a channel
     /// with a chosen vChid through the *encoded* form, like a real guest would.
     ///
-    /// ## ⊘ ONE contiguous field, where RM writes TWO — `mock_method::CE_LAUNCH_DMA`'s
-    /// family, and this seam has no other implementer
+    /// ## ★★ FIXED: this now encodes exactly as RM encodes — no more and no less
     ///
-    /// `[src]` RM splits the chid across two **non-adjacent** subfields of
-    /// `NVOS04_FLAGS`, with a flag bit between them:
-    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE` is `10:8` and
-    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_VALUE` is `20:12`, separated by
-    /// `_USERD_INDEX_FIXED 11:11` (`ogkm-580:
-    /// src/common/sdk/nvidia/inc/alloc/alloc_channel.h:184, 186, 201`). It fills them from
-    /// the chid as `VALUE = ChID % n`, `PAGE_VALUE = ChID / n` with
-    /// `n = NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))` = 8 (`ogkm-580:
-    /// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793, 2800, 2802`), so the recovery
-    /// is `PAGE_VALUE * 8 + VALUE` and is **not** a contiguous field read.
+    /// It used to pack the chid into **one** 12-bit field at `18:7`, straddling both of
+    /// RM's real subfields *and* RM's `_FIXED` bit. `MockArch` was the seam's only
+    /// non-refusing implementer at the time, so **nothing in the suite had ever exercised
+    /// a split encoding** — the mock's invented layout was hiding the defect for the life
+    /// of the trait. That is `mock_fidelity_both_directions`, whose whole content is that
+    /// a too-*capable* mock and a too-strict one are the same defect and a green suite
+    /// catches neither.
     ///
-    /// This mock packs it into one 12-bit field at `18:7` — which straddles both real
-    /// fields and RM's `_FIXED` bit. That is fine as an invented encoding and it is
-    /// recorded because of what it makes untestable: `Ga10xArch::vchid_from_userd_flags`
-    /// answers `VChid(0)` for **every** input (a documented refusal), so [`MockArch`] is
-    /// the only implementer of this seam that returns a chid at all, and the shape of what
-    /// it returns has never been driven against a split encoding. ⊘ Unlike `E4`'s
-    /// `LAUNCH_DMA`, the *signature* is not the problem — both real fields live in the one
-    /// `u32` this method is handed — so building the real decode is an increment, not a
-    /// redesign.
+    /// `[src]` RM splits the chid across two **non-adjacent** subfields of `NVOS04_FLAGS`,
+    /// with a flag bit between them: `_CHANNEL_USERD_INDEX_VALUE` is `10:8`,
+    /// `_CHANNEL_USERD_INDEX_FIXED` is `11:11` and `_CHANNEL_USERD_INDEX_PAGE_VALUE` is
+    /// `20:12`, with `_CHANNEL_USERD_INDEX_PAGE_FIXED` at `21:21` (`ogkm-580:
+    /// src/common/sdk/nvidia/inc/alloc/alloc_channel.h:184, 186, 201, 203`). CPU-RM fills
+    /// them as `VALUE = ChID % n`, `PAGE_VALUE = ChID / n` with
+    /// `n = NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))` = 8, **and sets `_FIXED=_FALSE` /
+    /// `_PAGE_FIXED=_TRUE` in the same breath** (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793-2802`).
+    ///
+    /// ⊘ **"No more"** is the half that is easy to lose: the two marker bits are part of
+    /// the encoding, not decoration. Without them the decode has no way to express *these
+    /// flags name no channel*, which is a shape a real guest can send and RM answers with
+    /// `NV_ERR_INVALID_STATE`.
+    ///
+    /// ⊘ **The truncation is RM's, and is reproduced rather than fixed.** `FLD_SET_DRF_NUM`
+    /// masks the quotient into nine bits, so a chid ≥ 4096 goes on the wire as
+    /// `((chid / 8) & 0x1FF) * 8 + (chid % 8)` — `4096` encodes as `0`. A mock that
+    /// round-tripped it faithfully would be *more* capable than the driver, which is the
+    /// same defect pointing the other way.
+    ///
+    /// ★ The layout below is the mock's own arithmetic and is deliberately not a call into
+    /// `kayfabe_chips` — a mock that delegated to the implementation under test would make
+    /// every round trip through it a function testing its own inverse, which is exactly the
+    /// shape `token_for` was caught in. `tests/tests/userd_chid_oracle.rs` is what pins
+    /// both against NVIDIA's compiled writer.
     #[must_use]
     pub fn userd_flags_for(vchid: VChid) -> u32 {
-        // Fake packing: vchid in bits [18:7], marker bits low.
-        (u32::from(vchid.0 & 0xfff) << 7) | 0b101
+        let chid = u32::from(vchid.0);
+        let value = chid % Self::USERD_CHANNELS_PER_PAGE;
+        // Nine bits, as `FLD_SET_DRF_NUM` would leave it.
+        let page = (chid / Self::USERD_CHANNELS_PER_PAGE) & 0x1FF;
+        (1 << Self::USERD_INDEX_PAGE_FIXED_SHIFT)
+            | (page << Self::USERD_INDEX_PAGE_VALUE_SHIFT)
+            | (value << Self::USERD_INDEX_VALUE_SHIFT)
     }
+
+    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE`, `10:8`.
+    const USERD_INDEX_VALUE_SHIFT: u32 = 8;
+    /// Ditto, width — and therefore the divisor RM's writer uses.
+    const USERD_INDEX_VALUE_WIDTH: u32 = 3;
+    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_FIXED`, `11:11` — **between** the two halves.
+    const USERD_INDEX_FIXED_SHIFT: u32 = 11;
+    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_VALUE`, `20:12`.
+    const USERD_INDEX_PAGE_VALUE_SHIFT: u32 = 12;
+    /// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_FIXED`, `21:21`.
+    const USERD_INDEX_PAGE_FIXED_SHIFT: u32 = 21;
+    /// `NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))`.
+    const USERD_CHANNELS_PER_PAGE: u32 = 1 << Self::USERD_INDEX_VALUE_WIDTH;
 
     /// Inverse of [`Arch::decode_doorbell`] — build a valid Mockingbird token.
     #[must_use]
@@ -205,8 +236,22 @@ impl Arch for MockArch {
         }
     }
 
-    fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
-        VChid(((flags >> 7) & 0xfff) as u16)
+    /// RM's own three shapes, and only one of them names a channel — see
+    /// [`MockArch::userd_flags_for`] for the citations and for why the mock reproduces the
+    /// split rather than inventing a contiguous field.
+    fn vchid_from_userd_flags(&self, flags: u32) -> Option<VChid> {
+        // No page forced → the allocator picks the chid; the flags carry none.
+        if (flags >> Self::USERD_INDEX_PAGE_FIXED_SHIFT) & 1 == 0 {
+            return None;
+        }
+        // Page forced AND index forced → RM answers NV_ERR_INVALID_STATE.
+        if (flags >> Self::USERD_INDEX_FIXED_SHIFT) & 1 != 0 {
+            return None;
+        }
+        let value = (flags >> Self::USERD_INDEX_VALUE_SHIFT) & (Self::USERD_CHANNELS_PER_PAGE - 1);
+        let page = (flags >> Self::USERD_INDEX_PAGE_VALUE_SHIFT) & 0x1FF;
+        // At most 511 * 8 + 7 = 4095, so the cast is lossless.
+        Some(VChid((page * Self::USERD_CHANNELS_PER_PAGE + value) as u16))
     }
 
     fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
@@ -346,7 +391,7 @@ impl Arch for WireClassArch {
         }
     }
 
-    fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
+    fn vchid_from_userd_flags(&self, flags: u32) -> Option<VChid> {
         self.0.vchid_from_userd_flags(flags)
     }
     fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {
@@ -3352,7 +3397,19 @@ mod tests {
                 runlist: kayfabe_arch::ids::RunlistId(0)
             })
         );
-        assert_eq!(a.vchid_from_userd_flags(MockArch::userd_flags_for(v)), v);
+        assert_eq!(
+            a.vchid_from_userd_flags(MockArch::userd_flags_for(v)),
+            Some(v)
+        );
+        // ⊘ …and this half is NOT self-consistent-only any more: the USERD encoding above
+        // is RM's, and `tests/tests/userd_chid_oracle.rs` compares BOTH directions of it
+        // against NVIDIA's compiled writer and reader. This line is a smoke test; that file
+        // is the oracle.
+        assert_eq!(
+            a.vchid_from_userd_flags(MockArch::userd_flags_for(v) & !(1 << 21)),
+            None,
+            "a word with no USERD page forced names no channel"
+        );
         assert_eq!(
             a.decode_doorbell(0x1234),
             None,

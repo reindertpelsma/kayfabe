@@ -171,36 +171,16 @@ impl Arch for Ga10xArch {
         }
     }
 
-    /// ⊘ **`VChid(0)` for every input, and that is a refusal wearing the only shape this
-    /// signature allows.** The real recovery is a GA10x `USERD` flag-field decode that
-    /// this port has never validated against silicon — `gsp_core_bridge.md` §6 names
-    /// *"that the `userd_flags`→`VChid` recovery matches real silicon"* as exactly what
-    /// the stage cannot prove. Collapsing every channel to one vChid makes a **second**
-    /// channel collide loudly in the core's `by_vchid` index rather than route silently
-    /// to the wrong one; the return type has no `Option`, so a loud collision is the
-    /// strongest available statement of "unbuilt".
+    /// ★★★ **The GA10x `USERD_INDEX` chid recovery, landed.** See
+    /// [`decode_userd_index_chid`] — this is a thin forward to it so the free function can
+    /// be differentialled directly.
     ///
-    /// ## ★★ What the encoding IS, recorded so the increment starts from a reading
-    ///
-    /// `[src]` RM splits the chid across two **non-adjacent** subfields with a flag bit
-    /// between them — `NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE 10:8`,
-    /// `_USERD_INDEX_FIXED 11:11`, `_USERD_INDEX_PAGE_VALUE 20:12` (`ogkm-580:
-    /// src/common/sdk/nvidia/inc/alloc/alloc_channel.h:184, 186, 201`) — and fills them
-    /// from the chid as `VALUE = ChID % n` / `PAGE_VALUE = ChID / n`, where
-    /// `n = NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))` = 8 (`ogkm-580:
-    /// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793, 2800, 2802`). So the recovery
-    /// is `PAGE_VALUE * 8 + VALUE`.
-    ///
-    /// ⊘ **That reading is not a licence to land it**, and this refusal stays until it is
-    /// settled the way `E3`'s doorbell token was: by compiling RM's own writer as an
-    /// oracle and differentialling the decode against it over the field space
-    /// (`isolate_the_drivers_own_checks`; `worksubmit_token_oracle.rs` is the pattern).
-    /// A transcription of the three lines above is exactly the instrument that has been
-    /// wrong before. Note also that `kayfabe_mocks::MockArch` — the seam's only
-    /// non-refusing implementer — packs the chid into **one** contiguous field, so
-    /// nothing in the suite has ever exercised a split one.
-    fn vchid_from_userd_flags(&self, _flags: u32) -> VChid {
-        VChid(0)
+    /// The refusal this replaced (`VChid(0)` for every input) is gone because it had become
+    /// a boot blocker: more than one channel exists on the path to first compute, and
+    /// collapsing them all to one vChid turns *every* second channel into a
+    /// `ProjectionError::VchidCollision`.
+    fn vchid_from_userd_flags(&self, flags: u32) -> Option<VChid> {
+        decode_userd_index_chid(flags)
     }
 
     /// ★★★ **E3 — the GA10x work-submit token, decoded.** Two fields and nothing else:
@@ -284,6 +264,138 @@ impl Arch for Ga10xArch {
     fn host_classes(&self) -> Option<&dyn HostClasses> {
         Some(&crate::host_classes::Ga10xHostClasses)
     }
+}
+
+// ── ★★★ The USERD_INDEX chid recovery — `vchid_from_userd_flags`, landed ──────────────
+
+/// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE`, `10:8` — the channel's index **within** a
+/// USERD page (`ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:184`).
+const USERD_INDEX_VALUE_SHIFT: u32 = 8;
+/// Ditto, width. ★★ This number does **double duty** and that is the whole subtlety of
+/// this decode — see [`USERD_CHANNELS_PER_PAGE`].
+///
+/// ⊘ **MEASURED 2026-08-03 (mutation, not a reading): this width is NOT pinned as a mask.**
+/// Widening the mask alone — `& ((1 << (WIDTH + 1)) - 1)`, leaving the multiplier at 8 —
+/// leaves the whole oracle sweep green. The reason is principled rather than a gap in the
+/// sweep: the extra bit is [`USERD_INDEX_FIXED_SHIFT`], and **every** flags word in which
+/// that bit is set is one this function refuses *before* the mask runs (`_PAGE_FIXED` with
+/// `_FIXED` is `NV_ERR_INVALID_STATE`; `_FIXED` without `_PAGE_FIXED` names no chid). So
+/// there is no input on which a four-bit read differs from a three-bit one, and no test can
+/// distinguish them. What the sweep *does* pin is the width's other job — widening it as a
+/// constant moves [`USERD_CHANNELS_PER_PAGE`] to 16 and goes red immediately.
+const USERD_INDEX_VALUE_WIDTH: u32 = 3;
+
+/// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_FIXED`, `11:11` — sits **between** the two halves of
+/// the chid (`alloc_channel.h:186`), which is why this is not a contiguous field read.
+const USERD_INDEX_FIXED_SHIFT: u32 = 11;
+
+/// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_VALUE`, `20:12` — the USERD **page**
+/// (`alloc_channel.h:201`).
+const USERD_INDEX_PAGE_VALUE_SHIFT: u32 = 12;
+/// Ditto, width.
+const USERD_INDEX_PAGE_VALUE_WIDTH: u32 = 9;
+
+/// `NVOS04_FLAGS_CHANNEL_USERD_INDEX_PAGE_FIXED`, `21:21` (`alloc_channel.h:203`).
+const USERD_INDEX_PAGE_FIXED_SHIFT: u32 = 21;
+
+/// **The multiplier**, and the single most load-bearing number in this file.
+///
+/// ## ★★★ There are TWO of these, reached by two unrelated routes
+///
+/// This one is the **writer's**: CPU-RM splits the chid with
+/// `numChannelsPerUserd = NVBIT(DRF_SIZE(NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE))`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793`) — a number that
+/// comes from **the width of a flag field**, which is why it is written here as
+/// `1 << USERD_INDEX_VALUE_WIDTH` and not as a literal.
+///
+/// Physical RM does **not** recover the chid with it. The reader
+/// (`kchannelAllocHwID_GM107`, `kernel_channel_gm107.c:456-476`) extracts the two
+/// subfields and passes them down *separately*; the recombination happens one frame later
+/// in `kfifoChidMgrAllocChid_IMPL` (`kernel_fifo.c:782-785`) as
+/// `userdPageIdx * pChidMgr->pGlobalChIDHeap->ownerGranularity + internalIdx`, and that
+/// `ownerGranularity` was set from `RM_PAGE_SIZE / userdBar1Size` (`kernel_fifo.c:338-341`)
+/// with `userdBar1Size` from the halified `kfifoGetUserdSizeAlign` — `1 <<
+/// NV_RAMUSERD_BASE_SHIFT` = 512 on the `_GM107` implementation GA106 binds. So the
+/// reader's multiplier is **a page size divided by the size of a USERD**.
+///
+/// 4096 / 512 = 8 = `1 << 3`. The two agree on GA106 **as a fact, not as a definition**.
+///
+/// ⊘ Nothing above is what makes this trustworthy — it is a reading, and a transcribed
+/// reading is the failure `isolate_the_drivers_own_checks` names.
+/// `tests/tests/userd_chid_oracle.rs` is the instrument: it compiles RM's writer, RM's
+/// reader, RM's recombination **and** RM's granularity computation out of the driver's own
+/// files, runs a chid round trip through them, and asserts that the granularity the
+/// driver's own eheap ended up holding equals this constant. That assertion is what
+/// *demonstrates* the equality above instead of assuming it, and it is what will go red on
+/// the release or the chip where the two part company.
+///
+/// ★ `pub` on purpose, and it is the ONE constant here that is: the differential in
+/// `tests/tests/userd_chid_oracle.rs` has to compare *our* multiplier against the
+/// granularity NVIDIA's own eheap ended up holding, and a test that re-derived it from
+/// `1 << 3` would be comparing the driver against a second transcription instead of
+/// against us.
+pub const USERD_CHANNELS_PER_PAGE: u32 = 1 << USERD_INDEX_VALUE_WIDTH;
+
+/// Recover a channel's chid from the `NVOS04_FLAGS` word CPU-RM put on the
+/// `ALLOC_CHANNEL` RPC — or `None` when the word does not name a channel at all.
+///
+/// # The two `None` arms are RM's, not ours
+///
+/// `kchannelAllocHwID_GM107` has three shapes, and only one of them yields a chid
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_channel_gm107.c:456-476`):
+///
+/// 1. `_PAGE_FIXED = _TRUE` and `_FIXED = _FALSE` → `bForceUserdPage`, the two subfields
+///    are extracted, and the recombination names a chid. This is what CPU-RM's GSP-client
+///    path always writes (`kernel_channel.c:2795-2802` sets `_FIXED=_FALSE` and
+///    `_PAGE_FIXED=_TRUE` in the same breath as the values).
+/// 2. `_PAGE_FIXED = _TRUE` **and** `_FIXED = _TRUE` → RM's own
+///    `NV_ASSERT_OR_RETURN(…, NV_ERR_INVALID_STATE)` refuses the allocation outright.
+/// 3. `_PAGE_FIXED = _FALSE` → no page is forced. `_FIXED = _TRUE` then asks for a
+///    specific index *within a page RM will choose*, which is a constraint on the
+///    allocation and **not a chid**; `_FIXED = _FALSE` asks for nothing at all. In both
+///    cases `kfifoChidMgrAllocChid` picks the chid off the heap, so the flags word does
+///    not carry one.
+///
+/// Arms 2 and 3 are why this returns `Option` and why the trait method was widened. A
+/// `VChid` return had to answer *something* for them, and boundary-1 posture is that guest
+/// bytes are hostile: a guest can set those bits, and inventing a channel number for a
+/// word that names none is exactly the silent mis-route this decode exists to avoid.
+///
+/// # ⊘ There is deliberately NO upper bound on the chid here
+///
+/// The real bound is `kfifoChidMgrGetNumChannels` — runtime state that depends on the
+/// chip's FIFO configuration and that nothing at this seam has. So the only bound applied
+/// is the one the **field widths** impose: `_PAGE_VALUE` is nine bits and the multiplier
+/// is eight, so the widest chid this encoding can express is `511 * 8 + 7 = 4095`, and a
+/// larger one is not representable rather than rejected. ⊘ A plausible-looking constant
+/// (`4096`? `2048`?) would be an invented bound wearing the shape of a sourced one; the
+/// caller (`kayfabe_core`'s exec-plane index) is what answers "is there a live channel
+/// there", and it answers with a miss.
+///
+/// ★ Note what this makes of RM's own round trip. The writer divides the chid by 8 and
+/// `FLD_SET_DRF_NUM` masks the quotient into nine bits, so **CPU-RM itself cannot express
+/// a chid ≥ 4096 in these flags**: it writes `((chid / 8) & 0x1FF) * 8 + (chid % 8)`, and
+/// `4096` goes on the wire as `0`. The oracle sweeps past that edge and records the
+/// writer's chid and the reader's chid *separately* for exactly this reason — it is a
+/// lossiness in the driver, not a disagreement with this decoder.
+#[must_use]
+pub fn decode_userd_index_chid(flags: u32) -> Option<VChid> {
+    let page_fixed = (flags >> USERD_INDEX_PAGE_FIXED_SHIFT) & 1 != 0;
+    let index_fixed = (flags >> USERD_INDEX_FIXED_SHIFT) & 1 != 0;
+    // Arm 3: nothing forces a USERD page, so the flags name no channel.
+    if !page_fixed {
+        return None;
+    }
+    // Arm 2: RM answers NV_ERR_INVALID_STATE. So do we — with a refusal, not a chid.
+    if index_fixed {
+        return None;
+    }
+    let value = (flags >> USERD_INDEX_VALUE_SHIFT) & ((1 << USERD_INDEX_VALUE_WIDTH) - 1);
+    let page = (flags >> USERD_INDEX_PAGE_VALUE_SHIFT) & ((1 << USERD_INDEX_PAGE_VALUE_WIDTH) - 1);
+    // RM's own expression, in RM's own order: page * granularity + index-within-page.
+    let chid = page * USERD_CHANNELS_PER_PAGE + value;
+    // Lossless by the two masks above: 9 bits times 8 plus 3 bits is at most 4095.
+    Some(VChid(chid as u16))
 }
 
 /// ★★★ The work-submit-token decode, **shared by three generations** — and the sharing

@@ -312,6 +312,25 @@ pub enum ProjectionError {
         /// Second claimant.
         b: ResourceKey,
     },
+    /// ★★ A channel's `NVOS04_FLAGS` word **names no channel at all**.
+    ///
+    /// Sits beside [`Self::VchidCollision`] because it is the other half of the same
+    /// question: that one is *two channels claiming one vChid*, this one is *a channel
+    /// claiming none*. [`kayfabe_arch::Arch::vchid_from_userd_flags`] returns `Option`
+    /// precisely so this case has somewhere to go — RM's own reader has two arms where the
+    /// flags do not carry a chid (`_PAGE_FIXED` false leaves it to the allocator;
+    /// `_PAGE_FIXED` and `_FIXED` both true is `NV_ERR_INVALID_STATE`), and boundary-1
+    /// posture is that a guest can send either.
+    ///
+    /// ⊘ Refusing is the *whole* answer here. There is no fallback vChid to pick: any
+    /// choice would put this channel in the exec-plane index under a number the guest
+    /// never asked for, which is the silent mis-route the `Option` was widened to prevent.
+    UnnamedVchid {
+        /// The channel that declared them.
+        channel: ResourceKey,
+        /// The word itself, verbatim, so the refusal can be read against the driver.
+        userd_flags: u32,
+    },
     /// Two distinct VASpace origins on ONE target declare the same PDB.
     PdbCollision {
         /// The target GPU scope of the collision (`None` = unresolved-target scope).
@@ -767,7 +786,14 @@ pub fn project(
                 }
             }
             ObjectKind::Channel { engine } => {
-                let vchid = arch.vchid_from_userd_flags(node.facts.userd_flags);
+                // ★ A word that names no channel is a NAMED refusal, never a substituted
+                // vChid — see `ProjectionError::UnnamedVchid`.
+                let Some(vchid) = arch.vchid_from_userd_flags(node.facts.userd_flags) else {
+                    return Err(ProjectionError::UnnamedVchid {
+                        channel: node.id(),
+                        userd_flags: node.facts.userd_flags,
+                    });
+                };
                 // ★★★ §12.41 — by resource identity, on both the channel and the VASpace
                 // its `hVASpace` resolves to (see the VaSpace arm).
                 let gpu = g.gpu_of_resource(node.id());

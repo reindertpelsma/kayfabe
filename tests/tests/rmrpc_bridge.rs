@@ -3010,7 +3010,7 @@ fn gpu_from_script(script: &RpcScript) -> kayfabe_tests::Guarded<Gpu> {
 /// +68  hObjectBuffer       00 00 00 00                       (params +4)
 /// +72  gpFifoOffset        00 … 00  (NvU64, 8-aligned)       (params +8)
 /// +80  gpFifoEntries       00 00 00 00                       (params +16)
-/// +84  flags               85 10 00 00   -> 0x1085           (params +20) ★
+/// +84  flags               00 41 20 00   -> 0x0020_4100      (params +20) ★
 /// +88  hContextShare       00 00 00 00   -> none declared    (params +24) ★
 /// +92  hVASpace            10 00 00 5c   -> 0x5c000010       (params +28) ★
 /// ── and NOTHING follows: +96 is where 610 would put `hHandleVASpace` and 580
@@ -3022,7 +3022,7 @@ const HEX_CHANNEL_ALLOC: [u8; 96] = [
     0x71, 0x00, 0xd0, 0xc1, 0x12, 0x00, 0x00, 0x5c, 0x19, 0x00, 0x00, 0x5c, 0x6f, 0xc5, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x85, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x5c,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x5c,
 ];
 
 /// ★ **Transcription #1 vs #2, for the channel.** Two humans, two methods, one byte
@@ -3033,7 +3033,17 @@ const HEX_CHANNEL_ALLOC: [u8; 96] = [
 fn the_hand_written_hex_channel_and_the_independent_builder_agree_byte_for_byte() {
     // The encoded flags word is part of the fixture, so it is pinned as a literal too —
     // otherwise the hex would silently follow the mock arch's packing wherever it went.
-    assert_eq!(gr_flags(), 0x1085, "MockArch::userd_flags_for(VChid(0x21))");
+    // ★★ 0x0020_4100 and not the old 0x1085: `MockArch` used to pack the chid into one
+    // contiguous invented field, and now encodes exactly as CPU-RM does —
+    // `_PAGE_FIXED` set, `_PAGE_VALUE = 0x21 / 8 = 4`, `_VALUE = 0x21 % 8 = 1`
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2793-2802`, and
+    // `tests/tests/userd_chid_oracle.rs` differentials both directions against that
+    // span COMPILED). So this fixture became MORE faithful, not less.
+    assert_eq!(
+        gr_flags(),
+        0x0020_4100,
+        "MockArch::userd_flags_for(VChid(0x21))"
+    );
     assert_eq!(
         w::message(
             fn_id::GSP_RM_ALLOC,
@@ -3066,7 +3076,7 @@ fn the_hand_hex_channel_alloc_becomes_the_declared_event() {
                 h_vaspace: Some(HObject(cp::VAS)),
                 // `hContextShare` was `NV01_NULL_OBJECT` on the wire, which is absence.
                 h_ctx_share: None,
-                userd_flags: 0x1085,
+                userd_flags: 0x0020_4100,
                 // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
                 // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
                 // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
@@ -3807,12 +3817,20 @@ fn one_changed_field_of_the_compute_script_changes_the_projection() {
 /// would have produced. Everything else is held constant, including the PDB — so the
 /// difference between a served ring and a named fault is *the decoder*.
 ///
-/// ★ It takes **three** runs, not two, and the third is a finding the design's one-line
+/// ★ It takes **three** runs, not two, and the second is a finding the design's one-line
 /// arm does not have: the channel decoder recovers `userd_flags` as well as the VAS
 /// handles, and `userd_flags` is what the channel ROUTES by. So a wholly absent decoder
-/// does not reach `NoVas` at all — the doorbell's token resolves to no channel and the
-/// fault is `UnknownVchid`, one plane earlier. Only stripping the handle facts while
-/// keeping the flags isolates the VAS, and that is the run the design is describing.
+/// does not reach `NoVas` at all — it does not even PROJECT. A zero flags word forces no
+/// USERD page, which is one of the two shapes RM's own reader answers with "no chid here"
+/// (`kchannelAllocHwID_GM107`), so `Arch::vchid_from_userd_flags` returns `None` and the
+/// projection refuses by name with `ProjectionError::UnnamedVchid` — **two** planes
+/// earlier than `NoVas`, at graph time rather than at ring time.
+///
+/// ⊘ That is a CHANGE, and it is the point of widening the seam to `Option`: this arm used
+/// to reach `FwdFault::UnknownVchid`, because `MockArch`'s invented encoding decoded a
+/// zero word to `VChid(0)` — a channel number the guest never asked for, sitting in the
+/// exec-plane index. Only stripping the handle facts while KEEPING the flags isolates the
+/// VAS, and that is the run the design is describing.
 #[test]
 fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
     let channel_msg = w::message(
@@ -3897,21 +3915,31 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
     assert_eq!(with_pdb, Some(Some(CP_PDB)), "the channel found its VAS");
     assert_eq!(with_decoder, Ok(()), "…and the ring is served");
 
-    // (2) ★ With NO decoder at all: `userd_flags` is 0 too, so the channel is not even at
-    //     this vChid. The absence surfaces one plane earlier, by name.
-    let (no_decoder, no_pdb) = run(undecoded);
-    assert_eq!(
-        no_pdb, None,
-        "★ no decoder ⇒ no `userd_flags` ⇒ the channel routes at a different vChid",
-    );
+    // (2) ★★ With NO decoder at all: `userd_flags` is 0 too, and a zero word forces no
+    //     USERD page — RM's own reader leaves the chid to the allocator there, so the word
+    //     names no channel and the projection REFUSES it by name. There is no doorbell to
+    //     take: the channel never enters the index at all.
+    let no_decoder = {
+        let mut gpu = fresh_gpu();
+        {
+            let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut gpu);
+            for out in deliver_all(&mut policy, &prefix.messages()) {
+                let _ = out.expect("the prefix is legal");
+            }
+        }
+        gpu.apply(undecoded)
+    };
     assert_eq!(
         no_decoder,
-        Err(FwdFault::UnknownVchid {
-            gpu: GpuId::ZERO,
-            vchid: CP_GR_VCHID,
-        }),
-        "the EXACT fault, and it is not `NoVas` — this is the arm the design's one-liner \
-         folds together",
+        Err(kayfabe_core::gpu::GpuError::Projection(
+            kayfabe_core::project::ProjectionError::UnnamedVchid {
+                channel: ResourceKey::first(NodeKey::new(HClient(cp::C), HObject(cp::GR))),
+                userd_flags: 0,
+            }
+        )),
+        "★★ the EXACT refusal, and it is neither `NoVas` nor `UnknownVchid`: a word that \
+         names no channel is refused at graph time rather than given a vChid the guest \
+         never asked for",
     );
 
     // (3) ★★ The design's arm proper: the flags survive, the declared handles do not.

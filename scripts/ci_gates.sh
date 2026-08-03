@@ -85,7 +85,11 @@ want_all=0
 # moving a pinned floor under them would have been worse. Until it existed, that whole
 # oracle family could have vanished from CI and from a dev box at once with nothing red —
 # which is the exact failure this floor was invented for.
-GATE_STEPS_ALL_MIN=22
+# ★ 22 -> 23: the USERD-CHID-ORACLE reached-count step (the tests that judge
+# `Arch::vchid_from_userd_flags` against NVIDIA's own USERD_INDEX writer, reader,
+# recombination and eheap granularity). Same shape as the four above — it READS the test
+# log, so the extractor defers it and only the `--all` literal moves.
+GATE_STEPS_ALL_MIN=23
 GATE_STEPS_FAST_MIN=11
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.

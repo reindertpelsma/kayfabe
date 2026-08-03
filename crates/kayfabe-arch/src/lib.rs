@@ -866,7 +866,19 @@ pub trait Arch: Send + Sync {
     /// Recover a channel's virtual channel ID ([`VChid`]) from the opaque
     /// USERD/flags word its alloc params declared (the open-driver
     /// `kernel_channel.c` USERD_INDEX recovery, generalized as a seam).
-    fn vchid_from_userd_flags(&self, flags: u32) -> VChid;
+    ///
+    /// ## ★★ `None` means "these flags name no channel", and it is RM's own answer
+    ///
+    /// The GA10x reader has **three** shapes and only one of them yields a chid
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_channel_gm107.c:456-476`):
+    /// `_PAGE_FIXED` false leaves the chid to the allocator, and `_PAGE_FIXED` with
+    /// `_FIXED` both true is refused by RM with `NV_ERR_INVALID_STATE`. A bare [`VChid`]
+    /// return had to answer *something* for those two, and boundary-1 posture is that
+    /// guest bytes are hostile — a guest can set those bits, so inventing a channel number
+    /// for a word that names none is the same silent mis-route [`Arch::decode_doorbell`]
+    /// returns `Option` to avoid. The caller turns it into a named refusal
+    /// (`kayfabe_core::ProjectionError::UnnamedVchid`).
+    fn vchid_from_userd_flags(&self, flags: u32) -> Option<VChid>;
 
     /// Decode a doorbell/work-submit token written to the usermode region (B6).
     /// Returns `None` for a token this generation considers malformed — the

@@ -157,7 +157,33 @@ either needs the double to carry windows, which is a shape change.
 
 ---
 
-## ★★ FINDING D — `vchid_from_userd_flags`: one contiguous field where RM writes two
+## ~~★★ FINDING D — `vchid_from_userd_flags`: one contiguous field where RM writes two~~
+
+★★★ **CLOSED 2026-08-03, task #174 — and the reading below SURVIVED, with one correction
+that changes what had to be built.**
+
+What was built: a **fifth compiled oracle** (`tests/oracle/userd_chid_oracle.c`,
+`tests/tests/userd_chid_oracle.rs`, five tests, `USERD-CHID-ORACLE-GATE` floor 5 in
+`ci.yml`, `GATE_STEPS_ALL_MIN` 22 → 23). `MockArch` now encodes **exactly** as RM encodes,
+and that is not a claim the mock makes about itself: the expected bytes are the ones
+NVIDIA's own `kernel_channel.c` span produced, compiled.
+
+★ **The correction.** The recovery is `PAGE_VALUE * 8 + VALUE`, but the `8` below is the
+**writer's** divisor — a flag-field WIDTH. Physical RM does not recover the chid with it:
+`kchannelAllocHwID_GM107` extracts the two subfields and passes them down *separately*
+(`kernel_channel_gm107.c:456-476`), and `kfifoChidMgrAllocChid_IMPL` recombines them with
+`pChidMgr->pGlobalChIDHeap->ownerGranularity` (`kernel_fifo.c:782-785`), which was set from
+`RM_PAGE_SIZE / userdBar1Size` (`kernel_fifo.c:338-341`) — a PAGE SIZE over a USERD SIZE.
+**Two numbers, two unrelated routes, equal on GA106 (both 8, from 4096 / 512).** So the
+oracle compiles both and prints the granularity NVIDIA's own eheap ended up holding, and
+the test *demonstrates* the equality rather than assuming it. ⊘ Measured limit: because
+they are equal here, writing the multiplier as the literal `8` is **behaviourally inert** on
+GA106 — the mutation is green. What the differential buys is that the day a release or a
+chip moves one and not the other, the test names it.
+
+The original finding, kept verbatim below.
+
+---
 
 The seam's **only non-refusing implementer is the mock**:
 `Ga10xArch::vchid_from_userd_flags` answers `VChid(0)` for every input, as a documented
@@ -300,8 +326,8 @@ catch, and because a clean row is the useful half of an inventory.
 | # | what | why it is not an edit |
 |---|---|---|
 | ~~A~~ | ~~GPFIFO `PushRange::gpa` is a GPU VA on GA10x~~ | ★ **CLOSED 2026-08-02** — the phase moved into `route_act`'s act phase, which holds the proc and takes no new lock (`execution_plane_increments.md` §9.1) |
-| D | `vchid_from_userd_flags` real decode | wants RM's writer compiled as a fifth oracle + a CI reached-count floor |
+| ~~D~~ | ~~`vchid_from_userd_flags` real decode~~ | ★ **CLOSED 2026-08-03 (#174)** — the fifth oracle exists and compiles RM's writer, reader, recombination AND eheap granularity; floor 5 in `ci.yml`, `GATE_STEPS_ALL_MIN` 23 |
 | E | mock guest's `BadLength` position and gating | needs consume-and-continue; lands with #85's version-split bound |
 | C′ | `MockVmm::map_guest` unbacked-GPA and overlap refusals | needs the double to carry windows |
 | — | `MockPushbuffer::gpfifo_entries` prefix-decodes a truncated ring and has no `LENGTH == 0` refusal, both more permissive than `Ga10xPushbuffer` | a per-arch policy choice; recorded at the site so no test there is read as evidence about the real codec |
-| G | `Ad10xArch`/`Gh100Arch` still answer the data-plane seams with `MockArch`'s invented encodings | moving the composition is the increment `Ga10xArch`'s own module docs argue for |
+| G | `Ad10xArch`/`Gh100Arch` still answer the data-plane seams with `MockArch`'s invented encodings | ★ **partly closed**: `decode_doorbell` moved at `#156` and `vchid_from_userd_flags` moved at `#174` (both generations bind the same `_GM107` reader and the same `NVOS04_FLAGS` extents, cited at the call sites). `mmu`, `userd`, `pushbuffer` and `is_case2_control` still delegate |

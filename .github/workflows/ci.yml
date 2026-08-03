@@ -398,6 +398,56 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This machine has a vendored ogkm tree: $ran pushbuffer-oracle tests executed."
           fi
+      # ★★ USERD-CHID-ORACLE-gate non-vacuity — the `vchid_from_userd_flags` instrument.
+      #
+      # Why it needs its own step rather than riding on the others: these are the ONLY
+      # tests that judge the GA10x `USERD_INDEX` chid recovery against NVIDIA's own
+      # writer, reader, recombination AND granularity — four spans out of three driver
+      # files (`tests/oracle/userd_chid_oracle.c`), because the writer's divisor
+      # (a flag-field WIDTH) and the reader's multiplier (a PAGE SIZE over a USERD SIZE)
+      # are two different numbers reached by two unrelated routes. They agree on GA106,
+      # and the whole point of the oracle is that the agreement is DEMONSTRATED rather
+      # than assumed. A decode built on the wrong one of the two routes a guest's channel
+      # to another channel, and on the Mode-2 path we are the GSP, so nobody notices.
+      #
+      # ★ Its honest limit, same as the three oracle families above: GitHub's runners do
+      # not carry the vendored ogkm trees, so on THIS runner the family is counted and
+      # never passes. Developer boxes and the bench are where it actually runs — which is
+      # precisely why the floor matters.
+      - name: USERD-CHID-ORACLE-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'USERD-CHID-ORACLE-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'USERD-CHID-ORACLE-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          # ★ ONE literal, not three — the PUSHBUFFER step's rule, and the reason for it:
+          # the three older sibling steps each spell their floor out in the echo, the
+          # comparison AND the error string, and a hand-edit once moved two of the three
+          # and printed the nonsense verdict "12 < 12".
+          floor=5
+          echo "USERD-CHID-oracle gate: ran=$ran skipped=$skipped total=$total (floor $floor)"
+          if [ "$total" -lt "$floor" ]; then
+            echo "::error::USERD-CHID-oracle tests were not reached: $total < $floor." \
+                 "Either they were deleted, or the gate stopped announcing itself." \
+                 "These are the ONLY tests that judge the GA10x USERD_INDEX chid recovery" \
+                 "against RM's own writer, reader and recombination — and the only place" \
+                 "the writer's divisor and the reader's granularity are shown to be the" \
+                 "same number rather than assumed to be."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This machine has a vendored ogkm tree: $ran USERD-chid-oracle tests executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check

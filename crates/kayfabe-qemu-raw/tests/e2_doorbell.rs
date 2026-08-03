@@ -302,15 +302,19 @@ fn a_device_reset_clears_the_doorbell_report() {
 /// - anything downstream of it — the route **resolved**, so the doorbell found the channel
 ///   the bridge declared. Only one object model can produce that.
 ///
-/// ⚠ **The token is `0`, and that is forced rather than chosen.**
-/// `Ga10xArch::vchid_from_userd_flags` answers `VChid(0)` for every channel — a stated
-/// refusal until the USERD flag-field decode is settled against silicon the way E3's token
-/// was — so `VChid(0)` is the *only* vChid a GA10x channel can currently be filed under,
-/// and `0x0000_0000` is the token RM's own encoder emits for `(runlist 0, chid 0)`.
+/// ★ **The token is `0` because the channel below DECLARES chid 0**, and that is now a
+/// choice rather than a floor. It used to be forced: `Ga10xArch::vchid_from_userd_flags`
+/// answered `VChid(0)` for every channel — a stated refusal — so `VChid(0)` was the only
+/// vChid a GA10x channel could be filed under. That refusal is gone; the channel's
+/// `userd_flags` below is the word CPU-RM would put on the wire for chid 0, built with
+/// `MockArch::userd_flags_for`, whose encoding `tests/tests/userd_chid_oracle.rs`
+/// differentials against NVIDIA's own compiled writer. `0x0000_0000` is the token RM's own
+/// encoder emits for `(runlist 0, chid 0)`, so the two halves still meet.
 ///
-/// ⊘ **This is therefore ALSO the statement of what E6 still cannot do**: a real guest's
-/// scrubber channel is not chid 0 in general, so a *live* boot's doorbell would still miss.
-/// That is the USERD decode's increment, not this one, and it is recorded in §10.
+/// ⊘ What this still does NOT establish is unchanged: a real guest's scrubber channel is
+/// not chid 0 in general, and nothing here is a live boot (`only_live_boots_are_proof`).
+/// What the USERD decode bought is that a channel at ANY chid would now route; this
+/// fixture exercises one of them.
 #[test]
 fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
     use kayfabe_arch::ClientKind;
@@ -385,6 +389,12 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
             class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
             facts: AllocFacts {
                 h_vaspace: Some(vas),
+                // ★ The `NVOS04_FLAGS` word CPU-RM writes for chid 0. `AllocFacts::default()`
+                // (a zero word) would name NO channel at all — RM's own reader leaves the
+                // chid to the allocator when `_PAGE_FIXED` is clear — and the projection
+                // refuses it by name (`ProjectionError::UnnamedVchid`). A channel has to
+                // declare a chid to be routable, which is the point of the decode.
+                userd_flags: kayfabe_mocks::MockArch::userd_flags_for(kayfabe_arch::ids::VChid(0)),
                 ..Default::default()
             },
         },
