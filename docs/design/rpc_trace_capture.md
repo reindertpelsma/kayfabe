@@ -1,7 +1,8 @@
 # Capturing the GSP-RM RPC boot sequence from real hardware
 
-**Status:** step 1 complete — the existing driver levers were checked and are **insufficient**;
-the hook points are located and named. Nothing has been built or run yet.
+**Status:** step 2 complete — the recorder is **built, run on a real GA106, and broken on
+purpose**. §6 has the results, the numbers and the limits. §1–§5 are the pre-build reasoning
+and are left as written, because the decisions they justify are the ones that shipped.
 
 ## 0. Why this exists, and what it replaces
 
@@ -159,3 +160,157 @@ Capture is independent of implementation and far cheaper, so it comes first and 
 conformance test written today would be measuring mocks against mocks — the exact defect
 `mock_fidelity_both_directions` names, twice caught this week. Trace first; implement the second
 arch properly; hold the rest.
+
+---
+
+# 6. Step 2 — BUILT, RUN ON REAL HARDWARE, AND BROKEN ON PURPOSE
+
+**Status: complete.** 2026-08-03, `vb` (vast.ai instance 46494693), RTX 3060 = **GA106**,
+host kernel `6.8.0-59-generic`, **NVIDIA open kernel modules 580.159.04** rebuilt from
+`research_clones/ogkm-580.159.04` (`version.mk: 580.159.04`, git tag `b81d58e`).
+Everything below is `scripts/rpctrace/`.
+
+| file | what it is |
+|---|---|
+| `nv_rpctrace.h` | the record format, and the three hook prototypes |
+| `nv_rpctrace.c` | the recorder: vmalloc ring + `/proc/driver/nvidia/rpctrace` |
+| `rpctrace.patch` | the hooks — 2 capture points, 3 accounting calls, nothing else |
+| `build_instrumented.sh` | pristine tree → instrumented `nvidia.ko`, with the placement assertion |
+| `capture.sh` | swap in, boot, drain, **restore, and verify the restore** |
+| `decode_rpctrace.py` | verify-or-refuse, summary, `--list`, `--controls`, `--hexdump` |
+| `test_decoder_refusals.py` | mutate the real capture, watch the guards fire |
+| `rpc_function_names.tsv` | @generated name map (262 entries) from `rpc_global_enums.h` |
+
+## 6.1 The capture
+
+`traces/rpctrace_ga106_boot1.bin` — committed, **1 229 472 bytes**, md5
+`0fcc24c7074df68a585868b75326f329`. Summary in `traces/rpctrace_ga106_boot1.json`,
+driver output in `traces/rpctrace_ga106_boot1_dmesg.log`.
+
+| | |
+|---|---|
+| records | **1 076** (535 CPU→GSP, 541 GSP→CPU) |
+| payload bytes | 1 176 776 — every one of them present |
+| largest single element | **65 536** = `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX` exactly (seq 971, `GSP_RM_CONTROL`) |
+| smallest / mean | 80 / 1 093.7 bytes |
+| **ring wrapped?** | **no** — 1.17 MiB used of a 64 MiB ring; `n_dropped = 0` |
+| dropped / refused-empty / rx failures | **0 / 0 / 0** |
+| distinct RPC functions | 14 |
+| span | 3 701 ms |
+
+★ **The boot SUCCEEDS.** `nvidia-smi` reports the RTX 3060 with driver 580.159.04 and
+`capture.sh` exits non-zero if it does not. That is the whole difference from `cap1`.
+
+★★ **It contains TWO complete sessions, and the first reading of that was wrong.** Every
+per-function count came out even and 479 records shared an `elem_seq`; read naively that is
+479 retransmits. It is not. With persistence mode off RM tears the GPU down when the last
+client closes, so each `nvidia-smi` invocation is a full bring-up *and* shutdown and the
+message queue's `seqNum` restarts at 0. `decode_rpctrace.py` now cuts sessions where a
+direction's `elem_seq` goes backwards and reports retransmits **within** a session:
+**0**. ⇒ Sessions #0 (479 records, 1 659 ms, 13 functions) and #1 (597 records, 1 557 ms,
+14 functions) are two independent bring-ups of the same GPU in one file — which makes the
+trace a repeatability check as well as a capture.
+
+## 6.2 ★★★ What it answers that `mode2_initctrl_ga106.h` got WRONG
+
+`decode_rpctrace.py --controls` decodes the `GSP_RM_CONTROL` elements: **620 elements, 310
+request/reply pairs, 104 distinct control commands**, and
+
+> **replies declaring params with no bytes present: 0.**
+
+All six of the empty rows the FIFTH LIMIT names as *contradicted by hardware* are here with
+bodies, and the headline one reproduces the independent 2026-08-01 measurement exactly:
+
+| cmd | C table | this trace | decoded |
+|---|---|---|---|
+| `0x20802a08` `CE_GET_FAULT_METHOD_BUFFER_SIZE` | `dlen=0` ⇒ 0 | 4 bytes ×10 | **20480** |
+| `0x20802a06` | `dlen=0` | 4 bytes ×4 | 16 |
+| `0x2080017e` | `dlen=0` | 8 bytes ×2 | 33554432 |
+| `0x20800af3` | `dlen=0` | 2 bytes ×4 | `0101` |
+| `0x20800a4b` | `dlen=0` | 4 bytes ×2 | 67174400 |
+| `0x20800aac` | `dlen=0` | 4 bytes ×2 | 65536 |
+
+⇒ The 20480 was previously established by a *different* instrument (a `NV_PRINTF` probe,
+`traces/real_ga106/fmb_real_ga106.txt`). Two independent instruments agreeing on it is worth
+more than either alone, and it is the cross-check that says this recorder is reading the right
+bytes.
+
+★ **A genuinely zero-length reply is now DISTINGUISHABLE from an unmeasured one**, which was
+the whole complaint. `0x20800a70` answers with `paramsSize = 0` and status `NV_OK`; that is a
+measurement — the element was captured entire and it says zero. An empty row in the C table
+was the *absence* of a measurement wearing the same clothes.
+
+⊘ **And this still does not classify data-vs-act** (§4). `0x20800a6c`
+(`INTERNAL_MEMSYS_L2_INVALIDATE_EVICT`, #148) appears 8 times and answers **17** on some calls
+and **49** on others; `0xa06f0103` (`GPFIFO_SCHEDULE`, #177) answers 3 bytes. Both look exactly
+like data in this table. A replay that served either from it would fail late.
+
+## 6.3 Breaking it on purpose
+
+**The ring, on real hardware.** Re-captured with `--kb 512`, i.e. a 512 KiB ring against a boot
+that needs ~1.2 MB. The recorder filled, refused **262 records / 821 760 bytes**, and set
+`NV_RPCTRACE_FF_OVERFLOWED`; the decoder exits **2** with `RING OVERFLOWED … The trace is a
+PREFIX, not a capture.` This is the guard firing on a real overflow produced by a real driver,
+not on a hand-edited header.
+
+**The file.** `test_decoder_refusals.py` mutates the **real capture** — not a synthetic fixture,
+so it tests the decoder against the format the *recorder* produces — and asserts the clean file
+is accepted first, because a suite whose subject is refused for an unrelated reason scores
+perfectly having tested nothing. 13 mutations refused: truncate by 1 byte, truncate by 1000,
+truncate inside the file header, trailing garbage, zeroed file magic, bumped version, wrong
+record-header size, claimed `n_dropped`, claimed `n_rx_failed`, corrupted mid-stream record
+magic, `cap_len = 0`, a gap in the record counter, and a header record count off by one.
+
+⊘ **One mutation is INERT and is listed rather than dropped:** flipping a byte inside a
+record's payload changes the file and changes nothing the decoder can see. There is no
+integrity check over bodies and there cannot be a useful one — the recorder copies them out of
+driver memory with nothing to compare against. So "13 of 14 caught" must not be read as "the
+decoder validates payloads". It validates *structure*.
+
+## 6.4 Two instrument defects found by running the instrument
+
+Both are recorded because in each case the instrument reported something confidently false.
+
+1. **The placement gate matched its own documentation.** `build_instrumented.sh` asserts the
+   send hook precedes the encrypt call. Anchored on the bare name `ccslEncryptWithRotationChecks`,
+   it found the occurrence inside the *hook's own comment* — three lines above the hook — and
+   failed the build on a correctly-placed hook. Anchoring on `= ccsl…` and on
+   `nv_rpctrace_record(` matches code and only code.
+2. **`nm … | grep -q` under `pipefail` is a false red, and the line below it was a false green.**
+   `grep -q` exits at the first match, `nm` on a 100k-symbol module dies of SIGPIPE, `pipefail`
+   fails the pipeline — so the check reported "symbol not in the module" about a module the
+   symbol was in. The identical construct one line down passed only because `modinfo -p` is
+   short enough to finish first, i.e. for a reason unrelated to the parameter existing. Both go
+   through a file now.
+
+## 6.5 ⚠ The bench, and one thing that went wrong on it
+
+`vb`'s stock module is **never modified on disk**: the instrumented one is `insmod`ed by path
+and the restore is a plain `modprobe`. The restore is verified by two positive discriminators
+(`/proc/driver/nvidia/rpctrace` must be gone, and `/sys/module/nvidia/srcversion` must equal the
+DKMS module's) plus a working `nvidia-smi` — `scripts/rpctrace/capture.sh`, `restore_stock()`.
+**Observed on `vb`, 2026-08-03:** the final run printed `srcversion matches the stock DKMS
+module (EF35EC2DD7E7BD18B01732F)` and `GPU 0: NVIDIA GeForce RTX 3060`, and the same two checks
+are re-run by the `EXIT` trap on every failure path.
+
+★ **MEASURED on `vb`, 2026-08-03, first run of `capture.sh`: that check FAILED and the bench was
+left on the instrumented module.** `nvidia-smi` shells out to `nvidia-modprobe`, which loads
+**`nvidia_uvm`** — so by drain time `/sys/module/nvidia/refcnt` read `1` with
+`/sys/module/nvidia/holders/nvidia_uvm`, and `rmmod nvidia` failed. The restore path had only
+ever considered `nvidia` itself. The bench was restored by hand within a minute (`rmmod
+nvidia_uvm; rmmod nvidia; modprobe nvidia`, then `srcversion` back to `EF35EC…` and
+`nvidia-smi -L` working), and both the pre-load and the restore now go through one
+`unload_all`. The check earned its keep on its first outing: a restore verified only by
+"modprobe returned 0" would have reported success on that run.
+
+## 6.6 What is still open
+
+- ⊘ **One part, one kernel, one driver.** GA10x only; §5's TU10x/AD10x/GH100 rows are untouched.
+- ⊘ **Open driver only** (§4's last limit stands): the closed driver cannot be instrumented, and
+  that the sequences correspond is still *assumed*.
+- ⊘ **Only a well-behaved boot.** `nvidia-smi`, twice. No CUDA context, no compute, no refusal
+  and no reorder — those have to be authored, not recorded.
+- ⊘ **Data-vs-act is not answered** (§4, and §6.2's last paragraph). That pass is static, over
+  `ogkm`, and it is the one that keeps a replay honest.
+- ⊘ **No consumer yet.** Nothing in `crates/` reads this format; wiring it into a differential
+  is separate work.
