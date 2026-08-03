@@ -1,0 +1,7 @@
+[ 3830.726846] NVRM: rpctrace: armed, ring 67108864 bytes, rec_hdr 48 bytes
+[ 3830.726985] nvidia-nvlink: Nvlink Core is being initialized, major device number 238
+
+[ 3830.735351] nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[ 3830.777485] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  575.51.03  Release Build  (root@ubuntu)  Mon Aug  3 18:53:19 UTC 2026
+[ 3832.362144] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0
+[ 3834.189022] NVRM: knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally for GPU0

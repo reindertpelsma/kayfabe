@@ -1,0 +1,1 @@
+GPU 0: NVIDIA GeForce RTX 3090 (UUID: GPU-3ec8c41b-f3a4-af3b-a7f6-c6f48b426bce)

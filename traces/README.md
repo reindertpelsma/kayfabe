@@ -150,3 +150,26 @@ One part, one kernel, one driver — GA10x only, **open** driver only. Two well-
 `nvidia-smi` boots: no CUDA context, no compute, no refusal, no reorder. And it does not
 classify data-vs-act: `0x20800a6c` answers 17 on some calls and 49 on others, `0xa06f0103`
 answers 3 bytes, and both look exactly like data here. Serving an act from a table fails late.
+
+---
+
+# `ga102_boot1.bin` — the second die (GA102, RTX 3090, 575.51.03)
+
+Taken 2026-08-03 with the **same recorder**, re-anchored for 575 (`rpctrace-575.51.03.patch`;
+`nv_rpctrace.{c,h}` byte-identical). **1 152 928 bytes**, md5
+`6bc25a2e80858c2abaa7c7bbb50ca2c8`, **1 180 records**, **724** `GSP_RM_CONTROL` elements,
+**122** distinct control commands, **ring did not wrap** (1.10 MiB of 64 MiB), dropped /
+refused-empty / rx-failed = **0 / 0 / 0**, and **replies declaring params with no bytes = 0**.
+The boot succeeds — `nvidia-smi` reports the RTX 3090 — and the stock (proprietary) module was
+restored and verified afterwards.
+
+⚠ **It is not a clean architecture comparison against `rpctrace_ga106_boot1.bin`**: that one is
+580.159.04 and this one is 575.51.03, so the raw diff is arch ∧ driver-version. The three
+groups are attributed separately in `docs/design/rpc_trace_capture.md` §7.2 — the 2 only-GA106
+controls and all 11 reply-size differences are **version**; the 20 only-GA102 controls are a
+**capability** difference, 17 of them NVLink.
+
+★ The one row needing no cross-version argument, because both boards issue it:
+`0x20800a87` (`INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO`) is answered `NV_ERR_NOT_SUPPORTED` on
+the GA106 and `NV_OK` on the GA102, and the 17 NVLink controls follow only on the GA102. The
+sequence branches on a **reply**, not on a part number (§7.3).

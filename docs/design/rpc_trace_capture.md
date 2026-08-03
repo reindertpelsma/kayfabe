@@ -350,3 +350,199 @@ nvidia_uvm; rmmod nvidia; modprobe nvidia`, then `srcversion` back to `EF35EC…
 - ⊘ **Two sessions by construction, not by design.** `capture.sh` runs `nvidia-smi` twice, so the
   file holds two bring-ups. That is useful (it is a repeatability check) but a consumer wanting a
   single boot must cut at the session boundary; the decoder reports it, nothing enforces it.
+
+---
+
+# 7. Step 3 — THE SECOND DIE (GA102), and what it says about "arch"
+
+**Status: one of two boxes captured.** 2026-08-03, RTX 3090 = **GA102**, host kernel
+`6.8.0-59-generic`, NVIDIA **open** kernel modules **575.51.03** rebuilt from a fresh
+`open-gpu-kernel-modules` checkout at tag `575.51.03`. The Ada box (RTX 4090 = AD102) was
+allocated for the same run and **never became reachable** — see §7.6.
+
+## 7.1 The capture
+
+`traces/ga102_boot1.bin` — committed, **1 152 928 bytes**, md5
+`6bc25a2e80858c2abaa7c7bbb50ca2c8`. Summary `traces/ga102_boot1.json`, driver output
+`traces/ga102_boot1_dmesg.log`.
+
+| | GA102 (RTX 3090, 575.51.03) | GA106 (RTX 3060, 580.159.04) |
+|---|---|---|
+| records | **1 180** (585 req / 595 rep) | 1 076 (535 / 541) |
+| payload bytes | 1 094 968 | 1 176 776 |
+| largest element | **65 536** (seq 1052, `GSP_RM_CONTROL`) | 65 536 (seq 971) |
+| smallest / mean | 80 / 927.9 | 80 / 1 093.7 |
+| **ring wrapped?** | **no** — 1.10 MiB of a 64 MiB ring | no |
+| dropped / refused-empty / rx-failed | **0 / 0 / 0** | 0 / 0 / 0 |
+| NOT_SENT / len-disagree / CC | 0 / 0 / 0 | 0 / 0 / 0 |
+| distinct RPC functions | 14 | 14 |
+| `GSP_RM_CONTROL` elements | **724** (362 pairs) | 620 (310 pairs) |
+| distinct control commands | **122** | 104 |
+| **replies declaring params with no bytes** | **0** | 0 |
+| sessions / retransmits within a session | 2 / **0** | 2 / 0 |
+
+★ The boot **succeeds**: `nvidia-smi` reports the RTX 3090 on 575.51.03 and `capture.sh` exits
+non-zero if it does not. The same two-session structure appears (persistence mode off ⇒ each
+`nvidia-smi` is a full bring-up and teardown), and `elem_seq` restarts confirm the cut.
+
+## 7.2 ★★★ THE CROSS-ARCH DIFF IS CONFOUNDED, AND THE CONFOUND IS MOST OF IT
+
+The two boxes do **not** run the same driver: GA106 was captured on 580.159.04 and GA102 on
+575.51.03, because 575.51.03 is what was installed on the GA102 box and a rebuilt module must
+match the running userspace. ⊘ So the raw diff below is **arch ∧ driver-version**, and reading
+it as an architecture result would be wrong. `ogkm is VERSIONED, not the spec`.
+
+Raw diff (`decode_rpctrace.py --controls`, 2026-08-03): **102 common**, 20 only-GA102,
+2 only-GA106, and **11 of the 102 common controls answer with a different reply size**.
+
+Each of the three groups was then attributed **statically**, by reading both trees:
+
+- **The 2 only-GA106 controls are pure VERSION.** `0x20800b05`
+  (`INTERNAL_STATIC_KGR_GET_SM_ISSUE_THROTTLE_CTRL`) and `0x20803404`
+  (`ECC_GET_REPAIR_STATUS`) are **not defined anywhere in the 575.51.03 tree**. A driver that
+  has no such control cannot issue it. Nothing architectural here.
+
+- **★★ The 11 differing reply SIZES are pure VERSION — and they are the trap.** They are the
+  most die-sounding controls in the whole table — `GET_GLOBAL_SM_ORDER`,
+  `GET_FLOORSWEEPING_MASKS`, `GET_PPC_MASKS` — so "the bigger die returns bigger static info"
+  is the obvious reading. It is wrong, and the arithmetic settles it: these params are
+  **fixed-size arrays**, so their `sizeof` cannot vary with the part.
+  `NV2080_CTRL_INTERNAL_STATIC_GR_GLOBAL_SM_ORDER` gained two `NvU16` fields between the trees
+  (`physicalCpcId`, `virtualTpcId`), and `NV2080_CTRL_INTERNAL_GR_MAX_GPC` went **12 → 16**:
+
+  | control | 580 predicted | GA106 observed | 575 predicted | GA102 observed |
+  |---|---|---|---|---|
+  | `0x20800a22` `GET_GLOBAL_SM_ORDER` | `(9·2·240+4)·8` = **34 592** | 34 592 | `(7·2·240+4)·8` = **26 912** | 26 912 |
+  | `0x20800a30` `GET_PPC_MASKS` | `16·4·8` = **512** | 512 | `12·4·8` = **384** | 384 |
+
+  ⇒ Predicted from the headers alone, matching the wire byte-for-byte, on both trees. The
+  observed size is a function of the **struct layout**, not of the GPU. ⊘ Note what this means
+  for a replay: a table keyed on "arch" that stored 34 592 for `GET_GLOBAL_SM_ORDER` would be
+  wrong on **the same die** under a different driver.
+
+- **★★★ The 20 only-GA102 controls are a genuine CAPABILITY difference, and 17 of them are
+  NVLink.** `INTERNAL_NVLINK_*` (11), `NVLINK_*` (4), `SYSTEM_SYNC_EXTERNAL_FABRIC_MGMT`,
+  and `INTERNAL_CE_GET_HUB_PCE_MASK_V2` (the HSHUB PCE mask, which is the NVLink hub). The
+  remaining 3 are `GPU_GET_RESET_STATUS`, `GPU_GET_DRAIN_AND_RESET_STATUS` and
+  `PMGR_GET_MODULE_INFO`. ⊘ This is **not** version: every one of those NVLink controls is
+  defined in the 580 tree too, so the GA106 driver could have issued them and did not.
+  The RTX 3090 carries an NVLink connector; the RTX 3060 has none.
+
+## 7.3 ★★★ THE SEQUENCE BRANCHES ON A REPLY, NOT ON A PART NUMBER
+
+The cleanest single row in this whole comparison, and it needs no cross-version argument
+because **both boards issue the control**:
+
+| | GA106 (RTX 3060) | GA102 (RTX 3090) |
+|---|---|---|
+| `0x20800a87` `INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO` | called ×2, **status `0x56`** (`NV_ERR_NOT_SUPPORTED`) | called ×4, **status `0x0`** (`NV_OK`) |
+| the 17 NVLink/fabric controls above | **never issued** | issued |
+
+⇒ CPU-RM **probes** for NVLink with a control whose answer comes from the GPU, and the entire
+NVLink sub-sequence is gated on that answer. The demand list is therefore not a property of the
+architecture at all on this axis — it is a property of what the emulated GSP *replies*.
+
+★ This is a design finding for the port, stated as a constraint rather than a conclusion: an
+emulator that answers `0x20800a87` with `NV_OK` **summons 17 controls it must then serve**, and
+answering it `NV_ERR_NOT_SUPPORTED` is what a GA106 really does. Refusing is both the smaller
+surface and the measured-real behaviour for a part without the connector.
+
+★★ **Corroborated by a different instrument on the same run.** The decoded RPC stream is one
+reading; the driver's own `printk` is another, and `traces/ga102_boot1_dmesg.log` (2026-08-03,
+RTX 3090) carries `knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown all links unilaterally
+for GPU0` **twice** — once per session — plus `nvidia-nvlink: Nvlink Core is being initialized`.
+So CPU-RM on this board is genuinely driving NVLink teardown, not merely reading a mask. The
+GA106 capture's dmesg has no such line. ⊘ Two instruments agreeing is worth more than either
+alone (§6.2b makes the same argument), and here the second one is NVIDIA's own logging rather
+than anything of ours.
+
+## 7.4 So is the "arch" abstraction at the right granularity?
+
+Reported either way, as required — and the honest answer is **neither of the two offered**:
+
+- ⊘ It is **not** the case that two dies of the same generation match. They differ by 20
+  controls, and that difference is real and capability-driven (§7.2, §7.3).
+- ⊘ It is **also not** the case that this refutes per-generation `Arch`. Nothing in the 20 is
+  *architectural* — it is one board having a connector the other lacks, discovered at runtime.
+
+⇒ The granularity that the measurement actually argues for is **`Arch` × capability**, where
+the capability is answered by the emulator and is not a property of the die name. A GA102 with
+no NVLink bridge and a GA106 would, on this evidence, demand the same sequence.
+⚠ **Held to what was measured:** two dies, and they differ by a *driver version* as well, so
+this is one clean capability axis — not a survey. An AD102 capture is what would test whether a
+generation boundary adds anything beyond capability, and it was not taken (§7.6).
+
+## 7.5 Four instrument defects, all found by running the instrument
+
+Recorded because in each case the tooling reported something confidently false. Nothing in this
+list is in the recorder; all four are in the harness around it.
+
+1. **The version guard refused a correct tree, on evidence it had failed to gather.**
+   `build_instrumented.sh` read the running version with a `sed` anchored on 580's `/proc`
+   wording (`... Kernel Module for x86_64 580.159.04`). 575.51.03 prints
+   `... x86_64 Kernel Module  575.51.03` — no `for` — so the pattern matched nothing, `running`
+   was the **empty string**, and the guard died with `running driver is , source tree is
+   575.51.03`. ⊘ A parse failure and a genuine mismatch were **indistinguishable in its
+   output**. Both readers now share one `detect_running_version`, and an unparseable `/proc` is
+   its own named error.
+
+2. **`insmod` resolves no dependencies, and the *stock* module's dependency list is the wrong
+   one to read.** The load failed with `Unknown symbol ecc_make_pub_key`. The GA102 box's stock
+   module is the **proprietary** one (`license: NVIDIA`), which carries its own ECC inside
+   `nv-kernel.o_binary` and reports `depends:` **empty**; the module we necessarily build is the
+   **open** one (`license: Dual MIT/GPL`), which links the kernel's `crypto/ecc.ko` and reports
+   `depends: ecc`. Reading the installed module's dependencies would have found nothing.
+   `capture.sh` now reads `modinfo -F depends` off **the module it is about to load**.
+
+3. **★★ The restore trap cried catastrophe about an untouched bench.** A run aborted in the
+   *baseline* check — step 0, before any unload — and the `EXIT` trap printed
+   `‼‼‼ BENCH LEFT WITH A NON-STOCK OR NON-WORKING DRIVER — NEEDS A HUMAN`. The bench was on its
+   stock module with a working `nvidia-smi` the whole time; the trap branched only on
+   `RESTORED != 1`, which is equally true of every abort that happens before anything is
+   swapped. ⊘ Same defect class as the empty-dmesg harness this project already names: **an
+   output that does not distinguish "the thing is bad" from "I never looked"** — and here it
+   failed in the direction that gets a healthy shared box torn down. The trap now branches on a
+   `SWAPPED` flag set at the unload (not at the insmod, since an unload that succeeds and an
+   insmod that then fails also leaves the bench off stock).
+
+4. **The "is anything using the GPU" check fired on the script's own `nvidia-smi`.** The
+   baseline `nvidia-smi -L` three lines above still held `/dev/nvidia0`, `/dev/nvidiactl` and
+   `/dev/nvidia-uvm` while tearing its context down. A single instantaneous `fuser` sample
+   cannot tell a departing process from a resident one; it now drains for up to 10 s first.
+
+★ Defects 1 and 2 are the same shape and worth naming as one: **both are places where the
+harness was correct for the only bench that had ever run it.** A constant that was true of
+580.159.04, and a dependency list that was empty on an open-driver box. Neither is a bug in what
+the recorder captures; both are the cost of a second machine, and both were silent until there
+was one.
+
+## 7.6 ⊘ The Ada box was never reachable — no AD102 capture
+
+`ssh -p 31858 root@85.218.235.6` (RTX 4090, AD102) was polled from 2026-08-03 18:41 onward. The
+**first** probe reached TCP and timed out during the SSH banner exchange; every probe after that
+failed to connect at all, and the host stopped answering ICMP entirely (100% packet loss, port
+closed). ⊘ Stated as what it is: **no AD102 trace was taken, and no claim about Ada is made
+here.** The second architecture — the one that would actually test a generation boundary — is
+still unmeasured, and §5's TU10x/AD10x/GH100 rows remain untouched apart from this GA10x
+sibling. ⚠ This project's own note that a box's public address can change under a running
+instance is the first thing to check if it is retried.
+
+## 7.7 What changed in the tooling, and what deliberately did not
+
+★ **The recorder was not rewritten and was not modified.** `nv_rpctrace.c` / `nv_rpctrace.h` are
+byte-identical across both captures; the record format, the ring and the `/proc` drain are
+unchanged. What changed is the harness around it:
+
+- `rpctrace-575.51.03.patch` — **`rpctrace.patch` re-anchored, not a second recorder.** Six of
+  its eight hunks are the 580 patch's hunks verbatim. `patch --dry-run` of the 580 patch against
+  a pristine 575 tree reports `2 out of 8 hunks FAILED`, both in `GspMsgQueueReceiveStatus`:
+  580 reaches a shared `exit:` label by `goto`, and 575 has no such label and returns directly.
+  The two hooks are re-expressed at **the same point in the data flow** — after
+  `ccslDecryptWithRotationChecks`, after the msgLen sanity check, before the element is
+  released — which is the property §2.1 actually constrains, and
+  `build_instrumented.sh` re-asserts it on the post-patch text rather than trusting that
+  sentence (`send@508 < encrypt@526 ; decrypt@794 < receive@860` on the 575 tree).
+- `build_instrumented.sh` — version is **discovered, not constant**; `--version` / `--patch`
+  override; a per-version patch is selected automatically when present; and rejects are now
+  asserted absent directly, because `patch --forward` dropping a hunk yields a module that
+  builds, loads, and records **half** the RPCs with no error anywhere.

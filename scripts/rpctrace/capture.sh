@@ -55,6 +55,10 @@ mkdir -p "$OUTDIR"
 
 RESTORED=0
 PERSISTENCED_WAS_ACTIVE=0
+# ★ Did we ever actually take the bench off its stock module? Set at the moment
+# the stock stack is UNLOADED (step 1), which is the first instant the bench is
+# not on stock — not at the insmod, which can fail after the unload. See on_exit().
+SWAPPED=0
 STOCK_KO="/lib/modules/$(uname -r)/updates/dkms/nvidia.ko"
 
 # ⚠ MEASURED, 2026-08-03, first run of this script: `rmmod nvidia` in the restore
@@ -109,8 +113,38 @@ on_exit() {
   local rc=$?
   if [ "$RESTORED" != 1 ]; then
     echo
-    echo "── exiting with rc=$rc before a verified restore; attempting one now"
-    restore_stock || echo "‼‼‼ BENCH LEFT WITH A NON-STOCK OR NON-WORKING DRIVER — NEEDS A HUMAN"
+    #
+    # ⚠⚠ MEASURED, 2026-08-03, on the GA102 box: this trap printed
+    #   `‼‼‼ BENCH LEFT WITH A NON-STOCK OR NON-WORKING DRIVER — NEEDS A HUMAN`
+    # about a bench that was on its stock module, with a working nvidia-smi, that
+    # had never been touched. The script had died in the BASELINE check — step 0,
+    # before the unload — and the trap fired purely on `RESTORED != 1`, which is
+    # also true of every abort that happens before anything is swapped.
+    #
+    # ⊘ That is a false alarm of the worst kind on a shared bench: the loudest
+    # possible message, saying a healthy machine is broken. It is the same defect
+    # class as the empty-dmesg harness — a check whose output does not distinguish
+    # "the thing is bad" from "I never looked".
+    #
+    # ⇒ The trap now branches on whether we ever SWAPPED. If we did not, there is
+    # nothing to restore and it says so; the invariant is still asserted (we do
+    # not just stay quiet) — it just asserts the true one.
+    #
+    if [ "$SWAPPED" != 1 ]; then
+      echo "── exiting with rc=$rc; the instrumented module was never loaded, so there is"
+      echo "   nothing to restore. Verifying the bench is on stock anyway:"
+      if [ -e /proc/driver/nvidia/rpctrace ]; then
+        echo "‼‼‼ /proc/driver/nvidia/rpctrace EXISTS but we never loaded — NEEDS A HUMAN"
+      elif nvidia-smi -L >/dev/null 2>&1; then
+        echo "   OK: stock module, nvidia-smi works. Bench untouched."
+      else
+        echo "‼‼‼ nvidia-smi does not work and we never swapped — the bench was ALREADY"
+        echo "     broken when this script started. NEEDS A HUMAN."
+      fi
+    else
+      echo "── exiting with rc=$rc before a verified restore; attempting one now"
+      restore_stock || echo "‼‼‼ BENCH LEFT WITH A NON-STOCK OR NON-WORKING DRIVER — NEEDS A HUMAN"
+    fi
   fi
   exit $rc
 }
@@ -122,6 +156,17 @@ nvidia-smi -L >"$OUTDIR/${TAG}_baseline_smi.txt" 2>&1 \
   || die "nvidia-smi already fails BEFORE we do anything — fix the bench first"
 cat "$OUTDIR/${TAG}_baseline_smi.txt"
 
+# ⚠ MEASURED, 2026-08-03, GA102 box: this fired on the script's OWN baseline
+# `nvidia-smi -L` three lines above. nvidia-smi's exit is not instantaneous — it
+# holds /dev/nvidia0, /dev/nvidiactl and /dev/nvidia-uvm open while it tears its
+# context down, and on a box where nvidia_uvm is loaded that takes longer than the
+# next statement. The check is right to exist (a real user of the GPU must stop
+# us) but a single instantaneous sample cannot tell a departing process from a
+# resident one. ⇒ Give it a few seconds to drain, and only then refuse.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  fuser -s /dev/nvidia* 2>/dev/null || break
+  sleep 1
+done
 if fuser -s /dev/nvidia* 2>/dev/null; then
   die "something is using the GPU right now: $(fuser -v /dev/nvidia* 2>&1 | tail -n +2)"
 fi
@@ -134,8 +179,38 @@ fi
 # ── 1. Unload the stock stack ─────────────────────────────────────────────────
 say "unloading the stock stack"
 unload_all || die "could not unload the stock stack"
+# ★ From HERE the bench is no longer on its stock module — not from the insmod.
+# An unload that succeeds and an insmod that then fails (which is exactly what
+# happened on the GA102 box's first run, see step 2) leaves the box with NO nvidia
+# module at all, and that needs the same restore as a successful swap.
+SWAPPED=1
 
 # ── 2. Load the instrumented one BY PATH ──────────────────────────────────────
+#
+# ⚠ MEASURED, 2026-08-03, on the GA102 box (RTX 3090, 575.51.03): the insmod
+# below failed with `Unknown symbol ecc_make_pub_key / ecc_get_curve /
+# ecc_gen_privkey`. ⊘ Nothing to do with the recorder — `insmod` loads exactly
+# one file and resolves NO dependencies, and this box's instrumented module has
+# `depends: ecc` where the GA106 bench's had none.
+#
+# The reason it differed is worth keeping: that box's STOCK module is the
+# PROPRIETARY one (`license: NVIDIA`), which carries its own ECC inside
+# `nv-kernel.o_binary`, while we necessarily build the OPEN module
+# (`license: Dual MIT/GPL`), which links the kernel's `crypto/ecc.ko`. So the
+# stock module's `modinfo -F depends` is EMPTY and ours is not — reading the
+# dependency list off the *installed* module would have found nothing and this
+# would still fail. It has to be read off the module we are about to load.
+#
+# We keep `insmod`-by-path (that is what guarantees the stock module on disk is
+# never in play) and pre-load the dependencies with modprobe explicitly.
+deps="$(modinfo -F depends "$KO" 2>/dev/null | tr ',' ' ')"
+if [ -n "$deps" ]; then
+  say "instrumented module depends on: $deps — pre-loading (insmod resolves nothing)"
+  for d in $deps; do
+    modprobe "$d" || die "could not modprobe dependency '$d' needed by $KO"
+  done
+fi
+
 say "loading $KO with NVreg_RpcTraceKB=$KB"
 dmesg -C 2>/dev/null || true   # so the persisted dmesg below is THIS boot's
 insmod "$KO" NVreg_RpcTraceKB="$KB" || die "insmod failed (dmesg: $(dmesg | tail -3))"

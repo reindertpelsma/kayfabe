@@ -30,11 +30,37 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRISTINE="${PRISTINE:-$HOME/ogkm-580.159.04}"
 BUILD="${BUILD:-$HOME/ogkm-rpctrace-build}"
 OUT="${OUT:-$HOME/rpctrace-out}"
-WANT_VERSION="580.159.04"
 JOBS="${JOBS:-$(nproc)}"
+
+# ────────────────────────────────────────────────────────────────────────────────
+# ⚠ THE DRIVER VERSION IS DISCOVERED, NOT ASSUMED.
+#
+# This was `WANT_VERSION="580.159.04"`, a constant, because the only bench was on
+# 580.159.04. `ogkm is VERSIONED, not the spec` — the second and third boxes came
+# up on 575.51.03, and a hardcoded 580 here fails LOUDLY (good) only because the
+# version.mk check below happens to exist. The default is now the RUNNING driver,
+# read from /proc/driver/nvidia/version, which is the version the built module
+# must match anyway; --version overrides it for an offline build.
+# ────────────────────────────────────────────────────────────────────────────────
+#
+# ⊘ ONE parser, used by both the default and the mismatch guard below. The two
+# wordings this must survive, both seen on real benches:
+#   580: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04 ...
+#   575: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 ...
+# So anchor on "Kernel Module", skip anything that is not a digit, and take the
+# first dotted number. Emits nothing when it cannot parse — callers check.
+#
+detect_running_version() {
+  [ -r /proc/driver/nvidia/version ] || return 0
+  sed -n 's/.*Kernel Module[^0-9]*\([0-9][0-9.]*[0-9]\).*/\1/p' /proc/driver/nvidia/version | head -1
+}
+
+WANT_VERSION="${WANT_VERSION:-}"
+[ -n "$WANT_VERSION" ] || WANT_VERSION="$(detect_running_version)"
+PRISTINE="${PRISTINE:-}"
+PATCHFILE="${PATCHFILE:-}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -42,12 +68,35 @@ while [ $# -gt 0 ]; do
     --build)    BUILD="$2";    shift 2;;
     --out)      OUT="$2";      shift 2;;
     --jobs)     JOBS="$2";     shift 2;;
+    --version)  WANT_VERSION="$2"; shift 2;;
+    --patch)    PATCHFILE="$2";    shift 2;;
     *) echo "unknown argument: $1" >&2; exit 2;;
   esac
 done
 
 die() { echo "‼ $*" >&2; exit 1; }
 say() { echo "── $*"; }
+
+[ -n "$WANT_VERSION" ] \
+  || die "could not determine the driver version and --version was not given"
+PRISTINE="${PRISTINE:-$HOME/ogkm-$WANT_VERSION}"
+
+# ★ ONE RECORDER, VERSION-ANCHORED HOOKS. `nv_rpctrace.{c,h}` are shared verbatim
+# across every version; only the patch's ANCHORS are version-specific, because the
+# NVIDIA source they attach to genuinely differs (575's GspMsgQueueReceiveStatus
+# has no `exit:` label; 580's does). A per-version patch is picked up automatically
+# if it exists, and the generic one is used otherwise — ⊘ never a forced apply,
+# because `patch --forward` dropping a hunk yields a module that builds, loads, and
+# records HALF the RPCs with no error anywhere.
+if [ -z "$PATCHFILE" ]; then
+  if [ -f "$HERE/rpctrace-$WANT_VERSION.patch" ]; then
+    PATCHFILE="$HERE/rpctrace-$WANT_VERSION.patch"
+  else
+    PATCHFILE="$HERE/rpctrace.patch"
+  fi
+fi
+[ -f "$PATCHFILE" ] || die "no patch file at $PATCHFILE"
+say "version=$WANT_VERSION  pristine=$PRISTINE  patch=$(basename "$PATCHFILE")"
 
 # ── 0. Preconditions, each one a thing that has cost somebody a day somewhere ──
 [ -d "$PRISTINE" ] || die "no pristine checkout at $PRISTINE"
@@ -60,10 +109,25 @@ KVER="$(uname -r)"
 # ⚠ The userspace/kernel-module version trap. We are rebuilding the SAME version,
 # so this should hold trivially — which is exactly why it is worth asserting: a
 # silent mismatch here surfaces as an inscrutable nvidia-smi failure much later.
+#
+# ⚠⚠ MEASURED, 2026-08-03, on the GA102 box: this check FAILED A CORRECT TREE.
+# It read the version with `s/.*Kernel Module for [^ ]* *\([0-9.]*\).*/\1/p`,
+# which is coupled to 580's /proc wording. 575.51.03 prints
+#   `NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 ...`
+# — no "for" — so the sed matched NOTHING and `running` was the EMPTY STRING. The
+# guard then reported `running driver is , source tree is 575.51.03`, i.e. it
+# refused the build on evidence it had failed to gather. It is a false red rather
+# than a false green only by luck: the empty string can never equal a version, so
+# a parse failure and a genuine mismatch are INDISTINGUISHABLE in its output.
+# ⇒ Both readers now go through `detect_running_version`, and an unparseable
+# /proc is now its own named error instead of masquerading as a mismatch.
 if [ -r /proc/driver/nvidia/version ]; then
-  running="$(sed -n 's/.*Kernel Module for [^ ]* *\([0-9.]*\).*/\1/p' /proc/driver/nvidia/version)"
+  running="$(detect_running_version)"
+  [ -n "$running" ] \
+    || die "/proc/driver/nvidia/version exists but no version could be parsed from it: $(cat /proc/driver/nvidia/version)"
   [ "$running" = "$WANT_VERSION" ] \
     || die "running driver is $running, source tree is $WANT_VERSION — refusing to build a mismatch"
+  say "running driver $running matches the source tree"
 fi
 
 if command -v mokutil >/dev/null 2>&1; then
@@ -93,9 +157,17 @@ cmp -s "$HERE/nv_rpctrace.h" "$BUILD/kernel-open/nvidia/nv_rpctrace.h" \
   || die "the two header copies differ from the source — refusing to build"
 
 # ── 3. Apply the hooks ────────────────────────────────────────────────────────
-say "applying rpctrace.patch"
-( cd "$BUILD" && patch -p1 --forward --no-backup-if-mismatch < "$HERE/rpctrace.patch" ) \
+say "applying $(basename "$PATCHFILE")"
+( cd "$BUILD" && patch -p1 --forward --no-backup-if-mismatch < "$PATCHFILE" ) \
   || die "patch did not apply cleanly against $WANT_VERSION"
+
+# ⊘ `patch --forward` returns 1 when hunks are rejected but leaves the tree half
+# patched, and `set -e` would catch that here — but only because of the `||` above.
+# Assert the absence of rejects DIRECTLY: a .rej left behind means some hooks are
+# in and some are not, which is the one failure that still builds and still loads.
+if find "$BUILD" -name '*.rej' | grep -q .; then
+  die "patch left rejects: $(find "$BUILD" -name '*.rej')"
+fi
 
 # ★ Prove the hooks are where the constraint says they are, on the real post-patch
 # text, rather than trusting that the patch header describes the patch. The send
