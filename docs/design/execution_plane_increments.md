@@ -1534,10 +1534,14 @@ behavioural test reads `UnknownVchid` on both sides and goes red, *and* the old
 source-quantified `the_archive_realizes_exactly_one_object_model` goes red. Restored tree:
 8 passed, 0 failed.
 
-⚠ **The token is `0`, and that is forced rather than chosen.**
-`Ga10xArch::vchid_from_userd_flags` answers `VChid(0)` for **every** channel — a stated
-refusal until the USERD flag-field decode is settled against silicon the way E3's token was.
-So `VChid(0)` is the only vChid a GA10x channel can be filed under today. See §10.6.
+★ **The token is `0` because the fixture's channel DECLARES chid 0** — a choice, since
+2026-08-03. It used to be forced: `Ga10xArch::vchid_from_userd_flags` answered `VChid(0)`
+for **every** channel, a stated refusal, so `VChid(0)` was the only vChid a GA10x channel
+could be filed under. Task #174 settled the decode the way E3's token was settled — by
+compiling RM's own writer, reader, recombination **and** eheap granularity as a fifth
+oracle (`tests/oracle/userd_chid_oracle.c`, `tests/tests/userd_chid_oracle.rs`) — and the
+fixture now builds its flags word with the encoder that oracle holds in place. A channel at
+any chid routes; this fixture exercises one of them. See §10.6.
 
 ### 10.4 ★★★ The acceptance, ON HARDWARE — `CeEvidence::copied() == true`
 
@@ -1649,10 +1653,14 @@ inside E6 is what this document exists to refuse.
 1. **No live guest drove it.** The acceptance is a guest's *bytes* and a guest's
    *declarations* through the production core, on real silicon — not a booted guest. Three
    named things still separate them: (a) the boot wall above, unmoved; (b) the real isolate
-   plane aborting QEMU (§10.5 arm B); (c) `Ga10xArch::vchid_from_userd_flags` answering
-   `VChid(0)` for every channel, so a *live* guest's doorbell cannot route to its own
-   channel — the USERD decode is an increment of its own, and its instrument is named in the
-   refusal itself (compile RM's own writer, `kernel_channel.c:2793,2800,2802`).
+   plane aborting QEMU (§10.5 arm B); ~~(c) `Ga10xArch::vchid_from_userd_flags` answering
+   `VChid(0)` for every channel~~ — ★ **(c) CLOSED 2026-08-03, task #174.** The USERD decode
+   landed, judged against a fifth compiled oracle that carries RM's own writer, reader,
+   recombination and the `ownerGranularity` its own eheap holds; the seam now returns
+   `Option<VChid>` and a word that names no channel is
+   `ProjectionError::UnnamedVchid` rather than a substituted `VChid(0)`. ⊘ It is still not a
+   live boot — `only_live_boots_are_proof` — so what moved is that a live guest's doorbell
+   *can* now route to its own channel, not that one has.
 2. **Nothing about the sandboxed isolate.** The hardware acceptance runs an **in-process**
    `HostRmBackend`, because a `CeWitness` and a CPU mapping both die at the process
    boundary. That the same verb chain survives the sandbox is R10/R11/R16's measurement.

@@ -92,6 +92,13 @@ host-isolates = ["dep:kayfabe-isolate-host"]
 # plane is stillborn at the SEAM rather than by its type name.
 [dev-dependencies]
 kayfabe-arch.workspace = true
+# ★ TESTS ONLY, and for exactly one thing: `MockArch::userd_flags_for`, the encoder that
+# builds the `NVOS04_FLAGS` word a channel fixture declares its chid with. It is here
+# rather than a hand-written literal because that encoder is differentialled against
+# NVIDIA's OWN compiled writer (`tests/tests/userd_chid_oracle.rs`), so a fixture built
+# with it cannot drift away from the driver silently. The crate is already in this one's
+# NORMAL graph through `kayfabe-chips`, so this adds no edge to the shipped archive.
+kayfabe-mocks.workspace = true
 
 # ★ DELIBERATELY NOT `[lints] workspace = true` — the SECOND crate to omit it, and the
 # first one added since the rule was written. `l2_qemu_adapter.md` §2.2 / decision Q2:

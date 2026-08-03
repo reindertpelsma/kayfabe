@@ -323,8 +323,25 @@ impl Arch for Ad10xArch {
     fn classify(&self, class: ClassId) -> ObjectKind {
         self.inner.classify(class)
     }
-    fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
-        self.inner.vchid_from_userd_flags(flags)
+    /// ★★★ NOT `self.inner` — the same `#156` argument as [`Self::decode_doorbell`], and
+    /// the same evidence shape. `MockArch`'s USERD encoding was invented; it was answering
+    /// here for a seam whose wrong answer routes a channel to another channel.
+    ///
+    /// RM binds this generation to the SAME reader as GA10x: `kchannelAllocHwID` is
+    /// halified two ways and only `ChipHal: T234D | T264D` gets its own arm, so every
+    /// other chip — including this one — falls to `_GM107`
+    /// (`ogkm-580: src/nvidia/generated/g_kernel_channel_nvoc.c:1021-1029`). The field
+    /// positions are `NVOS04_FLAGS_*`, which are SDK alloc-params and not per-chip at all
+    /// (`src/common/sdk/nvidia/inc/alloc/alloc_channel.h`), and the multiplier comes from
+    /// `kfifoGetUserdSizeAlign`, halified with the identical `T234D | T264D`-else-`_GM107`
+    /// split (`g_kernel_fifo_nvoc.c:835-843`). See
+    /// [`crate::ga10x::decode_userd_index_chid`].
+    ///
+    /// ⊘ Compiling for a generation is not booting on one — the oracle that settled this
+    /// decode is built against GA106's bindings, and they are the *same symbols* here, not
+    /// a second measurement.
+    fn vchid_from_userd_flags(&self, flags: u32) -> Option<VChid> {
+        crate::ga10x::decode_userd_index_chid(flags)
     }
     /// ★★★ NOT `self.inner` (`#156`). `MockArch`'s doorbell encoding is **invented** —
     /// deliberately so, it is a mock — and it was answering here, for the one seam

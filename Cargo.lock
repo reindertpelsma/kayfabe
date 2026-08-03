@@ -274,6 +274,7 @@ dependencies = [
  "kayfabe-gsp",
  "kayfabe-isolate",
  "kayfabe-isolate-host",
+ "kayfabe-mocks",
  "kayfabe-rmrpc",
  "kayfabe-rt",
  "kayfabe-vmm",

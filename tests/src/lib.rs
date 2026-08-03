@@ -625,6 +625,14 @@ pub fn ga10x_process(s: &mut Scenario, client: HClient, pdb: Pdb, base: u32) -> 
         class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
         facts: AllocFacts {
             h_vaspace: Some(vas),
+            // ★ The `NVOS04_FLAGS` word CPU-RM writes for chid 0 — the same chid the
+            // notifier below is placed for. `AllocFacts::default()` (a zero word) names NO
+            // channel at all: RM's own reader leaves the chid to the allocator when
+            // `_PAGE_FIXED` is clear, so `Arch::vchid_from_userd_flags` answers `None` and
+            // the projection refuses by name. `MockArch::userd_flags_for` is the encoder
+            // because it is the one differentialled against NVIDIA's OWN compiled writer
+            // (`tests/tests/userd_chid_oracle.rs`); a literal here would drift silently.
+            userd_flags: kayfabe_mocks::MockArch::userd_flags_for(kayfabe_arch::ids::VChid(0)),
             error_notifier: Some(ErrorNotifier::Sysmem {
                 gpa: notifier_gpa(kayfabe_arch::ids::VChid(0)),
             }),

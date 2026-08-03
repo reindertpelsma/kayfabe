@@ -61,7 +61,7 @@ impl Arch for Ga10xArch {
     fn classify(&self, class: ClassId) -> ObjectKind {
         self.inner.classify(class)
     }
-    fn vchid_from_userd_flags(&self, flags: u32) -> VChid {
+    fn vchid_from_userd_flags(&self, flags: u32) -> Option<VChid> {
         self.inner.vchid_from_userd_flags(flags)
     }
     fn decode_doorbell(&self, token: u64) -> Option<DoorbellTarget> {

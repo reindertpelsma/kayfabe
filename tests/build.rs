@@ -404,6 +404,205 @@ fn extract_sf_accessors(src: &str) -> Result<String, String> {
     Ok(slice.to_string())
 }
 
+// =====================================================================================
+// ★★★ The USERD-INDEX / chid oracle — the `vchid_from_userd_flags` instrument
+// =====================================================================================
+//
+// See `oracle/userd_chid_oracle.c`. Everything here decides WHICH driver code is compiled,
+// and it decides it by reading the driver.
+//
+// ★★ Why this one compiles FOUR spans out of THREE files. The writer's divisor
+// (`NVBIT(DRF_SIZE(_USERD_INDEX_VALUE))`, a flag-field WIDTH) and the reader's multiplier
+// (`pGlobalChIDHeap->ownerGranularity`, set from `RM_PAGE_SIZE / userdBar1Size`) are two
+// different numbers reached by two unrelated routes. They are equal on GA106. An oracle
+// that compiled only one of them would be assuming exactly the thing that could be wrong,
+// so both are compiled and the round trip is what says whether they agree.
+
+/// The chip whose HAL bindings this oracle is built with — the same GA106 the shipped
+/// `kayfabe_chips::Ga10xArch` is, named here for [`GMMU_ORACLE_CHIP`]'s reason.
+const USERD_CHID_ORACLE_CHIP: &str = "GA106";
+
+/// The dispatch table that binds the READER per chip.
+const NVOC_KERNEL_CHANNEL_C: &str = "src/nvidia/generated/g_kernel_channel_nvoc.c";
+
+/// The halified entry point that EXTRACTS the two subfields out of the flags word.
+const KCHANNEL_ALLOC_HWID_HAL_FUNC: &str = "kchannelAllocHwID";
+
+/// The file holding the recombination and the granularity, both sliced as statement spans.
+const KERNEL_FIFO_C: &str = "src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c";
+
+/// The generated header that declares which member holds each halified `kfifo*`.
+const NVOC_KERNEL_FIFO_H: &str = "src/nvidia/generated/g_kernel_fifo_nvoc.h";
+
+/// The name of the USERD-isolation predicate the **granularity span itself** calls.
+///
+/// ★★ `ogkm` is VERSIONED, not the spec — and this is that rule biting in a place that
+/// costs a segfault rather than a compile error. The span is byte-identical between the
+/// two vendored trees except for one call: `580.159.04` asks
+/// `kfifoIsPreAllocatedUserDEnabled`, a plain `static inline` reading a PDB property;
+/// `610.43.02` asks `kfifoUserdNeedsIsolation`, which is **halified** and therefore
+/// dispatches through a function pointer that is `NULL` in a `calloc`'d `KernelFifo`. The
+/// 610 oracle built clean and then crashed on its first case.
+///
+/// So the predicate is read out of the driver's own text rather than named here, and the
+/// caller binds it when — and only when — the driver's own header says it is halified.
+fn span_isolation_predicate(span: &str) -> Result<String, String> {
+    let decl = "NvBool bIsolationEnabled = ";
+    let at = span
+        .find(decl)
+        .ok_or_else(|| format!("the granularity span has no `{decl}…`"))?;
+    let rest = &span[at + decl.len()..];
+    let name: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    if name.is_empty() || !rest[name.len()..].trim_start().starts_with('(') {
+        return Err(format!(
+            "the granularity span's isolation predicate is not a call: `{}`",
+            rest.lines().next().unwrap_or_default()
+        ));
+    }
+    Ok(name)
+}
+
+/// Cut the **writer** span out of `kernel_channel.c`, verbatim.
+///
+/// The span runs from the `numChannelsPerUserd` declaration — the divisor, computed from a
+/// flag field's own width — through the `_PAGE_VALUE` `FLD_SET_DRF_NUM` that closes the
+/// four-statement write. Between them the file contains nothing else, so the cut is a
+/// contiguous run of the original bytes.
+///
+/// Both ends are located by the file's OWN text, never by line number, for
+/// [`extract_interface_slice`]'s reason.
+fn extract_userd_writer_span(src: &str) -> Result<&str, String> {
+    let decl = "NvU32 numChannelsPerUserd";
+    let at = src.find(decl).ok_or_else(|| {
+        format!("no `{decl}` in the file — CPU-RM no longer splits the chid here")
+    })?;
+    let start = src[..at].rfind('\n').map_or(0, |r| r + 1);
+    let last = "_CHANNEL_USERD_INDEX_PAGE_VALUE";
+    let at2 = src[start..]
+        .find(last)
+        .map(|r| start + r)
+        .ok_or_else(|| format!("no `{last}` after the divisor"))?;
+    let end = src[at2..]
+        .find(';')
+        .map(|r| at2 + r + 1)
+        .ok_or("the `_PAGE_VALUE` write has no `;`")?;
+    let slice = &src[start..end];
+    for anchor in [
+        "NVBIT(DRF_SIZE(NVOS04_FLAGS_CHANNEL_USERD_INDEX_VALUE))",
+        "_CHANNEL_USERD_INDEX_FIXED, _FALSE",
+        "_CHANNEL_USERD_INDEX_PAGE_FIXED, _TRUE",
+        "ChID % numChannelsPerUserd",
+        "ChID / numChannelsPerUserd",
+    ] {
+        if !slice.contains(anchor) {
+            return Err(format!("the writer span does not contain `{anchor}`"));
+        }
+    }
+    // …and what it must NOT: the span is four statements, not the RPC around them.
+    for forbidden in ["NV_RM_RPC_ALLOC_CHANNEL", "internalFlags"] {
+        if slice.contains(forbidden) {
+            return Err(format!("the writer span reaches `{forbidden}`"));
+        }
+    }
+    Ok(slice)
+}
+
+/// Cut the **recombination** span out of `kernel_fifo.c`, verbatim.
+///
+/// ★★★ The span must be the **non-VF** arm. `kfifoChidMgrAllocChid_IMPL` holds two
+/// structurally identical `if (bForceUserdPage)` blocks — one multiplying by
+/// `ppVirtualChIDHeap[gfid]->ownerGranularity` (SR-IOV) and one by
+/// `pGlobalChIDHeap->ownerGranularity` (everything else, including the GSP-client path we
+/// are). Cutting the wrong one would compile, run, and be judged against a heap this
+/// harness never populates. So the cut is anchored on `pGlobalChIDHeap` and the slice is
+/// **refused** if it mentions the virtual heap at all.
+fn extract_chid_recombine_span(src: &str) -> Result<&str, String> {
+    let needle = "pChidMgr->pGlobalChIDHeap->ownerGranularity";
+    let at = src.find(needle).ok_or_else(|| {
+        format!("no `{needle}` — this release no longer recombines the chid from the global heap")
+    })?;
+    let open = "if (bForceUserdPage)";
+    let start = src[..at]
+        .rfind(open)
+        .ok_or_else(|| format!("no `{open}` before the recombination"))?;
+    let start = src[..start].rfind('\n').map_or(0, |r| r + 1);
+    let tail = "offsetAlign = internalIdx;";
+    let at2 = src[at..]
+        .find(tail)
+        .map(|r| at + r)
+        .ok_or_else(|| format!("no `{tail}` closing the `else if` arm"))?;
+    let end = src[at2..]
+        .find('}')
+        .map(|r| at2 + r + 1)
+        .ok_or("the `else if` arm never closes")?;
+    let slice = &src[start..end];
+    for anchor in [
+        "bForceUserdPage",
+        "NV_ASSERT_OR_RETURN(!bForceInternalIdx, NV_ERR_INVALID_STATE)",
+        "userdPageIdx",
+        "ownerGranularity",
+        "internalIdx",
+        "NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE",
+    ] {
+        if !slice.contains(anchor) {
+            return Err(format!(
+                "the recombination span does not contain `{anchor}`"
+            ));
+        }
+    }
+    if slice.contains("ppVirtualChIDHeap") {
+        return Err(
+            "the recombination span caught the SR-IOV arm (`ppVirtualChIDHeap`), whose heap \
+             this harness never populates"
+                .to_string(),
+        );
+    }
+    Ok(slice)
+}
+
+/// Cut the **granularity** span out of `kernel_fifo.c`, verbatim.
+///
+/// Three statements: size a USERD through the halified `kfifoGetUserdSizeAlign`, ask
+/// whether isolation is on, and hand `RM_PAGE_SIZE / userdBar1Size` to the eheap. The
+/// number the whole increment turns on is the third argument of the third statement, and
+/// it is never read here — the driver's own `eheapSetOwnerIsolation` stores it and the
+/// driver's own recombination reads it back.
+fn extract_userd_granularity_span(src: &str) -> Result<&str, String> {
+    let first = "kfifoGetUserdSizeAlign_HAL(pKernelFifo, &userdBar1Size, NULL);";
+    let at = src
+        .find(first)
+        .ok_or_else(|| format!("no `{first}` — the USERD size no longer reaches the eheap"))?;
+    let start = src[..at].rfind('\n').map_or(0, |r| r + 1);
+    let setter = "eheapSetOwnerIsolation";
+    let at2 = src[start..]
+        .find(setter)
+        .map(|r| start + r)
+        .ok_or_else(|| format!("no `{setter}` after the USERD size"))?;
+    let at3 = src[at2..]
+        .find("RM_PAGE_SIZE")
+        .map(|r| at2 + r)
+        .ok_or("the isolation setter is no longer handed `RM_PAGE_SIZE / …`")?;
+    let end = src[at3..]
+        .find(';')
+        .map(|r| at3 + r + 1)
+        .ok_or("the isolation call has no `;`")?;
+    let slice = &src[start..end];
+    for anchor in [
+        "kfifoGetUserdSizeAlign_HAL",
+        "userdBar1Size",
+        "eheapSetOwnerIsolation",
+        "RM_PAGE_SIZE / userdBar1Size",
+    ] {
+        if !slice.contains(anchor) {
+            return Err(format!("the granularity span does not contain `{anchor}`"));
+        }
+    }
+    Ok(slice)
+}
+
 /// Read the symbol the driver's own dispatch table binds `func` to for `chip`.
 ///
 /// ★★★ Why this is derived and not listed. `kgmmuFmtInitPteComptagLine` looks like it
@@ -770,6 +969,7 @@ fn main() {
     println!("cargo:rerun-if-changed=oracle/gmmu_fmt_oracle.c");
     println!("cargo:rerun-if-changed=oracle/worksubmit_token_oracle.c");
     println!("cargo:rerun-if-changed=oracle/pushbuffer_abi_oracle.c");
+    println!("cargo:rerun-if-changed=oracle/userd_chid_oracle.c");
     for (env_var, _, _) in TREES {
         println!("cargo:rerun-if-env-changed={env_var}");
     }
@@ -790,6 +990,7 @@ fn main() {
         build_gmmu_oracle(&cc, &out_dir, &root, tag, env_var);
         build_token_oracle(&cc, &out_dir, &root, tag, env_var);
         build_pushbuffer_oracle(&cc, &out_dir, &root, tag, env_var);
+        build_userd_chid_oracle(&cc, &out_dir, &root, tag, env_var);
 
         if !root.join(VBIOS_TU102_C).is_file()
             || !root.join(FWSEC_C).is_file()
@@ -1376,6 +1577,293 @@ fn build_pushbuffer_oracle(cc: &str, out_dir: &Path, root: &Path, tag: &str, env
         cmd.arg("-I").arg(root.join(prefix).join(sub));
     }
     cmd.arg(&harness);
+
+    let out = cmd
+        .output()
+        .unwrap_or_else(|e| fail(&format!("could not run the C compiler `{cc}`: {e}")));
+    if !out.status.success() {
+        fail(&format!(
+            "the harness did not compile. Compiler output:\n{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        ));
+    }
+
+    println!("cargo:rustc-env={out_env}={}", bin.display());
+}
+
+/// Build the **USERD-index / chid oracle** for one vendored tree — the instrument for
+/// `Arch::vchid_from_userd_flags`.
+///
+/// Failure polarity is the house rule, for the fifth time and the same reason: an absent
+/// tree is a **skip** with a `cargo:warning=`; a present tree that will not build is a
+/// **hard error**. An oracle that degrades to a skip is how a gate stops being able to
+/// fire — and this one guards a decode whose wrong answer is silent (it routes a guest's
+/// channel to *another channel*, and on the Mode-2 path we are the GSP, so there is no
+/// second party to notice).
+fn build_userd_chid_oracle(cc: &str, out_dir: &Path, root: &Path, tag: &str, env_var: &str) {
+    let out_env = format!("KAYFABE_USERD_CHID_ORACLE_{tag}");
+    let chan_dispatch = root.join(NVOC_KERNEL_CHANNEL_C);
+    let fifo_dispatch = root.join(NVOC_KERNEL_FIFO_C);
+    // The driver's own containers, compiled WHOLE: `ownerGranularity` must be stored by
+    // NVIDIA's `eheapSetOwnerIsolation` and read back by NVIDIA's recombination, with
+    // nothing of ours in between. `eheap_old.c` links against `btree.c`.
+    let eheap = root.join("src/nvidia/src/libraries/containers/eheap/eheap_old.c");
+    let btree = root.join("src/nvidia/src/libraries/containers/btree/btree.c");
+    if !chan_dispatch.is_file()
+        || !fifo_dispatch.is_file()
+        || !root.join(TOKEN_IMPL_ROOT).is_dir()
+        || !root.join(TOKEN_KCHANNEL_C).is_file()
+        || !root.join(KERNEL_FIFO_C).is_file()
+        || !eheap.is_file()
+        || !btree.is_file()
+    {
+        println!(
+            "cargo:warning=USERD-CHID ORACLE SKIPPED: no usable open-kernel-modules tree at \
+             {} (set {env_var} to relocate). The tests that judge \
+             `Ga10xArch::vchid_from_userd_flags` against NVIDIA's OWN writer, reader and \
+             chid recombination announce themselves as SKIPPED and assert NOTHING. Nothing \
+             is vendored here to stand in for them.",
+            root.display()
+        );
+        return;
+    }
+
+    let fail = |what: &str| -> ! {
+        panic!(
+            "USERD-CHID ORACLE: {what}\n\
+             The tree at {} IS present, so this is NOT a machine without the oracle — it is \
+             the oracle having rotted against a driver whose text moved, and degrading it to \
+             a skip is how a gate stops being able to fire.",
+            root.display()
+        )
+    };
+
+    let chan_dispatch_src = std::fs::read_to_string(&chan_dispatch)
+        .unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", chan_dispatch.display())));
+    let fifo_dispatch_src = std::fs::read_to_string(&fifo_dispatch)
+        .unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", fifo_dispatch.display())));
+
+    // ★★ Refuse a chip name a table has never heard of, in BOTH tables — `nvoc_hal_symbol`
+    // would otherwise take the `else` arm silently. Here that arm happens to be the right
+    // answer for GA106 in both cases, which makes the check more important rather than
+    // less: without it a typo'd chip produces the identical binding and the oracle looks
+    // healthy for a chip that does not exist (`a_table_does_not_decide_behaviour`).
+    for (src, path) in [
+        (&chan_dispatch_src, &chan_dispatch),
+        (&fifo_dispatch_src, &fifo_dispatch),
+    ] {
+        if !chip_is_known(src, USERD_CHID_ORACLE_CHIP) {
+            fail(&format!(
+                "`{USERD_CHID_ORACLE_CHIP}` appears in no `/* ChipHal: … */` comment in {} — \
+                 the name is wrong.",
+                path.display()
+            ));
+        }
+    }
+
+    // 1. The READER, as the driver's own dispatch table binds it for this chip.
+    let reader_sym = nvoc_hal_symbol(
+        &chan_dispatch_src,
+        KCHANNEL_ALLOC_HWID_HAL_FUNC,
+        USERD_CHID_ORACLE_CHIP,
+    )
+    .unwrap_or_else(|e| fail(&e));
+    let reader_file =
+        find_definition_file(&root.join(TOKEN_IMPL_ROOT), &reader_sym).unwrap_or_else(|e| fail(&e));
+    let reader_src = std::fs::read_to_string(&reader_file)
+        .unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", reader_file.display())));
+    let reader_fn = extract_function(&reader_src, &reader_sym)
+        .unwrap_or_else(|e| fail(&format!("{} — {e}", reader_file.display())));
+    for anchor in [
+        "_CHANNEL_USERD_INDEX_PAGE_FIXED",
+        "_CHANNEL_USERD_INDEX_PAGE_VALUE",
+        "_CHANNEL_USERD_INDEX_VALUE",
+        "_CHANNEL_USERD_INDEX_FIXED",
+        "NV_ERR_INVALID_STATE",
+        "kfifoChidMgrAllocChid",
+    ] {
+        if !reader_fn.contains(anchor) {
+            fail(&format!(
+                "the reader sliced for `{reader_sym}` does not contain `{anchor}`. Either \
+                 the cut is wrong or this release no longer extracts the USERD index here \
+                 — either way the oracle must not be believed."
+            ));
+        }
+    }
+    // ★ The slice carries the reader file's OWN `#include` lines, byte for byte.
+    // `NVOS04_FLAGS_CHANNEL_USERD_INDEX_*` reach the compiler only through them.
+    let reader_includes: String = reader_src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#include"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+
+    // 2. The USERD SIZE, likewise derived — it is the numerator's divisor, and on GA106 the
+    //    driver binds *Maxwell's* implementation (see `USERD_SIZE_HAL_FUNC`).
+    let userd_sym = nvoc_hal_symbol(
+        &fifo_dispatch_src,
+        USERD_SIZE_HAL_FUNC,
+        USERD_CHID_ORACLE_CHIP,
+    )
+    .unwrap_or_else(|e| fail(&e));
+    let userd_file =
+        find_definition_file(&root.join(TOKEN_IMPL_ROOT), &userd_sym).unwrap_or_else(|e| fail(&e));
+    let userd_src = std::fs::read_to_string(&userd_file)
+        .unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", userd_file.display())));
+    let userd_fn = extract_function(&userd_src, &userd_sym)
+        .unwrap_or_else(|e| fail(&format!("{} — {e}", userd_file.display())));
+    for anchor in USERD_SLICE_ANCHORS {
+        if !userd_fn.contains(anchor) {
+            fail(&format!(
+                "the driver code sliced for `{userd_sym}` does not contain `{anchor}`."
+            ));
+        }
+    }
+    let userd_published: String = userd_src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#include") && l.contains("published/"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    if !userd_published.contains("dev_ram.h") {
+        fail(&format!(
+            "{} no longer includes a `published/…/dev_ram.h`, so USERD could not be sized \
+             against the driver's own field definitions.",
+            userd_file.display()
+        ));
+    }
+
+    // 3. The three STATEMENT spans, each cut by the file's own text.
+    let kchannel_src = std::fs::read_to_string(root.join(TOKEN_KCHANNEL_C))
+        .unwrap_or_else(|e| fail(&format!("cannot read {TOKEN_KCHANNEL_C}: {e}")));
+    let writer_span = extract_userd_writer_span(&kchannel_src).unwrap_or_else(|e| {
+        fail(&format!(
+            "slicing the writer out of {TOKEN_KCHANNEL_C}: {e}"
+        ))
+    });
+    let fifo_src = std::fs::read_to_string(root.join(KERNEL_FIFO_C))
+        .unwrap_or_else(|e| fail(&format!("cannot read {KERNEL_FIFO_C}: {e}")));
+    let recombine_span = extract_chid_recombine_span(&fifo_src).unwrap_or_else(|e| {
+        fail(&format!(
+            "slicing the recombination out of {KERNEL_FIFO_C}: {e}"
+        ))
+    });
+    let granularity_span = extract_userd_granularity_span(&fifo_src).unwrap_or_else(|e| {
+        fail(&format!(
+            "slicing the granularity out of {KERNEL_FIFO_C}: {e}"
+        ))
+    });
+
+    // 3b. ★★ The isolation predicate the granularity span calls, bound if the driver's own
+    //     header says it is halified. See `span_isolation_predicate`: the 610 tree's
+    //     predicate dispatches through a function pointer, and an unbound one is a NULL
+    //     call at run time — an oracle that builds clean and segfaults.
+    let pred = span_isolation_predicate(granularity_span).unwrap_or_else(|e| fail(&e));
+    let fifo_hdr = std::fs::read_to_string(root.join(NVOC_KERNEL_FIFO_H))
+        .unwrap_or_else(|e| fail(&format!("cannot read {NVOC_KERNEL_FIFO_H}: {e}")));
+    // NVOC's OWN statement of which member holds the pointer — not a guessed `__x__`.
+    let fnptr_define = format!("#define {pred}_FNPTR(pKernelFifo) pKernelFifo->__{pred}__");
+    let isolation_binding: Option<(String, String)> = if fifo_hdr.contains(&fnptr_define) {
+        let sym = nvoc_hal_symbol(&fifo_dispatch_src, &pred, USERD_CHID_ORACLE_CHIP)
+            .unwrap_or_else(|e| fail(&format!("binding the isolation predicate `{pred}`: {e}")));
+        Some((format!("__{pred}__"), sym))
+    } else if fifo_hdr.contains(&format!("static inline NvBool {pred}(struct KernelFifo *")) {
+        // A plain inline: nothing to bind, and the span calls it directly.
+        None
+    } else {
+        fail(&format!(
+            "the granularity span calls `{pred}`, which {NVOC_KERNEL_FIFO_H} declares \
+             neither as a halified entry point (no `{pred}_FNPTR` define) nor as a plain \
+             `static inline NvBool {pred}(struct KernelFifo *)`. Binding it wrong is a NULL \
+             call at RUN time, so this refuses at BUILD time instead."
+        ));
+    };
+
+    // ★ A statement span cannot carry its own `#include` lines — it is compiled INSIDE a
+    // function body. So the two source files' `#include` lines travel as separate
+    // file-scope fragments, still byte for byte and still theirs.
+    let chan_includes: String = kchannel_src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#include"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    let fifo_includes: String = fifo_src
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#include"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+
+    // Per-tag subdirectory with a stable basename, for `build_gmmu_oracle`'s reason: the
+    // driver's own `NV_PRINTF` puts `__FILE__`'s basename in every diagnostic.
+    let dir = out_dir.join(tag);
+    std::fs::create_dir_all(&dir).expect("slice dir");
+    let write = |name: &str, body: &str| -> PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, body).unwrap_or_else(|e| fail(&format!("writing {name}: {e}")));
+        p
+    };
+    let p_chan_inc = write("userd_chid_kernel_channel_includes.inc", &chan_includes);
+    let p_fifo_inc = write("userd_chid_kernel_fifo_includes.inc", &fifo_includes);
+    let p_writer = write("userd_chid_writer_slice.inc", &format!("{writer_span}\n"));
+    let p_reader = write(
+        "userd_chid_reader_slice.inc",
+        &format!("{reader_includes}\n{reader_fn}\n"),
+    );
+    let p_recomb = write(
+        "userd_chid_recombine_slice.inc",
+        &format!("{recombine_span}\n"),
+    );
+    let p_gran = write(
+        "userd_chid_granularity_slice.inc",
+        &format!("{granularity_span}\n"),
+    );
+    let p_usize = write(
+        "userd_chid_userd_size_slice.inc",
+        &format!("{userd_published}\n{userd_fn}\n"),
+    );
+
+    let harness = Path::new("oracle/userd_chid_oracle.c")
+        .canonicalize()
+        .expect("oracle/userd_chid_oracle.c is part of this crate");
+    let bin = out_dir.join(format!("userd_chid_oracle_{tag}"));
+    let mut cmd = Command::new(cc);
+    cmd.arg("-std=gnu11").arg("-O1").arg("-g");
+    cmd.arg("-fno-strict-aliasing");
+    cmd.arg("-o").arg(&bin);
+    for (macro_name, path) in [
+        ("OGKM_KERNEL_CHANNEL_INCLUDES", &p_chan_inc),
+        ("OGKM_KERNEL_FIFO_INCLUDES", &p_fifo_inc),
+        ("OGKM_USERD_WRITER_SLICE", &p_writer),
+        ("OGKM_KCHANNEL_ALLOC_HWID_SLICE", &p_reader),
+        ("OGKM_CHID_RECOMBINE_SLICE", &p_recomb),
+        ("OGKM_USERD_GRANULARITY_SLICE", &p_gran),
+        ("OGKM_USERD_SIZE_SLICE", &p_usize),
+    ] {
+        cmd.arg(format!("-D{macro_name}=\"{}\"", path.display()));
+    }
+    cmd.arg(format!("-DOGKM_KCHANNEL_ALLOC_HWID_FN={reader_sym}"));
+    cmd.arg(format!(
+        "-DOGKM_KCHANNEL_ALLOC_HWID_FN_NAME=\"{reader_sym}\""
+    ));
+    cmd.arg(format!("-DOGKM_USERD_SIZE_FN={userd_sym}"));
+    cmd.arg(format!(
+        "-DOGKM_USERD_CHID_CHIP=\"{USERD_CHID_ORACLE_CHIP}\""
+    ));
+    if let Some((member, sym)) = &isolation_binding {
+        cmd.arg(format!("-DOGKM_USERD_ISOLATION_MEMBER={member}"));
+        cmd.arg(format!("-DOGKM_USERD_ISOLATION_FN={sym}"));
+    }
+    for d in DEFINES {
+        cmd.arg(format!("-D{d}"));
+    }
+    cmd.arg("-include")
+        .arg(root.join("src/common/sdk/nvidia/inc/cpuopsys.h"));
+    for (prefix, sub) in INCLUDES {
+        cmd.arg("-I").arg(root.join(prefix).join(sub));
+    }
+    cmd.arg(&harness);
+    cmd.arg(&eheap);
+    cmd.arg(&btree);
 
     let out = cmd
         .output()
