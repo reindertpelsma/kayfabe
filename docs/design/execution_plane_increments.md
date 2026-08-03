@@ -1682,3 +1682,104 @@ inside E6 is what this document exists to refuse.
   `libtest_capture_swallows_thread_output`, fixed the way `kvm_gate::report` already was.
   And clippy's `too_many_arguments` (8/7) on the ring helper, fixed by grouping the copy's
   two ends rather than with an `#[allow]`.
+
+---
+
+## 11. E7 — §10.5's blocker, FIXED. The real isolate plane boots.
+
+### 11.1 What was wrong, and it was one phase boundary
+
+§10.5 arm B named it and refused to fix it inside E6: *"the spawn must move to a
+plan/execute/commit shape of its own — decide which isolates are needed under the lock,
+spawn with **zero** locks held, adopt under the lock with R5 re-validation."* That is
+exactly what landed. The design record — the defect, why 1975 green tests could not see
+it, the two R5 shapes, and the six doors the deferral had to be named at — is
+`l1_concurrency.md` §12.47; it is not repeated here.
+
+⊘ **Nothing about the increments E0–E6 changed.** E0b's property is preserved, and §11.2's
+runs `r1real1`/`r1real2` at rev `e726844` re-measure it rather than assuming it: the spawn
+still follows the guest's action. The deferral moves *where in the lock discipline* the
+spawn happens, not *what causes* it.
+
+### 11.2 ★★★ The acceptance — a real-plane boot that does NOT abort
+
+`[measured]` rev **`e726844`**, vast **46529600**, RTX 3060 (GA106 `10de:2504`) at
+`00:03.0` in the guest, host driver **580.159.04 Open Kernel Module**, guest Ubuntu 24.04
+with a **stock unpatched** 580.159.04 open module. Archive built
+`KAYFABE_SHIM_FEATURES=host-isolates`; the QEMU binary **and** `libkayfabe_qemu_raw.a` both
+stamp `kayfabe-rev:e7268444bf77c68d0ae6e7590f4c9d4995b48162`. Three boots, one fresh QEMU
+each, powered down between; harness `scripts/bench/e0_isolate_witness.sh`.
+
+| run | `KAYFABE_ISOLATES` | rc | `R1 no-blocking-under-lock` in the QEMU log | isolate children | census |
+|---|---|---|---|---|---|
+| `r1real1` | `real` | **0** | **0** | 1, first sighting **t+42 s** | `1 materialized, 1 live, 0 refusing` |
+| `r1real2` | `real` | **0** | **0** | 1, first sighting **t+43 s** | `1 materialized, 1 live, 0 refusing` |
+| `r1ctl1` | *unset* | **0** | **0** | **0** | `1 materialized, 1 live, 1 refusing (1 no-plane)` |
+
+Evidence: `bench_evidence/e726844_run_r1{real1,real2,ctl1}_{dmesg,qemu,probe,isolate}.log`.
+Compare `bench_evidence/f0b7efa_run_basereal_qemu.log`, the same arm before the fix, where
+the count is **1** and QEMU is gone.
+
+★ **E0b re-measured, not assumed:** the guest opened the device at **t+37 s** and the first
+isolate child appeared at **t+42/43 s** — the spawn still *follows* the guest's action. The
+deferral makes it strictly later, never earlier.
+
+### 11.3 ★★★ The wall, and it is UNCHANGED — which is the honest headline
+
+```text
+NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56
+NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ ce_utils.c:304
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+```
+
+Three diffs, all `[measured]` at `e726844`, kernel timestamps stripped:
+
+| pair | verdict |
+|---|---|
+| `r1real1` vs `r1ctl1` — guest dmesg | **IDENTICAL**, 26 lines / 22 `NVRM` / 3 adapter each |
+| `r1real1` vs `r1real2` — guest dmesg | **IDENTICAL** |
+| `r1ctl1` vs the committed control `147c069_run_e6join1_dmesg.log` | **IDENTICAL** |
+
+⇒ **The control still behaves exactly as it does today**, and **the real plane is now
+indistinguishable from it at this wall.** The device's own report differs between the arms
+in **exactly one line** — the isolate census (`0 refusing` vs `1 refusing (1 no-plane)`)
+plus the refusal sentence the stillborn plane prints. Every other counter is byte-identical:
+`registers … 56309 writes`, `faults 0`, `interrupt requests dropped 91`, `framebuffer 122r
+/55106w`, `BAR2 111r/21128w`, `commands: 92 decoded, 20 UNSERVICED, 17 distinct`,
+`doorbells: 0 arrived`.
+
+★ **Why unchanged is the expected answer and not a disappointment.** The isolate plane
+serves *verbs*; the boot dies inside `RmInitAdapter`, long before a channel is scheduled, so
+there is no guest submission for it to serve. E6 recorded the same shape (*"it could not
+have moved"*). What this run buys is that **the plane can now be switched on at all** — the
+prerequisite for every increment past this one — and the other half of
+`suspect_the_instrument_first`: the change did not break the control either.
+
+⊘ **What did NOT move and must not be read as having moved.** No `cuInit`, no doorbell, no
+forwarded verb, no host RM ioctl caused by *guest intent* (the isolate's own bring-up is its
+own, as `e0_isolate_witness.sh`'s docs already scope). `nvidia-smi` in the guest still finds
+no device. The next wall is the same one §10.5 left: `status: 56` on the scrubber's CE
+channel schedule.
+
+⊘ **Against the committed control the READ counters move** (`3630`→`3646` register reads,
+`gsp 341r`→`344r`, `timer 24`→`36`) while every write count is identical. That is the
+`bench_rebuild_notes.md` §3 pattern — *diff the writes, tolerate the reads* — and it is
+present between two runs of the **same** binary here too (`r1real1` 3630 vs `r1real2` 3638).
+
+### 11.4 Suite, gates, ledger
+
+- **Suite**, `[measured]` at `e726844` on the RTX 3060 bench (the KVM box), `KAYFABE_NO_KVM`
+  unset: `cargo test --workspace --no-fail-fast` → **1986 passed, 0 failed, 1 ignored**;
+  `KVM-GATE: RAN` **56**. ⇒ **+11 over `dac9610`'s 1975**, all of them
+  `tests/tests/r1_spawn_outside_lock.rs`.
+- **Gates**, `[measured]` at `e726844`: `./scripts/ci_gates.sh --all` →
+  `ALL GATES CLEAN (22 steps, floor 22 for --all mode)`. No gated oracle family was added,
+  so the floors are untouched.
+- **Claim ledger**: **382 / 66 / 17** — unmoved. ⊘ It went red twice while this branch was
+  written (384/382, then 383/382 when §11 was added) and was fixed by **attributing** every
+  new site — each now names the run or the test that fails if it stops being true — never by
+  moving the ceiling.
+- **Bite-checks**: five, in `l1_concurrency.md` §12.47 §7. Four bite. ★★★ The fifth was a
+  **non-biter on the first run and the finding was in the test, not the code** — the assert
+  under test shares its panic message with `IsolateBox::drop`, so a `#[should_panic]` was
+  being satisfied by the wrong door. Fixed and re-run: it bites.

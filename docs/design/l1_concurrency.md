@@ -6383,7 +6383,7 @@ bug.
 
 ★★ **SIX doors needed the discrimination, not two.** `kayfabe_fwd::missing_isolate` is the
 `never_serves` lesson repeated with a bigger number: five of the six are PLAN-phase
-(`plan_publish`, `plan_doorbell`, `parse_pushbuffer`'s route, `plan_control`, `plan_ce`) and
+(`plan_publish`, `plan_doorbell`, `plan_engine_object`, `plan_control`, `plan_ce`) and
 refuse *before* a checkout is ever attempted. With only the two checkout doors converted,
 `r1_spawn_outside_lock.rs::a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds`
 failed with `NoTarget { proc: ProcId(1) }` — `plan_doorbell` had already refused. **The
@@ -6391,6 +6391,12 @@ other four were found by that test and by nothing else.** ⊘ The COMMIT-phase t
 (`commit_control`) is deliberately left alone: there the isolate was present when the plan
 was made, so its absence is divergent staleness (`Stale::Target`) and re-materializing it
 would be finishing what a vanished world started.
+
+★ **All six sit behind `SharedDevice::verb_op`.** That is what makes the DEFER real rather
+than a nicer name for a refusal: every one is reached from a site that *can* re-run, so the
+shell materializes and re-plans and `IsolatePending` never reaches a guest. A future caller
+that reaches one of those plans outside that loop gets it as a fault — correctly, by
+`checkout`'s own per-site rule — and it will be a fault that says what it means.
 
 #### 6. Tests
 
@@ -6413,4 +6419,44 @@ would be finishing what a vanished world started.
 ⊘ **What none of these can settle.** Every isolate here is a `MockIsolate`; nothing forks,
 so "the spawn really was expensive" is not measured and cannot be by this file. What is
 measured is *where in the lock discipline it happens*, which is the whole defect. The live
-boot is the acceptance (`only_live_boots_are_proof`).
+boot is the acceptance (`only_live_boots_are_proof`) — `execution_plane_increments.md` §11.
+
+#### 7. Bite-checks — and ★★★ one of them was a NON-BITER, which found a defect in the test
+
+`[measured]` at rev `e726844` on the RTX 3060 bench (vast 46529600), each bite applied by
+exact string replacement with the replacement count asserted (a mutation that matched zero
+or two sites aborts the harness — a mutation that is not *live* makes any verdict
+meaningless), each followed by a full `cargo test --workspace --no-fail-fast`, each restored
+with an explicit `touch` (`bite_harness_must_touch_after_restore`).
+
+| # | neuter | result |
+|---|---|---|
+| B1 | `defer_isolate` **spawns inline again** — the pre-fix behaviour, verbatim | **BITES**, 9 tests red and **3 `R1 no-blocking-under-lock` panic lines in the suite log**. ★ That number is the point of the whole exercise: before `IsolateBox::new` asserted, this mutation was the shipped code and produced **zero**. Two of the nine are pre-existing tests that knew nothing about this work — `l1_mean::mean_multiproc_multithread_multigpu_multiworkload` and `e2_doorbell::the_doorbell_reaches_the_same_object_model_the_bridge_declares_into` |
+| B2 | `install_isolate` drops the R5 `wants_isolate` re-validation | **BITES** — `an_isolate_spawned_for_a_proc_that_retired_in_the_gap_is_refused` alone, which is exactly the arm removed |
+| B3 | `missing_isolate` always answers `NoTarget` (the deferral loses its name) | **BITES** — the naming test plus **both** verb-in-the-gap tests: without the name, `verb_op` cannot know to resolve it |
+| B4 | `verb_op` stops resolving `IsolatePending` and surfaces it | **BITES** — both verb-in-the-gap tests |
+| B5 | `IsolateBox::new`'s two asserts removed — **the mechanism itself** | ★★★ **NON-BITER on the first run.** See below |
+
+#### 7b. ★★★ B5, and `suspect_the_instrument_first`
+
+B5 removes the assert this entire section is about, and **nothing went red.** The test that
+exists to catch it was six lines and a `#[should_panic(expected = "R1
+no-blocking-under-lock")]`, and it was **vacuous**: with the birth assert gone, `new`
+returns, the `IsolateBox` falls at the end of the test **with rank 0 still held**, and
+`IsolateBox::drop`'s own §12.16-G3b assert fires the *identical sentence*. The attribute was
+satisfied by the other door.
+
+⊘ **Absorbing that as "B5 is a non-biter because the death assert covers it" would have been
+wrong twice over**: the death assert covers a different act, and the test would have gone on
+claiming to pin a mechanism it did not touch. What the test does now: release the rank
+*before* the value falls (so `Drop` cannot answer), assert on the panic's **text** that it is
+the birth door (*"materializing an isolate"*, not *"dropping an isolate"*), and fail loudly
+when nothing panics at all. `catch_unwind` replaces `#[should_panic]` because the witness is
+a thread-local and under `--test-threads=1` libtest runs on the **main** thread, so an unwind
+that leaves rank 0 set would poison every later test in the binary.
+
+**B5 re-run after the fix: BITES**, with
+`the birth-side R1 assert did not fire at all` — the message that says which door.
+
+★ The general form, for the next person: **a `#[should_panic]` whose expected string is
+produced by more than one site in the code under test is not a test of either of them.**

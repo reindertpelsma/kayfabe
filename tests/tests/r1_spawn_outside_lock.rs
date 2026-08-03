@@ -115,15 +115,62 @@ fn process_events(i: usize) -> Vec<RmEvent> {
 /// This is the assert whose absence let the defect ship: the real one
 /// (`kayfabe_linux_raw::ChildSpec::spawn`) exists and is correct and is only reachable on
 /// a box with a GPU.
+///
+/// ## ★★★ THE INSTRUMENT WAS THE BUG FIRST — and the bite harness is what said so
+///
+/// The first version of this test was six lines and a `#[should_panic]`, and it was
+/// **vacuous**. `[measured]`, bite **B5** (remove both asserts from `IsolateBox::new`,
+/// `cargo test --workspace --no-fail-fast` at rev `e726844` on the RTX 3060 bench): **zero
+/// tests red.** The reason is the half of the lifecycle that was already correct — with
+/// the birth assert gone, `new` returns, the value falls at the end of the test **with the
+/// rank still held**, and `IsolateBox::drop`'s own §12.16-G3b assert fires the identical
+/// R1 sentence. `#[should_panic(expected = "R1 no-blocking-under-lock")]` was satisfied by
+/// the wrong door.
+///
+/// So this version does three things the short one could not:
+///
+/// 1. **releases the rank before the value falls**, so `Drop` cannot supply the panic;
+/// 2. asserts on the panic's own text that it is the **birth** door
+///    (*"materializing an isolate"*) and not the death door (*"dropping an isolate"*);
+/// 3. **fails loudly if nothing panicked at all**, instead of relying on an attribute
+///    that any panic satisfies.
+///
+/// `catch_unwind` rather than `#[should_panic]` for reason (1): the witness is a
+/// thread-local, and under `--test-threads=1` libtest runs tests on the **main** thread,
+/// so an unwind that leaves rank 0 set poisons every test after it in the binary. The
+/// cleanup below runs on both paths.
 #[test]
-#[should_panic(expected = "R1 no-blocking-under-lock violation")]
 fn materializing_an_isolate_under_a_ranked_lock_panics_naming_r1() {
     let (factory, _rec) = MockIsolateFactory::new();
-    // Simulate the device write guard the boot died under. libtest runs each test on its
-    // own thread and the witness is a thread-local, so the panic cannot leak this bit into
-    // any other test.
-    kayfabe_util::lockwitness::note_acquired(LockRank::Device as u8);
-    let _boom = IsolateBox::new(factory.spawn(IsolateId::new(1, GpuId::ZERO)));
+    let rank = LockRank::Device as u8;
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // Simulate the device write guard the boot died under.
+        kayfabe_util::lockwitness::note_acquired(rank);
+        let made = IsolateBox::new(factory.spawn(IsolateId::new(1, GpuId::ZERO)));
+        // Only reachable if the BIRTH assert did not fire. Drop the rank first — see the
+        // docs: otherwise the death assert answers for it.
+        kayfabe_util::lockwitness::note_released(rank);
+        drop(made);
+    }));
+    // Whatever happened, this thread holds nothing afterwards.
+    kayfabe_util::lockwitness::note_released(rank);
+
+    let err = outcome.err().expect(
+        "materializing an isolate with rank 0 held must panic — the birth-side R1 assert          did not fire at all",
+    );
+    let text = err
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| err.downcast_ref::<&str>().copied())
+        .unwrap_or("<a panic payload that is not a string>");
+    assert!(
+        text.contains("R1 no-blocking-under-lock violation"),
+        "it must panic naming R1: {text}"
+    );
+    assert!(
+        text.contains("materializing an isolate"),
+        "★ and it must be the BIRTH door. `dropping an isolate …` here means the assert          under test is absent and `IsolateBox::drop` answered instead — the exact way          this test used to pass for the wrong reason: {text}"
+    );
 }
 
 /// ⊘ **The control, and it is not ceremony.** An assert that fires unconditionally is not

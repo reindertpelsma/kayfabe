@@ -1,0 +1,109 @@
+=== e0_isolate_witness tag=r1real1 at 2026-08-02T23:42:09+00:00 ===
+REV_UNDER_TEST=e7268444bf77c68d0ae6e7590f4c9d4995b48162
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=real
+qemu binary: -rwxr-xr-x 1 root root 85745848 Aug  2 23:41 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:e7268444bf77c68d0ae6e7590f4c9d4995b48162
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+archive rev == source rev
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:r1real1] booting (extra args: none)
+t+35   [boot_capture:r1real1] guest is up after 35s
+t+36   [boot_capture:r1real1] module unloaded and ring buffer cleared; loading cold
+t+37   [boot_capture:r1real1] opening the device (this is what runs RmInitAdapter)
+=== ISOLATE CHILD pid 849683  at 2026-08-02T23:42:55+00:00  (t+42s from witness start) ===
+cmdline: kayfabe-isolate --proc 0 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 838570
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -enable-kvm -m 8G -smp 8 -machine q35 -drive file=/wo
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug  2 23:42 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug  2 23:42 1 -> pipe:[1193580]
+  lrwx------ 1 root root 64 Aug  2 23:42 10 -> /dev/nvidia0
+  l--------- 1 root root 64 Aug  2 23:42 11 -> /dev
+  lrwx------ 1 root root 64 Aug  2 23:42 12 -> /dev/nvidia0
+  l-wx------ 1 root root 64 Aug  2 23:42 2 -> /workspace/bench/run_r1real1_qemu.log
+  lrwx------ 1 root root 64 Aug  2 23:42 3 -> socket:[1198195]
+  lrwx------ 1 root root 64 Aug  2 23:42 5 -> socket:[1198197]
+  lrwx------ 1 root root 64 Aug  2 23:42 6 -> socket:[1198199]
+  lrwx------ 1 root root 64 Aug  2 23:42 7 -> socket:[1198201]
+  lrwx------ 1 root root 64 Aug  2 23:42 8 -> socket:[1198203]
+  lrwx------ 1 root root 64 Aug  2 23:42 9 -> /dev/nvidiactl
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  7b52c1c63000-7b52c1c73000 rw-s 00000000 00:05 510                        /dev/nvidia0
+--- containment ---
+  Name:	67
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	6
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026532784]  host=user:[4026531837]
+    pid   child=pid:[4026532721]  host=pid:[4026531836]
+    net   child=net:[4026532788]  host=net:[4026531840]
+    mnt   child=mnt:[4026532785]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026532787]  host=ipc:[4026531839]
+    uts   child=uts:[4026532786]  host=uts:[4026531838]
+
+t+46   [boot_capture:r1real1] captured 26 dmesg lines, 22 NVRM, 3 adapter → /workspace/bench/run_r1real1_dmesg.log
+t+46   [boot_capture:r1real1] --- the verdict lines ---
+t+46   [   32.161288] NVRM: RmInitNvDevice: *** Cannot load state into the device
+t+46   [   32.161292] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+t+46   [   33.130051] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+t+46   [boot_capture:r1real1] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+=== ISOLATE CHILD SETTLED pid 849683  (first seen t+42s, settled at t+48s) ===
+cmdline: kayfabe-isolate --proc 0 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 838570
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -enable-kvm -m 8G -smp 8 -machine q35 -drive file=/wo
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug  2 23:42 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug  2 23:42 1 -> pipe:[1193580]
+  lrwx------ 1 root root 64 Aug  2 23:42 10 -> /dev/nvidia0
+  l--------- 1 root root 64 Aug  2 23:42 11 -> /dev
+  lrwx------ 1 root root 64 Aug  2 23:42 12 -> /dev/nvidia0
+  l-wx------ 1 root root 64 Aug  2 23:42 2 -> /workspace/bench/run_r1real1_qemu.log
+  lrwx------ 1 root root 64 Aug  2 23:42 3 -> socket:[1198195]
+  lrwx------ 1 root root 64 Aug  2 23:42 5 -> socket:[1198197]
+  lrwx------ 1 root root 64 Aug  2 23:42 6 -> socket:[1198199]
+  lrwx------ 1 root root 64 Aug  2 23:42 7 -> socket:[1198201]
+  lrwx------ 1 root root 64 Aug  2 23:42 8 -> socket:[1198203]
+  lrwx------ 1 root root 64 Aug  2 23:42 9 -> /dev/nvidiactl
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  7b52c1c63000-7b52c1c73000 rw-s 00000000 00:05 510                        /dev/nvidia0
+--- containment ---
+  Name:	67
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	6
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026532784]  host=user:[4026531837]
+    pid   child=pid:[4026532721]  host=pid:[4026531836]
+    net   child=net:[4026532788]  host=net:[4026531840]
+    mnt   child=mnt:[4026532785]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026532787]  host=ipc:[4026531839]
+    uts   child=uts:[4026532786]  host=uts:[4026531838]
+
+t+67   [boot_capture:r1real1] done. serial=/workspace/bench/run_r1real1_serial.log qemu=/workspace/bench/run_r1real1_qemu.log dmesg=/workspace/bench/run_r1real1_dmesg.log probe=/workspace/bench/run_r1real1_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 9   (0 = never seen alive)
+distinct isolate-child pids: 1
+plane->RmMode mapping check: ok
+E0b lazy-spawn check: ok — first isolate child at t+42s, guest opened the device at
+            t+37s ⇒ the spawn FOLLOWS the guest's action
+=== E1: the device's own isolate-plane census (from /workspace/bench/run_r1real1_qemu.log) ===
+  qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 0 refusing (0 no-plane, 0 spawn-failed)

@@ -724,7 +724,7 @@ fn never_serves(iso: &dyn kayfabe_isolate::Isolate) -> bool {
 /// ★★★ **Which absence is this?** — the R1-deferral counterpart of [`never_serves`], and
 /// it lives in one function for the identical reason, one order of magnitude louder:
 /// [`never_serves`] had **two** doors to keep in step, this has **six**. Five of them are
-/// PLAN-phase (`plan_publish`, `plan_doorbell`, `parse_pushbuffer`'s route, `plan_control`,
+/// PLAN-phase (`plan_publish`, `plan_doorbell`, `plan_engine_object`, `plan_control`,
 /// `plan_ce`) and refuse *before* the checkout is ever reached, so fixing the checkout
 /// alone is a change that passes every unit test and still refuses a legal state on the
 /// path L1 actually takes.

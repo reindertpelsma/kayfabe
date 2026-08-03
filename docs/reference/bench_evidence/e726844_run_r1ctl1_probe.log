@@ -1,0 +1,29 @@
+=== boot_capture tag=r1ctl1 at 2026-08-02T23:44:39+00:00 ===
+=== source revision: e7268444 ===
+=== qemu binary: -rwxr-xr-x 1 root root 85745848 Aug  2 23:41 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+WAS_LOADED
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+No devices were found
+SMI_RC=6
+=== /dev nodes (AFTER the open — they are created by it) ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+crw-rw-rw- 1 root root 237,   0 Aug  2 23:44 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug  2 23:44 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug  2 23:44 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug  2 23:44 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug  2 23:44 .
+drwxr-xr-x 18 root root   3980 Aug  2 23:44 ..
+cr--------  1 root root 240, 1 Aug  2 23:44 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug  2 23:44 nvidia-cap2
+=== lsmod ===
+Warning: Permanently added '192.168.77.2' (ED25519) to the list of known hosts.
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
