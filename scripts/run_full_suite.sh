@@ -582,11 +582,71 @@ run_mutants() {
     echo "  from the denominator and INFLATES the score. Do not trust this campaign."
     return 1
   fi
+
+  # ★★★ THE SAME MECHANISM, A SECOND CAUSE — and it fired for real.
+  #
+  # `[measured]` 2026-08-03, vast 46529600, 33,374 s: this phase printed
+  # `mutation score 100% (killed 1936 / viable 1936), threshold 91%` and `ok`, while its own
+  # output carried **15** `No space left on device` errors, `Error: write outcomes.json`, and
+  # `Found 8738 mutants to test`. **6802 mutants — 78% — were unaccounted for**, and there
+  # were ZERO `MISSED`/`TIMEOUT` lines.
+  #
+  # The ICE guard above understood the mechanism exactly — *"removes it from the denominator
+  # and INFLATES the score"* — and covered only the ICE trigger. ENOSPC does the same thing,
+  # and worse: it stops the RESULT FILES being written at all. `missed.txt` was never created,
+  # `n()` read its absence as **0**, and `viable = killed + 0 = killed` forces the score to
+  # **exactly 100%**. ⊘ A perfect score here is the ALARM, not the achievement.
+  #
+  # ⇒ This is the project's own FIFTH LIMIT — *an empty capture is evidence of NOTHING, not
+  # evidence of emptiness* — inside its own harness. Absence must never read as zero.
+  local found
+  if [ ! -s mutants.out/outcomes.json ]; then
+    echo "★★★ NO USABLE mutants.out/outcomes.json — cargo-mutants could not write its own"
+    echo "  authoritative record, so THERE IS NO RESULT to score. Do not read the numbers"
+    echo "  below as a campaign; the usual cause is the disk filling mid-run (df -h)."
+    return 1
+  fi
+  if grep -rqi "No space left on device" mutants.out/ 2>/dev/null; then
+    echo "★★★ ENOSPC INSIDE THE CAMPAIGN. Mutants whose build or run died of a full disk are"
+    echo "  DROPPED FROM THE DENOMINATOR, which drives the score UP. The campaign measured a"
+    echo "  universe that collapsed under it. Free space and re-run; do not trust this."
+    return 1
+  fi
+
   local n caught missed to killed viable score
-  n() { [ -f "mutants.out/$1.txt" ] && wc -l < "mutants.out/$1.txt" || echo 0; }
+  # ⊘ Absence is UNMEASURED, not zero — that substitution is what produced the 100% above.
+  n() {
+    if [ -f "mutants.out/$1.txt" ]; then wc -l < "mutants.out/$1.txt"; else echo MISSING; fi
+  }
   caught=$(n caught); missed=$(n missed); to=$(n timeout)
+  for f in caught missed timeout; do
+    [ -f "mutants.out/$f.txt" ] || {
+      echo "★★★ mutants.out/${f}.txt DOES NOT EXIST. Reading that as \"zero ${f}\" is exactly"
+      echo "  how a truncated campaign scores 100%. The campaign did not complete."
+      return 1
+    }
+  done
   killed=$((caught + to)); viable=$((killed + missed))
   [ "$viable" -gt 0 ] || { echo "★ zero viable mutants — the campaign measured nothing"; return 1; }
+
+  # ★ The universe check: cargo-mutants says how many it FOUND. A large unexplained shortfall
+  # between found and scored means the campaign did not test what it set out to test — and
+  # the ratio is printed either way, because a number beside the bar it cleared is evidence
+  # and a number on its own is decoration.
+  found=$(grep -ohE "Found [0-9]+ mutants to test" mutants.out/*.txt mutants.out/log/* 2>/dev/null \
+            | grep -ohE "[0-9]+" | head -1)
+  if [ -n "$found" ] && [ "$found" -gt 0 ]; then
+    local pct=$(( viable * 100 / found ))
+    echo "mutants found ${found} / scored ${viable} (${pct}%)"
+    if [ "$pct" -lt "${MUTATION_COVERAGE_MIN_PCT:-80}" ]; then
+      echo "★★★ ONLY ${pct}% of the mutants cargo-mutants found were scored. The rest did not"
+      echo "  survive and get counted — they VANISHED, and vanishing inflates the score."
+      return 1
+    fi
+  else
+    echo "★ could not read the found-mutant count; the universe check did not run."
+  fi
+
   score=$(( killed * 100 / viable ))
   echo "mutation score ${score}% (killed ${killed} / viable ${viable}), threshold ${threshold}%"
   [ "$score" -ge "$threshold" ]
