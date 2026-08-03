@@ -245,6 +245,31 @@ was the *absence* of a measurement wearing the same clothes.
 and **49** on others; `0xa06f0103` (`GPFIFO_SCHEDULE`, #177) answers 3 bytes. Both look exactly
 like data in this table. A replay that served either from it would fail late.
 
+## 6.2b ★★ The decoder checked against an instrument that is not itself
+
+A decoder that mis-locates a field produces a table that is wrong in a completely
+self-consistent way, so it cannot be caught by reading its own output. `traces/real_ga106/
+rpc_transcript_real_ga106.txt` is an **independent** measurement of the same GPU by a different
+instrument — an `NV_PRINTF` probe in `rpcRmApiControl_GSP`, taken 2026-08-01 — and it prints
+`cmd`, `psize` and `gspst` for 88 control calls.
+
+Compared against this capture's decoded `GSP_RM_CONTROL` replies (`[measured]` 2026-08-03,
+`traces/rpctrace_ga106_boot1.bin`):
+
+| | |
+|---|---|
+| transcript lines | 88 |
+| agree on **both** `paramsSize` and GSP status | **88** |
+| disagree | **0** |
+| commands absent from the new trace | **0** |
+
+⇒ The element-header (48) and RPC-header (32) offsets `--controls` decodes through are the
+right ones, and the status field is where it is claimed to be. This is worth more than the
+agreement on `0x20802a08` alone, because it covers 88 calls including the `0x56` refusals.
+
+★ The new capture is a strict superset: 104 distinct commands against the transcript's smaller
+set, **and it carries the reply bodies**, which the probe never printed.
+
 ## 6.3 Breaking it on purpose
 
 **The ring, on real hardware.** Re-captured with `--kb 512`, i.e. a 512 KiB ring against a boot

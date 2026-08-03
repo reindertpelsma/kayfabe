@@ -136,6 +136,14 @@ All six of those are in this file with bodies, and the headline row reproduces a
 ★ A genuinely zero-length reply is now distinguishable from an unmeasured one: `0x20800a70`
 answers `paramsSize = 0` with `NV_OK`, and that is a *measurement*.
 
+## The decoder is checked against a different instrument
+
+`traces/real_ga106/rpc_transcript_real_ga106.txt` is an independent `NV_PRINTF` probe of the
+same GPU from 2026-08-01, printing `cmd`/`psize`/`gspst` for 88 control calls. Decoding this
+capture's `GSP_RM_CONTROL` replies and comparing: **88 of 88 agree on both `paramsSize` and GSP
+status, 0 disagree, 0 absent.** A decoder that mis-located a field would produce a
+self-consistently wrong table; this is the check that the offsets are right.
+
 ## ⊘ What it does not witness
 
 One part, one kernel, one driver — GA10x only, **open** driver only. Two well-behaved
