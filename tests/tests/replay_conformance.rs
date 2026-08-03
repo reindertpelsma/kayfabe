@@ -1539,19 +1539,24 @@ fn answers_agree(
         let Some(b) = base.get(k) else {
             return Err(format!("0x{:08x} was not in the baseline run", k.0));
         };
-        // Every answer to the same request must be the same answer, in either run.
-        let a_set: BTreeSet<&Answer> = v.iter().collect();
-        let b_set: BTreeSet<&Answer> = b.iter().collect();
-        if a_set != b_set {
+        // ★ Every answer to the same request must be the same answer, in either run — as a
+        // sorted MULTISET, not a set. Order within the key is deliberately dropped (that is
+        // the whole property), but multiplicity is deliberately kept: a set would score
+        // `{OK, OK, REFUSED}` and `{OK, REFUSED, REFUSED}` equal, so a policy that flipped
+        // one of three identical calls would pass. Sorting is what makes the comparison
+        // order-insensitive without also making it count-insensitive.
+        let mut a_ms: Vec<&Answer> = v.iter().collect();
+        let mut b_ms: Vec<&Answer> = b.iter().collect();
+        a_ms.sort_unstable();
+        b_ms.sort_unstable();
+        if a_ms != b_ms {
             return Err(format!(
                 "0x{:08x}: the answer changed with position — baseline {:?}, reordered {:?}",
                 k.0,
-                b_set
-                    .iter()
+                b_ms.iter()
                     .map(|a| (a.rpc_result, a.params_size))
                     .collect::<Vec<_>>(),
-                a_set
-                    .iter()
+                a_ms.iter()
                     .map(|a| (a.rpc_result, a.params_size))
                     .collect::<Vec<_>>(),
             ));
@@ -1577,6 +1582,41 @@ impl PartialOrd for Answer {
     fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(o))
     }
+}
+
+/// The same comparison with multiplicity dropped — for the one ordering that changes the
+/// call COUNT on purpose (each `DATA` control issued twice). ⊘ Not used anywhere else: a
+/// comparator that cannot see a count change is a weaker instrument, and the weaker one
+/// must be reached for deliberately, at the one place the stronger one is inapplicable.
+fn answers_agree_ignoring_multiplicity(
+    base: &BTreeMap<ReqKey, Vec<Answer>>,
+    other: &BTreeMap<ReqKey, Vec<Answer>>,
+) -> Result<usize, String> {
+    let mut compared = 0usize;
+    for (k, v) in other {
+        let Some(b) = base.get(k) else {
+            return Err(format!("0x{:08x} was not in the baseline run", k.0));
+        };
+        let a_set: BTreeSet<&Answer> = v.iter().collect();
+        let b_set: BTreeSet<&Answer> = b.iter().collect();
+        if a_set != b_set {
+            return Err(format!(
+                "0x{:08x}: the answer changed when the control was asked again — baseline \
+                 {:?}, repeated {:?}",
+                k.0,
+                b_set
+                    .iter()
+                    .map(|a| (a.rpc_result, a.params_size))
+                    .collect::<Vec<_>>(),
+                a_set
+                    .iter()
+                    .map(|a| (a.rpc_result, a.params_size))
+                    .collect::<Vec<_>>(),
+            ));
+        }
+        compared += 1;
+    }
+    Ok(compared)
 }
 
 /// A deterministic shuffle with no `rand` dependency — a 64-bit LCG, so a failure is
@@ -1681,8 +1721,15 @@ fn spec_compliant_orders_the_real_kernel_never_issues_all_pass() {
     assert!(doubled.len() > reqs.len());
     let mut policy = port_policy();
     let got = by_request(&doubled, &replay(&doubled, &mut *policy));
-    total_compared +=
-        answers_agree(&base, &got).expect("a control asked twice must answer the same twice");
+    // ⚠ **The one case multiplicity cannot be the criterion**, and it is worth saying why
+    // rather than quietly using the weaker comparator everywhere: this ordering doubles
+    // each DATA control BY CONSTRUCTION, so every key's count is exactly twice the
+    // baseline's and a multiset comparison would fail on the arithmetic rather than on any
+    // behaviour. What still has to hold — and is what is checked — is that the SET of
+    // distinct answers per key is unchanged, i.e. the second ask answers exactly what the
+    // first did.
+    total_compared += answers_agree_ignoring_multiplicity(&base, &got)
+        .expect("a control asked twice must answer the same twice");
 
     // The two bring-ups interleaved. A real driver cannot do this — a full teardown sits
     // between them — and nothing in the protocol forbids it.

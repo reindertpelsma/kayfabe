@@ -796,6 +796,13 @@ under two seeds, every `DATA` control issued twice, and the two bring-ups interl
 is asserted is that the port is a **function of the request** — the same `(cmd, params)`
 gets the same answer in every ordering — never that the reply *streams* match.
 
+★ The comparison is a **sorted multiset**, not a set: order within a key is dropped (that is
+the property), multiplicity is kept, because a set scores `{OK, OK, REFUSED}` and
+`{OK, REFUSED, REFUSED}` equal and a policy that flipped one of three identical calls would
+pass. The one ordering that changes the call count on purpose — each `DATA` control issued
+twice — is the only place the weaker set comparator is reached for, and it is reached for
+explicitly rather than used everywhere.
+
 ## 9.5 ★★★ What the suite FOUND, which is the part that mattered
 
 `0x20800301` `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` is a control this port **claims**, is
