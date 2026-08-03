@@ -65,7 +65,22 @@ NVRM: _memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, statu
 
 for six weeks, and that `56` is hex — `0x56` — i.e. `NV_ERR_NOT_SUPPORTED`
 (`ogkm-580: nvstatuscodes.h:115`), which is what `kayfabe_gsp::GspFsm::answer` posts when
-**nobody claimed the command**. ⇒ `0x56` on this control is a *signature of absence*, not a
+**nobody claimed the command**.
+
+★★★ **The base is not a reading — it is the format specifier, and it is the one line this
+whole reinterpretation rests on.** `ogkm-580:
+src/nvidia/src/kernel/gpu/mem_mgr/mem_utils.c:1985`:
+
+```c
+NV_PRINTF(LEVEL_ERROR, "Unable to schedule channel, status: %x\n", rmStatus);
+```
+
+⊘ Cite it, because the alternative reading is not merely wrong, it is *plausible and
+different*: decimal `56` is `0x38` = `NV_ERR_INVALID_OPERATION`, which **is** one of the four
+documented returns above, and would have meant RM examined the request and rejected it —
+the opposite conclusion, reached from the same six characters. A paragraph that warns two
+lines below about writing status constants from memory should not itself assert a base
+without its source. *(Citation added by the verifier, not the author.)* ⇒ `0x56` on this control is a *signature of absence*, not a
 decision. A refusal this port actually decides must therefore not reuse it, or the only
 place a human ever reads this failure — the guest's own dmesg — cannot tell "I examined your
 channel and declined" from "no code path exists". #177 answers
