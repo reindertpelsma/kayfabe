@@ -244,6 +244,36 @@ pub struct PtDecodeOutcome {
     /// Pages whose level **was** learned this pass, so a later direct decode of them
     /// knows what they are.
     pub meta_learned: usize,
+    /// ★★★ E8 — **which** pages were learned, so the shell can publish them into the
+    /// device-global ownership index ([`kayfabe_core::gpu::Spine::pt_learned`]).
+    ///
+    /// ⊘ Carried out as data rather than published from here, and that is the whole
+    /// increment. The index is a rank-0 structure and this function holds a rank-1
+    /// `&mut Proc`; reaching up would invert the lock order. The pass therefore *reports*
+    /// what it learned and a fourth PUBLISH phase installs it after every ranked lock has
+    /// been released — see `SharedDevice::decode_pt_writes`.
+    ///
+    /// ★ It parallels [`Self::meta_learned`] exactly (one entry per increment), which is
+    /// an equality a test can hold the two to.
+    pub learned_pages: Vec<(GpuId, Pdb, u64)>,
+    /// ★★★ E8 — pages the PUBLISH phase actually installed in the device-global index.
+    ///
+    /// ⊘ **Not equal to [`Self::meta_learned`], and the gap is the point.** A page is
+    /// learned under the owner's rank-1 lock and published under rank 0 with every guard
+    /// in between released; anything that died in the gap is dropped by R5. `learned > 0`
+    /// with `published == 0` is the address space having gone away mid-pass — a correct
+    /// outcome, and one only a separate counter can show.
+    ///
+    /// ⚠ Written by the shell, not by [`commit_pt_decode`], which cannot reach rank 0.
+    pub pages_published: usize,
+    /// Publications the index refused — capacity ([`kayfabe_core::gpu::MAX_PT_LEARNED`]),
+    /// a dead or re-homed address space (R5), or a page already owned by a *different*
+    /// `(proc, pdb)`.
+    ///
+    /// ★ The last of those is the one worth watching: it means two address spaces claim one
+    /// physical page-table page, which is either guest aliasing or a wrong decode, and the
+    /// index refuses rather than letting the most recent writer win.
+    pub pages_publish_refused: usize,
     /// ★★ The first **transport** failure the byte source hit, if any — set by the shell
     /// from [`IsolateFb::transport_error`] after the execute phase.
     ///
@@ -436,6 +466,9 @@ pub fn commit_pt_decode(
             }
             vas.pt_meta.insert(p.phys, *p);
             out.meta_learned += 1;
+            // E8: report it upward for the PUBLISH phase. Recorded at the same statement
+            // that learns it, so the two can never drift.
+            out.learned_pages.push((r.task.gpu, r.task.pdb, p.phys));
         }
         // OBSERVE — content in, nothing decided yet.
         for (page, decode) in &d.decodes {

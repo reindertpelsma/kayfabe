@@ -5,8 +5,12 @@
 > `853a311` (§6), **E2** at `5c1f501` (§7), **E4/E5** at `ee3a8c3` (§8-§9) and **E6** at
 > `147c069` (§10). Every row is `[src]` at its revision, `[measured]` with a named run and
 > revision, or explicitly `[assumed]`.
-> ⚠ **E5 is PARTIAL** (§9.2: the CE-page-table-write source reaches a root page only) and
-> ★★★ **§10.5 arm B is a new wall**: the real isolate plane aborts QEMU under R1, at the
+> ⚠ **E5 was PARTIAL** (§9.2: the CE-page-table-write source reached a root page only);
+> **E8 closed it** (§12) — the decode's learned page-table pages are now published into the
+> device-global ownership index in a fourth, rank-0 phase, so a guest CE write into a *leaf*
+> table is witnessed and its leaf binds. ⊘ Suite only — no boot has been spent on E8, and the
+> guest boot still stops at `mem_utils.c:2006` on `0xa06f0103`, which is the execution plane.
+> ★★★ **§10.5 arm B remains a wall**: the real isolate plane aborts QEMU under R1, at the
 > base revision as well as at this one.
 
 ## 0. Why this document exists now, and what it replaces
@@ -90,7 +94,8 @@ that makes a green mean something. A row whose acceptance has no control is mark
 | **E2** ✅ | the doorbell reaches the core: a guest MMIO write to the usermode doorbell aperture arrives at `kayfabe_rt::SharedDevice::doorbell` | a boot in which a guest doorbell write produces a `DoorbellOutcome`-or-named-`FwdFault`, counted | a non-doorbell BAR write in the same run produces neither. **`[measured]` §7** |
 | **E3** ✅ | ★ **`Ga10xArch::decode_doorbell` is built** and validated against real silicon | a token RM itself hands a channel decodes to that channel's own vChid, on hardware | a token from a *different* channel must decode to a different vChid — and a fabricated token must decode to `None`. **DONE — `doorbell_token_encoding.md`** |
 | **E4** ✅ | GA10x `UserdModel` + `PushbufferAbi` replace `UnbuiltUserd`/`UnbuiltPushbuffer` | `read_pushbuffer` over bytes NVIDIA's own macros encode yields `LAUNCH_DMA`/`SEM_EXECUTE` at the offsets the guest wrote them | garbage bytes must **fault**, not decode to a plausible method. **DONE — §7, and it REFUTED the seam: `CeLaunchDma` is not decodable per-method at all** |
-| **E5** ◐ | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) — **PARTIAL, §9: source 1 whole, source 2 reaches a ROOT PAGE and no further** |
+| **E5** ✅ | the address table is populated from the guest's own bindings, so the CE operands resolve in the isolate's host VAS | a guest VA that *was* bound resolves; the copy's operands are found | ★ a VA that was **never bound** must FAULT (`mode2_address_table.md`: miss = fault, never a reverse-resolve) — source 1 whole at §9; **source 2 closed by E8, §12** |
+| **E8** ✅ | ★ the phase-shape change §9.2 refused to build blind: the decode's learned page-table pages are PUBLISHED into the device-global ownership index, at rank 0, after every rank-1 guard is released | a guest CE write into a **leaf** page table is classified, witnessed, and its leaf binds — the second write in a two-write sequence | ⊘ the **identical ring parsed before the publish** must yield zero page-table writes, or the acceptance is vacuous. **§12** |
 | **E6** ✅ | the join: guest CE copy → `plan_ce` → `Worker::execute` → `HostRmBackend::ce_copy_outcome` | `CeEvidence::copied()` — R17's predicate | the same archive with `KAYFABE_ISOLATES` unset must **not** produce it. **`[measured]` §10** — ★ and the control found a HANG |
 | **E7** ✅ | ★★★ the R1 fix §10.5 names: the isolate spawn moves **out** of the device lock — decide under rank 0, spawn with zero locks, install with R5 re-validation | a live boot with `KAYFABE_ISOLATES=real` + `host-isolates` that does **not** abort, and reaches a driver wall instead of a `SIGABRT` | the same archive with the variable unset must behave exactly as it does today. **`[measured]` §11** |
 
@@ -1823,3 +1828,109 @@ present between two runs of the **same** binary here too (`r1real1` 3630 vs `r1r
   **non-biter on the first run and the finding was in the test, not the code** — the assert
   under test shares its panic message with `IsolateBox::drop`, so a `#[should_panic]` was
   being satisfied by the wrong door. Fixed and re-run: it bites.
+
+## 12. E8 — BUILT. The PUBLISH phase §9.2 refused to invent, and what it closed
+
+### 12.1 The gap, restated as the four links it broke
+
+§9.2 measured that source 2 *"reaches a ROOT PAGE AND NO FURTHER"* and named the reason:
+`classify_ce` produces a `PtWrite` only for a destination `Spine::pt_page_owner`
+recognises, and that index held roots only. So a guest CE write into a **leaf** page table
+was classified as ordinary data, forwarded, never witnessed, and every leaf under it stayed
+`unwitnessed` — a MISS, a FAULT. The bytes decoded correctly and the metadata chain *was*
+learned; only the binding was withheld.
+
+§9.2 also named why it stopped there rather than patching it: *"`commit_pt_decode` holds
+only `&mut Proc` (rank 1) and publishing into the spine (rank 0) from there inverts the lock
+order. That is a phase-shape change of its own — an increment, not an edit."*
+
+### 12.2 The shape — a FOURTH phase, and the ordering is the whole content
+
+`SharedDevice::decode_pt_writes` was PLAN (rank 1) → EXECUTE (no lock) → COMMIT (rank 1).
+It is now PLAN → EXECUTE → COMMIT → **PUBLISH (rank 0)**.
+
+- `commit_pt_decode` *reports* what it learned (`PtDecodeOutcome::learned_pages`) instead of
+  publishing it. It cannot publish: it holds rank 1.
+- The shell takes the rank-0 write guard **after `with_proc_mut` has returned**, so its
+  rank-1 guard is already dropped. That is an acquisition from nothing, not an inversion.
+- **R5** lives in `Spine::publish_pt_pages`: every `(gpu, pdb)` is re-resolved against
+  `by_pdb`, and a page whose address space died — or whose PDB value now belongs to a
+  different proc — publishes nothing. `pages_published` is a separate counter from
+  `meta_learned` precisely so that gap is visible rather than assumed away.
+
+### 12.3 ★★★ The invariant that had to survive, and how
+
+`Spine`'s routing maps are **derived from a projection, never accreted** — the comment sits
+directly above `pt_roots.clear()`. A decode-learned page is not derivable from
+`bounds.by_pdb`, so the naive move (accrete into `pt_roots`) would have quietly repealed
+that rule for one map.
+
+Instead `Spine::pt_learned` is a **projection of every live `Vas::pt_meta`**, recomputed
+from scratch in `Spine::refresh` exactly as `pt_roots` is, and `publish_pt_pages` applies
+**the same function early** — because a level learned in one pass must be recognisable
+before the next RM graph event, and the guest does not wait for one.
+
+⇒ publishing cannot disagree with the projection: it *is* the projection, run sooner. And
+pruning stays automatic, which is the property the C artifact lacked — a `Vas` that dies
+takes its pages with it, where the C's table was *"never pruned on handle free"*.
+
+⚠ Bounded by `MAX_PT_LEARNED` (2^17), device-global, because the guest chooses both how
+many page-table pages exist *and* how many address spaces to create — so the per-`Vas`
+`MAX_PT_META` does not bound the device sum. Overflow **refuses and counts**; it never
+evicts, since evicting a page the guest is still writing would silently return it to
+"ordinary data" and unbind its leaves.
+
+⊘ And a page already owned by a *different* `(proc, pdb)` is **refused, not re-homed**. Two
+address spaces claiming one physical page-table page means either guest aliasing or a wrong
+decode, and letting the last writer win is how the C's table came to attribute a page to
+whoever touched it most recently.
+
+### 12.4 Acceptance — the second write, and its non-vacuity
+
+`tests/tests/e5_address_table_join.rs::a_ce_write_into_a_learned_leaf_table_is_witnessed_and_binds_its_leaf`:
+
+1. Pass 1 — the guest writes the **root**; the subtree's metadata is learned; nothing binds.
+2. ⊘ **Non-vacuity**: a ring naming the **leaf table** yields **zero** page-table writes.
+3. PUBLISH — 4 pages, 0 refused.
+4. The **identical ring, byte for byte**, now yields **one** page-table write, attributed to
+   `A_PDB` — which is not the issuing channel's proc in general, and is why the index is
+   device-global.
+5. Pass 2 — the leaf is witnessed, `bound == 1`, and `leaf_va` resolves to the physical
+   address the guest's own PTE names, at offset zero.
+
+Wiring is asserted separately, in `pt_decode.rs`'s shell test, because "the function works"
+and "the shell calls it" are different claims: `learned_pages == published == 4`, and
+`SharedDevice::pt_page_owner` answers `(pid, A_PDB)` for each.
+
+### 12.5 Bites — I broke both halves and both went red
+
+★ Both halves of E8 are load-bearing, and that is `[measured]` rather than asserted:
+2026-08-04 on branch `e8-pt-index` (off master `b63b5c5`), by editing
+`Spine::publish_pt_pages` / `Spine::pt_page_owner` in place and re-running
+`cargo test --no-fail-fast -p kayfabe-tests --test e5_address_table_join --test pt_decode`.
+The two tests are
+`a_ce_write_into_a_learned_leaf_table_is_witnessed_and_binds_its_leaf` and
+`the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_unlocked`;
+whole-suite baseline for the same run was 2008 passed / 0 failed.
+
+| mutation | e5 join | pt_decode shell |
+|---|---|---|
+| `publish_pt_pages` returns without publishing | **RED** | **RED** |
+| `pt_page_owner` consults `pt_roots` only | **RED** | **RED** |
+
+Run with `--no-fail-fast`: cargo stops after the first failing *target*, which manufactures
+false non-biters (`bite_check_needs_no_fail_fast`).
+
+### 12.6 ⊘ What E8 does NOT establish
+
+- **No boot has been spent on it.** Everything above is the suite; `only_live_boots_are_proof`.
+  The guest boot still stops at `mem_utils.c:2006` on `0xa06f0103`, which is the execution
+  plane and is untouched by this increment.
+- **The publish is driven only from `decode_pt_writes`.** Any future decode caller must add
+  its own PUBLISH; nothing in the type system forces it, and that is a real residue.
+- ★ **The absence test did not go red, and that was a finding about the test.**
+  `the_ce_pt_write_source_can_witness_only_a_root_page_today` was written to fail the day
+  this stage landed. It passed. Its assertion is about a *single* pass and remained true;
+  the claim E8 falsified lived only in its prose. A test whose message is broader than its
+  assertion cannot detect the thing its message is about — recorded in the test itself
+  rather than tidied away.

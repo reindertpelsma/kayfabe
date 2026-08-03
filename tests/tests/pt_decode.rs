@@ -1638,6 +1638,31 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
         );
         assert_eq!(out.transport, None, "{mode:?}");
         assert_eq!(out.meta_learned, 4, "{mode:?}");
+        // ★★★ E8 — the PUBLISH phase RAN, through the real shell entry point. Asserted
+        // here rather than only in the join test because this is the only place
+        // `SharedDevice::decode_pt_writes` is driven: a `Spine::publish_pt_pages` that
+        // works but is never called would leave the join test green via its own explicit
+        // call and the live path still broken.
+        assert_eq!(
+            (
+                out.learned_pages.len(),
+                out.pages_published,
+                out.pages_publish_refused
+            ),
+            (4, 4, 0),
+            "{mode:?}: every page the decode learned reached the device-global index — \
+             `learned` is the rank-1 half, `published` the rank-0 half, and they agree \
+             only because the address space survived the gap between them (R5)"
+        );
+        for (_, _, page) in &out.learned_pages {
+            assert_eq!(
+                device.pt_page_owner(GPU, *page),
+                Some((pid, A_PDB)),
+                "{mode:?}: …and the index ANSWERS for it, which is the whole point — \
+                 the next guest CE write into this page is classified as a page-table \
+                 write instead of forwarded as ordinary data"
+            );
+        }
         assert_eq!(
             (out.unwitnessed, out.unreachable),
             (0, 0),
