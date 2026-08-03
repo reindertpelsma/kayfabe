@@ -256,12 +256,28 @@ USERD-CHID-ORACLE-GATE: SKIPPED our_decode_matches_rms_own_reader_over_the_whole
 test result: ok. 5 passed; 0 failed
 ```
 
-⊘ **Nothing in the machinery was broken.** Every skip is loud and self-describing; the oracle
-gates floor on `ran + skipped` **deliberately**, because §1's table is right that GitHub's
-runners can never carry those trees and a floor demanding `ran` would fail there forever. The
-defect was in **what a green run got read to mean** — and in the provisioning: the two GA106
+⊘ **Nothing in the machinery was broken, and this file's own runner would have caught it.**
+★ **CORRECTION, and it is the more useful half of the finding:** `run_full_suite.sh` already
+has all of this and is *stricter* than anything added since. `probe_ogkm580` / `probe_ogkm610`
+are first-class requirements (`ALL_REQS`); `phase test-hardware` **requires** them; the
+`gpu-box` profile makes an unmet requirement **red** rather than informational (§4); and
+`census_gates` fails the run on **any** family with `SKIPPED > 0`, deriving the family list
+from the markers exactly as §2 describes. On those benches
+`scripts/run_full_suite.sh --profile gpu-box` would have **refused to run the hardware phase
+at all** and exited non-zero, naming the two missing trees.
+
+So the defect was not a missing instrument. It was **using the weaker runner** — `cargo test
+--workspace` plus `ci_gates.sh --all` — and reading its green as though it were this file's
+§0 claim. The top of this file already says the authoritative run *is* `run_full_suite.sh`;
+that sentence was load-bearing and I did not treat it as such. Compounding it, the two GA106
 benches were stood up by their own `prov*.sh` scripts, which never included **step 3 above**.
-The recipe knew; the boxes that mattered most were not built from it.
+The recipe knew, the runner knew, and the boxes that mattered most were built from neither.
+
+The remaining honest gap is narrower: the oracle gates in `ci.yml` floor on `ran + skipped`
+**deliberately** — §1's table is right that GitHub's runners can never carry those trees, and
+a floor demanding `ran` would fail there forever — so `ci_gates.sh`, which anybody may run
+directly, could still print a clean verdict over an all-skipped set. That is what the census
+added to `ci_gates.sh` closes: a second, weaker net under the one that already existed.
 
 ★ **What that costs.** `[measured]` 2026-08-03, vast **46494693**, at `d87b10f` — the same
 box and the same hour as the census above, so the only variable is the trees. One mutation to

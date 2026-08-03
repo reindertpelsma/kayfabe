@@ -225,6 +225,15 @@ rm -f "$deferred_note"
 # The defect was never in the floor. It was in what a green run got READ to mean. So the
 # split is printed beside the verdict, and the reader decides.
 #
+# ★ **This is the SECOND net, not the first.** `scripts/run_full_suite.sh` already had all of
+# this and is stricter: the ogkm trees are first-class requirements, `phase test-hardware`
+# demands them, the `gpu-box` profile makes an unmet requirement RED, and its `census_gates`
+# FAILS on any family with `SKIPPED > 0`. On that bench it would have refused to run the
+# hardware phase at all. The real mistake was running the weaker pair — `cargo test` plus this
+# script — and reading its green as the authoritative hardware claim. What this census adds is
+# only that *this* script, which anybody may run directly, can no longer print a clean verdict
+# over an all-skipped set without saying so.
+#
 # ⊘ **How much this costs to get wrong, measured on the same box the same hour:** the same
 # one-line mutation to `decode_userd_index_chid` — dropping its refusal of
 # `_USERD_INDEX_FIXED`, which RM answers with `NV_ERR_INVALID_STATE` — was a **non-biter**
