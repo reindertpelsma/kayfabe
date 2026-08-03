@@ -339,3 +339,14 @@ nvidia_uvm; rmmod nvidia; modprobe nvidia`, then `srcversion` back to `EF35EC…
   `ogkm`, and it is the one that keeps a replay honest.
 - ⊘ **No consumer yet.** Nothing in `crates/` reads this format; wiring it into a differential
   is separate work.
+- ⊘ **Observational neutrality is NOT proven.** The hooks add a `memcpy` of up to 64 KiB under a
+  spinlock on the RPC path, and this project's own rule is that a recorder can perturb what it
+  records (`nvkvm_m2_rec` is *not* observationally neutral, which is why `m2_trace` must never be
+  reused for capture). The evidence here is indirect and is worth exactly what it is: the 88/88
+  agreement in §6.2b is against a capture taken from a **differently instrumented build** of the
+  same driver, so the control sequence and its sizes are stable across at least those two builds.
+  That is not the same as showing the sequence is what an *uninstrumented* driver issues, and no
+  measurement in this task establishes that.
+- ⊘ **Two sessions by construction, not by design.** `capture.sh` runs `nvidia-smi` twice, so the
+  file holds two bring-ups. That is useful (it is a repeatability check) but a consumer wanting a
+  single boot must cut at the session boundary; the decoder reports it, nothing enforces it.
