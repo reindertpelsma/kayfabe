@@ -173,3 +173,26 @@ controls and all 11 reply-size differences are **version**; the 20 only-GA102 co
 `0x20800a87` (`INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO`) is answered `NV_ERR_NOT_SUPPORTED` on
 the GA106 and `NV_OK` on the GA102, and the 17 NVLink controls follow only on the GA102. The
 sequence branches on a **reply**, not on a part number (§7.3).
+
+---
+
+# `ad102_boot1.bin` — the second architecture (AD102, RTX 4090, 575.51.03)
+
+Taken 2026-08-03 with the same recorder and **`rpctrace-575.51.03.patch` unchanged**.
+**1 140 256 bytes**, md5 `751840ae979327bf63f8833036f56507`, **1 112 records**, **656**
+`GSP_RM_CONTROL` elements, **108** distinct control commands, **ring did not wrap** (1.09 MiB of
+64 MiB), dropped / refused-empty / rx-failed = **0 / 0 / 0**, **replies declaring params with no
+bytes = 0**, 9 controls refused by a real GSP. Boot succeeds; stock (proprietary) module
+restored and verified.
+
+★★★ **This is the trace that makes a clean architecture comparison possible.** It runs the
+**same driver and kernel as `ga102_boot1.bin`**, so AD102 ↔ GA102 varies only the architecture.
+Result (`docs/design/rpc_trace_capture.md` §8): **105 common controls, and 0 of them differ in
+reply size** — confirming that the 11 size differences in the GA106 ↔ GA102 comparison were
+driver-version drift, not silicon. The whole observed architecture difference is two
+capabilities: **NVLink** (17 controls, only the 3090) and **ECC** (6 controls, only the 4090),
+each gated on a probe the GPU answers.
+
+★ `0x20800a87` (`INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO`) answers `NV_ERR_NOT_SUPPORTED` on the
+4090 — like the 3060, unlike the 3090. Three boards, two architectures, two driver versions, and
+the only variable predicting the answer is whether the board has the connector.

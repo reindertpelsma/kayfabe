@@ -1,8 +1,9 @@
 # Capturing the GSP-RM RPC boot sequence from real hardware
 
-**Status:** step 2 complete — the recorder is **built, run on a real GA106, and broken on
-purpose**. §6 has the results, the numbers and the limits. §1–§5 are the pre-build reasoning
-and are left as written, because the decisions they justify are the ones that shipped.
+**Status:** step 4 complete — the recorder is **built, run on three real boards across two
+architectures, and broken on purpose**. §6 = GA106, §7 = GA102, §8 = AD102 at constant driver
+version. §1–§5 are the pre-build reasoning and are left as written, because the decisions they
+justify are the ones that shipped.
 
 ## 0. Why this exists, and what it replaces
 
@@ -527,6 +528,12 @@ still unmeasured, and §5's TU10x/AD10x/GH100 rows remain untouched apart from t
 sibling. ⚠ This project's own note that a box's public address can change under a running
 instance is the first thing to check if it is retried.
 
+⇒ **SUPERSEDED by §8, and the diagnosis above was wrong.** A replacement box came up on the
+same public IP on a different port and answered SSH immediately; AD102 was captured the same
+day. The ICMP evidence cited here was worthless — the host filters ping — and §8.7 records how
+two non-independent weak signals read as corroboration. This paragraph is left standing rather
+than edited, because the retraction is the useful part.
+
 ## 7.7 What changed in the tooling, and what deliberately did not
 
 ★ **The recorder was not rewritten and was not modified.** `nv_rpctrace.c` / `nv_rpctrace.h` are
@@ -546,3 +553,158 @@ unchanged. What changed is the harness around it:
   override; a per-version patch is selected automatically when present; and rejects are now
   asserted absent directly, because `patch --forward` dropping a hunk yields a module that
   builds, loads, and records **half** the RPCs with no error anywhere.
+
+---
+
+# 8. Step 4 — AD102 AT CONSTANT DRIVER VERSION, and the confound of §7 removed
+
+**Status: the comparison §7 could not make.** 2026-08-03, RTX 4090 = **AD102**
+(`10de:2684`), host kernel `6.8.0-59-generic`, NVIDIA **open** kernel modules
+**575.51.03** — the *same driver and the same kernel* as the GA102 box in §7. So
+**AD102 ↔ GA102 holds driver version constant and varies only the architecture**, which is
+exactly what GA106 ↔ GA102 could not do. `rpctrace-575.51.03.patch` applied unchanged, and the
+§2.1 ordering property was re-asserted on the post-patch text rather than assumed
+(`send@508 < encrypt@526 ; decrypt@794 < receive@860`).
+
+## 8.1 The capture
+
+`traces/ad102_boot1.bin` — committed, **1 140 256 bytes**, md5
+`751840ae979327bf63f8833036f56507`. Summary `traces/ad102_boot1.json`, driver output
+`traces/ad102_boot1_dmesg.log`.
+
+| | AD102 (RTX 4090) | GA102 (RTX 3090) | GA106 (RTX 3060) |
+|---|---|---|---|
+| driver | **575.51.03** | **575.51.03** | 580.159.04 |
+| records | 1 112 (551 / 561) | 1 180 (585 / 595) | 1 076 (535 / 541) |
+| payload bytes | 1 085 784 | 1 094 968 | 1 176 776 |
+| largest element | 65 536 (seq 1006) | 65 536 | 65 536 |
+| **ring wrapped?** | **no** — 1.09 MiB of 64 MiB | no | no |
+| dropped / refused-empty / rx-failed | **0 / 0 / 0** | 0 / 0 / 0 | 0 / 0 / 0 |
+| NOT_SENT / len-disagree / CC | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| distinct RPC functions | 14 | 14 | 14 |
+| `GSP_RM_CONTROL` elements | 656 (328 pairs) | 724 (362) | 620 (310) |
+| distinct control commands | **108** | 122 | 104 |
+| **replies declaring params with no bytes** | **0** | 0 | 0 |
+| controls refused by a real GSP | **9** | 11 | 13 |
+| sessions / retransmits within a session | 2 / **0** | 2 / 0 | 2 / 0 |
+
+★ The boot succeeds (`nvidia-smi` reports the RTX 4090 on 575.51.03) and the stock —
+**proprietary** — module was restored and verified afterwards.
+
+## 8.2 ★★★ ZERO of 105 common controls differ in reply size
+
+`decode_rpctrace.py --controls`, 2026-08-03, AD102 vs GA102, driver version constant:
+**105 common, 17 only-GA102, 3 only-AD102, and 0 — zero — reply-size differences.**
+
+⇒ This **confirms §7.2's static attribution empirically and from the other side.** The 11 size
+differences in the GA106 ↔ GA102 comparison were predicted from header arithmetic to be pure
+driver-version drift; here, across a **generation boundary** (Ampere → Ada) with the version
+pinned, not one of the 105 common controls changes size by a single byte. Reply parameter sizes
+on this path are a function of the **driver**, not of the die and not of the architecture.
+
+⊘ Restated as the rule it implies for a replay table: **size is keyed on driver version, never
+on arch.** A table that stored 34 592 for `GET_GLOBAL_SM_ORDER` "because GA10x" would be wrong
+on the same die under a different driver and right on a *different* architecture under the same
+one — which is the precise inversion of what an arch-keyed table assumes.
+
+## 8.3 ★★★ THE 4090 REFUSES THE NVLINK PROBE — third instance, and it settles §7.3
+
+The RTX 4090 has no NVLink connector, and the trace says so in the driver's own vocabulary:
+
+| board | arch | driver | connector | `0x20800a87` `INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO` | the 17 NVLink/fabric controls |
+|---|---|---|---|---|---|
+| RTX 3060 | GA106 | 580.159.04 | none | **`0x56` `NV_ERR_NOT_SUPPORTED`** | never issued |
+| RTX 3090 | GA102 | 575.51.03 | **yes** | **`0x0` `NV_OK`** | **issued** |
+| RTX 4090 | AD102 | 575.51.03 | none | **`0x56` `NV_ERR_NOT_SUPPORTED`** | never issued |
+
+⇒ The probe's answer tracks **the connector** — not the architecture (GA102 and GA106 are the
+same generation and disagree; GA106 and AD102 are different generations and agree) and not the
+driver version (GA102 and AD102 share a driver and disagree). Three boards, two architectures,
+two driver versions, and the only variable that predicts the answer is the capability.
+
+★★ Corroborated independently by the driver's own logging on the same runs:
+`traces/ga102_boot1_dmesg.log` carries `knvlinkCoreShutdownDeviceLinks_IMPL: Need to shutdown
+all links unilaterally for GPU0` **twice**, and `traces/ad102_boot1_dmesg.log` carries it
+**zero** times — only the generic `nvidia-nvlink: Nvlink Core is being initialized`, which every
+board emits because it is the subsystem init.
+
+## 8.4 ★★★ AND THE ARCH DIFFERENCE THAT *IS* THERE IS ALSO A CAPABILITY — ECC
+
+Every one of the 3 only-AD102 controls, and every one of the 3 controls whose *status* differs,
+is **ECC**:
+
+| cmd | name | GA102 (RTX 3090) | AD102 (RTX 4090) |
+|---|---|---|---|
+| `0x20800133` | `GPU_QUERY_ECC_CONFIGURATION` | **never issued** | ×3, `NV_OK` |
+| `0x20801347` | `FB_GET_ROW_REMAPPER_HISTOGRAM` | **never issued** | ×1, `NV_OK` |
+| `0x2080852b` | *(not defined in the open tree)* | **never issued** | ×1, `NV_OK`, 2 836 bytes |
+| `0x2080012f` | `GPU_QUERY_ECC_STATUS` | ×1, **`0x56`** | ×2, **`0x0`** |
+| `0x20800157` | `GPU_QUERY_INFOROM_ECC_SUPPORT` | ×2, **`0x56`** | ×2, **`0x0`** |
+| `0x20801344` | `FB_GET_REMAPPED_ROWS` | ×1, **`0x56`** | ×1, **`0x0`** |
+
+★★ Three more instances of the §7.3 pattern, in the opposite direction to NVLink: the **same
+control**, issued by **both** boards, refused on the one lacking the capability and served on
+the one having it — and the three controls only Ada issues are the follow-on that the served
+answers unlock. Corroborated by a different instrument on the same runs: the `nvidia-smi` ECC
+column reads **`N/A`** on the RTX 3090 (`traces/ga102_boot1_smi.txt`) and **`Off`** on the
+RTX 4090 (`traces/ad102_boot1_smi.txt`) — i.e. the 4090 supports ECC and has it disabled, the
+3090 has no such feature to report.
+
+⊘ `0x2080852b` is **not defined anywhere in the open 575.51.03 or 580.159.04 SDK headers**, so
+its name is unknown; it is grouped here by its position in the sequence and its 0x85 prefix
+shared with the common `0x2080852c`, which is an inference and is labelled as one.
+
+## 8.5 The last 3 controls of §7.2 close, and they close as VERSION
+
+§7.2 attributed 17 of the 20 only-GA102-vs-GA106 controls to NVLink capability and left three
+unexplained: `0x208001ab` (`GPU_GET_RESET_STATUS`), `0x208001ae`
+(`GPU_GET_DRAIN_AND_RESET_STATUS`) and `0x20802609` (`PMGR_GET_MODULE_INFO`). All three are
+**common to AD102 and GA102** in this constant-version comparison, i.e. both 575.51.03 boards
+issue them and the 580.159.04 board does not. ⇒ **Version, not architecture.** The 20 now
+resolve cleanly as **17 capability + 3 version**, with nothing left over.
+
+## 8.6 So: is the "arch" abstraction at the right granularity?
+
+With the confound removed, §7.4's answer holds and hardens. Across a **generation boundary** at
+constant driver version, the entire observed difference is:
+
+- **NVLink** — 17 controls, gated on a probe the GPU answers (§8.3);
+- **ECC** — 6 controls, gated the same way (§8.4);
+- **nothing else.** Not one control demanded merely because the die is Ada, and **not one byte**
+  of reply-size difference across 105 common controls (§8.2).
+
+⇒ **`Arch` × capability**, and on this evidence the capability term is carrying all of it. A
+GA102 without an NVLink bridge and an AD102 would, on this measurement, demand the same
+sequence. ⚠ **Scope, held to what ran:** three boards, two architectures, two capabilities, and
+two well-behaved `nvidia-smi` boots each. No CUDA context, no compute, no refusal injection, no
+reorder. This says nothing about whether the *execution* plane — where §4's data-vs-act
+distinction lives — is equally capability-shaped; the controls that are **acts** are exactly the
+ones a demand list cannot classify.
+
+★ For the port, the operative consequence is a **liability**, not a feature: our emulated GSP
+chooses these answers. Answering `0x20800a87` `NV_OK` summons 17 NVLink controls it must then
+serve; answering the three ECC probes `NV_OK` summons three more. The answer measured on the
+parts lacking each capability — RTX 3060 and RTX 4090 for NVLink, RTX 3090 for ECC, 2026-08-03,
+`traces/rpctrace_ga106_boot1.bin` / `traces/ad102_boot1.bin` / `traces/ga102_boot1.bin` — is
+`NV_ERR_NOT_SUPPORTED` in every case, and it is also the smaller surface: the rare place where
+fidelity and least-work agree.
+
+## 8.7 ⚠ The instrument lesson: `ping` was the wrong instrument, and it cost a box
+
+§7.6 reported the first Ada box as unreachable on two signals: an SSH connect timeout and
+**100% ICMP packet loss**. The first was real evidence. The second was **not evidence of
+anything** — the host filters ICMP — and it was the one that made the diagnosis feel confirmed.
+The box was destroyed on that reading and a replacement rented; the replacement came up on the
+**same public IP** on a different port and answered SSH immediately. A `/dev/tcp` probe to the
+port, from two different networks, is what actually discriminates, and it was not run.
+
+⊘ This project already carries this exact trap in writing — *"refused ssh + 100% ping loss read
+as a dead box; it was up"* — and it was walked into anyway. The failure was not ignorance of the
+rule; it was **two weak signals reading as corroboration** because they failed at the same time.
+⇒ Two instruments agreeing is only worth something when they are independent, which is the same
+argument §6.2b and §8.3 make in the direction where it *works*. ICMP reachability and SSH
+reachability on a filtered host are not independent — they are one signal counted twice.
+
+★ It ended better than the correct diagnosis would have: the replacement runs **575.51.03**,
+which is what made §8 a constant-version comparison at all. That is luck, and recording it as
+luck is the point.
