@@ -469,9 +469,62 @@ pub const NVA06C_CTRL_CMD_GPFIFO_SCHEDULE: u32 = 0xa06c_0101;
 /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:66`.
 ///
-/// Issued **on the channel object**, for a channel that is not in a TSG. Present for
-/// completeness and *not* what this port uses — see [`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`].
+/// Issued **on the channel object**, for a channel that is not in a TSG.
+///
+/// ★★★ **This is the command the guest sends us, and it is NOT the one we send the host.**
+/// The two directions were conflated in this module's earlier text ("present for
+/// completeness and *not* what this port uses"), and that sentence was wrong about the
+/// **guest** direction. Established from the driver's own source rather than assumed
+/// (task #177, method step 1):
+///
+/// - `_memmgrMemUtilsScrubInitScheduleChannel` issues **this** id — `0xa06f0103`, on
+///   `pChannel->channelId`, a bare channel with no TSG — for the global CeUtils scrubber
+///   (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/mem_utils.c:1973-1989`). The TSG form
+///   [`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`] is **not** on this path.
+/// - On a GSP client the kernel half does no hardware work at all and RPCs it straight to
+///   us: `kchannelCtrlCmdGpFifoSchedule_IMPL` → `if (IS_VIRTUAL(pGpu) || IS_GSP_CLIENT(pGpu))
+///   NV_RM_RPC_CONTROL(...)` (`ogkm-580:
+///   src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:3085-3131`).
+/// - The host direction is still the `a06c` form, because the channel *the isolate*
+///   allocates does live in a TSG ([`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`], and
+///   `kayfabe_isolate_host`'s `schedule` issues it on the group).
+///
+/// ⇒ guest asks `0xa06f0103` on a TSG-less channel; we answer; the host act, when there is
+/// one, is `0xa06c0101` on a group. Same requirement, three different objects.
 pub const NVA06F_CTRL_CMD_GPFIFO_SCHEDULE: u32 = 0xa06f_0103;
+
+/// ★★ The status the guest's own driver documents for [`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`]
+/// — and `NV_ERR_NOT_SUPPORTED` (`0x56`) is **not among them**.
+///
+/// `ogkm-580: ctrla06fgpfifo.h:59-64` lists exactly `NV_OK`,
+/// `NV_ERR_INVALID_OBJECT_HANDLE`, `NV_ERR_INVALID_STATE`, `NV_ERR_INVALID_OPERATION`.
+///
+/// ★★★ That makes `0x56` here a **signature**, not an answer: it is what
+/// `kayfabe_gsp::GspFsm::answer` posts when *nobody claimed the command*, and it is the
+/// value the bench guest printed for six weeks —
+/// `_memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56`.
+/// A refusal that this port *decided* must therefore not reuse it, or the guest's own log
+/// cannot distinguish "I examined your channel and refused" from "no code path exists".
+/// Refusals from this port's schedule policy use [`GPFIFO_SCHEDULE_REFUSED_STATUS`].
+/// ⚠ The three non-zero values are `ogkm-580: nvstatuscodes.h:80,85,93` and **not** what a
+/// plausible-looking guess produces: `NV_ERR_INVALID_STATE` is `0x40`, not `0x39`, and
+/// `NV_ERR_INVALID_OBJECT_HANDLE` is `0x33`, not `0x1e`. Both wrong values were written
+/// here first and caught only by reading the table.
+pub const GPFIFO_SCHEDULE_DOCUMENTED_STATUSES: &[u32] = &[
+    0x0,  // NV_OK
+    0x33, // NV_ERR_INVALID_OBJECT_HANDLE
+    0x40, // NV_ERR_INVALID_STATE
+    0x38, // NV_ERR_INVALID_OPERATION
+];
+
+/// `NV_ERR_INVALID_STATE` — the status this port answers when it has **looked at** the
+/// channel and declines to schedule it.
+///
+/// Chosen over `NV_ERR_NOT_SUPPORTED` for the reason in
+/// [`GPFIFO_SCHEDULE_DOCUMENTED_STATUSES`]: it is in the control's documented set, so the
+/// guest's own error path treats it as an answer rather than as an absent one, and a reader
+/// of the guest dmesg can tell the two apart by the hex alone.
+pub const GPFIFO_SCHEDULE_REFUSED_STATUS: u32 = 0x40;
 
 /// `NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:69-73`.
@@ -504,6 +557,141 @@ impl GpfifoScheduleParams {
         put(bytes, Self::C_NAME, Self::SIZE, 1, &[self.b_skip_submit])?;
         put(bytes, Self::C_NAME, Self::SIZE, 2, &[self.b_skip_enable])
     }
+
+    /// Whether this is the request the port's FIFO model can act on at all — `bEnable`
+    /// either way, and **neither** skip flag set.
+    #[must_use]
+    pub fn is_modelled(&self) -> bool {
+        self.b_skip_submit == 0 && self.b_skip_enable == 0
+    }
+}
+
+/// Why a [`GpfifoScheduleParams`] image was refused.
+///
+/// ★ The variants are the port's whole refusal vocabulary for `0xa06f0103`, and they are
+/// **named** rather than collapsed to one status precisely so a boot's report can say
+/// which one fired. `NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS` has no `[OUT]` field, so nothing
+/// downstream can recover a wrong decode by looking at the answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpfifoScheduleError {
+    /// Fewer than [`GpfifoScheduleParams::SIZE`] bytes of params.
+    ShortParams {
+        /// What arrived.
+        got: usize,
+    },
+    /// A byte that is not a valid `NvBool`. ⊘ Deliberately a **decode** failure and not a
+    /// policy question, for [`crate::l2evict`]'s reason: `NvBool` is `NV_TRUE`/`NV_FALSE`
+    /// and a third value means the image is not the struct we think it is, which no
+    /// amount of policy can repair.
+    NonBoolean {
+        /// The C field name.
+        field: &'static str,
+        /// The byte that is neither 0 nor 1.
+        value: u8,
+    },
+    /// `bSkipSubmit` and/or `bSkipEnable` set — the **enabled-versus-scheduled split**.
+    ///
+    /// ★★★ This is the part of the control this port does not model, named. RM documents
+    /// the two flags as separating "in the runlist" from "will actually be run"
+    /// (`ogkm-580: ctrla06fgpfifo.h:44-55`); this port's [`ExecPlane`-side] state is a
+    /// single membership and has no third value to move to. ⊘ Serving these by ignoring
+    /// them would be the silent-`NV_OK` failure with extra steps: the guest would have
+    /// asked for a channel that is scheduled and *not* submitted, and got one that is
+    /// both.
+    ///
+    /// [`ExecPlane`-side]: this is `kayfabe_core::gpu::ExecPlane`; named in prose because
+    /// `kayfabe-abi` does not depend on the core.
+    UnmodelledSkip {
+        /// `bSkipSubmit` as it arrived.
+        b_skip_submit: u8,
+        /// `bSkipEnable` as it arrived.
+        b_skip_enable: u8,
+    },
+}
+
+impl core::fmt::Display for GpfifoScheduleError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            GpfifoScheduleError::ShortParams { got } => write!(
+                f,
+                "{} needs {} bytes of params, got {got}",
+                GpfifoScheduleParams::C_NAME,
+                GpfifoScheduleParams::SIZE
+            ),
+            GpfifoScheduleError::NonBoolean { field, value } => {
+                write!(f, "{field} = {value:#04x} is not an NvBool")
+            }
+            GpfifoScheduleError::UnmodelledSkip {
+                b_skip_submit,
+                b_skip_enable,
+            } => write!(
+                f,
+                "bSkipSubmit={b_skip_submit} bSkipEnable={b_skip_enable}: this port does not \
+                 model a channel that is scheduled but not submitted (or vice versa)"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for GpfifoScheduleError {}
+
+/// Decode an `NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS` image.
+///
+/// # Errors
+/// [`GpfifoScheduleError`], by variant.
+pub fn decode_gpfifo_schedule(params: &[u8]) -> Result<GpfifoScheduleParams, GpfifoScheduleError> {
+    if params.len() < GpfifoScheduleParams::SIZE {
+        return Err(GpfifoScheduleError::ShortParams { got: params.len() });
+    }
+    for (field, value) in [
+        ("bEnable", params[0]),
+        ("bSkipSubmit", params[1]),
+        ("bSkipEnable", params[2]),
+    ] {
+        if value > 1 {
+            return Err(GpfifoScheduleError::NonBoolean { field, value });
+        }
+    }
+    let out = GpfifoScheduleParams {
+        b_enable: params[0],
+        b_skip_submit: params[1],
+        b_skip_enable: params[2],
+    };
+    if !out.is_modelled() {
+        return Err(GpfifoScheduleError::UnmodelledSkip {
+            b_skip_submit: out.b_skip_submit,
+            b_skip_enable: out.b_skip_enable,
+        });
+    }
+    Ok(out)
+}
+
+/// The reply body a real GA106's own GSP sends for `0xa06f0103`: **the request's three
+/// params bytes, unchanged**.
+///
+/// ★★★ `[measured]` on a real GA106 —
+/// `traces/real_ga106/rpc_transcript_real_ga106.txt:59`, `cmd=0xa06f0103 psize=3
+/// gspst=0x0 head=01 00 00`. The guest sent `bEnable=1` and got `01 00 00` back with
+/// status `NV_OK`.
+///
+/// ⊘ **Not** taken from the C artifact's captured table, whose row for this id is
+/// `{0xa06f0103u, 0x0u, 3u, 0u, ctl_a06f0103}` — `dlen = 0`, an **empty body**
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6234`). That row is one of the 11/56 the FIFTH
+/// LIMIT contradicts (`crates/kayfabe-abi/src/oracle.rs:39`), and an empty capture is
+/// evidence of nothing. The C's *status* is corroborated by hardware; its *body* is not,
+/// and only the hardware trace is cited for the bytes.
+///
+/// ★ Why echoing matters even though every field is `[IN]`: the GSP transport copies the
+/// reply's params back over the caller's own struct whenever `paramsSize != 0`
+/// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11085-11090`), so a zero-filled body would
+/// silently clear the caller's `bEnable`. `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` taught
+/// this port that lesson; hardware happens to agree here.
+#[must_use]
+pub fn encode_gpfifo_schedule(req: &GpfifoScheduleParams) -> Vec<u8> {
+    let mut out = vec![0u8; GpfifoScheduleParams::SIZE];
+    req.encode_into(&mut out)
+        .expect("SIZE bytes is exactly what encode_into needs");
+    out
 }
 
 /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` —

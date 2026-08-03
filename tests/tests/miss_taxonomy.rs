@@ -988,6 +988,8 @@ fn defer_a_channel_with_an_unresolved_vaspace_faults_at_use_then_resolves() {
         Some(PDB0),
         "★★ the channel's VAS resolved — same `ChanId`, no churn"
     );
+    // #177: the guest always schedules a channel before ringing its doorbell.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     kayfabe_fwd::publish_backing(
         gpu.procs.get_mut(&pid).unwrap(),
         GpuId::ZERO,

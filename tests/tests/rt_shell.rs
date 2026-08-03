@@ -124,6 +124,10 @@ fn rt_gpu(n: usize) -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
         gpu.apply(ev).expect("scenario applies cleanly");
     }
     assert_eq!(gpu.procs.len(), n);
+    // ★177: the guest always schedules a channel before ringing it; restore that
+    // step here (once, for every proc built by this harness) so doorbell tests reach
+    // their subject rather than `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let pids: Vec<ProcId> = (0..n)
         .map(|i| gpu.spine.by_pdb[&(gpu_of(i), pdb_of(i))])
         .collect();

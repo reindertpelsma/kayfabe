@@ -99,6 +99,10 @@ fn one_proc_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("scenario applies");
     }
+    // #177: `plan_doorbell` now refuses a channel the guest never scheduled via
+    // `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`; declare every channel scheduled so tests here
+    // that ring a doorbell reach their actual subject instead of `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let pid = gpu.spine.by_pdb[&(GPU, PDB)];
     (
         Guarded::new("teardown_reclaim", gpu, recorder.clone()),

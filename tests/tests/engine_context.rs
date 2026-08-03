@@ -428,6 +428,8 @@ fn channel_materialization_declares_its_engine_to_the_backend() {
     // Site 2 (`handle_doorbell` lazy materialization): the CE channel's first ring
     // materializes it as Ce — not the GR/compute default.
     let (mut gpu, recorder) = compute_gpu();
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
         .expect("CE doorbell materializes + rings");
     assert_eq!(

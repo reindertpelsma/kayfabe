@@ -1341,10 +1341,23 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         to.publish(self.0.isolate_census());
     }
 
+    fn schedule_channel(
+        &mut self,
+        client: kayfabe_rt::HClient,
+        object: kayfabe_rt::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault> {
+        self.0.schedule_channel(client, object, enable)
+    }
+
     /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
     /// lives inside a device lock and a proc lock, and a `&Gpu` handed out here would
     /// outlive both guards.
     fn as_gpu(&self) -> Option<&kayfabe_core::gpu::Gpu> {
+        None
+    }
+
+    fn as_gpu_mut(&mut self) -> Option<&mut kayfabe_core::gpu::Gpu> {
         None
     }
 }

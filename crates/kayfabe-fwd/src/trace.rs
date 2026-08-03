@@ -41,6 +41,7 @@ impl Faulted for FwdFault {
             FwdFault::RetiredProc(_) => FaultTag("FwdFault::RetiredProc"),
             FwdFault::Condemned { .. } => FaultTag("FwdFault::Condemned"),
             FwdFault::NoVas(_) => FaultTag("FwdFault::NoVas"),
+            FwdFault::NotScheduled { .. } => FaultTag("FwdFault::NotScheduled"),
             FwdFault::UnknownChannel { .. } => FaultTag("FwdFault::UnknownChannel"),
             FwdFault::IsolateRetired { .. } => FaultTag("FwdFault::IsolateRetired"),
             FwdFault::IsolatePending { .. } => FaultTag("FwdFault::IsolatePending"),

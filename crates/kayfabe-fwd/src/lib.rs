@@ -154,6 +154,29 @@ pub enum FwdFault {
     /// The channel is not bound to any declared VAS and system routing does not
     /// apply — refusing to guess an address space.
     NoVas(ChanId),
+    /// ★★★ **#177.** The guest rang a channel it never asked us to schedule.
+    ///
+    /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) with `bEnable = NV_TRUE` is what
+    /// puts a channel into `kayfabe_core::gpu::ExecPlane::requested`; until then a real
+    /// GPU would not run its work, because the channel is on no runlist. This fault is
+    /// what makes that true here too.
+    ///
+    /// ⊘ **Why this variant is the whole point of the #177 rung.** Before it,
+    /// [`plan_doorbell`] treated scheduling as a *memo*: `let schedule =
+    /// !proc.exec.scheduled.contains(&cid)` — a channel that had never been scheduled was
+    /// simply scheduled on the fly, so serving `0xa06f0103` would have had **nothing to
+    /// perform** and its `NV_OK` would have been unfalsifiable. With this gate the control
+    /// has an observable: refuse before, proceed after.
+    ///
+    /// ⚠ It is deliberately **not** `UnknownVchid` or `NoVas`: the channel is known and
+    /// may be perfectly well bound. What is missing is the guest's own declaration.
+    NotScheduled {
+        /// The channel that was rung.
+        chan: ChanId,
+        /// Its vChid, as the doorbell decoded it — the identity a bench log can match
+        /// against the `gpfifo rings` census line.
+        vchid: VChid,
+    },
     /// ★★★ **E6.** The proc this submission was routed to holds no channel with this
     /// [`ChanId`].
     ///
@@ -1588,6 +1611,15 @@ pub fn plan_doorbell(
     } else {
         None
     };
+    // ★★★ #177 — THE GATE. The guest must have asked for this channel to be schedulable
+    // before anything it submits is planned. `requested` is written only by
+    // `Gpu::schedule_channel`, i.e. only by the guest's own `0xa06f0103`.
+    if !proc.exec.requested.contains(&cid) {
+        return Err(FwdFault::NotScheduled {
+            chan: cid,
+            vchid: route.vchid,
+        });
+    }
     let schedule = !proc.exec.scheduled.contains(&cid);
 
     // ---- ★★ The #14 ring-gate, BEFORE any host op — and it now runs **inside the

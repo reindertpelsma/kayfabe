@@ -62,6 +62,9 @@ pub mod lock;
 /// id is API hygiene, not a new edge: it is a plain newtype over an integer and carries no
 /// architecture with it.
 pub use kayfabe_arch::ids::GpuId;
+/// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
+/// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
+pub use kayfabe_arch::ids::{HClient, HObject};
 
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
 // public types. `BlockingSection` is deliberately ABSENT: it is `!Send` by

@@ -394,6 +394,9 @@ fn two_proc_gpu() -> (Guarded<Gpu>, MockVmm, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("applies");
     }
+    // ★177: the guest always schedules a channel before ringing it; restore that step
+    // so the doorbell gate's fault is the one under test, not `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     (
         Guarded::new("pushbuffer_parser::two_proc_gpu", gpu, rec.clone()),
         MockVmm::new(),

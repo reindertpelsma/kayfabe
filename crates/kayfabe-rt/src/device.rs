@@ -1688,6 +1688,36 @@ impl SharedDevice {
         )))
     }
 
+    /// ★★★ **#177** — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`, in the
+    /// shell's own two ranks: ROUTE under the device read lock, ACT under the owning
+    /// proc's lock alone. Identical in shape to [`Self::promote_ctx`], and for the same
+    /// reason — the core provides the two halves so this is a composition, not a second
+    /// implementation.
+    ///
+    /// # Errors
+    ///
+    /// [`kayfabe_core::gpu::ScheduleFault`], by variant.
+    pub fn schedule_channel(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault> {
+        let route = {
+            let route_in = |spine: &kayfabe_core::gpu::Spine| {
+                kayfabe_core::gpu::route_schedule_channel(spine, client, object)
+            };
+            match self.mode {
+                LockMode::Sharded => route_in(&self.state.read().spine),
+                LockMode::Degenerate => route_in(&self.state.write().spine),
+            }?
+        };
+        self.with_proc_mut(route.proc, |proc| {
+            kayfabe_core::gpu::apply_schedule_channel(proc, &route, enable)
+        })
+        .ok_or(kayfabe_core::gpu::ScheduleFault::ChannelNotMaterialized { client, object })
+    }
+
     /// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. Case 2 is ACKed
     /// under the device read lock and never leaves the process; Case 1 runs the same
     /// three phases, with `payload` written back in the commit.

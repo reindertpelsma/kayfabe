@@ -84,6 +84,10 @@ fn build_proc(
         .values()
         .next()
         .expect("has a channel");
+    // ★177: the guest always schedules a channel (`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`)
+    // before ringing it; restore that step so tests reach the fault under test rather
+    // than `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(gpu);
     (pid, cid)
 }
 

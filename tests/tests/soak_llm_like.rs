@@ -95,6 +95,8 @@ fn build(
     for ev in s.events {
         gpu.apply(ev).expect("fixture applies");
     }
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let pids: Vec<_> = infs
         .iter()
         .map(|inf| *gpu.spine.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap())
