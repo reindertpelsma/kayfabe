@@ -1720,6 +1720,12 @@ Evidence: `bench_evidence/e726844_run_r1{real1,real2,ctl1}_{dmesg,qemu,probe,iso
 Compare `bench_evidence/f0b7efa_run_basereal_qemu.log`, the same arm before the fix, where
 the count is **1** and QEMU is gone.
 
+⊘ **The archive is `e726844`, the branch tip is later, and the difference is checked rather
+than waved at** — §7's discipline. `git diff --name-only e726844 8b26763` outside `docs/` is
+two files: `tests/tests/r1_spawn_outside_lock.rs` (a test target, **not linked into the
+archive**) and `crates/kayfabe-fwd/src/lib.rs`, whose diff filtered of comment lines is
+**zero lines**. So the binary these boots ran is this branch's content.
+
 ★ **E0b re-measured, not assumed:** the guest opened the device at **t+37 s** and the first
 isolate child appeared at **t+42/43 s** — the spawn still *follows* the guest's action. The
 deferral makes it strictly later, never earlier.
