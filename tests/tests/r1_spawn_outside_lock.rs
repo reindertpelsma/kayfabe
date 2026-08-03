@@ -155,7 +155,7 @@ fn materializing_an_isolate_under_a_ranked_lock_panics_naming_r1() {
     // Whatever happened, this thread holds nothing afterwards.
     kayfabe_util::lockwitness::note_released(rank);
 
-    let err = outcome.err().expect(
+    let err = outcome.expect_err(
         "materializing an isolate with rank 0 held must panic — the birth-side R1 assert          did not fire at all",
     );
     let text = err
