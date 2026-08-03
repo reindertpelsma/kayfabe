@@ -76,8 +76,33 @@ if pgrep -x qemu-system-x86 >/dev/null 2>&1; then
   die precondition "a QEMU is already running (pgrep -x qemu-system-x86 matched:" \
       "$(pgrep -x qemu-system-x86 | tr '\n' ' ')). GPU/bench runs are STRICTLY SERIAL."
 fi
-[ -x "$BENCH/boot_nvkvm.sh" ] || die precondition "$BENCH/boot_nvkvm.sh is not executable"
-[ -x "$BENCH/gssh_nv" ]       || die precondition "$BENCH/gssh_nv is not executable"
+# ---- WHICH COPY OF THE HELPERS ACTUALLY RUNS -----------------------------------------
+#
+# ★★★ This script used to invoke `$BENCH/boot_nvkvm.sh` and `$BENCH/gssh_nv` — the
+# **box-local** copies — while the repository carries its own versioned ones right beside
+# this file. That is a silent-no-op generator: edit the tree, push, boot, and the boot runs
+# the *other* file.
+#
+# ⊘ It has already fired, and the note recording it is a workaround rather than a fix:
+# `bench_rebuild_notes.md` §"the differential is the instrument" — *"`/workspace/bench/
+# boot_nvkvm.sh` on this box had drifted to `-m 8G` while `scripts/bench/boot_nvkvm.sh` in
+# the tree says `-m 2048`. `boot_capture.sh` runs the bench copy, so the tree's value is not
+# what boots."* A whole memory-size differential was taken by `sed -i` on the box copy.
+#
+# So: the REPO copy wins, and the choice plus a hash of what ran is recorded in the probe log
+# — because a harness that silently picks one of two files is the same defect one level up.
+# `KAYFABE_BENCH_HELPERS=box` forces the old behaviour for a box that genuinely needs a
+# different tap or key; it is an explicit, logged departure rather than an accident.
+HELPERS=${KAYFABE_BENCH_HELPERS:-repo}
+SELFDIR=$(cd "$(dirname "$0")" && pwd)
+pick_helper() {
+  local name=$1 repo="$SELFDIR/$1" box="$BENCH/$1"
+  if [ "$HELPERS" = "repo" ] && [ -x "$repo" ]; then echo "$repo"; return; fi
+  [ -x "$box" ] || die precondition "neither $repo nor $box is an executable $name"
+  echo "$box"
+}
+BOOTER=$(pick_helper boot_nvkvm.sh) || exit $?
+GSSH=$(pick_helper gssh_nv)         || exit $?
 
 # ⊘ Delete the previous run's evidence FIRST. A stale file from an earlier tag reading as
 # this boot's output is the exact failure this script exists to prevent.
@@ -85,7 +110,7 @@ rm -f "$DMESG" "$PROBE"
 
 # ---- phase 1: boot ------------------------------------------------------------------
 say "booting (extra args: ${*:-none})"
-"$BENCH/boot_nvkvm.sh" "$TAG" "$@" &
+"$BOOTER" "$TAG" "$@" &
 QPID=$!
 trap 'kill -9 $QPID 2>/dev/null' EXIT
 
@@ -97,7 +122,7 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
     tail -20 "${LOG}_qemu.log" 2>/dev/null
     die boot "QEMU pid $QPID is gone before ssh came up"
   fi
-  if "$BENCH/gssh_nv" true >/dev/null 2>&1; then up=1; break; fi
+  if "$GSSH" true >/dev/null 2>&1; then up=1; break; fi
   sleep 3
 done
 [ "$up" -eq 1 ] || die boot \
@@ -131,7 +156,7 @@ gq() {
     die qemu-died "QEMU exited during phase 2/3. ⊘ This is NOT a guest or driver failure;
    do not cite this tag as a boot result. Read ${LOG}_qemu.log."
   fi
-  timeout "$GQ_TIMEOUT" "$BENCH/gssh_nv" "$@"
+  timeout "$GQ_TIMEOUT" "$GSSH" "$@"
   local rc=$?
   if [ "$rc" -eq 124 ]; then
     if ! kill -0 "$QPID" 2>/dev/null; then
@@ -150,6 +175,21 @@ gq() {
   echo "=== boot_capture tag=$TAG at $(date -Is) ==="
   echo "=== source revision: $(git -C "${REPO:-$(dirname "$0")/../..}" rev-parse --short HEAD 2>/dev/null || echo UNKNOWN) ==="
   echo "=== qemu binary: $(ls -l "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null) ==="
+  # ★★ The archive revision comes from INSIDE the binary, never from BUILD_REV.txt.
+  # `[measured]` 2026-08-03, vast 46494693: that file named a third revision while the
+  # binary's own stamp named a fourth. A file that claims to record a fact is not the fact.
+  echo "=== archive rev STAMPED IN THE BINARY: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]*' | sort -u | tr '\n' ' ')"
+  echo "=== BUILD_REV.txt says (informational, NOT authoritative): $(cat "$BENCH/BUILD_REV.txt" 2>/dev/null | head -1)"
+  # ★★★ WHICH helper files actually ran, with hashes — see the note at the top of phase 0.
+  echo "=== helpers (KAYFABE_BENCH_HELPERS=$HELPERS) ==="
+  for h in "$BOOTER" "$GSSH"; do
+    echo "    used: $h  sha256=$(sha256sum "$h" 2>/dev/null | cut -c1-16)"
+    b="$BENCH/$(basename "$h")"
+    if [ "$h" != "$b" ] && [ -e "$b" ] && ! cmp -s "$h" "$b"; then
+      echo "    ⚠ the box copy $b DIFFERS from the one that ran (sha256=$(sha256sum "$b" 2>/dev/null | cut -c1-16))."
+      echo "      That divergence is exactly what used to run silently; it is now only a note."
+    fi
+  done
 } > "$PROBE"
 
 gq 'lsmod | grep -q "^nvidia " && echo WAS_LOADED || echo WAS_COLD' >> "$PROBE" 2>&1
@@ -226,7 +266,7 @@ fi
 
 # ---- phase 4: fresh boot next time --------------------------------------------------
 say "powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)"
-"$BENCH/gssh_nv" 'sudo poweroff' >/dev/null 2>&1
+"$GSSH" 'sudo poweroff' >/dev/null 2>&1
 for _ in $(seq 1 30); do kill -0 $QPID 2>/dev/null || break; sleep 2; done
 kill -9 $QPID 2>/dev/null
 trap - EXIT

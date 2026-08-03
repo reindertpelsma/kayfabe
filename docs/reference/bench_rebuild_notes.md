@@ -482,10 +482,17 @@ driver unless the bench is cheap"). With §1's recipe in hand and 21 cores it wa
 nvidia` → `version 580.159.04`, `license Dual MIT/GPL`, `vermagic 6.8.0-136-generic`,
 `filename /lib/modules/6.8.0-136-generic/kernel/drivers/video/nvidia.ko`. **Stock, unpatched.**
 
-⚠ **`boot_nvkvm.sh` and `gssh_nv` are NOT in the repo** — §7 lists them as box-1 files and they
-were lost with that box's scope. They had to be **re-derived**, and that is a real gap: the
-harness `scripts/bench/boot_capture.sh` hard-requires both (`die precondition`) and neither is
-version-controlled. What was reconstructed here, and it works:
+~~⚠ **`boot_nvkvm.sh` and `gssh_nv` are NOT in the repo**~~ — ★ **RESOLVED 2026-08-03, and
+then resolved a second time.** Both are version-controlled at `scripts/bench/`; that landed
+with the bench-script versioning work. But versioning them was only half of it: until
+`cc6a8c5`+ `boot_capture.sh` still *invoked* `$BENCH/boot_nvkvm.sh` and `$BENCH/gssh_nv` —
+the **box-local** copies — so editing the tree changed nothing about what booted. It now
+prefers the repo copies, records which file ran with a hash in the probe log, and **warns
+when a box copy differs from the one that ran**. `KAYFABE_BENCH_HELPERS=box` restores the old
+behaviour explicitly for a box that genuinely needs a different tap or key.
+
+⊘ Read the paragraph below as history, not instruction. It is what had to be reconstructed on
+box 2 when the files existed only on a box:
 
 ```sh
 # gssh_nv
@@ -601,7 +608,13 @@ in `docs/design/execution_plane_increments.md` §8.2.3.
   boot.
 - ⚠ **`/workspace/bench/boot_nvkvm.sh` on this box had drifted to `-m 8G`** while
   `scripts/bench/boot_nvkvm.sh` in the tree says `-m 2048`. `boot_capture.sh` runs the
-  **bench copy**, so the tree's value is not what boots. The 2 GiB run was taken by
+  **bench copy**, so the tree's value is not what boots.
+  ★ **FIXED at `cc6a8c5`+ — this row is the measured instance the fix was written against.**
+  `boot_capture.sh` now prefers the **repo** copy, logs which file ran with its hash, and
+  warns when the box copy differs. The `sed -i`-the-box-copy dance below is no longer the
+  way to change a boot parameter: change the tree. The rest of this row still stands as the
+  reason the differential mattered.
+  The 2 GiB run was taken by
   `sed -i "s/-m 8G/-m 2G/"` on the bench copy with a `.8g.bak` beside it, and the backup was
   restored afterwards — so the box is as it was found. ⊘ Do not read the repo's boot script
   as a description of what the bench ran; read the QEMU log's own
