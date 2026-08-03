@@ -205,7 +205,60 @@ built by RPCs we can observe.
 
 ---
 
-## 4. Where the code is
+## 4. The boot — `[measured]` 2026-08-03 on `vb` (vast 46494693, RTX 3060 GA106, host
+   580.159.04 open)
+
+Two boots, one fresh QEMU each, same box, same guest image, taken an hour apart. The
+binaries' embedded `kayfabe-rev` was read out of the hypervisor itself (`strings
+qemu-build/qemu-system-x86_64 | grep kayfabe-rev`), never from `BUILD_REV.txt`.
+
+| | **control** `ctl177a` | **treatment** `trt177a` |
+|---|---|---|
+| archive rev *in the binary* | `9dcd5caa5543…` | `1ed29650962c…` |
+| guest's own wall | `mem_utils.c:2006` — *"Unable to schedule channel, status: 56"* | ★ `mem_utils.c:2022` — *"event notification control failed"* |
+| commands decoded | 92 | **95** |
+| unserviced | 20, **17 distinct** | 19, **16 distinct** |
+| `0xa06f0103` in the ledger | ★ **present** | ★ **absent** |
+| verdict line | `RmInitAdapter failed! (0x25:0xffff:1249)` | `RmInitAdapter failed! (0x25:0xffff:1249)` |
+
+★★★ **The boot moved.** The scheduling failure is gone from the guest's dmesg, the guest
+issued **three more commands** than it could before, and the unserviced set lost exactly one
+**member** — `0xa06f0103` — with every other id unchanged. (Membership, never cardinality:
+`unserviced.rs`'s own rule.)
+
+⊘ **It did not move far, and the distance was predicted.** The sweep row already recorded
+`[measured]` boot `schedprobe1` (`0bf7eb7` + a throwaway serve arm, never landed): a bare
+`NV_OK` moves the wall *exactly one step*, `:2006` → `:2022`. This rung lands on the same
+step. ⇒ **the boot's motion cannot distinguish a performed schedule from a fabricated one**,
+which is why the falsifiable claim in §2 is the doorbell gate and its mutation (`M1`,
+`scripts/bite_gpfifo_schedule.py`) rather than this table.
+
+### ★★ The new wall is INVISIBLE IN THE LEDGER, and that is the finding worth carrying
+
+`_memmgrMemUtilsScrubInitRegisterCallback` issues `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION`
+for `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` — index **35**, action `REPEAT` (`ogkm-580:
+mem_utils.c:1918-1930`; and a real GA106 sends exactly that, `cmd=0x20800301 psize=20
+head=23 00 00 00 02 00 00 00`, `traces/real_ga106/rpc_transcript_real_ga106.txt:60`).
+
+`0x20800301` is **served** — it is in `WantedTable::ALL` — and `InitTablePolicy` **refuses**
+it, because 35 is not in `eventnotify::SILENT_NOTIFIERS` (which carries only
+`POWER_RESUME`). `refuse()` returns `Some(Reply)`, so the chain terminates and the
+`UnservicedLedger` never sees it:
+
+> the treatment boot reports `bridge refusals: 0` and 16 distinct unserviced ids, and
+> `0x20800301` is in **neither** list. The only place this wall exists is the guest's own
+> dmesg.
+
+⇒ This is `refusal_invisible_in_the_ledger` reproduced live, on the very next rung. Anyone
+picking the next control by diffing unserviced ledgers will not find it.
+
+★ It is also the **next member of the set this port already named**: `sweep.rs`'s `0xa06f0104`
+row calls `0xa06f0103` (schedule), `0xa06f0104` (bind), `0xc36f0108` (token) and the index-35
+arming *"ONE requirement asked four times"*. One is now spent. ⚠ And the set is smaller than
+it looked on **this** boot: `0xa06f0104` is never issued at all (`bUseVasForCeCopy` is false —
+§3), so three remain, not four.
+
+## 5. Where the code is
 
 | what | file |
 |---|---|
