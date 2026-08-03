@@ -97,6 +97,10 @@ fn world() -> Guarded<Gpu> {
     for ev in s.events {
         gpu.apply(ev).expect("the scenario applies cleanly");
     }
+    // #177: `plan_doorbell` now refuses a channel the guest never scheduled via
+    // `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`; declare every channel scheduled so the
+    // doorbells this world's callers ring reach their actual subject, not `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     Guarded::new("trace_replay::world", gpu, recorder)
 }
 

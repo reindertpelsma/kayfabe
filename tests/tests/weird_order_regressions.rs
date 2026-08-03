@@ -87,6 +87,8 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
         0x10000,
     )
     .expect("CTX1 backs VA");
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let out1 = handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("CTX1 doorbell");
     assert!(
         out1.scheduled_now,
@@ -143,6 +145,8 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
         "CTX2 resolves its own backing"
     );
 
+    // ★ #177 — the guest schedules before it rings, for CTX2's OWN (fresh) proc.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     // CTX2's doorbell schedules CTX2's OWN channel — the sticky-one-shot #12 bug
     // would have left it off-runlist (scheduled_now == false).
     let out2 = handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("CTX2 doorbell");
@@ -360,6 +364,8 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
         0x10000,
     )
     .unwrap();
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("channel rung");
     // An in-flight completion is pending for this proc.
     gpu.procs

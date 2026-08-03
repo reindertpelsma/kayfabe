@@ -193,6 +193,8 @@ fn t14_identical_va_disjoint_backing() {
 #[test]
 fn t14_doorbell_demux_routes_to_own_isolate() {
     let (mut gpu, _vmm, recorder) = two_process_gpu();
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
 
     // Ring A's GR channel and B's GR channel via their (distinct) vChid tokens.
     let a_token = MockArch::token_for(kayfabe_arch::ids::VChid(0x10));

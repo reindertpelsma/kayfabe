@@ -134,6 +134,10 @@ fn device_with(
     for ev in s.events {
         gpu.apply(ev).expect("scenario applies");
     }
+    // #177: `plan_doorbell` now refuses a channel the guest never scheduled via
+    // `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`; declare every channel scheduled up front so
+    // the doorbells this file's tests ring reach their actual subject, not `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let pids: Vec<ProcId> = (0..procs)
         .map(|i| gpu.spine.by_pdb[&(GPU, if i == 0 { PDB } else { PDB2 })])
         .collect();
@@ -569,6 +573,11 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
             },
         })
         .expect("re-alloc applies");
+    // #177: the re-allocated channel is a NEW `ChanId` under the same vChid, so it
+    // needs its own guest schedule declaration before the fresh ring below.
+    device
+        .schedule_channel(CLIENT, HObject(0x5c00_00f9), true)
+        .expect("the guest schedules the re-allocated channel (#177)");
 
     held.release();
     let out = t.join().expect("joins");

@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use kayfabe_arch::Arch;
 use kayfabe_arch::fault::ErrorNotifier;
-use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, Pdb, VChid};
+use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::{CompletionQueue, DeliveryPlane, FenceArms, PostBatch};
 use kayfabe_isolate::{
     CancelReason, Cancels, HostHandle, Isolate, IsolateBox, IsolateCensus, IsolateFactory,
@@ -30,7 +30,7 @@ use kayfabe_util::Instant;
 use crate::gpa::{GpaArena, GpaBlock, GpaError, GpaSpace};
 use crate::project::{Boundaries, ProcBoundary, ProjectionError, SYSTEM_ANCHOR, project};
 use crate::reactor::SourceRegistry;
-use crate::rmgraph::{ClientId, ClientKey, ResourceKey, RmEvent, RmGraph, RmGraphError};
+use crate::rmgraph::{ClientId, ClientKey, NodeKey, ResourceKey, RmEvent, RmGraph, RmGraphError};
 use crate::{ChanId, ProcAnchor, ProcId};
 
 /// ★ G10 (`l1_concurrency.md` §12.22) — the largest number of distinct **condemned
@@ -313,9 +313,171 @@ pub struct Channel {
 /// its own, per proc.
 #[derive(Debug, Default)]
 pub struct ExecPlane {
+    /// ★★★ Channels the **guest** has asked to be scheduled —
+    /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) with `bEnable = NV_TRUE`, task
+    /// #177.
+    ///
+    /// # Why this is a second set and not a flag on [`Self::scheduled`]
+    ///
+    /// The two sets answer different questions and are written by different actors:
+    ///
+    /// | set | written by | means |
+    /// |---|---|---|
+    /// | `requested` | the **guest's control**, through [`Gpu::schedule_channel`] | "the guest declared this channel runnable" |
+    /// | `scheduled` | `kayfabe_fwd::commit_doorbell` | "a host runlist submit has actually happened for it" |
+    ///
+    /// Collapsing them would make the control's answer unfalsifiable in the exact way
+    /// `refusal_invisible_in_the_ledger` describes: if the guest's `NV_OK` and the host's
+    /// completed act were one bit, no test could distinguish *"we recorded an intent"*
+    /// from *"a host GPU accepted it"*, and the first would read as the second forever.
+    ///
+    /// ★★ It is `requested` that **gates** submission (`kayfabe_fwd::plan_doorbell`), and
+    /// that is what makes serving `0xa06f0103` a performed transition rather than a word:
+    /// before the control a doorbell on this channel is refused by name
+    /// (`FwdFault::NotScheduled`), after it the doorbell proceeds. ⊘ Break the gate and
+    /// the control is once again a fabricated promise — the mutation is in
+    /// `scripts/bite_gpfifo_schedule.py`.
+    pub requested: BTreeSet<ChanId>,
     /// Channels whose host TSG/channel has been made runnable.
     pub scheduled: BTreeSet<ChanId>,
 }
+
+/// Where a `0xa06f0103` is going — [`route_schedule_channel`]'s answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScheduleRoute {
+    /// The proc that owns the channel.
+    pub proc: ProcId,
+    /// Its channel slot.
+    pub chan: ChanId,
+}
+
+/// ★ **ROUTE (rank 0).** Resolve `(client, object)` to the proc and channel slot the
+/// guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` names. A pure read of the spine's
+/// projection-derived indices; it touches no [`Proc`].
+///
+/// Two forward hops, no fallback:
+///
+/// 1. `(client, object)` → the **live** resource at that handle, then immediately its
+///    stable [`ResourceKey`] (handle values are recyclable; identities are not).
+/// 2. identity → `(ProcId, ChanId)` ([`Spine::by_chan`], built from the projection beside
+///    `by_vchid` and never accreted).
+///
+/// ⚠ It deliberately does **not** route through [`Spine::ctx_vas`] the way
+/// [`crate::promote::route_promote_ctx`] does. The first channel this control is ever
+/// asked about is RM's global CeUtils scrubber, which is allocated with
+/// `hVASpace = NV01_NULL_OBJECT` on purpose (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:86-93`); a VAS-keyed route would
+/// refuse it for a reason that has nothing to do with scheduling, and the refusal would
+/// have looked like a correct one.
+///
+/// # Errors
+/// [`ScheduleFault`], by variant.
+pub fn route_schedule_channel(
+    spine: &Spine,
+    client: HClient,
+    object: HObject,
+) -> Result<ScheduleRoute, ScheduleFault> {
+    let node = spine
+        .rmgraph
+        .node(NodeKey::new(client, object))
+        .ok_or(ScheduleFault::UnknownChannel { client, object })?;
+    if !matches!(node.kind, kayfabe_arch::ObjectKind::Channel { .. }) {
+        return Err(ScheduleFault::NotAChannel { client, object });
+    }
+    let &(proc, chan) = spine
+        .by_chan
+        .get(&node.id())
+        .ok_or(ScheduleFault::ChannelNotMaterialized { client, object })?;
+    Ok(ScheduleRoute { proc, chan })
+}
+
+/// ★ **ACT (rank 1, one proc).** Record or withdraw the guest's scheduling declaration.
+#[must_use]
+pub fn apply_schedule_channel(proc: &mut Proc, route: &ScheduleRoute, enable: bool) -> ScheduleAck {
+    let changed = if enable {
+        proc.exec.requested.insert(route.chan)
+    } else {
+        proc.exec.requested.remove(&route.chan)
+    };
+    ScheduleAck {
+        proc: route.proc,
+        chan: route.chan,
+        enabled: enable,
+        changed,
+    }
+}
+
+/// What [`Gpu::schedule_channel`] performed — #177.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScheduleAck {
+    /// The proc that owns the channel.
+    pub proc: ProcId,
+    /// The channel slot the intent was recorded against.
+    pub chan: ChanId,
+    /// The `bEnable` that was asked for.
+    pub enabled: bool,
+    /// Whether the set actually moved. ★ `false` is a **legitimate** answer and still
+    /// `NV_OK`: RM re-schedules an already-scheduled channel on several paths, and this
+    /// control is idempotent by construction. It is reported rather than discarded so a
+    /// boot's census can distinguish "the guest asked twice" from "the guest asked once".
+    pub changed: bool,
+}
+
+/// Why [`Gpu::schedule_channel`] refused — #177.
+///
+/// ⊘ Every variant means *"this port examined the request and declined"*, which is why
+/// they are answered with `kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS`
+/// (`NV_ERR_INVALID_STATE`) and never with `NV_ERR_NOT_SUPPORTED` — the latter is the
+/// FSM's signature for *"nobody claimed this command"*, and reusing it would make the two
+/// indistinguishable in the guest's own dmesg, which is the only place a reader ever sees
+/// this control fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleFault {
+    /// No live resource at `(client, object)`.
+    UnknownChannel {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// The handle resolves, but not to a channel.
+    NotAChannel {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// A live channel resource that no proc has a slot for — it was declared but the
+    /// projection has not (or can no longer) place it. ★ Distinct from
+    /// [`Self::UnknownChannel`] on purpose: one means the guest named something that does
+    /// not exist, the other means **we** cannot place something that does, and only the
+    /// second is our defect.
+    ChannelNotMaterialized {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+}
+
+impl core::fmt::Display for ScheduleFault {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ScheduleFault::UnknownChannel { client, object } => {
+                write!(f, "no live resource at ({client:?}, {object:?})")
+            }
+            ScheduleFault::NotAChannel { client, object } => {
+                write!(f, "({client:?}, {object:?}) is not a channel")
+            }
+            ScheduleFault::ChannelNotMaterialized { client, object } => write!(
+                f,
+                "channel ({client:?}, {object:?}) is declared but has no slot in any proc"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for ScheduleFault {}
 
 /// Per-proc poll bookkeeping (the C's `m2_poll_kick`/`m2_last_db_token`
 /// singletons, made per-process — crack ⚠7).
@@ -1014,6 +1176,20 @@ pub struct Spine {
     pub by_pdb: BTreeMap<(GpuId, Pdb), ProcId>,
     /// ★ Exec-plane routing (derived): `(GpuId, vChid)` → (proc, channel) (MG-3).
     pub by_vchid: BTreeMap<(GpuId, VChid), (ProcId, ChanId)>,
+    /// ★★★ **#177** — the same routing fact keyed by the channel's own **stable
+    /// identity** instead of by its vChid.
+    ///
+    /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` names its channel by `(hClient, hObject)`, not
+    /// by a doorbell token, so [`Spine::by_vchid`] is the wrong key for it and decoding a
+    /// vChid just to look one up would be a second description of a fact the projection
+    /// already has. Built in the **same loop** as `by_vchid`, from the same
+    /// [`crate::project::Boundaries`], so the two can never disagree about which proc owns
+    /// a channel.
+    ///
+    /// ⊘ Deliberately holds only channels the projection could route. A channel whose
+    /// vChid was never recovered is absent from both maps: it cannot be rung, so it must
+    /// not be schedulable either.
+    pub by_chan: BTreeMap<ResourceKey, (ProcId, ChanId)>,
     /// ★★★ **Page-table-page ownership: `(GpuId, physical page)` → the `Vas` whose page
     /// table it is** (`#102`/#13's operand split; the C's `m2_cpt`, `C:
     /// nvkvm_gpu_emul.c:596-609`).
@@ -1924,6 +2100,10 @@ impl Spine {
         Self::stage_dropped_channels(p, &live_cids);
         p.channels.retain(|cid, _| live_cids.contains(cid));
         p.exec.scheduled.retain(|cid| live_cids.contains(cid));
+        // ★ #177 — the guest-intent half of the same rule. A freed channel's `ChanId` is
+        // mintable again, and an intent that outlived its channel would schedule a
+        // *different* channel that never asked.
+        p.exec.requested.retain(|cid| live_cids.contains(cid));
     }
 
     /// ★★ **T0/G2, the address plane** (`l1_os_shell.md` §7.6 T0): move the host
@@ -2380,6 +2560,7 @@ impl Spine {
         p.channels.clear();
         p.chan_ids.clear();
         p.exec.scheduled.clear();
+        p.exec.requested.clear();
         // ★ VACATE, not RETIRE: the isolates stay live so the queue just filled can
         // actually be disposed of. See `Proc::vacate` for the clean-vs-violent split.
         // ★★ §7.6 T2 — and it CANCELS: a guest process that exits (normally, killed, or
@@ -2693,6 +2874,7 @@ impl Spine {
         // projection — to a named refusal rather than to an anonymous miss.
         self.by_pdb.clear();
         self.by_vchid.clear();
+        self.by_chan.clear();
         self.pt_roots.clear();
         self.ctx_vas.clear();
         self.condemned_by_pdb.clear();
@@ -2726,6 +2908,7 @@ impl Spine {
             if anchor == SYSTEM_ANCHOR {
                 if let Some(&cid) = system.chan_ids.get(&key) {
                     self.by_vchid.insert((gpu, vchid), (Gpu::SYSTEM_PROC, cid));
+                    self.by_chan.insert(key, (Gpu::SYSTEM_PROC, cid));
                 }
             } else if let Some(&pid) = anchor_to_pid.get(&anchor) {
                 if let Some(&cid) = procs
@@ -2735,6 +2918,7 @@ impl Spine {
                     .get(&key)
                 {
                     self.by_vchid.insert((gpu, vchid), (pid, cid));
+                    self.by_chan.insert(key, (pid, cid));
                 }
             } else if condemned_anchors.contains(&anchor) {
                 self.condemned_by_vchid.insert((gpu, vchid), anchor);
@@ -3267,6 +3451,7 @@ impl Gpu {
             rmgraph,
             by_pdb: BTreeMap::new(),
             by_vchid: BTreeMap::new(),
+            by_chan: BTreeMap::new(),
             pt_roots: BTreeMap::new(),
             ctx_vas: BTreeMap::new(),
             targets,
@@ -3408,6 +3593,52 @@ impl Gpu {
                 .ok_or(crate::promote::PromoteFault::RetiredProc(route.proc))?
         };
         crate::promote::apply_promote_ctx(proc, &route, p)
+    }
+
+    /// ★★★ **#177 — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`.**
+    ///
+    /// Records (or withdraws) the guest's declaration that the channel at
+    /// `(client, object)` is runnable. This is the *whole* of what this port performs for
+    /// that control, and the honest scope is written down at
+    /// [`ExecPlane::requested`] and in `docs/design/gpfifo_schedule.md`:
+    ///
+    /// - **performed here** — the eligibility transition. It is enforced: after it, and
+    ///   only after it, `kayfabe_fwd::plan_doorbell` will build a submission plan for this
+    ///   channel.
+    /// - **deferred to the first doorbell** — the host-side runlist submit
+    ///   (`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` on the isolate's own channel group). No work
+    ///   can execute on a GPFIFO channel between this control returning and that doorbell,
+    ///   so the two are observationally indistinguishable to the guest; this is the same
+    ///   architecture the C artifact used to carry a stock driver to a correct matmul.
+    /// - **not modelled at all** — `bSkipSubmit` / `bSkipEnable`, refused by name in the
+    ///   decoder (`kayfabe_abi::submit::GpfifoScheduleError::UnmodelledSkip`), and every
+    ///   runlist ordering property (timeslice, interleave, preemption).
+    ///
+    /// The route is three forward hops with no fallback, exactly like
+    /// [`crate::promote::route_promote_ctx`], but it must **not** use that function: it
+    /// routes through `ctx_vas`, and the channel this control is asked about first — RM's
+    /// global CeUtils scrubber — is allocated with `hVASpace = NV01_NULL_OBJECT` on
+    /// purpose (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:86-93`,
+    /// *"For physical CE channels, we will use RM internal VAS"*). A VAS-keyed route would
+    /// refuse it for a reason that has nothing to do with scheduling.
+    ///
+    /// # Errors
+    /// [`ScheduleFault`], by variant.
+    pub fn schedule_channel(
+        &mut self,
+        client: HClient,
+        object: HObject,
+        enable: bool,
+    ) -> Result<ScheduleAck, ScheduleFault> {
+        let route = route_schedule_channel(&self.spine, client, object)?;
+        let proc = if route.proc == Gpu::SYSTEM_PROC {
+            &mut self.system
+        } else {
+            self.procs
+                .get_mut(&route.proc)
+                .ok_or(ScheduleFault::ChannelNotMaterialized { client, object })?
+        };
+        Ok(apply_schedule_channel(proc, &route, enable))
     }
 
     /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).

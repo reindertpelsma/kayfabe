@@ -422,6 +422,10 @@ fn mean_gpu() -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("the scenario applies cleanly");
     }
+    // #177: a real guest schedules a channel (`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`) before
+    // ringing its doorbell; declare every channel this world just derived so the mean
+    // script's doorbells don't trip `FwdFault::NotScheduled` before its own subjects run.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     assert_eq!(gpu.procs.len(), N_PROCS, "six distinct procs were derived");
     // Resolved through the routing map, never assumed from mint order.
     let pids: Vec<ProcId> = (0..N_PROCS)
@@ -813,6 +817,9 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
             },
         })
         .expect("T0: the guest declares a channel");
+    device
+        .schedule_channel(client, chan, true)
+        .expect("T0: the guest schedules the channel it just declared (#177)");
     let rung = device
         .doorbell(gpu, MockArch::token_for(T0_VCHID), &[])
         .expect("T0: the guest rings it, materializing a host channel + token");
@@ -884,6 +891,9 @@ fn generation_recycle(
     }
     dev.publish_backing(GPU0, GEN1_PDB, GpuVa(VA_GEN), 0x1000)
         .expect("({mode:?}) generation 1 publishes");
+    // #177: the guest schedules its channel before ringing it.
+    dev.schedule_channel(GEN_CLIENT, handles.gr_channel, true)
+        .expect("({mode:?}) generation 1 schedules its channel");
     let gen1 = dev
         .doorbell(GPU0, MockArch::token_for(GEN1_GR), &[GpuVa(VA_GEN)])
         .expect("({mode:?}) generation 1 rings")
@@ -920,6 +930,9 @@ fn generation_recycle(
     }
     dev.publish_backing(GPU1, GEN2_PDB, GpuVa(VA_GEN), 0x1000)
         .expect("({mode:?}) generation 2 publishes");
+    // #177: same, for the recycled generation's own channel.
+    dev.schedule_channel(GEN_CLIENT, handles.gr_channel, true)
+        .expect("({mode:?}) generation 2 schedules its channel");
     let gen2 = dev
         .doorbell(GPU1, MockArch::token_for(GEN2_GR), &[GpuVa(VA_GEN)])
         .expect("({mode:?}) generation 2 rings")
@@ -2978,6 +2991,8 @@ fn reinit(gpu: &mut Gpu, client: HClient, pdb: Pdb, gr: VChid, ce: VChid, target
         gpu.apply(ev)
             .expect("★ the re-initialising process's RM events apply");
     }
+    // #177: the recovering guest schedules its fresh channels before ringing them.
+    kayfabe_tests::guest_schedules_every_channel(gpu);
 }
 
 /// Every host object identity a `Proc` currently holds — host VASes, published backing
@@ -3383,6 +3398,12 @@ fn recovery_after_a_multi_gpu_condemnation_serves_both_targets() {
         BTreeSet::from([GPU0, GPU1]),
         "one proc, two per-target isolates (MG-5)"
     );
+
+    // #177: the cross-GPU dup MERGES the two reinit'd halves into one component; the
+    // losing half's channel re-materialises under the merged proc with a fresh `ChanId`
+    // that `reinit`'s own sweep (taken before the merge) never saw. Re-sweep now that the
+    // merge has happened, before either plane is next rung.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
 
     // Served on BOTH planes, end to end.
     for (g, pdb, gr) in [(GPU0, R_PDB, R_GR), (GPU1, R_PDB2, R_GR2)] {
@@ -4168,6 +4189,11 @@ fn a_live_component_that_splits_yields_two_procs() {
         dst: NodeKey::new(SPLIT_B, JOIN_SPLIT_ALIAS),
     })
     .expect("a user↔user share is a grouping edge");
+    // #177: the dup MERGES the two independently-`reinit`'d halves into one component,
+    // which can re-materialise a channel under a fresh `ChanId` that each half's own
+    // `reinit` sweep (taken before the merge) never saw. Re-sweep post-merge, before
+    // either half's first ring below.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let merged = gpu.spine.by_pdb[&(GPU0, SPLIT_A_PDB)];
     assert_eq!(
         gpu.spine.by_pdb[&(GPU0, SPLIT_B_PDB)],
@@ -4267,6 +4293,9 @@ fn a_live_component_that_splits_yields_two_procs() {
     );
 
     // ---- …and both halves are genuinely SERVED, end to end, in their own lanes.
+    // #177: the departing half re-materialised with a FRESH channel (new `ChanId`, new
+    // `Proc`, empty `exec.requested`) — schedule it before it is next rung.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     for (pid, pdb, gr) in [
         (pid_a, SPLIT_A_PDB, SPLIT_A_GR),
         (pid_b, SPLIT_B_PDB, SPLIT_B_GR),
@@ -5142,6 +5171,9 @@ fn a_recycled_channel_handle_never_shares_the_ghosts_host_channel() {
         },
     })
     .expect("★ re-allocating a freed channel handle is LEGAL (see the data-plane test)");
+    // #177: the successor channel is freshly minted outside `reinit`; schedule it (and
+    // re-declare the ghost's, harmlessly) before either is rung below.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
 
     // ---- ★★ THE BREACH, first: BOTH live channels must have an exec plane of their own.
     let route = |gpu: &Gpu, v: VChid| gpu.spine.by_vchid.get(&(GPU0, v)).copied();
@@ -6408,6 +6440,8 @@ fn gpa_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, Shared
     for ev in s.events {
         gpu.apply(ev).expect("the scenario applies cleanly");
     }
+    // #177: same reasoning as `mean_gpu` — declare every channel before any doorbell.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     assert_eq!(gpu.procs.len(), N_PROCS, "six distinct procs were derived");
     let pids: Vec<ProcId> = (0..N_PROCS)
         .map(|i| gpu.spine.by_pdb[&(gpu_of(i), lane_of(i).pdb)])
@@ -9851,6 +9885,8 @@ fn n3_gpu() -> (Guarded<Gpu>, ProcId, ProcId, ProcId, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("the N3 scenario applies cleanly");
     }
+    // #177: declare every channel of this world before any doorbell.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
 
     let straddler = gpu.spine.by_pdb[&(GPU0, N3_PDB)];
     assert_eq!(

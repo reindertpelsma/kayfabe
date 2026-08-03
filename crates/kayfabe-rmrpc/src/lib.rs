@@ -196,8 +196,8 @@ mod reasm;
 
 pub use fault::{FaultEmitRefusal, rc_triggered_for};
 pub use policy::{
-    GraphPolicy, OBJECT_VERBS, ObjectModel, ObjectPolicy, RefusalCensus, RingCensus,
-    SharedRefusalCensus, SharedRingCensus,
+    GraphPolicy, OBJECT_CONTROLS, OBJECT_VERBS, ObjectModel, ObjectPolicy, RefusalCensus,
+    RingCensus, SharedRefusalCensus, SharedRingCensus,
 };
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 

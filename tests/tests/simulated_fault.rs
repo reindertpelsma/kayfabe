@@ -87,6 +87,10 @@ fn two_app_gpu() -> Guarded<Gpu> {
     for ev in s.events {
         gpu.apply(ev).expect("the two-process bring-up applies");
     }
+    // ★177: the guest always schedules a channel before ringing it; restore that
+    // step so `refuse_ring` below reaches the address-plane miss under test, not
+    // `NotScheduled`.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     Guarded::new("simulated_fault", gpu, rec)
 }
 

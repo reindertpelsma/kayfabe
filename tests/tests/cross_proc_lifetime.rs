@@ -1182,6 +1182,8 @@ fn uvm_referenced_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     for ev in s.events {
         gpu.apply(ev).expect("scenario applies");
     }
+    // #177: the guest always schedules a channel before ringing its doorbell.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
     (
         Guarded::new(

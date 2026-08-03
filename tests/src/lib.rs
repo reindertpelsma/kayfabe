@@ -1086,3 +1086,31 @@ pub fn script_ring_via(vmm: &mut dyn Vmm, gpa: u64, methods: &[(u32, Vec<u32>)])
     // regression to the untranslated read observable; see `PB_VA_BIAS`.
     gpfifo_ring(pb_va(gpa).0, bytes.len() as u64)
 }
+
+/// ★★★ **#177** — the guest's own `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`, applied to every
+/// channel this [`kayfabe_core::gpu::Gpu`] currently holds. Returns how many channels it
+/// declared, so a caller can assert it declared *something*.
+///
+/// # Why this helper exists, and why it is not a bypass
+///
+/// `kayfabe_fwd::plan_doorbell` refuses a channel the guest never asked us to schedule
+/// (`FwdFault::NotScheduled`). That gate is what makes serving `0xa06f0103` a **performed
+/// transition** rather than a word — see `kayfabe_core::gpu::ExecPlane::requested`.
+///
+/// A real guest always schedules before it rings; the harnesses in this workspace mostly
+/// did not, because until #177 nothing made them. So this is the step those tests were
+/// **missing**, restored in one place rather than open-coded 45 times. ⊘ It is emphatically
+/// **not** a way around the gate: it goes through the same `exec.requested` set the control
+/// writes, it is called by tests whose subject is something else entirely, and the gate's
+/// own behaviour is asserted in `tests/tests/gpfifo_schedule.rs` — which does *not* call
+/// this — including that a channel it has not been called for is refused by name.
+pub fn guest_schedules_every_channel(gpu: &mut kayfabe_core::gpu::Gpu) -> usize {
+    let mut n = 0;
+    for proc in core::iter::once(&mut gpu.system).chain(gpu.procs.values_mut()) {
+        for &cid in proc.chan_ids.values() {
+            proc.exec.requested.insert(cid);
+            n += 1;
+        }
+    }
+    n
+}

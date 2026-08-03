@@ -721,7 +721,44 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               mode2_initctrl_ga106.h:6234, psize 3, dlen 0); a real GA106 answers 01 00 00 \
               ([measured] 2026-08-01, traces/real_ga106/rpc_bodies_real_ga106.txt), which is \
               bEnable=NV_TRUE echoed back — an [IN] echo and NOT an answer, so even a \
-              correct capture of it would license nothing here",
+              correct capture of it would license nothing here. \
+              ★★★ SERVED as of #177, and every sentence above is CORRECTED rather than \
+              deleted — all of it was true, and one inference in it was not. \
+              (a) WHICH CONTROL: established from the driver rather than assumed. The \
+              CeUtils path issues THIS id (0xa06f0103) on a bare, TSG-less channel \
+              (ogkm-580: mem_utils.c:1973-1989); NVA06C_CTRL_CMD_GPFIFO_SCHEDULE \
+              (0xa06c0101) is NOT on this path, and the a06c form is only what the ISOLATE \
+              sends the HOST, on its own channel's group. \
+              (b) THE CORRECTED INFERENCE: 'the runlist write is on our side of the line' \
+              is true and does NOT entail 'it must happen at this control'. Between this \
+              control returning and the first doorbell on the channel, NO work can execute \
+              on it — a GPFIFO channel runs only what GP_PUT advertises, and only once the \
+              host is told — so 'on the runlist now' and 'on the runlist by the first \
+              submission' are observationally indistinguishable to the guest, and RM's own \
+              next two steps (arm the notifier, fetch a work-submit token) probe neither. \
+              The C artifact — the ONLY implementation a real driver has accepted end to \
+              end — answers this exact id NV_OK from its captured table (C: \
+              mode2_initctrl_ga106.h:6234) and performs the host-side schedule at the FIRST \
+              DOORBELL (C: nvkvm_gpu_emul.c:8038-8048 M5.8, :4176-4194 M5.25); that is the \
+              architecture that carried a STOCK driver to a bad=0 matmul. \
+              (c) WHAT WAS ACTUALLY MISSING, and it was NOT the reply: nothing GATED on the \
+              guest's declaration. plan_doorbell read `!exec.scheduled.contains(&cid)` as a \
+              memo and scheduled an unscheduled channel on the fly, so an NV_OK here would \
+              have had nothing to perform and nothing could have falsified it. #177 adds \
+              exec.requested and FwdFault::NotScheduled: refused before the control, planned \
+              after it. THAT is the transition this row demanded and could not find. \
+              (d) ⊘ STILL TRUE, and named rather than hidden: for THIS channel the deferred \
+              host-side act cannot presently succeed. RM allocates the global CeUtils \
+              scrubber with hVASpace = NV01_NULL_OBJECT on purpose ('For physical CE \
+              channels, we will use RM internal VAS to map channel buffers' — ogkm-580: \
+              channel_utils.c:86-93), so resolve_channel_vas yields vas_pdb=None and the \
+              first doorbell on it refuses FwdFault::NoVas. That is UNBUILT (E5 is partial), \
+              not impossible, and it is a LOUD named refusal rather than a hang. \
+              (e) The refusal status is no longer 0x56. NV_ERR_NOT_SUPPORTED is not among \
+              this control's documented returns (ogkm-580: ctrla06fgpfifo.h:59-64 lists \
+              NV_OK / INVALID_OBJECT_HANDLE / INVALID_STATE / INVALID_OPERATION), which \
+              makes 0x56 the SIGNATURE of an unclaimed command; a decided refusal now \
+              answers NV_ERR_INVALID_STATE so the guest's own dmesg can tell the two apart",
     },
     // ── ★★★ The two rungs BEHIND 0xa06f0103, measured together in boot evtprobe1
     // ([measured] 2026-08-01, rev 4e93f17 + a throwaway probe never landed;

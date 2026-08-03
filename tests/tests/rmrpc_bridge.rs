@@ -2975,6 +2975,12 @@ fn gpu_from_script(script: &RpcScript) -> kayfabe_tests::Guarded<Gpu> {
         }
         assert!(policy.census().is_empty(), "a clean script refuses nothing");
     }
+    // ★ #177 — a real guest schedules every channel it allocates before ringing it
+    // (`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`); this harness models the whole rest of a
+    // script from wire bytes but has never modelled that control. Every caller of this
+    // helper that goes on to ring a doorbell needs it, and a caller that only inspects
+    // `boundaries(&gpu)` is unaffected — `exec.requested` plays no part in a projection.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     gpu
 }
 
@@ -3900,6 +3906,12 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
         }
         gpu.apply(channel).expect("the channel applies either way");
         gpu.apply(set_page_dir()).expect("the PDB binds");
+        // ★ #177 — the guest schedules before it rings; this local helper builds the
+        // channel from an `RmEvent` rather than a script, so it needs the same step
+        // `gpu_from_script` gets. Both arms below still reach and assert their ORIGINAL
+        // fault (`NoVas`) unchanged: `plan_doorbell` returns `NoVas` before it ever
+        // checks `exec.requested` when the channel has no VAS.
+        kayfabe_tests::guest_schedules_every_channel(&mut gpu);
         let outcome = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CP_GR_VCHID), &[]);
         let vas_pdb = gpu
             .spine

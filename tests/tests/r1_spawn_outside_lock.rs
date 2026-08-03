@@ -470,6 +470,9 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
     let pid = *gpu.procs.keys().next().expect("one guest proc");
     assert!(gpu.procs[&pid].wants_isolate(GpuId::ZERO));
 
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+
     let device = SharedDevice::new(gpu, LockMode::Sharded);
     assert_eq!(
         device.isolate_census().materialized,
@@ -528,6 +531,9 @@ fn two_threads_racing_one_deferral_spawn_twice_and_install_once() {
         "the contested id names the proc this test believes it does"
     );
     drop(gpu.spine.take_pending_spawns());
+
+    // ★ #177 — the guest schedules before it rings.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
 
     let device = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
     let token = MockArch::token_for(gr_vchid(0));

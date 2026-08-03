@@ -402,6 +402,11 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
         dev.apply(ev).expect("the bridge's object model accepts it");
     }
 
+    // ★ #177 — the guest schedules before it rings; this test's subject is the join and
+    // the isolate plane downstream of routing, not the scheduling gate itself.
+    dev.schedule_channel(CLIENT, chan, true)
+        .expect("the guest schedules the channel it just declared");
+
     // ---- ★ THE WITNESS: the same token, now routed.
     let after = r.write(BAR_REGS, DOORBELL, 4, 0);
     let report = after.doorbell.as_ref().expect("a doorbell");

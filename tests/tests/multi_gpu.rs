@@ -107,6 +107,8 @@ fn two_gpu_world() -> (
         .by_pdb
         .get(&(GpuId(1), SHARED_PDB))
         .expect("GPU1 PDB routes");
+    // #177: the guest always schedules a channel before ringing its doorbell.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     (gpu, rec, pid_a, pid_b)
 }
 

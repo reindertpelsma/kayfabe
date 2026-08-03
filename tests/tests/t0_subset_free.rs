@@ -174,6 +174,10 @@ fn declare_channel(device: &SharedDevice, handle: HObject, vchid: VChid) {
             },
         })
         .expect("the guest declares a channel");
+    // ★ #177 — the guest schedules before it rings.
+    device
+        .schedule_channel(CLIENT, handle, true)
+        .expect("the guest schedules the channel it just declared");
 }
 
 /// The guest frees one of its own objects and keeps running.

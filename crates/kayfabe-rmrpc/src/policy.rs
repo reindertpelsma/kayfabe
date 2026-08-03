@@ -280,6 +280,21 @@ pub trait ObjectModel: Send {
     /// value across a guard.
     fn publish_isolate_census(&self, to: &kayfabe_core::gpu::SharedIsolateCensus);
 
+    /// ★★★ **#177** — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`.
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::ScheduleFault`], by variant.
+    fn schedule_channel(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault>;
+
+    /// The model as a plain [`Gpu`], **mutably**, if it is one. Same contract and same
+    /// `None` as [`Self::as_gpu`].
+    fn as_gpu_mut(&mut self) -> Option<&mut Gpu>;
+
     /// The model as a plain [`Gpu`], if it **is** one.
     ///
     /// ⊘ `None` is the honest answer for a model behind ranked locks: there is no `&Gpu`
@@ -308,7 +323,20 @@ impl ObjectModel for Gpu {
         to.publish(Gpu::isolate_census(self));
     }
 
+    fn schedule_channel(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault> {
+        Gpu::schedule_channel(self, client, object, enable)
+    }
+
     fn as_gpu(&self) -> Option<&Gpu> {
+        Some(self)
+    }
+
+    fn as_gpu_mut(&mut self) -> Option<&mut Gpu> {
         Some(self)
     }
 }
@@ -804,6 +832,24 @@ pub const OBJECT_VERBS: &[kayfabe_gsp::RpcFunction] = &[
     kayfabe_gsp::RpcFunction::Free,
 ];
 
+/// ★★★ **#177** — the `RpcFunction::RmControl` command ids this policy claims, and the
+/// **only** ones.
+///
+/// # Why a second list instead of putting `RmControl` in [`OBJECT_VERBS`]
+///
+/// `RmControl` is one RPC function carrying hundreds of different commands. Adding it to
+/// `OBJECT_VERBS` would make this policy answer **every** control in the port — including
+/// every one nobody has decided about — and because `PolicyChain::respond` is a `find_map`,
+/// the first `Some` terminates the chain. The `UnservicedLedger` sits at the end of that
+/// chain, so the cost would be exact and total: the ledger goes permanently silent, and the
+/// ledger is this port's primary instrument for *"what has the guest asked for that we do
+/// not answer"*. `GraphPolicy` carries the same warning for the same reason
+/// (`kayfabe_device::served_chain`).
+///
+/// ⊘ So the claim is by **command id**, quantified over this list, and the list is public
+/// so a test asks the type rather than restating it (`gates_quantified_over_a_list`).
+pub const OBJECT_CONTROLS: &[u32] = &[kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE];
+
 impl ObjectPolicy {
     /// A policy that owns `gpu`, decoding with `abi`, serving a `guest_os`.
     #[must_use]
@@ -903,6 +949,17 @@ impl ObjectPolicy {
         self.gpu.as_gpu()
     }
 
+    /// The object model **mutably**, if it is a plain [`Gpu`] — the `&mut` twin of
+    /// [`Self::gpu`], with the same `None` and for the same reason.
+    ///
+    /// ⊘ Test-facing. The shipped composition root builds this policy with
+    /// [`ObjectPolicy::over`] and gets `None`; a caller that needs to act on a sharded
+    /// shell must go through the shell's own ranked verbs, not through here.
+    #[must_use]
+    pub fn gpu_mut(&mut self) -> Option<&mut Gpu> {
+        self.gpu.as_gpu_mut()
+    }
+
     /// Translate one command and apply whatever it declared — the `Result` form, for a
     /// test that asserts an exact [`BridgeRefusal`] variant.
     ///
@@ -930,6 +987,70 @@ impl ObjectPolicy {
     pub fn isolate_census(&self) -> kayfabe_core::gpu::SharedIsolateCensus {
         self.isolates.clone()
     }
+
+    /// ★★★ **#177** — answer `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`, and **only** it.
+    ///
+    /// The three answers, and why each is the one it is:
+    ///
+    /// - **`None`** — any control not in [`OBJECT_CONTROLS`], and any payload this policy
+    ///   cannot even classify as a control. The chain (and therefore the unserviced
+    ///   ledger) is untouched. ⊘ This is the arm that must stay large: it is what keeps
+    ///   the ledger honest.
+    /// - **`NV_OK` with the request's own three params bytes** — the transition was
+    ///   performed. The body is what a real GA106's GSP sends
+    ///   (`kayfabe_abi::submit::encode_gpfifo_schedule`), not what the C's empty capture
+    ///   row implies.
+    /// - **`GPFIFO_SCHEDULE_REFUSED_STATUS` (`NV_ERR_INVALID_STATE`) with an empty body**
+    ///   — the decode or the route said no. ⚠ Never `NV_ERR_NOT_SUPPORTED`: that is the
+    ///   FSM's signature for *"nobody claimed this"*, and the guest prints the raw hex, so
+    ///   reusing it would erase the difference between "refused" and "unimplemented" in
+    ///   the only place anyone reads it.
+    fn respond_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let req = self.bridge.abi.decode_rpc_control(&cmd.payload).ok()?;
+        if !OBJECT_CONTROLS.contains(&req.cmd) {
+            return None;
+        }
+        let refuse = || {
+            Some(Reply {
+                rpc_result: kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS,
+                body: Vec::new(),
+            })
+        };
+        // The guest's own two assertions about its params, both checked — the same pair
+        // `InitTablePolicy` checks, for the same reason.
+        let want = kayfabe_abi::submit::GpfifoScheduleParams::SIZE;
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != want
+            || cmd.payload.len() < req.params_at + want
+        {
+            return refuse();
+        }
+        let Ok(params) = kayfabe_abi::submit::decode_gpfifo_schedule(
+            &cmd.payload[req.params_at..req.params_at + want],
+        ) else {
+            return refuse();
+        };
+        let ack = self.gpu.schedule_channel(
+            kayfabe_arch::ids::HClient(req.client),
+            kayfabe_arch::ids::HObject(req.object),
+            params.b_enable != 0,
+        );
+        self.gpu.publish_isolate_census(&self.isolates);
+        if ack.is_err() {
+            return refuse();
+        }
+        // ★ The reply carries the request's params back, because the GSP transport copies
+        // the reply's params over the caller's own struct whenever `paramsSize != 0`
+        // (`ogkm-580: rpc.c:11085-11090`). A zero-filled body would clear the caller's
+        // `bEnable` behind its back.
+        let mut body = cmd.payload.clone();
+        let params_out = kayfabe_abi::submit::encode_gpfifo_schedule(&params);
+        body[req.params_at..req.params_at + want].copy_from_slice(&params_out);
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body,
+        })
+    }
 }
 
 impl core::fmt::Debug for ObjectPolicy {
@@ -952,6 +1073,11 @@ impl CommandPolicy for ObjectPolicy {
     /// (`kayfabe_gsp::GspFsm::answer`). Both are correct answers for a verb this port does
     /// not model; an `NV_OK` would not be.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        if cmd.function == kayfabe_gsp::RpcFunction::RmControl {
+            // ★★★ #177 — the narrow control claim. `None` for every control not in
+            // `OBJECT_CONTROLS`, so the chain and the unserviced ledger are untouched.
+            return self.respond_control(cmd);
+        }
         if !ObjectPolicy::claims(cmd.function) {
             return None;
         }

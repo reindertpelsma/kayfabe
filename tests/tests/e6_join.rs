@@ -397,7 +397,10 @@ fn the_control_with_no_isolate_plane_produces_no_copy_and_refuses_by_name() {
 /// is *unbounded*, not slow.
 #[test]
 fn a_permanently_dead_isolate_is_REFUSED_and_does_not_park_forever() {
-    let (gpu, _vmm, pid, cid) = stillborn_device();
+    let (mut gpu, _vmm, pid, cid) = stillborn_device();
+    // ★ #177 — the guest schedules before it rings; this test's subject is what happens
+    // AFTER that (a dead isolate plane), not the scheduling gate itself.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let vchid = gpu.procs[&pid].channels[&cid].vchid;
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 

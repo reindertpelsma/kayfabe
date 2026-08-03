@@ -492,6 +492,8 @@ fn gpu_of(events: &[RmEvent]) -> Guarded<Gpu> {
     for &ev in events {
         gpu.apply(ev).expect("the scenario applies");
     }
+    // #177: the guest always schedules a channel before ringing its doorbell.
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     Guarded::new("rmgraph_order_independence::gpu_of", gpu, rec)
 }
 
