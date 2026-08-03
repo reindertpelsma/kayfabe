@@ -1,6 +1,6 @@
 # Capturing the GSP-RM RPC boot sequence from real hardware
 
-**Status:** step 4 complete — the recorder is **built, run on three real boards across two
+**Status:** step 5 complete — the recorder is **built, run on three real boards across two
 architectures, and broken on purpose**. §6 = GA106, §7 = GA102, §8 = AD102 at constant driver
 version. §1–§5 are the pre-build reasoning and are left as written, because the decisions they
 justify are the ones that shipped.
@@ -338,8 +338,11 @@ nvidia_uvm; rmmod nvidia; modprobe nvidia`, then `srcversion` back to `EF35EC…
   and no reorder — those have to be authored, not recorded.
 - ⊘ **Data-vs-act is not answered** (§4, and §6.2's last paragraph). That pass is static, over
   `ogkm`, and it is the one that keeps a replay honest.
-- ⊘ **No consumer yet.** Nothing in `crates/` reads this format; wiring it into a differential
-  is separate work.
+- ⊘ ~~**No consumer yet.** Nothing in `crates/` reads this format; wiring it into a
+  differential is separate work.~~ ⇒ **CLOSED by §9**: `tests/src/rpctrace.rs` reads the
+  format and `tests/tests/replay_conformance.rs` is the conformance suite over it. Struck
+  rather than deleted, because the *rest* of this list is unchanged and a reader should be
+  able to see which item moved.
 - ⊘ **Observational neutrality is NOT proven.** The hooks add a `memcpy` of up to 64 KiB under a
   spinlock on the RPC path, and this project's own rule is that a recorder can perturb what it
   records (`nvkvm_m2_rec` is *not* observationally neutral, which is why `m2_trace` must never be
@@ -708,3 +711,140 @@ reachability on a filtered host are not independent — they are one signal coun
 ★ It ended better than the correct diagnosis would have: the replacement runs **575.51.03**,
 which is what made §8 a constant-version comparison at all. That is luck, and recording it as
 luck is the point.
+
+---
+
+# 9. Step 5 — THE CONFORMANCE SUITE, and the two halves it has to have
+
+**Status: built and green.** `tests/tests/replay_conformance.rs` (16 tests) over
+`tests/src/rpctrace.rs` (the Rust reader §6.6 said did not exist). ⇒ §6.6's *"no consumer
+yet"* is **closed**; every other open item there still stands.
+
+## 9.1 The constraint, and why trace equality was never the deliverable
+
+The owner's framing: *"hardcoding the order in a test is fine; in prod you must be protocol
+compliant"* — **and** *"tests that test orders/ops the real kernel doesn't do but are still
+spec compliant should pass as well."*
+
+⊘ A test that asserts trace equality is **worse than nothing**: it pins the port to one
+board, one driver and one boot, and goes red on every legitimate driver revision while
+saying nothing about compliance. So there are two halves, and the second is not garnish —
+without it the first is trace lock-in wearing a test's clothes.
+
+| half | what it does |
+|---|---|
+| **replay** | re-issues the recorded control demand through the real `msgq` transport at the real `served_policy()` chain, substituting only what varies per boot, and judges the *answers* by protocol properties |
+| **reorder** | feeds five sequences a real kernel never issues but which are spec compliant under a declared order model, and requires them to **pass** |
+
+Nothing in the file asserts *"the Nth element must be X"*.
+
+## 9.2 What the three captures prove, now as tests
+
+`[measured]` 2026-08-03 by `cargo test -p kayfabe-tests --test replay_conformance` over
+`traces/rpctrace_ga106_boot1.bin`, `traces/ga102_boot1.bin`, `traces/ad102_boot1.bin`.
+
+1. **Reply size is keyed on driver VERSION, not architecture.** 0 of **105** common
+   controls differ across the Ampere→Ada boundary at constant driver. ★ And the *converse*
+   is now measured too, which §8.2 did not state: the set of ids that moves across the
+   version boundary is **identical** (11 ids) whether the comparison also crosses a
+   generation (GA106↔AD102) or not (GA106↔GA102). "Keyed on version" is therefore not an
+   inference from a zero — it is a positive, matching set.
+2. **The sequence branches on a REPLY.** Encoded as a **biconditional** over three boards:
+   each of the 17 NVLink controls appears **iff** `0x20800a87` answered `NV_OK`, and each of
+   the 3 ECC controls **iff** all three ECC probes did. Both directions bite (a dependent
+   without its probe, and a served probe without its closure), and the check refuses to pass
+   vacuously if all three boards agree.
+3. **A reply is a pure function of `(cmd, request params)`** — over 163 / 185 / 184 distinct
+   argument keys, the number of keys with more than one answer is **one**, `0x20801819`
+   (live PCIe counters), the same on all three boards. ⇒ a **params-keyed** table is
+   expressive enough for the demand list; a cmd-id-keyed one is not.
+4. **Refusal is ordinary protocol behaviour** — 13 / 11 / 9 controls answered non-`NV_OK` by
+   real firmware on boots that reach a working `nvidia-smi`, exactly two of them conditional.
+
+## 9.3 ★★★ Two protocol facts the earlier sections did not have
+
+- **`paramsSize` is NOT bounded by the element.** `0x2080a0a4` (GSS-legacy, defined in
+  neither open tree) declares `paramsSize = 67396` inside an element of exactly
+  `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX = 65536` — **65 416 present against 67 396 declared**, in
+  both directions, on all three boards, answered `NV_OK`. This is the *inverse* of the
+  `dlen = 0` class: not an absent measurement but a present one saying the declaration
+  overruns the message (`[measured]` 2026-08-03,
+  `tests/tests/replay_conformance.rs::params_size_is_not_bounded_by_the_element_and_real_firmware_answers_anyway`,
+  over all three committed captures). ⇒ an emulator may not treat `paramsSize > delivered`
+  as malformed, and must clamp to what arrived.
+- **The per-boot substitution surface is `hClient`, and it is measured.** Across the two
+  bring-ups in each capture the `hClient` sets are disjoint apart from one persistent
+  RM-internal client (`0xc2000006`), while the `hObject` sets are equal apart from a single
+  entry. ⇒ a replay substitutes client handles and **nothing else** — and ⊘ it must not
+  pretend to substitute a live counter.
+
+## 9.4 The order model, and the fork it resolves
+
+A permutation is admitted only if it moves controls the static pass classified **`DATA`**
+(`docs/reference/gsp_control_classification.tsv`). `ACT`, `MIXED` and — deliberately —
+`UNKNOWN` keep their positions: **absence of a classification is not a licence**, the same
+rule as the FIFTH LIMIT's *"an empty capture is evidence of NOTHING"*.
+
+⚠ **This is the design fork the task named, and it is resolved narrowly rather than
+invented around.** A *general* spec-compliant reordering needs a full inter-control
+dependency model, which this project does not have. What it has is a per-control, cited,
+order-independence claim for 106 controls, and that is the universe the model quantifies
+over. Widening it later means widening the classification, not editing the test.
+
+Five sequences, all green: the `DATA` sub-sequence reversed, rotated by a third, shuffled
+under two seeds, every `DATA` control issued twice, and the two bring-ups interleaved. What
+is asserted is that the port is a **function of the request** — the same `(cmd, params)`
+gets the same answer in every ordering — never that the reply *streams* match.
+
+## 9.5 ★★★ What the suite FOUND, which is the part that mattered
+
+`0x20800301` `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` is a control this port **claims**, is
+answered `NV_OK` by real GA106 firmware on all six of its recorded calls, and is answered by
+this port **`NV_OK` once and `NV_ERR_NOT_SUPPORTED` five times**. Two different causes hide
+behind one id:
+
+1. Four refusals are `kayfabe_abi::eventnotify::SILENT_NOTIFIERS` — deliberate and argued:
+   accepting a registration is a promise to deliver, this device delivers nothing, so only
+   notifier indices whose silence is *true* of this device may be accepted.
+2. ★ The fifth is **not** deliberate. `InitTablePolicy::notify_actions` outlives the guest
+   driver lifetime that the guest's own `Subdevice` does not, so after the guest's `rmmod`
+   the already-armed transition rule fires against a guest that is legitimately re-arming.
+   `a_guest_teardown_does_not_reset_this_port_s_notifier_state` isolates it away from the
+   replay harness (arm → fn 47 → arm), so the finding does not rest on the harness
+   collapsing two bring-ups into one transport.
+
+⊘ **Recorded and pinned, not fixed here.** Whether fn-47 should reset this port's
+event-plane state is a decision about state lifetime across guest driver lifetimes.
+
+★ And note the shape: this refusal is returned by a link that **claimed** the command, so it
+never reaches `unserviced::UnservicedLedger` and **diffing ledgers cannot find it** — the
+project already carries that exact trap in writing. A test that judges the *answer* can.
+That is why the claimed-but-refused set is a pinned list with a reason per row, not a
+predicate.
+
+## 9.6 What is green, and what it cost
+
+- 24 of 24 `WantedTable` entries are demanded by the GA106 capture, and **every one of their
+  reply `paramsSize` values agrees with real GA106 GSP firmware on 580.159.04.**
+- 84 of the 310 recorded control calls are ones this port claims; the other 226 are refused
+  with `NV_ERR_NOT_SUPPORTED` and **zero bytes of the guest's own request coming back** —
+  125 of them carried non-zero `[in]` params an echo would have handed straight back, which
+  is what stops that assertion being vacuous.
+- Every property is a function that was **seen to fail**: 17 reader mutations refused, plus
+  a mutation per protocol property, plus two policy mutants (an echo-everything policy and a
+  position-dependent one). ⊘ Two mutations are **inert and listed rather than dropped** — a
+  payload byte flip is invisible to a structural reader, and perturbing a reply for an
+  argument key that occurs once settles nothing.
+
+## 9.7 ⊘ What this suite does NOT establish
+
+- **One driver version is replayed.** The GA106 capture is 580.159.04 = `BENCH_DRIVER`; the
+  other two are 575.51.03, and this port selects a different wire table for them, so
+  replaying their bytes at this ABI would measure a version mismatch rather than
+  conformance. They are used in §9.2, which is version-aware by construction.
+- **`GSP_RM_CONTROL` only.** The other 13 RPC functions in the captures are not replayed.
+- **Well-behaved boots only** (§6.6's limit stands): no CUDA context, no compute, and no
+  *deliberate refusal* injected at the guest — the reorder half authors new **orders**, not
+  new **failures**.
+- **Observational neutrality is still not proven** (§6.6), and the port's answers are judged
+  against a recorder that sits inside CPU-RM.

@@ -10,6 +10,7 @@
 
 pub mod gspworld;
 pub mod guest;
+pub mod rpctrace;
 pub mod rpcwire;
 pub mod teardown;
 
