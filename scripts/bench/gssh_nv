@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 # ssh into the nvkvm-booted guest (tap net, 192.168.77.2)
+#
+# ★★ `ConnectTimeout` bounds the HANDSHAKE, not the SESSION. An already-established session
+# whose peer stops answering — which is exactly what happens when QEMU aborts while
+# `nvidia-smi` is running inside the guest — hangs forever without keepalives. `[measured]`
+# 2026-08-03: a real-isolate boot at `dac9610` aborted QEMU on the first guest register
+# write, and `boot_capture.sh` sat at *"opening the device"* for **nine minutes** with the
+# abort already sitting in the QEMU log. The `ServerAlive*` pair below caps that at ~60 s.
+# ⊘ Not a substitute for `boot_capture.sh`'s liveness check — that one NAMES the cause.
 exec ssh -i /workspace/bench/guest_key -o StrictHostKeyChecking=no \
      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-     -o ConnectTimeout=5 ubuntu@192.168.77.2 "$@"
+     -o ConnectTimeout=5 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+     ubuntu@192.168.77.2 "$@"

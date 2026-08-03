@@ -105,6 +105,46 @@ done
    calling this a VM failure: a missing ~/.ssh key or a down tap reads identically."
 say "guest is up after $(( BOOT_TIMEOUT - (deadline - $(date +%s)) ))s"
 
+# ---- gq: EVERY guest command past this point gets a deadline AND a liveness check ----
+#
+# ★★★ `[measured]` 2026-08-03. Phase 1 above is careful — a deadline, and `kill -0 $QPID`
+# inside the loop so a dead QEMU is named rather than waited out. **Phases 2 and 3 had
+# neither.** A real-isolate boot at `dac9610` aborted QEMU on the first guest register write
+# (R1 lock violation, `lockwitness.rs:125`), and this script sat at *"opening the device"*
+# for **nine minutes** before I killed it by hand. Every fact needed to diagnose it was
+# already in `${LOG}_qemu.log` — a full Rust backtrace ending in `kayfabe_shim_regs_write`.
+#
+# ⊘ **A harness that hangs reports nothing while looking like it is still working**, which is
+# strictly worse than one that fails: a red run gets read, a hung one gets waited on. Same
+# family as the `pgrep` trap below and as `bench_rebuild_notes.md`'s empty-`dmesg` capture —
+# every waiter gets a deadline, and every deadline names what it was waiting for.
+#
+# ⚠ The liveness check runs FIRST. `timeout` alone would eventually return, but it would
+# return a *guest* failure for what is a *hypervisor* death, and the tag's evidence would say
+# "the driver did not answer" rather than "the device aborted".
+GQ_TIMEOUT=${GQ_TIMEOUT:-90}
+gq() {
+  if ! kill -0 "$QPID" 2>/dev/null; then
+    say "★ QEMU IS GONE (pid $QPID) — the guest cannot answer, and the reason is already"
+    say "  in ${LOG}_qemu.log. Its tail:"
+    tail -30 "${LOG}_qemu.log" 2>/dev/null | sed 's/^/    /'
+    die qemu-died "QEMU exited during phase 2/3. ⊘ This is NOT a guest or driver failure;
+   do not cite this tag as a boot result. Read ${LOG}_qemu.log."
+  fi
+  timeout "$GQ_TIMEOUT" "$BENCH/gssh_nv" "$@"
+  local rc=$?
+  if [ "$rc" -eq 124 ]; then
+    if ! kill -0 "$QPID" 2>/dev/null; then
+      say "★ the guest command timed out AND QEMU is gone — tail of its report:"
+      tail -30 "${LOG}_qemu.log" 2>/dev/null | sed 's/^/    /'
+      die qemu-died "QEMU exited while a guest command was in flight. Read ${LOG}_qemu.log."
+    fi
+    say "★ guest command exceeded ${GQ_TIMEOUT}s while QEMU is still alive — a WEDGE, which"
+    say "  is a different fact from a crash and worth keeping: $*"
+  fi
+  return "$rc"
+}
+
 # ---- phase 2: load the driver COLD and capture its ring buffer -----------------------
 {
   echo "=== boot_capture tag=$TAG at $(date -Is) ==="
@@ -112,11 +152,11 @@ say "guest is up after $(( BOOT_TIMEOUT - (deadline - $(date +%s)) ))s"
   echo "=== qemu binary: $(ls -l "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null) ==="
 } > "$PROBE"
 
-"$BENCH/gssh_nv" 'lsmod | grep -q "^nvidia " && echo WAS_LOADED || echo WAS_COLD' >> "$PROBE" 2>&1
-"$BENCH/gssh_nv" 'sudo rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia 2>/dev/null; sudo dmesg -C' >/dev/null 2>&1
+gq 'lsmod | grep -q "^nvidia " && echo WAS_LOADED || echo WAS_COLD' >> "$PROBE" 2>&1
+gq 'sudo rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia 2>/dev/null; sudo dmesg -C' >/dev/null 2>&1
 say "module unloaded and ring buffer cleared; loading cold"
 
-"$BENCH/gssh_nv" 'sudo modprobe nvidia; echo MODPROBE_RC=$?' >> "$PROBE" 2>&1
+gq 'sudo modprobe nvidia; echo MODPROBE_RC=$?' >> "$PROBE" 2>&1
 
 # ★★★ OPEN THE DEVICE. `modprobe` alone only registers the PCI driver; `RmInitAdapter` —
 # the entire subject of every boot rung — runs on the first `open()` of `/dev/nvidia0`, and
@@ -126,14 +166,14 @@ say "module unloaded and ring buffer cleared; loading cold"
 say "opening the device (this is what runs RmInitAdapter)"
 {
   echo "=== nvidia-smi (the device open) ==="
-  "$BENCH/gssh_nv" 'timeout 40 nvidia-smi 2>&1; echo SMI_RC=$?'
+  gq 'timeout 40 nvidia-smi 2>&1; echo SMI_RC=$?'
 } >> "$PROBE" 2>&1
 
-"$BENCH/gssh_nv" 'sudo dmesg' > "$DMESG" 2>&1
+gq 'sudo dmesg' > "$DMESG" 2>&1
 {
   echo "=== /dev nodes (AFTER the open — they are created by it) ==="
-  "$BENCH/gssh_nv" 'ls -la /dev/nvidia* 2>&1'
-  echo "=== lsmod ===";       "$BENCH/gssh_nv" 'lsmod | grep nvidia 2>&1'
+  gq 'ls -la /dev/nvidia* 2>&1'
+  echo "=== lsmod ===";       gq 'lsmod | grep nvidia 2>&1'
 } >> "$PROBE" 2>&1
 
 # ---- phase 3: VERIFY THE CAPTURE, before anyone reads it as evidence -----------------
