@@ -78,3 +78,75 @@ are the ones that can, and they are the ones committed here.
 
 Stated before any result, so a green diff is never mistaken for coverage — see
 `docs/design/c_rust_trace_differential.md` §5a and `crates/kayfabe-crec/src/lib.rs`.
+
+---
+
+# `rpctrace_ga106_boot1.bin` — a GSP-RM RPC trace of a boot that **SUCCEEDS**
+
+★★★ Everything above this line comes from *our* emulator. This file does not: it was recorded
+**inside CPU-RM** on a real GA106, by a recorder patched into the open driver's own message
+queue, during a boot that ends with a working `nvidia-smi`. `cap1` is a trace of a boot that
+fails — it stops where the emulator stopped. This one carries the sequence *and the answers a
+real GSP gave* past that point.
+
+Built and captured by `scripts/rpctrace/`; full write-up in `docs/design/rpc_trace_capture.md`
+§6. Format: `scripts/rpctrace/nv_rpctrace.h`. Decoder: `scripts/rpctrace/decode_rpctrace.py`,
+which **refuses** a wrapped or truncated file rather than replaying a hole.
+
+## Provenance
+
+| | |
+|---|---|
+| part | NVIDIA GeForce RTX 3060 (GA106), `GPU-e28d7776-e4f9-704b-d392-d46f187343f8` |
+| host | vast.ai instance `46494693`, kernel `6.8.0-59-generic` |
+| driver | **NVIDIA open kernel modules 580.159.04**, rebuilt from source with the recorder |
+| source | `research_clones/ogkm-580.159.04`, git tag `b81d58e` (`version.mk: 580.159.04`) |
+| module | `nvidia.ko` sha256 `6e81064b5464b581d31fce99ac82ba8c974fc873d7cca9650a52e701568724ab` |
+| date | 2026-08-03 |
+| method | `capture.sh --tag boot1`: stock stack unloaded, instrumented module `insmod`ed **by path**, `nvidia-smi` + `nvidia-smi -q`, `/proc/driver/nvidia/rpctrace` drained, stock module restored **and the restore verified** |
+
+The bench's stock module was never modified on disk. `traces/rpctrace_ga106_boot1_dmesg.log` is
+the driver's own output for this capture, persisted deliberately — the serial/console log is
+*not* where it lives, and a harness that writes an empty file reads as capture.
+
+## The numbers
+
+| | |
+|---|---|
+| file | 1 229 472 bytes, md5 `0fcc24c7074df68a585868b75326f329` |
+| records | **1 076** (535 CPU→GSP, 541 GSP→CPU) |
+| payload bytes | 1 176 776 |
+| largest single element | **65 536** — `GSP_MSG_QUEUE_ELEMENT_SIZE_MAX` exactly |
+| **wrapped?** | **no**; 1.17 MiB of a 64 MiB ring, `n_dropped = 0` |
+| refused-empty / rx failures | 0 / 0 |
+| sessions | **2** — one per `nvidia-smi`; RM tears the GPU down when the last client closes |
+| retransmits within a session | 0 |
+| distinct RPC functions | 14 |
+| distinct `GSP_RM_CONTROL` commands | **104**, 310 request/reply pairs |
+
+## ★★★ Why this file exists at all
+
+`decode_rpctrace.py --controls` reports **replies declaring params with no bytes present: 0**.
+The oracle it replaces — the C artifact's `mode2_initctrl_ga106.h` — has 11 rows of 56 that
+declare a length and carry nothing, and every one checked against hardware is *contradicted*.
+All six of those are in this file with bodies, and the headline row reproduces an independent
+2026-08-01 measurement exactly: `0x20802a08` (`CE_GET_FAULT_METHOD_BUFFER_SIZE`) answers
+**20480**, where the empty row decodes to 0 and RM DMAs into a buffer of exactly that size.
+
+★ A genuinely zero-length reply is now distinguishable from an unmeasured one: `0x20800a70`
+answers `paramsSize = 0` with `NV_OK`, and that is a *measurement*.
+
+## The decoder is checked against a different instrument
+
+`traces/real_ga106/rpc_transcript_real_ga106.txt` is an independent `NV_PRINTF` probe of the
+same GPU from 2026-08-01, printing `cmd`/`psize`/`gspst` for 88 control calls. Decoding this
+capture's `GSP_RM_CONTROL` replies and comparing: **88 of 88 agree on both `paramsSize` and GSP
+status, 0 disagree, 0 absent.** A decoder that mis-located a field would produce a
+self-consistently wrong table; this is the check that the offsets are right.
+
+## ⊘ What it does not witness
+
+One part, one kernel, one driver — GA10x only, **open** driver only. Two well-behaved
+`nvidia-smi` boots: no CUDA context, no compute, no refusal, no reorder. And it does not
+classify data-vs-act: `0x20800a6c` answers 17 on some calls and 49 on others, `0xa06f0103`
+answers 3 bytes, and both look exactly like data here. Serving an act from a table fails late.

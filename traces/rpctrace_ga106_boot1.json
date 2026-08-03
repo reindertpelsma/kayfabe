@@ -1,0 +1,201 @@
+{
+  "driver_version": "580.159.04",
+  "ring_capacity": 67108864,
+  "bytes_used": 1229344,
+  "file_bytes": 1229472,
+  "n_records": 1076,
+  "n_payload_bytes": 1176776,
+  "n_dropped": 0,
+  "n_refused_empty": 0,
+  "n_rx_failed": 0,
+  "wrapped": false,
+  "n_requests": 535,
+  "n_replies": 541,
+  "largest_element": {
+    "seq": 971,
+    "bytes": 65536,
+    "dir": "CPU->GSP",
+    "rpc_fn": 76,
+    "name": "GSP_RM_CONTROL"
+  },
+  "span_ms": 3701.246755,
+  "min_element": 80,
+  "mean_element": 1093.6579925650558,
+  "n_not_sent": 0,
+  "n_len_disagree": 0,
+  "n_cc": 0,
+  "n_request_sentinel_status": 535,
+  "n_reply_error_status": 0,
+  "reply_error_functions": [],
+  "n_sessions": 2,
+  "sessions": [
+    {
+      "index": 0,
+      "first_seq": 0,
+      "last_seq": 478,
+      "n_records": 479,
+      "n_requests": 238,
+      "n_replies": 241,
+      "duplicate_elem_seq": 0,
+      "span_ms": 1659.043607,
+      "distinct_functions": 13
+    },
+    {
+      "index": 1,
+      "first_seq": 479,
+      "last_seq": 1075,
+      "n_records": 597,
+      "n_requests": 297,
+      "n_replies": 300,
+      "duplicate_elem_seq": 0,
+      "span_ms": 1557.74576,
+      "distinct_functions": 14
+    }
+  ],
+  "n_duplicate_elem_seq_within_session": 0,
+  "distinct_functions": 14,
+  "top_functions": [
+    {
+      "rpc_fn": 76,
+      "name": "GSP_RM_CONTROL",
+      "count": 620
+    },
+    {
+      "rpc_fn": 103,
+      "name": "GSP_RM_ALLOC",
+      "count": 208
+    },
+    {
+      "rpc_fn": 10,
+      "name": "FREE",
+      "count": 208
+    },
+    {
+      "rpc_fn": 70,
+      "name": "UPDATE_BAR_PDE",
+      "count": 8
+    },
+    {
+      "rpc_fn": 4108,
+      "name": "EVENT_UCODE_LIBOS_PRINT",
+      "count": 6
+    },
+    {
+      "rpc_fn": 1,
+      "name": "SET_GUEST_SYSTEM_INFO",
+      "count": 4
+    },
+    {
+      "rpc_fn": 65,
+      "name": "GET_GSP_STATIC_INFO",
+      "count": 4
+    },
+    {
+      "rpc_fn": 228,
+      "name": "INIT_GSP_TRACE_CRASH_BUFFER",
+      "count": 4
+    },
+    {
+      "rpc_fn": 47,
+      "name": "UNLOADING_GUEST_DRIVER",
+      "count": 4
+    },
+    {
+      "rpc_fn": 72,
+      "name": "GSP_SET_SYSTEM_INFO",
+      "count": 2
+    },
+    {
+      "rpc_fn": 73,
+      "name": "SET_REGISTRY",
+      "count": 2
+    },
+    {
+      "rpc_fn": 4098,
+      "name": "EVENT_GSP_RUN_CPU_SEQUENCER",
+      "count": 2
+    },
+    {
+      "rpc_fn": 4097,
+      "name": "EVENT_GSP_INIT_DONE",
+      "count": 2
+    },
+    {
+      "rpc_fn": 71,
+      "name": "CONTINUATION_RECORD",
+      "count": 2
+    }
+  ],
+  "functions_seen": [
+    {
+      "rpc_fn": 1,
+      "name": "SET_GUEST_SYSTEM_INFO",
+      "count": 4
+    },
+    {
+      "rpc_fn": 10,
+      "name": "FREE",
+      "count": 208
+    },
+    {
+      "rpc_fn": 47,
+      "name": "UNLOADING_GUEST_DRIVER",
+      "count": 4
+    },
+    {
+      "rpc_fn": 65,
+      "name": "GET_GSP_STATIC_INFO",
+      "count": 4
+    },
+    {
+      "rpc_fn": 70,
+      "name": "UPDATE_BAR_PDE",
+      "count": 8
+    },
+    {
+      "rpc_fn": 71,
+      "name": "CONTINUATION_RECORD",
+      "count": 2
+    },
+    {
+      "rpc_fn": 72,
+      "name": "GSP_SET_SYSTEM_INFO",
+      "count": 2
+    },
+    {
+      "rpc_fn": 73,
+      "name": "SET_REGISTRY",
+      "count": 2
+    },
+    {
+      "rpc_fn": 76,
+      "name": "GSP_RM_CONTROL",
+      "count": 620
+    },
+    {
+      "rpc_fn": 103,
+      "name": "GSP_RM_ALLOC",
+      "count": 208
+    },
+    {
+      "rpc_fn": 228,
+      "name": "INIT_GSP_TRACE_CRASH_BUFFER",
+      "count": 4
+    },
+    {
+      "rpc_fn": 4097,
+      "name": "EVENT_GSP_INIT_DONE",
+      "count": 2
+    },
+    {
+      "rpc_fn": 4098,
+      "name": "EVENT_GSP_RUN_CPU_SEQUENCER",
+      "count": 2
+    },
+    {
+      "rpc_fn": 4108,
+      "name": "EVENT_UCODE_LIBOS_PRINT",
+      "count": 6
+    }
+  ]
+}

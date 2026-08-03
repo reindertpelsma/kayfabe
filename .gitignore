@@ -20,3 +20,4 @@ Cargo.lock.orig
 # Generated review artifacts (regenerable from their .md/.py sources)
 docs/design/*.pdf
 docs/design/*.png
+__pycache__/
