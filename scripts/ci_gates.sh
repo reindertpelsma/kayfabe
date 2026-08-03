@@ -211,14 +211,82 @@ while IFS= read -r line; do
 done < "$deferred_note"
 rm -f "$deferred_note"
 
+# ---- THE ORACLE CENSUS ---------------------------------------------------------------
+#
+# ★★★ WHY. `[measured]` 2026-08-03, vast 46494693: this script printed
+# `ALL GATES CLEAN (22 steps, floor 22)` on a GPU bench where **every compiled-oracle test
+# was SKIPPED and asserted nothing**, because the box had no open-kernel-modules tree at the
+# absolute path `tests/build.rs` looks for. All five families — VBIOS, GMMU, TOKEN,
+# PUSHBUFFER, USERD-CHID — announced themselves skipped, counted as `passed`, and cleared
+# their gates, because each oracle step's floor is over `ran + skipped`. That is
+# DELIBERATE and must not change: GitHub's runners can never carry those trees, and a floor
+# that demanded `ran` would fail there forever.
+#
+# The defect was never in the floor. It was in what a green run got READ to mean. So the
+# split is printed beside the verdict, and the reader decides.
+#
+# ⊘ **How much this costs to get wrong, measured on the same box the same hour:** the same
+# one-line mutation to `decode_userd_index_chid` — dropping its refusal of
+# `_USERD_INDEX_FIXED`, which RM answers with `NV_ERR_INVALID_STATE` — was a **non-biter**
+# with the trees absent and failed **two** tests with them present. A skipped oracle does
+# not merely add no confidence; it silently converts a live guard into a dead one, and the
+# green it produces is indistinguishable from the real thing.
+#
+# ★ The family list is DERIVED from the marker strings the tests actually emit, never
+# hand-kept. A hand-kept list is a smaller universe than the one it claims to cover — and
+# my first pass at this census took the names from this file's own prose comments
+# (`GMMU-FMT-ORACLE`, `WORKSUBMIT-TOKEN-ORACLE`) instead of from the tests
+# (`GMMU-ORACLE-GATE`, `TOKEN-ORACLE-GATE`) and reported `RAN=0 SKIPPED=0` for both, which
+# looks like an answer.
+oracle_census() {
+  local log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+  local root fams fam ran skipped any_skipped=0
+  root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+  fams=$(grep -rhoE '[A-Z0-9-]+-ORACLE-GATE' "$root"/tests/tests/*.rs 2>/dev/null | sort -u)
+  # ⊘ NOT `return 0`. An empty derivation is the census failing, not the census finding
+  # nothing — and a silent census is the very shape this whole function exists to remove.
+  # I wrote the quiet version first and it printed nothing at all when `$root` came out
+  # wrong, which read exactly like "there are no oracle families".
+  if [ -z "$fams" ]; then
+    echo "  ★ ORACLE CENSUS FAILED — no '<FAMILY>-ORACLE-GATE' marker found under"
+    echo "    $root/tests/tests/. Either the markers were renamed (fix this grep in the"
+    echo "    same commit) or \$root is wrong. Do NOT read the verdict above as covering"
+    echo "    the compiled oracles."
+    return 0
+  fi
+  if [ ! -r "$log" ]; then
+    echo "  oracle census: no test log at $log — run with --all, or set KAYFABE_TEST_LOG."
+    echo "  ⊘ Until then this run says NOTHING about the compiled-oracle families."
+    return 0
+  fi
+  echo "  oracle census (from $log):"
+  for fam in $fams; do
+    ran=$(grep -c "$fam: RAN" "$log" || true)
+    skipped=$(grep -c "$fam: SKIPPED" "$log" || true)
+    printf '    %-24s RAN=%-4s SKIPPED=%s\n' "${fam%-GATE}" "$ran" "$skipped"
+    [ "$skipped" -gt 0 ] && any_skipped=1
+  done
+  if [ "$any_skipped" -eq 1 ]; then
+    echo "  ⊘ A SKIPPED oracle test ASSERTS NOTHING and still counts as passed. This run"
+    echo "    carries no evidence about the families above that show SKIPPED > 0. The usual"
+    echo "    cause is a missing open-kernel-modules tree; see docs/design/ and the paths in"
+    echo "    tests/build.rs, and provision the box rather than reading the green."
+  fi
+}
+
 if [ "$fail" -eq 0 ]; then
   # ★ The count and the floor are printed TOGETHER. The old line said only "(N steps)",
   # which reads as reassurance whatever N is — it said "(0 steps)" the day this script
   # reported a clean run of nothing. A number beside the bar it cleared is evidence; a
   # number on its own is decoration.
   echo "ALL GATES CLEAN (${#steps[@]} steps, floor $floor for $mode mode)"
+  oracle_census
   [ "$want_all" -eq 0 ] && echo "★ Before pushing a CI change, run with --all — it is the only mode that covers every step."
 else
   echo "★ AT LEAST ONE GATE FAILED — do not push."
+  # ★ The census runs on the red path too. A failing run is exactly when somebody starts
+  # asking which checks were real, and "the oracles were skipped" changes what the red
+  # means as much as it changes what a green means.
+  oracle_census
 fi
 exit "$fail"

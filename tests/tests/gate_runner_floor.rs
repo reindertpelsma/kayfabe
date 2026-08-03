@@ -148,3 +148,63 @@ fn the_floor_is_checked_before_any_gate_runs() {
          supposed to detect"
     );
 }
+
+/// ★★★ The oracle census, and why a *second* guard on the same script is not duplication.
+///
+/// `[measured]` 2026-08-03, vast 46494693: `ci_gates.sh --all` printed
+/// `ALL GATES CLEAN (22 steps, floor 22)` on a GPU bench where **every compiled-oracle test
+/// was SKIPPED and asserted nothing** — the box had no open-kernel-modules tree at the
+/// absolute path `tests/build.rs` looks for. The floor above was satisfied (22 steps really
+/// did run); the oracle steps were satisfied too, because their floors count `ran + skipped`
+/// **deliberately** — GitHub's runners can never carry those trees.
+///
+/// So this is a different failure from the one the floor catches. The floor asks *"did the
+/// gates run?"*. This asks *"did the gates that ran have anything to compare against?"* —
+/// and the honest answer was no, invisibly, for the entire life of the bench.
+///
+/// ⊘ **The cost, measured the same hour on the same box:** one mutation to
+/// `decode_userd_index_chid` — dropping its refusal of `_USERD_INDEX_FIXED`, which RM answers
+/// with `NV_ERR_INVALID_STATE` — was a **non-biter** with the trees absent and failed **two**
+/// tests with them present. A skipped oracle does not merely add no confidence; it converts a
+/// live guard into a dead one and the green it leaves behind is indistinguishable from a real
+/// one.
+///
+/// This test exists for the same reason the floor test does: a guard living only inside the
+/// script it guards can be deleted by an edit to that script, and nothing would say so.
+#[test]
+fn the_gate_runner_censuses_which_oracle_families_actually_ran() {
+    let src = runner();
+    assert!(
+        src.contains("oracle_census()"),
+        "★ `oracle_census` is gone from scripts/ci_gates.sh. Without it the runner's verdict \
+         cannot distinguish a green run on a box that COULD compile the ogkm oracles from a \
+         green run on a box that could not — and the second kind asserts nothing about them"
+    );
+    // Declared-but-never-called is the same shape the floor test guards against, and it
+    // survives review because the definition sits there looking purposeful. Both call sites
+    // matter: the red path is exactly when somebody asks which checks were real.
+    let calls = src.matches("\n  oracle_census\n").count();
+    assert!(
+        calls >= 2,
+        "★ `oracle_census` is called {calls} time(s); it must run on BOTH the clean and the \
+         failed path. A census only on green tells you nothing on the day a gate goes red, \
+         which is the day the question gets asked"
+    );
+    // ★ The family list must be DERIVED from what the tests emit. A hand-kept list is a
+    // smaller universe than the one it claims to cover (`gates_quantified_over_a_list`), and
+    // the first draft of this census took its names from this script's own prose comments
+    // rather than from the tests and reported `RAN=0 SKIPPED=0` for two live families.
+    assert!(
+        src.contains("ORACLE-GATE") && src.contains("tests/tests/*.rs"),
+        "★ the census no longer derives its family list from the `<FAMILY>-ORACLE-GATE` \
+         markers under tests/tests/. A hand-kept list silently stops covering a family the \
+         day one is added"
+    );
+    // And an empty derivation must SHOUT rather than print nothing — a silent census is the
+    // exact shape the whole function exists to remove.
+    assert!(
+        src.contains("ORACLE CENSUS FAILED"),
+        "★ the census returns quietly when it derives no families. That is indistinguishable \
+         from `there are no oracle families`, which is the failure mode being fixed"
+    );
+}

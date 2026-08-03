@@ -242,6 +242,55 @@ rustc is pointing at. It cost three phases of one run here (`fuzz-build`, `fuzz-
 15 characters, so the long form can never match and any "nothing is running" check built on
 it passes vacuously. `pkill -9 -x`, never `-f`.
 
+## 5.1 ★★★ Step 3 is not optional, and the BENCH boxes had skipped it for their whole lives
+
+`[measured]` 2026-08-03, vast **46494693**. `./scripts/ci_gates.sh --all` printed
+`ALL GATES CLEAN (22 steps, floor 22 for --all mode)` and `cargo test --workspace` reported
+**0 failures** — on a box where **every compiled-oracle test in every family was SKIPPED**:
+
+```
+USERD-CHID-ORACLE-GATE: SKIPPED our_decode_matches_rms_own_reader_over_the_whole_field_space
+  — no vendored open-kernel-modules tree at
+    /workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04 …
+    The test asserts NOTHING; this line is the only record that it did not run.
+test result: ok. 5 passed; 0 failed
+```
+
+⊘ **Nothing in the machinery was broken.** Every skip is loud and self-describing; the oracle
+gates floor on `ran + skipped` **deliberately**, because §1's table is right that GitHub's
+runners can never carry those trees and a floor demanding `ran` would fail there forever. The
+defect was in **what a green run got read to mean** — and in the provisioning: the two GA106
+benches were stood up by their own `prov*.sh` scripts, which never included **step 3 above**.
+The recipe knew; the boxes that mattered most were not built from it.
+
+★ **What that costs.** `[measured]` 2026-08-03, vast **46494693**, at `d87b10f` — the same
+box and the same hour as the census above, so the only variable is the trees. One mutation to
+`kayfabe_chips::decode_userd_index_chid` — deleting its refusal of `_USERD_INDEX_FIXED`, which
+RM answers with `NV_ERR_INVALID_STATE`, so returning a chid there invents a channel:
+
+| ogkm trees | `cargo test --workspace --no-fail-fast` |
+|---|---|
+| absent | **exit 0 — a non-biter** |
+| present | **exit 101, 2 failed** (`our_decode_matches_rms_own_reader_over_the_whole_field_space`, `flags_that_name_no_channel_are_refused`) |
+
+Same code, same box, same command. ⇒ **A skipped oracle does not merely fail to add
+confidence; it converts a live guard into a dead one**, and the green it leaves is
+indistinguishable from a real one. Stopping at the first run would have produced the finding
+*"the `_FIXED` refusal is untested"* — about the code, when it was about the box.
+
+**Fixed two ways.** Both benches were provisioned (152 MB + 167 MB, `.git` excluded, sha256
+asserted identical on all three machines), taking the census on 46494693 from *all skipped* to
+**VBIOS 13, GMMU 15, TOKEN 2, PUSHBUFFER 18, USERD-CHID 5 — 53 RAN, 0 SKIPPED**. And
+`ci_gates.sh` now prints that per-family census beside its verdict, on the red path as well as
+the green, so the distinction is never again something a reader has to think to check.
+`tests/tests/gate_runner_floor.rs` holds the census from outside the script, the same way it
+holds the floor.
+
+⚠ The census derives its family list from the `<FAMILY>-ORACLE-GATE` markers the tests emit.
+Its first draft took the names from `ci_gates.sh`'s own prose comments instead and reported
+`RAN=0 SKIPPED=0` for two live families — a census over the wrong list returns zero and looks
+like an answer.
+
 ## 6. ★ The run of record
 
 ★★ **Any bench claim carries the revision it was taken at** — the standing rule, and the
