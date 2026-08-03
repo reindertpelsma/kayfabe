@@ -1720,6 +1720,32 @@ Evidence: `bench_evidence/e726844_run_r1{real1,real2,ctl1}_{dmesg,qemu,probe,iso
 Compare `bench_evidence/f0b7efa_run_basereal_qemu.log`, the same arm before the fix, where
 the count is **1** and QEMU is gone.
 
+#### 11.2.1 ★★ The pre-fix control, taken independently on a SECOND machine
+
+`[measured]` rev **`dac9610`** (master immediately before this branch), vast **46494693** —
+a *different* RTX 3060 from the acceptance runs above — host driver 580.159.04, same
+harness, `KAYFABE_ISOLATES=real`. Evidence:
+`bench_evidence/dac9610_run_masterreal_{qemu,isolate,probe}.log`.
+
+The guest reached a login prompt at **t+28 s**, the module loaded cold, and QEMU **aborted
+the moment the driver opened the device** — `crates/kayfabe-util/src/lockwitness.rs:125`,
+`R1 no-blocking-under-lock violation … while holding rank(s) [0]`, then `panic in a function
+that cannot unwind` and `thread caused non-unwinding panic. aborting.` The C frame below it
+is `kayfabe_shim_regs_write ← nvkvm_trap_write ← memory_region_write_accessor`, i.e. an
+ordinary **guest register write**.
+
+Why this run exists at all: §11.2's before/after is otherwise one box's story, and
+`f0b7efa` is a different revision from the branch's base. This pins the breach to **master
+at `dac9610` on hardware the fix's author never touched**, so the pair is a genuine control
+rather than a comparison across two variables at once.
+
+⚠ **A harness trap the control exposed, and it is not fixed here.** `boot_capture.sh`'s
+device-open step is a waiter with **no deadline**: when QEMU dies underneath it, the ssh
+`open()` never returns and the script sits at *"opening the device"* indefinitely — it ran
+~9 minutes before being killed by hand. The abort was in the QEMU log the whole time. Same
+family as the `pgrep` trap in `bench_rebuild_notes.md`: **every waiter gets a deadline, and
+a harness that hangs reports nothing while looking like it is still working.**
+
 ⊘ **The archive is `e726844`, the branch tip is later, and the difference is checked rather
 than waved at** — §7's discipline. `git diff --name-only e726844 8b26763` outside `docs/` is
 two files: `tests/tests/r1_spawn_outside_lock.rs` (a test target, **not linked into the
