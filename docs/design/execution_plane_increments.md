@@ -1934,3 +1934,61 @@ false non-biters (`bite_check_needs_no_fail_fast`).
   the claim E8 falsified lived only in its prose. A test whose message is broader than its
   assertion cannot detect the thing its message is about — recorded in the test itself
   rather than tidied away.
+
+### 12.7 ★★★ E8 v1 was REVIEWED AND FOUND WANTING — five mutations, none caught
+
+`[measured]` 2026-08-05, branch `e8-refusals`. An adversarial review of `9f55716` planted
+five mutations and the suite caught **zero**. I re-ran its headline mutation myself and
+confirmed. §12.5 above claimed both halves of E8 were load-bearing and verified — that was
+true of the *mechanism* and false of the *guards*.
+
+**Why my own bite-check missed it.** My two mutations removed the FEATURE (`publish_pt_pages`
+a no-op; `pt_page_owner` ignoring the map). The acceptance test exercises the feature, so
+they bit. The review's five removed the REFUSALS — re-home on conflict, disable the R5
+re-resolve, disable the ceiling, flip the projection to last-writer, delete the rebuild —
+and every one of those is something §12.3 called load-bearing. The tests asserted
+`(published, refused) == (4, 0)`: `refused` pinned at **zero**, so no test ever watched a
+refusal happen. ⊘ *A guard nothing is ever seen to refuse is not evidence.*
+
+#### The real defect it exposed: TWO conflict policies for one question
+
+| path | rule | visible |
+|---|---|---|
+| `publish_pt_pages` (v1) | refuse the **second arrival**, keep the incumbent | counted |
+| `refresh` (v1) | `entry().or_insert()` — keep the **lowest `ProcId`** | silent |
+
+So `pt_page_owner(P)` answered one proc before a rebuild and another after, and the
+"REFUSED, not re-homed" property — §12.3's stated fix for the C's last-writer-wins
+attribution — was undone by the projection, silently and uncounted. The invariant
+*"publishing cannot disagree with the projection"* was **false**, and the test §12.3 cited
+for it (`pt_index_publish_equals_projection`) **did not exist**: the string occurred once
+in the tree, in the comment claiming it.
+
+#### The correction: both paths DECLINE
+
+Neither "first" rule is implementable on both sides — publish cannot know a future
+claimant, the projection has no arrival order. So a page claimed by two `(proc, pdb)` pairs
+is indexed for **nobody** ([`Spine::pt_contested`]), sticky across publishes and re-derived
+from scratch by `refresh`. `pt_page_owner` returns `None`, `classify_ce` forwards writes to
+it as ordinary data, and its leaves do not bind — a loud miss instead of a wrong owner.
+
+`tests/tests/pt_index_projection.rs` now drives every refusal: the equality itself (with a
+genuinely contested page, and a non-vacuity assertion that the contest occurred), the
+decline, stickiness, R5 against both a mis-routed and an unrouted PDB, the ceiling
+refusing-and-counting without evicting, and the projection pruning a page whose metadata is
+gone. **All five review mutations now bite** (`--no-fail-fast`; cargo stops after the first
+failing target otherwise).
+
+Also fixed: `refresh` no longer increments `pt_learned_refused`. It re-derives pages already
+counted when first offered, so counting again made the diagnostic grow on every RM graph
+event and stop meaning "publications turned away".
+
+#### ⊘ OPEN — the residue this does NOT close
+
+Declining costs the *legitimate* owner its binding too, so a process able to forge a PDE
+pointing at another proc's page-table page can **deny** that page rather than steal it. A
+loud fault beats silent cross-process capture, but the underlying question is untouched:
+nothing validates that a page reached by a decode belongs to the decoding proc — `p.phys`
+is a child pointer read out of guest-authored bytes. ⚠ This is the same question the E9
+review raised from the other end (whose identity does a guest-supplied number name?), and
+it is **one ruling, not two**. Not decided here.
