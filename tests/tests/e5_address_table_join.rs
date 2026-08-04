@@ -23,23 +23,35 @@
 //! **one** table that a copy-engine command then resolves against. That composition is
 //! E5's whole content, and a composition is precisely what per-source tests cannot assert.
 //!
-//! # ★★★ AND THE JOIN IS ASYMMETRIC — source 2 reaches a ROOT PAGE AND NO FURTHER
+//! # ★★★ THE JOIN WAS ASYMMETRIC, AND E8 CLOSED IT — but read what each test asserts
 //!
-//! Writing this file measured it. `GPU_PROMOTE_CTX` populates the table end to end
-//! through the live path. The observed CE page-table write **witnesses only a root page
-//! directory**, because `Spine::pt_page_owner` reads `Spine::pt_roots`, which its own doc
-//! describes as *"seeded from each live `Vas`'s **root**… Deeper levels are
-//! forward-populated by the decode at the guest's commit point (**the next stage**)"* —
-//! and that stage is not built. A guest CE write into a *leaf* table is therefore
-//! classified as ordinary data, forwarded, never witnessed, and every leaf under it stays
-//! `unwitnessed`, which is a MISS, which is a FAULT.
+//! Writing this file measured the asymmetry. `GPU_PROMOTE_CTX` populated the table end to
+//! end; the observed CE page-table write **witnessed only a root page directory**, because
+//! `Spine::pt_page_owner` read `Spine::pt_roots` alone, and that map is root-only by
+//! construction. A guest CE write into a *leaf* table was therefore classified as ordinary
+//! data, forwarded, never witnessed, and every leaf under it stayed `unwitnessed` — a MISS,
+//! a FAULT.
 //!
-//! ⊘ That is asserted here by name
-//! ([`the_ce_pt_write_source_can_witness_only_a_root_page_today`]) rather than worked
-//! around. Hand-latching the leaf page — which `pt_decode.rs`'s fixtures do, correctly, to
-//! exercise the decoder — would make this file report a join the live path cannot perform.
-//! The test goes **red** the day the next stage lands, which is the only way an absence
-//! stays visible (`mock_fidelity_both_directions`).
+//! **E8 built the stage `Spine::pt_roots`'s doc called "the next stage".** The decode
+//! reports the pages it learned, a fourth PUBLISH phase installs them in
+//! `Spine::pt_learned` at rank 0, and the guest's *next* write into one of them is
+//! classified. [`a_ce_write_into_a_learned_leaf_table_is_witnessed_and_binds_its_leaf`] is
+//! the closed join, and it carries its own non-vacuity: the identical ring parsed *before*
+//! the publish must yield zero page-table writes.
+//!
+//! ## ⚠ And a lesson about the absence test, recorded because it is this file's own
+//!
+//! [`the_ce_pt_write_source_can_witness_only_a_root_page_today`] was written to go **red**
+//! the day that stage landed. **It did not.** Its assertion is
+//! `(bound, unwitnessed) == (0, 1)` over a *single* pass from the root — and that is still
+//! exactly right after E8, because one pass learns the leaf's level without the guest
+//! having written the leaf yet. What E8 falsified was the test's *prose* (*"only a ROOT
+//! can be [witnessed]"*), which no assertion ever checked.
+//!
+//! ⊘ **A test whose message is stronger than its assertion cannot detect the thing its
+//! message is about.** The absence is now covered by the *presence* test above instead,
+//! which is the direction that actually bites; this one is kept and re-scoped to the pass
+//! shape it really measures.
 //!
 //! # ⚠ What "must FAULT" means here, stated exactly, because it is not uniform
 //!
@@ -425,35 +437,39 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
     );
 }
 
-/// ★★★ **THE WALL IN SOURCE 2 — the observed CE page-table write can witness ONLY A ROOT
-/// PAGE today, so no compute leaf binds through it.**
+/// ★★ **ONE PASS FROM THE ROOT LEARNS THE SUBTREE AND BINDS NOTHING** — the witness gate
+/// doing its job, and the starting state of the E8 test above.
 ///
-/// `[measured]` 2026-08-02 at rev `4e8960f` by this test itself, which is the whole
-/// reason it exists: the assertion below fails the moment any of the four links stops
-/// holding, so the absence is banked rather than remembered.
+/// ⚠ **RE-SCOPED, 2026-08-04.** This test was written to assert *"the observed CE
+/// page-table write can witness ONLY A ROOT PAGE"* and to go **red** the day the next
+/// stage landed. E8 landed and it stayed **green** — because its assertion is about a
+/// *single* pass and that assertion is still true: pass 1 learns the leaf table's level
+/// but the guest has not written the leaf yet, so nothing is witnessed below the root and
+/// nothing binds. The claim E8 falsified lived only in the prose.
 ///
-/// This is not a defect of the decoder and it is not a gap in this test. It is the
-/// consequence of one index being root-only, stated in its own doc:
-/// `Spine::pt_roots` is *"seeded from each live `Vas`'s **root**… Deeper levels are
-/// forward-populated by the decode at the guest's commit point (**the next stage**)"*.
-/// That stage is not built, and the chain that depends on it is exactly:
+/// ⊘ **The lesson is kept rather than tidied away**: a test whose message is broader than
+/// its assertion cannot detect the thing its message is about, and *"it will go red when
+/// X lands"* is a prediction the test must actually encode. The presence test above is
+/// what encodes it — it fails if the publish stops working, which is the direction that
+/// bites. See `should_panic_matches_the_wrong_site` for the same species.
+///
+/// `[measured]` 2026-08-02 at rev `4e8960f`; still holding at E8. The chain it exercises:
 ///
 /// 1. `classify_ce` produces a `PtWrite` only for a destination `Spine::pt_page_owner`
-///    recognises — and that index holds **roots only**.
+///    recognises — at this point in the sequence, only the root.
 /// 2. `latch_pt_writes` is the only writer of `Vas::pt_pages`.
 /// 3. `plan_pt_decode` drains `pt_pages` and is the only caller of `ReachShadow::witness`.
 /// 4. `settle` binds a leaf only from a page that is reachable **and** witnessed.
 ///
-/// ⇒ a guest CE write into a *leaf* table is classified as ordinary data, forwarded, and
-/// never witnessed; every leaf under it stays `unwitnessed`, which is a MISS, which is a
+/// ⇒ after pass 1, every leaf below the root is `unwitnessed`, which is a MISS, which is a
 /// FAULT. **The bytes are decoded correctly and the metadata chain is learned; only the
-/// binding is withheld.**
+/// binding is withheld** — and it is withheld until the guest is *seen* to write the leaf
+/// table, which is what E8 made possible and the test above demonstrates.
 ///
-/// ⊘ **Deliberately asserted rather than worked around.** Hand-inserting the leaf page
-/// into `pt_pages` — which `pt_decode.rs`'s own fixtures do, correctly, to test the
-/// decoder — would make this file report a join the live path cannot perform
-/// (`mock_fidelity_both_directions`). This test goes **red** the day the next stage lands,
-/// which is the only way an absence stays visible.
+/// ⊘ **Deliberately not worked around.** Hand-inserting the leaf page into `pt_pages` —
+/// which `pt_decode.rs`'s own fixtures do, correctly, to test the decoder — would make
+/// this file report a join the live path cannot perform
+/// (`mock_fidelity_both_directions`).
 #[test]
 fn the_ce_pt_write_source_can_witness_only_a_root_page_today() {
     let (mut gpu, mut vmm, fb_factory, fb_rec, pid, cid) = fixture();
@@ -495,6 +511,132 @@ fn the_ce_pt_write_source_can_witness_only_a_root_page_today() {
     assert!(
         kayfabe_fwd::pt_meta_of(&gpu.procs[&pid], GPU, A_PDB).contains_key(&PT_SMALL),
         "the leaf table's level and vabase were learned forward from the root's decode"
+    );
+}
+
+/// ★★★ **E8 — THE JOIN CLOSED: a guest CE write into a LEAF page table is witnessed, and
+/// the leaf under it BINDS.**
+///
+/// This is E5's acceptance read literally for source 2 — *a guest VA that was bound
+/// resolves* — and it is the statement
+/// [`the_ce_pt_write_source_can_witness_only_a_root_page_today`] could not make.
+///
+/// # ★ The sequence is TWO writes, and that is the whole content
+///
+/// One decode pass starting at the root learns the entire subtree's metadata (its levels
+/// and vabases) but binds nothing, because the leaf table's page was never *witnessed* —
+/// the guest's write into it was classified as ordinary data and forwarded. E8 publishes
+/// what the pass learned into the device-global ownership index, so the guest's **next**
+/// write into that page is recognised. Pass 2 then witnesses it and the leaf binds.
+///
+/// ⊘ **The non-vacuity half runs first and would fail on its own.** The identical ring is
+/// parsed *before* the publish and must yield **zero** page-table writes. Without that,
+/// a fixture in which the leaf happened to be recognised anyway would let this test pass
+/// while E8 did nothing — which is exactly how the sibling test stayed green through a
+/// change that was supposed to make it red.
+///
+/// ⊘ **The publish is called here explicitly, and that is deliberate.** This file's
+/// fixture is a `Gpu`, so it can reach `Spine` directly; whether the *shell* actually
+/// calls `publish_pt_pages` is a different claim and is asserted where
+/// `SharedDevice::decode_pt_writes` is driven (`pt_decode.rs`,
+/// `the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_unlocked`).
+/// Proving both here would let one carry the other.
+#[test]
+fn a_ce_write_into_a_learned_leaf_table_is_witnessed_and_binds_its_leaf() {
+    let (mut gpu, mut vmm, fb_factory, fb_rec, pid, cid) = fixture();
+    let mut iso = fb_factory.spawn(IsolateId::new(1, GPU));
+    let mut worker = iso.checkout().expect("a fresh pool");
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+
+    // ---- PASS 1: the guest writes the ROOT. The chain below it is learned, nothing binds.
+    let first = witness_and_decode_page_tables(&mut gpu, &mut vmm, &mut worker, &fb_rec, pid, cid);
+    assert_eq!(
+        (first.bound, first.unwitnessed),
+        (0, 1),
+        "the starting state is the sibling test's ending state"
+    );
+
+    // The ring for the SECOND write — into the leaf TABLE this time, not the root.
+    let ring2 = script_ring_via(
+        &mut vmm,
+        0x5100_0000,
+        &[
+            MockPushbuffer::set_object(mc::DMA_COPY),
+            MockPushbuffer::ce_launch_dma(PT_SMALL + 0x8, 0x40, false),
+        ],
+    );
+    bind_ring(&mut gpu, pid, cid, &ring2);
+
+    // ---- ★ NON-VACUITY: before the publish, that write is NOT a page-table write.
+    let before = kayfabe_fwd::parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2)
+        .expect("the ring parses");
+    assert_eq!(
+        before.pt_writes.len(),
+        0,
+        "★★★ the index knows roots only, so a write into a LEAF table is forwarded as \
+         ordinary data — this is the wall E8 exists to remove, reproduced here so the \
+         assertion below cannot be vacuous"
+    );
+
+    // ---- PUBLISH — E8's fourth phase, the one that needs rank 0.
+    let pages: Vec<u64> = first.learned_pages.iter().map(|&(_, _, p)| p).collect();
+    assert!(
+        pages.contains(&PT_SMALL),
+        "pass 1 learned the leaf table's level — that is what makes it publishable"
+    );
+    let (published, refused) = gpu.spine.publish_pt_pages(pid, GPU, A_PDB, pages);
+    assert_eq!(
+        (published, refused),
+        (4, 0),
+        "the four pages below the root; the root itself is declared and is not re-published"
+    );
+
+    // ---- and now the SAME ring, byte for byte, IS a page-table write.
+    let after = kayfabe_fwd::parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2)
+        .expect("the ring parses");
+    assert_eq!(
+        (
+            after.pt_writes.len(),
+            after.pt_writes[0].page,
+            after.pt_writes[0].owner_pdb
+        ),
+        (1, PT_SMALL, A_PDB),
+        "★★★ classified, and attributed to the address space that OWNS the page — which \
+         is not the channel's proc in general, and is why the index is device-global"
+    );
+
+    // ---- PASS 2: the leaf's page is witnessed now, so the leaf binds.
+    let plan = plan_pt_decode(gpu.procs.get_mut(&pid).expect("live"));
+    assert_eq!(
+        plan.tasks.iter().map(|t| t.page.phys).collect::<Vec<_>>(),
+        vec![PT_SMALL],
+        "and the descent starts at the leaf TABLE, whose level pass 1 learned — a page \
+         whose level is unknown would have been DEFERRED, not decoded"
+    );
+    let results = {
+        let mut fb = IsolateFb::new(&mut worker);
+        run_pt_decode(fmt, &mut fb, &plan.tasks, PT_DECODE_BUDGET)
+    };
+    let second = commit_pt_decode(fmt, gpu.procs.get_mut(&pid).expect("live"), &results);
+    assert!(second.is_clean(), "{second:?}");
+    assert_eq!(
+        (second.bound, second.unwitnessed),
+        (1, 0),
+        "★★★ BOUND. The second populate source now reaches a leaf, which is the half of \
+         E5 that was PARTIAL"
+    );
+
+    // ---- E5's acceptance, literally: the guest VA that was bound RESOLVES.
+    let leaf_va = leaf_va(fmt);
+    assert_eq!(
+        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+            .table
+            .resolve(A_PDB, leaf_va)
+            .map(|(b, off)| (b.phys, off)),
+        Ok((LEAF_PHYS, 0)),
+        "…and it resolves to the physical address the guest's OWN page table entry names, \
+         at offset zero — not to a nearest binding and not to a reverse-resolve"
     );
 }
 

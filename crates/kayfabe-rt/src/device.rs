@@ -740,6 +740,17 @@ impl SharedDevice {
             .collect()
     }
 
+    /// The device-global page-table ownership index's answer for `phys` — **spine op**
+    /// (read guard), a diagnostic window over [`kayfabe_core::gpu::Spine::pt_page_owner`].
+    ///
+    /// ★ E8: exists so a test (and a boot-time diagnostic) can ask whether the PUBLISH
+    /// phase actually reached the index, without the caller holding a guard or reaching
+    /// into the lock shell. `None` is the ordinary answer for an ordinary data page.
+    #[must_use]
+    pub fn pt_page_owner(&self, gpu: GpuId, phys: u64) -> Option<(ProcId, Pdb)> {
+        self.state.read().spine.pt_page_owner(gpu, phys)
+    }
+
     /// ★★★ **E1's isolate census, over the sharded shell** — `Gpu::isolate_census`'s twin
     /// for a device whose procs live behind rank-1 locks.
     ///
@@ -1582,6 +1593,40 @@ impl SharedDevice {
         // COMMIT — rank 1 again, re-resolving every target (R5).
         let mut out =
             self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_decode(fmt, p, &results.0))?;
+        // ★★★ **PUBLISH** — E8, rank 0, and the phase E5 could not have. The pages this
+        // pass learned go into the device-global ownership index, so the NEXT guest CE
+        // write into one of them is classified as a page-table write instead of forwarded
+        // as ordinary data. Without it the decode learns the whole subtree and the index
+        // still knows only roots, which is exactly what
+        // `the_ce_pt_write_source_can_witness_only_a_root_page_today` measured.
+        //
+        // ⚠ **The ordering is the increment.** `with_proc_mut` above has returned, so its
+        // rank-1 guard is dropped; taking the rank-0 write guard here is an acquisition
+        // from nothing, not an inversion. Publishing from inside `commit_pt_decode` — the
+        // obvious place — would take rank 0 beneath rank 1 and is the ABBA §9.2 refused to
+        // build blind.
+        //
+        // R5 lives in `Spine::publish_pt_pages`: every `(gpu, pdb)` is re-resolved against
+        // `by_pdb` and a page whose address space died, or whose PDB now belongs to some
+        // other proc, publishes nothing.
+        if !out.learned_pages.is_empty() {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            // Grouped so the R5 re-resolve is paid once per address space rather than once
+            // per page; `learned_pages` arrives in task order, which is already grouped,
+            // but nothing in the type says so and a fold that assumed it would be a silent
+            // dependency on the pass's iteration order.
+            let mut by_vas: std::collections::BTreeMap<(GpuId, Pdb), Vec<u64>> =
+                std::collections::BTreeMap::new();
+            for &(gpu, pdb, page) in &out.learned_pages {
+                by_vas.entry((gpu, pdb)).or_default().push(page);
+            }
+            for ((gpu, pdb), pages) in by_vas {
+                let (published, refused) = st.spine.publish_pt_pages(pid, gpu, pdb, pages);
+                out.pages_published += published;
+                out.pages_publish_refused += refused;
+            }
+        }
         // ★ A transport failure is surfaced as its own fact rather than blended into the
         // walk faults: `Ok(false)` from the isolate is a statement about the GUEST's page
         // tables, an `Err` is a statement about US, and a caller that cannot tell them

@@ -1140,6 +1140,20 @@ impl ProcSet for BTreeMap<ProcId, Proc> {
     }
 }
 
+/// Device-global ceiling on [`Spine::pt_learned`] — how many *discovered* page-table pages
+/// the ownership index will hold across every address space on every target.
+///
+/// ⚠ **Boundary-1**: the guest chooses how many page-table pages exist, so an unbounded
+/// index is a guest-driven allocation. The per-`Vas` chain is already capped by
+/// `kayfabe_fwd::MAX_PT_META`; this is the *device* sum, which that per-VAS cap does not
+/// bound because the guest also chooses how many address spaces to create.
+///
+/// ★ The number: 2^17 pages ≈ 4 MiB of index for a guest whose page tables span 512 MiB of
+/// framebuffer at 4 KiB granularity. Sized to be reached only by a guest doing something
+/// no CUDA workload does, so [`Spine::pt_learned_refused`] staying zero is the ordinary
+/// case and a non-zero value is a real signal rather than routine noise.
+pub const MAX_PT_LEARNED: usize = 1 << 17;
+
 /// ★ The device-global SPINE (`l1_concurrency.md` §3.4 — the `Gpu` ownership
 /// split): everything a per-proc op only *reads* (graph, routing maps, targets)
 /// plus the spine-mutating machinery (factory, window geometry, the retired list).
@@ -1215,11 +1229,52 @@ pub struct Spine {
     /// **Derived, never accreted** — rebuilt from the projection in [`Spine::refresh`]
     /// beside [`Spine::by_pdb`], seeded from each live `Vas`'s **root**: a PDB *is* the
     /// physical address of its root page directory, so the root page is a declared fact
-    /// and needs no discovery. Deeper levels are forward-populated by the decode at the
-    /// guest's commit point (the next stage), which is also what makes them prunable: a
-    /// `Vas` that dies takes its pages with it, where the C's table was *"never pruned on
-    /// handle free"* (`eight_blockers_resolved.md` §2).
+    /// and needs no discovery.
+    ///
+    /// ★ **Deeper levels live in [`Self::pt_learned`]** — forward-populated by the decode
+    /// at the guest's commit point, which is E8 and is now built. Both maps are re-derived
+    /// from the same projection, which is what makes them prunable: a `Vas` that dies takes
+    /// its pages with it, where the C's table was *"never pruned on handle free"*
+    /// (`eight_blockers_resolved.md` §2).
     pub pt_roots: BTreeMap<(GpuId, u64), (ProcId, Pdb)>,
+    /// ★★★ **The DEEPER levels — the same index, discovered instead of declared** (E8,
+    /// `execution_plane_increments.md` §12). [`Self::pt_roots`]'s own doc named this as
+    /// *"the next stage"*; this is it.
+    ///
+    /// ## Why a second map rather than more rows in the first
+    ///
+    /// Because the two are known in different ways, and collapsing them would hide it. A
+    /// root is a **declared** fact — a PDB *is* the physical address of its root page
+    /// directory, so it needs no discovery and cannot be wrong. Everything here was
+    /// **discovered** by decoding guest bytes, so it is exactly as good as the decode that
+    /// produced it. ⊘ A single map would let a diagnostic say "this page is a page table"
+    /// without saying which of those two sentences it means.
+    ///
+    /// ## ★ Derived, never accreted — and that survives the incremental publish
+    ///
+    /// This is a projection of every live `Vas::pt_meta`, recomputed from scratch in
+    /// [`Spine::refresh`] exactly as [`Self::pt_roots`] is. [`Spine::publish_pt_pages`]
+    /// applies the *same function* early, at the decode's commit point, because a level
+    /// learned in one pass must be recognisable before the next RM graph event — the guest
+    /// does not wait for one. ⇒ publishing can never disagree with the projection: it is
+    /// the projection, run sooner. `pt_index_publish_equals_projection` is that stated as a
+    /// test.
+    ///
+    /// Pruning is therefore automatic and is the property the C artifact lacked: a `Vas`
+    /// that dies takes its pages with it, where the C's table was *"never pruned on handle
+    /// free"* (`eight_blockers_resolved.md` §2).
+    ///
+    /// ⚠ Bounded by [`MAX_PT_LEARNED`], device-global and guest-influenced — a
+    /// boundary-1 concern. Overflow REFUSES the excess and counts it
+    /// ([`Spine::pt_learned_refused`]); it never evicts, because evicting a page the guest
+    /// is still writing would silently return it to "ordinary data" and unbind its leaves.
+    pub pt_learned: BTreeMap<(GpuId, u64), (ProcId, Pdb)>,
+    /// How many page publications [`Self::pt_learned`] has refused for want of room.
+    ///
+    /// ★ A counter and not a log: the refusal is a capacity fact, and the page that lost
+    /// is not more interesting than the one before it. Non-zero means the address plane is
+    /// under-provisioned for this guest, which is a sizing decision and not a bug to chase.
+    pub pt_learned_refused: u64,
     /// ★★ **Context-object → address space**: a channel or TSG **resource** → the
     /// `(GpuId, Pdb)` whose table its context buffers belong in
     /// ([`crate::promote::route_promote_ctx`]).
@@ -1602,9 +1657,76 @@ impl Spine {
     /// and it runs first — an unresolvable destination faults there, before this is asked.
     ///
     /// [`AddressTable::resolve`]: kayfabe_mmu::AddressTable::resolve
+    ///
+    /// ★ E8: **declared first, then discovered.** A root that is also present in
+    /// [`Self::pt_learned`] answers from [`Self::pt_roots`], because a PDB *is* its root
+    /// page and no decode can be more authoritative about that than the declaration.
     #[must_use]
     pub fn pt_page_owner(&self, gpu: GpuId, phys: u64) -> Option<(ProcId, Pdb)> {
-        self.pt_roots.get(&(gpu, phys & !0xfff)).copied()
+        let key = (gpu, phys & !0xfff);
+        self.pt_roots
+            .get(&key)
+            .or_else(|| self.pt_learned.get(&key))
+            .copied()
+    }
+
+    /// ★★★ E8 **PUBLISH** (spine op, rank 0, and the fourth phase of the decode pass):
+    /// install pages a decode learned into [`Self::pt_learned`].
+    ///
+    /// **R5 — re-validate after re-acquiring.** Every ranked lock was released between the
+    /// decode's commit and this call, so `(gpu, pdb)` is re-resolved through
+    /// [`Self::by_pdb`] and a page is published **only** if that address space still routes
+    /// to `pid`. A `Vas` that died, or one whose PDB value has been recycled onto a
+    /// different proc, publishes nothing — which is the same recyclable-value rule
+    /// [`Self::ctx_vas`] states, applied to a physical page instead of a handle.
+    ///
+    /// ⊘ Deliberately **not** idempotent-by-overwrite: a page already owned by a
+    /// *different* `(pid, pdb)` is refused rather than re-homed. Two address spaces
+    /// claiming one physical page-table page means either the guest is aliasing framebuffer
+    /// across processes or our decode is wrong, and quietly letting the last writer win is
+    /// how the C's table came to attribute a page to whoever touched it most recently.
+    ///
+    /// Returns `(published, refused)` — refused counts both the capacity ceiling and the
+    /// ownership conflict, and the ceiling half is also accumulated into
+    /// [`Self::pt_learned_refused`].
+    pub fn publish_pt_pages(
+        &mut self,
+        pid: ProcId,
+        gpu: GpuId,
+        pdb: Pdb,
+        pages: impl IntoIterator<Item = u64>,
+    ) -> (usize, usize) {
+        // R5: the address space must still be this proc's. `SYSTEM_PROC` never appears in
+        // `by_pdb` under a user anchor, so the system proc's own page tables route through
+        // the same check rather than around it.
+        if self.by_pdb.get(&(gpu, pdb)) != Some(&pid) {
+            let n = pages.into_iter().count();
+            return (0, n);
+        }
+        let (mut published, mut refused) = (0usize, 0usize);
+        for page in pages {
+            let key = (gpu, page & !0xfff);
+            // A declared root is never shadowed by a discovered row.
+            if self.pt_roots.contains_key(&key) {
+                continue;
+            }
+            match self.pt_learned.get(&key) {
+                Some(&owner) if owner == (pid, pdb) => continue,
+                Some(_) => {
+                    refused += 1;
+                    continue;
+                }
+                None => {}
+            }
+            if self.pt_learned.len() >= MAX_PT_LEARNED {
+                refused += 1;
+                self.pt_learned_refused += 1;
+                continue;
+            }
+            self.pt_learned.insert(key, (pid, pdb));
+            published += 1;
+        }
+        (published, refused)
     }
 
     /// Ensure target `gpu` exists (minting its disjoint window + drain gate on first
@@ -2876,6 +2998,9 @@ impl Spine {
         self.by_vchid.clear();
         self.by_chan.clear();
         self.pt_roots.clear();
+        // ★★★ E8: the discovered half is re-derived here too, and clearing it is the whole
+        // reason `publish_pt_pages` may run early without becoming accretion.
+        self.pt_learned.clear();
         self.ctx_vas.clear();
         self.condemned_by_pdb.clear();
         self.condemned_by_vchid.clear();
@@ -2903,6 +3028,49 @@ impl Spine {
             if let Some(&pid) = self.by_pdb.get(&(gpu, pdb)) {
                 self.pt_roots.insert((gpu, pdb.0 & !0xfff), (pid, pdb));
             }
+        }
+        // ★★★ E8 — the DEEPER levels of the same ownership index, projected from every
+        // live `Vas::pt_meta` exactly as the roots above are projected from
+        // `bounds.by_pdb`. This pass is what lets [`Spine::publish_pt_pages`] run early at
+        // the decode's commit point without the index becoming accreted state: anything
+        // published for an address space that no longer projects simply fails to reappear.
+        //
+        // ★ Filtered through the freshly-rebuilt `by_pdb`, so a CONDEMNED component's
+        // learned pages drop out on the same edge its root does — its page tables must not
+        // attract capture, and the C re-checked ownership at decode time for exactly this
+        // (`C: :8574-8586`).
+        let mut learned: Vec<((GpuId, u64), (ProcId, Pdb))> = Vec::new();
+        {
+            let mut project = |pid: ProcId, p: &Proc, by_pdb: &BTreeMap<(GpuId, Pdb), ProcId>| {
+                for (&(gpu, pdb), vas) in &p.vases {
+                    if by_pdb.get(&(gpu, pdb)) != Some(&pid) {
+                        continue;
+                    }
+                    for &page in vas.pt_meta.keys() {
+                        learned.push(((gpu, page & !0xfff), (pid, pdb)));
+                    }
+                }
+            };
+            project(Gpu::SYSTEM_PROC, system, &self.by_pdb);
+            for (pid, p) in procs.iter_mut() {
+                project(pid, p, &self.by_pdb);
+            }
+        }
+        for (key, owner) in learned {
+            // A declared root is never shadowed by a discovered row (`pt_page_owner`
+            // prefers roots anyway; not inserting keeps the two maps disjoint so a census
+            // can add their sizes).
+            if self.pt_roots.contains_key(&key) {
+                continue;
+            }
+            if self.pt_learned.len() >= MAX_PT_LEARNED && !self.pt_learned.contains_key(&key) {
+                self.pt_learned_refused += 1;
+                continue;
+            }
+            // ⊘ `or_insert`, not `insert`: first owner wins, and the iteration order is
+            // system-then-ascending-`ProcId` over `BTreeMap`s, so "first" is deterministic
+            // rather than whichever proc happened to be visited first.
+            self.pt_learned.entry(key).or_insert(owner);
         }
         for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
             if anchor == SYSTEM_ANCHOR {
@@ -3453,6 +3621,8 @@ impl Gpu {
             by_vchid: BTreeMap::new(),
             by_chan: BTreeMap::new(),
             pt_roots: BTreeMap::new(),
+            pt_learned: BTreeMap::new(),
+            pt_learned_refused: 0,
             ctx_vas: BTreeMap::new(),
             targets,
             sources: SourceRegistry::new(),
