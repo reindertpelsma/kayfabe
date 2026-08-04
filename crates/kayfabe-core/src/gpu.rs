@@ -1257,8 +1257,15 @@ pub struct Spine {
     /// applies the *same function* early, at the decode's commit point, because a level
     /// learned in one pass must be recognisable before the next RM graph event — the guest
     /// does not wait for one. ⇒ publishing can never disagree with the projection: it is
-    /// the projection, run sooner. `pt_index_publish_equals_projection` is that stated as a
-    /// test.
+    /// the projection, run sooner — asserted by
+    /// `tests/tests/pt_index_projection.rs::pt_index_publish_equals_projection`, which
+    /// publishes, forces a rebuild, and compares both maps for equality.
+    ///
+    /// ⚠ **That claim shipped in E8 v1 citing a test that DID NOT EXIST**, and it was
+    /// false: publish refused the second claimant while [`Spine::refresh`] silently kept
+    /// the lowest `ProcId`, so this map's answer flipped across a rebuild. Both paths now
+    /// **decline** a contested page ([`Self::pt_contested`]) — the only rule implementable
+    /// on both. ⊘ Grep every test name a doc cites; a citation is not a test.
     ///
     /// Pruning is therefore automatic and is the property the C artifact lacked: a `Vas`
     /// that dies takes its pages with it, where the C's table was *"never pruned on handle
@@ -1269,6 +1276,33 @@ pub struct Spine {
     /// ([`Spine::pt_learned_refused`]); it never evicts, because evicting a page the guest
     /// is still writing would silently return it to "ordinary data" and unbind its leaves.
     pub pt_learned: BTreeMap<(GpuId, u64), (ProcId, Pdb)>,
+    /// ★★★ Pages **more than one** `(proc, pdb)` has claimed — indexed for NOBODY.
+    ///
+    /// A physical page reachable from two live address spaces' page tables is either guest
+    /// aliasing or a wrong decode. Either way we do not know whose it is, so the index
+    /// declines to answer: [`Self::pt_page_owner`] returns `None`, `classify_ce` treats a
+    /// write to it as ordinary data, and its leaves do not bind.
+    ///
+    /// ⊘ **Decline, do not pick a winner** — and this is the correction to E8's first cut,
+    /// which had `publish_pt_pages` refuse the *second* claimant (first-by-arrival) while
+    /// [`Spine::refresh`] silently kept the *lowest `ProcId`* (`entry().or_insert()`). Two
+    /// different policies for one question, so `pt_page_owner` answered differently before
+    /// and after a refresh — and the "REFUSED, not re-homed" property the design rests on
+    /// was defeated by the projection, silently and uncounted. Declining is the only rule
+    /// both paths can implement identically, because it does not depend on arrival order or
+    /// on iteration order.
+    ///
+    /// ★ Sticky by construction: once contested, a page stays out even if a later publish
+    /// re-offers it, so the incremental path is idempotent. `refresh` re-derives the set
+    /// from scratch (a key claimed by ≥2 owners), so it is a projection like the rest.
+    ///
+    /// ⚠ **Known residue, NOT a decision this makes**: declining costs the *legitimate*
+    /// owner its binding too, so a process that can forge a PDE at another's page table can
+    /// deny that page rather than steal it. A loud fault instead of silent cross-process
+    /// capture is the safe direction, but the underlying question — whether a guest can
+    /// name another proc's page at all — is open and belongs with the chid-namespace
+    /// ruling. See `execution_plane_increments.md` §12.7.
+    pub pt_contested: BTreeSet<(GpuId, u64)>,
     /// How many page publications [`Self::pt_learned`] has refused for want of room.
     ///
     /// ★ A counter and not a log: the refusal is a capacity fact, and the page that lost
@@ -1664,6 +1698,11 @@ impl Spine {
     #[must_use]
     pub fn pt_page_owner(&self, gpu: GpuId, phys: u64) -> Option<(ProcId, Pdb)> {
         let key = (gpu, phys & !0xfff);
+        // ★ A contested page is indexed for NOBODY — see `Spine::pt_contested`. Checked
+        // after roots, because a declared root is never contested: a PDB is its own root.
+        if !self.pt_roots.contains_key(&key) && self.pt_contested.contains(&key) {
+            return None;
+        }
         self.pt_roots
             .get(&key)
             .or_else(|| self.pt_learned.get(&key))
@@ -1710,9 +1749,20 @@ impl Spine {
             if self.pt_roots.contains_key(&key) {
                 continue;
             }
+            // Already contested — indexed for nobody, and sticky so this path is idempotent.
+            if self.pt_contested.contains(&key) {
+                refused += 1;
+                continue;
+            }
             match self.pt_learned.get(&key) {
                 Some(&owner) if owner == (pid, pdb) => continue,
                 Some(_) => {
+                    // ★ DECLINE, do not pick a winner: evict the incumbent too and mark the
+                    // page contested, which is exactly what `refresh`'s projection derives.
+                    // Keeping the incumbent would make this path first-by-arrival while the
+                    // projection is first-by-`ProcId` — the disagreement E8 shipped.
+                    self.pt_learned.remove(&key);
+                    self.pt_contested.insert(key);
                     refused += 1;
                     continue;
                 }
@@ -3001,6 +3051,7 @@ impl Spine {
         // ★★★ E8: the discovered half is re-derived here too, and clearing it is the whole
         // reason `publish_pt_pages` may run early without becoming accretion.
         self.pt_learned.clear();
+        self.pt_contested.clear();
         self.ctx_vas.clear();
         self.condemned_by_pdb.clear();
         self.condemned_by_vchid.clear();
@@ -3056,21 +3107,45 @@ impl Spine {
                 project(pid, p, &self.by_pdb);
             }
         }
+        // ★★★ Fold the claims to ONE owner per key, or to CONTESTED. This must produce
+        // exactly what `Spine::publish_pt_pages` produces incrementally — that equality is
+        // `pt_index_publish_equals_projection`, and E8's first cut FAILED it: this loop used
+        // `entry().or_insert()` (lowest `ProcId` wins, silently) while publish refused the
+        // second arrival, so `pt_page_owner` flipped its answer across a refresh.
+        //
+        // ⊘ Neither "first" rule is implementable on both paths — publish cannot know a
+        // future claimant and the projection has no arrival order — so both DECLINE.
+        let mut claim: BTreeMap<(GpuId, u64), (ProcId, Pdb)> = BTreeMap::new();
         for (key, owner) in learned {
             // A declared root is never shadowed by a discovered row (`pt_page_owner`
-            // prefers roots anyway; not inserting keeps the two maps disjoint so a census
-            // can add their sizes).
+            // prefers roots anyway; not inserting keeps the maps disjoint so a census can
+            // add their sizes).
             if self.pt_roots.contains_key(&key) {
                 continue;
             }
-            if self.pt_learned.len() >= MAX_PT_LEARNED && !self.pt_learned.contains_key(&key) {
-                self.pt_learned_refused += 1;
+            if self.pt_contested.contains(&key) {
                 continue;
             }
-            // ⊘ `or_insert`, not `insert`: first owner wins, and the iteration order is
-            // system-then-ascending-`ProcId` over `BTreeMap`s, so "first" is deterministic
-            // rather than whichever proc happened to be visited first.
-            self.pt_learned.entry(key).or_insert(owner);
+            match claim.get(&key) {
+                Some(&held) if held == owner => {}
+                Some(_) => {
+                    claim.remove(&key);
+                    self.pt_contested.insert(key);
+                }
+                None => {
+                    claim.insert(key, owner);
+                }
+            }
+        }
+        for (key, owner) in claim {
+            // ⊘ The ceiling does NOT increment `pt_learned_refused` here. This pass is a
+            // RE-derivation of pages already counted when they were first offered, so
+            // counting again would make the diagnostic grow on every RM graph event and
+            // stop meaning "how many publications were turned away".
+            if self.pt_learned.len() >= MAX_PT_LEARNED {
+                continue;
+            }
+            self.pt_learned.insert(key, owner);
         }
         for (&(gpu, vchid), &(anchor, key)) in &bounds.by_vchid {
             if anchor == SYSTEM_ANCHOR {
@@ -3622,6 +3697,7 @@ impl Gpu {
             by_chan: BTreeMap::new(),
             pt_roots: BTreeMap::new(),
             pt_learned: BTreeMap::new(),
+            pt_contested: BTreeSet::new(),
             pt_learned_refused: 0,
             ctx_vas: BTreeMap::new(),
             targets,
