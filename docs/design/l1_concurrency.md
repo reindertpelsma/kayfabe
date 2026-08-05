@@ -2464,8 +2464,43 @@ clone is a quarter of a control plane that is O(live objects) per event end to e
 **★ This is a finding, not just a performance note.** With `MAX_LIVE_HANDLES = 2^18`, a
 guest can make each control-plane event cost O(live objects), so N events cost O(N²) —
 a guest-reachable complexity DoS (boundary-2) of the same species as the parked-map linear
-scan that was already hardened. PyTorch startup allocates thousands of RM objects, so it is
-reachable benignly too. **Deferred deliberately, with the two candidate fixes named rather
+scan that was already hardened.
+
+> ### ★★★ CORRECTION 2026-08-05 — the benign half of this claim was an INFERENCE, and it does not hold
+>
+> This paragraph used to continue: *"PyTorch startup allocates thousands of RM objects, so it
+> is reachable benignly too."* ⊘ **That does not follow from the table above, and the numbers
+> now say otherwise.**
+>
+> **What the benchmark actually measures.** Its own description is the tell: *alloc+map pairs
+> against a **growing graph***. It never frees. So it drives a monotonically growing **live**
+> set — which is the *hostile* shape. The cost is O(**live** objects) per event, not
+> O(events), so a workload that allocates and frees never walks up this curve at all.
+>
+> **`[measured]` 2026-08-05, three committed traces of a real boot to a working `nvidia-smi`**
+> (`traces/rpctrace_ga106_boot1.bin`, `ga102_boot1.bin`, `ad102_boot1.bin`;
+> `scripts/rpctrace/decode_rpctrace.py --list --dir req`):
+>
+> | | GA106 | GA102 | AD102 |
+> |---|---:|---:|---:|
+> | `GSP_RM_ALLOC` | 104 | 104 | 104 |
+> | `FREE` | **104** | **104** | **104** |
+> | total request elements | 535 | 585 | 551 |
+>
+> ⇒ **104 allocations and 104 frees.** Live never exceeds ~104 and ends at zero — on three
+> different dies, identically. Against the table above, 535 events is *half* its smallest
+> row, and at O(live) with live ≈ 100 the per-event cost is not on the curve at all.
+>
+> ⊘ **What this does NOT say.** No CUDA or PyTorch workload has been traced, so the benign
+> ceiling for real compute is still **unmeasured**. But the open question is now the right
+> one: not *"how many objects does PyTorch allocate"* (irrelevant) but *"how many does it
+> hold LIVE at once"*. Allocating thousands over time costs nothing here.
+>
+> ⇒ the exposure is **a guest that allocates and does not free**, up to `MAX_LIVE_HANDLES`.
+> That is a real boundary-2 DoS and unchanged. What is struck is the claim that ordinary
+> workloads reach it — which made a hostile-input measurement read as a description of
+> normal operation, and turned a bounded hostile case into an argument for redesigning
+> decision #27. **Deferred deliberately, with the two candidate fixes named rather
 than guessed at:**
 
 - **incremental derivation** — `project`/`sync` recompute only what the event touched. This
