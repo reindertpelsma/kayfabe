@@ -1983,12 +1983,35 @@ Also fixed: `refresh` no longer increments `pt_learned_refused`. It re-derives p
 counted when first offered, so counting again made the diagnostic grow on every RM graph
 event and stop meaning "publications turned away".
 
-#### ⊘ OPEN — the residue this does NOT close
+#### ⊘ What this is, and what it is NOT — ★ OWNER CORRECTION 2026-08-05
 
-Declining costs the *legitimate* owner its binding too, so a process able to forge a PDE
-pointing at another proc's page-table page can **deny** that page rather than steal it. A
-loud fault beats silent cross-process capture, but the underlying question is untouched:
-nothing validates that a page reached by a decode belongs to the decoding proc — `p.phys`
-is a child pointer read out of guest-authored bytes. ⚠ This is the same question the E9
-review raised from the other end (whose identity does a guest-supplied number name?), and
-it is **one ruling, not two**. Not decided here.
+An earlier draft of this section called the residue a security question: *"a process able to
+forge a PDE at another proc's page-table page"*. **That threat does not exist, and the owner
+named why.**
+
+Unprivileged guest userspace **cannot author a PDE**. GMMU page tables are built by
+`nvidia.ko`, which already holds legitimate access to every address space in the guest — the
+same reason a Linux process cannot edit its own PTEs without going through `mmap`. The same
+answer disposes of the "authority" reframe: when an RM command carries a physical address,
+that address was chosen by the guest kernel module, so validating it against cross-process
+access is validating the guest kernel against itself.
+
+★ **The threat-model error underneath it**: procs A and B are both processes *inside one
+guest VM*. Guest-internal isolation is the guest kernel's job — which is equally true on
+bare metal, where a real GPU does not protect one process from another; the driver does.
+This port's boundary is **guest → host escape**, and no step of that scenario crosses it. A
+compromised guest kernel loses A-vs-B on real hardware too, and that is not ours to prevent.
+
+⊘ Checked, because it is the one thing that would change the answer: guest **userspace** does
+author pushbuffer content, but those methods name **VAs**, not physical addresses —
+`[measured]` 2026-08-02 at revs `81a1f45` (`#170`) and `49befb7` (`#171`), where VA ≠ GPA was
+established by a RAM differential because a single boot read green — and a VA resolves only
+against its own address
+space, so B's VAs are *not found* in A's rather than *denied*. The physical-destination CE
+path belongs to the kernel's own CeUtils channel.
+
+⇒ **What the contested-page decline actually buys is ROBUSTNESS, not a boundary.** If our own
+decode is wrong, or a buggy guest kernel does something unexpected, a contested page produces
+a loud miss instead of a silent wrong binding. That is diagnosability and it is worth having.
+It is **not** a security control, it does **not** need an owner ruling, and it is **not** the
+same question as the chid namespace — pairing them was the same over-reach.
