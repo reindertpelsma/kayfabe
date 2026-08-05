@@ -2015,3 +2015,81 @@ decode is wrong, or a buggy guest kernel does something unexpected, a contested 
 a loud miss instead of a silent wrong binding. That is diagnosability and it is worth having.
 It is **not** a security control, it does **not** need an owner ruling, and it is **not** the
 same question as the chid namespace — pairing them was the same over-reach.
+## 13. E9 — the execution-plane set: a JOIN across seams that already exist
+
+### 13.1 The set, and why it is one requirement
+
+`kayfabe_device::sweep`'s `0xa06f0104` row already names it: `0xa06f0103` (schedule),
+`0xa06f0104` (bind), `0xc36f0108` (work-submit token) and the notifier-35 arming at
+`mem_utils.c:1920` *"are not four rungs of a ladder; they are ONE requirement — put a
+channel on a runlist, arm its completion, hand back its doorbell — asked four times."*
+`[measured]` 2026-08-01, boot `evtprobe1` at rev `4e93f17` with a throwaway probe that
+faked three of them: `mem_utils.c:2022` cleared and the boot reached the fourth.
+
+### 13.2 ★ Most of it is already built, and that is worth stating plainly
+
+The verbs the set needs exist on `kayfabe_isolate::RmBackend` and have run on real
+hardware (`#113`, `3b2597c` — a real CE moved device memory through them):
+
+| control | what it needs | state |
+|---|---|---|
+| `0xc36f0108` token | a real host channel's token | `alloc_channel` **returns** `(handle, host_work_submit_token)` |
+| `0xa06f0103` schedule | an act on that channel | `RmBackend::schedule(chan)` exists |
+| `0xa06f0104` bind | engine → runlist | `alloc_channel` takes `engine: EngineKind` (GR-1's fix: an engine-blind alloc is the C's wrong-runlist bug) |
+| notifier 35 arming | a `SILENT_NOTIFIERS` row | argument written and cited in `sweep.rs`, deliberately **not taken** because taking it alone moves nothing |
+
+⇒ E9 is a **join across existing seams**, not a new mechanism.
+
+### 13.3 ★★★ SETTLED — the guest picks its own ChID, so translation is FORCED
+
+⚠ **An earlier draft of this section was wrong and is struck.** It framed a decision:
+*"does the guest get a token encoding its own vChid, or the host channel's verbatim?"* and
+called it *"the one question with a silent wrong answer"*. There was never a choice. The
+owner named the mechanism and the C confirms it in one line.
+
+**`[src]` The guest kernel allocates the ChID, before anything reaches us.**
+`kchannelAllocHwID_GM107` runs in the guest's own CPU-RM and calls
+`kfifoChidMgrAllocChid` against an eheap the guest owns (`ogkm-580:
+src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_channel_gm107.c:480`,
+`kernel_fifo.c:569`). It then **smuggles the already-decided ChID to us through the alloc
+flags**, because `NV_CHANNEL_ALLOC_PARAMS` has no chid field:
+
+```
+chid = flags[20:12] * 8 + flags[10:8]          (USERD_INDEX_PAGE_VALUE, USERD_INDEX_VALUE)
+```
+
+`C: src/qemu/nvkvm_gpu_emul.c:2914` — *"A GSP-client CPU-RM encodes its already-decided
+ChID into USERD_INDEX so the physical RMAPI reuses it… doorbell `token[11:0]` == this
+vChid; it's the demux key."* And `numChannelsPerUserd = 1 << DRF_SIZE(USERD_INDEX_VALUE)`
+= 8, which is where the `* 8` comes from.
+
+⇒ **We are told a chid; we do not choose one.** The host driver will independently pick its
+own for the real channel. A guest vChid is meaningless on the host, so a guest token can
+**never** be forwarded to the host directly — it always translates.
+
+### 13.3.1 ★ And this is WHY the doorbell page is trapped at all
+
+The trap is not a design preference, it is the only route. The guest writes
+`token[11:0] = its own chid` into the doorbell register; the host channel carries a
+different chid; nothing else in the flow sees both numbers. ⊘ Official vGPU does not have
+this problem because a legacy vGPU capability let the GPU select from available vChids —
+and that capability is **inaccessible** on the parts this project targets.
+
+⇒ the shape is fixed: guest allocates a vChid and tells us → we ask the host driver for a
+channel and it returns **its own** chid and token
+(`RmBackend::alloc_channel` → `(HostHandle, u64)`) → we keep the pair → the doorbell trap
+maps guest vChid to host token. `Ga10xArch::decode_doorbell` (E3) is what reads the guest's
+written token back to a vChid, which is exactly the lookup this needs.
+
+⊘ **The C did NOT do this, and that is not an argument against it.** The C demuxed by
+walking every channel's pending GPFIFO on each doorbell (`C: nvkvm_gpu_emul.c:242-243`) —
+correct, and O(n) per doorbell with n guest-driven. E3's decoder makes the same demux O(1).
+The C's approach is a fallback that stays available, not the design.
+
+### 13.4 ⊘ What is deliberately NOT built yet
+
+The join itself: the guest-vChid → host-(handle, token) map, the token reply, the schedule
+and bind acts, and the notifier-35 row. Nothing above is blocked on a decision any more —
+what remains is the build. ⊘ No boot has been spent on any of it, so every claim this
+section makes about the *join* is source-derived until one is
+(`only_live_boots_are_proof`).
