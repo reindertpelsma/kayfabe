@@ -1,5 +1,57 @@
 # The questions that cost months if answered wrong
 
+> ## ★★★ RE-SWEPT 2026-08-05 — read this section, then the archive below
+>
+> The body of this file was written **2026-07-30**. Most of it has since been answered by
+> measurement or by an owner ruling. This header is the **current** list; everything under
+> "TIER 1" onward is kept as the archive, because the reasoning that produced a dissolved
+> question is still worth reading and because a disposition needs its original to point at.
+>
+> Swept against `master` at `ce43a5d`. ⊘ Honest count: **8 items still need the owner, and
+> only the first four are consequential.**
+
+### Still yours — ranked by what an answer unblocks
+
+| # | question | why it cannot be measured | recommendation |
+|---|---|---|---|
+| **1** | **Is there a tenant axis in v1**, or is v1 single-tenant-per-GPU by declaration? (supersedes Q19) | all three denial shapes are now measured on GA106 — wedge CONTAINED, guest-reachable MMU fault CONTAINED, **VRAM exhaustion NOT** (a hog takes 95.8 %, next tenant cannot make a context). What remains is product scope, not fact. There is **no `TenantId` anywhere in `crates/`**, and RM's cross-client check is an **OR on euid**, so same-uid isolates pass it against each other | **declare v1 single-tenant** — but take the one-line deployment policy anyway: run each isolate at a **distinct non-zero uid**. That is a spawn argument, not a logic change, and it converts RM's euid-OR into the kernel's own boundary. Schedule the VRAM quota post-v1 |
+| **2** | **May a miss walk?** (`mode2_address_table.md` §6 — "a miss is a fault, never a walk") | a risk posture, not a fact: both designs are implementable and both are safe under some reading. ★ §6's premise is now **false** — a *third* invalidate transport exists (BAR0 PRI `MMU_INVALIDATE`, the Turing+ default, 308 register invalidates in `cap3`), so "the guest commits nothing on that path" is dead. What survives (§6.2 torn multi-level walk) holds for walk-**ahead** and not for walk-**on-fault** | **keep miss = fault for v1.** E5/E8 built the forward-populate path and E8 v2's contested decline turns ambiguity into a loud miss — exactly the diagnosability a walk trades away. Revisit only if the witness requirement is *measured* to be what caps framebuffer performance |
+| **3** | **GSP §11-O7a** — at 580 the resume handoff is an RPC **we** would have to send (`GSP_RUN_CPU_SEQUENCER`); at 610 it is local and free. Build it, or accept the risk? | ⊘ the deciding evidence — a sequencer buffer's contents — is in **closed GSP-RM firmware**. Not "nobody ran it"; it cannot be read | **accept, explicitly, on the C's evidence** (the C never sends it and still handles GSP reload). Write the acceptance as a named risk against S6–S8, and spend the **first boot that survives `RmInitAdapter`** on a teardown/re-acquire, because nothing will surface this incidentally |
+| **4** | **The quadratic control plane** — redesign decision #27 (incremental derivation), journal `RmGraph::apply` (~200 lines, ~24 %, still quadratic), or live with it | the measurement exists: O(N²) — 1 000 events 0.85 s, 8 000 events **54.8 s**; PyTorch startup reaches the curve **benignly**. The trade is a property the suite rests on vs a constant factor | **neither yet** — 54.8 s is a **debug** build. Re-measure on release *before* spending decision #27. One afternoon, and it should precede the ruling rather than follow it |
+| 5 | **Q12** — the cross-process "verb parked" edge; the ~0.5 % flake can only be silenced by weakening the §7.5 contract it guards | a correct fix needs a real cross-process parked-verb edge = an **isolate protocol change** | approve the protocol edge. A flake that can only be quieted by weakening its own contract is a design gap wearing a flake's clothes |
+| 6 | **Q20** — one repo-wide citation-attribution convention (~35 edits), or leave the gate scoped and accept ~28 unattributable citations | `#159` found **three miscited oracle rows in shipped source** — every value right, every address wrong, `C:` gate satisfied throughout | **(a) repo-wide.** The failure mode is silent |
+| 7 | **Q21 + mock-fidelity E** — the mock guest's `rpc_length` bound. ★ CHANGED SHAPE: not just the bound (580's 32 vs 610's 0) but the **position** — on both real tags the test gates *nothing* (`exit:` consumes and bumps `rxSeqNum` regardless); our mock hoists it to the front and returns, so a bad-length element is a wedge in the model and not on hardware | one shape change fixes both | **(a), both at once.** Keeping 580's bound makes every 610 test using the mock weaker than it reads |
+| 8 | **Q22** — decision #33 says "five refusals, four compile-fail, the fifth a review obligation"; after the §4.6 mapping correction **all five** have a trybuild row and the real obligation is a **sixth** item | renumbering a decision record is the owner's | amend to "five refusals, all five compile-fail, plus a sixth review obligation" |
+
+### ⊘ One thing the sweep would not guess at, and wants one word from you
+
+`crates/kayfabe-linux-raw/src/memtype.rs` (`:245`, `:330`, `:427`, `:496`) says **"host-physical"**
+and means it — it queries the host kernel's own PAT/MTRR record for a host range. That is either a
+legitimate exception to the 2026-08-05 *"no real phys"* directive (it is host-side introspection, not
+an address this port stores or forwards) or exactly the wording the directive outlaws. Elsewhere the
+phrase is only used to say the core stores **no** host-physical address, which reads as consistent.
+
+### Answered since 2026-07-30 — do not re-spend judgement on these
+
+Q1–Q6, Q10, Q11, Q13, Q24, Q25 — owner rulings, recorded in place.
+Q8 — dissolved **structurally** by the claim-ledger CI gate; the class cannot recur silently.
+Q23(2) — RESOLVED-AS-EMPTY: the region lock governs a capability with **no current members**.
+E9 token pass-through-vs-mint — **dissolved**: the guest allocates its own ChID and smuggles it via
+`USERD_INDEX`; translation is forced (§13.3).
+Cross-process "forged PDE" — **dissolved**: userspace cannot author a PDE; that is the guest kernel's
+job as on bare metal (§12.7).
+§8.2.2 VA == GPA — **refuted**, latent not live (§8.2.3).
+E8's two conflict policies — **fixed** in v2 (`7c4c61a`); the cited-but-missing test now exists.
+
+### ⚠ Doc drift found by the sweep — NOT decisions, and mine to fix
+
+`viewer_install.rs:86` still says "is an owner decision" for a verb that exists; `grstatic.rs:51`/`:724`
+still carry `[assumed]` for something boot `stateload1` **measured**; §10 item 6 still states three
+assertions B3 retracted; the QEMU-backport prose survives a **CANCELLED** ruling; and a trybuild gate
+claims "all ten rows" where nine exist — that last is nearer a bug than a chore.
+
+---
+
 > Written 2026-07-30, at the point where **stage C3 landed and the buildable-without-a-decision
 > work ran out**. Ranked by *blast radius*, not by effort. Each entry states what breaks if we guess
 > wrong, and — where it matters — **whether we could even detect the mistake ourselves**.
