@@ -1296,12 +1296,21 @@ pub struct Spine {
     /// re-offers it, so the incremental path is idempotent. `refresh` re-derives the set
     /// from scratch (a key claimed by ≥2 owners), so it is a projection like the rest.
     ///
-    /// ⚠ **Known residue, NOT a decision this makes**: declining costs the *legitimate*
-    /// owner its binding too, so a process that can forge a PDE at another's page table can
-    /// deny that page rather than steal it. A loud fault instead of silent cross-process
-    /// capture is the safe direction, but the underlying question — whether a guest can
-    /// name another proc's page at all — is open and belongs with the chid-namespace
-    /// ruling. See `execution_plane_increments.md` §12.7.
+    /// ★ **This is ROBUSTNESS, not a security boundary** — corrected 2026-08-05, and the
+    /// correction matters because the first draft claimed the opposite.
+    ///
+    /// ⊘ It said a process could "forge a PDE at another proc's page table". **It cannot.**
+    /// Unprivileged guest userspace does not author page-table entries at all; `nvidia.ko`
+    /// does, and it already holds access to every address space in the guest — the same
+    /// reason a Linux process cannot edit its own PTEs outside `mmap`. Procs A and B are
+    /// both inside **one guest VM**, so guest-internal isolation is the guest kernel's job,
+    /// exactly as it is on bare metal where a real GPU does not separate one process from
+    /// another. This port's boundary is guest → host escape and no step of that scenario
+    /// crosses it.
+    ///
+    /// ⇒ what declining buys is a **loud miss instead of a silent wrong binding** when our
+    /// own decode is wrong or a buggy guest kernel does something unexpected. Worth having,
+    /// and not a boundary. See `execution_plane_increments.md` §12.7.
     pub pt_contested: BTreeSet<(GpuId, u64)>,
     /// How many page publications [`Self::pt_learned`] has refused for want of room.
     ///
