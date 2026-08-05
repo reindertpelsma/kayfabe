@@ -31,6 +31,56 @@
 //! kayfabe-linux-raw --test compile_fail` **after** confirming the errors are still the
 //! same errors. Never delete a row to make it green.
 
+/// ★★★ The rows this matrix must contain, **by name**.
+///
+/// ⊘ `compile_fail("tests/ui/*.rs")` is a **glob**, so deleting a row leaves the suite green
+/// with fewer rows and nothing goes red. The maintenance note above says *"never delete a row
+/// to make it green"* — which is a request to a human, not a gate. This list is the gate:
+/// `gates_quantified_over_a_list` — *shortening the list weakens the gate with ZERO red tests;
+/// a smaller universe is a smaller true statement.*
+///
+/// ★ Names, not a count. A count catches a deletion; names also catch a **rename**, which is
+/// how a row silently stops testing what its §4.6 entry says it tests.
+const REQUIRED_ROWS: &[&str] = &[
+    "cache_policy_has_no_default.rs",
+    "map_fixed_bare_address.rs",
+    "no_base_address.rs",
+    "no_borrow_escape.rs",
+    "no_wide_volatile_load.rs",
+    "offset_arithmetic.rs",
+    "page_size_literal.rs",
+    "region_is_not_send.rs",
+    "view_outlives_region.rs",
+];
+
+/// ★ The universe is DERIVED from the directory and compared against [`REQUIRED_ROWS`] in
+/// **both** directions, so this fails on a deletion *and* on an addition nobody recorded.
+///
+/// An added row is not an error the way a missing one is — but an unrecorded row means
+/// `l1_os_shell.md` §4.6's table no longer enumerates the matrix, and that table is what the
+/// exit gate is quantified over. Adding a row is one line here; leaving §4.6 stale is the
+/// failure this catches.
+#[test]
+fn the_compile_fail_matrix_still_has_every_row_it_claims() {
+    let mut found: Vec<String> = std::fs::read_dir("tests/ui")
+        .expect("tests/ui exists")
+        .filter_map(|e| {
+            let n = e.ok()?.file_name().to_string_lossy().into_owned();
+            n.ends_with(".rs").then_some(n)
+        })
+        .collect();
+    found.sort();
+    let mut want: Vec<String> = REQUIRED_ROWS.iter().map(|s| (*s).to_owned()).collect();
+    want.sort();
+    assert_eq!(
+        found, want,
+        "★★★ the trybuild matrix changed without REQUIRED_ROWS changing. A missing row is a \
+         DELETED GUARD that leaves the suite green (the glob simply tests fewer files); an \
+         extra row means `l1_os_shell.md` §4.6's table no longer enumerates the matrix the \
+         exit gate is quantified over. Fix the list AND §4.6 together — never one alone."
+    );
+}
+
 #[test]
 fn dangerous_patterns_do_not_compile() {
     let t = trybuild::TestCases::new();

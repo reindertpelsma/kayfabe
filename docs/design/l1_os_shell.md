@@ -945,6 +945,17 @@ Each row is a dangerous pattern that must **not compile**:
 | ~~**10**~~ | ~~a host CPU address (`*mut u8`/`*const u8`/`NonNull`/`usize`-as-address) in the signature of any item reachable from outside `kayfabe-linux-raw`~~ | ~~§4.2.1's crate-boundary rule, in compile-fail form~~ — ★ **NOT A TRYBUILD ROW. Renumbered into a CI gate, 2026-07-28 (see below).** |
 | **11** | `CachePolicy` has no `Default` — a mapping's cacheability is a required parameter, never inherited | added by `a91f318`; a property §4.6 did not originally have a row for, and it does have a file (`cache_policy_has_no_default.rs`) |
 
+> ### ★★★ The matrix's OWN membership is now gated too (2026-08-05)
+>
+> `compile_fail("tests/ui/*.rs")` is a **glob**: delete a row and the suite stays green with
+> fewer rows. The maintenance note in `compile_fail.rs` said *"never delete a row to make it
+> green"* — a request to a human, not a gate. `the_compile_fail_matrix_still_has_every_row_it_claims`
+> now pins the nine rows **by name**, compared both directions, so a deletion *and* an
+> unrecorded addition go red. `[measured]` hiding `no_borrow_escape.rs` turns it red while
+> `dangerous_patterns_do_not_compile` **still passes with eight rows** — which is exactly the
+> hole. Names rather than a count, because a rename also stops a row testing what this table
+> says it tests. `gates_quantified_over_a_list`.
+>
 > ### ★★ Row 10 is a CI gate, not a compile-fail row — and it never was one
 >
 > **[measured] 2026-07-28, doc audit.** `crates/kayfabe-linux-raw/tests/ui/` contains **9**
