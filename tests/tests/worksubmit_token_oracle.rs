@@ -61,6 +61,7 @@
 use kayfabe_arch::Arch;
 use kayfabe_arch::ids::{RunlistId, VChid};
 use kayfabe_chips::Ga10xArch;
+use kayfabe_chips::ga10x::encode_work_submit_token;
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::process::Command;
@@ -207,6 +208,75 @@ fn run(path: &str) -> (BTreeMap<String, String>, Vec<Case>) {
 // ===========================================================================================
 // The differential
 // ===========================================================================================
+
+/// ★★★ **Our ENCODER produces RM's OWN bytes** — the differential the reply at
+/// `0xc36f0108` rests on.
+///
+/// `Ga10xArch::decode_doorbell` reads a token the guest wrote. This is the other direction:
+/// the **internal** work-submit-token control routes to us (`ROUTE_TO_PHYSICAL`,
+/// `g_kernel_channel_nvoc.c:551`) and we must hand back a token. If ours is not bit-identical
+/// to what RM's encoder would have produced for the same `(runlist, chid)`, the guest's
+/// internal channel and its userspace channels disagree about the same doorbell — and the
+/// only symptom is work landing on the wrong channel.
+///
+/// ⊘ The expected value is **RM's compiled encoder's output**, never a number this file
+/// computes. A transcription here would put back exactly what the oracle exists to remove.
+#[test]
+fn our_encode_reproduces_rms_own_encoder_byte_for_byte() {
+    for (tag, path) in require_oracle!("our_encode_reproduces_rms_own_encoder_byte_for_byte") {
+        let (header, cases) = run(path);
+        assert_eq!(
+            header.get("gfid").map(String::as_str),
+            Some("0"),
+            "{tag}: the oracle must drive the PHYSICAL function"
+        );
+        let mut checked = 0usize;
+        let mut out_of_range = 0usize;
+        for case in &cases {
+            let (runlist, chid) = (case.u32_of("runlist"), case.u32_of("chid"));
+            let Some(token) = case.token() else { continue };
+            let (Ok(rl), Ok(cid)) = (u16::try_from(runlist), u16::try_from(chid)) else {
+                out_of_range += 1;
+                continue;
+            };
+            match encode_work_submit_token(RunlistId(rl), VChid(cid)) {
+                Some(ours) => {
+                    assert_eq!(
+                        ours,
+                        u64::from(token),
+                        "{tag}: case `{}` — RM's own encoder produced {token:#010x} for \
+                         runlist={runlist} chid={chid}; we produced {ours:#010x}. The reply \
+                         at 0xc36f0108 would name a DIFFERENT channel than the guest's own \
+                         userspace path computes for itself",
+                        case.name
+                    );
+                    checked += 1;
+                }
+                None => {
+                    // ★ We refuse only where the value cannot fit the field. RM TRUNCATES
+                    // there instead (`#163`: chid 4096 → 0x00000000). That divergence is
+                    // deliberate and is unreachable from the guest: `decode_userd_index_chid`
+                    // caps a guest-supplied chid at 4095, exactly the field width. Assert the
+                    // divergence is confined to that case rather than letting it hide.
+                    assert!(
+                        chid > 0x0FFF || runlist > 0x007F,
+                        "{tag}: case `{}` — we REFUSED runlist={runlist} chid={chid}, which \
+                         fits both fields, while RM encoded it to {token:#010x}. A refusal \
+                         here is a reply we cannot make and a channel that never runs",
+                        case.name
+                    );
+                    out_of_range += 1;
+                }
+            }
+        }
+        assert!(
+            checked > 0,
+            "{tag}: the oracle produced no in-range encodable case — this test asserted \
+             nothing, which is the shape a green run must never have"
+        );
+        eprintln!("{tag}: encode differential {checked} matched, {out_of_range} out-of-range");
+    }
+}
 
 #[test]
 fn our_decode_inverts_rms_own_encoder_over_the_whole_field_space() {
@@ -361,4 +431,55 @@ fn a_token_rm_could_not_have_written_is_refused() {
     // (`WORK_SUBMIT_TOKEN_PARAMS_SIZE`), so a wider value never came from RM either.
     assert!(arch.decode_doorbell(1u64 << 32).is_none());
     assert!(arch.decode_doorbell(u64::MAX).is_none());
+}
+
+/// ★★★ **The encoder REFUSES what will not fit, and this is the half the oracle
+/// differential cannot see.**
+///
+/// ⊘ The differential above compares our token to RM's for values RM encodes. It is
+/// therefore blind to the range check: delete the check and we would *truncate exactly as RM
+/// truncates*, matching on every oracle case and staying green — while producing, for an
+/// out-of-range chid, a token naming a **different real channel**. That is the
+/// `mutate_the_refusals_not_the_mechanism` shape, so the refusal is driven here directly.
+///
+/// ★ Why refusing is right rather than merely strict: RM truncates instead
+/// (`chid 4096 → 0x00000000`) — ⊘ a **differential against RM's own compiled encoder**
+/// (`tests/oracle/worksubmit_token_oracle.c`, `#163` at `6e4f66f`), NVIDIA's code executing
+/// rather than a live boot. But a guest cannot reach that input: `decode_userd_index_chid`
+/// caps a guest-supplied chid at `511 * 8 + 7 = 4095`, exactly the 12-bit field
+/// (`ogkm-580: kernel_channel.c:2688`). So this refuses only on values our own state could
+/// produce, never on an input hardware sees.
+#[test]
+fn the_encoder_refuses_what_the_fields_cannot_hold() {
+    // Both extremes IN range encode, so the refusals below are not vacuous.
+    assert_eq!(encode_work_submit_token(RunlistId(0), VChid(0)), Some(0));
+    assert_eq!(
+        encode_work_submit_token(RunlistId(0x7F), VChid(0xFFF)),
+        Some(0x007F_0FFF),
+        "the widest legal pair is the widest legal token"
+    );
+    // ★ One past each field, where RM would have TRUNCATED to a valid-looking token.
+    assert_eq!(
+        encode_work_submit_token(RunlistId(0), VChid(0x1000)),
+        None,
+        "chid 4096 truncates to 0 in RM's encoder — a token naming channel ZERO"
+    );
+    assert_eq!(
+        encode_work_submit_token(RunlistId(0x80), VChid(0)),
+        None,
+        "runlist 128 truncates to 0 in RM's encoder — a token naming runlist ZERO"
+    );
+    // And the round trip holds for everything in range.
+    for chid in [0u16, 1, 7, 8, 4094, 4095] {
+        for rl in [0u16, 1, 63, 127] {
+            let t = encode_work_submit_token(RunlistId(rl), VChid(chid)).expect("in range");
+            let back = kayfabe_chips::ga10x::decode_work_submit_token(t)
+                .expect("our own encoder's output must decode");
+            assert_eq!(
+                (back.runlist.0, back.vchid.0),
+                (rl, chid),
+                "encode/decode must be inverse over the whole legal field space"
+            );
+        }
+    }
 }

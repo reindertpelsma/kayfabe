@@ -446,6 +446,54 @@ pub fn decode_work_submit_token(token: u64) -> Option<DoorbellTarget> {
     })
 }
 
+/// ★★★ The work-submit-token **encode** — the inverse of [`decode_work_submit_token`], and
+/// what `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) must reply with.
+///
+/// ## Why an encoder exists at all, when the guest computes its own
+///
+/// For a **userspace** channel the guest never asks us: `0xc36f0108` carries flags `0x10008`
+/// (no `ROUTE_TO_PHYSICAL`), so `kchannelCtrlCmdGpfifoGetWorkSubmitToken_IMPL` generates the
+/// token locally from `pKernelChannel->ChID` (`ogkm-580: kernel_channel.c:3283`). The
+/// **internal** variant — the scrubber/CeUtils channel — carries `0x10244`, routes to us
+/// (`g_kernel_channel_nvoc.c:551`), and we must answer. This function is that answer.
+///
+/// ⇒ it must produce what the guest would have produced for itself, or the two paths
+/// disagree about the same channel.
+///
+/// ## ★ The vChid is the GUEST's, and that is forced rather than chosen
+///
+/// The guest kernel allocates its own `ChID` before anything reaches us and smuggles it
+/// through `NV_CHANNEL_ALLOC_PARAMS.flags` `USERD_INDEX` — see
+/// [`decode_userd_index_chid`], and `execution_plane_increments.md` §13.3. The host driver
+/// picks a different chid for the real channel; a guest vChid is meaningless on the host.
+/// So the doorbell **write** is where the two are reconciled, and this reply carries the
+/// guest's own number so that `Ga10xArch::decode_doorbell` can recover it.
+///
+/// ## ⊘ Out of range is REFUSED, and RM's truncation is not a counter-example
+///
+/// RM's encoder **truncates** — `chid = 4096` comes back as `0x00000000` and `runlist = 128`
+/// as `0`. ⊘ That is a **differential against RM's own compiled `_GA100` encoder**
+/// (`tests/oracle/worksubmit_token_oracle.c`, `#163`), i.e. NVIDIA's code executing, not a
+/// live boot — the epistemic level is *its encoder ran and produced these bytes*, which is
+/// exactly what this function has to match and is not a claim about a running GPU.
+/// Mimicking the truncation would let a wrong number name a *different real channel*
+/// silently.
+///
+/// ★ Refusing is not "stricter than hardware on a reachable input", because the input cannot
+/// reach here out of range: [`decode_userd_index_chid`]'s own note proves it — *"9 bits times
+/// 8 plus 3 bits is at most 4095"* — which is exactly the 12-bit field. So this refusal is an
+/// internal-consistency check on a path the guest cannot drive, not a fidelity departure
+/// (`mock_fidelity_both_directions` is about departures on inputs hardware DOES see).
+#[must_use]
+pub fn encode_work_submit_token(runlist: RunlistId, vchid: VChid) -> Option<u64> {
+    // The two field widths RM defines — `NV_CTRL_VF_DOORBELL_VECTOR` 11:0 and
+    // `_RUNLIST_ID` 22:16 (`turing/tu102/dev_ctrl.h:36-37`, `ampere/ga100/dev_ctrl.h:26-27`).
+    if vchid.0 > 0x0FFF || runlist.0 > 0x007F {
+        return None;
+    }
+    Some((u64::from(runlist.0) << 16) | u64::from(vchid.0))
+}
+
 // ── ★★★ The GA10x GMMU, VER2 — `#149`, the first translated aperture ────────────────
 
 /// Level index of the root page directory (`PD3`, virtual address bits 48:47).
