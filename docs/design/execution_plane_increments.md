@@ -1960,49 +1960,56 @@ hardware (`#113`, `3b2597c` — a real CE moved device memory through them):
 
 ⇒ E9 is a **join across existing seams**, not a new mechanism.
 
-### 13.3 ★★★ The one question with a SILENT wrong answer — and it is now smaller
+### 13.3 ★★★ SETTLED — the guest picks its own ChID, so translation is FORCED
 
-When the guest asks `0xc36f0108`, does it get a token encoding **its** vChid (which our
-doorbell trap decodes and maps), or the **host** channel's token verbatim?
+⚠ **An earlier draft of this section was wrong and is struck.** It framed a decision:
+*"does the guest get a token encoding its own vChid, or the host channel's verbatim?"* and
+called it *"the one question with a silent wrong answer"*. There was never a choice. The
+owner named the mechanism and the C confirms it in one line.
 
-⚠ This is the shape `doorbell_token_encoding.md` warns about: *"A wrong decode does not
-fail; it routes a guest's ring"* — no error, wrong channel.
+**`[src]` The guest kernel allocates the ChID, before anything reaches us.**
+`kchannelAllocHwID_GM107` runs in the guest's own CPU-RM and calls
+`kfifoChidMgrAllocChid` against an eheap the guest owns (`ogkm-580:
+src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_channel_gm107.c:480`,
+`kernel_fifo.c:569`). It then **smuggles the already-decided ChID to us through the alloc
+flags**, because `NV_CHANNEL_ALLOC_PARAMS` has no chid field:
 
-**`[src]` The guest never inspects it.** Every consumer in both trees stores the token and
-writes it, and not one decodes, validates or compares it:
+```
+chid = flags[20:12] * 8 + flags[10:8]          (USERD_INDEX_PAGE_VALUE, USERD_INDEX_VALUE)
+```
 
-- `ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:5626` —
-  `channel->workSubmissionToken = params.workSubmitToken;` (stored; re-exported at `:6228`)
-- `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_utils_gm107.c:1903-1915` —
-  read back, handed straight to `kfifoUpdateUsermodeDoorbell_HAL`
-- `ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c:162` —
-  `GPU_VREG_WR32(pGpu, NV_VIRTUAL_FUNCTION_DOORBELL, workSubmitToken)`, verbatim
-- `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:1162`, `uvm_volta_host.c:44` —
-  `UVM_GPU_WRITE_ONCE(*workSubmissionOffset, workSubmissionToken)`
+`C: src/qemu/nvkvm_gpu_emul.c:2914` — *"A GSP-client CPU-RM encodes its already-decided
+ChID into USERD_INDEX so the physical RMAPI reuses it… doorbell `token[11:0]` == this
+vChid; it's the demux key."* And `numChannelsPerUserd = 1 << DRF_SIZE(USERD_INDEX_VALUE)`
+= 8, which is where the `* 8` comes from.
 
-⇒ **the token is an opaque cookie to the entire guest stack.** Both encodings are correct
-*from the guest's side*, so this is not a guest-compatibility question at all. It is ours,
-and it turns on exactly one property:
+⇒ **We are told a chid; we do not choose one.** The host driver will independently pick its
+own for the real channel. A guest vChid is meaningless on the host, so a guest token can
+**never** be forwarded to the host directly — it always translates.
 
-> **May a guest-supplied 32-bit value name a host channel directly?**
+### 13.3.1 ★ And this is WHY the doorbell page is trapped at all
 
-- **(a) host token verbatim** — simplest. But the doorbell page is guest-writable, so a
-  guest may write *any* 32 bits, including a value naming **another tenant's** host
-  channel. Safety then rests on a membership check at the trap that nothing forces us to
-  write, and whose absence is silent.
-- **(b) guest-side token, translated at the trap** — the guest gets a token minted from its
-  own vChid; the trap decodes → vChid → *this proc's* channel → host token. A forged value
-  decodes to a vChid the proc does not own and is **refused by name**, which is the shape
-  `by_vchid` routing and the `#14` ring gate already have.
+The trap is not a design preference, it is the only route. The guest writes
+`token[11:0] = its own chid` into the doorbell register; the host channel carries a
+different chid; nothing else in the flow sees both numbers. ⊘ Official vGPU does not have
+this problem because a legacy vGPU capability let the GPU select from available vChids —
+and that capability is **inaccessible** on the parts this project targets.
 
-★ **(b) is what every standing rule points at** — miss = fault, never reverse-resolve, and
-per-proc isolation keyed on vChid — and it is why `E3` built `decode_doorbell` to return a
-**vChid** at all; under (a) that decoder has no purpose. ⊘ Recorded as a recommendation
-rather than taken, because the cost of being wrong here is a wrong-channel routing that no
-test would redden.
+⇒ the shape is fixed: guest allocates a vChid and tells us → we ask the host driver for a
+channel and it returns **its own** chid and token
+(`RmBackend::alloc_channel` → `(HostHandle, u64)`) → we keep the pair → the doorbell trap
+maps guest vChid to host token. `Ga10xArch::decode_doorbell` (E3) is what reads the guest's
+written token back to a vChid, which is exactly the lookup this needs.
+
+⊘ **The C did NOT do this, and that is not an argument against it.** The C demuxed by
+walking every channel's pending GPFIFO on each doorbell (`C: nvkvm_gpu_emul.c:242-243`) —
+correct, and O(n) per doorbell with n guest-driven. E3's decoder makes the same demux O(1).
+The C's approach is a fallback that stays available, not the design.
 
 ### 13.4 ⊘ What is deliberately NOT built yet
 
-Everything downstream of §13.3, which is the whole join: the token reply, the schedule and
-bind acts, and the notifier-35 row. They share one encoding decision, and building them
-against a guess would mean rebuilding all four if the guess were wrong.
+The join itself: the guest-vChid → host-(handle, token) map, the token reply, the schedule
+and bind acts, and the notifier-35 row. Nothing above is blocked on a decision any more —
+what remains is the build. ⊘ No boot has been spent on any of it, so every claim this
+section makes about the *join* is source-derived until one is
+(`only_live_boots_are_proof`).
