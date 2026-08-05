@@ -2093,3 +2093,40 @@ and bind acts, and the notifier-35 row. Nothing above is blocked on a decision a
 what remains is the build. ⊘ No boot has been spent on any of it, so every claim this
 section makes about the *join* is source-derived until one is
 (`only_live_boots_are_proof`).
+
+### 13.5 ★★★ The four are NOT homogeneous — two are replies, two are HOST ACTS
+
+`[src]` 2026-08-05 at `ff59d23`. §13.1 calls the set *"one requirement asked four times"*,
+which is right about the *requirement* and wrong about the *implementation*. Surveying before
+building found the four split cleanly, and the split is what the remaining work is shaped by.
+
+| control | kind | servable by today's path? |
+|---|---|---|
+| `0xc36f0108` work-submit token | **reply** — a pure function of `(runlist, guest vChid)`, both of which we hold | ✔ the encoder landed at `ff59d23` |
+| notifier-35 arming | **reply** — a `SILENT_NOTIFIERS` row; `sweep.rs:325-335` already wrote and cited the argument (*the arming is never read*) | ✔ |
+| `0xa06f0103` `GPFIFO_SCHEDULE` | **host act** — must put a real host channel on a real runlist | ✘ |
+| `0xa06f0104` `BIND` | **host act** — engine → runlist on a real host channel | ✘ |
+
+### 13.5.1 ⊘ Why the two acts cannot use the path the other twenty-odd controls used
+
+`InitTablePolicy` — the whole control-serving surface — **has no `Worker`**, and therefore no
+route to the isolate. Every control this port has served so far is a reply computed from state
+it already holds. The one previously described as *"an ACTION, not a description"*
+(`0x20800a6c` `MEMSYS_L2_INVALIDATE_EVICT`, `#148`) is not a counter-example: its licence is
+explicitly that it is *"a verb on hardware this device does not have"* — served **vacuously**,
+by arguing nothing needed to happen. `0xa06f0103` and `0xa06f0104` have no such argument
+available: something must happen on a real host channel or the guest's ring never runs.
+
+⇒ serving them is a **phase-shape change**, the same species §9.2 named for E8 and E8 built:
+the blocking host call cannot happen under a ranked lock, so the control path needs
+PLAN (rank 1) → EXECUTE (no lock, via a `Worker`) → COMMIT (rank 1, R5 re-validate). That is
+an increment with its own acceptance, not a table row.
+
+★ Everything *beneath* it already exists and is wired: `Channel` carries `vchid`,
+`host_channel: Option<HostHandle>` and `host_token: Option<u64>`; those are written at
+`kayfabe-fwd/src/lib.rs:1743-1744` and `:2121-2122` and read at `:1602`, `:1748`, `:1757`.
+`RmBackend::schedule(chan)` exists. The guest-vChid → host-channel map is **not** missing —
+what is missing is a control that can reach it.
+
+⊘ **Not started.** Half a phase-shape change is worse than none, and this one wants its own
+increment with its own bite-check over its own refusals.
