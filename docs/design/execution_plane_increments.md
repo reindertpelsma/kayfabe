@@ -2102,10 +2102,46 @@ building found the four split cleanly, and the split is what the remaining work 
 
 | control | kind | servable by today's path? |
 |---|---|---|
-| `0xc36f0108` work-submit token | **reply** — a pure function of `(runlist, guest vChid)`, both of which we hold | ✔ the encoder landed at `ff59d23` |
-| notifier-35 arming | **reply** — a `SILENT_NOTIFIERS` row; `sweep.rs:325-335` already wrote and cited the argument (*the arming is never read*) | ✔ |
+| `0xc36f0108` work-submit token | **reply** — a pure function of `(runlist, guest vChid)` | ~~✔~~ ⊘ **✘ — CORRECTED 2026-08-06, see §13.5.2** |
+| notifier-35 arming | **reply** — a `SILENT_NOTIFIERS` row; `sweep.rs:325-335` already wrote and cited the argument (*the arming is never read*) | ✔ (but see below: it must not be taken alone) |
 | `0xa06f0103` `GPFIFO_SCHEDULE` | **host act** — must put a real host channel on a real runlist | ✘ |
 | `0xa06f0104` `BIND` | **host act** — engine → runlist on a real host channel | ✘ |
+
+### 13.5.2 ⊘ CORRECTION — the token reply is NOT servable either, and the reason is the TRAIT
+
+`[src]` 2026-08-06. The ✔ above said the token is *"a pure function of `(runlist, guest vChid)`,
+**both of which we hold**"*. The function is pure; **the inputs are unreachable from a reply
+policy**, which makes the ✔ false.
+
+- Every reply policy implements `ObjectModel` (`crates/kayfabe-rmrpc/src/policy.rs:258`) and
+  answers through `fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply>` (`:763`). That
+  signature is the whole context: **a command, and the policy's own fields.** No device, no
+  `Proc`, no `Channel`, no `Worker`. All ten implementations share it.
+- `InitTablePolicy`'s own fields are `{chip, driver, notify_actions: [u8; N]}`
+  (`crates/kayfabe-device/src/inittables.rs:173-191`), and its rustdoc states the property
+  deliberately: *"There is no handle in it, no client, no sequence number, so it cannot grow,
+  cannot alias two guest processes, and cannot refuse a legal recycle."*
+
+⇒ A channel's `(runlist, vchid)` is **per-`Proc`** state. Reaching it from a reply policy would
+mean giving that policy exactly the handle-keyed state its own doc says it must not have — so
+the fix is **not** to widen `InitTablePolicy`. ⊘ Widening it would trade a `#14`-class
+isolation property for a table row, which is the worse side of that trade.
+
+★★ **So the real split is not 2 replies + 2 acts. It is:**
+
+| | needs | items |
+|---|---|---|
+| **plumbing A** — a control that can reach **per-`Proc` channel state** | context on the serving path | token reply **and** both host acts (3 of 4) |
+| **plumbing B** — a control that can **block on the host** (PLAN/EXECUTE/COMMIT, a `Worker`) | §13.5.1's phase-shape change | both host acts (2 of 4) |
+| neither | — | notifier-35 alone, which `sweep.rs` already argues must not be taken alone |
+
+⇒ **A is the prerequisite and it is shared by three of the four.** §13.5.1 named B and missed A,
+because it reasoned about *what the controls must do* and not about *what the serving signature
+can see*. The increment order follows: A first, then the token reply lands as a table row on top
+of it, and only then does B become the last thing standing between here and a scheduled channel.
+
+⚠ Nothing here is measured. It is a reading of a trait signature and a struct definition, and
+the claim it replaces was also unmeasured — it was an inference stated as a ✔.
 
 ### 13.5.1 ⊘ Why the two acts cannot use the path the other twenty-odd controls used
 
