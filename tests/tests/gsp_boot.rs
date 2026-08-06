@@ -3358,3 +3358,47 @@ fn a_command_no_policy_answers_is_refused_by_name_rather_than_echoed() {
         "a policy that answered is not an unserviced command",
     );
 }
+
+/// ★★★ **A zero-length rpc is LEGAL at 610 and illegal at 580 — the bound is the version's,
+/// not ours** (`#85` / Q21).
+///
+/// `gspworld` hardcoded 580's `rpc.length >= 32` for both versions, so under `P610` the model
+/// **refused input the real driver accepts**. A double that is stricter than the thing it
+/// doubles passes happily while the product fails, and `mock_fidelity_both_directions` records
+/// too-strict and too-capable as the *same* defect.
+///
+/// Owner's rule, which is why this is a per-version value and not an assertion:
+/// *"if it does not break prod apps ever, not even raced, then it's not a thing to assert."*
+///
+/// | | comparison the driver makes | ⇒ minimum `rpc.length` |
+/// |---|---|---|
+/// | 580 | `msgLen < sizeof(GSP_MSG_QUEUE_ELEMENT)` (`ogkm-580: message_queue_cpu.c:760-770`), and that `sizeof` embeds `rpc_message_header_v` at +48 (`ogkm-580: message_queue_priv.h:43-51`) | **32** |
+/// | 610 | `msgLen >= queueElementHdrSize` (`ogkm-610: message_queue_cpu.c:826-833`), element ends at a flexible `payload[]` (`ogkm-610: message_queue_priv.h:52-67`) | **0** |
+///
+/// ⊘ **What this test does NOT prove, stated rather than implied.** It pins the value each
+/// profile reports, not that a 610 guest survives a zero-length element end to end through
+/// `recv`. Driving that needs an element with `rpc.length == 0` in the ring, and the fixture's
+/// `send` floors it at 32 (`rpc_length = 32 + payload.len()`) — so it needs raw-element
+/// machinery `Guest` does not expose. Recorded as a gap; a green here is a smaller claim than
+/// "610 accepts zero-length rpcs", and must not be cited as that.
+#[test]
+fn the_minimum_rpc_length_is_the_drivers_own_and_zero_is_legal_at_610() {
+    assert_eq!(
+        P580.min_rpc_length(),
+        32,
+        "580 compares against sizeof(GSP_MSG_QUEUE_ELEMENT), which embeds the 32-byte rpc \
+         header — so 32 is the driver's floor, not a number this model chose"
+    );
+    assert_eq!(
+        P610.min_rpc_length(),
+        0,
+        "★ 610 compares against queueElementHdrSize alone and its element ends at a flexible \
+         payload[], so a ZERO-length rpc is legal. Restoring 32 here makes every 610 test \
+         using this model weaker than it reads"
+    );
+    assert!(
+        P610.min_rpc_length() < P580.min_rpc_length(),
+        "the two versions must not collapse to one bound — a single shared floor is exactly \
+         the defect this replaced"
+    );
+}

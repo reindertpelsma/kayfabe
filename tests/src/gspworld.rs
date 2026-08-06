@@ -236,6 +236,32 @@ impl Profile {
     pub fn element_size_max(&self) -> u32 {
         self.table().gsp_element_size_max()
     }
+
+    /// ★★★ The smallest `rpc.length` this version's receive path accepts — **version-split,
+    /// and the split is STRUCTURAL, not a constant somebody tightened.**
+    ///
+    /// - **580** compares `msgLen < sizeof(GSP_MSG_QUEUE_ELEMENT)`
+    ///   (`ogkm-580: message_queue_cpu.c:760-770`). That `sizeof` embeds `rpc_message_header_v`
+    ///   at +48 (`ogkm-580: message_queue_priv.h:43-51`), so `48 + rpc.length >= 80`
+    ///   ⇒ **`rpc.length >= 32`**.
+    /// - **610** compares `msgLen >= queueElementHdrSize`
+    ///   (`ogkm-610: message_queue_cpu.c:826-833`), and its element ends at a flexible
+    ///   `payload[]` with no envelope inside it (`ogkm-610: message_queue_priv.h:52-67`)
+    ///   ⇒ **`rpc.length >= 0`**: a zero-length rpc is LEGAL at 610.
+    ///
+    /// ⚠ Until 2026-08-06 this model hardcoded 580's `32` for both, so under `P610` it was
+    /// **stricter than the driver** — a double that refuses input a real driver accepts, which
+    /// `mock_fidelity_both_directions` records as the same defect class as a too-capable one.
+    /// Owner's rule, and the reason this is a value rather than an assertion: *"if it does not
+    /// break prod apps ever, not even raced, then it's not a thing to assert."*
+    ///
+    /// ⊘ NOT derived from `elem_count_off()`, which happens to differ between these two
+    /// versions the same way. That is a coincidence of the pair, not the reason, and writing a
+    /// coincidence down as a rule is how an implicit coupling becomes load-bearing.
+    #[must_use]
+    pub fn min_rpc_length(&self) -> u32 {
+        if self.version.major >= 610 { 0 } else { 32 }
+    }
 }
 
 impl Profile {
@@ -1149,10 +1175,10 @@ impl Guest {
             //         `rpc.length == 0`**, because 610's element ends at a flexible
             //         `payload[]` with no envelope inside it
             //         (`ogkm-610: message_queue_priv.h:52-67`).
-            // ⚠ So under `P610` this predicate is STRICTER THAN THE DRIVER. It is left
-            // as-is deliberately — the model slices where the driver casts a flexible
-            // array, and relaxing it would need a shape change, not a comment — but no
-            // test may assert that a 610 guest *rejects* `rpc.length == 0`: it does not.
+            // ★ FIXED 2026-08-06: the bound is now `self.p.min_rpc_length()`, 32 at 580 and
+            // **0 at 610**, so this predicate is no longer stricter than the driver it models.
+            // The prohibition stands and is now merely redundant: no test may assert that a
+            // 610 guest *rejects* `rpc.length == 0`, because it does not.
             //
             // ⚠⚠ AND SO IS ITS POSITION, which is a second divergence and a different one.
             // At BOTH tags the length test is the LAST thing the receive path does and it
@@ -1169,10 +1195,31 @@ impl Guest {
             //   (b) a bad-length element is not a wedge on a real guest, and it is here.
             // The two live call sites (`tests/tests/gsp_boot.rs:197, 217`) accept
             // `BadLength` only inside an `Err(A | B)` disjunction, so nothing currently
-            // pins the wrong refusal. Straightening it means making the model
-            // consume-and-continue, which is the same shape change the `rpc.length` bound
-            // above needs — so both are recorded together and neither is guessed at.
-            if rpc_length < 32
+            // pins the wrong refusal.
+            //
+            // ★★ POSITION: STILL DIVERGENT, but no longer described from a summary — 580's
+            // exit path was READ on 2026-08-06 (`ogkm-580: message_queue_cpu.c:760-786`) and
+            // it is more specific than "consume and continue":
+            //
+            //     nvStatus = NV_ERR_INVALID_PARAM_STRUCT;   // length is bad
+            //   exit:
+            //     nRet = msgqRxMarkConsumed(pMQI->hQueue, nElements);
+            //     if (nRet >= 0) pMQI->rxSeqNum++;
+            //     return nvStatus;                          // the error IS returned
+            //
+            // ⇒ the driver **consumes the element, advances `rxSeqNum`, and THEN returns the
+            // error**. Returning an error is not the divergence; returning *without
+            // consuming* is. So the faithful fix is narrow: consume `n` and bump `rx_seq`
+            // before the `Err`.
+            //
+            // ⊘ Not done here, and the reason is a gap rather than a preference: `nElements`
+            // is computed **before** the length test in the driver, while this model derives
+            // `n` **after** it — and at 610 `n` is derived FROM `rpc_length`, so on a bad
+            // length its value is exactly the thing under suspicion. 610's own
+            // `nElements`-on-failure arithmetic has NOT been read. Reordering on 580's
+            // evidence alone would make the model right at one tag by guessing at the other,
+            // which is the defect this comment block exists to avoid.
+            if rpc_length < self.p.min_rpc_length()
                 || msg_len < self.p.hdr() as u32
                 || msg_len > self.p.element_size_max()
             {
