@@ -694,6 +694,161 @@ pub fn encode_gpfifo_schedule(req: &GpfifoScheduleParams) -> Vec<u8> {
     out
 }
 
+// =====================================================================================
+// ★★★ E9 — `NVA06F_CTRL_CMD_BIND`, the control that gives a channel a RUNLIST
+// =====================================================================================
+
+/// `NVA06F_CTRL_CMD_BIND` = `0xa06f0104`, issued **on the channel object** —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:96`.
+///
+/// ## ★★★ Who sends this, and why it is not the function whose name matches
+///
+/// ⊘ `kchannelCtrlCmdBind_IMPL` is the **receiving** half — what RM runs when it is the one
+/// being asked. On a GSP client the guest kernel never reaches it. The sender is
+/// [`kchannelBindToRunlist_IMPL`] (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2762-2785`), which on
+/// `IS_GSP_CLIENT(pGpu)` builds `NVA06F_CTRL_BIND_PARAMS` **itself** and
+/// `NV_RM_RPC_CONTROL`s it to us:
+///
+/// ```text
+/// params.engineType = gpuGetNv2080EngineType(localRmEngineType);
+/// NV_RM_RPC_CONTROL(pGpu, …, NVA06F_CTRL_CMD_BIND, &params, sizeof(params), status);
+/// NV_ASSERT_OK_OR_RETURN(status);
+/// ```
+///
+/// ★ Two consequences the shape of this port depends on:
+///
+/// 1. **Our answer is load-bearing, immediately.** `NV_ASSERT_OK_OR_RETURN` means a
+///    non-`NV_OK` stops the guest before `kfifoRunlistSetIdByEngine_HAL`, so a refusal is
+///    seen. An undeserved `NV_OK` is worse than a refusal: the guest proceeds to assign a
+///    runlist id for an engine we never agreed to, which is the C-era
+///    `dma_copy_class_alloc_params` defect (`engineType=0` → wrong runlist) with the
+///    error moved one layer out.
+/// 2. **Not every bind reaches us.** `if ((engineDesc == ENG_SW) || (engineDesc == ENG_BUS))
+///    return NV_OK;` short-circuits before the RPC (`:2762-2765`), so a port that counts
+///    binds will count fewer than the guest performed. ⊘ That is not a lost message.
+///
+/// ## `[measured]` What a real GA106 was asked
+///
+/// `traces/real_ga106/rpc_transcript_real_ga106.txt:63` —
+/// `cmd=0xa06f0104 psize=4 gspst=0x0 head=0b 00 00 00`, i.e. **`engineType = 11`**.
+/// With `NV2080_ENGINE_TYPE_COPY0 = 9` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/class/cl2080_notification.h:293`) and the `COPY(i)` macro at
+/// `:398`, that is **`COPY2`** — `RmInitAdapter` binds the CeUtils scrubber channel to the
+/// third copy engine, not the first.
+///
+/// ⚠ And the C's captured row for this id is one of the **11 empty ones**
+/// (`crates/kayfabe-abi/src/oracle.rs`, `psize 4, dlen 0`): the C would have decoded it as
+/// `engineType = 0`, which is `NV2080_ENGINE_TYPE_NULL`. Nine of those eleven rows are
+/// contradicted by hardware and this is one of them.
+pub const NVA06F_CTRL_CMD_BIND: u32 = 0xa06f_0104;
+
+/// The statuses `NVA06F_CTRL_CMD_BIND` documents —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:90-93`.
+///
+/// ★★ **`NV_ERR_NOT_SUPPORTED` (`0x56`) is not among them**, exactly as for
+/// [`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`] — and for the same reason it must not be used as a
+/// refusal here: `0x56` is `kayfabe_gsp::GspFsm::answer`'s signature for *"nobody claimed
+/// this command"*, and the guest prints the raw hex. Reusing it erases the only difference
+/// a reader has between a decision and an absence.
+///
+/// ⚠ Values read from `ogkm-580: kernel-open/common/inc/nvstatuscodes.h:60,93`, not
+/// guessed: `NV_ERR_INVALID_ARGUMENT` is `0x1F` and `NV_ERR_INVALID_STATE` is `0x40`.
+pub const BIND_DOCUMENTED_STATUSES: &[u32] = &[
+    0x0,  // NV_OK
+    0x1f, // NV_ERR_INVALID_ARGUMENT
+    0x40, // NV_ERR_INVALID_STATE
+];
+
+/// `NV_ERR_INVALID_ARGUMENT` — what this port answers when the **engine named in the
+/// request** is not one this device advertised.
+///
+/// ★ Chosen over `NV_ERR_INVALID_STATE` because the two say different things and the
+/// distinction is the guest's to read: `INVALID_STATE` is about the *channel* (the shape
+/// [`GPFIFO_SCHEDULE_REFUSED_STATUS`] uses), `INVALID_ARGUMENT` is about the *parameter*,
+/// and here it is the parameter that is wrong. Both are in
+/// [`BIND_DOCUMENTED_STATUSES`], so either is an answer rather than a hole; only one is
+/// true.
+pub const BIND_UNKNOWN_ENGINE_STATUS: u32 = 0x1f;
+
+/// `NV_ERR_INVALID_STATE` — what this port answers when the request is well-formed and
+/// names a real engine, but the **channel** could not be routed.
+pub const BIND_REFUSED_STATUS: u32 = 0x40;
+
+/// `NVA06F_CTRL_BIND_PARAMS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:98-101`.
+///
+/// One `NvU32 engineType`, and the header says it is *"an `NV2080_ENGINE_TYPE` value"*.
+///
+/// ⚠ ★ **The numbering space is part of the type and is easy to get wrong.** The engine
+/// tables this port serves through the device-info path carry `RM_ENGINE_TYPE`
+/// (`FifoDeviceEntry::engine_data[engine_info_type::RM_ENGINE_TYPE]`), which is a
+/// *different enum* that RM converts with `gpuGetNv2080EngineType` /`gpuGetRmEngineType`.
+/// Comparing one against the other without converting is the same species of defect as
+/// reading a VA as a GPA, and it would be silent.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BindParams {
+    /// `NvU32 engineType` @ +0 — an `NV2080_ENGINE_TYPE_*` ordinal.
+    pub engine_type: u32,
+}
+
+impl BindParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NVA06F_CTRL_BIND_PARAMS";
+    /// `sizeof` — one `NvU32`.
+    pub const SIZE: usize = 4;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            0,
+            &self.engine_type.to_le_bytes(),
+        )
+    }
+}
+
+/// Decode a [`BindParams`] image.
+///
+/// ⊘ There is **no validity check here and that is deliberate**: every 32-bit value is a
+/// syntactically valid `NvU32`, so unlike [`decode_gpfifo_schedule`] — whose `NvBool`s have
+/// only two legal bytes — this decode cannot fail on anything but length. Whether the
+/// ordinal names an engine is a *policy* question with a different answer per device, and
+/// answering it here would bake one device's engine set into the ABI crate.
+///
+/// # Errors
+/// [`GpfifoScheduleError::ShortParams`] if fewer than [`BindParams::SIZE`] bytes.
+pub fn decode_bind(params: &[u8]) -> Result<BindParams, GpfifoScheduleError> {
+    if params.len() < BindParams::SIZE {
+        return Err(GpfifoScheduleError::ShortParams { got: params.len() });
+    }
+    Ok(BindParams {
+        engine_type: u32::from_le_bytes([params[0], params[1], params[2], params[3]]),
+    })
+}
+
+/// Encode a [`BindParams`] for the reply body.
+///
+/// ★ The reply carries the request's own params back, for
+/// [`encode_gpfifo_schedule`]'s reason: the GSP transport copies the reply's params over
+/// the caller's struct whenever `paramsSize != 0` (`ogkm-580:
+/// src/nvidia/src/kernel/vgpu/rpc.c:11085-11090`), so a zero-filled body would rewrite the
+/// caller's `engineType` to `NV2080_ENGINE_TYPE_NULL` behind its back. `[measured]`
+/// hardware agrees: the real GA106 reply body IS the request's four bytes.
+#[must_use]
+pub fn encode_bind(req: &BindParams) -> Vec<u8> {
+    let mut out = vec![0u8; BindParams::SIZE];
+    req.encode_into(&mut out)
+        .expect("SIZE bytes is exactly what encode_into needs");
+    out
+}
+
 /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrlc36f.h:79`.
 ///
@@ -2329,6 +2484,92 @@ mod tests {
         );
         assert_eq!(BIND_PARAMS_SIZE, 4);
         assert_eq!(WORK_SUBMIT_TOKEN_PARAMS_SIZE, 4);
+    }
+
+    /// ★★★ **E9.** The channel-side bind is `0xa06f0104` and is a *fourth* command, not a
+    /// spelling of any of the three above.
+    ///
+    /// ⊘ `0xa06c0102` binds a channel **group**; `0xa06f0104` binds a bare **channel**.
+    /// They differ in one nibble of the class id and in which object the guest issues them
+    /// on, and the guest's scrubber channel — the one that reaches us — has no group.
+    #[test]
+    fn the_channel_side_bind_is_a_fourth_distinct_command() {
+        assert_eq!(NVA06F_CTRL_CMD_BIND, 0xa06f_0104);
+        for other in [
+            NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+            NVA06C_CTRL_CMD_BIND,
+            NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+        ] {
+            assert_ne!(
+                NVA06F_CTRL_CMD_BIND, other,
+                "the channel-side bind collided with another FIFO control"
+            );
+        }
+        assert_eq!(BindParams::SIZE, 4);
+    }
+
+    /// ★★★ `[measured]` **The real GA106's own request, byte for byte.**
+    ///
+    /// `traces/real_ga106/rpc_transcript_real_ga106.txt:63` — `cmd=0xa06f0104 psize=4
+    /// head=0b 00 00 00`. Decoding those four bytes must yield `NV2080_ENGINE_TYPE_COPY2`,
+    /// and the reply body must be the same four bytes back.
+    ///
+    /// ⚠ This is the test that would have caught the C's empty row: decoding `dlen = 0`
+    /// gives `engine_type = 0` = `NV2080_ENGINE_TYPE_NULL`, which is not what the hardware
+    /// was asked and not what it answered.
+    #[test]
+    fn the_measured_ga106_bind_request_decodes_to_copy2_and_echoes_back() {
+        let wire = [0x0b, 0x00, 0x00, 0x00];
+        let got = decode_bind(&wire).expect("four bytes is the whole struct");
+        assert_eq!(
+            got.engine_type,
+            engine_type_copy(2).expect("COPY2 is within the first ten"),
+            "a real GA106 binds its scrubber channel to COPY2 (11), and 11 must decode to \
+             exactly that — if this reads as COPY0 the ordinal base is wrong"
+        );
+        assert_eq!(got.engine_type, 11, "COPY0 is 9, so COPY2 is 11");
+        assert_ne!(
+            got.engine_type, 0,
+            "⊘ zero is NV2080_ENGINE_TYPE_NULL and is what the C's EMPTY captured row \
+             decodes to — the value this test exists to distinguish from a measurement"
+        );
+        assert_eq!(&encode_bind(&got)[..], &wire[..]);
+    }
+
+    /// A short params image is a decode failure, not a zero.
+    ///
+    /// ⊘ The tempting alternative — pad and read what is there — would turn a truncated
+    /// request into a bind to whatever engine the low bytes spell.
+    #[test]
+    fn a_bind_params_image_shorter_than_its_struct_is_refused() {
+        for n in 0..BindParams::SIZE {
+            let err = decode_bind(&vec![0xffu8; n]).expect_err("must refuse");
+            assert_eq!(err, GpfifoScheduleError::ShortParams { got: n });
+        }
+    }
+
+    /// ★★ The refusal statuses are in the control's own documented set, and neither is
+    /// `NV_ERR_NOT_SUPPORTED`.
+    ///
+    /// ⊘ `0x56` is the FSM's *"nobody claimed this"* signature. A refusal that reused it
+    /// would be indistinguishable, in the guest's own dmesg, from this port having no code
+    /// for the command at all — which is the confusion that cost the schedule rung weeks.
+    #[test]
+    fn the_bind_refusals_are_documented_answers_and_never_the_unclaimed_signature() {
+        for s in [BIND_UNKNOWN_ENGINE_STATUS, BIND_REFUSED_STATUS] {
+            assert!(
+                BIND_DOCUMENTED_STATUSES.contains(&s),
+                "{s:#x} is not a status NVA06F_CTRL_CMD_BIND documents, so the guest's own \
+                 error path has no case for it"
+            );
+            assert_ne!(s, 0x56, "NV_ERR_NOT_SUPPORTED is the unclaimed signature");
+            assert_ne!(s, 0, "a refusal that answers NV_OK is not a refusal");
+        }
+        assert_ne!(
+            BIND_UNKNOWN_ENGINE_STATUS, BIND_REFUSED_STATUS,
+            "★ the two refusals say different things — a bad PARAMETER versus an unroutable \
+             CHANNEL — and collapsing them throws away the only diagnosis the guest gets"
+        );
     }
 
     /// The five host-FIFO semaphore methods are consecutive dwords starting at `0x5c`,
