@@ -3,7 +3,28 @@
 //!
 //! R1 says: *no blocking call under ANY lock, ever.* Its enforcement is "a
 //! thread-local lock-depth counter, maintained by the L1 guard wrappers, asserted
-//! zero at every blocking-verb entry". Those are **two different crates**: the guard
+//! zero at every blocking-verb entry".
+//!
+//! ## ⊘⊘ WHAT THIS WITNESS CANNOT SEE — read before trusting a green assert
+//!
+//! ★★★ **R1 says "ANY lock". This module sees only RANKED ones.** The mask is over
+//! `MAX_RANKS` small integers that the L1 adapter assigns; a `std::sync::Mutex` nobody
+//! ranked is invisible to it, so [`assert_lock_free`] passes **vacuously** while such a
+//! lock is held. The panic message is careful and says "ranked"; this paragraph exists
+//! because the *name* is not, and a reader budgets their trust by the name.
+//!
+//! This is the same defect the raw-surface keyword has (`l1_os_shell.md` §4.2.1.1): the
+//! instrument sees the thing it was told to see, scores perfectly, and is structurally
+//! blind to the class that actually bites. `[measured]` 2026-08-06, an agent designing a
+//! control-path host call was about to rely on this assert while the caller held
+//! `RegPlane`'s unranked FSM mutex — which would have compiled, passed, and stalled every
+//! vCPU's MMIO for the duration of a host round trip.
+//!
+//! ⇒ The unranked locks a vCPU thread can hold are **enumerated** in
+//! `l1_concurrency.md` §3.3.1 and gated by `tests/tests/unranked_locks.rs`, so a new one
+//! cannot be added without being classified. ⊘ Enumeration is not detection: this witness
+//! still will not fire on them. It is a reading aid, and the rule they carry is a review
+//! obligation. Those are **two different crates**: the guard
 //! wrappers are the L1 adapter's (`kayfabe-rt`), while the blocking-verb entry is the
 //! isolate port's (`kayfabe_isolate::Worker::execute`, the one door to a host RM verb).
 //! For the assert to guard the thing it names rather than a wrapper someone must
@@ -110,7 +131,12 @@ pub fn acquisitions(rank: u8) -> u64 {
     ACQUIRED.with(Cell::get)[rank as usize]
 }
 
-/// ★ **The R1 assert.** Panics — naming R1 — unless this thread holds ZERO locks.
+/// ★ **The R1 assert.** Panics — naming R1 — unless this thread holds zero **ranked**
+/// locks.
+///
+/// ⊘ The name says `lock_free` and that is stronger than what it checks: an unranked
+/// `Mutex` is invisible here and this returns cleanly while one is held. See the module
+/// doc's "what this witness cannot see"; the enumerated set is `l1_concurrency.md` §3.3.1.
 ///
 /// `what` names the operation being attempted, so the message says which blocking
 /// thing was about to run under a lock. Every door to a potentially-blocking

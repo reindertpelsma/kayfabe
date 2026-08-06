@@ -405,6 +405,43 @@ The three ASSERTED invariants are **R1, R3, R5**; R2 and R4 are the structural r
 that make them cheap to honor. Every one of the three is exercised as a runtime assert
 in the test tiers (§8.4) — the discipline is enforced, not merely documented.
 
+
+#### 3.3.1 ★★★ The locks the R1 witness CANNOT see — enumerated, because it will not fire on them
+
+R1 says *"no blocking call under **ANY** lock"*. `kayfabe_util::lockwitness` enforces it over a
+mask of **ranked** locks (device 0 / proc 1 / leaf 2). A plain `std::sync::Mutex` nobody ranked
+is invisible to that mask, so **`assert_lock_free` returns cleanly while one is held.** The
+panic message is careful and says *"ranked"*; the function *name* is not, and a reader budgets
+trust by the name.
+
+⚠ `[measured]` 2026-08-06 — not hypothetical. A control-path host call was being designed
+against that assert while the caller held `RegPlane`'s FSM mutex (`kayfabe-device/src/plane.rs`,
+taken across the whole policy chain on the vCPU's own MMIO trap). It would have compiled, passed
+every assertion, and stalled **every vCPU's MMIO** for a host round trip — multi-second at RM's
+timeout, forever on a wedged worker. `plane.rs` already calls keeping the doorbell port outside
+that mutex *"a requirement rather than a preference"*, enforced until now by that sentence alone.
+
+★ **Same defect the `unsafe` keyword has** (`l1_os_shell.md` §4.2.1.1): the instrument sees what
+it was told to see, scores perfectly, and is structurally blind to the class that bites.
+
+| lock | may anything block beneath it? |
+|---|---|
+| `kayfabe-rt/src/device.rs` `Mutex<GateState>` | **yes — that is its job.** `PoolGate` backpressure; every ranked guard is dropped before entry and the caller re-enters from the top after the wait |
+| `kayfabe-rt/src/executor.rs` `Mutex<ParkState>` | **yes.** `Parker`'s condvar state — `Condvar::wait` atomically *releases* it, so it is not held across the wait |
+| `kayfabe-device/src/plane.rs` `Mutex<PlaneState>` | ⊘ **NO. THE HAZARD.** Held across the entire policy chain on the vCPU MMIO trap |
+| `kayfabe-device/src/plane.rs` `RwLock<Box<dyn DoorbellPort>>` | **yes** — deliberately outside `state` so the doorbell's ranked-lock + backpressure path is not run beneath the FSM mutex |
+| `kayfabe-device/src/plane.rs` `Mutex<DoorbellLog>` | no call of any kind beneath it; push and release |
+
+⊘ **Enumeration is not detection.** Nothing fires when a blocking call runs under one of these;
+that stays a review obligation. What `tests/tests/unranked_locks.rs` buys is that the **set
+cannot grow silently** — a new unranked lock in the crates a vCPU thread runs through goes red
+until someone rules on it, which is when the obligation gets asked for.
+
+★ It earned that immediately: the gate's first correct run found `Mutex<ParkState>`, which was
+**absent from the hand-built list** because the first scanner matched only the bare `Mutex<`
+spelling and missed the fully-qualified `std::sync::Mutex<…>`. The scanner was fixed by a
+bite-check, and the row above exists because the fixed scanner demanded it.
+
 ### 3.4 The honest cost: a core-shape change, requested by design discussion
 
 > **Status (decision #35, owner-confirmed refactor-NOW): LANDED, behavior-preserving,
