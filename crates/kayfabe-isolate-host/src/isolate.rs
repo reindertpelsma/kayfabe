@@ -107,8 +107,14 @@ pub const CONTROL_FD: i32 = 3;
 /// the module docs: a parent-opened `/dev` descriptor is an escape, and the vacancy is the
 /// fix rather than an oversight.
 pub const RESERVED_NEVER_GRANTED_FD: i32 = 4;
+/// ★ fd number of the **park witness** write end, granted **only** when `--park` is armed.
+///
+/// Test-support scaffolding: see [`crate::loopback::LoopbackShared`]'s `park_witness` field for
+/// why a duration cannot stand in for it. ⊘ A production isolate never receives this grant, so
+/// this number is simply an unopened descriptor there — reserved, not silently reused.
+pub const PARK_WITNESS_FD: i32 = 5;
 /// fd number of pool worker 0's stream in the child; worker *n* is `WORKER_FD_BASE + n`.
-pub const WORKER_FD_BASE: i32 = 5;
+pub const WORKER_FD_BASE: i32 = 6;
 
 // ★ The descriptor contract, checked at COMPILE time rather than by a test. It is a
 // relationship between three constants, so a runtime assertion could only ever be
@@ -118,8 +124,12 @@ const _: () = {
     assert!(CONTROL_FD >= 3, "grants start above the standard streams");
     assert!(CONTROL_FD != RESERVED_NEVER_GRANTED_FD);
     assert!(
-        WORKER_FD_BASE > RESERVED_NEVER_GRANTED_FD,
-        "workers come after the reserved hole"
+        PARK_WITNESS_FD > RESERVED_NEVER_GRANTED_FD,
+        "the park witness comes after the reserved hole"
+    );
+    assert!(
+        WORKER_FD_BASE > PARK_WITNESS_FD,
+        "workers come after the reserved hole AND after the park witness"
     );
     assert!(
         RESERVED_NEVER_GRANTED_FD == 4,
@@ -656,9 +666,87 @@ pub struct HostIsolate {
     /// `RmBackend::export_backing` returned. **This is what the VMM installs from** — see
     /// [`HostIsolate::exports`].
     exports: Arc<ExportRegistry>,
+    /// ★ Read end of the park witness — `Some` only when this isolate was spawned with a
+    /// `--park` verb armed. See [`HostIsolate::wait_for_park`].
+    park_witness: Option<std::io::PipeReader>,
+    /// ★ The parent's OWN write end of the same pipe, kept solely so a watchdog can unblock
+    /// [`HostIsolate::wait_for_park`] with a distinguishable byte.
+    ///
+    /// ⊘ Without it a broken witness would make the wait **hang**, and a hang wedges CI
+    /// instead of failing it — the failure shape this repo has already been bitten by three
+    /// times. A bound that produces a *named* error is the whole point.
+    park_deadline: Option<std::io::PipeWriter>,
 }
 
 impl HostIsolate {
+    /// ★★★ Block until this isolate's parked verb has **actually parked**.
+    ///
+    /// The fact a caller needs before acting on a wedged requester is *"the verb is parked"*,
+    /// and the fact a timeout gives is *"no reply has arrived yet"*. The second is strictly
+    /// weaker — it is also true before the chain has started — so a test that wants the first
+    /// and waits for the second is betting on a host round trip. That bet is what made
+    /// `abandon_releases_a_wedged_requester_with_wedged` flake ~0.5 % of the time, and it
+    /// fails **20/20** when the duration is shortened to zero.
+    ///
+    /// This reads the byte the child writes immediately before its blocking `read`, so on
+    /// return every earlier verb in the chain has already completed.
+    ///
+    /// ## `within` is a BOUND, not the thing being waited on
+    ///
+    /// ⚠ The distinction that this whole change is about survives here and must not be
+    /// blurred. `within` never decides the answer on a healthy run: the wait ends when the
+    /// **park happens**, however long that takes. `within` exists only so that a *broken*
+    /// witness — a child that never announces — produces a named error instead of a hang,
+    /// because a hang wedges CI rather than failing it. Pick it generously; it is a
+    /// diagnostic ceiling, not a synchronisation device. If shortening it changes whether a
+    /// green test is green, something else is wrong.
+    ///
+    /// # Errors
+    /// The isolate was spawned without a park armed, the bound elapsed, or the read failed.
+    ///
+    /// # Panics
+    /// Never.
+    pub fn wait_for_park(&mut self, within: std::time::Duration) -> Result<(), String> {
+        use std::io::{Read as _, Write as _};
+        let deadline = self
+            .park_deadline
+            .as_ref()
+            .ok_or("this isolate was spawned without a park armed, so nothing will ever park")?
+            .try_clone()
+            .map_err(|e| format!("duplicating the park deadline writer: {e}"))?;
+        let reader = self
+            .park_witness
+            .as_mut()
+            .ok_or("this isolate was spawned without a park armed, so nothing will ever park")?;
+
+        // ★ The watchdog writes into the SAME pipe, so the blocking read below is what gets
+        // unblocked — no non-blocking mode, no signal, no second descriptor to poll. It is
+        // told to stand down the moment the real byte arrives, so the healthy path leaves no
+        // thread sleeping and no stale byte behind.
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+        let watchdog = std::thread::spawn(move || {
+            if stop_rx.recv_timeout(within).is_err() {
+                let _ = (&mut &deadline).write_all(b"T");
+            }
+        });
+
+        let mut byte = [0u8; 1];
+        let read = reader.read_exact(&mut byte);
+        let _ = stop_tx.send(());
+        let _ = watchdog.join();
+
+        match read {
+            Ok(()) if byte == *b"P" => Ok(()),
+            Ok(()) if byte == *b"T" => Err(format!(
+                "★ no park was announced within {within:?}. The child either never reached the \
+                 parked verb or no longer announces it — this is NOT a reason to lengthen the \
+                 bound, which never decides a healthy run"
+            )),
+            Ok(()) => Err(format!("unknown park witness byte {byte:?}")),
+            Err(e) => Err(format!("waiting for the park witness: {e}")),
+        }
+    }
+
     /// ★ Why the spawn failed, if it did.
     ///
     /// **A finding about the port, not about this type.**
@@ -693,6 +781,8 @@ impl HostIsolate {
             retired: true,
             spawn_error: Some(why),
             exports: Arc::new(ExportRegistry::new()),
+            park_witness: None,
+            park_deadline: None,
         }
     }
 
@@ -993,6 +1083,23 @@ fn build_isolate(
         // ★ And NO device-directory grant. `RESERVED_NEVER_GRANTED_FD` stays empty; the
         // child builds its own sandbox and mints the descriptor inside it.
         .grant(FdGrant::new(OwnedFd::from(control_theirs), CONTROL_FD));
+    // ★ The park witness, granted ONLY when a park is armed. `ParkVerb::Nothing` is every
+    // production isolate, and it gets no pipe, no grant and no write — the descriptor number
+    // is reserved rather than reused so the layout does not depend on a test knob.
+    let park_witness = if park == crate::loopback::ParkVerb::Nothing {
+        None
+    } else {
+        let (reader, writer) = std::io::pipe().map_err(|e| format!("park witness pipe: {e}"))?;
+        let ours = writer
+            .try_clone()
+            .map_err(|e| format!("keeping our own park deadline writer: {e}"))?;
+        spec = spec.grant(FdGrant::new(OwnedFd::from(writer), PARK_WITNESS_FD));
+        Some((reader, ours))
+    };
+    let (park_witness, park_deadline) = match park_witness {
+        Some((r, w)) => (Some(r), Some(w)),
+        None => (None, None),
+    };
     for i in 0..pool {
         let (mine, theirs) = UnixStream::pair().map_err(|e| format!("worker socketpair: {e}"))?;
         ours.push(mine);
@@ -1062,6 +1169,8 @@ fn build_isolate(
         retired: false,
         spawn_error: None,
         exports,
+        park_witness,
+        park_deadline,
     })
 }
 

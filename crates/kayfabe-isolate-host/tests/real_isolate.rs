@@ -535,12 +535,36 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
     isolate.checkin(w);
 }
 
+/// ★ An isolate with **no park armed** must REFUSE the wait, not block forever.
+///
+/// ⊘ This is the refusal, and without a test for it the obvious wrong implementation —
+/// return `Ok(())` when there is no witness — passes everything else in this file, because
+/// every other caller *does* arm a park. A vacuous `Ok` would then silently restore the exact
+/// defect this whole mechanism replaced: the caller proceeds without the park having happened.
+#[test]
+fn waiting_for_a_park_that_was_never_armed_is_refused_not_awaited() {
+    let f = factory(ParkVerb::Nothing);
+    let mut a = f.spawn_host(iso(51));
+    let e = a
+        .wait_for_park(Duration::from_secs(30))
+        .expect_err("an isolate with nothing parked must refuse, not wait");
+    assert!(
+        e.contains("without a park armed"),
+        "the refusal must say WHY nothing will ever arrive, so a caller is not left \
+         wondering whether it simply lost a race: {e}"
+    );
+}
+
 /// ★★ §7.5's escape, end to end against a real process: the requester is **released
 /// without a reply**, and the verb it was waiting for is still parked in the child.
 #[test]
 fn abandon_releases_a_wedged_requester_with_wedged() {
     let f = factory(ParkVerb::Sysmem);
-    let mut a = f.spawn(iso(50));
+    // ★ `spawn_host`, not `spawn` — the concrete type, because `wait_for_park` is deliberately
+    // NOT on the `Isolate` trait. The park witness is test scaffolding, and putting it on the
+    // production interface would make every implementation owe an answer to a question only a
+    // fixture can ask.
+    let mut a = f.spawn_host(iso(50));
 
     let w = a.checkout().expect("worker");
     let (rx, t) = spawn_verb(
@@ -551,8 +575,24 @@ fn abandon_releases_a_wedged_requester_with_wedged() {
             at: AT,
         },
     );
-    // It really is parked before we abandon it.
-    assert!(rx.recv_timeout(TICK).is_err());
+    // ★★★ WAIT FOR THE PARK ITSELF, not for a duration.
+    //
+    // This line used to be `assert!(rx.recv_timeout(TICK).is_err())` — a 25 ms bet that the
+    // chain had got past `alloc_vaspace` and into the parked `alloc_sysmem`. But "no reply
+    // arrived in 25 ms" is a strictly weaker fact than "the verb is parked": it is also true
+    // when the chain has not started. When the bet lost, `abandon` landed first, the chain
+    // unwound with ZERO intermediates, and the `orphans.free.len() == 1` assertion below
+    // failed — ~0.5 % of runs, and **20/20** with the duration shortened to zero.
+    //
+    // The child now announces the park immediately before its blocking read, so on return
+    // `alloc_vaspace` has provably completed and exactly one intermediate exists. ⊘ The old
+    // form must not come back: it makes this test's subject a scheduling outcome.
+    a.wait_for_park(Duration::from_secs(30))
+        .expect("the chain parks in alloc_sysmem");
+    assert!(
+        rx.try_recv().is_err(),
+        "a parked verb has not replied — if this fires, the park is not where the test thinks"
+    );
 
     let request = a
         .abandon(kayfabe_isolate::WorkerId(0))

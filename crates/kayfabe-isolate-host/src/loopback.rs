@@ -42,7 +42,7 @@ use kayfabe_isolate::{
 };
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
 /// Which verb parks forever. One knob, chosen because the hazard the design is about is a
@@ -94,6 +94,20 @@ pub struct LoopbackShared {
     /// is deliberately not exposed: the hazard is a verb that never returns.
     _park_writer: std::io::PipeWriter,
     park_reader: std::io::PipeReader,
+    /// ★★★ The **progress edge**: written once, immediately before a park's blocking read.
+    ///
+    /// A parent that wants to act on a parked verb needs to know the verb is *parked* — not
+    /// merely that no reply has arrived yet. Those are different facts, and the second is
+    /// strictly weaker: "no reply yet" is also true when the chain has not started. Waiting
+    /// on a duration to tell them apart is a **bet on a host round trip**, and
+    /// `abandon_releases_a_wedged_requester_with_wedged` lost that bet ~0.5 % of the time
+    /// (deterministically at 0 ms — see `real_isolate.rs`).
+    ///
+    /// ⊘ This is **test-support scaffolding, not protocol**. It exists only because the park
+    /// itself is induced by the fixture (`--park`), and the component that chooses to park is
+    /// the one honest place to announce it. It is `None` in every isolate that does not park,
+    /// so a production isolate has neither the fd nor the write.
+    park_witness: Option<std::io::PipeWriter>,
 }
 
 impl LoopbackShared {
@@ -101,7 +115,10 @@ impl LoopbackShared {
     ///
     /// # Errors
     /// The `pipe(2)` failed.
-    pub fn new(park_on: ParkVerb) -> std::io::Result<Arc<Self>> {
+    pub fn new(
+        park_on: ParkVerb,
+        park_witness: Option<std::io::PipeWriter>,
+    ) -> std::io::Result<Arc<Self>> {
         let (park_reader, _park_writer) = std::io::pipe()?;
         Ok(Arc::new(LoopbackShared {
             client: Mutex::new(Table {
@@ -114,6 +131,7 @@ impl LoopbackShared {
             park_on,
             _park_writer,
             park_reader,
+            park_witness,
         }))
     }
 }
@@ -154,6 +172,14 @@ impl LoopbackRm {
     fn verb(&mut self, parks: bool) -> Result<u64, RmError> {
         let mut table = self.shared.client.lock().unwrap_or_else(|e| e.into_inner());
         if parks && self.shared.park_on == ParkVerb::Sysmem {
+            // ★ Announce BEFORE blocking, and while holding the client lock. When the parent
+            // observes this byte, every earlier verb in the chain has already returned — that
+            // is precisely the fact a duration cannot establish. A failed write is deliberately
+            // ignored: the witness is an observation aid, and a parent that stopped listening
+            // must not change whether this verb parks.
+            if let Some(w) = self.shared.park_witness.as_ref() {
+                let _ = (&mut &*w).write_all(b"P");
+            }
             let mut byte = [0u8; 1];
             match self.park.read(&mut byte) {
                 // Only a signal ends a park. The `Ok` arms are unreachable while the
@@ -352,7 +378,7 @@ mod tests {
     }
 
     fn rm(park: ParkVerb) -> LoopbackRm {
-        let shared = LoopbackShared::new(park).expect("pipe");
+        let shared = LoopbackShared::new(park, None).expect("pipe");
         LoopbackRm::new(IsolateId::new(1, GpuId(0)), shared, exports()).expect("dup")
     }
 
@@ -379,7 +405,7 @@ mod tests {
         let mut a = rm(ParkVerb::Nothing);
         let mut b = LoopbackRm::new(
             IsolateId::new(2, GpuId(0)),
-            LoopbackShared::new(ParkVerb::Nothing).expect("pipe"),
+            LoopbackShared::new(ParkVerb::Nothing, None).expect("pipe"),
             exports(),
         )
         .expect("dup");
@@ -417,7 +443,7 @@ mod tests {
     #[test]
     fn a_parked_verb_blocks_until_a_break_signal_and_reports_interrupted() {
         kayfabe_linux_raw::install_break_handler().expect("handler");
-        let shared = LoopbackShared::new(ParkVerb::Sysmem).expect("pipe");
+        let shared = LoopbackShared::new(ParkVerb::Sysmem, None).expect("pipe");
         let mut worker =
             LoopbackRm::new(IsolateId::new(1, GpuId(0)), Arc::clone(&shared), exports())
                 .expect("dup");
@@ -484,7 +510,7 @@ mod tests {
         const NEVER_ARRIVED: std::time::Duration = std::time::Duration::from_secs(30);
 
         kayfabe_linux_raw::install_break_handler().expect("handler");
-        let shared = LoopbackShared::new(ParkVerb::Sysmem).expect("pipe");
+        let shared = LoopbackShared::new(ParkVerb::Sysmem, None).expect("pipe");
         let id = IsolateId::new(1, GpuId(0));
         let mut parker = LoopbackRm::new(id, Arc::clone(&shared), exports()).expect("dup");
         let mut sibling = LoopbackRm::new(id, Arc::clone(&shared), exports()).expect("dup");

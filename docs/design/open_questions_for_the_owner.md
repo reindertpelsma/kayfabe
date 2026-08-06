@@ -542,17 +542,34 @@ through `kayfabe-isolate-host/src/rm.rs`. Nothing in the capability rebuild touc
 anything it is marginally *dearer*: `TABLES` now has eight rows rather than six, so the new field
 costs two more lines.
 
-## Q12 — a cross-process **"verb parked"** edge (the fifth flake)
+## ~~Q12~~ — CLOSED 2026-08-06, and the answer was **not** the one this section asked for
 
-`abandon_releases_a_wedged_requester_with_wedged` flakes at ~0.5% (2/400 before *and* after the flake
-campaign — untouched by it). Its precondition is `recv_timeout(25ms).is_err()`: **a sleep used as a
+`abandon_releases_a_wedged_requester_with_wedged` flaked at ~0.5% (2/400 before *and* after the flake
+campaign — untouched by it). Its precondition was `recv_timeout(25ms).is_err()`: **a sleep used as a
 progress edge** for a park that happens in a **child process**, where *"no reply yet"* is not the same
 as *"past the VAS allocation"*.
 
-**Deliberately not fixed**, and the reasoning is the ask: lengthening the sleep moves the rate without
-killing the class, and loosening the `== 1` assertion would delete the §7.5 contract it exists to
-protect. A correct fix needs a **real cross-process parked-verb edge** — a protocol change. That is a
-decision about the isolate protocol, so it is yours.
+`[measured]` 2026-08-06, `real_isolate.rs::abandon_releases_a_wedged_requester_with_wedged`, 20 runs:
+**the race reproduces 20/20 with the wait shortened to 0 ms**, always at the same
+assertion (`orphans.free` is `[]`, 1 demanded). The order: parent spawns the verb thread → waits →
+abandons → if the child has not yet finished `alloc_vaspace`, the abandon lands first and the chain
+unwinds with **zero** intermediates. So the precondition proved something **strictly weaker** than
+what the final assertion needed, which is the entire defect.
+
+⊘ **This section previously said a correct fix "needs a real cross-process parked-verb edge — a
+protocol change", and that was wrong.** It was written without ever reproducing the race, which let a
+guess be recorded as a requirement and put a decision on the owner's desk that was never theirs. The
+park is **induced by the fixture** (`with_park(ParkVerb::Sysmem)` — a blocking pipe read in the
+child), so the component that *chooses* to park is the one honest place to **announce** it. The fix is
+a `PARK_WITNESS_FD` pipe granted only when `--park` is armed, written immediately before the blocking
+read: **test-support scaffolding, isolate request/reply protocol untouched.**
+
+★ The wait carries a `within` bound, and the bound is **not** what is being waited on — it exists only
+so a broken witness fails with a name instead of hanging (a hang wedges CI rather than failing it).
+Both new refusals were verified by mutation on 2026-08-06 (`real_isolate.rs`, 20 further runs green after
+the fix): deleting the announce fails in 30 s with its own message,
+and replacing the never-armed refusal with a vacuous `Ok` turns the new
+`waiting_for_a_park_that_was_never_armed_is_refused_not_awaited` red.
 
 ---
 

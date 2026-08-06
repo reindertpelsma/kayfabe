@@ -29,7 +29,7 @@
 
 use crate::export::ChildExports;
 use crate::fdcross::write_frame_with_fds;
-use crate::isolate::{CONTROL_FD, RmMode, WORKER_FD_BASE, decode_control};
+use crate::isolate::{CONTROL_FD, PARK_WITNESS_FD, RmMode, WORKER_FD_BASE, decode_control};
 use crate::loopback::{LoopbackRm, LoopbackShared, ParkVerb};
 use crate::proto::{
     EXPORT_SOURCE_FABRICATED, EXPORT_SOURCE_HOST_DEVICE, Envelope, Reply, Request, WireError,
@@ -251,7 +251,18 @@ fn build_backends(
                 .collect())
         }
         RmMode::Loopback => {
-            let shared = LoopbackShared::new(args.park).map_err(|e| format!("park pipe: {e}"))?;
+            // ★ Adopt the park witness only when a park is armed — its grant is conditional
+            // on exactly the same predicate in the parent, so an absent descriptor here is
+            // the expected state, not a degradation to tolerate silently.
+            let witness = if args.park == ParkVerb::Nothing {
+                None
+            } else {
+                let fd = adopt_inherited_fd(PARK_WITNESS_FD)
+                    .map_err(|e| format!("adopting the park witness: {e}"))?;
+                Some(std::io::PipeWriter::from(fd))
+            };
+            let shared =
+                LoopbackShared::new(args.park, witness).map_err(|e| format!("park pipe: {e}"))?;
             let mut out: Vec<Box<dyn RmBackend>> = Vec::with_capacity(args.workers);
             for _ in 0..args.workers {
                 out.push(Box::new(
@@ -623,7 +634,7 @@ mod tests {
     /// named status, so it reads as a refusal and never as an empty page.
     #[test]
     fn an_oversized_fabricated_aperture_read_is_refused_before_anything_is_allocated() {
-        let shared = LoopbackShared::new(ParkVerb::Nothing).expect("pipe");
+        let shared = LoopbackShared::new(ParkVerb::Nothing, None).expect("pipe");
         let mut rm = LoopbackRm::new(
             IsolateId::new(1, GpuId(0)),
             shared,
