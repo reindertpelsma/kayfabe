@@ -463,7 +463,18 @@ def sweep() -> list[Site]:
 # runner asks for the tightening the moment the ceiling has slack, and the reason it asks is
 # that a ceiling nobody tightens stops biting, so it happens in the commit that created the
 # slack rather than being left as headroom the next diff can grow into.
-UNATTRIBUTED_BAR = 382
+# ★ 382 -> 381 on the raw-layer re-derivation commit (2026-08-07), and it is a NET figure
+# hiding two movements in opposite directions: the residue list added to
+# `kayfabe-linux-raw/tests/unsafe_naming.rs` created two new claim sites, and both were
+# written as UNMEASURED on the first pass rather than after the gate complained — the words
+# were "I have not read those sites myself". ⊘ The gate still scored them red, because
+# "measured" appearing anywhere in the block is what it counts, so the fix was to say
+# UNMEASURED in the sentence that makes the claim instead of narrating around it. Three sites
+# elsewhere in the same diff went from claim to non-claim for the same reason.
+# ★ Worth recording as a pattern: an honest admission phrased as a comparison ("rather than
+# measured") reads to the ledger exactly like a boast. The honest class has a vocabulary and
+# it has to be used, not approximated.
+UNATTRIBUTED_BAR = 381
 CONFLATED_BAR = 66
 BARE_HW_BAR = 17
 

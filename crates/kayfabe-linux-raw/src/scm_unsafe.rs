@@ -44,11 +44,20 @@ use std::os::fd::{AsRawFd, BorrowedFd, OwnedFd};
 
 /// The most descriptors one frame may carry.
 ///
-/// ★ A bound, not a capacity estimate. The control-message length is written by the
-/// **peer**, and on the receive side that peer is the isolate — deliberately the less
-/// trusted end of the boundary (`l1_os_shell.md` §11). Without a bound, a peer that
-/// attaches descriptors to every frame exhausts the VMM's descriptor table, which is
-/// the same DoS the C's R2-M1 finding names.
+/// ★ A bound, not a capacity estimate. On the receive side the peer is the isolate —
+/// deliberately the less trusted end of the boundary (`l1_os_shell.md` §11) — and without
+/// a bound, a peer that attaches descriptors to every frame exhausts the VMM's descriptor
+/// table, which is the same DoS the C's R2-M1 finding names.
+///
+/// ⚠ **CORRECTED 2026-08-07.** This paragraph used to open *"the control-message length is
+/// written by the **peer**"*, and that is false. The peer chooses **how many descriptors
+/// it attaches**; the `cmsghdr` on this side is written by the **kernel**, which computes
+/// `cmsg_len = CMSG_LEN(n * sizeof(int))` from the count it decided to deliver
+/// (`scm_detach_fds`). The bound below is still right, but it defends against a *count*,
+/// not against an *encoding* — and a security rationale that names the wrong writer is how
+/// the audit that reviewed [`recv_with_fds`] came to report a peer-reachable underflow that
+/// no peer can reach. See the walk in [`recv_with_fds`] for what the arithmetic now rests
+/// on instead.
 ///
 /// Four is chosen from the C's own traffic: no message in
 /// `C: src/common/nvkvm_isolate_proto.h` carries more than one, and the headroom is for
@@ -249,6 +258,54 @@ pub fn send_with_fds(
 // Receiving
 // =====================================================================================
 
+/// `CMSG_LEN(0)` — the bytes a control header occupies before its payload begins, and
+/// therefore the smallest `cmsg_len` a well-formed header can carry.
+const CMSG_HEADER_BYTES: usize = {
+    // SAFETY: `CMSG_LEN` is pure size arithmetic over its argument. It takes no pointer,
+    // dereferences nothing, and reads no memory — the `unsafe` is `libc`'s blanket on the
+    // whole `f!` macro family, not a claim this call site has to discharge.
+    (unsafe { libc::CMSG_LEN(0) }) as usize
+};
+
+/// ★★★ How many descriptors a control header's payload can hold — re-derived from **both**
+/// the header's declared length and the bytes the receiver actually owns after it.
+///
+/// This is the arithmetic the `SCM_RIGHTS` walk in [`recv_with_fds`] used to do inline as
+/// `(cmsg_len - CMSG_LEN(0)) / 4`, and it is extracted here because a pure function over
+/// two integers can be driven with values the kernel will never produce, which is the only
+/// way to test that it does not produce them.
+///
+/// ## ⚠ What it is defending against, stated precisely
+///
+/// ⊘ **Not a peer.** The `cmsghdr` is written by the **kernel**, which computes
+/// `cmsg_len = CMSG_LEN(n * sizeof(int))` from the count it chose to deliver — see the
+/// correction on [`MAX_FDS_PER_FRAME`]. No isolate can hand us a malformed one.
+///
+/// What it *is* defending against is a reliance nothing in this file recorded, and that a
+/// reader would have to go into `libc`'s source to find `[measured]` 2026-08-07,
+/// `libc-0.2.189 src/unix/linux_like/mod.rs:1766-1772`:
+///
+/// - `CMSG_FIRSTHDR` checks **only** `msg_controllen >= size_of::<cmsghdr>()`. It never
+///   looks at the first header's `cmsg_len`, so a first header declaring less than
+///   `CMSG_LEN(0)` reaches the subtraction — where an unsigned `-` wraps to ~2^64 and the
+///   quotient becomes a loop bound over memory we do not own.
+/// - `CMSG_NXTHDR` *does* reject `cmsg_len < size_of::<cmsghdr>()`, so only the **first**
+///   header can underflow — but it bounds the next header's *start* using the **current**
+///   header's length, and never bounds the payload *end* of the header it returns.
+///
+/// ⇒ In both cases the count came from a length field alone and was never intersected with
+/// the buffer. `available` is that intersection, and it is what makes the result a fact
+/// about our own array rather than a fact about the kernel's good behaviour. The axiom in
+/// `lib.rs` does not say *"trust nothing except the kernel"*; it says the block re-derives.
+fn descriptors_in(declared_len: usize, available: usize) -> usize {
+    // `saturating_sub`, not `-`: a short header yields an empty payload rather than a
+    // 64-bit loop bound. `min`: the payload cannot outrun the bytes we own, whatever it says.
+    let payload = declared_len
+        .saturating_sub(CMSG_HEADER_BYTES)
+        .min(available);
+    payload / std::mem::size_of::<libc::c_int>()
+}
+
 /// Receive up to `buf.len()` bytes from `sock`, appending any descriptors that arrive
 /// with them to `fds` — at most `max_fds` of them.
 ///
@@ -351,22 +408,48 @@ pub fn recv_with_fds(
     // Collect first, judge second. Anything adopted here is closed by `Drop` on every
     // path out of this function, including the refusals below.
     let mut received: Vec<OwnedFd> = Vec::new();
+    // ★ The end of the control data the kernel says it wrote, as an address. Every read in
+    // the walk below is bounded by THIS rather than by a header's own claim about itself.
+    // `msg_controllen` was overwritten by `recvmsg` with the byte count actually produced;
+    // it is the one length in this frame that describes our array instead of describing a
+    // message.
+    // ⚠ `try_from` rather than `as`, and the `allow` is the whole reason it needs a comment:
+    // `msg_controllen` is a `size_t` on glibc and a `socklen_t` on musl, and this crate is
+    // compiled for BOTH (the isolate image is `x86_64-unknown-linux-musl`). On the target
+    // clippy happens to be linting, the conversion IS an identity and the lint is right about
+    // this build; on the other it is a real widening. ⊘ Taking either of clippy's two
+    // suggestions — `as usize` (`unnecessary_cast` fires) or bare `msg_controllen`
+    // (`useless_conversion` fires) — makes the expression correct on one libc and wrong or
+    // non-compiling on the other. `unwrap_or(0)` reads a length this platform cannot
+    // represent as "no control data", which is the safe direction.
+    #[allow(
+        clippy::useless_conversion,
+        reason = "identity on glibc, a widening on musl"
+    )]
+    let control_end =
+        (msg.msg_control as usize).saturating_add(usize::try_from(msg.msg_controllen).unwrap_or(0));
+
     // SAFETY: `msg` was just filled by a successful `recvmsg`, so `msg_control` /
     // `msg_controllen` describe the control data the KERNEL wrote into `cmsg`, which is
     // live in this frame for the whole walk; `CMSG_FIRSTHDR`/`CMSG_NXTHDR` are the
-    // kernel's own iteration protocol over exactly that region and stop at null. For a
-    // header the kernel itself wrote as `SCM_RIGHTS`, its payload is a run of `c_int`
-    // descriptors whose count is derived from that header's own `cmsg_len` — never from
-    // a peer-supplied number in the message body — and `read_unaligned` makes no
-    // alignment claim about the payload. Each integer is handed straight to `adopt_fd`
-    // on the expression that reads it, so each becomes an `OwnedFd` exactly once.
+    // kernel's own iteration protocol over exactly that region and stop at null.
+    //
+    // ★ The bound on the payload read is NOT taken from `cmsg_len`. `descriptors_in`
+    // intersects the header's declared payload with `control_end - CMSG_DATA(hdr)` — the
+    // bytes still inside `cmsg`, an array whose size this frame chose — so `data.add(i)`
+    // for `i < count` stays within that array however the header is encoded. That closes
+    // the two `libc` gaps recorded on `descriptors_in`: the un-validated FIRST header, and
+    // NXTHDR's bound on a header's start rather than its payload's end. `read_unaligned`
+    // makes no alignment claim about the payload. Each integer is handed straight to
+    // `adopt_fd` on the expression that reads it, so each becomes an `OwnedFd` exactly once
+    // and is closed by `Drop` on every path out of here.
     unsafe {
         let mut hdr = libc::CMSG_FIRSTHDR(&raw const msg);
         while !hdr.is_null() {
             if (*hdr).cmsg_level == libc::SOL_SOCKET && (*hdr).cmsg_type == libc::SCM_RIGHTS {
-                let payload = (*hdr).cmsg_len as usize - libc::CMSG_LEN(0) as usize;
-                let count = payload / std::mem::size_of::<libc::c_int>();
                 let data = libc::CMSG_DATA(hdr).cast::<libc::c_int>();
+                let available = control_end.saturating_sub(data as usize);
+                let count = descriptors_in((*hdr).cmsg_len as usize, available);
                 for i in 0..count {
                     let raw = data.add(i).read_unaligned();
                     received.push(adopt_fd(raw, "recvmsg(SCM_RIGHTS)")?);
@@ -463,4 +546,86 @@ fn unsafe_zeroed_msghdr() -> libc::msghdr {
     // valid inhabitant. Every field is overwritten or deliberately left zero by the two
     // callers in this file before the struct reaches a syscall.
     unsafe { std::mem::zeroed() }
+}
+
+// =====================================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FD: usize = std::mem::size_of::<libc::c_int>();
+
+    /// The ordinary case, and the reason the clamp is invisible in normal traffic: when the
+    /// header is well-formed and the buffer holds what it describes, the answer is the count.
+    #[test]
+    fn a_well_formed_header_yields_exactly_the_descriptors_it_declares() {
+        for n in 0..=MAX_FDS_PER_FRAME {
+            let declared = CMSG_HEADER_BYTES + n * FD;
+            assert_eq!(
+                descriptors_in(declared, n * FD),
+                n,
+                "a header declaring {n} descriptors, in a buffer holding exactly that many, \
+                 must yield {n} — if the clamp changes this it is refusing real traffic"
+            );
+        }
+    }
+
+    /// ★★★ **The underflow.** A first header shorter than `CMSG_LEN(0)` reaches the
+    /// subtraction because `CMSG_FIRSTHDR` does not inspect `cmsg_len` at all.
+    ///
+    /// ⊘ With a plain `-` this is not "one too many" — unsigned wraparound makes the count
+    /// roughly `2^61`, i.e. a loop that walks the whole address space adopting whatever
+    /// integers it finds as descriptors. The assertion is `== 0`, and the number below is
+    /// what it would otherwise be.
+    #[test]
+    fn a_header_shorter_than_its_own_prologue_yields_no_descriptors() {
+        for declared in 0..CMSG_HEADER_BYTES {
+            assert_eq!(
+                descriptors_in(declared, 4096),
+                0,
+                "cmsg_len {declared} is below CMSG_LEN(0) = {CMSG_HEADER_BYTES}; a `-` here \
+                 wraps and the quotient becomes {}",
+                (usize::MAX - (CMSG_HEADER_BYTES - declared - 1)) / FD
+            );
+        }
+    }
+
+    /// ★★ The second gap: a header whose payload runs past the control data the kernel
+    /// actually wrote. `CMSG_NXTHDR` bounds a header's *start*, never its payload's *end*,
+    /// so the count must be intersected with what remains of the buffer.
+    #[test]
+    fn a_payload_longer_than_the_buffer_is_cut_to_the_buffer() {
+        // Declares 64 descriptors; only 2 descriptors' worth of buffer is left.
+        assert_eq!(descriptors_in(CMSG_HEADER_BYTES + 64 * FD, 2 * FD), 2);
+        // Declares more than the address space could hold. The `min` is what answers.
+        assert_eq!(descriptors_in(usize::MAX, 3 * FD), 3);
+        // Nothing left at all — the header sits at the very end of the written region.
+        assert_eq!(descriptors_in(CMSG_HEADER_BYTES + 8 * FD, 0), 0);
+    }
+
+    /// ⊘ A partial descriptor is not a descriptor: trailing bytes that cannot form a whole
+    /// `c_int` must be dropped rather than rounded up into a read that runs off the end.
+    #[test]
+    fn a_trailing_partial_descriptor_is_not_counted() {
+        assert_eq!(descriptors_in(CMSG_HEADER_BYTES + FD + 3, 4096), 1);
+        assert_eq!(descriptors_in(CMSG_HEADER_BYTES + FD - 1, 4096), 0);
+        assert_eq!(descriptors_in(CMSG_HEADER_BYTES + 2 * FD, FD + 1), 1);
+    }
+
+    /// The constant is the one the walk's pointer arithmetic assumes: `CMSG_DATA` is
+    /// `hdr.offset(1)`, so the prologue must be exactly one `cmsghdr`, aligned.
+    ///
+    /// ⚠ If this ever fails, `descriptors_in`'s `available` argument and its
+    /// `saturating_sub` disagree about where the payload starts — the clamp would still be
+    /// safe (it can only ever shrink), but the well-formed case above would start refusing
+    /// real descriptors, which is the too-strict half of the same defect.
+    #[test]
+    fn the_header_prologue_matches_what_cmsg_data_skips() {
+        assert_eq!(
+            CMSG_HEADER_BYTES,
+            std::mem::size_of::<libc::cmsghdr>(),
+            "CMSG_LEN(0) and the offset CMSG_DATA skips have diverged on this target"
+        );
+    }
 }

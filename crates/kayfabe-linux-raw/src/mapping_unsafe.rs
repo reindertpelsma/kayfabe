@@ -897,8 +897,21 @@ impl Reservation {
         // The result is compared against the requested address below, so a kernel that
         // honoured the request differently cannot be adopted, and the mapping is adopted
         // `InsideReservation` so it will not `munmap` a hole in the range on drop.
+        //
+        // ⚠ `[measured]` 2026-08-07: that sentence was a PHANTOM for the life of this
+        // function — no such comparison existed. `MAP_FIXED`'s contract makes it true
+        // anyway (the kernel returns the requested address or fails), so nothing was
+        // reachable through it; what was wrong was a `// SAFETY:` block citing, as its own
+        // justification, a check the reader could not find. That is the shape the ioctl
+        // bound was hiding behind one commit earlier, and the fix is the same one: make the
+        // sentence true rather than delete it. `[src] mmap(2)` — "MAP_FIXED … the mapping
+        // is placed at exactly that address" — is a contract, and a contract we do not
+        // check is a contract we are trusting.
+        let target = unsafe { self.map.base.as_ptr().add(start).cast::<libc::c_void>() };
+        // SAFETY: as argued in (a)-(d) above — `target` is inside a reservation this process
+        // owns and still holds, `len_host` was bounded against that reservation's own length
+        // by `checked_span`, and no live placement overlaps the range.
         let ret = unsafe {
-            let target = self.map.base.as_ptr().add(start).cast::<libc::c_void>();
             libc::mmap(
                 target,
                 len_host,
@@ -910,6 +923,23 @@ impl Reservation {
         };
         if ret == libc::MAP_FAILED {
             return Err(last_syscall_error("mmap"));
+        }
+        if !std::ptr::eq(ret, target) {
+            // ⊘ Adopting this would record a `Placement` at `offset` while the memory it
+            // names is somewhere else entirely: every `MappedRegion` derived from it would
+            // address the reservation's PROT_NONE filler, and the real mapping would be
+            // unreachable AND unfreed. Give it back and refuse.
+            //
+            // SAFETY: `ret` is a live mapping of exactly `len_host` bytes that the call
+            // above created moments ago; no `Placement`, `MappedRegion` or reservation
+            // refers to it, because nothing has been recorded yet on this path.
+            unsafe { libc::munmap(ret, len_host) };
+            return Err(RawError::Unsupported {
+                what: "a kernel that did not honour MAP_FIXED",
+                detail: "mmap(MAP_FIXED) returned an address other than the one requested; \
+                         the placement bookkeeping cannot describe a mapping that is not \
+                         where it was put, so the mapping was returned rather than adopted",
+            });
         }
         let base = NonNull::new(ret.cast::<u8>()).ok_or(RawError::Syscall {
             call: "mmap",

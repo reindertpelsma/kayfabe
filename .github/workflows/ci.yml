@@ -1332,7 +1332,29 @@ jobs:
           # branches on it to decide whether an operation is permitted; RM re-derives the
           # caller's privilege on every ioctl (`guest_blast_radius.md` §3.2) and a
           # userspace pre-check could only ever disagree with the kernel's answer.
-          AUDITED="kayfabe-linux-raw:87 kayfabe-qemu-raw:47"
+          # ★★ 87 -> 90 at the raw-layer RE-DERIVATION commit (2026-08-07), and the shape of
+          # the move is the point: TWO of the three are the same block being SPLIT so a check
+          # can stand between its halves, and only ONE is new surface.
+          #   +1 `scm_unsafe.rs` — `CMSG_HEADER_BYTES`, a const block wrapping
+          #      `libc::CMSG_LEN(0)`. Pure size arithmetic over a literal: takes no pointer,
+          #      reads no memory, cannot fail. The `unsafe` is `libc`'s blanket on its whole
+          #      `f!` macro family, not a precondition this site discharges. It exists so the
+          #      `SCM_RIGHTS` walk can bound a payload against `CMSG_LEN(0)` by NAME rather
+          #      than by an inline `16`.
+          #   +2 `mapping_unsafe.rs` — `Reservation::place`'s single block became three.
+          #      `let target = unsafe { base.add(start) }` was ALREADY inside the old block;
+          #      it is hoisted out so `ret` can be compared against it, which is what the old
+          #      block's own `// SAFETY:` comment claimed already happened and did not. The
+          #      genuinely new one is `unsafe { libc::munmap(ret, len_host) }` on the refusal
+          #      arm: a kernel that ignores `MAP_FIXED` hands back a live mapping nothing
+          #      refers to, and refusing without unmapping would leak it. Its invariant is
+          #      that `ret` was created by the `mmap` two lines above, is exactly `len_host`
+          #      bytes, and has not been recorded in any `Placement` — nothing can be holding
+          #      it, because nothing has been told about it.
+          # ⊘ Note what did NOT move: `chardev_unsafe.rs` stays at 4 across the ioctl-size
+          # bound that landed at `6d82fb4`, because a bound added in SAFE code above an
+          # existing block is the shape this ratchet should never charge for.
+          AUDITED="kayfabe-linux-raw:90 kayfabe-qemu-raw:47"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -1612,12 +1634,18 @@ jobs:
           #        `send` deliberately: re-entering `sendmsg` would attach the descriptors a
           #        SECOND time.
           #      `recv_with_fds` (3) — `CMSG_SPACE` (a pure size computation, relaxed only
-          #        because libc declares it unsafe), the `recvmsg`, and the cmsg WALK. The
-          #        walk's invariant is the one worth reading: the descriptor count comes
-          #        from the kernel's own `cmsg_len`, never from a peer-supplied number in
-          #        the message body, and each integer is handed to `adopt_fd` on the
-          #        expression that reads it — so a refusal downstream closes it by `Drop`
-          #        rather than by an arm someone must remember to write.
+          #        because libc declares it unsafe), the `recvmsg`, and the cmsg WALK. Each
+          #        integer is handed to `adopt_fd` on the expression that reads it — so a
+          #        refusal downstream closes it by `Drop` rather than by an arm someone must
+          #        remember to write.
+          #        ⚠ CORRECTED 2026-08-07. This entry used to state the walk's invariant as
+          #        *"the count comes from the kernel's own `cmsg_len`, never from a
+          #        peer-supplied number in the message body"* — true, and not an invariant.
+          #        `cmsg_len` being kernel-written says nothing about whether the payload it
+          #        describes fits the buffer WE own, and `libc::CMSG_FIRSTHDR` does not
+          #        inspect the first header's length at all. The count is now intersected
+          #        with the control region's own end (`scm_unsafe::descriptors_in`), which is
+          #        a fact about our array rather than about the kernel's good behaviour.
           #      `descriptor_kind` (2) — `fstat` and the matching `assume_init`, split
           #        because the second is only sound on the first's success path.
           #      `unsafe_zeroed_msghdr` (1) — `msghdr` has private padding on some targets
@@ -1627,6 +1655,27 @@ jobs:
           #      removing the kind check fails 3 tests; ignoring `MSG_CTRUNC` fails 2;
           #      removing the cross-isolate check fails 3; dropping `MSG_CMSG_CLOEXEC` fails
           #      the exec test; `mem::forget`ing a refused descriptor fails 2.
+          #
+          # ★★ 87 -> 90 THE RE-DERIVATION COMMIT (2026-08-07). Three blocks, itemised in the
+          #    note above `AUDITED` because two of them are a SPLIT rather than growth:
+          #      `scm_unsafe.rs::CMSG_HEADER_BYTES` (1) — `CMSG_LEN(0)` in a const block.
+          #      `mapping_unsafe.rs::Reservation::place` (+2) — the `base.add(start)` hoisted
+          #        out of the `mmap` block so the returned address can be compared against
+          #        it, plus the `munmap` that gives back a mapping a non-conforming kernel
+          #        put somewhere else.
+          #    ★ Watched to fire, both directions:
+          #      - `available` shortened by one byte -> 2 of 18 `fd_crossing` tests RED
+          #        (`the_cap_admits_exactly_its_own_number_and_refuses_one_more` and
+          #        `more_descriptors_than_allowed_is_refused_and_leaks_nothing`), which is
+          #        the correct pair: a 1-byte loss only crosses a descriptor boundary at 4.
+          #      - the `MAP_FIXED` comparison forced to always refuse -> 5+ `mapping_unsafe`
+          #        tests RED, proving the arm is on the live path.
+          #    ⊘ The comparison's OTHER direction (forced to never refuse) is a principled
+          #    NON-BITER and is recorded as one: `MAP_FIXED` either returns the requested
+          #    address or fails, so no test on a conforming kernel can distinguish them. It
+          #    is there because the block's own SAFETY argument cites it, not because a test
+          #    demands it — and a citation of a check that does not exist is what this commit
+          #    is about.
           #
           # kayfabe-qemu-raw (0) — L2-Q stage Q0. Nothing yet, and §2.2's "itemise the
           # second crate's blocks exactly as the first crate's 37 are" is therefore

@@ -44,11 +44,15 @@ const CRATES: &[&str] = &["kayfabe-linux-raw", "kayfabe-qemu-raw"];
 /// nevertheless carry reasoning a raw-surface block depends on, and therefore owe the
 /// `_unsafe` suffix. §4.2.1.1 names the three qualifying constructs.
 ///
-/// **It is empty, and empty is a CLAIM rather than an absence.** It asserts that no block in
-/// this tree's raw layer trusts a value it did not re-derive itself. The worked standard is
-/// `Region::word_at` (`src/mapping_unsafe.rs`): it re-checks alignment, then bounds the access
-/// with `bounds::checked_span(self.map.len_bytes(), …)` — from the **mapping's own length**,
-/// never from what the caller claimed. Safe code passing a wild offset gets a `RawError`.
+/// **It is empty, and empty is a CLAIM rather than an absence.** It asserts that **no file
+/// outside the `*_unsafe.rs` set** carries reasoning a raw block depends on — that the `ls`
+/// audit's field of view is complete, not that the code inside it is finished. That second,
+/// much larger statement is [`UNDISCHARGED_REDERIVATION`]'s, and it is **false today**.
+///
+/// The worked standard is `Region::word_at` (`src/mapping_unsafe.rs`): it re-checks alignment,
+/// then bounds the access with `bounds::checked_span(self.map.len_bytes(), …)` — from the
+/// **mapping's own length**, never from what the caller claimed. Safe code passing a wild
+/// offset gets a `RawError`.
 ///
 /// ★ Which is exactly why offsets and lengths are *allowed* to be computed in safe files: the
 /// rule is not *"never compute an offset in safe code"*, it is *"never let the raw layer trust
@@ -58,6 +62,96 @@ const CRATES: &[&str] = &["kayfabe-linux-raw", "kayfabe-qemu-raw"];
 /// ⊘ Adding a name here is a design decision, not a filing one. Prefer the better fix — make
 /// the raw side re-validate, which empties the entry instead of decorating it.
 const SOUNDNESS_CRITICAL_SAFE_FILES: &[&str] = &[];
+
+/// ★★★ **Raw blocks that still trust a value they did not re-derive.** Open, by name.
+///
+/// ## ⚠ Why this list exists: the empty one above used to say something much bigger
+///
+/// Until 2026-08-07 [`SOUNDNESS_CRITICAL_SAFE_FILES`] was documented as asserting *"no block
+/// in this tree's raw layer trusts a value it did not re-derive itself"* — a statement about
+/// **every block in the crate**, resting on a list that quantifies over **files outside it**.
+/// An audit refuted it, and two of its findings were real:
+///
+/// - `CharDevice::ioctl` never compared `_IOC_SIZE(request)` against `arg.len()`, so a safe
+///   caller whose request number and buffer had drifted apart made the **driver** copy up to
+///   16 383 bytes into a buffer that might hold 32. Fixed at `6d82fb4`, and the `// SAFETY:`
+///   block there had **named the missing check and assigned it to the caller**.
+/// - `recv_with_fds`'s `SCM_RIGHTS` walk derived its descriptor count from `cmsg_len` alone.
+///   Fixed by `scm_unsafe::descriptors_in`. ⊘ Note this one was reported as peer-reachable and
+///   **is not** — see that function for who actually writes a `cmsghdr`.
+///
+/// ★ The lesson is the one `gates_quantified_over_a_list` keeps teaching from the other side:
+/// an empty list is only as true as the sentence attached to it, and **nothing was checking
+/// the sentence.** So the residue gets a list of its own, and the list is not empty.
+///
+/// ## ⊘ What this does NOT do
+///
+/// It detects nothing. Every row below is a *known* gap someone has to close; none of them is
+/// currently reachable from a peer, which is why they are recorded rather than embargoed. What
+/// the list buys is that the count cannot silently drop — closing one means deleting its row,
+/// and deleting a row is a diff a reviewer sees.
+///
+/// `[measured]` 2026-08-07 — every row read at the cited line by me, not transcribed.
+const UNDISCHARGED_REDERIVATION: &[(&str, &str)] = &[
+    (
+        "crates/kayfabe-linux-raw/src/chardev_unsafe.rs",
+        "★★ THE SAME DEFECT AS THE ONE JUST FIXED, one level in: `Indirect` knows its buffer's \
+         length and offers it as `len()`, but the argument's COMPANION SIZE FIELD — the number \
+         the driver actually copies by — is set by the caller and never checked against \
+         `buf.len()`. The request-size bound added at 6d82fb4 covers the top-level argument \
+         only; a pointer patched into it can still name a buffer smaller than the size field \
+         beside it claims. Closing it means `Indirect` writing that field itself.",
+    ),
+    (
+        "crates/kayfabe-linux-raw/src/sandbox_unsafe.rs",
+        "★★ FAILS OPEN, and it is a SECURITY INSTRUMENT: `last_capability` breaks out of its \
+         probe loop on the first error and returns the last success, so if PR_CAPBSET_READ \
+         fails at capability 0 it reports 0. `privileges()` then scans one capability and \
+         reports a nearly-empty bounding set — which is exactly what a caller verifying \
+         'privilege was surrendered' wants to see. A broken probe reads as a clean result.",
+    ),
+    (
+        "crates/kayfabe-linux-raw/src/vcpu_unsafe.rs",
+        "★ `VcpuExit::Mmio.len` is narrowed from the kernel's u32 with `u8::try_from`, which \
+         bounds it to 255 — but KVM's contract is <= 8 and `data` is `[u8; 8]`. A consumer \
+         slicing `data[..len]` panics rather than reads out of bounds, so this is a liveness \
+         gap, not a soundness one; the completion side IS bounded (see its own test). The \
+         bound should come from `data.len()`, which is the value that makes it true.",
+    ),
+    (
+        "crates/kayfabe-linux-raw/src/kvm_unsafe.rs",
+        "★ `KvmVm::adopt` takes an `OwnedFd` and builds a VM handle without calling \
+         `confirm_is_a_vm`, which exists three hundred lines away and is what the clone path \
+         uses. Every ioctl afterwards is issued against whatever that descriptor really is. \
+         The failure is EINVAL rather than corruption, but the type says 'this is a VM' and \
+         nothing established it.",
+    ),
+    (
+        "crates/kayfabe-linux-raw/src/spawn_unsafe.rs",
+        "`FdGrant::new` asserts `target >= 3` and has no upper bound, so a grant can name a \
+         descriptor number the child's RLIMIT_NOFILE will refuse. The dup2 fails and the spawn \
+         reports it, so this is tidiness rather than a hole — recorded so the asymmetry (a \
+         lower bound that panics, no upper bound at all) is a decision rather than an oversight.",
+    ),
+];
+
+/// ⚠ The audit that produced the rows above raised nine findings. Two were fixed, five are
+/// listed, and **two are neither** — `Backing::SharedFile` accepting a file shorter than the
+/// mapping (a `SIGBUS` on first touch, no `fstat`) and `adopt_inherited_fd` treating a
+/// descriptor's openness as evidence of ownership. ⊘ Both are **UNMEASURED by me** — the
+/// wording above is the audit's, carried verbatim and adjudicated by nobody. A row I
+/// transcribed rather than read would make the five I did read less believable, so they stay
+/// out of the list and stay named here: the gap is a gap, not a shorter list.
+const UNADJUDICATED_AUDIT_FINDINGS: usize = 2;
+
+/// ★ The audit's findings that are **still open**: five listed above plus two unread.
+///
+/// ⊘ This is the ratchet, and it points DOWN. Deleting a row from
+/// [`UNDISCHARGED_REDERIVATION`] because the gap was closed must decrement this too, and the
+/// test that checks the sum is what forces the commit to say *which* finding closed. A residue
+/// list nobody has to reconcile shrinks by attrition — a row gets tidied away in an unrelated
+/// diff and the count of known-open holes silently drops.
+const AUDIT_FINDINGS_STILL_OPEN: usize = 7;
 
 fn repo_root() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -121,6 +215,54 @@ fn every_declared_soundness_critical_safe_file_carries_the_unsafe_suffix() {
              the row instead of decorating it"
         );
     }
+}
+
+/// ★★★ Every undischarged row names a file that exists, and says what is trusted.
+///
+/// ⊘ This cannot tell whether the gap is still open — only a reader can. What it stops is the
+/// row outliving the file, which is how a residue list turns into decoration: five confident
+/// paragraphs about code nobody can open.
+#[test]
+fn every_undischarged_rederivation_names_a_live_file_and_states_what_is_trusted() {
+    let present = sources();
+    for (file, why) in UNDISCHARGED_REDERIVATION {
+        assert!(
+            present.contains(*file),
+            "⊘ `{file}` carries an undischarged-trust row but does not exist. Either the gap \
+             was closed and the row should be DELETED (which is the point of the list), or the \
+             path rotted and every other row just got less believable"
+        );
+        assert!(
+            why.len() > 120,
+            "★ the row for `{file}` is too short to say what value is trusted, where it comes \
+             from, and what closing it would mean — and those three are the whole content"
+        );
+    }
+    assert!(
+        !UNDISCHARGED_REDERIVATION.is_empty(),
+        "★★★ if this list is empty then the crate-wide claim the audit REFUTED has become true \
+         again — which is excellent, and is a claim that must be re-established by reading, not \
+         by an empty array. Restore the sentence on SOUNDNESS_CRITICAL_SAFE_FILES when it is"
+    );
+}
+
+/// ★★ The books balance: every audit finding is fixed, listed, or named as unread.
+///
+/// ⊘ The debt is UNMEASURED and this test cannot measure it — what it does is make the debt
+/// **unavoidable to edit**. Closing a gap deletes a row, which breaks this sum, which forces
+/// the same commit to say which finding closed and decrement the total. That is the only
+/// mechanism here; without it a row is a comment, and comments get tidied.
+#[test]
+fn the_open_findings_account_for_every_row_and_every_unread_site() {
+    assert_eq!(
+        UNDISCHARGED_REDERIVATION.len() + UNADJUDICATED_AUDIT_FINDINGS,
+        AUDIT_FINDINGS_STILL_OPEN,
+        "★ the residue no longer adds up. If a gap was CLOSED, decrement \
+         AUDIT_FINDINGS_STILL_OPEN in the same commit and say in the message which one and how \
+         it was verified. If a row was ADDED from somewhere other than the 2026-08-07 audit, \
+         give it its own provenance — inheriting a citation it does not come from is exactly \
+         the move that put a refuted claim on master in the first place"
+    );
 }
 
 /// ★★ The scan still finds the tree, so an empty list means *"nothing qualifies"* and not
