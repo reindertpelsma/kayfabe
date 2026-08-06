@@ -697,12 +697,98 @@ ratchet and every `// SAFETY:` comment all still pass. **The unsoundness happene
 pointer was minted; everything after it is safe code being wrong.** That is why the rule is
 about *what crosses the seam*, not about who writes `unsafe`.
 
-> **THE RULE. A host CPU address never crosses a crate boundary, in any representation.**
-> Not `*mut u8`, not `*const u8`, not `NonNull`, not `usize`, not a `u64` field. What crosses
-> is a **bounded object** — a region that carries its own length and offers only checked
-> accessors — or an **opaque token** that only the raw layer can resolve. Offsets are
-> domain-typed (`HostOffset`), guest addresses are domain-typed (`Gpa`), and **a length is
-> never passed separately from the base it belongs to.**
+> **THE AXIOM** (owner, 2026-08-06). **`unsafe` code must assume safe code is bugged, broken,
+> and skips every validation — and still may not violate.** `unsafe` exists to hand safe code
+> *more safe functions*; safe code never uses unsafe functions or raw pointers. If an `unsafe`
+> block's correctness depends on any invariant safe code is capable of breaking, that block is
+> unsound, however careful the safe code happens to be today.
+>
+> **THE RULE, which is now a COROLLARY rather than an axiom.** A host CPU address never crosses
+> a crate boundary, in any representation. Not `*mut u8`, not `*const u8`, not `NonNull`, not
+> `usize`, not a `u64` field. What crosses is a **bounded object** — a region that carries its
+> own length and offers only checked accessors — or an **opaque token** that only the raw layer
+> can resolve. Offsets are domain-typed (`HostOffset`), guest addresses are domain-typed
+> (`Gpa`), and **a length is never passed separately from the base it belongs to.**
+
+★★★ **Why the axiom is stated first, and the five refusals derived from it.** Until 2026-08-06
+this section opened with the five as *axioms* — an enumeration of routes — which is why nobody
+could say whether the list was complete. Under the axiom they are consequences: handing safe
+code a `*mut u8` / `usize` / `NonNull` is *automatically* a violation, because safe code can now
+feed a corrupted value back in and the `unsafe` that trusts it is unsound by construction. One
+sentence generates all five — and generates the ones nobody enumerated.
+
+⇒ ★ **And it generalises past addresses.** The same argument covers file descriptors, KVM
+memslot indices, `mmap` lifetimes, memfd seal state and uffd registrations: an fd round-tripped
+through safe code and handed back to an `unsafe` syscall is the identical defect with no pointer
+in sight. Read the rule as *"nothing an `unsafe` block's soundness rests on may be round-tripped
+through safe code"*; "host CPU address" is its most common instance, not its extent.
+
+#### 4.2.1.1 ★★★ The `unsafe` KEYWORD is not the boundary — the `_unsafe` FILE is
+
+`unsafe` marks five **operations** (deref a raw pointer, call an `unsafe fn`, touch `static mut`,
+implement an `unsafe trait`, read a union field). It does not mark **reasoning**. Rust's own
+model puts the soundness boundary at the **privacy boundary**: safe code that can reach an
+abstraction's private fields is part of its safety argument. So *"rustc accepted it without an
+`unsafe` block"* was never evidence of anything.
+
+⊘ **Therefore the criterion for the `_unsafe` filename suffix is NOT "contains an `unsafe`
+block".** It is *"contains reasoning an `unsafe` block depends on"*. A file earns the suffix,
+with no `unsafe {}` anywhere in it, if it contains any of:
+
+1. **raw pointer arithmetic** — subsumed in practice, because a pointer should never be outside
+   an `_unsafe` file at all;
+2. **mutable data that bypasses Rust's lifetime and aliasing model** — most importantly anything
+   viewing memory the *guest* can write, since the guest never stops writing and a `&[u8]` over
+   it is UB at the moment of creation rather than at the dereference (§4.3);
+3. **manual memory management that bypasses Rust's own** — hand-rolled lifetimes, manual
+   `Drop` ordering that something else's soundness relies on.
+
+★★ **The qualifier that keeps this from swallowing the tree, and it is load-bearing.** Offsets
+and lengths **may** live outside `_unsafe` files — provided **every use inside `unsafe`
+re-validates them against bounds the unsafe layer owns.** A `HostOffset` computed by ordinary
+safe code is fine; what would not be fine is `unsafe` *trusting* it.
+
+`Region::word_at` (`kayfabe-linux-raw/src/mapping_unsafe.rs:674-700`) is the worked example and
+the standard: it re-checks alignment, then calls `bounds::checked_span(self.map.len_bytes(), …)`
+— deriving the bound from the **mapping's own length**, never from what the caller claimed — and
+its `// SAFETY:` note discharges validity and aliasing separately. Safe code passing a wild
+offset gets a `RawError`, not undefined behaviour.
+
+⇒ ★ **So the first response to soundness-critical safe code is to make the `unsafe` side
+re-validate, not to rename the file.** Renaming is the fallback for the residue where
+re-validation is impossible or genuinely too costly. A tree where `unsafe` trusts nothing has an
+empty residue, which is the state this one is in (§4.6.1).
+
+⚠ **And a measurement, because a perfect score can hide the gap.** `[measured]` 2026-08-06: the
+set of files using the keyword and the set named `*_unsafe.rs` are **exactly equal — 13 and 13**,
+no exceptions in either direction. That is not luck: `scripts/ci_gates.sh`'s **Unsafe-surface
+gate** already enforces it, on the rationale that an auditor must be able to enumerate the whole
+raw surface with `ls`. ⊘ *"Never widen the pattern and never add an allowlist: the moment this
+gate needs a judgement call, `ls` stops being the audit."*
+
+★ But that flawless result is *against the keyword criterion*, and it proves only that nobody
+hid the keyword under an innocent name. It is structurally incapable of seeing the class above —
+and its 13/13 is precisely what makes that easy to miss. The residue is therefore **enumerated
+by name** in `crates/kayfabe-linux-raw/tests/unsafe_naming.rs`, which is *not* an allowlist: it
+can only ever make the audited surface larger, never smaller, so `ls` remains the audit. The
+list is empty today, and empty is a **claim** — that no raw-surface block trusts a value it did
+not re-derive itself.
+
+#### 4.2.1.2 ★★ The bound is the OBJECT, not the memslot
+
+`[src]` A guest-RAM view must be unable to address VMM memory that is not guest RAM — but the
+memslot is **not** a tight enough boundary to state that with. There are several memslots at a
+time (`kayfabe-vmm-kvm/src/lib.rs:527`, `memslots: Vec<KvmMemslot>`, with `live_memslots` /
+`peak_memslots` counters at `:290-298`), and each holds **many objects**.
+
+⇒ **A struct addressing an object may not address outside THAT OBJECT**, never merely "somewhere
+inside the same memslot". A slot-wide bound would let a view of one guest object walk into
+another guest object that happens to share its slot — which is `#14`'s cross-process collision
+wearing a different hat, and is not what MISS = FAULT promises.
+
+⊘ This is why the line is *"does the access go through an object that owns its own bounds"* and
+not *"which address space is it named in"*. An unchecked `Gpa` **is** a VMM-memory access; it is
+only guest-confined because something bounds-checked it first.
 
 **What the API must refuse** (each is a `trybuild` row — ~~§4.6 rows 7–10~~ ★ **corrected
 2026-07-28, doc audit: §4.6 rows 1, 3, 7, 8, 9 — refusal 1 is row 1, refusal 5 is row 3, and
