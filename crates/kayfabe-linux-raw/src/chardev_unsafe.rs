@@ -375,6 +375,40 @@ impl CharDevice {
                 value: arg.len() as u64,
             });
         }
+        // ★★★ RE-DERIVE THE DRIVER'S OWN COPY LENGTH FROM THE REQUEST NUMBER.
+        //
+        // `request` is a plain caller-supplied `u64`, and its `_IOC_SIZE` field is what the
+        // frontend copies **in both directions** at the address below — `ogkm-580:
+        // kernel-open/nvidia/nv.c:2404` (`arg_size = _IOC_SIZE(cmd)`), `:2437`
+        // (`NV_KMALLOC(arg_copy, arg_size)`), `:2445` (`NV_COPY_FROM_USER(…, arg_size)`) and
+        // `:2775` (`NV_COPY_TO_USER(…, arg_size)`).
+        //
+        // ⊘ Until 2026-08-06 this was a **caller's contract**, and the `// SAFETY:` block
+        // below said so in as many words. That is the one thing this crate's axiom forbids
+        // (`lib.rs`: *"No block in this crate has a precondition its caller is trusted to have
+        // met"*): a safe caller whose request number and buffer had drifted apart — an ABI
+        // struct whose size constant no longer matched its encode buffer, which is a recorded
+        // bug pattern in this project — made the driver write up to `MAX_IOCTL_SIZE` bytes
+        // into a buffer that might hold 32, with no `unsafe` anywhere on the caller's side.
+        // ⚠ The predicate is `>`, NOT `!=`, and the difference was found by the suite within
+        // minutes of the first cut. `!=` is stronger than memory safety requires and it broke a
+        // legitimate caller immediately: **legacy request numbers carry no size field at all**
+        // — `FIONREAD` is `0x541B`, a magic constant predating the `_IOC` encoding, so its
+        // `_IOC_SIZE` decodes to 0 while the driver still serves it. Refusing those is the
+        // too-strict half of `mock_fidelity_both_directions`, which is the same defect class as
+        // being too permissive.
+        //
+        // ★ What memory safety actually needs is that the driver never copies **more** than we
+        // own. `declared == 0` says the number describes no payload and the check can say
+        // nothing; `declared < arg.len()` is a buffer larger than the driver will touch, which
+        // is wasteful and safe. Only `declared > arg.len()` is the overrun.
+        let declared = crate::ioctl::declared_size(request);
+        if declared > arg.len() {
+            return Err(RawError::IoctlSizeMismatch {
+                declared: declared as u64,
+                buffer: arg.len() as u64,
+            });
+        }
         // Every check below runs BEFORE a single address is written, so a refusal leaves
         // `arg` exactly as the caller handed it over — no half-patched buffer escapes.
         for (i, p) in indirect.iter().enumerate() {
@@ -415,10 +449,10 @@ impl CharDevice {
             arg[p.at..p.at + POINTER_FIELD_WIDTH].copy_from_slice(&addr.to_le_bytes());
         }
 
-        // SAFETY: `arg` is a live exclusive borrow of at least one byte (checked above) and
-        // no larger than the request number can describe (checked above). The driver reads
-        // and writes exactly the `_IOC_SIZE(request)` bytes at that address, which is the
-        // caller's contract for building `request` from `arg.len()` via `crate::ioctl`.
+        // SAFETY: `arg` is a live exclusive borrow of at least one byte (checked above). The
+        // driver reads and writes exactly `_IOC_SIZE(request)` bytes at that address, and
+        // that number was **re-derived from `request` and compared against `arg.len()`
+        // above** — it is this block's own bound, not a contract handed to the caller.
         // Every pointer field the driver will follow was bounds-checked into `arg` above
         // and points at a buffer borrowed exclusively for this call. `ioctl` is variadic:
         // the third argument is passed as a pointer, which is what the frontend expects.
@@ -637,6 +671,85 @@ mod tests {
         assert!(
             r.is_err(),
             "an ioctl under a leaf lock must panic naming R1"
+        );
+    }
+
+    /// ★★★ A request number that declares more bytes than the buffer holds is REFUSED —
+    /// before any address reaches the driver.
+    ///
+    /// This is the raw layer re-deriving a bound instead of trusting one. `request` is a plain
+    /// caller `u64`, and its `_IOC_SIZE` field is what the frontend copies **in both
+    /// directions** at the address we pass (`ogkm-580: kernel-open/nvidia/nv.c:2404`, `:2445`,
+    /// `:2775`). Before 2026-08-06 this was documented as *"the caller's contract"*, so a safe
+    /// caller whose request and buffer had drifted apart — an ABI struct whose size constant no
+    /// longer matched its encode buffer — made the driver write up to `MAX_IOCTL_SIZE` bytes
+    /// into a buffer that might hold 32, with no raw-surface keyword anywhere on its side.
+    ///
+    /// ⊘ The refusal must fire **without a device**: it is a pure predicate over the arguments,
+    /// so it cannot be excused by "no GPU on this box".
+    ///
+    /// ⚠ The predicate is `declared > arg.len()`, not `!=` — see the check's own comment. The
+    /// companion test below pins the legacy case that forced that correction.
+    #[test]
+    fn an_ioctl_request_that_outsizes_its_buffer_is_refused() {
+        // Declares 4096 bytes; the buffer holds 32. The mismatch alone must be fatal.
+        let request = ioctl::readwrite(b'F', 0x2A, 4096).expect("a legal request");
+        assert_eq!(ioctl::declared_size(request), 4096);
+
+        let dev = dev_null();
+        let mut arg = [0u8; 32];
+        let r = dev.ioctl(request, &mut arg, &mut []);
+        assert!(
+            matches!(
+                r,
+                Err(RawError::IoctlSizeMismatch {
+                    declared: 4096,
+                    buffer: 32
+                })
+            ),
+            "★★★ a request declaring 4096 bytes over a 32-byte buffer must be refused BY NAME \
+             — the driver would copy the declared count in both directions. Got {r:?}"
+        );
+    }
+
+    /// ★★ A LEGACY request number — no `_IOC_SIZE` field at all — must still be accepted.
+    ///
+    /// `FIONREAD` is `0x541B`, a magic constant predating the `_IOC` encoding, so
+    /// `declared_size` reads 0 from it while the kernel serves it perfectly well. The first cut
+    /// of the size check asserted **equality** and refused this within minutes of landing
+    /// (`export_backing.rs`'s non-vacuity control went red). ⊘ A double that refuses input the
+    /// real thing accepts is the same defect class as one that accepts too much.
+    #[test]
+    fn a_legacy_request_number_carrying_no_size_field_is_still_accepted() {
+        const FIONREAD: u64 = 0x541B;
+        assert_eq!(
+            ioctl::declared_size(FIONREAD),
+            0,
+            "FIONREAD predates the _IOC encoding, so it declares nothing — that is the whole \
+             reason the predicate cannot be equality"
+        );
+        let dev = dev_null();
+        let mut queued = [0u8; 4];
+        let r = dev.ioctl(FIONREAD, &mut queued, &mut []);
+        assert!(
+            !matches!(r, Err(RawError::IoctlSizeMismatch { .. })),
+            "★ a legacy request must reach the kernel — refusing it is the too-strict failure: \
+             {r:?}"
+        );
+    }
+
+    /// ★ And the matching request is accepted by the size check — so the refusal above is about
+    /// the overrun, not about this path refusing everything.
+    #[test]
+    fn a_request_whose_size_matches_its_buffer_passes_the_size_check() {
+        let request = ioctl::readwrite(b'F', 0x2A, 32).expect("a legal request");
+        let dev = dev_null();
+        let mut arg = [0u8; 32];
+        let r = dev.ioctl(request, &mut arg, &mut []);
+        assert!(
+            !matches!(r, Err(RawError::IoctlSizeMismatch { .. })),
+            "a matching request must get PAST the size check (whatever /dev/null then says \
+             about the ioctl itself): {r:?}"
         );
     }
 }

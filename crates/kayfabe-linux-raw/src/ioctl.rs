@@ -47,6 +47,19 @@ const DIRSHIFT: u32 = SIZESHIFT + SIZEBITS;
 /// The largest payload an ioctl request number can describe.
 pub const MAX_IOCTL_SIZE: usize = (1usize << SIZEBITS) - 1;
 
+/// ★★★ The byte count a request number tells the driver to copy — `_IOC_SIZE(request)`.
+///
+/// This lives beside [`encode`] because it is that function read backwards, and a decoder
+/// that drifts from its encoder is how a size check stops checking. ⊘ It is **not** a
+/// convenience: `chardev_unsafe`'s `ioctl` compares it against the caller's buffer length,
+/// because the driver copies exactly this many bytes **in both directions** at the address it
+/// is given (`ogkm-580: kernel-open/nvidia/nv.c:2404` `arg_size = _IOC_SIZE(cmd)`, `:2445`
+/// `NV_COPY_FROM_USER(…, arg_size)`, `:2775` `NV_COPY_TO_USER(…, arg_size)`).
+#[must_use]
+pub fn declared_size(request: u64) -> usize {
+    ((request >> SIZESHIFT) as usize) & MAX_IOCTL_SIZE
+}
+
 fn encode(dir: u32, ty: u8, nr: u8, size: usize) -> Result<u64, RawError> {
     if size > MAX_IOCTL_SIZE {
         return Err(RawError::TooLargeForHost { value: size as u64 });

@@ -45,6 +45,19 @@ pub enum RawError {
         /// Length operand.
         len: u64,
     },
+    /// ★★★ An ioctl request number and its argument buffer disagree about the size.
+    ///
+    /// The 14-bit `_IOC_SIZE` field of `request` is **what the driver copies**, in both
+    /// directions, at the address we hand it — so a `request` describing more bytes than
+    /// `arg` holds is a write past the end of a buffer this process owns. The number is a
+    /// plain caller-supplied `u64`, so this refusal is the raw layer re-deriving a bound
+    /// rather than trusting one.
+    IoctlSizeMismatch {
+        /// Bytes the request number says the driver will copy — `_IOC_SIZE(request)`.
+        declared: u64,
+        /// Bytes the argument buffer actually holds.
+        buffer: u64,
+    },
     /// A value the host requires to be page- (or word-) aligned was not.
     Misaligned {
         /// What was misaligned (`"mapping length"`, `"volatile load offset"`, …).
@@ -210,6 +223,12 @@ impl fmt::Display for RawError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RawError::ZeroLength { what } => write!(f, "{what} is zero"),
+            RawError::IoctlSizeMismatch { declared, buffer } => write!(
+                f,
+                "ioctl request declares {declared} bytes but the argument buffer holds \
+                 {buffer} — the driver copies the DECLARED count in both directions, so this \
+                 would read or write past the buffer"
+            ),
             RawError::OutOfRange {
                 offset,
                 len,
