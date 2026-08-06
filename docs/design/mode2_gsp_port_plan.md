@@ -1590,7 +1590,7 @@ Listed here for completeness as GSP-D1.
 | **O6** | does the guest ever post a *command* larger than one element during boot? | decides whether GSP-D6's multi-element read is on the boot critical path or only the steady state | S5, from a recorded trace: count commands whose `rpc.length > elementSizeMin - hdrSize`. **No GPU** — the trace already exists once §6.2's patch lands |
 | ★★ **O7** | `GSP_RUN_CPU_SEQUENCER` (0x1002) — **RESOLVED STATUS WITHDRAWN 2026-07-28.** It was marked RESOLVED on **610** evidence and the **580** answer is the opposite; see the restatement immediately below this table. | it decides whether the faked GSP can ever drive a CPU-side sequencer — including the SEC2 **CORE_RESUME** path, which bears on "GPU restart must work without a bolt-on" | version-split, both answers now `[src]`. What remains open is narrower and named in O7a |
 | ~~**O8**~~ | ~~does the bench's 580 declare `queueElementHdrSize` in `MESSAGE_QUEUE_INIT_ARGUMENTS`?~~ | **ANSWERED 2026-07-28: NO.** 580's struct has the r570 **4** fields (`ogkm-580: gsp_init_args.h:29-34`, written at `kernel_gsp.c:4486-4489`); 610's has 9. ⇒ **queue geometry is not negotiated at 580** and must come from Axis A: 48 / 4096 / 65536 / 4 / 12 (`ogkm-580: message_queue_priv.h:91-104`). §1.3, §9 D8 | — |
-| **O7a** | at 580, is a `GSP_RUN_CPU_SEQUENCER` event *required* on any path we must support, or merely *accepted*? | if required, the faked GSP must be able to emit sequencer buffers, which is a whole new emitter | read `_kgspRpcRunCpuSequencer`'s callers-of-consequence at 580 and check whether any resume path we support reaches `GSP_SEQ_BUF_OPCODE_CORE_RESUME`. **No GPU.** See §14.6 |
+| ~~**O7a**~~ | ~~at 580, is a `GSP_RUN_CPU_SEQUENCER` event *required* or merely *accepted*?~~ | ★★★ **RESOLVED 2026-08-06 — merely ACCEPTED, on both versions, and the contract is `emit-never`.** See §11.2 | — |
 
 ### 11.1 ★★ O7 restated — it is version-split, and 580 is the one that governs
 
@@ -1622,11 +1622,82 @@ guest's CPU side*. So:
   `FALCON_MAILBOX0 == 0` — lives **inside the sequencer executor**
   (`ogkm-580: kernel_gsp_tu102.c:913-960`), and the executor is reachable **only** from
   `_kgspRpcRunCpuSequencer`, i.e. only from an event **we** send. At 610 the same handoff
-  survives but was promoted out of the RPC into a first-class HAL,
-  `kgspExecuteCoreResume_TU102` (`ogkm-610: kernel_gsp_falcon_tu102.c:441-471`, called locally
-  at `:563` and `kernel_gsp_falcon_ga102.c:401`). ⇒ **at 580 a GSP resume is RPC-driven and at
-  610 it is host-driven.** Whether any resume path we must support actually goes through it is
-  **O7a**; §14.6 records what was and was not established.
+  survives as `kgspExecuteCoreResume_TU102` (`ogkm-610: kernel_gsp_falcon_tu102.c:455`).
+
+  ⊘ **CORRECTED 2026-08-06 — this bullet used to end *"at 580 a GSP resume is RPC-driven and
+  at 610 it is host-driven"*, and the second half is FALSE.** At 610 `kgspExecuteCoreResume`
+  has exactly two callers — `kgspLoadAndExecuteGenericBootloader_TU102`
+  (`ogkm-610: kernel_gsp_falcon_tu102.c:563`) and `kgspLoadAndExecuteHsBinary_GA102`
+  (`ogkm-610: kernel_gsp_falcon_ga102.c:401`) — and **both are reached only from RPC event
+  handlers**: `_kgspRpcLoadAndExecuteGenericBootloader` / `_kgspRpcLoadAndExecuteHsBinary`
+  (`ogkm-610: kernel_gsp.c:432-458`), dispatched at `:1579-1584` for events
+  `GSP_LOAD_EXEC_GENERIC_BOOTLOADER` (0x1026) / `GSP_LOAD_EXEC_HS_BINARY` (0x1027), with their
+  params read **out of the RPC body**. ★ The functions are *local to a falcon file*; that is
+  locality of **definition**, which was misread as locality of **triggering**. See §11.2.
+
+
+### 11.2 ★★★ O7a RESOLVED — CPU-assist events are `emit-never`, and it is version-INDEPENDENT
+
+**The question:** at 580 is `GSP_RUN_CPU_SEQUENCER` *required* on a path we must support, or
+merely *accepted*? **Answer: merely accepted — and the same holds at 610 for its successors.**
+
+**What the two versions actually do** (`[src]`, dispatch read, not just tables):
+
+| | 580.159.04 | 610.43.02 |
+|---|---|---|
+| route to `CORE_RESUME` | `GSP_RUN_CPU_SEQUENCER` (0x1002) → `_kgspRpcRunCpuSequencer` (`ogkm-580: kernel_gsp.c:1486`) → `kgspExecuteSequencerBuffer` → opcode arm (`kernel_gsp_ga102.c:151` for GA106) | `GSP_LOAD_EXEC_GENERIC_BOOTLOADER` (0x1026) / `GSP_LOAD_EXEC_HS_BINARY` (0x1027) → `ogkm-610: kernel_gsp.c:1579-1584` → `kgspExecuteCoreResume_TU102` (`kernel_gsp_falcon_tu102.c:455`) |
+| 0x1002 dispatched? | ★ yes | **no** — zero occurrences in `ogkm-610: kernel_gsp.c`; falls to the default *"unexpected RPC event … log but otherwise ignore"* arm |
+| who initiates | the **GSP** | the **GSP** |
+
+⇒ ★★★ **The split is not "RPC vs local". On BOTH versions every route to `CORE_RESUME` begins
+with a GSP→CPU event, and the CPU driver never starts one by itself.** The versions differ only
+in *which* event carries it — a raw opcode buffer at 580, typed load-exec events at 610.
+
+**Why `emit-never` is the compliant answer, not merely the cheap one.** The opcode family
+(`ogkm-580: rmgspseq.h:78-89` — `REG_WRITE`, `REG_MODIFY`, `REG_POLL`, `DELAY_US`, `REG_STORE`,
+`CORE_RESET/START/WAIT_FOR_HALT/RESUME`) exists so the **GSP can borrow the CPU while real
+silicon is down**. An emulated GSP has no down-silicon phase, so it has nothing to ask for. And
+nothing on the driver side waits for one: the boot wait is `rpcRecvPoll(… GSP_INIT_DONE)`
+(`ogkm-580: kernel_gsp.c:5229`; `ogkm-610: kernel_gsp.c:6282`), and every timeout people
+associate with the sequencer lives **inside** the handlers, running only if the event arrives.
+Suspend waits on the falcon `MAILBOX0` processor state (`ogkm-580: kernel_gsp_tu102.c:1242`),
+which we already own.
+
+`[measured]` The C artifact is the empirical half: it contains **zero** occurrences of the
+sequencer (`C: src/qemu/`, grep 2026-08-06) and a stock 580.159.04 driver nonetheless completed
+cold boot → `cuCtxCreate` → matmul `bad=0` → teardown → GSP reload. So on 580 the driver
+demonstrably does not need the event on any path we have exercised.
+
+★★ **AND THE "UNREADABLE FIRMWARE" PREMISE IS DEAD** — `[measured]` 2026-08-06 against
+`traces/rpctrace_ga106_boot1.bin` (real GA106, open 580.159.04): a real GSP sends **exactly one
+`RUN_CPU_SEQUENCER` per bring-up** — records 2 and 481 of two sessions, `rpc_len=6328` — roughly
+200 ms **before** `GSP_INIT_DONE` (records 5, 484). It is part of *normal cold boot*, not a
+resume-only path, and the whole buffer is byte-decodable from a committed trace.
+
+⊘ **That makes replay tempting and it is still the wrong move.** Replaying a captured 6328-byte
+buffer would oblige us to emulate falcon halt bits, SEC2 start, the `SCRATCH_14` stage-3
+handoff, SEC2 mailbox and ~104 `REG_POLL`s each with its own timeout failure mode — binding
+kayfabe to one chip's boot script to serve a round trip whose purpose (reviving real silicon)
+has no referent here. That is the *inverse* of the invented-encoding defect: a **too-capable**
+double, which `mock_fidelity_both_directions` names as the same defect as a too-strict one.
+
+**THE CONTRACT (version-independent):** *CPU-assist events — `0x1002` at 580, `0x1026`/`0x1027`
+at 610 — are **emit-never**. The fake GSP performs their effects internally as instantaneous
+state transitions. Resume and re-acquire are expressed solely through the observables the CPU
+driver actually polls: the processor-suspend mailbox, WPR2, and a seqnum-correct `INIT_DONE`
+re-post.*
+
+⚠ **The one thing most likely to make this wrong,** and it is the invisible-refusal class the
+ledger cannot show: a handler side effect we skip that something later *reads*. Named
+candidates — the `NV_PFALCON_FALCON_OS` appVersion write and the `regSaveArea` mailbox stores
+the GSP reads back after `CORE_RESUME` (`ogkm-580: kernel_gsp_ga102.c:184-186`,
+`rmgspseq.h:215-217`). Inside a fully emulated device we own producer and consumer both, so this
+*should* be vacuous — so S6 must assert it rather than assume it: a zero-CPU-assist boot reaches
+`INIT_DONE`, **and** no guest read of `FALCON_OS` is ever answered from unwritten state.
+
+⊘ **Not determined, and recorded as such:** what makes real GSP firmware emit the event
+(closed); whether a real 610 GSP emits 0x1026/0x1027 on GA106 (**no 610 trace exists**); S3/GC6
+behaviour on either version (never exercised by any bench).
 
 ---
 
