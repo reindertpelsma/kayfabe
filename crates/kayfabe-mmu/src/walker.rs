@@ -252,6 +252,18 @@ fn follow(
                 if e.next == 0 {
                     continue;
                 }
+                // ★★★ Same refusal on the point-query path. `PdeEdge::aperture` was carried
+                // and never read; following a sysmem edge here would descend into the
+                // framebuffer at the child's GPA. Recorded as this edge's fault so a walk
+                // with a vidmem sibling still succeeds through the sibling.
+                if e.aperture != Aperture::Vidmem {
+                    first.get_or_insert(TranslateFault::Walk(WalkFault::ForeignAperture {
+                        phys: e.next,
+                        level: e.child_level,
+                        aperture: e.aperture,
+                    }));
+                    continue;
+                }
                 match descend(fmt, fb, e.next, e.child_level, va, depth + 1) {
                     Ok(t) => return Ok(t),
                     Err(f) => first.get_or_insert(f),
@@ -421,6 +433,31 @@ pub enum WalkFault {
         /// The level it was believed to be at.
         level: u8,
     },
+    /// ★★★ A **page-table page that is not in video memory**, refused by name.
+    ///
+    /// The byte source behind every read here is the isolate's mapping of the *fabricated
+    /// aperture* — it serves framebuffer bytes and nothing else. So a table page whose
+    /// aperture is system memory names a **GPA**, and reading it through this source would
+    /// interpret that GPA as a **GPGA**: whatever framebuffer byte happens to sit at the same
+    /// number. The walk would succeed, decode structured garbage, and bind it.
+    ///
+    /// ⊘ That is `#170`/`#171`'s species exactly — *"a GPA-typed field holding a VA is the
+    /// whole bug"* — one level down, and it is silent. `PtPage`/`PdeEdge` have carried an
+    /// `aperture` since they existed and **no read site consulted it** (found 2026-08-06).
+    ///
+    /// ★ Unreachable on today's boot path: RM allocates page directories from FBMEM
+    /// (`ogkm-580: kern_bus_gm107.c:4050`, as `bar2.rs` already cites), so every table page a
+    /// real walk meets is vidmem. This is therefore **not a bug fix** — it converts a latent
+    /// *silently wrong* into a loud *not implemented*, which is what it actually is: serving
+    /// sysmem-resident page tables (UVM's) needs a second byte source, not a wider read here.
+    ForeignAperture {
+        /// The address the table page claimed.
+        phys: u64,
+        /// The level it was believed to be at.
+        level: u8,
+        /// The aperture it declared — anything but vidmem reaches this.
+        aperture: Aperture,
+    },
     /// The format has no such level. An un-enumerated level is a fault, never a stride
     /// this crate invents (see [`kayfabe_arch::GmmuFmt::level_shift`]).
     NoSuchLevel {
@@ -498,6 +535,16 @@ pub fn decode_page(
         .checked_mul(u64::from(width))
         .and_then(|n| usize::try_from(n).ok())
         .ok_or(WalkFault::BadGeometry { level: page.level })?;
+
+    // ★★★ Aperture BEFORE bytes. `fb` serves the fabricated aperture only, so a non-vidmem
+    // table page would have its GPA read as a GPGA — see `WalkFault::ForeignAperture`.
+    if page.aperture != Aperture::Vidmem {
+        return Err(WalkFault::ForeignAperture {
+            phys: page.phys,
+            level: page.level,
+            aperture: page.aperture,
+        });
+    }
 
     let mut image = vec![0u8; bytes];
     if !fb.read(page.phys, &mut image) {

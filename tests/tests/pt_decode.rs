@@ -1740,3 +1740,90 @@ fn the_page_table_metadata_bound_is_reported_when_it_is_reached() {
     assert_eq!(out.meta_learned, 0);
     assert!(!out.is_clean(), "a refusal is never a clean pass");
 }
+
+// =====================================================================================
+
+/// ★★★ **A page-table page that is NOT in video memory is REFUSED BY NAME, not read.**
+///
+/// The byte source here is the isolate's mapping of the *fabricated aperture* — framebuffer
+/// bytes and nothing else. So a table page whose aperture is system memory names a **GPA**,
+/// and reading it through this source interprets that GPA as a **GPGA**: whatever framebuffer
+/// byte happens to sit at the same number. The walk would succeed, decode structured garbage
+/// and bind it — `#170`/`#171`'s species (*"a GPA-typed field holding a VA is the whole
+/// bug"*) one level down, and silent.
+///
+/// ⚠ **Found 2026-08-06: `PtPage` and `PdeEdge` have carried an `aperture` field since they
+/// existed and NO read site consulted it.** The value was propagated faithfully all the way
+/// into `Binding` and never once used to decide whether the read was legal.
+///
+/// ★ **The test is built so that aperture is the ONLY difference.** Real, decodable bytes are
+/// written at `PD_L2` first, so a walker that ignores aperture *succeeds* and returns a leaf.
+/// Both halves are asserted below: vidmem reads it, sysmem refuses it, same address, same
+/// bytes. Without that pairing the refusal could be passing because the page was unreadable.
+///
+/// ⊘ This is **not** a bug fix and must not be described as one: RM allocates page directories
+/// from FBMEM (`ogkm-580: kern_bus_gm107.c:4050`, as `bar2.rs` cites), so no walk on today's
+/// boot path meets a sysmem table page. It converts a latent *silently wrong* into a loud
+/// *not implemented* — serving UVM's sysmem-resident page tables needs a second byte source,
+/// which is a feature, not a wider read here.
+#[test]
+fn a_page_table_page_outside_vidmem_is_refused_rather_than_read_as_framebuffer() {
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+    let (factory, rec) = aperture_worker();
+    let mut iso = factory.spawn(IsolateId::new(1, GPU));
+    let mut worker = iso.checkout().expect("fresh pool");
+    let vas = fresh_host_vas(&mut worker);
+
+    let lvl = alias_level(fmt);
+    let img = page_at(fmt, lvl, &[(1, leaf(0x4000_0000))]);
+    write_fabricated(&mut worker, &rec, vas, PD_L2, &img);
+
+    // CONTROL: identical page, identical bytes, aperture = vidmem. This MUST read, or the
+    // refusal below proves nothing about aperture.
+    let mut fb = IsolateFb::new(&mut worker);
+    let ok = decode_page(
+        fmt,
+        &mut fb,
+        PtPage {
+            phys: PD_L2,
+            aperture: Aperture::Vidmem,
+            level: lvl,
+            vabase: 0,
+        },
+    )
+    .expect("the control must read — otherwise this test is vacuous");
+    assert!(
+        !ok.leaves.is_empty(),
+        "the control must actually decode a leaf, or 'sysmem refuses' is not a contrast"
+    );
+
+    // THE PROPERTY: same address, same bytes, only the aperture differs.
+    for foreign in [
+        Aperture::SysmemCoherent,
+        Aperture::SysmemNonCoherent,
+        Aperture::Peer,
+    ] {
+        let refused = decode_page(
+            fmt,
+            &mut fb,
+            PtPage {
+                phys: PD_L2,
+                aperture: foreign,
+                level: lvl,
+                vabase: 0,
+            },
+        );
+        assert_eq!(
+            refused,
+            Err(WalkFault::ForeignAperture {
+                phys: PD_L2,
+                level: lvl,
+                aperture: foreign,
+            }),
+            "★ a {foreign:?} table page was read through the FABRICATED APERTURE — its GPA was \
+             interpreted as a GPGA and whatever framebuffer byte sits at that number was \
+             decoded as page-table entries"
+        );
+    }
+}
