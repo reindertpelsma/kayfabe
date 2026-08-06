@@ -1379,7 +1379,7 @@ pub static GA106_DEVICE_INFO: DeviceInfoRow = DeviceInfoRow {
 ///
 /// `[measured]`, and the run is the **C artifact's rather than this port's**: the oracle's
 /// captured reply table carries `{0x20800af3u, 0x0u, 2u, 0u, ctl_20800af3}`
-/// (`C: src/qemu/mode2_initctrl_ga106.h:6216`, `nvidia-gpu-passthrough` rev `018e492`) with
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6216 = 0x20800af3`, `nvidia-gpu-passthrough` rev `018e492`) with
 /// an **empty** `ctl_20800af3[]` at `:39-40`. The capture trims trailing zeros, so a real
 /// RTX 3060's own GSP answered `NV_OK` with both bits clear.
 ///

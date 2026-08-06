@@ -327,7 +327,7 @@ fn scheduling_twice_is_idempotent_and_says_so() {
 /// ★★★ The expected body is `01 00 00` because that is what a **real GA106's own GSP**
 /// answers — `traces/real_ga106/rpc_transcript_real_ga106.txt:59`, `cmd=0xa06f0103 psize=3
 /// gspst=0x0 head=01 00 00`. ⊘ It is *not* taken from the C artifact's captured row, which
-/// is `dlen = 0` (`C: mode2_initctrl_ga106.h:6234`) — one of the eleven empty rows the
+/// is `dlen = 0` (`C: mode2_initctrl_ga106.h:6234 = 0xa06f0103`) — one of the eleven empty rows the
 /// FIFTH LIMIT contradicts. An empty capture is evidence of nothing.
 #[test]
 fn the_scrubbers_own_request_is_served_with_the_bytes_hardware_sends() {

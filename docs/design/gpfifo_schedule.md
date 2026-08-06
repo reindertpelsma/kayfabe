@@ -145,7 +145,7 @@ and `C: src/qemu/nvkvm_gpu_emul.c`, and a **run** somebody else made on a rebuil
 2026-07-29 (`docs/BENCH_REBUILD_NOTES.md`).
 
 *Read* (a citation into the artifact, no run behind it): the C answers this exact
-id `NV_OK` from its captured table (`C: src/qemu/mode2_initctrl_ga106.h:6234` — row
+id `NV_OK` from its captured table (`C: src/qemu/mode2_initctrl_ga106.h:6234 = 0xa06f0103` — row
 `{0xa06f0103u, 0x0u, 3u, 0u, ctl_a06f0103}`), and it performs the host-side schedule **at the
 first doorbell** rather than at the control (`C: src/qemu/nvkvm_gpu_emul.c:8038-8048` M5.8,
 `:4176-4194` M5.25).

@@ -133,7 +133,7 @@ fn the_evict_kbusverifybar2_actually_sends_is_served() {
         "the control header's own status says NV_OK"
     );
     // The reply describes itself: four bytes of params, which is what the oracle's captured
-    // row declares (`C: mode2_initctrl_ga106.h:6245`, `psize = 4`).
+    // row declares (`C: mode2_initctrl_ga106.h:6245 = 0x20800a6c`, `psize = 4`).
     assert_eq!(
         u32::from_le_bytes(
             reply.body[CONTROL_PARAMS_SIZE_OFF..CONTROL_PARAMS_SIZE_OFF + 4]
@@ -173,7 +173,7 @@ fn the_reply_is_four_zeros_which_is_the_opposite_of_the_event_control() {
     //
     // ⊘ And the oracle agrees from the other side: `{0x20800a6cu, 0x0u, 4u, 0u}` with an
     // EMPTY `ctl_20800a6c[]`, where `dlen` is trailing-zero-trimmed
-    // (`C: mode2_initctrl_ga106.h:6245, :3346`; `C: src/qemu/nvkvm_gpu_emul.c:3422-3425`).
+    // (`C: mode2_initctrl_ga106.h:6245 = 0x20800a6c, :3346`; `C: src/qemu/nvkvm_gpu_emul.c:3422-3425`).
     // A real GA106's GSP returned four zeros, not the flags it was sent.
     for flags in [
         0,

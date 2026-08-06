@@ -178,7 +178,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               NV_PRINTF(LEVEL_INFO, \"NVLink is unavailable\") (ogkm-580: \
               kernel_nvlink.c:1826-1830), and a real GA106's own GSP answers this control \
               0x56 too — ★ that corroboration was [inferred] from the C's captured row \
-              (C: mode2_initctrl_ga106.h:6251) and is now [measured] first-hand: an RTX 3060 \
+              (C: mode2_initctrl_ga106.h:6251 = 0x20800a87) and is now [measured] first-hand: an RTX 3060 \
               on open 580.159.04 answers `cmd=0x20800a87 psize=1056 gspst=0x56` \
               (traces/real_ga106/rpc_transcript_real_ga106.txt)",
     },
@@ -424,7 +424,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               only skips writing sliGpuBoostSync, which stays zeroed. SLI GPU-boost \
               synchronisation is a multi-GPU clock-sharing feature this port does not offer \
               at all, so zeroed is also the true answer and the oracle's own 16-byte reply \
-              (C: mode2_initctrl_ga106.h:6209) is never read by anything that branches",
+              (C: mode2_initctrl_ga106.h:6209 = 0x20800a80) is never read by anything that branches",
     },
     // ── seq 39 ─────────────────────────────────────────────────────────────────────
     SweepControl {
@@ -455,7 +455,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         cmd: 0x2080_2a0d,
         engine: "KernelCE",
         disposition: SweepDisposition::RefusalHalts,
-        why: "the 156-byte PCE-to-LCE mapping itself (C: mode2_initctrl_ga106.h:6214, \
+        why: "the 156-byte PCE-to-LCE mapping itself (C: mode2_initctrl_ga106.h:6214 = 0x20802a0d, \
               {0x20802a0du, 0x0u, 156u, 156u}), issued from kceTopLevelPceLceMappingsUpdate \
               after an NV_ASSERT_OK_OR_RETURN (ogkm-580: kernel_ce.c:794-806). ⊘ The third \
               member of the copy-engine topology triple with 0x20802a0f and 0x20802a06; the \
@@ -553,7 +553,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         cmd: 0x2080_0a26,
         engine: "KernelGraphics",
         disposition: SweepDisposition::AmputationUnsurvivable,
-        why: "GET_FLOORSWEEPING_MASKS, 3008 bytes (C: mode2_initctrl_ga106.h:6220), issued \
+        why: "GET_FLOORSWEEPING_MASKS, 3008 bytes (C: mode2_initctrl_ga106.h:6220 = 0x20800a26), issued \
               under NV_CHECK_OK_OR_GOTO (ogkm-580: kernel_graphics.c:1253-1260) with the \
               same silent-then-fatal consequence as 0x20800a1f. ⚠ Its gpcMask is read \
               DIRECTLY by _kgraphicsPostSchedulingEnableHandler, which returns NV_OK early \
@@ -602,7 +602,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               SM_ISSUE_RATE_MODIFIER's call at :1391 overwrites it — and that one \
               normalises NV_ERR_NOT_SUPPORTED to NV_OK unconditionally at :1410. ⊘ The \
               oracle's own GA106 answered ROP_INFO with three zeros anyway \
-              (C: mode2_initctrl_ga106.h:6224)",
+              (C: mode2_initctrl_ga106.h:6224 = 0x20800a2e)",
     },
     SweepControl {
         cmd: 0x2080_0a3d,
@@ -610,8 +610,8 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         disposition: SweepDisposition::AmputationUnsurvivable,
         why: "GET_FECS_RECORD_SIZE under NV_CHECK_OK_OR_GOTO (ogkm-580: \
               kernel_graphics.c:1465-1476); 32 bytes, one NvU32 per engine, 128 on this part \
-              (C: mode2_initctrl_ga106.h:6228). Same silent-then-fatal path as 0x20800a1f, \
-              and the value is a divisor in the FECS buffer's record arithmetic so zero is \
+              (C: mode2_initctrl_ga106.h:6228 = 0x20800a3d). Same silent-then-fatal path as \
+              0x20800a1f, and the value is a divisor in the FECS buffer's record arithmetic so zero is \
               not merely a small answer. Served",
     },
     SweepControl {
@@ -631,7 +631,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               kernel_graphics.c:1504-1518) — the LAST mandatory one, so it is the control \
               that decides whether bInitialized becomes NV_TRUE on the next line (:1521). \
               Eight bytes, one NvBool per engine; bPerSubCtxheaderSupported is true on \
-              Ampere (C: mode2_initctrl_ga106.h:6230) and is consumed immediately by \
+              Ampere (C: mode2_initctrl_ga106.h:6230 = 0x20800a48) and is consumed immediately by \
               kgraphicsSetPerSubcontextContextHeaderSupported. Served",
     },
     SweepControl {
@@ -651,7 +651,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               stateload1 at 041b4f1. Refusing sends the whole function to cleanup: and \
               un-sets bInitialized, so it is the same KernelFifo NV_ERR_INVALID_STATE as \
               0x20800a1f by a different route. 1664 bytes \
-              (C: mode2_initctrl_ga106.h:6231). Served",
+              (C: mode2_initctrl_ga106.h:6231 = 0x20800a32). Served",
     },
     SweepControl {
         cmd: 0x2080_0a38,
@@ -718,7 +718,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               via CE and then compares the read-back (ogkm-580: mem_mgr.c:407-470, called \
               at :4158). ⇒ this is an EXECUTION-PLANE rung and cannot be closed by a reply. \
               ⚠ Its oracle row is one of the eleven with NO captured body (C: \
-              mode2_initctrl_ga106.h:6234, psize 3, dlen 0); a real GA106 answers 01 00 00 \
+              mode2_initctrl_ga106.h:6234 = 0xa06f0103, psize 3, dlen 0); a real GA106 answers 01 00 00 \
               ([measured] 2026-08-01, traces/real_ga106/rpc_bodies_real_ga106.txt), which is \
               bEnable=NV_TRUE echoed back — an [IN] echo and NOT an answer, so even a \
               correct capture of it would license nothing here. \
@@ -738,7 +738,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               next two steps (arm the notifier, fetch a work-submit token) probe neither. \
               The C artifact — the ONLY implementation a real driver has accepted end to \
               end — answers this exact id NV_OK from its captured table (C: \
-              mode2_initctrl_ga106.h:6234) and performs the host-side schedule at the FIRST \
+              mode2_initctrl_ga106.h:6234 = 0xa06f0103) and performs the host-side schedule at the FIRST \
               DOORBELL (C: nvkvm_gpu_emul.c:8038-8048 M5.8, :4176-4194 M5.25); that is the \
               architecture that carried a STOCK driver to a bad=0 matmul. \
               (c) WHAT WAS ACTUALLY MISSING, and it was NOT the reply: nothing GATED on the \

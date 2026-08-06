@@ -50,7 +50,7 @@
 //!
 //! ★★ Here that same measurement **corroborates** the artifact rather than falsifying it.
 //! `0x20800a2a`'s captured row is `{0x20800a2au, 0x0u, 3712u, 3712u, ctl_20800a2a}`
-//! (`C: src/qemu/mode2_initctrl_ga106.h:6219`) — a *full* body, `dlen == psize` — and it is
+//! (`C: src/qemu/mode2_initctrl_ga106.h:6219 = 0x20800a2a`) — a *full* body, `dlen == psize` — and it is
 //! **identical to hardware for all 3712 bytes**. That is the class result stated the other
 //! way round: rows the C actually captured are right, rows it recorded empty say nothing.
 //!

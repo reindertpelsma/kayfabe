@@ -18,7 +18,7 @@
 //!   `ogkm-580: src/nvidia/src/kernel/rmapi/control.c:702-709`.
 //! - ★★★ **The C oracle's captured GA106 table is WRONG here.** Its row is
 //!   `{0x20802a08u, 0x0u, 4u, 0u, ctl_20802a08}` with an **empty** body
-//!   (`C: src/qemu/mode2_initctrl_ga106.h:6233`), which decodes to `size = 0` — the very
+//!   (`C: src/qemu/mode2_initctrl_ga106.h:6233 = 0x20802a08`), which decodes to `size = 0` — the very
 //!   value that produces the wall this module removes. See
 //!   [the measurement](#the-measurement) for how it was falsified and for the five other
 //!   rows that fall with it.

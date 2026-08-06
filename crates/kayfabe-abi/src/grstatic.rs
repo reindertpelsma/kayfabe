@@ -284,7 +284,7 @@ pub const GA106_GPCS: [GpcRow; 3] = [
 pub const GA106_GPC_MASK: u32 = 0b111;
 
 /// `tpcToPesMap[10]` — which PES each local TPC hangs off. `[measured]` on a real GA106
-/// (`C: src/qemu/mode2_initctrl_ga106.h:6220`), pinned by `tests/gr_static_info.rs`; the
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6220 = 0x20800a26`), pinned by `tests/gr_static_info.rs`; the
 /// tail past `tpc_count` is zero in the capture and zero here.
 pub const GA106_TPC_TO_PES_MAP: [u32; MAX_TPC_PER_GPC] = [0, 0, 1, 1, 2, 2, 0, 0, 0, 0];
 

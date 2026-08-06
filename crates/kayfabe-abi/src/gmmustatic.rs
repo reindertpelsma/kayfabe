@@ -54,7 +54,7 @@
 //!
 //! `[measured]`, and the run is the **C artifact's rather than this port's**: the oracle's
 //! captured reply table carries `{0x20800a59u, 0x0u, 16u, 16u, ctl_20800a59}`
-//! (`C: src/qemu/mode2_initctrl_ga106.h:6260`, `nvidia-gpu-passthrough` rev `018e492`) —
+//! (`C: src/qemu/mode2_initctrl_ga106.h:6260 = 0x20800a59`, `nvidia-gpu-passthrough` rev `018e492`) —
 //! `psize` 16, captured `dlen` 16, nothing trimmed — and `ctl_20800a59[]` at `:5418-5419`
 //! is
 //!

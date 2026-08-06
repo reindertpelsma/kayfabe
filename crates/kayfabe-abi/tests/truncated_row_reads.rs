@@ -251,13 +251,29 @@ fn census_by_line() -> BTreeMap<u32, (u32, usize, usize, String)> {
 /// correct, every **address** wrong, and the `C:`-citation gate satisfied throughout. This
 /// test resolves the address instead of counting it.
 ///
-/// ⊘ **Scoped, deliberately.** It judges only citations to a **truncated** row's line, and
-/// only when the citing line names its own control. A truncated row is where sourcing a
-/// claim to the wrong address is worst, because the wrong address may be a capture that
-/// stops before the bytes the claim is about. Everything else is out of scope, and an
-/// unattributable citation is a limit rather than a pass.
+/// ★★★ **WIDENED 2026-08-06 to EVERY census row, and the silent skip is GONE (Q20 = (a)).**
+///
+/// It used to judge only citations to a **truncated** row, and only when the citing line named
+/// a control — `if named.is_empty() { continue; }`. That skip is the whole problem: an
+/// unattributable citation *looked* like a pass. `[measured]` at the time of widening there
+/// were **69** `ga106.h:<line>` citations in the tree, **37** naming no control, and **0** of
+/// those 37 cited a truncated row — so the old gate's scope contained **nothing it skipped**,
+/// and every unattributable citation in the repo sat entirely outside it.
+///
+/// ★ All **23** whose cited line is a real census row were adjudicated by hand before the
+/// widening and **none was a miscitation** — every claim was about the control at the line it
+/// cited; the subject simply sat on an *adjacent* line (a `cmd:` field, a preceding sentence)
+/// rather than the citing one. The control id was then written onto each citing line, which
+/// records an adjudication that was actually performed. ⊘ Stamping the census value onto a
+/// citation *without* reading it would launder a miscitation into compliance — it would make
+/// this gate green **by construction**, which is the failure mode the gate exists to catch.
+///
+/// ⊘ Still out of scope, and stated rather than fixed: **14** citations name a line that is
+/// not a census row at all — the header banner (`:1-2`) or a body array (`:3346`, `:3878`).
+/// Those are legitimate citations the census cannot resolve, because it indexes registration
+/// lines. Widening to them needs a body-line index, not a rule change.
 #[test]
-fn every_citation_to_a_truncated_rows_line_names_the_control_that_line_carries() {
+fn every_citation_to_a_census_rows_line_names_the_control_that_line_carries() {
     let census = census_by_line();
     let truncated_lines: BTreeMap<u32, u32> = census
         .iter()
@@ -269,6 +285,8 @@ fn every_citation_to_a_truncated_rows_line_names_the_control_that_line_carries()
         TRUNCATED_ROWS.len(),
         "the census and the Rust table must agree on how many rows are truncated"
     );
+    // ★ THE WIDENING: every census row, not just the truncated ones.
+    let cited_lines: BTreeMap<u32, u32> = census.iter().map(|(l, v)| (*l, v.0)).collect();
 
     let mut sources = rust_sources();
     sources.extend(walk(&["docs", "notes"], ".md"));
@@ -280,7 +298,7 @@ fn every_citation_to_a_truncated_rows_line_names_the_control_that_line_carries()
             continue;
         }
         for line in text.lines() {
-            for (cited_line, owner) in &truncated_lines {
+            for (cited_line, owner) in &cited_lines {
                 if !line.contains(&format!("ga106.h:{cited_line}")) {
                     continue;
                 }
@@ -297,6 +315,14 @@ fn every_citation_to_a_truncated_rows_line_names_the_control_that_line_carries()
                     })
                     .collect();
                 if named.is_empty() {
+                    // ⊘ NOT a skip. An unattributable citation is exactly what Q20 decided
+                    // against: the reader cannot tell which control the claim is about, so
+                    // the gate cannot tell either, and "cannot tell" must never read as
+                    // "checked". Name the control on the citing line — after confirming the
+                    // claim really is about the row at that line.
+                    wrong.push(format!(
+                        "{path}: cites ga106.h:{cited_line} ({owner:#010x}) but names NO                          control on the citing line — unattributable. Add the control id to                          this line once you have CONFIRMED the claim is about that row"
+                    ));
                     continue;
                 }
                 checked += 1;
@@ -315,11 +341,17 @@ fn every_citation_to_a_truncated_rows_line_names_the_control_that_line_carries()
         "miscited oracle rows:\n{}",
         wrong.join("\n")
     );
-    // ⊘ A floor, because a gate that checks nothing reports clean. Five such citations
-    // survive the 2026-08-02 corrections; fewer means the scan stopped matching.
+    // ⊘ A floor, because a gate that checks nothing reports clean. `[measured]` 2026-08-06,
+    // widened to every census row: **42** attributable citations resolve.
+    //
+    // ⚠ The first version of this line said 55, and 55 was a GUESS I wrote into an assertion
+    // message as though it were a measurement. The gate caught it by failing. A number in a
+    // failure message is a claim like any other — this one is now the count the run produced,
+    // and it is exact rather than padded, matching the `>= 5` the truncated-only floor used.
     assert!(
-        checked >= 5,
-        "only {checked} attributable citations to a truncated row were resolved — the scan \
-         found five when it was written, so a smaller number is the instrument breaking"
+        checked >= 42,
+        "only {checked} attributable citations to a census row were resolved — the widened \
+         scan found 42, so a smaller number is the instrument breaking rather than the tree \
+         improving. Raise this floor when citations are ADDED; never lower it to go green"
     );
 }

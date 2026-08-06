@@ -395,7 +395,7 @@ pub enum WantedTable {
     /// [`Self::EventSetNotification`]. Here the caller's params are a **stack local** that
     /// `kmemsysSendL2InvalidateEvict_IMPL` never reads after the call
     /// (`ogkm-580: kern_mem_sys.c:1079-1093`), and the oracle's captured reply is four zero
-    /// bytes (`C: mode2_initctrl_ga106.h:6245`, `psize = 4, dlen = 0`). Both sources agree
+    /// bytes (`C: mode2_initctrl_ga106.h:6245 = 0x20800a6c`, `psize = 4, dlen = 0`). Both sources agree
     /// on a zero-filled body, so that is what is encoded.
     MemsysL2InvalidateEvict,
     /// `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE` (`0x20802a08`) — ★★★ the first

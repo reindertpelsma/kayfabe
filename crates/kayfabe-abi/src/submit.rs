@@ -676,7 +676,7 @@ pub fn decode_gpfifo_schedule(params: &[u8]) -> Result<GpfifoScheduleParams, Gpf
 ///
 /// ⊘ **Not** taken from the C artifact's captured table, whose row for this id is
 /// `{0xa06f0103u, 0x0u, 3u, 0u, ctl_a06f0103}` — `dlen = 0`, an **empty body**
-/// (`C: src/qemu/mode2_initctrl_ga106.h:6234`). That row is one of the 11/56 the FIFTH
+/// (`C: src/qemu/mode2_initctrl_ga106.h:6234 = 0xa06f0103`). That row is one of the 11/56 the FIFTH
 /// LIMIT contradicts (`crates/kayfabe-abi/src/oracle.rs:39`), and an empty capture is
 /// evidence of nothing. The C's *status* is corroborated by hardware; its *body* is not,
 /// and only the hardware trace is cited for the bytes.

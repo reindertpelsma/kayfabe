@@ -17,7 +17,7 @@
 //!
 //! ★★ It survived four rungs because it was **cited**. `crates/kayfabe-device/src/sweep.rs`
 //! is gated on every triage row naming a source, and the row named `C:
-//! mode2_initctrl_ga106.h:6233` — exactly as demanded. ⊘ **Citing the oracle is not the
+//! mode2_initctrl_ga106.h:6233 = 0x20802a08` — exactly as demanded. ⊘ **Citing the oracle is not the
 //! oracle being right.** A citation gate checks a claim is *sourced*; it can never check
 //! that the source says what the claim says it says.
 //!

@@ -64,7 +64,7 @@
 //! static const unsigned char ctl_20800a6c[] = { };
 //! ```
 //!
-//! (`C: mode2_initctrl_ga106.h:6245` and `:3346`.) `status = 0x0` is `NV_OK`. So the answer
+//! (`C: mode2_initctrl_ga106.h:6245 = 0x20800a6c` and `:3346`.) `status = 0x0` is `NV_OK`. So the answer
 //! this port is about to give is the answer NVIDIA's own firmware gives on the part this
 //! port emulates. ⊘ It is corroboration and not proof — the C's capture is a different boot
 //! of a different machine — but it removes the one reading that would have been fatal,

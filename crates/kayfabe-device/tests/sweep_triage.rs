@@ -287,7 +287,7 @@ fn a_citation_of_an_uncaptured_oracle_row_must_carry_what_hardware_said() {
     // ⊘⊘ AND ITS FIRST VERSION WAS TOO WEAK, found by its own bite harness the same night.
     // It accepted the loose phrase `"real GA106"` as evidence — and `0x20800a6c`'s row said
     // *"a real GA106's own GSP answers this NV_OK with a four-zero body (C:
-    // mode2_initctrl_ga106.h:6245)"*, which is a **false claim about hardware manufactured
+    // mode2_initctrl_ga106.h:6245 = 0x20800a6c)"*, which is a **false claim about hardware manufactured
     // out of the empty capture**, and it sailed straight through. Hardware echoes the
     // caller's flags. So the gate now demands `traces/real_ga106`: a path to a **committed
     // artifact** a reader can open, not a phrase anyone can type. ★★★ That is the same
