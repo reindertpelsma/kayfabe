@@ -2102,46 +2102,67 @@ building found the four split cleanly, and the split is what the remaining work 
 
 | control | kind | servable by today's path? |
 |---|---|---|
-| `0xc36f0108` work-submit token | **reply** — a pure function of `(runlist, guest vChid)` | ~~✔~~ ⊘ **✘ — CORRECTED 2026-08-06, see §13.5.2** |
+| `0xc36f0108` work-submit token | **reply** — a pure function of `(runlist, guest vChid)` | ✔ **on the `ObjectPolicy` path** (not the init-table one) — see §13.5.2 |
 | notifier-35 arming | **reply** — a `SILENT_NOTIFIERS` row; `sweep.rs:325-335` already wrote and cited the argument (*the arming is never read*) | ✔ (but see below: it must not be taken alone) |
-| `0xa06f0103` `GPFIFO_SCHEDULE` | **host act** — must put a real host channel on a real runlist | ✘ |
+| `0xa06f0103` `GPFIFO_SCHEDULE` | **host act** — must put a real host channel on a real runlist | ~~✘~~ ★ **SERVED since `#177`** — act deferred to the first doorbell, see §13.5.2 |
 | `0xa06f0104` `BIND` | **host act** — engine → runlist on a real host channel | ✘ |
 
-### 13.5.2 ⊘ CORRECTION — the token reply is NOT servable either, and the reason is the TRAIT
+### 13.5.2 ⊘⊘ TWICE-CORRECTED — §13.5.1 IS STALE (`0xa06f0103` IS SERVED), and my first correction was ALSO WRONG
 
-`[src]` 2026-08-06. The ✔ above said the token is *"a pure function of `(runlist, guest vChid)`,
-**both of which we hold**"*. The function is pure; **the inputs are unreachable from a reply
-policy**, which makes the ✔ false.
+`[src]` 2026-08-06, and both errors are left standing rather than deleted because the pair is
+the useful part.
 
-- Every reply policy implements `ObjectModel` (`crates/kayfabe-rmrpc/src/policy.rs:258`) and
-  answers through `fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply>` (`:763`). That
-  signature is the whole context: **a command, and the policy's own fields.** No device, no
-  `Proc`, no `Channel`, no `Worker`. All ten implementations share it.
-- `InitTablePolicy`'s own fields are `{chip, driver, notify_actions: [u8; N]}`
-  (`crates/kayfabe-device/src/inittables.rs:173-191`), and its rustdoc states the property
-  deliberately: *"There is no handle in it, no client, no sequence number, so it cannot grow,
-  cannot alias two guest processes, and cannot refuse a legal recycle."*
+**(1) `0xa06f0103` `GPFIFO_SCHEDULE` has been SERVED since `#177`.** §13.5's ✘ and §13.5.1's
+closing *"⊘ Not started"* are stale. The tree contains
+`OBJECT_CONTROLS = &[NVA06F_CTRL_CMD_GPFIFO_SCHEDULE]` (`policy.rs:851`),
+`SharedDevice::schedule_channel` (`kayfabe-rt/src/device.rs:1736-1764`, its own rustdoc headed
+*"★★★ #177"*), `ExecPlane::{requested, scheduled}` (`kayfabe-core/src/gpu.rs:340-424`), a
+570-line `tests/tests/gpfifo_schedule.rs` and a 10-mutation `scripts/bite_gpfifo_schedule.py`.
+`sweep.rs:725` says *"★★★ SERVED as of #177"* in as many words.
 
-⇒ A channel's `(runlist, vchid)` is **per-`Proc`** state. Reaching it from a reply policy would
-mean giving that policy exactly the handle-keyed state its own doc says it must not have — so
-the fix is **not** to widen `InitTablePolicy`. ⊘ Widening it would trade a `#14`-class
-isolation property for a table row, which is the worse side of that trade.
+★ **And it landed in a DIFFERENT SHAPE than §13.5.1 proposed.** It does **not** put
+PLAN→EXECUTE→COMMIT in the control path. The control records *intent* under rank 1 and replies
+`NV_OK`; the real host act happens at the **first doorbell**, on the verb path that already
+existed (`plan_doorbell` sets `schedule = !exec.scheduled.contains(&cid)`,
+`kayfabe-fwd/src/lib.rs:1614-1623`; `Worker::execute`'s `Doorbell` arm runs `alloc_channel` +
+`schedule` lock-free; `commit_doorbell` moves it to `scheduled`). The licence is written at
+`sweep.rs:725-761`: between the control returning and the first doorbell, *"on the runlist now"*
+and *"on the runlist by the first submission"* are **observationally indistinguishable to the
+guest** — and the C, the only implementation a real driver ever accepted, does exactly this.
 
-★★ **So the real split is not 2 replies + 2 acts. It is:**
+**(2) ⊘ My own correction, written earlier the same day, was wrong.** It said *"every reply
+policy answers through `fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply>`… That
+signature is the whole context: a command, and the policy's own fields. No device, no `Proc`,
+no `Channel`, no `Worker."* The first half is true and the conclusion does not follow.
+**Context arrives through `self`, not through the arguments.** `ObjectPolicy` holds
+`gpu: Box<dyn ObjectModel>` (`policy.rs:813-819`) — a *port to the object model*, which in the
+shell is `SharedObjectModel` over `SharedDevice`. That is precisely how `#177` reaches per-`Proc`
+channel state from inside a `respond`.
 
-| | needs | items |
-|---|---|---|
-| **plumbing A** — a control that can reach **per-`Proc` channel state** | context on the serving path | token reply **and** both host acts (3 of 4) |
-| **plumbing B** — a control that can **block on the host** (PLAN/EXECUTE/COMMIT, a `Worker`) | §13.5.1's phase-shape change | both host acts (2 of 4) |
-| neither | — | notifier-35 alone, which `sweep.rs` already argues must not be taken alone |
+⇒ **There is no "plumbing A".** The route from a control to a channel exists and is in use. What
+made `InitTablePolicy` unable to serve the token is not the trait — it is that *that* policy
+deliberately holds no handle-keyed state (`inittables.rs:173-191`), which remains correct and
+must not be widened. The token belongs on the `ObjectPolicy` path, beside `#177`, not on the
+init-table path.
 
-⇒ **A is the prerequisite and it is shared by three of the four.** §13.5.1 named B and missed A,
-because it reasoned about *what the controls must do* and not about *what the serving signature
-can see*. The increment order follows: A first, then the token reply lands as a table row on top
-of it, and only then does B become the last thing standing between here and a scheduled channel.
+★★ **What actually remains, then:**
 
-⚠ Nothing here is measured. It is a reading of a trait signature and a struct definition, and
-the claim it replaces was also unmeasured — it was an inference stated as a ✔.
+| item | state |
+|---|---|
+| `0xa06f0103` `GPFIFO_SCHEDULE` | **SERVED** (`#177`), act deferred to first doorbell |
+| `0xa06f0104` `BIND` | **not served** — one `OBJECT_CONTROLS` entry, one `respond_control` arm, one core route/apply pair, following `#177`'s landed idiom |
+| `0xc36f0108` token | belongs on the `ObjectPolicy` path; the encoder exists (`ff59d23`) |
+| notifier-35 | unchanged — `sweep.rs:325-335`'s cited reason to wait still holds |
+
+⚠ **The mistake I made, named so it is not made again.** I read a trait *method signature*,
+found no context in its arguments, and concluded the capability was absent — without reading
+what the implementations hold in `self`. That is the same species as
+`a_table_does_not_decide_behaviour`: the signature is not the dispatch, and it is the second
+time in this campaign that **absence of the obvious carrier was read as absence of the fact**
+(the first was inferring the guest could not tell us a ChID because `NV_CHANNEL_ALLOC_PARAMS`
+has no chid field — it tells us through `USERD_INDEX`).
+
+⚠ Still unmeasured: everything above is a reading of the tree. No boot has exercised `#177`.
 
 ### 13.5.1 ⊘ Why the two acts cannot use the path the other twenty-odd controls used
 
@@ -2164,5 +2185,8 @@ an increment with its own acceptance, not a table row.
 `RmBackend::schedule(chan)` exists. The guest-vChid → host-channel map is **not** missing —
 what is missing is a control that can reach it.
 
-⊘ **Not started.** Half a phase-shape change is worse than none, and this one wants its own
-increment with its own bite-check over its own refusals.
+⊘ ~~**Not started.**~~ ★★ **STALE — read §13.5.2 first.** `0xa06f0103` shipped in `#177` and
+deliberately did **not** take the phase-shape change this section proposes: the act moved to the
+first doorbell, where the verb path and its `Worker` already are. This section is kept because
+its *analysis* of why a control cannot block is correct and still governs — but its conclusion
+that a control path needs PLAN/EXECUTE/COMMIT was overtaken by a cheaper shape.
