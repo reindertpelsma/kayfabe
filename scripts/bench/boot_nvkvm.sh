@@ -16,7 +16,12 @@ exec "$Q" \
   -drive if=virtio,file=/workspace/bench/guest.qcow2,format=qcow2 \
   -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no \
   -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56 \
-  -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0 \
+  `# NVKVM_DEV_EXTRA appends properties to the device line (e.g.
+   # NVKVM_DEV_EXTRA=probe-arm-notifier=35 for a PROBE boot). It is an env var rather
+   # than a positional arg because the device line is one argument and cannot be extended
+   # from "$@"; the device's own end-of-run census reports the probe set it actually ran
+   # with, so a boot cannot silently diverge from what this variable claims.` \
+  -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA} \
   -display none \
   `# ★★★ E2 — TIMESTAMP every error_report/info_report the device writes.
    # The device's per-doorbell line is the ATTRIBUTION instrument: a ring is only
