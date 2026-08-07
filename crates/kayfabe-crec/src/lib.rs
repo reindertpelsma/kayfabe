@@ -195,11 +195,11 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
     kayfabe_device::served_policy(
         kayfabe_device::default_chip(),
         bench_abi().driver,
-        kayfabe_device::unserviced::UnservicedLog::new(),
-        kayfabe_device::faultbuffer::FaultBufferLog::new(),
-        // ★ Fresh per run for the same reason the unserviced log is: a shared latch would
-        // carry one round's published root into the next.
-        kayfabe_device::bar2::BarPdeLog::new(),
+        // ★ Every latch fresh per run, for the same reason the unserviced log is: a
+        // shared one would carry one round's published roots and publications into the
+        // next. ⊘ The publication recorder is an OBSERVER (it always declines), so it
+        // cannot change a replayed reply byte either way — but it can change a REPORT.
+        kayfabe_device::ChainLogs::default(),
         // Fresh per run, like the unserviced log and for its reason. ⊘ And never
         // `set_probe_arm`ed, so the probe set `served_policy` derives from it is EMPTY:
         // the replay answers a recorded capture, and the C whose replies it diffs

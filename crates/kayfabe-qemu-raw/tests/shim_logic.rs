@@ -563,9 +563,20 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // (4 u64-equivalents) below. The set a boot ran with must appear in the boot's own
     // report — three boots ran probe-off while looking armed from the launching shell,
     // when the probe was a process env var. This is the reason the wire ABI moved to 16.
+    // ★ 52 -> 55 at `execution_plane_increments.md` §14.10: `gvas_pub_total`,
+    // `gvas_pub_len` and `gvas_pub_undecodable`, plus the row array below. The rows are
+    // the ONLY boot-path statement of a page-directory root at all — `[measured
+    // 2026-08-08]` over `traces/real_ga106/rpc_transcript_real_ga106.txt`,
+    // `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (the one control the port turns into a
+    // page-directory base) occurs ZERO times in the whole boot while `0x90f10106` occurs
+    // four times and `0x20800a9f` once. `gvas_pub_undecodable` is a separate counter for
+    // `bar_pde_updates`' refusal half's reason: "published something unreadable" and
+    // "published nothing" are different diagnoses and an absence cannot tell them apart.
+    // This is the reason the wire ABI moved to 17.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (52 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
+        (55 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+            + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
@@ -575,6 +586,25 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeServedControl>()
             + kayfabe_qemu_raw::shim::NOTIFIER_ARMING_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeNotifierArming>()
+            + kayfabe_qemu_raw::shim::GVAS_PUBLICATION_SLOTS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabeGvasPublication>()
+    );
+    // ★ The publication rows' own sizes, so the C header's arithmetic and this crate's
+    // cannot drift apart silently: 24 bytes per level, 200 per row, no hidden padding.
+    // ⊘ `page_shift` is a `u32` here and an `NvU8` on NVIDIA's wire; this is OUR structure
+    // and the narrowing already happened in `kayfabe_abi::gvaspacepdes::PdeLevel`, so a
+    // `u8` would only have bought three bytes of implicit padding in a hand-mirrored C
+    // layout — the exact class the `sizeof` handshake exists to catch late.
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabePdeLevel>(),
+        2 * size_of::<u64>() + 2 * size_of::<u32>()
+    );
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeGvasPublication>(),
+        6 * size_of::<u32>()
+            + 4 * size_of::<u64>()
+            + kayfabe_qemu_raw::shim::GVAS_MAX_LEVELS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabePdeLevel>()
     );
     // ★ The census rows' own sizes, so the C header's arithmetic and this crate's cannot
     // drift apart silently: 16 bytes and 32 bytes, no hidden padding.

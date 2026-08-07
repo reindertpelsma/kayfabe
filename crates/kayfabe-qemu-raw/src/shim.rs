@@ -163,8 +163,18 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// while looking armed from the launching shell, which is the failure the property and
 /// the report field jointly kill.
 ///
+/// ★ Bumped to **17** for the VA-space page-directory publication census, the ABI-3 reason
+/// a twelfth time: [`KayfabeRegAudit`] gained three counters and
+/// [`GVAS_PUBLICATION_SLOTS`] × [`KayfabeGvasPublication`] rows, so an ABI-16 shim would
+/// allocate the old layout and this archive would write well past the end of it.
+///
+/// ⊘ [`KayfabeRegWrite`] did **not** grow, for E1's reason rather than E2's: a page-
+/// directory publication is a property of an RPC over a whole boot, not of any one
+/// register write, and stamping it per-access would make an operator read it thousands of
+/// times and still not know how many address spaces there were.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 16;
+pub const ABI_VERSION: u32 = 17;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -950,6 +960,85 @@ impl Default for KayfabeDoorbellRefusal {
     }
 }
 
+/// How many distinct VA-space page-directory publications [`KayfabeRegAudit`] carries.
+///
+/// ★ Matches `kayfabe_device::gvaspub::GVAS_PUBLICATION_SAMPLE_MAX`, and `gvas_pub_len`
+/// reports the truth even when it exceeds this — a full array is never mistaken for a
+/// complete list.
+pub const GVAS_PUBLICATION_SLOTS: usize = 8;
+
+/// `GMMU_FMT_MAX_LEVELS` — the `levels[]` bound the publication's own ABI declares
+/// (`ogkm-580: ctrl/ctrl90f1.h:37`).
+pub const GVAS_MAX_LEVELS: usize = kayfabe_abi::gvaspacepdes::GMMU_FMT_MAX_LEVELS;
+
+/// One published page-directory level, in the wire shape.
+///
+/// ⊘ `page_shift` is widened from the `NvU8` it is on NVIDIA's wire to a `u32` here. This
+/// is **our** structure, not theirs — the narrowing that matters already happened in
+/// `kayfabe_abi::gvaspacepdes::PdeLevel` — and a `u8` would have put three bytes of
+/// implicit padding into a layout that is hand-mirrored in C.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct KayfabePdeLevel {
+    /// Physical address of this level instance. ⚠ A **guest** physical address, in the
+    /// guest's own frame of reference; nothing here translates it.
+    pub phys_address: u64,
+    /// Bytes allocated for this level instance.
+    pub size: u64,
+    /// `GMMU_APERTURE_*`. ★ A real fork and not decoration: the receiver maps
+    /// `GMMU_APERTURE_VIDEO → ADDR_FBMEM` and `SYS_{COH,NONCOH} → ADDR_SYSMEM` and asserts
+    /// on anything else (`ogkm-580: gpu_vaspace.c:4503-4511`).
+    pub aperture: u32,
+    /// The level's page shift. `[measured 2026-08-08]` on GA106 the four levels are
+    /// `47, 38, 29, 21` (`traces/real_ga106/`, the §14.9 census).
+    pub page_shift: u32,
+}
+
+/// ★★★ **One VA-space page-directory publication, in the wire shape** — `0x90f10106` /
+/// `0x20800a9f`, the guest telling us where its page directories live.
+///
+/// `[measured 2026-08-08]` over `traces/real_ga106/rpc_transcript_real_ga106.txt` (a real
+/// 580.159.04 driver on a real GA106): `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` — the only
+/// control the port turns into a page-directory base — occurs **zero** times in the whole
+/// boot, while these two ids occur four and one times respectively. So this row is the
+/// *only* thing a boot can say about its own address spaces, and until it existed the port
+/// decoded these publications, answered them `NV_OK`, and dropped the value.
+///
+/// ★★ [`Self::object`] is what makes a row mean anything: the client arm is issued with
+/// `rmCtrlParams.hObject = hVASpace` (`ogkm-580: gpu_vaspace.c:5174-5177`), so the RPC
+/// header — not the params — names *which* VA space these levels root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct KayfabeGvasPublication {
+    /// `0x90f10106` (a VA space under a client's device) or `0x20800a9f` (the GPU group's
+    /// global VA space). Kept apart because the two arms are chosen on *who owns the VA
+    /// space*.
+    pub cmd: u32,
+    /// `hClient` from the RPC control header.
+    pub client: u32,
+    /// ★★★ `hObject` — **the VA space itself**.
+    pub object: u32,
+    /// How many of [`Self::levels`] are meaningful. `4` on GA106.
+    pub num_levels: u32,
+    /// VA coverage of the level being reserved.
+    pub page_size: u64,
+    /// First GPU VA of the reserved range.
+    pub virt_addr_lo: u64,
+    /// **Last** GPU VA of the range, inclusive — so `hi + 1` is what is page-aligned.
+    pub virt_addr_hi: u64,
+    /// `hSubDevice`; `0` means *"use `subdevice_id`"*.
+    pub h_subdevice: u32,
+    /// `subDeviceId`.
+    pub subdevice_id: u32,
+    /// How many times this exact row arrived.
+    pub count: u64,
+    /// The published levels. ★ **`levels[0]` is the ROOT** —
+    /// `_gvaspacePopulatePDEentries` fills them top-down from `pFmt->pRoot`
+    /// (`ogkm-580: gpu_vaspace.c:3974-4031`) and the receiver consumes them bottom-up
+    /// (`:4492`). Entries at or past [`Self::num_levels`] carry no meaning.
+    pub levels: [KayfabePdeLevel; GVAS_MAX_LEVELS],
+}
+
 /// One row of the bridge's refusal census: a `FaultTag`, and how many carried it.
 ///
 /// ★★★ **The instrument boot `alloc1` did without.** `[measured]` 2026-08-01, boot
@@ -1227,6 +1316,20 @@ pub struct KayfabeRegAudit {
     pub arming_len: u64,
     /// The rows, in first-seen order, with the handles they arrived on.
     pub armings: [KayfabeNotifierArming; NOTIFIER_ARMING_SLOTS],
+    /// ★★★ **The VA-space page-directory publications** — every publication that decoded,
+    /// including repeats and rows past [`GVAS_PUBLICATION_SLOTS`].
+    ///
+    /// See [`KayfabeGvasPublication`] for why this is the only boot-path statement of a
+    /// page-directory root at all.
+    pub gvas_pub_total: u64,
+    /// Distinct publication rows seen — the truth even past the array.
+    pub gvas_pub_len: u64,
+    /// ⊘ Publications that arrived and **did not decode**. A separate number rather than
+    /// an absent row: *"the guest published something we could not read"* and *"the guest
+    /// published nothing"* are different diagnoses and only one of them is our defect.
+    pub gvas_pub_undecodable: u64,
+    /// The rows, in first-seen order.
+    pub gvas_pub: [KayfabeGvasPublication; GVAS_PUBLICATION_SLOTS],
     /// ★ How many notifier indices the `probe-arm-notifier` device property named — the
     /// probe set this boot actually ran with, as recorded by the plane's census at
     /// construction from the same value the event-plane arm consults. `0` in every
@@ -1603,12 +1706,9 @@ impl Regs {
     /// build answers as has no wire table, or [`Status::Malformed`] for a probe string
     /// that is not a comma-separated decimal list within
     /// [`kayfabe_abi::eventnotify::PROBE_ARM_MAX`] entries.
-    pub fn create_probed(
-        device_id: u16,
-        probe_arm: &str,
-    ) -> Result<Regs, (Status, &'static str)> {
-        let probe_arm = kayfabe_abi::eventnotify::ProbeArmSet::parse(probe_arm).map_err(
-            |e| match e {
+    pub fn create_probed(device_id: u16, probe_arm: &str) -> Result<Regs, (Status, &'static str)> {
+        let probe_arm =
+            kayfabe_abi::eventnotify::ProbeArmSet::parse(probe_arm).map_err(|e| match e {
                 kayfabe_abi::eventnotify::ProbeArmParseError::NotDecimal => (
                     Status::Malformed,
                     "probe-arm-notifier must be a comma-separated list of decimal \
@@ -1622,8 +1722,7 @@ impl Regs {
                      truncating silently would be a boot running different \
                      instrumentation than its operator believes — refused instead",
                 ),
-            },
-        )?;
+            })?;
         let chip = chip_for(device_id)?;
         let abi = kayfabe_device::abi::gsp_abi_for(GUEST_DRIVER).map_err(|_| {
             (
@@ -1928,6 +2027,40 @@ impl Regs {
             arming_distinct: arming_len,
             armings: arming_rows,
         } = self.plane.control_census();
+        // ★★★ The VA-space publications — DESTRUCTURED with no `..` for [`Shim::audit`]'s
+        // reason: a field added to `GvasPubSnapshot` and not wired here is a fact the C
+        // shell can never read, and nothing goes red. `rustc` refuses the pattern instead.
+        let kayfabe_device::gvaspub::GvasPubSnapshot {
+            total: gvas_pub_total,
+            distinct: gvas_pub_len,
+            undecodable: gvas_pub_undecodable,
+            sample: gvas_pub_rows,
+        } = self.plane.gvas_publications();
+        let mut gvas_pub = [KayfabeGvasPublication::default(); GVAS_PUBLICATION_SLOTS];
+        for (slot, r) in gvas_pub.iter_mut().zip(gvas_pub_rows.iter()) {
+            let mut levels = [KayfabePdeLevel::default(); GVAS_MAX_LEVELS];
+            for (lv, src) in levels.iter_mut().zip(r.pdes.levels.iter()) {
+                *lv = KayfabePdeLevel {
+                    phys_address: src.phys_address,
+                    size: src.size,
+                    aperture: src.aperture,
+                    page_shift: u32::from(src.page_shift),
+                };
+            }
+            *slot = KayfabeGvasPublication {
+                cmd: r.cmd,
+                client: r.client,
+                object: r.object,
+                num_levels: r.pdes.num_levels,
+                page_size: r.pdes.page_size,
+                virt_addr_lo: r.pdes.virt_addr_lo,
+                virt_addr_hi: r.pdes.virt_addr_hi,
+                h_subdevice: r.pdes.h_subdevice,
+                subdevice_id: r.pdes.subdevice_id,
+                count: r.count,
+                levels,
+            };
+        }
         let mut probe_arm = [0u32; PROBE_ARM_SLOTS];
         probe_arm[..probe_arm_set.as_slice().len()].copy_from_slice(probe_arm_set.as_slice());
         let mut served = [KayfabeServedControl::default(); SERVED_CONTROL_SLOTS];
@@ -2005,6 +2138,10 @@ impl Regs {
             gpfifo_ring_nonzero,
             gpfifo_ring_va: gpfifo_ring_first.map_or(0, |(va, _)| va),
             gpfifo_ring_entries: gpfifo_ring_first.map_or(0, |(_, n)| u64::from(n)),
+            gvas_pub_total,
+            gvas_pub_len,
+            gvas_pub_undecodable,
+            gvas_pub,
             served_total,
             served_len,
             served,

@@ -59,6 +59,7 @@ pub mod faultbuffer;
 pub mod fbwin;
 pub mod ga10x;
 pub mod guestsysinfo;
+pub mod gvaspub;
 pub mod inert;
 pub mod inittables;
 pub mod plane;
@@ -878,13 +879,35 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
 /// also absent — so "id absent" discriminated nothing. The census records the two positive
 /// states so absence finally means *never seen*. See [`census`]'s module docs; it returns
 /// the inner reply unchanged, byte for byte, and `tests/control_census.rs` pins that.
+/// ★★★ **The observation latches a served chain writes into**, as one value.
+///
+/// ⊘ A struct rather than four more parameters, and the reason is not tidiness: every one
+/// of these is a log that the **plane also holds**, so the composition root must hand the
+/// *same* handle to both. Four positional `Log::new()`s at a call site is exactly the shape
+/// that silently acquires a fifth built fresh in the wrong place — the aperture would go on
+/// being published, nothing would receive it, and every later access would refuse with a
+/// diagnosis pointing at the guest ([`plane::RegPlane::bar_pde_log`] argues the same case
+/// for the same reason). Named fields make that a compile error at the construction site.
+///
+/// ★ It is `Clone` because every field is a shared handle (`Arc` inside): cloning it hands
+/// out the same latches, never copies of them.
+#[derive(Debug, Clone, Default)]
+pub struct ChainLogs {
+    /// The commands **nothing answered** ([`unserviced`]).
+    pub unserviced: unserviced::UnservicedLog,
+    /// The replayable-fault-buffer registrations this port declines ([`faultbuffer`]).
+    pub fault_buffer: faultbuffer::FaultBufferLog,
+    /// The bus apertures' published root page-directory entries ([`bar2`]).
+    pub bar_pdes: bar2::BarPdeLog,
+    /// The VA spaces' published page-directory levels ([`gvaspub`]).
+    pub gvas_pub: gvaspub::GvasPubLog,
+}
+
 #[must_use]
 pub fn served_policy(
     chip: &'static ChipProfile,
     driver: kayfabe_abi::versions::DriverAbiTable,
-    unserviced: unserviced::UnservicedLog,
-    fault_buffer: faultbuffer::FaultBufferLog,
-    bar_pdes: bar2::BarPdeLog,
+    logs: ChainLogs,
     census: census::ControlCensusLog,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
@@ -900,15 +923,7 @@ pub fn served_policy(
         census,
         sticky::StickyAnswerGuard::new(
             driver,
-            served_chain(
-                chip,
-                driver,
-                unserviced,
-                fault_buffer,
-                bar_pdes,
-                probe_arm,
-                objects,
-            ),
+            served_chain(chip, driver, logs, probe_arm, objects),
         ),
     ))
 }
@@ -924,13 +939,33 @@ pub fn served_policy(
 pub fn served_chain(
     chip: &'static ChipProfile,
     driver: kayfabe_abi::versions::DriverAbiTable,
-    unserviced: unserviced::UnservicedLog,
-    fault_buffer: faultbuffer::FaultBufferLog,
-    bar_pdes: bar2::BarPdeLog,
+    logs: ChainLogs,
     probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
+    // ★★★ EXHAUSTIVE, and the missing `..` is load-bearing for [`Shim::audit`]'s reason
+    // one crate over: a latch added to `ChainLogs` and not seated in a link below is a fact
+    // the report can never carry, and nothing would go red. `rustc` refuses the pattern
+    // instead.
+    let ChainLogs {
+        unserviced,
+        fault_buffer,
+        bar_pdes,
+        gvas_pub,
+    } = logs;
     let mut links: Vec<Box<dyn kayfabe_gsp::CommandPolicy>> = vec![
+        // ★★★ FIRST, and the position is the whole of it — see `gvaspub`'s module docs.
+        // This link records the guest's page-directory publication (`0x90f10106` /
+        // `0x20800a9f`) and **declines**, always. `InitTablePolicy` below TERMINATES the
+        // chain for those two ids — it decodes, re-encodes and returns `Some` — so a
+        // recorder seated with the other two recorders at the tail could never see one.
+        //
+        // ⊘ The alternative was re-routing who ANSWERS, and it is forbidden:
+        // `tests/gvaspace_pdes.rs` and `tests/cap1b_differential.rs` pin
+        // `InitTablePolicy` as the answerer, and this link must not change a reply byte.
+        // Seating an always-`None` observer ahead of it is what keeps those two facts
+        // compatible (`execution_plane_increments.md` §14.8).
+        Box::new(gvaspub::GvasPubRecorder::new(driver, gvas_pub)),
         // ★ The probe set rides into exactly one link: the event-plane arm. It is empty
         // unless the `probe-arm-notifier` device property named indices, and the set in
         // effect is recorded in the census so the boot's own report proves what it ran

@@ -165,9 +165,10 @@ fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
         kayfabe_device::default_chip(),
         *kayfabe_abi::versions::table_for(kayfabe_abi::versions::BENCH_DRIVER)
             .expect("the bench driver has a wire table"),
-        log.clone(),
-        kayfabe_device::faultbuffer::FaultBufferLog::new(),
-        kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::ChainLogs {
+            unserviced: log.clone(),
+            ..Default::default()
+        },
         kayfabe_device::census::ControlCensusLog::new(),
         // ★ No object-model link. This test is about fn 47 reaching `InertPolicy` and NOT
         // reaching the ledger; adding one would make the assertion depend on a link that

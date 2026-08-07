@@ -105,9 +105,10 @@ fn chain_with_objects() -> (
     let policy = kayfabe_device::served_policy(
         kayfabe_device::default_chip(),
         *abi(),
-        log.clone(),
-        kayfabe_device::faultbuffer::FaultBufferLog::new(),
-        kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::ChainLogs {
+            unserviced: log.clone(),
+            ..Default::default()
+        },
         kayfabe_device::census::ControlCensusLog::new(),
         Some(Box::new(ObjectPolicy::new(
             abi(),
@@ -129,9 +130,10 @@ fn chain_without_objects() -> (
     let policy = kayfabe_device::served_policy(
         kayfabe_device::default_chip(),
         *abi(),
-        log.clone(),
-        kayfabe_device::faultbuffer::FaultBufferLog::new(),
-        kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::ChainLogs {
+            unserviced: log.clone(),
+            ..Default::default()
+        },
         kayfabe_device::census::ControlCensusLog::new(),
         None,
     );

@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 16u
+#define KAYFABE_SHIM_ABI 17u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -422,6 +422,51 @@ typedef struct KayfabeNotifierArming {
     uint64_t count;
 } KayfabeNotifierArming;
 
+/* ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATION — 0x90f10106 / 0x20800a9f.
+ *
+ * MEASURED 2026-08-08 over traces/real_ga106/rpc_transcript_real_ga106.txt (a real
+ * 580.159.04 driver on a real GA106), all 88 KAYFABE-RPC entries:
+ * NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY occurs ZERO times, 0x90f10106 occurs FOUR times
+ * and 0x20800a9f once.  SET_PAGE_DIRECTORY is the only control the port turns into a page
+ * directory base, so these two ids are the ONLY boot-path source of one — and the port
+ * decoded them, answered them NV_OK and discarded the value.
+ *
+ * `object` is the field that makes a row mean anything: the client arm is issued with
+ * rmCtrlParams.hObject = hVASpace (ogkm-580: gpu_vaspace.c:5174-5177), so the RPC header —
+ * not the params — is the only statement of WHICH address space these levels root.
+ *
+ * `levels[0]` is the ROOT.  _gvaspacePopulatePDEentries fills levels[] top-down from
+ * pFmt->pRoot (gpu_vaspace.c:3974-4031) and the receiver consumes it bottom-up (:4492).
+ * `aperture` is a real fork, not decoration: GMMU_APERTURE_VIDEO -> ADDR_FBMEM,
+ * SYS_COH/SYS_NONCOH -> ADDR_SYSMEM, and the receiver asserts on anything else (:4503-4511).
+ *
+ * ⊘ `gvas_pub_undecodable` is a SEPARATE number, not an absent row: "the guest published
+ * something we could not read" and "the guest published nothing" are different diagnoses
+ * and only one of them is our defect.  Same argument as bar_pde_updates' refusal half. */
+#define KAYFABE_GVAS_PUBLICATION_SLOTS 8u
+#define KAYFABE_GVAS_MAX_LEVELS 6u
+
+typedef struct KayfabePdeLevel {
+    uint64_t phys_address;  /* GUEST-physical, in the guest's own frame of reference */
+    uint64_t size;          /* bytes allocated for this level instance */
+    uint32_t aperture;      /* GMMU_APERTURE_* */
+    uint32_t page_shift;    /* NvU8 on the wire, widened here so the row needs no padding */
+} KayfabePdeLevel;
+
+typedef struct KayfabeGvasPublication {
+    uint32_t cmd;           /* 0x90f10106 (client arm) or 0x20800a9f (global arm) */
+    uint32_t client;        /* hClient from the RPC control header */
+    uint32_t object;        /* ★ hObject — the VA SPACE.  See the block above. */
+    uint32_t num_levels;    /* how many of levels[] are meaningful; 4 on GA106 */
+    uint64_t page_size;     /* VA coverage of the level being reserved */
+    uint64_t virt_addr_lo;  /* first GPU VA of the reserved range */
+    uint64_t virt_addr_hi;  /* LAST GPU VA of the range, inclusive */
+    uint32_t h_subdevice;   /* 0 on every occurrence measured; means "use subdevice_id" */
+    uint32_t subdevice_id;
+    uint64_t count;         /* how many times this exact row arrived */
+    KayfabePdeLevel levels[KAYFABE_GVAS_MAX_LEVELS];
+} KayfabeGvasPublication;
+
 typedef struct KayfabeRegAudit {
     uint64_t reads;
     uint64_t writes;
@@ -604,6 +649,16 @@ typedef struct KayfabeRegAudit {
     uint64_t arming_len;
     KayfabeNotifierArming armings[KAYFABE_NOTIFIER_ARMING_SLOTS];
 
+    /* ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATIONS — see the block above
+     * KayfabeGvasPublication.  `gvas_pub_total` counts every publication that decoded,
+     * `gvas_pub_len` is the number of DISTINCT rows and is the truth even when it exceeds
+     * the array, and `gvas_pub_undecodable` counts publications that arrived and did not
+     * decode.  A boot with all three at zero is a boot in which the guest never published
+     * a page directory at all — which is a diagnosis, not a silence. */
+    uint64_t gvas_pub_total;
+    uint64_t gvas_pub_len;
+    uint64_t gvas_pub_undecodable;
+    KayfabeGvasPublication gvas_pub[KAYFABE_GVAS_PUBLICATION_SLOTS];
     /* ★ THE PROBE SET THIS BOOT RAN WITH — from the `probe-arm-notifier` device property,
      * recorded by the plane's census at construction from the same value the event-plane
      * arm consults.  0 entries in every shipping boot.  Printed so a boot's own report

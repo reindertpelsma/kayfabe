@@ -146,6 +146,7 @@ use crate::bar2::{BarPdeLog, BarPdes};
 use crate::cpuintr::CpuIntrTree;
 use crate::doorbell::{DoorbellPort, DoorbellRefused, DoorbellReport, RefusingDoorbell};
 use crate::fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb};
+use crate::gvaspub::{GvasPubLog, GvasPubSnapshot};
 use crate::{ChipError, ChipProfile, FbWindow};
 
 /// A [`GuestRam`] that refuses every access, by name.
@@ -459,6 +460,12 @@ pub struct PlaneResidue {
     /// into framebuffer the new guest has not written and answer the **previous** guest's
     /// mappings through the new one's aperture.
     pub bar_pdes: BarPdes,
+    /// ★★★ The VA spaces' published page-directory roots (`crate::gvaspub`).
+    ///
+    /// In the residue for `bar_pdes`' reason, one level up: a reloaded device that still
+    /// held the previous guest's VAS roots would attribute that guest's address spaces to
+    /// this one's channels the moment anything consumes them.
+    pub gvas_pub: GvasPubSnapshot,
     /// ★★★ How many bytes of framebuffer the store is holding.
     ///
     /// ⊘ Content, not identity — this is a *size*, and it is here because the alternative
@@ -824,6 +831,12 @@ pub struct RegPlane {
     /// doorbell, and a caller that replaced the policy still gets to read what the guest
     /// published.
     bar_pdes: BarPdeLog,
+    /// ★★★ **The VA-space page-directory publications** (`crate::gvaspub`) — the guest
+    /// telling us where its page directories live, with the `hObject` that names which VA
+    /// space they root. Held here for the two reasons `bar_pdes` is: reading it must not
+    /// take the FSM's lock behind a doorbell, and a caller that replaced the policy still
+    /// gets to read what the guest published.
+    gvas_pub: GvasPubLog,
     /// ★★★ **E2 — the usermode doorbell seam** (`crate::doorbell`).
     ///
     /// ⚠ **Outside [`RegPlane::state`], and that is a requirement rather than a
@@ -1015,6 +1028,7 @@ impl RegPlane {
         let census = crate::census::ControlCensusLog::new();
         let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
         let bar_pdes = BarPdeLog::new();
+        let gvas_pub = GvasPubLog::new();
         // ★ The probe set is recorded into the census FIRST, and `served_policy` reads it
         // back out of the same log — so "the set the report prints" and "the set the
         // event-plane arm reads" are one stored value, not two values this line promises
@@ -1033,9 +1047,14 @@ impl RegPlane {
                 policy: crate::served_policy(
                     chip,
                     abi.driver,
-                    unserviced.clone(),
-                    fault_buffer.clone(),
-                    bar_pdes.clone(),
+                    // ★ The SAME handles the plane keeps below — see `ChainLogs`' own docs
+                    // for why this is a struct and not four positional arguments.
+                    crate::ChainLogs {
+                        unserviced: unserviced.clone(),
+                        fault_buffer: fault_buffer.clone(),
+                        bar_pdes: bar_pdes.clone(),
+                        gvas_pub: gvas_pub.clone(),
+                    },
                     census.clone(),
                     objects,
                 ),
@@ -1051,6 +1070,7 @@ impl RegPlane {
             census,
             fault_buffer,
             bar_pdes,
+            gvas_pub,
             // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
             doorbell: RwLock::new(Box::new(RefusingDoorbell)),
             doorbell_log: Mutex::new(DoorbellLog::default()),
@@ -1184,6 +1204,30 @@ impl RegPlane {
     #[must_use]
     pub fn bar_pde_log(&self) -> BarPdeLog {
         self.bar_pdes.clone()
+    }
+
+    /// ★★★ What the guest has published about its **VA spaces'** page-directory roots
+    /// (`crate::gvaspub`) — every publication, with the `hClient`/`hObject` it arrived on
+    /// and every `PdeLevel` it carried.
+    ///
+    /// ⊘ The only channel, and for a sharper reason than `bar_pdes`': these two controls
+    /// are answered `NV_OK` by `crate::inittables::InitTablePolicy` and the decoded value
+    /// was, until this log existed, discarded at the arm. `[measured 2026-08-08]`
+    /// (`traces/real_ga106/rpc_transcript_real_ga106.txt`, the §14.9 census) they are the
+    /// **only** page-directory root the boot ever sends — `SET_PAGE_DIRECTORY` occurs
+    /// zero times — so a boot that does not print this prints nothing about its own
+    /// address spaces.
+    #[must_use]
+    pub fn gvas_publications(&self) -> GvasPubSnapshot {
+        self.gvas_pub.snapshot()
+    }
+
+    /// The publication latch itself, as a shared handle — for
+    /// [`RegPlane::bar_pde_log`]'s reason: [`RegPlane::set_policy`] replaces the whole
+    /// chain, and the link that decodes these publications lives in it.
+    #[must_use]
+    pub fn gvas_pub_log(&self) -> GvasPubLog {
+        self.gvas_pub.clone()
     }
 
     /// Install a command policy, replacing the C-baseline echo.
@@ -1322,6 +1366,7 @@ impl RegPlane {
             census,
             fault_buffer,
             bar_pdes,
+            gvas_pub,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what this device
             // life SAW through it is carried out as `doorbell` just below.
             doorbell: _,
@@ -1365,6 +1410,7 @@ impl RegPlane {
             fault_buffers_registered: fault_buffer.total(),
             bar0_window: *bar0_window,
             bar_pdes: bar_pdes.pdes(),
+            gvas_pub: gvas_pub.snapshot(),
             fb_resident_bytes: fb.resident_bytes(),
             doorbell,
         }
@@ -1467,6 +1513,11 @@ impl RegPlane {
         // ★★★ And the published roots. See `crate::bar2::BarPdeLog::device_reset` for why
         // this one is a cross-life *information* leak and not merely stale state.
         self.bar_pdes.device_reset();
+        // ★★★ And the VA-space publications, for `BarPdeLog::device_reset`'s reason one
+        // level up: a root that survived a device life belongs to the PREVIOUS guest's
+        // address space, and the whole purpose of recording it is that something will
+        // eventually follow it.
+        self.gvas_pub.device_reset();
         // ★★ E2 — and the doorbell log, for the same reason: a token the PREVIOUS guest
         // rang, reported after a reset as this life's, is a false attribution in exactly
         // the direction that would make an E2 acceptance run pass on somebody else's ring.

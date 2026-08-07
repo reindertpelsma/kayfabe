@@ -568,6 +568,18 @@ static bool nvkvm_bars_realize(NvkvmState *s, Error **errp)
     unsigned i;
 
     QEMU_BUILD_BUG_ON(ARRAY_SIZE(nvkvm_regions) != NVKVM_N_REGIONS);
+    /* ★★★ The two hand-mirrored halves of the publication census, PINNED AT COMPILE TIME.
+     *
+     * KayfabeRegAudit is written by the Rust archive and read here, and the crate docs say
+     * plainly that the `sizeof` handshake does NOT cover this structure — only
+     * KAYFABE_SHIM_ABI stands between a field added on one side and a write past the end
+     * of this allocation.  That protects against a version SKEW; it does not protect
+     * against the two sides declaring the same fields with different padding in the same
+     * commit.  crates/kayfabe-qemu-raw/tests/shim_logic.rs pins these exact two numbers on
+     * the Rust side; these two lines pin them here, so a layout that drifts is a build
+     * failure on the bench rather than a plausible address in a report. */
+    QEMU_BUILD_BUG_ON(sizeof(KayfabePdeLevel) != 24);
+    QEMU_BUILD_BUG_ON(sizeof(KayfabeGvasPublication) != 200);
 
     for (i = 0; i < NVKVM_N_REGIONS; i++) {
         const NvkvmRegionSpec *row = &nvkvm_regions[i];
@@ -1396,6 +1408,66 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.bar2_reads, a.bar2_writes, a.bar2_faults,
                 a.bar_pde_updates >> 32, a.bar_pde_updates & 0xffffffffu,
                 a.bar2_root_entry);
+
+    /*
+     * ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATIONS.  Printed unconditionally, all-zeros
+     * included, for the reason every other block here is.
+     *
+     * MEASURED 2026-08-08 over traces/real_ga106/rpc_transcript_real_ga106.txt (a real
+     * 580.159.04 driver on a real GA106): NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY — the ONE
+     * control this port turns into a page-directory base — occurs ZERO times in the whole
+     * boot, while 0x90f10106 occurs four times and 0x20800a9f once.  So these rows are the
+     * only thing a boot can say about its own address spaces, and a report without them
+     * was a report in which "the guest never published a page directory" and "the guest
+     * published four and we discarded them" printed identically.
+     *
+     * ⊘ These are OBSERVED, never answered: the recording link declines every command and
+     * kayfabe_device::inittables::InitTablePolicy still answers these two ids byte for
+     * byte.  A row here is a statement about the GUEST, not about what we did with it —
+     * and today we do nothing with it.
+     *
+     * `levels[0]` is the ROOT (ogkm-580: gpu_vaspace.c:3974-4031 fills top-down from
+     * pFmt->pRoot; the receiver consumes bottom-up at :4492), and `aperture` decides
+     * whether that address is a framebuffer offset or a guest-physical one
+     * (VIDEO=1 -> ADDR_FBMEM, SYS_COH/SYS_NONCOH -> ADDR_SYSMEM, :4503-4511).
+     */
+    info_report("nvkvm: VA-space page-directory publications: %" PRIu64 " total, %" PRIu64
+                " distinct, %" PRIu64 " UNDECODABLE (0x90f10106 / 0x20800a9f; the ONLY "
+                "boot-path source of a page-directory root — SET_PAGE_DIRECTORY is never "
+                "sent)",
+                a.gvas_pub_total, a.gvas_pub_len, a.gvas_pub_undecodable);
+    {
+        uint64_t i, j, shown = a.gvas_pub_len;
+
+        if (shown > KAYFABE_GVAS_PUBLICATION_SLOTS) {
+            shown = KAYFABE_GVAS_PUBLICATION_SLOTS;
+        }
+        for (i = 0; i < shown; i++) {
+            const KayfabeGvasPublication *g = &a.gvas_pub[i];
+            uint64_t nl = g->num_levels;
+
+            info_report("nvkvm:   gvas cmd 0x%08x hClient 0x%08x hObject 0x%08x "
+                        "va [0x%016" PRIx64 "..0x%016" PRIx64 "] pageSize 0x%" PRIx64
+                        " levels %u subdev %u/%u x%" PRIu64,
+                        g->cmd, g->client, g->object, g->virt_addr_lo, g->virt_addr_hi,
+                        g->page_size, g->num_levels, g->h_subdevice, g->subdevice_id,
+                        g->count);
+            if (nl > KAYFABE_GVAS_MAX_LEVELS) {
+                nl = KAYFABE_GVAS_MAX_LEVELS;
+            }
+            for (j = 0; j < nl; j++) {
+                const KayfabePdeLevel *lv = &g->levels[j];
+
+                /* ⊘ levels[0] is labelled ROOT in the line itself.  An operator reading
+                 * this for the first time must not have to know the top-down convention to
+                 * find the one address the whole census exists to carry. */
+                info_report("nvkvm:     level[%" PRIu64 "]%s phys 0x%016" PRIx64
+                            " size 0x%" PRIx64 " aperture %u pageShift %u",
+                            j, j == 0 ? " ROOT" : "", lv->phys_address, lv->size,
+                            lv->aperture, lv->page_shift);
+            }
+        }
+    }
 
     /*
      * ★★★ THE LIST.  Printed unconditionally, INCLUDING when it is empty, because "no line
