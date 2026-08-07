@@ -2490,3 +2490,52 @@ Following the owner's tree (translate → residency → executor → signal trut
 
 `memmgrTestCeUtils`' own readback compare passes and the boot advances past `mem_mgr.c:526`.
 ⊘ No rung is claimed until a boot the author produced shows it, per `only_live_boots_are_proof`.
+
+### 14.7 E10e — the survey (2026-08-08), and why it is a deep gap not a link
+
+`[src]` throughout — a reading of the tree at master `349924b`, plus one boot
+(`bench_evidence/run_probe35_349924b_qemu.log`). E10a–E10d landed and are tested GPU-free;
+the boot confirms they do **not** regress the wall and are **not yet** on the live data path.
+The doorbell for the CeUtils channel (`Gpu::SYSTEM_PROC`, `ChanId(1)`) is still refused
+`NoVas` before any ring is read. Three gaps stack, and relaxing `NoVas` alone buys nothing:
+
+1. **No page-directory root reaches the core.** `[src]` `Channel::vas_pdb` is set from
+   `RmGraph::pdb_of_resource` (`crates/kayfabe-core/src/rmgraph.rs:2304`), fed by
+   `RmEvent::SetPageDir`, produced only in `translate_control`
+   (`crates/kayfabe-rmrpc/src/lib.rs:1358`). But `ObjectPolicy`'s `OBJECT_CONTROLS`
+   (`crates/kayfabe-rmrpc/src/policy.rs:891`) is `{GPFIFO_SCHEDULE, BIND}` only, so
+   `GSP_RM_CONTROL` is unclaimed and `translate_control` is unreachable on a real boot; and
+   the control that carries this VAS's root, `0x90f10106`
+   (`NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES`), is `PageDirNotModelled`
+   (`crates/kayfabe-abi/src/capability.rs:2731`, refused at `rmrpc/src/lib.rs:1329`). The
+   `FERMI_VASPACE_A` alloc reaches the graph as an edge with `AllocParams::NoDeclaredFacts`
+   (`crates/kayfabe-abi/src/versions.rs:1021`), i.e. carrying no PDB, ever. ⇒ no `Vas`/
+   `AddressTable` materializes for this channel (`crates/kayfabe-core/src/gpu.rs:2365`).
+2. **The ring is a GPU VA that nothing can translate.** `[src]` the census names it
+   `0x1_2006_4000` GPU-virtual; `read_pushbuffer` hard-requires `vas_pdb`
+   (`crates/kayfabe-fwd/src/lib.rs:2754`). ⚠ At 8 GiB that VA is *itself a legal GPA*, so an
+   untranslated read **succeeds and returns wrong bytes** (§8.2.3's measured warning) — which
+   is why relaxing `plan_doorbell:1650`/`read_pushbuffer:2754` before a resolver exists trades
+   a loud refusal for silent corruption.
+3. **The shim has no `Vmm`/`FbStore` at the doorbell and E10c/d have no caller.** `[src]`
+   `SharedDoorbell::ring` rings with an empty working set (`crates/kayfabe-qemu-raw/src/shim.rs:1487`);
+   `Regs` holds neither a `Vmm` nor a handle to the installed `SparseFb` (moved into `RegPlane`
+   with no getter); `cpu_ce::{execute_ours_spans, write_completion}` have no production caller.
+
+★ **What is already E10e-clean** `[src]`: the *pure-core* half. `partition_ce`/`operand_runs`
+short-circuit before the table on a physical operand (`crates/kayfabe-fwd/src/lib.rs:3103`),
+so E10a/E10b classify a physical `sys ← vid` copy with no VAS; `apply_pushbuffer` already
+threads `chan_pdb: Option<Pdb>`. The gap is the **address resolution for the ring/semaphore**
+and the **shim wiring**, not the operand classification.
+
+**Ordering the next agent should read off the above** (not a committed plan): (a) decide the
+ring-address resolver first — teach `PushRange` its address-kind and add a GMMU-walk resolver
+reachable from the act phase (the §8.2.3 follow-up, the deep item), *or* find a `0x90f10106`
+decoder path that yields the page-directory root as a `Pdb` (smaller — the reason
+`PageDirNotModelled` exists is to make this visible); (b) only then relax the `NoVas` sites;
+(c) wire the shim — a shared `FbStore` handle + a late-installed `QemuVmm` on `SharedDoorbell`
+(mirroring the `attach_ram` lifecycle), drive `SharedDevice::parse_pushbuffer` (not the
+`&mut Gpu` free function — `Gpu::procs` never contains `SYSTEM_PROC`), divert `Ours` spans to
+`cpu_ce::execute_ours_spans` before `forward_ce`, then `write_completion`. ⚠ `write_completion`
+resolves the semaphore VA through the channel table, so it needs the same resolver as (a) —
+or a VAS-less variant if the finishPayload turns out to be physical too.
