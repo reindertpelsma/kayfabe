@@ -2664,10 +2664,15 @@ the shape that drops the fork.
 
 #### ⚠ Two bounds on the above, stated so nobody over-reads it
 
-1. ⊘ **The transcript's terminus is still unverified** (flagged five times now): it is not known
-   whether entry 88 is adapter-init *success* or the capture stopping. That bounds "25 remaining",
-   ★ but it does **not** bound this finding — a zero count over a prefix is still a zero count
-   over that prefix, and the four `0x90f10106` all land *inside* it.
+1. ✓ **The transcript's terminus — RESOLVED the same day, and it is COMPLETE.** `[measured
+   2026-08-08]` the 55 distinct commands are a **strict subset** of the C oracle's 56-row table
+   (`C: src/qemu/mode2_initctrl_ga106.h`): `rows − transcript = {0x20800a4c}` and
+   `transcript − rows = ∅`. That one row is the one `traces/real_ga106/README.md` independently
+   calls a *"client-driven query rather than an init control"*, reachable only by widening with
+   `nvidia-smi -q`. A truncated capture drops an arbitrary tail; this one is missing exactly the
+   single command already classified as post-init. ⇒ the count is over a **whole** init, so the
+   zero is a zero over the whole init and not merely over a prefix. See
+   `docs/reference/remaining_boot_surface.md` §1.
 2. `[src]` **`0x90f10106` fires only for a SPLIT VAS** — `gvaspaceCopyServerRmReservedPdesToServerRm`
    returns early unless `IS_GSP_CLIENT(pGpu)` **and** `pGVAS->vaStartServerRMOwned != 0`
    (`ogkm-580: gpu_vaspace.c:4039-4051`). So it publishes the levels backing the *server-RM-owned

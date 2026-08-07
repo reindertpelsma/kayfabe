@@ -46,9 +46,21 @@ control calls only*. It does **not** count the scrubber's real CE copy (executio
 delivery for notifier 35 (interrupts). Those two are the expensive items and they sit outside
 this list entirely.
 
-⊘ **Never verified whether the 88 entries end at adapter-init success or are truncated.**
-Flagged three times, still open. It is the cheapest unanswered question in the project and it
-decides whether "25 remaining" means anything at all. Check it before quoting the number.
+✓ **ANSWERED 2026-08-08 — the capture is COMPLETE, so "25 remaining" is a real number.**
+(This was flagged as open five times. It needed one set-difference, and both halves of the
+answer were already committed.)
+
+`[measured]` The transcript's **55 distinct commands are a strict subset of the C oracle's
+56-row table** (`C: src/qemu/mode2_initctrl_ga106.h`, whose rows are named `ctl_<cmd>`):
+`rows − transcript = {0x20800a4c}`, and `transcript − rows = {}`. The single missing row is
+the one `traces/real_ga106/README.md` **independently** identifies as reachable only by
+widening the capture with `nvidia-smi -q` — *"a client-driven query rather than an init
+control."*
+
+⇒ The transcript covers the init set exactly, missing precisely the one command that is by
+definition not part of init. ★ That asymmetry is the proof: a capture cut short drops an
+*arbitrary* tail, not exactly the one row its own author had already classified as post-init.
+Two independent artefacts agree, and neither was written to answer this question.
 
 ## 2. ⚠ The trap that will corrupt the first Rust perf number
 
