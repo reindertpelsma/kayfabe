@@ -76,4 +76,23 @@ resolver can.
 payload wait) is deliberately left **stock**. It is a different failure and instrumenting it
 here would make the two indistinguishable in a grep.
 
-Verified: `patch -p1 --dry-run` applies clean against pristine `ogkm-580.159.04`.
+★★ **Verified by BUILDING it, not by a dry-run** (2026-08-08, vast GA106 host box, 38 cores,
+kernel 6.8.0-59-generic). `patch -p1` applied to a pristine copy of `ogkm-580.159.04`, then
+`make modules -j32`:
+
+| check | result |
+|---|---|
+| compile errors | **0** |
+| `channel_utils.o` | built (`src/nvidia/_out/Linux_x86_64/`) |
+| `strings nvidia.ko \| grep -c KAYFABE-BRINGUP` | **2** — exactly the two `NV_PRINTF` calls, in the **linked** module |
+
+★ Why build rather than dry-run: a dry-run proves the *context lines* match and nothing else. It
+cannot catch a field that does not exist on `OBJCHANNEL`, a format specifier that disagrees with
+its argument, or a macro that is not in scope — and RM compiles with warnings-as-errors, so all
+three would have failed here and none would have failed a dry-run. Finding any of them on the
+bench instead would have cost a guest module rebuild plus a boot.
+
+⚠ Built against the **host** kernel (6.8.0-59) while the guest runs 6.8.0-136, so this particular
+`.ko` is not loadable in the guest — vermagic differs. That is fine and does not weaken the
+check: the RM core (`nv-kernel.o`, where `channel_utils.c` lives) is kernel-version-independent C,
+and compilation is the property being tested.

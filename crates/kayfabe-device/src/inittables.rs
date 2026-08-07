@@ -1095,7 +1095,8 @@ impl CommandPolicy for InitTablePolicy {
                         s.actions[ev] = u8::try_from(reg.action).unwrap_or(0);
                     }
                 } else {
-                    let Some(free) = self.notify_actions.iter().position(Option::is_none) else {
+                    let Some(free) = self.notify_actions.iter().position(Option::is_none)
+                    else {
                         // The arming that would need one slot more than
                         // `NOTIFY_SUBDEVICE_SLOTS`: bounded state fails LOUD — a refused
                         // row in the census — never silently evicts an armed subdevice.

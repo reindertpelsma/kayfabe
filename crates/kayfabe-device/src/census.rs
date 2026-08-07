@@ -51,7 +51,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use kayfabe_abi::eventnotify::{ACTION_OFF, EVENT_OFF, NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION};
+use kayfabe_abi::eventnotify::{
+    ACTION_OFF, EVENT_OFF, NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION,
+};
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
@@ -263,9 +265,11 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
                 // request whose refusal needs explaining.
                 let field = |off: usize| -> u32 {
                     let at = req.params_at + off;
-                    cmd.payload.get(at..at + 4).map_or(ARMING_NO_REPLY, |b| {
-                        u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-                    })
+                    cmd.payload
+                        .get(at..at + 4)
+                        .map_or(ARMING_NO_REPLY, |b| {
+                            u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                        })
                 };
                 self.log.note_arming(NotifierArming {
                     client: req.client,
@@ -282,9 +286,4 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
     }
 }
 
-kayfabe_util::assert_send_sync!(
-    ServedControl,
-    NotifierArming,
-    CensusSnapshot,
-    ControlCensusLog
-);
+kayfabe_util::assert_send_sync!(ServedControl, NotifierArming, CensusSnapshot, ControlCensusLog);

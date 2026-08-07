@@ -123,9 +123,10 @@ pub fn execute_ours(
     let dst = span.sub.dst;
     let len = span.sub.len;
     // The destination plane must exist for anything to be written.
-    let dst_plane = span
-        .dst_plane
-        .ok_or(FwdFault::CpuCeStraddle { dst, dst_end: true })?;
+    let dst_plane = span.dst_plane.ok_or(FwdFault::CpuCeStraddle {
+        dst,
+        dst_end: true,
+    })?;
 
     match span.sub.src {
         CeSource::Constant(pattern) => {
