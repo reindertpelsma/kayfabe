@@ -188,6 +188,13 @@ pub struct InitTablePolicy {
     ///
     /// ★ It keeps the type `Copy`, which is why the array is `[u8; N]` and not a map.
     notify_actions: [u8; eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+    /// ★ **PROBE ONLY, and empty by default** — notifier indices this device instance will
+    /// arm although [`kayfabe_abi::eventnotify::SILENT_NOTIFIERS`] does not admit them.
+    /// Arrives from the `probe-arm-notifier` device property (it used to be a process env
+    /// var, under which three boots ran probe-off while looking armed from the launching
+    /// shell). A boot that goes further because of this set measures REACHABILITY, never
+    /// correctness — see `ProbeArmSet`'s docs.
+    probe_arm: eventnotify::ProbeArmSet,
 }
 
 /// Which of the two tables a command asked for. Returned by [`InitTablePolicy::wanted`] so
@@ -696,8 +703,24 @@ impl WantedTable {
 
 impl InitTablePolicy {
     /// Build the policy for one chip and one guest driver's wire table.
+    ///
+    /// The notifier probe is **empty** — this is the shipping constructor, and its ~25
+    /// call sites are exactly the reason the probing case is a separate, named one
+    /// ([`InitTablePolicy::with_probe_arm`]) rather than a parameter here.
     #[must_use]
     pub fn new(chip: &'static ChipProfile, driver: DriverAbiTable) -> InitTablePolicy {
+        InitTablePolicy::with_probe_arm(chip, driver, eventnotify::ProbeArmSet::default())
+    }
+
+    /// Build the policy with a notifier **probe set** — reachability instrumentation, off
+    /// unless the `probe-arm-notifier` device property names an index. See the field's
+    /// docs; a boot that advances because of this set is reachability data, not a rung.
+    #[must_use]
+    pub fn with_probe_arm(
+        chip: &'static ChipProfile,
+        driver: DriverAbiTable,
+        probe_arm: eventnotify::ProbeArmSet,
+    ) -> InitTablePolicy {
         InitTablePolicy {
             chip,
             driver,
@@ -705,6 +728,7 @@ impl InitTablePolicy {
             // starts at and therefore the only starting state that agrees with the guest.
             notify_actions: [eventnotify::ACTION_DISABLE as u8;
                 eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+            probe_arm,
         }
     }
 
@@ -974,11 +998,11 @@ impl CommandPolicy for InitTablePolicy {
                 ) else {
                     return refuse();
                 };
-                // ⊘ The second disjunct is a PROBE and is off unless the environment
-                // names an index — see `eventnotify::probe_armed_notifier`. A boot that
-                // gets further because of it measures REACHABILITY, never correctness.
+                // ⊘ The second disjunct is a PROBE and is off unless the device property
+                // names an index — see `eventnotify::ProbeArmSet`. A boot that gets
+                // further because of it measures REACHABILITY, never correctness.
                 if !eventnotify::is_silent_notifier(reg.event)
-                    && !eventnotify::probe_armed_notifier(reg.event)
+                    && !self.probe_arm.contains(reg.event)
                 {
                     return refuse();
                 }

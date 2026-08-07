@@ -1034,11 +1034,20 @@ pub unsafe extern "C" fn kayfabe_shim_chip_identity(
 
 /// Create the register plane. `device_id` of 0 selects the table's default row.
 ///
+/// `probe_arm` / `probe_arm_len` carry the `probe-arm-notifier` device property — a
+/// comma-separated decimal list of notifier indices the boot will probe-arm. Pass
+/// `(NULL, 0)` or an empty string for the shipping configuration. ⊘ Junk in the string
+/// refuses the device by name rather than booting probe-off.
+///
 /// # Safety
-/// `out_handle` must be writable; the message out-parameters must be writable or empty.
+/// `out_handle` must be writable; the message out-parameters must be writable or empty;
+/// `probe_arm` must point to `probe_arm_len` readable bytes, or be NULL with
+/// `probe_arm_len == 0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kayfabe_shim_regs_create(
     device_id: u16,
+    probe_arm: *const u8,
+    probe_arm_len: u64,
     out_handle: *mut *mut c_void,
     out_msg: *mut *const u8,
     out_msg_len: *mut u64,
@@ -1051,7 +1060,28 @@ pub unsafe extern "C" fn kayfabe_shim_regs_create(
         msg.set("the shim asked for a register plane with nowhere to put the handle");
         return Status::Malformed.code();
     }
-    match Regs::create(device_id) {
+    let probe_str = if probe_arm.is_null() {
+        if probe_arm_len != 0 {
+            msg.set("probe-arm-notifier arrived as NULL with a non-zero length");
+            return Status::Malformed.code();
+        }
+        ""
+    } else {
+        // SAFETY: non-null with `probe_arm_len` readable bytes is this function's
+        // documented precondition, checked as far as a pointer can be.
+        let bytes = unsafe { core::slice::from_raw_parts(probe_arm, probe_arm_len as usize) };
+        match core::str::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(_) => {
+                msg.set(
+                    "probe-arm-notifier is not UTF-8; a probe string that cannot be read \
+                     must refuse the device rather than boot probe-off",
+                );
+                return Status::Malformed.code();
+            }
+        }
+    };
+    match Regs::create_probed(device_id, probe_str) {
         Ok(regs) => {
             let handle = Box::into_raw(Box::new(regs)).cast::<c_void>();
             // SAFETY: `out_handle` was proven non-null above, and that it is writable and

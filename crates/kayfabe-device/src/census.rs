@@ -111,6 +111,13 @@ pub struct NotifierArming {
 /// Everything the census can say at teardown, in one read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CensusSnapshot {
+    /// ★ **The notifier probe set this device ran with** — empty in every shipping boot.
+    ///
+    /// Recorded at plane construction from the SAME value handed to the served chain's
+    /// event-plane arm, because the probe's history is three boots that ran without it
+    /// while looking armed from the launching shell (it was a process env var then). The
+    /// report proves what the boot ran with, or the report is the same trap again.
+    pub probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
     /// Every `GSP_RM_CONTROL` a policy answered, including repeats and rows past the cap.
     pub served_total: u64,
     /// Distinct `(cmd, rpc_result)` pairs seen — the truth even past
@@ -128,6 +135,7 @@ pub struct CensusSnapshot {
 
 #[derive(Debug, Default)]
 struct CensusInner {
+    probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
     served_total: u64,
     served_distinct: u64,
     served: Vec<ServedControl>,
@@ -148,6 +156,14 @@ impl ControlCensusLog {
     #[must_use]
     pub fn new() -> ControlCensusLog {
         ControlCensusLog::default()
+    }
+
+    /// Record the notifier probe set this device was constructed with, so the end-of-run
+    /// report states what the boot actually ran with. Called once, at plane construction,
+    /// with the same value the served chain's event-plane arm consults.
+    pub fn set_probe_arm(&self, probe_arm: kayfabe_abi::eventnotify::ProbeArmSet) {
+        let mut s = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        s.probe_arm = probe_arm;
     }
 
     /// Record one answered control.
@@ -197,6 +213,7 @@ impl ControlCensusLog {
     pub fn snapshot(&self) -> CensusSnapshot {
         let s = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         CensusSnapshot {
+            probe_arm: s.probe_arm,
             served_total: s.served_total,
             served_distinct: s.served_distinct,
             served: s.served.clone(),

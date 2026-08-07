@@ -226,6 +226,7 @@ fn the_census_changes_no_byte_of_any_reply() {
                 kayfabe_device::unserviced::UnservicedLog::new(),
                 kayfabe_device::faultbuffer::FaultBufferLog::new(),
                 kayfabe_device::bar2::BarPdeLog::new(),
+                kayfabe_abi::eventnotify::ProbeArmSet::default(),
                 None,
             ),
         ));
@@ -253,4 +254,66 @@ fn the_census_changes_no_byte_of_any_reply() {
             "command {i}: the census wrapper altered a reply"
         );
     }
+}
+
+// ── The census reports the probe set the boot ran with ─────────────────────────────
+
+/// ★ The report field exists because the probe's history is three boots that ran WITHOUT
+/// it while looking armed from the launching shell (it was a process env var then). The
+/// snapshot must carry the set the plane was constructed with — including, and especially,
+/// the empty default.
+#[test]
+fn the_census_carries_the_probe_set_and_defaults_to_empty() {
+    use kayfabe_abi::eventnotify::ProbeArmSet;
+
+    let log = ControlCensusLog::new();
+    assert!(
+        log.snapshot().probe_arm.is_empty(),
+        "a census nobody told about a probe reports the shipping configuration"
+    );
+    log.set_probe_arm(ProbeArmSet::parse("35,37").expect("parses"));
+    assert_eq!(log.snapshot().probe_arm.as_slice(), &[35, 37]);
+}
+
+/// The PLANE records the same value it hands the served chain — so a probed device's own
+/// end-of-run report states the set in effect, and a default-built plane states empty.
+#[test]
+fn a_plane_reports_the_probe_set_it_was_built_with() {
+    use kayfabe_abi::eventnotify::ProbeArmSet;
+    use kayfabe_device::{NanoClock, RegPlane, abi};
+
+    /// A fixed clock: this test reads no timer, but the plane wants one.
+    #[derive(Debug)]
+    struct StillClock;
+    impl NanoClock for StillClock {
+        fn now_ns(&self) -> u64 {
+            0
+        }
+    }
+
+    let stock = RegPlane::new(
+        kayfabe_device::chip_for_device_id(0x2504).expect("GA106 is in the table"),
+        abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER).expect("bench table"),
+        Box::new(StillClock),
+    )
+    .expect("GA106 is servable");
+    assert!(
+        stock.control_census().probe_arm.is_empty(),
+        "RegPlane::new is the shipping constructor and must report an empty probe set"
+    );
+
+    let probed = RegPlane::with_objects(
+        kayfabe_device::chip_for_device_id(0x2504).expect("GA106 is in the table"),
+        abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER).expect("bench table"),
+        Box::new(StillClock),
+        ProbeArmSet::parse("35").expect("parses"),
+        None,
+    )
+    .expect("GA106 is servable");
+    assert_eq!(
+        probed.control_census().probe_arm.as_slice(),
+        &[35],
+        "the report must state the set the served chain consults, or a probe boot is \
+         indistinguishable from a stock one — the exact misreading this field kills"
+    );
 }

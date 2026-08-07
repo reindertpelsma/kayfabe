@@ -888,12 +888,27 @@ pub fn served_policy(
     census: census::ControlCensusLog,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
+    // ★ The notifier PROBE SET comes out of the census log — deliberately, and not as a
+    // convenience: the census is what the end-of-run report prints, so reading the set
+    // from it makes "the set the report states" and "the set the event-plane arm
+    // consults" ONE stored value rather than two values a construction site promises to
+    // keep equal. A caller that never called `ControlCensusLog::set_probe_arm` gets the
+    // empty set — the shipping configuration, and the safe direction.
+    let probe_arm = census.snapshot().probe_arm;
     Box::new(census::ControlCensus::new(
         driver,
         census,
         sticky::StickyAnswerGuard::new(
             driver,
-            served_chain(chip, driver, unserviced, fault_buffer, bar_pdes, objects),
+            served_chain(
+                chip,
+                driver,
+                unserviced,
+                fault_buffer,
+                bar_pdes,
+                probe_arm,
+                objects,
+            ),
         ),
     ))
 }
@@ -912,10 +927,17 @@ pub fn served_chain(
     unserviced: unserviced::UnservicedLog,
     fault_buffer: faultbuffer::FaultBufferLog,
     bar_pdes: bar2::BarPdeLog,
+    probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     let mut links: Vec<Box<dyn kayfabe_gsp::CommandPolicy>> = vec![
-        Box::new(inittables::InitTablePolicy::new(chip, driver)),
+        // ★ The probe set rides into exactly one link: the event-plane arm. It is empty
+        // unless the `probe-arm-notifier` device property named indices, and the set in
+        // effect is recorded in the census so the boot's own report proves what it ran
+        // with (`RegPlane::with_objects` records the SAME value it passes here).
+        Box::new(inittables::InitTablePolicy::with_probe_arm(
+            chip, driver, probe_arm,
+        )),
         Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         // ★★★ `#149`. Position: among the ANSWERING links, before the recorders, and

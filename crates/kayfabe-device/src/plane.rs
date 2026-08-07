@@ -973,7 +973,13 @@ impl RegPlane {
         abi: GspAbi,
         clock: Box<dyn NanoClock>,
     ) -> Result<RegPlane, ChipError> {
-        RegPlane::with_objects(chip, abi, clock, None)
+        RegPlane::with_objects(
+            chip,
+            abi,
+            clock,
+            kayfabe_abi::eventnotify::ProbeArmSet::default(),
+            None,
+        )
     }
 
     /// Build a plane whose served chain also carries an **object-model link**.
@@ -999,6 +1005,7 @@ impl RegPlane {
         chip: &'static ChipProfile,
         abi: GspAbi,
         clock: Box<dyn NanoClock>,
+        probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
         objects: Option<Box<dyn CommandPolicy>>,
     ) -> Result<RegPlane, ChipError> {
         let rom = crate::rom_for(chip)?;
@@ -1008,6 +1015,13 @@ impl RegPlane {
         let census = crate::census::ControlCensusLog::new();
         let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
         let bar_pdes = BarPdeLog::new();
+        // ★ The probe set is recorded into the census FIRST, and `served_policy` reads it
+        // back out of the same log — so "the set the report prints" and "the set the
+        // event-plane arm reads" are one stored value, not two values this line promises
+        // to keep equal. The probe's history is three boots that ran without it while
+        // looking armed from the launching shell; the report proving what it ran with is
+        // the fix.
+        census.set_probe_arm(probe_arm);
         Ok(RegPlane {
             chip,
             model,

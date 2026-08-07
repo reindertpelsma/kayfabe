@@ -196,9 +196,24 @@ pub fn is_silent_notifier(index: u32) -> bool {
     SILENT_NOTIFIERS.iter().any(|n| n.index == index)
 }
 
-/// ★★★ **PROBE ONLY. NEVER A SHIPPING PATH.** Notifier indices this *run* will arm even
-/// though [`SILENT_NOTIFIERS`] does not admit them — read once from
-/// `KAYFABE_PROBE_ARM_NOTIFIER` (comma-separated decimal).
+/// The most notifier indices a [`ProbeArmSet`] can carry. A probe naming more than this
+/// is refused at parse time — loudly, because a silently truncated probe set is a boot
+/// that ran with different instrumentation than its operator believes.
+pub const PROBE_ARM_MAX: usize = 8;
+
+/// ★★★ **PROBE ONLY. NEVER A SHIPPING PATH.** Notifier indices one *device instance* will
+/// arm even though [`SILENT_NOTIFIERS`] does not admit them.
+///
+/// # ★ A device property, not an environment variable — and why that history matters
+///
+/// This began as `KAYFABE_PROBE_ARM_NOTIFIER`, read once per process from the environment.
+/// **Three consecutive boots ran without the probe while looking correct from the
+/// launching shell** — an env var set in one shell is invisible to a boot launched from
+/// another, and nothing in the boot's own output said which set it ran with. The value now
+/// arrives as a property on `-device nvkvm-gpu,probe-arm-notifier=…`, is parsed
+/// **strictly** (junk refuses the device at realize rather than silently booting
+/// probe-off), and the set in effect is reported in the device's own end-of-run census —
+/// so a boot's report proves what it ran with.
 ///
 /// # ⊘ What this is for, and what its green boot does NOT mean
 ///
@@ -219,19 +234,74 @@ pub fn is_silent_notifier(index: u32) -> bool {
 /// correctness, and anything it unblocks still owes the real answer — which for a
 /// completion notifier means **delivering the event**, not admitting the arming.
 ///
-/// ★ Off unless the environment says otherwise, and the default is asserted by a test
-/// rather than trusted: the failure mode being guarded is a probe that quietly becomes the
-/// product, which is `mock_fidelity_both_directions`' too-capable half with a flag on it.
-#[must_use]
-pub fn probe_armed_notifier(index: u32) -> bool {
-    static SET: std::sync::OnceLock<Vec<u32>> = std::sync::OnceLock::new();
-    SET.get_or_init(|| {
-        std::env::var("KAYFABE_PROBE_ARM_NOTIFIER")
-            .ok()
-            .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
-            .unwrap_or_default()
-    })
-    .contains(&index)
+/// ★ [`ProbeArmSet::default`] is empty, and the default is asserted by a test rather than
+/// trusted: the failure mode being guarded is a probe that quietly becomes the product,
+/// which is `mock_fidelity_both_directions`' too-capable half with a flag on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ProbeArmSet {
+    indices: [u32; PROBE_ARM_MAX],
+    len: u8,
+}
+
+/// Why a probe string could not become a [`ProbeArmSet`].
+///
+/// ⊘ Every variant is a **refusal to boot**, not a value. The predecessor env-var parser
+/// used `filter_map(… .ok())`, under which `probe-arm-notifier=3S` silently booted with a
+/// *smaller* probe set than asked — exactly the "boot ran with different instrumentation
+/// than reported" failure the property exists to kill.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeArmParseError {
+    /// A comma-separated token was not a decimal `u32`.
+    NotDecimal,
+    /// More than [`PROBE_ARM_MAX`] indices were named.
+    TooMany,
+}
+
+impl ProbeArmSet {
+    /// Parse a comma-separated decimal list (`"35"`, `"35, 37"`). An empty or
+    /// all-whitespace string is the empty set — the default, spelled out.
+    ///
+    /// # Errors
+    ///
+    /// [`ProbeArmParseError`] — strictly: any token that is not a decimal `u32`, or more
+    /// than [`PROBE_ARM_MAX`] of them, refuses the whole string rather than keeping the
+    /// parseable subset.
+    pub fn parse(s: &str) -> Result<ProbeArmSet, ProbeArmParseError> {
+        let mut set = ProbeArmSet::default();
+        if s.trim().is_empty() {
+            return Ok(set);
+        }
+        for token in s.split(',') {
+            let idx: u32 = token
+                .trim()
+                .parse()
+                .map_err(|_| ProbeArmParseError::NotDecimal)?;
+            if usize::from(set.len) == PROBE_ARM_MAX {
+                return Err(ProbeArmParseError::TooMany);
+            }
+            set.indices[usize::from(set.len)] = idx;
+            set.len += 1;
+        }
+        Ok(set)
+    }
+
+    /// Whether this run's probe admits arming `index`.
+    #[must_use]
+    pub fn contains(&self, index: u32) -> bool {
+        self.as_slice().contains(&index)
+    }
+
+    /// The indices named, in the order they were named.
+    #[must_use]
+    pub fn as_slice(&self) -> &[u32] {
+        &self.indices[..usize::from(self.len)]
+    }
+
+    /// `true` iff no index is admitted — the shipping configuration.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 }
 
 /// A decoded `NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS`.
@@ -413,24 +483,24 @@ pub fn encode_event_set_notification(reg: &EventSetNotification) -> Vec<u8> {
 
 #[cfg(test)]
 mod probe_default_tests {
-    /// ★★★ The probe is OFF unless the environment names an index — and index 35, the one
-    /// the `m1` boot died on, is refused by default like any other completion notifier.
+    use super::{PROBE_ARM_MAX, ProbeArmParseError, ProbeArmSet};
+
+    /// ★★★ The probe is OFF unless a device property names an index — and index 35, the
+    /// one the `m1` boot died on, is refused by default like any other completion notifier.
     ///
     /// ⊘ This is the guard against the probe quietly becoming the product. It asserts the
-    /// DEFAULT, which is the only thing a shipped binary ever sees, and it deliberately does
-    /// not set the variable: a test that turns the probe on would make the process-wide
-    /// `OnceLock` observable to every other test in this binary.
+    /// DEFAULT — `ProbeArmSet::default()`, which is what every constructor that was not
+    /// handed an explicit set uses — since the default is the only thing a shipped binary
+    /// ever sees.
     #[test]
     fn the_notifier_probe_is_off_by_default_and_35_is_not_silent() {
-        assert!(
-            std::env::var("KAYFABE_PROBE_ARM_NOTIFIER").is_err(),
-            "the test environment must not preset the probe, or this assertion is vacuous"
-        );
+        let default = ProbeArmSet::default();
+        assert!(default.is_empty());
         for idx in [35u32, 0, 37, 194, 197] {
             assert!(
-                !super::probe_armed_notifier(idx),
-                "★ notifier {idx} is probe-armed with no environment asking for it — the \
-                 probe has become the default, which is the failure this test exists for"
+                !default.contains(idx),
+                "★ notifier {idx} is probe-armed by the DEFAULT set — the probe has \
+                 become the default, which is the failure this test exists for"
             );
         }
         assert!(
@@ -442,5 +512,53 @@ mod probe_default_tests {
         assert!(super::is_silent_notifier(
             super::NV2080_NOTIFIERS_POWER_RESUME
         ));
+    }
+
+    /// The property string is parsed STRICTLY. The predecessor env-var parser dropped
+    /// unparseable tokens with `filter_map`, so a typo booted with a smaller probe set
+    /// than asked and nothing said so.
+    #[test]
+    fn probe_parse_is_strict_and_refuses_junk() {
+        assert_eq!(ProbeArmSet::parse("").unwrap(), ProbeArmSet::default());
+        assert_eq!(ProbeArmSet::parse("  ").unwrap(), ProbeArmSet::default());
+
+        let one = ProbeArmSet::parse("35").unwrap();
+        assert!(one.contains(35) && !one.is_empty());
+        assert_eq!(one.as_slice(), &[35]);
+
+        let two = ProbeArmSet::parse(" 35 , 37 ").unwrap();
+        assert_eq!(two.as_slice(), &[35, 37]);
+        assert!(!two.contains(36));
+
+        // ⊘ Exact-variant assertions, never `is_err()` (`testing_doctrine.md`).
+        assert_eq!(
+            ProbeArmSet::parse("3S"),
+            Err(ProbeArmParseError::NotDecimal),
+            "a typo must refuse the boot, not silently shrink the probe set"
+        );
+        assert_eq!(
+            ProbeArmSet::parse("35,"),
+            Err(ProbeArmParseError::NotDecimal)
+        );
+        assert_eq!(ProbeArmSet::parse("-1"), Err(ProbeArmParseError::NotDecimal));
+
+        let too_many = (0..=PROBE_ARM_MAX as u32)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        assert_eq!(
+            ProbeArmSet::parse(&too_many),
+            Err(ProbeArmParseError::TooMany),
+            "overflow must refuse, never truncate: a silently clipped set is a boot that \
+             ran with different instrumentation than its operator believes"
+        );
+        let exactly_full = (0..PROBE_ARM_MAX as u32)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        assert_eq!(
+            ProbeArmSet::parse(&exactly_full).unwrap().as_slice().len(),
+            PROBE_ARM_MAX
+        );
     }
 }

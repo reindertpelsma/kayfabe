@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 15u
+#define KAYFABE_SHIM_ABI 16u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -400,6 +400,7 @@ typedef struct KayfabeIsolateRefusal {
 #define KAYFABE_SERVED_CONTROL_SLOTS 32u
 #define KAYFABE_NOTIFIER_ARMING_SLOTS 16u
 #define KAYFABE_CTRL_NO_REPLY 0xFFFFFFFFu
+#define KAYFABE_PROBE_ARM_SLOTS 8u
 
 typedef struct KayfabeServedControl {
     uint32_t cmd;         /* the NV*_CTRL_CMD_* id */
@@ -602,6 +603,15 @@ typedef struct KayfabeRegAudit {
     uint64_t arming_total;
     uint64_t arming_len;
     KayfabeNotifierArming armings[KAYFABE_NOTIFIER_ARMING_SLOTS];
+
+    /* ★ THE PROBE SET THIS BOOT RAN WITH — from the `probe-arm-notifier` device property,
+     * recorded by the plane's census at construction from the same value the event-plane
+     * arm consults.  0 entries in every shipping boot.  Printed so a boot's own report
+     * proves its probe set: the predecessor env var ran three boots probe-off while
+     * looking armed from the launching shell.  Never clipped: the parser refuses more
+     * than the array holds, so probe_arm_len <= KAYFABE_PROBE_ARM_SLOTS by construction. */
+    uint64_t probe_arm_len;
+    uint32_t probe_arm[KAYFABE_PROBE_ARM_SLOTS];
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.
@@ -610,8 +620,17 @@ typedef struct KayfabeRegAudit {
 int32_t kayfabe_shim_chip_identity(uint16_t device_id, KayfabeChipIdentity *out,
                                    const uint8_t **out_msg, uint64_t *out_msg_len);
 
-/* Create the register plane for a chip.  `device_id` of 0 selects the default row. */
-int32_t kayfabe_shim_regs_create(uint16_t device_id, void **out_handle,
+/* Create the register plane for a chip.  `device_id` of 0 selects the default row.
+ *
+ * `probe_arm`/`probe_arm_len` carry the `probe-arm-notifier` device property: a
+ * comma-separated decimal list of notifier indices to PROBE-arm (reachability
+ * instrumentation, never a shipping path).  Pass (NULL, 0) or an empty string for the
+ * shipping configuration.  ⊘ Junk in the string refuses the device BY NAME rather than
+ * booting probe-off — the predecessor env var silently did the latter, three boots in a
+ * row.  The set in effect comes back in KayfabeRegAudit.probe_arm. */
+int32_t kayfabe_shim_regs_create(uint16_t device_id,
+                                 const uint8_t *probe_arm, uint64_t probe_arm_len,
+                                 void **out_handle,
                                  const uint8_t **out_msg, uint64_t *out_msg_len);
 
 void    kayfabe_shim_regs_destroy(void *handle);

@@ -559,9 +559,14 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // the unserviced list nor the bridge census, and 0x20800301 was the control named in
     // the guest line that killed a boot while absent from every list the report printed.
     // This is the reason the wire ABI moved to 15.
+    // ★ 51 -> 52 at the probe-arm report: `probe_arm_len` plus the 8-entry u32 array
+    // (4 u64-equivalents) below. The set a boot ran with must appear in the boot's own
+    // report — three boots ran probe-off while looking armed from the launching shell,
+    // when the probe was a process env var. This is the reason the wire ABI moved to 16.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (51 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (52 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
+            * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()
@@ -1205,4 +1210,41 @@ fn with_the_feature_both_host_planes_build_a_factory() {
             "★ {plane:?} could not be built in an archive that links kayfabe-isolate-host"
         );
     }
+}
+
+// ── The probe-arm device property: strict parse, reported set ──────────────────────
+
+#[test]
+fn a_probe_string_with_junk_refuses_the_device_rather_than_booting_probe_off() {
+    use kayfabe_qemu_raw::shim::{Regs, Status};
+
+    // ⊘ Exact-variant assertions. The predecessor env-var parser dropped unparseable
+    // tokens silently, which is how three boots ran probe-off while looking armed.
+    let (status, msg) = Regs::create_probed(0, "3S").expect_err("junk must refuse");
+    assert_eq!(status, Status::Malformed);
+    assert!(
+        msg.contains("probe-arm-notifier"),
+        "the refusal names the property so the operator knows which knob to fix: {msg}"
+    );
+    let (status, _) = Regs::create_probed(0, "1,2,3,4,5,6,7,8,9").expect_err("too many");
+    assert_eq!(status, Status::Malformed);
+}
+
+#[test]
+fn the_audit_reports_the_probe_set_the_device_ran_with() {
+    use kayfabe_qemu_raw::shim::Regs;
+
+    // The shipping constructor: empty, and REPORTED as empty.
+    let stock = Regs::create(0).expect("servable");
+    assert_eq!(stock.audit().probe_arm_len, 0);
+    assert_eq!(stock.audit().probe_arm, [0u32; 8]);
+
+    // A probed device: the audit states the set, values and count both — this is the
+    // line in the boot's own report that proves what it ran with.
+    let probed = Regs::create_probed(0, "35,37").expect("servable");
+    let audit = probed.audit();
+    assert_eq!(audit.probe_arm_len, 2);
+    assert_eq!(audit.probe_arm[0], 35);
+    assert_eq!(audit.probe_arm[1], 37);
+    assert_eq!(&audit.probe_arm[2..], &[0u32; 6]);
 }

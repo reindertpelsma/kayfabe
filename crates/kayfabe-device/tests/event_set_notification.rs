@@ -464,3 +464,93 @@ fn the_policy_still_declines_a_function_that_is_not_a_control() {
         "an event registration is not an allocation, whatever its payload says"
     );
 }
+
+// ── The notifier probe: a device property, admitting exactly what it names ─────────
+
+/// The `m1` boot's index: `NV2080_NOTIFIERS_FIFO_EVENT_MTHD`, a completion notifier.
+const FIFO_EVENT_MTHD: u32 = 35;
+
+fn probed_policy(csv: &str) -> InitTablePolicy {
+    InitTablePolicy::with_probe_arm(
+        chip(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+        kayfabe_abi::eventnotify::ProbeArmSet::parse(csv).expect("test set parses"),
+    )
+}
+
+fn arming_of(event: u32) -> RpcCommand {
+    event_command(
+        &EventSetNotification {
+            event,
+            action: ACTION_REPEAT,
+            notify_state: false,
+            info32: 0,
+            info16: 0,
+        },
+        EVENT_SET_NOTIFICATION_PARAMS_SIZE as u32,
+    )
+}
+
+#[test]
+fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_it() {
+    // ⊘ The default first, because the default is what every shipping boot runs: index 35
+    // is a COMPLETION notifier and `InitTablePolicy::new` must refuse to arm it.
+    assert_ne!(
+        policy()
+            .respond(&arming_of(FIFO_EVENT_MTHD))
+            .expect("claimed")
+            .rpc_result,
+        0,
+        "the DEFAULT policy probe-arms index 35 — the probe has become the product"
+    );
+    // The probe admits what it names…
+    let mut probed = probed_policy("35");
+    assert_eq!(
+        probed
+            .respond(&arming_of(FIFO_EVENT_MTHD))
+            .expect("served")
+            .rpc_result,
+        0,
+        "a probe naming 35 serves the arming — reachability instrumentation"
+    );
+    // …and nothing it does not name: 37 is another legal, non-silent index.
+    assert_ne!(
+        probed.respond(&arming_of(37)).expect("claimed").rpc_result,
+        0,
+        "the probe is a set, not a switch: an unnamed non-silent index stays refused"
+    );
+}
+
+#[test]
+fn the_probe_does_not_bypass_the_transition_rule_or_the_wire_bounds() {
+    // ★ The probe widens ONE gate (SILENT_NOTIFIERS) and only that one. The already-armed
+    // transition rule is RM's own and still applies to a probe-armed index…
+    let mut probed = probed_policy("35");
+    assert_eq!(
+        probed
+            .respond(&arming_of(FIFO_EVENT_MTHD))
+            .expect("served")
+            .rpc_result,
+        0
+    );
+    assert_ne!(
+        probed
+            .respond(&arming_of(FIFO_EVENT_MTHD))
+            .expect("claimed")
+            .rpc_result,
+        0,
+        "REPEAT over REPEAT is refused even when the index is probe-armed"
+    );
+    // …and so does the decoder's own bound: a probe cannot admit an index the wire
+    // refuses to decode.
+    let out_of_range = NV2080_NOTIFIERS_MAXCOUNT;
+    let mut probed_oob = probed_policy(&out_of_range.to_string());
+    assert_ne!(
+        probed_oob
+            .respond(&arming_of(out_of_range))
+            .expect("claimed")
+            .rpc_result,
+        0,
+        "an out-of-range index is refused by the DECODE before any probe is consulted"
+    );
+}

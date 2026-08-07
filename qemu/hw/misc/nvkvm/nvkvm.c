@@ -138,6 +138,11 @@ struct NvkvmState {
     bool     shareable_ram;
     /* 0 = the chip table's default row.  A hex PCI device id selects another. */
     uint32_t chip_device_id;
+    /* ★ PROBE ONLY, default NULL (= empty).  Comma-separated decimal notifier indices to
+     * probe-arm.  Parsed STRICTLY by the archive: junk refuses realize by name rather
+     * than booting probe-off, and the set in effect comes back in the end-of-run census
+     * so the boot's own report proves what it ran with. */
+    char    *probe_arm_notifier;
 
     /* --- regions ---------------------------------------------------------------- */
     MemoryRegion mr[NVKVM_N_REGIONS];
@@ -1458,6 +1463,39 @@ static void nvkvm_report_registers(NvkvmState *s)
      * line this report printed.  With these rows, an id absent from ALL the lists is
      * finally a control that was never issued.
      */
+    /*
+     * ★ THE PROBE SET FIRST, unconditionally, empties included: the census rows below are
+     * only interpretable against the probe set the boot ran with — an arming of a
+     * non-silent index served with result 0 means one thing under an empty probe (a
+     * defect) and another under a probe naming it (the measurement that was asked for).
+     * Three boots ran probe-off while looking armed from the launching shell; this line
+     * is what makes that impossible to misread again.
+     */
+    if (a.probe_arm_len == 0) {
+        info_report("nvkvm: probe-arm set: EMPTY (shipping configuration: every "
+                    "non-silent notifier arming refused)");
+    } else {
+        uint64_t i, pshown = a.probe_arm_len;
+        char pbuf[KAYFABE_PROBE_ARM_SLOTS * 12 + 1];
+        size_t off = 0;
+
+        if (pshown > KAYFABE_PROBE_ARM_SLOTS) {
+            pshown = KAYFABE_PROBE_ARM_SLOTS;
+        }
+        pbuf[0] = '\0';
+        for (i = 0; i < pshown; i++) {
+            int n = snprintf(pbuf + off, sizeof(pbuf) - off, "%s%u",
+                             i ? "," : "", a.probe_arm[i]);
+            if (n < 0 || (size_t)n >= sizeof(pbuf) - off) {
+                break;
+            }
+            off += (size_t)n;
+        }
+        info_report("nvkvm: probe-arm set: [%s] — PROBE BOOT, reachability only; any "
+                    "rung reached under this set is a measurement, NOT a milestone",
+                    pbuf);
+    }
+
     info_report("nvkvm: controls: %" PRIu64 " answered, %" PRIu64 " distinct cmd/result "
                 "rows (result 0 = served; non-zero = served-but-REFUSED, which reaches "
                 "no other list)",
@@ -1792,8 +1830,11 @@ static void nvkvm_realize(PCIDevice *pci, Error **errp)
         const uint8_t *msg = NULL;
         uint64_t msg_len = 0;
         void *handle = NULL;
-        int32_t rc = kayfabe_shim_regs_create((uint16_t)s->chip_device_id, &handle,
-                                              &msg, &msg_len);
+        const char *probe = s->probe_arm_notifier ? s->probe_arm_notifier : "";
+        int32_t rc = kayfabe_shim_regs_create((uint16_t)s->chip_device_id,
+                                              (const uint8_t *)probe,
+                                              (uint64_t)strlen(probe),
+                                              &handle, &msg, &msg_len);
 
         if (rc != KAYFABE_OK) {
             error_setg(errp, "nvkvm: the register plane refused to build (%d): %.*s",
@@ -1912,6 +1953,12 @@ static const Property nvkvm_properties[] = {
      * and an id the table does not carry is a named refusal at realize — there is
      * deliberately no nearest-neighbour fallback. */
     DEFINE_PROP_UINT32("chip-device-id", NvkvmState, chip_device_id, 0),
+    /* ★ PROBE ONLY — reachability instrumentation, never a shipping path.  Unset = empty
+     * = every non-silent notifier arming is refused, which is the product behaviour.
+     * This is a DEVICE PROPERTY rather than an env var so the boot's own census can
+     * report the set it actually ran with: three boots ran probe-off while looking
+     * armed from the launching shell, and their conclusions had to be retracted. */
+    DEFINE_PROP_STRING("probe-arm-notifier", NvkvmState, probe_arm_notifier),
     NVKVM_PROP_TERMINATOR
 };
 

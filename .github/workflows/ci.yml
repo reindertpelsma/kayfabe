@@ -1354,7 +1354,26 @@ jobs:
           # ⊘ Note what did NOT move: `chardev_unsafe.rs` stays at 4 across the ioctl-size
           # bound that landed at `6d82fb4`, because a bound added in SAFE code above an
           # existing block is the shape this ratchet should never charge for.
-          AUDITED="kayfabe-linux-raw:90 kayfabe-qemu-raw:47"
+          # ★★★ `kayfabe-qemu-raw` 47 -> 48 AT ABI 16, 2026-08-07 — the
+          # `probe-arm-notifier` device property. ONE relaxation:
+          #
+          #   [p16-a] `kayfabe_shim_regs_create` — the `unsafe {
+          #           core::slice::from_raw_parts(probe_arm, probe_arm_len as usize) }`
+          #           that reads the property string the C shell passes as (ptr, len).
+          #           Same shape as the existing `cfg.bars` read in
+          #           `kayfabe_shim_realize` (NULL is checked first,
+          #           NULL-with-nonzero-len is refused Malformed, and the bytes are
+          #           validated as UTF-8 before any use); the slice does not outlive the
+          #           call — `Regs::create_probed` parses it into an owned `ProbeArmSet`
+          #           before returning.
+          #
+          # ⊘ Why the argument is (ptr, len) at all: the probe moved from a process env
+          # var to a device property precisely so a boot's own report proves the probe
+          # set it ran with (three boots ran probe-off while looking armed from the
+          # launching shell). The string must therefore cross the FFI boundary once, at
+          # regs-create time, instead of being ambiently readable — the one new unsafe
+          # site IS the fix's mechanism, not incidental.
+          AUDITED="kayfabe-linux-raw:90 kayfabe-qemu-raw:48"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

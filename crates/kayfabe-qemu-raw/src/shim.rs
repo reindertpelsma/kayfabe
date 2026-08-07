@@ -155,8 +155,16 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// ([`SERVED_CONTROL_SLOTS`], [`NOTIFIER_ARMING_SLOTS`]), so an ABI-14 shim would allocate
 /// the old layout and this archive would write past the end of it.
 ///
+/// ★ Bumped to **16** when the notifier probe moved from a process env var to the
+/// `probe-arm-notifier` **device property**: `kayfabe_shim_regs_create` gained the
+/// probe-string arguments (a signature change is an ABI change even with no struct
+/// growth), and [`KayfabeRegAudit`] gained `probe_arm_len` / `probe_arm` so the boot's
+/// own report states the probe set it actually ran with — three boots ran probe-off
+/// while looking armed from the launching shell, which is the failure the property and
+/// the report field jointly kill.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 15;
+pub const ABI_VERSION: u32 = 16;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1218,7 +1226,21 @@ pub struct KayfabeRegAudit {
     pub arming_len: u64,
     /// The rows, in first-seen order, with the handles they arrived on.
     pub armings: [KayfabeNotifierArming; NOTIFIER_ARMING_SLOTS],
+    /// ★ How many notifier indices the `probe-arm-notifier` device property named — the
+    /// probe set this boot actually ran with, as recorded by the plane's census at
+    /// construction from the same value the event-plane arm consults. `0` in every
+    /// shipping boot. Reported so a boot's own output proves its probe set: the
+    /// predecessor env var ran three boots probe-off while looking armed from the
+    /// launching shell.
+    pub probe_arm_len: u64,
+    /// The indices, in the order the property named them.
+    pub probe_arm: [u32; PROBE_ARM_SLOTS],
 }
+
+/// How many probe-arm indices [`KayfabeRegAudit`] carries — the full
+/// [`kayfabe_abi::eventnotify::PROBE_ARM_MAX`], so unlike the sampled censuses this one
+/// is never clipped: parse refuses more, so `probe_arm_len` ≤ the array by construction.
+pub const PROBE_ARM_SLOTS: usize = kayfabe_abi::eventnotify::PROBE_ARM_MAX;
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
 ///
@@ -1556,12 +1578,51 @@ impl core::fmt::Debug for Regs {
 }
 
 impl Regs {
-    /// Build the register plane for a chip. `0` selects the table's default row.
+    /// Build the register plane for a chip. `0` selects the table's default row. The
+    /// notifier probe is empty — the shipping configuration, and the reason this is the
+    /// constructor every test uses.
     ///
     /// # Errors
-    /// [`classify_chip`]-ed, or [`Status::Unsupported`] if the guest driver version this
-    /// build answers as has no wire table.
+    /// As [`Regs::create_probed`].
     pub fn create(device_id: u16) -> Result<Regs, (Status, &'static str)> {
+        Regs::create_probed(device_id, "")
+    }
+
+    /// Build the register plane with a notifier **probe set** — the
+    /// `probe-arm-notifier` device property's comma-separated decimal string.
+    ///
+    /// ⊘ Parsed **strictly**: junk refuses the device at realize, by name, rather than
+    /// booting probe-off — the predecessor env var did exactly that silently, three
+    /// boots in a row, and the conclusions drawn from them had to be retracted. The set
+    /// in effect is recorded in the plane's census, so the end-of-run report proves
+    /// what the boot ran with.
+    ///
+    /// # Errors
+    /// [`classify_chip`]-ed, [`Status::Unsupported`] if the guest driver version this
+    /// build answers as has no wire table, or [`Status::Malformed`] for a probe string
+    /// that is not a comma-separated decimal list within
+    /// [`kayfabe_abi::eventnotify::PROBE_ARM_MAX`] entries.
+    pub fn create_probed(
+        device_id: u16,
+        probe_arm: &str,
+    ) -> Result<Regs, (Status, &'static str)> {
+        let probe_arm = kayfabe_abi::eventnotify::ProbeArmSet::parse(probe_arm).map_err(
+            |e| match e {
+                kayfabe_abi::eventnotify::ProbeArmParseError::NotDecimal => (
+                    Status::Malformed,
+                    "probe-arm-notifier must be a comma-separated list of decimal \
+                     notifier indices; a token failed to parse, and a probe that \
+                     silently shrank would be a boot running different instrumentation \
+                     than its operator believes — refused instead",
+                ),
+                kayfabe_abi::eventnotify::ProbeArmParseError::TooMany => (
+                    Status::Malformed,
+                    "probe-arm-notifier names more indices than the probe set carries; \
+                     truncating silently would be a boot running different \
+                     instrumentation than its operator believes — refused instead",
+                ),
+            },
+        )?;
         let chip = chip_for(device_id)?;
         let abi = kayfabe_device::abi::gsp_abi_for(GUEST_DRIVER).map_err(|_| {
             (
@@ -1576,6 +1637,7 @@ impl Regs {
             chip,
             abi,
             Box::new(HostMonotonicClock::new()),
+            probe_arm,
             Some(objects),
         )
         .map_err(|e| classify_chip(&e))?;
@@ -1857,6 +1919,7 @@ impl Regs {
         // a field added to `CensusSnapshot` and not wired here is a fact the C shell can
         // never read, and nothing goes red. `rustc` refuses the pattern instead.
         let kayfabe_device::census::CensusSnapshot {
+            probe_arm: probe_arm_set,
             served_total,
             served_distinct: served_len,
             served: served_rows,
@@ -1864,6 +1927,8 @@ impl Regs {
             arming_distinct: arming_len,
             armings: arming_rows,
         } = self.plane.control_census();
+        let mut probe_arm = [0u32; PROBE_ARM_SLOTS];
+        probe_arm[..probe_arm_set.as_slice().len()].copy_from_slice(probe_arm_set.as_slice());
         let mut served = [KayfabeServedControl::default(); SERVED_CONTROL_SLOTS];
         for (slot, r) in served.iter_mut().zip(served_rows.iter()) {
             *slot = KayfabeServedControl {
@@ -1945,6 +2010,8 @@ impl Regs {
             arming_total,
             arming_len,
             armings,
+            probe_arm_len: probe_arm_set.as_slice().len() as u64,
+            probe_arm,
         }
     }
 }

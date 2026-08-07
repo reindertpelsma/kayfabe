@@ -449,11 +449,24 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 12] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 13] = [
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",
         disposition: StickyDisposition::Guarded,
+    },
+    // ★ The control census (`#`03a5c31). `Delegates` is the unconditional statement: it
+    // forwards to the wrapped policy and returns that reply UNCHANGED — byte-for-byte,
+    // pinned by `tests/control_census.rs::the_census_changes_no_byte_of_any_reply` — so
+    // it authors nothing a cache could keep. ⊘ This row was missing for one commit: the
+    // impl landed in 03a5c31 without it, and the derive-from-source test was red on
+    // master while that commit's message claimed a green suite. The ledger row is the
+    // fix; the incident is the reason the test derives the universe instead of trusting
+    // this array.
+    PolicyDisposition {
+        name: "ControlCensus<P>",
+        path: "crates/kayfabe-device/src/census.rs",
+        disposition: StickyDisposition::Delegates,
     },
     PolicyDisposition {
         name: "StaticInfoPolicy",
