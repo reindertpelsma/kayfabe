@@ -353,6 +353,7 @@ fn the_not_a_control_rows_decline_every_control_command() {
                     kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
                 )
                 .expect("the port's object model realizes"),
+                kayfabe_device::ga10x::GA106_ENGINES,
             )),
         ),
         // ★★ `#149`. It answers exactly `UPDATE_BAR_PDE` (fn 70) and declines every other

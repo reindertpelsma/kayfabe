@@ -795,7 +795,7 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               to us under NV_ASSERT_OK_OR_RETURN (ogkm-580: kernel_channel.c:2878-2886, \
               reached from :3230); our NV_ERR_NOT_SUPPORTED returns through mem_utils.c:1969 \
               VERBATIM, printing 'Unable to bind Channel, status: 56'. \
-              ⊘ NOT SERVED, and this row is where the SET is named. 0xa06f0103 (schedule), \
+              ⊘ This row is where the SET is named. 0xa06f0103 (schedule), \
               0xa06f0104 (bind), 0xc36f0108 (token) and the index-35 arming at \
               mem_utils.c:1920 are not four rungs of a ladder; they are ONE requirement — \
               put a channel on a runlist, arm its completion, hand back its doorbell — asked \
@@ -805,7 +805,37 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               mode2_initctrl_ga106.h, psize 4, dlen 0) and a real GA106 answers 0b 00 00 00 \
               — the [IN] engineType echoed back (kayfabe_abi::oracle, traces/real_ga106/). \
               As with 0xa06f0103 that is an echo, not an answer, so even a perfect capture \
-              licenses nothing",
+              licenses nothing. \
+              ★★★ SERVED as of E9/§13.6, and every sentence above is CORRECTED rather than \
+              deleted — this row used to open its verdict with 'NOT SERVED', and that is \
+              the only word that changed kind. \
+              (a) WHAT SERVING IT IS: per ogkm-580: kernel_fifo_gm107.c:672-759 a real GSP \
+              answers a bind by linear-scanning THIS GPU's own engine-info list — the list \
+              built from the device-info table we serve — so the faithful check is 'did \
+              this device advertise the engine', asked of the SAME ChipProfile::engines \
+              slice the guest was served (ObjectPolicy carries it from construction, \
+              execution_plane_increments.md §13.6 option (2); required, never defaulted, \
+              because a gate whose default is open is not a gate). The wire ordinal is \
+              NV2080 space and the table is RM space; nv2080_to_rm_engine_type converts \
+              FIRST, because the spaces collide above 0x12 (raw 0x13 is NVDEC0 in one and \
+              COPY10 in the other) and a raw compare is a silent wrong answer. \
+              (b) THE REFUSAL VOCABULARY, and 0x56 is gone from it: an engine this device \
+              never advertised answers NV_ERR_OBJECT_NOT_FOUND (0x57, gm107.c:736 — NOT in \
+              the header's own status list, which is wrong by omission); a malformed \
+              request or unroutable channel answers NV_ERR_INVALID_STATE (0x40); and the \
+              two must not be transposed in a boot log — 0x57 is one away from 0x56, the \
+              FSM's 'nobody claimed this' signature this row spent six weeks printing. \
+              (c) THE REPLY is the request's own four bytes echoed back, which is exactly \
+              what the real GA106 answered (0b 00 00 00 above) — the transport copies a \
+              non-empty reply's params over the caller's struct (ogkm-580: \
+              rpc.c:11085-11090), so a zero-filled body would rewrite engineType to NULL \
+              behind the caller's back. \
+              (d) ⊘ STILL TRUE, and named rather than hidden: NV_OK here records the \
+              guest's declaration (ExecPlane::bound, the same declared-versus-performed \
+              split as exec.requested) — the host-side runlist act remains deferred to the \
+              doorbell, the 'ONE requirement asked four times' framing stands, and a reply \
+              still cannot close the execution plane; it can only stop lying about which \
+              wall is next",
     },
 ];
 

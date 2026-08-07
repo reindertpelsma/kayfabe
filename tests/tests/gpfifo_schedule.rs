@@ -120,7 +120,12 @@ fn command(msg: &[u8]) -> RpcCommand {
 /// A policy that has already been told about one client, device, subdevice and channel —
 /// i.e. the state the guest's `RmInitAdapter` is in when it issues this control.
 fn policy_with_a_channel() -> ObjectPolicy {
-    let mut p = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut p = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let mut s = w::RpcScript::new();
     s.client_root(w::NV01_ROOT, CLIENT, w::KERNEL_PID)
         .device(CLIENT, CLIENT, DEVICE, 0)
@@ -491,13 +496,27 @@ fn a_handle_that_is_not_a_live_channel_is_refused_by_its_own_name() {
 /// ★★★ The policy claims `RmControl` **by command id**, and `OBJECT_CONTROLS` is that
 /// closed list. Quantified over the constant rather than restating it
 /// (`gates_quantified_over_a_list`).
+///
+/// ⚠ One id → two at E9/§13.6: the channel-side bind (`0xa06f0104`) joined the claim.
+/// The membership is pinned in full so growing the list is a **visible** diff here, not a
+/// silent widening of what the ledger can no longer see.
 #[test]
-fn the_control_claim_is_exactly_one_id() {
-    assert_eq!(OBJECT_CONTROLS, &[NVA06F_CTRL_CMD_GPFIFO_SCHEDULE]);
+fn the_control_claim_is_exactly_these_ids() {
+    assert_eq!(
+        OBJECT_CONTROLS,
+        &[
+            NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+            kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+        ]
+    );
     assert!(
         !OBJECT_CONTROLS.contains(&NVA06C_CTRL_CMD_GPFIFO_SCHEDULE),
         "★ the TSG form is what we send the HOST, never what the guest asks us — \
          ogkm-580: mem_utils.c:1973-1989 issues the a06f form on a TSG-less channel"
+    );
+    assert!(
+        !OBJECT_CONTROLS.contains(&kayfabe_abi::submit::NVA06C_CTRL_CMD_BIND),
+        "★ likewise the TSG-side bind (0xa06c0102): host-facing, never guest-claimed"
     );
 }
 
@@ -516,7 +535,9 @@ fn every_other_control_is_still_declined_so_the_ledger_lives() {
     // the TSG form, which is the one a careless claim would swallow.
     for cmd in [
         NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
-        0xa06f_0104,
+        // ⚠ 0xa06f_0104 (the channel-side bind) left this list at E9/§13.6 — it is now
+        // CLAIMED, and its own suite (`bind_channel.rs`) asserts it is always decided.
+        kayfabe_abi::submit::NVA06C_CTRL_CMD_BIND,
         0xc36f_0108,
         0x2080_0a6c,
         0x2080_0301,

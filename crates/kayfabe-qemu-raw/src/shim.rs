@@ -1350,6 +1350,15 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         self.0.schedule_channel(client, object, enable)
     }
 
+    fn bind_channel(
+        &mut self,
+        client: kayfabe_rt::HClient,
+        object: kayfabe_rt::HObject,
+        rm_engine_type: u32,
+    ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault> {
+        self.0.bind_channel(client, object, rm_engine_type)
+    }
+
     /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
     /// lives inside a device lock and a proc lock, and a `&Gpu` handed out here would
     /// outlive both guards.
@@ -1477,7 +1486,7 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (objects, refusals, rings, isolates, device) = object_policy(abi.driver)?;
+        let (objects, refusals, rings, isolates, device) = object_policy(abi.driver, chip.engines)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -1869,6 +1878,10 @@ type ObjectLink = (
 
 fn object_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
+    // ★★★ E9/§13.6 option (2) — the SAME `ChipProfile::engines` slice the device-info
+    // path serves the guest, so the bind check and the advertisement cannot be two
+    // descriptions of one silicon.
+    engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
 ) -> Result<ObjectLink, (Status, &'static str)> {
     let isolates = isolate_factory(selected_isolate_plane()?)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
@@ -1904,6 +1917,7 @@ fn object_policy(
         // this becomes a realize-time property beside the driver version — not an `if`.
         kayfabe_abi::GuestOs::Linux,
         Box::new(SharedObjectModel(Arc::clone(&device))),
+        engines,
         kayfabe_rmrpc::ReasmLimits::default(),
     );
     // ★ The handle is taken BEFORE the policy is boxed, because afterwards there is no

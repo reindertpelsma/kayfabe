@@ -112,6 +112,7 @@ fn chain_with_objects() -> (
             abi(),
             GuestOs::Linux,
             port_gpu(),
+            kayfabe_device::ga10x::GA106_ENGINES,
         ))),
     );
     (policy, log)
@@ -306,7 +307,12 @@ fn the_four_classes_the_boot_asked_for_are_all_served() {
 /// that test. This asserts the graph actually took four facts.
 #[test]
 fn serving_the_four_classes_declares_four_facts_into_the_object_model() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     for cmd in boot_allocs() {
         let _ = policy.deliver(&cmd).expect("the object model accepts it");
     }
@@ -375,7 +381,12 @@ fn without_the_object_link_the_frees_are_refused_too() {
 /// its params is decoded.
 #[test]
 fn a_class_this_port_does_not_model_is_still_refused_by_name() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
     let e = policy
         .deliver(&alloc(2, BOOT_HCLIENT, 0xdead_0001, 0x1234))
@@ -403,7 +414,12 @@ fn a_class_this_port_does_not_model_is_still_refused_by_name() {
 /// boot, and would silently give the guest a default answer for every class forever.
 #[test]
 fn an_allowlisted_but_unmapped_class_is_refused_as_unmapped_not_as_unpermitted() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
     let e = policy
         .deliver(&alloc(2, BOOT_HCLIENT, 0xdead_0002, 0x0000_0005))
@@ -435,8 +451,18 @@ fn the_event_class_params_are_never_read_however_hostile_they_are() {
         ),
     ));
 
-    let mut clean = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
-    let mut dirty = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut clean = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
+    let mut dirty = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     for (i, cmd) in boot_allocs().into_iter().enumerate() {
         let _ = clean.deliver(&cmd).expect("clean sequence accepted");
         if i < 3 {
@@ -785,7 +811,12 @@ fn the_ports_object_model_realizes_with_no_forwarding_plane_and_no_isolate() {
 /// never spawns at all.
 #[test]
 fn the_first_guest_alloc_materializes_the_ports_isolate() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     // ★ `.expect` and not `.unwrap_or_default()`: since E2 `ObjectPolicy::gpu` is an
     // `Option` because a policy may be built over a shell whose graph is behind ranked
     // locks. This test builds one over a bare `Gpu`, so `None` here would mean the
@@ -828,7 +859,12 @@ fn the_first_guest_alloc_materializes_the_ports_isolate() {
 /// boot would show as a refusal on the *second* class, not the first.
 #[test]
 fn the_client_root_is_normalised_so_the_device_beneath_it_resolves() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
     let _ = policy
         .deliver(&device_alloc(2, BOOT_HCLIENT, H_DEVICE))
@@ -882,7 +918,12 @@ fn a_recycled_hclient_survives_alloc_free_alloc() {
 /// refusals over a clean boot" into a bound rather than an absence.
 #[test]
 fn refusals_are_countable_by_tag() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let _ = policy.deliver(&alloc(1, BOOT_HCLIENT, 0xdead_0003, 0x1234));
     let _ = policy.deliver(&alloc(2, BOOT_HCLIENT, 0xdead_0004, 0x1235));
     let tags: Vec<(FaultTag, usize)> = policy.census().tags().collect();
@@ -911,7 +952,12 @@ fn refusals_are_countable_by_tag() {
 /// through a handle taken beforehand.
 #[test]
 fn the_refusal_census_is_readable_through_a_handle_after_the_policy_is_boxed() {
-    let policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     // The handle the composition root keeps — see `kayfabe_qemu_raw::shim::Regs`.
     let census = policy.refusal_census();
     assert!(
@@ -953,7 +999,12 @@ fn the_refusal_census_is_readable_through_a_handle_after_the_policy_is_boxed() {
 /// this pass by silently routing every guest device to GPU 0.
 #[test]
 fn a_device_that_declares_no_device_id_is_refused_rather_than_defaulted() {
-    let mut policy = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
     let e = policy
         .deliver(&alloc(2, BOOT_HCLIENT, H_DEVICE, 0x0000_0080))
@@ -1012,7 +1063,12 @@ fn an_allocs_params_live_past_the_declared_length_and_are_still_served() {
         elements: 1,
         delivered: Vec::new(),
     };
-    let mut a = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut a = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let e = a
         .deliver(&declared_only)
         .expect_err("with no delivered run there is nothing to decode");
@@ -1033,7 +1089,12 @@ fn an_allocs_params_live_past_the_declared_length_and_are_still_served() {
         delivered: full.clone(),
         ..declared_only.clone()
     };
-    let mut b = ObjectPolicy::new(abi(), GuestOs::Linux, port_gpu());
+    let mut b = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
     let _ = b
         .deliver(&delivered)
         .expect("the params are in the element run, where the guest put them");

@@ -340,6 +340,20 @@ pub struct ExecPlane {
     pub requested: BTreeSet<ChanId>,
     /// Channels whose host TSG/channel has been made runnable.
     pub scheduled: BTreeSet<ChanId>,
+    /// ★★★ Which engine the guest has **bound** each channel to —
+    /// `NVA06F_CTRL_CMD_BIND` (`0xa06f0104`), E9/§13.6.
+    ///
+    /// The value is in **RM engine space**, not the wire's `NV2080_ENGINE_TYPE` space:
+    /// the policy converts with `kayfabe_abi::submit::nv2080_to_rm_engine_type` *before*
+    /// routing here, because the two spaces collide above `0x12` (raw `0x13` is `NVDEC0`
+    /// in one and `COPY10` in the other) and a raw value stored here would poison every
+    /// later comparison against the RM-space engine tables.
+    ///
+    /// ⊘ This map records the guest's declaration; it does not assert a host runlist
+    /// assignment happened — the same declared-versus-performed split as
+    /// [`Self::requested`] vs [`Self::scheduled`], for the same
+    /// `refusal_invisible_in_the_ledger` reason.
+    pub bound: BTreeMap<ChanId, u32>,
 }
 
 /// Where a `0xa06f0103` is going — [`route_schedule_channel`]'s answer.
@@ -478,6 +492,136 @@ impl core::fmt::Display for ScheduleFault {
 }
 
 impl core::error::Error for ScheduleFault {}
+
+/// Where a `0xa06f0104` is going — [`route_bind_channel`]'s answer. E9/§13.6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BindRoute {
+    /// The proc that owns the channel.
+    pub proc: ProcId,
+    /// Its channel slot.
+    pub chan: ChanId,
+}
+
+/// ★ **ROUTE (rank 0).** Resolve `(client, object)` to the proc and channel slot the
+/// guest's `NVA06F_CTRL_CMD_BIND` names — [`route_schedule_channel`]'s three forward
+/// hops, verbatim and for its reasons (read that function's docs; they are the argument).
+///
+/// ⚠ Including the non-reason: it does **not** route through [`Spine::ctx_vas`], because
+/// the first channel this control is ever asked about — the global CeUtils channel RM
+/// allocates at `mem_mgr.c:4155` — is on the same `hVASpace = NV01_NULL_OBJECT` footing
+/// as the scrubber, and a VAS-keyed route would refuse it for a reason that has nothing
+/// to do with binding.
+///
+/// ⊘ And it does **not** ask whether the engine is one this device advertised. That check
+/// belongs to whoever holds the advertised set (`ChipProfile::engines`), which the core
+/// deliberately does not (`execution_plane_increments.md` §13.6): the policy checks the
+/// engine *before* routing, so a fault from here is always about the **channel**.
+///
+/// # Errors
+/// [`BindFault`], by variant.
+pub fn route_bind_channel(
+    spine: &Spine,
+    client: HClient,
+    object: HObject,
+) -> Result<BindRoute, BindFault> {
+    let node = spine
+        .rmgraph
+        .node(NodeKey::new(client, object))
+        .ok_or(BindFault::UnknownChannel { client, object })?;
+    if !matches!(node.kind, kayfabe_arch::ObjectKind::Channel { .. }) {
+        return Err(BindFault::NotAChannel { client, object });
+    }
+    let &(proc, chan) = spine
+        .by_chan
+        .get(&node.id())
+        .ok_or(BindFault::ChannelNotMaterialized { client, object })?;
+    Ok(BindRoute { proc, chan })
+}
+
+/// ★ **ACT (rank 1, one proc).** Record which engine the guest bound the channel to.
+///
+/// `rm_engine_type` is in **RM engine space** — see [`ExecPlane::bound`] for why the
+/// conversion must already have happened.
+#[must_use]
+pub fn apply_bind_channel(proc: &mut Proc, route: &BindRoute, rm_engine_type: u32) -> BindAck {
+    let previous = proc.exec.bound.insert(route.chan, rm_engine_type);
+    BindAck {
+        proc: route.proc,
+        chan: route.chan,
+        rm_engine_type,
+        changed: previous != Some(rm_engine_type),
+    }
+}
+
+/// What [`Gpu::bind_channel`] performed — E9/§13.6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BindAck {
+    /// The proc that owns the channel.
+    pub proc: ProcId,
+    /// The channel slot the binding was recorded against.
+    pub chan: ChanId,
+    /// The engine it was bound to, in **RM engine space** (already converted).
+    pub rm_engine_type: u32,
+    /// Whether the binding actually moved. ★ `false` is a **legitimate** answer and still
+    /// `NV_OK` — re-binding a channel to the engine it is already bound to is idempotent —
+    /// reported rather than discarded for [`ScheduleAck::changed`]'s census reason.
+    pub changed: bool,
+}
+
+/// Why [`Gpu::bind_channel`] refused — E9/§13.6.
+///
+/// ⊘ Every variant means *"this port examined the request and could not route the
+/// CHANNEL"*, which is why the policy answers them all with
+/// `kayfabe_abi::submit::BIND_REFUSED_STATUS` (`NV_ERR_INVALID_STATE`). The **engine**
+/// refusal is a different answer (`BIND_UNKNOWN_ENGINE_STATUS`, `0x57`) and is decided in
+/// the policy, before routing, by whoever holds the advertised engine set — so it has no
+/// variant here on purpose. And never `NV_ERR_NOT_SUPPORTED`: `0x56` is the FSM's
+/// signature for *"nobody claimed this command"*, the exact number the bench guest
+/// printed at `mem_utils.c:1969` while this control was unserved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindFault {
+    /// No live resource at `(client, object)`.
+    UnknownChannel {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// The handle resolves, but not to a channel.
+    NotAChannel {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// A live channel resource that no proc has a slot for — [`ScheduleFault`] draws the
+    /// same distinction for the same reason: only this variant is **our** defect.
+    ChannelNotMaterialized {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+}
+
+impl core::fmt::Display for BindFault {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            BindFault::UnknownChannel { client, object } => {
+                write!(f, "no live resource at ({client:?}, {object:?})")
+            }
+            BindFault::NotAChannel { client, object } => {
+                write!(f, "({client:?}, {object:?}) is not a channel")
+            }
+            BindFault::ChannelNotMaterialized { client, object } => write!(
+                f,
+                "channel ({client:?}, {object:?}) is declared but has no slot in any proc"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for BindFault {}
 
 /// Per-proc poll bookkeeping (the C's `m2_poll_kick`/`m2_last_db_token`
 /// singletons, made per-process — crack ⚠7).
@@ -3894,6 +4038,34 @@ impl Gpu {
                 .ok_or(ScheduleFault::ChannelNotMaterialized { client, object })?
         };
         Ok(apply_schedule_channel(proc, &route, enable))
+    }
+
+    /// ★★★ **E9/§13.6 — perform the guest's `NVA06F_CTRL_CMD_BIND`.**
+    ///
+    /// Records which engine the channel at `(client, object)` was bound to.
+    /// `rm_engine_type` is in **RM engine space** — the policy converts the wire's
+    /// `NV2080_ENGINE_TYPE` first *and* checks it against the device's advertised engine
+    /// set, so by the time this runs the engine question is settled and every fault here
+    /// is about the channel. Same PLAN/COMMIT split as [`Self::schedule_channel`], for
+    /// the same two-lock reason.
+    ///
+    /// # Errors
+    /// [`BindFault`], by variant.
+    pub fn bind_channel(
+        &mut self,
+        client: HClient,
+        object: HObject,
+        rm_engine_type: u32,
+    ) -> Result<BindAck, BindFault> {
+        let route = route_bind_channel(&self.spine, client, object)?;
+        let proc = if route.proc == Gpu::SYSTEM_PROC {
+            &mut self.system
+        } else {
+            self.procs
+                .get_mut(&route.proc)
+                .ok_or(BindFault::ChannelNotMaterialized { client, object })?
+        };
+        Ok(apply_bind_channel(proc, &route, rm_engine_type))
     }
 
     /// Reap retired procs at the quiesce point (see [`Spine::reap_retired`]).

@@ -291,6 +291,21 @@ pub trait ObjectModel: Send {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault>;
 
+    /// ★★★ **E9/§13.6** — perform the guest's `NVA06F_CTRL_CMD_BIND`.
+    ///
+    /// `rm_engine_type` is in **RM engine space**: the policy converts the wire ordinal
+    /// and checks it against the device's advertised set *before* calling this, so the
+    /// model only ever answers the channel question.
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::BindFault`], by variant.
+    fn bind_channel(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        rm_engine_type: u32,
+    ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault>;
+
     /// The model as a plain [`Gpu`], **mutably**, if it is one. Same contract and same
     /// `None` as [`Self::as_gpu`].
     fn as_gpu_mut(&mut self) -> Option<&mut Gpu>;
@@ -330,6 +345,15 @@ impl ObjectModel for Gpu {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault> {
         Gpu::schedule_channel(self, client, object, enable)
+    }
+
+    fn bind_channel(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        rm_engine_type: u32,
+    ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault> {
+        Gpu::bind_channel(self, client, object, rm_engine_type)
     }
 
     fn as_gpu(&self) -> Option<&Gpu> {
@@ -822,6 +846,22 @@ pub struct ObjectPolicy {
     /// same reason, as [`SharedRefusalCensus`]; see
     /// [`kayfabe_core::gpu::SharedIsolateCensus`].
     isolates: kayfabe_core::gpu::SharedIsolateCensus,
+    /// ★★★ **E9/§13.6 option (2)** — the engines THIS DEVICE advertised, i.e. the same
+    /// `ChipProfile::engines` slice the device-info path serves the guest
+    /// (`kayfabe_device::ga10x::GA106_ENGINES` on the shipped chip). A real GSP answers
+    /// `NVA06F_CTRL_CMD_BIND` by linear-scanning its own engine-info list
+    /// (`ogkm-580: kernel_fifo_gm107.c:672-759`, `NV_ERR_OBJECT_NOT_FOUND` at `:736`), so
+    /// the faithful refusal is *"an engine we never advertised"* — and that question is
+    /// answerable only against this slice.
+    ///
+    /// ⊘ **Required at construction, not a defaulted `Option`** — `None` would have to
+    /// mean either "refuse every bind" (silently breaking mock-composed tests) or "accept
+    /// every bind" (the `sandbox_unsafe::last_capability` fail-open shape). A gate whose
+    /// default is open is not a gate. ⊘ And not on `Arch`: the engine set is per-**chip**
+    /// (GA102 and GA106 differ in CE count while sharing `Ga10xArch`), and a second
+    /// hand-written description of one silicon is the drift `inittables.rs` forbids by
+    /// name.
+    engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
 }
 
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
@@ -848,13 +888,26 @@ pub const OBJECT_VERBS: &[kayfabe_gsp::RpcFunction] = &[
 ///
 /// ⊘ So the claim is by **command id**, quantified over this list, and the list is public
 /// so a test asks the type rather than restating it (`gates_quantified_over_a_list`).
-pub const OBJECT_CONTROLS: &[u32] = &[kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE];
+pub const OBJECT_CONTROLS: &[u32] = &[
+    kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+    // ★★★ E9/§13.6 — the channel-side bind. Same claim discipline: by id, never by the
+    // whole `RmControl` function.
+    kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+];
 
 impl ObjectPolicy {
-    /// A policy that owns `gpu`, decoding with `abi`, serving a `guest_os`.
+    /// A policy that owns `gpu`, decoding with `abi`, serving a `guest_os`, answering
+    /// engine questions against `engines` — the same `ChipProfile::engines` slice the
+    /// device-info path serves (see the field's docs for why it is required, not
+    /// defaulted).
     #[must_use]
-    pub fn new(abi: &DriverAbiTable, guest_os: GuestOs, gpu: Gpu) -> ObjectPolicy {
-        ObjectPolicy::with_limits(abi, guest_os, gpu, ReasmLimits::default())
+    pub fn new(
+        abi: &DriverAbiTable,
+        guest_os: GuestOs,
+        gpu: Gpu,
+        engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
+    ) -> ObjectPolicy {
+        ObjectPolicy::with_limits(abi, guest_os, gpu, engines, ReasmLimits::default())
     }
 
     /// As [`ObjectPolicy::new`], with explicit continuation bounds.
@@ -863,9 +916,10 @@ impl ObjectPolicy {
         abi: &DriverAbiTable,
         guest_os: GuestOs,
         gpu: Gpu,
+        engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
         limits: ReasmLimits,
     ) -> ObjectPolicy {
-        ObjectPolicy::over(abi, guest_os, Box::new(gpu), limits)
+        ObjectPolicy::over(abi, guest_os, Box::new(gpu), engines, limits)
     }
 
     /// ★★★ **E2** — a policy over an object model somebody else owns.
@@ -882,6 +936,7 @@ impl ObjectPolicy {
         abi: &DriverAbiTable,
         guest_os: GuestOs,
         gpu: Box<dyn ObjectModel>,
+        engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
         limits: ReasmLimits,
     ) -> ObjectPolicy {
         let isolates = kayfabe_core::gpu::SharedIsolateCensus::new();
@@ -894,6 +949,7 @@ impl ObjectPolicy {
             bridge: Bridge::new(*abi, guest_os, limits),
             gpu,
             isolates,
+            engines,
         }
     }
 
@@ -988,28 +1044,52 @@ impl ObjectPolicy {
         self.isolates.clone()
     }
 
-    /// ★★★ **#177** — answer `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`, and **only** it.
+    /// ★★★ **#177 + E9/§13.6** — answer the controls in [`OBJECT_CONTROLS`], and **only**
+    /// them: `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) and `NVA06F_CTRL_CMD_BIND`
+    /// (`0xa06f0104`).
     ///
-    /// The three answers, and why each is the one it is:
+    /// The shapes of the answers, and why each is the one it is:
     ///
     /// - **`None`** — any control not in [`OBJECT_CONTROLS`], and any payload this policy
     ///   cannot even classify as a control. The chain (and therefore the unserviced
     ///   ledger) is untouched. ⊘ This is the arm that must stay large: it is what keeps
     ///   the ledger honest.
-    /// - **`NV_OK` with the request's own three params bytes** — the transition was
+    /// - **`NV_OK` with the request's own params bytes echoed** — the transition was
     ///   performed. The body is what a real GA106's GSP sends
-    ///   (`kayfabe_abi::submit::encode_gpfifo_schedule`), not what the C's empty capture
-    ///   row implies.
-    /// - **`GPFIFO_SCHEDULE_REFUSED_STATUS` (`NV_ERR_INVALID_STATE`) with an empty body**
-    ///   — the decode or the route said no. ⚠ Never `NV_ERR_NOT_SUPPORTED`: that is the
-    ///   FSM's signature for *"nobody claimed this"*, and the guest prints the raw hex, so
-    ///   reusing it would erase the difference between "refused" and "unimplemented" in
-    ///   the only place anyone reads it.
+    ///   (`kayfabe_abi::submit::encode_gpfifo_schedule` / `encode_bind`), not what the
+    ///   C's empty capture rows imply.
+    /// - **A decided refusal with an empty body** — the decode, the engine check or the
+    ///   route said no; per-arm statuses are documented on [`Self::respond_bind`] and the
+    ///   schedule arm. ⚠ Never `NV_ERR_NOT_SUPPORTED`: that is the FSM's signature for
+    ///   *"nobody claimed this"*, and the guest prints the raw hex, so reusing it would
+    ///   erase the difference between "refused" and "unimplemented" in the only place
+    ///   anyone reads it.
     fn respond_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let req = self.bridge.abi.decode_rpc_control(&cmd.payload).ok()?;
         if !OBJECT_CONTROLS.contains(&req.cmd) {
             return None;
         }
+        // ★ The list gates, the match dispatches, and the two must not drift — a claimed
+        // id with no arm here would fall through to the unserviced ledger as a `0x56`
+        // while `OBJECT_CONTROLS` says it is decided
+        // (`a_table_does_not_decide_behaviour`). The lockstep is tested:
+        // `every_claimed_control_is_decided_even_when_malformed` quantifies over the
+        // constant and demands `Some` from this function for every member.
+        match req.cmd {
+            kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE => {
+                self.respond_gpfifo_schedule(cmd, &req)
+            }
+            kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND => self.respond_bind(cmd, &req),
+            _ => None,
+        }
+    }
+
+    /// The `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` arm — see [`Self::respond_control`].
+    fn respond_gpfifo_schedule(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
         let refuse = || {
             Some(Reply {
                 rpc_result: kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS,
@@ -1046,6 +1126,83 @@ impl ObjectPolicy {
         let mut body = cmd.payload.clone();
         let params_out = kayfabe_abi::submit::encode_gpfifo_schedule(&params);
         body[req.params_at..req.params_at + want].copy_from_slice(&params_out);
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body,
+        })
+    }
+
+    /// ★★★ **E9/§13.6 — the `NVA06F_CTRL_CMD_BIND` arm.** Decode, then the ENGINE, then
+    /// the CHANNEL — and the two refusals are different statuses on purpose:
+    ///
+    /// - **`BIND_UNKNOWN_ENGINE_STATUS` (`0x57`, `NV_ERR_OBJECT_NOT_FOUND`)** — the
+    ///   request names an engine this device never advertised. The faithful answer: a
+    ///   real GSP linear-scans its own engine-info list and returns exactly this
+    ///   (`ogkm-580: kernel_fifo_gm107.c:736`), and that list is built from the very
+    ///   device-info table this port serves.
+    /// - **`BIND_REFUSED_STATUS` (`0x40`, `NV_ERR_INVALID_STATE`)** — the engine is
+    ///   real but the request is malformed or the channel cannot be routed.
+    /// - **`NV_OK` with the request's own four bytes echoed** — `[measured]` a real
+    ///   GA106's reply body IS the request (`traces/real_ga106/`, `0b 00 00 00`), and a
+    ///   zero-filled body would rewrite the caller's `engineType` to `NULL` behind its
+    ///   back (`ogkm-580: rpc.c:11085-11090`).
+    ///
+    /// ⚠ ★ The engine check converts **first** (`nv2080_to_rm_engine_type`): the wire is
+    /// `NV2080_ENGINE_TYPE` space, the advertised table is RM space, and the two collide
+    /// above `0x12` — raw `0x13` is NVDEC0 in one and COPY10 in the other, so a raw
+    /// compare is a silent wrong answer, not a shortcut.
+    fn respond_bind(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let refuse = |status: u32| {
+            Some(Reply {
+                rpc_result: status,
+                body: Vec::new(),
+            })
+        };
+        // The guest's own two assertions about its params, both checked — the same pair
+        // the schedule arm checks, for the same reason.
+        let want = kayfabe_abi::submit::BindParams::SIZE;
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != want
+            || cmd.payload.len() < req.params_at + want
+        {
+            return refuse(kayfabe_abi::submit::BIND_REFUSED_STATUS);
+        }
+        let Ok(params) =
+            kayfabe_abi::submit::decode_bind(&cmd.payload[req.params_at..req.params_at + want])
+        else {
+            return refuse(kayfabe_abi::submit::BIND_REFUSED_STATUS);
+        };
+        // THE ENGINE — convert first, then ask "did THIS DEVICE advertise it?" against
+        // the same slice the device-info path serves the guest (§13.6 option (2)).
+        let Some(rm_engine_type) =
+            kayfabe_abi::submit::nv2080_to_rm_engine_type(params.engine_type)
+        else {
+            return refuse(kayfabe_abi::submit::BIND_UNKNOWN_ENGINE_STATUS);
+        };
+        let advertised = self.engines.iter().any(|e| {
+            e.engine_data[kayfabe_abi::inittables::engine_info_type::RM_ENGINE_TYPE]
+                == rm_engine_type
+        });
+        if !advertised {
+            return refuse(kayfabe_abi::submit::BIND_UNKNOWN_ENGINE_STATUS);
+        }
+        // THE CHANNEL — route and record, in the core.
+        let ack = self.gpu.bind_channel(
+            kayfabe_arch::ids::HClient(req.client),
+            kayfabe_arch::ids::HObject(req.object),
+            rm_engine_type,
+        );
+        self.gpu.publish_isolate_census(&self.isolates);
+        if ack.is_err() {
+            return refuse(kayfabe_abi::submit::BIND_REFUSED_STATUS);
+        }
+        let mut body = cmd.payload.clone();
+        body[req.params_at..req.params_at + want]
+            .copy_from_slice(&kayfabe_abi::submit::encode_bind(&params));
         Some(Reply {
             rpc_result: 0, // NV_OK
             body,

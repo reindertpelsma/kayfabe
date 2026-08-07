@@ -1763,6 +1763,38 @@ impl SharedDevice {
         .ok_or(kayfabe_core::gpu::ScheduleFault::ChannelNotMaterialized { client, object })
     }
 
+    /// ★★★ **E9/§13.6 — perform the guest's `NVA06F_CTRL_CMD_BIND`** — the sharded form
+    /// of [`kayfabe_core::gpu::Gpu::bind_channel`], under the same two-lock split as
+    /// [`Self::schedule_channel`]: route under the device lock (rank 0), record under the
+    /// owning proc's lock (rank 1).
+    ///
+    /// `rm_engine_type` is in **RM engine space** — the policy converts and checks it
+    /// against the advertised set before calling; every fault here is about the channel.
+    ///
+    /// # Errors
+    ///
+    /// [`kayfabe_core::gpu::BindFault`], by variant.
+    pub fn bind_channel(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        rm_engine_type: u32,
+    ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault> {
+        let route = {
+            let route_in = |spine: &kayfabe_core::gpu::Spine| {
+                kayfabe_core::gpu::route_bind_channel(spine, client, object)
+            };
+            match self.mode {
+                LockMode::Sharded => route_in(&self.state.read().spine),
+                LockMode::Degenerate => route_in(&self.state.write().spine),
+            }?
+        };
+        self.with_proc_mut(route.proc, |proc| {
+            kayfabe_core::gpu::apply_bind_channel(proc, &route, rm_engine_type)
+        })
+        .ok_or(kayfabe_core::gpu::BindFault::ChannelNotMaterialized { client, object })
+    }
+
     /// Route a `GSP_RM_CONTROL` through the Case-1/Case-2 split. Case 2 is ACKed
     /// under the device read lock and never leaves the process; Case 1 runs the same
     /// three phases, with `payload` written back in the commit.
