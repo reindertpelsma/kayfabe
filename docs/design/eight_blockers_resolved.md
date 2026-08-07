@@ -844,10 +844,19 @@ client it had not yet seen read as *not* user-CE.
   expressible (`!src_phys && !dst_phys` in the C's one conjunction). Bounded by
   `MAX_CE_SPANS` per request and `MAX_CE_SPANS_PER_PARSE` per parse, both **loud**
   refusals — a truncated partition is a silently dropped tail, i.e. `#13 CE-DROP` rebuilt.
-- `VerbPlan::CeSplit { vas, subs }` + `RmBackend::ce_copy` — §12.4's *"the executor is the
-  isolate in both cases"*, made structural: the core builds a plan and has no way to move
-  a byte. ONE verb, with the engine as a field of the instruction, because representability
-  is address-plane knowledge the backend does not hold and must not appear to.
+- `VerbPlan::CeSplit { vas, subs }` + `RmBackend::ce_copy` — the core builds a plan and has
+  no way to move a byte. ONE verb, with the engine as a field of the instruction, because
+  representability is address-plane knowledge the backend does not hold and must not appear to.
+  - ★★★ **CORRECTION (E10, `[measured]` 2026-08-07).** §12.4's *"the executor is the isolate
+    in **both** cases"* is **false for the CPU (`CeExecutor::Ours`) branch** and is retained
+    here only as the phrasing being corrected. The isolate is a separate sandboxed process
+    that deliberately holds **neither** the emulated framebuffer **nor** guest RAM, so
+    `ce_copy(Ours)` refuses `NOT_ON_THIS_RUNG` there and *could not do otherwise* — that is
+    the security boundary working, not a gap. The `Ours` copy executes in the **shell**
+    (`kayfabe_rt::cpu_ce_unsafe`, over `SparseFb` + `Vmm`); only the `HostCe` branch is the
+    isolate's. The executor is chosen by **where the bytes live**, which is exactly the
+    ruling's own test — see `ce_executor_tree.md` ("Where the executors can live") and
+    `execution_plane_increments.md` §14.2.
 
 **Three measured departures from the C's predicate** (`ce_representability_split.rs` pins
 each as a value):

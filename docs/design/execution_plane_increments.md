@@ -2334,10 +2334,36 @@ mechanism.
 
 ## 14. E10 — the CPU branch of the CE decision tree. The `memmgrTestCeUtils` wall, dissected
 
-★ Status 2026-08-07: **DESIGN + PREREQUISITE MEASURED, no code landed, no boot spent.**
+★ Status 2026-08-07: **DESIGN + PREREQUISITE MEASURED.**
 Written before any edit because the increment spans six crates and turns on a design fork
 (where the CPU branch *executes*) that must be settled first. Every `[src]` below is a file
 this survey read; nothing here is `[measured]` on hardware.
+
+★★ Status 2026-08-08 — **E10a–E10d LANDED and tested (GPU-free); E10e + the shim data-path
+wiring + the boot REMAIN.** The pure/shell layers of the CPU branch are built and pinned:
+- **E10a** (`9c343d5`) — the phys-mode `PhysTarget` decode.
+- **E10b** (`c2c3d28`) — the residency split: `PhysTarget`/aperture → `kayfabe_arch::CpuPlane`
+  `{Fb, GuestRam}`, carried per-operand on `CeSpan`; `_PEERMEM` refused by name
+  (`FwdFault::CePeerOperand`). This is why E10a exists — a raw physical address is ambiguous
+  (an FB offset and a guest GPA collide numerically); the `_TARGET` disambiguates and now
+  reaches the executor. Pinned in `ce_representability_split.rs` (numeric-collision,
+  target-swap, Peer-refusal, fabricated-virtual-aperture), bite-checked.
+- **E10c** (`749ef32`) — `kayfabe_rt::cpu_ce_unsafe::{execute_ours, execute_ours_spans}`, the
+  shell CPU executor over `FbStore` (`SparseFb`) + `Vmm`. `memmgrTestCeUtils`' `sys ← vid`
+  readback compare is reproduced GPU-free in `cpu_ce_executor.rs`. `FwdFault::CpuCeStraddle`
+  refuses an `Ours` span whose needed plane is `None` by name.
+- **E10d** (`c181d1d`) — `cpu_ce_unsafe::write_completion`: the finishPayload written to the
+  resolved physical of the guest's own semaphore VA (the channel's own aperture — the #12
+  where-mistake), one-word (4-byte), interrupt raised **only after** every write lands and
+  **not at all** on a refusal.
+
+★ **What E10e still owes for the boot** (the doorbell for the CeUtils channel is still refused
+`NoVas(ChanId(1))`, so none of E10b–d is on the live data path yet): (1) `plan_doorbell` /
+`read_pushbuffer` accepting the physical-operand channel and translating its still-virtual
+ring/semaphore (the channel's `FERMI_VASPACE_A` needs publishing/linking — measured scope
+below); (2) the shim driving `parse_pushbuffer → execute_ours_spans → write_completion` off
+the doorbell with a `&mut dyn Vmm` and the `SparseFb` (today it rings with an empty working
+set and never parses). No rung is claimed until a boot shows it.
 
 ### 14.1 The wall, in the guest's own source
 
