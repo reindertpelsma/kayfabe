@@ -835,7 +835,27 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               split as exec.requested) — the host-side runlist act remains deferred to the \
               doorbell, the 'ONE requirement asked four times' framing stands, and a reply \
               still cannot close the execution plane; it can only stop lying about which \
-              wall is next",
+              wall is next. \
+              (e) [measured] 2026-08-07, boot m2p35bind at rev f681bce (probe armed, same \
+              harness as the m2p35 baseline; docs/reference/bench_evidence/\
+              m2p35bind_f681bce_{dmesg,qemu}.log): 'Unable to bind Channel, status: 56' \
+              is GONE, kernel_channel.c:2886/:3230 and mem_utils.c:2006 are GONE, and \
+              0xa06f0104 LEFT the unserviced list (present in the m2p35 baseline's, absent \
+              in this boot's). The SAME consumer (the global CeUtils, mem_mgr.c:4155/:526) \
+              advanced to the NEXT statement of the same setup: \
+              _memmgrMemUtilsScrubInitRegisterCallback @ mem_utils.c:2022, 'event \
+              notification control failed' — NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION \
+              (0x20800301) for index 35 REFUSED despite the armed probe. ⚠ WHICH gate \
+              refused is invisible in every census (refusal_invisible_in_the_ledger, this \
+              exact instrument); an in-process discriminator at f681bce (env armed, \
+              InitTablePolicy driven directly) measured the probe path WORKING and the \
+              SECOND arming refusing — our notify_actions is DEVICE-global while RM's \
+              transition rule reads pSubdevice->notifyActions (ogkm-580: \
+              subdevice_ctrl_event_kernel.c:126-131, per-SUBDEVICE), so two subdevices \
+              each legitimately arming index 35 once alias into one slot and the second \
+              refuses where a real GSP accepts. The per-boot arming count is UNMEASURED, \
+              so env-not-reaching-QEMU is not yet excluded; the aliasing is the next rung's \
+              hypothesis, not its conclusion",
     },
 ];
 
