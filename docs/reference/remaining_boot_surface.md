@@ -50,12 +50,16 @@ this list entirely.
 (This was flagged as open five times. It needed one set-difference, and both halves of the
 answer were already committed.)
 
-`[measured]` The transcript's **55 distinct commands are a strict subset of the C oracle's
-56-row table** (`C: src/qemu/mode2_initctrl_ga106.h`, whose rows are named `ctl_<cmd>`):
-`rows − transcript = {0x20800a4c}`, and `transcript − rows = {}`. The single missing row is
-the one `traces/real_ga106/README.md` **independently** identifies as reachable only by
-widening the capture with `nvidia-smi -q` — *"a client-driven query rather than an init
-control."*
+★ **It is a derivation over two committed artefacts, not a hardware run** — labelled that way
+deliberately, since nothing was executed on a machine and a marker claiming otherwise would be
+the exact defect this file's §3 criticises. Anyone can re-run it: take the distinct `cmd=` words of
+`traces/real_ga106/rpc_transcript_real_ga106.txt`, take the `ctl_<cmd>` row names of
+`C: src/qemu/mode2_initctrl_ga106.h`, and difference the two sets.
+
+The transcript's **55 distinct commands are a strict subset of the C oracle's 56-row table**:
+`rows − transcript = {0x20800a4c}`, and `transcript − rows = {}`. The single missing row is the
+one `traces/real_ga106/README.md` **independently** identifies as reachable only by widening the
+capture with `nvidia-smi -q` — *"a client-driven query rather than an init control."*
 
 ⇒ The transcript covers the init set exactly, missing precisely the one command that is by
 definition not part of init. ★ That asymmetry is the proof: a capture cut short drops an
