@@ -1,0 +1,108 @@
+--- a/src/nvidia/src/kernel/gpu/mem_mgr/mem_utils.c	2026-08-07 12:46:56.009582406 +0200
++++ b/src/nvidia/src/kernel/gpu/mem_mgr/mem_utils.c	2026-08-07 12:46:56.012420929 +0200
+@@ -1881,6 +1881,10 @@
+         if (rmStatus != NV_OK)
+         {
+             NV_PRINTF(LEVEL_ERROR, "Unable to allocate a subdevice.\n");
++            NV_PRINTF(LEVEL_ERROR,
++                      "KAYFABE-BRINGUP: subdevice alloc failed: rmStatus=0x%x hClient=0x%x hDevice=0x%x hSubdevice=0x%x inst=%u\n",
++                      rmStatus, pChannel->hClient, pChannel->deviceId,
++                      pChannel->subdeviceId, subdeviceInstance);
+             return NV_ERR_GENERIC;
+         }
+ 
+@@ -1912,6 +1916,10 @@
+     if (rmStatus != NV_OK)
+     {
+         NV_PRINTF(LEVEL_ERROR, "event allocation failed\n");
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-BRINGUP: event alloc failed: rmStatus=0x%x hClient=0x%x hSubdevice=0x%x hEvent=0x%x class=0x%x notifyIndex=0x%x\n",
++                  rmStatus, pChannel->hClient, subDeviceHandle, pChannel->eventId,
++                  (NvU32)NV01_EVENT_KERNEL_CALLBACK_EX, nv0005AllocParams.notifyIndex);
+         return NV_ERR_GENERIC;
+     }
+ 
+@@ -1930,6 +1938,12 @@
+     if (rmStatus != NV_OK)
+     {
+         NV_PRINTF(LEVEL_ERROR, "event notification control failed\n");
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-BRINGUP: SET_NOTIFICATION failed: cmd=0x%x rmStatus=0x%x hClient=0x%x hSubdevice=0x%x event=%u action=%u\n",
++                  (NvU32)NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, rmStatus,
++                  pChannel->hClient, subDeviceHandle,
++                  nv2080EventNotificationParams.event,
++                  nv2080EventNotificationParams.action);
+         return NV_ERR_GENERIC;
+     }
+ 
+@@ -1966,6 +1980,10 @@
+         if (rmStatus != NV_OK)
+         {
+             NV_PRINTF(LEVEL_ERROR, "Unable to bind Channel, status: %x\n", rmStatus);
++            NV_PRINTF(LEVEL_ERROR,
++                      "KAYFABE-BRINGUP: BIND failed: cmd=0x%x rmStatus=0x%x hClient=0x%x hChannel=0x%x engineType=0x%x\n",
++                      (NvU32)NVA06F_CTRL_CMD_BIND, rmStatus, pChannel->hClient,
++                      pChannel->channelId, bindParams.engineType);
+             return rmStatus;
+         }
+     }
+@@ -1983,6 +2001,10 @@
+     if (rmStatus != NV_OK)
+     {
+         NV_PRINTF(LEVEL_ERROR, "Unable to schedule channel, status: %x\n", rmStatus);
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-BRINGUP: GPFIFO_SCHEDULE failed: cmd=0x%x rmStatus=0x%x hClient=0x%x hChannel=0x%x\n",
++                  (NvU32)NVA06F_CTRL_CMD_GPFIFO_SCHEDULE, rmStatus,
++                  pChannel->hClient, pChannel->channelId);
+         return NV_ERR_GENERIC;
+     }
+ 
+@@ -2002,8 +2024,15 @@
+     KernelFifo     *pKernelFifo = GPU_GET_KERNEL_FIFO(pGpu);
+     KernelChannel  *pFifoKernelChannel = NULL;
+ 
++    NV_STATUS kayfabeStatus;
++
+     // schedulechannel
+-    NV_ASSERT_OK_OR_RETURN(_memmgrMemUtilsScrubInitScheduleChannel(pGpu, pChannel));
++    kayfabeStatus = _memmgrMemUtilsScrubInitScheduleChannel(pGpu, pChannel);
++    if (kayfabeStatus != NV_OK)
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-BRINGUP: ChannelSchedulingSetup rung=ScrubInitScheduleChannel rmStatus=0x%x hClient=0x%x hChannel=0x%x\n",
++                  kayfabeStatus, pChannel->hClient, pChannel->channelId);
++    NV_ASSERT_OK_OR_RETURN(kayfabeStatus);
+ 
+     // Determine classEngineID for SetObject usage
+     NV_ASSERT_OK_OR_RETURN(CliGetKernelChannelWithDevice(pChannel->pRsClient,
+@@ -2019,12 +2048,25 @@
+                                                        &classID,
+                                                        &engineID));
+ 
+-    NV_ASSERT_OK_OR_RETURN(_memmgrMemUtilsScrubInitRegisterCallback(pGpu, pChannel));
+-
+-    NV_ASSERT_OK_OR_RETURN(kfifoRmctrlGetWorkSubmitToken_HAL(pKernelFifo,
+-                                                             pChannel->hClient,
+-                                                             pChannel->channelId,
+-                                                            &pChannel->workSubmitToken));
++    kayfabeStatus = _memmgrMemUtilsScrubInitRegisterCallback(pGpu, pChannel);
++    if (kayfabeStatus != NV_OK)
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-BRINGUP: ChannelSchedulingSetup rung=ScrubInitRegisterCallback rmStatus=0x%x hClient=0x%x hChannel=0x%x\n",
++                  kayfabeStatus, pChannel->hClient, pChannel->channelId);
++    NV_ASSERT_OK_OR_RETURN(kayfabeStatus);
++
++    kayfabeStatus = kfifoRmctrlGetWorkSubmitToken_HAL(pKernelFifo,
++                                                      pChannel->hClient,
++                                                      pChannel->channelId,
++                                                     &pChannel->workSubmitToken);
++    if (kayfabeStatus != NV_OK)
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-BRINGUP: ChannelSchedulingSetup rung=GetWorkSubmitToken rmStatus=0x%x hClient=0x%x hChannel=0x%x\n",
++                  kayfabeStatus, pChannel->hClient, pChannel->channelId);
++    NV_ASSERT_OK_OR_RETURN(kayfabeStatus);
++    NV_PRINTF(LEVEL_ERROR,
++              "KAYFABE-BRINGUP: ChannelSchedulingSetup OK hClient=0x%x hChannel=0x%x workSubmitToken=0x%x\n",
++              pChannel->hClient, pChannel->channelId, pChannel->workSubmitToken);
+ 
+     // initialize the channel parameters (should be done by the parent object)
+     pChannel->channelPutOffset = 0;
