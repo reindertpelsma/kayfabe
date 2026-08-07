@@ -292,6 +292,32 @@ pub enum FwdFault {
         /// The operand's address (a physical FB/peer address or a resolved binding phys).
         addr: u64,
     },
+    /// ★★★ **E10c — a `CeExecutor::Ours` sub-copy whose needed CPU plane is `None`** — a
+    /// straddle no single executor can run.
+    ///
+    /// A sub-copy is diverted to the shell CPU executor because its `by` is `Ours`, but one
+    /// of the ends it must touch is real device memory (`Representability::HostBacked`) or
+    /// untracked, which has no [`kayfabe_arch::CpuPlane`]. The shell holds only the emulated
+    /// framebuffer and guest RAM, so it cannot reach that end; the isolate cannot run it
+    /// either (the other end is fabricated). Refused **by name** rather than guessing a
+    /// store — the executor is chosen by *where the bytes live*, and here they live in two
+    /// places no one executor spans.
+    CpuCeStraddle {
+        /// The destination address of the un-runnable sub-copy.
+        dst: u64,
+        /// Whether the missing plane was the destination's (`true`) or the source's.
+        dst_end: bool,
+    },
+    /// ★★★ **E10c — the emulated framebuffer store refused a CPU CE access.** The copy
+    /// resolved to a framebuffer-physical address the `FbStore` would not serve (outside
+    /// the advertised framebuffer, or the residency ceiling was reached). Carries the
+    /// address and the store's own one-sentence reason (`FbRefused::why`).
+    CpuCeFb {
+        /// The framebuffer-physical address the access resolved to.
+        phys: u64,
+        /// The store's reason, verbatim.
+        why: &'static str,
+    },
     /// The target proc has no `Vas` for this `(GpuId, PDB)` (data-plane routing miss).
     /// Carries its target: a `Pdb` is a per-GPU namespace (MG-3).
     UnknownPdb {

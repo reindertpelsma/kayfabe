@@ -301,6 +301,7 @@ dependencies = [
  "kayfabe-arch",
  "kayfabe-completion",
  "kayfabe-core",
+ "kayfabe-device",
  "kayfabe-fwd",
  "kayfabe-isolate",
  "kayfabe-mmu",

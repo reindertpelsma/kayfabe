@@ -14,6 +14,10 @@ kayfabe-isolate.workspace = true
 kayfabe-vmm.workspace = true
 kayfabe-core.workspace = true
 kayfabe-fwd.workspace = true
+# ★ E10c: the shell CPU CE executor moves bytes into the emulated framebuffer store
+# (`kayfabe_device::FbStore`). rt is an adapter, so this is a peer-adapter dependency, not
+# a hexagonal-boundary crossing; `kayfabe-device` does not depend back on `kayfabe-rt`.
+kayfabe-device.workspace = true
 
 [dev-dependencies]
 kayfabe-mocks.workspace = true
