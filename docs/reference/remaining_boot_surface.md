@@ -3,10 +3,10 @@
 Facts derived in conversation on 2026-08-07/08 that live nowhere else. ⊘ Each was a
 measurement or an owner ruling; none is a plan.
 
-## 1. `[measured]` How much RPC boot surface is left
+## 1. How much RPC boot surface is left
 
-Counted from `traces/real_ga106/rpc_transcript_real_ga106.txt` (a **real** driver on a **real**
-GA106):
+`[measured 2026-08-07]` — counted from `traces/real_ga106/rpc_transcript_real_ga106.txt`, the
+transcript of a **real** 580.159.04 driver on a **real** GA106 (RTX 3060, the bench box):
 
 | | |
 |---|---|
@@ -35,8 +35,9 @@ Triage:
   never touched. Confirmed **downstream of the CE wall**, not a defect.
 - **`0x402c0101`** — `0x402c` is the class the probe boot showed a failing `GspRmAlloc` for.
 - ⚠ **`0x20802a08`** is `CE_GET_FAULT_METHOD_BUFFER_SIZE`, one of the C oracle's **contradicted
-  empty rows**. Real hardware answers **20480**; the captured row says 0, and RM DMAs CE fault
-  records into a buffer of exactly that size. ⊘ Use the measured value, never the row.
+  empty rows**. A real GA106 answers **20480** (`[measured 2026-08-01]`, task #157, recorded with
+  a real body by task #178); the captured row says 0, and RM DMAs CE fault records into a buffer
+  of exactly that size. ⊘ Use the hardware answer, never the row.
 
 ### ⚠ Two caveats that bound what this number means
 
@@ -49,22 +50,30 @@ this list entirely.
 Flagged three times, still open. It is the cheapest unanswered question in the project and it
 decides whether "25 remaining" means anything at all. Check it before quoting the number.
 
-## 2. ⚠ The trap that will corrupt the first Rust perf measurement
+## 2. ⚠ The trap that will corrupt the first Rust perf number
 
-`[measured, C artifact]` Mode-2 reached **49.9 t/s vs 47.5 t/s bare metal** — parity. But that
-was the *end of a campaign*, not a property, and the record is specific about where the time
-went: compute and DMA overhead were ~0% almost immediately; the tax was **all control-path**.
-Perf root was a `0x110094` **poll vmexit storm**; the wins were `m2opaque`/GPGA-index plus
-memslot-backing the read-mostly pages and trapping only the observe-write ones.
+`[measured 2026-06-16, C artifact, bare-metal box .32, RTX 3050]` — Mode-2 ran a `qwen.gguf`
+generation at **49.9 t/s** against a **47.5 t/s** host-native ceiling *on that same card*. Within
+noise ⇒ **~zero forwarding overhead**. But that was the *end of a campaign*, not a property, and
+the record is specific about where the time went: compute and DMA overhead were ~0% almost
+immediately; the tax was **all control-path**. Perf root was a `0x110094` **poll vmexit storm**;
+the wins were `m2opaque`/GPGA-index plus memslot-backing the read-mostly pages and trapping only
+the observe-write ones.
 
 ★ So the Rust's perf work is **pre-diagnosed** — the enemy is control-path chatter, not data
 movement. That is weeks we do not spend, in the same way the C's compute bugs are weeks we do
 not spend.
 
-⊘ **AND THE TRAP:** the C's own finding was that *"the gap was 100% nesting."* Our bench guest
-runs **inside a vast VM**, so any benchmark taken there measures the nesting, not the port. The
-first Rust perf figure must be bare-metal or explicitly labelled meaningless — otherwise it
-reads as a regression that is not one and somebody spends a day chasing it.
+⊘ **AND THE TRAP:** the same run settled that *the gap was 100% nesting* — the C's earlier vast
+numbers were ~20 t/s against the same 50 t/s bare metal, a **2.5× tax that belonged entirely to
+nested virt**, not to the design. Our bench guest also runs **inside a vast VM**, so any
+benchmark taken there measures the nesting. The first Rust perf figure must be bare-metal or
+explicitly labelled meaningless — otherwise it reads as a regression that is not one and
+somebody spends a day chasing it.
+
+★ And the corollary cuts the other way too: the `0x110094` remedy above is a **nested-deployment
+fix**. On bare metal the C found nothing to fix. ⊘ So do not port that work as if it were
+general — check first whether the deployment is nested.
 
 ## 3. Owner-relevant assessment of the instrument apparatus (2026-08-07)
 
