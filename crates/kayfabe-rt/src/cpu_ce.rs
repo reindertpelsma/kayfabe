@@ -10,13 +10,15 @@
 //! owns — the [`FbStore`] and the [`Vmm`] — with the store chosen by the E10b residency
 //! answer ([`CpuPlane`]) each operand carries, never by the address value.
 //!
-//! ⊘ **Why `_unsafe.rs` with no `unsafe` keyword** (`l1_os_shell.md` §4.2.1.1, third
-//! construct): this file does raw *address arithmetic over guest memory* — it forms
-//! guest-physical and framebuffer-physical addresses by offset and moves bytes between two
-//! stores the guest can write concurrently. No raw pointer is dereferenced (every access is
-//! a bounded copy through the [`Vmm`]/[`FbStore`] trait, which validates the address it is
-//! given), so there is no `unsafe {}`; but the *reasoning* is the raw-surface kind the
-//! naming rule names, so the file is named for it.
+//! ⊘ **Why this is SAFE code, not a `*_unsafe.rs` file** (`l1_os_shell.md` §4.2.1.1). This
+//! module computes guest-physical and framebuffer-physical addresses by offset arithmetic,
+//! but it never dereferences a raw pointer and never holds a `&[u8]` over live guest memory:
+//! every access is a **bounded copy into an owned buffer through the [`Vmm`]/[`FbStore`]
+//! trait, which re-validates the address against bounds the audited raw layer owns.** That is
+//! precisely §4.2.1.1's sanctioned pattern — *"the first response to soundness-critical safe
+//! code is to make the raw side re-validate, not to rename the file"* — so the unsound
+//! surface stays in the audited crates (`kayfabe-linux-raw`/`kayfabe-qemu-raw`, the real
+//! `Vmm`), and this executor is ordinary safe code on top of it (the §4.1 containment gate).
 //!
 //! ★ **This is forwarding, not forgery** (`mode2_forwarding_model.md`: *correctness =
 //! observable end-states only*): a different executor producing the TRUE end-state is

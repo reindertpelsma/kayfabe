@@ -15,7 +15,7 @@ use kayfabe_fwd::{CeSpan, CeSubCopy, FwdFault, Representability, partition_ce};
 use kayfabe_isolate::{CeExecutor, CeSource};
 use kayfabe_mmu::{AddressTable, Binding};
 use kayfabe_mocks::MockVmm;
-use kayfabe_rt::cpu_ce_unsafe::{execute_ours, execute_ours_spans, write_completion};
+use kayfabe_rt::cpu_ce::{execute_ours, execute_ours_spans, write_completion};
 use kayfabe_vmm::{IrqSpec, Vmm};
 
 const FB_LIMIT: u64 = 1 << 28; // 256 MiB advertised framebuffer

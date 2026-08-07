@@ -48,10 +48,11 @@
 //! (`_unsafe.rs`) never trips it. Writing about the rule therefore stays possible
 //! without an allowlist — which is exactly why there is no allowlist to negotiate.
 
-/// ★ E10c — the shell's CPU copy-engine executor. Named `_unsafe` for the raw
-/// address-arithmetic-over-guest-memory reasoning it carries, not for an `unsafe` block
-/// (`l1_os_shell.md` §4.2.1.1).
-pub mod cpu_ce_unsafe;
+/// ★ E10c — the shell's CPU copy-engine executor. Ordinary safe code: it accesses guest
+/// memory only through the `Vmm`/`FbStore` traits, which re-validate against bounds the
+/// audited raw crates own (`l1_os_shell.md` §4.1/§4.2.1.1), so the unsound surface stays
+/// contained and this file carries no `_unsafe` suffix.
+pub mod cpu_ce;
 pub mod device;
 pub mod executor;
 pub mod inbox;
