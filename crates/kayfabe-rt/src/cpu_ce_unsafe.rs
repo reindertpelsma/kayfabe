@@ -24,10 +24,12 @@
 //! that did not move the bytes, or landing them where the guest cannot read them. The bytes
 //! move first; E10d signals only after.
 
-use kayfabe_arch::CpuPlane;
+use kayfabe_arch::ids::{GpuVa, Pdb};
+use kayfabe_arch::{Aperture, CpuPlane};
 use kayfabe_device::{FbRefused, FbStore};
-use kayfabe_fwd::{CeSpan, FwdFault};
+use kayfabe_fwd::{COMPLETION_VECTOR, CeSpan, FwdFault};
 use kayfabe_isolate::{CeExecutor, CeSource};
+use kayfabe_mmu::AddressTable;
 use kayfabe_vmm::{Vmm, VmmError};
 
 /// The bounded staging-buffer size for one copy step. A guest controls a copy's length, so
@@ -195,4 +197,79 @@ pub fn execute_ours_spans(
         }
     }
     Ok(ran)
+}
+
+// =====================================================================================
+// ★★★ E10d — THE COMPLETION WRITE-BACK TAIL. There is NONE today: the finishPayload
+// semaphore the guest polls is written nowhere (`execution_plane_increments.md` §14.4(3),
+// §14.5 E10d). This is the `sem_releases` consumer.
+// =====================================================================================
+
+/// The CPU plane a resolved binding's aperture names — the E10d completion analogue of
+/// E10b's operand classification. A peer aperture is refused by name.
+fn sem_plane(aperture: Aperture, phys: u64) -> Result<CpuPlane, FwdFault> {
+    match aperture {
+        Aperture::Vidmem => Ok(CpuPlane::Fb),
+        Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => Ok(CpuPlane::GuestRam),
+        Aperture::Peer => Err(FwdFault::CePeerOperand { addr: phys }),
+    }
+}
+
+/// ★★★ **Write a copy-engine request's finishPayload semaphores where the guest polls
+/// them, then — and only then — raise the completion interrupt.**
+///
+/// Each `(addr, payload)` is a `SEM_RELEASE` the guest's own pushbuffer asked for. `addr`
+/// is a GPU **virtual** address in the *channel's own VAS* — `pChannel->pbGpuVA +
+/// finishPayloadOffset` (`ogkm-580: channel_utils.c:838-840`) — and the guest reads the
+/// same physical allocation back through its CPU mapping (`pbCpuVA`). So the payload is
+/// written to whatever that VA resolves to **in this channel's table**, in the channel's own
+/// aperture — never to a scratch framebuffer page the guest does not look at.
+///
+/// # ⊘ #12, the bug this ordering exists to avoid
+///
+/// The C artifact's `#12` wrote completion **data to the framebuffer while the guest polled
+/// `pbCpuVA`** — a semaphore that advanced somewhere the guest never read — and it cost
+/// weeks. Two disciplines here are that lesson, made structural:
+/// 1. **Where** — the payload lands at the resolved physical of the guest's own semaphore
+///    VA, so `pbCpuVA` sees it.
+/// 2. **When** — the interrupt is raised **after every byte is in place**, and **not at
+///    all** if any write refuses. A completion signal for work whose result is not yet
+///    visible is exactly the forgery `mode2_forwarding_model.md` forbids.
+///
+/// The finishPayload is a **one-word** (4-byte) release
+/// (`ogkm-580: channel_utils.c:732` `_RELEASE_SIZE_4BYTE`, `:836` `_RELEASE_ONE_WORD`), so
+/// the low 32 bits are written and the adjacent `authTagBufSema` (`:` `finishPayloadOffset +
+/// CHANNEL_ENGINE_SEMAPHORE_SIZE`) is never clobbered by an over-wide store.
+///
+/// # Errors
+/// - [`FwdFault::Address`] if a semaphore VA does not resolve in the channel's table
+///   (MISS = FAULT — a completion aimed at nothing is not written and does not signal).
+/// - [`FwdFault::CePeerOperand`] if it resolves into peer memory.
+/// - [`FwdFault::CpuCeFb`] / [`FwdFault::NonRamGpa`] / [`FwdFault::GpaRead`] on a store
+///   refusal. In every error case **no interrupt is raised** — the writes that DID land are
+///   the guest's own memory and are harmless, but no completion is claimed.
+///
+/// Returns the number of semaphores written on success.
+pub fn write_completion(
+    fb: &mut dyn FbStore,
+    vmm: &mut dyn Vmm,
+    table: &AddressTable,
+    pdb: Pdb,
+    releases: &[(GpuVa, u64)],
+) -> Result<usize, FwdFault> {
+    // 1. WRITE every payload first. A refusal here returns before any signal.
+    for &(addr, payload) in releases {
+        let (binding, off) = table.resolve(pdb, addr).map_err(FwdFault::Address)?;
+        let phys = binding.phys.wrapping_add(off);
+        let plane = sem_plane(binding.aperture, phys)?;
+        // One-word (4-byte) release: the low 32 bits, little-endian.
+        let bytes = (payload as u32).to_le_bytes();
+        write_plane(fb, vmm, plane, phys, &bytes)?;
+    }
+    // 2. SIGNAL — only now, and only because every write above returned Ok. The guest's
+    //    poll of `pbCpuVA` already sees the values; the interrupt wakes a blocking waiter.
+    if !releases.is_empty() {
+        vmm.raise_irq(COMPLETION_VECTOR).map_err(ram_fault)?;
+    }
+    Ok(releases.len())
 }

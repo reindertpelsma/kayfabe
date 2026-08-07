@@ -8,14 +8,15 @@
 //! forged completion can satisfy it because it reads the real bytes the copy did or did not
 //! move.
 
-use kayfabe_arch::{CeWork, CpuPlane, PhysTarget};
-use kayfabe_arch::ids::GpuVa;
+use kayfabe_arch::ids::{GpuVa, Pdb};
+use kayfabe_arch::{Aperture, CeWork, CpuPlane, PhysTarget};
 use kayfabe_device::{FbStore, SparseFb};
 use kayfabe_fwd::{CeSpan, CeSubCopy, FwdFault, Representability, partition_ce};
 use kayfabe_isolate::{CeExecutor, CeSource};
+use kayfabe_mmu::{AddressTable, Binding};
 use kayfabe_mocks::MockVmm;
-use kayfabe_rt::cpu_ce_unsafe::{execute_ours, execute_ours_spans};
-use kayfabe_vmm::Vmm;
+use kayfabe_rt::cpu_ce_unsafe::{execute_ours, execute_ours_spans, write_completion};
+use kayfabe_vmm::{IrqSpec, Vmm};
 
 const FB_LIMIT: u64 = 1 << 28; // 256 MiB advertised framebuffer
 
@@ -260,4 +261,129 @@ fn a_multi_chunk_copy_streams_correctly() {
         seed,
         "every byte of a multi-chunk copy landed, in order"
     );
+}
+
+// =====================================================================================
+// ★★★ E10d — THE COMPLETION WRITE-BACK TAIL. The finishPayload the guest polls, written
+// where pbCpuVA reads it, and the interrupt raised only AFTER the bytes are in place.
+// =====================================================================================
+
+const SEM_PDB: Pdb = Pdb(0x5500_000);
+
+/// A channel VAS with the finishPayload semaphore mapped into guest RAM (sysmem) — the
+/// common case: the CeUtils channel's pushbuffer allocation is sysmem-backed, so the guest
+/// reads it back through its own coherent CPU mapping.
+fn sem_table_in_sysmem(sem_va: u64, sem_phys: u64) -> AddressTable {
+    let mut t = AddressTable::new();
+    t.bind(
+        SEM_PDB,
+        GpuVa(sem_va),
+        0x1000,
+        Binding {
+            phys: sem_phys,
+            aperture: Aperture::SysmemCoherent,
+            host: None,
+        },
+    )
+    .expect("bind the semaphore page");
+    t
+}
+
+/// ★★★ The finishPayload lands at the guest's own semaphore location, and the completion
+/// interrupt fires — the mechanism that lets `memmgrMemSet`/`memmgrMemCopy` RETIRE instead
+/// of timing out at `mem_mgr.c:463`.
+#[test]
+fn a_finish_payload_lands_where_the_guest_polls_and_then_the_irq_fires() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    // Semaphore at VA 0x300_1000, resolving to guest GPA 0x40_0000 (a DIFFERENT number).
+    const SEM_VA: u64 = 0x300_1000;
+    const SEM_PHYS: u64 = 0x40_0000;
+    let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
+
+    // The guest initialised the semaphore to 0 and is polling for the finishPayload value.
+    vmm.gpa_write(SEM_PHYS, &0u32.to_le_bytes()).unwrap();
+    assert!(vmm.irqs.is_empty(), "no completion signalled yet");
+
+    let n = write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(SEM_VA), 0x1234_5678)])
+        .expect("the completion writes");
+    assert_eq!(n, 1);
+    // The guest's own CPU mapping (pbCpuVA -> SEM_PHYS) now reads the finishPayload.
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS, 4),
+        0x1234_5678u32.to_le_bytes(),
+        "the finishPayload is at the guest's own semaphore location"
+    );
+    // And ONLY THEN the interrupt.
+    assert_eq!(
+        vmm.irqs,
+        vec![IrqSpec::Msix(0)],
+        "the completion interrupt is raised, once, after the write"
+    );
+}
+
+/// Only the LOW 4 bytes are written — a one-word release must not clobber the adjacent
+/// `authTagBufSema` that sits immediately after the finishPayload.
+#[test]
+fn a_one_word_release_writes_four_bytes_and_spares_the_neighbour() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    const SEM_VA: u64 = 0x600_0000;
+    const SEM_PHYS: u64 = 0x50_0000;
+    let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
+    // Poison the 4 bytes AFTER the semaphore; a >4-byte write would disturb them.
+    vmm.gpa_write(SEM_PHYS + 4, &0xA5A5_A5A5u32.to_le_bytes()).unwrap();
+    write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(SEM_VA), 0xFFFF_FFFF_DEAD_BEEF)])
+        .unwrap();
+    assert_eq!(vmm.ram_read(SEM_PHYS, 4), 0xDEAD_BEEFu32.to_le_bytes(), "low word written");
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS + 4, 4),
+        0xA5A5_A5A5u32.to_le_bytes(),
+        "the neighbouring authTagBufSema is untouched"
+    );
+}
+
+/// ⊘ #12 discipline: a semaphore VA that does NOT resolve is a loud MISS, and **no
+/// interrupt is raised** — a completion aimed at nothing must not be signalled.
+#[test]
+fn an_unresolved_semaphore_faults_and_raises_no_interrupt() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    let table = AddressTable::new(); // empty: every VA misses
+    let err = write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(0x700_0000), 7)])
+        .expect_err("an unresolved semaphore must fault");
+    assert!(matches!(err, FwdFault::Address(_)), "MISS=FAULT: {err:?}");
+    assert!(
+        vmm.irqs.is_empty(),
+        "⊘ no completion interrupt for a semaphore that landed nowhere"
+    );
+}
+
+/// A finishPayload whose semaphore resolves into the FRAMEBUFFER lands in the FbStore (the
+/// vidmem-backed channel case) — the plane is chosen by residency, same as the copy.
+#[test]
+fn a_finish_payload_in_vidmem_lands_in_the_framebuffer_store() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    const SEM_VA: u64 = 0x800_0000;
+    const SEM_PHYS: u64 = 0x0080_0000; // inside the advertised FB
+    let mut table = AddressTable::new();
+    table
+        .bind(
+            SEM_PDB,
+            GpuVa(SEM_VA),
+            0x1000,
+            Binding {
+                phys: SEM_PHYS,
+                aperture: Aperture::Vidmem,
+                host: None,
+            },
+        )
+        .unwrap();
+    write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(SEM_VA), 0xCAFE)]).unwrap();
+    let mut got = [0u8; 4];
+    fb.read(SEM_PHYS, &mut got).unwrap();
+    assert_eq!(got, 0xCAFEu32.to_le_bytes(), "the vidmem semaphore is in the FB store");
+    // guest RAM was never touched.
+    assert!(vmm.refused.is_empty());
 }
