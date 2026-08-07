@@ -142,12 +142,14 @@ fn a_served_but_refused_control_is_recorded_with_the_result_the_guest_read() {
 
 #[test]
 fn one_index_armed_on_two_subdevices_is_two_rows_with_the_handles_they_arrived_on() {
-    // ★★★ The H1 signature. `notify_actions` is device-global; RM's transition rule is
-    // per-subdevice (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`). A second arming
-    // of one index from a DIFFERENT subdevice object must therefore read as two rows with
-    // different `object` handles — the first served, the second refused by the aliasing.
-    // Folding them into one line with a count of two is the exact blindness the bench
-    // census exists to remove; this test is what goes red if anyone reintroduces it.
+    // ★★★ The H1 signature, and the census keying that found it. This test used to pin
+    // the DEFECT (`notify_actions` device-global, second subdevice's arming refused by the
+    // aliasing — `[measured]` boot `census_probe35` at `6c51da7`); RM's transition rule is
+    // per-subdevice (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`) and so is the
+    // policy's state now, so BOTH armings serve — and the census must still keep two rows
+    // with the `object` handles they arrived on. Folding them into one line with a count
+    // of two is the exact blindness the bench census exists to remove; a reintroduced
+    // device-global slot would flip the second row's result back to `0x56` and go red here.
     let (mut chain, census) = chain_with_census();
     let params = arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT);
     let first = control_command(
@@ -165,8 +167,8 @@ fn one_index_armed_on_two_subdevices_is_two_rows_with_the_handles_they_arrived_o
     assert_eq!(chain.respond(&first).expect("served").rpc_result, 0);
     assert_eq!(
         chain.respond(&second).expect("answered").rpc_result,
-        NV_ERR_NOT_SUPPORTED,
-        "precondition: the device-global slot refuses the second subdevice's arming"
+        0,
+        "each subdevice arms its own copy of the index — a real GSP accepts both"
     );
 
     let snap = census.snapshot();
@@ -187,7 +189,7 @@ fn one_index_armed_on_two_subdevices_is_two_rows_with_the_handles_they_arrived_o
                 object: 0xabcd_2081,
                 event: NV2080_NOTIFIERS_POWER_RESUME,
                 action: ACTION_REPEAT,
-                rpc_result: NV_ERR_NOT_SUPPORTED,
+                rpc_result: 0,
                 count: 1,
             },
         ]

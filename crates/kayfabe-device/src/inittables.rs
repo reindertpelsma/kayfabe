@@ -31,9 +31,9 @@
 //!
 //! Fourteen controls, twelve of them `[OUT]`-only and answered from the chip row. It
 //! touches no RM graph state and allocates no handle. ⚠ It no longer *remembers nothing*:
-//! [`InitTablePolicy::notify_actions`] is one action per notifier index, keyed by a bounded
-//! small integer and by nothing a guest can mint — see that field for why the bound is
-//! structural. Every other command
+//! [`InitTablePolicy::notify_actions`] is **per-subdevice** arming state — one action per
+//! notifier index, keyed by the control header's own `(hClient, hObject)` and bounded by a
+//! fixed slot count — see that field for the bound and its named residuals. Every other command
 //! falls through to whatever the FSM would have done — this is a *supplement* to the
 //! baseline policy, not a replacement for `kayfabe_rmrpc::GraphPolicy`, which is the
 //! semantic policy the compute path will need.
@@ -166,6 +166,29 @@ pub fn is_gss_legacy(cmd: u32) -> bool {
 /// `NV_OK`.
 const NV_OK: u32 = 0;
 
+/// How many subdevices may hold **armed** notifiers at once.
+///
+/// The key of [`InitTablePolicy::notify_actions`] is guest-minted (`hClient, hObject`), so
+/// the state must be bounded, and the bound must fail **loud**: the arming that would need
+/// a seventeenth slot is refused (a `0x56` row in the census with this comment as its
+/// attribution), never silently evicted. The GA106 boot arms notifiers on **three** distinct
+/// subdevices (`docs/reference/bench_evidence/census_probe35_6c51da7_census.log`), so
+/// sixteen is headroom, not a squeeze.
+pub const NOTIFY_SUBDEVICE_SLOTS: usize = 16;
+
+/// One subdevice's arming state — the mirror of RM's own
+/// `pSubdevice->notifyActions[NV2080_NOTIFIERS_MAXCOUNT]`
+/// (`ogkm-580: subdevice_ctrl_event_kernel.c:119-146`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SubdeviceNotifyActions {
+    /// `hClient` the arming control arrived under.
+    client: u32,
+    /// `hObject` — the subdevice the arming was issued against.
+    object: u32,
+    /// One action per notifier index, exactly RM's array.
+    actions: [u8; eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+}
+
 /// Answers the FIFO device-info table and the kernel interrupt table from a chip row.
 ///
 /// Every other command gets `None`, i.e. the FSM's own acknowledgement.
@@ -173,21 +196,37 @@ const NV_OK: u32 = 0;
 pub struct InitTablePolicy {
     chip: &'static ChipProfile,
     driver: DriverAbiTable,
-    /// ★★★ **The only state this policy holds** — one action per notifier index, mirroring
+    /// ★★★ **The only state this policy holds** — **per-subdevice** arming state, mirroring
     /// the `pSubdevice->notifyActions[NV2080_NOTIFIERS_MAXCOUNT]` array RM keeps on both
     /// sides of the RPC (`ogkm-580: subdevice_ctrl_event_kernel.c:119-146`).
     ///
-    /// ⊘ The module's "remembers nothing between commands" rule is narrowed by this, not
-    /// broken, and the distinction is worth being precise about: this is keyed by a
-    /// **notifier index** — a small integer bounded by
-    /// [`NV2080_NOTIFIERS_MAXCOUNT`](kayfabe_abi::eventnotify::NV2080_NOTIFIERS_MAXCOUNT) —
-    /// and by nothing the guest can mint. There is no handle in it, no client, no sequence
-    /// number, so it cannot grow, cannot alias two guest processes, and cannot refuse a
-    /// legal recycle. A fixed-size array is the shape that makes all of that true by
-    /// construction rather than by a bound check.
+    /// ⚠ **Per-subdevice is a bug fix, not a refinement.** This used to be ONE
+    /// device-global array, and RM's already-armed transition rule reads
+    /// `pSubdevice->notifyActions` — per subdevice
+    /// (`ogkm-580: subdevice_ctrl_event_kernel.c:124-131`). The GA106 scrubber builds two
+    /// channels (`runQueues=2`), each legitimately arming
+    /// `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` (35) once on its **own** subdevice; the global
+    /// array aliased them into one slot and refused the second with `0x56` where a real GSP
+    /// accepts — which is what reached `mem_utils_gm107.c:1027`. `[measured]` boot
+    /// `census_probe35` at `6c51da7`
+    /// (`docs/reference/bench_evidence/census_probe35_6c51da7_census.log`):
+    /// `(0xc1e00005, 0x0b)` served, `(0xc1e00006, 0x0c)` refused.
+    /// `tests/event_set_notification.rs` carries those rows as the regression fixture.
     ///
-    /// ★ It keeps the type `Copy`, which is why the array is `[u8; N]` and not a map.
-    notify_actions: [u8; eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+    /// ⊘ The old "keyed by nothing a guest can mint" property is **narrowed, with its
+    /// residuals named**, because the key is now `(hClient, hObject)` — guest-minted:
+    /// - Bounded: [`NOTIFY_SUBDEVICE_SLOTS`] fixed slots. The arming that would need one
+    ///   more is refused — loud in the census — never silently evicted.
+    /// - A slot is occupied only while at least one notifier on it is armed: a subdevice
+    ///   whose every action returns to `ACTION_DISABLE` releases its slot, so arm/disarm
+    ///   cycling cannot grow the table and an ordinary disarmed recycle costs nothing.
+    /// - Residual, named: a subdevice freed while still ARMED keeps its slot (this policy
+    ///   does not observe `FREE`), so a recycle of that exact `(hClient, hObject)` pair
+    ///   would wrongly refuse its first arming — loudly, as a census row, with this
+    ///   comment as the attribution. The boot path frees no armed subdevice.
+    ///
+    /// ★ It keeps the type `Copy`: a fixed array of fixed-size slots, not a map.
+    notify_actions: [Option<SubdeviceNotifyActions>; NOTIFY_SUBDEVICE_SLOTS],
     /// ★ **PROBE ONLY, and empty by default** — notifier indices this device instance will
     /// arm although [`kayfabe_abi::eventnotify::SILENT_NOTIFIERS`] does not admit them.
     /// Arrives from the `probe-arm-notifier` device property (it used to be a process env
@@ -724,10 +763,10 @@ impl InitTablePolicy {
         InitTablePolicy {
             chip,
             driver,
-            // Every notifier starts disabled, which is what RM's own zeroed `Subdevice`
-            // starts at and therefore the only starting state that agrees with the guest.
-            notify_actions: [eventnotify::ACTION_DISABLE as u8;
-                eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+            // Every subdevice starts with every notifier disabled, which is what RM's own
+            // zeroed `Subdevice` starts at and therefore the only starting state that
+            // agrees with the guest — represented here as no slot at all.
+            notify_actions: [None; NOTIFY_SUBDEVICE_SLOTS],
             probe_arm,
         }
     }
@@ -1006,21 +1045,72 @@ impl CommandPolicy for InitTablePolicy {
                 {
                     return refuse();
                 }
-                // The index is bounded by the decode, so this cannot be out of range.
-                let slot = match self.notify_actions.get_mut(reg.event as usize) {
-                    Some(s) => s,
-                    None => return refuse(),
-                };
+                // The index is bounded by the decode; re-checked so the indexing below can
+                // never panic even if the decoder's bound ever drifts.
+                let ev = reg.event as usize;
+                if ev >= eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize {
+                    return refuse();
+                }
+                // RM's transition rule reads `pSubdevice->notifyActions` — PER-subdevice
+                // (`ogkm-580: subdevice_ctrl_event_kernel.c:124-131`) — so the state is
+                // keyed by the control header's own `(hClient, hObject)`. See the field's
+                // docs for the aliasing this fixes and the bound's residuals.
+                let slot_idx = self.notify_actions.iter().position(
+                    |s| matches!(s, Some(s) if s.client == req.client && s.object == req.object),
+                );
+                let current = slot_idx
+                    .and_then(|i| self.notify_actions[i].map(|s| s.actions[ev]))
+                    .unwrap_or(eventnotify::ACTION_DISABLE as u8);
                 if reg.action != eventnotify::ACTION_DISABLE
-                    && *slot != eventnotify::ACTION_DISABLE as u8
+                    && current != eventnotify::ACTION_DISABLE as u8
                 {
                     return refuse();
                 }
                 // ⚠ Recorded BEFORE the reply is built, and it is the port's own state
                 // rather than a cache of the guest's: the day this device can raise an
-                // interrupt, this array is what says which notifier was armed with what.
-                // Until then it is what makes the transition rule above enforceable.
-                *slot = u8::try_from(reg.action).unwrap_or(0);
+                // interrupt, these slots are what say which subdevice armed which notifier
+                // with what. Until then they are what makes the transition rule above
+                // enforceable.
+                if reg.action == eventnotify::ACTION_DISABLE {
+                    // DISABLE has no precondition (`subdevice_ctrl_event_kernel.c:133-137`):
+                    // on an unknown subdevice it is a legal no-op and allocates nothing.
+                    if let Some(i) = slot_idx {
+                        let released = match self.notify_actions[i].as_mut() {
+                            Some(s) => {
+                                s.actions[ev] = eventnotify::ACTION_DISABLE as u8;
+                                s.actions
+                                    .iter()
+                                    .all(|&a| a == eventnotify::ACTION_DISABLE as u8)
+                            }
+                            None => false,
+                        };
+                        // A subdevice with nothing armed releases its slot — the reclaim
+                        // that keeps arm/disarm cycling from growing state.
+                        if released {
+                            self.notify_actions[i] = None;
+                        }
+                    }
+                } else if let Some(i) = slot_idx {
+                    if let Some(s) = self.notify_actions[i].as_mut() {
+                        s.actions[ev] = u8::try_from(reg.action).unwrap_or(0);
+                    }
+                } else {
+                    let Some(free) = self.notify_actions.iter().position(Option::is_none)
+                    else {
+                        // The arming that would need one slot more than
+                        // `NOTIFY_SUBDEVICE_SLOTS`: bounded state fails LOUD — a refused
+                        // row in the census — never silently evicts an armed subdevice.
+                        return refuse();
+                    };
+                    let mut s = SubdeviceNotifyActions {
+                        client: req.client,
+                        object: req.object,
+                        actions: [eventnotify::ACTION_DISABLE as u8;
+                            eventnotify::NV2080_NOTIFIERS_MAXCOUNT as usize],
+                    };
+                    s.actions[ev] = u8::try_from(reg.action).unwrap_or(0);
+                    self.notify_actions[free] = Some(s);
+                }
                 eventnotify::encode_event_set_notification(&reg)
             }
             // ★★★ The arm that answers an **action** rather than a description, and the

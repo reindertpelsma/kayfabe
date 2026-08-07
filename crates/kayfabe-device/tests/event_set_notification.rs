@@ -45,7 +45,7 @@ use kayfabe_abi::eventnotify::{
 };
 use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_device::ChipProfile;
-use kayfabe_device::inittables::{InitTablePolicy, WantedTable};
+use kayfabe_device::inittables::{InitTablePolicy, NOTIFY_SUBDEVICE_SLOTS, WantedTable};
 use kayfabe_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 60 - 20 = 40`.
@@ -68,9 +68,20 @@ fn policy() -> InitTablePolicy {
 /// is poison. That is what makes "re-encoded" distinguishable from "echoed": an echo would
 /// bring `0xAA` back in the two pad runs, and a re-encode brings zeros.
 fn event_command(reg: &EventSetNotification, params_size: u32) -> RpcCommand {
+    event_command_on(0xc1e0_0004, 0xabcd_2080, reg, params_size)
+}
+
+/// [`event_command`] with the subdevice spelled out — the handles are load-bearing since
+/// the arming state went per-subdevice, so the fixture tests name them explicitly.
+fn event_command_on(
+    client: u32,
+    object: u32,
+    reg: &EventSetNotification,
+    params_size: u32,
+) -> RpcCommand {
     let mut payload = vec![0xAAu8; PARAMS_AT + params_size as usize];
-    payload[0..4].copy_from_slice(&0xc1e0_0004u32.to_le_bytes()); // hClient, as captured
-    payload[4..8].copy_from_slice(&0xabcd_2080u32.to_le_bytes()); // hObject
+    payload[0..4].copy_from_slice(&client.to_le_bytes()); // hClient
+    payload[4..8].copy_from_slice(&object.to_le_bytes()); // hObject
     payload[8..12].copy_from_slice(&NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION.to_le_bytes());
     payload[12..16].copy_from_slice(&0u32.to_le_bytes()); // status
     payload[16..20].copy_from_slice(&params_size.to_le_bytes());
@@ -448,6 +459,142 @@ fn a_fresh_policy_starts_with_every_notifier_disabled() {
         .rpc_result,
         0
     );
+}
+
+// ── ★★★ The arming state is PER-SUBDEVICE, from the bench's own census rows ────────
+
+/// The three rows of `docs/reference/bench_evidence/census_probe35_6c51da7_census.log`
+/// (`[measured]` 2026-08-07, boot `census_probe35`, probe `35` armed) — the fixture the
+/// per-subdevice fix is written from. The third row is the defect: the device-global array
+/// refused it `0x56` where RM's per-subdevice rule
+/// (`ogkm-580: subdevice_ctrl_event_kernel.c:124-131`) accepts.
+const CENSUS_PROBE35_ROWS: [(u32, u32, u32); 3] = [
+    (0xc1e0_0002, 0xcaf0_0001, NV2080_NOTIFIERS_POWER_RESUME), // event 194, served
+    (0xc1e0_0005, 0x0000_000b, FIFO_EVENT_MTHD),               // event 35, served
+    (0xc1e0_0006, 0x0000_000c, FIFO_EVENT_MTHD),               // event 35, was REFUSED
+];
+
+fn arming_on(client: u32, object: u32, event: u32) -> RpcCommand {
+    event_command_on(
+        client,
+        object,
+        &EventSetNotification {
+            event,
+            action: ACTION_REPEAT,
+            notify_state: false,
+            info32: 0,
+            info16: 0,
+        },
+        EVENT_SET_NOTIFICATION_PARAMS_SIZE as u32,
+    )
+}
+
+#[test]
+fn the_census_fixture_two_subdevices_each_arm_event_35_once_and_all_three_rows_serve() {
+    // The GA106 scrubber builds two channels (`runQueues=2`), each arming
+    // `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` on its OWN subdevice. Aliasing them into one
+    // device-global slot refused the second — which is what reached
+    // `mem_utils_gm107.c:1027` as `event notification control failed`.
+    let mut p = probed_policy("35");
+    for (client, object, event) in CENSUS_PROBE35_ROWS {
+        assert_eq!(
+            p.respond(&arming_on(client, object, event))
+                .expect("served")
+                .rpc_result,
+            0,
+            "({client:#x}, {object:#x}) arming event {event} is a first arming on its \
+             own subdevice and must serve"
+        );
+    }
+    // ⊘ And the transition rule still bites where RM's would: a SECOND arming on the
+    // SAME subdevice is the illegal transition, per-subdevice keying does not erase it.
+    let (client, object, event) = CENSUS_PROBE35_ROWS[1];
+    assert_ne!(
+        p.respond(&arming_on(client, object, event))
+            .expect("claimed")
+            .rpc_result,
+        0,
+        "REPEAT over REPEAT on one subdevice stays refused"
+    );
+}
+
+#[test]
+fn a_disarmed_subdevice_releases_its_slot_and_the_bound_refuses_only_while_full() {
+    // The key is guest-minted, so the state is bounded; the bound must fail LOUD and the
+    // reclaim must make an ordinary disarm free its slot. POWER_RESUME is silent, so no
+    // probe is involved.
+    let mut p = policy();
+    let arm = |i: u32| arming_on(0xc1e0_0000 + i, 0x100 + i, NV2080_NOTIFIERS_POWER_RESUME);
+    for i in 0..NOTIFY_SUBDEVICE_SLOTS as u32 {
+        assert_eq!(
+            p.respond(&arm(i)).expect("served").rpc_result,
+            0,
+            "subdevice {i} fits in the table"
+        );
+    }
+    let overflow = NOTIFY_SUBDEVICE_SLOTS as u32;
+    assert_ne!(
+        p.respond(&arm(overflow)).expect("claimed").rpc_result,
+        0,
+        "the arming that would need one slot more is refused, never silently evicted"
+    );
+    // Fully disarm one subdevice: its slot must be released…
+    let disable = event_command_on(
+        0xc1e0_0003,
+        0x103,
+        &EventSetNotification {
+            event: NV2080_NOTIFIERS_POWER_RESUME,
+            action: ACTION_DISABLE,
+            notify_state: false,
+            info32: 0,
+            info16: 0,
+        },
+        EVENT_SET_NOTIFICATION_PARAMS_SIZE as u32,
+    );
+    assert_eq!(p.respond(&disable).expect("served").rpc_result, 0);
+    // …and the arming that was refused above now serves.
+    assert_eq!(
+        p.respond(&arm(overflow)).expect("served").rpc_result,
+        0,
+        "an all-disabled subdevice released its slot"
+    );
+}
+
+#[test]
+fn a_disable_on_an_unknown_subdevice_is_a_served_no_op_that_allocates_nothing() {
+    // DISABLE has no precondition (`subdevice_ctrl_event_kernel.c:133-137`) — and it must
+    // not burn a slot, or a disarm-happy guest could exhaust the table without arming
+    // anything. This test is the check: disable on NOTIFY_SUBDEVICE_SLOTS unknown
+    // subdevices, then NOTIFY_SUBDEVICE_SLOTS armed ones must still all fit.
+    let mut p = policy();
+    for i in 0..NOTIFY_SUBDEVICE_SLOTS as u32 {
+        let disable = event_command_on(
+            0xdead_0000 + i,
+            0x200 + i,
+            &EventSetNotification {
+                event: NV2080_NOTIFIERS_POWER_RESUME,
+                action: ACTION_DISABLE,
+                notify_state: false,
+                info32: 0,
+                info16: 0,
+            },
+            EVENT_SET_NOTIFICATION_PARAMS_SIZE as u32,
+        );
+        assert_eq!(
+            p.respond(&disable).expect("served").rpc_result,
+            0,
+            "disabling an unarmed notifier is legal from any state"
+        );
+    }
+    for i in 0..NOTIFY_SUBDEVICE_SLOTS as u32 {
+        assert_eq!(
+            p.respond(&arming_on(0xc1e0_0000 + i, 0x100 + i, NV2080_NOTIFIERS_POWER_RESUME))
+                .expect("served")
+                .rpc_result,
+            0,
+            "the disables above allocated no slots"
+        );
+    }
 }
 
 // ── The policy does not overreach ──────────────────────────────────────────────────

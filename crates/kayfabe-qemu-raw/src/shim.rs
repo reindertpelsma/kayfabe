@@ -890,11 +890,12 @@ pub struct KayfabeServedControl {
 
 /// One row of the notifier-arming census (`0x20800301`), in the wire shape.
 ///
-/// ★★ The handles are the point: the device's `notify_actions` is device-global while RM's
-/// already-armed rule is per-subdevice (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`),
-/// so a second arming of one index on a **different** subdevice must be visible as two rows
-/// with different `object` handles — that aliasing is the live hypothesis the census
-/// exists to settle.
+/// ★★ The handles are the point: RM's already-armed rule is per-subdevice
+/// (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`), and these rows are what MEASURED
+/// the device's old device-global `notify_actions` aliasing two subdevices' armings of one
+/// index (boot `census_probe35` at `6c51da7` — served then refused `0x56`, two rows,
+/// different `object` handles). The state is per-subdevice now; the handles stay in the
+/// rows so the same regression would reprint the same two-row signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(C)]
 pub struct KayfabeNotifierArming {

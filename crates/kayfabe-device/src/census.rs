@@ -33,12 +33,14 @@
 //! ## ★★ Notifier armings are recorded with their HANDLES, and the handles are the point
 //!
 //! For every `0x20800301` the census keeps `(hClient, hObject, event, action)` plus the
-//! result it was answered with. [`crate::inittables::InitTablePolicy::notify_actions`] is
-//! **device-global**, while RM's already-armed transition rule is **per-subdevice**
-//! (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`) — so a *second* arming of the same
-//! index arriving on a *different* subdevice object is the live aliasing hypothesis, and it
-//! is visible here as two rows with different `object` handles, not one line with a count
-//! of two.
+//! result it was answered with. RM's already-armed transition rule is **per-subdevice**
+//! (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`), and these rows are what proved
+//! [`crate::inittables::InitTablePolicy::notify_actions`] used to be device-global instead:
+//! `[measured]` boot `census_probe35` at `6c51da7`, one index armed on two subdevices, the
+//! second refused `0x56` by the aliasing — two rows, different `object` handles. The state
+//! is per-subdevice now (see that field), and the handles stay in the rows so the same
+//! regression would be visible as the same two-row signature, not one line with a count of
+//! two.
 //!
 //! ## ⊘ Bounded, keyed, and truthful about overflow
 //!
