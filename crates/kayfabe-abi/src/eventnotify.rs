@@ -196,6 +196,44 @@ pub fn is_silent_notifier(index: u32) -> bool {
     SILENT_NOTIFIERS.iter().any(|n| n.index == index)
 }
 
+/// ★★★ **PROBE ONLY. NEVER A SHIPPING PATH.** Notifier indices this *run* will arm even
+/// though [`SILENT_NOTIFIERS`] does not admit them — read once from
+/// `KAYFABE_PROBE_ARM_NOTIFIER` (comma-separated decimal).
+///
+/// # ⊘ What this is for, and what its green boot does NOT mean
+///
+/// `[measured]` boot `m1`, 2026-08-07 (`docs/reference/bench_evidence/m1_809b040_dmesg.log`):
+/// the guest dies at `mem_utils.c:2022` arming **index 35**,
+/// `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` — a **completion** notifier, i.e. exactly the class
+/// [`SILENT_NOTIFIERS`]'s own rationale forbids admitting, because *"a fault, a completion,
+/// a timer must never be silently armed"* and the count of undelivered events would not be
+/// zero.
+///
+/// So the honest question is not *"may we admit it"* (no) but *"does the guest **block** on
+/// the callback during `RmInitAdapter`, or merely register it and continue?"* — and that is
+/// a fact about the guest, measurable in one boot and derivable from no amount of reading.
+/// This switch buys that one measurement.
+///
+/// ⊘ **A boot that goes further with this set is NOT a rung.** It is a *reachability*
+/// result: "the guest reaches X once this refusal stops firing". It says nothing about
+/// correctness, and anything it unblocks still owes the real answer — which for a
+/// completion notifier means **delivering the event**, not admitting the arming.
+///
+/// ★ Off unless the environment says otherwise, and the default is asserted by a test
+/// rather than trusted: the failure mode being guarded is a probe that quietly becomes the
+/// product, which is `mock_fidelity_both_directions`' too-capable half with a flag on it.
+#[must_use]
+pub fn probe_armed_notifier(index: u32) -> bool {
+    static SET: std::sync::OnceLock<Vec<u32>> = std::sync::OnceLock::new();
+    SET.get_or_init(|| {
+        std::env::var("KAYFABE_PROBE_ARM_NOTIFIER")
+            .ok()
+            .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+            .unwrap_or_default()
+    })
+    .contains(&index)
+}
+
 /// A decoded `NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS`.
 ///
 /// ⊘ Every field is `[IN]`. There is nothing here for this port to *answer* — the struct
@@ -371,4 +409,38 @@ pub fn encode_event_set_notification(reg: &EventSetNotification) -> Vec<u8> {
     params[INFO32_OFF..INFO32_OFF + 4].copy_from_slice(&reg.info32.to_le_bytes());
     params[INFO16_OFF..INFO16_OFF + 2].copy_from_slice(&reg.info16.to_le_bytes());
     params
+}
+
+#[cfg(test)]
+mod probe_default_tests {
+    /// ★★★ The probe is OFF unless the environment names an index — and index 35, the one
+    /// the `m1` boot died on, is refused by default like any other completion notifier.
+    ///
+    /// ⊘ This is the guard against the probe quietly becoming the product. It asserts the
+    /// DEFAULT, which is the only thing a shipped binary ever sees, and it deliberately does
+    /// not set the variable: a test that turns the probe on would make the process-wide
+    /// `OnceLock` observable to every other test in this binary.
+    #[test]
+    fn the_notifier_probe_is_off_by_default_and_35_is_not_silent() {
+        assert!(
+            std::env::var("KAYFABE_PROBE_ARM_NOTIFIER").is_err(),
+            "the test environment must not preset the probe, or this assertion is vacuous"
+        );
+        for idx in [35u32, 0, 37, 194, 197] {
+            assert!(
+                !super::probe_armed_notifier(idx),
+                "★ notifier {idx} is probe-armed with no environment asking for it — the \
+                 probe has become the default, which is the failure this test exists for"
+            );
+        }
+        assert!(
+            !super::is_silent_notifier(35),
+            "⊘ index 35 is NV2080_NOTIFIERS_FIFO_EVENT_MTHD, a COMPLETION notifier. If it \
+             ever enters SILENT_NOTIFIERS the port is promising silence about an event it \
+             would actually have to deliver — see the module docs"
+        );
+        assert!(super::is_silent_notifier(
+            super::NV2080_NOTIFIERS_POWER_RESUME
+        ));
+    }
 }

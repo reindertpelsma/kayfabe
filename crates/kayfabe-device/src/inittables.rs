@@ -974,7 +974,12 @@ impl CommandPolicy for InitTablePolicy {
                 ) else {
                     return refuse();
                 };
-                if !eventnotify::is_silent_notifier(reg.event) {
+                // ⊘ The second disjunct is a PROBE and is off unless the environment
+                // names an index — see `eventnotify::probe_armed_notifier`. A boot that
+                // gets further because of it measures REACHABILITY, never correctness.
+                if !eventnotify::is_silent_notifier(reg.event)
+                    && !eventnotify::probe_armed_notifier(reg.event)
+                {
                     return refuse();
                 }
                 // The index is bounded by the decode, so this cannot be out of range.
