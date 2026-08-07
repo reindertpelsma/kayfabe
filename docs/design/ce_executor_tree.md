@@ -54,7 +54,11 @@ overlapping regions need a fence between them. Stated now rather than discovered
 Guest **userspace** pushbuffers are mapped straight into the GPU and are **passthrough** — we do
 not inspect them, and CE there is always real. This is why "bulk memory movement at LLM scale"
 is mostly not our problem: those copies never reach our code. Only syscall-mediated cases (e.g.
-cross-process) do, and the C proved CE-forward works for those.
+cross-process) do, and the C proved CE-forward works for kernel-originated CE on the compute
+path (`cup8`, 2048² matmul at `bad=0 maxerr=0`, committed as `cap3_matmul_forwarding`).
+⚠ Cross-process CE specifically is **unmeasured in Mode-2** — the C runs exactly one CUDA
+process per QEMU lifetime (`mode2_bench_lifecycle.md` §1); Mode-1's per-`mm` isolates are the
+multi-process precedent.
 
 ## ★★★ The trusted scratch VAS (owner's idea, 2026-08-07)
 
