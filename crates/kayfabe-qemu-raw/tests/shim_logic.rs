@@ -553,13 +553,33 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // declaration the driver makes ON PURPOSE for its golden-context channel
     // (`ogkm-580: kernel_graphics.c:2420-2424`), so one field could not tell "declared
     // address zero" from "declared nothing". This is the reason the wire ABI moved to 14.
+    // ★ 47 -> 51 at the control census: `served_total`/`served_len` and
+    // `arming_total`/`arming_len`, plus the two row arrays below. The census is the
+    // report's third state — a refusal that ANSWERS (`rpc_result != 0`) reaches neither
+    // the unserviced list nor the bridge census, and 0x20800301 was the control named in
+    // the guest line that killed a boot while absent from every list the report printed.
+    // This is the reason the wire ABI moved to 15.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (47 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
+        (51 + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS) * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeDoorbellRefusal>()
+            + kayfabe_qemu_raw::shim::SERVED_CONTROL_SLOTS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabeServedControl>()
+            + kayfabe_qemu_raw::shim::NOTIFIER_ARMING_SLOTS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabeNotifierArming>()
+    );
+    // ★ The census rows' own sizes, so the C header's arithmetic and this crate's cannot
+    // drift apart silently: 16 bytes and 32 bytes, no hidden padding.
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeServedControl>(),
+        2 * size_of::<u32>() + size_of::<u64>()
+    );
+    assert_eq!(
+        size_of::<kayfabe_qemu_raw::shim::KayfabeNotifierArming>(),
+        6 * size_of::<u32>() + size_of::<u64>()
     );
     // ⊘ And the three `kind` values are DISTINCT and NONE is zero — the property the C
     // shell's branch and the "an unwritten struct is not a diagnosis" argument both rest

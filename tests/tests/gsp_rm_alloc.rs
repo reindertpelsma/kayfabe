@@ -108,6 +108,7 @@ fn chain_with_objects() -> (
         log.clone(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
         kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::census::ControlCensusLog::new(),
         Some(Box::new(ObjectPolicy::new(
             abi(),
             GuestOs::Linux,
@@ -131,6 +132,7 @@ fn chain_without_objects() -> (
         log.clone(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
         kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::census::ControlCensusLog::new(),
         None,
     );
     (policy, log)

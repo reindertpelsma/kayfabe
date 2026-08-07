@@ -435,6 +435,10 @@ pub struct PlaneResidue {
     pub fb_window: Vec<(FbWindow, u64)>,
     /// The distinct commands no policy answered.
     pub unserviced: Vec<crate::unserviced::UnservicedCommand>,
+    /// ★★★ The control census — what WAS answered, and with what result, including the
+    /// served-but-refused class the `unserviced` list cannot see (`crate::census`).
+    /// Guest-driven observation state, in the residue for `fb_window`'s reason.
+    pub census: crate::census::CensusSnapshot,
     /// ★ The replayable-fault-buffer registrations the guest asked for and this port
     /// declined. Guest-driven, and — like `fb_window` — in no snapshot before `#130`.
     pub fault_buffers: Vec<crate::faultbuffer::FaultBufferNote>,
@@ -806,6 +810,11 @@ pub struct RegPlane {
     /// [`RegPlane::set_policy`] still gets to read what the default one recorded — and
     /// because reading it must not take the FSM's lock behind a doorbell.
     unserviced: crate::unserviced::UnservicedLog,
+    /// ★★★ The control census — seen-and-served and seen-and-refused, the two positive
+    /// states without which the unserviced list's absences discriminate nothing
+    /// (`crate::census`). Held here for [`RegPlane::unserviced`]'s two reasons: readable
+    /// without the FSM's lock, and it survives [`RegPlane::set_policy`].
+    census: crate::census::ControlCensusLog,
     /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
     /// (`crate::faultbuffer`). Recorded, never answered.
     fault_buffer: crate::faultbuffer::FaultBufferLog,
@@ -996,6 +1005,7 @@ impl RegPlane {
         let model = (chip.gsp_model)();
         assert_disjoint(chip, model.as_ref())?;
         let unserviced = crate::unserviced::UnservicedLog::new();
+        let census = crate::census::ControlCensusLog::new();
         let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
         let bar_pdes = BarPdeLog::new();
         Ok(RegPlane {
@@ -1012,6 +1022,7 @@ impl RegPlane {
                     unserviced.clone(),
                     fault_buffer.clone(),
                     bar_pdes.clone(),
+                    census.clone(),
                     objects,
                 ),
                 unclaimed: Vec::new(),
@@ -1023,6 +1034,7 @@ impl RegPlane {
             }),
             c: PlaneCounters::default(),
             unserviced,
+            census,
             fault_buffer,
             bar_pdes,
             // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
@@ -1293,6 +1305,7 @@ impl RegPlane {
             // Read through `counters()`, which destructures it in turn.
             c: _,
             unserviced,
+            census,
             fault_buffer,
             bar_pdes,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what this device
@@ -1333,6 +1346,7 @@ impl RegPlane {
             unclaimed: unclaimed.clone(),
             fb_window: fb_window.clone(),
             unserviced: unserviced.sample(),
+            census: census.snapshot(),
             fault_buffers: fault_buffer.sample(),
             fault_buffers_registered: fault_buffer.total(),
             bar0_window: *bar0_window,
@@ -1348,6 +1362,14 @@ impl RegPlane {
     #[must_use]
     pub fn unserviced_sample(&self) -> Vec<crate::unserviced::UnservicedCommand> {
         self.unserviced.sample()
+    }
+
+    /// ★★★ The control census — what was **answered**, and with what result, including the
+    /// served-but-refused class the unserviced list structurally cannot see
+    /// (`crate::census`).
+    #[must_use]
+    pub fn control_census(&self) -> crate::census::CensusSnapshot {
+        self.census.snapshot()
     }
 
     /// How many times the guest registered a replayable fault buffer

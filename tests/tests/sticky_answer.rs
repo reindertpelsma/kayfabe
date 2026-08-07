@@ -99,6 +99,7 @@ fn guarded() -> Box<dyn CommandPolicy> {
         kayfabe_device::unserviced::UnservicedLog::new(),
         kayfabe_device::faultbuffer::FaultBufferLog::new(),
         kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::census::ControlCensusLog::new(),
         // ⊘ No object-model link. This file's subject is `GSP_RM_CONTROL` replies and the
         // two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control at
         // all, so including it would add a link that cannot change a single assertion

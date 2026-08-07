@@ -52,6 +52,7 @@
 
 pub mod abi;
 pub mod bar2;
+pub mod census;
 pub mod cpuintr;
 pub mod doorbell;
 pub mod faultbuffer;
@@ -867,6 +868,16 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
 /// So *"installed in this port"* and *"cannot hand out a sticky answer"* are **one fact**,
 /// not two lists that agree today; [`sticky`]'s module docs carry the derivation, including
 /// the branch this cannot reach and why that one is tolerable.
+///
+/// ## ★★★ And the guard is itself wrapped by the CENSUS, which answers nothing
+///
+/// [`census::ControlCensus`] is the outermost layer, outside even the sticky guard, so the
+/// `rpc_result` it records is the one the guest reads. It exists because the unserviced
+/// ledger's list was twice misread as a map of the boot: a **served-but-refused** control
+/// (`refuse()` returns `Some(Reply)`) never reaches the ledger, and a **served** control is
+/// also absent — so "id absent" discriminated nothing. The census records the two positive
+/// states so absence finally means *never seen*. See [`census`]'s module docs; it returns
+/// the inner reply unchanged, byte for byte, and `tests/control_census.rs` pins that.
 #[must_use]
 pub fn served_policy(
     chip: &'static ChipProfile,
@@ -874,11 +885,16 @@ pub fn served_policy(
     unserviced: unserviced::UnservicedLog,
     fault_buffer: faultbuffer::FaultBufferLog,
     bar_pdes: bar2::BarPdeLog,
+    census: census::ControlCensusLog,
     objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
-    Box::new(sticky::StickyAnswerGuard::new(
+    Box::new(census::ControlCensus::new(
         driver,
-        served_chain(chip, driver, unserviced, fault_buffer, bar_pdes, objects),
+        census,
+        sticky::StickyAnswerGuard::new(
+            driver,
+            served_chain(chip, driver, unserviced, fault_buffer, bar_pdes, objects),
+        ),
     ))
 }
 

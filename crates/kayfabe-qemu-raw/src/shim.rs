@@ -150,8 +150,13 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// write, and stamping it per-access would make an operator read it thousands of times
 /// and still not know how many rings there were.
 ///
+/// ★ Bumped to **15** for the control census, the ABI-3 reason an eleventh time:
+/// [`KayfabeRegAudit`] gained the served-control rows and the notifier-arming rows
+/// ([`SERVED_CONTROL_SLOTS`], [`NOTIFIER_ARMING_SLOTS`]), so an ABI-14 shim would allocate
+/// the old layout and this archive would write past the end of it.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 14;
+pub const ABI_VERSION: u32 = 15;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -839,6 +844,68 @@ pub const DOORBELL_REFUSAL_LEN: usize = 192;
 /// to spare.
 pub const DOORBELL_KIND_LEN: usize = 64;
 
+/// How many distinct `(cmd, rpc_result)` served-control rows [`KayfabeRegAudit`] carries.
+///
+/// ★ Matches `kayfabe_device::census::SERVED_SAMPLE_MAX`, and `served_len` reports the
+/// truth even when it exceeds this — a full array is never mistaken for a complete list.
+pub const SERVED_CONTROL_SLOTS: usize = 32;
+
+/// How many distinct notifier-arming rows [`KayfabeRegAudit`] carries.
+pub const NOTIFIER_ARMING_SLOTS: usize = 16;
+
+/// The `rpc_result` recorded for an arming **no policy answered** (the FSM refused it by
+/// name), and for an arming field the params were too short to hold.
+///
+/// ⊘ Deliberately not `0`: `0` is `NV_OK`, and *"nothing answered"* must never read as
+/// *"served fine"*. Mirrors `kayfabe_device::census::ARMING_NO_REPLY`.
+pub const CTRL_NO_REPLY: u32 = 0xFFFF_FFFF;
+
+/// One row of the served-control census, in the wire shape: a control, the `rpc_result` it
+/// was answered with, and how often.
+///
+/// ★★★ **The half of the command stream the unserviced list is structurally blind to.**
+/// A refusal that ANSWERS (`rpc_result != 0`, e.g. `InitTablePolicy::refuse()`) never
+/// reaches the terminal ledger — `0x20800301` was the control named in the guest line that
+/// killed a boot while being absent from every list the report printed. Keyed on the
+/// **pair**: one control can be served `NV_OK` and later refused, and folding those rows
+/// together would erase exactly that distinction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct KayfabeServedControl {
+    /// The `NV*_CTRL_CMD_*` id.
+    pub cmd: u32,
+    /// The `rpc_result` answered. `0` = served; non-zero = served-but-REFUSED.
+    pub rpc_result: u32,
+    /// How many times this exact pair was answered.
+    pub count: u64,
+}
+
+/// One row of the notifier-arming census (`0x20800301`), in the wire shape.
+///
+/// ★★ The handles are the point: the device's `notify_actions` is device-global while RM's
+/// already-armed rule is per-subdevice (`ogkm-580: subdevice_ctrl_event_kernel.c:126-131`),
+/// so a second arming of one index on a **different** subdevice must be visible as two rows
+/// with different `object` handles — that aliasing is the live hypothesis the census
+/// exists to settle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct KayfabeNotifierArming {
+    /// `hClient` from the control header.
+    pub client: u32,
+    /// `hObject` — the subdevice the arming arrived on.
+    pub object: u32,
+    /// The notifier index, or [`CTRL_NO_REPLY`] if the params were too short to hold one.
+    pub event: u32,
+    /// The action, with the same too-short marker.
+    pub action: u32,
+    /// The `rpc_result` answered, or [`CTRL_NO_REPLY`] if no policy answered.
+    pub rpc_result: u32,
+    /// Padding, so the layout is the same on every ABI that cares.
+    pub reserved: u32,
+    /// How many times this exact row arrived.
+    pub count: u64,
+}
+
 /// ★★★ **E2 — a refused guest doorbell, in the wire shape**: the fault's stable kind and
 /// one sentence.
 ///
@@ -1133,6 +1200,24 @@ pub struct KayfabeRegAudit {
     /// *"declared address zero"* from *"declared nothing"*. Same argument as
     /// [`Self::doorbell_last_token_valid`].
     pub gpfifo_ring_entries: u64,
+    /// ★★★ **The served-control census** — every `GSP_RM_CONTROL` a policy answered,
+    /// including repeats and rows past [`SERVED_CONTROL_SLOTS`].
+    ///
+    /// The third state the report could not previously express. `unserviced` says what
+    /// nothing answered; `bridge_refusal` says what the object bridge refused by tag; this
+    /// says what WAS answered and with what result — so "id absent everywhere" finally
+    /// means *never issued* rather than being consistent with served-fine as well.
+    pub served_total: u64,
+    /// Distinct `(cmd, rpc_result)` rows seen — the truth even past the array.
+    pub served_len: u64,
+    /// The rows, in first-seen order.
+    pub served: [KayfabeServedControl; SERVED_CONTROL_SLOTS],
+    /// ★★ Every `0x20800301` arming seen, answered or not, including repeats.
+    pub arming_total: u64,
+    /// Distinct arming rows seen — the truth even past the array.
+    pub arming_len: u64,
+    /// The rows, in first-seen order, with the handles they arrived on.
+    pub armings: [KayfabeNotifierArming; NOTIFIER_ARMING_SLOTS],
 }
 
 /// Translate a chip-table refusal into the wire vocabulary, keeping the sentence.
@@ -1768,6 +1853,37 @@ impl Regs {
             nonzero: gpfifo_ring_nonzero,
             first_nonzero: gpfifo_ring_first,
         } = self.rings.snapshot();
+        // ★★★ The control census — DESTRUCTURED with no `..` for [`Shim::audit`]'s reason:
+        // a field added to `CensusSnapshot` and not wired here is a fact the C shell can
+        // never read, and nothing goes red. `rustc` refuses the pattern instead.
+        let kayfabe_device::census::CensusSnapshot {
+            served_total,
+            served_distinct: served_len,
+            served: served_rows,
+            arming_total,
+            arming_distinct: arming_len,
+            armings: arming_rows,
+        } = self.plane.control_census();
+        let mut served = [KayfabeServedControl::default(); SERVED_CONTROL_SLOTS];
+        for (slot, r) in served.iter_mut().zip(served_rows.iter()) {
+            *slot = KayfabeServedControl {
+                cmd: r.cmd,
+                rpc_result: r.rpc_result,
+                count: r.count,
+            };
+        }
+        let mut armings = [KayfabeNotifierArming::default(); NOTIFIER_ARMING_SLOTS];
+        for (slot, r) in armings.iter_mut().zip(arming_rows.iter()) {
+            *slot = KayfabeNotifierArming {
+                client: r.client,
+                object: r.object,
+                event: r.event,
+                action: r.action,
+                rpc_result: r.rpc_result,
+                reserved: 0,
+                count: r.count,
+            };
+        }
         KayfabeRegAudit {
             reads,
             writes,
@@ -1823,6 +1939,12 @@ impl Regs {
             gpfifo_ring_nonzero,
             gpfifo_ring_va: gpfifo_ring_first.map_or(0, |(va, _)| va),
             gpfifo_ring_entries: gpfifo_ring_first.map_or(0, |(_, n)| u64::from(n)),
+            served_total,
+            served_len,
+            served,
+            arming_total,
+            arming_len,
+            armings,
         }
     }
 }

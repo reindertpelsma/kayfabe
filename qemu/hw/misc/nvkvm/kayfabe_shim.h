@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 14u
+#define KAYFABE_SHIM_ABI 15u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -384,6 +384,43 @@ typedef struct KayfabeIsolateRefusal {
     uint64_t kind;
 } KayfabeIsolateRefusal;
 
+/* ★★★ THE CONTROL CENSUS — the two POSITIVE states the report could not express.
+ *
+ * The unserviced list says what NOTHING answered.  A refusal that ANSWERS (a non-zero
+ * rpc_result, e.g. InitTablePolicy's refuse()) never reaches it — 0x20800301 was the
+ * control named in the guest line that killed a boot while being absent from every list
+ * the report printed — and a control that is SERVED is also absent, so "id absent" was
+ * consistent with never-issued AND with served-fine and discriminated neither.  These rows
+ * record seen-and-served and seen-and-refused positively, so absence finally means "never
+ * seen".
+ *
+ * `served_len` / `arming_len` report the truth even when they exceed the arrays, exactly
+ * as `unserviced_len` does.  KAYFABE_CTRL_NO_REPLY marks an arming no policy answered (the
+ * FSM refused it by name) — deliberately not 0, which is NV_OK. */
+#define KAYFABE_SERVED_CONTROL_SLOTS 32u
+#define KAYFABE_NOTIFIER_ARMING_SLOTS 16u
+#define KAYFABE_CTRL_NO_REPLY 0xFFFFFFFFu
+
+typedef struct KayfabeServedControl {
+    uint32_t cmd;         /* the NV*_CTRL_CMD_* id */
+    uint32_t rpc_result;  /* 0 = served; non-zero = served-but-REFUSED */
+    uint64_t count;
+} KayfabeServedControl;
+
+/* One 0x20800301 arming, WITH the handles it arrived on.  The handles are the point: the
+ * device's notify_actions is device-global while RM's already-armed rule is per-subdevice
+ * (ogkm-580: subdevice_ctrl_event_kernel.c:126-131), so a second arming of one index on a
+ * DIFFERENT subdevice must be visible as two rows with different `object` handles. */
+typedef struct KayfabeNotifierArming {
+    uint32_t client;      /* hClient from the control header */
+    uint32_t object;      /* hObject — the subdevice armed on */
+    uint32_t event;       /* notifier index, or KAYFABE_CTRL_NO_REPLY if undecodable */
+    uint32_t action;      /* DISABLE=0 / SINGLE=1 / REPEAT=2, same marker */
+    uint32_t rpc_result;  /* as answered, or KAYFABE_CTRL_NO_REPLY if nothing answered */
+    uint32_t reserved;
+    uint64_t count;
+} KayfabeNotifierArming;
+
 typedef struct KayfabeRegAudit {
     uint64_t reads;
     uint64_t writes;
@@ -555,6 +592,16 @@ typedef struct KayfabeRegAudit {
     uint64_t gpfifo_ring_nonzero;
     uint64_t gpfifo_ring_va;
     uint64_t gpfifo_ring_entries;
+
+    /* ★★★ THE CONTROL CENSUS — see the block above KayfabeServedControl.  Together with
+     * `unserviced` and `bridge_refusal` these cover the command stream's three states:
+     * seen-and-served, seen-and-refused, and (by positive elimination) never seen. */
+    uint64_t served_total;
+    uint64_t served_len;
+    KayfabeServedControl served[KAYFABE_SERVED_CONTROL_SLOTS];
+    uint64_t arming_total;
+    uint64_t arming_len;
+    KayfabeNotifierArming armings[KAYFABE_NOTIFIER_ARMING_SLOTS];
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

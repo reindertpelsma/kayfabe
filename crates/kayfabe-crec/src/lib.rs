@@ -200,6 +200,8 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
         // ★ Fresh per run for the same reason the unserviced log is: a shared latch would
         // carry one round's published root into the next.
         kayfabe_device::bar2::BarPdeLog::new(),
+        // Fresh per run, like the unserviced log and for its reason.
+        kayfabe_device::census::ControlCensusLog::new(),
         // ⊘ **No object-model link, and this is a decision the differential depends on.**
         // `cap1`/`cap1b` are the C's replies, and the C had no object model — it answered
         // `GSP_RM_ALLOC` from its own tables. Installing one here would diff our object

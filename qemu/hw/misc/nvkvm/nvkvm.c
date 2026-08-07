@@ -1448,6 +1448,64 @@ static void nvkvm_report_registers(NvkvmState *s)
     }
 
     /*
+     * ★★★ THE CONTROL CENSUS — the two POSITIVE states the two lists above cannot express.
+     * Printed unconditionally, INCLUDING when empty, for the reason every block here is.
+     *
+     * A row with result 0 is seen-and-served.  A row with a non-zero result is
+     * seen-and-REFUSED — a refusal that ANSWERS the command (InitTablePolicy's refuse())
+     * reaches neither the unserviced list nor the bridge census, and 0x20800301 was the
+     * control named in the guest line that killed a boot while being absent from every
+     * line this report printed.  With these rows, an id absent from ALL the lists is
+     * finally a control that was never issued.
+     */
+    info_report("nvkvm: controls: %" PRIu64 " answered, %" PRIu64 " distinct cmd/result "
+                "rows (result 0 = served; non-zero = served-but-REFUSED, which reaches "
+                "no other list)",
+                a.served_total, a.served_len);
+    {
+        uint64_t i, shown = a.served_len;
+
+        if (shown > KAYFABE_SERVED_CONTROL_SLOTS) {
+            shown = KAYFABE_SERVED_CONTROL_SLOTS;
+        }
+        for (i = 0; i < shown; i++) {
+            const KayfabeServedControl *r = &a.served[i];
+
+            info_report("nvkvm:   control 0x%08x result 0x%08x x%" PRIu64 "%s",
+                        r->cmd, r->rpc_result, r->count,
+                        r->rpc_result ? " REFUSED" : "");
+        }
+    }
+
+    /*
+     * ★★ THE NOTIFIER ARMINGS, with the handles they arrived on.  The device's
+     * notify_actions[] is device-global while RM's already-armed transition rule is
+     * per-subdevice (ogkm-580: subdevice_ctrl_event_kernel.c:126-131), so a second arming
+     * of one index on a DIFFERENT subdevice — the aliasing hypothesis — reads as two rows
+     * with different object handles, not one line with a count of two.
+     */
+    info_report("nvkvm: notifier armings (0x20800301): %" PRIu64 " total, %" PRIu64
+                " distinct (result 0x%08x = nothing answered)",
+                a.arming_total, a.arming_len, KAYFABE_CTRL_NO_REPLY);
+    {
+        uint64_t i, shown = a.arming_len;
+
+        if (shown > KAYFABE_NOTIFIER_ARMING_SLOTS) {
+            shown = KAYFABE_NOTIFIER_ARMING_SLOTS;
+        }
+        for (i = 0; i < shown; i++) {
+            const KayfabeNotifierArming *r = &a.armings[i];
+
+            info_report("nvkvm:   arming event %u action %u client 0x%08x object 0x%08x "
+                        "result 0x%08x x%" PRIu64 "%s",
+                        r->event, r->action, r->client, r->object, r->rpc_result,
+                        r->count, (r->rpc_result != 0
+                                   && r->rpc_result != KAYFABE_CTRL_NO_REPLY)
+                                  ? " REFUSED" : "");
+        }
+    }
+
+    /*
      * ★★★ E0b/E1 — THE ISOLATE PLANE.  Printed unconditionally, all-zeros included, for
      * the reason every other block here is: "no line appeared" is what a silently-dead
      * reporter looks like, and this device has been bitten by that before.
