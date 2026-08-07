@@ -44,3 +44,36 @@ notifier index / params, client + subdevice / channel handles, and the `NV_STATU
 
 All lines are grep-able as `KAYFABE-BRINGUP`. The stock messages are left in place so
 a patched and an unpatched dmesg diff cleanly.
+
+### `0002-bringup-ceutils-finishpayload-wait.patch`
+
+The `memmgrTestCeUtils` wall. `RmInitAdapter → gpuStateLoad → memmgrInitInternalChannels`
+dies at a **real CE copy** whose only symptom is a bare `NV_ERR_TIMEOUT (0x65)` out of
+`channelWaitForFinishPayload` (`channel_utils.c:344-384`), reported upward as
+`RmInitAdapter failed! (0x25:0x65:1249)`. The number says a wait expired. It says nothing
+about *what was being waited on*, and that is the entire question.
+
+This patch adds two `KAYFABE-BRINGUP:` lines to **`channelWaitForFinishPayload` only** —
+one on entry, one on the timeout branch — carrying:
+
+| field | why it is the one that matters |
+|---|---|
+| `semaVA` = `pbGpuVA + finishPayloadOffset` | the **GPU virtual** address the CE is told to release to. Derived here exactly as the pushbuffer derives it for `SET_SEMAPHORE_A/B` (`channel_utils.c:671-672`), so print-vs-reality cannot drift |
+| `pbCpuVA` | where the **CPU reads the same object**. One object, two apertures — the shape of `#12` |
+| `bUseBar1` | which of the two the read goes through. ★ **Per-instance, not global**: the C measured one CeUtils instance sysmem-backed and another vidmem-backed *in the same run* |
+| `bUseVasForCeCopy` | whether the copy operands are virtual or physical — the fork `ce_executor_tree.md` STEP 0 turns on |
+| `hVASpaceId` | *"VASpace handle, when scrubber in virtual mode."* ★★★ This is the **cross-check for `0x90f10106`**: if the handle the guest prints equals the `hObject` our device records from the publication, the VAS join is proven from the guest's own mouth rather than inferred |
+| `target` vs `cur` | `cur < target` at a plausible `semaVA` = the release never landed where the guest looks; `cur` as garbage = it landed somewhere else entirely. **Different bugs**, and `NV_ERR_TIMEOUT` cannot distinguish them |
+
+⚠ **Why this instrument specifically.** `c_ceutils_ring_resolution.md` records that the C
+artifact resolved this same VA to **three different wrong pages** across three attempts, and
+that its own conclusions about the semaphore's aperture were reversed twice — because it was
+asking its *emulator's* resolver where the semaphore was. The guest is the only party that
+knows, and it is answering a question about **itself**, so it cannot be wrong the way a
+resolver can.
+
+⊘ The sibling loop `channelWaitForFreeEntry` (`:422`, a GPFIFO free-entry wait, not a
+payload wait) is deliberately left **stock**. It is a different failure and instrumenting it
+here would make the two indistinguishable in a grep.
+
+Verified: `patch -p1 --dry-run` applies clean against pristine `ogkm-580.159.04`.

@@ -1,0 +1,59 @@
+--- a/src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c	2026-08-08 01:33:18.393801917 +0200
++++ b/src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c	2026-08-08 01:33:18.407259897 +0200
+@@ -354,6 +354,32 @@
+     NV_STATUS status = NV_OK;
+ 
+     gpuSetTimeout(pGpu, GPU_TIMEOUT_DEFAULT, &timeout, GPU_TIMEOUT_FLAGS_BYPASS_THREAD_STATE);
++
++    //
++    // KAYFABE-BRINGUP: state the WAIT before entering it. Everything a Mode-2 emulator
++    // must satisfy to make this loop terminate is in this one line, and none of it is
++    // recoverable from outside the guest:
++    //   semaVA   - the GPU VIRTUAL address the CE is told to release to, derived exactly
++    //              as the pushbuffer derives it for SET_SEMAPHORE_A/B, so a mismatch
++    //              between what we print and what the CE gets is impossible by
++    //              construction rather than by inspection.
++    //   pbCpuVA  - where the CPU READS the same object. One object, two apertures, which
++    //              is the aperture bug the C artifact spent weeks on.
++    //   bUseBar1 - which of the two the read actually goes through. It is a PER-INSTANCE
++    //              property of this channel, not a global: the C measured one CeUtils
++    //              instance sysmem-backed and another vidmem-backed in the SAME run.
++    //
++    NV_PRINTF(LEVEL_ERROR,
++              "KAYFABE-BRINGUP: waitFinishPayload ENTER: hClient=0x%x chId=0x%x hVASpaceId=0x%x "
++              "pbGpuVA=0x%llx finishPayloadOffset=0x%x semaVA=0x%llx semaOffset=0x%x "
++              "pbCpuVA=%p bUseBar1=%u bUseVasForCeCopy=%u engineType=%u target=0x%llx cur=0x%x\n",
++              pChannel->hClient, pChannel->channelId, pChannel->hVASpaceId,
++              pChannel->pbGpuVA, pChannel->finishPayloadOffset,
++              pChannel->pbGpuVA + pChannel->finishPayloadOffset, pChannel->semaOffset,
++              pChannel->pbCpuVA, (NvU32)pChannel->bUseBar1,
++              (NvU32)pChannel->bUseVasForCeCopy, pChannel->engineType,
++              targetPayload, READ_CHANNEL_PAYLOAD_SEMA(pChannel));
++
+     while (1)
+     {
+         if (READ_CHANNEL_PAYLOAD_SEMA(pChannel) >= targetPayload)
+@@ -364,6 +390,23 @@
+         status = gpuCheckTimeout(pGpu, &timeout);
+         if (status == NV_ERR_TIMEOUT)
+         {
++            //
++            // KAYFABE-BRINGUP: the wall itself. `cur` is what the CPU can SEE at the
++            // semaphore, so `cur < target` with a plausible semaVA means the release
++            // never landed where the guest looks, while `cur` reading as garbage means
++            // it landed somewhere else entirely. Those are DIFFERENT bugs and the stock
++            // NV_ERR_TIMEOUT cannot tell them apart -- which is what made the C artifact
++            // resolve this same VA to three different wrong pages before noticing.
++            //
++            NV_PRINTF(LEVEL_ERROR,
++                      "KAYFABE-BRINGUP: waitFinishPayload TIMEOUT: hClient=0x%x chId=0x%x "
++                      "semaVA=0x%llx pbCpuVA=%p bUseBar1=%u target=0x%llx cur=0x%x "
++                      "pbSema=0x%x isChannelActive=%u workSubmitToken=0x%x\n",
++                      pChannel->hClient, pChannel->channelId,
++                      pChannel->pbGpuVA + pChannel->finishPayloadOffset,
++                      pChannel->pbCpuVA, (NvU32)pChannel->bUseBar1, targetPayload,
++                      READ_CHANNEL_PAYLOAD_SEMA(pChannel), READ_CHANNEL_PB_SEMA(pChannel),
++                      (NvU32)pChannel->isChannelActive, pChannel->workSubmitToken);
+             break;
+         }
+ 
