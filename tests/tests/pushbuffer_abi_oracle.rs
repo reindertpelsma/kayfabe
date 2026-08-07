@@ -1139,6 +1139,12 @@ fn a_copy_engine_run_decodes_to_the_drivers_own_operands() {
                 len,
                 dst_is_virtual,
                 src_is_virtual,
+                // ★ The oracle's `copy_*` corpus is all VIRTUAL, so the phys-mode target is
+                // the reset `LocalFb` and is not consulted. E10a's target decode is asserted
+                // in its own hand-built run (`ce_phys_mode_decodes_the_operand_residency`),
+                // not against a corpus that never exercises a physical operand.
+                dst_target: _,
+                src_target: _,
                 work,
             } = *launches[0]
             else {

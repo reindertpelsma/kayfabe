@@ -710,6 +710,10 @@ fn the_shipped_arch_refuses_every_data_plane_seam() {
                 len: 0x40,
                 dst_is_virtual: true,
                 src_is_virtual: true,
+                // A virtual copy wrote no phys-mode register, so both targets are the
+                // reset `LocalFb` and neither is consulted (E10a).
+                dst_target: kayfabe_arch::PhysTarget::LocalFb,
+                src_target: kayfabe_arch::PhysTarget::LocalFb,
                 work: kayfabe_arch::CeWork::Copy,
             }),
             "★★ a whole copy-engine run must fire with the operands the RUN wrote — a \

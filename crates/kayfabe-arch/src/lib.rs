@@ -465,6 +465,35 @@ pub trait UserdModel: Send + Sync {
     fn gp_put_offset(&self) -> u64;
 }
 
+/// Where a **physical** copy-engine operand lives — the `SET_{SRC,DST}_PHYS_MODE.TARGET`
+/// the engine reads when the operand's `_TYPE` is `_PHYSICAL`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:66-80`).
+///
+/// ★★★ **This is the residency signal for a physical operand, and nothing else carries
+/// it.** A physical CE address is a raw number in one of several apertures whose ranges may
+/// collide, so `dst`/`src` alone cannot say whether the bytes are in the emulated
+/// framebuffer or in guest sysmem. `memmgrTestCeUtils`' vid→sys copy is exactly this case:
+/// the CeUtils pushbuffer emits `_TARGET_LOCAL_FB` for the FB surface and
+/// `_TARGET_{COHERENT,NONCOHERENT}_SYSMEM` for the sysmem one
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:629-642, 1069-1082`).
+///
+/// ⊘ **Meaningful only when the corresponding operand is `_is_virtual == false`.** For a
+/// virtual operand the engine consults the MMU, not this register, so the value is carried
+/// but not consulted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhysTarget {
+    /// `_LOCAL_FB` (0) — device framebuffer. Also the register's reset value, so an
+    /// unlatched physical operand is faithfully `LocalFb` (`clc7b5.h:68`).
+    LocalFb,
+    /// `_COHERENT_SYSMEM` (1) — system memory, coherent (`clc7b5.h:69`).
+    CoherentSysmem,
+    /// `_NONCOHERENT_SYSMEM` (2) — system memory, non-coherent (`clc7b5.h:70`).
+    NonCoherentSysmem,
+    /// `_PEERMEM` (3) — a peer GPU's memory (`clc7b5.h:71`). Not reachable by a CPU copy;
+    /// carried so the classifier can refuse it by name rather than mistake it for FB.
+    Peer,
+}
+
 /// What a copy-engine command asks the engine to **do**, in core terms.
 ///
 /// The C reads this off `LAUNCH_DMA`'s flags as two booleans, `mscrub`
@@ -531,6 +560,12 @@ pub enum PushMethod {
         dst_is_virtual: bool,
         /// Whether the source is a virtual (VAS) address vs a physical FB address.
         src_is_virtual: bool,
+        /// The destination's `SET_DST_PHYS_MODE.TARGET` — the residency signal when
+        /// `dst_is_virtual == false`. See [`PhysTarget`].
+        dst_target: PhysTarget,
+        /// The source's `SET_SRC_PHYS_MODE.TARGET` — the residency signal when
+        /// `src_is_virtual == false`. Meaningless for [`CeWork::Scrub`]/[`CeWork::Fill`].
+        src_target: PhysTarget,
         /// What the engine is being asked to do.
         work: CeWork,
     },
@@ -1150,6 +1185,7 @@ kayfabe_util::assert_send_sync!(
     LevelShift,
     PushMethod,
     CeWork,
+    PhysTarget,
     PushRange,
     MethodState,
     dyn Arch,

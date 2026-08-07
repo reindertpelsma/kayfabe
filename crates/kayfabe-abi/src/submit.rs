@@ -1840,6 +1840,18 @@ pub mod ce {
     /// `LAUNCH_DMA_DST_TYPE_PHYSICAL` — field `13:13`, value 1 (`clc7b5.h:126`).
     pub const LAUNCH_DST_PHYSICAL: u32 = 1 << 13;
 
+    /// `NVC7B5_SET_SRC_PHYS_MODE` method address (`ogkm-580: clc7b5.h:66`, and
+    /// **identical** in `clb0b5.h:56`, so it is chip-family-stable across every
+    /// `*_DMA_COPY_*` this port targets).
+    pub const SET_SRC_PHYS_MODE: u32 = 0x0000_0260;
+    /// `NVC7B5_SET_DST_PHYS_MODE` method address (`clc7b5.h:75` = `clb0b5.h:61`).
+    pub const SET_DST_PHYS_MODE: u32 = 0x0000_0264;
+    /// `SET_{SRC,DST}_PHYS_MODE_TARGET` — field `1:0` (`clc7b5.h:67, :76`). The residency
+    /// of a physical operand; the enumerated values are `LOCAL_FB=0`, `COHERENT_SYSMEM=1`,
+    /// `NONCOHERENT_SYSMEM=2`, `PEERMEM=3` (`clc7b5.h:68-71`), and the register resets to 0
+    /// = `LOCAL_FB`.
+    pub const PHYS_MODE_TARGET_MASK: u32 = 0x3;
+
     /// `OFFSET_IN_UPPER_UPPER` / `OFFSET_OUT_UPPER_UPPER` — **`16:0`**, i.e. seventeen
     /// bits, not thirty-two (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:162,
     /// :166`). A decoder that took the whole word would report a destination the engine

@@ -52,7 +52,7 @@ use std::time::Duration;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_arch::{
     Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, LevelShift, ObjectKind, PageSize,
-    PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
+    PdeEdge, PhysTarget, PteDecode, PushMethod, PushRange, PushbufferAbi, UserdModel,
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
@@ -555,6 +555,17 @@ impl MockPushbuffer {
     }
 }
 
+/// The mock's fake 2-bit phys-mode target encoding → [`PhysTarget`], same value ladder as
+/// the hardware register (`0 = LocalFb`, matching the reset).
+fn mock_phys_target(bits: u64) -> PhysTarget {
+    match bits & 3 {
+        1 => PhysTarget::CoherentSysmem,
+        2 => PhysTarget::NonCoherentSysmem,
+        3 => PhysTarget::Peer,
+        _ => PhysTarget::LocalFb,
+    }
+}
+
 impl PushbufferAbi for MockPushbuffer {
     fn method_len(&self, header: u32) -> usize {
         // Fake convention: the header's low 16 bits are the arg-word count (set by
@@ -575,6 +586,11 @@ impl PushbufferAbi for MockPushbuffer {
                 len: lo64(2),
                 dst_is_virtual: lo64(3) & 1 != 0,
                 src_is_virtual: lo64(3) & 2 != 0,
+                // Fake convention: the phys-mode target rides bits 4:5 (dst) and 6:7 (src)
+                // of the flags word, so a mock-composed test can express a FB→sysmem copy
+                // without the GA10x codec. `0` = `LocalFb`, matching the register reset.
+                dst_target: mock_phys_target((lo64(3) >> 4) & 3),
+                src_target: mock_phys_target((lo64(3) >> 6) & 3),
                 // An unknown kind decodes as a plain copy — never guessed into a scrub,
                 // which is a *destroying* operation (trap-min: no guessed semantics).
                 work: match (lo64(3) >> 2) & 3 {

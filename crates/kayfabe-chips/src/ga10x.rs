@@ -1049,7 +1049,25 @@ impl Ga10xPushbuffer {
             submit::ce::OFFSET_OUT_LOWER => Some(3),
             submit::ce::LINE_LENGTH_IN => Some(4),
             submit::ce::LINE_COUNT => Some(5),
+            // ★ The per-operand phys-mode target — the residency signal for a physical
+            // operand (`memmgrTestCeUtils`' vid→sys copy, E10). Latched like any other CE
+            // register write; read in `ce_launch` only when the operand is physical.
+            submit::ce::SET_SRC_PHYS_MODE => Some(6),
+            submit::ce::SET_DST_PHYS_MODE => Some(7),
             _ => None,
+        }
+    }
+
+    /// A latched `SET_{SRC,DST}_PHYS_MODE` slot → [`kayfabe_arch::PhysTarget`]. An operand
+    /// that never wrote the register is `LocalFb`, the engine's own reset value
+    /// (`ogkm-580: clc7b5.h:68`) — faithful, not a guess.
+    fn phys_target(latched: Option<u32>) -> kayfabe_arch::PhysTarget {
+        use kayfabe_arch::PhysTarget;
+        match latched.map(|v| v & submit::ce::PHYS_MODE_TARGET_MASK) {
+            Some(1) => PhysTarget::CoherentSysmem,
+            Some(2) => PhysTarget::NonCoherentSysmem,
+            Some(3) => PhysTarget::Peer,
+            _ => PhysTarget::LocalFb,
         }
     }
 
@@ -1103,12 +1121,18 @@ impl Ga10xPushbuffer {
         // and `rm::ce_pushbuffer` writes it only because it shares a header with
         // `LINE_LENGTH_IN`.
         let len = u64::from(state.latched(subch, 4)?);
+        // ★ Non-`?`: the phys-mode registers are NOT required operands. An operand may be
+        // physical and never have written its target (the engine then reads the reset
+        // value, `LOCAL_FB`), so demanding it would refuse a copy real hardware performs —
+        // the opposite discipline from the offsets, which the copy cannot address without.
         Some(PushMethod::CeLaunchDma {
             dst: GpuVa(dst),
             src: GpuVa(src),
             len,
             dst_is_virtual: flags & submit::ce::LAUNCH_DST_PHYSICAL == 0,
             src_is_virtual: flags & submit::ce::LAUNCH_SRC_PHYSICAL == 0,
+            dst_target: Self::phys_target(state.latched(subch, 7)),
+            src_target: Self::phys_target(state.latched(subch, 6)),
             work: CeWork::Copy,
         })
     }

@@ -3453,6 +3453,11 @@ pub fn apply_pushbuffer(
                 len,
                 dst_is_virtual,
                 src_is_virtual,
+                // ★ The phys-mode targets are decoded (E10a) but not yet consumed here:
+                // the residency split that reads them is E10b. Ignored, not dropped —
+                // when E10b lands it names these instead of re-deriving them.
+                dst_target: _,
+                src_target: _,
                 work,
             } => {
                 // ★★★ DECISION 1 of 2 — EXECUTE.
