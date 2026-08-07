@@ -762,8 +762,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
 
     let before = {
         let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
-        pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub)
-            .expect("partitions")
+        pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
         before
@@ -800,8 +799,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
 
     let after = {
         let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
-        pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub)
-            .expect("partitions")
+        pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
         after

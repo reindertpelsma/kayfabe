@@ -251,7 +251,9 @@ fn a_multi_chunk_copy_streams_correctly() {
     const SYS: u64 = 0x20_0000;
     let len = 200_000u64; // > 3 chunks
     // Seed the FB with an address-dependent pattern so a mis-streamed byte is visible.
-    let seed: Vec<u8> = (0..len).map(|i| (i.wrapping_mul(31) & 0xff) as u8).collect();
+    let seed: Vec<u8> = (0..len)
+        .map(|i| (i.wrapping_mul(31) & 0xff) as u8)
+        .collect();
     fb.write(VID, &seed).unwrap();
 
     let spans = sys_from_vid(SYS, VID, len);
@@ -268,7 +270,7 @@ fn a_multi_chunk_copy_streams_correctly() {
 // where pbCpuVA reads it, and the interrupt raised only AFTER the bytes are in place.
 // =====================================================================================
 
-const SEM_PDB: Pdb = Pdb(0x5500_000);
+const SEM_PDB: Pdb = Pdb(0x0550_0000);
 
 /// A channel VAS with the finishPayload semaphore mapped into guest RAM (sysmem) — the
 /// common case: the CeUtils channel's pushbuffer allocation is sysmem-backed, so the guest
@@ -305,8 +307,14 @@ fn a_finish_payload_lands_where_the_guest_polls_and_then_the_irq_fires() {
     vmm.gpa_write(SEM_PHYS, &0u32.to_le_bytes()).unwrap();
     assert!(vmm.irqs.is_empty(), "no completion signalled yet");
 
-    let n = write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(SEM_VA), 0x1234_5678)])
-        .expect("the completion writes");
+    let n = write_completion(
+        &mut fb,
+        &mut vmm,
+        &table,
+        SEM_PDB,
+        &[(GpuVa(SEM_VA), 0x1234_5678)],
+    )
+    .expect("the completion writes");
     assert_eq!(n, 1);
     // The guest's own CPU mapping (pbCpuVA -> SEM_PHYS) now reads the finishPayload.
     assert_eq!(
@@ -332,10 +340,21 @@ fn a_one_word_release_writes_four_bytes_and_spares_the_neighbour() {
     const SEM_PHYS: u64 = 0x50_0000;
     let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
     // Poison the 4 bytes AFTER the semaphore; a >4-byte write would disturb them.
-    vmm.gpa_write(SEM_PHYS + 4, &0xA5A5_A5A5u32.to_le_bytes()).unwrap();
-    write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(SEM_VA), 0xFFFF_FFFF_DEAD_BEEF)])
+    vmm.gpa_write(SEM_PHYS + 4, &0xA5A5_A5A5u32.to_le_bytes())
         .unwrap();
-    assert_eq!(vmm.ram_read(SEM_PHYS, 4), 0xDEAD_BEEFu32.to_le_bytes(), "low word written");
+    write_completion(
+        &mut fb,
+        &mut vmm,
+        &table,
+        SEM_PDB,
+        &[(GpuVa(SEM_VA), 0xFFFF_FFFF_DEAD_BEEF)],
+    )
+    .unwrap();
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS, 4),
+        0xDEAD_BEEFu32.to_le_bytes(),
+        "low word written"
+    );
     assert_eq!(
         vmm.ram_read(SEM_PHYS + 4, 4),
         0xA5A5_A5A5u32.to_le_bytes(),
@@ -350,8 +369,14 @@ fn an_unresolved_semaphore_faults_and_raises_no_interrupt() {
     let mut fb = SparseFb::new(FB_LIMIT);
     let mut vmm = MockVmm::new();
     let table = AddressTable::new(); // empty: every VA misses
-    let err = write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(0x700_0000), 7)])
-        .expect_err("an unresolved semaphore must fault");
+    let err = write_completion(
+        &mut fb,
+        &mut vmm,
+        &table,
+        SEM_PDB,
+        &[(GpuVa(0x700_0000), 7)],
+    )
+    .expect_err("an unresolved semaphore must fault");
     assert!(matches!(err, FwdFault::Address(_)), "MISS=FAULT: {err:?}");
     assert!(
         vmm.irqs.is_empty(),
@@ -380,10 +405,21 @@ fn a_finish_payload_in_vidmem_lands_in_the_framebuffer_store() {
             },
         )
         .unwrap();
-    write_completion(&mut fb, &mut vmm, &table, SEM_PDB, &[(GpuVa(SEM_VA), 0xCAFE)]).unwrap();
+    write_completion(
+        &mut fb,
+        &mut vmm,
+        &table,
+        SEM_PDB,
+        &[(GpuVa(SEM_VA), 0xCAFE)],
+    )
+    .unwrap();
     let mut got = [0u8; 4];
     fb.read(SEM_PHYS, &mut got).unwrap();
-    assert_eq!(got, 0xCAFEu32.to_le_bytes(), "the vidmem semaphore is in the FB store");
+    assert_eq!(
+        got,
+        0xCAFEu32.to_le_bytes(),
+        "the vidmem semaphore is in the FB store"
+    );
     // guest RAM was never touched.
     assert!(vmm.refused.is_empty());
 }

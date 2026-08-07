@@ -2352,18 +2352,25 @@ wiring + the boot REMAIN.** The pure/shell layers of the CPU branch are built an
   shell CPU executor over `FbStore` (`SparseFb`) + `Vmm`. `memmgrTestCeUtils`' `sys ← vid`
   readback compare is reproduced GPU-free in `cpu_ce_executor.rs`. `FwdFault::CpuCeStraddle`
   refuses an `Ours` span whose needed plane is `None` by name.
-- **E10d** (`c181d1d`) — `cpu_ce_unsafe::write_completion`: the finishPayload written to the
-  resolved physical of the guest's own semaphore VA (the channel's own aperture — the #12
+- **E10d** (`c181d1d`) — `kayfabe_rt::cpu_ce::write_completion`: the finishPayload written to
+  the resolved physical of the guest's own semaphore VA (the channel's own aperture — the #12
   where-mistake), one-word (4-byte), interrupt raised **only after** every write lands and
   **not at all** on a refusal.
+- **E10c fix** (`33dac8f`) — the executor module `cpu_ce_unsafe.rs` was renamed to `cpu_ce.rs`:
+  it accesses guest memory only through the `Vmm`/`FbStore` traits (bounded copies, the raw
+  side re-validates), so it carries no unsound surface and no `_unsafe` suffix (§4.1 gate B).
 
-★ **What E10e still owes for the boot** (the doorbell for the CeUtils channel is still refused
-`NoVas(ChanId(1))`, so none of E10b–d is on the live data path yet): (1) `plan_doorbell` /
-`read_pushbuffer` accepting the physical-operand channel and translating its still-virtual
-ring/semaphore (the channel's `FERMI_VASPACE_A` needs publishing/linking — measured scope
-below); (2) the shim driving `parse_pushbuffer → execute_ours_spans → write_completion` off
-the doorbell with a `&mut dyn Vmm` and the `SparseFb` (today it rings with an empty working
-set and never parses). No rung is claimed until a boot shows it.
+★ **What E10e still owes for the boot** `[src]` (the doorbell for the CeUtils channel is still
+refused `NoVas(ChanId(1))` at `bench_evidence/run_probe35_349924b_qemu.log`, so none of E10b–d
+is on the live data path yet). Scope read off the tree by the 2026-08-08 E10e survey (§14.7):
+(1) `plan_doorbell` / `read_pushbuffer` accept the physical-operand channel and translate its
+still-virtual ring/semaphore — but the channel's `FERMI_VASPACE_A` page-directory root never
+reaches the core (it arrives only via `0x90f10106`, unclaimed by `ObjectPolicy` and
+`PageDirNotModelled` in the ABI), so no `AddressTable` materializes and the ring VA
+`0x1_2006_4000` is untranslatable — a deep gap, not a link; (2) the shim must drive
+`parse_pushbuffer → execute_ours_spans → write_completion` off the doorbell with a
+`&mut dyn Vmm` and the `SparseFb` (today it rings with an empty working set and never parses).
+No rung is claimed until a boot shows it.
 
 ### 14.1 The wall, in the guest's own source
 

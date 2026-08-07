@@ -563,8 +563,8 @@ fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issue
                     }
                     let dst = base + off;
                     let src = GpuVa(src_base + off);
-                    let spans = pc(Some(&t), GpuVa(dst), true, src, true, len, work)
-                        .expect("partitions");
+                    let spans =
+                        pc(Some(&t), GpuVa(dst), true, src, true, len, work).expect("partitions");
                     assert_total(
                         &spans,
                         dst,
@@ -661,8 +661,7 @@ fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
         };
         let dst = base + off;
         let src = GpuVa(src_base + off);
-        let spans =
-            pc(Some(&t), GpuVa(dst), true, src, true, len, work).expect("partitions");
+        let spans = pc(Some(&t), GpuVa(dst), true, src, true, len, work).expect("partitions");
         assert_total(
             &spans,
             dst,
@@ -798,8 +797,8 @@ fn c_execute_predicate_and_the_representability_ruling_agree_except_on_two_named
     let fake = table_of(base, &[(0x1000, Kind::Fake)]);
 
     let ruling = |t: &AddressTable, work: CeWork| -> CeExecutor {
-        let spans = pc(Some(t), GpuVa(base), true, GpuVa(base), true, 0x1000, work)
-            .expect("partitions");
+        let spans =
+            pc(Some(t), GpuVa(base), true, GpuVa(base), true, 0x1000, work).expect("partitions");
         assert_eq!(spans.len(), 1, "a uniform range must not split");
         spans[0].sub.by
     };
@@ -919,7 +918,11 @@ fn a_physical_sys_from_vid_copy_carries_the_two_operands_distinct_cpu_planes() {
     .expect("a physical copy partitions");
     assert_eq!(spans.len(), 1, "no table, no fragmentation: one span");
     let s = spans[0];
-    assert_eq!(s.sub.by, CeExecutor::Ours, "a physical copy is never hardware's");
+    assert_eq!(
+        s.sub.by,
+        CeExecutor::Ours,
+        "a physical copy is never hardware's"
+    );
     assert_eq!(
         (s.dst_kind, s.src_kind),
         (
@@ -1049,7 +1052,11 @@ fn a_fabricated_virtual_operand_takes_its_plane_from_the_aperture() {
     )
     .expect("partitions");
     assert_eq!(spans.len(), 2, "the aperture boundary splits the scrub");
-    assert_eq!(spans[0].dst_plane, Some(CpuPlane::Fb), "vidmem run → framebuffer");
+    assert_eq!(
+        spans[0].dst_plane,
+        Some(CpuPlane::Fb),
+        "vidmem run → framebuffer"
+    );
     assert_eq!(
         spans[1].dst_plane,
         Some(CpuPlane::GuestRam),

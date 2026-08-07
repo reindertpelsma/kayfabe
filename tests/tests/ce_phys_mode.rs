@@ -140,7 +140,9 @@ fn ce_phys_mode_unlatched_is_local_fb_the_reset_value() {
         ],
     );
     let mut st = kayfabe_arch::MethodState::new();
-    let got = a.pushbuffer().decode_run(&mut st, &[bind, offs, line, fire]);
+    let got = a
+        .pushbuffer()
+        .decode_run(&mut st, &[bind, offs, line, fire]);
     let PushMethod::CeLaunchDma {
         src_target,
         dst_target,
