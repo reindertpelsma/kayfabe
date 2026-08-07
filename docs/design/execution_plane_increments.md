@@ -10,6 +10,15 @@
 > device-global ownership index in a fourth, rank-0 phase, so a guest CE write into a *leaf*
 > table is witnessed and its leaf binds. ⊘ Suite only — no boot has been spent on E8, and the
 > guest boot still stops at `mem_utils.c:2006` on `0xa06f0103`, which is the execution plane.
+> ⊘ ★★★ **THAT SENTENCE IS FALSE AND WAS FALSE WHEN WRITTEN.** `[measured]` boot `m1`,
+> 2026-08-07, master `809b040`, RTX 3060/GA106 vast `47029542`
+> (`docs/reference/bench_evidence/m1_809b040_dmesg.log`): the guest stops at
+> **`mem_utils.c:2022`, `_memmgrMemUtilsScrubInitRegisterCallback: event notification control
+> failed`** — exactly where `ff5278d` put it on **2026-08-03**. `0xa06f0103` has been SERVED
+> since `3ab1305`, and `0xa06f0104` appears **0 times** in all four captured logs: the guest
+> never issues it, because `bUseVasForCeCopy` is false.
+> ⇒ **Every E9 increment designed after 08-03 was designed against a wall already cleared.**
+> Read §13.7 before acting on anything else in this section.
 > ★★★ **§10.5 arm B remains a wall**: the real isolate plane aborts QEMU under R1, at the
 > base revision as well as at this one.
 
@@ -2261,3 +2270,64 @@ the 24 edits are mechanical. (1) is (2) plus an extra hop and a new crate edge f
 these lands is the shape every future per-chip capability question inherits (how many CEs,
 which video engines, MIG partitioning), so it is worth one decision rather than one
 precedent set at 02:30 by whoever was holding the keyboard.
+
+### 13.7 ★★★ boot `m1` — the wall, and the instrument that cannot see it
+
+`[measured]` boot `m1`, 2026-08-07, master `809b040` (revision read out of the QEMU binary
+with `strings`), vast instance `47029542` (RTX 3060 / GA106), stock unpatched NVIDIA
+580.159.04 open kernel module in the guest. Every line below is quoted from
+`docs/reference/bench_evidence/m1_809b040_{dmesg,probe,qemu,serial}.log`, committed beside
+this file because a boot log that lives only on a rented box is not evidence.
+
+| | |
+|---|---|
+| box | vast `47029542`, RTX 3060 (**GA106**, the traces' own chip), 38 cores / 198 GB, `/dev/kvm` present |
+| host driver | 580.159.04 **Open Kernel Module**, `Dual MIT/GPL`, all three nodes `open()` clean |
+| guest | Ubuntu 24.04, kernel 6.8.0-136, **stock unpatched** 580.159.04 open module |
+| revision | `809b040`, verified by `strings` on the QEMU binary → `kayfabe-rev:809b0400ab0bc…` |
+| evidence | `docs/reference/bench_evidence/m1_809b040_{dmesg,probe,qemu,serial}.log` |
+| blank box → captured boot | **17 minutes** |
+
+**The fatal chain, in the guest's own words:**
+
+```
+mem_utils.c:2022   _memmgrMemUtilsScrubInitRegisterCallback: event notification control failed
+                   → NV_ERR_GENERIC (0x0000FFFF)
+mem_utils_gm107.c:1027 → ce_utils.c:304 → mem_scrub.c:181
+mem_mgr_scrub_gp100.c:63 → mem_mgr.c:487 → kernel_fifo.c:3129
+RmInitNvDevice: *** Cannot load state into the device
+RmInitAdapter failed! (0x25:0xffff:1249)
+```
+
+★ **The boot HAS advanced since `419afe8`**: that revision died earlier, at
+`osVerifySystemEnvironment` / `0x11:0x45:2134` (`NV_ERR_IRQ_NOT_FIRING`). That wall is gone.
+⊘ **And it has not advanced since `ff5278d` (2026-08-03).** Four days, 32 commits, same line.
+
+#### ★★★ THE LEDGER IS BLIND TO THE WALL, AND THIS BOOT PROVES IT
+
+The device reports **19 unserviced commands, 16 distinct**, and here is the whole set:
+
+```
+0x2080017e 0x20800a2c 0x20800a2e 0x20800a30 0x20800a34 0x20800a38 0x20800a3f 0x20800a4b
+0x20800a70 0x20800a80 0x20800a87 0x20800afe 0x20800aff 0x20800b03 0x20800b05 0x20802a0f
+```
+
+`0x20800301` — `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION`, the control whose failure is printed
+in the fatal line above — **appears 0 times.** It is *served-but-refused*, so
+`InitTablePolicy::refuse()` returns `Some(Reply)` and the ledger never records it.
+
+⇒ **The port's primary rung-picking instrument cannot see the class of wall the port is stuck
+on.** Anyone choosing the next rung by diffing ledgers will pick from those 16 and none of them
+is the blocker. That is not a metaphor for how four days went into `0xa06f0104`; it is the
+mechanism.
+
+#### What this settles
+
+- ⊘ **E9's `0xa06f0104` is not the next rung.** 0 occurrences in 4 logs. §13.6's engine-set
+  routing fork is **moot until the guest issues the control**, and is withdrawn from the
+  owner's desk rather than answered.
+- ★ **The next rung is `EVENT_SET_NOTIFICATION` index 35** — named by the guest, at the line
+  that kills it.
+- ★★ **Fix the ledger before using it again**: a served-but-refused reply must be recorded, or
+  the ledger must lose its role in rung selection. A gate that is structurally blind to the
+  failures you have is worse than no gate, because it answers.
