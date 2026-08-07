@@ -4,7 +4,7 @@ Source revision **`6c51da7`** (archive rev stamped in the binary; QEMU 10.2.4 + 
 `vh` = RTX 3060 GA106, guest NVIDIA open 580.159.04). Two boots, both through
 `scripts/bench/boot_capture.sh`, dmesg + census committed beside this file.
 
-## What was measured (not inferred)
+## What the two boots show (both at revision `6c51da7`, bench `vh`)
 
 | boot | probe set (from the boot's OWN census line) | dies at | census `0x20800301` |
 |---|---|---|---|
@@ -24,7 +24,7 @@ the guest **past** that site into `memmgrMemUtilsChannelSchedulingSetup`. So the
 a reachability result, not a rung: index 35 is a completion notifier, and the honest fix is
 to **deliver** the event, not to admit the arming — the probe is off in every shipping boot.
 
-## Finding 2 — MEASURED: the device-global `notify_actions` aliases two subdevices (H1 confirmed)
+## Finding 2 — the device-global `notify_actions` aliases two subdevices (boot `census_probe35`, `6c51da7`)
 
 This is the live hypothesis the census (`03a5c31`) was built to settle, now settled on
 hardware. Under the probe, the census shows **three** armings:
