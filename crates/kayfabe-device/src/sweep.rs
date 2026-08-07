@@ -855,7 +855,21 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               each legitimately arming index 35 once alias into one slot and the second \
               refuses where a real GSP accepts. The per-boot arming count is UNMEASURED, \
               so env-not-reaching-QEMU is not yet excluded; the aliasing is the next rung's \
-              hypothesis, not its conclusion",
+              hypothesis, not its conclusion. \
+              (f) [measured] 2026-08-07, boots subdev_stock_925b27b + subdev_probe35_925b27b \
+              at 925b27b (notify_actions per-subdevice; docs/reference/bench_evidence/\
+              run_subdev_*_925b27b_{dmesg,qemu}.log): the (e) hypothesis is CONFIRMED and \
+              the fix holds on hardware — under the probe BOTH event-35 armings serve \
+              (census: 0xc1e00005/0x0b AND 0xc1e00006/0x0c result 0), mem_utils.c:2022 and \
+              mem_utils_gm107.c:1027 are GONE, and the boot advanced to the CE test copy \
+              itself: memmgrMemSet(TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463 NV_ERR_TIMEOUT \
+              -> memmgrTestCeUtils @ :4159 -> :526 -> kernel_fifo.c:3129 -> RmInitAdapter \
+              0x25:0x65:1249 — the execution plane, unbypassable per the ogkm-580 walk \
+              (!IS_SILICON is dead code; only RMDisableScrubOnFree+RmDisableGlobalCeUtils \
+              skip it, and a stock guest sets neither). ⊘ Probe-off is UNCHANGED (first \
+              arming still refused by SILENT_NOTIFIERS, 0x25:0xffff:1249): the advance is \
+              reachability under the probe, NOT a rung, and the honest next step is \
+              delivering the CE copy, not admitting index 35",
     },
 ];
 

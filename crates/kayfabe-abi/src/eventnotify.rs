@@ -229,6 +229,13 @@ pub const PROBE_ARM_MAX: usize = 8;
 /// a fact about the guest, measurable in one boot and derivable from no amount of reading.
 /// This switch buys that one measurement.
 ///
+/// ★ **ANSWERED**: it registers and continues. `[measured]` boot `subdev_probe35_925b27b`,
+/// 2026-08-07 (`docs/reference/bench_evidence/run_subdev_probe35_925b27b_dmesg.log`): with
+/// both scrubber subdevices' index-35 armings served (per-subdevice `notify_actions`), the
+/// guest did not wait for any delivery — it advanced straight to `memmgrTestCeUtils`' real
+/// CE memset and timed out on the **CE semaphore** (`mem_mgr.c:463`, `NV_ERR_TIMEOUT`),
+/// not on a notifier. The blocking dependency is the copy engine, not the callback.
+///
 /// ⊘ **A boot that goes further with this set is NOT a rung.** It is a *reachability*
 /// result: "the guest reaches X once this refusal stops firing". It says nothing about
 /// correctness, and anything it unblocks still owes the real answer — which for a
