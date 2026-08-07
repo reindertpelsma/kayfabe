@@ -2596,3 +2596,80 @@ event is produced. Item 1 is therefore *"observe the publication BEFORE the answ
 apply its root to the graph, while leaving the reply plane untouched"* — an observer that
 declines, seated ahead of `InitTablePolicy`, not a re-route of who answers (re-routing breaks
 `cap1b_differential` / `gvaspace_pdes`, which pin `InitTablePolicy` as the answerer).
+
+### 14.9 ★★★ MEASURED: `SET_PAGE_DIRECTORY` is issued **ZERO** times in the whole boot — the port models the one control the driver never sends (2026-08-08)
+
+`[measured 2026-08-08]` from `traces/real_ga106/rpc_transcript_real_ga106.txt` — our own committed
+transcript of a **real** 580.159.04 driver on a **real** GA106. A census of all 88
+`KAYFABE-RPC` entries, by command word:
+
+| control | occurrences in the boot | what the port does with it |
+|---|---|---|
+| `0x00801813` `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` | **0** | `ControlParams::SetPageDir` — ★ *the only control the port turns into a `Pdb`* |
+| `0x00801814` (the paired unset) | **0** | `PageDirNotModelled` |
+| `0x90f10106` `VASPACE_COPY_SERVER_RESERVED_PDES` | **4** (entries 57, 61, 66, 70) | `PageDirNotModelled` — refused |
+| `0x20800a9f` | **1** | `PageDirNotModelled` — refused |
+
+⇒ **`NoVas(ChanId(1))` is not a missing link-up. It is the designed consequence of building the
+entire `Pdb` identity on a control that never arrives.** No amount of wiring downstream of
+`RmEvent::SetPageDir` can populate `chan.vas_pdb` on the boot path, because nothing upstream of
+it ever fires. §14.7 called this "a deep gap, not a link"; this is the measurement that says so
+without inference.
+
+★★ **This PROMOTES `translate_control`'s own rustdoc from `[src]` to `[measured]`, and
+strengthens it.** That doc already warned — reading `gpu_vaspace.c:3109` — that `SET_PAGE_DIRECTORY`
+reaches the wire *only* for a `SHARED_MANAGEMENT`/`IS_EXTERNALLY_OWNED` (i.e. UVM's) VASpace, and
+concluded the arm is *"necessary and not sufficient"*. For the boot path it is not merely
+insufficient: it is **entirely absent**, and the doc's own framing — *"a conclusion a live boot
+can refute and a source read cannot"* — is what earned the check. ⇒ `0x90f10106` is not "one more
+control to serve". It is **the only boot-path source of a page-directory root**, and E10e's item
+(1) is therefore load-bearing rather than incremental.
+
+#### The wire facts, each checked against the capture rather than assumed
+
+- ★ **`psize=184` on all four occurrences, and 184 is the struct size derived field-by-field**:
+  `hSubDevice`(4) + `subDeviceId`(4) + `pageSize`(8) + `virtAddrLo`(8) + `virtAddrHi`(8) +
+  `numLevelsToCopy`(4) + 4 pad + `levels[6]`×24 = **184**
+  (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h:272-332`, `GMMU_FMT_MAX_LEVELS = 6` at
+  `:37`; each level is `physAddress`(8) + `size`(8) + `aperture`(4) + `pageShift`(1) + 3 pad).
+  The decoder's exact-size assertion (§4.3) therefore has a constant confirmed against the real
+  GA106's own wire (`traces/real_ga106/rpc_transcript_real_ga106.txt`, census 2026-08-08), not a
+  transcribed one. ★ Which matters here specifically: this is the failure mode
+  `c_oracle_empty_rows_are_wrong` is about — a size trusted from a table rather than from a
+  machine was a buffer overrun with a hardware writer behind it.
+- ★ **The sender is positively identified, not inferred**: every occurrence logs
+  `head=00 00 00 00 00 00 00 00`, i.e. `hSubDevice = 0` **and** `subDeviceId = 0`. That is exactly
+  `_gvaspacePopulatePDEentries`, which sets `subDeviceId` from
+  `gpumgrGetSubDeviceInstanceFromGpu` (0 on a single GPU) and **never** writes `hSubDevice`
+  (`ogkm-580: gpu_vaspace.c:5251-5253`). The `hSubDevice`-populated path is not the one we see.
+- ★ **`levels[0]` is the root, confirmed at the producer** — `gvaspaceGetPageLevelInfo` starts at
+  `pLevelFmt = pGpuState->pFmt->pRoot` and descends via `mmuFmtGetNextLevel` at the *bottom* of
+  the loop, filling `levels[level]` top-down (`ogkm-580: gpu_vaspace.c:3974-4031`). The receiver
+  then consumes it **bottom-up** (`for (i = numLevelsToCopy - 1; i >= 0; i--)`, `:4492`), which
+  is the corroborating half: root last, so root is index 0.
+- ★ **The aperture is a real fork, not decoration** — the receiver switches
+  `GMMU_APERTURE_VIDEO → ADDR_FBMEM` and `GMMU_APERTURE_SYS_{COH,NONCOH} → ADDR_SYSMEM`
+  (`ogkm-580: gpu_vaspace.c:4503-4511`), and asserts on anything else.
+
+#### ⊘ And this is the debt `translate_control` predicted coming due
+
+Its rustdoc says `RmEvent::SetPageDir` has nowhere to put `aperture`, so *"a vidmem-rooted and a
+sysmem-rooted page directory become the same event"*, safe **only** while `Pdb` is a bare key —
+and names the moment that stops being free: *"the day a walker follows a PDB it must know whether
+the address is a framebuffer offset or a guest-physical address."* **E10e is that day.** So the
+event this increment adds must carry the aperture from the start; adding it later would mean
+`kayfabe_arch::ids::Pdb` had already accreted the wrong assumption (its own doc currently says
+*"a per-GPU FB address"*). ⊘ Do not reuse `RmEvent::SetPageDir` for `0x90f10106` — its shape is
+the shape that drops the fork.
+
+#### ⚠ Two bounds on the above, stated so nobody over-reads it
+
+1. ⊘ **The transcript's terminus is still unverified** (flagged five times now): it is not known
+   whether entry 88 is adapter-init *success* or the capture stopping. That bounds "25 remaining",
+   ★ but it does **not** bound this finding — a zero count over a prefix is still a zero count
+   over that prefix, and the four `0x90f10106` all land *inside* it.
+2. `[src]` **`0x90f10106` fires only for a SPLIT VAS** — `gvaspaceCopyServerRmReservedPdesToServerRm`
+   returns early unless `IS_GSP_CLIENT(pGpu)` **and** `pGVAS->vaStartServerRMOwned != 0`
+   (`ogkm-580: gpu_vaspace.c:4039-4051`). So it publishes the levels backing the *server-RM-owned
+   sub-range*. ★ That does not weaken it: `levels[0]` is the root of the **whole** VAS regardless
+   of which VA the walk was seeded with, because every walk in a VAS starts at the same root.
