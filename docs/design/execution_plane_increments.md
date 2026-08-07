@@ -2190,3 +2190,74 @@ deliberately did **not** take the phase-shape change this section proposes: the 
 first doorbell, where the verb path and its `Worker` already are. This section is kept because
 its *analysis* of why a control cannot block is correct and still governs — but its conclusion
 that a control path needs PLAN/EXECUTE/COMMIT was overtaken by a cheaper shape.
+
+### 13.6 `0xa06f0104` BIND — the ABI landed, and the refusal is BLOCKED on a routing fact
+
+`[measured]` 2026-08-07, `1c47834` + `dac6484`. The ABI half of the bind is on master and
+green: the command id, `BindParams`, the decode/encode, the status set, and
+`nv2080_to_rm_engine_type`. What is **not** built is the policy arm, and the reason is a
+finding rather than a shortage of time.
+
+#### The refusal this rung is for
+
+Per `ogkm-580: kernel_fifo_gm107.c:672-759`, a real GSP answers a bind by **linear-scanning
+this GPU's own engine-info list** — the list built from the device-info table *we serve* — and
+returns `NV_ERR_OBJECT_NOT_FOUND` (`:736`) when nothing matches. So the faithful refusal is
+exactly *"an engine we never advertised"*. It is not invented, and it is not the
+channel-shaped `NV_ERR_INVALID_STATE`.
+
+⊘ And it must not be *"the engine disagrees with the channel's alloc engine"*. Nothing in the
+bind path checks that (`kchannelCtrlCmdBind_IMPL` only calls
+`gpuXlateClientEngineIdToEngDesc`, against a **static, chip-independent** table that `pGpu` is
+passed to and never read from — `ogkm-580: gpu.c:5274-5295`). Adding it would be
+`mock_fidelity_both_directions`' too-strict half.
+
+#### ★★★ THE BLOCKER: the engine set is a per-CHIP fact with no route into the object plane
+
+The check needs to ask *"is `rm_engine_type` in the set this device advertised?"*. Following
+that question through the tree, `[measured]` at `dac6484`:
+
+| holder | has the engine set? | is on the bind path? |
+|---|---|---|
+| `kayfabe_device`'s `ChipModel.engines` (`GA106_ENGINES`, `ga10x.rs:616`) | ★ **yes — the single description** | no |
+| `kayfabe_arch::Arch` | no | yes (`Gpu` holds one) |
+| `kayfabe_core::Gpu` | no | yes |
+| `kayfabe_rt::SharedDevice` | no | yes (via `SharedObjectModel`) |
+| `kayfabe_rmrpc::ObjectPolicy` | no | yes |
+
+⇒ **Every type on the bind path lacks the fact, and the type that has it is not on the path.**
+
+⚠ The tempting fix — put the engine set on `Arch` — is wrong twice over. It is a **per-chip**
+fact, not a per-generation one (GA102 and GA106 differ in CE count while sharing `Ga10xArch`),
+and it would be a *second* hand-written description of one silicon, which
+`inittables.rs:862-865` forbids in as many words: the `InternalDeviceInfo` arm is *"the only
+arm that is a **projection** rather than a statement … Two hand-written descriptions of one
+silicon is the drift `kayfabe_abi::deviceinfo` exists to forbid."*
+
+#### The three shapes, and the recommendation
+
+1. **`ObjectModel` gains the query; the shell answers it, a bare `Gpu` declares nothing.**
+   Both impls exist (`Gpu` in `policy.rs:310`, `SharedObjectModel` in `shim.rs:1325`). ⚠ But
+   `SharedDevice` does **not** hold the chip either, so this needs the chip routed into
+   `kayfabe-rt` first — the work is not one method, it is a new edge.
+2. **`ObjectPolicy` takes the engine slice at construction.** `kayfabe-rmrpc` already depends
+   on `kayfabe-abi`, so it can name `&'static [FifoDeviceEntry]` with no new dependency, and
+   the shell already holds both halves. Cost: **24 construction sites** across 5 files,
+   including `kayfabe-qemu-raw/src/shim.rs` (raw-crate, ratchet territory).
+   ⊘ A defaulted `Option` is **not** available here: `None` would have to mean either "refuse
+   every bind" (too strict, and it would break every mock-composed test silently) or "accept
+   every bind" — and the second is the `sandbox_unsafe::last_capability` fail-open shape
+   already recorded as undischarged residue. A gate whose default is open is not a gate.
+3. **Serve BIND from a device-side policy that already holds `chip`.** Cheapest, and wrong:
+   it splits the engine check from the channel routing across two policies, so neither can
+   answer the whole control.
+
+★ **Recommendation: (2).** It puts the check next to the only description of the silicon, it
+is fail-closed by construction (the slice is required, so no composition can forget it), and
+the 24 edits are mechanical. (1) is (2) plus an extra hop and a new crate edge for no gain.
+
+⚠ **Held for the owner, not started.** The reason is the owner's own standing ruling that
+*arch seams get built at the time the code is written rather than retrofitted*: whichever of
+these lands is the shape every future per-chip capability question inherits (how many CEs,
+which video engines, MIG partitioning), so it is worth one decision rather than one
+precedent set at 02:30 by whoever was holding the keyboard.
