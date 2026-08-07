@@ -743,14 +743,18 @@ pub fn encode_gpfifo_schedule(req: &GpfifoScheduleParams) -> Vec<u8> {
 /// contradicted by hardware and this is one of them.
 pub const NVA06F_CTRL_CMD_BIND: u32 = 0xa06f_0104;
 
-/// The statuses `NVA06F_CTRL_CMD_BIND` documents —
-/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:90-93`.
+/// The statuses `NVA06F_CTRL_CMD_BIND` **documents** —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:91-95`.
 ///
 /// ★★ **`NV_ERR_NOT_SUPPORTED` (`0x56`) is not among them**, exactly as for
 /// [`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`] — and for the same reason it must not be used as a
 /// refusal here: `0x56` is `kayfabe_gsp::GspFsm::answer`'s signature for *"nobody claimed
 /// this command"*, and the guest prints the raw hex. Reusing it erases the only difference
 /// a reader has between a decision and an absence.
+///
+/// ⊘ **And this list is NOT the set of answers to choose from — see
+/// [`BIND_STATUSES_THE_CODE_PRODUCES`].** The header is incomplete relative to the driver's
+/// own code, and building a gate out of it would have forced a wrong answer.
 ///
 /// ⚠ Values read from `ogkm-580: kernel-open/common/inc/nvstatuscodes.h:60,93`, not
 /// guessed: `NV_ERR_INVALID_ARGUMENT` is `0x1F` and `NV_ERR_INVALID_STATE` is `0x40`.
@@ -760,16 +764,59 @@ pub const BIND_DOCUMENTED_STATUSES: &[u32] = &[
     0x40, // NV_ERR_INVALID_STATE
 ];
 
-/// `NV_ERR_INVALID_ARGUMENT` — what this port answers when the **engine named in the
-/// request** is not one this device advertised.
+/// ★★★ The statuses the **code** actually produces on the bind path — a strict superset of
+/// [`BIND_DOCUMENTED_STATUSES`].
 ///
-/// ★ Chosen over `NV_ERR_INVALID_STATE` because the two say different things and the
-/// distinction is the guest's to read: `INVALID_STATE` is about the *channel* (the shape
-/// [`GPFIFO_SCHEDULE_REFUSED_STATUS`] uses), `INVALID_ARGUMENT` is about the *parameter*,
-/// and here it is the parameter that is wrong. Both are in
-/// [`BIND_DOCUMENTED_STATUSES`], so either is an answer rather than a hole; only one is
-/// true.
-pub const BIND_UNKNOWN_ENGINE_STATUS: u32 = 0x1f;
+/// ## ⚠ Why the doc list could not be the gate
+///
+/// A first cut of this module made [`BIND_DOCUMENTED_STATUSES`] the acceptance set for
+/// refusals, on the same reasoning that made it right for
+/// [`GPFIFO_SCHEDULE_DOCUMENTED_STATUSES`]. Walking the call path
+/// (`ogkm-580: kernel_channel.c:3069-3133` → `gpu.c:5274-5295` →
+/// `kernel_fifo_gm107.c:447-488` → `:672-759`) shows the header is **wrong by omission**:
+/// the status for *"a structurally valid engine this chip does not have"* is
+/// `NV_ERR_OBJECT_NOT_FOUND` (`0x57`), returned from
+/// `ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:736`, and it
+/// is **not in the header's list**.
+///
+/// ⇒ A gate built from the header would have rejected the true answer and admitted only
+/// false ones — `mock_fidelity_both_directions`' too-strict half, arriving through a
+/// citation that was perfectly real. ★ The header is a *claim about* the code, not the
+/// code.
+pub const BIND_STATUSES_THE_CODE_PRODUCES: &[u32] = &[
+    0x0,  // NV_OK
+    0x1f, // NV_ERR_INVALID_ARGUMENT   — gpu.c:5294, and gm107.c:465 (runqueue 1)
+    0x40, // NV_ERR_INVALID_STATE      — gm107.c:410, :425-427 (runlist already fixed)
+    0x57, // NV_ERR_OBJECT_NOT_FOUND   — gm107.c:736 (engine absent from THIS chip's table)
+];
+
+/// `NV_ERR_OBJECT_NOT_FOUND` — what this port answers when the request names a
+/// **structurally valid engine that this device never advertised**.
+///
+/// `[inferred]`, and the inference is named rather than buried: the GSP-RM firmware is not
+/// in the open tree, so what a real GSP answers cannot be read. What *can* be read is that
+/// `kchannelBindToRunlist_IMPL` RPCs **only** when `IS_GSP_CLIENT(pGpu)` and otherwise falls
+/// through to `kfifoRunlistSetIdByEngine_HAL`
+/// (`ogkm-580: kernel_channel.c:2767,2789`) — a structure that only makes sense if the same
+/// function is the RPC's receiver on the GSP side. Down that path,
+/// `kfifoEngineInfoXlate_GM107` linear-scans **this GPU's own engine-info list** and returns
+/// `NV_ERR_OBJECT_NOT_FOUND` when nothing matches
+/// (`ogkm-580: kernel_fifo_gm107.c:734-737`). That list is built from the very device-info
+/// table this port serves, which is why refusing an engine we never advertised is the
+/// *faithful* answer rather than an invented one.
+///
+/// ⊘ **Not `NV_ERR_INVALID_ARGUMENT`.** That is what CPU-RM produces **locally, before any
+/// RPC is sent**, for an ordinal that is not a bindable engine type at all
+/// (`gpuXlateClientEngineIdToEngDesc`, `ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:5294`) —
+/// against a **static, chip-independent** table that `pGpu` is passed to and never read
+/// from. Such a bind never reaches us, so answering with its status would be describing a
+/// check we do not perform.
+///
+/// ⚠ ★ **`0x57` is one away from `0x56`**, the FSM's *"nobody claimed this"* signature, and
+/// the guest prints raw hex. They mean opposite things — *"I looked and this device has no
+/// such engine"* versus *"no code path exists"* — so a reader of a boot log must not
+/// transpose them. Recorded because this port has already lost weeks to `status: 56`.
+pub const BIND_UNKNOWN_ENGINE_STATUS: u32 = 0x57;
 
 /// `NV_ERR_INVALID_STATE` — what this port answers when the request is well-formed and
 /// names a real engine, but the **channel** could not be routed.
@@ -813,6 +860,71 @@ impl BindParams {
         )
     }
 }
+
+/// ★★★ Convert an `NV2080_ENGINE_TYPE` ordinal to the `RM_ENGINE_TYPE` the engine tables
+/// are written in — `None` if it names nothing bindable.
+///
+/// ## ⊘ Why this function has to exist, with the counter-example
+///
+/// The two spaces are **not** the same enum, and the driver says so in as many words
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_engine_type.c:37-43`): *"Rm internally uses RM
+/// engine type instead of NV2080 engine types … When ENGINE_TYPE cross RM boundary, through
+/// control calls or RPC calls, we will need to convert the engine types."*
+///
+/// They agree on exactly the two ranges this port cares about most —
+/// `GR0..GR7 = 0x01..0x08` and `COPY0..COPY9 = 0x09..0x12` — which is precisely what makes
+/// a raw integer comparison look correct in every test anyone would think to write.
+/// **Above that they collide:**
+///
+/// | raw | as `NV2080_ENGINE_TYPE` | as `RM_ENGINE_TYPE` |
+/// |---|---|---|
+/// | `0x13` | `NVDEC0` (`cl2080_notification.h:303-304`) | `COPY10` (`gpu_engine_type.h:53`) |
+/// | `0x22` | `SW` (`cl2080_notification.h:320`) | `COPY25`-region / not `SW` |
+/// | `0x2d` | — | `SW` (`gpu_engine_type.h:79`) |
+/// | `0x34` | `COPY10` (`cl2080_notification.h:342`) | `COPY43`-region / not a CE |
+///
+/// ⇒ A bind for `NVDEC0` compared raw against an RM-space table would be **accepted as a
+/// bind to the eleventh copy engine.** Same species as reading a VA as a GPA, and just as
+/// silent.
+///
+/// ★ It also confirms, rather than assumes, which space our own tables are in:
+/// `ga10x.rs`'s `SOFTWARE` row carries `0x2d`, which is `RM_ENGINE_TYPE_SW` and is **not**
+/// `NV2080_ENGINE_TYPE_SW` (`0x22`). The shipped table is in RM space, which is what a
+/// GSP client expects — the fetched table is `portMemCopy`'d verbatim with no translation
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c:2104-2108`). ⚠ The **vGPU**
+/// path is the exception and converts in place (`:1934-1950`, guarded by `IS_VIRTUAL`), so
+/// a future vGPU posture must revisit this and not inherit it.
+///
+/// ## What is modelled, and what is refused
+///
+/// Only the identity ranges plus `SW`. `None` for everything else — including the video
+/// engines and the second CE decade, which this port advertises no rows for. ⊘ Deliberately
+/// **not** a transcription of all ~57 cases of
+/// `gpuGetRmEngineType_IMPL` (`gpu_engine_type.c:50-149`): a conversion this port cannot
+/// then act on would be a too-capable double, and every unmodelled ordinal reaching
+/// [`BIND_UNKNOWN_ENGINE_STATUS`] is the honest answer for a device with no such engine.
+#[must_use]
+pub fn nv2080_to_rm_engine_type(nv2080: u32) -> Option<u32> {
+    match nv2080 {
+        // GR0..GR7 — identical in both spaces (`gpu_engine_type.c:62-69` vs `:172-179`).
+        0x01..=0x08 => Some(nv2080),
+        // COPY0..COPY9 — identical in both spaces (`:70-79` vs `:180-189`).
+        ENGINE_TYPE_COPY0..=0x12 => Some(nv2080),
+        // SW — the one row where the two spaces DISAGREE and this port has a table entry.
+        NV2080_ENGINE_TYPE_SW => Some(RM_ENGINE_TYPE_SW),
+        _ => None,
+    }
+}
+
+/// `NV2080_ENGINE_TYPE_SW` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:320`.
+pub const NV2080_ENGINE_TYPE_SW: u32 = 0x0000_0022;
+
+/// `RM_ENGINE_TYPE_SW` — `ogkm-580: src/nvidia/inc/kernel/gpu/gpu_engine_type.h:79`.
+///
+/// ⚠ `0x2d`, not `0x22`. The pair is the cheapest available proof that the two engine-type
+/// spaces are different enums; see [`nv2080_to_rm_engine_type`].
+pub const RM_ENGINE_TYPE_SW: u32 = 0x0000_002d;
 
 /// Decode a [`BindParams`] image.
 ///
@@ -2548,28 +2660,121 @@ mod tests {
         }
     }
 
-    /// ★★ The refusal statuses are in the control's own documented set, and neither is
+    /// ★★ The refusal statuses are answers the **code** produces, and neither is
     /// `NV_ERR_NOT_SUPPORTED`.
     ///
     /// ⊘ `0x56` is the FSM's *"nobody claimed this"* signature. A refusal that reused it
     /// would be indistinguishable, in the guest's own dmesg, from this port having no code
     /// for the command at all — which is the confusion that cost the schedule rung weeks.
     #[test]
-    fn the_bind_refusals_are_documented_answers_and_never_the_unclaimed_signature() {
+    fn the_bind_refusals_are_answers_the_code_produces_and_never_the_unclaimed_signature() {
         for s in [BIND_UNKNOWN_ENGINE_STATUS, BIND_REFUSED_STATUS] {
             assert!(
-                BIND_DOCUMENTED_STATUSES.contains(&s),
-                "{s:#x} is not a status NVA06F_CTRL_CMD_BIND documents, so the guest's own \
-                 error path has no case for it"
+                BIND_STATUSES_THE_CODE_PRODUCES.contains(&s),
+                "{s:#x} is not a status the bind path produces, so answering it would be \
+                 describing a check RM does not perform"
             );
             assert_ne!(s, 0x56, "NV_ERR_NOT_SUPPORTED is the unclaimed signature");
             assert_ne!(s, 0, "a refusal that answers NV_OK is not a refusal");
         }
         assert_ne!(
             BIND_UNKNOWN_ENGINE_STATUS, BIND_REFUSED_STATUS,
-            "★ the two refusals say different things — a bad PARAMETER versus an unroutable \
-             CHANNEL — and collapsing them throws away the only diagnosis the guest gets"
+            "★ the two refusals say different things — an engine this device does not have \
+             versus a channel that cannot be routed — and collapsing them throws away the \
+             only diagnosis the guest gets"
         );
+    }
+
+    /// ★★★ **The header is INCOMPLETE, and this test is the record of it.**
+    ///
+    /// `ctrla06fgpfifo.h:91-95` lists three statuses. The bind path produces a fourth —
+    /// `NV_ERR_OBJECT_NOT_FOUND` (`0x57`) from `kernel_fifo_gm107.c:736` — for the case this
+    /// port most needs to answer. A first cut made the documented list the acceptance gate
+    /// for refusals, which would have **rejected the true status and admitted only wrong
+    /// ones**.
+    ///
+    /// ⊘ The lesson is not "distrust headers". It is that a citation proves a claim is
+    /// *sourced*, never that the source is *complete* — the same shape as the C oracle's
+    /// empty rows, where a real row corroborated a false number.
+    #[test]
+    fn the_documented_status_list_is_a_strict_subset_of_what_the_code_produces() {
+        for d in BIND_DOCUMENTED_STATUSES {
+            assert!(
+                BIND_STATUSES_THE_CODE_PRODUCES.contains(d),
+                "{d:#x} is documented but no path produces it — that would make the header \
+                 wrong in the OTHER direction, which is a different finding and wants its own \
+                 citation"
+            );
+        }
+        assert!(
+            BIND_STATUSES_THE_CODE_PRODUCES.len() > BIND_DOCUMENTED_STATUSES.len(),
+            "★ if these are equal the header caught up with the code (or someone trimmed the \
+             code list to match the header, which is the failure this test exists to catch). \
+             Re-read kernel_fifo_gm107.c:736 before changing this"
+        );
+        assert!(
+            !BIND_DOCUMENTED_STATUSES.contains(&BIND_UNKNOWN_ENGINE_STATUS),
+            "the whole point: the status we answer for an absent engine is NOT in the \
+             header's list"
+        );
+    }
+
+    /// ★★★ **The collision.** Raw `0x13` is `NVDEC0` in `NV2080` space and `COPY10` in `RM`
+    /// space, so a bind naming a video decoder must never convert to a copy engine.
+    ///
+    /// ⊘ This is the test a raw integer comparison passes trivially and wrongly. The
+    /// identity ranges below it are what make such a comparison *look* right.
+    #[test]
+    fn the_two_engine_type_spaces_collide_and_the_conversion_does_not() {
+        // The ranges where the two spaces genuinely agree — and the reason a raw compare
+        // survives every obvious test.
+        assert_eq!(nv2080_to_rm_engine_type(ENGINE_TYPE_GRAPHICS), Some(1));
+        assert_eq!(nv2080_to_rm_engine_type(ENGINE_TYPE_COPY0), Some(9));
+        assert_eq!(
+            nv2080_to_rm_engine_type(11),
+            Some(11),
+            "COPY2, the measured one"
+        );
+        assert_eq!(
+            nv2080_to_rm_engine_type(0x12),
+            Some(0x12),
+            "COPY9, the last agreeing"
+        );
+
+        // ★ And the first ordinal past them, where they do not.
+        assert_eq!(
+            nv2080_to_rm_engine_type(0x13),
+            None,
+            "0x13 is NVDEC0 in the space this parameter is written in; RM_ENGINE_TYPE_COPY10 \
+             is also 0x13, so a raw compare against an RM-space table would bind a video \
+             decoder to the eleventh copy engine"
+        );
+        assert_eq!(
+            nv2080_to_rm_engine_type(0x34),
+            None,
+            "0x34 IS NV2080's COPY10 — refused because this port advertises no such row, not \
+             because the ordinal is meaningless"
+        );
+
+        // The one modelled row where the spaces disagree, converted rather than passed through.
+        assert_eq!(
+            nv2080_to_rm_engine_type(NV2080_ENGINE_TYPE_SW),
+            Some(RM_ENGINE_TYPE_SW)
+        );
+        assert_ne!(
+            NV2080_ENGINE_TYPE_SW, RM_ENGINE_TYPE_SW,
+            "★ 0x22 vs 0x2d — the cheapest proof these are different enums, and the reason \
+             ga10x.rs's SOFTWARE row carrying 0x2d confirms our tables are in RM space"
+        );
+
+        // Nothing bindable at either end of the space.
+        for dead in [0u32, 0x54, 0x2d, 0xffff, 0xffff_ffff] {
+            assert_eq!(
+                nv2080_to_rm_engine_type(dead),
+                None,
+                "{dead:#x} names no engine this device advertises"
+            );
+        }
     }
 
     /// The five host-FIFO semaphore methods are consecutive dwords starting at `0x5c`,
