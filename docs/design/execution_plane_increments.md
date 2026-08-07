@@ -2331,3 +2331,129 @@ mechanism.
 - ★★ **Fix the ledger before using it again**: a served-but-refused reply must be recorded, or
   the ledger must lose its role in rung selection. A gate that is structurally blind to the
   failures you have is worse than no gate, because it answers.
+
+## 14. E10 — the CPU branch of the CE decision tree. The `memmgrTestCeUtils` wall, dissected
+
+★ Status 2026-08-07: **DESIGN + PREREQUISITE MEASURED, no code landed, no boot spent.**
+Written before any edit because the increment spans six crates and turns on a design fork
+(where the CPU branch *executes*) that must be settled first. Every `[src]` below is a file
+this survey read; nothing here is `[measured]` on hardware.
+
+### 14.1 The wall, in the guest's own source
+
+`[measured]` boot `run_subdev_probe35_925b27b` at `0e2f3ae` dies at
+`bench_evidence/run_subdev_probe35_925b27b_dmesg.log`:
+
+```
+NVRM: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x65) returned from
+      memmgrMemSet(pMemoryManager, &vidSurface, 0, sizeof vidmemData, TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463
+NVRM: memmgrInitCeUtils(...) @ mem_mgr.c:526 → RmInitAdapter failed! (0x25:0x65:1249)
+```
+
+`[src]` `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/mem_mgr.c:408-478` (`memmgrTestCeUtils`):
+the guest allocates a **vidmem** (`ADDR_FBMEM`) surface and a **sysmem** surface, then:
+`memmgrMemSet(vid, 0, CE)` → `memmgrMemWrite(vid, 0xAABBCCDD, CPU)` →
+`memmgrMemWrite(sys, 0x11223345, CPU)` → `memmgrMemCopy(sys ← vid, CE)` →
+`memmgrMemRead(sys, CPU)` → `NV_ASSERT_TRUE(sysmemData == vidmemData)`. The `MemSet` never
+retires, so its finishPayload semaphore never advances and the guest times out at the first
+CE op. **The guest's own readback compare is the acceptance oracle** — no forged completion
+can satisfy it, because `memmgrMemRead` reads the real bytes the copy did or did not move.
+
+### 14.2 The CPU branch CAN serve it — but only in the SHELL, not the isolate
+
+Under the owner's CE decision tree, both operands are CPU-reachable:
+- the `MemSet` destination is `ADDR_FBMEM` = our **emulated framebuffer**, which lives in the
+  shell as `kayfabe_device::fbwin::SparseFb` (`plane.rs:1725` `fb_write`, installed
+  `kayfabe-qemu-raw/src/shim.rs:1664`) — a sparse `BTreeMap` byte store, CPU-reachable;
+- the `MemCopy` destination is `ADDR_SYSMEM` = **guest RAM**, reachable via
+  `kayfabe_vmm::Vmm::gpa_read`/`gpa_write` (`kayfabe-vmm/src/lib.rs:754`/`:762`), which the
+  shell already holds.
+
+★★★ **The design fork this increment settles.** §12.4 states *"the executor is the isolate in
+both cases."* That is **false for the CPU branch of the kernel-originated CE.** The isolate is
+a separate sandboxed process; it has **neither** `SparseFb` **nor** `Vmm`. Its
+`RmBackend::ce_copy(Ours)` therefore refuses `NOT_ON_THIS_RUNG`
+(`kayfabe-isolate-host/src/rm.rs:2935-2937`) and *could not do otherwise* — the doc at
+`rm.rs:2374-2398` already says the isolate's fabricated-aperture mapping "needs a GPU to run
+it against." ⇒ **the CPU branch executes in the shell**, against the two memory planes the
+shell owns. This does not contradict the owner's ruling — "whoever does the work releases the
+semaphore" — it *locates* the "whoever" by where the bytes live, which is exactly the ruling's
+own test. The isolate keeps the `HostCe` branch (operands in real device memory) unchanged.
+
+### 14.3 The residency question is unanswerable today — the phys-mode target is not decoded
+
+⚠ `Representability::executor` (`kayfabe-fwd/src/lib.rs:2939-2945`) keys on
+`binding.host.is_some()` — a proxy for residency, not residency. A fabricated FB page (binding,
+no host) falls to `Fabricated → Ours → NOT_ON_THIS_RUNG`; a sysmem binding with no host mapping
+falls the same way. Neither answer is "this is CPU-reachable, serve it in the shell."
+
+★ And for a **physical** CE operand — which is what CeUtils issues — the residency signal is
+carried by a method the GA10x codec **does not decode**. `[src]`
+`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:629-642, 1069-1082`: the CeUtils
+pushbuffer emits `SET_DST_PHYS_MODE`/`SET_SRC_PHYS_MODE` with
+`_TARGET_{LOCAL_FB, COHERENT_SYSMEM, NONCOHERENT_SYSMEM}` from
+`memdescGetAddressSpace(pMemDesc)`. `Ga10xPushbuffer::ce_launch`
+(`kayfabe-chips/src/ga10x.rs:1088-1114`) reads only the `LAUNCH_{DST,SRC}_PHYSICAL` bit
+(virtual vs physical) — it never latches the target, so FB-physical and sysmem-physical
+operands are **indistinguishable** in-tree, and their addresses can even collide numerically
+(the emulated FB aperture and guest GPAs are different number spaces). The target IS the
+disambiguator, and it is the fact `classify_ce`/`Representability` needs.
+
+`[src]` offsets/values, stable across `NVB0B5`/`NVC7B5` (`clc7b5.h:66-80`, `clb0b5.h:56-65`):
+`SET_SRC_PHYS_MODE = 0x260`, `SET_DST_PHYS_MODE = 0x264`, `TARGET` = bits `1:0`,
+`LOCAL_FB=0 / COHERENT_SYSMEM=1 / NONCOHERENT_SYSMEM=2 / PEERMEM=3`; register reset = 0 =
+`LOCAL_FB`.
+
+### 14.4 The three unwired stops (all `[src]`-confirmed) between here and the wall moving
+
+1. **The guest-kernel ring is never parsed.** `SharedDevice::{parse_pushbuffer, forward_ce,
+   submit_ring}` (`kayfabe-rt/src/device.rs:1437/1497/1535`) have **no production caller**; the
+   shim's doorbell path rings the host doorbell with an **empty working set** and never parses
+   (`kayfabe-qemu-raw/src/shim.rs:1490-1495`). The CeUtils channel (`Gpu::SYSTEM_PROC`, routed
+   at `gpu.rs:3306`) reaches `plan_doorbell` and is refused `NoVas(ChanId(1))` — it is a
+   **physical-mode** channel with `vas_pdb == None`, and `plan_doorbell` requires a VAS
+   (`lib.rs:1593-1609`). A physical CE copy needs no VAS; this refusal is the first stop.
+2. **`CeExecutor::Ours` / `CeSource::Constant` refuse on the real backend** (`rm.rs:2935-2940`),
+   and cannot be served there at all (14.2). They must be diverted to the shell before the
+   isolate.
+3. **There is no completion write-back tail.** `PushbufferOutcome::sem_releases`
+   (`lib.rs:2546`) is consumed by no crate; `SemRelease` is hashed into an opaque `OsEventRef`
+   and the address is discarded (`lib.rs:3513-3518`); the delivery tail
+   (`encode → gpa_write → IRQ`) is a comment, wired only in tests
+   (`kayfabe-rt/src/executor.rs:227`). The finishPayload semaphore the guest polls is written
+   **nowhere**. This is why the guest times out even when a copy could be performed.
+
+### 14.5 The increment, as ordered edits
+
+Following the owner's tree (translate → residency → executor → signal truthfully):
+
+- **E10a — decode the phys-mode target.** `kayfabe-abi/src/submit::ce`: add
+  `SET_SRC_PHYS_MODE`/`SET_DST_PHYS_MODE`/`PHYS_MODE_TARGET_*` constants. `kayfabe-arch`: add
+  `PhysTarget { LocalFb, CoherentSysmem, NonCoherentSysmem, Peer }` and carry `dst_target`/
+  `src_target` on `PushMethod::CeLaunchDma` (default `LocalFb` = reset, faithful to hardware).
+  `kayfabe-chips/src/ga10x.rs`: latch slots 6/7 in `ce_slot`, read them in `ce_launch`. Mock +
+  the 5 `CeLaunchDma` sites updated. **A pure decode test asserts LOCAL_FB vs SYSMEM off a
+  built pushbuffer — GPU-free, and the first thing to land.**
+- **E10b — residency, in the pure core.** Replace `Representability`'s host-proxy with a
+  residency answer over `(aperture | phys-mode-target, host.is_some())`: real-device-memory →
+  `HostCe`; emulated-FB (fabricated, or a `LOCAL_FB` physical operand) → CPU/**Fb**; guest-RAM
+  (sysmem binding, or a `SYSMEM` physical operand) → CPU/**GuestRam**; untracked → forward.
+  Carry the CPU plane so the executor knows which store to touch. `partition_ce` intersects as
+  today; a sub-copy is shell-executable only if **both** ends are CPU-reachable.
+- **E10c — the shell CPU executor**, `kayfabe-rt/src/cpu_ce_unsafe.rs` (named per
+  `l1_os_shell.md` §4.2.1's third construct — raw arithmetic over guest memory bypassing
+  lifetimes). Moves bytes between `SparseFb` and `Vmm` per the planned plane; memset/fill are
+  destination-only. Diverted from `forward_ce` before the isolate; `HostCe` spans still go to
+  the isolate. A fence between executors for overlapping regions (owner's ordering rule).
+- **E10d — signal truthfully.** After the bytes land, write the finishPayload semaphore to the
+  channel's own aperture where the guest polls it (the completion tail `executor.rs:227`
+  marks), and raise the channel's interrupt. This is the `sem_releases` consumer that does not
+  exist yet.
+- **E10e — the VAS-less physical channel.** `plan_doorbell`/`parse_pushbuffer` must accept a
+  `vas_pdb == None` channel whose CE operands are physical (no VAS needed); the `NoVas` refusal
+  is only correct for a *virtual* submission.
+
+### 14.6 Acceptance (unchanged from the owner's brief)
+
+`memmgrTestCeUtils`' own readback compare passes and the boot advances past `mem_mgr.c:526`.
+⊘ No rung is claimed until a boot the author produced shows it, per `only_live_boots_are_proof`.
