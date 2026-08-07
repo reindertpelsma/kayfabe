@@ -2539,3 +2539,60 @@ decoder path that yields the page-directory root as a `Pdb` (smaller — the rea
 `cpu_ce::execute_ours_spans` before `forward_ce`, then `write_completion`. ⚠ `write_completion`
 resolves the semaphore VA through the channel table, so it needs the same resolver as (a) —
 or a VAS-less variant if the finishPayload turns out to be physical too.
+
+### 14.8 ★★★ E10e is COHESIVE — item (1) is NOT independently landable (2026-08-08, `[src]`)
+
+`[src]`, a reading of the doorbell path at `c525a11`, not a boot — but a reading that changes
+what "ordered work" is allowed to *commit*, so it is recorded before anyone edits.
+
+**The finding: routing the VAS root into the CeUtils channel (item 1) WITHOUT the shim already
+driving parse→execute→completion (item c) does not advance the wall — it turns a loud, correct
+`NoVas` refusal into a SILENT NO-OP.** That is this repo's own forbidden shape
+(`mode2_forwarding_model.md`: never signal work that did not happen; `only_live_boots` §"a
+served-but-inert path is worse than a refusal"). The mechanism, each step `[src]`:
+
+1. `plan_doorbell` checks the isolate **before** the VAS: `missing_isolate` at
+   `crates/kayfabe-fwd/src/lib.rs:1629`, the `NoVas` refusal at `:1650`. The wall measured at
+   boot `run_probe35_349924b`, rev `349924b` (`bench_evidence/run_probe35_349924b_qemu.log`) is
+   `NoVas`, so SYSTEM_PROC's isolate already exists — the VAS is the *only* thing missing.
+2. Give the channel a VAS (item 1) and `plan_doorbell` passes `:1650`. The `#14` ring-gate then
+   runs over the shim's **empty** working set (`SharedDoorbell::ring` calls
+   `self.0.doorbell(DOORBELL_TARGET_GPU, token, &[])`, `crates/kayfabe-qemu-raw/src/shim.rs:1490`);
+   `VerbPlan::gated_doorbell` over an empty set produces no `UngatedVa`, so the gate is vacuous
+   and the plan is built (`lib.rs:1679`).
+3. `commit_doorbell` materializes + schedules + rings a host channel and returns `Ok`. For a
+   **physical-mode** CeUtils MemSet there is no host-side CE work behind that ring, so the
+   finishPayload never advances, the guest still times out at `mem_mgr.c:463` — but now with the
+   doorbell reporting **Served**, not Refused. The one instrument that currently says "we cannot
+   do this yet" goes quiet.
+
+⇒ **Corrected ordering.** The design may still be *built* in the sequence (1)→(a)→(b)→(c), but
+the first thing that may be **committed** is an increment in which the shim drives
+`parse_pushbuffer → execute_ours_spans → write_completion` off the doorbell — because only then
+does a channel-with-a-VAS produce a loud named refusal at the *next* stop (a ring-VA `Miss`, or
+the resolver's fault) instead of a silent success. Equivalently: if item 1 is landed first in
+isolation, `plan_doorbell` must be taught to keep refusing by name (e.g. a
+`FwdFault::CeUtilsExecutorUnwired`) until the executor is reachable — a scaffold refusal, which
+is a smell but still loud. The plan's own guard (⊘ do not relax `NoVas` before a real resolver)
+has a twin here: **do not grant the VAS before the executor, either** — both directions of this
+gap fail *silently* if opened alone, and silent is the one failure mode this project treats as
+worse than a stalled boot.
+
+**The two facts item 1 needs, now pinned so they are not re-derived** `[src]`: the client-arm
+`0x90f10106` control is issued with `rmCtrlParams.hObject = hVASpace`
+(`ogkm-580: gpu_vaspace.c:5174-5177`), so the VASpace it publishes is named by the RPC header's
+`hObject` — which `translate_control` currently **drops** (`crates/kayfabe-rmrpc/src/lib.rs:1256`).
+And `levels[0]` is the **root** page directory: `_gvaspacePopulatePDEentries` fills
+`levels[i].physAddress` / `.aperture` from `pdeInfo.levels[i]` top-down with
+`pageShift = virtAddrBitLo` (`ogkm-580: gpu_vaspace.c:5243-5251`), and on GA106 the levels are
+`47, 38, 29, 21`, so `levels[0].physAddress` is the PDB and `levels[0].aperture`
+(`GMMU_APERTURE_VIDEO` for GSP-managed page tables) says it lives in the emulated FB
+(`SparseFb`) — which is exactly the byte source `kayfabe_mmu::walker::translate` (already built)
+walks. ⚠ But the fact is discarded at the chain, not at the decoder: `0x90f10106` is served for
+its *reply* by `InitTablePolicy` (the FIRST chain link, `served_chain` in
+`crates/kayfabe-device/src/lib.rs:924`), which decodes + re-encodes and terminates the `find_map`
+chain, so `ObjectPolicy` (which holds the object model) never sees it and no `SetPageDir`-shaped
+event is produced. Item 1 is therefore *"observe the publication BEFORE the answering link and
+apply its root to the graph, while leaving the reply plane untouched"* — an observer that
+declines, seated ahead of `InitTablePolicy`, not a re-route of who answers (re-routing breaks
+`cap1b_differential` / `gvaspace_pdes`, which pin `InitTablePolicy` as the answerer).
