@@ -494,6 +494,30 @@ pub enum PhysTarget {
     Peer,
 }
 
+/// ★★★ **Where a CPU-executed copy-engine operand's bytes live** — the shell-side store a
+/// [`crate::PhysTarget`] or an unpublished binding's [`Aperture`] resolves to.
+///
+/// This is the residency answer the CPU branch of the CE decision tree turns on (E10b,
+/// `execution_plane_increments.md` §14): a copy the isolate cannot run because its operand is
+/// in memory the isolate deliberately does not hold. There are exactly two such stores, and
+/// they are different number spaces that can collide numerically — which is the whole reason
+/// [`crate::PhysTarget`] exists and a raw address is not enough:
+///
+/// - [`CpuPlane::Fb`] — the emulated framebuffer (`_TARGET_LOCAL_FB`, or a fabricated
+///   [`Aperture::Vidmem`] binding). Reached in the shell through its `SparseFb`.
+/// - [`CpuPlane::GuestRam`] — guest system memory (`_TARGET_{COHERENT,NONCOHERENT}_SYSMEM`,
+///   or a fabricated sysmem binding). Reached in the shell through the `Vmm`.
+///
+/// ⊘ Peer memory (`_TARGET_PEERMEM`) is neither, and has no `CpuPlane`: a physical operand
+/// naming it is refused by name rather than mistaken for one of these two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CpuPlane {
+    /// The emulated framebuffer — device-local storage we invented, held in the shell.
+    Fb,
+    /// Guest system memory — reached through the `Vmm`'s `gpa_read`/`gpa_write`.
+    GuestRam,
+}
+
 /// What a copy-engine command asks the engine to **do**, in core terms.
 ///
 /// The C reads this off `LAUNCH_DMA`'s flags as two booleans, `mscrub`

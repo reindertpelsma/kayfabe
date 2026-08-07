@@ -73,7 +73,7 @@
 //! (disjoint borrows, no shared lock).
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, RunlistId, VChid};
-use kayfabe_arch::{Aperture, PushRange};
+use kayfabe_arch::{Aperture, CpuPlane, PhysTarget, PushRange};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
@@ -276,6 +276,21 @@ pub enum FwdFault {
         dst: GpuVa,
         /// The request's declared length.
         len: u64,
+    },
+    /// ★★★ **E10b — a copy-engine operand lives in a PEER GPU's memory** and is therefore
+    /// neither host-representable in this port's model nor CPU-reachable by the shell.
+    ///
+    /// A physical operand carrying `SET_{SRC,DST}_PHYS_MODE.TARGET = _PEERMEM`
+    /// (`kayfabe_arch::PhysTarget::Peer`), or a fabricated binding whose aperture is
+    /// [`Aperture::Peer`]. The residency split gives every `CeExecutor::Ours` sub-copy a
+    /// defined [`kayfabe_arch::CpuPlane`] (the framebuffer or guest RAM) — a peer operand
+    /// has neither, so it is refused **by name** here rather than silently mistaken for a
+    /// framebuffer copy (`clc7b5.h:71`; `PhysTarget::Peer`'s own doc). Loud, never guessed:
+    /// modelling peer-to-peer DMA is a deliberate future decision, not something to fall
+    /// into through a defaulted plane.
+    CePeerOperand {
+        /// The operand's address (a physical FB/peer address or a resolved binding phys).
+        addr: u64,
     },
     /// The target proc has no `Vas` for this `(GpuId, PDB)` (data-plane routing miss).
     /// Carries its target: a `Pdb` is a per-GPU namespace (MG-3).
@@ -2960,6 +2975,19 @@ pub struct CeSpan {
     /// Where the source address lives — `None` for a scrub or a fill, which have no
     /// source operand (`C: :6320` "No src is set.").
     pub src_kind: Option<Representability>,
+    /// ★★★ **E10b — the CPU plane the destination operand's bytes live in**, `Some` exactly
+    /// when the destination is CPU-resident (the emulated framebuffer or guest RAM), `None`
+    /// when it is real device memory the isolate reaches or untracked. The shell CPU
+    /// executor reads it to choose which store to write; a `by == CeExecutor::Ours` sub-copy
+    /// whose destination plane is `None` is a straddle no single executor can run and the
+    /// executor refuses it rather than guessing a store.
+    pub dst_plane: Option<CpuPlane>,
+    /// ★★★ **E10b — the CPU plane the source operand's bytes live in.** `None` for a
+    /// scrub/fill (no source operand), for a real-device-memory source, or an untracked one.
+    /// Distinct from [`Self::dst_plane`] because the two ends can differ —
+    /// `memmgrTestCeUtils`' `sys ← vid` copy reads the framebuffer and writes guest RAM in
+    /// one instruction.
+    pub src_plane: Option<CpuPlane>,
 }
 
 /// Upper bound on the sub-copies ONE copy-engine request may partition into.
@@ -2980,36 +3008,99 @@ pub const MAX_CE_SPANS: usize = 4096;
 /// truncation, for the same reason.
 pub const MAX_CE_SPANS_PER_PARSE: usize = 1 << 16;
 
-/// Classify ONE already-resolved sub-range of an operand.
-fn representability_of(binding: Option<&Binding>) -> Representability {
-    match binding {
-        Some(b) if b.host.is_some() => Representability::HostBacked,
-        Some(_) => Representability::Fabricated,
-        None => Representability::Untracked,
+/// ★★★ **E10b — the CPU plane a `_TARGET` names**, or a refusal for peer memory.
+///
+/// The residency signal a *physical* operand carries (`clc7b5.h:66-80`), turned into the
+/// shell-side store that holds its bytes: `_LOCAL_FB` → the emulated framebuffer,
+/// `_{COHERENT,NONCOHERENT}_SYSMEM` → guest RAM. `_PEERMEM` has neither and is refused by
+/// name — see [`FwdFault::CePeerOperand`].
+fn cpu_plane_of_target(target: PhysTarget, addr: u64) -> Result<CpuPlane, FwdFault> {
+    match target {
+        PhysTarget::LocalFb => Ok(CpuPlane::Fb),
+        PhysTarget::CoherentSysmem | PhysTarget::NonCoherentSysmem => Ok(CpuPlane::GuestRam),
+        PhysTarget::Peer => Err(FwdFault::CePeerOperand { addr }),
     }
 }
 
-/// The partition of one operand's range, as `(start, len, kind)` runs.
+/// ★★★ **E10b — the CPU plane a fabricated binding's aperture names**, or a refusal.
+///
+/// The virtual-operand analogue of [`cpu_plane_of_target`]: a *declared-but-unpublished*
+/// binding (`host = None`) lives in the store its aperture names — a `Vidmem` binding is a
+/// page of the emulated framebuffer (`#13`'s page tables live here), a sysmem binding is
+/// guest RAM (`Binding::phys` for sysmem *is* a guest-physical address). A `Peer` aperture
+/// has no CPU plane and is refused by name.
+fn cpu_plane_of_aperture(aperture: Aperture, addr: u64) -> Result<CpuPlane, FwdFault> {
+    match aperture {
+        Aperture::Vidmem => Ok(CpuPlane::Fb),
+        Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => Ok(CpuPlane::GuestRam),
+        Aperture::Peer => Err(FwdFault::CePeerOperand { addr }),
+    }
+}
+
+/// Classify ONE already-resolved sub-range of an operand — its representability, and (when
+/// it is ours to execute) the CPU plane its bytes live in.
+///
+/// ★ E10b carries the plane beside the representability rather than deriving it later,
+/// because the two `Ours` representabilities live in *different* stores (a fabricated
+/// vidmem page in the framebuffer, a fabricated sysmem page in guest RAM) and the shell
+/// executor must know which to touch. `HostBacked`/`Untracked` are not ours to run, so they
+/// carry no plane.
+fn representability_of(
+    binding: Option<&Binding>,
+    addr: u64,
+) -> Result<(Representability, Option<CpuPlane>), FwdFault> {
+    match binding {
+        Some(b) if b.host.is_some() => Ok((Representability::HostBacked, None)),
+        Some(b) => {
+            let plane = cpu_plane_of_aperture(b.aperture, addr)?;
+            Ok((Representability::Fabricated, Some(plane)))
+        }
+        None => Ok((Representability::Untracked, None)),
+    }
+}
+
+/// One resolved run of an operand's range: `(start, len, representability, cpu-plane)` —
+/// the plane present exactly when the run's `representability.executor() == CeExecutor::Ours`.
+type OperandRun = (u64, u64, Representability, Option<CpuPlane>);
+
+/// The partition of one operand's range, as [`OperandRun`]s — the `plane`
+/// present exactly when `kind.executor() == CeExecutor::Ours`.
 ///
 /// A physical operand is ONE run of [`Representability::PhysicalOperand`]: there is
-/// nothing to look up, and no sub-range of it could be anything else.
+/// nothing to look up, and no sub-range of it could be anything else. ★ Its plane comes
+/// from the operand's `_TARGET` ([`PhysTarget`]) — the E10b residency signal — so a
+/// `_LOCAL_FB` physical copy and a `_SYSMEM` physical copy are told apart even when their
+/// addresses collide numerically.
+///
+/// # Errors
+/// [`FwdFault::CePeerOperand`] if any run resolves into peer memory.
 fn operand_runs(
     table: Option<&AddressTable>,
     addr: GpuVa,
     is_virtual: bool,
+    target: PhysTarget,
     len: u64,
-) -> Vec<(u64, u64, Representability)> {
+) -> Result<Vec<OperandRun>, FwdFault> {
     if len == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     if !is_virtual {
-        return vec![(addr.0, len, Representability::PhysicalOperand)];
+        let plane = cpu_plane_of_target(target, addr.0)?;
+        return Ok(vec![(
+            addr.0,
+            len,
+            Representability::PhysicalOperand,
+            Some(plane),
+        )]);
     }
     match table {
         Some(t) => t
             .spans(addr, len)
             .into_iter()
-            .map(|(s, l, b)| (s, l, representability_of(b.as_ref())))
+            .map(|(s, l, b)| {
+                let (kind, plane) = representability_of(b.as_ref(), s)?;
+                Ok((s, l, kind, plane))
+            })
             .collect(),
         // No table for this channel's VAS at all: nothing is tracked, so nothing is
         // ours. The same clipping rule the table's own range query uses.
@@ -3017,9 +3108,9 @@ fn operand_runs(
             let end = (u128::from(addr.0) + u128::from(len)).min(1u128 << 64);
             let eff = (end - u128::from(addr.0)) as u64;
             if eff == 0 {
-                Vec::new()
+                Ok(Vec::new())
             } else {
-                vec![(addr.0, eff, Representability::Untracked)]
+                Ok(vec![(addr.0, eff, Representability::Untracked, None)])
             }
         }
     }
@@ -3046,21 +3137,29 @@ fn operand_runs(
 /// destination governs the effective length, and the source is clipped to match, so a
 /// copy is never issued reading past where its destination stops.
 ///
+/// ★ E10b threads each operand's `_TARGET` ([`PhysTarget`], meaningful only for a physical
+/// operand) so a `by == CeExecutor::Ours` sub-copy carries the CPU plane each end lives in
+/// — the shell executor's "which store" answer, computed here where the residency signal is.
+///
 /// # Errors
-/// [`FwdFault::CeTooFragmented`] if the partition exceeds [`MAX_CE_SPANS`].
+/// [`FwdFault::CeTooFragmented`] if the partition exceeds [`MAX_CE_SPANS`];
+/// [`FwdFault::CePeerOperand`] if an operand resolves into peer memory.
+#[allow(clippy::too_many_arguments)]
 pub fn partition_ce(
     dst_table: Option<&AddressTable>,
     dst: GpuVa,
     dst_is_virtual: bool,
+    dst_target: PhysTarget,
     src: GpuVa,
     src_is_virtual: bool,
+    src_target: PhysTarget,
     len: u64,
     work: kayfabe_arch::CeWork,
 ) -> Result<Vec<CeSpan>, FwdFault> {
-    let dst_runs = operand_runs(dst_table, dst, dst_is_virtual, len);
+    let dst_runs = operand_runs(dst_table, dst, dst_is_virtual, dst_target, len)?;
     // The destination decides how much of the request exists at all (a clipped
     // destination clips the whole copy).
-    let eff: u64 = dst_runs.iter().map(|(_, l, _)| *l).sum();
+    let eff: u64 = dst_runs.iter().map(|(_, l, _, _)| *l).sum();
     if eff == 0 {
         return Ok(Vec::new());
     }
@@ -3068,7 +3167,7 @@ pub fn partition_ce(
     // intersect — its representability is a property of its destination alone.
     let has_src = matches!(work, kayfabe_arch::CeWork::Copy);
     let src_runs = if has_src {
-        operand_runs(dst_table, src, src_is_virtual, eff)
+        operand_runs(dst_table, src, src_is_virtual, src_target, eff)?
     } else {
         Vec::new()
     };
@@ -3085,15 +3184,15 @@ pub fn partition_ce(
     let mut si = 0usize;
     let mut s_consumed: u64 = 0;
     while off < eff {
-        let (_, d_len, d_kind) = dst_runs[di];
+        let (_, d_len, d_kind, d_plane) = dst_runs[di];
         let d_left = d_len - d_consumed;
-        let (s_left, s_kind) = if !has_src {
-            (u64::MAX, None)
+        let (s_left, s_kind, s_plane) = if !has_src {
+            (u64::MAX, None, None)
         } else if si < src_runs.len() {
-            let (_, s_len, s_kind) = src_runs[si];
-            (s_len - s_consumed, Some(s_kind))
+            let (_, s_len, s_kind, s_plane) = src_runs[si];
+            (s_len - s_consumed, Some(s_kind), s_plane)
         } else {
-            (eff - off, Some(Representability::Untracked))
+            (eff - off, Some(Representability::Untracked), None)
         };
         let take = d_left.min(s_left).min(eff - off);
         debug_assert!(take > 0, "a partition step must consume bytes");
@@ -3128,6 +3227,10 @@ pub fn partition_ce(
             },
             dst_kind: d_kind,
             src_kind: s_kind,
+            // ★ E10b: each operand's own plane rides along, so the shell knows which store
+            // to touch per end. A scrub/fill or a HostCe/untracked end carries `None`.
+            dst_plane: d_plane,
+            src_plane: s_plane,
         });
         off += take;
         d_consumed += take;
@@ -3153,6 +3256,8 @@ pub fn partition_ce(
                 if prev.sub.by == s.sub.by
                     && prev.dst_kind == s.dst_kind
                     && prev.src_kind == s.src_kind
+                    && prev.dst_plane == s.dst_plane
+                    && prev.src_plane == s.src_plane
                     && prev.sub.dst.wrapping_add(prev.sub.len) == s.sub.dst =>
             {
                 prev.sub.len += s.sub.len;
@@ -3453,11 +3558,12 @@ pub fn apply_pushbuffer(
                 len,
                 dst_is_virtual,
                 src_is_virtual,
-                // ★ The phys-mode targets are decoded (E10a) but not yet consumed here:
-                // the residency split that reads them is E10b. Ignored, not dropped —
-                // when E10b lands it names these instead of re-deriving them.
-                dst_target: _,
-                src_target: _,
+                // ★ E10b consumes the phys-mode targets E10a decoded: for a physical
+                // operand they are the residency signal `partition_ce` turns into a CPU
+                // plane. For a virtual operand they are carried but unread (the MMU, not
+                // this register, answers residency there).
+                dst_target,
+                src_target,
                 work,
             } => {
                 // ★★★ DECISION 1 of 2 — EXECUTE.
@@ -3478,8 +3584,10 @@ pub fn apply_pushbuffer(
                     dst_table,
                     dst,
                     dst_is_virtual,
+                    dst_target,
                     src,
                     src_is_virtual,
+                    src_target,
                     len,
                     work,
                 )?;

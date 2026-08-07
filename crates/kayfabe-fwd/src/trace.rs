@@ -49,6 +49,7 @@ impl Faulted for FwdFault {
             FwdFault::CeTooFragmented { .. } => FaultTag("FwdFault::CeTooFragmented"),
             FwdFault::UnknownPdb { .. } => FaultTag("FwdFault::UnknownPdb"),
             FwdFault::NoTarget { .. } => FaultTag("FwdFault::NoTarget"),
+            FwdFault::CePeerOperand { .. } => FaultTag("FwdFault::CePeerOperand"),
             // ★ Delegated, so an address fault's tag names WHICH address fault. A miss
             // and an overlap are different findings, and `mode2_address_table.md`'s whole
             // discipline is that a miss is loud and specific.

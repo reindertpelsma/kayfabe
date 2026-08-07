@@ -26,6 +26,8 @@
 
 use kayfabe_arch::Aperture;
 use kayfabe_arch::CeWork;
+use kayfabe_arch::CpuPlane;
+use kayfabe_arch::PhysTarget;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
@@ -40,6 +42,34 @@ use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 const GPU: GpuId = GpuId::ZERO;
 const A_PDB: Pdb = Pdb(0x3401_000);
+
+/// ★ Thin wrapper over [`partition_ce`] defaulting both phys-mode targets to the register
+/// **reset value** (`PhysTarget::LocalFb`, `clc7b5.h:68`) — the value every operand in this
+/// file's virtual-address and framebuffer-physical cases carried before E10b decoded the
+/// field. The residency-signal cases that need a real `_SYSMEM` target call `partition_ce`
+/// directly (the `ce_phys_mode_*` residency tests).
+#[allow(clippy::too_many_arguments)]
+fn pc(
+    dst_table: Option<&AddressTable>,
+    dst: GpuVa,
+    dst_is_virtual: bool,
+    src: GpuVa,
+    src_is_virtual: bool,
+    len: u64,
+    work: CeWork,
+) -> Result<Vec<CeSpan>, FwdFault> {
+    partition_ce(
+        dst_table,
+        dst,
+        dst_is_virtual,
+        PhysTarget::LocalFb,
+        src,
+        src_is_virtual,
+        PhysTarget::LocalFb,
+        len,
+        work,
+    )
+}
 
 /// ★ A deliberately **non-uniform** fill pattern. `0` and `u32::MAX` are byte-uniform,
 /// so a fill using either cannot observe a phase error at all — which is exactly the
@@ -194,7 +224,7 @@ fn the_degenerate_partitions_are_clean_and_never_produce_an_empty_sub_copy() {
 
     // Zero length: no sub-copies at all. An empty request is empty, not a fault.
     assert_eq!(
-        partition_ce(
+        pc(
             Some(&t),
             GpuVa(base),
             true,
@@ -209,7 +239,7 @@ fn the_degenerate_partitions_are_clean_and_never_produce_an_empty_sub_copy() {
 
     // Wholly inside the real run: ONE span, host CE. The fabricated part is empty and
     // the split degenerates to the whole-copy path rather than emitting a 0-length peer.
-    let all_real = partition_ce(
+    let all_real = pc(
         Some(&t),
         GpuVa(base),
         true,
@@ -224,7 +254,7 @@ fn the_degenerate_partitions_are_clean_and_never_produce_an_empty_sub_copy() {
     assert_eq!(all_real[0].sub.by, CeExecutor::HostCe);
 
     // Wholly inside the fabricated run: ONE span, ours. The real part is empty.
-    let all_fake = partition_ce(
+    let all_fake = pc(
         Some(&t),
         GpuVa(base + 0x1000),
         true,
@@ -239,7 +269,7 @@ fn the_degenerate_partitions_are_clean_and_never_produce_an_empty_sub_copy() {
     assert_eq!(all_fake[0].sub.by, CeExecutor::Ours);
 
     // Ending EXACTLY on the boundary: still one span, no empty tail.
-    let to_boundary = partition_ce(
+    let to_boundary = pc(
         Some(&t),
         GpuVa(base + 0x800),
         true,
@@ -253,7 +283,7 @@ fn the_degenerate_partitions_are_clean_and_never_produce_an_empty_sub_copy() {
     assert_eq!(to_boundary[0].sub.len, 0x800);
 
     // One byte either side of the boundary: two spans of one byte each.
-    let hair = partition_ce(
+    let hair = pc(
         Some(&t),
         GpuVa(base + 0xfff),
         true,
@@ -296,7 +326,7 @@ fn a_wrapping_request_is_clipped_at_the_top_and_never_reaches_address_zero() {
     .expect("bind at 0");
 
     let start = u64::MAX - 0x0f;
-    let spans = partition_ce(
+    let spans = pc(
         Some(&t),
         GpuVa(start),
         true,
@@ -327,7 +357,7 @@ fn a_request_fragmented_past_the_bound_is_refused_by_name_and_never_truncated() 
     let t = table_of(base, &runs);
     let len = 0x1000 * (MAX_CE_SPANS as u64 + 1);
     assert_eq!(
-        partition_ce(
+        pc(
             Some(&t),
             GpuVa(base),
             true,
@@ -533,7 +563,7 @@ fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issue
                     }
                     let dst = base + off;
                     let src = GpuVa(src_base + off);
-                    let spans = partition_ce(Some(&t), GpuVa(dst), true, src, true, len, work)
+                    let spans = pc(Some(&t), GpuVa(dst), true, src, true, len, work)
                         .expect("partitions");
                     assert_total(
                         &spans,
@@ -563,6 +593,8 @@ fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issue
                             dst_kind: Representability::HostBacked,
                             src_kind: matches!(work, CeWork::Copy)
                                 .then_some(Representability::HostBacked),
+                            dst_plane: None,
+                            src_plane: None,
                         }];
                         let whole_image = image_after(&mut worker, vas, &rec, &whole, dst, len);
                         assert_same_bytes(
@@ -630,7 +662,7 @@ fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
         let dst = base + off;
         let src = GpuVa(src_base + off);
         let spans =
-            partition_ce(Some(&t), GpuVa(dst), true, src, true, len, work).expect("partitions");
+            pc(Some(&t), GpuVa(dst), true, src, true, len, work).expect("partitions");
         assert_total(
             &spans,
             dst,
@@ -654,6 +686,8 @@ fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
             },
             dst_kind: Representability::Fabricated,
             src_kind: matches!(work, CeWork::Copy).then_some(Representability::Fabricated),
+            dst_plane: Some(CpuPlane::Fb),
+            src_plane: matches!(work, CeWork::Copy).then_some(CpuPlane::Fb),
         }];
         let whole_image = image_after(&mut worker, vas, &rec, &whole, dst, len);
         assert_same_bytes(
@@ -706,7 +740,7 @@ fn the_source_operand_splits_the_request_too_and_a_fabricated_source_is_never_ha
     )
     .expect("fabricated source half");
 
-    let spans = partition_ce(
+    let spans = pc(
         Some(&t),
         GpuVa(base),
         true,
@@ -764,7 +798,7 @@ fn c_execute_predicate_and_the_representability_ruling_agree_except_on_two_named
     let fake = table_of(base, &[(0x1000, Kind::Fake)]);
 
     let ruling = |t: &AddressTable, work: CeWork| -> CeExecutor {
-        let spans = partition_ce(Some(t), GpuVa(base), true, GpuVa(base), true, 0x1000, work)
+        let spans = pc(Some(t), GpuVa(base), true, GpuVa(base), true, 0x1000, work)
             .expect("partitions");
         assert_eq!(spans.len(), 1, "a uniform range must not split");
         spans[0].sub.by
@@ -835,7 +869,7 @@ fn c_execute_predicate_and_the_representability_ruling_agree_except_on_two_named
 
     // A PHYSICAL operand is ours under both, and under the ruling it is ours *by
     // construction* — there is no lookup, because no GPU VA denotes it.
-    let phys = partition_ce(
+    let phys = pc(
         Some(&real),
         GpuVa(base),
         false,
@@ -852,6 +886,178 @@ fn c_execute_predicate_and_the_representability_ruling_agree_except_on_two_named
     assert_eq!(
         ce_executor_c(CeWork::Scrub, ChannelOrigin::User, true, false),
         CeExecutor::Ours
+    );
+}
+
+// =====================================================================================
+// ★★★ E10b — THE RESIDENCY SPLIT. A physical operand's `_TARGET` becomes the CPU plane
+// the shell executor touches, and two operands whose ADDRESSES COLLIDE are told apart.
+// =====================================================================================
+
+/// ★★★ `memmgrTestCeUtils`' `sys ← vid` copy in one instruction: the source is
+/// `_TARGET_LOCAL_FB` (the emulated framebuffer) and the destination is
+/// `_TARGET_COHERENT_SYSMEM` (guest RAM). One span, both ends `Ours`, and the two ends carry
+/// **different** CPU planes — which is the fact the shell executor turns on.
+#[test]
+fn a_physical_sys_from_vid_copy_carries_the_two_operands_distinct_cpu_planes() {
+    // Deliberately IDENTICAL numeric addresses on both ends: the emulated FB aperture and
+    // guest GPAs are different number spaces, so a copy whose src and dst are the same
+    // number is legal and its two planes must STILL come out different. Nothing but the
+    // `_TARGET` disambiguates them.
+    let addr = GpuVa(0x10_0000);
+    let spans = partition_ce(
+        None, // physical operands consult no table
+        addr,
+        false, // dst physical
+        PhysTarget::CoherentSysmem,
+        addr,
+        false, // src physical
+        PhysTarget::LocalFb,
+        0x1000,
+        CeWork::Copy,
+    )
+    .expect("a physical copy partitions");
+    assert_eq!(spans.len(), 1, "no table, no fragmentation: one span");
+    let s = spans[0];
+    assert_eq!(s.sub.by, CeExecutor::Ours, "a physical copy is never hardware's");
+    assert_eq!(
+        (s.dst_kind, s.src_kind),
+        (
+            Representability::PhysicalOperand,
+            Some(Representability::PhysicalOperand)
+        )
+    );
+    assert_eq!(
+        s.dst_plane,
+        Some(CpuPlane::GuestRam),
+        "the SYSMEM destination lands in guest RAM — the plane the shell must WRITE"
+    );
+    assert_eq!(
+        s.src_plane,
+        Some(CpuPlane::Fb),
+        "the LOCAL_FB source is read from the emulated framebuffer, at the SAME number"
+    );
+}
+
+/// ⊘ The disambiguation is NOT vacuous: swap the two targets and the two planes swap with
+/// them. A decode that answered a constant would pass the test above and fail this one.
+#[test]
+fn swapping_the_targets_swaps_the_planes_the_address_is_not_consulted() {
+    let addr = GpuVa(0x20_0000);
+    let spans = partition_ce(
+        None,
+        addr,
+        false,
+        PhysTarget::LocalFb, // dst now FB
+        addr,
+        false,
+        PhysTarget::CoherentSysmem, // src now sysmem
+        0x800,
+        CeWork::Copy,
+    )
+    .expect("partitions");
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0].dst_plane, Some(CpuPlane::Fb));
+    assert_eq!(spans[0].src_plane, Some(CpuPlane::GuestRam));
+}
+
+/// A physical operand naming PEER memory is refused **by name** — it has no CPU plane and
+/// is not host-representable in this model. ⊘ Not defaulted to a framebuffer copy.
+#[test]
+fn a_peer_physical_operand_is_refused_by_name_never_mistaken_for_fb() {
+    let err = partition_ce(
+        None,
+        GpuVa(0x4000),
+        false,
+        PhysTarget::Peer,
+        GpuVa(0),
+        true,
+        PhysTarget::LocalFb,
+        0x1000,
+        CeWork::Scrub,
+    )
+    .expect_err("a peer operand must refuse");
+    assert!(
+        matches!(err, FwdFault::CePeerOperand { addr } if addr == 0x4000),
+        "the peer operand is named, not folded: got {err:?}"
+    );
+}
+
+/// A `NONCOHERENT_SYSMEM` physical operand is guest RAM too — the coherence bit does not
+/// change WHICH store, only how the real engine would order it (a distinction the CPU
+/// executor does not have and does not need).
+#[test]
+fn noncoherent_sysmem_is_guest_ram_like_coherent() {
+    let spans = partition_ce(
+        None,
+        GpuVa(0x8000),
+        false,
+        PhysTarget::NonCoherentSysmem,
+        GpuVa(0),
+        true,
+        PhysTarget::LocalFb,
+        0x1000,
+        CeWork::Scrub,
+    )
+    .expect("partitions");
+    assert_eq!(spans[0].dst_plane, Some(CpuPlane::GuestRam));
+}
+
+/// ★ A FABRICATED VIRTUAL operand's plane comes from its binding's APERTURE, not from a
+/// phys-mode target (which a virtual operand does not consult): a vidmem binding is the
+/// framebuffer, a sysmem binding is guest RAM. This is the #13 page-table-alias case — the
+/// kernel's copy-engine utility maps FB into its own VAS as a vidmem binding.
+#[test]
+fn a_fabricated_virtual_operand_takes_its_plane_from_the_aperture() {
+    let base = 0x100_0000u64;
+    // A table with a vidmem-fabricated run and a sysmem-fabricated run, back to back.
+    let mut t = AddressTable::new();
+    t.bind(
+        A_PDB,
+        GpuVa(base),
+        0x1000,
+        Binding {
+            phys: 0xDEAD_0000,
+            aperture: Aperture::Vidmem,
+            host: None,
+        },
+    )
+    .expect("vidmem bind");
+    t.bind(
+        A_PDB,
+        GpuVa(base + 0x1000),
+        0x1000,
+        Binding {
+            phys: 0xBEEF_0000,
+            aperture: Aperture::SysmemCoherent,
+            host: None,
+        },
+    )
+    .expect("sysmem bind");
+    // A scrub across BOTH runs: the destination alone decides, and the two runs must carry
+    // different planes (Fb then GuestRam) even though the target arg is the same LOCAL_FB.
+    let spans = partition_ce(
+        Some(&t),
+        GpuVa(base),
+        true,
+        PhysTarget::LocalFb,
+        GpuVa(0),
+        true,
+        PhysTarget::LocalFb,
+        0x2000,
+        CeWork::Scrub,
+    )
+    .expect("partitions");
+    assert_eq!(spans.len(), 2, "the aperture boundary splits the scrub");
+    assert_eq!(spans[0].dst_plane, Some(CpuPlane::Fb), "vidmem run → framebuffer");
+    assert_eq!(
+        spans[1].dst_plane,
+        Some(CpuPlane::GuestRam),
+        "sysmem run → guest RAM"
+    );
+    assert!(
+        spans.iter().all(|s| s.sub.by == CeExecutor::Ours),
+        "both fabricated runs are ours"
     );
 }
 
@@ -907,7 +1113,7 @@ fn fabricated_vram_in_a_userspace_va_becomes_representable_by_being_backed() {
 
     let before = {
         let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
-        partition_ce(Some(t), va, true, GpuVa(0), true, 0x2000, CeWork::Scrub).expect("partitions")
+        pc(Some(t), va, true, GpuVa(0), true, 0x2000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
         before
@@ -940,7 +1146,7 @@ fn fabricated_vram_in_a_userspace_va_becomes_representable_by_being_backed() {
 
     let after = {
         let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
-        partition_ce(Some(t), va, true, GpuVa(0), true, 0x2000, CeWork::Scrub).expect("partitions")
+        pc(Some(t), va, true, GpuVa(0), true, 0x2000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
         after

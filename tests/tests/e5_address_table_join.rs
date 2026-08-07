@@ -78,7 +78,7 @@
 #![allow(clippy::unusual_byte_groupings)]
 
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
-use kayfabe_arch::{Aperture, Arch, CeWork, GmmuFmt};
+use kayfabe_arch::{Aperture, Arch, CeWork, GmmuFmt, PhysTarget};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::promote::{CtxPromotion, PromoteDeclined, PromotedRange};
@@ -125,6 +125,32 @@ const LEAF_PHYS: u64 = 0xF000_0000;
 const CTX_VA: GpuVa = GpuVa(0x2_0010_0000);
 const CTX_LEN: u64 = 0x2_0000;
 const CTX_PHYS: u64 = 0x8_0000_0000;
+
+/// ★ Thin wrapper over [`partition_ce`] defaulting both phys-mode targets to the register
+/// reset (`PhysTarget::LocalFb`) — every operand in this file is virtual, so the target is
+/// carried-but-unread. E10b's residency-signal decode is exercised in `ce_representability_split`.
+#[allow(clippy::too_many_arguments)]
+fn pc(
+    dst_table: Option<&kayfabe_mmu::AddressTable>,
+    dst: GpuVa,
+    dst_is_virtual: bool,
+    src: GpuVa,
+    src_is_virtual: bool,
+    len: u64,
+    work: CeWork,
+) -> Result<Vec<kayfabe_fwd::CeSpan>, kayfabe_fwd::FwdFault> {
+    partition_ce(
+        dst_table,
+        dst,
+        dst_is_virtual,
+        PhysTarget::LocalFb,
+        src,
+        src_is_virtual,
+        PhysTarget::LocalFb,
+        len,
+        work,
+    )
+}
 
 /// A VA nothing ever binds. **The control.** Deliberately far from every range above and
 /// from the pushbuffer's own mapping, so "it faulted" cannot be an accident of adjacency.
@@ -405,7 +431,7 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
     );
 
     // ---- ACCEPTANCE (b): the copy's operands are FOUND, both ends.
-    let spans = partition_ce(
+    let spans = pc(
         Some(table),
         GpuVa(CTX_VA.0 + 0x1000),
         true,
@@ -736,7 +762,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
 
     let before = {
         let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
-        partition_ce(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub)
+        pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub)
             .expect("partitions")
     };
     assert_eq!(
@@ -774,7 +800,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
 
     let after = {
         let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
-        partition_ce(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub)
+        pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub)
             .expect("partitions")
     };
     assert_eq!(
