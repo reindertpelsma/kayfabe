@@ -5235,3 +5235,181 @@ with a different id.
 | `ChipProfile::smc_mode`, typed; `WantedTable::InternalGpuGetSmcMode`; served universe **25 → 26**, attributed | `kayfabe-device` |
 | 5 integration tests over a `0xAA`-poisoned request | `tests/internal_gpu_get_smc_mode.rs` |
 | the two bisect captures, annotated with their boot tags and stamps | `traces/real_ga106/gpuinfo_bisect_guest_gis1_e6ed6bc.txt`, `cuinit_bisect_guest_w1429_49b182a.txt` |
+
+### 14.30 ★★★★ `BUS_GET_INFO_V2` SERVED — and its value is the first this port DERIVES, because the oracle MOVES
+
+#### ⊘⊘ First, the refutation of the framing I was handed — and it is mine as much as my predecessor's
+
+§14.29 closed with a specification that was right to stop and wrong in two of its
+particulars, and I carried both for the first hour:
+
+> *"`[unmeasured]` **What `0x2d` must carry.** `0x03003020` is what one part answered."*
+
+★ **`0x03003020` is not what any part answered.** The reply bytes in
+`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:46` are `2d000000 00203000`, which is
+index `0x2d` and data **`0x00302000`**. The published word was the same bytes re-grouped one
+boundary off — and it **decodes plausibly** (`GEN=gen4` instead of `gen3`), which is exactly
+why reading it never caught it. `[measured]` R22 replays that six-entry request on a real
+GA106 and reproduces the whole reply, all six entries byte for byte.
+
+⚠ Worth naming as a class: **a mis-transcription that still decodes is not a typo, it is a
+second oracle.** Nothing about `0x03003020` looks wrong; it looks like a Gen4 part. The only
+thing that separates it from the truth is asking the hardware again.
+
+⊘ And the second particular: §14.29 said the next rung was *"an `rmladder` sweep … before any
+value is written down."* Correct, and **a sweep alone could not have answered it.** The idle
+sweep returned **sixteen identical words** — which reads as *"constant, safe to tabulate"* and
+is worth nothing, because an idle PCIe link is a constant link. The measurement below only
+exists because the link was made to move.
+
+#### `[measured 2026-08-08, vh, RTX 3060 (GA106) `GPU-d0913685`, driver 580.159.04 Open, rev `4e79a14`]`
+
+R22 (`rmladder --bus-info-sweep`) asks all 52 `BUS_GET_INFO_V2` indices one call each, replays
+libcuda's own two requests byte for byte, and then reads `0x2d` sixteen times. Run twice: once
+with the link idle, once with `scripts/rpctrace/pcie_link_load.c` moving 11.2 GiB/s across it.
+
+| link | `current_link_speed` | `nvidia-smi gen.current` | `0x2d` | `0x03` |
+|---|---|---|---|---|
+| idle | 2.5 GT/s | 1 | `0x00302000` (×16, 1 distinct) | `0x00453d03` |
+| loaded | 8.0 GT/s | 3 | ★ **`0x00322000`** (×16, 1 distinct) | `0x00454d03` |
+
+The delta is `0x0002_0000` — bits 19:16, `CURR_LEVEL`, `GEN1 → GEN3`. **The same physical
+part, minutes apart, answers two different words.** Evidence:
+`traces/real_ga106/rmladder_r22_businfo_{sweep,loaded}_real_ga106.txt`.
+
+#### ★★★ THE ANSWER TO §14.29's QUESTION: the word holds THREE generations and only one is the die's
+
+Decoded with `NV2080_CTRL_BUS_INFO_PCIE_LINK_CAP_*` (`ogkm-580: ctrl2080bus.h:355-390`) and
+checked against `nvidia-smi` on the same box in the same second — three fields, three
+different numbers, three different owners:
+
+| field | bits | value | `nvidia-smi` | owner |
+|---|---|---|---|---|
+| `GPU_GEN` | 23:20 | `gen4` | `pcie.link.gen.gpumax = 4` | ★ **the die** |
+| `GEN` | 15:12 | `gen3` | `pcie.link.gen.max = 3` | **the slot** (this box's root port is 8 GT/s) |
+| `CURR_LEVEL` | 19:16 | `gen1`→`gen3` | `pcie.link.gen.current = 1`→`3` | **the live link** |
+
+⇒ **No chip-family row may state this word**, and that is now measured rather than argued.
+`0x00302000` in a `GA106` row would claim every GA106 sits in a Gen3 slot idling at 2.5 GT/s —
+wrong on a Gen4 board, and wrong on **the same box thirty seconds later**. ★ Note the two
+"static-looking" fields already disagree *with each other* on the one box we own: the die is
+gen4 and the slot is gen3. A single reading could never have shown that.
+
+#### What this port serves, and the residual named rather than elided
+
+The chip row states **one enum** — `ChipProfile::pcie_max_gen`, the die's own maximum
+generation, `[measured]` `Gen4` on GA106 by two instruments — and the word is **derived** by
+`PcieGenInfo::fully_trained`: the emulated link is presented as trained at the die's own
+generation, so `GPU_GEN == GEN == CURR_LEVEL` and the served word is `0x00333000`.
+
+⊘ Deliberately **not** either measured word. This is a statement about the link *this port
+presents*, identical on every host by construction, derived for every architecture from one
+enum rather than tabulated per chip — `derive_what_you_cannot_query_then_oracle_it`.
+
+⚠ **The residual:** the guest's DMA really does traverse the *host's* link, which this reply
+does not describe. The truthful upgrade is `current_link_speed` / `max_link_speed` from sysfs
+— world-readable, no privilege, no RM ioctl — folded into `GEN`/`CURR_LEVEL`. ⊘ Not done here
+because **the shipping archive has no host GPU binding at all**: `host-isolates` is off by
+default (`kayfabe-qemu-raw/Cargo.toml:87`) and `InitTablePolicy` holds a `&'static ChipProfile`
+and nothing else. `PcieGenInfo`'s three independent fields ARE that seam.
+
+#### ⚠ §14.28's trap, present for the third time — and this time there is no bit to key on
+
+Of the six indices in the failing request, exactly one is RPC-forwarded on a GSP client:
+`0x2d`. `0x0f` `BUS_NUMBER`, `0x10` `DEVICE_NUMBER`, `0x2c` `DOMAIN_NUMBER`, `0x03`
+`PCIE_GPU_LINK_CAPS` and `0x06` `PCIE_DOWNSTREAM_LINK_CAPS` are the guest kernel's own
+(`ogkm-580: kern_bus_ctrl.c:283-470`).
+
+★★★ **And unlike `GPU_GET_INFO_V2` there is no forward bit — because none is needed.**
+`kbusSendBusInfo_IMPL` forwards one entry at a time in a **fresh** params struct with
+`busInfoListSize = 1` (`ogkm-580: kern_bus.c:1065-1101`). The six-entry struct is the
+**ioctl**; what reaches a GSP is a **one-entry RPC per forwarded index**, and the boot's
+ledger agrees — `unserviced fn 76 cmd 0x20801823` appeared exactly **once** at `49b182a`.
+⇒ Arriving here IS the marker, so every declared entry is filled and an index with no
+derivation is refused by name. ⊘ Never zero-filled: `PCIE_LINK_CAP_GEN_GEN1 == 0`, so a zero
+entry is the positive claim *"Gen 1"* rather than an absence.
+
+#### The hazard check, run first, in the direction that has bitten three times
+
+*"What is keyed on `0x20801823` being absent?"* — **nothing.** It is already permitted by the
+capability table (`capability.rs:749`, `Origin::Nvproxy`); its flags are `0x10118`
+(`ogkm-580: g_subdevice_nvoc.c:6800-6812`), carrying neither `RMCTRL_FLAGS_CACHEABLE`
+(`0x400`) nor `_CACHEABLE_BY_INPUT` (`0x20000`), so it is **not** a
+`sticky::BRANCH_A_CACHEABLE` row — which matters here more than usual, because a value that
+moves with the link must never be cached for the life of a boot.
+
+#### `[measured 2026-08-08, boot `bus1430_0dbbabc`, both stamps `0dbbabc…`, shipping config, `probe-arm set: EMPTY`, STOCK module]` THE WALL IS DOWN
+
+```text
+nvkvm: control 0x20801823 result 0x00000000 x1     ← served, and GONE from unserviced
+```
+
+`cup2`, verbatim:
+
+```text
+SMI_RC=0
+=== cup2: run ===
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+CUP2_RC=1
+```
+
+#### ⊘⊘⊘ AND `cuInit` STILL RETURNS 100 — the wall moved ONE control further
+
+Boot `gt1430_0dbbabc`, the in-guest interposer, 52 lines on disk
+(`traces/real_ga106/cuinit_trace_guest_gt1430_0dbbabc.txt`):
+
+```text
+0x20800102  status=0x00000000     ← §14.29's wall
+0x20801701  status=0x00000000
+0x20801823  status=0x00000000     ← 3 entries
+0x20801801  status=0x00000000
+0x20801823  status=0x00000000     ★ §14.29's wall, now SERVED — 6 entries
+0x20801803  status=0x00000000
+0x2080182a  status=0x00000056     ★★ THE NEW WALL
+FREE ×3 ; cuInit(0) -> 100
+```
+
+`0x2080182a` is `NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS`
+(`ogkm-580: ctrl2080bus.h:1273`), flags `0x40048`, params 112 bytes, and it is the **very next
+line of the real-hardware trace** (`cuinit_ioctl_trace_real_ga106.txt:48`), where a real GA106
+answers `NV_OK`.
+
+#### ★★★ THE NEXT RUNG IS NOT "COPY THE TRACE" — the oracle is BLIND here, in the `dlen = 0` shape
+
+Two facts, both measured today, that the next increment must not skip past:
+
+1. ⊘ **The committed trace's body for `0x2080182a` is ambiguous by construction.** Its `in=`
+   and `out=` are both 112 zero bytes, and `traces/real_ga106/README.md` already warns why
+   that decides nothing: *"libcuda hands RM zeroed buffers, so an all-zero pair is ambiguous."*
+   This is `c_oracle_empty_rows_are_wrong` reached by a different route — **an all-zero body
+   read out of a zero-filled request is evidence of NOTHING, not evidence of zeros.**
+2. ⊘ **And the `0xCD`-seed instrument that would resolve it CANNOT reach the control.**
+   `[measured]` `rmladder --probe-ctrl 0x2080182a:112`, twice, on the real GA106:
+   `refused Other(86)` — `NV_ERR_NOT_SUPPORTED`, both times. So on the same physical part, in
+   the same hour, **libcuda gets `NV_OK` and a bare Subdevice gets `0x56`.** The handler is a
+   `_DISPATCH` (`g_subdevice_nvoc.c:6809`), so the answer depends on caller state that
+   `rmladder` does not reproduce, and *"the control is unsupported"* is a reading the evidence
+   does not support.
+
+⇒ The rung is **not** a value to transcribe. It is: find what makes the answer differ between
+the two callers (`rmladder` allocates a Subdevice and stops; libcuda has a Device, an
+`NV2081_BINAPI`, and eleven earlier controls behind it), and only then decide what this port
+says. ★ A single-caller reading pasted into a table here would be `0x20802a08` for the third
+time.
+
+⚠ And one instrument note, since it cost nothing only because it was checked: R22's own idle
+run would have "confirmed" a constant sixteen times over. **The perturbation is the
+instrument** — `scripts/rpctrace/pcie_link_load.c` exists so that a value suspected of
+describing the link can be caught moving, on one box, with no second part to rent.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| R22 `--bus-info-sweep` — 52 indices one call each, libcuda's two requests replayed byte for byte, `0x2d` ×16 decoded, both hypotheses written down before the run | `crates/kayfabe-isolate-host/src/bin/rmladder.rs` |
+| ★ `pcie_link_load.c` — the perturbation that turns a decode into a measurement | `scripts/rpctrace/` |
+| `kayfabe_abi::businfo` — the ABI, `PcieGen`/`PcieGenInfo`, the request-editing answer, four named refusals, 8 unit tests | `crates/kayfabe-abi/src/businfo.rs` |
+| `ChipProfile::pcie_max_gen` — an **enum**, one field, not the `u32` the control returns | `kayfabe-device/src/lib.rs`, `ga10x.rs` |
+| `WantedTable::BusGetInfoV2`; served universe **26 → 27**, attributed | `kayfabe-device/src/inittables.rs` |
+| the two R22 captures and the guest trace | `traces/real_ga106/rmladder_r22_businfo_{sweep,loaded}_real_ga106.txt`, `cuinit_trace_guest_gt1430_0dbbabc.txt` |
+| a citation `truncated_row_reads` refused — §14.29's `ga106.h:6243` lines now name `0x20800a4c` | `smcmode.rs`, this file |
