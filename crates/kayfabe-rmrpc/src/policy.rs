@@ -893,6 +893,14 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // ★★★ E9/§13.6 — the channel-side bind. Same claim discipline: by id, never by the
     // whole `RmControl` function.
     kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+    // ★★★ **§14.25 — the address-plane control, RE-CLAIMED.** It was claimed in §14.21,
+    // measured to kill the adapter, and reverted; §14.21's own re-enable condition was
+    // *"when the `0x90f10106` publication reaches `Vas::pdb`, promote-ctx SUCCEEDS rather
+    // than refuses"*, and §14.24 measured that publication landing (`4 ACCEPTED`) with the
+    // milestone reproducing byte for byte. This is that condition being tested.
+    //
+    // ⚠ The status question does NOT disappear with it — see `Self::respond_promote_ctx`.
+    kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
 ];
 
 impl ObjectPolicy {
@@ -1080,7 +1088,87 @@ impl ObjectPolicy {
                 self.respond_gpfifo_schedule(cmd, &req)
             }
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND => self.respond_bind(cmd, &req),
+            kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX => {
+                self.respond_promote_ctx(cmd)
+            }
             _ => None,
+        }
+    }
+
+    /// ★★★ **§14.25 — the `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` arm, re-claimed after §14.21
+    /// measured its first version killing the adapter.**
+    ///
+    /// ⊘ **This arm decodes nothing itself, and that is the point.** The other two arms
+    /// hand-decode because their params are four and eight bytes; this control's are 560
+    /// with a 16-entry array and a three-state classifier, and every piece of that already
+    /// exists on the [`Bridge`] path — `translate_promote_ctx` → `Translation::CtxPromotion`
+    /// → [`kayfabe_core::gpu::Gpu::promote_ctx`]. Re-deriving it here would be a second
+    /// decoder for one wire struct, which is the drift `Bridge::deliver` was extracted to
+    /// prevent. So this arm is a **route**, and it inherits reassembly, the `promoted`
+    /// counter and the refusal census for free.
+    ///
+    /// # The reply, and why it is the request's own bytes
+    ///
+    /// `paramsSize` is 560, non-zero, so the GSP transport copies the reply's params over
+    /// the caller's struct (`ogkm-580: rpc.c:11085-11090`) — and RM then **reads its own
+    /// struct back**: on `NV_OK` it walks `params.promoteEntry[i].bInitialize` to decide
+    /// which context buffers to mark initialized
+    /// (`ogkm-580: kernel_graphics_object.c:141-157`). A zero-filled body would therefore
+    /// not merely lose information, it would rewrite guest state — which is exactly C
+    /// defect **D7**, where a captured foreign-boot blob was replayed into the caller's
+    /// buffer under `NV_OK` (`gpu_promote_ctx.md` §3 D7). Echoing the guest's own bytes
+    /// unchanged is that defect's documented port: *"a Case-2 ACK writes back nothing"*.
+    ///
+    /// # ★★★ THE REFUSAL STATUS, and it is `0x56` — the whole of §14.21's lesson
+    ///
+    /// The first version of this arm answered `NV_ERR_INVALID_OBJECT_HANDLE` (`0x33`) and
+    /// `NV_ERR_INVALID_STATE` (`0x40`), per this crate's standing rule that `0x56` is the
+    /// FSM's *"nobody claimed this"* signature and must never be reused for a decision.
+    /// `[measured 2026-08-08, boot ship2_7c5d74d]` that cost the milestone: the A/B against
+    /// `ship_7a881a7` differed in four lines and ended `RmInitAdapter failed! (0x25:0x40:1249)`.
+    ///
+    /// `gpuStatePostLoad` (`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:3437-3439`) converts
+    /// **only** `NV_ERR_NOT_SUPPORTED` to `NV_OK` and bails on everything else, and this
+    /// control's failure reaches it: `kgrobjPromoteContext` → `_kgrAlloc` →
+    /// `kgraphicsCreateGoldenImageChannel` → the FIFO engine's `StatePostLoad`
+    /// (`kfifoStateLoad_GM107` → `kfifoTriggerPostSchedulingEnableCallback`,
+    /// `ogkm-580: kernel_fifo_gm107.c:229-234`, which returns any error verbatim).
+    ///
+    /// ⇒ The rule needed a **scope**, not a repeal: it is right wherever the guest's error
+    /// path *reads* the status (`GPFIFO_SCHEDULE`, `BIND`) and wrong for any control whose
+    /// failure propagates into an engine's `StatePostLoad`. ★ So this arm answers
+    /// [`BridgeRefusal::rpc_result`], which is `NV_ERR_NOT_SUPPORTED` for **every** variant
+    /// — i.e. the refusal rides the envelope exactly as it does for a control this port
+    /// never claimed, and the census is where the *variant* is recorded. Asking *"where
+    /// does the caller's error go?"* is the question, never *"what does the header
+    /// document?"*.
+    ///
+    /// ⊘ That makes a refused promote-ctx **wire-indistinguishable** from an unserviced
+    /// one, and it is worth saying out loud: the difference is visible only in this port's
+    /// own census, which is where it belongs. Nothing is bought by telling the guest a
+    /// truer status when the truer status is what kills it.
+    fn respond_promote_ctx(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        match self.deliver(cmd) {
+            // The promotion landed, or this was a fragment the reassembler is holding.
+            // Both are `NV_OK` with this message's own body — the held case because the
+            // guest reads its status off the LAST fragment and needs each earlier one
+            // acknowledged with its own length (`GraphPolicy::respond`'s `Held` docs).
+            Ok(Translation::CtxPromotion(_) | Translation::Held) => Some(Reply {
+                rpc_result: 0, // NV_OK
+                body: cmd.payload.clone(),
+            }),
+            // ⊘ Not reachable through `translate` for this command id — `ControlParams::PromoteCtx`
+            // routes to `translate_promote_ctx`, which returns `CtxPromotion` or an error.
+            // Written as a decided refusal rather than `unreachable!()` because this arm is
+            // reached from a GUEST-controlled command id: a panic here aborts the whole VM.
+            Ok(Translation::Event(_) | Translation::Inert) => Some(Reply {
+                rpc_result: kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+                body: Vec::new(),
+            }),
+            Err(r) => Some(Reply {
+                rpc_result: r.rpc_result(),
+                body: Vec::new(),
+            }),
         }
     }
 

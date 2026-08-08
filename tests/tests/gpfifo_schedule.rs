@@ -507,6 +507,12 @@ fn the_control_claim_is_exactly_these_ids() {
         &[
             NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+            // ★★★ §14.25 — the address-plane control, RE-claimed. It was claimed in §14.21,
+            // measured to kill the adapter with a "better" refusal status, and reverted;
+            // §14.24 measured the fact it was waiting on (`Vas::pdb`) landing. ⚠ Its refusal
+            // is `0x56` and that is not an oversight — `bind_channel.rs`'s
+            // `every_claimed_control_is_decided_even_when_malformed` carries the scope.
+            kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
         ]
     );
     assert!(

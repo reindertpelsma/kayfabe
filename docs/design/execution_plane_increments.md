@@ -4278,3 +4278,100 @@ rather than refuses"* — is now testable for the first time.
 variant, so routing promote-ctx's refusal through the **envelope** rather than through a
 per-arm status constant is what §14.21 measured the need for — the C-shaped mistake was a
 *better* status, chosen at the arm.
+
+### 14.25 ★★★★ PROMOTE-CTX SUCCEEDS — §14.21's re-enable condition, met and measured (`423bf08`)
+
+`[measured 2026-08-08, boot pro1_423bf08, rev 423bf08]`, vast GA106 bench (`vh`, RTX 3060
+`10de:2504`, host driver **580.159.04 Open**), stamp verified on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:423bf080502168f46edb44d54d69d4a4d8f75f81` in each. **`probe-arm set: EMPTY`**,
+**STOCK** guest module. Evidence: `docs/reference/bench_evidence/run_pro1_423bf08_*`.
+
+#### The two lines this section exists for
+
+```text
+nvkvm:   control 0x2080012b result 0x00000000 x1
+nvkvm:   control 0x2080012b result 0x00000056 x1 REFUSED
+SMI_RC=0
+```
+
+★★★ **A `GPU_PROMOTE_CTX` was PERFORMED** — `Translation::CtxPromotion` applied through
+`Gpu::promote_ctx`, `NV_OK` on the wire — and the adapter **survived**, which is the
+combination §14.21 measured to be impossible before the fact existed.
+
+⊘ **`PromoteFault::ContextVasUndeclared` does not appear in the census at all.** That is the
+wall §14.21 named by measurement and §14.22 restated as *"the real wall is unchanged and
+already named"*. It is gone, and it was removed by §14.23/§14.24 rather than argued away.
+
+#### What was re-claimed, and the one thing that changed from §14.21's version
+
+`NV2080_CTRL_CMD_GPU_PROMOTE_CTX` rejoins `OBJECT_CONTROLS` with a `respond_control` arm that
+**routes** through `Bridge::deliver` (no second decoder for a 560-byte struct) and echoes the
+request's own body on success — verbatim §14.21's design.
+
+★★★ The single change is the **refusal status**, and it is the whole of §14.21's lesson made
+executable: the arm answers `BridgeRefusal::rpc_result`, which is `NV_ERR_NOT_SUPPORTED`
+(`0x56`) for **every** variant, instead of the per-arm `0x33`/`0x40` that killed the adapter.
+`gpuStatePostLoad` converts only `0x56` to `NV_OK` (`ogkm-580: gpu.c:3437-3439`) and this
+control's failure reaches it. ⊘ The consequence, said out loud: a refused promote-ctx is now
+**wire-indistinguishable** from an unserviced one, and the difference lives only in this
+port's own census — which is where it belongs. `bind_channel.rs`'s
+`every_claimed_control_is_decided_even_when_malformed` still quantifies over the whole of
+`OBJECT_CONTROLS` and splits the *expectation* per id with its reason; ⊘ the list was not
+shortened.
+
+#### ★★★ The wall MOVED, and here is the guest's own log saying so
+
+`diff` of the guest's dmesg against `pub2_5849328` (timestamps stripped, sorted).
+**Disappeared:**
+
+```text
+- kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508      -> 0x56
+- pRmApi->AllocWithHandle(…, hObj3D, classNum, NULL, 0)    @ kernel_graphics.c:2519     -> 0x56
+- kgrobjPromoteContext(…)                                  @ kernel_graphics_object.c:224 (one of two)
+- Assertion failed: 0                                      @ kernel_fifo.c:3129
+- vaListDestroy: non-zero mapCount(pVaList): 0x1  ×4
+```
+
+**Appeared:**
+
+```text
++ GspRmAlloc failed: hClient=0xc1e00007 hParent=0xbaba0045 hObject=0xbaba0046
+                     hClass=0x0000c797 paramsSize=0x0 status=0x00000056
++ GspRmFree failed:  hClient=0xc1e00007 hObject=0xbaba0046
++ Assertion failed: (status == NV_OK) || (… FULLCHIP_RESET) @ rs_client.c:844, rs_server.c:{259,1375}
+```
+
+`0xc797` is **`AMPERE_B`**, and ★ it had **never been requested in any previous boot** —
+`grep -l 'hClass=0x0000c797'` over every capture in `docs/reference/bench_evidence/` returns
+nothing before this one. The `0xbaba00xx` handles are the golden-image channel's own
+(`hClient 0xc1e00007` is the client whose VA space `0xbaba0042` published a root in §14.24's
+table). ⇒ The chain that had been dying at `kgrobjPromoteContext` now runs past it and dies
+at an **alloc class this port does not admit**.
+
+⚠ **What is measured and what is inferred, kept apart.** Measured: those five lines left the
+log, `0xc797` entered it, one promote-ctx returned `NV_OK`, one returned `0x56`, and the
+adapter lived. Inferred (from handle prefixes and from the surviving
+`kgrobjPromoteContext` line falling *between* the RC watchdog's `0x0070` at `33.675` and
+`kernel_rc_watchdog.c:1198` at `34.136`): the promotion that **succeeded** is the golden
+channel's and the one that **refused** — `PromoteFault::UnknownContextObject x1` — is the RC
+watchdog's, an engine §14.20 and §14.22 both measured as **non-fatal**. ⊘ That attribution is
+a reading of two timestamps and a handle prefix; it is not established by anything the device
+itself printed, and the next increment should make the census carry the handles rather than
+leave this to inference.
+
+#### ⇒ The next wall, named
+
+**`AMPERE_B` (`0xc797`) is refused as `BridgeRefusal::UnmappedAllocClass`.**
+
+⊘ And note this is **not** §14.22's refused trio wearing a new number. That section's ruling
+was *"do NOT admit `0x0070` / `0xc36f`"* because their refusals were logged **after** the
+failure they were blamed for and belong to the non-fatal RC watchdog — the ordering is in
+that section's own timestamps. `0xc797`'s refusal is logged at `33.559`, **before** every
+watchdog line, on the golden channel's own client, at exactly the point the chain now
+reaches. The two situations are opposites and both were settled by reading the guest's clock.
+
+⚠ Past this sits the GR golden context itself, and the C artifact's answer to it was *"silicon
+boundary, forward to the host"*. Admitting a class is not the same as serving what the class
+does; whether `AMPERE_B` can be answered without real silicon is the question the next
+increment has to put to hardware, not to a table.

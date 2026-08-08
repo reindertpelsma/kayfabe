@@ -481,11 +481,32 @@ fn every_claimed_control_is_decided_even_when_malformed() {
             reply.rpc_result, 0,
             "{cmd_id:#010x}: a malformed request is refused, not served"
         );
-        assert_ne!(
-            reply.rpc_result,
-            kayfabe_abi::NV_ERR_NOT_SUPPORTED,
-            "{cmd_id:#010x}: and the refusal is a decision, never the unclaimed signature"
-        );
+        // ★★★ **The "never `0x56`" rule needed a SCOPE, and a boot is what gave it one.**
+        //
+        // It is right wherever the guest's own error path *reads* the status — the two
+        // channel controls — and it is WRONG for `GPU_PROMOTE_CTX`, whose failure
+        // propagates into an engine's `StatePostLoad`, where `gpuStatePostLoad` converts
+        // **only** `NV_ERR_NOT_SUPPORTED` to `NV_OK` and bails on everything else
+        // (`ogkm-580: gpu.c:3437-3439`). `[measured 2026-08-08, boot ship2_7c5d74d]`:
+        // answering `0x40` there ended `RmInitAdapter failed! (0x25:0x40:1249)` and cost
+        // the milestone; §14.21 reverted the whole claim over it.
+        //
+        // ⊘ The gate is still quantified over the WHOLE list — the expectation is split
+        // per id with its reason, never the list shortened (`gates_quantified_over_a_list`).
+        if cmd_id == kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX {
+            assert_eq!(
+                reply.rpc_result,
+                kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+                "{cmd_id:#010x}: this control's refusal reaches gpuStatePostLoad, where 0x56 \
+                 is the ONLY status that keeps the adapter alive",
+            );
+        } else {
+            assert_ne!(
+                reply.rpc_result,
+                kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+                "{cmd_id:#010x}: and the refusal is a decision, never the unclaimed signature"
+            );
+        }
     }
 }
 
