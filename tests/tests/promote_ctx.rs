@@ -1574,3 +1574,293 @@ fn a_case2_ack_writes_nothing_back() {
         "the Case-2 command really is the one under test",
     );
 }
+
+// =====================================================================================
+// ★★★ §14.21 — THE POLICY GATE. Every part of serving this control was already built;
+// `ObjectPolicy` did not CLAIM the command, so none of it ran.
+//
+// `[measured 2026-08-08, boots ship_7a881a7 and ship_7a881a7_b, rev 7a881a7]` this is the
+// FIRST wall on the golden-image channel, and the tests below are written against the
+// guest's own failure:
+//
+// ```text
+// [34.092117] NVRM: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
+//             returned from kgrobjPromoteContext(...) @ kernel_graphics_object.c:224
+// [34.133508] NVRM: Assertion failed: ... AllocWithHandle(..., classNum, NULL, 0)
+//             @ kernel_graphics.c:2519
+// [34.175699] NVRM: Check failed: ... kgraphicsCreateGoldenImageChannel(...)
+//             @ kernel_graphics.c:508
+// ```
+//
+// ⊘ The `0x56` there is `GspFsm::answer`'s *"nobody claimed this command"* signature, not
+// a decision — which is exactly what makes it the interesting one: the port had a decoder,
+// a translator, an applier and a core join for this control, and the guest could not tell
+// any of that from a device with no code at all.
+//
+// ⚠ These tests are NOT a boot and do not claim the golden channel is built. They claim
+// the command is decided. `only_live_boots_are_proof`.
+// =====================================================================================
+
+mod policy_gate {
+    use kayfabe_abi::GuestOs;
+    use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
+    use kayfabe_abi::view::{PROMOTE_CTX_REFUSED_STATUS, PROMOTE_CTX_UNKNOWN_OBJECT_STATUS};
+    use kayfabe_core::gpa::GpaSpace;
+    use kayfabe_core::gpu::Gpu;
+    use kayfabe_device::ga10x::GA106_ENGINES;
+    use kayfabe_gsp::{CommandPolicy, RpcCommand};
+    use kayfabe_rmrpc::{OBJECT_CONTROLS, ObjectPolicy};
+    use kayfabe_tests::gspworld::FUNCTIONS;
+    use kayfabe_tests::rpcwire::{self as w, PromoteEntryWire};
+
+    /// `NV2080_CTRL_CMD_GPU_PROMOTE_CTX`, written as a literal here rather than imported,
+    /// so this file's third transcription of the id is independent of the constant the
+    /// policy gates on. A rename that changed the value would redden
+    /// [`the_id_under_test_is_the_one_the_guest_sends`] before anything else drifts.
+    const PROMOTE_CTX: u32 = 0x2080_012b;
+
+    /// The client, channel and GR context VA are the **outer module's**, so this section
+    /// promotes exactly the world every other test in this file already agrees about. A
+    /// second hand-built world here would be a second thing to keep true.
+    use super::{A_CLIENT, A_PDB, GR_LEN, GR_VA, H_GR_CHANNEL};
+
+    /// The Subdevice the control is issued **against** — `RES_GET_HANDLE(pSubdevice)`
+    /// (`ogkm-580: kernel_graphics_object.c:135`). The port drops it; it is here because
+    /// the real message carries it and a fixture that omitted it would exercise a shape
+    /// the guest never sends.
+    const SUBDEV: u32 = 0x5c00_00ff;
+
+    /// A GR context buffer range, the shape `kgrctxPreparePromoteCtxBuffer` produces:
+    /// both `gpuVirtAddr` and `size` set, `bNonmapped` clear — state C, the only state
+    /// that becomes a binding.
+    fn complete_entry() -> PromoteEntryWire {
+        PromoteEntryWire {
+            gpu_phys_addr: 0x2_ef94_6000,
+            gpu_virt_addr: GR_VA.0,
+            size: GR_LEN,
+            phys_attr: 0, // aperture VIDMEM
+            buffer_id: 0, // NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_MAIN
+            b_initialize: 0,
+            b_nonmapped: 0,
+        }
+    }
+
+    fn abi() -> &'static DriverAbiTable {
+        table_for(BENCH_DRIVER).expect("the bench driver is supported")
+    }
+
+    fn command(msg: &[u8]) -> RpcCommand {
+        let env = abi()
+            .decode_rpc_envelope(msg)
+            .expect("well-formed envelope");
+        RpcCommand {
+            function: FUNCTIONS.classify(env.function),
+            code: env.function,
+            sequence: env.sequence,
+            payload: abi().rpc_payload(msg).expect("payload").to_vec(),
+            elements: 1,
+            delivered: msg[kayfabe_abi::view::RpcEnvelope::SIZE..].to_vec(),
+        }
+    }
+
+    /// The world RM is in when `kgrobjPromoteContext` fires — the file's own
+    /// [`super::world`] subgraph, wrapped in the policy under test.
+    ///
+    /// ⊘ **Built through `Scenario`, not by scripting RPCs, and that is a measurement not
+    /// a shortcut.** A VASpace acquires its `Pdb` from `SET_PAGE_DIRECTORY` — and
+    /// `[measured 2026-08-08, traces/real_ga106/]` the boot issues that control **zero**
+    /// times (`execution_plane_increments.md` §14.9); the boot-path root arrives on
+    /// `0x90f10106`, which a *different* chain link records. `ObjectPolicy` does not claim
+    /// either, so an RPC-scripted world here would leave the VAS with no page-directory
+    /// base and refuse every promotion — a fixture artefact indistinguishable, from the
+    /// reply alone, from the refusal arm working. It was seen: the first draft of this
+    /// module was red on exactly that, twice, and the port was right both times
+    /// (`suspect_the_instrument_first`).
+    fn policy() -> ObjectPolicy {
+        let (factory, _rec) = kayfabe_mocks::MockIsolateFactory::new();
+        let mut gpu = Gpu::new(
+            Box::new(kayfabe_mocks::WireClassArch::new()),
+            Box::new(factory),
+            GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000),
+        )
+        .expect("the port's object model realizes");
+        let mut s = kayfabe_tests::Scenario::new();
+        s.compute_process(A_CLIENT, A_PDB, kayfabe_tests::identical_handles(0x10, 0x11));
+        for ev in s.events {
+            gpu.apply(ev).expect("scenario applies cleanly");
+        }
+        // ★★ NON-VACUITY, in the fixture rather than in each test: a world whose channel
+        // never registered refuses every promotion, and three tests below assert a SERVED
+        // one. Without this line a broken fixture reddens all three and points at the port.
+        assert!(
+            !gpu.spine.by_chan.is_empty(),
+            "★ fixture: the GR channel must be in the projection index before a promotion \
+             can route to it",
+        );
+        ObjectPolicy::new(abi(), GuestOs::Linux, gpu, GA106_ENGINES)
+    }
+
+    /// A `0x2080012b` issued the way RM issues it: the **envelope** names the subdevice's
+    /// client and the subdevice handle, while `hChanClient`/`hObject` in the params name
+    /// the channel's namespace and the channel (`ogkm-580: kernel_graphics_object.c:130-135`).
+    fn promote_cmd(chan_client: u32, object: u32) -> RpcCommand {
+        let params = w::promote_ctx_params(1, chan_client, object, 1, &[complete_entry()]);
+        let mut s = w::RpcScript::new();
+        s.control(A_CLIENT.0, SUBDEV, PROMOTE_CTX, &params);
+        command(&s.messages().into_iter().next().expect("one message"))
+    }
+
+    // ---------------------------------------------------------------------------------
+    // The gate itself
+    // ---------------------------------------------------------------------------------
+
+    /// ★★★ **The regression this section exists for.** The id must be in the list the
+    /// policy gates on — and the list is asked, never restated, so shortening it reddens
+    /// here (`gates_quantified_over_a_list`).
+    #[test]
+    fn the_id_under_test_is_the_one_the_guest_sends() {
+        assert_eq!(
+            PROMOTE_CTX,
+            kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
+            "the literal the guest's dmesg shows and the constant the port uses",
+        );
+        assert!(
+            OBJECT_CONTROLS.contains(&PROMOTE_CTX),
+            "★ 0x2080012b must be CLAIMED. While it was not, the port had a decoder, a \
+             translator, an applier and a core join for this control and none of them \
+             could run — the guest saw the FSM's 0x56 and stopped at \
+             kernel_graphics_object.c:224",
+        );
+    }
+
+    /// ★★★ The command is **answered**, and the answer is not the unclaimed signature.
+    ///
+    /// ⊘ Two assertions, because they are two different failures: `None` is the gate
+    /// still shut, and `0x56` is the gate open onto a refusal that reads, in the guest's
+    /// own log, exactly like the gate still being shut.
+    #[test]
+    fn the_promote_is_served_and_never_answers_the_unclaimed_signature() {
+        let mut p = policy();
+        let reply = p
+            .respond(&promote_cmd(A_CLIENT.0, H_GR_CHANNEL.0))
+            .expect("★ this policy claims 0x2080012b");
+        assert_ne!(
+            reply.rpc_result,
+            kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+            "★ 0x56 is 'nobody claimed this', and it is what the guest saw for six weeks",
+        );
+        assert_eq!(
+            reply.rpc_result, 0,
+            "★ a well-formed promotion on a routable GR channel is NV_OK",
+        );
+    }
+
+    /// ★★★ **C defect D7, at the policy boundary.** The reply body is the request's own
+    /// bytes, byte for byte.
+    ///
+    /// This is not cosmetic. `paramsSize` is 560, so the GSP transport copies the reply's
+    /// params over the caller's struct (`ogkm-580: rpc.c:11085-11090`), and RM then reads
+    /// `params.promoteEntry[i].bInitialize` back out of it to decide which context buffers
+    /// to mark initialized (`ogkm-580: kernel_graphics_object.c:141-157`). A zero-filled
+    /// body would therefore rewrite guest state under an `NV_OK` — which is what the C did
+    /// with a captured foreign-boot blob (`gpu_promote_ctx.md` §3 D7).
+    #[test]
+    fn the_ack_echoes_the_guests_own_bytes_and_changes_none_of_them() {
+        let mut p = policy();
+        let cmd = promote_cmd(A_CLIENT.0, H_GR_CHANNEL.0);
+        let reply = p.respond(&cmd).expect("claimed");
+        assert_eq!(reply.rpc_result, 0, "served");
+        assert_eq!(
+            reply.body, cmd.payload,
+            "★ D7: not one byte of the caller's params may differ",
+        );
+    }
+
+    /// ★★ An `hObject` that resolves to nothing gets `NV_ERR_INVALID_OBJECT_HANDLE`, the
+    /// status RM's own dispatcher produces for a handle that fails `clientGetResourceRef`
+    /// — **not** `NV_ERR_INVALID_STATE`, and not `0x56`.
+    ///
+    /// MISS = FAULT: a promotion naming an object we cannot see is refused, never guessed.
+    #[test]
+    fn an_unresolvable_context_object_is_refused_as_an_invalid_handle() {
+        let mut p = policy();
+        let reply = p
+            .respond(&promote_cmd(A_CLIENT.0, 0xdead_beef))
+            .expect("claimed even when it names nothing");
+        assert_eq!(
+            reply.rpc_result, PROMOTE_CTX_UNKNOWN_OBJECT_STATUS,
+            "★ 'I cannot see what you named' — 0x33, not 0x40 and not 0x56",
+        );
+        assert!(reply.body.is_empty(), "a refusal carries no params back");
+    }
+
+    /// ★★ An object that **does** resolve but is not a channel is the same refusal, for
+    /// the same reason — typed resolution, so a guest naming its Device here cannot have
+    /// the promotion land in whatever address space the Device's neighbour happens to use.
+    #[test]
+    fn a_context_object_that_is_not_a_channel_is_refused_as_an_invalid_handle() {
+        let mut p = policy();
+        let reply = p.respond(&promote_cmd(A_CLIENT.0, super::H_DEVICE.0)).expect("claimed");
+        assert_eq!(reply.rpc_result, PROMOTE_CTX_UNKNOWN_OBJECT_STATUS);
+    }
+
+    /// ★★ The two refusal statuses are **different values**, and neither is the unclaimed
+    /// signature. A boot log that showed the same hex for both could not distinguish
+    /// *"I cannot see your channel"* from *"I saw it and will not act"* — and the guest
+    /// prints raw hex.
+    #[test]
+    fn the_two_refusal_statuses_are_distinct_and_neither_is_the_unclaimed_signature() {
+        assert_ne!(PROMOTE_CTX_UNKNOWN_OBJECT_STATUS, PROMOTE_CTX_REFUSED_STATUS);
+        for s in [PROMOTE_CTX_UNKNOWN_OBJECT_STATUS, PROMOTE_CTX_REFUSED_STATUS] {
+            assert_ne!(s, kayfabe_abi::NV_ERR_NOT_SUPPORTED);
+            assert_ne!(s, 0, "a refusal is never NV_OK");
+        }
+    }
+
+    /// ★★ A malformed message is **decided**, not dropped — the same promise
+    /// `bind_channel::every_claimed_control_is_decided_even_when_malformed` makes over the
+    /// whole list, asserted here against this control's own 560-byte size check.
+    #[test]
+    fn a_wrong_sized_params_block_is_refused_by_decision() {
+        let mut p = policy();
+        let mut s = w::RpcScript::new();
+        s.control(A_CLIENT.0, SUBDEV, PROMOTE_CTX, &[0xee; 8]);
+        let cmd = command(&s.messages().into_iter().next().expect("one"));
+        let reply = p.respond(&cmd).expect("★ claimed ids are decided even when malformed");
+        assert_eq!(
+            reply.rpc_result, PROMOTE_CTX_REFUSED_STATUS,
+            "★ the size mismatch is a decision this port made, not an absent code path",
+        );
+    }
+
+    /// ★★★ The served promotion is **performed**, not merely acknowledged: the range the
+    /// entry declared is resolvable in the owning proc's address table afterwards.
+    ///
+    /// ⊘ This is what separates this rung from an `NV_OK` echo. Without it, deleting the
+    /// `Gpu::promote_ctx` call and keeping the reply would pass every other test here.
+    #[test]
+    fn a_served_promotion_binds_the_range_it_declared() {
+        let mut p = policy();
+        assert_eq!(p.respond(&promote_cmd(A_CLIENT.0, H_GR_CHANNEL.0)).expect("claimed").rpc_result, 0);
+
+        let e = complete_entry();
+        let gpu = p.gpu().expect("a bare Gpu is behind this policy");
+        let found = gpu
+            .procs
+            .values()
+            .chain(std::iter::once(&gpu.system))
+            .any(|proc| {
+                proc.vases.values().any(|vas| {
+                    vas.table
+                        .resolve(vas.pdb, kayfabe_arch::ids::GpuVa(e.gpu_virt_addr))
+                        .is_ok()
+                })
+            });
+        assert!(
+            found,
+            "★ the GR context VA {:#x} must resolve after the promotion — an ACK that \
+             bound nothing is the C's NV_OK-and-drop",
+            e.gpu_virt_addr,
+        );
+    }
+}

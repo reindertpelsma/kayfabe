@@ -284,6 +284,39 @@ pub enum DeniedBecause {
     /// `NV_OK` echo here *"a false green"*; this is the row that makes the refusal say
     /// which mechanism, rather than *"never heard of it"*.
     FaultMechanismNotModelled,
+    /// ★★★ **A physical board bus this emulated GPU does not have — and RM's own source
+    /// says the alloc is expected to fail.**
+    ///
+    /// `NV40_I2C` is the handle onto the card's I²C/SMBus segments: DDC/EDID on the display
+    /// connectors, board thermal sensors, gsync. There is no such bus behind this device,
+    /// and nothing this port could put behind the class would be a reading of anything.
+    ///
+    /// ★ The refusal costs the guest nothing, and that is **measured in RM's own code, not
+    /// assumed**. The sole in-tree allocator is the UNIX bootstrap, and the call site is
+    /// wrapped in a comment saying so (`ogkm-580:
+    /// src/nvidia/arch/nvalloc/unix/src/osinit.c:1764-1778`, verbatim at `ogkm-610:
+    /// :1835-1847`):
+    ///
+    /// ```text
+    /// // The NV40_I2C allocation expected to fail, if it is disabled with RM config.
+    /// if (pRmApi->Alloc(..., NV40_I2C, NULL, 0) != NV_OK) { nv->rmapi.hI2C = 0; }
+    /// ```
+    ///
+    /// No `goto fail`, no propagation: `RmUnixAllocRmApi` still returns `NV_TRUE`, and
+    /// every consumer is handle-guarded (`RmI2cAddGpuPorts` is `if (pNv->rmapi.hI2C != 0)`,
+    /// `ogkm-580: osapi.c:4101`), so the GPU simply exposes no i2c adapters.
+    /// `[measured 2026-08-08, boots ship_7a881a7 and ship_7a881a7_b, rev 7a881a7]` the
+    /// adapter initialises and `nvidia-smi` enumerates the device with this class refused.
+    ///
+    /// ⊘ **Serving it would be the worse shape, for `GT200_DEBUGGER`'s exact reason.** The
+    /// alloc itself is trivial to fake — `RS_NONE` params, and `i2capiConstruct` is a
+    /// `return NV_OK` (`ogkm-580: src/nvidia/src/kernel/gpu/i2c/i2c_api.c:26-35`). But the
+    /// five `0x402c01xx` controls behind it have **no kernel-side implementation in the
+    /// open tree at all** (`g_i2c_api_nvoc.c:130-206`, flags `0x48` = route-to-physical),
+    /// so accepting the attach means inventing a port map for a bus that does not exist —
+    /// too-capable, which is the same defect as too-strict
+    /// (`mock_fidelity_both_directions`).
+    NoPhysicalBoardBus,
 }
 
 /// A row this port refuses deliberately, with a reason.
@@ -1377,6 +1410,11 @@ pub(crate) static DENIED_CLASSES: &[DeniedEntry] = &[
     // Allowing the alloc and refusing every control would let a debugger *attach* and
     // then fail at first use — a worse shape than refusing the attach.
     DeniedEntry {
+        id: 0x0000_402c,
+        name: "NV40_I2C",
+        why: DeniedBecause::NoPhysicalBoardBus,
+    },
+    DeniedEntry {
         id: 0x0000_83de,
         name: "GT200_DEBUGGER",
         why: DeniedBecause::SmDebuggerTrapping,
@@ -2408,7 +2446,7 @@ mod tests {
         assert_eq!(at(570, 86, 15).all_classes().count(), 89, "classes at 570");
         assert_eq!(bench().all_classes().count(), 91, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 13, "denied controls");
-        assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
+        assert_eq!(bench().all_denied_classes().count(), 4, "denied classes");
     }
 
     /// The origins are all populated — a `Mode2Rpc` count of zero would mean the

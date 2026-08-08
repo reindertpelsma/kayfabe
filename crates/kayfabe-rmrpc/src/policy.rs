@@ -864,6 +864,35 @@ pub struct ObjectPolicy {
     engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
 }
 
+/// Which `NV_STATUS` a refused `GPU_PROMOTE_CTX` deserves — **total over the refusal, not
+/// a blanket**.
+///
+/// The two statuses answer two different questions the guest can act on differently, so
+/// the split is by what we could and could not SEE:
+///
+/// - [`kayfabe_abi::view::PROMOTE_CTX_UNKNOWN_OBJECT_STATUS`] (`NV_ERR_INVALID_OBJECT_HANDLE`)
+///   — the `(hChanClient, hObject)` pair named nothing resolvable, or named something that
+///   is not a channel or channel group. This is the status RM's own dispatcher produces for
+///   a handle that fails `clientGetResourceRef`, so it is the answer a real GSP would send.
+/// - [`kayfabe_abi::view::PROMOTE_CTX_REFUSED_STATUS`] (`NV_ERR_INVALID_STATE`) — everything
+///   else: a malformed message, an address space that has declared no page-directory base,
+///   a proc that retired under the route, or a range this port refused to bind.
+///
+/// ⊘ **`ForeignContextObject` is deliberately in the second group, not the first.** It means
+/// the envelope's `hClient` and the params' `hChanClient` disagree about who owns the
+/// object — we DID resolve it, and refused because of who it belongs to. Answering
+/// "invalid handle" there would tell a probing guest that a handle it cannot reach does not
+/// exist, which is a different (and less true) sentence than "not in a state I will act on".
+fn promote_refusal_status(r: &BridgeRefusal) -> u32 {
+    use kayfabe_core::promote::PromoteFault;
+    match r {
+        BridgeRefusal::Promote(
+            PromoteFault::UnknownContextObject { .. } | PromoteFault::NotAContextObject { .. },
+        ) => kayfabe_abi::view::PROMOTE_CTX_UNKNOWN_OBJECT_STATUS,
+        _ => kayfabe_abi::view::PROMOTE_CTX_REFUSED_STATUS,
+    }
+}
+
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
 /// over it rather than restate it** — `gates_quantified_over_a_list`'s rule: a gate that
 /// spells its own universe is a gate that shrinks silently.
@@ -893,6 +922,17 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // ★★★ E9/§13.6 — the channel-side bind. Same claim discipline: by id, never by the
     // whole `RmControl` function.
     kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+    // ★★★ §14.21 — the address-plane control, and the THIRD occurrence of
+    // `a_table_does_not_decide_behaviour`. Every part of serving this command was already
+    // built and none of it could run: `DriverAbiTable::control_params` decodes it to
+    // `ControlParams::PromoteCtx`, `translate_promote_ctx` turns it into
+    // `Translation::CtxPromotion`, `Bridge::deliver` has an arm that applies it, and
+    // `Gpu::promote_ctx` performs it — but `respond_control` gates on THIS list, so the
+    // command never reached any of them and the guest got the FSM's `0x56`.
+    //
+    // ⊘ Its absence here was not a decision recorded anywhere; it is what the list said
+    // while four other files said the opposite.
+    kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
 ];
 
 impl ObjectPolicy {
@@ -1080,7 +1120,69 @@ impl ObjectPolicy {
                 self.respond_gpfifo_schedule(cmd, &req)
             }
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND => self.respond_bind(cmd, &req),
+            kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX => {
+                self.respond_promote_ctx(cmd)
+            }
             _ => None,
+        }
+    }
+
+    /// ★★★ **§14.21 — the `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` arm.**
+    ///
+    /// ⊘ **This arm decodes nothing itself, and that is the point.** The other two arms
+    /// hand-decode because their params are four and eight bytes; this control's are 560
+    /// with a 16-entry array and a three-state classifier, and every piece of that already
+    /// exists on the [`Bridge`] path — `translate_promote_ctx` → `Translation::CtxPromotion`
+    /// → [`kayfabe_core::gpu::Gpu::promote_ctx`]. Re-deriving it here would be a second
+    /// decoder for one wire struct, which is the drift `Bridge::deliver` was extracted to
+    /// prevent. So this arm is a **route**, and it inherits reassembly, the `promoted`
+    /// counter and the refusal census for free.
+    ///
+    /// # The reply, and why it is the request's own bytes
+    ///
+    /// `paramsSize` is 560, non-zero, so the GSP transport copies the reply's params over
+    /// the caller's struct (`ogkm-580: rpc.c:11085-11090`) — and RM then **reads its own
+    /// struct back**: on `NV_OK` it walks `params.promoteEntry[i].bInitialize` to decide
+    /// which context buffers to mark initialized
+    /// (`ogkm-580: kernel_graphics_object.c:141-157`). A zero-filled body would therefore
+    /// not merely lose information, it would rewrite guest state — which is exactly C
+    /// defect **D7**, where a captured foreign-boot blob was replayed into the caller's
+    /// buffer under `NV_OK` (`gpu_promote_ctx.md` §3 D7). Echoing the guest's own bytes
+    /// unchanged is that defect's documented port: *"a Case-2 ACK writes back nothing"*.
+    ///
+    /// # The two refusal statuses
+    ///
+    /// [`kayfabe_abi::view::PROMOTE_CTX_UNKNOWN_OBJECT_STATUS`] (`0x33`) when the guest
+    /// named a context object we cannot resolve or that is not a channel, and
+    /// [`kayfabe_abi::view::PROMOTE_CTX_REFUSED_STATUS`] (`0x40`) for everything else this
+    /// port decided. ⊘ Never `0x56` — see those constants for the argument, and note that
+    /// a refusal here is **fatal to the caller**: `kgrobjPromoteContext` returns our status
+    /// straight up into `_kgrAlloc`, so the GR object alloc fails
+    /// (`ogkm-580: kernel_graphics_object.c:163,224`).
+    fn respond_promote_ctx(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        match self.deliver(cmd) {
+            // The promotion landed, or this was a fragment the reassembler is holding.
+            // Both are `NV_OK` with this message's own body — the held case because the
+            // guest reads its status off the LAST fragment and needs each earlier one
+            // acknowledged with its own length (`GraphPolicy::respond`'s `Held` docs).
+            Ok(Translation::CtxPromotion(_) | Translation::Held) => Some(Reply {
+                rpc_result: 0, // NV_OK
+                body: cmd.payload.clone(),
+            }),
+            // ⊘ Not reachable through `translate` for this command id — `ControlParams::PromoteCtx`
+            // routes to `translate_promote_ctx`, which returns `CtxPromotion` or an error.
+            // Written as a refusal rather than a `_ => unreachable!()` because this arm is
+            // reached from a GUEST-controlled command id: if the translation table is ever
+            // changed so that this id produces something else, the guest must get a decided
+            // answer and not a panic in the device.
+            Ok(Translation::Event(_) | Translation::Inert) => Some(Reply {
+                rpc_result: kayfabe_abi::view::PROMOTE_CTX_REFUSED_STATUS,
+                body: Vec::new(),
+            }),
+            Err(r) => Some(Reply {
+                rpc_result: promote_refusal_status(&r),
+                body: Vec::new(),
+            }),
         }
     }
 
