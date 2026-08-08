@@ -4097,3 +4097,184 @@ guard (`a_table_does_not_decide_behaviour`, fourth instance).
   ★ The stamp check is what caught it — `strings … | grep kayfabe-rev` on the archive returned
   **nothing at all**, which is why that check must be run on the archive and not only on the
   binary.
+
+### 14.23 ★★★ THE PUBLICATION REACHES THE OBJECT MODEL — recording is not forwarding (`[built]`)
+
+⊘ **`[built]`, not `[measured]`** at the moment it was written; §14.24 is its boot, and
+that boot **refutes this section's own closing claim**. Read both.
+
+#### What §14.22 left, restated as a defect rather than as a gap
+
+`[measured 2026-08-08, boots ship_7a881a7 / ship3_d5369b5]`: `control 0x90f10106 result
+0x00000000 x4`. **Served.** `GvasPubRecorder` decoded all five publications (four client-arm
++ the global arm) and wrote them into a **census log** whose entire output was a number in a
+report. Nothing turned one into an `RmEvent::SetPageDir`, so `Vas::pdb` stayed `None`, so
+`kayfabe_core::promote::route_promote_ctx` could only ever answer `ContextVasUndeclared` —
+which is exactly what both boots printed at `kernel_graphics_object.c:224`.
+
+⊘ **A fact the guest states five times, answered `NV_OK`, reaching nothing.** That is the C
+artifact's shape with better instrumentation on it.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| `ControlParams::VaspacePublishedPdes` | `0x90f10106` + `0x20800a9f` leave `PageDirNotModelled`, which keeps only the **revocation** `0x00801814`. `params_size` = 184, checked **exactly** |
+| `translate_published_pdes` → `RmEvent::SetPageDir` | the VA space is read off the RPC **header**'s `hObject` (`ogkm-580: gpu_vaspace.c:5174-5177`) — ⊘ **no params field names it at all** |
+| three named refusals | `PublishedPdesUnnamedVaspace` (`hObject == 0`), `PublishedPdesMalformed` (the guest broke `ctrl90f1.h`'s own rules), `PublishedPdesRootAperture` (a root outside the framebuffer is **not** a `Pdb`) |
+| `GMMU_APERTURE_*` + `decode_aperture` **move** to `kayfabe_abi::gvaspacepdes` | one declaration. This enum has already been transcribed wrong once — all four values — and a boot is what caught it (`two_encodings_agreeing_on_the_first_values`) |
+| `kayfabe_gsp::CommandObserver` + `Observing` | ★★★ a chain link that **cannot answer, because it has nothing to return** |
+| `served_chain`'s FRONT seat | takes a `CommandObserver`, ahead of `InitTablePolicy` — which still answers these two ids and must |
+| `kayfabe_rmrpc::PublicationObserver` | declares into a **second `ObjectModel` handle on the same shell** (E2's port, used for its purpose), shares the refusal census, publishes `seen`/`applied` |
+| wire ABI 21 → 22 | `gvas_pub_seen` / `gvas_pub_applied` / `gvas_pub_unexpected` |
+
+★★ **Two counts of one event, deliberately.** `gvas_pub_total` is the *recorder's* (decode +
+log); `gvas_pub_seen` is the *observer's* (decode + declare). Until this increment the first
+read 5 while the object model held nothing, and one number could not have said that.
+
+⊘ **`Bridge` is deliberately not reused here.** `Bridge::deliver` runs the `Reassembler`, and
+there must be exactly **one** reassembler over a command stream: a second one seated ahead of
+`ObjectPolicy` would consume the same continuation fragments into a second buffer — two
+half-messages where the guest sent one.
+
+#### ⊘⊘ Two INSTRUMENT defects found on the way, both this repository's own named traps
+
+1. **`served_chain`'s object seat cited a test file that has never existed.** The comment
+   read *"the obligation is stated here and `tests/served_chain_objects.rs` is where it is
+   checked"*, and `kayfabe-crec` cited the same non-file a second time as the reason its
+   replay chain is safe. `git ls-files` has never listed it. The obligation was load-bearing,
+   precisely worded, cited twice, and unchecked for its whole life — the family of
+   `should_panic_matches_the_wrong_site` and `gate_read_through_grep_cannot_fail`: a claim
+   whose *reference* to a check was mistaken for the check. Discharged now by
+   `tests/tests/served_chain_seats.rs`.
+2. **`sticky::POLICY_DISPOSITIONS`' `ObjectPolicy` row claimed `NotAControl`, and `#177` had
+   already made it false.** That policy answers `OBJECT_CONTROLS` (`0xa06f0103`,
+   `0xa06f0104`) with `NV_OK` and a body. Its executing test sweeps `WantedTable::ALL` —
+   **`InitTablePolicy`'s** 24 ids — so it quantified over a universe containing neither
+   control and passed vacuously (`gates_quantified_over_a_list`). Row corrected to `Guarded`.
+
+★ And a third, smaller, caught by the new test itself: the two publication ids are **also**
+members of `WantedTable::ALL`, so a sweep posts each twice and `PUBLICATION_CONTROLS.len()`
+is a wrong expected value that reads like the right one.
+
+#### ⊘ The closing claim of this section, which was WRONG
+
+> Nothing guest-visible changes: the front seat cannot answer, and every reply byte is
+> identical with and without it.
+
+Every reply byte **was** identical. §14.24 is what that missed.
+
+### 14.24 ★★★★ THE MILESTONE HAD BEEN RESTING ON THE PORT'S IGNORANCE — measured, and fixed (`5849328`)
+
+#### The boot that refuted it
+
+`[measured 2026-08-08, boot pub1_3e43e9a, rev 3e43e9a]`, vast GA106 bench (`vh`, RTX 3060
+`10de:2504`, host driver **580.159.04 Open**), stamp verified by
+`strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on **both** `libkayfabe_qemu_raw.a` and
+`qemu-build/qemu-system-x86_64`. Shipping configuration, `probe-arm set: EMPTY`, **STOCK**
+guest module. Evidence: `docs/reference/bench_evidence/run_pub1_3e43e9a_*`.
+
+```text
+nvkvm:   of those, 3 reached the object model, 2 ACCEPTED
+nvkvm: doorbells: 1 arrived, 0 served, 1 REFUSED by name
+nvkvm:   first doorbell refusal [FwdFault::IsolateRetired] … c=0xc1e00006 vas=0xa root=0x2efa9c000/ap1/sh47
+NVRM: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from memmgrMemSet(…) @ mem_mgr.c:463
+NVRM: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x65:1249)
+```
+
+against `2 arrived, 2 served [CpuCe::ServedLocally]` and `SMI_RC=0` one revision earlier.
+**The publication forwarding worked exactly as designed and cost the milestone.**
+
+#### ★★★ The mechanism, and it is one line of ours
+
+`SharedDoorbell::try_ce_submission` opened with
+
+```rust
+if facts.vas_pdb.is_some() {
+    return None; // the core can address this channel; it is not ours.
+}
+```
+
+and its own precondition list said *"**`vas_pdb` must be `None`.** A channel the core can
+address is the core's."* That is an **inference**: the core can *address* it, therefore the
+core can *serve* it. It held only while the port did not know the channel's address space.
+§14.23 made it know — so the CeUtils scrubber's channel became addressable, this executor
+declined it as "not ours", the doorbell fell through to the real forwarding plane, and that
+plane is `IsolatePlane::Stillborn` in **every shipping build** (`STILLBORN_WHY`: *"no host
+verb can be issued"*).
+
+⇒ ★★★ **`nvidia-smi` has been enumerating a device because the port did not know where the
+scrubber's page tables were.** §14.20's green, §14.22's reproduction and §14.21's restoration
+all rested on that. It is the same shape as §14.21 one plane over — *an accurate port state
+is fatal when a fallback was keyed on the inaccuracy* — and it is the second time in two
+days that **being more correct** broke the boot.
+
+⚠ Note what §14.8 had already written, in the module this increment edited around
+(`kayfabe_device::gvaspub`): *"granting the CeUtils channel a VAS **without the executor
+being reachable** makes `plan_doorbell` pass … and makes `commit_doorbell` ring a host
+channel with no CE behind it."* The warning named the right hazard and predicted the wrong
+sign — it expected a doorbell reporting **Served** over work that did not happen; what
+happened is a doorbell reporting **Refused** over work that used to happen. Reading it was
+not enough; only the boot got the direction right.
+
+#### The fix, and why it is not a fallback
+
+The gate now asks the question it always meant — not *"can the core **address** this
+channel?"* but **"is there any other executor?"** — answered from the composition root's own
+`selected_isolate_plane()` reading, carried to the doorbell port at realize as
+`SharedDoorbell::local_ce_is_the_only_executor`.
+
+⊘ **Not a fallback-after-refusal.** The decision is made before any doorbell arrives, from a
+choice the composition root declared; nothing retries a refused submission on a second path.
+⊘ **One reading, not two**: the selector is read once in `object_policy` and carried out, for
+the reason the probe set and the chip's engine slice are — two readings of one fact are two
+facts that can disagree. A build that selects a real isolate plane keeps the old routing
+exactly: a channel the core can address goes to the core.
+
+#### `[measured 2026-08-08, boot pub2_5849328, rev 5849328]` — GREEN, with the fact in place
+
+Same bench, same stamp discipline, `probe-arm set: EMPTY`, **STOCK** module. Evidence:
+`docs/reference/bench_evidence/run_pub2_5849328_*`.
+
+```text
+SMI_RC=0                        (full nvidia-smi device table)
+nvkvm: VA-space page-directory publications: 5 total, 5 distinct, 0 UNDECODABLE
+nvkvm:   of those, 5 reached the object model, 4 ACCEPTED (Vas::pdb populated)
+nvkvm: doorbells: 2 arrived, 2 served, 0 REFUSED by name
+nvkvm: completions: 2 announced, 0 UNVECTORED, 2 would be masked
+nvkvm:   bind engineType 11 (COPY2) client 0xc1e00006 object 0x00000002 result 0x00000000
+```
+
+★★ **The guest's dmesg is IDENTICAL to `ship3_d5369b5`** — 38 lines, timestamps stripped and
+sorted, `diff` empty. So the milestone reproduces byte for byte **and** four VA spaces now
+carry the guest's own page-directory base:
+
+| publication | `hClient` / `hObject` | root | applied? |
+|---|---|---|---|
+| `0x20800a9f` (global arm) | `0x0` / `0x0` | `0x2efbae000` | ⊘ **no** — `BridgeRefusal::ReservedClient`, `NV01_NULL_OBJECT` is not a namespace |
+| `0x90f10106` | `0xc1e00005` / `0xc` | `0x2efba5000` | ✔ |
+| `0x90f10106` | `0xc1e00006` / `0xa` | `0x2efa9c000` | ✔ — the channel that binds COPY2 and rings the doorbell |
+| `0x90f10106` | `0xc1e00007` / `0xbaba0042` | `0x2efa7c000` | ✔ |
+| `0x90f10106` | `0xc1d00008` / `0xcaf00000` | `0x2efa7c000` | ✔ |
+
+⊘ Zero `PublishedPdes*` refusals: every client-arm publication was well-formed and
+**vidmem-rooted**, so the aperture fork never had to fire on this boot. It is still the right
+refusal — `c_ceutils_ring_resolution.md` §2 measured a sysmem-rooted PDB on real GA106 — and
+it is now a guard that *can* fire rather than one that could not.
+
+#### ⊘ What this does NOT establish
+
+`kgrobjPromoteContext` still returns `0x56` at `kernel_graphics_object.c:224`, and that is
+**expected rather than disappointing**: §14.21 removed the claim, so `GPU_PROMOTE_CTX` is
+unserviced and the envelope refusal is the FSM's. The fact it was waiting on now exists in
+the object model; **claiming the control is the next increment**, and §14.21's re-enable
+condition — *"when the `0x90f10106` publication reaches `Vas::pdb`, promote-ctx SUCCEEDS
+rather than refuses"* — is now testable for the first time.
+
+⚠ And when it is claimed, the `0x56` trap still governs: a refusal here propagates into
+`gpuStatePostLoad`, where `NV_ERR_NOT_SUPPORTED` is the **only** status converted to `NV_OK`
+(`ogkm-580: gpu.c:3437-3439`). ★ `BridgeRefusal::rpc_result` already answers `0x56` for every
+variant, so routing promote-ctx's refusal through the **envelope** rather than through a
+per-arm status constant is what §14.21 measured the need for — the C-shaped mistake was a
+*better* status, chosen at the arm.
