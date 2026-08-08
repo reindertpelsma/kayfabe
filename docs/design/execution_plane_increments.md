@@ -4958,3 +4958,64 @@ routing.
 ★ `replay_conformance.rs` is the strongest half: `n_claimed` moves `84 → 87` and
 `size_checked` `24 → 25` against a real-GA106 GSP capture, so the reply's `paramsSize` is
 hardware-evidenced rather than declared.
+
+#### ⊘⊘⊘ THE BOOT: both halves landed on the wire, and `cuInit` STILL RETURNS 100
+
+`[measured 2026-08-08, boot `gi1_e6ed6bc`, real GA106 on `vh`, shipping config,
+`probe-arm set: EMPTY`, **STOCK** guest module, both stamps
+`kayfabe-rev:e6ed6bcf8647a0df459c80c9f11a922be3da1936`]`:
+
+```text
+SMI_RC=0
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+```
+
+⊘ **Not "the change did not take".** The wire says both halves landed, three ways:
+
+| evidence | before (`amb1_ee1994b`) | after (`gi1_e6ed6bc`) |
+|---|---|---|
+| `0x20800102` in the **unserviced** ledger | present | ★ **gone** — `control 0x20800102 result 0x00000000 x1` |
+| `0x2081` among `GspRmAlloc failed` | refused | ★ **absent** — the refused classes are now `0x70`, `0xc36f`, `0x402c`, `0x208f` |
+| controls demanded | 24 unserviced | 32, incl. **nine never demanded before** |
+| `0x20810110` | never seen | ★ present — a **second** control on the BinApi handle, which libcuda can only issue on a handle it now owns |
+
+★ The boot **advanced**. `RmInitAdapter` succeeds, `nvidia-smi` returns 0, and nine control
+ids reach this port for the first time. What did not move is `cuInit`'s answer.
+
+#### ⊘⊘ THE REAL REFUTATION — an injection matrix measures NECESSITY and can NEVER measure SUFFICIENCY
+
+§14.27 forced one status to `0x56` **at a time, on a working system** — real GA106, real
+libcuda, real GSP firmware answering everything else correctly. That experiment removes X and
+observes failure, which proves X is **required**. It says nothing whatever about what else is
+required, because nothing else was ever removed. §14.27 wrote it up as *"⇒ Two co-equal
+causes … Land both, then boot"*, and I carried that sentence as a **complete** specification.
+
+⊘ It was a pair of *necessary* conditions produced by a method that is structurally incapable
+of enumerating the rest. Two necessary conditions do not make a sufficient one, and the boot
+above is the falsifier.
+
+★★★ **And the instrument is now exhausted, which is itself the measurement.** Every id this
+port still refuses on the `cuInit` path was put through the same injection matrix on real
+hardware, one at a time (`[measured 2026-08-08]`, `inj_1428.sh`):
+
+```text
+BASELINE (nothing forced)          cuInit(0) -> 0
+refuse CTRL 0x20810110/0x208f1105/0x20809009/0x2080014b/0x20800157/0x20801357
+           /0x2080a612/0x2080a618/0x2080012b/0x00800294/0x20810108   -> 0  (all)
+refuse ALLOC 0x70/0xc36f/0x402c/0x208f                               -> 0  (all)
+```
+
+**Sixteen for sixteen non-load-bearing.** So the next cause is **not a single refused id**,
+and single-fault injection cannot find it. Two reasons, both structural:
+
+1. ⊘ **It runs on hardware that WORKS.** Every id it clears is cleared in a world where
+   everything else is answered by real firmware. Our port answers many of those differently.
+2. ⊘ **It can only turn `NV_OK` into `0x56`.** It has no way to turn a *right* answer into a
+   *wrong* one — so a control this port SERVES with a wrong body is invisible to it, by
+   construction. That is `mock_fidelity_both_directions` and
+   `refusal_invisible_in_the_ledger` meeting in one instrument.
+
+⇒ The next increment needs a **comparison, not a subtraction**: the same interposer run
+**inside the guest**, diffed positionally against
+`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt`. That names a served-but-wrong answer,
+which is the only remaining class this project has an oracle for.
