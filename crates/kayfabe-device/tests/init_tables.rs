@@ -332,7 +332,15 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // ⊘ It is NOT admitted by the injection matrix, which is structurally incapable of
     // finding it (§14.28: injection subtracts an answer from a system that works, and every
     // one of the sixteen ids it cleared was cleared on real firmware).
-    assert_eq!(WantedTable::ALL.len(), 26, "the served universe's size");
+    // ★★★ 26 -> 27 at §14.30: `0x20801823` BUS_GET_INFO_V2, and it is the first of the
+    // twenty-seven whose VALUE is **derived** rather than transcribed. Attributed, not
+    // ratcheted: `[measured 2026-08-08, boot `v1429_49b182a`]` `cuInit` stops at this
+    // control's second call with `0x56`, and `rmladder --bus-info-sweep` (R22) measured the
+    // one index of six that reaches a GSP. ⊘ And it is the first row admitted with a
+    // measurement that FORBIDS a chip constant: the same physical GA106 answered
+    // `0x00302000` idle and `0x00322000` under load, so the served word comes off one enum
+    // (`ChipProfile::pcie_max_gen`) through `PcieGenInfo::fully_trained`, never a table.
+    assert_eq!(WantedTable::ALL.len(), 27, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

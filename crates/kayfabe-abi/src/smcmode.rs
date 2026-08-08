@@ -42,7 +42,7 @@
 //!
 //! # ★★★ Where the value comes from, and where it must NOT come from
 //!
-//! ⊘ **Not from the C oracle.** `C: src/qemu/mode2_initctrl_ga106.h:6243` records this row
+//! ⊘ **Not from the C oracle.** `C: src/qemu/mode2_initctrl_ga106.h:6243` is `0x20800a4c`'s row
 //! with `psize = 4, dlen = 0` — it is one of the eleven **empty** rows, nine of which real
 //! hardware contradicts outright (`crate::oracle`). An empty capture is evidence of nothing,
 //! and `traces/real_ga106/README.md` marks this row *"⚠ coincides"* precisely because

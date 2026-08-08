@@ -713,6 +713,7 @@ fn ga106_copy() -> kayfabe_device::ChipProfile {
         gr_context_buffers: g.gr_context_buffers,
         forwarded_gpu_info: g.forwarded_gpu_info,
         smc_mode: g.smc_mode,
+        pcie_max_gen: g.pcie_max_gen,
         fb_length: g.fb_length,
     }
 }

@@ -553,6 +553,7 @@ const fn copy_of_ga106() -> ChipProfile {
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
         forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         smc_mode: kayfabe_abi::smcmode::GA106_SMC_MODE,
+        pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,
     }

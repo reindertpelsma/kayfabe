@@ -5139,7 +5139,7 @@ place the blind spot could show through.
 
 #### The value, and where it must NOT come from
 
-⊘ **Not from the C oracle.** `C: mode2_initctrl_ga106.h:6243` records this row `psize 4,
+⊘ **Not from the C oracle.** `C: mode2_initctrl_ga106.h:6243` is `0x20800a4c`'s row, `psize 4,
 dlen 0` — one of the eleven **empty** rows, nine of which hardware contradicts, and
 `traces/real_ga106/README.md` already marks it *"⚠ coincides"*: nothing **about the row**
 distinguishes it from the nine that are wrong. The value comes from two positive measurements
