@@ -3509,3 +3509,42 @@ context. `nvidia-smi` is the **next** milestone's oracle, not this one's.
 - ⊘ It establishes **nothing** about the isolate's `HostCe` branch, which this path refuses
   by name and never took, and nothing about a multi-launch or multi-entry submission — the
   boot's two doorbells were one GPFIFO entry and one `LAUNCH_DMA` each.
+
+#### ★★ REPRODUCED, and the difference between the two runs is the corroboration
+
+`[measured 2026-08-08]` a second boot at the same revision, `p35_754e393_b`
+(`docs/reference/bench_evidence/run_p35_754e393_b_*.log`): **byte-identical** guest dmesg,
+39/39 lines with timestamps stripped, same `2 arrived, 2 served, 0 REFUSED`. ⊘ Recorded
+because `#13` is the standing proof that *"it worked once"* is not a result on this bench.
+
+★ And the one thing that **differs** between the two runs is the evidence that nothing here
+is a constant: the finishPayload resolved to guest-physical `0x02d6_8004` in the first boot
+and `0x22c5_9004` in the second, for the *same* GPU virtual address `0x4_2006_c004`. The
+guest allocates a different page each boot and the walk followed it — a hard-coded address, a
+cached translation or a lucky numerical coincidence would have produced the same number
+twice.
+
+#### ★ The `cuda.h` errand, done — and the trap it carries is CONFIRMED
+
+`[measured 2026-08-08]` NVIDIA's own driver-API header is now at
+**`/usr/local/include/cuda.h`** in the bench guest (`CUDA_VERSION 12090`, 1 168 299 bytes),
+extracted host-side from `cuda-cudart-dev-12-9_12.9.79-1_amd64.deb` and `scp`'d in.
+⊘ **No CUDA toolkit was installed** — one header, out of one `dpkg-deb -x`, into
+`/usr/local/include` — and the guest's network was not reconfigured.
+
+⚠ **The trap is real, and here is the guest's own `find`:**
+
+```
+/tmp/cuda.h
+/usr/include/linux/cuda.h                                  ← the PowerMac ADB controller
+/usr/src/linux-headers-6.8.0-136/include/linux/cuda.h       ← the same, twice
+/usr/src/linux-headers-6.8.0-136/include/uapi/linux/cuda.h
+/usr/local/include/cuda.h                                   ← NVIDIA's, and it is LAST
+```
+
+Three of the five hits are `linux/cuda.h`, the **Apple PowerMac ADB microcontroller** header,
+and they sort *ahead* of the real one. An existence check passes on any of them and the
+compile then fails on a missing `CUdevice`. ⇒ Check the **content**
+(`grep -q CUDA_VERSION`), never the path. `gcc -fsyntax-only -I/usr/local/include` over a
+translation unit whose only line is `#include <cuda.h>` succeeds, which is the property the
+next rung needs and the only one this errand claims.
