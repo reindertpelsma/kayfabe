@@ -894,6 +894,7 @@ fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
         &kayfabe_abi::gspstaticinfo::GspStaticInfo {
             fb_regions: OTHER.fb_regions,
             fb_length: OTHER.fb_length,
+            gid: kayfabe_device::staticinfo::StaticInfoPolicy::gid_for_chip(&OTHER),
         },
         kayfabe_abi::versions::GspStaticInfoWire::Pre610,
     )
@@ -920,6 +921,9 @@ fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
             &kayfabe_abi::gspstaticinfo::GspStaticInfo {
                 fb_regions: kayfabe_device::ga10x::GA106.fb_regions,
                 fb_length: kayfabe_device::ga10x::GA106.fb_length,
+                gid: kayfabe_device::staticinfo::StaticInfoPolicy::gid_for_chip(
+                    &kayfabe_device::ga10x::GA106,
+                ),
             },
             kayfabe_abi::versions::GspStaticInfoWire::Pre610,
         )

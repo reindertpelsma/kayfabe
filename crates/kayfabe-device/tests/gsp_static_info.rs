@@ -49,6 +49,24 @@ const ORACLE_FB_REGION_PARAMS: &str = concat!(
     "0000000000000000000000000000000000000000000000000000000000000000",
 );
 
+/// Bytes 24..36 of the oracle's `GspStaticConfigInfo`: `gidInfo.index`, `gidInfo.flags`
+/// and `gidInfo.length`. Read from the same board's own reply
+/// (`C: docs/research/captures/ga106_gspstaticinfo_580.log:3-4`, rows `0010` and `0020`).
+/// ⊘ The shape only — the 16 identity bytes that follow are [`ORACLE_GID_UUID`], and this
+/// port must not serve them.
+const ORACLE_GID_INFO_HEADER: &str = "000000000200000010000000";
+
+/// Bytes 36..52 of the oracle's body: the captured RTX 3060's **own** UUID. Present here
+/// for exactly one purpose — so `the_encoder_reproduces_the_oracles_own_fb_region_bytes`
+/// can assert this port does **not** serve it. ⊘ Never a default, never a fallback.
+const ORACLE_GID_UUID: &str = "51b08678782840151962a65a7a488e3c";
+
+/// A UUID for the layout tests. Any non-zero value: what is under test is where the bytes
+/// land, never which bytes they are.
+fn a_test_gid() -> kayfabe_abi::gspstaticinfo::GpuGid {
+    kayfabe_abi::gspstaticinfo::GpuGid::derive(b"gsp_static_info layout test")
+}
+
 /// The five regions the oracle's GSP reported for a 12 GiB RTX 3060, decoded from
 /// [`ORACLE_FB_REGION_PARAMS`] by hand so that feeding them back in is a real round trip
 /// and not a copy of the same bytes.
@@ -136,6 +154,7 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
         &GspStaticInfo {
             fb_regions: &ORACLE_ROWS,
             fb_length: TWELVE_GIB,
+            gid: a_test_gid(),
         },
         GspStaticInfoWire::Pre610,
     )
@@ -158,10 +177,64 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
     assert!(body[632..1248].iter().all(|b| *b == 0), "fbRegion[5..16]");
     // `fb_length`, the second statement of the same 12 GiB.
     assert_eq!(&body[1352..1360], &0x3_0000_0000u64.to_le_bytes()[..]);
-    // Bytes 0..344 are `grCapsBits`/`gidInfo`/`SKUInfo` — real in the capture, and left
-    // zero here because this port does not advertise them. The oracle's are deliberately
-    // NOT copied: a GID this device did not generate is an identity it cannot honour.
-    assert!(body[..344].iter().all(|b| *b == 0));
+    // Bytes 0..24 (`grCapsBits` + its alignment byte) and 292..344 (`SKUInfo`) are real in
+    // the capture and left zero here, because this port does not advertise them.
+    assert!(body[..24].iter().all(|b| *b == 0), "grCapsBits");
+    assert!(body[292..344].iter().all(|b| *b == 0), "SKUInfo");
+
+    // ★★★ `gidInfo`, and the two halves of it are treated DIFFERENTLY on purpose.
+    //
+    // - Its **shape** — `index`, `flags`, `length` — is a fact about what a GSP writes,
+    //   and the capture is the oracle for it: bytes 24..36 of the oracle body read
+    //   `00000000 02000000 10000000`, i.e. index 0, `FORMAT_BINARY | TYPE_SHA1`, and a
+    //   length of 16. This port must write the same three words or the guest's
+    //   `gidInfo.data` is not where it looks for it.
+    // - Its **identity** — `data[0..16]` — is deliberately NOT the oracle's. A GID this
+    //   device did not generate is an identity it cannot honour, and copying the C bench
+    //   board's UUID would make every kayfabe GPU claim to be that specific RTX 3060.
+    assert_eq!(
+        &body[24..36],
+        &unhex(ORACLE_GID_INFO_HEADER)[..],
+        "gidInfo.{{index,flags,length}} — the oracle's own three words"
+    );
+    assert_eq!(
+        &body[36..52],
+        a_test_gid().as_bytes(),
+        "gidInfo.data[0..16]"
+    );
+    assert_ne!(
+        &body[36..52],
+        &unhex(ORACLE_GID_UUID)[..],
+        "this port must never ship the captured board's own UUID"
+    );
+    assert!(
+        body[52..292].iter().all(|b| *b == 0),
+        "gidInfo.data past the 16-byte SHA-1 GID"
+    );
+}
+
+/// ★ **The default this port derives is not zero** — the one value
+/// `gpuGenGidData_FWCLIENT` reads as *"GSP Static Info has not been initialized yet for
+/// UUID"* (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_gspclient.c:152-156`).
+///
+/// `[measured 2026-08-08, boots p35_754e393 and p35_1f88649, revs 754e393 / 1f88649]` a
+/// zero here is not a quiet field: it is `RmRegisterGpudb: Failed to get UUID` and
+/// `RmInitAdapter failed! (0x43:0x59:2239)` — `osinit.c:2239`,
+/// `RM_SET_ERROR(status, RM_GPUDB_REGISTER_FAILED)` — thirteen seconds and four subsystems
+/// after the last thing that mentions the GSP. That distance is the whole reason this test
+/// asserts on the *served body* rather than on the type.
+#[test]
+fn the_served_body_carries_a_non_zero_uuid_for_every_chip_row() {
+    for chip in kayfabe_device::CHIPS {
+        let body = StaticInfoPolicy::new(chip, *table_for(BENCH_DRIVER).expect("bench ABI"))
+            .body()
+            .expect("every shipped chip row encodes");
+        assert!(
+            body[36..52].iter().any(|b| *b != 0),
+            "{}: gidInfo.data is all zero, which the guest reads as NV_ERR_INVALID_STATE",
+            chip.name
+        );
+    }
 }
 
 #[test]

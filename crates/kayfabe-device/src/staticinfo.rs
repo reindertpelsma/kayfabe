@@ -40,7 +40,7 @@
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::gspstaticinfo::{
-    GSP_STATIC_CONFIG_INFO_SIZE, GspStaticInfo, encode_gsp_static_info,
+    GSP_STATIC_CONFIG_INFO_SIZE, GpuGid, GspStaticInfo, encode_gsp_static_info,
 };
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
@@ -58,13 +58,48 @@ const NV_OK: u32 = 0;
 pub struct StaticInfoPolicy {
     chip: &'static ChipProfile,
     driver: DriverAbiTable,
+    gid: GpuGid,
 }
 
 impl StaticInfoPolicy {
-    /// Bind the policy to a chip row and a guest driver version.
+    /// Bind the policy to a chip row and a guest driver version, with the UUID this
+    /// device declares derived from the chip row.
+    ///
+    /// ⚠ **Per chip row, therefore not per board.** See [`GpuGid`]: two nvkvm GPUs built
+    /// from the same row would declare the same UUID, and the answer is a VMM-declared
+    /// value through [`StaticInfoPolicy::with_gid`]. The derivation is here rather than a
+    /// constant so that the value is at least *stable* — a guest that pinned
+    /// `GPU-<uuid>` finds the same device after a reboot — and so that adding a second
+    /// chip row cannot silently produce a second GPU with the first one's identity.
     #[must_use]
     pub fn new(chip: &'static ChipProfile, driver: DriverAbiTable) -> StaticInfoPolicy {
-        StaticInfoPolicy { chip, driver }
+        StaticInfoPolicy::with_gid(chip, driver, Self::gid_for_chip(chip))
+    }
+
+    /// Bind the policy with an explicitly declared UUID — the door a VMM-supplied
+    /// `gpu-uuid` comes through.
+    #[must_use]
+    pub fn with_gid(
+        chip: &'static ChipProfile,
+        driver: DriverAbiTable,
+        gid: GpuGid,
+    ) -> StaticInfoPolicy {
+        StaticInfoPolicy { chip, driver, gid }
+    }
+
+    /// The UUID [`StaticInfoPolicy::new`] derives, exposed so a test can state the
+    /// default without restating the derivation.
+    #[must_use]
+    pub fn gid_for_chip(chip: &ChipProfile) -> GpuGid {
+        // ★ The chip's PCI identity, in a fixed order. Not `chip.name`: a diagnostic
+        // string is the one field this row documents as never branched on, and an
+        // identity derived from it would change if somebody fixed a typo.
+        let mut seed = [0u8; 8];
+        seed[0..2].copy_from_slice(&chip.pci_device_id.to_le_bytes());
+        seed[2..4].copy_from_slice(&chip.pci_subsystem_vendor_id.to_le_bytes());
+        seed[4..6].copy_from_slice(&chip.pci_subsystem_id.to_le_bytes());
+        seed[6] = chip.pci_revision;
+        GpuGid::derive(&seed)
     }
 
     /// The body this policy would post, or the reason it cannot.
@@ -83,6 +118,7 @@ impl StaticInfoPolicy {
             &GspStaticInfo {
                 fb_regions: self.chip.fb_regions,
                 fb_length: self.chip.fb_length,
+                gid: self.gid,
             },
             self.driver.gsp_static_info_wire(),
         )

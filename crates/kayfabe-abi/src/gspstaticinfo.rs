@@ -76,6 +76,28 @@ const GID_DATA_SIZE: usize = 256;
 /// (`ogkm-580: ctrl2080gpu.h:1785-1790`).
 const GID_INFO_SIZE: usize = 12 + GID_DATA_SIZE;
 
+/// `RM_SHA1_GID_SIZE` — how many bytes of `gidInfo.data[]` are the GPU's UUID
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gpu_uuid.h:30-34`, *"uses the first 16 bytes"*).
+pub const RM_SHA1_GID_SIZE: usize = 16;
+
+/// Byte offset of `gidInfo` — the **second** member of `GspStaticConfigInfo`
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:80-81`), after
+/// `grCapsBits[23]` realigned to the struct's 4-byte members.
+pub const GID_INFO_OFF: usize = align_up(GR_CAPS_BITS_SIZE, 4);
+
+/// Byte offset of `gidInfo.data[]` — past `index`, `flags` and `length`.
+pub const GID_DATA_OFF: usize = GID_INFO_OFF + 12;
+
+/// `NV2080_GPU_CMD_GPU_GET_GID_FLAGS_FORMAT_BINARY` (`0x2`) with
+/// `..._TYPE_SHA1` (`0x0` at bit 2) — `ogkm-580: ctrl2080gpu.h:1793-1798`.
+///
+/// ★ Corroborated by the real board rather than derived: the C artifact's captured
+/// GA106 reply (`C: docs/research/captures/ga106_gspstaticinfo_580.log:3-4`) carries
+/// `index = 0`, `flags = 2`, `length = 0x10` at exactly these offsets. This is a row
+/// **with a body**, which is the half of that capture set `CLAUDE.md` records as
+/// trustworthy byte-for-byte.
+const GID_FLAGS_SHA1_BINARY: u32 = 0x2;
+
 /// `sizeof(NV2080_CTRL_BIOS_GET_SKU_INFO_PARAMS)` (`ogkm-580: ctrl2080bios.h:376-386`):
 /// `BoardID` u32, `chipSKU[9]`, `chipSKUMod[5]`, u32 `skuConfigVersion` (3 bytes of
 /// padding ahead of it), `project[5]`, `projectSKU[5]`, `CDP[6]`, `projectSKUMod[2]`,
@@ -172,6 +194,111 @@ pub struct FbRegion {
     pub protected: bool,
 }
 
+/// ★★★ **The GPU's UUID** — `gidInfo.data[0..16]`, and the field whose being zero fails
+/// `RmInitAdapter` thirteen seconds and four subsystems away from here.
+///
+/// # Why this is a type and not a `[u8; 16]`
+///
+/// The guest's only test of it is *"is it all zeros"*:
+///
+/// ```text
+/// if (portMemCmp(pGSCI->gidInfo.data, zeroGid, RM_SHA1_GID_SIZE) == 0)
+///     return NV_ERR_INVALID_STATE;                 // gpuGenGidData_FWCLIENT
+/// ```
+///
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_gspclient.c:152-159`). On a GSP client that
+/// function is the **only** producer of the UUID — the other two `gpuGenGidData` HALs are
+/// `_VF` and `_SOC`, so no register, fuse or PCI path can supply one. `[measured
+/// 2026-08-08, boots p35_754e393 and p35_1f88649]` a zero field there surfaces as:
+///
+/// ```text
+/// NVRM: RmRegisterGpudb: Failed to get UUID
+/// NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x43:0x59:2239)
+/// ```
+///
+/// — `osinit.c:2239` is `RM_SET_ERROR(status, RM_GPUDB_REGISTER_FAILED)`, and `0x59` is
+/// `NV_ERR_OPERATING_SYSTEM`, which `RmRegisterGpudb` returns at `osinit.c:1671-1674` when
+/// `RmGetGpuUuidRaw` hands back `NULL`. ⇒ **an all-zero UUID must be unconstructible**,
+/// which is what this newtype is for. A `[u8; 16]` field would put the check in the
+/// encoder, where a caller could pass a default and get a body that looks served.
+///
+/// # ⊘ What this port does NOT claim
+///
+/// NVIDIA's own value is the first 16 bytes of a SHA-1 over the chip's ECID, computed by
+/// the closed physical RM (`gpuGenGidData_GK104`, declared in
+/// `ogkm-580: g_gpu_nvoc.h:4737` and **not** in the open tree). This port cannot compute
+/// that and does not pretend to: [`GpuGid::derive`] produces a *stable synthetic
+/// identity*, and the only properties claimed for it are determinism, non-zeroness, and
+/// distinctness for distinct seeds.
+///
+/// ⚠ **Scope, stated because it is a real limit and not a rounding error.** The seed the
+/// device uses today is its own chip row, so two nvkvm GPUs presented to one guest from
+/// the same chip row would carry the **same** UUID. That is wrong and it is known: the
+/// fix is a per-device `gpu-uuid` declaration from the VMM, [`GpuGid::from_bytes`] is the
+/// door it comes through, and until it exists this port is single-GPU on this axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuGid([u8; RM_SHA1_GID_SIZE]);
+
+impl GpuGid {
+    /// An operator-declared UUID, or `None` if it is the one value the guest reads as
+    /// *"GSP static info has not been initialized yet"*.
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; RM_SHA1_GID_SIZE]) -> Option<GpuGid> {
+        let mut i = 0;
+        while i < RM_SHA1_GID_SIZE {
+            if bytes[i] != 0 {
+                return Some(GpuGid(bytes));
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// The wire bytes, for [`encode_gsp_static_info`].
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; RM_SHA1_GID_SIZE] {
+        &self.0
+    }
+
+    /// A stable synthetic identity for `seed`.
+    ///
+    /// FNV-1a over a domain-separated seed, expanded by SplitMix64. ★ Deliberately a
+    /// *named, boring, dependency-free* mixing function rather than a hash imported for
+    /// the occasion: nothing here is a security property, and the one property that is
+    /// load-bearing — *the same seed always yields the same UUID, so a guest that pinned
+    /// `GPU-<uuid>` still finds its device after a reboot* — is easier to see in eight
+    /// lines than to take on trust from a crate.
+    ///
+    /// Never all-zero: the final byte-0 fixup is what makes the return type total rather
+    /// than an `Option` the caller would have to invent an answer for.
+    #[must_use]
+    pub fn derive(seed: &[u8]) -> GpuGid {
+        /// The domain separator, so a seed that happens to collide with some other use of
+        /// the same bytes does not produce the same identity.
+        const DOMAIN: &[u8] = b"kayfabe/gpu-gid/v1\0";
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in DOMAIN.iter().chain(seed.iter()) {
+            h ^= u64::from(*b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        let mut out = [0u8; RM_SHA1_GID_SIZE];
+        for chunk in out.chunks_mut(8) {
+            h = h.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            let mut z = h;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            z ^= z >> 31;
+            chunk.copy_from_slice(&z.to_le_bytes());
+        }
+        // ⊘ The one value the guest reads as "not initialized yet" is excluded by
+        // construction rather than by a probability argument.
+        if out.iter().all(|b| *b == 0) {
+            out[0] = 1;
+        }
+        GpuGid(out)
+    }
+}
+
 /// The static facts this port is willing to state about one GPU.
 ///
 /// ⊘ Deliberately not "the struct". Every field of `GspStaticConfigInfo` this type does
@@ -185,6 +312,8 @@ pub struct GspStaticInfo<'a> {
     pub fb_regions: &'a [FbRegion],
     /// `fb_length` — the framebuffer this device advertises, in bytes.
     pub fb_length: u64,
+    /// `gidInfo.data[0..16]` — this GPU's UUID. See [`GpuGid`] for what fails without it.
+    pub gid: GpuGid,
 }
 
 /// A `GspStaticConfigInfo` this port will not put on the wire.
@@ -336,6 +465,15 @@ pub fn encode_gsp_static_info(
     }
 
     let mut body = vec![0u8; GSP_STATIC_CONFIG_INFO_SIZE];
+    // ★★★ `gidInfo`. `index` stays 0, which is what the captured GA106 reply carries and
+    // what `gpuGenGidData_FWCLIENT` never reads; `flags` and `length` are written because
+    // the real GSP writes them, and a field the guest does not read is not a licence to
+    // leave the struct half-built (`mock_fidelity_both_directions`: no more and no less
+    // than hardware).
+    body[GID_INFO_OFF + 4..GID_INFO_OFF + 8].copy_from_slice(&GID_FLAGS_SHA1_BINARY.to_le_bytes());
+    body[GID_INFO_OFF + 8..GID_INFO_OFF + 12]
+        .copy_from_slice(&(RM_SHA1_GID_SIZE as u32).to_le_bytes());
+    body[GID_DATA_OFF..GID_DATA_OFF + RM_SHA1_GID_SIZE].copy_from_slice(info.gid.as_bytes());
     let n = u32::try_from(regions.len()).unwrap_or(u32::MAX);
     let p = FB_REGION_INFO_PARAMS_OFF;
     body[p..p + 4].copy_from_slice(&n.to_le_bytes());
@@ -359,6 +497,12 @@ pub fn encode_gsp_static_info(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A UUID for the encoder tests. Any non-zero value; the encoding is what is under
+    /// test here, never the value.
+    fn a_gid() -> GpuGid {
+        GpuGid::derive(b"gspstaticinfo unit test")
+    }
 
     /// A minimal well-formed table: one usable region spanning a 1 MiB framebuffer.
     fn one_region(fb: u64) -> [FbRegion; 1] {
@@ -386,6 +530,34 @@ mod tests {
         assert_eq!(FB_REGION_INFO_PARAMS_OFF - (24 + 268 + 48), 4);
     }
 
+    /// ★★★ The one value the guest reads as *"GSP static info has not been initialized
+    /// yet for UUID"* (`ogkm-580: gpu_gspclient.c:152-156`) has no constructor. This is
+    /// the property that makes the newtype worth existing — an encoder-side check would
+    /// leave a caller able to hold a zero UUID and only discover it at the wire.
+    #[test]
+    fn an_all_zero_uuid_cannot_be_constructed() {
+        assert!(GpuGid::from_bytes([0u8; RM_SHA1_GID_SIZE]).is_none());
+        // One byte set anywhere is enough, including the last one — the guest compares
+        // all sixteen, so the check must not be "is byte 0 non-zero".
+        let mut last = [0u8; RM_SHA1_GID_SIZE];
+        last[RM_SHA1_GID_SIZE - 1] = 1;
+        assert_eq!(
+            GpuGid::from_bytes(last).expect("non-zero").as_bytes(),
+            &last
+        );
+    }
+
+    /// Determinism is the load-bearing property: a guest that pinned `GPU-<uuid>` must
+    /// find the same device after a reboot, and two different seeds must not collide.
+    #[test]
+    fn derive_is_stable_and_seed_sensitive() {
+        assert_eq!(GpuGid::derive(b"a"), GpuGid::derive(b"a"));
+        assert_ne!(GpuGid::derive(b"a"), GpuGid::derive(b"b"));
+        // The empty seed is a real caller (a chip row of all zeros) and must still be
+        // non-zero on the wire.
+        assert!(GpuGid::derive(&[]).as_bytes().iter().any(|b| *b != 0));
+    }
+
     #[test]
     fn the_body_is_the_whole_struct_and_zero_outside_what_we_state() {
         let fb = 1 << 20;
@@ -393,14 +565,36 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &one_region(fb),
                 fb_length: fb,
+                gid: a_gid(),
             },
             GspStaticInfoWire::Pre610,
         )
         .expect("encodes");
         assert_eq!(body.len(), 1792);
+        // `grCapsBits[23]` and its alignment byte, then `SKUInfo` — both still untouched.
+        assert!(body[..24].iter().all(|b| *b == 0), "grCaps untouched");
+        assert!(body[292..344].iter().all(|b| *b == 0), "SKUInfo untouched");
+        // ★ `gidInfo`, at the literal offsets the 580 struct produces — spelled out
+        // rather than read back off the constants, like the offsets test above.
+        assert_eq!(
+            u32::from_le_bytes(body[24..28].try_into().unwrap()),
+            0,
+            "gidInfo.index"
+        );
+        assert_eq!(
+            u32::from_le_bytes(body[28..32].try_into().unwrap()),
+            2,
+            "gidInfo.flags = FORMAT_BINARY | TYPE_SHA1"
+        );
+        assert_eq!(
+            u32::from_le_bytes(body[32..36].try_into().unwrap()),
+            16,
+            "gidInfo.length"
+        );
+        assert_eq!(&body[36..52], a_gid().as_bytes(), "gidInfo.data[0..16]");
         assert!(
-            body[..344].iter().all(|b| *b == 0),
-            "grCaps/gid/SKU untouched"
+            body[52..292].iter().all(|b| *b == 0),
+            "the 240 bytes of gidInfo.data past the SHA-1 UUID stay zero"
         );
         assert!(
             body[1248..1352].iter().all(|b| *b == 0),
@@ -420,6 +614,7 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &[],
                 fb_length: 1 << 20,
+                gid: a_gid(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -446,6 +641,7 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &rows,
                 fb_length: 17 << 20,
+                gid: a_gid(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -468,6 +664,7 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &rows,
                 fb_length: 0x1001,
+                gid: a_gid(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -508,6 +705,7 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &rows,
                 fb_length: 0x2_0000,
+                gid: a_gid(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -529,6 +727,7 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &one_region(fb),
                 fb_length: fb * 2,
+                gid: a_gid(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -549,6 +748,7 @@ mod tests {
             &GspStaticInfo {
                 fb_regions: &one_region(fb),
                 fb_length: fb,
+                gid: a_gid(),
             },
             GspStaticInfoWire::From610_43_02,
         )
