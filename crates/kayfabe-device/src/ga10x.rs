@@ -1307,8 +1307,21 @@ pub static GA106_MEMORY_SYSTEM: MemorySystemRow = MemorySystemRow {
     disable_post_l2_compression: false,
     ecc_fbpa_enabled: false,
     l2_prefill: false,
-    // 0x24_0000 = 2.25 MiB = 24 slices x 96 KiB, which is `ltc_count * lts_per_ltc_count`
-    // two fields down. The capture agrees with itself.
+    // 0x24_0000 = 2.25 MiB, captured. ★★★ ⚠ This comment used to read *"= 24 slices x 96 KiB,
+    // which is `ltc_count * lts_per_ltc_count` two fields down. The capture agrees with
+    // itself."* — arithmetic that **checks out for a value read as the wrong quantity**, and
+    // `two_encodings_agreeing_on_the_first_values` in a doc comment. `[measured 2026-08-08,
+    // real GA106]` `FB_GET_INFO_V2`'s `LTS_COUNT` (`0x23`) is **18**, not 24
+    // (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66`), and 18 x 128 KiB is this
+    // 2.25 MiB — 128 KiB being the Ampere slice GA102's `ltsPerLtcCount * ltcCount == 48`
+    // arm implies for its 6 MiB (`ogkm-580: kern_mem_sys_ga102.c:66-120`). 96 KiB is not an
+    // Ampere L2 slice.
+    //
+    // ⊘ The FIELDS BELOW ARE CORRECT AND UNCHANGED: `ltsPerLtcCount = 4` is what a real
+    // GSP put on the wire (`C: mode2_initctrl_ga106.h:5391`, `dlen 40`, a row WITH a body),
+    // and RM's header calls `LTS_COUNT` the **active** count across active LTCs — a
+    // floorswept part runs three of each LTC's four. Two different quantities, both true.
+    // ⇒ `kayfabe_abi::fbinfo` therefore REFUSES `0x23` rather than projecting it from here.
     l2_cache_size: 0x0024_0000,
     fbpa_present: true,
     // 64 KiB; the encoder derives `comprPageShift = 16` from it.

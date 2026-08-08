@@ -5600,3 +5600,231 @@ the way `PCIE_GEN_INFO` poisons a chip row.
 | ⊘ **three inherited RED gates repaired, each attributed** (`[measured]` all three fail at `78bee9e`): the `cap1b` closure set + both non-vacuity counts; the claimed-call pin `87 → 95` where the **whole +8 is §14.29's `0x20800a4c`** and this rung contributes **zero**; and the size-evidence gate, exempted **with the reason it demands** rather than deleted | `cap1b_differential.rs`, `replay_conformance.rs` |
 | ★ the "which copy runs" trap found again — on the **payload**: the hook pushed the box's 445-line interposer where the repo's is 666, so §14.29's `NVSWEEP_GPUINFO` was never reachable through it. Repo copy now wins and prints its md5; a missing `gtrace.txt` is now shouted rather than exited-0 over | `scripts/bench/guest_cuinit_trace.sh` |
 | the R23 capture and the new guest trace | `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`, `cuinit_trace_guest_gt1431_ff7a0ea.txt` |
+
+### 14.32 ★★★★ `FB_GET_INFO_V2` SERVED — and the ledger that "proved" it never arrived was **SATURATED**
+
+#### ⊘⊘ First, the refutation of the framing I was handed — and it is §14.31's, whose author
+#### was told to expect exactly this and still could not have found it by reading
+
+§14.31 closed with its sharpest finding stated as a measurement:
+
+> *"★★★ **AND IT HAS NO LEDGER ENTRY IN EITHER DIRECTION.** `[measured]`
+> `grep -c "unserviced fn 76 cmd 0x20801303"` = **0**, and there is no
+> `control 0x20801303 result …` line either: the command **never reaches the emulated
+> GSP**. The guest's own kernel refuses it out of its own state."*
+
+★ **The grep is right and the conclusion is wrong. Both ledgers were FULL.** `[measured
+2026-08-09, re-reading that same boot's `/workspace/bench/run_gt1431_ff7a0ea_qemu.log`]` —
+the two summary lines directly above the rows §14.31 read:
+
+```text
+nvkvm: commands: 362 decoded, 67 UNSERVICED (…), 32 distinct
+nvkvm: controls: 101 answered, 32 distinct cmd/result rows (…)
+```
+
+Both `32`s are the **caps** — `UNSERVICED_SAMPLE_MAX` and `SERVED_CONTROL_SLOTS`, each `= 32`
+— and `UnservicedLog::note` was `if s.len() < MAX && !s.contains(&entry) { push }`. The list
+was saturated; every command first seen after the thirty-second was dropped with no line
+anywhere. `0x2080012f` is the thirty-second and last row printed, and `0x20801303` is asked
+*after* it.
+
+⇒ ★★ **An absence from a saturated list is not evidence of absence.** Third species of the
+same defect, after `pgrep_comm_truncation_trap` (a check that cannot fail) and
+`gate_read_through_grep_cannot_fail` (a verdict a grep cannot deliver): here an **instrument
+that silently stops recording** at a bound.
+
+★★★ And the reason it survived is worth more than the bug. The `UNSERVICED_SLOTS` doc
+asserted, in as many words:
+
+> *"`unserviced_len` reports the truth even when it exceeds this, so a full array is never
+> mistaken for a complete list."*
+
+`unserviced_len` was `sample().len()` — clamped by that very cap and **structurally unable to
+exceed it**. `safety_comment_is_not_the_check`, on the project's primary rung-picking
+instrument: the prose stated the exact property whose absence caused the error, and stating
+it is what stopped anyone checking. ⊘ `ControlCensusLog` had kept a separate `served_distinct`
+counter all along, so the served list's count *was* truthful — one module got it right and
+the sentence in the other one covered for it.
+
+⚠ ★ **The cap was documented.** `unserviced.rs` says *"The distinct set is capped"* in its own
+header. A documented bound is not a bound anybody checks; only a **printed** one is.
+
+#### ⚠ And §14.31's reply table mis-transcribed a word, one byte-boundary off — for the second time in three rungs
+
+It published *"`0x08` | `0x0000c000` — ★ already agreed: our guest's first call answers this
+exactly"*. `[measured]` the raw bytes at `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:50`
+are `08000000 0000c000`, i.e. index `0x08`, data **`0x00c00000`** = 12 582 912 KiB = **12
+GiB**, which is the RTX 3060 12 GB's whole framebuffer. `0x0000c000` would be 48 MiB.
+
+⇒ §14.30's `0x03003020`-for-`0x00302000` was the first; this is the second, and **both decode
+plausibly**. ★ It cost nothing only because `0x08` turns out to be answered by the guest's own
+kernel and never forwarded — luck, not process. **Re-derive from the hex, never from the
+paragraph**, including when the paragraph says it was re-derived from the hex.
+
+#### ★★★ Three of the seven indices are the guest kernel's own, and the RPC is NOT `BUS_GET_INFO_V2`'s shape
+
+`_kmemsysGetFbInfos` (`ogkm-580: src/nvidia/src/kernel/gpu/mem_sys/kern_mem_sys_ctrl.c:137-996`)
+answers what it can locally and tracks the rest in `fbInfoListIndicesUnset`. Every index with
+a `case` arm in its second `switch` is kernel-answered; the `default:` arm is a bare
+`continue`. For libcuda's failing seven-index request:
+
+| index | name | answered by |
+|---|---|---|
+| `0x08` | `TOTAL_RAM_SIZE` | **guest kernel** (`:335`) |
+| `0x17` | `RAM_LOCATION` | **guest kernel** (`:711`) |
+| `0x18` | `FB_IS_BROKEN` | **guest kernel** (`:716`) |
+| `0x0b` | `BUS_WIDTH` | ★ forwarded |
+| `0x19` | `FBP_COUNT` | ★ forwarded |
+| `0x1b` | `L2CACHE_SIZE` | ★ forwarded |
+| `0x0d` | `RAM_TYPE` | ★ forwarded |
+
+⚠ **And the forward is ONE COMPACTED RPC, not one per index.** `kbusSendBusInfo_IMPL` sends a
+fresh one-entry struct per forwarded index; `_kmemsysGetFbInfos` allocates **one** fresh
+`NV2080_CTRL_FB_GET_INFO_V2_PARAMS`, copies the unset indices into it **compacted from slot
+zero**, and sends a single `NV_RM_RPC_CONTROL` of `sizeof(*pRpcParams)` (`:952-990`). So the
+request this port answers is a **four**-entry struct, never the guest's seven-entry ioctl
+buffer. ★ The property that matters is unchanged: **arriving here is the marker**, so every
+declared entry is filled and an index with no derivation refuses the whole call.
+
+#### ★★★ What is served — and it is the first rung that states NO NEW NUMBER
+
+All four are **projections of `ChipProfile::memory_system`**, the row already served to
+`NV2080_CTRL_CMD_INTERNAL_MEMSYS_GET_STATIC_CONFIG` (`0x20800a1c`):
+
+| index | served | from | real GA106 |
+|---|---|---|---|
+| `0x1b` `L2CACHE_SIZE` | `0x0024_0000` | `memory_system.l2_cache_size`, verbatim | `0x00240000` ✓ |
+| `0x0d` `RAM_TYPE` | `0x11` `GDDR6` | `memory_system.ram_type`, verbatim | `0x00000011` ✓ |
+| `0x0b` `BUS_WIDTH` | `192` | `ltc_count × 32` (one 32-bit FBPA per LTC) | `0x000000c0` ✓ |
+| `0x19` `FBP_COUNT` | `3` | `ltc_count ÷ 2` (two FBPAs per FBP on GA10x) | `0x00000003` ✓ |
+
+★★ **The projection is the design.** `l2CacheSize` and `ramType` are *the same two silicon
+facts* under two control ids; a second table of measured words is precisely what would let
+this device tell RM its L2 is 2.25 MiB under one id and something else under the next.
+`kayfabe-device/tests/fb_get_info_v2.rs` drives **both** controls through one policy and
+compares the bytes, so the agreement is executed rather than asserted. The two relations hold
+for every Ampere `ltcCount` RM's own PLC arms enumerate (`kmemsysIsPagePLCable_GA102`:
+`{48, 40, 4×8, 3×8}` ⇒ `ltcCount ∈ {12, 10, 8}` ⇒ 384/320/256-bit) and are named `GA10X_*` so
+the Hopper seam is a named line rather than a retrofit.
+
+#### ⊘⊘ The OBVIOUS next step is measured WRONG — `LTS_COUNT` is not `ltc × ltsPerLtc`
+
+The very next `FB_GET_INFO_V2` in the same real trace (`:66`) asks `{0x1a, 0x22, 0x23}` and is
+answered `{0x07, 6, 18}`. `0x22` `LTC_COUNT` is `memory_system.ltc_count` exactly. `0x23`
+`LTS_COUNT` is **not** the product: `6 × 4 = 24`, and hardware says **18**.
+
+Both readings are real hardware and neither is wrong. `ltsPerLtcCount = 4` is a captured GSP
+reply (`C: src/qemu/mode2_initctrl_ga106.h:5391`, `dlen 40`, a row **with** a body);
+`FB_INFO_INDEX_LTS_COUNT` is documented as *"the **active** LTS count across all active LTCs"*
+(`ogkm-580: ctrl2080fb.h:251-254`), and `18 × 128 KiB = 2304 KiB` is this part's L2 — the same
+slice size GA102's `== 48` arm implies.
+
+★★★ ⚠ **And `ga10x.rs`'s own comment on that field is arithmetic that self-justifies the wrong
+reading:** *"2.25 MiB = 24 slices x 96 KiB … The capture agrees with itself."* 24 × 96 KiB is
+2304 KiB, so it **checks out** — and 96 KiB is not an Ampere L2 slice.
+`two_encodings_agreeing_on_the_first_values`, in a doc comment. ⊘ The **field is correct and
+was not touched**; only the justification is, and `0x1a`/`0x22`/`0x23` are refused by name
+with the contradiction pinned in a test so nobody "simplifies" `0x23` into the product later.
+
+#### `[measured 2026-08-08, boots `fb1432_20e319b` and `gt1432_20e319b`, both artifacts stamped `kayfabe-rev:20e319bc7a37545f0ba5fabb98eb40122475f962`, shipping config, `probe-arm set: EMPTY`, STOCK module]` THE WALL IS DOWN
+
+```text
+nvkvm: control 0x20801303 result 0x00000000 x1     ← served
+```
+
+`cup2`, verbatim:
+
+```text
+SMI_RC=0
+=== cup2: run ===
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+CUP2_RC=1
+```
+
+★★ **And the instrument repair paid for itself in the same boot, measurably.** Unserviced went
+`32 distinct` → **34**, and the two rows the saturated list could not have shown either way
+are `0x20802a12` and `0x20802a0b`. Served rows went `32` → **33**, with
+`control 0x20801303 result 0x00000000` among them — ⊘ at the old `SERVED_CONTROL_SLOTS = 32`
+that row would have been **counted and not printed**, and this rung's own success would have
+been unobservable in the ledger.
+
+#### ★★★★ `cuInit` GOT NINE CONTROLS FURTHER, and the traces now agree LINE FOR LINE to the divergence
+
+`traces/real_ga106/cuinit_trace_guest_gt1432_20e319b.txt` — 52 lines → **67**:
+
+```text
+0x20801303  status=0x00000000     ★ §14.31's wall, now SERVED (all four calls)
+0x20800170  status=0x00000000
+0x20800119  status=0x00000000
+0x0000027b  status=0x00000000
+ESC 0xc9 ; ESC 0xce
+0x20801201  status=0x00000000
+0x2080122a  status=0x00000000
+0x2080122b  status=0x00000000  ×3
+0x20801227  status=0x00000000
+0x20802a0a  status=0x00000056     ★★ THE NEW WALL
+FREE ×3 ; cuInit(0) -> 100
+```
+
+★★★ **Our trace and the real GA106's are now identical from line 50 to line 61** — twelve
+consecutive calls, same ids, same order, all `NV_OK` — and diverge at **line 62**:
+`0x20802a0a` `NV2080_CTRL_CMD_CE_GET_ALL_CAPS` (`ogkm-580: ctrl2080ce.h:325`, 136 bytes),
+which a real GA106 answers `NV_OK` and this port answers `0x56`. ⊘ Unlike `0x2080012f`, the
+real trace **convicts** rather than clears it.
+
+#### The next rung, fully specified — and the ID TO SERVE IS NOT THE ID THAT FAILS
+
+★★★ `0x20802a0a` is **not** in this boot's unserviced ledger either — and this time that
+silence is *trustworthy*, because the ledger is no longer saturated (34 of 64, no truncation
+line). `subdeviceCtrlCmdCeGetAllCaps_IMPL` (`ogkm-580: kernel_ce_shared.c:283-336`) explains
+it exactly:
+
+1. `portMemSet(pCeCapsParams, 0, sizeof(*pCeCapsParams))`;
+2. `NV_ASSERT_OK_OR_RETURN(pRmApi->Control(…, NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS, …))`
+   on the **physical** RMAPI — i.e. **`0x20802a0b`**, straight to our GSP;
+3. then it **overwrites** `present` and `capsTbl[kceInst]` locally for every non-stubbed
+   `KernelCE` via `kceAssignCeCaps_HAL`.
+
+⇒ ★★ **Serve `0x20802a0b`, not `0x20802a0a`.** And `0x20802a0b` is one of the two rows the cap
+raise made visible — the repaired instrument produced the next rung's target directly, out of
+the same boot, having spent two rungs hiding it.
+
+⇒ ★ A refinement of §14.31's rule rather than a reversal: *"do not pick your rung from the
+ledger"* becomes **the interposer names the failing IOCTL and the ledger names the RPC to
+serve, and they are different ids.** You need both instruments, and the ledger only after it
+was made able to tell you the truth.
+
+The real GA106's own reply (`cuinit_ioctl_trace_real_ga106.txt:62`, re-derived from the raw
+`out=` bytes and **not** from this paragraph — `NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS` is
+`NvU8 capsTbl[64][2]` then a 8-aligned `NvU64 present`, 136 bytes):
+
+| field | real GA106 |
+|---|---|
+| `capsTbl[0]` | `e3 03` |
+| `capsTbl[1]` | `e3 03` |
+| `capsTbl[2]` | `e2 03` |
+| `capsTbl[3]` | `e2 03` |
+| `capsTbl[4..63]` | all zero |
+| `present` @128 | `0x0f` — CE0..CE3 |
+
+⚠ **This is a body with real content, not another `dlen = 0` row** — the `0x20802a08` shape is
+absent here, and `present = 0x0f` agrees with `GA106_ENGINES`' four copy engines independently.
+⊘ But the request is `[OUT]`-only and libcuda hands RM a zeroed buffer, so **do not read the
+zero tail as measured**: `rmladder --probe-ctrl 0x20802a0b:136` is sound on this struct
+(§14.31's `[IN]`-field trap does **not** apply — there is no `[IN]` field) and is the cheap
+instrument that turns the `capsTbl[4..63]` zeros from ambiguous into positive. ★ Decode the
+caps bits against `NV2080_CTRL_CE_CAPS_*` before writing any of them down; `0x03e3` vs `0x03e2`
+differs in exactly one bit between CE0/1 and CE2/3, and which bit that is decides whether this
+is a per-CE fact or a copy-paste.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| `kayfabe_abi::fbinfo` — the ABI, `FbGeometry`'s four projections, seven named refusals, 12 unit tests incl. the `LTS_COUNT ≠ product` pin | `crates/kayfabe-abi/src/fbinfo.rs` |
+| `WantedTable::FbGetInfoV2`; served universe **28 → 29**, attributed | `kayfabe-device/src/inittables.rs` |
+| 7 reply-plane tests, one of which drives `0x20801303` **and** `0x20800a1c` through one policy and compares the bytes | `kayfabe-device/tests/fb_get_info_v2.rs` |
+| ★★★ **the saturated-ledger repair**: `UnservicedLog::distinct()` / `::truncated()` counting before the capacity test, `unserviced_len` finally truthful, both caps 32 → 64, an explicit `TRUNCATED … absence here is NOT evidence of absence` line in the C printer, ABI **22 → 23**, and a hand-written `Default` because `[T; N]` only derives it to `N == 32` | `unserviced.rs`, `census.rs`, `plane.rs`, `shim.rs`, `kayfabe_shim.h`, `nvkvm.c` |
+| the test the old bounded-set test could not be: a saturated sample must *say so* | `kayfabe-device/tests/unserviced_ledger.rs` |
+| two gate exemptions extended **with their reasons** rather than deleted — and `0x20801303`'s size is the best-evidenced of the three (`size=1028` on five real-GA106 ioctls and four of ours) | `cap1b_differential.rs`, `replay_conformance.rs` |
+| the new guest trace and both boots' device reports | `traces/real_ga106/cuinit_trace_guest_gt1432_20e319b.txt`, `docs/reference/bench_evidence/run_{fb,gt}1432_20e319b_{qemu,probe}.log` |
