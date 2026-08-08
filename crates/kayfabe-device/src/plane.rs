@@ -1287,7 +1287,7 @@ impl RegPlane {
     /// `demand` is `gmmu_publication_discipline.md` §7 rule 1: the guest event that
     /// authorised the walk. There is no constructor for a [`crate::ceresolve::Demand`]
     /// that does not name one, so this method cannot be used to prefetch — which is §6.2's
-    /// unsafe case, and the one whose three interleavings all produce a *plausible-looking
+    /// refused case, and the one whose three interleavings all produce a *plausible-looking
     /// wrong physical page* rather than an error.
     ///
     /// # Why it belongs on the plane

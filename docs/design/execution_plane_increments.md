@@ -2942,3 +2942,115 @@ and *that* named fault is the thing to investigate, not a transport hypothesis i
 range and reasoned about *set membership*, where the operative property was *tree reachability*.
 Both instances failing the membership test — and one of them succeeding anyway — is the check that
 would have caught it, and it is one subtraction.
+
+### 14.13 ★★★ E10e item (a), BOOTED — **THE WALK RESOLVES**, and every address of the walling channel lands in guest RAM (`84d857d`)
+
+`[measured 2026-08-08]`, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver **580.159.04
+Open**), source revision **`84d857d`** verified by `strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on
+**both** `target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:84d857ded732cf1438f700dc261e39cd26ff1c5e` in each. Boot `p35_84d857d`, probe set
+`[35]`, **stock** guest module. Evidence: `/workspace/bench/run_p35_84d857d_{qemu,dmesg,serial,probe}.log`.
+
+The doorbell refusal now carries the walk, and this is the whole line:
+
+```
+first doorbell refusal [FwdFault::NoVas] NoVas(ChanId(1))
+  | c=0xc1e00006 vas=0xa root=0x2efa9c000/ap1/sh47 ring=0x420064000
+    rng=S:0x2f2c3000  fin=S:0x2f2cb004  gp0=0x420000064+0x60  pb=S:0x399d064
+```
+
+#### ★★★ §14.12's open question is ANSWERED, and the answer is yes
+
+§14.12 closed with *"what genuinely remains open is the empirical question: are the intermediate
+entries on the path to `0x4_2000_0000` actually present in our emulated FB? … ⊘ Do not go looking
+for a second range these two control ids don't carry until a walk has actually missed."*
+**The walk did not miss.** Starting from `levels[0]` of the publication the guest made for
+`(hClient 0xc1e00006, hObject 0x0a)` — the pair §14.11's two-sided join proved is this channel's —
+the GMMU descent through our emulated framebuffer resolves **every** address the submission names:
+
+| address | what it is | resolves to |
+|---|---|---|
+| `0x4_2006_4000` | `gpFifoOffset`, the ring | **guest RAM** `0x2f2c_3000` |
+| `0x4_2006_c004` | the finishPayload semaphore (`ring + 0x8004`) | **guest RAM** `0x2f2c_b004` |
+| `0x4_2000_0064` | the first GPFIFO entry's target, **read out of the resolved ring and decoded**, 0x60 bytes | **guest RAM** `0x399_d064` |
+
+⇒ **Three independent corroborations in one line.** (1) `0x420064000 + 0x8004 = 0x42006c004`, which
+is the `semaVA` the guest itself printed (§14.11), so the ring address we derived and the semaphore
+the guest polls are the same allocation. (2) `0x2f2cb004 − 0x2f2c3000 = 0x8004` — the *physical*
+pages are contiguous across the same offset, which is the C artifact's cont.8 correction
+(`c_ceutils_ring_resolution.md` §4: the finishPayload is contiguous at `+0x8004` within the 64 KiB
+channel buffer) reproduced on our own device. (3) The ring's first entry decodes as a well-formed GP
+entry naming `pbGpuVA + 0x64` — i.e. the pushbuffer inside the same buffer the channel declared —
+rather than as garbage, which is what a wrong root would have produced.
+
+★ **The chain, not one address of it.** The third row is the load-bearing one: it required resolving
+the ring, *reading guest memory through that resolution*, decoding the bytes as a GPFIFO entry, and
+resolving the address that entry named. A wrong root cannot pass that.
+
+#### ⊘ The wall is UNCHANGED, and that is the increment's acceptance condition
+
+`memmgrMemSet(… TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463`, `NV_ERR_TIMEOUT (0x65)`,
+`RmInitAdapter failed! (0x25:0x65:1249)` — identical to `stock_c89899a`. §14.8 measured why that is
+required rather than disappointing: this increment binds no `vas_pdb`, creates no `Vas` and relaxes
+no `NoVas`, because granting the channel a VAS *before* the executor is reachable turns a loud,
+correct refusal into a doorbell reporting **Served** over work that did not happen. The refusal is
+still `NoVas(ChanId(1))`; what changed is that it now **states the resolution** instead of leaving it
+to be inferred.
+
+#### ★★★ THE APERTURE: all three addresses are **SYSMEM**, and that settles a fork the port had open
+
+Every one resolves to guest RAM, not to the emulated framebuffer. That is the `bUseBar1=0` half of
+the per-instance split: general CeUtils passes `_NO_BAR1_USE_TRUE` (`ogkm-580: mem_mgr.c:4134`) ⇒
+sysmem, while the memory scrubber passes `_VIRTUAL_MODE_TRUE` with no `_NO_BAR1_USE`
+(`ogkm-580: mem_scrub.c:154`) ⇒ vidmem (`c_ceutils_ring_resolution.md` §2). The guest's own
+instrumentation agrees from the other side — §14.11's `bUseBar1=0 bUseVasForCeCopy=1` for exactly
+this channel.
+
+⇒ **Consequences for the executor, all three now MEASURED rather than open:**
+1. The ring and the pushbuffer are read with `Vmm::gpa_read` / the plane's `GuestRam` port, **not**
+   from `SparseFb`. A reader that assumed the framebuffer would have read an unrelated page.
+2. The finishPayload must be written to **guest RAM** at `0x2f2c_b004`. This is `#12`'s
+   where-mistake with the apertures the other way round from the C's scrubber instance, and it is
+   the reason `cpu_ce::write_completion` resolves the aperture rather than picking one.
+3. The **page directories** are in vidmem (`ap1` on all four published levels) while the **leaves**
+   are sysmem — so the per-level aperture fork is not decoration on this channel, it is the
+   difference between finding the tables and finding nothing.
+
+#### ⚠⚠ How this was nearly missed, and it is `a_table_does_not_decide_behaviour` again
+
+The **first** boot of this increment (`p35_a34025b`, same night, same box) refused
+`rng=ROOTAP1 fin=ROOTAP1` — *"aperture 1 is not this device's framebuffer"* — with the join and the
+plumbing already perfect. The cause was four constants: `GMMU_APERTURE` had been transcribed from
+the **PDE field** encoding (`ogkm-580: kern_gmmu_fmt_gm10x.c:165-182`, `0=INVALID 1=VIDEO 2=SYS_COH
+3=SYS_NONCOH`) instead of from the **enum** this control's `levels[].aperture` actually carries
+(`ogkm-580: src/nvidia/inc/libraries/mmu/gmmu_fmt.h:280-325` — unnumbered, so declaration order is
+the encoding: `INVALID=0 VIDEO=1 PEER=2 SYS_NONCOH=3 SYS_COH=4`). The two agree on `INVALID` and
+`VIDEO` and disagree on everything else, and ⚠ `SYS_NONCOH` precedes `SYS_COH`, the reverse of every
+other list in this port.
+
+★ Two fields named `aperture`, in one subsystem, with different encodings, and the wrong one is a
+plausible read of the right file. The boot is what told them apart — a source read had already
+"confirmed" the wrong one.
+
+#### The discipline this walk runs under, stated because it is a safety rule
+
+`gmmu_publication_discipline.md` §6.3: *"Walk-on-miss is safe if and only if 'miss' means 'the GPU
+faulted on this VA'. Walk-ahead is not safe, and no ordering rule in this driver makes it safe."*
+The trigger here is the **doorbell** — the guest's own submit fence, after it wrote the ring,
+published the mappings and ran §3's flush — and it is the only commit point available, since §5
+measured **both** invalidate transports at zero on this path. The permission is carried as a value
+(`kayfabe_device::ceresolve::Demand::from_doorbell`) so a future prefetch cannot acquire it by
+editing a comment. §7's eight rules are checked one by one in `ceresolve`'s module header, including
+the two this port does **not** satisfy: rule 5 is enforced for vidmem leaves and **not** for sysmem
+ones (no GPA bound is available; an out-of-range sysmem leaf refuses at *use*, not at decode), and
+rule 7 is **vacuous** — with no invalidate to serialise against there is **no defence against
+§6.2(3)**, a sub-level freed before any invalidate.
+
+#### What remains for the executor, now that addressing is not the unknown
+
+The `pb=S:0x399d064 +0x60` range is 96 bytes = 24 method words: the CeUtils `memset` pushbuffer.
+⚠ `Ga10xPushbuffer::ce_launch` refuses `LAUNCH_REMAP_ENABLE` (`kayfabe-chips/src/ga10x.rs:1113`),
+and a CE *fill* is exactly a remap-enabled launch — so decoding this submission needs
+`SET_REMAP_CONST_A` / `SET_REMAP_COMPONENTS` and a `CeWork::Fill`, which E10a–E10d did not build.
+That, plus driving `parse → execute_ours_spans → write_completion` off the doorbell with the
+**sysmem** plane, is what E10e item (c) still owes. ⊘ None of it is an addressing question any more.

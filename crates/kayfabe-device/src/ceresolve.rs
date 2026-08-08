@@ -140,7 +140,7 @@ pub const GMMU_APERTURE_SYS_COH: u32 = 4;
 /// deliberately **no** `Demand::new()`, no `Default`, and no way to build one from a
 /// caller's assertion that now would be a convenient moment: a prefetch, a background scan
 /// or a *"resolve it while we hold the lock"* has no event to name, which is exactly
-/// §6.2's unsafe case and exactly what this type refuses to express.
+/// the case §6.2 refuses, and exactly what this type declines to express.
 ///
 /// ⊘ It carries no data. It is not an optimisation barrier and not a token to be stored —
 /// storing one and reusing it later would be walk-ahead with a receipt.
@@ -258,9 +258,10 @@ pub fn decode_aperture(raw: u32) -> Option<Aperture> {
 /// `hObject` names *which* address space the levels root
 /// (`rmCtrlParams.hObject = hVASpace`, `ogkm-580: gpu_vaspace.c:5174-5177`). A lookup on
 /// `hClient` alone would answer with whichever VA space that client published *last* —
-/// and the measured boot has one client publishing a VA space (`0xc1e00005` → `hObject
-/// 0xc`) while its own channel reports `hVASpaceId=0x0`, so the wrong-answer case is
-/// present in the very boot this exists for.
+/// and that is not hypothetical: `[measured 2026-08-08, boot `run_p35_84d857d`, rev
+/// `84d857d`, vast GA106 / 580.159.04 Open]` one client publishes a VA space
+/// (`0xc1e00005` → `hObject 0xc`) while its own channel reports `hVASpaceId=0x0`, so the
+/// wrong-answer case is present in the very boot this exists for.
 ///
 /// ★ The **last** matching row wins. A VA space torn down and re-published at the same
 /// handles differs in nothing but arrival order, and the current tree is the later one;
