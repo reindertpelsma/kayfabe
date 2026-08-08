@@ -1685,7 +1685,11 @@ mod policy_gate {
         )
         .expect("the port's object model realizes");
         let mut s = kayfabe_tests::Scenario::new();
-        s.compute_process(A_CLIENT, A_PDB, kayfabe_tests::identical_handles(0x10, 0x11));
+        s.compute_process(
+            A_CLIENT,
+            A_PDB,
+            kayfabe_tests::identical_handles(0x10, 0x11),
+        );
         for ev in s.events {
             gpu.apply(ev).expect("scenario applies cleanly");
         }
@@ -1800,7 +1804,9 @@ mod policy_gate {
     #[test]
     fn a_context_object_that_is_not_a_channel_is_refused_as_an_invalid_handle() {
         let mut p = policy();
-        let reply = p.respond(&promote_cmd(A_CLIENT.0, super::H_DEVICE.0)).expect("claimed");
+        let reply = p
+            .respond(&promote_cmd(A_CLIENT.0, super::H_DEVICE.0))
+            .expect("claimed");
         assert_eq!(reply.rpc_result, PROMOTE_CTX_UNKNOWN_OBJECT_STATUS);
     }
 
@@ -1810,8 +1816,14 @@ mod policy_gate {
     /// prints raw hex.
     #[test]
     fn the_two_refusal_statuses_are_distinct_and_neither_is_the_unclaimed_signature() {
-        assert_ne!(PROMOTE_CTX_UNKNOWN_OBJECT_STATUS, PROMOTE_CTX_REFUSED_STATUS);
-        for s in [PROMOTE_CTX_UNKNOWN_OBJECT_STATUS, PROMOTE_CTX_REFUSED_STATUS] {
+        assert_ne!(
+            PROMOTE_CTX_UNKNOWN_OBJECT_STATUS,
+            PROMOTE_CTX_REFUSED_STATUS
+        );
+        for s in [
+            PROMOTE_CTX_UNKNOWN_OBJECT_STATUS,
+            PROMOTE_CTX_REFUSED_STATUS,
+        ] {
             assert_ne!(s, kayfabe_abi::NV_ERR_NOT_SUPPORTED);
             assert_ne!(s, 0, "a refusal is never NV_OK");
         }
@@ -1826,7 +1838,9 @@ mod policy_gate {
         let mut s = w::RpcScript::new();
         s.control(A_CLIENT.0, SUBDEV, PROMOTE_CTX, &[0xee; 8]);
         let cmd = command(&s.messages().into_iter().next().expect("one"));
-        let reply = p.respond(&cmd).expect("★ claimed ids are decided even when malformed");
+        let reply = p
+            .respond(&cmd)
+            .expect("★ claimed ids are decided even when malformed");
         assert_eq!(
             reply.rpc_result, PROMOTE_CTX_REFUSED_STATUS,
             "★ the size mismatch is a decision this port made, not an absent code path",
@@ -1841,7 +1855,12 @@ mod policy_gate {
     #[test]
     fn a_served_promotion_binds_the_range_it_declared() {
         let mut p = policy();
-        assert_eq!(p.respond(&promote_cmd(A_CLIENT.0, H_GR_CHANNEL.0)).expect("claimed").rpc_result, 0);
+        assert_eq!(
+            p.respond(&promote_cmd(A_CLIENT.0, H_GR_CHANNEL.0))
+                .expect("claimed")
+                .rpc_result,
+            0
+        );
 
         let e = complete_entry();
         let gpu = p.gpu().expect("a bare Gpu is behind this policy");

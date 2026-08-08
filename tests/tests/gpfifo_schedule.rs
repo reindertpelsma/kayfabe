@@ -498,6 +498,10 @@ fn a_handle_that_is_not_a_live_channel_is_refused_by_its_own_name() {
 /// (`gates_quantified_over_a_list`).
 ///
 /// ⚠ One id → two at E9/§13.6: the channel-side bind (`0xa06f0104`) joined the claim.
+/// Two → three at §14.21: `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` (`0x2080012b`), the control
+/// `kgrobjPromoteContext` sends and the first wall on the golden-image channel
+/// (`[measured 2026-08-08, boots ship_7a881a7 and ship_7a881a7_b, rev 7a881a7]`,
+/// `kernel_graphics_object.c:224` at `t+32.571` — before either watchdog alloc).
 /// The membership is pinned in full so growing the list is a **visible** diff here, not a
 /// silent widening of what the ledger can no longer see.
 #[test]
@@ -507,6 +511,7 @@ fn the_control_claim_is_exactly_these_ids() {
         &[
             NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+            kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
         ]
     );
     assert!(
