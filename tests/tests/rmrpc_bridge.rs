@@ -3219,7 +3219,12 @@ fn every_class_in_the_table_decodes_its_declared_facts_and_only_those() {
         ),
         "Channel: all three, from +20/+24/+28",
     );
-    for class in [w::AMPERE_COMPUTE_B, w::AMPERE_DMA_COPY_B] {
+    // ★ `AMPERE_B` joins the two on 2026-08-08 (`execution_plane_increments.md` §14.26).
+    // Its params, when a caller supplies them at all, are `NV_GR_ALLOCATION_PARAMETERS`
+    // — `{version, flags, size, caps}`, four NvU32, no handle and no pointer
+    // (`ogkm-580: nvos.h:2716-2721`) — so `[0xff; 64]` is exactly as readable as a
+    // well-formed one, and the assertion below is the statement that neither is read.
+    for class in [w::AMPERE_COMPUTE_B, w::AMPERE_DMA_COPY_B, w::AMPERE_B] {
         assert_eq!(
             xlate(&msg(class, &[0xff; 64])),
             want(class, AllocFacts::default()),

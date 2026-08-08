@@ -1018,7 +1018,44 @@ impl DriverAbiTable {
             // engine object's are engine-private; the protocol content of all
             // three is the EDGE — parent, handle, class — which the RPC header
             // already carries.
-            classes::FERMI_VASPACE_A | classes::AMPERE_COMPUTE_B | classes::AMPERE_DMA_COPY_B => {
+            classes::FERMI_VASPACE_A
+            | classes::AMPERE_COMPUTE_B
+            | classes::AMPERE_DMA_COPY_B
+            // ★★★ `AMPERE_B` (`0xc797`), the GA10x **3D** object, joins its compute
+            // sibling — and it is here because a boot asked for it, not because the
+            // table was being completed. `[measured 2026-08-08, boot pro1_423bf08]`:
+            // once `GPU_PROMOTE_CTX` started succeeding, `kgrobjConstruct` stopped
+            // failing locally and the golden-image channel's 3D object reached the
+            // wire for the FIRST time in any capture —
+            // `hClass=0x0000c797 paramsSize=0x00000000 status=0x00000056`
+            // (`run_pro1_423bf08_dmesg.log:11`), refused as `UnmappedAllocClass`.
+            //
+            // ⚠ `NoDeclaredFacts` is the STRONG reading here, not a shrug, and RM's own
+            // resource table says so: `AMPERE_B` registers its params as
+            // **`RS_OPTIONAL(NV_GR_ALLOCATION_PARAMETERS)`**
+            // (`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:2010`), which
+            // expands to `{ sizeof(x), bParamRequired = NV_FALSE }`
+            // (`resource_desc.c:76`) — a NULL is legal by declaration, not by accident.
+            // The struct itself is `{version, flags, size, caps}`, 4 x NvU32, **no handle
+            // and no pointer** (`ogkm-580: nvos.h:2716-2721`), `caps` is an *output* the
+            // caller reads back rather than a fact it states, and ★
+            // `grep -rn NV_GR_ALLOCATION_PARAMETERS src/nvidia/src/kernel/gpu/gr/` finds
+            // **nothing**: no GR code reads it on the alloc path at all. The one
+            // allocator on this boot path supplies none of it —
+            // `AllocWithHandle(…, hObj3D, classNum, NULL, 0)`
+            // (`ogkm-580: kernel_graphics.c:2519-2521`) — which is why the wire says
+            // `paramsSize=0`.
+            //
+            // ⊘ **Admitting the class is not serving what the class does.** The alloc's
+            // real effect is GSP-side: the physical-RM GR object constructor is where a
+            // golden context image gets built, and this port builds none. That is
+            // affordable *here* and only here — the guest frees the whole tree three
+            // lines later (`kernel_graphics.c:2533`) and never reads an image back
+            // through this port, and the C artifact's standing answer for the golden
+            // context proper is "silicon boundary, forward GR execution to the host"
+            // (`c_cuda_ladder.md` §3). A guest that later runs its OWN GR engine against
+            // a forged golden context is the case this row does NOT cover.
+            | classes::AMPERE_B => {
                 Some(AllocParams::NoDeclaredFacts)
             }
             // ★★ The two classes the 2026-08-01 boot measured this table missing, and

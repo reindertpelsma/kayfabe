@@ -384,6 +384,13 @@ impl Arch for WireClassArch {
             nv::AMPERE_COMPUTE_B => ObjectKind::EngineObject {
                 engine: EngineKind::GrCompute,
             },
+            // ⚠ Mirrored from `Ga10xArch::classify` — see the reasoning there. This table
+            // exists because `_ => self.0.classify(class)` falls through to `MockArch`,
+            // whose ids are invented `0xF0xx` values, so a wire id missing HERE is
+            // silently `Unknown` in every wire-bytes test while the shipped arch is right.
+            nv::AMPERE_B => ObjectKind::EngineObject {
+                engine: EngineKind::GrGraphics,
+            },
             nv::AMPERE_DMA_COPY_B => ObjectKind::EngineObject {
                 engine: EngineKind::Ce,
             },

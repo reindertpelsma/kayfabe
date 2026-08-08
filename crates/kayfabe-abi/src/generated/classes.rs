@@ -140,6 +140,30 @@ pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
 /// ogkm `src/common/sdk/nvidia/inc/class/clc7c0.h`.
 pub const AMPERE_COMPUTE_B: u32 = 0xc7c0;
 
+/// `AMPERE_B` — the GA10x **3D/graphics** engine object, the sibling of
+/// [`AMPERE_COMPUTE_B`] on the same engine (`ENG_GR(0)`). Declares no `AllocFacts`
+/// for the same reason the compute object does not.
+///
+/// ★★★ It is on this path because of ONE allocator, and it is not a CUDA process:
+/// `kgraphicsCreateGoldenImageChannel_IMPL` allocates a channel and exactly one GR
+/// object on it — `GR_OBJECT_TYPE_3D` when `kgraphicsIsGFXSupported`, which a GeForce
+/// GA106 is — and then frees the whole tree
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2502-2521`, the
+/// `AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0)` at
+/// `:2519` is the LAST statement before `cleanup:`). ⊘ The kernel side therefore never
+/// writes a pushbuffer, rings a doorbell or waits on the GR engine — the golden image
+/// is GSP-RM's to produce — which is why admitting this class does not put a silicon
+/// demand on the emulated device.
+///
+/// ⚠ Its alloc params, when a caller supplies them at all, are
+/// `NV_GR_ALLOCATION_PARAMETERS` — 4 x NvU32 `{version, flags, size, caps}`, 16 bytes,
+/// no handle and no pointer (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2716-2721`).
+/// The golden-image caller passes `NULL, 0`, measured on the wire as
+/// `paramsSize=0x00000000` (`run_pro1_423bf08_dmesg.log:11`).
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc797.h`.
+pub const AMPERE_B: u32 = 0xc797;
+
 /// `AMPERE_DMA_COPY_B` — the copy-engine object on a CE channel. Same shape
 /// as [`AMPERE_COMPUTE_B`]: no declared facts, and the only thing that tells the
 /// core this channel is a CE channel at all.

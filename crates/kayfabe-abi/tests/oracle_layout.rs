@@ -783,6 +783,10 @@ fn class_ids_match_the_headers() {
         0xc7b5,
         "ogkm-580: clc7b5.h:33 (= ogkm-610)"
     );
+    // ★ The 3D sibling of `AMPERE_COMPUTE_B` on the same engine. ⊘ NOT part of a CUDA
+    // process's subgraph — the only allocator on the boot path is RM's own
+    // `kgraphicsCreateGoldenImageChannel_IMPL` (`ogkm-580: kernel_graphics.c:2519`).
+    assert_eq!(classes::AMPERE_B, 0xc797, "ogkm-580: clc797.h:32 (= ogkm-610)");
 }
 
 /// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` and `NV_CTXSHARE_ALLOCATION_PARAMETERS`

@@ -378,6 +378,127 @@ fn without_the_object_link_the_frees_are_refused_too() {
 }
 
 // =================================================================================
+// 1b. §14.26 — the GOLDEN-IMAGE CHANNEL's 3D object (`AMPERE_B`, `0xc797`)
+// =================================================================================
+
+/// The golden-image channel's own handles, transcribed from **RM's source** rather than
+/// from the dmesg, because RM spells them as literals and the boot merely echoes them:
+/// `hChannelId = 0xbaba0045`, `hObj3D = 0xbaba0046`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2149-2150`).
+const GOLDEN_CHANNEL: u32 = 0xbaba_0045;
+const GOLDEN_OBJ3D: u32 = 0xbaba_0046;
+
+/// `paramsSize` as the wire carried it — **zero**, because the allocator passes
+/// `NULL, 0`:
+/// `pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0)`
+/// (`ogkm-580: kernel_graphics.c:2519`), measured as `paramsSize=0x00000000` in
+/// `docs/reference/bench_evidence/run_pro1_423bf08_dmesg.log:11`.
+const GOLDEN_OBJ3D_PARAMS_SIZE: usize = 0;
+
+/// ★★★ **The §14.25 wall, reproduced and then served.**
+///
+/// `[measured 2026-08-08, boot pro1_423bf08]`: once `GPU_PROMOTE_CTX` began succeeding,
+/// `kgrobjConstruct` stopped failing inside the guest and the golden-image channel's 3D
+/// object reached the wire **for the first time in any capture** —
+///
+/// ```text
+/// GspRmAlloc failed: hClient=0xc1e00007; hParent=0xbaba0045; hObject=0xbaba0046;
+///                    hClass=0x0000c797; paramsSize=0x00000000; status=0x00000056
+/// ```
+///
+/// — refused as [`BridgeRefusal::UnmappedAllocClass`], because `0xc797` was permitted by
+/// the capability table and absent from `DriverAbiTable::alloc_params`. This test is that
+/// message, and its before/after pair.
+///
+/// ⊘ The client handle here is this file's `BOOT_HCLIENT`, not the boot's `0xc1e00007`:
+/// the namespace is not what the class table keys on, and inventing a second client
+/// fixture would assert nothing extra. The three values that ARE the measurement — the
+/// parent/object edge and `paramsSize = 0` — are the boot's own.
+#[test]
+fn the_golden_image_channels_3d_object_is_served_rather_than_unmapped() {
+    let obj3d = || {
+        alloc_with(
+            2,
+            GOLDEN_CHANNEL,
+            GOLDEN_OBJ3D,
+            0x0000_c797,
+            &vec![0u8; GOLDEN_OBJ3D_PARAMS_SIZE],
+        )
+    };
+
+    // ⊘ The negative half FIRST: a chain with no object model still refuses it, so the
+    // green below is a statement about the object link and not about the fixture.
+    let (mut bare, bare_log) = chain_without_objects();
+    if let Some(r) = bare.respond(&obj3d()) {
+        assert_ne!(
+            r.rpc_result, 0,
+            "a chain that models no objects must not answer AMPERE_B NV_OK"
+        );
+    }
+    assert_eq!(bare_log.total(), 1, "it must reach the unserviced ledger");
+
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
+    let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
+    let _ = policy
+        .deliver(&obj3d())
+        .expect("AMPERE_B with the boot's own zero-length params is accepted");
+    assert_eq!(policy.applied(), 2, "root + the 3D object, both declared");
+    assert!(
+        policy.census().is_empty(),
+        "no refusal may remain: {:?}",
+        policy.census()
+    );
+}
+
+/// ★★ **`NoDeclaredFacts` is the strong reading, and this is what makes it a claim.**
+///
+/// `NV_GR_ALLOCATION_PARAMETERS` is `{version, flags, size, caps}` — four `NvU32`, 16
+/// bytes, **no handle and no pointer** (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:
+/// 2716-2721`) — so there is nothing in it the object model could route on, and `caps`
+/// is an *output* the caller reads back rather than a fact it states. A well-formed
+/// 16-byte params block, 64 bytes of hostile rubbish, and the boot's own empty one must
+/// therefore all produce the identical declaration.
+///
+/// ⊘ Note what this does NOT say: that the port serves what the class *does*. The golden
+/// image is GSP-RM's to produce, and this port produces none — see §14.26.
+#[test]
+fn the_3d_objects_params_are_never_read_however_they_arrive() {
+    // `{version = 0x2, flags = 0, size = 16, caps = 0}` — RM's own documented shape.
+    let well_formed: Vec<u8> = [2u32, 0, 16, 0].iter().flat_map(|v| v.to_le_bytes()).collect();
+    assert_eq!(well_formed.len(), 16, "NV_GR_ALLOCATION_PARAMETERS is 16 B");
+
+    let applied_with = |params: &[u8]| {
+        let mut policy = ObjectPolicy::new(
+            abi(),
+            GuestOs::Linux,
+            port_gpu(),
+            kayfabe_device::ga10x::GA106_ENGINES,
+        );
+        let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
+        let _ = policy
+            .deliver(&alloc_with(
+                2,
+                GOLDEN_CHANNEL,
+                GOLDEN_OBJ3D,
+                0x0000_c797,
+                params,
+            ))
+            .expect("accepted whatever the params say");
+        assert!(policy.census().is_empty());
+        policy.applied()
+    };
+
+    let empty = applied_with(&[]);
+    assert_eq!(empty, applied_with(&well_formed));
+    assert_eq!(empty, applied_with(&[0xffu8; 64]));
+}
+
+// =================================================================================
 // 2. What is served is NOT "everything"
 // =================================================================================
 
@@ -582,6 +703,23 @@ fn the_shipped_arch_classifies_the_real_wire_class_ids() {
         a.classify(ClassId(0xc56f)),
         ObjectKind::Channel {
             engine: EngineKind::GrCompute
+        }
+    );
+    // ★ The two GR engine objects on the SAME engine, and they carry DIFFERENT labels
+    // because RM picks between them on `kgraphicsIsGFXSupported`
+    // (`ogkm-580: kernel_graphics.c:2502-2513`). Every consumer treats the two GR
+    // variants alike, so this is a naming claim rather than a routing one — asserted
+    // here so that saying it out loud is what it costs to change it.
+    assert_eq!(
+        a.classify(ClassId(0xc7c0)),
+        ObjectKind::EngineObject {
+            engine: EngineKind::GrCompute
+        }
+    );
+    assert_eq!(
+        a.classify(ClassId(0xc797)),
+        ObjectKind::EngineObject {
+            engine: EngineKind::GrGraphics
         }
     );
     // ⊘ And an id it does not name is Unknown, never a guess.

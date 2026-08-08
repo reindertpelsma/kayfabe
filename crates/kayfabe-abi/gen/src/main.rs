@@ -120,6 +120,7 @@ const CL9067_H: &str = "src/common/sdk/nvidia/inc/class/cl9067.h";
 const CL90F1_H: &str = "src/common/sdk/nvidia/inc/class/cl90f1.h";
 const CLA06C_H: &str = "src/common/sdk/nvidia/inc/class/cla06c.h";
 const CLC56F_H: &str = "src/common/sdk/nvidia/inc/class/clc56f.h";
+const CLC797_H: &str = "src/common/sdk/nvidia/inc/class/clc797.h";
 const CLC7B5_H: &str = "src/common/sdk/nvidia/inc/class/clc7b5.h";
 const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
 // ── The HOST-forwarding class axis (#156) ────────────────────────────────────
@@ -446,6 +447,13 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
                 rust_name: "AMPERE_COMPUTE_B",
                 rust_ty: "u32",
                 doc: "`AMPERE_COMPUTE_B` — the compute engine object a CUDA process allocates\non its GR channel. Declares no `AllocFacts`; its whole protocol content is the\nedge (channel -> engine object) that refines the channel's `EngineKind`.",
+            },
+            ConstReq {
+                header: CLC797_H,
+                c_name: "AMPERE_B",
+                rust_name: "AMPERE_B",
+                rust_ty: "u32",
+                doc: "`AMPERE_B` — the GA10x **3D/graphics** engine object, the sibling of\n[`AMPERE_COMPUTE_B`] on the same engine (`ENG_GR(0)`). Declares no `AllocFacts`\nfor the same reason the compute object does not.\n\n★★★ It is on this path because of ONE allocator, and it is not a CUDA process:\n`kgraphicsCreateGoldenImageChannel_IMPL` allocates a channel and exactly one GR\nobject on it — `GR_OBJECT_TYPE_3D` when `kgraphicsIsGFXSupported`, which a GeForce\nGA106 is — and then frees the whole tree\n(`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2502-2521`, the\n`AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0)` at\n`:2519` is the LAST statement before `cleanup:`). ⊘ The kernel side therefore never\nwrites a pushbuffer, rings a doorbell or waits on the GR engine — the golden image\nis GSP-RM's to produce — which is why admitting this class does not put a silicon\ndemand on the emulated device.\n\n⚠ Its alloc params, when a caller supplies them at all, are\n`NV_GR_ALLOCATION_PARAMETERS` — 4 x NvU32 `{version, flags, size, caps}`, 16 bytes,\nno handle and no pointer (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2716-2721`).\nThe golden-image caller passes `NULL, 0`, measured on the wire as\n`paramsSize=0x00000000` (`run_pro1_423bf08_dmesg.log:11`).",
             },
             ConstReq {
                 header: CLC7B5_H,

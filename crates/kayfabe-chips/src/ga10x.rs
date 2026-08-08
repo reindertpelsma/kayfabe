@@ -164,6 +164,22 @@ impl Arch for Ga10xArch {
             nv::AMPERE_COMPUTE_B => ObjectKind::EngineObject {
                 engine: EngineKind::GrCompute,
             },
+            // ★★ `AMPERE_B` is the **3D** object on the SAME engine (`ENG_GR(0)`), and it
+            // is labelled `GrGraphics` rather than `GrCompute` because that is what it is:
+            // RM picks it over the compute class precisely when `kgraphicsIsGFXSupported`
+            // (`ogkm-580: kernel_graphics.c:2502-2513`).
+            //
+            // ⊘ The label is **checked to be inert**, not assumed to be: every consumer
+            // that reads an `EngineKind` treats the two GR variants identically —
+            // `kayfabe_abi::rc::EngineRoute::for_engine` (`rc.rs:115`) maps both to
+            // `NV2080_ENGINE_TYPE_GRAPHICS`, `kayfabe_isolate_host::rm::engine_type_for`
+            // (`rm.rs:1654`) to the same `ENGINE_TYPE_GRAPHICS`, and
+            // `kayfabe_fwd::completion_arm` (`fwd:4159`) splits only `NvEnc` out. So the
+            // refinement this enables rewrites the golden-image channel's label and
+            // changes no decision — which is the reason the truthful name is affordable.
+            nv::AMPERE_B => ObjectKind::EngineObject {
+                engine: EngineKind::GrGraphics,
+            },
             nv::AMPERE_DMA_COPY_B => ObjectKind::EngineObject {
                 engine: EngineKind::Ce,
             },

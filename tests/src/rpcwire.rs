@@ -799,6 +799,15 @@ pub const AMPERE_COMPUTE_B: u32 = 0xc7c0;
 /// (`ogkm-610: kernel-open/nvidia-uvm/clc7b5.h:33`, `ogkm-580: clc7b5.h:33`).
 pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
 
+/// `AMPERE_B` — the GA10x **3D** engine object (`ogkm-610: clc797.h:32`,
+/// `ogkm-580: clc797.h:32`).
+///
+/// ⊘ Not a CUDA process's object. The one allocator on the boot path is RM's own
+/// `kgraphicsCreateGoldenImageChannel_IMPL`, which allocates it on the golden-image
+/// channel with `NULL, 0` params and then frees the whole tree
+/// (`ogkm-580: kernel_graphics.c:2519`).
+pub const AMPERE_B: u32 = 0xc797;
+
 /// `NV01_MEMORY_SYSTEM` (`ogkm-610: src/common/sdk/nvidia/inc/class/cl003e.h:33`,
 /// `ogkm-580: cl003e.h:33`) — a real
 /// class that this port **does not map**, used wherever a test needs one.

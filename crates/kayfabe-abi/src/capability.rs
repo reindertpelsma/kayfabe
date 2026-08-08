@@ -2526,7 +2526,10 @@ mod tests {
                 "{class:#010x} decodes as {params:?} but the capability table refuses it"
             );
         }
-        assert_eq!(seen, 11, "the port decodes eleven classes today");
+        // 11 → 12 on 2026-08-08 (`execution_plane_increments.md` §14.26): `AMPERE_B`
+        // (`0xc797`), the golden-image channel's 3D object, which boot `pro1_423bf08`
+        // put on the wire for the first time.
+        assert_eq!(seen, 12, "the port decodes twelve classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(
