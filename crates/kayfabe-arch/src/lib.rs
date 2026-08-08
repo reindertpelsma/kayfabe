@@ -494,28 +494,135 @@ pub enum PhysTarget {
     Peer,
 }
 
-/// ★★★ **Where a CPU-executed copy-engine operand's bytes live** — the shell-side store a
-/// [`crate::PhysTarget`] or an unpublished binding's [`Aperture`] resolves to.
+/// ★★★ **Where a CPU-executed copy-engine operand's bytes are READ AND WRITTEN** — the
+/// shell-side store a [`crate::PhysTarget`] or a binding's [`Aperture`] resolves to.
 ///
-/// This is the residency answer the CPU branch of the CE decision tree turns on (E10b,
-/// `execution_plane_increments.md` §14): a copy the isolate cannot run because its operand is
-/// in memory the isolate deliberately does not hold. There are exactly two such stores, and
-/// they are different number spaces that can collide numerically — which is the whole reason
-/// [`crate::PhysTarget`] exists and a raw address is not enough:
+/// There are exactly two such stores, and they are different number spaces that can collide
+/// numerically — which is the whole reason [`crate::PhysTarget`] exists and a raw address is
+/// not enough:
 ///
-/// - [`CpuPlane::Fb`] — the emulated framebuffer (`_TARGET_LOCAL_FB`, or a fabricated
+/// - [`CpuPlane::Fb`] — the emulated framebuffer (`_TARGET_LOCAL_FB`, or an
 ///   [`Aperture::Vidmem`] binding). Reached in the shell through its `SparseFb`.
+///   `[measured 2026-08-08, boot `run_p35_84d857d`]` the walling CeUtils channel's **page
+///   directories** are here.
 /// - [`CpuPlane::GuestRam`] — guest system memory (`_TARGET_{COHERENT,NONCOHERENT}_SYSMEM`,
-///   or a fabricated sysmem binding). Reached in the shell through the `Vmm`.
+///   or a sysmem binding). Reached through the `Vmm`.
+///   `[measured 2026-08-08, boot `run_p35_84d857d`]` that channel's **ring, pushbuffer and
+///   finishPayload** are all here, so this is the arm the wall actually takes.
 ///
-/// ⊘ Peer memory (`_TARGET_PEERMEM`) is neither, and has no `CpuPlane`: a physical operand
-/// naming it is refused by name rather than mistaken for one of these two.
+/// ⊘ Peer memory (`_TARGET_PEERMEM`) is neither and has no `CpuPlane`: an operand naming it
+/// is refused by name rather than mistaken for one of these two.
+///
+/// # ⚠ This says WHERE the CPU reads. It does **not** say who guarantees it stays there.
+///
+/// That is [`Backing`], and the two are deliberately separate fields of [`Residency`] — see
+/// that type for the measurement that makes the split load-bearing rather than tidy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CpuPlane {
     /// The emulated framebuffer — device-local storage we invented, held in the shell.
     Fb,
     /// Guest system memory — reached through the `Vmm`'s `gpa_read`/`gpa_write`.
     GuestRam,
+}
+
+/// ★★★ **WHO GUARANTEES THE BYTES STAY WHERE THEY ARE**, for the duration of an operation.
+///
+/// # ⚠ Why this is a second field and not a third [`CpuPlane`] variant (owner, 2026-08-08)
+///
+/// The first attempt at this seam added a *"not ours, refuse"* arm to the plane, and the
+/// owner corrected it against the C artifact's own measured design
+/// (`/workspace/nvidia-gpu-passthrough/docs/design/mode2_uvm_residency.md`, DECIDED
+/// 2026-06-04, and it ran at **host parity** — it does not refuse):
+///
+/// - a guest **managed** VA is backed by a host `cudaMallocManaged` allocation; **host UVM
+///   owns residency and the guest's UVM is an inert fiction**;
+/// - the guest is told a *static* residency (`PreferredLocation=CPU` + `AccessedBy=GPU`, the
+///   supported fault-free zero-copy configuration), so it never faults at that level;
+/// - real migration happens one level **below** the guest's addressing, at GPA→HPA, through
+///   MMU-notifier invalidation → `migrate_to_ram`.
+///
+/// ⇒ **From the executor's seat managed memory is still guest RAM read through the `Vmm`.
+/// The plane is unchanged.** What differs is that we do not own or pin it. So the thing that
+/// must not be conflated is not *place*, it is **place vs ownership** — and a two-variant
+/// plane conflates *"where the CPU reads"* with *"who guarantees it stays there"*.
+///
+/// ★★ **Load-bearing today, not speculative.** A CPU copy assumes its source and destination
+/// are stable for the duration of the copy. Under a host-owned backing they are not.
+/// Recording who guarantees stability is exactly the fact that assumption rests on, and a
+/// later managed case is then a **new value of this field** rather than a new arm every
+/// `match` in the tree has to learn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Backing {
+    /// ★ **We guarantee it.** The emulated framebuffer is ours outright; guest RAM is backed
+    /// by memory the hypervisor holds for the life of the machine. Neither moves under a
+    /// copy in progress, so a CPU copy over it needs no further interlock.
+    Stable,
+    /// ★★★ **The host driver owns it and may move it under us.** The managed-memory case:
+    /// the backing is a host `cudaMallocManaged` allocation whose residency host UVM
+    /// decides. ⊘ Not a refusal *in principle* — the C ran this at parity — but this port
+    /// has built no interlock, so an executor that meets one today stops **by name** rather
+    /// than copying from a page that may migrate mid-copy.
+    HostOwned,
+}
+
+/// ★★★ **The residency ANSWER: where the bytes are, and who guarantees they stay.**
+///
+/// ⊘ One value carrying two independent facts, because they *are* independent: managed
+/// memory is [`CpuPlane::GuestRam`] with a [`Backing::HostOwned`], and ordinary sysmem is
+/// the same plane with a [`Backing::Stable`]. A type that could only say the first half
+/// would make those two indistinguishable — which is the conflation this split exists to
+/// remove.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Residency {
+    /// Which shell-side store holds the bytes.
+    pub plane: CpuPlane,
+    /// Who guarantees they stay there for the duration of an operation.
+    pub backing: Backing,
+}
+
+impl Residency {
+    /// A place we own outright — the common answer, and the only one this port can serve.
+    #[must_use]
+    pub const fn stable(plane: CpuPlane) -> Residency {
+        Residency {
+            plane,
+            backing: Backing::Stable,
+        }
+    }
+}
+
+/// ★★★ **Residency is a QUERY, not a classification performed inline at a call site.**
+///
+/// # Why a trait for something with one implementation
+///
+/// Owner directive, 2026-08-08: once residency is a query, a host-owned/managed case becomes
+/// an **implementation behind it** and the CPU executor never changes. The executor asks
+/// where bytes live and who owns them, and handles the answer; it does not compute one from
+/// an address range, because an address range is exactly what stops being sufficient the
+/// moment the backing is somebody else's ([`Backing::HostOwned`]).
+///
+/// ⊘ **And the implementation is meant to be EXTENDED, not paralleled** (same directive):
+/// the C's own record is that a managed session *"reuses Mode-1 machinery"* and that the only
+/// genuinely new piece is keeping the guest UVM quiescent. A second residency subsystem
+/// beside this one would be the parallel path that directive forbids.
+///
+/// `None` means **there is no CPU plane at all** — peer memory. It is not a soft failure and
+/// not a default: the caller turns it into a named refusal.
+///
+/// `Send + Sync`: an oracle is consulted wherever a submission is parsed, and every method
+/// takes `&self` (decision #17's shape for every Axis-B seam).
+pub trait ResidencyOracle: Send + Sync {
+    /// Where do the bytes of a **physical** operand live, given the `_TARGET` the guest's own
+    /// pushbuffer declared beside it and the address itself?
+    ///
+    /// ⊘ Both arguments, always: an address without its aperture names nothing
+    /// (`mode2_forwarding_model.md`). The `_TARGET` is the guest's declaration; the address
+    /// is what an implementation that tracks real backings would look up.
+    fn residency_of_physical(&self, target: PhysTarget, addr: u64) -> Option<Residency>;
+
+    /// Where do the bytes behind a **resolved binding** live, given the aperture its leaf
+    /// declared and the resolved address?
+    fn residency_of_aperture(&self, aperture: Aperture, addr: u64) -> Option<Residency>;
 }
 
 /// What a copy-engine command asks the engine to **do**, in core terms.
@@ -1210,9 +1317,13 @@ kayfabe_util::assert_send_sync!(
     PushMethod,
     CeWork,
     PhysTarget,
+    CpuPlane,
+    Backing,
+    Residency,
     PushRange,
     MethodState,
     dyn Arch,
+    dyn ResidencyOracle,
     dyn HostClasses,
     dyn GmmuFmt,
     dyn UserdModel,

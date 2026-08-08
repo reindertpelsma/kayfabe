@@ -73,7 +73,7 @@
 //! (disjoint borrows, no shared lock).
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, RunlistId, VChid};
-use kayfabe_arch::{Aperture, CpuPlane, PhysTarget, PushRange};
+use kayfabe_arch::{Aperture, CpuPlane, PhysTarget, PushRange, Residency, ResidencyOracle};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
@@ -283,7 +283,7 @@ pub enum FwdFault {
     /// A physical operand carrying `SET_{SRC,DST}_PHYS_MODE.TARGET = _PEERMEM`
     /// (`kayfabe_arch::PhysTarget::Peer`), or a fabricated binding whose aperture is
     /// [`Aperture::Peer`]. The residency split gives every `CeExecutor::Ours` sub-copy a
-    /// defined [`kayfabe_arch::CpuPlane`] (the framebuffer or guest RAM) — a peer operand
+    /// defined [`kayfabe_arch::Residency`] (the framebuffer or guest RAM) — a peer operand
     /// has neither, so it is refused **by name** here rather than silently mistaken for a
     /// framebuffer copy (`clc7b5.h:71`; `PhysTarget::Peer`'s own doc). Loud, never guessed:
     /// modelling peer-to-peer DMA is a deliberate future decision, not something to fall
@@ -292,12 +292,30 @@ pub enum FwdFault {
         /// The operand's address (a physical FB/peer address or a resolved binding phys).
         addr: u64,
     },
+    /// ★★★ **The operand's backing is not ours to hold still** —
+    /// [`kayfabe_arch::Backing::HostOwned`].
+    ///
+    /// ⊘ **Not a statement that the case is impossible.** The C artifact ran exactly this at
+    /// **host parity** (`mode2_uvm_residency.md`, DECIDED 2026-06-04): a guest managed VA is
+    /// backed by a host `cudaMallocManaged` allocation, host UVM owns residency, and real
+    /// migration happens below the guest's addressing at GPA→HPA. From here the *plane* is
+    /// unchanged — it is still guest RAM through the `Vmm`.
+    ///
+    /// What is missing is the **interlock**: a CPU copy assumes its operands are stable for
+    /// its duration, and a host-owned backing may migrate mid-copy. This port has built no
+    /// such interlock, so it stops by name rather than copying from a page that may move.
+    /// ★ Separate from [`FwdFault::CePeerOperand`] because *"a second GPU owns it"* and
+    /// *"its backing can move under us"* are different findings with different fixes.
+    CeUnstableBacking {
+        /// The operand's address.
+        addr: u64,
+    },
     /// ★★★ **E10c — a `CeExecutor::Ours` sub-copy whose needed CPU plane is `None`** — a
     /// straddle no single executor can run.
     ///
     /// A sub-copy is diverted to the shell CPU executor because its `by` is `Ours`, but one
     /// of the ends it must touch is real device memory (`Representability::HostBacked`) or
-    /// untracked, which has no [`kayfabe_arch::CpuPlane`]. The shell holds only the emulated
+    /// untracked, which has no [`kayfabe_arch::Residency`]. The shell holds only the emulated
     /// framebuffer and guest RAM, so it cannot reach that end; the isolate cannot run it
     /// either (the other end is fabricated). Refused **by name** rather than guessing a
     /// store — the executor is chosen by *where the bytes live*, and here they live in two
@@ -3007,13 +3025,13 @@ pub struct CeSpan {
     /// executor reads it to choose which store to write; a `by == CeExecutor::Ours` sub-copy
     /// whose destination plane is `None` is a straddle no single executor can run and the
     /// executor refuses it rather than guessing a store.
-    pub dst_plane: Option<CpuPlane>,
+    pub dst_plane: Option<Residency>,
     /// ★★★ **E10b — the CPU plane the source operand's bytes live in.** `None` for a
     /// scrub/fill (no source operand), for a real-device-memory source, or an untracked one.
     /// Distinct from [`Self::dst_plane`] because the two ends can differ —
     /// `memmgrTestCeUtils`' `sys ← vid` copy reads the framebuffer and writes guest RAM in
     /// one instruction.
-    pub src_plane: Option<CpuPlane>,
+    pub src_plane: Option<Residency>,
 }
 
 /// Upper bound on the sub-copies ONE copy-engine request may partition into.
@@ -3034,33 +3052,81 @@ pub const MAX_CE_SPANS: usize = 4096;
 /// truncation, for the same reason.
 pub const MAX_CE_SPANS_PER_PARSE: usize = 1 << 16;
 
-/// ★★★ **E10b — the CPU plane a `_TARGET` names**, or a refusal for peer memory.
+/// ★★★ **THE residency oracle this port has today** — the static mapping from what the
+/// guest *declared* about an operand to where its bytes are.
 ///
-/// The residency signal a *physical* operand carries (`clc7b5.h:66-80`), turned into the
-/// shell-side store that holds its bytes: `_LOCAL_FB` → the emulated framebuffer,
-/// `_{COHERENT,NONCOHERENT}_SYSMEM` → guest RAM. `_PEERMEM` has neither and is refused by
-/// name — see [`FwdFault::CePeerOperand`].
-fn cpu_plane_of_target(target: PhysTarget, addr: u64) -> Result<CpuPlane, FwdFault> {
-    match target {
-        PhysTarget::LocalFb => Ok(CpuPlane::Fb),
-        PhysTarget::CoherentSysmem | PhysTarget::NonCoherentSysmem => Ok(CpuPlane::GuestRam),
-        PhysTarget::Peer => Err(FwdFault::CePeerOperand { addr }),
+/// # ⊘ What it can and cannot answer, said plainly
+///
+/// It reads the guest's own declaration and nothing else: a `_TARGET` beside a physical
+/// operand (`clc7b5.h:66-80`), or the aperture of the leaf a resolved binding came from. It
+/// **cannot** discover that an address is really in host device memory, and it **cannot**
+/// answer for managed memory at all — where those bytes are is a fact the host driver owns
+/// and may change (`mode2_uvm_residency.md`). Both of those arrive as *different
+/// implementations of [`ResidencyOracle`]*, which is the whole reason the query is a trait
+/// with one implementation rather than two free functions
+/// (owner directive, 2026-08-08 — `execution_plane_increments.md` §14).
+///
+/// ★ **A unit struct, deliberately.** It holds no state because a static declaration-to-
+/// place mapping *has* none; an implementation that needed state would be a different one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeclaredResidency;
+
+impl ResidencyOracle for DeclaredResidency {
+    /// `_LOCAL_FB` → the emulated framebuffer, `_{COHERENT,NONCOHERENT}_SYSMEM` → guest
+    /// RAM, `_PEERMEM` → **not ours**: a second physical GPU's framebuffer, which this
+    /// device does not back.
+    ///
+    /// ⊘ `addr` is unread **by this implementation** and that is a statement about this
+    /// implementation, not about the seam: an oracle that tracked real residency would look
+    /// it up, which is why the parameter is on the trait.
+    fn residency_of_physical(&self, target: PhysTarget, _addr: u64) -> Option<Residency> {
+        match target {
+            PhysTarget::LocalFb => Some(Residency::stable(CpuPlane::Fb)),
+            PhysTarget::CoherentSysmem | PhysTarget::NonCoherentSysmem => {
+                Some(Residency::stable(CpuPlane::GuestRam))
+            }
+            PhysTarget::Peer => None,
+        }
+    }
+
+    /// The virtual-operand analogue: a *declared-but-unpublished* binding (`host = None`)
+    /// lives in the store its aperture names — a `Vidmem` binding is a page of the emulated
+    /// framebuffer (`#13`'s page tables live there), a sysmem binding is guest RAM
+    /// (`Binding::phys` for sysmem *is* a guest-physical address).
+    ///
+    /// `[measured 2026-08-08, boot `run_p35_84d857d`]` the CeUtils channel that walls has
+    /// its ring, pushbuffer and finishPayload all under the sysmem arm and its page
+    /// directories under the vidmem one, so both are live on the path that matters.
+    fn residency_of_aperture(&self, aperture: Aperture, _addr: u64) -> Option<Residency> {
+        match aperture {
+            Aperture::Vidmem => Some(Residency::stable(CpuPlane::Fb)),
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {
+                Some(Residency::stable(CpuPlane::GuestRam))
+            }
+            Aperture::Peer => None,
+        }
     }
 }
 
-/// ★★★ **E10b — the CPU plane a fabricated binding's aperture names**, or a refusal.
+/// Ask [`DeclaredResidency`] about a physical operand; **no CPU plane** becomes this crate's
+/// named peer refusal.
 ///
-/// The virtual-operand analogue of [`cpu_plane_of_target`]: a *declared-but-unpublished*
-/// binding (`host = None`) lives in the store its aperture names — a `Vidmem` binding is a
-/// page of the emulated framebuffer (`#13`'s page tables live here), a sysmem binding is
-/// guest RAM (`Binding::phys` for sysmem *is* a guest-physical address). A `Peer` aperture
-/// has no CPU plane and is refused by name.
-fn cpu_plane_of_aperture(aperture: Aperture, addr: u64) -> Result<CpuPlane, FwdFault> {
-    match aperture {
-        Aperture::Vidmem => Ok(CpuPlane::Fb),
-        Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => Ok(CpuPlane::GuestRam),
-        Aperture::Peer => Err(FwdFault::CePeerOperand { addr }),
-    }
+/// ⊘ The refusal is raised HERE and not inside the oracle: an oracle's job is to answer, and
+/// *"this answer means the caller must stop"* is the caller's policy. That split is what lets
+/// a later oracle report a [`kayfabe_arch::Backing::HostOwned`] answer without inventing a
+/// fault, and lets the *executor* decide what to do about it.
+fn residency_of_target(target: PhysTarget, addr: u64) -> Result<Residency, FwdFault> {
+    DeclaredResidency
+        .residency_of_physical(target, addr)
+        .ok_or(FwdFault::CePeerOperand { addr })
+}
+
+/// Ask [`DeclaredResidency`] about a resolved binding's aperture. See
+/// [`residency_of_target`].
+fn residency_of_aperture(aperture: Aperture, addr: u64) -> Result<Residency, FwdFault> {
+    DeclaredResidency
+        .residency_of_aperture(aperture, addr)
+        .ok_or(FwdFault::CePeerOperand { addr })
 }
 
 /// Classify ONE already-resolved sub-range of an operand — its representability, and (when
@@ -3074,11 +3140,11 @@ fn cpu_plane_of_aperture(aperture: Aperture, addr: u64) -> Result<CpuPlane, FwdF
 fn representability_of(
     binding: Option<&Binding>,
     addr: u64,
-) -> Result<(Representability, Option<CpuPlane>), FwdFault> {
+) -> Result<(Representability, Option<Residency>), FwdFault> {
     match binding {
         Some(b) if b.host.is_some() => Ok((Representability::HostBacked, None)),
         Some(b) => {
-            let plane = cpu_plane_of_aperture(b.aperture, addr)?;
+            let plane = residency_of_aperture(b.aperture, addr)?;
             Ok((Representability::Fabricated, Some(plane)))
         }
         None => Ok((Representability::Untracked, None)),
@@ -3087,7 +3153,7 @@ fn representability_of(
 
 /// One resolved run of an operand's range: `(start, len, representability, cpu-plane)` —
 /// the plane present exactly when the run's `representability.executor() == CeExecutor::Ours`.
-type OperandRun = (u64, u64, Representability, Option<CpuPlane>);
+type OperandRun = (u64, u64, Representability, Option<Residency>);
 
 /// The partition of one operand's range, as [`OperandRun`]s — the `plane`
 /// present exactly when `kind.executor() == CeExecutor::Ours`.
@@ -3111,7 +3177,7 @@ fn operand_runs(
         return Ok(Vec::new());
     }
     if !is_virtual {
-        let plane = cpu_plane_of_target(target, addr.0)?;
+        let plane = residency_of_target(target, addr.0)?;
         return Ok(vec![(
             addr.0,
             len,

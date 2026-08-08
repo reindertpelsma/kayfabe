@@ -9,7 +9,7 @@
 //! move.
 
 use kayfabe_arch::ids::{GpuVa, Pdb};
-use kayfabe_arch::{Aperture, CeWork, CpuPlane, PhysTarget};
+use kayfabe_arch::{Aperture, CeWork, CpuPlane, PhysTarget, Residency};
 use kayfabe_device::{FbStore, SparseFb};
 use kayfabe_fwd::{CeSpan, CeSubCopy, FwdFault, Representability, partition_ce};
 use kayfabe_isolate::{CeExecutor, CeSource};
@@ -158,7 +158,7 @@ fn a_fill_is_address_phased_and_split_invariant() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: None,
-        dst_plane: Some(CpuPlane::Fb),
+        dst_plane: Some(Residency::stable(CpuPlane::Fb)),
         src_plane: None,
     }];
     execute_ours_spans(&mut fb_whole, &mut vmm, &whole).unwrap();
@@ -176,7 +176,7 @@ fn a_fill_is_address_phased_and_split_invariant() {
             },
             dst_kind: Representability::PhysicalOperand,
             src_kind: None,
-            dst_plane: Some(CpuPlane::Fb),
+            dst_plane: Some(Residency::stable(CpuPlane::Fb)),
             src_plane: None,
         }];
         execute_ours_spans(&mut fb_split, &mut vmm, &span).unwrap();
@@ -231,7 +231,7 @@ fn a_copy_with_no_source_plane_is_refused_on_the_source_end() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: Some(Representability::HostBacked),
-        dst_plane: Some(CpuPlane::GuestRam),
+        dst_plane: Some(Residency::stable(CpuPlane::GuestRam)),
         src_plane: None,
     };
     let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("must refuse");
@@ -422,4 +422,112 @@ fn a_finish_payload_in_vidmem_lands_in_the_framebuffer_store() {
     );
     // guest RAM was never touched.
     assert!(vmm.refused.is_empty());
+}
+
+// =====================================================================================
+// ★★★ PLACE vs OWNERSHIP — the seam the owner ruled on, 2026-08-08
+// =====================================================================================
+
+/// ★★★ A destination whose backing is **host-owned** is refused **by name**, even though its
+/// PLANE is one the executor can reach.
+///
+/// # ⚠ Why this is not a "future" test
+///
+/// Managed memory is [`CpuPlane::GuestRam`] — the same plane an ordinary sysmem operand takes,
+/// read through the same `Vmm`. What differs is that the backing is a host `cudaMallocManaged`
+/// allocation whose residency **host UVM owns and may migrate**
+/// (`mode2_uvm_residency.md`, DECIDED 2026-06-04; the C ran it at host parity). A CPU copy
+/// assumes its operands hold still for its duration, and under that backing they do not.
+///
+/// ⊘ So the two are indistinguishable by plane, and a type that carried only the plane would
+/// have this copy silently proceed over pages that can move mid-copy. **That** is what the
+/// second field buys, and this test is what makes the claim non-vacuous.
+#[test]
+fn a_host_owned_backing_is_refused_even_though_its_plane_is_reachable() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    let span = CeSpan {
+        sub: CeSubCopy {
+            dst: 0x3000,
+            src: CeSource::Constant(0xAABB_CCDD),
+            len: 0x40,
+            by: CeExecutor::Ours,
+        },
+        dst_kind: Representability::PhysicalOperand,
+        src_kind: None,
+        dst_plane: Some(kayfabe_arch::Residency {
+            plane: CpuPlane::GuestRam,
+            backing: kayfabe_arch::Backing::HostOwned,
+        }),
+        src_plane: None,
+    };
+    let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("a host-owned backing must refuse");
+    assert!(
+        matches!(err, FwdFault::CeUnstableBacking { addr } if addr == 0x3000),
+        "refused by its OWN name, not as a straddle and not as a peer operand: {err:?}"
+    );
+}
+
+/// …and the SOURCE end is checked too, at the source's address.
+///
+/// ⊘ Separately asserted because a check written once, on the destination, is a check the
+/// source silently does not get — and a copy that reads from a migrating page and writes to a
+/// stable one is exactly as wrong as the other way round.
+#[test]
+fn a_host_owned_source_is_refused_at_the_source_address() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    let span = CeSpan {
+        sub: CeSubCopy {
+            dst: 0x4000,
+            src: CeSource::Address(0x9_0000),
+            len: 0x40,
+            by: CeExecutor::Ours,
+        },
+        dst_kind: Representability::PhysicalOperand,
+        src_kind: Some(Representability::PhysicalOperand),
+        dst_plane: Some(Residency::stable(CpuPlane::GuestRam)),
+        src_plane: Some(kayfabe_arch::Residency {
+            plane: CpuPlane::GuestRam,
+            backing: kayfabe_arch::Backing::HostOwned,
+        }),
+    };
+    let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("must refuse");
+    assert!(
+        matches!(err, FwdFault::CeUnstableBacking { addr } if addr == 0x9_0000),
+        "named at the SOURCE's address, so the diagnosis points at the operand that moved: \
+         {err:?}"
+    );
+}
+
+/// ★ And the ordinary case is unaffected: a **stable** guest-RAM destination still copies.
+///
+/// ⊘ The non-vacuity half. A refusal test alone is satisfied by an executor that refuses
+/// everything, and `[measured 2026-08-08, boot `run_p35_84d857d`]` this is the arm the wall
+/// actually takes — the walling CeUtils channel's ring, pushbuffer and finishPayload are all
+/// guest RAM with a backing we hold.
+#[test]
+fn a_stable_guest_ram_destination_is_still_filled() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    let span = CeSpan {
+        sub: CeSubCopy {
+            dst: 0x5000,
+            src: CeSource::Constant(0xAABB_CCDD),
+            len: 8,
+            by: CeExecutor::Ours,
+        },
+        dst_kind: Representability::PhysicalOperand,
+        src_kind: None,
+        dst_plane: Some(Residency::stable(CpuPlane::GuestRam)),
+        src_plane: None,
+    };
+    execute_ours(&mut fb, &mut vmm, &span).expect("a stable backing must still be served");
+    let mut got = [0u8; 8];
+    vmm.gpa_read(0x5000, &mut got).unwrap();
+    assert_eq!(
+        got,
+        [0xDD, 0xCC, 0xBB, 0xAA, 0xDD, 0xCC, 0xBB, 0xAA],
+        "the fill still lands, phased by the destination address"
+    );
 }

@@ -3029,8 +3029,11 @@ the encoding: `INVALID=0 VIDEO=1 PEER=2 SYS_NONCOH=3 SYS_COH=4`). The two agree 
 other list in this port.
 
 ★ Two fields named `aperture`, in one subsystem, with different encodings, and the wrong one is a
-plausible read of the right file. The boot is what told them apart — a source read had already
-"confirmed" the wrong one.
+plausible read of the right file. The boot is what told them apart: `[measured 2026-08-08]`
+`run_p35_a34025b_qemu.log` says `rng=ROOTAP1 fin=ROOTAP1` and `run_p35_84d857d_qemu.log` says
+`rng=S:0x2f2c3000 fin=S:0x2f2cb004`, on bit-identical inputs and four changed constants — while the
+citation the wrong values carried (`ogkm-580: kern_gmmu_fmt_gm10x.c:165-182`) was, and remains,
+a **correct** reading of a **different** field.
 
 #### The discipline this walk runs under, stated because it is a safety rule
 

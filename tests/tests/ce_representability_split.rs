@@ -28,6 +28,7 @@ use kayfabe_arch::Aperture;
 use kayfabe_arch::CeWork;
 use kayfabe_arch::CpuPlane;
 use kayfabe_arch::PhysTarget;
+use kayfabe_arch::Residency;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
@@ -685,8 +686,8 @@ fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
             },
             dst_kind: Representability::Fabricated,
             src_kind: matches!(work, CeWork::Copy).then_some(Representability::Fabricated),
-            dst_plane: Some(CpuPlane::Fb),
-            src_plane: matches!(work, CeWork::Copy).then_some(CpuPlane::Fb),
+            dst_plane: Some(Residency::stable(CpuPlane::Fb)),
+            src_plane: matches!(work, CeWork::Copy).then_some(Residency::stable(CpuPlane::Fb)),
         }];
         let whole_image = image_after(&mut worker, vas, &rec, &whole, dst, len);
         assert_same_bytes(
@@ -932,12 +933,12 @@ fn a_physical_sys_from_vid_copy_carries_the_two_operands_distinct_cpu_planes() {
     );
     assert_eq!(
         s.dst_plane,
-        Some(CpuPlane::GuestRam),
+        Some(Residency::stable(CpuPlane::GuestRam)),
         "the SYSMEM destination lands in guest RAM — the plane the shell must WRITE"
     );
     assert_eq!(
         s.src_plane,
-        Some(CpuPlane::Fb),
+        Some(Residency::stable(CpuPlane::Fb)),
         "the LOCAL_FB source is read from the emulated framebuffer, at the SAME number"
     );
 }
@@ -960,8 +961,11 @@ fn swapping_the_targets_swaps_the_planes_the_address_is_not_consulted() {
     )
     .expect("partitions");
     assert_eq!(spans.len(), 1);
-    assert_eq!(spans[0].dst_plane, Some(CpuPlane::Fb));
-    assert_eq!(spans[0].src_plane, Some(CpuPlane::GuestRam));
+    assert_eq!(spans[0].dst_plane, Some(Residency::stable(CpuPlane::Fb)));
+    assert_eq!(
+        spans[0].src_plane,
+        Some(Residency::stable(CpuPlane::GuestRam))
+    );
 }
 
 /// A physical operand naming PEER memory is refused **by name** — it has no CPU plane and
@@ -1003,7 +1007,10 @@ fn noncoherent_sysmem_is_guest_ram_like_coherent() {
         CeWork::Scrub,
     )
     .expect("partitions");
-    assert_eq!(spans[0].dst_plane, Some(CpuPlane::GuestRam));
+    assert_eq!(
+        spans[0].dst_plane,
+        Some(Residency::stable(CpuPlane::GuestRam))
+    );
 }
 
 /// ★ A FABRICATED VIRTUAL operand's plane comes from its binding's APERTURE, not from a
@@ -1054,12 +1061,12 @@ fn a_fabricated_virtual_operand_takes_its_plane_from_the_aperture() {
     assert_eq!(spans.len(), 2, "the aperture boundary splits the scrub");
     assert_eq!(
         spans[0].dst_plane,
-        Some(CpuPlane::Fb),
+        Some(Residency::stable(CpuPlane::Fb)),
         "vidmem run → framebuffer"
     );
     assert_eq!(
         spans[1].dst_plane,
-        Some(CpuPlane::GuestRam),
+        Some(Residency::stable(CpuPlane::GuestRam)),
         "sysmem run → guest RAM"
     );
     assert!(

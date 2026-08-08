@@ -27,7 +27,7 @@
 //! move first; E10d signals only after.
 
 use kayfabe_arch::ids::{GpuVa, Pdb};
-use kayfabe_arch::{Aperture, CpuPlane};
+use kayfabe_arch::{Aperture, Backing, CpuPlane, Residency, ResidencyOracle};
 use kayfabe_device::{FbRefused, FbStore};
 use kayfabe_fwd::{COMPLETION_VECTOR, CeSpan, FwdFault};
 use kayfabe_isolate::{CeExecutor, CeSource};
@@ -58,6 +58,33 @@ fn ram_fault(e: VmmError) -> FwdFault {
         _ => FwdFault::GpaRead {
             gpa: u64::MAX, // no address the port named; the variant carries none
         },
+    }
+}
+
+/// ★★★ **The plane a residency answer permits us to touch — or a named refusal.**
+///
+/// # ⚠ The backing check is the point, and it is load-bearing today
+///
+/// A CPU copy assumes its operands hold still for its duration. [`Backing::Stable`] says
+/// they do — the emulated framebuffer is ours outright and guest RAM is held by the
+/// hypervisor for the life of the machine. [`Backing::HostOwned`] says they do **not**: the
+/// managed-memory case, where the backing is a host `cudaMallocManaged` allocation and host
+/// UVM may migrate it below the guest's addressing (`mode2_uvm_residency.md`, DECIDED
+/// 2026-06-04, measured at host parity in the C artifact).
+///
+/// ⊘ **Refusing it is not a claim the case is impossible** — the C ran it. It is a claim
+/// that *this port has built no interlock*, and copying from a page that may move mid-copy
+/// is a silent wrong-bytes generator. When the interlock lands, the fix is here and the
+/// executor's shape is unchanged, which is the whole reason the fact is a **field** rather
+/// than a plane variant.
+///
+/// ★ Note the plane itself is unchanged for a host-owned backing: managed memory is still
+/// guest RAM read through the `Vmm`. Place and ownership are independent, which is why they
+/// are two fields.
+fn touchable(r: Residency, addr: u64) -> Result<CpuPlane, FwdFault> {
+    match r.backing {
+        Backing::Stable => Ok(r.plane),
+        Backing::HostOwned => Err(FwdFault::CeUnstableBacking { addr }),
     }
 }
 
@@ -123,9 +150,11 @@ pub fn execute_ours(
     let dst = span.sub.dst;
     let len = span.sub.len;
     // The destination plane must exist for anything to be written.
-    let dst_plane = span
-        .dst_plane
-        .ok_or(FwdFault::CpuCeStraddle { dst, dst_end: true })?;
+    let dst_plane = touchable(
+        span.dst_plane
+            .ok_or(FwdFault::CpuCeStraddle { dst, dst_end: true })?,
+        dst,
+    )?;
 
     match span.sub.src {
         CeSource::Constant(pattern) => {
@@ -149,10 +178,13 @@ pub fn execute_ours(
         CeSource::Address(src) => {
             // A real copy needs BOTH ends reachable; a missing source plane is the same
             // straddle, named on the source end.
-            let src_plane = span.src_plane.ok_or(FwdFault::CpuCeStraddle {
-                dst,
-                dst_end: false,
-            })?;
+            let src_plane = touchable(
+                span.src_plane.ok_or(FwdFault::CpuCeStraddle {
+                    dst,
+                    dst_end: false,
+                })?,
+                src,
+            )?;
             let mut off: u64 = 0;
             let mut chunk = vec![0u8; CHUNK.min(usize::try_from(len).unwrap_or(CHUNK))];
             while off < len {
@@ -209,11 +241,14 @@ pub fn execute_ours_spans(
 /// The CPU plane a resolved binding's aperture names — the E10d completion analogue of
 /// E10b's operand classification. A peer aperture is refused by name.
 fn sem_plane(aperture: Aperture, phys: u64) -> Result<CpuPlane, FwdFault> {
-    match aperture {
-        Aperture::Vidmem => Ok(CpuPlane::Fb),
-        Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => Ok(CpuPlane::GuestRam),
-        Aperture::Peer => Err(FwdFault::CePeerOperand { addr: phys }),
-    }
+    // ⊘ ASKED, not computed here. The same oracle the operand classification consults, so a
+    // semaphore and the copy that releases it can never come to disagree about where one
+    // aperture's bytes are — and a later oracle that knows about host-owned backings covers
+    // the completion write for free.
+    let r = kayfabe_fwd::DeclaredResidency
+        .residency_of_aperture(aperture, phys)
+        .ok_or(FwdFault::CePeerOperand { addr: phys })?;
+    touchable(r, phys)
 }
 
 /// ★★★ **Write a copy-engine request's finishPayload semaphores where the guest polls
