@@ -595,6 +595,90 @@ fn probe_ctrl(
     }
 }
 
+/// ★★★ R20 — **`NV2081_BINAPI` and its opaque control, asked of a real GA106.**
+///
+/// `execution_plane_increments.md` §14.26 named this rung by measurement: `0x20810108` has
+/// **no oracle**. There is no row for it in the C artifact's captured control table, `cap1`
+/// carries the *request* and never a reply, and `traces/real_ga106/` does not mention it —
+/// and the three failures share **one** cause, because every one of those instruments was
+/// produced by driving `RmInitAdapter` with `nvidia-smi`, while `0x20810108` is issued by
+/// **libcuda**. ⊘ Three instruments agreeing is not corroboration when they share the defect.
+///
+/// Source cannot answer it either: `binapiControl_IMPL` does not interpret `pParams->cmd`
+/// at all, it forwards the whole command to GSP over `NV_RM_RPC_API_CONTROL`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/binary_api.c:61-127`), and GSP-RM is in no
+/// vendored tree. So the only remaining instrument is a real part.
+///
+/// ## ★★ Why this rung exists even though `cuda_ioctl_trace.c` already traced libcuda
+///
+/// The interposed trace of a real `cuInit` recorded `0x20810108` as **992 bytes in, 992
+/// bytes out, `NV_OK`, and every byte zero on both sides** — because libcuda hands RM a
+/// zeroed buffer. ⊘ That measurement **cannot distinguish** "GSP wrote 992 zeros" from "GSP
+/// returned `NV_OK` and wrote nothing", and those are different facts with different
+/// consequences for what our emulated GSP must put on the wire.
+///
+/// This rung separates them the only way they can be separated: **seed the buffer with
+/// `0xCD` first**, exactly as R18 does and for exactly R18's reason. A buffer that comes
+/// back zeroed was written. A buffer that comes back `0xCD` was not. An interposer must not
+/// modify what it observes; a ladder is free to.
+///
+/// ⚠ The `0x2081` alloc is issued the way libcuda measurably issues it — **`paramsSize=0`
+/// and a NULL params pointer**, not the 4-byte `NV2081_ALLOC_PARAMETERS`. RM's own RPC to
+/// GSP then carries `paramsSize=4` because `RS_OPTIONAL(NV2081_ALLOC_PARAMETERS)`
+/// (`resource_list.h:444`) declares that size for the *registered* class; the guest-side
+/// wire we must answer and the client-side ioctl we must imitate are **not the same
+/// number**, and mistaking one for the other is how a decoder ends up demanding a body no
+/// client ever sends.
+fn binapi_probe(
+    rm: &mut HostRmBackend,
+    subdevice: kayfabe_isolate::HostHandle,
+    specs: &[(u32, usize)],
+) {
+    println!("info  R20 binapi probe    = alloc NV2081_BINAPI under the subdevice");
+
+    // ⚠ Empty params. RS_OPTIONAL means a NULL is legal BY DECLARATION
+    // (`resource_desc.c:76` expands it to `bParamRequired = NV_FALSE`), and it is what a
+    // real libcuda sends — measured, not assumed.
+    let binapi = match rm.alloc(subdevice, ClassId(0x2081), &[]) {
+        Ok(h) => {
+            println!("★     R20 hBinApi        = {:#010x} (NV_OK, params NULL/0)", h.raw());
+            h
+        }
+        Err(e) => {
+            // A refusal here is itself the result, and it localises: it says an
+            // unprivileged-flagged class under a Subdevice was still denied to this client,
+            // which would make every reply body below unobtainable rather than unknown.
+            println!("info  R20 NV2081_BINAPI  = refused {e:?} — no control could be probed");
+            return;
+        }
+    };
+
+    for &(cmd, size) in specs {
+        let mut payload = vec![0xCDu8; size];
+        let result = rm.control(binapi, ControlCmd(cmd), &mut payload);
+        let untouched = payload.iter().all(|&b| b == 0xCD);
+        let all_zero = payload.iter().all(|&b| b == 0);
+        let hex: String = payload.iter().map(|b| format!("{b:02x}")).collect();
+        match result {
+            Ok(()) if untouched => println!(
+                "info  R20 {cmd:#010x}    = NV_OK but the buffer is UNTOUCHED ({size} bytes \
+                 still 0xCD) — an accepted call that answered nothing"
+            ),
+            Ok(()) if all_zero => println!(
+                "★     R20 {cmd:#010x}    = NV_OK and RM ZEROED all {size} bytes — the reply \
+                 IS zeros, and the 0xCD seed is what proves it was written"
+            ),
+            Ok(()) => println!("★     R20 {cmd:#010x}    = NV_OK, {size} bytes: {hex}"),
+            Err(e) => println!("info  R20 {cmd:#010x}    = refused {e:?} (no value measured)"),
+        }
+    }
+
+    match rm.free(binapi) {
+        Ok(()) => println!("ok    R20 free           = NV_OK"),
+        Err(e) => println!("info  R20 free           = {e:?}"),
+    }
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -883,6 +967,7 @@ fn main() -> std::process::ExitCode {
     let mut want_census = false;
     let mut want_timer = false;
     let mut want_probe: Option<Vec<(u32, usize)>> = None;
+    let mut want_binapi: Option<Vec<(u32, usize)>> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -912,6 +997,19 @@ fn main() -> std::process::ExitCode {
                     Ok(specs) => want_probe = Some(specs),
                     Err(e) => {
                         eprintln!("--probe-ctrl {e}");
+                        return std::process::ExitCode::from(64);
+                    }
+                }
+            }
+            "--binapi-ctrl" => {
+                let Some(v) = args.next() else {
+                    eprintln!("--binapi-ctrl needs a `cmd[:size],...` list");
+                    return std::process::ExitCode::from(64);
+                };
+                match parse_ctrl_specs(&v) {
+                    Ok(specs) => want_binapi = Some(specs),
+                    Err(e) => {
+                        eprintln!("--binapi-ctrl {e}");
                         return std::process::ExitCode::from(64);
                     }
                 }
@@ -965,6 +1063,19 @@ fn main() -> std::process::ExitCode {
     if let Some(specs) = want_probe {
         probe_ctrl(&mut rm, subdevice, &specs);
         println!("done — probe only");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R20 runs here and RETURNS, for R18's reason: the whole value of the rung is that the
+    // only object in play is the `NV2081_BINAPI` it allocates itself, so a refusal is the
+    // control's or the class's and cannot be a channel's from three rungs earlier.
+    if let Some(specs) = want_binapi {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        binapi_probe(&mut rm, subdevice, &specs);
+        println!("done — binapi probe only");
         return std::process::ExitCode::SUCCESS;
     }
 
