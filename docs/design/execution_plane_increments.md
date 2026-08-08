@@ -2905,11 +2905,38 @@ usable PDB for `0x4_2000_0000`. The route is unchanged: **walk** from that root 
 with `kayfabe_mmu::walker::translate`, aperture fork at every level. The published `levels[1..3]`
 are for a different path and ⊘ must not be reused — that part of §14.11 is correct and important.
 
-★ **What genuinely remains open** is the empirical question, not the structural one: are the
-intermediate entries on the path to `0x4_2000_0000` actually present in our emulated FB? If the
-guest built this channel's pushbuffer there, they must be. **A miss is a fault** — which is the
-correct, loud behaviour and needs no new transport hypothesis. ⊘ Do not go looking for "a second
-range these two control ids don't carry" until a walk has actually missed.
+#### ⊘⊘ AND THE "what if the walk misses" WORRY IS ALSO ALREADY ANSWERED — three times
+
+I first wrote this section saying the open question was *"are the intermediate entries on the path
+to `0x4_2000_0000` actually present in our emulated FB?"* ⊘ **That is the wrong worry, and §9.2
+already settled it the other way** — `[measured 2026-08-02, rev 4e8960f]`, six days before I asked.
+Recorded here rather than quietly deleted, because the next reader will reach for the same
+hypothetical:
+
+1. **A miss is not an open design question — it is built and loud.**
+   `crates/kayfabe-mmu/src/walker.rs:215`: `PteDecode::Invalid => Err(TranslateFault::Unmapped {
+   va, level })`, carrying the level it failed at; an un-enumerated leaf size is a separate named
+   fault (`WalkFault::UnknownLeafSize`, #13's corollary made into a check). There is no fallback
+   to design and no policy to decide.
+2. ★★★ **A walk stopping at a root HAS been measured — and the cause was not missing bytes.**
+   §9.2, `[measured]` 2026-08-02 at rev `4e8960f`, test
+   `e5_address_table_join.rs::the_ce_pt_write_source_can_witness_only_a_root_page_today`. The
+   cause was that **source 2** (the observed CE page-table write) witnesses *roots only* —
+   `Spine::pt_roots` is seeded from roots, and a guest CE write into a leaf table is classified as
+   ordinary data. §9.2's own words: *"The bytes decode correctly and the metadata chain **is**
+   learned forward — only the **binding** is withheld."* ⇒ the constrained operation was never
+   reading; it was **authorisation to bind**.
+3. **E8 built the PUBLISH phase that closed exactly that** (§12).
+
+⇒ **And tonight's measurement removes the constraint entirely for this channel.** The root arrives
+on `0x90f10106` — an RPC binding, i.e. **source (1)** of the two co-equal populate sources named in
+`mode2_address_table.md`, the sanctioned forward transport. Source 2's witness chain is not needed
+for it at all. ★ And reading the intermediate levels *during a walk* is **reading page-table bytes,
+not binding** — that is what a TLB does, and it was never the operation the doctrine restricts.
+
+⊘ So: do not treat a walk from `levels[0]` as speculative, and do not go looking for "a second
+range these two control ids don't carry". If a walk misses, it will say so **by name, at a level** —
+and *that* named fault is the thing to investigate, not a transport hypothesis invented ahead of it.
 
 ⚠ **How the wrong inference was reachable, worth naming:** the report compared a VA against a
 range and reasoned about *set membership*, where the operative property was *tree reachability*.
