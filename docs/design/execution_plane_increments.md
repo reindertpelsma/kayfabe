@@ -3956,3 +3956,144 @@ vh, rev 7c5d74d]`) — and the tree it measured was
 `7a881a7` plus four hand-copied files, three doc commits behind master. On the real HEAD the
 ledger is **381/66/17 with `MEASURED` 882 → 886**. Sync with a bundle before believing a
 gate: it is the same species as the stale-binary trap above, and it costs a wrong ratchet.
+
+### 14.22 ★★★ THE ALLOC CLASSES ARE NOT THE WALL — the golden image channel fails **upstream** of all of them (`[measured 2026-08-08, boot ship3_d5369b5, rev d5369b5]`)
+
+`[measured 2026-08-08]`, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver
+**580.159.04 Open**), source revision **`d5369b5`** verified by
+`strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:d5369b58bda44de90c51c8baf055f889aeb7c71b` in each. Boot `ship3_d5369b5`,
+**`probe-arm set: EMPTY`**, **STOCK** guest module. Evidence:
+`docs/reference/bench_evidence/run_ship3_d5369b5_{dmesg,qemu,probe,serial}.log`.
+
+#### ✔ First: the milestone REPRODUCES after the host reboot
+
+`SMI_RC=0`, the full `nvidia-smi` device table, `probe-arm set: EMPTY`, stock module —
+identical in kind to §14.20's `ship_7a881a7`, now at the reverted HEAD. The census matches
+line for line: `completions: 2 announced, 0 UNVECTORED, 2 would be masked`,
+`bind engineType 11 (COPY2)`, `doorbells: 2 arrived, 2 served`. ⇒ §14.21's revert restored
+the adapter exactly as it predicted, and the recovered box behaves.
+
+#### ★★★ The reordering: the four "blocking" alloc classes block **nothing upstream**
+
+The standing framing was *"`kgraphicsCreateGoldenImageChannel` fails on refused alloc
+classes `0x0070` / `0xc36f` / `0x402c` / `0x2081`."* **The guest's own dmesg timestamps say
+the opposite**, and the order is unambiguous:
+
+```text
+[38.596585] kgrobjPromoteContext                @ kernel_graphics_object.c:224  -> 0x56
+[38.639983] AllocWithHandle(… hObj3D, classNum) @ kernel_graphics.c:2519        -> 0x56
+[38.683581] kgraphicsCreateGoldenImageChannel   @ kernel_graphics.c:508         -> 0x56
+[38.690119] GspRmAlloc hClass=0x00000070  hObject=0x3141590f   <-- AFTER the failure
+[39.002705] GspRmAlloc hClass=0x0000c36f  hObject=0x31415900   <-- AFTER the failure
+[39.093908] Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[39.125188] GspRmAlloc hClass=0x0000402c  hObject=0xcaf00002
+```
+
+★ **Every refused alloc class is logged AFTER `kgraphicsCreateGoldenImageChannel` has
+already failed.** A refusal at `38.690` cannot cause a failure printed at `38.683`. The
+golden image channel's own channel allocation **succeeded**; it died on the **3D object**,
+whose `_kgrAlloc` runs `kgrobjPromoteContext`, and §14.21 measured that refusal by name:
+`PromoteFault::ContextVasUndeclared`.
+
+#### The handles name the real owner, and RM's source agrees
+
+`WATCHDOG_PUSHBUFFER_CHANNEL_ID 0x31415900` (`ogkm-580:
+src/nvidia/src/kernel/gpu/rc/kernel_rc_watchdog.c:64`) ⇒ `0x3141590f` and `0x31415900` are
+the **RC watchdog's** objects, not the golden channel's. Confirmed against RM's source, which
+also settles what the golden channel really allocates
+(`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2136-2541`,
+`kgraphicsCreateGoldenImageChannel_IMPL`):
+
+| step | class | site |
+|---|---|---|
+| VA space | `FERMI_VASPACE_A` `0x90f1` | `:2293` |
+| pushbuffer phys | `NV01_MEMORY_SYSTEM` `0x3e` | `:2315` |
+| pushbuffer **virt** | **`NV50_MEMORY_VIRTUAL` `0x50a0`** — ⊘ *not* `0x0070` | `:2328` |
+| USERD | `NV01_MEMORY_LOCAL_USER` `0x40` | `:2404` |
+| **channel** | `kfifoGetChannelClassId` → **`AMPERE_CHANNEL_GPFIFO_A` `0xc56f`** | `:2411`, `:2454` |
+| 3D object | `AMPERE_B` — **this is the one that fails** | `:2513` |
+
+`kfifoGetChannelClassId_IMPL` takes the **numeric maximum** GPFIFO class
+(`NV_MAX(class, pClassList[i])`, `ogkm-580: kernel_fifo.c:3448-3484`) over GA106's
+`ENG_KERNEL_FIFO` set `{0xc36f, 0xc46f, 0xc56f}` ⇒ **`0xc56f`**, which this port already
+admits and maps. ⚠ The `gpuIsClassSupported(VOLTA_CHANNEL_GPFIFO_A)` test at `:2337` is real
+but only sizes the **USERD** buffer (`ctrlSize = sizeof(Nvc36fControl)`); it does not choose
+the channel class. A reader who stops at that `if` concludes `0xc36f` — which is how the
+wrong framing arose.
+
+`0xc36f` on GA106 comes from `krcWatchdogInit`'s `gpfifoMapping[]`, which is scanned
+**first-match-wins in ascending-arch order** and therefore stops at **VOLTA**, never reaching
+TURING or AMPERE (`ogkm-580: kernel_rc_watchdog.c:617-652`).
+
+#### ⇒ The corrected table
+
+| class | who asks | refusal at `d5369b5` | verdict |
+|---|---|---|---|
+| `0x0070` `NV01_MEMORY_VIRTUAL` | **RC watchdog** virtual ctx handle (`kernel_rc_watchdog.c:673`) | `UnmappedAllocClass` | not upstream of anything; watchdog-only |
+| `0xc36f` `VOLTA_CHANNEL_GPFIFO_A` | **RC watchdog** channel (`:1013`) | `NotOnAllowlist` | not upstream of anything; watchdog-only |
+| `0x402c` `NV40_I2C` | i2c probe (`RS_UNIQUE_HANDLE_BASE`) | `AllocClassNotPermitted::**Refused**` | ★ already decided — refused BY NAME (`4088589`) |
+| `0x2081` `NV2081_BINAPI` | — **nobody** — | *never requested* | ⊘ not a wall; already on the allowlist |
+
+⊘ **`0x2081` is a phantom.** `grep -l 'hClass=0x00002081'` over **every** captured boot in
+`docs/reference/bench_evidence/` returns nothing, and there is no `Alloc(… NV2081_BINAPI …)`
+call site anywhere in the open kernel tree — it is allocated only by closed userspace
+(NVML/`nvidia-smi`) under a Subdevice. It has been on `CLASSES_SHARED` the whole time. It
+entered the work list as a *name in a doc sentence* and was never checked against a boot.
+
+★ And the census arithmetic proves the set is exactly three, with nothing hidden: three
+alloc-class refusals in the log, three `GspRmAlloc` failures in dmesg, and the bridge census
+reads `AllocClassNotPermitted::NotOnAllowlist x1` + `::Refused x1` + `UnmappedAllocClass x1`.
+
+#### ⊘ What this means for the work — do NOT admit them
+
+Serving `0x0070` + `0xc36f` would fix the **RC watchdog**, an engine whose failure §14.20 and
+this boot both measure as **non-fatal** (the adapter initialises and `nvidia-smi` enumerates
+with all three refused). It would buy **zero** progress toward `cuInit`, and §14.21's lesson
+applies directly: a class admitted so a green appears somewhere is exactly the trade that
+cost the adapter last time.
+
+★★★ **The real wall is unchanged and already named**: `kgrobjPromoteContext` →
+`PromoteFault::ContextVasUndeclared` → the golden channel's VASpace has no page-directory
+base. §14.21's re-enable condition is the whole of the remaining work, and it is exact: **make
+the `0x90f10106` publication reach `Vas::pdb`.**
+
+⚠ And that publication is **not** refused — it is **SERVED**. `control 0x90f10106 result
+0x00000000 x4` in both `ship_7a881a7` and `ship3_d5369b5`. `GvasPubRecorder`
+(`kayfabe-device/src/lib.rs:970`) records it into a **census log** and declines;
+`InitTablePolicy` answers it. The record carries everything needed — `client`, `object`
+(= `hVASpace`), and `pdes.levels[0]` (= the root) — and **nothing forwards it into the object
+model as an `RmEvent::SetPageDir`**. ⊘ Note the consequence for instruments: the
+`ControlParams::PageDirNotModelled` arm in `translate_control` is **unreachable** for
+`0x90f10106`, because `InitTablePolicy` terminates the chain first — `BridgeRefusal::
+PageDirControlNotModelled` appears in **no** boot census. A refusal that cannot fire is not a
+guard (`a_table_does_not_decide_behaviour`, fourth instance).
+
+#### ⚠ Two bench-recovery facts the host reboot taught, both runtime-only state
+
+- ★★★ **The `nvktap0` tap device does not survive a reboot.** `boot_nvkvm.sh` runs
+  `-netdev tap,ifname=nvktap0,script=no,downscript=no`, i.e. QEMU requires the tap to
+  **pre-exist**. After the reboot `ip -br addr` showed no tap at all, and `boot_capture.sh`
+  failed with *"guest never answered ssh within 150s"* — while the serial log showed the guest
+  reaching `graphical.target` and a **login prompt**. ⊘ A perfectly healthy guest reads as a
+  dead one. Recover with:
+  `ip tuntap add dev nvktap0 mode tap && ip addr add 192.168.77.1/24 dev nvktap0 && ip link set nvktap0 up`.
+  ⚠ Note `gssh_nv` connects to `ubuntu@192.168.77.2` over this tap — **not** `localhost:2223` —
+  so the remembered *"needs a `~/.ssh/config`"* trap is a **different** harness's, and chasing
+  it here wastes the cycle. (There is no `~/.ssh/config` on `vh` and the boot is green without one.)
+
+- ★★★ **A killed build leaves a ZERO-BYTE artifact that `cargo` then reports as FRESH.** The
+  outage killed the `d5369b5` build mid-compile. Afterwards
+  `cargo build --release -p kayfabe-qemu-raw` printed **`Finished in 0.82s`** — cargo trusts its
+  fingerprint DB and never checksums its own outputs — while
+  `target/release/deps/libkayfabe_rt-*.rlib` was **0 bytes**. `build_qom_shim.sh`'s guard is
+  `[ -f "$ARCHIVE" ]` — **existence, not size** — so it laid an empty archive into the tree and
+  the only symptom was ~200 undefined `kayfabe_shim_*` symbols at link. ⊘ Exactly one file was
+  genuinely truncated (6 zero-length files, 5 of them lock/`stderr` files that are legitimately
+  empty), so `cargo clean -p <the-one-crate>` was the whole fix.
+  ⇒ Same family as `862c7c2` and `bench_rebuild_stub_gap`, with a new twist: here **both**
+  the tool's own success signal **and** the script's guard were satisfied by a broken artifact.
+  ★ The stamp check is what caught it — `strings … | grep kayfabe-rev` on the archive returned
+  **nothing at all**, which is why that check must be run on the archive and not only on the
+  binary.
