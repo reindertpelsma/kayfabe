@@ -4650,3 +4650,35 @@ measured, and a second wall-moving change inside it would make a regression unat
 `0x2081` is a correlation of two facts in one window, not a proof of causation. It is the
 only new refusal in that window, which is why it is the next thing to try — not why it is
 the answer.
+
+#### ⊘ Gate state at `55d289b`, attributed rather than absorbed
+
+`scripts/run_full_suite.sh --only ci-stable` on `vh`: **4 steps fail, and all four reproduce
+at `origin/master` `8c40f00` in a clean worktree.** Measured by checking each one against a
+`git worktree` at master rather than by assuming:
+
+| failing step | at `8c40f00`? |
+|---|---|
+| Format check (main workspace) | ✔ yes — 8 sites: `kayfabe-device/src/lib.rs:969`, `kayfabe-rmrpc/src/policy.rs:1524`, `rmrpc_bridge.rs`, `served_chain_seats.rs` ×5 |
+| Format check (fuzz workspace) | ✔ yes — 8 sites |
+| Bridge-exclusivity (`kayfabe-device` names both `RpcCommand` and `RmEvent`) | ✔ yes |
+| Claim-ledger (`UNATTRIBUTED 382 > 381`, `CONFLATED 67 > 66`) | ✔ yes |
+
+⇒ *"★ AT LEAST ONE GATE FAILED — do not push"* was **already true at `8c40f00`**, and it is
+recorded here so the next agent does not spend the cycle deciding whether the red is theirs.
+⊘ Not fixed here, deliberately: reformatting and re-attributing another increment's work is
+`path_scoped_add_does_not_scope_the_commit` waiting to happen.
+
+★ What this increment DID own and fixed: one clippy `useless_vec`, two rustfmt sites, and
+`+1 UNATTRIBUTED / +1 CONFLATED` in the claim ledger — **attributed, never ratcheted**, back
+to master's own 382/67/17.
+
+★★ And two gates that were failing are now GREEN and were **nobody's code**: the hexagonal
+and VMM-vocabulary gates `grep -r` four crate directories *whole*, and
+`crates/kayfabe-abi/gen/target/` — created by the suite's **own** `abi-gen-tests` phase, and
+gitignored — is inside one of them. `[measured]` two runs of the same tree at the same
+revision: first green, second *"binary file matches"*. ⇒ The suite **armed its own failure**,
+those gates were green only on a tree that had never built the ABI generator (i.e. exactly a
+fresh GitHub runner, which is why CI could not catch it), and the fix is
+`--exclude-dir=target` on all four — cargo output, never a source file, pattern and crate
+list untouched.
