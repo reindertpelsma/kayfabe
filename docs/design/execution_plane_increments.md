@@ -2681,7 +2681,8 @@ the shape that drops the fork.
 
 ### 14.10 E10e item (1), BUILT — the publication is LATCHED and the report carries it (`d79b67f`)
 
-`[built]` at `62a06af` + `d79b67f`, GPU-free; ⊘ **no boot of this revision has been taken yet**,
+`[built]` at `62a06af` + `d79b67f`, GPU-free; ⊘ **no boot of this revision had been taken when this
+section was written** — §14.11 has since taken three, and where the two disagree §14.11 wins —
 so everything below is a property of the tree and of its tests, not of a guest. The one number
 this increment exists to produce — `levels[0]` per publication, with its `hObject` — is a
 **boot output** and is deliberately not asserted here.
@@ -2737,3 +2738,129 @@ handle equals an `hObject` in this log, the VAS→channel join becomes a fact th
 stated rather than one we joined up. If it differs, that is the more valuable result and this record is what
 makes the disagreement visible at all. ⊘ Patch `0002` is bring-up instrumentation, so any rung
 claimed on a boot carrying it is a **diagnosis**, not the milestone.
+
+### 14.11 ★★★ E10e item (1), BOOTED — the join HOLDS, and the semaphore is OUTSIDE every published range (`c89899a`)
+
+`[measured 2026-08-08]`, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver **580.159.04
+Open**, 38 cores), source revision **`c89899a`** verified by
+`strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on **both** `target/release/libkayfabe_qemu_raw.a`
+and `qemu-build/qemu-system-x86_64` → `kayfabe-rev:c89899a661f1382cabbd2b5cab197b43fd12af10` in
+each. Three boots, one fresh QEMU each:
+
+| tag | probe set | guest `nvidia.ko` | evidence |
+|---|---|---|---|
+| `p2_c89899a` | `[35]` | **PATCHED** with `0002-bringup-ceutils-finishpayload-wait.patch`, built in-guest from `ogkm-580.159.04` against `6.8.0-136-generic` | `bench_evidence/run_p2_c89899a_{dmesg,qemu,serial,probe}.log` |
+| `stock_c89899a` | `[35]` | **STOCK** (the `.run`'s own module, `md5 b029cb74…`, `grep -c KAYFABE-BRINGUP` = 0) | `bench_evidence/run_stock_c89899a_{dmesg,qemu,serial,probe}.log` |
+| `noprobe_c89899a` | none | **STOCK** | `bench_evidence/run_noprobe_c89899a_{dmesg,qemu,serial,probe}.log` |
+
+★ **How the patched module was built, because the README's route had to be corrected once
+already.** The vendored full-source oracle `ogkm-580.159.04` (⊘ *not* the `.run` payload, which
+ships a 17 MB precompiled `nv-kernel.o_binary` and has no `channel_utils.c`) was copied **into the
+guest**, patched, and built there with `make modules -j16` against the guest's own
+`6.8.0-136-generic` headers — 0 errors, `strings kernel-open/nvidia.ko | grep -c KAYFABE-BRINGUP`
+= **2**, `modinfo -F vermagic` = `6.8.0-136-generic SMP preempt mod_unload modversions`. The stock
+module is preserved at `/root/stock-nvidia-ko/nvidia.ko` in the guest and the patched one at
+`/root/patched-nvidia.ko`, so the A/B is one `cp` + `depmod -a` in either direction. **The guest
+is left holding the STOCK module**, because the milestone is a stock guest and the bench's default
+must be the milestone's configuration.
+
+⚠ **`mem_mgr.c:463` is a PROBE-CONDITIONAL wall** — `boot_wall_may_be_probe_conditional` again, on
+a new wall. `[measured 2026-08-08]`, rev `c89899a`, RTX 3060 / 580.159.04 Open: a **third** boot,
+`noprobe_c89899a` (same revision, same stock module, no
+`NVKVM_DEV_EXTRA`), dies **earlier**: `_memmgrMemUtilsScrubInitRegisterCallback: event
+notification control failed` → `mem_utils.c:2022` (`NV_ERR_GENERIC`), `RmInitAdapter failed!
+(0x25:0xffff:1249)`, with **2** publications instead of 3 and **0 doorbells arrived**. The
+CE-copy wall this increment is about is only reachable with notifier 35 armed; a boot taken
+without it never gets to the question, so it falsifies nothing here.
+(`bench_evidence/run_noprobe_c89899a_*.log`.)
+
+#### The falsifier §14.10 stated, CHECKED FIRST
+
+`diff` of `run_probe35_349924b_dmesg.log` (no observer, stock module) against
+`run_stock_c89899a_dmesg.log` (observer present, stock module), timestamps stripped:
+**byte-identical, 22/22 lines.** The wall is `memmgrMemSet … NV_ERR_TIMEOUT (0x65) @
+mem_mgr.c:463` and the doorbell is `first doorbell refusal [FwdFault::NoVas] NoVas(ChanId(1))`,
+exactly as before. ⇒ **the observer changed nothing the guest can see.** §14.10's condition is met.
+
+And `p2_c89899a` vs `stock_c89899a` (`[measured 2026-08-08]`, rev `c89899a`, RTX 3060 /
+580.159.04 Open), timestamps stripped and the `KAYFABE-BRINGUP` lines removed,
+differ in **one** line — the module's own build banner (`(ubuntu@ubuntu) Sat Aug 8 …` vs
+`(dvs-builder@U22-I3-AF04-09-6) Wed Apr 29 …`). ⇒ **patch `0002` is observation-only, measured
+rather than asserted.**
+
+#### The guest's own lines, verbatim (`run_p2_c89899a_dmesg.log`)
+
+```
+[33.381991] NVRM: channelWaitForFinishPayload: KAYFABE-BRINGUP: waitFinishPayload ENTER: hClient=0xc1e00006 chId=0x2 hVASpaceId=0xa pbGpuVA=0x420000000 finishPayloadOffset=0x6c004 semaVA=0x42006c004 semaOffset=0x6c000 pbCpuVA=FFFFD171024C1000 bUseBar1=0 bUseVasForCeCopy=1 engineType=11 target=0x1 cur=0x0
+[37.382285] NVRM: channelWaitForFinishPayload: KAYFABE-BRINGUP: waitFinishPayload TIMEOUT: hClient=0xc1e00006 chId=0x2 semaVA=0x42006c004 pbCpuVA=FFFFD171024C1000 bUseBar1=0 target=0x1 cur=0x0 pbSema=0x0 isChannelActive=0 workSubmitToken=0x10002
+[37.382797] NVRM: … ENTER:  (identical to 33.381991 — the retry)
+[41.383463] NVRM: … TIMEOUT: (identical to 37.382285 — the retry)
+[42.326466] NVRM: channelWaitForFinishPayload: KAYFABE-BRINGUP: waitFinishPayload ENTER: hClient=0xc1e00005 chId=0x2 hVASpaceId=0x0 pbGpuVA=0x120000000 finishPayloadOffset=0x6c004 semaVA=0x12006c004 semaOffset=0x6c000 pbCpuVA=FFFFD17102453000 bUseBar1=1 bUseVasForCeCopy=0 engineType=11 target=0x0 cur=0x0
+```
+
+#### ★★★ The join, from two independent sides in ONE boot
+
+| side | statement |
+|---|---|
+| device (`run_p2_c89899a_qemu.log`) | `gvas cmd 0x90f10106 hClient 0xc1e00006 hObject 0x0000000a` |
+| guest (`run_p2_c89899a_dmesg.log`) | `hClient=0xc1e00006 … hVASpaceId=0xa` |
+
+**EQUAL — on `hClient` *and* on the handle.** The VAS→channel join is now a fact the guest stated
+about itself, not one we inferred from a resolver. ⊘ And `hVASpaceId != 0`: the scrubber **is** in
+virtual mode (`bUseVasForCeCopy=1`), which is the branch §14.10 could not choose between.
+
+The second CeUtils instance is the counter-example that proves the recorder is not just echoing:
+the device recorded `hClient 0xc1e00005 hObject 0x0000000c`, while the guest printed
+`hVASpaceId=0x0` for *that client's channel*. Not a contradiction — that channel is **not** in
+virtual mode (`bUseVasForCeCopy=0`, `bUseBar1=1`), so it has no VAS handle; `0xc` is a VA space
+the same client published for something else. ⇒ **the two CeUtils instances differ in aperture
+*and* in mode within one run** (`[measured 2026-08-08]`, boot `p2_c89899a`, rev `c89899a`, RTX
+3060 / 580.159.04 Open), reproducing on our device the per-instance `bUseBar1` split the C
+artifact measured on 2026-07-25. The third publication, `cmd 0x20800a9f hClient 0 hObject 0`, is
+the subdevice-scoped BAR2 one and carries no client.
+
+★ **`workSubmitToken=0x10002` (guest) == `DOORBELL token 0x00010002` (device).** A third
+independent join in the same boot: the doorbell our device refused is provably *this* channel's.
+
+#### ★★★ THE FINDING — the semaphore is OUTSIDE every published page-directory range
+
+All **3** publications, in both boots, cover exactly one range:
+
+```
+va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4
+  level[0] ROOT phys 0x…000 size 0x20 aperture 1 pageShift 47   (aperture 1 on every level, all 3)
+```
+
+The channel that **walls** has `pbGpuVA=0x420000000`, `semaVA=0x42006c004` — **not in
+`[0x1_0000_0000..0x1_1fff_ffff]`, nor in any published range.** Only the *other* instance
+(`pbGpuVA=0x120000000`, `semaVA=0x12006c004`, the one that never waits: `target=0x0`) lands
+inside it.
+
+⇒ Two things follow, and they reorder the work:
+
+1. **`NoVas(ChanId(1))` is not merely "we declined to bind a VAS" — there is no published VAS
+   that could serve this channel's addresses even if we bound one.** Populating `chan.vas_pdb`
+   from `gvaspub` as it stands would give the walling channel a page directory that does not map
+   its own pushbuffer. That is precisely §14.8's "a doorbell that reports **Served** over work
+   that did not happen", arrived at from a new direction.
+2. Either RM publishes a *second* range per VAS that `0x90f10106` / `0x20800a9f` does not carry,
+   or the `0x420000000` mapping arrives by a transport we are not recording at all. **Finding
+   which is the next measurement**, and it is a different question from the one E10e item (2) was
+   scoped to.
+
+⚠ **This REFUTES the premise the task carried in**, that the walling channel would be the C
+artifact's `0x120000000` / gpfifo `0x120064000` one. It is not. The C's channel is present and its
+arithmetic reproduces **exactly** — `0x120064000 + 0x8004 = 0x12006c004`, and our device's own
+`gpfifo rings: … first 0x0000000120064000` names it — but it is the instance that **succeeds
+trivially** (`target=0x0`). The wall is a *different, second* CeUtils instance one VA aperture
+higher. Any reasoning that assumed one CeUtils channel was reasoning about the wrong one.
+
+#### At the timeout: `cur < target` at a plausible `semaVA`
+
+`target=0x1`, `cur=0x0`, `pbSema=0x0`, `isChannelActive=0`. `cur` is **not** garbage, so this is
+"the release never landed", not "it landed somewhere else" — and the device's own count
+(`doorbells: 1 arrived, 0 served, 1 REFUSED`) says why: nothing executed at all. `isChannelActive=0`
+is the guest agreeing that the channel never came up.
+
+⊘ **Both boots are diagnostics, and one of them is patched.** No milestone is claimed. The
+milestone remains a stock guest, and the stock arm of this pair ends at exactly the same wall.
