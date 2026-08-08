@@ -27,11 +27,20 @@ for.
 
 ## The supporting reasons
 
-1. ⊘ **It would forfeit `ogkm` as ground truth.** The open kernel modules require firmware, so a
-   GSP-less target means committing to the **proprietary** driver permanently. That is the loss
-   that actually hurts: five compiled oracles came from readable RM source, and essentially every
-   debugging win of this campaign traced back to having it
-   ([[isolate_the_drivers_own_checks]], `docs/design/` oracle work).
+1. ⚠ **It changes what ground truth is available — and the owner CORRECTED my first version of
+   this point, rightly.** I originally wrote that a GSP-less target would leave us with *no* open
+   reference. That is wrong: **nouveau is open and documents non-GSP bring-up**, so the
+   register-level sequence is not a blind reverse-engineering problem.
+
+   ★ **What survives the correction, and it is subtler:** the open kernel modules require
+   firmware, so a GSP-less guest runs the **proprietary** NVIDIA driver. Nouveau then tells us
+   what *nouveau* believes about the hardware — excellent, hard-won, and **not** a statement about
+   what the proprietary driver expects. ⇒ we would trade a **first-party** oracle (NVIDIA's own
+   RM source, which we can *compile and run* against our answers — five oracles do exactly that,
+   `isolate_the_drivers_own_checks`) for a **third-party model of the same silicon**, while the
+   thing being satisfied is first-party code we could no longer read.
+
+   ⊘ So this is a real cost, but a smaller and more specific one than "no reference exists".
 2. **The affected silicon is old.** GSP-less means pre-Turing in practice; Pascal is 2016.
 3. **Those parts already have an answer.** vGPU unlock exists for them and is reported reliable.
 4. **The ecosystem moved.** Current drivers — including nouveau, and including Windows guests —
