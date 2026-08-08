@@ -461,6 +461,26 @@ jobs:
       # comment, so this greps both. Exit-code polarity: `grep -r` returns 0 on a
       # HIT (= boundary breach = fail) and 1 on no match (= the success case), hence
       # the `if`, never a bare `grep` under `set -e`.
+      # ★★★ `--exclude-dir=target` ON EVERY CRATE-DIR GREP BELOW, and it is a CORRECTNESS
+      # fix rather than a relaxation. `[measured 2026-08-08]`, two runs of
+      # `scripts/run_full_suite.sh` on the same tree at the same revision: the first was
+      # green on this gate, the second FAILED with
+      #
+      #   grep: crates/kayfabe-abi/gen/target/debug/deps/kayfabe_abi_gen-…: binary file matches
+      #
+      # ⊘ Nothing about the source changed. The suite's OWN `abi-gen-tests` phase runs
+      # `cd crates/kayfabe-abi/gen && cargo test`, which creates a nested (gitignored)
+      # `target/` INSIDE a crate this gate greps whole — so running the suite ARMS the
+      # failure for the next run of the suite. Same for anyone who regenerates the ABI.
+      #
+      # ⇒ These gates were green only on a tree that had never built the ABI generator,
+      # which is exactly what a fresh GitHub runner is. A gate that passes because the
+      # artefact it trips on is usually absent is the `skipped_oracle_kills_the_guard`
+      # shape pointed the other way, and it makes the suite ORDER-DEPENDENT.
+      #
+      # ⊘ This narrows nothing a reviewer cares about: `target/` is cargo output, never a
+      # source file, and the gate's own instruction — "never weaken this gate" — is about
+      # the PATTERN and the crate list, neither of which moves.
       - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
@@ -468,7 +488,7 @@ jobs:
                 crates/kayfabe-abi crates/kayfabe-device \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
                 crates/kayfabe-chips"
-          if grep -rniE 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
+          if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
             echo ""
             echo "★ BOUNDARY BREACH — l1_concurrency.md §6.2."
             echo "The pure logic crates own the completion-source MODEL, never the OS"
@@ -530,7 +550,7 @@ jobs:
           # L1 *threaded* shell) was in the list and `kayfabe-shell` was not; that reads
           # as an omission when the second crate was split out, not as a decision. It is
           # clean today, so this widens the gate's reach without moving anything.
-          if grep -rniE '\bBQL\b|bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD|MemoryRegion|memory_region_|qemu_bh|QEMUBH|aio_bh|qdev_|VMStateDescription|\bbottom.?half|\bmain.?loop|iothread' $portable; then
+          if grep -rniE --exclude-dir=target '\bBQL\b|bql_lock|qemu_mutex_lock_iothread|BQL_LOCK_GUARD|MemoryRegion|memory_region_|qemu_bh|QEMUBH|aio_bh|qdev_|VMStateDescription|\bbottom.?half|\bmain.?loop|iothread' $portable; then
             echo ""
             echo "★ HYPERVISOR-VOCABULARY BREACH — l1_os_shell.md §6.0."
             echo "The core and the L1 shell must name hypervisor CAPABILITIES, never one"
@@ -624,7 +644,7 @@ jobs:
                 crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
                 crates/kayfabe-vmm crates/kayfabe-isolate-host"
-          hits=$(grep -rniE \
+          hits=$(grep -rniE --exclude-dir=target \
             '\b(kepler|maxwell|turing|ampere|lovelace|hopper|blackwell|rubin)|\b(ada|pascal|volta)\b|\b(g[kmpvab][0-9]{3}|tu1[0-9]{2}|ad1[0-9]{2}|gh[0-9]{3}|v[56][0-9]{2})\b' \
             $pure | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
           if [ -n "$hits" ]; then
@@ -960,7 +980,7 @@ jobs:
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-mmu \
                 crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch crates/kayfabe-abi \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate"
-          if grep -rnE '\.gpa_(read|write)\(' $pure; then
+          if grep -rnE --exclude-dir=target '\.gpa_(read|write)\(' $pure; then
             echo ""
             echo "★ GPA-ACCESSOR BREACH — l1_os_shell.md §6.1 / §10.1 item 6."
             echo "Guest-physical access belongs to ONE core-side site,"
