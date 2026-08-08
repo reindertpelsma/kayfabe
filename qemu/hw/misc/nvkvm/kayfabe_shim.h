@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 19u
+#define KAYFABE_SHIM_ABI 20u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -425,7 +425,12 @@ typedef struct KayfabeIsolateRefusal {
  * FSM refused it by name) — deliberately not 0, which is NV_OK. */
 #define KAYFABE_SERVED_CONTROL_SLOTS 32u
 #define KAYFABE_NOTIFIER_ARMING_SLOTS 16u
+#define KAYFABE_CHANNEL_BIND_SLOTS 16u
 #define KAYFABE_CTRL_NO_REPLY 0xFFFFFFFFu
+/* The ce_index of a bind naming something that is NOT a copy engine, or whose params were
+ * too short.  ⊘ Not 0 — 0 is CE0, and CE0 is one of the two indices this chip's captured
+ * interrupt table publishes with vectorNonStall = INVALID. */
+#define KAYFABE_BIND_NOT_A_COPY_ENGINE 0xFFFFFFFFu
 #define KAYFABE_PROBE_ARM_SLOTS 8u
 
 typedef struct KayfabeServedControl {
@@ -447,6 +452,34 @@ typedef struct KayfabeNotifierArming {
     uint32_t reserved;
     uint64_t count;
 } KayfabeNotifierArming;
+
+/* ★★★ ONE 0xa06f0104 CHANNEL BIND — the ONLY place the scrubber's chosen copy engine
+ * becomes observable to this device.
+ *
+ * RmInitAdapter's global CeUtils scrubber picks its CE in ceutilsGetFirstAsyncCe — the
+ * first CE that is not a GRCE and is in the engine table (ogkm-580: ce_utils.c:66-81) —
+ * and kchannelBindToRunlist_IMPL RPCs it to us as `engineType`
+ * (ogkm-580: kernel_channel.c:2762-2785).  On GA106 kceGetGrceMaskReg is halified to the
+ * NV_ERR_NOT_SUPPORTED stub (ogkm-580: g_kernel_ce_nvoc.c:847-858), so the GRCE test walks
+ * the partner list over THE DEVICE-INFO TABLE THIS PORT SERVES — which makes inferring the
+ * answer from our own table circular.  It has to be read off the wire, and this row is it.
+ *
+ * Why it matters: the captured GA106_INTR_TABLE gives CE0 and CE1 vectorNonStall = INVALID
+ * and CE2/CE3/CE4 a real vector, so which CE the guest bound is the difference between a
+ * refusal grounded in "we deliver nothing" and one grounded in "the hardware we imitate
+ * publishes no vector to raise".
+ *
+ * `engine_type` is raw NV2080_ENGINE_TYPE space and is NOT translated: above 0x12 that
+ * space collides with RM_ENGINE_TYPE (raw 0x13 is NVDEC0 in one and COPY10 in the other). */
+typedef struct KayfabeChannelBind {
+    uint32_t client;      /* hClient from the control header */
+    uint32_t object;      /* hObject — the channel being bound */
+    uint32_t engine_type; /* NV2080_ENGINE_TYPE space, or KAYFABE_CTRL_NO_REPLY */
+    uint32_t ce_index;    /* which CE that names, or KAYFABE_BIND_NOT_A_COPY_ENGINE */
+    uint32_t rpc_result;  /* as answered, or KAYFABE_CTRL_NO_REPLY if nothing answered */
+    uint32_t reserved;
+    uint64_t count;
+} KayfabeChannelBind;
 
 /* ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATION — 0x90f10106 / 0x20800a9f.
  *
@@ -680,6 +713,12 @@ typedef struct KayfabeRegAudit {
     uint64_t arming_total;
     uint64_t arming_len;
     KayfabeNotifierArming armings[KAYFABE_NOTIFIER_ARMING_SLOTS];
+
+    /* ★★★ THE CHANNEL-BIND CENSUS — see the block above KayfabeChannelBind.  `bind_len` is
+     * the number of DISTINCT rows and is the truth even when it exceeds the array. */
+    uint64_t bind_total;
+    uint64_t bind_len;
+    KayfabeChannelBind binds[KAYFABE_CHANNEL_BIND_SLOTS];
 
     /* ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATIONS — see the block above
      * KayfabeGvasPublication.  `gvas_pub_total` counts every publication that decoded,

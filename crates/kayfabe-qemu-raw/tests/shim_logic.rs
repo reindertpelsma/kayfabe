@@ -578,9 +578,18 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // did. ⊘ Its own structure and not a second `KayfabeDoorbellRefusal` — the two carry
     // the same bytes and mean opposite things, and a header in which a serving is declared
     // as a refusal reads as a bug. This is the reason the wire ABI moved to 19.
+    // ★ 55 -> 57 for the channel-bind census: `bind_total`, `bind_len` and the row array
+    // below. ★★★ The rows are the ONLY place the scrubber's chosen copy engine becomes
+    // observable to this device — `ceutilsGetFirstAsyncCe` picks it inside the guest
+    // (`ogkm-580: ce_utils.c:66-81`) and `kchannelBindToRunlist_IMPL` RPCs it to us as
+    // `engineType` (`ogkm-580: kernel_channel.c:2762-2785`) — and on GA106 the GRCE test
+    // that drives the pick walks the partner list over the device-info table THIS PORT
+    // SERVES (`kceGetGrceMaskReg` is the `NV_ERR_NOT_SUPPORTED` stub below GB202,
+    // `ogkm-580: g_kernel_ce_nvoc.c:847-858`), so inferring the answer from our own table
+    // is circular. This is the reason the wire ABI moved to 20.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (55 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (57 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
@@ -594,7 +603,13 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeNotifierArming>()
             + kayfabe_qemu_raw::shim::GVAS_PUBLICATION_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeGvasPublication>()
+            + kayfabe_qemu_raw::shim::CHANNEL_BIND_SLOTS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabeChannelBind>()
     );
+    // ★ The bind row's own size, so the C header's arithmetic and this crate's cannot
+    // drift apart silently: five u32s, an explicit `reserved` u32 so the u64 count lands
+    // on its natural alignment with no HIDDEN padding, and the count — 32 bytes.
+    assert_eq!(size_of::<kayfabe_qemu_raw::shim::KayfabeChannelBind>(), 32);
     // ★ The publication rows' own sizes, so the C header's arithmetic and this crate's
     // cannot drift apart silently: 24 bytes per level, 200 per row, no hidden padding.
     // ⊘ `page_shift` is a `u32` here and an `NvU8` on NVIDIA's wire; this is OUR structure

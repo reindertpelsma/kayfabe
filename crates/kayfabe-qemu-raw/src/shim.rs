@@ -188,8 +188,18 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// point of the timestamped per-doorbell line is attribution.
 ///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
+/// ★ Bumped to **20** for the channel-bind census, the ABI-3 reason a fourteenth time:
+/// [`KayfabeRegAudit`] gained two counters and [`CHANNEL_BIND_SLOTS`] ×
+/// [`KayfabeChannelBind`] rows, so an ABI-19 shim would allocate the old layout and this
+/// archive would write well past the end of it.
+///
+/// ⊘ [`KayfabeRegWrite`] did **not** grow, for E1's reason rather than E2's: which engine
+/// a channel is bound to is a property of an RPC over a whole boot, not of any one
+/// register write, and stamping it per-access would make an operator read it thousands of
+/// times and still not know how many channels there were.
+///
 /// [`DOORBELL_SERVED_LOCAL`]: crate::shim_unsafe::DOORBELL_SERVED_LOCAL
-pub const ABI_VERSION: u32 = 19;
+pub const ABI_VERSION: u32 = 20;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -886,6 +896,19 @@ pub const SERVED_CONTROL_SLOTS: usize = 32;
 /// How many distinct notifier-arming rows [`KayfabeRegAudit`] carries.
 pub const NOTIFIER_ARMING_SLOTS: usize = 16;
 
+/// How many distinct channel-bind rows [`KayfabeRegAudit`] carries.
+///
+/// ★ Matches `kayfabe_device::census::BIND_SAMPLE_MAX`, and `bind_len` reports the truth
+/// even when it exceeds this — a full array is never mistaken for a complete list.
+pub const CHANNEL_BIND_SLOTS: usize = 16;
+
+/// The `ce_index` for a bind naming something that is not a copy engine, or whose params
+/// were too short. Mirrors `kayfabe_device::census::BIND_NOT_A_COPY_ENGINE`.
+///
+/// ⊘ Not `0`: `0` is CE0, and CE0 is one of the two indices this chip's captured interrupt
+/// table publishes with `vectorNonStall = INVALID`.
+pub const BIND_NOT_A_COPY_ENGINE: u32 = 0xFFFF_FFFF;
+
 /// The `rpc_result` recorded for an arming **no policy answered** (the FSM refused it by
 /// name), and for an arming field the params were too short to hold.
 ///
@@ -932,6 +955,37 @@ pub struct KayfabeNotifierArming {
     pub event: u32,
     /// The action, with the same too-short marker.
     pub action: u32,
+    /// The `rpc_result` answered, or [`CTRL_NO_REPLY`] if no policy answered.
+    pub rpc_result: u32,
+    /// Padding, so the layout is the same on every ABI that cares.
+    pub reserved: u32,
+    /// How many times this exact row arrived.
+    pub count: u64,
+}
+
+/// One row of the channel-bind census (`0xa06f0104`), in the wire shape.
+///
+/// ★★★ **This is the only place the scrubber's chosen copy engine becomes observable to
+/// this device.** `ceutilsGetFirstAsyncCe` picks it inside the guest
+/// (`ogkm-580: ce_utils.c:66-81`) and `kchannelBindToRunlist_IMPL` RPCs it to us as
+/// `engineType` (`ogkm-580: kernel_channel.c:2762-2785`). Which CE that is decides whether
+/// a non-stall interrupt vector exists for it at all — the captured `GA106_INTR_TABLE`
+/// gives CE0 and CE1 `vectorNonStall = INVALID` and CE2/CE3/CE4 a real vector.
+///
+/// See `kayfabe_device::census::ChannelBind` for why the answer cannot be inferred from
+/// the device-info table this port itself serves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct KayfabeChannelBind {
+    /// `hClient` from the control header.
+    pub client: u32,
+    /// `hObject` — the channel being bound.
+    pub object: u32,
+    /// `engineType` in **`NV2080_ENGINE_TYPE` space**, raw, or [`CTRL_NO_REPLY`] if the
+    /// params were too short to hold one.
+    pub engine_type: u32,
+    /// Which copy engine that names, or [`BIND_NOT_A_COPY_ENGINE`].
+    pub ce_index: u32,
     /// The `rpc_result` answered, or [`CTRL_NO_REPLY`] if no policy answered.
     pub rpc_result: u32,
     /// Padding, so the layout is the same on every ABI that cares.
@@ -1366,6 +1420,12 @@ pub struct KayfabeRegAudit {
     pub arming_len: u64,
     /// The rows, in first-seen order, with the handles they arrived on.
     pub armings: [KayfabeNotifierArming; NOTIFIER_ARMING_SLOTS],
+    /// ★★★ Every `0xa06f0104` seen, answered or not, including repeats.
+    pub bind_total: u64,
+    /// Distinct bind rows seen — the truth even past the array.
+    pub bind_len: u64,
+    /// The rows, in first-seen order. See [`KayfabeChannelBind`].
+    pub binds: [KayfabeChannelBind; CHANNEL_BIND_SLOTS],
     /// ★★★ **The VA-space page-directory publications** — every publication that decoded,
     /// including repeats and rows past [`GVAS_PUBLICATION_SLOTS`].
     ///
@@ -2403,6 +2463,9 @@ impl Regs {
             arming_total,
             arming_distinct: arming_len,
             armings: arming_rows,
+            bind_total,
+            bind_distinct: bind_len,
+            binds: bind_rows,
         } = self.plane.control_census();
         // ★★★ The VA-space publications — DESTRUCTURED with no `..` for [`Shim::audit`]'s
         // reason: a field added to `GvasPubSnapshot` and not wired here is a fact the C
@@ -2455,6 +2518,18 @@ impl Regs {
                 object: r.object,
                 event: r.event,
                 action: r.action,
+                rpc_result: r.rpc_result,
+                reserved: 0,
+                count: r.count,
+            };
+        }
+        let mut binds = [KayfabeChannelBind::default(); CHANNEL_BIND_SLOTS];
+        for (slot, r) in binds.iter_mut().zip(bind_rows.iter()) {
+            *slot = KayfabeChannelBind {
+                client: r.client,
+                object: r.object,
+                engine_type: r.engine_type,
+                ce_index: r.ce_index,
                 rpc_result: r.rpc_result,
                 reserved: 0,
                 count: r.count,
@@ -2526,6 +2601,9 @@ impl Regs {
             arming_total,
             arming_len,
             armings,
+            bind_total,
+            bind_len,
+            binds,
             probe_arm_len: probe_arm_set.as_slice().len() as u64,
             probe_arm,
         }

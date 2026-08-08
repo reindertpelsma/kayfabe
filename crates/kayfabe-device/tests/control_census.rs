@@ -329,3 +329,146 @@ fn a_plane_reports_the_probe_set_it_was_built_with() {
          indistinguishable from a stock one — the exact misreading this field kills"
     );
 }
+
+// ── The channel-bind census: which copy engine the guest named ─────────────────────
+
+/// `NVA06F_CTRL_BIND_PARAMS` — a single `NvU32 engineType`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:96`).
+fn bind_params(engine_type: u32) -> Vec<u8> {
+    engine_type.to_le_bytes().to_vec()
+}
+
+/// ★★★ The measurement this census exists for: the CE the scrubber picked, read off the
+/// wire rather than inferred.
+///
+/// `[measured]` a real GA106 binds its CeUtils scrubber channel with `engineType = 11`
+/// (`traces/real_ga106/rpc_transcript_real_ga106.txt:63`), which is `COPY2` — so the row
+/// must say `ce_index = 2`, and it must say it in `NV2080_ENGINE_TYPE` space untranslated.
+#[test]
+fn a_bind_records_the_copy_engine_the_guest_named() {
+    let (mut chain, census) = chain_with_census();
+    let cmd = control_command(
+        0xc1e0_0005,
+        0x0000_000b,
+        kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+        &bind_params(11),
+    );
+    let _ = chain.respond(&cmd);
+
+    let snap = census.snapshot();
+    assert_eq!(snap.bind_total, 1);
+    assert_eq!(snap.bind_distinct, 1);
+    assert_eq!(snap.binds.len(), 1);
+    let row = snap.binds[0];
+    assert_eq!(row.client, 0xc1e0_0005);
+    assert_eq!(row.object, 0x0000_000b);
+    assert_eq!(
+        row.engine_type, 11,
+        "recorded raw, in the wire's own NV2080_ENGINE_TYPE space",
+    );
+    assert_eq!(row.ce_index, 2, "engineType 11 is COPY2, not COPY11");
+    assert_eq!(row.count, 1);
+}
+
+/// ⊘ **Not-a-copy-engine must never read as CE0.** CE0 is one of exactly two indices the
+/// captured `GA106_INTR_TABLE` publishes with `vectorNonStall = INVALID`, so a census that
+/// defaulted an undecodable engine to `0` would manufacture the reading that decides
+/// whether the index-35 refusal stands on hardware's authority. Three inputs that are all
+/// "not a CE" for different reasons, and none of them may produce a `0`.
+#[test]
+fn a_bind_naming_something_that_is_not_a_copy_engine_is_never_recorded_as_ce0() {
+    use kayfabe_device::census::BIND_NOT_A_COPY_ENGINE;
+    for (engine_type, why) in [
+        (1u32, "GRAPHICS"),
+        (0x13, "NVDEC0 in NV2080 space — COPY10 only in RM space"),
+        (0, "NV2080_ENGINE_TYPE_NULL"),
+    ] {
+        let (mut chain, census) = chain_with_census();
+        let cmd = control_command(
+            0xc1e0_0005,
+            0x0000_000b,
+            kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+            &bind_params(engine_type),
+        );
+        let _ = chain.respond(&cmd);
+        let snap = census.snapshot();
+        assert_eq!(snap.binds.len(), 1, "{why} was still recorded");
+        assert_eq!(snap.binds[0].engine_type, engine_type);
+        assert_eq!(
+            snap.binds[0].ce_index, BIND_NOT_A_COPY_ENGINE,
+            "{why} must not read as copy engine 0",
+        );
+    }
+}
+
+/// ⊘ A bind whose params are too short to hold an `engineType` is **recorded**, with the
+/// no-reply marker in both fields. The census must be able to show the malformed request
+/// whose refusal needs explaining — a decoder that dropped it would be blind to exactly
+/// the row an operator would be looking for.
+#[test]
+fn a_bind_with_params_too_short_is_recorded_with_the_no_reply_marker() {
+    use kayfabe_device::census::{ARMING_NO_REPLY, BIND_NOT_A_COPY_ENGINE};
+    let (mut chain, census) = chain_with_census();
+    let cmd = control_command(
+        0xc1e0_0005,
+        0x0000_000b,
+        kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+        &[0u8; 2],
+    );
+    let _ = chain.respond(&cmd);
+    let snap = census.snapshot();
+    assert_eq!(snap.bind_total, 1);
+    assert_eq!(snap.binds[0].engine_type, ARMING_NO_REPLY);
+    assert_eq!(snap.binds[0].ce_index, BIND_NOT_A_COPY_ENGINE);
+}
+
+/// Two channels bound to the same engine are **two rows**, keyed on the handles — the
+/// `NotifierArming` keying argument, for its reason: a boot that binds one channel and a
+/// boot that binds two must not print the same line.
+#[test]
+fn two_channels_bound_to_one_engine_are_two_rows_and_a_repeat_is_a_count() {
+    let (mut chain, census) = chain_with_census();
+    let first = control_command(
+        0xc1e0_0005,
+        0x0000_000b,
+        kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+        &bind_params(11),
+    );
+    let second = control_command(
+        0xc1e0_0005,
+        0x0000_000c,
+        kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+        &bind_params(11),
+    );
+    let _ = chain.respond(&first);
+    let _ = chain.respond(&second);
+    let _ = chain.respond(&first);
+
+    let snap = census.snapshot();
+    assert_eq!(snap.bind_total, 3);
+    assert_eq!(
+        snap.bind_distinct, 2,
+        "different objects are different rows"
+    );
+    assert_eq!(snap.binds[0].object, 0x0000_000b);
+    assert_eq!(snap.binds[0].count, 2, "the repeat folds into a count");
+    assert_eq!(snap.binds[1].object, 0x0000_000c);
+    assert_eq!(snap.binds[1].count, 1);
+}
+
+/// ⊘ A control that is not a bind reaches no bind row — the "never seen" inference the
+/// whole census rests on, applied to this list too.
+#[test]
+fn a_control_that_is_not_a_bind_reaches_no_bind_row() {
+    let (mut chain, census) = chain_with_census();
+    let cmd = control_command(
+        0xc1e0_0004,
+        0xabcd_2080,
+        NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION,
+        &arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT),
+    );
+    let _ = chain.respond(&cmd);
+    let snap = census.snapshot();
+    assert_eq!(snap.bind_total, 0);
+    assert_eq!(snap.binds, vec![]);
+}

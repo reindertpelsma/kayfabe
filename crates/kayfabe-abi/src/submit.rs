@@ -435,6 +435,37 @@ pub const fn engine_type_copy(index: u32) -> Option<u32> {
     }
 }
 
+/// `NV2080_ENGINE_TYPE_COPY10` — the base of the **second, discontiguous** copy-engine
+/// block (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:340`).
+pub const ENGINE_TYPE_COPY10: u32 = 0x0000_0034;
+
+/// The exact inverse of `NV2080_ENGINE_TYPE_COPY(i)` — *"which copy engine is this?"*
+///
+/// `NV2080_ENGINE_TYPE_IS_COPY` then `NV2080_ENGINE_TYPE_COPY_IDX`, transcribed as one
+/// function (`ogkm-580: cl2080_notification.h:396-400`): `COPY0..COPY9` are `0x09..=0x12`
+/// and `COPY10..COPY19` are `0x34..=0x3d`, and **the gap between them is real** —
+/// `0x13` in this space is `NVDEC0`, not `COPY10`.
+///
+/// ⊘ `None` means *"not a copy engine"* and never *"copy engine 0"*. That distinction is
+/// the whole reason this returns an `Option`: a caller reporting which CE the guest named
+/// must be able to say "it named something else", and a zero would read as CE0 — which is
+/// one of the two indices whose non-stall vector this chip publishes as `INVALID`, i.e.
+/// precisely the answer a wrong default would fake.
+///
+/// ⚠ Both blocks are covered on purpose even though this port's GA106 has five CEs: an
+/// inverse that silently stops at `COPY9` would answer `None` for a real engine on a
+/// later part, and that is the too-strict half of `mock_fidelity_both_directions`.
+#[must_use]
+pub const fn copy_index_of_engine_type(engine_type: u32) -> Option<u32> {
+    if engine_type >= ENGINE_TYPE_COPY0 && engine_type <= ENGINE_TYPE_COPY0 + 9 {
+        Some(engine_type - ENGINE_TYPE_COPY0)
+    } else if engine_type >= ENGINE_TYPE_COPY10 && engine_type <= ENGINE_TYPE_COPY10 + 9 {
+        Some(engine_type - ENGINE_TYPE_COPY10 + 10)
+    } else {
+        None
+    }
+}
+
 // =====================================================================================
 // The two channel controls
 // =====================================================================================

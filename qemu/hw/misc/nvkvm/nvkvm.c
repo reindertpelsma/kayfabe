@@ -1624,6 +1624,43 @@ static void nvkvm_report_registers(NvkvmState *s)
     }
 
     /*
+     * ★★★ THE CHANNEL BINDS — and specifically WHICH COPY ENGINE the guest named.
+     *
+     * The scrubber's CE is chosen inside the guest by ceutilsGetFirstAsyncCe and reaches
+     * this device only as this control's `engineType` (see KayfabeChannelBind).  Printed
+     * unconditionally, zero rows included: "the guest bound no channel" is a diagnosis,
+     * and a block that appears only when non-empty cannot state it.
+     */
+    info_report("nvkvm: channel binds (0xa06f0104): %" PRIu64 " total, %" PRIu64
+                " distinct (result 0x%08x = nothing answered)",
+                a.bind_total, a.bind_len, KAYFABE_CTRL_NO_REPLY);
+    {
+        uint64_t i, shown = a.bind_len;
+
+        if (shown > KAYFABE_CHANNEL_BIND_SLOTS) {
+            shown = KAYFABE_CHANNEL_BIND_SLOTS;
+        }
+        for (i = 0; i < shown; i++) {
+            const KayfabeChannelBind *r = &a.binds[i];
+            char engine[32];
+
+            if (r->ce_index == KAYFABE_BIND_NOT_A_COPY_ENGINE) {
+                /* ⊘ Never printed as CE0: not-a-CE and CE0 are different answers, and CE0
+                 * is one of the two indices with no non-stall vector. */
+                snprintf(engine, sizeof(engine), "not-a-CE");
+            } else {
+                snprintf(engine, sizeof(engine), "COPY%u", r->ce_index);
+            }
+            info_report("nvkvm:   bind engineType %u (%s) client 0x%08x object 0x%08x "
+                        "result 0x%08x x%" PRIu64 "%s",
+                        r->engine_type, engine, r->client, r->object, r->rpc_result,
+                        r->count, (r->rpc_result != 0
+                                   && r->rpc_result != KAYFABE_CTRL_NO_REPLY)
+                                  ? " REFUSED" : "");
+        }
+    }
+
+    /*
      * ★★★ E0b/E1 — THE ISOLATE PLANE.  Printed unconditionally, all-zeros included, for
      * the reason every other block here is: "no line appeared" is what a silently-dead
      * reporter looks like, and this device has been bitten by that before.

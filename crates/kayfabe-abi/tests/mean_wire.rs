@@ -1972,3 +1972,60 @@ fn exactly_the_two_client_root_classes_are_client_roots() {
         );
     }
 }
+
+/// ★★★ `copy_index_of_engine_type` is the **exact** inverse of `NV2080_ENGINE_TYPE_COPY(i)`,
+/// swept over every value either block can reach — including the gap between them.
+///
+/// ⚠ The gap is the whole point. `COPY0..COPY9` is `0x09..=0x12` and `COPY10..COPY19` is
+/// `0x34..=0x3d`, and the values in between are **other engines** — raw `0x13` is `NVDEC0`
+/// (`ogkm-580: cl2080_notification.h:303`), which an inverse written as a single
+/// `value - COPY0` would report as copy engine 10. This sweeps `0..=0x60`, which covers
+/// both blocks, the gap, and the `COMP_DECOMP_COPY` block above them, and asserts the
+/// *exact* answer at every value rather than sampling the easy ones.
+///
+/// ⊘ And `None` is asserted as `None`, never as `Some(0)`: the caller that reports which
+/// copy engine a guest named must be able to say "it named something else", and a zero
+/// default would read as CE0 — the index this chip publishes with no non-stall vector.
+#[test]
+fn the_copy_engine_inverse_is_exact_across_both_blocks_and_the_gap_between_them() {
+    use kayfabe_abi::submit::{ENGINE_TYPE_COPY0, ENGINE_TYPE_COPY10, copy_index_of_engine_type};
+
+    // The two block bases, read off the header rather than assumed.
+    assert_eq!(ENGINE_TYPE_COPY0, 0x09);
+    assert_eq!(ENGINE_TYPE_COPY10, 0x34);
+
+    for raw in 0u32..=0x60 {
+        let want = match raw {
+            0x09..=0x12 => Some(raw - 0x09),
+            0x34..=0x3d => Some(raw - 0x34 + 10),
+            _ => None,
+        };
+        assert_eq!(
+            copy_index_of_engine_type(raw),
+            want,
+            "NV2080_ENGINE_TYPE {raw:#x}",
+        );
+    }
+
+    // The named collisions, spelled out so a reader sees why the gap is not cosmetic.
+    assert_eq!(
+        copy_index_of_engine_type(0x13),
+        None,
+        "0x13 is NVDEC0 in NV2080 space (it is COPY10 only in RM_ENGINE_TYPE space)",
+    );
+    assert_eq!(
+        copy_index_of_engine_type(0x01),
+        None,
+        "0x01 is GRAPHICS, and must not read as CE0",
+    );
+    assert_eq!(copy_index_of_engine_type(u32::MAX), None);
+
+    // ★ The round trip in the direction the port actually uses: what the guest sends for
+    // the CE the scrubber picked, decoded back to that CE. `[measured]` a real GA106 sends
+    // `engineType = 11` (`traces/real_ga106/rpc_transcript_real_ga106.txt:63`).
+    assert_eq!(copy_index_of_engine_type(11), Some(2));
+    for i in 0..10u32 {
+        let wire = kayfabe_abi::submit::engine_type_copy(i).expect("first block");
+        assert_eq!(copy_index_of_engine_type(wire), Some(i));
+    }
+}

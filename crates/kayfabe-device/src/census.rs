@@ -64,6 +64,21 @@ pub const SERVED_SAMPLE_MAX: usize = 32;
 /// How many distinct `(client, object, event, action, rpc_result)` arming rows are kept.
 pub const ARMING_SAMPLE_MAX: usize = 16;
 
+/// How many distinct `(client, object, engine_type, rpc_result)` channel-bind rows are kept.
+///
+/// ★ Small on purpose: a boot binds a handful of channels, and the distinct counter
+/// reports the truth past the cap exactly as the other two censuses do.
+pub const BIND_SAMPLE_MAX: usize = 16;
+
+/// The `ce_index` recorded for a bind whose `engineType` names **something that is not a
+/// copy engine** — or whose params were too short to hold one.
+///
+/// ⊘ Deliberately not `0`: `0` is CE0, and CE0 is one of the two indices this chip's
+/// captured interrupt table gives `vectorNonStall = INVALID`. A row that could not tell
+/// *"not a CE"* from *"CE0"* would manufacture the exact reading that decides whether the
+/// index-35 refusal stands, which is the question this census was added to answer.
+pub const BIND_NOT_A_COPY_ENGINE: u32 = 0xFFFF_FFFF;
+
 /// The `rpc_result` recorded for an arming **no policy answered** — the FSM refused it by
 /// name, outside any reply this census can read.
 ///
@@ -108,6 +123,54 @@ pub struct NotifierArming {
     pub count: u64,
 }
 
+/// One row of the channel-bind census (`0xa06f0104`): who asked, which engine they named,
+/// and what came back.
+///
+/// ## ★★★ Why this row exists — it settles which CE the scrubber picked
+///
+/// `RmInitAdapter`'s global CeUtils scrubber chooses its copy engine in
+/// `ceutilsGetFirstAsyncCe` — *the first CE that is not a GRCE and is in the engine table*
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/ce_utils.c:66-81`) — stores it as
+/// `pChannel->ceId` (`:281`), and the only place that choice becomes **observable to this
+/// device** is here: `kchannelBindToRunlist_IMPL` RPCs `engineType =
+/// gpuGetNv2080EngineType(RM_ENGINE_TYPE_COPY(ceId))` to us
+/// (`ogkm-580: kernel_channel.c:2762-2785`).
+///
+/// ⚠ On GA106 the choice is **not** read from a GRCE-mask register: `kceGetGrceMaskReg` is
+/// halified to the `NV_ERR_NOT_SUPPORTED` stub for everything below GB202
+/// (`ogkm-580: g_kernel_ce_nvoc.c:847-858`), so `ceIsCeGrce` falls through to the
+/// partner-list walk (`kernel_ce_shared.c:76-135`) over **the device-info table this port
+/// serves**. The picked CE is therefore a consequence of our own published table, and
+/// inferring it from the table is circular — it has to be read off the wire.
+///
+/// ⊘ This row is an observation and decides nothing by itself. What it feeds is the
+/// question of whether a copy engine's **non-stall interrupt vector exists at all**: the
+/// captured `GA106_INTR_TABLE` publishes `vectorNonStall = INVALID` for CE0 and CE1 and a
+/// real vector for CE2/CE3/CE4, so *which* CE the guest bound is the difference between a
+/// refusal grounded in "we deliver nothing" and one grounded in the far stronger "the
+/// hardware we are imitating publishes no vector to raise".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelBind {
+    /// `hClient` from the control header.
+    pub client: u32,
+    /// `hObject` — the channel being bound.
+    pub object: u32,
+    /// `engineType` from the params, in **`NV2080_ENGINE_TYPE` space** (the wire's), or
+    /// [`ARMING_NO_REPLY`] if the params were too short to hold one.
+    ///
+    /// ⚠ Recorded raw and un-translated. Above `0x12` this space collides with
+    /// `RM_ENGINE_TYPE` (raw `0x13` is `NVDEC0` in one and `COPY10` in the other), and a
+    /// census that quietly reported one as the other would be a wrong answer wearing a
+    /// number.
+    pub engine_type: u32,
+    /// Which copy engine [`Self::engine_type`] names, or [`BIND_NOT_A_COPY_ENGINE`].
+    pub ce_index: u32,
+    /// The `rpc_result` answered, or [`ARMING_NO_REPLY`] if no policy answered at all.
+    pub rpc_result: u32,
+    /// How many times this exact row arrived.
+    pub count: u64,
+}
+
 /// Everything the census can say at teardown, in one read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CensusSnapshot {
@@ -131,6 +194,12 @@ pub struct CensusSnapshot {
     pub arming_distinct: u64,
     /// The rows, in first-seen order, capped at [`ARMING_SAMPLE_MAX`].
     pub armings: Vec<NotifierArming>,
+    /// Every `0xa06f0104` seen, answered or not, including repeats and rows past the cap.
+    pub bind_total: u64,
+    /// Distinct bind rows seen — the truth even past [`BIND_SAMPLE_MAX`].
+    pub bind_distinct: u64,
+    /// The rows, in first-seen order, capped at [`BIND_SAMPLE_MAX`].
+    pub binds: Vec<ChannelBind>,
 }
 
 #[derive(Debug, Default)]
@@ -142,6 +211,9 @@ struct CensusInner {
     arming_total: u64,
     arming_distinct: u64,
     armings: Vec<NotifierArming>,
+    bind_total: u64,
+    bind_distinct: u64,
+    binds: Vec<ChannelBind>,
 }
 
 /// The shared record. Cloneable so the plane and the wrapper hold the same one — the
@@ -208,6 +280,25 @@ impl ControlCensusLog {
         }
     }
 
+    /// Record one channel bind, answered or not.
+    pub fn note_bind(&self, row: ChannelBind) {
+        let mut s = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        s.bind_total += 1;
+        if let Some(seen) = s.binds.iter_mut().find(|r| {
+            r.client == row.client
+                && r.object == row.object
+                && r.engine_type == row.engine_type
+                && r.rpc_result == row.rpc_result
+        }) {
+            seen.count += 1;
+            return;
+        }
+        s.bind_distinct += 1;
+        if s.binds.len() < BIND_SAMPLE_MAX {
+            s.binds.push(ChannelBind { count: 1, ..row });
+        }
+    }
+
     /// Everything recorded so far.
     #[must_use]
     pub fn snapshot(&self) -> CensusSnapshot {
@@ -220,6 +311,9 @@ impl ControlCensusLog {
             arming_total: s.arming_total,
             arming_distinct: s.arming_distinct,
             armings: s.armings.clone(),
+            bind_total: s.bind_total,
+            bind_distinct: s.bind_distinct,
+            binds: s.binds.clone(),
         }
     }
 }
@@ -256,17 +350,32 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
             if let Some(r) = &reply {
                 self.log.note_served(req.cmd, r.rpc_result);
             }
+            // ⊘ Raw field reads, not the full decoders: those REFUSE malformed params,
+            // and a census that could not record a malformed request would be blind to
+            // exactly the request whose refusal needs explaining.
+            let field = |off: usize| -> u32 {
+                let at = req.params_at + off;
+                cmd.payload.get(at..at + 4).map_or(ARMING_NO_REPLY, |b| {
+                    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                })
+            };
+            if req.cmd == kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND {
+                let engine_type = field(0);
+                self.log.note_bind(ChannelBind {
+                    client: req.client,
+                    object: req.object,
+                    engine_type,
+                    // ⊘ `None` is recorded as BIND_NOT_A_COPY_ENGINE, never as 0: CE0 is a
+                    // real answer with real consequences (it is one of the two indices the
+                    // captured intr table gives no non-stall vector), so "not a CE" must
+                    // not be able to read as "CE0".
+                    ce_index: kayfabe_abi::submit::copy_index_of_engine_type(engine_type)
+                        .unwrap_or(BIND_NOT_A_COPY_ENGINE),
+                    rpc_result: reply.as_ref().map_or(ARMING_NO_REPLY, |r| r.rpc_result),
+                    count: 1,
+                });
+            }
             if req.cmd == NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION {
-                // ⊘ Raw field reads, not the full `decode_event_set_notification`: that
-                // decoder REFUSES out-of-range indices and unknown actions, and a census
-                // that could not record a malformed arming would be blind to exactly the
-                // request whose refusal needs explaining.
-                let field = |off: usize| -> u32 {
-                    let at = req.params_at + off;
-                    cmd.payload.get(at..at + 4).map_or(ARMING_NO_REPLY, |b| {
-                        u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-                    })
-                };
                 self.log.note_arming(NotifierArming {
                     client: req.client,
                     object: req.object,
@@ -285,6 +394,7 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
 kayfabe_util::assert_send_sync!(
     ServedControl,
     NotifierArming,
+    ChannelBind,
     CensusSnapshot,
     ControlCensusLog
 );
