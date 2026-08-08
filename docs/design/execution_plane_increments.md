@@ -2864,3 +2864,54 @@ is the guest agreeing that the channel never came up.
 
 ⊘ **Both boots are diagnostics, and one of them is patched.** No milestone is claimed. The
 milestone remains a stock guest, and the stock arm of this pair ends at exactly the same wall.
+
+### 14.12 ⊘ ADJUDICATION: "no published VAS could serve this channel" is REFUTED by arithmetic
+
+`[measured 2026-08-08, boot run_p2_c89899a]` §14.11 concludes from the boot that the walling
+channel's `semaVA=0x42006c004` is *"outside every published range"* and therefore *"there is no
+published VAS that could serve this channel's addresses"*, and that only the non-walling instance
+lands inside. **The first clause is true, the second does not follow, and the third is wrong.**
+
+#### 1. BOTH channels are outside the published range — so it distinguishes nothing
+
+```
+published: [0x1_0000_0000 .. 0x1_1FFF_FFFF]      512 MiB, the server-RM split range
+A (WALLS):  pbGpuVA 0x4_2000_0000   outside      (0x3_0000_0001 past the end)
+B (succeeds): pbGpuVA 0x1_2000_0000 outside      (exactly ONE byte past the end)
+```
+
+B sits at `0x1_2000_0000`, and the range ends at `0x1_1FFF_FFFF`. ⇒ **B is outside too.** Being
+outside the published range cannot be why A fails, because it is equally true of the instance that
+succeeds. ★ B succeeds because it has **no pending work** (`target=0x0`) — its success says nothing
+about addressing at all.
+
+#### 2. The published RANGE is not the root's COVERAGE
+
+The boot reports `level[0] … size 0x20 … pageShift 47`. That is `0x20 / 8 = 4` entries indexed at
+bit 47, i.e. **4 × 2⁴⁷ = 512 TiB of coverage** — the whole GA106 virtual address space. Both
+`0x4_2000_0000` and `0x1_2000_0000` resolve to **root entry index 0**.
+
+⊘ So a root cannot fail to "cover" a VA in its own VAS; covering everything is what a root *is*.
+What the publication's `virtAddrLo/Hi` scopes is which sub-range's **lower** levels RM reserved and
+copied — `_gvaspacePopulatePDEentries` seeds `gvaspaceGetPageLevelInfo` with
+`virtAddress = pGVAS->vaStartServerRMOwned` (`ogkm-580: gpu_vaspace.c:5236-5240`), and
+`mmuWalkGetPageLevelInfo` returns the instance **on the path to that VA**. For level 0 there is only
+one instance per VAS, so it is the root whatever VA seeded the walk (`:3974-3981`).
+
+#### ⇒ The consequence for the increment: §14.11's plan stands, unchanged
+
+`levels[0].physAddress` for `hObject 0x0a` — the VAS the join proved this channel belongs to — is a
+usable PDB for `0x4_2000_0000`. The route is unchanged: **walk** from that root through `SparseFb`
+with `kayfabe_mmu::walker::translate`, aperture fork at every level. The published `levels[1..3]`
+are for a different path and ⊘ must not be reused — that part of §14.11 is correct and important.
+
+★ **What genuinely remains open** is the empirical question, not the structural one: are the
+intermediate entries on the path to `0x4_2000_0000` actually present in our emulated FB? If the
+guest built this channel's pushbuffer there, they must be. **A miss is a fault** — which is the
+correct, loud behaviour and needs no new transport hypothesis. ⊘ Do not go looking for "a second
+range these two control ids don't carry" until a walk has actually missed.
+
+⚠ **How the wrong inference was reachable, worth naming:** the report compared a VA against a
+range and reasoned about *set membership*, where the operative property was *tree reachability*.
+Both instances failing the membership test — and one of them succeeding anyway — is the check that
+would have caught it, and it is one subtraction.
