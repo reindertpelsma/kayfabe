@@ -1401,8 +1401,10 @@ impl CommandPolicy for InitTablePolicy {
             // rather than transcribed. The table handed to it has one row, built here from
             // the chip's die generation — deliberately not a `&'static` table like
             // `forwarded_gpu_info`, because a `&'static [(u32, u32)]` is exactly the shape
-            // that invites a measured word to be pasted into it, and `[measured]` the word
-            // moved on one part between two runs.
+            // that invites a measured word to be pasted into it — and the word MOVES:
+            // `[measured 2026-08-08, real GA106 `GPU-d0913685`, R22 runs 1 and 2,
+            // `traces/real_ga106/rmladder_r22_businfo_{sweep,loaded}_real_ga106.txt`]`
+            // `0x00302000` with the link idle at 2.5 GT/s and `0x00322000` under load.
             //
             // ⊘ Every declared entry is filled with no forward-bit test, because
             // `kbusSendBusInfo_IMPL` puts ONE entry in a FRESH params struct per forwarded

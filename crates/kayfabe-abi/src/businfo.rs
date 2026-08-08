@@ -317,8 +317,10 @@ impl core::error::Error for BusInfoError {}
 /// Answer a `BUS_GET_INFO_V2` RPC: **the request, edited**.
 ///
 /// Every entry the request declares is filled from `answers`; the tail past
-/// `busInfoListSize` is left exactly as it arrived, for `GPU_GET_INFO_V2`'s
-/// `[measured]` reason — real GSP returns the untouched tail verbatim.
+/// `busInfoListSize` is left exactly as it arrived, because real RM returns it untouched:
+/// `[measured 2026-08-08, real GA106 `GPU-d0913685`, `rmladder --bus-info-sweep` R22,
+/// `traces/real_ga106/rmladder_r22_businfo_sweep_real_ga106.txt`]` all 52 indices come back
+/// `tail=untouched` with the 408 bytes past the declared entry seeded `0xCD`.
 ///
 /// ⊘ **Every declared entry is filled**, with no forward-bit test, because
 /// `kbusSendBusInfo_IMPL` only ever puts entries the guest kernel could not answer into an
