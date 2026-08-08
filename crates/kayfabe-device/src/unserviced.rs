@@ -232,7 +232,13 @@ impl UnservicedLog {
     /// a full array is never mistaken for a complete list"* — and `unserviced_len` was
     /// [`Self::sample`]`.len()`, which is **clamped by construction and can never exceed
     /// it**. A load-bearing rationale that was false, in the shape
-    /// `safety_comment_is_not_the_check` names: the prose was the least verified part.
+    /// `safety_comment_is_not_the_check` names.
+    /// `[measured 2026-08-09, boot `gt1431_ff7a0ea`, its own
+    /// `/workspace/bench/run_gt1431_ff7a0ea_qemu.log`]` that boot printed `32 distinct` out
+    /// of a saturated 32-slot list, and `execution_plane_increments.md` §14.31 built a rung
+    /// on the resulting miss. `tests/unserviced_ledger.rs`'s
+    /// `a_saturated_sample_says_so_rather_than_reading_as_complete` is the test that fails
+    /// if this stops being true.
     /// [`crate::census::ControlCensusLog`] had kept a separate distinct counter all along,
     /// which is why the served list's count was truthful and this one's was not.
     #[must_use]

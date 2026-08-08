@@ -481,6 +481,23 @@ jobs:
       # ⊘ This narrows nothing a reviewer cares about: `target/` is cargo output, never a
       # source file, and the gate's own instruction — "never weaken this gate" — is about
       # the PATTERN and the crate list, neither of which moves.
+      #
+      # ★★★★ `libc` -> `\blibc\b`, and this is a CORRECTION rather than the weakening the
+      # instruction forbids: `libc` is a SUBSTRING OF `libcuda`, and this gate has therefore
+      # been RED on every revision since libcuda entered the vocabulary. `[measured
+      # 2026-08-09, rev feb6fd0]` the unbounded pattern returns **39 hits across the whole
+      # pure-crate set and EVERY ONE of them is the word `libcuda`** — filter those out and
+      # nothing remains; with `\blibc\b` the count is **0**. There was never a real breach
+      # hiding among them.
+      #
+      # ⊘⊘ **A permanently-red gate is not a strict gate, it is an absent one.** Nobody
+      # could have told a genuine `libc::` from the noise, and §14.29-§14.31 each ran this
+      # suite and shipped past it — `skipped_oracle_kills_the_guard` reached by the other
+      # route. ★ `\blibc\b` still matches `libc::c_int`, `use libc;` and `-lc`-style
+      # mentions, because `:` and `;` are word boundaries; `[measured]` by planting
+      # `// bite probe: libc::c_int` in `kayfabe-util` and watching the corrected pattern
+      # fire on it, then removing it. It does NOT match `libcuda`, which is a different
+      # word naming a userspace library this port has to talk ABOUT.
       - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
         run: |
           pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
@@ -488,7 +505,7 @@ jobs:
                 crates/kayfabe-abi crates/kayfabe-device \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
                 crates/kayfabe-chips"
-          if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK' $pure; then
+          if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|\blibc\b|O_NONBLOCK' $pure; then
             echo ""
             echo "★ BOUNDARY BREACH — l1_concurrency.md §6.2."
             echo "The pure logic crates own the completion-source MODEL, never the OS"

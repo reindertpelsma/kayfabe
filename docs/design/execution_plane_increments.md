@@ -5601,14 +5601,22 @@ the way `PCIE_GEN_INFO` poisons a chip row.
 | ★ the "which copy runs" trap found again — on the **payload**: the hook pushed the box's 445-line interposer where the repo's is 666, so §14.29's `NVSWEEP_GPUINFO` was never reachable through it. Repo copy now wins and prints its md5; a missing `gtrace.txt` is now shouted rather than exited-0 over | `scripts/bench/guest_cuinit_trace.sh` |
 | the R23 capture and the new guest trace | `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`, `cuinit_trace_guest_gt1431_ff7a0ea.txt` |
 
-### 14.32 ★★★★ `FB_GET_INFO_V2` SERVED — and the ledger that "proved" it never arrived was **SATURATED**
+### 14.32 ★★★★ `FB_GET_INFO_V2` SERVED — and the ledger that "proved" it never arrived was **SATURATED** (`[measured 2026-08-08, boots fb1432_20e319b / gt1432_20e319b, rev 20e319b]`)
+
+`[measured 2026-08-08, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-d0913685`, host
+driver 580.159.04 Open), boots `fb1432_20e319b` and `gt1432_20e319b`, both
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` stamped
+`kayfabe-rev:20e319bc7a37545f0ba5fabb98eb40122475f962`, shipping config,
+`probe-arm set: EMPTY`, STOCK guest module]`. Evidence:
+`docs/reference/bench_evidence/run_{fb,gt}1432_20e319b_{qemu,probe}.log` and
+`traces/real_ga106/cuinit_trace_guest_gt1432_20e319b.txt`.
 
 #### ⊘⊘ First, the refutation of the framing I was handed — and it is §14.31's, whose author
 #### was told to expect exactly this and still could not have found it by reading
 
 §14.31 closed with its sharpest finding stated as a measurement:
 
-> *"★★★ **AND IT HAS NO LEDGER ENTRY IN EITHER DIRECTION.** `[measured]`
+> *"★★★ **AND IT HAS NO LEDGER ENTRY IN EITHER DIRECTION.** `[measured 2026-08-08]`
 > `grep -c "unserviced fn 76 cmd 0x20801303"` = **0**, and there is no
 > `control 0x20801303 result …` line either: the command **never reaches the emulated
 > GSP**. The guest's own kernel refuses it out of its own state."*
@@ -5707,7 +5715,9 @@ for every Ampere `ltcCount` RM's own PLC arms enumerate (`kmemsysIsPagePLCable_G
 `{48, 40, 4×8, 3×8}` ⇒ `ltcCount ∈ {12, 10, 8}` ⇒ 384/320/256-bit) and are named `GA10X_*` so
 the Hopper seam is a named line rather than a retrofit.
 
-#### ⊘⊘ The OBVIOUS next step is measured WRONG — `LTS_COUNT` is not `ltc × ltsPerLtc`
+#### ⊘⊘ The OBVIOUS next step is contradicted by hardware — `LTS_COUNT` is not `ltc × ltsPerLtc`
+
+`[measured 2026-08-08, real GA106 `GPU-d0913685`, `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66`]`:
 
 The very next `FB_GET_INFO_V2` in the same real trace (`:66`) asks `{0x1a, 0x22, 0x23}` and is
 answered `{0x07, 6, 18}`. `0x22` `LTC_COUNT` is `memory_system.ltc_count` exactly. `0x23`
@@ -5828,3 +5838,34 @@ is a per-CE fact or a copy-paste.
 | the test the old bounded-set test could not be: a saturated sample must *say so* | `kayfabe-device/tests/unserviced_ledger.rs` |
 | two gate exemptions extended **with their reasons** rather than deleted — and `0x20801303`'s size is the best-evidenced of the three (`size=1028` on five real-GA106 ioctls and four of ours) | `cap1b_differential.rs`, `replay_conformance.rs` |
 | the new guest trace and both boots' device reports | `traces/real_ga106/cuinit_trace_guest_gt1432_20e319b.txt`, `docs/reference/bench_evidence/run_{fb,gt}1432_20e319b_{qemu,probe}.log` |
+
+#### ⊘⊘ The gate ledger for this rung, measured at the PARENT revision rather than assumed
+
+★ `scripts/ci_gates.sh --all` is **red at `82e5354`**, the revision this rung started from —
+`[measured 2026-08-09]` in a clean worktree of that exact commit, three steps fail:
+
+| gate | at `82e5354` | at this rung | whose |
+|---|---|---|---|
+| Hexagonal boundary | **FAILED**, 39 hits | ★ **GREEN** | see below — it was never anybody's |
+| Bridge-exclusivity | **FAILED** | FAILED, same lines | inherited; `staticinfo.rs:189`, `lib.rs:1075` and the `use kayfabe_gsp::{…}` imports all pre-date this rung (`git blame`: `61fb1f4`, `02aa11e`) |
+| Claim ledger | unattributed **403**/381, conflated **68**/66, bare-HW **18**/17 | 406 / 68 / 18 | ⊘ this rung's own delta is **0 on all three**; the `+3` is `docs/PRODUCT_POSITIONING.md` (+1) and `docs/design/gpu_compartmentalisation.md` (+2), which are the owner's concurrent doc commit |
+
+⊘ Recorded rather than ratcheted, and rather than absorbed: no bar is raised here.
+
+#### ★★★★ And the boundary gate had been red on a SUBSTRING — `libc` is inside `libcuda`
+
+`[measured 2026-08-09]` the gate's pattern is
+`eventfd|epoll|timerfd|rawfd|libc|O_NONBLOCK`, case-insensitive, over fourteen pure crates.
+It returns **39 hits, and filtering out the word `libcuda` leaves ZERO**. With `libc` the
+count is **0**. There was never a real breach among them — the gate has been failing on the
+name of a userspace library this port necessarily talks *about*, since libcuda entered the
+vocabulary at §14.27.
+
+⊘⊘ **A permanently-red gate is not a strict gate, it is an absent one.** Nobody could have
+distinguished a genuine `libc::` from thirty-nine `libcuda`s, and §14.29, §14.30 and §14.31
+each ran this suite and shipped past it — `skipped_oracle_kills_the_guard` reached from the
+other side: there, a guard covered no compiled oracle; here, a guard's output was pure noise.
+★ The fix is a **correction, not the weakening the gate's own instruction forbids**, and it
+was bite-checked rather than argued: `libc` still fires on a planted
+`// bite probe: libc::c_int` in `kayfabe-util` (`:` is a word boundary) and does not fire on
+`libcuda`.
