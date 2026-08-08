@@ -17,6 +17,77 @@ it, on the day it was asked.
 
 The box was returned to its stock module afterwards.
 
+### ⊘⊘⊘ THE METHOD ROW ABOVE IS ALSO THIS DIRECTORY'S BLIND SPOT — and it is shared
+
+★★★ *"`RmInitAdapter` driven by `nvidia-smi`"* is **the same method** that produced the C
+artifact's captured control table (`mode2_initctrl_ga106.h`) and `cap1_coldboot_hermetic`.
+All three oracles this project owns were made by the same harness, so **none of them can
+witness anything only CUDA asks for**, and three of them agreeing that a control is *"never
+requested"* is not corroboration — it is one defect counted three times
+(`a_table_does_not_decide_behaviour`: *"a correction from the same source is not an
+independent check"*).
+
+`[measured 2026-08-08]` That is exactly how `execution_plane_increments.md` §14.22 ruled
+`NV2081_BINAPI` a *phantom*. §14.26 refuted the ruling; §14.27 measured what it should have
+said. ⇒ **From `cuInit` onward, the instrument is a new capture and never a lookup here.**
+
+The three files dated **2026-08-08** below were taken with a CUDA process, expressly to
+close that hole, and their provenance row differs:
+
+| | |
+|---|---|
+| host | vast bench `vh`, RTX 3060 (GA106) `10de:2504`, host driver **580.159.04 Open**, **stock** module |
+| date | 2026-08-08 |
+| method | ⊘ **no driver rebuild and no probes.** `scripts/rpctrace/cuinit_probe.c` drives `libcuda.so.1` directly (`dlopen`/`dlsym`, no toolkit) under `scripts/rpctrace/cuda_ioctl_trace.c`, an `LD_PRELOAD` interposer on `ioctl(2)`; plus `kayfabe-rm-ladder --binapi-ctrl` at rev `6c9e3d2bb` |
+
+### `cuinit_ioctl_trace_real_ga106.txt`
+
+The **whole** of `cuInit(0)` on a real GA106: 9 `NV_ESC_RM_ALLOC`s and ~60
+`NV_ESC_RM_CONTROL`s, each with its params buffer **before and after** the call, bracketed by
+`MARK` lines. This is the first capture this project has ever held of the region past
+`nvidia-smi`.
+
+★ Two facts in it are worth naming here because they bound what a port must serve:
+`0x2080012f` (`GPU_QUERY_ECC_STATUS`) returns **`0x56` on real hardware** and `cuInit` still
+succeeds — a refusal mid-`cuInit` is survivable; and `0x20800102`
+(`NV2080_CTRL_CMD_GPU_GET_INFO_V2`) is **input-dependent**, so no fixed-body table row can
+answer it correctly for an arbitrary request.
+
+⚠ **In / out being identical is not evidence that nothing was written.** libcuda hands RM
+zeroed buffers, so an all-zero pair is ambiguous by construction. That ambiguity is what the
+next file exists to remove.
+
+### `rmladder_r20_binapi_real_ga106.txt`
+
+`0x20810108` on an `NV2081_BINAPI` allocated under the Subdevice, with the 992-byte buffer
+**seeded to `0xCD`** — the one thing an interposer must never do. Two runs, byte-identical.
+
+⇒ RM returns `NV_OK` and writes **6 bytes of 992**: offset `0` (1 byte), offsets `132..135`
+(4 bytes), offset `984` (1 byte), all zero. **986 bytes are never touched.**
+⊘ *"The reply is 992 zeros"* — the reading the interposed trace alone would have licensed —
+is a **986-byte over-claim**. Same family as `c_oracle_empty_rows_are_wrong`, arrived at from
+the opposite direction: there an empty capture was decoded as zeros, here a zero capture
+would have been decoded as a written body.
+
+★ The alloc is issued the way libcuda measurably issues it: `paramsSize=0`, params **NULL**.
+RM's own RPC to GSP then carries `paramsSize=4`, because `RS_OPTIONAL(NV2081_ALLOC_PARAMETERS)`
+declares that size for the registered class. The client-side ioctl and the guest-side wire we
+must answer are **not the same number**.
+
+### `cuinit_fault_injection_matrix.txt`
+
+⚠ **Not a capture of hardware** — the same interposer in its opt-in injection mode, forcing
+one status to `0x56` and nothing else, so that *"libcuda asks X"* can be separated from
+*"libcuda needs X"*. §14.26 refused to close that gap by assertion; this closes it by
+experiment, on the real part:
+
+| refused (`0x56`) | `cuInit(0)` |
+|---|---|
+| nothing | `0` |
+| control `0x20810108` | **`0`** — ⊘ **not load-bearing** |
+| alloc `NV2081_BINAPI` (`0x2081`) | **`100`** |
+| control `0x20800102` `GPU_GET_INFO_V2` | **`100`** |
+
 ## The files
 
 ### `fmb_real_ga106.txt`

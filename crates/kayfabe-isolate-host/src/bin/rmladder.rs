@@ -641,7 +641,10 @@ fn binapi_probe(
     // real libcuda sends — measured, not assumed.
     let binapi = match rm.alloc(subdevice, ClassId(0x2081), &[]) {
         Ok(h) => {
-            println!("★     R20 hBinApi        = {:#010x} (NV_OK, params NULL/0)", h.raw());
+            println!(
+                "★     R20 hBinApi        = {:#010x} (NV_OK, params NULL/0)",
+                h.raw()
+            );
             h
         }
         Err(e) => {

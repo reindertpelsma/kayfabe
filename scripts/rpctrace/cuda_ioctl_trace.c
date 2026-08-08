@@ -45,9 +45,29 @@
  * nonsense (`ioctl_nr_collision_bug`). UVM's magic is not 'F', so the type
  * check excludes them by construction rather than by a path heuristic.
  *
- * ⊘ THIS OBSERVES ONLY. It forwards every call to the real `ioctl` unmodified,
- * copies out of the caller's buffers and never into them. A trace that changed
- * what it measured would be worthless for the thing it is being built for.
+ * ⊘ BY DEFAULT THIS OBSERVES ONLY. It forwards every call to the real `ioctl`
+ * unmodified, copies out of the caller's buffers and never into them. A trace
+ * that changed what it measured would be worthless for the thing it is for.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * ★★★ THE OPT-IN SECOND MODE: FAULT INJECTION, AND WHY IT IS IN THE SAME FILE
+ *
+ * A trace establishes that libcuda *asks* something. It cannot establish that
+ * libcuda *needs* it. §14.26 was explicit about this and refused to close the
+ * gap by assertion: *"`cuInit` failing 100 beside a refused `0x2081` is a
+ * correlation of two facts in one window, not a proof of causation."*
+ *
+ * The experiment that settles it is to make a REAL GA106, driving a REAL
+ * libcuda, refuse exactly one thing and nothing else — then look at what
+ * `cuInit` returns. `NVFAULT_CTRL` / `NVFAULT_ALLOC` do that: the real ioctl
+ * still runs, and only the `status` word the caller reads back is overwritten,
+ * which is precisely the shape our emulated GSP's refusal has on the wire.
+ *
+ * ⚠ Injection is **off unless an env var names a target**, every injection
+ * prints an `INJECT` line into the trace, and a trace containing `INJECT` lines
+ * is NOT a capture of what hardware does. Keeping the two modes in one file is
+ * deliberate: they must share the decode, or the injector would be aiming at a
+ * different field than the tracer reports.
  *
  * ────────────────────────────────────────────────────────────────────────────
  * BUILD / RUN
@@ -58,6 +78,13 @@
  * `NVTRACE_OUT` unset ⇒ stderr. `NVTRACE_MAX` caps the hex dump per buffer
  * (default 256 bytes); a control whose params are longer is marked truncated
  * rather than silently shortened.
+ *
+ *   NVFAULT_CTRL=0x20810108,0x20800102   force these controls' status
+ *   NVFAULT_ALLOC=0x2081                 force these classes' alloc status
+ *   NVFAULT_STATUS=0x56                  the forced value (default 0x56,
+ *                                        NV_ERR_NOT_SUPPORTED — the status our
+ *                                        port's refusal actually puts on the
+ *                                        wire, not an arbitrary error)
  */
 
 #define _GNU_SOURCE
@@ -90,11 +117,51 @@ static int trace_fd = -1;
 static size_t hex_max = 256;
 
 /*
+ * The injection targets. `NULL` — the default — means "inject nothing", which
+ * is the only state in which this library's output is a capture of hardware.
+ */
+static const char *fault_ctrl;
+static const char *fault_alloc;
+static uint32_t fault_status = 0x56; /* NV_ERR_NOT_SUPPORTED */
+
+/*
+ * Is `id` named in a comma-separated env list of hex numbers?
+ *
+ * ⚠ Matched NUMERICALLY, never as a substring of the text. `strstr` on the
+ * list would make `NVFAULT_CTRL=0x108` silently match `0x20810108`, and an
+ * injector that hits a target nobody named produces a result attributed to the
+ * wrong control — the whole point of the experiment is the attribution.
+ */
+static int in_fault_list(const char *list, uint32_t id) {
+  const char *p = list;
+  while (p != NULL && *p != '\0') {
+    char *end = NULL;
+    unsigned long v = strtoul(p, &end, 0);
+    if (end == p) {
+      break;
+    }
+    if ((uint32_t)v == id) {
+      return 1;
+    }
+    p = (*end == ',') ? end + 1 : end;
+    while (*p == ' ') {
+      p++;
+    }
+    if (*p == '\0') {
+      break;
+    }
+  }
+  return 0;
+}
+
+/*
  * ★ A raw fd and `write(2)`, never stdio. The traced process is libcuda, which
  * runs its own threads and its own atfork handlers; a `FILE*` shared across
  * them can deadlock inside the very call we are trying to observe. `write` on
  * an O_APPEND fd is the one primitive that does not.
  */
+static void emit(const char *buf, size_t len);
+
 static void trace_init(void) {
   const char *path;
   const char *max;
@@ -112,6 +179,27 @@ static void trace_init(void) {
     long v = strtol(max, NULL, 0);
     if (v > 0 && v <= 65536) {
       hex_max = (size_t)v;
+    }
+  }
+
+  fault_ctrl = getenv("NVFAULT_CTRL");
+  fault_alloc = getenv("NVFAULT_ALLOC");
+  {
+    const char *s = getenv("NVFAULT_STATUS");
+    if (s != NULL && s[0] != '\0') {
+      fault_status = (uint32_t)strtoul(s, NULL, 0);
+    }
+  }
+  if ((fault_ctrl != NULL && fault_ctrl[0] != '\0') ||
+      (fault_alloc != NULL && fault_alloc[0] != '\0')) {
+    char line[512];
+    int n = snprintf(line, sizeof(line),
+                     "INJECT-CONFIG ctrl=%s alloc=%s status=0x%08x  ⚠ THIS RUN "
+                     "IS NOT A CAPTURE OF HARDWARE\n",
+                     fault_ctrl != NULL ? fault_ctrl : "-",
+                     fault_alloc != NULL ? fault_alloc : "-", fault_status);
+    if (n > 0) {
+      emit(line, (size_t)n);
     }
   }
 }
@@ -236,6 +324,23 @@ int ioctl(int fd, unsigned long request, ...) {
     hexdump(after, sizeof(after), (const void *)(uintptr_t)params, params_size,
             &t_after);
 
+    /* ⚠ The overwrite happens AFTER the `after` snapshot, so the trace still
+     * reports the body hardware actually produced. The caller sees the forced
+     * status; the log records both, which is what makes an injected run
+     * interpretable instead of merely broken. */
+    if (fault_ctrl != NULL && in_fault_list(fault_ctrl, cmd)) {
+      char inj[192];
+      size_t k = (size_t)snprintf(inj, sizeof(inj),
+                                  "INJECT CTRL cmd=0x%08x real_status=0x%08x "
+                                  "forced=0x%08x\n",
+                                  cmd, status, fault_status);
+      memcpy(p + 28, &fault_status, sizeof(fault_status));
+      if (k > sizeof(inj)) {
+        k = sizeof(inj);
+      }
+      emit(inj, k);
+    }
+
     n = (size_t)snprintf(
         line, sizeof(line),
         "CTRL cmd=0x%08x hClient=0x%08x hObject=0x%08x size=%u status=0x%08x "
@@ -272,6 +377,19 @@ int ioctl(int fd, unsigned long request, ...) {
     rc = real_ioctl(fd, request, arg);
     h_new = rd32(p, 8);
     status = rd32(p, v2 ? 40 : 28);
+
+    if (fault_alloc != NULL && in_fault_list(fault_alloc, h_class)) {
+      char inj[192];
+      size_t k = (size_t)snprintf(inj, sizeof(inj),
+                                  "INJECT ALLOC hClass=0x%08x "
+                                  "real_status=0x%08x forced=0x%08x\n",
+                                  h_class, status, fault_status);
+      memcpy(p + (v2 ? 40 : 28), &fault_status, sizeof(fault_status));
+      if (k > sizeof(inj)) {
+        k = sizeof(inj);
+      }
+      emit(inj, k);
+    }
 
     n = (size_t)snprintf(line, sizeof(line),
                          "ALLOC hClass=0x%08x hRoot=0x%08x hParent=0x%08x "

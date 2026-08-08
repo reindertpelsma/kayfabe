@@ -4607,6 +4607,11 @@ What is already known, from RM's source rather than from a table:
   (`ogkm-580: resource_list.h:439-449`). ⇒ another `NoDeclaredFacts`, on the same strong
   reading as `AMPERE_B`.
 - ⚠ **The control is the hard half, and it is opaque by construction.**
+  ⊘⊘ **REFUTED — see §14.27.** It is opaque, and it is **not load-bearing**: refused alone on
+  a real GA106, `cuInit` still returns `0`. The *alloc* — called "the easy half" — is the
+  causal one, and `0x20800102` `GPU_GET_INFO_V2` is a co-equal second cause this section did
+  not see. ★ The sentence below is kept intact so the refutation has a subject; *"has no
+  oracle"* is a fact about our instruments and was silently read as *"is required"*.
   `binapiControl_IMPL` (`ogkm-580: src/nvidia/src/kernel/rmapi/binary_api.c:61-127`) does not
   interpret `pParams->cmd` at all — it forwards the whole command to GSP via
   `NV_RM_RPC_API_CONTROL`. So there is no kernel-side semantics to read for `0x20810108`;
@@ -4682,3 +4687,156 @@ those gates were green only on a tree that had never built the ABI generator (i.
 fresh GitHub runner, which is why CI could not catch it), and the fix is
 `--exclude-dir=target` on all four — cargo output, never a source file, pattern and crate
 list untouched.
+
+### 14.27 ★★★★ THE WALL WAS THE OTHER HALF — `0x20810108` is NOT load-bearing, and a SECOND cause was invisible to the instrument (`[measured 2026-08-08, real GA106]`)
+
+#### ⊘⊘ First, the refutation of the framing I inherited and carried
+
+§14.26 closed by naming the next increment and splitting it in two:
+
+> *"**The alloc is the easy half** … ⚠ **The control `0x20810108` is the hard half and has NO
+> ORACLE.**"*
+
+⊘ **Both halves of that sentence are refuted by measurement.** On a real GA106, driving a
+real libcuda, refusing `0x20810108` with `NV_ERR_NOT_SUPPORTED` and **nothing else**:
+
+```text
+INJECT CTRL cmd=0x20810108 real_status=0x00000000 forced=0x00000056
+cuInit(0) -> 0
+```
+
+`cuInit` **still returns 0**. The control that had no oracle, that source could not answer
+because `binapiControl_IMPL` forwards it whole to GSP, that §14.26 said *"must come from a
+real GA106 or be refused by name"* — **is not load-bearing at all.** Refusing it by name was
+always going to be enough, and the entire difficulty was located in the half that does not
+matter.
+
+The half §14.26 called *easy* is the one that decides:
+
+```text
+INJECT ALLOC hClass=0x00002081 real_status=0x00000000 forced=0x00000056
+cuInit(0) -> 100
+```
+
+★ I inherited this framing, restated it, and went looking for the reply body first. The
+measurement that overturned it took under a minute once the instrument existed. ⊘ **"Has no
+oracle" is a statement about our instruments; "is required" is a statement about the driver.
+They are unrelated, and I had silently treated the first as evidence for the second.**
+
+#### ★★★ And the second cause, which no diff we own could have surfaced
+
+`0x20800102` — `NV2080_CTRL_CMD_GPU_GET_INFO_V2` — **also produces `cuInit=100` on its own**,
+refused alone on real hardware. It is co-equal with the `0x2081` alloc: serving either one
+without the other still yields `100`.
+
+§14.26 reported *"exactly **one** control id is new in the unserviced ledger relative to
+`pro1` (23 → 24 distinct, `comm -13`)"*. That sentence is **true and was the wrong
+question**, for a reason that is a property of the instrument:
+
+★★ **The unserviced ledger is a de-duplicated, un-timestamped, un-counted SET dump printed
+once at end of run.** Check it against the served-controls ledger printed eleven lines below
+it in the same log — that one carries multiplicities (`x2`, `x4`, `x8`); the unserviced one
+carries none. So a `comm -13` between two boots' ledgers answers *"which ids were **never**
+demanded in the earlier boot"*, which is strictly weaker than *"which ids the CUDA process
+demands"*. `GPU_GET_INFO_V2` is demanded by `RmInitAdapter` **and** by `cuInit`; it is
+therefore in both boots' ledgers; and it is therefore **invisible to newness** while being
+every bit as fatal as the id that was visible.
+
+⇒ `gates_quantified_over_a_list` again, and `refusal_invisible_in_the_ledger`'s sibling: the
+ledger was our rung-picking instrument, and it cannot express *when* or *how often*. ⊘ A set
+difference over sets that record neither is not a statement about a window.
+
+★ The positive instrument that does answer it is in the table below.
+
+#### The instruments, and why two were needed
+
+| instrument | what it is for | file |
+|---|---|---|
+| `cuda_ioctl_trace.c` | `LD_PRELOAD` on `ioctl(2)`, gated on `_IOC_TYPE=='F'` (never the escape number — `NV_ESC_*` collide with UVM's, `ioctl_nr_collision_bug`). Decodes NVOS21/64/00/54 and snapshots control params **before and after** | `scripts/rpctrace/` |
+| `cuinit_probe.c` | `dlopen`s `libcuda.so.1` — ⊘ no toolkit on the bench — and walks `cuInit → cuDeviceGetCount → cuDeviceGet → cuCtxCreate`, writing `MARK` lines into the same append-mode trace so a demand is attributable to the call that provoked it | `scripts/rpctrace/` |
+| `rmladder --binapi-ctrl` (R20) | allocs `NV2081_BINAPI` under the Subdevice and issues a control with the buffer **seeded `0xCD`** | `rmladder.rs` |
+| the same interposer, injection mode | forces one status to `0x56` and nothing else, so *"libcuda asks X"* separates from *"libcuda needs X"* | `NVFAULT_CTRL` / `NVFAULT_ALLOC` |
+
+★★ **R20 exists because the interposer cannot answer its own question**, and this is the
+whole methodological point of the increment. The interposed trace records `0x20810108` as
+992 bytes in, 992 bytes out, `NV_OK`, **every byte zero on both sides** — because libcuda
+hands RM a zeroed buffer. ⊘ That cannot distinguish *"GSP wrote 992 zeros"* from *"GSP
+returned `NV_OK` and wrote nothing"*. Seeded to `0xCD`, two runs byte-identical:
+
+```text
+★ R20 0x20810108 = NV_OK, 992 bytes: 00 cd×131 00000000 cd×848 00 cd×7
+  written: offset 0 (1 byte), offsets 132..135 (4 bytes), offset 984 (1 byte) — all zero
+  untouched: 986 of 992
+```
+
+⇒ The reply is **6 bytes**, not 992. *"The reply is 992 zeros"* — the reading the trace alone
+licenses — is a **986-byte over-claim**. This is `c_oracle_empty_rows_are_wrong` approached
+from the opposite side: there an *empty* capture was decoded as zeros; here a *zero* capture
+would have been decoded as a written body. ★ An observer must not modify what it measures; a
+ladder is free to, and that is why the project needs both.
+
+#### `[measured]` The whole of `cuInit` on a real GA106 — the first capture past `nvidia-smi`
+
+`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt`: 9 allocs, ~60 controls, `cuInit → 0`.
+Two facts in it bound what any port must serve:
+
+- ★ **`0x2080012f` (`GPU_QUERY_ECC_STATUS`) returns `0x56` on real hardware and `cuInit`
+  still succeeds.** A refusal mid-`cuInit` is survivable; refusals are not automatically
+  walls, and this is the first direct evidence of that on the CUDA path.
+- ⚠ **`GPU_GET_INFO_V2` is input-dependent.** libcuda sends `gpuInfoListSize=11` and eleven
+  `(index, data)` pairs with `data=0`; RM fills `data` per index. ⊘ **No fixed-body table row
+  can answer it** — a captured row would be right only for the exact index list that was
+  captured, which is `a_table_does_not_decide_behaviour` waiting in a new place.
+
+The eleven indices and the real part's answers, all capability booleans and all correct for a
+consumer GA106 rather than magic numbers (`derive_what_you_cannot_query_then_oracle_it`):
+
+| index | name (`ogkm-580: ctrl2080gpu.h`) | GA106 |
+|---|---|---|
+| `0x11` | — not named in this header — | 0 |
+| `0x22` | `GEMINI_BOARD` | 0 |
+| `0x27` | `GLOBAL_POISON_FUSE_ENABLED` | 0 |
+| `0x2a` | `GPU_SMC_MODE` | 0 |
+| `0x2d` | `GPU_FLA_CAPABILITY` | 0 |
+| `0x37` | `GPU_DEBUGGING_CAPABILITY` | **1** |
+| `0x3a` | `GPU_LOCAL_EGM_CAPABILITY` | 0 |
+| `0x3b` | `GPU_SELF_HOSTED_CAPABILITY` | 0 |
+| `0x3c` | `CMP_SKU` | 0 |
+| `0x3d` | `DMABUF_CAPABILITY` | **1** |
+| `0x44` | `COHERENT_GPU_MEMORY_MODE` | 0 |
+
+#### ⊘ What this increment did NOT do, said plainly
+
+**No port change landed and no guest boot was taken.** This increment is the measurement, and
+`only_live_boots_are_proof` cuts both ways: a port change I could not boot would be `[built]`
+wearing a `[measured]` section's clothes. ⊘ `cup2` still fails `cuInit(0) -> 100` at
+`amb1_ee1994b`, unchanged, because nothing in the port changed.
+
+★ What it *does* do is make the next increment a specification rather than a search, and it
+subtracts a wall rather than climbing one.
+
+#### ⇒ The next increment, now fully specified by measurement
+
+**Both of these, together — neither alone changes `cuInit`'s answer:**
+
+1. **Admit `NV2081_BINAPI` (`0x2081`).** `alloc_params(0x2081) = NoDeclaredFacts` on §14.26's
+   strong reading (`RS_OPTIONAL(NV2081_ALLOC_PARAMETERS)`, `{NvU32 reserved}`, no handle and
+   no pointer, `resource_list.h:439-450`), `classify` under a Subdevice, the derivation
+   ratchet `12 → 13`. Structurally identical to §14.26's `AMPERE_B` landing, and the same
+   hazard check applies first: **what is keyed on this class being absent?**
+2. **Serve `0x20800102` `GPU_GET_INFO_V2`** as a `WantedTable` arm that **reads the request**
+   — echo each `(index, data)` pair the guest sent and fill `data` from the table above,
+   exactly as `WantedTable::DeviceInfo` already reads its `baseIndex` cursor. ⚠ `params_size`
+   is `4 + 8 × NV2080_CTRL_GPU_INFO_MAX_LIST_SIZE = 564`, and the guest's own
+   `gpuInfoListSize` must be **bounded against that**, never trusted — it is a guest-supplied
+   count that indexes a buffer.
+3. **`0x20810108` — refuse by name, deliberately.** Measured non-load-bearing. If it is ever
+   served, the truthful body is the 6 bytes above and **not** 992 zeros; recording that here
+   is what stops the over-claim from being re-derived.
+
+⚠ And the standing caution, now discharged rather than repeated: §14.26 said *"`cuInit`
+failing 100 beside a refused `0x2081` is a correlation of two facts in one window, not a
+proof of causation."* It was right to say so, and the correlation was **half right** — the
+alloc is causal, the control beside it is not, and a third fact outside that window is
+equally causal. ★ A correlation flagged honestly is still a correlation; the only thing that
+retires one is the experiment.
