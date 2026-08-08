@@ -204,3 +204,25 @@ specific move — reading an empty `ctl_` array as *"hardware says zero"*.
 - ⊘ **`gspst=0x56` means this part's own GSP refuses that control** — which is a fact worth
   having (`0x20800a87`, `0x20800b05`), but says nothing about whether *our* refusal is
   survivable in *our* guest.
+
+## ★★★ §14.28's two additions, and they are of DIFFERENT KINDS
+
+⚠ **`GPU-d0913685-1ec0-805a-e319-43a901a0e1ff` is a SECOND, DIFFERENT physical GA106.** The
+provenance table above names `GPU-e28d7776`; every file added on 2026-08-08 was read from
+the other part. That distinction is not bookkeeping — it is the whole finding of
+`rmladder_r21_gpuinfo_sweep_real_ga106.txt`.
+
+| file | boundary | what it is |
+|---|---|---|
+| `rmladder_r21_gpuinfo_sweep_real_ga106.txt` | ioctl, host | all 70 `GPU_GET_INFO_V2` indices, **one call each** (`getGpuInfos` breaks its loop on the first error, so a 70-index request measures only the first failure), tail seeded `0xCD` |
+| `cuinit_ioctl_trace_guest_gt1_e6ed6bc.txt` | ioctl, **INSIDE THE GUEST** | ⊘ **not a real GA106 at all** — the same interposer run against *this port*, so it is the differential partner of `cuinit_ioctl_trace_real_ga106.txt` |
+
+★★★ **`0x23` and `0x24` differ between the two parts** (`0x19ece058`/`0xb91e2532` here,
+`0x4324d4e9`/`0x8708a4a8` there) and are stable across runs on each. They are **per-chip
+identity values**; ⊘ no chip-family table may state them, and `kayfabe_abi::gpuinfo` refuses
+them by name.
+
+⊘ **And the R21 sweep is an oracle for FEWER rows than it prints.** The guest kernel resolves
+32 of the 70 indices itself and forwards only the `default:` arm, so a row here is a claim
+about GSP-RM **only** for an index the kernel forwards. For the other 32 it is the *host
+kernel's* answer and says nothing about what a GSP would return.

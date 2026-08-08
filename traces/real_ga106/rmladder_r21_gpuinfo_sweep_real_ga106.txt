@@ -1,0 +1,78 @@
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d000ec
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R21 gpuinfo sweep   = 70 indices x 1 call each, 564-byte params, tail seeded 0xCD
+info  R21 legend          = idx status data   (the port serves FORWARDED rows only)
+★     R21 0x00  NV_OK      data=0x00000000 (0)  echo=0x00000000  tail=untouched
+★     R21 0x01  NV_OK      data=0xb65e41c4 (3059630532)  echo=0x00000001  tail=untouched
+★     R21 0x02  NV_OK      data=0x0000005d (93)  echo=0x00000002  tail=untouched
+★     R21 0x03  NV_OK      data=0x00000000 (0)  echo=0x00000003  tail=untouched
+★     R21 0x04  NV_OK      data=0x00000000 (0)  echo=0x00000004  tail=untouched
+info  R21 0x05  refused    Other(86)
+info  R21 0x06  refused    Other(86)
+★     R21 0x07  NV_OK      data=0x00000000 (0)  echo=0x00000007  tail=untouched
+★     R21 0x08  NV_OK      data=0x00000000 (0)  echo=0x00000008  tail=untouched
+★     R21 0x09  NV_OK      data=0x0000001c (28)  echo=0x00000009  tail=untouched
+★     R21 0x0a  NV_OK      data=0x00000000 (0)  echo=0x0000000a  tail=untouched
+★     R21 0x0b  NV_OK      data=0x176d9790 (393058192)  echo=0x0000000b  tail=untouched
+★     R21 0x0c  NV_OK      data=0x00000011 (17)  echo=0x0000000c  tail=untouched
+★     R21 0x0d  NV_OK      data=0xffffffff (4294967295)  echo=0x0000000d  tail=untouched
+★     R21 0x0e  NV_OK      data=0x00000009 (9)  echo=0x0000000e  tail=untouched
+info  R21 0x0f  refused    Other(31)
+info  R21 0x10  refused    Other(31)
+★     R21 0x11  NV_OK      data=0x00000000 (0)  echo=0x00000011  tail=untouched
+★     R21 0x12  NV_OK      data=0x00000000 (0)  echo=0x00000012  tail=untouched
+★     R21 0x13  NV_OK      data=0x00000000 (0)  echo=0x00000013  tail=untouched
+★     R21 0x14  NV_OK      data=0x00000000 (0)  echo=0x00000014  tail=untouched
+★     R21 0x15  NV_OK      data=0x00000001 (1)  echo=0x00000015  tail=untouched
+★     R21 0x16  NV_OK      data=0xffffffff (4294967295)  echo=0x00000016  tail=untouched
+★     R21 0x17  NV_OK      data=0x00000000 (0)  echo=0x00000017  tail=untouched
+★     R21 0x18  NV_OK      data=0x00000001 (1)  echo=0x00000018  tail=untouched
+info  R21 0x19  refused    Other(86)
+★     R21 0x1a  NV_OK      data=0x00000004 (4)  echo=0x0000001a  tail=untouched
+★     R21 0x1b  NV_OK      data=0x013ff440 (20968512)  echo=0x0000001b  tail=untouched
+info  R21 0x1c  refused    Other(31)
+info  R21 0x1d  refused    Other(86)
+★     R21 0x1e  NV_OK      data=0x00000000 (0)  echo=0x0000001e  tail=untouched
+★     R21 0x1f  NV_OK      data=0x00000001 (1)  echo=0x0000001f  tail=untouched
+★     R21 0x20  NV_OK      data=0x00000000 (0)  echo=0x00000020  tail=untouched
+info  R21 0x21  refused    Other(31)
+★     R21 0x22  NV_OK      data=0x00000000 (0)  echo=0x00000022  tail=untouched
+★     R21 0x23  NV_OK      data=0x4324d4e9 (1126487273)  echo=0x00000023  tail=untouched
+★     R21 0x24  NV_OK      data=0x8708a4a8 (2265490600)  echo=0x00000024  tail=untouched
+★     R21 0x25  NV_OK      data=0x00000000 (0)  echo=0x00000025  tail=untouched
+info  R21 0x26  refused    Other(31)
+★     R21 0x27  NV_OK      data=0x00000000 (0)  echo=0x00000027  tail=untouched
+★     R21 0x28  NV_OK      data=0x00000000 (0)  echo=0x00000028  tail=untouched
+★     R21 0x29  NV_OK      data=0x00000000 (0)  echo=0x00000029  tail=untouched
+★     R21 0x2a  NV_OK      data=0x00000000 (0)  echo=0x0000002a  tail=untouched
+★     R21 0x2b  NV_OK      data=0x00000001 (1)  echo=0x0000002b  tail=untouched
+★     R21 0x2c  NV_OK      data=0x00000806 (2054)  echo=0x0000002c  tail=untouched
+★     R21 0x2d  NV_OK      data=0x00000000 (0)  echo=0x0000002d  tail=untouched
+★     R21 0x2e  NV_OK      data=0x00000016 (22)  echo=0x0000002e  tail=untouched
+★     R21 0x2f  NV_OK      data=0x00000000 (0)  echo=0x0000002f  tail=untouched
+★     R21 0x30  NV_OK      data=0x00000000 (0)  echo=0x00000030  tail=untouched
+★     R21 0x31  NV_OK      data=0x00000001 (1)  echo=0x00000031  tail=untouched
+★     R21 0x32  NV_OK      data=0x00000017 (23)  echo=0x00000032  tail=untouched
+★     R21 0x33  NV_OK      data=0x00000000 (0)  echo=0x00000033  tail=untouched
+★     R21 0x34  NV_OK      data=0x00000001 (1)  echo=0x00000034  tail=untouched
+★     R21 0x35  NV_OK      data=0x00000000 (0)  echo=0x00000035  tail=untouched
+★     R21 0x36  NV_OK      data=0x00000001 (1)  echo=0x00000036  tail=untouched
+★     R21 0x37  NV_OK      data=0x00000001 (1)  echo=0x00000037  tail=untouched
+★     R21 0x38  NV_OK      data=0x00000001 (1)  echo=0x00000038  tail=untouched
+★     R21 0x39  NV_OK      data=0x00000001 (1)  echo=0x00000039  tail=untouched
+★     R21 0x3a  NV_OK      data=0x00000000 (0)  echo=0x0000003a  tail=untouched
+★     R21 0x3b  NV_OK      data=0x00000000 (0)  echo=0x0000003b  tail=untouched
+★     R21 0x3c  NV_OK      data=0x00000000 (0)  echo=0x0000003c  tail=untouched
+★     R21 0x3d  NV_OK      data=0x00000001 (1)  echo=0x0000003d  tail=untouched
+★     R21 0x3e  NV_OK      data=0x00000000 (0)  echo=0x0000003e  tail=untouched
+★     R21 0x3f  NV_OK      data=0x00000000 (0)  echo=0x0000003f  tail=untouched
+★     R21 0x40  NV_OK      data=0x00000007 (7)  echo=0x00000040  tail=untouched
+★     R21 0x41  NV_OK      data=0x00000000 (0)  echo=0x00000041  tail=untouched
+★     R21 0x42  NV_OK      data=0x00000000 (0)  echo=0x00000042  tail=untouched
+info  R21 0x43  refused    Other(31)
+★     R21 0x44  NV_OK      data=0x00000000 (0)  echo=0x00000044  tail=untouched
+★     R21 0x45  NV_OK      data=0x00000000 (0)  echo=0x00000045  tail=untouched
+★     R21 libcuda 11     = NV_OK  0x11=0 0x22=0 0x27=0 0x2a=0 0x37=1 0x3b=0 0x3c=0 0x3d=1 0x2d=0 0x3a=0 0x44=0 
+done — gpu-info sweep only

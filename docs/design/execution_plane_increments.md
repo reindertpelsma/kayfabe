@@ -5019,3 +5019,57 @@ and single-fault injection cannot find it. Two reasons, both structural:
 **inside the guest**, diffed positionally against
 `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt`. That names a served-but-wrong answer,
 which is the only remaining class this project has an oracle for.
+
+#### ★★★★ THE WALL, NAMED — and it is ONE LINE of the guest's own `cuInit` trace
+
+The comparison instrument was built and run the same night: the §14.27 `LD_PRELOAD`
+interposer, pushed **into the guest** and run over `cuInit`. Boot `gt1_e6ed6bc`, same
+shipping config, same stamps. The whole trace is committed as
+`traces/real_ga106/cuinit_ioctl_trace_guest_gt1_e6ed6bc.txt` — **44 ioctls**, and the last
+one before teardown is this:
+
+```text
+CTRL cmd=0x20800102 hObject=0x5c000003 size=564 status=0x00000056 rc=0
+  in = 0b000000 11000000 00000000 22000000 00000000 …   (libcuda's eleven indices)
+  out= 0b000000 11000000 00000000 22000000 00000000 …   ⊘ BYTE-IDENTICAL TO `in`
+FREE ×3
+== stage1 cuInit END
+cuInit(0) -> 100
+```
+
+Beside it, the real part on the same 564 bytes
+(`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:42`): `status=0x00000000`, and
+`0x37 → 1`, `0x3d → 1`.
+
+⇒ **`out == in`. Not one of the eleven `data` fields was written.** The guest kernel bailed
+before it filled anything, and `cuInit` gives up on the next line.
+
+#### ⊘⊘ AND THIS REFUTES MY OWN INCREMENT'S GREEN ROW
+
+The port's served ledger for that very boot says:
+
+```text
+control 0x20800102 result 0x00000000 x1
+```
+
+★ One call, served, `NV_OK`. **And libcuda's call is not it.** libcuda's `GPU_GET_INFO_V2`
+produced **no ledger row of any kind** — not served, not refused, not unserviced. It never
+reached this port. The `0x56` was manufactured **inside the guest kernel, without an RPC**.
+
+⊘ So *"the control is served"* and *"the guest's ioctl succeeds"* are two different facts, and
+this increment established the first while reporting it as though it settled the second. The
+served ledger is a record of what **crossed the RPC boundary**; a control the guest answers
+locally is invisible to it in exactly the way `refusal_invisible_in_the_ledger` describes —
+one boundary further out. ⇒ **Every instrument this port owns lives at the GSP boundary, and
+`cuInit` is decided at the ioctl boundary.** The guest-side interposer is the first
+instrument we have that spans them, which is why it found in one boot what sixteen injections
+could not.
+
+⚠ `[unmeasured]` **Why** the kernel answers `0x56` without an RPC is the next increment's
+question, and it must not be guessed. Two candidates, both testable from the same trace:
+`getGpuInfos`'s switch bailing on an arm before it reaches `default:` (its loop `break`s on
+the first non-`NV_OK` and returns it for the whole call, `:566-569`), or the RM control
+**cache** — this id is `CACHEABLE_BY_INPUT` and is now row five of
+`kayfabe_device::sticky::BRANCH_A_CACHEABLE`, whose whole thesis is that *no reply of ours can
+influence it*. ⊘ Do not pick between them from source; the guest will say which, and the
+instrument that asks is already built.
