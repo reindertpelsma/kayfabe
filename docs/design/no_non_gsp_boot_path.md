@@ -48,10 +48,26 @@ for.
    - **Nouveau does not implement every op the proprietary driver runs.** A GSP-less guest runs the
      proprietary driver, which will issue sequences nouveau never issues. Those have **no
      reference at all** — not a second-hand one, none.
-   - ★★ **Nouveau's own bring-up may be REPLAY, not understanding.** Sequences captured from the
-     proprietary driver or lifted from optimised disassembly, replayed to satisfy the GPU, with
-     even the authors knowing only part of what they do. ⇒ we would be copying **magic without
-     meaning**, unable to tell a load-bearing operation from an incidental one.
+   - ★★ **Nouveau's bring-up leans on EMPIRICAL constants — and the refined version of this is
+     sharper than "it is all replay", which would be unfair and wrong.** Nouveau's knowledge sorts
+     roughly into: **(A)** architectural/semantic, **(B)** functional-but-unexplained, **(C)**
+     empirical recipe (*"NVIDIA writes `0x00100064` here; anything else breaks init"*), **(D)**
+     opaque firmware (FECS/GPCCS blobs loaded into Falcon IMEM/DMEM through a protocol nouveau
+     understands well while the blob's internals stay closed).
+
+     ★ For **runtime** operation nouveau is largely A/B — it dynamically builds VM mappings,
+     channels, contexts, fences, pushbuffers and interrupts, which cannot be fixed trace replay.
+     ⊘ **But C concentrates precisely in BRING-UP**: `{address, count, stride, data}` init tables,
+     GR init sequences, *"some context buffer of unknown purpose"* that it nonetheless allocates
+     and maps correctly, and memory-training writes whose own comments say *"magic writes that
+     improve train reliability?"*.
+
+     ⇒ ★★★ **And bring-up is exactly and only the part we would need.** So the argument is not
+     "nouveau doesn't understand its GPU" — it does, mostly. It is that **the one region where its
+     knowledge is weakest is the one region we would be copying**, and we would inherit the
+     weakness without inheriting the way out: nouveau earned its A-level understanding by
+     experimenting against real silicon over years, and we would be re-deriving semantics from a
+     recipe with no spec-holder to check against.
    - ⇒ **We would be building against a replay, because there is no spec and nobody to show us
      one.**
 
