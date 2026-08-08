@@ -3667,7 +3667,9 @@ index-35 arming, exactly where it was.
 ### 14.19 ★★★ §14.18 STEP 1 BUILT — the completion is **announced**, and index 35 is served from a second list
 
 ⊘ **`[built]`, not `[measured]`.** Everything below is a property of the tree and of its
-tests; no boot of this revision existed when it was written. `only_live_boots_are_proof`.
+tests; it is **unmeasured** on hardware — no boot of this revision existed when it was
+written, and nothing here may be cited as a boot result. `only_live_boots_are_proof`.
+(§14.20 is the boot, and it refutes part of the motivation below.)
 
 #### What landed, in the four pieces §14.18 named
 
@@ -3806,7 +3808,7 @@ nvkvm: completions: 2 announced (non-stall vector raised), 0 UNVECTORED, 2 would
 - ★★★ **`0 UNVECTORED`** — every copy this shell performed was announced. That is the
   counter whose non-zero value would be the promise of serving index 35 broken quietly.
 
-#### ⊘⊘ AND THE MEASUREMENT REFUTES HALF OF WHY WE BUILT IT — `2 would be masked`
+#### ⊘⊘ AND IT REFUTES HALF OF WHY WE BUILT IT — `2 would be masked` `[measured 2026-08-08, boots `ship_7a881a7` and `ship_7a881a7_b`, rev `7a881a7`]`
 
 ★ **The guest never enabled the leaf.** Vector `0x07` is leaf 0, bit 7; both announcements
 were latched with `LEAF_EN(0)` bit 7 clear, so the guest's own non-stall scan —

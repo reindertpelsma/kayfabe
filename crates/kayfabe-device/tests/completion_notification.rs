@@ -183,6 +183,11 @@ fn the_vector_under_test_is_the_one_this_chips_captured_table_publishes_for_ce2(
 /// measured to bind, raises the vector that engine's captured row publishes — and the
 /// guest's own scan finds it pending.
 ///
+/// ★ *"measured to bind"* names a run: `[measured 2026-08-08, boots `cebind_p35` and
+/// `cup2_p35` at rev `5a035e0`, and `ship_7a881a7` at rev `7a881a7`]` — the device's own
+/// channel-bind census printed `engineType 11 (COPY2)` in each, the last of them in the
+/// shipping configuration.
+///
 /// ⊘ The last two assertions are not decoration. `intrGetPendingNonStall_TU102` reads
 /// `TOP(0)` first and skips the whole subtree if its bit is clear
 /// (`ogkm-580: intr_nonstall_tu102.c:243-248`), then reads `LEAF & LEAF_EN_SET`
