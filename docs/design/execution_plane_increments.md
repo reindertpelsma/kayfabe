@@ -4375,3 +4375,235 @@ reaches. The two situations are opposites and both were settled by reading the g
 boundary, forward to the host"*. Admitting a class is not the same as serving what the class
 does; whether `AMPERE_B` can be answered without real silicon is the question the next
 increment has to put to hardware, not to a table.
+
+### 14.26 ★★★ `AMPERE_B` ADMITTED — and §14.25's closing question, answered from RM's own source before it was put to hardware (`ee1994b`)
+
+§14.25 ended: *"whether `AMPERE_B` can be answered without real silicon is the question the
+next increment has to put to hardware, not to a table."* ★ **It was answerable from source,
+and the answer is yes — because the function that allocates it never runs the engine.**
+
+#### ⊘ First, the refutation of my own framing
+
+I opened this increment expecting the hazard to be *"admitting the class lets the guest start
+the golden channel, and a GR channel we cannot execute then times out"* — i.e. §14.24's shape
+again, one plane over. **That fear is wrong, and one `sed` of RM's source settles it.**
+
+`kgraphicsCreateGoldenImageChannel_IMPL` **ends at the 3D-object alloc**:
+
+```c
+2519    NV_ASSERT_OK_OR_GOTO(status,
+2520        pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0),
+2521        cleanup);
+2523 cleanup:
+2533        pRmApi->Free(pRmApi, hClientId, hClientId);
+```
+
+(`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2519-2533`.) `:2519` is the **last
+statement before `cleanup:`**, and `cleanup:` frees the whole internal client — 3D object,
+channel, USERD, pushbuffer memory, VA space, subdevices, device. Between the two there is no
+pushbuffer write, no `GPFIFO_SCHEDULE`, no doorbell, no semaphore and no FECS wait. RM says so
+itself at `:2419-2424`: *"Set the gpFifoOffset to zero intentionally since we only need this
+channel to be created, but will not submit any work to it."* ⇒ **`gpFifoOffset = 0`.**
+
+★ And the one branch that *could* have run work is not on this chip:
+`_kgraphicsPostSchedulingEnableHandler:509-511` calls `kgraphicsInitializeBug4208224WAR_HAL`
+only when `kgraphicsIsBug4208224WARNeeded_HAL`, which `g_kernel_graphics_nvoc.c:464-480` wires
+to `_TU102` for `TU102 | TU104 | TU106` and to `_3dd2c9` — the `return NV_FALSE` stub —
+everywhere else. GA106 gets the stub.
+
+⇒ The kernel side of the golden image channel is **allocate and free**. The golden image
+itself is GSP-RM's to produce, on the far side of the `GSP_RM_ALLOC` we answer.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| `AMPERE_B` generated from `clc797.h:32` (both vendored tags agree, same line) | `kayfabe-abi/gen/src/main.rs`, `generated/classes.rs` |
+| `alloc_params(0xc797) = NoDeclaredFacts` | `versions.rs` |
+| `classify(0xc797) = EngineObject { engine: GrGraphics }` | `kayfabe-chips/src/ga10x.rs` **and** `kayfabe-mocks`' `WireClassArch` |
+| the derivation ratchet `11 → 12` | `capability.rs::every_class_this_port_decodes_is_permitted` |
+| the boot's own wire row, served, with its before/after pair; params-never-read over three shapes; the id pinned against ogkm; the classify arm pinned | `tests/tests/gsp_rm_alloc.rs`, `rmrpc_bridge.rs`, `oracle_layout.rs` |
+
+⊘ **The capability boundary did not move by one class.** `0xc797` has been on `CLASSES_SHARED`
+with `Origin::Empirical` since the port was written (`capability.rs:1099-1103`), and
+`the_founding_rows_are_pinned` already asserted it (`cls(0x0000_c797, "AMPERE_B")`). The
+refusal came from the statement **after** the capability gate — `alloc_params` returning
+`None` (`kayfabe-rmrpc/src/lib.rs:1179`). This increment touches the decoder half only, which
+is the split `translate_alloc:1167-1170` exists to make.
+
+#### ★★ `NoDeclaredFacts` is the STRONG reading, and RM's own table says so
+
+Not "we have no decoder" — *"there is nothing here to decode."* Four independent facts:
+
+1. RM registers this class's params as **`RS_OPTIONAL(NV_GR_ALLOCATION_PARAMETERS)`**
+   (`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:2010`), which expands to
+   `{ sizeof(x), bParamRequired = NV_FALSE }` (`resource_desc.c:76`). A NULL is legal **by
+   declaration**.
+2. The struct is `{version, flags, size, caps}` — 4 × `NvU32`, 16 bytes, **no handle and no
+   pointer** (`ogkm-580: nvos.h:2716-2721`); `caps` is an *output* the caller reads back.
+3. ★ `grep -rn NV_GR_ALLOCATION_PARAMETERS src/nvidia/src/kernel/gpu/gr/` returns **nothing**.
+   No GR code reads it on the alloc path at all. `kgrobjConstruct_IMPL` touches `pParams`
+   only for `hResource` and `hParent` (`kernel_graphics_object.c:310, 339`).
+4. The one allocator on this path supplies none of it — `NULL, 0` at `:2520` — which is why
+   the wire said `paramsSize=0x00000000`.
+
+#### ⊘ The standing hazard, checked in the direction that bit §14.21 and §14.24
+
+The question is *"is there any other executor?"*, and before that, *"what is keyed on this
+class being absent?"* Answers, each read rather than assumed:
+
+- `SharedDoorbell::try_ce_submission`'s gate reads `facts.vas_pdb` and the realize-time
+  `local_ce_is_the_only_executor`. It reads **no** `EngineKind` and **no** object-graph node.
+- `kayfabe_fwd::plan_doorbell`'s gate reads `proc.exec.requested`, written only by the
+  guest's own `0xa06f0103`. `chan.engine` is carried as a routing tag and gates nothing.
+- `completion_arm` (`fwd:4159`) splits only `NvEnc` out; `GrCompute`, `GrGraphics` and `Ce`
+  are all `SharedSema`.
+- `route_engine_object` / `exec_engine_object` are reachable **only** through
+  `SharedDevice::forward_engine_object`, which has no non-test caller. Declaring the object
+  adds a graph node and nothing else.
+
+★ And the refinement pass is a **no-op in kind**: `AMPERE_CHANNEL_GPFIFO_A` already classifies
+`Channel { engine: GrCompute }` (`ga10x.rs:161`), and every consumer maps `GrCompute` and
+`GrGraphics` to the same answer — `EngineRoute::for_engine` (`rc.rs:115`) and
+`engine_type_for` (`kayfabe-isolate-host/src/rm.rs:1654`) both to
+`NV2080_ENGINE_TYPE_GRAPHICS`. That is what makes the *truthful* label affordable:
+`AMPERE_B` is `GR_OBJECT_TYPE_3D` (`kgrmgrGetGrObjectType_IMPL`,
+`kernel_graphics_manager.c:130`), RM picks it over the compute class exactly when
+`kgraphicsIsGFXSupported` (`kernel_graphics.c:2503-2510`), and GA106's class list carries
+`{ AMPERE_B, ENG_GR(0) }` as its **only** 3D-typed entry
+(`g_gpu_class_list.c:1112`, beside `{ AMPERE_COMPUTE_B, ENG_GR(0) }` at `:1114`).
+
+⚠ **One hazard is real and is recorded rather than fixed**: `project.rs:737`'s
+`engine_refine.entry(chan).or_insert(engine)` is *first-object-wins*. A channel carrying both
+an `AMPERE_B` and an `AMPERE_DMA_COPY_B` could have its CE refinement stolen. On the measured
+boot it cannot happen — `0xc797` is `hClient=0xc1e00007 / hParent=0xbaba0045` (the golden
+channel) while the CeUtils scrubber is `hClient=0xc1e00006` — but this is the failure mode to
+watch if the golden channel is ever reused.
+
+#### ⊘⊘ What this does NOT establish, said before the boot rather than after it
+
+**Admitting a class is not serving what the class does.** The `GSP_RM_ALLOC` we answer `NV_OK`
+is the point at which the *physical* RM, on GSP, constructs the GR object and builds a golden
+context image on silicon. This port builds none. That is affordable **here and only here**,
+for two reasons that are properties of this call site and not of the class:
+
+- the guest frees the whole tree three lines later, and
+- it never reads an image back through this port on the boot path.
+
+A guest that later runs its **own** GR engine against a forged golden context is the case this
+row does not cover, and the C artifact's standing answer for it is unchanged: *silicon
+boundary, forward GR execution to the host* (`c_cuda_ladder.md` §3 — the host self-maps its
+own ctx buffers at `st=0x51`, and faking them produced the `cuCtxCreate` stale-read crash).
+
+★ The named next wall is therefore **not** in `kgraphicsCreateGoldenImageChannel`. It is
+whatever the guest does with an adapter that finally completed `_kgraphicsPostSchedulingEnableHandler`.
+
+#### ★★★★ `[measured 2026-08-08, boot amb1_ee1994b, rev ee1994b]` — THE GOLDEN-IMAGE CHANNEL COMPLETES
+
+vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver **580.159.04 Open**), stamp verified
+on **both** `target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:ee1994b551fddf06b3964bef74e39f565148984d` in each, both non-empty (33.1 MB /
+84.6 MB). **`probe-arm set: EMPTY`**, **STOCK** guest module, `SMI_RC=0`. Evidence:
+`docs/reference/bench_evidence/run_amb1_ee1994b_*`.
+
+`diff` of the guest's dmesg against `pro1_423bf08` (timestamps stripped, sorted) is **five
+lines removed and ZERO added**:
+
+```text
+- rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00007; hParent=0xbaba0045;
+                     hObject=0xbaba0046; hClass=0x0000c797; paramsSize=0x0; status=0x56
+- rpcRmApiFree_GSP:  GspRmFree failed:  hClient=0xc1e00007; hObject=0xbaba0046; status=0x56
+- Assertion failed: (status == NV_OK) || (… FULLCHIP_RESET) @ rs_client.c:844
+- Assertion failed: (status == NV_OK) || (… FULLCHIP_RESET) @ rs_server.c:259
+- Assertion failed: (status == NV_OK) || (… FULLCHIP_RESET) @ rs_server.c:1375
+```
+
+⇒ The whole 3D-object chain — `kgrobjConstruct` → ctx-buffer alloc/map → the 12-entry
+`GPU_PROMOTE_CTX` → `GSP_RM_ALLOC(0xc797)` → `GSP_RM_FREE` — is now **silent**. Everything
+still in the log is the RC watchdog's (`0x0070`, `0xc36f`, `kgrobjPromoteContext` at
+`kernel_graphics_object.c:224`, `kernel_rc_watchdog.c:1198`) and the i2c probe's (`0x402c`),
+all three of which §14.20/§14.22 measured to be non-fatal and this boot reproduces as such.
+
+★ **Nothing was added**, which is the half a green diff usually cannot claim. The accuracy
+improvement cost nothing this time — and per §14.21/§14.24 that was the thing to check, not
+to assume.
+
+#### ★★★★ AND THE LADDER RAN — `cuInit` reached this port for the FIRST time
+
+The boot carried `POST_CAPTURE_HOOK=cup2_hook.sh`, so `cup2` was built and run **inside the
+guest with the guest still up**. `cuda.h` located by content (`grep -q CUDA_VERSION`, not by
+path) at `/usr/local/include/cuda.h`; `GCC_RC=0`.
+
+```text
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+CUP2_RC=1
+```
+
+⊘ **Rung 1 of the ladder does NOT pass, and that is the result.** But the run is not empty:
+opening `/dev/nvidia0` a second time ran `RmInitAdapter` **again** (the device census doubles
+almost everywhere — `2` promote-ctx `NV_OK`, `2` refused, `4` doorbells all served, `8`
+accepted page-directory publications, `2` COPY2 binds on clients `0xc1e00006` and
+`0xc1e00011`), and the second init is line-for-line the first. ★ So the adapter is
+**re-initialisable**, which nothing had shown before.
+
+#### ⊘⊘ THE NEXT WALL, MEASURED — and it REFUTES §14.22's own ruling
+
+Exactly **one** control id is new in the unserviced ledger relative to `pro1` (23 → 24
+distinct, `comm -13`), and exactly one new `GspRmAlloc` failure appears in the cup2 window:
+
+```text
+NVRM: GspRmAlloc failed: hClient=0xc1d0000c; hParent=0x5c000003; hObject=0x5c000004;
+                         hClass=0x00002081; paramsSize=0x00000004; status=0x00000056
+nvkvm:   unserviced fn 76 cmd 0x20810108
+```
+
+★★★ **`0x2081` is `NV2081_BINAPI`, and §14.22 ruled it a phantom.** That section's table says
+*"who asks: — **nobody** — / never requested"* and its prose says *"⊘ `0x2081` is a phantom.
+`grep -l 'hClass=0x00002081'` over **every** captured boot in `docs/reference/bench_evidence/`
+returns nothing … It entered the work list as a *name in a doc sentence* and was never checked
+against a boot."* ⊘ **That ruling is refuted by measurement**, and the refutation is not
+subtle:
+
+- it *is* requested — by **libcuda**, on the `0x5c0000xx` RM-internal chain, under a
+  Subdevice, exactly as §14.22's own next sentence predicted it would be;
+- ★ it had **already** been captured. `execution_plane_increments.md:3645` — 400 lines
+  *above* §14.22, in this same file — prints `hClass=0x00002081 … status=0x00000056` from a
+  §14.19-era probe boot, and `:3844` names `0x2081` explicitly as appearing *"in the probe
+  boots"*. The grep was honest; its **universe** was `docs/reference/bench_evidence/`, and
+  those probe boots' captures were not all committed there.
+
+⇒ `gates_quantified_over_a_list`, in its purest form: *a smaller universe is a smaller true
+statement*, and the sentence read as a fact about the world. ★ The reason it survived is worth
+naming too — **no boot had ever run a CUDA process.** Every capture in the directory stopped
+at `nvidia-smi`, so a grep over that directory could not have found a class only libcuda
+allocates. The instrument was not wrong; it was pointed at a world where the event cannot
+occur (`skipped_oracle_kills_the_guard`).
+
+#### ⇒ The next increment, named — and ⊘ deliberately NOT bundled into this one
+
+**`NV2081_BINAPI` (`0x2081`) and its control `0x20810108`.**
+
+What is already known, from RM's source rather than from a table:
+
+- `NV2081_ALLOC_PARAMETERS` is `{ NvU32 reserved; }` — **four bytes, and the field is
+  literally named `reserved`** (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2081.h:33-40`),
+  which matches the measured `paramsSize=0x00000004` exactly. Registered
+  `RS_OPTIONAL`, parent `RS_LIST(classId(Subdevice))`, internal class `BinaryApi`
+  (`ogkm-580: resource_list.h:439-449`). ⇒ another `NoDeclaredFacts`, on the same strong
+  reading as `AMPERE_B`.
+- ⚠ **The control is the hard half, and it is opaque by construction.**
+  `binapiControl_IMPL` (`ogkm-580: src/nvidia/src/kernel/rmapi/binary_api.c:61-127`) does not
+  interpret `pParams->cmd` at all — it forwards the whole command to GSP via
+  `NV_RM_RPC_API_CONTROL`. So there is no kernel-side semantics to read for `0x20810108`;
+  whatever it means lives in GSP-RM, which is not in any vendored tree. ⊘ Inventing a reply
+  body here is `mock_fidelity_both_directions` with nothing to hold it to — the reply shape
+  must come from a real GA106 (`../nvkvm-rs/traces/real_ga106/`) or the control must be
+  refused **by name**.
+
+⊘ It is not bundled here for the reason §14.24 taught: this increment's boot is already
+measured, and a second wall-moving change inside it would make a regression unattributable.
+
+⚠ And the standing caution is unchanged: `cuInit` failing `100` **beside** a refused
+`0x2081` is a correlation of two facts in one window, not a proof of causation. It is the
+only new refusal in that window, which is why it is the next thing to try — not why it is
+the answer.
