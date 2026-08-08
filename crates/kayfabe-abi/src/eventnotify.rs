@@ -192,18 +192,56 @@
 //!   real and it runs synchronously off the doorbell, so "the work finished" is an instant
 //!   this device is standing at.
 //!
-//! ⚠ **The one thing not settled, and it is a measurement rather than a design.** Which CE
-//! the scrubber lands on: `ceutilsGetFirstAsyncCe` takes the first CE that is not a GRCE
-//! (`ce_utils.c:66-81`), and the captured table gives **CE0 (15) and CE1 (16) no non-stall
-//! vector at all**. If the scrubber's `pChannel->ceId` is one of those two, then this
-//! device has published — on real hardware's authority — that there is no vector to raise,
-//! and index 35 must stay refused on that *stronger* ground rather than this one. One boot
-//! that logs the chosen `ceId` decides it.
+//! ### ★★★ SETTLED — the scrubber lands on **CE2**, and CE2 has a vector
 //!
-//! ⊘ **Until then the refusal stands.** Admitting 35 into [`SILENT_NOTIFIERS`] would be
-//! promising a completion notification for work that really happens, which is the exact
-//! shape this module's own rule forbids — and the boot it buys is
-//! [`ProbeArmSet`]'s reachability result, not a rung.
+//! The open question here was whether the scrubber's `pChannel->ceId` might be CE0 or CE1,
+//! the two rows the captured table gives no non-stall vector at all. If it were, index 35
+//! would have to stay refused on hardware's own authority that there is nothing to raise —
+//! a far stronger ground than "we deliver nothing".
+//!
+//! `[measured 2026-08-08, boot cebind_p35 at 5a035e0]`, from the device's own report:
+//!
+//! ```text
+//! nvkvm: channel binds (0xa06f0104): 1 total, 1 distinct
+//! nvkvm:   bind engineType 11 (COPY2) client 0xc1e00006 object 0x00000002 result 0x0 x1
+//! ```
+//!
+//! `NV2080_ENGINE_TYPE` 11 is `COPY2` (`COPY0 = 9`), so `ceId = 2`, whose row is
+//! `MC_ENGINE_IDX` 17 → **`vectorNonStall = 0x07`**. ⇒ **A vector exists.** The refusal
+//! cannot be re-grounded on the table's silence, and the fourth piece — the wiring — is the
+//! only thing missing.
+//!
+//! ⊘ The pick could NOT have been read off our own tables. On GA106 `kceGetGrceMaskReg` is
+//! halified to the `NV_ERR_NOT_SUPPORTED` stub for everything below GB202
+//! (`ogkm-580: generated/g_kernel_ce_nvoc.c:847-858`), so `ceIsCeGrce` falls through to the
+//! partner-list walk (`kernel_ce_shared.c:76-135`) over **the device-info table this port
+//! serves** — deriving the answer from that table is circular. It had to be read off the
+//! wire, which is what `kayfabe_device::census::ChannelBind` was built to do.
+//!
+//! ### ⚠ AND THE SECOND MEASUREMENT, which constrains the order of work
+//!
+//! `[measured 2026-08-08, boot cebind1 at 5a035e0, probe-arm set EMPTY]` — the same
+//! revision in **shipping** configuration reports:
+//!
+//! ```text
+//! nvkvm:   arming event 35 action 2 client 0xc1e00005 object 0x0000000b result 0x56 REFUSED
+//! nvkvm: channel binds (0xa06f0104): 0 total, 0 distinct
+//! ```
+//!
+//! ⇒ **The bind is downstream of the arming.** `NVA06F_CTRL_CMD_BIND` is sent at
+//! `ogkm-580: mem_utils.c:1966`, *after* the `0x20800301` at `:1930` in the same function,
+//! so refusing the arming bails `_memmgrMemUtilsScrubInitScheduleChannel` before the guest
+//! ever names a copy engine. The CE2 reading above is therefore only observable **under
+//! probe `[35]`**, and that is not a caveat on it — it is the correct conditional: the
+//! question was always *"if we serve the arming, is there a vector for the CE the guest
+//! then binds?"*, and the answer is yes, `0x07`.
+//!
+//! ⊘ **The refusal still stands until the wiring exists.** Admitting 35 into
+//! [`SILENT_NOTIFIERS`] would be promising a completion notification for work that really
+//! happens, which is the exact shape this module's own rule forbids — and the boot it buys
+//! is [`ProbeArmSet`]'s reachability result, not a rung. What the measurement changes is
+//! *which* refusal is honest: not "the hardware publishes no vector", but "the vector is
+//! published and this device does not yet raise it".
 
 /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080event.h:79`).
