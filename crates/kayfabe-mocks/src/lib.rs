@@ -600,6 +600,17 @@ impl PushbufferAbi for MockPushbuffer {
                     },
                     _ => CeWork::Copy,
                 },
+                // ⊘⊘ **ALWAYS `None`, and that is a stated LIMIT rather than a default.**
+                // A CE completion is `SET_SEMAPHORE_A/B/PAYLOAD` plus a two-bit
+                // `LAUNCH_DMA.SEMAPHORE_TYPE`, three registers latched across separate
+                // method runs — a shape this one-word-per-fact convention cannot have.
+                // Inventing a bit for it here is precisely
+                // `mock_fidelity_both_directions`: a made-up encoding makes the seam look
+                // finished and every test through it green over a fact no chip states that
+                // way. ⇒ **A test about a CE completion must drive `Ga10xPushbuffer`**, as
+                // `tests/tests/pushbuffer_abi_oracle.rs` does against NVIDIA's own `DRF_*`
+                // packing. Recorded so the gap reads as a gap.
+                completion: None,
             },
             mock_method::SEM_RELEASE => PushMethod::SemRelease {
                 addr: GpuVa(pair(0)),

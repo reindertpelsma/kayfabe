@@ -1154,6 +1154,10 @@ fn a_copy_engine_run_decodes_to_the_drivers_own_operands() {
                 dst_target: _,
                 src_target: _,
                 work,
+                // ★ The `copy_*` corpus asks for no release, and that it decodes as `None`
+                // is asserted below rather than here — the completion has its own corpus
+                // (`sem_*`) and its own test.
+                completion,
             } = *launches[0]
             else {
                 unreachable!("filtered")
@@ -1174,6 +1178,18 @@ fn a_copy_engine_run_decodes_to_the_drivers_own_operands() {
             // ⊘ Always `Copy`, and never `Scrub`: `MEMORY_SCRUB_ENABLE` is not a field of
             // `NVC7B5` at all — see `submit::ce::NO_MEMORY_SCRUB_ON_THIS_CLASS`.
             assert_eq!(work, kayfabe_arch::CeWork::Copy, "[{tag}] {name}");
+            // ⊘ And no completion is invented for a launch that asked for none. Every
+            // `copy_*` case leaves `SEMAPHORE_TYPE` at `_NONE`, and NVIDIA's own extractor
+            // is what says so.
+            assert_eq!(
+                num(&d["semtype"]),
+                0,
+                "[{tag}] {name}: the copy corpus asks for no release"
+            );
+            assert_eq!(
+                completion, None,
+                "[{tag}] {name}: SEMAPHORE_TYPE_NONE releases nothing"
+            );
             // …and the bind is reported as well as applied.
             assert!(
                 got.iter().any(|m| matches!(
@@ -1437,6 +1453,133 @@ fn engine_fill_image(d: &BTreeMap<String, String>) -> Option<Vec<u8>> {
 /// The names of the accepted fill corpus.
 fn fill_names(o: &Oracle) -> Vec<&String> {
     o.ceruns.keys().filter(|n| n.starts_with("fill_")).collect()
+}
+
+/// ★★★ **E10e — the ENGINE-CLASS completion decodes to the driver's own semaphore**, and
+/// the corpus is `channelPushMethodsBlock`'s own shape rather than a copy run with one flag
+/// flipped.
+///
+/// # ⊘ The four-byte trap this exists for
+///
+/// `[src]` `ogkm-580: channel_utils.c` — one CeUtils pushbuffer block releases **two**
+/// semaphores: the **finishPayload** through the engine class (`SET_SEMAPHORE_A/B/PAYLOAD` +
+/// `LAUNCH_DMA.SEMAPHORE_TYPE`, `:832, 838-840`) at `pbGpuVA + finishPayloadOffset`, and a
+/// **host-FIFO** one at the bottom (`:698-746`) at `pbGpuVA + semaOffset`, four bytes lower
+/// (`:250`), meaning only *"HOST has read the methods"*. [`PushMethod::SemRelease`] decodes
+/// the host one; until this arm existed the finishPayload — the word
+/// `channelWaitForFinishPayload` actually spins on — was **undecodable**, so a completion
+/// writer fed from what we could already decode would have advanced the wrong word and
+/// logged a success.
+///
+/// Three properties, each against NVIDIA's own `DRF_VAL`:
+/// 1. the address is `_A`(high `16:0`) over `_B`(low) — a swap or an unmasked `_A` disagrees;
+/// 2. the payload is `SET_SEMAPHORE_PAYLOAD`;
+/// 3. **`SEMAPHORE_TYPE` decides, not written-ness** — `sem_none_despite_registers` latches
+///    all three registers and asks for no release.
+#[test]
+fn a_ce_launch_decodes_the_engine_class_completion_semaphore() {
+    let oracles = require_oracle!("a_ce_launch_decodes_the_engine_class_completion_semaphore");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let names: Vec<&String> = o.ceruns.keys().filter(|n| n.starts_with("sem_")).collect();
+        // ⊘ `gates_quantified_over_a_list`: a case that stops being emitted shortens this
+        // test rather than silencing it.
+        assert_eq!(
+            names.len(),
+            3,
+            "[{tag}] the completion corpus is RM's own memset block, an address using the \
+             `16:0` upper field, and the latched-but-not-requested case: {names:?}"
+        );
+        let mut with_release = 0usize;
+        for name in names {
+            let d = &o.cedec[name];
+            let got = decode_fresh(&o.ceruns[name]);
+            let launches: Vec<&PushMethod> = got
+                .iter()
+                .filter(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+                .collect();
+            assert_eq!(
+                launches.len(),
+                1,
+                "[{tag}] {name}: one launch fires, got {got:?}"
+            );
+            let PushMethod::CeLaunchDma { completion, .. } = *launches[0] else {
+                unreachable!("filtered")
+            };
+            match num(&d["semtype"]) {
+                0 => assert_eq!(
+                    completion, None,
+                    "[{tag}] {name}: ⊘ SEMAPHORE_TYPE_NONE releases nothing, even though \
+                     SET_SEMAPHORE_A/B/PAYLOAD were all latched — the FIELD decides"
+                ),
+                1 => {
+                    with_release += 1;
+                    assert_eq!(
+                        completion,
+                        Some(kayfabe_arch::CeCompletion {
+                            addr: kayfabe_arch::ids::GpuVa(num(&d["sem"])),
+                            payload: num(&d["payload"]),
+                        }),
+                        "[{tag}] {name}: the completion is NVIDIA's own recombination of \
+                         SET_SEMAPHORE_A (HIGH, 16:0) over SET_SEMAPHORE_B (LOW)"
+                    );
+                }
+                other => panic!("[{tag}] {name}: unexpected SEMAPHORE_TYPE {other}"),
+            }
+        }
+        // ⊘ Non-vacuity: a corpus of only `_NONE` cases is satisfied by a decoder that
+        // hard-codes `None`.
+        assert!(
+            with_release >= 2,
+            "[{tag}] the corpus must contain real releases, saw {with_release}"
+        );
+    }
+}
+
+/// ⊘ **A release this codec cannot express refuses the WHOLE LAUNCH**, and that is the
+/// design rather than an accident.
+///
+/// A launch and its release are one act — the engine writes the payload *after* the copy
+/// retires. Reporting the copy while dropping the release would move bytes and leave the
+/// semaphore forever unadvanced: the guest spins on a copy we really performed, and our own
+/// counters say we served it. That is the silent shape this project treats as worse than a
+/// stalled boot, so the pair is refused together and the launch shows up as `Opaque`.
+///
+/// Three cases: the four-word (with-timestamp) release, whose eight timestamp bytes this
+/// port has no clock for; the conditional-interrupt release, whose *"did it release?"* is
+/// engine state we do not model; and a one-word release whose registers were never pushed —
+/// `0` being a legal address, written-ness is asked for rather than assumed.
+#[test]
+fn a_completion_this_codec_cannot_express_refuses_the_whole_launch() {
+    let oracles =
+        require_oracle!("a_completion_this_codec_cannot_express_refuses_the_whole_launch");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let names: Vec<&String> = o
+            .ceruns
+            .keys()
+            .filter(|n| n.starts_with("refusesem_"))
+            .collect();
+        assert_eq!(
+            names.len(),
+            3,
+            "[{tag}] three named completion refusals — four-word, conditional-intr, and \
+             a release with nothing latched: {names:?}"
+        );
+        for name in names {
+            let got = decode_fresh(&o.ceruns[name]);
+            assert!(
+                !got.iter()
+                    .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+                "[{tag}] {name}: MUST NOT fire — a copy without its completion is a guest \
+                 that spins forever on work we did: {got:?}"
+            );
+            assert!(
+                got.contains(&PushMethod::Opaque),
+                "[{tag}] {name}: refused BY NAME, not skipped: {got:?}"
+            );
+        }
+    }
 }
 
 /// ★★★ **A CE `memset` run decodes to `CeWork::Fill`, with the driver's own pattern and

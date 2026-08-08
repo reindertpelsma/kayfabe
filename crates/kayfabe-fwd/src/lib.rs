@@ -3733,6 +3733,7 @@ pub fn apply_pushbuffer(
                 dst_target,
                 src_target,
                 work,
+                completion,
             } => {
                 // ★★★ DECISION 1 of 2 — EXECUTE.
                 //
@@ -3789,6 +3790,24 @@ pub fn apply_pushbuffer(
                         owner_pdb,
                         bytes: len,
                     }),
+                }
+                // ★★★ E10e — THE COMPLETION THIS LAUNCH RELEASES, appended **after** its
+                // own spans and in the same iteration, so `sem_releases` is ordered
+                // *behind* the bytes it certifies. `cpu_ce::write_completion` is the
+                // consumer, and its contract — write every payload, then signal, and never
+                // signal if a write refused — is what makes this the truthful half of
+                // `ce_executor_tree.md`'s rule 1.
+                //
+                // ⊘ **This is a DIFFERENT WORD from the `SemRelease` arm below**, four
+                // bytes apart on the channel that walls. RM releases the finishPayload
+                // through the *engine* class and, at the bottom of the same block, a
+                // *host*-class semaphore meaning only "HOST has read the methods"
+                // (`ogkm-580: channel_utils.c:250, 698-746, 838-840`). Until this arm
+                // existed only the host one was decodable — [`kayfabe_arch::CeCompletion`]
+                // carries the citation and the boot log that printed both addresses.
+                if let Some(c) = completion {
+                    proc.completion.observe(OsEventRef(c.addr.0 ^ c.payload))?;
+                    out.sem_releases.push((c.addr, c.payload));
                 }
             }
             kayfabe_arch::PushMethod::SemRelease { addr, payload } => {

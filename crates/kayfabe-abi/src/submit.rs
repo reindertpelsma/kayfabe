@@ -1796,6 +1796,22 @@ pub mod ce {
     /// hardware saying it finished, and it is the only signal in this module that our own
     /// code cannot produce.
     pub const LAUNCH_SEMAPHORE_RELEASE_ONE_WORD: u32 = 1 << 3;
+    /// `SET_SEMAPHORE_A_UPPER` — field `16:0` (`clc7b5.h:48`), i.e. semaphore address bits
+    /// `48:32`. ⊘ Masked rather than shifted whole: bits above `16:0` are not part of the
+    /// address, and carrying them would move a semaphore into a page nothing mapped.
+    pub const SET_SEMAPHORE_A_UPPER_MASK: u32 = 0x0001_FFFF;
+    /// `LAUNCH_DMA_SEMAPHORE_TYPE` — field `4:3` (`clc7b5.h:96`).
+    pub const LAUNCH_SEMAPHORE_TYPE_MASK: u32 = 0x3 << 3;
+    /// `LAUNCH_DMA_SEMAPHORE_TYPE_NONE` — value 0 (`clc7b5.h:97`). The launch releases
+    /// nothing; the `SET_SEMAPHORE_*` registers are not read at all.
+    pub const LAUNCH_SEMAPHORE_TYPE_NONE: u32 = 0;
+    /// `LAUNCH_DMA_SEMAPHORE_TYPE_RELEASE_FOUR_WORD_SEMAPHORE` — value 2, i.e. the
+    /// with-timestamp release (`clc7b5.h:100, :102`). Sixteen bytes: the payload plus a
+    /// **hardware timestamp** this port has no source for.
+    pub const LAUNCH_SEMAPHORE_TYPE_RELEASE_FOUR_WORD: u32 = 2 << 3;
+    /// `LAUNCH_DMA_SEMAPHORE_TYPE_RELEASE_CONDITIONAL_INTR_SEMAPHORE` — value 3
+    /// (`clc7b5.h:103`).
+    pub const LAUNCH_SEMAPHORE_TYPE_RELEASE_CONDITIONAL_INTR: u32 = 3 << 3;
     /// `LAUNCH_DMA_SRC_MEMORY_LAYOUT_PITCH` — field `7:7`, value 1
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:108`).
     pub const LAUNCH_SRC_PITCH: u32 = 1 << 7;

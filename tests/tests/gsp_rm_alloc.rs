@@ -717,6 +717,9 @@ fn the_shipped_arch_refuses_every_data_plane_seam() {
                 dst_target: kayfabe_arch::PhysTarget::LocalFb,
                 src_target: kayfabe_arch::PhysTarget::LocalFb,
                 work: kayfabe_arch::CeWork::Copy,
+                // `LAUNCH_DMA` here carries only `DATA_TRANSFER_TYPE`, so
+                // `SEMAPHORE_TYPE` is `_NONE` and the launch releases nothing (E10e).
+                completion: None,
             }),
             "★★ a whole copy-engine run must fire with the operands the RUN wrote — a \
              generation swapped underneath this answers with somebody else's method \

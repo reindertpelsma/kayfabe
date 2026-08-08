@@ -352,7 +352,7 @@ static void emit_ce_run_parts(const char *name, NvU32 sub, unsigned parts, NvU32
         printf(" 0x%08x", (unsigned) w[i]);
     printf("\n");
     printf("cedec %s parts=%u class=0x%x src=0x%llx dst=0x%llx len=0x%x count=0x%x "
-           "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u\n",
+           "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u semtype=%u\n",
            name, parts,
            (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, obj_class),
            (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_IN_UPPER, _UPPER, in_up) << 32)
@@ -367,7 +367,8 @@ static void emit_ce_run_parts(const char *name, NvU32 sub, unsigned parts, NvU32
            (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, flags),
            (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, flags),
            (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SRC_TYPE, flags),
-           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DST_TYPE, flags));
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DST_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, flags));
 }
 
 /* The whole five-run shape, which is what every accepted case is. */
@@ -446,7 +447,7 @@ static void emit_ce_fill_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_
     printf("cedec %s parts=%u class=0x%x src=0x0 dst=0x%llx len=0x%x count=0x0 "
            "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u "
            "map=%d consts=%d consta=0x%x constb=0x%x compsize=%u numdst=%u "
-           "dstx=%u dsty=%u dstz=%u dstw=%u\n",
+           "dstx=%u dsty=%u dstz=%u dstw=%u semtype=%u\n",
            name, CE_PART_ALL,
            (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B),
            (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_OUT_UPPER, _UPPER, out_up) << 32)
@@ -468,7 +469,108 @@ static void emit_ce_fill_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_
            (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_X, components),
            (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_Y, components),
            (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_Z, components),
-           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_W, components));
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_W, components),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, flags));
+}
+
+/*
+ * ★★★ E10e — ONE WHOLE CE MEMSET RUN **WITH ITS COMPLETION SEMAPHORE**: the exact block
+ * `_channelPushScrubMethodsBlock` / `channelPushMethodsBlock` emit, which is what the
+ * walling `memmgrTestCeUtils` channel submits.
+ *
+ * `[src]` `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:645, 671-673` and
+ * `:832, 838-840`. Three facts this corpus exists to pin, each of which a decoder gets
+ * wrong in a different way:
+ *
+ * 1. **The finishPayload is released through the ENGINE class**, not the host FIFO:
+ *    `SET_SEMAPHORE_A/B/PAYLOAD` (`NV_PUSH_INC_3U`, three consecutive methods at
+ *    0x240/0x244/0x248) plus `LAUNCH_DMA.SEMAPHORE_TYPE`.
+ * 2. **`SET_SEMAPHORE_A` is the address's HIGH half** (`_A_UPPER` is `16:0`) and `_B` the
+ *    low — the OPPOSITE order from the host FIFO's `SEM_ADDR_LO`/`_HI` run next door.
+ * 3. **`SEMAPHORE_TYPE` is what decides**, not the presence of the registers: the
+ *    `sem_none` case latches all three and asks for no release, and a decoder that read
+ *    written-ness instead of the field reports a completion the engine never writes.
+ *
+ * `push_sem` selects whether the three registers are pushed at all, so "asked for a
+ * release with nothing latched" is a case rather than an assumption.
+ */
+static void emit_ce_sem_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_len,
+                            NvU32 pattern, NvU32 components, NvU64 sem_addr, NvU32 payload,
+                            NvU32 flags, int push_sem)
+{
+    NvU32 w[32];
+    unsigned n = 0, i;
+    NvU32 out_up, out_lo, sem_up, sem_lo, pay;
+
+    w[n++] = hdr_inc(sub, NVC56F_SET_OBJECT, 1);
+    w[n++] = DRF_NUM(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B);
+
+    w[n++] = hdr_inc(sub, NVC7B5_SET_REMAP_CONST_A, 2);
+    w[n++] = DRF_NUM(C7B5, _SET_REMAP_CONST_A, _V, pattern);
+    w[n++] = DRF_NUM(C7B5, _SET_REMAP_CONST_B, _V, pattern);
+    w[n++] = hdr_inc(sub, NVC7B5_SET_REMAP_COMPONENTS, 1);
+    w[n++] = components;
+
+    out_up = DRF_NUM(C7B5, _OFFSET_OUT_UPPER, _UPPER, (NvU32) (dst >> 32));
+    out_lo = (NvU32) dst;
+    w[n++] = hdr_inc(sub, NVC7B5_OFFSET_OUT_UPPER, 2);
+    w[n++] = out_up;
+    w[n++] = out_lo;
+
+    w[n++] = hdr_inc(sub, NVC7B5_LINE_LENGTH_IN, 1);
+    w[n++] = DRF_NUM(C7B5, _LINE_LENGTH_IN, _VALUE, line_len);
+
+    /* ⊘ `NvU64_HI32` into `_A`, `NvU64_LO32` into `_B` — the driver's own order. */
+    sem_up = DRF_NUM(C7B5, _SET_SEMAPHORE_A, _UPPER, (NvU32) (sem_addr >> 32));
+    sem_lo = (NvU32) sem_addr;
+    pay    = DRF_NUM(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, payload);
+    if (push_sem) {
+        w[n++] = hdr_inc(sub, NVC7B5_SET_SEMAPHORE_A, 3);
+        w[n++] = sem_up;
+        w[n++] = sem_lo;
+        w[n++] = pay;
+    }
+
+    w[n++] = hdr_inc(sub, NVC7B5_LAUNCH_DMA, 1);
+    w[n++] = flags;
+
+    printf("cerun %s %u", name, n);
+    for (i = 0; i < n; i++)
+        printf(" 0x%08x", (unsigned) w[i]);
+    printf("\n");
+    printf("cedec %s parts=%u class=0x%x src=0x0 dst=0x%llx len=0x%x count=0x0 "
+           "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u "
+           "map=1 consts=1 consta=0x%x constb=0x%x compsize=%u numdst=%u "
+           "dstx=%u dsty=%u dstz=%u dstw=%u "
+           "pushsem=%d semtype=%u sem=0x%llx payload=0x%x\n",
+           name, CE_PART_ALL,
+           (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B),
+           (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_OUT_UPPER, _UPPER, out_up) << 32)
+                                 | (NvU64) DRF_VAL(C7B5, _OFFSET_OUT_LOWER, _VALUE, out_lo)),
+           (unsigned) DRF_VAL(C7B5, _LINE_LENGTH_IN, _VALUE,
+                              DRF_NUM(C7B5, _LINE_LENGTH_IN, _VALUE, line_len)),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SRC_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DST_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_CONST_A, _V,
+                              DRF_NUM(C7B5, _SET_REMAP_CONST_A, _V, pattern)),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_CONST_B, _V,
+                              DRF_NUM(C7B5, _SET_REMAP_CONST_B, _V, pattern)),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_X, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_Y, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_Z, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_W, components),
+           push_sem,
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, flags),
+           /* ★ NVIDIA's own extraction of the two halves, recombined in NVIDIA's own
+            * order — so a Rust decoder that swapped `_A` and `_B` disagrees here. */
+           (unsigned long long) (((NvU64) DRF_VAL(C7B5, _SET_SEMAPHORE_A, _UPPER, sem_up) << 32)
+                                 | (NvU64) DRF_VAL(C7B5, _SET_SEMAPHORE_B, _LOWER, sem_lo)),
+           (unsigned) DRF_VAL(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, pay));
 }
 
 int main(void)
@@ -845,9 +947,28 @@ int main(void)
      * refusal and an acceptance differ by exactly the field named in the case name.
      */
     {
+        /*
+         * ★★★ MEASURED 2026-08-08 while adding the completion decode: this word used to
+         * carry `_SEMAPHORE_TYPE, _RELEASE_ONE_WORD_SEMAPHORE` — copied from
+         * `kayfabe_isolate_host::rm::ce_pushbuffer`'s flags — while **neither**
+         * `emit_ce_run_parts` nor `emit_ce_fill_run` ever pushed `SET_SEMAPHORE_A/B/PAYLOAD`.
+         * So every accepted case in this corpus asked the engine for a release into
+         * whatever those three registers happened to hold, which on real silicon is a
+         * four-byte write to an address nobody wrote. `rm::ce_pushbuffer` pushes the three
+         * registers **and** sets the flag; this emitter set the flag alone.
+         *
+         * ⊘ It was invisible for exactly one reason: nothing read `SEMAPHORE_TYPE`. The
+         * moment `Ga10xPushbuffer::ce_completion` did, every launch in the corpus stopped
+         * firing — which is the decoder being right about a harness that was wrong.
+         *
+         * The completion is a fact with its OWN corpus (`emit_ce_sem_run`, the `sem_*` and
+         * `refusesem_*` cases), where the flag and the registers travel together. Here the
+         * subject is the operands, so the launch asks for no release and the shape is
+         * self-consistent.
+         */
         NvU32 base = DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _NON_PIPELINED)
                    | DRF_DEF(C7B5, _LAUNCH_DMA, _FLUSH_ENABLE, _TRUE)
-                   | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, _RELEASE_ONE_WORD_SEMAPHORE)
+                   | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, _NONE)
                    | DRF_DEF(C7B5, _LAUNCH_DMA, _SRC_MEMORY_LAYOUT, _PITCH)
                    | DRF_DEF(C7B5, _LAUNCH_DMA, _DST_MEMORY_LAYOUT, _PITCH)
                    | DRF_DEF(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, _FALSE)
@@ -1046,6 +1167,46 @@ int main(void)
                              (fill_base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_MULTI_LINE_ENABLE))
                                  | DRF_DEF(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, _TRUE),
                              1, 1);
+
+            /*
+             * ★★★ E10e — THE COMPLETION CORPUS. `sem_rm_memset` is the wall's own
+             * submission: RM's 1-byte map, pattern zero, four bytes, and the finishPayload
+             * released at the address the guest's own `channelWaitForFinishPayload`
+             * printed — `[measured 2026-08-08, boot run_p2_c89899a]`
+             * `semaVA=0x42006c004 target=0x1`.
+             */
+            {
+                NvU32 sem_one = fill_base
+                              | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE,
+                                        _RELEASE_ONE_WORD_SEMAPHORE);
+                NvU32 sem_four = fill_base
+                               | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE,
+                                         _RELEASE_FOUR_WORD_SEMAPHORE);
+                NvU32 sem_cond = fill_base
+                               | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE,
+                                         _RELEASE_CONDITIONAL_INTR_SEMAPHORE);
+                emit_ce_sem_run("sem_rm_memset", 2, 0x22000, 4, 0u, map_rm,
+                                0x42006c004ULL, 1u, sem_one, 1);
+                /* ★ A semaphore address that USES the `16:0` upper field: a decoder that
+                 * took the whole `_A` word, or that swapped the halves, lands elsewhere. */
+                emit_ce_sem_run("sem_high_addr", 2, 0x22000, 0x40,
+                                0x0403UL | 0x02010000UL, map_rm,
+                                0x0001AAAA55550000ULL, 0xDEADBEEFu, sem_one, 1);
+                /* ⊘ NON-VACUITY: all three registers latched, and `SEMAPHORE_TYPE_NONE`.
+                 * A decoder keyed on written-ness instead of the field reports a
+                 * completion the engine never writes. */
+                emit_ce_sem_run("sem_none_despite_registers", 2, 0x22000, 0x40,
+                                0x0403UL | 0x02010000UL, map_rm,
+                                0x42006c004ULL, 7u, fill_base, 1);
+                /* ⊘ The refusals: two release kinds this codec cannot express, and a
+                 * one-word release whose registers were never pushed. */
+                emit_ce_sem_run("refusesem_fourword", 2, 0x22000, 0x40,
+                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_four, 1);
+                emit_ce_sem_run("refusesem_condintr", 2, 0x22000, 0x40,
+                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_cond, 1);
+                emit_ce_sem_run("refusesem_nolatch", 2, 0x22000, 0x40,
+                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_one, 0);
+            }
 
             printf("remap COMPONENT_SIZE_ONE %u\n",
                    (unsigned) NVC7B5_SET_REMAP_COMPONENTS_COMPONENT_SIZE_ONE);

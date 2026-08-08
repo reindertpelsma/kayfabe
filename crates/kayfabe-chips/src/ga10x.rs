@@ -1060,6 +1060,60 @@ impl Ga10xPushbuffer {
             submit::ce::SET_REMAP_CONST_A => Some(8),
             submit::ce::SET_REMAP_CONST_B => Some(9),
             submit::ce::SET_REMAP_COMPONENTS => Some(10),
+            // ★★★ E10e — the ENGINE-class completion semaphore. Three consecutive methods
+            // at 0x240/0x244/0x248, which is why RM writes them with one `NV_PUSH_INC_3U`
+            // (`ogkm-580: channel_utils.c:671-673, :838-840`). ⚠ `_A` is the address's HIGH
+            // half; see `kayfabe_arch::CeCompletion`.
+            submit::ce::SET_SEMAPHORE_A => Some(11),
+            submit::ce::SET_SEMAPHORE_B => Some(12),
+            submit::ce::SET_SEMAPHORE_PAYLOAD => Some(13),
+            _ => None,
+        }
+    }
+
+    /// ★★★ **Decode a launch's engine-class completion semaphore** — `Some(Some(..))` for a
+    /// one-word release, `Some(None)` for *"this launch releases nothing"*, and `None` for a
+    /// release this codec cannot express, which refuses the whole launch.
+    ///
+    /// # ⊘ Why an unexpressible release refuses the COPY as well
+    ///
+    /// A launch and its release are one act: the engine writes the payload **after** the
+    /// copy retires, which is the only ordering that makes a completion truthful. Reporting
+    /// the copy while dropping the release would produce bytes that move and a semaphore that
+    /// never advances — the guest spins forever on a copy we actually performed, and our own
+    /// logs say we served it. Refusing the pair is loud in the one place a boot can see it.
+    /// (Same discipline as `MULTI_LINE_ENABLE`, one field over.)
+    ///
+    /// The two refusals, each a distinct thing:
+    /// - **`RELEASE_FOUR_WORD_SEMAPHORE`** (`clc7b5.h:100`) — sixteen bytes, of which eight
+    ///   are a **hardware timestamp** the engine samples. This port has no such clock, and
+    ///   writing the payload while leaving the timestamp words stale is a completion a
+    ///   timestamp-reading guest would misdate. `RELEASE_CONDITIONAL_INTR_SEMAPHORE`
+    ///   (value 3) is refused with it: the release is conditional on engine state we do not
+    ///   model, so *"did it release?"* is not answerable.
+    /// - **A one-word release whose `SET_SEMAPHORE_*` registers were never latched.** `0` is
+    ///   a legal payload and a legal address, so written-ness is asked for separately — the
+    ///   same rule the offsets already follow, and for the sharper reason: an unlatched
+    ///   address would send a completion to physical/virtual zero.
+    fn ce_completion(
+        state: &MethodState,
+        subch: usize,
+        flags: u32,
+    ) -> Option<Option<kayfabe_arch::CeCompletion>> {
+        match flags & submit::ce::LAUNCH_SEMAPHORE_TYPE_MASK {
+            submit::ce::LAUNCH_SEMAPHORE_TYPE_NONE => Some(None),
+            submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD => {
+                let hi = state.latched(subch, 11)?;
+                let lo = state.latched(subch, 12)?;
+                let payload = state.latched(subch, 13)?;
+                Some(Some(kayfabe_arch::CeCompletion {
+                    addr: GpuVa(
+                        (u64::from(hi & submit::ce::SET_SEMAPHORE_A_UPPER_MASK) << 32)
+                            | u64::from(lo),
+                    ),
+                    payload: u64::from(payload),
+                }))
+            }
             _ => None,
         }
     }
@@ -1243,6 +1297,10 @@ impl Ga10xPushbuffer {
         if !dst.is_multiple_of(element) {
             return None;
         }
+        // ★★★ E10e — the engine-class completion, decoded HERE because it is part of this
+        // launch and not a method beside it. A release this codec cannot express refuses the
+        // whole launch; see `ce_completion`.
+        let completion = Self::ce_completion(state, subch, flags)?;
         // ★ Non-`?`: the phys-mode registers are NOT required operands. An operand may be
         // physical and never have written its target (the engine then reads the reset
         // value, `LOCAL_FB`), so demanding it would refuse a copy real hardware performs —
@@ -1256,6 +1314,7 @@ impl Ga10xPushbuffer {
             dst_target: Self::phys_target(state.latched(subch, 7)),
             src_target: Self::phys_target(state.latched(subch, 6)),
             work,
+            completion,
         })
     }
 

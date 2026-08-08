@@ -831,6 +831,19 @@ pub enum PushMethod {
         src_target: PhysTarget,
         /// What the engine is being asked to do.
         work: CeWork,
+        /// ★★★ **The completion this launch releases — the ENGINE-class semaphore, and it
+        /// is part of the launch rather than a method beside it.**
+        ///
+        /// `LAUNCH_DMA.SEMAPHORE_TYPE` decides whether the engine writes
+        /// `SET_SEMAPHORE_PAYLOAD` to `SET_SEMAPHORE_A:B` **after this copy retires**
+        /// (`ogkm-580: clc7b5.h:99`). Carrying it inside the launch is what makes *"signal
+        /// only after the bytes are in place"* expressible at all: a separate
+        /// [`PushMethod::SemRelease`] would be an unordered sibling, and an executor could
+        /// serve it first without anything looking wrong.
+        ///
+        /// `None` for `SEMAPHORE_TYPE_NONE` — a copy that releases nothing, which is most
+        /// of them.
+        completion: Option<CeCompletion>,
     },
     /// `SEM_RELEASE` / `SET_SEMAPHORE_A/B` + payload / finishPayload: the completion —
     /// a semaphore address in a VAS advanced to `payload`. Extracted for the
@@ -852,6 +865,50 @@ pub enum PushMethod {
     /// Any method this arch does not model — passed through verbatim, acted on by no
     /// core code (trap-min, decision #6). NEVER guessed into one of the above.
     Opaque,
+}
+
+/// ★★★ **A copy engine's own completion semaphore** — the word the guest polls while it
+/// waits for a CE operation, and the fact that was **undecodable in this port until E10e**.
+///
+/// # ⚠ THE MEASUREMENT THAT MAKES THIS LOAD-BEARING, and it is a four-byte trap
+///
+/// `[src]` `ogkm-580: channel_utils.c:645, 671-673` (the scrub block) and `:832, 838-840`
+/// (the general CeUtils block): RM releases its **finishPayload** — the word
+/// `channelWaitForFinishPayload` spins on — through the **engine class**
+/// (`NVC8B5_SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA.SEMAPHORE_TYPE`), at
+/// `pbGpuVA + finishPayloadOffset`.
+///
+/// At the **bottom** of the very same pushbuffer block (`:698-746`) it *also* releases a
+/// **host-FIFO** semaphore (`NVC86F_SEM_EXECUTE` / `NV906F_SEMAPHORED`) at
+/// `pbGpuVA + semaOffset` — a different word, four bytes lower
+/// (`finishPayloadOffset = semaOffset + CHANNEL_HOST_SEMAPHORE_SIZE`, `:250`), meaning
+/// *"HOST has read all the methods"* and **not** *"the copy finished"*.
+///
+/// ⊘ [`PushMethod::SemRelease`] decodes only the **host** one. `[measured 2026-08-08, boot
+/// `run_p35_84d857d`]` on the walling CeUtils channel those two words are guest RAM
+/// `0x2f2c_b000` (host) and `0x2f2c_b004` (finishPayload), and the guest's own probe printed
+/// `semaVA=0x42006c004 semaOffset=0x6c000`. ⇒ **an executor that fed the releases it could
+/// already decode into a completion write would advance `…b000`, log a completion, and leave
+/// the guest spinning on `…b004`.** That is `#12`'s where-mistake displaced by four bytes,
+/// and it is why this type exists rather than a reuse of `SemRelease`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeCompletion {
+    /// The semaphore address, in the same address space as the launch's operands —
+    /// `SET_SEMAPHORE_A` (bits `48:32`) over `SET_SEMAPHORE_B` (bits `31:0`).
+    ///
+    /// ⚠ `A` is the **HIGH** half. The host-FIFO run next door is `SEM_ADDR_LO` then
+    /// `_HI`, i.e. the opposite order, and both are five/three-word incrementing runs of
+    /// consecutive methods — so a decoder written from one and applied to the other builds
+    /// a plausible address out of the halves swapped.
+    pub addr: GpuVa,
+    /// The payload the engine writes there when the copy retires — `SET_SEMAPHORE_PAYLOAD`,
+    /// zero-extended from its 32 bits.
+    ///
+    /// ⊘ 32 bits and not 64: `SET_SEMAPHORE_PAYLOAD_UPPER` (`clc7b5.h`, method `0x24C`) is a
+    /// separate register this codec does not latch, and it is only consulted by the
+    /// four-word release — which is refused rather than decoded, so the upper half can never
+    /// be silently needed.
+    pub payload: u64,
 }
 
 /// One pushbuffer range to walk: a contiguous run of method words a GPFIFO entry
