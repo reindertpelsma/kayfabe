@@ -5413,3 +5413,190 @@ describing the link can be caught moving, on one box, with no second part to ren
 | `WantedTable::BusGetInfoV2`; served universe **26 → 27**, attributed | `kayfabe-device/src/inittables.rs` |
 | the two R22 captures and the guest trace | `traces/real_ga106/rmladder_r22_businfo_{sweep,loaded}_real_ga106.txt`, `cuinit_trace_guest_gt1430_0dbbabc.txt` |
 | a citation `truncated_row_reads` refused — §14.29's `ga106.h:6243` lines now name `0x20800a4c` | `smcmode.rs`, this file |
+
+### 14.31 ★★★★ `0x2080182a` SERVED — the refusal that "proved caller-dependence" was the INSTRUMENT'S OWN SEED, and the new wall has NO LEDGER ENTRY
+
+#### ⊘⊘ First, the refutation of the framing I was handed — and it is §14.30's, which is mine as much as my predecessor's
+
+§14.30 closed with a finding stated in two clauses, one measured and one inferred:
+
+> *"`[measured]` `rmladder --probe-ctrl 0x2080182a:112`, twice, on the real GA106: `refused
+> Other(86)`, both times. So on the same physical part, in the same hour, **libcuda gets
+> `NV_OK` and a bare Subdevice gets `0x56`.** The handler is a `_DISPATCH`
+> (`g_subdevice_nvoc.c:6809`), so the answer depends on caller state that `rmladder` does not
+> reproduce."*
+
+★ **The two callers never issued the same call.** `capType` is an **`[IN]`** field
+(`ogkm-580: ctrl2080bus.h:1256-1258`, struct at `:1311-1315`), and `probe_ctrl` seeds *every*
+byte with `0xCD` — so R18 asked for `capType = 0xCDCDCDCD`, which is none of
+`_CAPTYPE_SYSMEM(0)` / `_GPU(1)` / `_P2P(2)` (`:1226-1228`). libcuda hands RM a **zeroed**
+buffer, so it asks for `_CAPTYPE_SYSMEM`. Nothing about the caller was ever in play.
+
+⇒ ★★ **The `0xCD` sentinel is sound only on a pure-`[OUT]` struct.** On a struct with an
+`[IN]` field it is an input **mutation**, and the instrument perturbs the thing it measures —
+`probe_ctrl`'s own doc-comment reasons entirely about *"whether RM **touched** the buffer"*
+and never once about what the buffer *says*. Same family as §14.30's own lesson (the
+perturbation is the instrument), with the sign flipped: there a perturbation was needed to see
+a value move; here an unintended perturbation manufactured a refusal.
+
+⚠ And the `_DISPATCH` was never the decider. This control's flags are `0x40048` =
+`NON_PRIVILEGED | ROUTE_TO_PHYSICAL | PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST`
+(`ogkm-580: g_subdevice_nvoc.c:6806-6819`, `rmapi/control.h:202-308`), so on a bare-metal GSP
+client the kernel RM **never runs the local arm at all** — it RPCs the whole struct to GSP-RM,
+which is exactly why the boot ledger carries `unserviced fn 76 cmd 0x2080182a` once. The
+`_92bfc3` arm NVOC installs for every non-VF variant is a bare `return NV_ERR_NOT_SUPPORTED`
+(`g_subdevice_nvoc.h:6999-7002`) that exists **because it should never run**. ⇒ Reading a HAL
+suffix and inferring caller-dependence skipped the two flags that say the HAL is bypassed.
+★ A `_DISPATCH` suffix is a fact about NVOC codegen, not about who is calling.
+
+#### `[measured 2026-08-08, real GA106 `GPU-d0913685`, driver 580.159.04 Open, rev `1d5704dd9`]` R23
+
+`rmladder --atomics-probe` — eight arms, on the **same bare Subdevice R18 used**, allocating
+nothing. Hypotheses written down before the run: H1 = caller state (every arm refuses),
+H2 = the seed (the `0/1/2` arms answer). Evidence:
+`traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`.
+
+| arm | `capType` | tail seed | result |
+|---|---|---|---|
+| R18 replay | `0xCDCDCDCD` | `0xCD` | refused `0x56` — §14.30 reproduced exactly |
+| captype poisoned only | `0xCDCDCDCD` | `0x00` | refused `0x56` |
+| ★ **SYSMEM, tail poisoned** | `0` | `0xCD` | **`NV_OK`, body WRITTEN** |
+| libcuda replay | `0` | `0x00` | `NV_OK`, body indistinguishable by construction |
+| GPU | `1` | `0xCD` | refused `0x56` |
+| P2P | `2` | `0xCD` | refused `0x56` |
+| undeclared | `3` | `0xCD` | refused `0x56` |
+| SYSMEM, `dbdf` poisoned | `0` | `0xCD` | `NV_OK`, `dbdf` echoed back `0xCDCDCDCD` |
+
+**H1 is dead and H2 holds.** The 2x2 is what separates *"the captype is invalid"* from *"a
+seeded byte anywhere is refused"*: poisoning only the tail still answers, poisoning only
+`capType` still refuses.
+
+★★★ **Three further facts the seeded arm bought, none of which the committed trace could
+give.** (1) The reply is thirteen ops at `bSupported = 0x00, attributes = 0x00000000`, **read
+out of a `0xCD` buffer** — a positive reading, where the trace's all-zero `out=` decides
+nothing (`traces/real_ga106/README.md`). (2) RM writes **five bytes of every eight-byte
+entry**: the three padding bytes after `bSupported` come back `0xCD`. (3) `dbdf` is `[IN]`
+and untouched, as the header says (*"Used only for the `_CAPTYPE_P2P`"*).
+
+★ And a second, independent source agrees on the value: RM's **own** vGPU-guest arm writes
+exactly this — `subdeviceCtrlCmdBusGetPcieSupportedGpuAtomics_VF` loops all thirteen ops to
+`NV_FALSE / 0x0` under the comment *"Atomics not supported in VF. See bug 3497203."*
+(`ogkm-580: kern_bus_ctrl.c:693-707`). NVIDIA's answer for a virtualized GPU is this port's
+answer, arrived at independently.
+
+⊘ **Why this zero is not the `0x20802a08` zero.** That one was decoded out of an *unmeasured*
+row and became a buffer size with a hardware DMA writer downstream. This one is measured,
+corroborated, and its failure direction is conservative: `bSupported = FALSE` denies a
+capability, so the driver takes a fallback path. Nothing here can produce a wrong `TRUE`.
+
+#### ⊘ What is REFUSED, and why the refusal is the measurement rather than a gap
+
+`_CAPTYPE_GPU` and `_CAPTYPE_P2P` are **declared in the header and refused by the hardware**.
+So this port refuses every captype but `SYSMEM`, **by name**. ⊘ Answering them "all thirteen
+unsupported" would be a *stronger* claim than a real GA106 makes, and the difference is
+observable: `NV_OK` where hardware says `0x56`.
+
+⊘ **No chip row.** Whether a GPU atomic completes to coherent sysmem depends on the **root
+complex** being a PCIe AtomicOp completer, so this is `PCIE_GEN_INFO`'s species, not
+`GPU_GEN`'s. `GpuAtomicOp::none_supported()` takes **no chip argument** — a compile-time
+statement of that, in the shape §14.30 established.
+
+#### The hazard check, run first, in the direction that has bitten three times
+
+*"What is keyed on `0x2080182a` being absent?"* — **nothing.** Its only mention in the tree
+was `capability.rs:750` (already permitted, `Origin::Nvproxy`), and its flags carry neither
+`RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor `_CACHEABLE_BY_INPUT` (`0x20000`), so it is not a
+`sticky::BRANCH_A_CACHEABLE` row.
+
+#### `[measured 2026-08-08, boots `atom1431_ff7a0ea` and `gt1431_ff7a0ea`, both stamps `ff7a0eae9…`, shipping config, `probe-arm set: EMPTY`, STOCK module]` THE WALL IS DOWN
+
+```text
+nvkvm: control 0x2080182a result 0x00000000 x1     ← served, and GONE from unserviced
+```
+
+`cup2`, verbatim:
+
+```text
+SMI_RC=0
+=== cup2: run ===
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+CUP2_RC=1
+```
+
+#### ⊘⊘⊘ AND `cuInit` STILL RETURNS 100 — but this time the ledger POINTS AT THE WRONG CONTROL
+
+`traces/real_ga106/cuinit_trace_guest_gt1431_ff7a0ea.txt`, the tail:
+
+```text
+0x20801803  status=0x00000000
+0x2080182a  status=0x00000000     ★ §14.30's wall, now SERVED
+0x2080012f  status=0x00000056     ← GPU_QUERY_ECC_STATUS, 1464 bytes, IN the ledger
+0x20801303  status=0x00000056     ★★ FB_GET_INFO_V2, 7 entries — NOT in the ledger at all
+FREE ×3 ; cuInit(0) -> 100
+```
+
+★★★★ **The committed real-hardware trace clears one and convicts the other, and it is the
+opposite way round from what the ledger suggests.**
+
+- `0x2080012f` `NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS` (`ogkm-580: ctrl2080gpu.h:1148`) is
+  `unserviced fn 76` in our boot — and **a real GA106 answers it `status=0x00000056` too**
+  (`cuinit_ioctl_trace_real_ga106.txt:49`). Our refusal is **correct**, libcuda tolerates it,
+  and it is not the wall. ★ This is the first time the real trace has let us *clear* a
+  refusal rather than demand a serve: an entry in the unserviced ledger is not automatically
+  a gap.
+- `0x20801303` `NV2080_CTRL_CMD_FB_GET_INFO_V2` (`ctrl2080fb.h:459`) with the seven indices
+  `{0x0b, 0x19, 0x1b, 0x18, 0x0d, 0x17, 0x08}` is answered **`NV_OK`** by a real GA106 on the
+  **byte-identical request** (`:50`). **That is the wall.**
+
+★★★ **AND IT HAS NO LEDGER ENTRY IN EITHER DIRECTION.** `[measured]`
+`grep -c "unserviced fn 76 cmd 0x20801303"` = **0**, and there is no
+`control 0x20801303 result …` line either: the command **never reaches the emulated GSP**.
+The guest's own kernel refuses it out of its own state — `kfbGetInfo` resolves most indices
+locally and forwards only its `default:` arm, the same one-of-N shape as `GPU_GET_INFO_V2`'s
+ten-of-eleven and `BUS_GET_INFO_V2`'s five-of-six. Three earlier `0x20801303` calls in the
+**same trace** are answered `NV_OK` (indices `0x08`, `0x3b`, `{0x16,0x09,0x10}`) — so the
+control is **argument-keyed** and the port has never been asked about it.
+
+⇒ ⊘⊘ **The unserviced ledger — this project's primary rung-picking instrument — is
+structurally blind to this wall**, and worse, it offers a plausible decoy one line above it.
+`refusal_invisible_in_the_ledger` recorded *"a served-but-refused command never appears in the
+unserviced ledger"*; this is one layer further out — **never asked at all**. ★ The only
+instrument that found it is the in-guest interposer diffed against the committed
+real-hardware trace, which is exactly what that pair is for.
+
+#### The next rung, fully specified
+
+`FB_GET_INFO_V2`'s six unanswered indices, with the real GA106's own reply
+(`cuinit_ioctl_trace_real_ga106.txt:50`, re-derived from the raw bytes and **not** from this
+paragraph):
+
+| index | real GA106 `data` |
+|---|---|
+| `0x0b` | `0x000000c0` |
+| `0x19` | `0x00000003` |
+| `0x1b` | `0x00240000` |
+| `0x18` | `0x00000000` |
+| `0x0d` | `0x00000011` |
+| `0x17` | `0x00000000` |
+| `0x08` | `0x0000c000` — ★ already agreed: our guest's first call answers this exactly |
+
+⚠ **Do not transcribe these into a chip row before asking which of them the guest kernel
+answers itself.** §14.30's trap has now fired three times (`GPU_GET_INFO_V2` ten-of-eleven,
+`BUS_GET_INFO_V2` five-of-six) and this control has the same shape. The first move is
+`ogkm-580: kern_fb_ctrl.c`'s switch, not the table — and then the `rmladder` equivalent of
+R21/R22 for `FB_GET_INFO_V2`, because two of these words (`0x1b` = `0x00240000`, `0x0b` =
+192) look like memory-geometry facts that a **rented board's FB size** would poison exactly
+the way `PCIE_GEN_INFO` poisons a chip row.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| R23 `--atomics-probe` — the 2x2 that separates the seed from the caller, plus the three declared captypes and one undeclared, both hypotheses written before the run | `crates/kayfabe-isolate-host/src/bin/rmladder.rs` |
+| `kayfabe_abi::gpuatomics` — the ABI, `GpuAtomicOp::none_supported()` (no chip argument), the request-editing answer, two named refusals, 8 unit tests | `crates/kayfabe-abi/src/gpuatomics.rs` |
+| `WantedTable::BusGetPcieSupportedGpuAtomics`; served universe **27 → 28**, attributed | `kayfabe-device/src/inittables.rs` |
+| 7 integration tests over a `0xAA`-poisoned request, incl. the padding assertions | `kayfabe-device/tests/bus_get_pcie_supported_gpu_atomics.rs` |
+| ★ §14.30's `BusGetInfoV2` had **no reply-plane test at all** — 6 written here so its differential exemption is true rather than quiet | `kayfabe-device/tests/bus_get_info_v2.rs` |
+| ⊘ **three inherited RED gates repaired, each attributed** (`[measured]` all three fail at `78bee9e`): the `cap1b` closure set + both non-vacuity counts; the claimed-call pin `87 → 95` where the **whole +8 is §14.29's `0x20800a4c`** and this rung contributes **zero**; and the size-evidence gate, exempted **with the reason it demands** rather than deleted | `cap1b_differential.rs`, `replay_conformance.rs` |
+| ★ the "which copy runs" trap found again — on the **payload**: the hook pushed the box's 445-line interposer where the repo's is 666, so §14.29's `NVSWEEP_GPUINFO` was never reachable through it. Repo copy now wins and prints its md5; a missing `gtrace.txt` is now shouted rather than exited-0 over | `scripts/bench/guest_cuinit_trace.sh` |
+| the R23 capture and the new guest trace | `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`, `cuinit_trace_guest_gt1431_ff7a0ea.txt` |

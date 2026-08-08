@@ -226,3 +226,38 @@ them by name.
 32 of the 70 indices itself and forwards only the `default:` arm, so a row here is a claim
 about GSP-RM **only** for an index the kernel forwards. For the other 32 it is the *host
 kernel's* answer and says nothing about what a GSP would return.
+
+## ★★★ §14.29–§14.31's additions, and the one that CLEARS a refusal
+
+All read from `GPU-d0913685-1ec0-805a-e319-43a901a0e1ff` — the **second** physical GA106,
+not the `GPU-e28d7776` of the provenance table above.
+
+| file | boundary | what it is |
+|---|---|---|
+| `gpuinfo_bisect_guest_gis1_e6ed6bc.txt`, `cuinit_bisect_guest_w1429_49b182a.txt` | ioctl, **inside the guest** | §14.29's `NVSWEEP_GPUINFO` bisect, before and after |
+| `rmladder_r22_businfo_{sweep,loaded}_real_ga106.txt` | ioctl, host | §14.30: all 52 `BUS_GET_INFO_V2` indices one call each, plus `0x2d` ×16 with the PCIe link **idle** and **under load** — the pair is the measurement, neither run alone is |
+| ★ `rmladder_r23_atomics_real_ga106.txt` | ioctl, host | §14.31: `BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS`, eight arms over `{capType} × {tail seed}` |
+| `cuinit_trace_guest_gt143{0,1}_*.txt` | ioctl, **inside the guest** | ⊘ not a real GA106 — this port under the same interposer, the differential partner of `cuinit_ioctl_trace_real_ga106.txt` |
+
+### ⊘⊘ `rmladder_r23_atomics_real_ga106.txt` is the file that says the INSTRUMENT can be the finding
+
+`--probe-ctrl` seeds every params byte `0xCD` so that *"RM wrote nothing"* is distinguishable
+from *"RM wrote zeros"*. On `0x2080182a` that seed lands in **`capType`, an `[IN]` field**, and
+the resulting `NV_ERR_NOT_SUPPORTED` was read for a rung as evidence that the control depends
+on caller state. It does not: the same bare Subdevice answers `NV_OK` for `capType = 0`.
+
+⇒ ★ **Before trusting any `--probe-ctrl` row in this directory, check the control's params
+struct for `[IN]` fields.** The seed is sound on a pure-`[OUT]` struct and is an input
+mutation on any other. R21's `GPU_GET_INFO_V2` and R22's `BUS_GET_INFO_V2` rows are safe
+because both rungs *build* their request rather than seeding it whole; a bare `--probe-ctrl`
+row is not.
+
+### ★★★ And `cuinit_ioctl_trace_real_ga106.txt` can CLEAR a refusal, not only demand a serve
+
+`[measured 2026-08-08]` `:49` shows a real GA106 answering `0x2080012f`
+`GPU_QUERY_ECC_STATUS` with **`status=0x00000056`**. This port refuses it too, and it appears
+in every boot's `unserviced fn 76` ledger — so that ledger entry is **not a gap**, and a rung
+picked from the ledger alone would have chased it. The wall on that same boot is `0x20801303`
+`FB_GET_INFO_V2`, which appears in the ledger **not at all** because the guest's own kernel
+never forwards it. ⊘ The ledger is an instrument for what reaches the emulated GSP, and the
+wall need not be there.
