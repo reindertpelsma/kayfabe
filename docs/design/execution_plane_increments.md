@@ -5895,3 +5895,203 @@ better host for the suite as well as the bench.
   it failed once, at 13.4 s, **under full-suite contention**. That is
   `flake_rate_depends_on_core_count` pointed the other way — a big box does not only hide
   races, a *loaded* one exposes them — and it is a real handoff, not a dismissal.
+
+### 14.33 ★★★★ `CE_GET_ALL_PHYSICAL_CAPS` SERVED — and §14.32's probe plan could never have run, on a control §14.32 read at the wrong boundary
+
+`[measured 2026-08-09, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-d0913685`, host
+driver 580.159.04 Open), boots `ce1433_0de5ddb` and `gt1433_0de5ddb`, both
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` stamped
+`kayfabe-rev:0de5ddb70a1509ac00ab66e4b833043f604ae524`, shipping config, STOCK guest module]`.
+
+#### ⊘⊘ First, the refutation of the framing I was handed — and it is TWO refutations of one paragraph
+
+§14.32 closed by specifying this rung completely: the id to serve, the reply bytes, and the
+instrument. It got the **id** right, and then got both of the other two wrong in ways that
+would each have cost a rung.
+
+##### 1. ★★★ The probe it specified is sound on the struct and CANNOT RUN
+
+> *"`rmladder --probe-ctrl 0x20802a0b:136` is sound on this struct (§14.31's `[IN]`-field
+> trap does **not** apply — there is no `[IN]` field) and is the cheap instrument that turns
+> the `capsTbl[4..63]` zeros from ambiguous into positive."*
+
+Every clause is true, and §14.31's trap really is disarmed. `[measured 2026-08-09, real GA106
+`GPU-d0913685`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`:
+
+```text
+info  R18 0x20802a0b    = refused Other(86) (no value measured)
+★     R18 0x20802a0a    = NV_OK, 136 bytes: e303e303e203e203 00…00 0f00000000000000
+```
+
+`0x20802a0b`'s export flags are `0x101d0` (`ogkm-580: g_subdevice_nvoc.c:7705-7718`) —
+`GPU_LOCK_DEVICE_ONLY(0x10) | ROUTE_TO_PHYSICAL(0x40) | INTERNAL(0x80) |
+API_LOCK_READONLY(0x100) | GSP_PLUGIN_FOR_VGPU_GSP(0x10000)` — and they carry **neither**
+`PRIVILEGED(0x4)` **nor** `NON_PRIVILEGED(0x8)`, which is `RMCTRL_FLAGS_KERNEL_PRIVILEGED`
+(`ogkm-580: control.h:170-247`): refused to every usermode client including root.
+
+⊘ **That precondition was already written down**, in `probe_ctrl`'s own doc comment, by the
+rung that first hit it on `0x20802a08`. Nobody had to discover it.
+
+⇒ ★★ **Checking that an instrument is sound on the DATA is not checking that it can reach
+the SUBJECT.** Two preconditions; clearing the one that bit you last says nothing about the
+other. For an RM control the second is one grep of the export row's flags.
+
+⊘⊘ And the reachable sibling cannot answer it either. `0x20802a0a` carries `NON_PRIVILEGED`
+and does answer `NV_OK` — but `subdeviceCtrlCmdCeGetAllCaps_IMPL` opens with
+`portMemSet(pCeCapsParams, 0, sizeof(*pCeCapsParams))`
+(`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce_shared.c:312`) **before** it forwards. The
+`0xCD` seed — the entire mechanism that separates *"wrote zeros"* from *"wrote nothing"* — is
+destroyed by the callee, and `[measured]` not one `0xCD` byte came back. ★ The seed
+instrument is **blind by construction on this control**, and `capsTbl[4..63]`'s zeros are
+still unmeasured at the physical boundary. No usermode instrument can measure them.
+
+##### 2. ★★★ The reply table it published is the reply of the control it correctly said NOT to serve
+
+§14.32's table is headed *"The real GA106's own reply (`cuinit_ioctl_trace_real_ga106.txt:62`)"*
+and line 62 is **`0x20802a0a`** — the guest kernel's composed answer, one boundary above the
+id being served. That is the very trap the same section named in bold two paragraphs earlier
+(*"a table read at one boundary does not describe the boundary below"*), applied to the id
+and then not applied to the bytes.
+
+★ The bytes turn out to be right, and having **proved** that is worth more than having
+inherited it. `subdeviceCtrlCmdCeGetAllCaps_IMPL` (`kernel_ce_shared.c:282-336`) post-processes
+the physical reply with exactly two operations and **both are monotone ORs**:
+
+- `pCeCapsParams->present |= BIT64(kceInst)` for each non-stubbed `KernelCE` (`:329`);
+- `kceAssignCeCaps_HAL(…, capsTbl[kceInst])` (`:331`), which for every Turing/Ampere/Ada part
+  resolves to `kceAssignCeCaps_GP100` (`g_kernel_ce_nvoc.c:413-427`) → a bare
+  `if (pKernelNvlink != NULL) kceGetNvlinkCaps(…)` (`kernel_ce_gp100.c:311-323`) → at most
+  three `RMCTRL_SET_CAP`s, and `RMCTRL_SET_CAP` is `|=` (`control.h:99`).
+
+There is **no `portMemSet` after the RPC and no `RMCTRL_CLEAR_CAP` on this path**, so the
+physical reply survives in full. And the three bits the kernel *could* add — `_CE_SYSMEM_READ`,
+`_CE_SYSMEM_WRITE`, `_CE_NVLINK_P2P` — are **exactly the three that measure clear** in both
+observed entries, because `GPU_GET_KERNEL_NVLINK` is `NULL` on a GeForce GA106. ⇒ The kernel
+added nothing; the caller-visible bytes **are** the physical reply. And the construction is
+idempotent even if that argument were wrong: the guest runs the same kernel code, so serving
+`V` = the observed value yields `V | X = V`.
+
+#### ★★★ What is served, and every bit's source
+
+`NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS` (`ogkm-580: ctrl2080ce.h:331-334`) is
+`NvU8 capsTbl[64][2]` then an 8-aligned `NvU64 present` — 136 bytes, `present` at 128, no
+padding. `0x20802a0b` shares the type by `typedef` (`:340`).
+
+| field | served | from |
+|---|---|---|
+| `present` | `0x0f` | the `DEV_TYPE_ENUM_LCE` rows of `ChipProfile::engines` — **the same slice** `FIFO_GET_DEVICE_INFO_TABLE` and `INTERNAL_DEVICE_INFO` already serve |
+| `capsTbl[0..1]` | `0x03e3` | `GA10X_LCE_BASE_CAPS \| GRCE` |
+| `capsTbl[2..3]` | `0x03e2` | `GA10X_LCE_BASE_CAPS` |
+| `capsTbl[4..63]` | `0x0000` | absent from `present`; the header says an absent CE's caps *"should be ignored"*, and a table whose ignored rows still claim `SYSMEM \| P2P` lies to anything that stops honouring the qualifier |
+
+The single per-CE bit is `_CE_GRCE` (`0:0x01`, *"Set if the CE is synchronous with GR"*).
+★ Principled, not copy-paste: `NV_CE_GRCE_ALLOWED_LCE_MASK = 0x03` (`kernel_ce_ga102.c:34`,
+returned by `kceGetGrceSupportedLceMask_GA102` at `:188-196` for GA102/103/104/**106**/107)
+names exactly LCE0 and LCE1, backed by `NV_CE_GRCE_CONFIG__SIZE_1 = 2` (`dev_ce.h:32`) and
+`NV_CE_MAX_GRCE = 2`. ⊘ Open source gives the *allowed* mask; the measurement gives that this
+part realises it. Both are recorded.
+
+#### ⊘⊘ FOURTH sighting of `a_table_does_not_decide_behaviour` — and this one would have shipped
+
+The same HAL file declares `NV_CE_MAX_LCE_MASK = 0x1F` (`kernel_ce_ga102.c:37`) — five GA10x
+LCEs, `{0,1}` GRCE, `{2,3}` sysmem, `{4}` even-async — and reading it as the exposed set
+predicts `present = 0x1f` with a fifth caps entry. `[measured]` a real GA106 answers
+**`present = 0x0f`** and `capsTbl[4] = {0x00, 0x00}`, from **two independent callers**.
+
+⇒ The mask is the **permitted universe**; what the part exposes is the dispatch's, and they
+differ by one engine. Kept as `GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE` with the contradiction
+pinned in two tests, so nobody "simplifies" the projection into the constant later.
+
+#### ⚠ One projection considered and REFUSED, recorded so it is not re-invented
+
+`_CE_CC_SECURE` is *"Set if the CE is capable of encryption/decryption"* (`ctrl2080ce.h:137-138`)
+— a property of the **silicon**, not of whether Confidential Computing is switched on.
+Deriving it from `ChipProfile::conf_compute` (which this port serves as both-bits-clear) would
+agree on GA106 **by coincidence** and be wrong on any CC-capable part with CC disabled. It is
+an arch fact and stays one.
+
+#### ★ THIRD hand-regrouped-hex defect in four rungs — and the first a TEST caught
+
+The byte-for-byte pin started life as a 272-character hex literal in `kayfabe_abi::cecaps`.
+It was **sixteen bytes short**, and the length assertion caught it before a human read it.
+§14.30's `0x03003020` and §14.32's `0x0000c000` were each caught by a *reader*, one rung late.
+
+⇒ The literal is gone. The abi-side expectation is built structurally, and the authority is
+`kayfabe-device/tests/ce_get_all_physical_caps.rs`, which parses the reply out of the
+committed artifacts themselves. ★ That test then found two more things nobody would have
+predicted: the two traces are in **different formats**, and **the provenance header I wrote
+into my own trace file is a decoy** — it names the id and the status and contains no hex, so
+a `contains(id) && contains("NV_OK")` filter matched it. A trace annotated for a human reader
+is a trace with decoys in it.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| `kayfabe_abi::cecaps` — the ABI, all twelve named cap bits as `(byte, mask)` pairs, `CeGeometry::from_engines`, two refusals, 12 unit tests | `crates/kayfabe-abi/src/cecaps.rs` |
+| `WantedTable::CeGetAllPhysicalCaps`; served universe **29 → 30**, attributed; the first arm whose reply is **constructed** rather than the request edited | `kayfabe-device/src/inittables.rs` |
+| 9 reply-plane tests, incl. the two-independent-captures agreement, the no-surviving-seed pin, and the `present`-is-the-engine-slice projection | `kayfabe-device/tests/ce_get_all_physical_caps.rs` |
+| the R18 CE-caps probe: `0x20802a0b` refused, `0x20802a0a` served, both hypotheses written before the run | `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt` |
+| the two closure sets, each entry with its reason; the `cuInit`-driven-capture flag promoted from a paragraph to a queue item at **five rungs overdue** | `cap1b_differential.rs`, `replay_conformance.rs` |
+
+#### `[measured 2026-08-09, boot `gt1433_0de5ddb`, artifact stamped `kayfabe-rev:0de5ddb70a1509ac00ab66e4b833043f604ae524`, STOCK module]` THE WALL IS DOWN
+
+```text
+nvkvm: control 0x20802a0b result 0x00000000 x1     ← served
+```
+
+and in the guest's own interposed trace, the control that was `0x56`:
+
+```text
+CTRL cmd=0x20802a0a size=136 status=0x00000000 out=e303e303e203e203 00…00 0f00000000000000
+```
+
+⊘ **Byte-identical to the real GA106's**, which is the assertion `ce_get_all_physical_caps.rs`
+already makes — now confirmed through a whole guest kernel rather than through a policy call.
+
+★★ And note which ledger it came out of. The plain boot `ce1433_0de5ddb` is `SMI_RC=0` with
+**191 commands decoded** and no `0x20802a0b` anywhere: `nvidia-smi`'s `RmInitAdapter` never
+asks for it. `gt1433_0de5ddb` decodes **368**. ⇒ The cap1b exemption this rung adds is not an
+excuse, it is the same fact measured from the other side — a capture driven by `nvidia-smi`
+**cannot** contain this control.
+
+#### ★★★★ `cuInit` went TWO CONTROLS FURTHER, and the agreement with hardware nearly DOUBLED
+
+`traces/real_ga106/cuinit_trace_guest_gt1433_0de5ddb.txt`:
+
+```text
+0x20801227  status=0x00000000
+0x20802a0a  status=0x00000000     ★ §14.32's wall, now NV_OK and byte-identical
+0x2080121b  status=0x00000000     ← new, 9240 bytes
+0x20803801  status=0x00000056     ★★ THE NEW WALL
+ESC 0xcf ; FREE ×3 ; cuInit(0) -> 100
+```
+
+★★★ Compared id-by-id and status-by-status against `cuinit_ioctl_trace_real_ga106.txt`, the
+two traces are now **identical for the first 62 calls with exactly one exception**, and they
+diverge at **call 63**. §14.32's agreement ran from 50 to 61 — twelve consecutive calls; it
+now runs from 1 to 62 with one hole, and the hole is **`0x20810108`** (call 39), the
+`NV2081_BINAPI` control §14.26 measured as having **no oracle in any instrument**.
+
+⊘⊘ **That is a result in itself, and it is a good one:** `0x20810108` is answered `NV_OK` by
+real hardware and `0x56` by this port, and `cuInit` carries on for **twenty-three more calls**
+regardless. Its refusal is therefore **not fatal**, which no amount of reasoning about an
+uncapturable control could have established — only running past it could.
+
+Call 63 is `0x20803801` `NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO` (`ogkm-580: ctrl2080grmgr.h:57`),
+1928 bytes, which a real GA106 answers `NV_OK` and this port answers `0x56`. ⊘ Like
+`0x20802a0a` and unlike `0x2080012f`, the real trace **convicts** rather than clears it.
+
+#### The next rung — and this time the reachability question is asked FIRST
+
+★ `0x20803801`'s export row is the first thing to read, not the last: this rung's whole
+opening lesson is that a probe plan written without it costs a cycle. Ask, in this order:
+(1) does the id that fails route to a *different* id at the physical boundary, as
+`0x20802a0a` → `0x20802a0b` did; (2) do the failing control's flags permit a usermode probe
+at all; (3) only then, what does the reply have to contain.
+
+⚠ And `GET_GR_FS_INFO` is a **query-list** control like `FB_GET_INFO_V2`, not a flat struct —
+`NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS` carries a `numQueries` and an array of tagged
+queries, so the `[IN]`-field trap §14.31 was bitten by **does** apply here, unlike on
+`0x20802a0b`. A `0xCD`-seeded probe of it would ask an undeclared query type. ⊘ Read the
+declared query tags before seeding anything.
