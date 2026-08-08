@@ -1512,6 +1512,11 @@ pub static GA106: ChipProfile = ChipProfile {
     // `getGpuInfos` arm read unprivileged (`rmladder_r21 … 0x2a NV_OK data=0x0`). GeForce
     // silicon has no MIG. ⊘ NOT from the C oracle's row for this id, which is empty.
     smc_mode: kayfabe_abi::smcmode::GA106_SMC_MODE,
+    // ★ `[measured 2026-08-08]` GA106's `GPU_GEN` field reads `3` = `..._GEN_GEN4` on a real
+    // RTX 3060, and `nvidia-smi --query-gpu=pcie.link.gen.gpumax` on the same box says `4`.
+    // Two instruments, one die fact — and it is the ONLY field of `PCIE_GEN_INFO` that is
+    // one. ⊘ The other two moved on that same part between two runs.
+    pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
     fb_length: GA106_FB_LENGTH,
 };
 

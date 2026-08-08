@@ -521,6 +521,26 @@ pub struct ChipProfile {
     /// type is what carries the distinction, which is why an unstated row cannot compile
     /// rather than being caught at realize.
     pub smc_mode: kayfabe_abi::smcmode::SmcMode,
+    /// ★★★ **The die's own maximum PCI Express generation** — and the whole of what a chip
+    /// family may say about `NV2080_CTRL_BUS_INFO_INDEX_PCIE_GEN_INFO` (`0x2d`).
+    ///
+    /// ⊘ **Deliberately one enum and not the `u32` the control returns.** `[measured
+    /// 2026-08-08, real GA106 `GPU-d0913685`]` the same physical part answered
+    /// `0x00302000` with its PCIe link idle at 2.5 GT/s and `0x00322000` with the link
+    /// loaded to 8.0 GT/s, seconds apart. The word packs three generations — `GPU_GEN` (the
+    /// die), `GEN` (the slot's negotiated ceiling; `gen3` on a bench whose die is `gen4`)
+    /// and `CURR_LEVEL` (the live link) — and only the first is a property of the chip.
+    /// A `u32` row here would be a reading of one rented slot at one instant wearing a
+    /// chip-family label: wrong on a Gen4 board and wrong on the same box thirty seconds
+    /// later. `derive_what_you_cannot_query_then_oracle_it`, in the place it was written
+    /// for.
+    ///
+    /// The served word is derived by
+    /// [`kayfabe_abi::businfo::PcieGenInfo::fully_trained`], which presents the emulated
+    /// link as trained at this generation. See [`kayfabe_abi::businfo`] for the measurement
+    /// and for the named residual (the guest's DMA traverses the *host's* link, which the
+    /// shipping archive has no binding to).
+    pub pcie_max_gen: kayfabe_abi::businfo::PcieGen,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

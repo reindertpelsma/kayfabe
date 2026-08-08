@@ -630,6 +630,29 @@ pub enum WantedTable {
     /// parts by two different instruments. ⊘ **Not** from the C oracle, whose row for this id
     /// is one of the eleven `dlen = 0` rows; the argument is in [`kayfabe_abi::smcmode`].
     InternalGpuGetSmcMode,
+    /// `NV2080_CTRL_CMD_BUS_GET_INFO_V2` (`0x20801823`) — ★★★ the wall §14.29 left standing,
+    /// and the **first value this port serves that is not a fact about the chip**.
+    ///
+    /// `[measured 2026-08-08, boot `v1429_49b182a`]` `cuInit` reaches this control's
+    /// **second** call and gets `0x56` from it. Of its six indices exactly one is
+    /// RPC-forwarded on a GSP client — `0x2d` `PCIE_GEN_INFO`
+    /// (`ogkm-580: kern_bus_ctrl.c:283-334`) — and the other five are the guest kernel's own,
+    /// the same one-of-N shape as [`Self::GpuInfoV2`]'s ten-of-eleven.
+    ///
+    /// ⊘ **No chip row may state `0x2d`, and that is MEASURED rather than argued.** The same
+    /// physical GA106 answered `0x00302000` with its link idle and `0x00322000` with the link
+    /// loaded, seconds apart: two of the word's three generation fields belong to the slot
+    /// and to the live link, and only `GPU_GEN` belongs to the die. So the chip row states
+    /// one enum — [`crate::ChipProfile::pcie_max_gen`] — and the word is DERIVED from it by
+    /// [`kayfabe_abi::businfo::PcieGenInfo::fully_trained`]. The whole measurement, and the
+    /// named residual (this describes the link this port presents, not the host's), are in
+    /// [`kayfabe_abi::businfo`].
+    ///
+    /// ⚠ Its flags are `0x10118` (`ogkm-580: g_subdevice_nvoc.c:6700-6712`) — neither
+    /// `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor `_CACHEABLE_BY_INPUT` (`0x20000`) — so unlike
+    /// [`Self::GpuInfoV2`] it is **not** a [`crate::sticky::BRANCH_A_CACHEABLE`] row, and a
+    /// value that moves with the link is never cached by the guest for the life of the boot.
+    BusGetInfoV2,
 }
 
 impl WantedTable {
@@ -660,7 +683,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 26] = [
+    pub const ALL: [WantedTable; 27] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -687,6 +710,7 @@ impl WantedTable {
         Self::GrContextBuffersInfo,
         Self::GpuInfoV2,
         Self::InternalGpuGetSmcMode,
+        Self::BusGetInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -748,6 +772,7 @@ impl WantedTable {
             Self::InternalGpuGetSmcMode => {
                 kayfabe_abi::smcmode::NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE
             }
+            Self::BusGetInfoV2 => kayfabe_abi::businfo::NV2080_CTRL_CMD_BUS_GET_INFO_V2,
         }
     }
 
@@ -788,6 +813,7 @@ impl WantedTable {
             Self::InternalGpuGetSmcMode => {
                 kayfabe_abi::smcmode::INTERNAL_GPU_GET_SMC_MODE_PARAMS_SIZE
             }
+            Self::BusGetInfoV2 => kayfabe_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE,
         }
     }
 
@@ -1370,6 +1396,34 @@ impl CommandPolicy for InitTablePolicy {
             // `kayfabe_abi::smcmode` for the two-part provenance.
             WantedTable::InternalGpuGetSmcMode => {
                 kayfabe_abi::smcmode::encode_smc_mode(self.chip.smc_mode)
+            }
+            // ★★★ The second request-editing arm, and the first whose VALUE is derived
+            // rather than transcribed. The table handed to it has one row, built here from
+            // the chip's die generation — deliberately not a `&'static` table like
+            // `forwarded_gpu_info`, because a `&'static [(u32, u32)]` is exactly the shape
+            // that invites a measured word to be pasted into it, and `[measured]` the word
+            // moved on one part between two runs.
+            //
+            // ⊘ Every declared entry is filled with no forward-bit test, because
+            // `kbusSendBusInfo_IMPL` puts ONE entry in a FRESH params struct per forwarded
+            // index (`ogkm-580: kern_bus.c:1065-1101`): arriving here is the marker. An
+            // index with no derivation is refused by name — never answered zero, which on
+            // this control reads as a positive claim of `PCIE_LINK_CAP_GEN_GEN1`.
+            WantedTable::BusGetInfoV2 => {
+                let at = req.params_at;
+                let answers = [(
+                    kayfabe_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO,
+                    kayfabe_abi::businfo::PcieGenInfo::fully_trained(self.chip.pcie_max_gen)
+                        .encode(),
+                )];
+                match kayfabe_abi::businfo::answer_bus_get_info_v2(
+                    &cmd.payload
+                        [at..at + kayfabe_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
+                    &answers,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
             }
         };
 

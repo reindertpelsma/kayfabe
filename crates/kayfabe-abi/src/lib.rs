@@ -96,6 +96,7 @@
 /// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
 pub mod bifstatic;
 pub mod bringup;
+pub mod businfo;
 pub mod capability;
 pub mod chipinfo;
 pub mod confcompute;
