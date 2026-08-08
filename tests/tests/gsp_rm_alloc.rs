@@ -391,7 +391,10 @@ const GOLDEN_OBJ3D: u32 = 0xbaba_0046;
 /// `paramsSize` as the wire carried it — **zero**, because the allocator passes
 /// `NULL, 0`:
 /// `pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0)`
-/// (`ogkm-580: kernel_graphics.c:2519`), measured as `paramsSize=0x00000000` in
+/// (`ogkm-580: kernel_graphics.c:2519`) — a reading. What makes the number a
+/// **measurement** is the run: `[measured 2026-08-08, boot pro1_423bf08, rev 423bf08]`
+/// on the vast GA106 bench (RTX 3060, host driver 580.159.04 Open), which printed
+/// `paramsSize=0x00000000` at
 /// `docs/reference/bench_evidence/run_pro1_423bf08_dmesg.log:11`.
 const GOLDEN_OBJ3D_PARAMS_SIZE: usize = 0;
 
@@ -422,7 +425,7 @@ fn the_golden_image_channels_3d_object_is_served_rather_than_unmapped() {
             GOLDEN_CHANNEL,
             GOLDEN_OBJ3D,
             0x0000_c797,
-            &vec![0u8; GOLDEN_OBJ3D_PARAMS_SIZE],
+            &[0u8; GOLDEN_OBJ3D_PARAMS_SIZE],
         )
     };
 
@@ -469,7 +472,10 @@ fn the_golden_image_channels_3d_object_is_served_rather_than_unmapped() {
 #[test]
 fn the_3d_objects_params_are_never_read_however_they_arrive() {
     // `{version = 0x2, flags = 0, size = 16, caps = 0}` — RM's own documented shape.
-    let well_formed: Vec<u8> = [2u32, 0, 16, 0].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let well_formed: Vec<u8> = [2u32, 0, 16, 0]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
     assert_eq!(well_formed.len(), 16, "NV_GR_ALLOCATION_PARAMETERS is 16 B");
 
     let applied_with = |params: &[u8]| {

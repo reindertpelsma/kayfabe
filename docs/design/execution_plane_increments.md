@@ -4486,8 +4486,9 @@ class being absent?"* Answers, each read rather than assumed:
 
 ⚠ **One hazard is real and is recorded rather than fixed**: `project.rs:737`'s
 `engine_refine.entry(chan).or_insert(engine)` is *first-object-wins*. A channel carrying both
-an `AMPERE_B` and an `AMPERE_DMA_COPY_B` could have its CE refinement stolen. On the measured
-boot it cannot happen — `0xc797` is `hClient=0xc1e00007 / hParent=0xbaba0045` (the golden
+an `AMPERE_B` and an `AMPERE_DMA_COPY_B` could have its CE refinement stolen.
+`[measured 2026-08-08, boots pro1_423bf08 and amb1_ee1994b]` it cannot happen on this
+path — `0xc797` is `hClient=0xc1e00007 / hParent=0xbaba0045` (the golden
 channel) while the CeUtils scrubber is `hClient=0xc1e00006` — but this is the failure mode to
 watch if the golden channel is ever reused.
 
