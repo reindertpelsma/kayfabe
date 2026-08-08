@@ -4034,13 +4034,24 @@ TURING or AMPERE (`ogkm-580: kernel_rc_watchdog.c:617-652`).
 | `0x0070` `NV01_MEMORY_VIRTUAL` | **RC watchdog** virtual ctx handle (`kernel_rc_watchdog.c:673`) | `UnmappedAllocClass` | not upstream of anything; watchdog-only |
 | `0xc36f` `VOLTA_CHANNEL_GPFIFO_A` | **RC watchdog** channel (`:1013`) | `NotOnAllowlist` | not upstream of anything; watchdog-only |
 | `0x402c` `NV40_I2C` | i2c probe (`RS_UNIQUE_HANDLE_BASE`) | `AllocClassNotPermitted::**Refused**` | ★ already decided — refused BY NAME (`4088589`) |
-| `0x2081` `NV2081_BINAPI` | — **nobody** — | *never requested* | ⊘ not a wall; already on the allowlist |
+| `0x2081` `NV2081_BINAPI` | — **nobody** — | *never requested* | ⊘⊘ **REFUTED — see §14.26.** It is **libcuda's**, measured at `amb1_ee1994b` |
 
-⊘ **`0x2081` is a phantom.** `grep -l 'hClass=0x00002081'` over **every** captured boot in
-`docs/reference/bench_evidence/` returns nothing, and there is no `Alloc(… NV2081_BINAPI …)`
-call site anywhere in the open kernel tree — it is allocated only by closed userspace
-(NVML/`nvidia-smi`) under a Subdevice. It has been on `CLASSES_SHARED` the whole time. It
-entered the work list as a *name in a doc sentence* and was never checked against a boot.
+⊘⊘ **THE PARAGRAPH BELOW IS WRONG AND IS KEPT SO THE REFUTATION HAS A SUBJECT** (§14.26,
+`[measured 2026-08-08, boot amb1_ee1994b]`): `hClass=0x00002081 paramsSize=0x00000004` on
+`hClient=0xc1d0000c / hParent=0x5c000003`, plus `unserviced fn 76 cmd 0x20810108`. The grep
+was honest and its **universe** was too small — no boot in that directory had ever run a CUDA
+process, so a class only libcuda allocates could not appear in it. ★ Worse: `:3645` of this
+same file already printed the line, from a §14.19-era probe boot, and `:3844` names `0x2081`
+as appearing *"in the probe boots"*.
+
+> ⊘ **`0x2081` is a phantom.** `grep -l 'hClass=0x00002081'` over **every** captured boot in
+> `docs/reference/bench_evidence/` returns nothing, and there is no `Alloc(… NV2081_BINAPI …)`
+> call site anywhere in the open kernel tree — it is allocated only by closed userspace
+> (NVML/`nvidia-smi`) under a Subdevice. It has been on `CLASSES_SHARED` the whole time. It
+> entered the work list as a *name in a doc sentence* and was never checked against a boot.
+
+★ The final sentence was the true one and it applied to the *ruling* as much as to the entry:
+"never checked against a boot" was still true of the refutation itself until a boot ran CUDA.
 
 ★ And the census arithmetic proves the set is exactly three, with nothing hidden: three
 alloc-class refusals in the log, three `GspRmAlloc` failures in dmesg, and the bridge census
