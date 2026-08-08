@@ -94,7 +94,10 @@ fn a_served_control_is_recorded_with_nv_ok_and_its_count() {
         &arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT),
     );
     let reply = chain.respond(&cmd).expect("the arm serves POWER_RESUME");
-    assert_eq!(reply.rpc_result, 0, "precondition: this registration is served");
+    assert_eq!(
+        reply.rpc_result, 0,
+        "precondition: this registration is served"
+    );
 
     let snap = census.snapshot();
     assert_eq!(snap.served_total, 1);
@@ -122,12 +125,20 @@ fn a_served_but_refused_control_is_recorded_with_the_result_the_guest_read() {
         &arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT),
     );
     assert_eq!(chain.respond(&cmd).expect("served").rpc_result, 0);
-    let second = chain.respond(&cmd).expect("answered — a refusal IS an answer");
-    assert_eq!(second.rpc_result, NV_ERR_NOT_SUPPORTED, "precondition: refused");
+    let second = chain
+        .respond(&cmd)
+        .expect("answered — a refusal IS an answer");
+    assert_eq!(
+        second.rpc_result, NV_ERR_NOT_SUPPORTED,
+        "precondition: refused"
+    );
 
     let snap = census.snapshot();
     assert_eq!(snap.served_total, 2);
-    assert_eq!(snap.served_distinct, 2, "one control, two results, two rows");
+    assert_eq!(
+        snap.served_distinct, 2,
+        "one control, two results, two rows"
+    );
     assert_eq!(
         snap.served[1],
         kayfabe_device::census::ServedControl {
@@ -205,7 +216,10 @@ fn an_unserviced_control_reaches_neither_census_list() {
         "precondition: nothing in the chain answers {UNKNOWN_CMD:#x}"
     );
     let snap = census.snapshot();
-    assert_eq!(snap.served_total, 0, "an unanswered control is not 'served'");
+    assert_eq!(
+        snap.served_total, 0,
+        "an unanswered control is not 'served'"
+    );
     assert_eq!(snap.armings, vec![], "and it armed nothing");
 }
 

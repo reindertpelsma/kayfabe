@@ -588,9 +588,13 @@ fn a_disable_on_an_unknown_subdevice_is_a_served_no_op_that_allocates_nothing() 
     }
     for i in 0..NOTIFY_SUBDEVICE_SLOTS as u32 {
         assert_eq!(
-            p.respond(&arming_on(0xc1e0_0000 + i, 0x100 + i, NV2080_NOTIFIERS_POWER_RESUME))
-                .expect("served")
-                .rpc_result,
+            p.respond(&arming_on(
+                0xc1e0_0000 + i,
+                0x100 + i,
+                NV2080_NOTIFIERS_POWER_RESUME
+            ))
+            .expect("served")
+            .rpc_result,
             0,
             "the disables above allocated no slots"
         );

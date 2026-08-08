@@ -547,7 +547,10 @@ mod probe_default_tests {
             ProbeArmSet::parse("35,"),
             Err(ProbeArmParseError::NotDecimal)
         );
-        assert_eq!(ProbeArmSet::parse("-1"), Err(ProbeArmParseError::NotDecimal));
+        assert_eq!(
+            ProbeArmSet::parse("-1"),
+            Err(ProbeArmParseError::NotDecimal)
+        );
 
         let too_many = (0..=PROBE_ARM_MAX as u32)
             .map(|i| i.to_string())

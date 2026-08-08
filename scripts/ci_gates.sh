@@ -125,7 +125,7 @@ heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt")
 # exactly the kind of misleading red this script exists to prevent. Detected by the
 # artifact path rather than by step name, so a rename cannot silently decouple them.
 PRODUCED = "/tmp/kayfabe-test.log"
-out, deferred = [], []
+out, deferred, skipped_heavy = [], [], []
 for step in job.get("steps", []):
     run = step.get("run")
     if not run:
@@ -136,6 +136,20 @@ for step in job.get("steps", []):
     if not want_all and (is_heavy or consumes):
         if consumes:
             deferred.append(name)
+        else:
+            # ★★★ A SKIPPED STEP MUST NAME ITSELF. Until 2026-08-08 the heavy steps were
+            # dropped in SILENCE, so `ALL GATES CLEAN` was printed by a run that had not
+            # executed `cargo fmt --all --check` at all -- and master was red on exactly
+            # that step for a full day, across three agents and a commit whose own subject
+            # line was "gate fixes: fmt + clippy". Every one of them read the green as
+            # covering fmt, because nothing said otherwise.
+            #
+            # ⊘ This is the `skipped_oracle_kills_the_guard` lesson in a second place: the
+            # oracle census already refuses to let an all-skipped oracle family read as
+            # coverage. The heavy steps had no such census, and a header comment saying
+            # "skipped unless --all" is not one -- nobody reads the script they are
+            # invoking, they read its last line.
+            skipped_heavy.append(name)
         continue
     # ★ `working-directory` is part of the step, MEASURED 2026-07-30. One step
     # ("Format check (fuzz workspace)") carries `working-directory: fuzz`, and this
@@ -149,6 +163,8 @@ for step in job.get("steps", []):
     }))
 for name in deferred:
     print(f"__DEFERRED__{name}", file=sys.stderr)
+for name in skipped_heavy:
+    print(f"__SKIPPED__{name}", file=sys.stderr)
 print("\n".join(out))
 PY
 ) || {
@@ -206,8 +222,12 @@ for s in "${steps[@]}"; do
 done
 
 printf '\n'
+skipped_names=()
 while IFS= read -r line; do
-  [ -n "$line" ] && echo "  deferred (needs --all, it reads the test log): ${line#__DEFERRED__}"
+  case "$line" in
+    __DEFERRED__*) echo "  deferred (needs --all, it reads the test log): ${line#__DEFERRED__}" ;;
+    __SKIPPED__*)  skipped_names+=("${line#__SKIPPED__}") ;;
+  esac
 done < "$deferred_note"
 rm -f "$deferred_note"
 
@@ -289,6 +309,13 @@ if [ "$fail" -eq 0 ]; then
   # reported a clean run of nothing. A number beside the bar it cleared is evidence; a
   # number on its own is decoration.
   echo "ALL GATES CLEAN (${#steps[@]} steps, floor $floor for $mode mode)"
+  # ★★★ NAME THE STEPS THIS RUN DID NOT EXECUTE, immediately under the green. A verdict
+  # that reports only what passed is read as a verdict about the tree; this one is a
+  # verdict about a SUBSET, and the subset has to be visible from the same glance.
+  if [ "${#skipped_names[@]}" -gt 0 ]; then
+    echo "⊘ NOT RUN by this mode (${#skipped_names[@]}) — the green above says NOTHING about these:"
+    for n in "${skipped_names[@]}"; do echo "    · $n"; done
+  fi
   oracle_census
   [ "$want_all" -eq 0 ] && echo "★ Before pushing a CI change, run with --all — it is the only mode that covers every step."
 else
