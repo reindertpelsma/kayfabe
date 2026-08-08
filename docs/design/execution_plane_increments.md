@@ -5869,3 +5869,29 @@ other side: there, a guard covered no compiled oracle; here, a guard's output wa
 was bite-checked rather than argued: `libc` still fires on a planted
 `// bite probe: libc::c_int` in `kayfabe-util` (`:` is a word boundary) and does not fire on
 `libcuda`.
+
+#### ★ `run_full_suite.sh` on `vh`, and the two things it found that are NOT this rung's
+
+`[measured 2026-08-09, `vh` (38 cores, 198 GB), rev `4aad26b`, `/workspace/bench/suite_4aad26b.log`]`
+`RAN 8 / FAILED 3 / SKIPPED 6`, with the **compiled oracles all live** —
+`GMMU RAN=15, PUSHBUFFER RAN=24, TOKEN RAN=3, USERD-CHID RAN=5, VBIOS RAN=13, SKIPPED=0` in
+every family. ★ So the local-only rule these rungs were run under is obsolete; `vh` is the
+better host for the suite as well as the bench.
+
+- **`fuzz-build`** failed in 5 s with `can't find crate for std … x86_64-unknown-linux-musl`.
+  ⊘ Not a code failure: the box's **nightly** toolchain had no musl std, while stable did, so
+  the main workspace's isolate built and the fuzz workspace's did not.
+  `rustup target add x86_64-unknown-linux-musl --toolchain nightly` and the step builds
+  clean. ⚠ A suite step that fails on a missing toolchain component **guards nothing while it
+  is red**, which is `skipped_oracle_kills_the_guard` in its third costume this session.
+- **`test-hardware`**: `stress_multi_vcpu_interleaved_ops` panicked with
+  `doorbell routes: NotScheduled { chan: ChanId(0), vchid: VChid(258) }`
+  (`tests/tests/concurrency_stress.rs:421`) followed by seven `PoisonError`s — the poison is
+  the consequence, not the fault. ⊘ **Not this rung's, and that is checked rather than
+  asserted**: `NotScheduled` is `kayfabe-core`/`kayfabe-fwd`'s and the failing path is
+  `handle_doorbell` over a `MockArch`; this rung touched `kayfabe-abi`, `kayfabe-device`,
+  `kayfabe-qemu-raw`, `qemu/` and docs, none of which that path reads.
+  `[measured]` **8/8 green** re-running it alone (5×) and the whole binary (3×, ~4.6 s each);
+  it failed once, at 13.4 s, **under full-suite contention**. That is
+  `flake_rate_depends_on_core_count` pointed the other way — a big box does not only hide
+  races, a *loaded* one exposes them — and it is a real handoff, not a dismissal.
