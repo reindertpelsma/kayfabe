@@ -3413,3 +3413,99 @@ A **boot**. `only_live_boots_are_proof`: none of the above is a claim about a gu
 acceptance is `memmgrTestCeUtils`' own readback compare at `ogkm-580: mem_mgr.c:467-470` —
 which no forged completion can satisfy, because it reads the real bytes the copy did or did
 not move.
+
+### 14.17 ★★★★ E10e item (c), BOOTED — **THE CE WALL IS GONE.** `memmgrTestCeUtils` passes on a STOCK guest (`754e393`)
+
+`[measured 2026-08-08]`, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver
+**580.159.04 Open**, 38 cores), source revision **`754e393`** verified by
+`strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:754e393828a1a61f3ea2b67d3d54744b1ea37693` in each. Boot `p35_754e393`, probe set
+`[35]`, **STOCK** guest module (`(dvs-builder@U22-I3-AF04-09-6) Wed Apr 29`, the `.run`'s own
+banner — ⊘ no `KAYFABE-BRINGUP` lines, no patch, this is the milestone's configuration).
+Evidence: `docs/reference/bench_evidence/run_p35_754e393_{dmesg,qemu,probe,serial}.log`.
+
+#### The A/B, one variable
+
+| | `p35_84d857d` (§14.13) | `p35_754e393` |
+|---|---|---|
+| doorbells | 1 arrived, 0 served, **1 REFUSED** `NoVas(ChanId(1))` | **2 arrived, 2 SERVED, 0 refused** |
+| guest wall | `memmgrMemSet(… PREFER_CE) NV_ERR_TIMEOUT (0x65) @ mem_mgr.c:463` | ⊘ **`mem_mgr.c` does not appear in the log at all** |
+| `RmInitAdapter failed!` | `(0x25:0x65:1249)` | `(0x43:0x59:2239)` |
+| guest dmesg | 22 lines | **39 lines** |
+
+Same box, same guest image, same stock module, same probe set. The only variable is the
+revision.
+
+#### ★★★ The two servings, and the second one is the acceptance
+
+```
+DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]   ×2
+last CPU-CE serving: cpu-ce: 1 gp, 9 methods, 1 launch, 1 span, 4 B, 1 sem
+                     fin va=0x42006c004 -> S:0x2d68004
+```
+
+- **Token `0x00010002`** is the walling channel's own `workSubmitToken`, the one §14.11's
+  guest probe printed — so these are provably that channel's rings, not another's.
+- **Two** submissions: `memmgrMemSet(vid, 0, sizeof vidmemData)` at `mem_mgr.c:463`, then
+  `memmgrMemCopy(sys ← vid, 4 bytes, PREFER_CE)` at `:467`. ★ The last serving moved
+  **4 B** — `sizeof vidmemData` exactly — which is the *copy*, i.e. the memset had already
+  retired and the guest had gone on.
+- **`fin va=0x42006c004 -> S:0x2d68004`** — the finishPayload, at the VA the guest itself
+  printed (§14.11: `semaVA=0x42006c004`), resolved through the published root into **guest
+  RAM**. ⊘ Not the host-FIFO word four bytes lower. Had we advanced that one, the counters
+  above would read exactly the same and the guest would still be at `mem_mgr.c:463`.
+
+#### ★★★★ `memmgrTestCeUtils`' OWN READBACK COMPARE PASSED
+
+This is the acceptance §14.6 stated and §14.14 sharpened, and it is met **by absence**:
+`memmgrTestCeUtils` ends `memmgrMemRead(sys) → NV_ASSERT_TRUE(sysmemData == vidmemData)`
+(`ogkm-580: mem_mgr.c:467-470`) and **no `mem_mgr.c` assertion appears in the boot at all** —
+neither the `:463` timeout that walled every previous revision nor the `:470` compare. The
+boot ran on for **thirteen more seconds** into `RmInitAdapter`'s graphics bring-up.
+
+⊘ **No forged completion can produce this.** The compare reads back the bytes through the
+guest's own CPU mapping; a semaphore advanced over a copy that did not happen leaves
+`sysmemData` at its `0x11223345` seed and fails `:470` loudly. That the guest read what our
+CPU executor wrote is what the silence means.
+
+#### The NEW wall, and it is a different subsystem
+
+```
+NVRM: … kgrobjPromoteContext(...) @ kernel_graphics_object.c:224      NV_ERR_NOT_SUPPORTED
+NVRM: … AllocWithHandle(..., classNum, NULL, 0) @ kernel_graphics.c:2519
+NVRM: … kgraphicsCreateGoldenImageChannel(...) @ kernel_graphics.c:508
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x0000c36f … status=0x00000056
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x43:0x59:2239)
+```
+
+Every one is `NV_ERR_NOT_SUPPORTED (0x56)` — an alloc or control **our RPC plane refused by
+name**, not a timeout and not a wrong answer. The wall is now the **graphics golden-context
+channel**, which is the boundary `mode2_fakeboot_complete.md` already names as *"GR golden-ctx
+= silicon boundary → forward to host"*. ⊘ It is not this increment's, and nothing about the CE
+plane is implicated in it.
+
+#### `nvidia-smi`, verbatim, and why
+
+```
+Unable to determine the device handle for GPU0: 0000:00:03.0: Not Found
+No devices were found
+SMI_RC=6
+```
+
+`RmInitAdapter` failed, so the adapter never initialised and `nvidia-smi` finds no device —
+⊘ **exactly as expected at a GR wall, and not a CE regression.** The device nodes *are*
+created (`/dev/nvidia0`, `/dev/nvidiactl`, `/dev/nvidia-uvm`, `nvidia-caps/`), and both
+modules are loaded (`nvidia`, `nvidia_uvm`); it is the adapter behind them that has no GR
+context. `nvidia-smi` is the **next** milestone's oracle, not this one's.
+
+#### What this does and does not establish
+
+- ✔ The four obstacles closed together, on a real guest: a VAS-less channel's ring,
+  pushbuffer, operands and finishPayload all resolved through the published-root walk, its
+  bytes moved by the shell CPU executor, and the word the guest polls advanced.
+- ✔ `[measured]` the completion address is right, by the strongest oracle available: the
+  guest's own readback compare and the fourteen seconds of boot after it.
+- ⊘ It establishes **nothing** about the isolate's `HostCe` branch, which this path refuses
+  by name and never took, and nothing about a multi-launch or multi-entry submission — the
+  boot's two doorbells were one GPFIFO entry and one `LAUNCH_DMA` each.
