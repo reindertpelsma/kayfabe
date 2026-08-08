@@ -620,3 +620,42 @@ in `docs/design/execution_plane_increments.md` §8.2.3.
   as a description of what the bench ran; read the QEMU log's own
   `memory plane realized (bar0=… bar1=… bar2=…)` line, which moves with the RAM size
   (`bar1=0x280000000` at 8 GiB, `0xe0000000` at 2 GiB).
+
+## 2026-08-08 — ★ The CUDA-ladder prerequisites, surveyed inside a booted guest
+
+`[measured 2026-08-08, boot `cudaprereq` on vast `vh` (RTX 3060 GA106), guest module
+untouched]`. The `cup2 → cup8` ladder compiles `gcc -O0 -o /tmp/cup8 /tmp/cup8.c -lcuda`
+against `#include <cuda.h>` and JITs its `sm_86` PTX in-guest via `cuModuleLoadData`. What the
+guest actually has:
+
+| prerequisite | state |
+|---|---|
+| `gcc` | ✔ 13.3.0 |
+| `libcuda.so{,.1}` → `libcuda.so.580.159.04` | ✔ present, both symlinks, so `-lcuda` links |
+| `libnvidia-ptxjitcompiler.so.580.159.04` | ✔ present and **exactly version-matched** to `libcuda` |
+| `nvcc` | ✘ absent — and not needed on the driver-API + PTX-JIT path |
+| **`cuda.h`** | ✘ **ABSENT** |
+
+⚠⚠ **`find / -name cuda.h` in the guest returns three hits and NONE of them is NVIDIA's.**
+They are `/usr/include/linux/cuda.h` and its two copies under `linux-headers-*` — the
+PowerMac **ADB CUDA controller** UAPI header, an unrelated device with a colliding name. A
+check written as *"does `cuda.h` exist"* passes on this guest and the compile still fails, so
+the check has to name the path or grep for `CUresult`.
+
+⊘ **And the host does not have it either**: `find /` on `vh` returns only QEMU's own
+`openbios/drivers/cuda.h`, `hw/misc/macio/cuda.h` and the same kernel headers. There is no
+NVIDIA `cuda.h` anywhere on this bench — it ships with the CUDA toolkit / `nvidia-cuda-dev`,
+not with the driver `.run`. ⇒ the C artifact's guest got it from somewhere this rebuild did
+not reproduce, and the ladder cannot be compiled in-guest as things stand.
+
+⚠ **The guest has NO default route.** `ip route` shows only the on-link
+`192.168.77.0/24 dev enp0s2`; it can ping the host at `.1` but DNS and `apt` both fail. The
+host has `ip_forward=1` and two `MASQUERADE` rules already, so this is one
+`ip route add default via 192.168.77.1` plus a `resolv.conf` away from working — **but it is
+not wired today**, and nothing that needs a package can be installed in the guest until it is.
+
+★ Cheapest close, for whoever decides: NVIDIA's `cuda.h` is a single self-contained header for
+the driver API. Fetching it on the host (which does have network) and `scp`-ing it to the guest
+over the tap closes the gap without a toolkit and without touching the guest's network.
+
+⊘ Bench left as found: guest powered off, `pgrep -x qemu-system-x86` empty, 2223 clear.
