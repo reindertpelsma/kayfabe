@@ -64,6 +64,59 @@ the only possible topology.**
 instance serving many tenants, living in a sacrificial VM instead of the host. That is a real
 improvement over the host being the boundary, and it is **not** per-tenant isolation.
 
+## 4b. ★★ Can a guest map a BAR without the VMM mapping it? — ANSWERED, and the answer is no
+
+The natural question: if the provider VM owns the BARs, can guests get native-speed mappings of
+them **without** the host VMM also holding a mapping? Researched against Linus master and this
+box's headers.
+
+**The hardware is not the constraint — confirmed.** EPT/NPT map GPA → HPA, and MMIO is in the host
+physical address space by definition. Shipping proof rather than a spec reading:
+`KVM_MEMSLOT_GMEM_ONLY` slots already program EPT/NPT **from a bare PFN with no VA in the path**,
+and `__kvm_is_mmio_pfn()` picks the memory type from the PFN. Intel and AMD differ only on memory
+type (`vmx_get_mt_mask()` forces UC; SVM defines no `get_mt_mask`) — ⊘ no asymmetry that decides
+viability.
+
+⊘ **The constraint is KVM's ABI, and there is no upstream mechanism.**
+- `guest_memfd` **cannot** do it, structurally rather than by omission: `kvm_gmem_get_folio()`
+  allocates through `__filemap_get_folio_mpol()` and returns `folio_file_pfn()` — page-allocator
+  PFNs, which cannot reference a BAR. There are **zero** `dma_buf` references anywhere in KVM.
+  ⚠ And upstream is moving the *other* way (`GUEST_MEMFD_FLAG_MMAP`, making gmem mappable).
+- ★ **The exact mechanism exists as an unmerged RFC**: `KVM: Support vfio_dmabuf backed MMIO region`
+  (Xu Yilun, 2025-05-29) adds `KVM_MEM_VFIO_DMABUF`, replacing `userspace_addr` with a
+  `struct dma_buf_attachment *`, expressly to *"eliminate userspace mapping"*. **Last posted
+  2025-05-29; nothing newer.** ⚠ And it is gated on `kvm_arch_has_private_mem()` — **a plain
+  VMX/SVM VM gets `-EINVAL`.** Kernel 6.19 merged only the PCI/TSM layer beneath it; TDISP /
+  private MMIO is explicitly the next phase.
+
+⚠ **And it is not an out-of-tree module.** KVM does not *fundamentally* assume an HVA —
+`__kvm_mmu_faultin_pfn()` already branches to a PFN-only backend — but there is no extension point:
+the flag check is closed in `check_memory_region_flags`, the dispatch is `static`, and master gates
+internals behind `EXPORT_SYMBOL_FOR_MODULES(sym, "kvm-intel,kvm-amd")` — **a named allowlist an
+out-of-tree `.ko` cannot link against.** ⇒ **A KVM patch, not a module.** The RFC's delta is ~200
+lines, plus dropping the CoCo gate, which is the part upstream has not agreed to.
+
+⚠ Also measured, and it kills the obvious workaround: **mmu_notifiers are HVA-indexed**
+(`hva_start = max(range->start, slot->userspace_addr)`), so the VMA is the *invalidation channel*,
+not merely an address supply. ⊘ "Map it, then `munmap`" cannot work.
+
+### ⇒ What this changes, which is less than it sounds
+★★ **The design's main claim does not depend on it.** GPU → host DMA containment comes from the
+**IOMMU**, which is indifferent to whether any process holds an HVA for a BAR. The BAR question is
+about a *different and lesser* risk: host → GPU MMIO.
+
+★ And the correct strength of the claim is weaker than "unmappable by the host": `ioremap` and
+`pci_resource_start` are always available to the **kernel** (`CONFIG_IO_STRICT_DEVMEM` restricts
+only `/dev/mem`, and only for idle ranges). TEE-IO's own changelog calls host-inaccessibility of
+private MMIO *"not that critical but nice to have"*. ⇒ Claim only: **"not reachable through the VMM
+process's address space."**
+
+### ★ The tractable near-term lever
+`vfio/pci: Add mmap() for DMABUFs` (v5, 2026-07-15) lets a primary process vend **range-limited,
+revocable** BAR handles by fd to subordinate processes instead of sharing the whole device fd.
+⊘ Still a VMA, so it does **not** answer the question above — but it is the realistic way to shrink
+VMM BAR authority in this topology, and it is on its way upstream rather than stalled.
+
 ## 5. Costs, all `unverified`
 
 - ★ **Every RM ioctl gains a round trip**: guest vmexit → guest VMM → provider VM → `ogkm` → back.
