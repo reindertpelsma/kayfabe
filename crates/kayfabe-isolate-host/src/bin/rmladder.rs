@@ -980,6 +980,158 @@ fn bus_info_sweep(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle
     );
 }
 
+/// ★★★ R23 — **`BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS`: is the refusal the CALLER, or the
+/// INSTRUMENT'S OWN SEED?**
+///
+/// §14.30 measured `--probe-ctrl 0x2080182a:112` refused `0x56` **twice** on the same
+/// physical GA106 that answers libcuda `NV_OK`, and concluded from the `_DISPATCH` suffix
+/// that *"the answer depends on caller state `rmladder` does not reproduce"* — object
+/// hierarchy, prior calls, client privilege.
+///
+/// ⊘ **Read the params struct before believing that.** `capType` is an **`[IN]`** field
+/// (`ogkm-580: ctrl2080bus.h:1256-1258, 1311-1315`), and `probe_ctrl` seeds *every* byte
+/// with `0xCD` — so R18 asked for `capType = 0xCDCDCDCD`, which is none of
+/// `_CAPTYPE_SYSMEM(0)` / `_GPU(1)` / `_P2P(2)` (`:1226-1228`). libcuda hands RM a **zeroed**
+/// buffer, so it asks for `_CAPTYPE_SYSMEM`. The two callers did not issue the same call.
+///
+/// ⇒ The sentinel that makes R18 able to tell *written* from *unwritten* is only safe on a
+/// **pure-OUT** struct. On a struct with an `[IN]` field it is an input **mutation**, and
+/// the instrument perturbs the very thing it measures.
+///
+/// | hypothesis | prediction |
+/// |---|---|
+/// | **H1 — caller state** (§14.30's). The bare Subdevice is missing something libcuda has. | every arm below refuses `0x56`, whatever the request bytes say. |
+/// | **H2 — the seed.** `capType = 0xCDCDCDCD` is an invalid captype and the refusal is the request's. | the arms whose `capType` is `0/1/2` answer `NV_OK` on the very same bare Subdevice; the `0xCD`-captype arms refuse. |
+///
+/// The arms are the 2x2 `{capType ∈ 0, 0xCDCDCDCD} x {tail ∈ 0x00, 0xCD}` plus the three
+/// declared captypes and one out-of-range one. The 2x2 is what separates *"the captype is
+/// invalid"* from *"a seeded byte anywhere in the buffer is refused"* — H2 is only
+/// established if the poison **follows `capType`** and not the tail.
+///
+/// ★ The `0xCD` tail is retained wherever it is not the variable under test, because it is
+/// still the only thing that can tell *"RM wrote 104 zeros"* from *"RM wrote nothing"* —
+/// which is exactly the ambiguity that made the committed trace's all-zero `out=` decide
+/// nothing (`traces/real_ga106/README.md`).
+///
+/// ⚠ The kernel RM cannot answer this control at all on a bare-metal GSP client: its flags
+/// are `0x40048` = `NON_PRIVILEGED | ROUTE_TO_PHYSICAL | PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST`
+/// (`ogkm-580: g_subdevice_nvoc.c:6796-6819`, `rmapi/control.h:202-308`), so it is RPC'd to
+/// GSP-RM, and the local `_92bfc3` arm NVOC installs for every non-VF variant is a bare
+/// `return NV_ERR_NOT_SUPPORTED` (`g_subdevice_nvoc.h:6999-7002`) that exists precisely
+/// because it should never run. ⇒ **the `_DISPATCH` is not the decider here**, and whatever
+/// this rung prints is GSP firmware's answer, not the open tree's.
+fn atomics_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle) {
+    const CMD: u32 = 0x2080_182a;
+    // `4 + 4 + 13 * 8`. Confirmed on the wire as `size=112` in both the real-GA106 and the
+    // guest cuInit traces.
+    const PARAMS: usize = 112;
+    const OP_COUNT: usize = 13;
+    /// `ogkm-580: ctrl2080bus.h:1275-1287`, in declaration order — the array index IS the
+    /// op type, so the order is the ABI.
+    const OP_NAMES: [&str; OP_COUNT] = [
+        "IADD", "IMIN", "IMAX", "INC", "DEC", "IAND", "IOR", "IXOR", "EXCH", "CAS", "FADD",
+        "FMIN", "FMAX",
+    ];
+
+    /// `capType` at `[0..4]`, `dbdf` at `[4..8]`, then 13 x `{NvBool bSupported; NvU32
+    /// attributes;}` — 8 bytes each because the `NvU32` forces 4-byte alignment, so bytes
+    /// `+1..+4` of every entry are PADDING and RM is under no obligation to write them.
+    fn request(cap_type: u32, dbdf: u32, tail: u8) -> Vec<u8> {
+        let mut p = vec![tail; PARAMS];
+        p[0..4].copy_from_slice(&cap_type.to_le_bytes());
+        p[4..8].copy_from_slice(&dbdf.to_le_bytes());
+        p
+    }
+
+    /// `ogkm-580: ctrl2080bus.h:1316-1338`.
+    fn attrs(v: u32) -> String {
+        const BITS: [&str; 8] = [
+            "SCALAR",
+            "VECTOR",
+            "REDUCTION",
+            "SIZE_32",
+            "SIZE_64",
+            "SIZE_128",
+            "SIGNED",
+            "UNSIGNED",
+        ];
+        let named: String = BITS
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| v & (1 << i) != 0)
+            .map(|(_, n)| format!("{n} "))
+            .collect();
+        let unknown = v & !0xffu32;
+        if unknown == 0 {
+            named
+        } else {
+            format!("{named}hi8+={unknown:#x} ")
+        }
+    }
+
+    println!(
+        "info  R23 atomics probe   = {CMD:#010x}, {PARAMS}-byte params, one bare Subdevice, \
+         no channel"
+    );
+    println!("info  R23 H1=caller-state (all arms refuse)  H2=the 0xCD seed IS the capType");
+
+    // (label, capType, dbdf, tail seed)
+    let arms: [(&str, u32, u32, u8); 8] = [
+        // The 2x2 that separates the two hypotheses.
+        ("R18 replay  cap=CD tail=CD", 0xCDCD_CDCD, 0xCDCD_CDCD, 0xCD),
+        ("cap=CD tail=00           ", 0xCDCD_CDCD, 0x0000_0000, 0x00),
+        ("cap=SYSMEM(0) tail=CD    ", 0, 0, 0xCD),
+        ("libcuda replay all-zero  ", 0, 0, 0x00),
+        // The other declared captypes, and one that is declared nowhere.
+        ("cap=GPU(1) tail=CD       ", 1, 0, 0xCD),
+        ("cap=P2P(2) tail=CD       ", 2, 0, 0xCD),
+        ("cap=3 (undeclared) tail=CD", 3, 0, 0xCD),
+        ("cap=SYSMEM dbdf=CD tail=CD", 0, 0xCDCD_CDCD, 0xCD),
+    ];
+
+    for (label, cap_type, dbdf, tail) in arms {
+        let mut p = request(cap_type, dbdf, tail);
+        let result = rm.control(subdevice, ControlCmd(CMD), &mut p);
+        match result {
+            Err(e) => {
+                println!("info  R23 {label} = refused {e:?}");
+                continue;
+            }
+            Ok(()) => {}
+        }
+        let echo_cap = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+        let echo_dbdf = u32::from_le_bytes([p[4], p[5], p[6], p[7]]);
+        // ★ Reported separately from the values, for R18's reason: `NV_OK` over an
+        // untouched buffer is a different fact from `NV_OK` over 104 written zeros, and
+        // only the seed can tell them apart.
+        let touched = p[8..].iter().any(|&b| b != tail);
+        println!(
+            "★     R23 {label} = NV_OK  echo cap={echo_cap:#010x} dbdf={echo_dbdf:#010x}  \
+             body={}",
+            if touched { "WRITTEN" } else { "UNTOUCHED" }
+        );
+        let hex: String = p.iter().map(|b| format!("{b:02x}")).collect();
+        println!("      R23 {label}   raw={hex}");
+        if !touched {
+            continue;
+        }
+        for (i, name) in OP_NAMES.iter().enumerate() {
+            let at = 8 + i * 8;
+            let supported = p[at];
+            let pad = &p[at + 1..at + 4];
+            let a = u32::from_le_bytes([p[at + 4], p[at + 5], p[at + 6], p[at + 7]]);
+            println!(
+                "      R23 op[{i:>2}] {name:<5} bSupported={supported:#04x} attributes={a:#010x} \
+                 [{}] pad={:02x}{:02x}{:02x}",
+                attrs(a),
+                pad[0],
+                pad[1],
+                pad[2]
+            );
+        }
+    }
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -1271,6 +1423,7 @@ fn main() -> std::process::ExitCode {
     let mut want_binapi: Option<Vec<(u32, usize)>> = None;
     let mut want_gpu_info = false;
     let mut want_bus_info = false;
+    let mut want_atomics = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -1293,6 +1446,7 @@ fn main() -> std::process::ExitCode {
             "--doorbell-census" => want_census = true,
             "--gpu-info-sweep" => want_gpu_info = true,
             "--bus-info-sweep" => want_bus_info = true,
+            "--atomics-probe" => want_atomics = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1392,6 +1546,19 @@ fn main() -> std::process::ExitCode {
         );
         bus_info_sweep(&mut rm, subdevice);
         println!("done — bus-info sweep only");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R23 runs here and RETURNS, for R18's reason: eight controls on the bare Subdevice,
+    // nothing allocated, so a refusal is the request's or the object's and cannot be a
+    // channel's from three rungs earlier — which is the whole variable under test.
+    if want_atomics {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        atomics_probe(&mut rm, subdevice);
+        println!("done — atomics probe only");
         return std::process::ExitCode::SUCCESS;
     }
 
