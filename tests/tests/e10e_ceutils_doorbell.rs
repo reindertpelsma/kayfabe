@@ -256,7 +256,7 @@ fn ring_once(
     vmm: &mut MockVmm,
     cursor: &mut GpCursor,
 ) -> Result<kayfabe_rt::ceutils::CeUtilsRun, kayfabe_rt::ceutils::CeUtilsRefusal> {
-    let pb = kayfabe_chips::Ga10xPushbuffer::default();
+    let pb = kayfabe_chips::Ga10xPushbuffer;
     let out = plane
         .ce_session(
             CLIENT,
@@ -428,7 +428,7 @@ fn an_unmapped_fill_destination_faults_by_name_and_writes_no_completion() {
 #[test]
 fn a_channel_with_no_published_root_opens_no_session() {
     let plane = plane_with_tree();
-    let pb = kayfabe_chips::Ga10xPushbuffer::default();
+    let pb = kayfabe_chips::Ga10xPushbuffer;
     let mut vmm = MockVmm::new();
     let cursor = GpCursor::default();
     let opened = plane.ce_session(

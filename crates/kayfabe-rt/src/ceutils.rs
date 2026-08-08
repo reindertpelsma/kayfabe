@@ -514,7 +514,7 @@ pub fn run_submission(
             // (`SetObject`, the latching runs) or something we do not model. ⊘ A
             // `SemRelease` is deliberately NOT acted on here: it is the *host* semaphore
             // four bytes below the finishPayload (§14.15), and advancing it would satisfy
-            // our own counters while the guest span on the word above it.
+            // our own counters while the guest spins on the word above it.
             continue;
         };
         run.launches += 1;
