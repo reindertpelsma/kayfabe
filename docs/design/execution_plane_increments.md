@@ -4841,3 +4841,120 @@ proof of causation."* It was right to say so, and the correlation was **half rig
 alloc is causal, the control beside it is not, and a third fact outside that window is
 equally causal. ★ A correlation flagged honestly is still a correlation; the only thing that
 retires one is the experiment.
+
+### 14.28 ★★★★ BOTH HALVES LANDED — and §14.27's eleven-row table was at the WRONG BOUNDARY BY ONE LAYER
+
+#### ⊘⊘ First, the refutation of the specification I was handed
+
+§14.27 closed with a specification rather than a search, and it was right about the two
+causes and right that they are co-equal. It was wrong about one thing, and the wrongness is
+not conservative:
+
+> *"Serve `0x20800102` `GPU_GET_INFO_V2` as a `WantedTable` arm that **reads the request** —
+> echo each `(index, data)` pair the guest sent and **fill `data` from the table above**."*
+
+★★★ **Ten of those eleven indices never reach a GSP.** `getGpuInfos`
+(`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:88-580`) is a
+thirty-two-arm `switch` that answers `GEMINI_BOARD`, `GPU_SMC_MODE`,
+`GPU_DEBUGGING_CAPABILITY`, `DMABUF_CAPABILITY` and twenty-eight more **from kernel state**,
+writing each answer into `pParams->gpuInfoList[i].data` at `:566`. Only the `default:` arm is
+forwarded, and it is marked: `pParams->gpuInfoList[i].index |= INDEX_FORWARD_TO_PHYSICAL`
+(`:548`), a constant `0x8000_0000` `ct_assert`ed at `:84` to equal the SDK's own
+`NV2080_CTRL_GPU_INFO_INDEX_RESERVED` bit. Only then does one `NV_RM_RPC_CONTROL` carry the
+whole struct across (`:570-577`).
+
+Of libcuda's eleven, exactly **one** — index `0x11`, unnamed in both vendored open headers —
+hits `default:`.
+
+⇒ A port built to §14.27's sentence would **overwrite ten values the guest's own kernel had
+just computed**, with numbers that agree today only because both readings came off the same
+machine. The table was *correct*; it is a reading of the **ioctl** boundary, and this port
+lives one layer below it. `a_table_does_not_decide_behaviour`, in a new place — and note the
+shape of how it survived: §14.27 measured `cuInit`, `cuInit` is an ioctl-boundary observer,
+and *"the instrument that found the wall"* was silently promoted to *"the instrument that
+specifies the fix."*
+
+⚠ And a second thing the sentence would have got wrong on its own: a port keyed on `0x11`
+would have matched **nothing**, because what arrives on the wire is `0x80000011`.
+
+#### `[measured 2026-08-03, real GA106, task #178]` The oracle that settles it was already committed
+
+`traces/rpctrace_ga106_boot1.bin` is a **GSP-level** RPC capture from a real GA106 boot
+(2026-08-03, driver 580.159.04, task #178). It carries **three** `0x20800102` calls, all `status=0x0 psize=564`,
+and they are the whole specification:
+
+```text
+seq303  REQ 01000000 11000080 00000000                    (listSize 1; 0x11 | FORWARD)
+        REP 01000000 11000000 00000000                    (bit 31 CLEARED, data 0)
+seq780  identical to seq303
+seq806  REQ 02000000 23000080 00000000 24000080 00000000
+        REP 02000000 23000000 58e0ec19 24000000 32251eb9
+```
+
+⇒ The forward bit is set on the request and **cleared in the reply**; the untouched tail
+comes back verbatim; and two further indices — `0x23`, `0x24` — are demanded by the guest
+kernel that libcuda never asks for.
+
+#### ★★★ `0x23` / `0x24` are PER-CHIP IDENTITY VALUES, and that is why this port REFUSES them
+
+A new rung settles it. `rmladder --gpu-info-sweep` (**R21**) asks all seventy indices **one
+call each** — because `getGpuInfos` breaks its loop on the first non-`NV_OK` status
+(`:566-569`), so a seventy-index request measures only *"the first index that fails"* — with
+the tail seeded `0xCD`.
+
+| source | GPU | `0x23` | `0x24` |
+|---|---|---|---|
+| `rpctrace_ga106_boot1.bin` seq806 | `GPU-e28d7776-…` | `0x19ece058` | `0xb91e2532` |
+| R21, 2026-08-08, run 1 | `GPU-d0913685-…` | `0x4324d4e9` | `0x8708a4a8` |
+| R21, run 2, same box | same | `0x4324d4e9` | `0x8708a4a8` |
+
+**Stable across runs on one part, different between two parts.** Unnamed in both vendored
+headers (`0x23`, `0x24` and `0x26` are blank between `GEMINI_BOARD` `0x22` and
+`SURPRISE_REMOVAL_POSSIBLE` `0x25`); the handler is GSP firmware.
+
+⊘ `derive_what_you_cannot_query_then_oracle_it` says *never a per-chip table*, and this is
+precisely that shape. So `kayfabe_abi::gpuinfo` ships **one** row (`0x11 → 0`, which has
+three independent readings across two parts) and refuses the rest by name
+(`GpuInfoError::UnmeasuredForwardedIndex`).
+
+⚠ **And this is NOT the `dlen = 0` mistake in reverse.** Answering `0x23`/`0x24` zero is not
+decoding an absence to zeros — it is **contradicting four positive measurements**. The C
+artifact did answer `0` (its map has no row, default zero, `C: nvkvm_gpu_emul.c:3226-3231`)
+and still reached `bad=0 maxerr=0`, so zero is *probably* survivable — and *probably* is not
+a reason to write a fabricated 32-bit identity into a reply the guest is free to cache
+forever (`RMCTRL_FLAGS_CACHEABLE_BY_INPUT`, flags `0x30118`, `g_subdevice_nvoc.c:151`).
+
+⊘ **And the refusal cannot regress anything**, which is the argument that makes it cheap
+rather than brave: the control is *entirely* unserved today — seven committed bench boots log
+`unserviced fn 76 cmd 0x20800102` — so serving two of the three recorded calls and leaving
+the third exactly as it is is strictly more than the status quo on every call.
+
+#### The hazard check, run first in the direction that has bitten three times
+
+*"What is keyed on `0x2081` being absent?"* — **nothing.** `ObjectKind::Unknown` is
+constructed in two places and **matched in zero**; `ObjectKind::Other` likewise. The graph
+branches only on `Device`/`Client`/`Memory`/`Event` (`rmgraph.rs:1346, 1429, 2372, 2399`),
+the projection only on `VaSpace`/`Tsg`/`CtxShare`/`Channel`/`EngineObject`
+(`project.rs:726, 758`), and `origin_of_kind` is a discriminant compare no caller can aim
+here. `0x2081` was **already permitted** by the capability table (`capability.rs:919-923`,
+`Origin::Nvproxy`); the refusal came from `alloc_params` returning `None` one statement
+later. ⚠ ⊘ NOT `EngineObject` — that is the one variant that rewrites a *sibling* node's
+routing.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| `NV2081_BINAPI` generated from `cl2081.h:33` (both tags agree) | `kayfabe-abi/gen/src/main.rs`, `generated/classes.rs` |
+| `alloc_params(0x2081) = NoDeclaredFacts`; ratchet `12 → 13` | `versions.rs`, `capability.rs` |
+| `classify(0x2081) = ObjectKind::Other` — its **first** constructor | `kayfabe-chips/src/ga10x.rs`, `kayfabe-mocks` |
+| ★ `WireClassArch` also gained `NV20_SUBDEVICE_0` and `NV01_EVENT_KERNEL_CALLBACK_EX`, missing since it was written — the silent-`Unknown` trap its own comment warns about | `kayfabe-mocks/src/lib.rs` |
+| `kayfabe_abi::gpuinfo` — the forward-bit ABI, the one-row table, five named refusals, 9 unit tests | `crates/kayfabe-abi/src/gpuinfo.rs` |
+| `WantedTable::GpuInfoV2`, the **request-editing** arm; `ChipProfile::forwarded_gpu_info` | `kayfabe-device/src/inittables.rs`, `lib.rs`, `ga10x.rs` |
+| R21 `--gpu-info-sweep` | `rmladder.rs` |
+| served universe `24 → 25`; branch-(a) cacheable `4 → 5` (the first via `CACHEABLE_BY_INPUT`) | `init_tables.rs`, `sticky.rs` |
+| `CLAIMED_BUT_REFUSED` gains `0x20800102` with its argument — **2 served / 1 refused** of the three recorded calls, which is exactly the argument-keyed shape that row demands | `replay_conformance.rs` |
+
+★ `replay_conformance.rs` is the strongest half: `n_claimed` moves `84 → 87` and
+`size_checked` `24 → 25` against a real-GA106 GSP capture, so the reply's `paramsSize` is
+hardware-evidenced rather than declared.

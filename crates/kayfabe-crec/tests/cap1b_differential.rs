@@ -340,12 +340,27 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `kayfabe_abi::gvaspacepdes`. What is genuinely uncovered here is the ENVELOPE for this
     // specific command id, and `[measured]` run `irq1` is the only thing that has exercised
     // it.
+    //
+    // ⚠⚠ §14.28 added a SIXTH, and its reason is a THIRD kind — not "the capture stopped
+    // mid-function" and not "a later boot phase", but **a different demander entirely**.
+    // `GpuInfoV2` is `0x20800102`, and `cap1b` is an `RmInitAdapter` capture driven by
+    // `nvidia-smi`; this control's forwarded entries are demanded by the guest kernel later
+    // in the boot and by **libcuda**, neither of which this capture contains. ⊘ No closure
+    // limit reaches a process that never ran.
+    //
+    // ★ Its reply plane is covered elsewhere and better: `tests/tests/replay_conformance.rs`
+    // replays the THREE real `0x20800102` calls in `traces/rpctrace_ga106_boot1.bin` — a
+    // GSP-level capture off a real GA106 — which is a stronger oracle than this differential
+    // could be, because it carries the requests' own bytes including the
+    // `INDEX_FORWARD_TO_PHYSICAL` bit. ⊘ This entry is still a real coverage cost and is
+    // named rather than elided: nothing in the `cap1b` pair would notice this arm breaking.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
         WantedTable::GrPdbProperties,
         WantedTable::GrContextBuffersInfo,
         WantedTable::GvaspaceServerReservedPdesClient,
+        WantedTable::GpuInfoV2,
     ]
     .into_iter()
     .collect();
@@ -368,10 +383,12 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // the new control is exercised by the replay rather than merely declared.
     // ★ 23 -> 24 at the `GR-info` rung: `0x20800a2a`, asked at sequence 50 — also INSIDE
     // the closure limit, so it too is exercised by the replay rather than merely declared.
-    assert_eq!(universe.len(), 24, "non-vacuity: the universe is not empty");
+    // ★ 24 -> 25 at the `cuInit` rung: `0x20800102` GPU_GET_INFO_V2, and it is the WEAKEST
+    // kind of addition this pair can see — it goes straight into the exception set below.
+    assert_eq!(universe.len(), 25, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        5,
+        6,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

@@ -57,7 +57,9 @@ fn abi() -> DriverAbiTable {
 fn port_gpu() -> kayfabe_core::gpu::Gpu {
     kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
-        Box::new(kayfabe_isolate::StillbornIsolates::new("served_chain_seats")),
+        Box::new(kayfabe_isolate::StillbornIsolates::new(
+            "served_chain_seats",
+        )),
         kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )
     .expect("the port's object model realizes")
@@ -134,7 +136,10 @@ fn func(function: RpcFunction, code: u32, len: usize) -> RpcCommand {
 fn every_command() -> Vec<(String, RpcCommand)> {
     let mut v: Vec<(String, RpcCommand)> = Vec::new();
     for w in WantedTable::ALL {
-        v.push((format!("table {:#010x}", w.cmd_id()), control(w.cmd_id(), w.params_size())));
+        v.push((
+            format!("table {:#010x}", w.cmd_id()),
+            control(w.cmd_id(), w.params_size()),
+        ));
     }
     for &cmd in kayfabe_rmrpc::OBJECT_CONTROLS {
         v.push((format!("object-control {cmd:#010x}"), control(cmd, 8)));
@@ -161,11 +166,7 @@ fn every_command() -> Vec<(String, RpcCommand)> {
             kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_FREE,
             16,
         ),
-        (
-            RpcFunction::UnloadingGuestDriver,
-            47,
-            16,
-        ),
+        (RpcFunction::UnloadingGuestDriver, 47, 16),
     ] {
         v.push((format!("fn {code}"), func(f, code, len)));
     }
@@ -240,7 +241,10 @@ fn the_publication_seat_changes_no_reply_byte_of_any_command() {
     for (name, cmd) in every_command() {
         let without = reply_bytes(&chain(false, false).respond(&cmd));
         let with = reply_bytes(&chain(false, true).respond(&cmd));
-        assert_eq!(without, with, "the publication seat changed the reply to {name}");
+        assert_eq!(
+            without, with,
+            "the publication seat changed the reply to {name}"
+        );
         // …and the same with the object seat filled, because that is the shipped shape.
         let without = reply_bytes(&chain(true, false).respond(&cmd));
         let with = reply_bytes(&chain(true, true).respond(&cmd));
@@ -306,13 +310,10 @@ fn the_publication_seat_sees_the_commands_the_link_below_it_answers() {
     let want_publications = all
         .iter()
         .filter(|(_, c)| {
-            abi()
-                .decode_rpc_control(&c.payload)
-                .ok()
-                .is_some_and(|r| {
-                    c.function == RpcFunction::RmControl
-                        && kayfabe_rmrpc::PUBLICATION_CONTROLS.contains(&r.cmd)
-                })
+            abi().decode_rpc_control(&c.payload).ok().is_some_and(|r| {
+                c.function == RpcFunction::RmControl
+                    && kayfabe_rmrpc::PUBLICATION_CONTROLS.contains(&r.cmd)
+            })
         })
         .count();
     assert!(

@@ -1524,7 +1524,9 @@ impl kayfabe_gsp::CommandObserver for PublicationObserver {
         self.census.note(|c| c.seen = c.seen.saturating_add(1));
         match translate(&self.abi, self.guest_os, cmd) {
             Ok(Translation::Event(ev)) => match self.gpu.apply(ev) {
-                Ok(()) => self.census.note(|c| c.applied = c.applied.saturating_add(1)),
+                Ok(()) => self
+                    .census
+                    .note(|c| c.applied = c.applied.saturating_add(1)),
                 // ★ The graph's own refusal, named — a publication for a VA space the
                 // guest has not allocated **parks** rather than refusing
                 // (`RmGraph::pending_pdbs`), so reaching this arm means something

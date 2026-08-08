@@ -812,7 +812,11 @@ fn branch_a_is_a_subset_of_what_this_port_serves_from_a_constant_row() {
             "{cmd:#010x}: branch (a) does not go through the GSS-legacy mask",
         );
     }
-    assert_eq!(BRANCH_A_CACHEABLE.len(), 4);
+    // ★ 4 -> 5 at §14.28: `0x20800102` GPU_GET_INFO_V2, the first row here that reaches
+    // branch (a) through `CACHEABLE_BY_INPUT` rather than the blanket `CACHEABLE` bit — and
+    // the first whose reply is not a constant. ⊘ The argument still holds and is checked one
+    // level up: the reply is a pure function of the very params the guest keys its cache on.
+    assert_eq!(BRANCH_A_CACHEABLE.len(), 5);
 }
 
 /// **Neither guard can help branch (a), and this states the only two levers there are.**

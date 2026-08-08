@@ -711,6 +711,7 @@ fn ga106_copy() -> kayfabe_device::ChipProfile {
         gr_static: g.gr_static,
         gr_info: g.gr_info,
         gr_context_buffers: g.gr_context_buffers,
+        forwarded_gpu_info: g.forwarded_gpu_info,
         fb_length: g.fb_length,
     }
 }

@@ -1500,6 +1500,13 @@ pub static GA106: ChipProfile = ChipProfile {
     gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
     gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
     gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+    // ★★★ One row — `0x11 -> 0`, the only `GPU_GET_INFO_V2` index this project has a
+    // measured GSP-level answer for, and `[measured 2026-08-08]` it has that answer three
+    // ways across two different physical RTX 3060 parts: a GSP-level RPC capture
+    // (`traces/rpctrace_ga106_boot1.bin` seq303/seq780), `rmladder --gpu-info-sweep` R21,
+    // and libcuda's own ioctl. ⊘ NOT the eleven-row ioctl table — ten of those indices are
+    // answered by the guest's own kernel and never reach a GSP.
+    forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
     fb_length: GA106_FB_LENGTH,
 };
 

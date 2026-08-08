@@ -249,6 +249,7 @@ static OTHER: ChipProfile = ChipProfile {
     gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
     gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
     gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+    forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
     constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
     fb_length: OTHER_FB_LENGTH,
 };
@@ -410,6 +411,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -461,6 +463,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -736,6 +739,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -791,6 +795,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };
@@ -1221,6 +1226,7 @@ fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
     };

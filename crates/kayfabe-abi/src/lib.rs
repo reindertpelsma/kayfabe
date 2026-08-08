@@ -107,6 +107,7 @@ pub mod fifochannels;
 pub mod fmbsize;
 pub mod generated;
 pub mod gmmustatic;
+pub mod gpuinfo;
 pub mod grinfo;
 pub mod grstatic;
 pub mod gspstaticinfo;

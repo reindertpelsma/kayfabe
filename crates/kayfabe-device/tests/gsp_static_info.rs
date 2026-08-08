@@ -551,6 +551,7 @@ const fn copy_of_ga106() -> ChipProfile {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,
     }

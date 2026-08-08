@@ -4810,7 +4810,14 @@ fn a_malformed_publication_is_refused_as_malformed_and_a_lying_size_as_a_size() 
     // ⊘ A declared `paramsSize` that is not the struct's own size is refused as a SIZE,
     // before the body is looked at — §4.3's exact check, not a lower bound.
     let params = publication_params(pubv::ROOT, g::GMMU_APERTURE_VIDEO, 4);
-    let body = w::control_body(pubv::C, pubv::VAS, CMD, 32, w::RMAPI_RPC_FLAGS_NONE, &params);
+    let body = w::control_body(
+        pubv::C,
+        pubv::VAS,
+        CMD,
+        32,
+        w::RMAPI_RPC_FLAGS_NONE,
+        &params,
+    );
     assert_eq!(
         xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
         Err(BridgeRefusal::ControlParamsSizeMismatch {

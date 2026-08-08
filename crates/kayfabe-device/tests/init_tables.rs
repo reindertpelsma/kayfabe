@@ -317,7 +317,14 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // 3712-byte reply is the SECOND measured on a real GA106, and the measurement went the
     // other way from `0x20802a08`'s: the C's captured row is FULL (`dlen == psize`) and
     // hardware CORROBORATED it byte for byte — see `kayfabe_abi::grinfo`.
-    assert_eq!(WantedTable::ALL.len(), 24, "the served universe's size");
+    // ★★★ 24 -> 25 at the `cuInit` rung (`execution_plane_increments.md` §14.28):
+    // `0x20800102` GPU_GET_INFO_V2, and it is the first of the twenty-five whose reply is a
+    // **function of the request** rather than of the chip row. It is also the first admitted
+    // by an *injection experiment* — one status forced to `0x56` at a time on a real GA106 —
+    // rather than by a boot log. ⊘ And the eleven-row table that experiment published is at
+    // the ioctl boundary: ten of those indices are answered by the guest's own kernel and
+    // never reach a GSP. See `kayfabe_abi::gpuinfo`.
+    assert_eq!(WantedTable::ALL.len(), 25, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

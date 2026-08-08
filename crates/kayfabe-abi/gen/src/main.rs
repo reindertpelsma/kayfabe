@@ -116,6 +116,7 @@ const CL0080_H: &str = "src/common/sdk/nvidia/inc/class/cl0080.h";
 const CTRL0080DMA_H: &str = "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h";
 const CTRL2080GPU_H: &str = "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h";
 const CL2080_H: &str = "src/common/sdk/nvidia/inc/class/cl2080.h";
+const CL2081_H: &str = "src/common/sdk/nvidia/inc/class/cl2081.h";
 const CL9067_H: &str = "src/common/sdk/nvidia/inc/class/cl9067.h";
 const CL90F1_H: &str = "src/common/sdk/nvidia/inc/class/cl90f1.h";
 const CLA06C_H: &str = "src/common/sdk/nvidia/inc/class/cla06c.h";
@@ -405,6 +406,13 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
                 rust_name: "NV20_SUBDEVICE_0",
                 rust_ty: "u32",
                 doc: "`NV20_SUBDEVICE_0` — the Subdevice class, allocated under a Device.\n\n★ No struct is mirrored for it, and that is a reading rather than a deferral:\n`NV2080_ALLOC_PARAMETERS` has exactly one member, `subDeviceId`, which names\nWHICH subdevice of an SLI device this is. `AllocFacts` has nowhere to put it and\nnothing in the core would read it — the GPU a subdevice routes to is its Device\nancestor's `deviceId` (`RmGraph::gpu_of` walks the parent edge), not a field\nhere. So the protocol content of this class is entirely the EDGE, which the RPC\nheader already carries.",
+            },
+            ConstReq {
+                header: CL2081_H,
+                c_name: "NV2081_BINAPI",
+                rust_name: "NV2081_BINAPI",
+                rust_ty: "u32",
+                doc: "`NV2081_BINAPI` — the **binary-API** subdevice class: a handle whose every control is\nforwarded whole to GSP-RM without the kernel interpreting it\n(`binapiControl_IMPL`, `ogkm-580: src/nvidia/src/kernel/rmapi/binary_api.c:61-127`).\n\n★★★ It is on this path because of **libcuda**, and that was measured rather than\nassumed. `execution_plane_increments.md` §14.27, `[measured 2026-08-08, real GA106]`:\nforcing this alloc to `NV_ERR_NOT_SUPPORTED` and nothing else makes `cuInit(0)` return\n**100**, while forcing its opaque control `0x20810108` to the same status leaves\n`cuInit(0) = 0`. ⊘ The class is load-bearing; the control on it is not.\n\n⚠ Its alloc params are `NV2081_ALLOC_PARAMETERS` — one `NvU32 reserved`, no handle and\nno pointer (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2081.h:36-38`) — registered as\n`RS_OPTIONAL` (`resource_list.h:444`), so a NULL is legal by declaration. Measured on the\nioctl boundary, real libcuda sends `paramsSize=0` and a NULL pointer; RM's own RPC to GSP\nthen carries `paramsSize=4` for the registered class, and the two numbers are not the\nsame wire.\n\n★ `RS_FLAGS_ALLOC_NON_PRIVILEGED` and `Parents = RS_LIST(classId(Subdevice))`\n(`resource_list.h:439-448`) — an unprivileged leaf under a Subdevice. It allocates no\nengine, owns no channel and schedules nothing, which is why admitting it puts no silicon\ndemand on the emulated device.",
             },
             ConstReq {
                 header: NVOS_H,

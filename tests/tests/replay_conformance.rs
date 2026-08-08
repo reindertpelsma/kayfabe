@@ -1356,9 +1356,9 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // would pass having tested only the refusal arm.
     assert_eq!(
         (n_claimed, n_unclaimed),
-        (84, 226),
-        "`[measured]` 2026-08-03: 84 of the 310 recorded control calls are ones this port \
-         claims. The served arm is not near-vacuous and the number is pinned so a silent \
+        (87, 223),
+        "`[measured]` 2026-08-03: 87 of the 310 recorded control calls are ones this port \
+         claims (84 before §14.28 added `0x20800102`, which the capture demands 3 times). The served arm is not near-vacuous and the number is pinned so a silent \
          collapse of it is red"
     );
 
@@ -1373,8 +1373,8 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     );
     assert_eq!(
         size_checked.len(),
-        24,
-        "24 distinct controls had their reply paramsSize judged against a real GA106 GSP \
+        25,
+        "25 distinct controls had their reply paramsSize judged against a real GA106 GSP \
          on 580.159.04, and every one agreed"
     );
     // And refusal really is the majority answer, which is the honest shape of this port
@@ -1389,9 +1389,31 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
 /// reaches `kayfabe_device::unserviced::UnservicedLedger` — it is invisible to every
 /// instrument this port has except a test that judges the *answer*. A predicate would have
 /// silently absorbed the next entry.
-const CLAIMED_BUT_REFUSED: [(u32, &str); 1] = [(
-    0x2080_0301,
-    "NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION. Accepting a registration is a promise to \
+const CLAIMED_BUT_REFUSED: [(u32, &str); 2] = [
+    (
+        0x2080_0102,
+        "NV2080_CTRL_CMD_GPU_GET_INFO_V2, and this is an ARGUMENT-KEYED refusal in the \
+         strictest sense the row above asks for: of the three recorded calls this port \
+         serves TWO and refuses ONE, and the split is decided by the guest's own request \
+         bytes. The two served calls (seq303, seq780) forward index 0x11, which this port \
+         has a measured GSP-level answer for — the capture's own reply says 0, and two \
+         further instruments on a second physical GA106 agree. The refused call (seq806) \
+         forwards 0x23 and 0x24, and those are ★★★ PER-CHIP IDENTITY VALUES: this capture's \
+         GA106 (GPU-e28d7776) answered 0x19ece058 / 0xb91e2532, while a different physical \
+         GA106 (GPU-d0913685) answered 0x4324d4e9 / 0x8708a4a8 — stable across runs on each \
+         part, different between parts. ⊘ No chip-FAMILY row can be right on both, so \
+         `kayfabe_abi::gpuinfo` refuses them by name (`UnmeasuredForwardedIndex`) rather \
+         than writing a plausible 32-bit identity into a reply the guest is free to cache \
+         forever (this control is RMCTRL_FLAGS_CACHEABLE_BY_INPUT). ⚠ It is a KNOWN GAP and \
+         a real divergence — real GA106 firmware answers NV_OK to all three — and the \
+         honest reading of the refusal is `derive_what_you_cannot_query_then_oracle_it`: \
+         these two want DERIVING from the identity this port already synthesises, and \
+         nothing in this repository yet says from what. ⊘ Answering 0 would not be \
+         conservative; it would contradict four positive measurements.",
+    ),
+    (
+        0x2080_0301,
+        "NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION. Accepting a registration is a promise to \
      deliver that event, and this port delivers none, so \
      `kayfabe_abi::eventnotify::SILENT_NOTIFIERS` admits only the indices whose silence is \
      TRUE of this device — today exactly NV2080_NOTIFIERS_POWER_RESUME (194), which cannot \
@@ -1407,7 +1429,8 @@ const CLAIMED_BUT_REFUSED: [(u32, &str); 1] = [(
      transition rule because `InitTablePolicy::notify_actions` outlives the guest driver \
      lifetime that the guest's own `Subdevice` does not. See \
      `a_guest_teardown_does_not_reset_this_port_s_notifier_state`, which isolates it.",
-)];
+    ),
+];
 
 /// The **guard** for the replay half: a policy that fabricates an `NV_OK` for a control it
 /// does not model must turn the test above red.

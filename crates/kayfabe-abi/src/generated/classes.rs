@@ -84,6 +84,31 @@ pub const NV01_DEVICE_0: u32 = 0x80;
 /// ogkm `src/common/sdk/nvidia/inc/class/cl2080.h`.
 pub const NV20_SUBDEVICE_0: u32 = 0x2080;
 
+/// `NV2081_BINAPI` — the **binary-API** subdevice class: a handle whose every control is
+/// forwarded whole to GSP-RM without the kernel interpreting it
+/// (`binapiControl_IMPL`, `ogkm-580: src/nvidia/src/kernel/rmapi/binary_api.c:61-127`).
+///
+/// ★★★ It is on this path because of **libcuda**, and that was measured rather than
+/// assumed. `execution_plane_increments.md` §14.27, `[measured 2026-08-08, real GA106]`:
+/// forcing this alloc to `NV_ERR_NOT_SUPPORTED` and nothing else makes `cuInit(0)` return
+/// **100**, while forcing its opaque control `0x20810108` to the same status leaves
+/// `cuInit(0) = 0`. ⊘ The class is load-bearing; the control on it is not.
+///
+/// ⚠ Its alloc params are `NV2081_ALLOC_PARAMETERS` — one `NvU32 reserved`, no handle and
+/// no pointer (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2081.h:36-38`) — registered as
+/// `RS_OPTIONAL` (`resource_list.h:444`), so a NULL is legal by declaration. Measured on the
+/// ioctl boundary, real libcuda sends `paramsSize=0` and a NULL pointer; RM's own RPC to GSP
+/// then carries `paramsSize=4` for the registered class, and the two numbers are not the
+/// same wire.
+///
+/// ★ `RS_FLAGS_ALLOC_NON_PRIVILEGED` and `Parents = RS_LIST(classId(Subdevice))`
+/// (`resource_list.h:439-448`) — an unprivileged leaf under a Subdevice. It allocates no
+/// engine, owns no channel and schedules nothing, which is why admitting it puts no silicon
+/// demand on the emulated device.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/cl2081.h`.
+pub const NV2081_BINAPI: u32 = 0x2081;
+
 /// `NV01_EVENT_KERNEL_CALLBACK_EX` — the event class the guest's own KERNEL
 /// RM allocates during adapter init (`[measured]`, the 2026-08-01 boot: it is the
 /// fourth and last class `rpcRmApiAlloc_GSP` asks for before `RmInitAdapter`

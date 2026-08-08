@@ -183,6 +183,27 @@ impl Arch for Ga10xArch {
             nv::AMPERE_DMA_COPY_B => ObjectKind::EngineObject {
                 engine: EngineKind::Ce,
             },
+            // ★★★ `NV2081_BINAPI` — an **opaque leaf under a Subdevice**, and
+            // [`ObjectKind::Other`]'s first constructor in this port. That variant's own doc
+            // is *"anything else the graph tracks as a plain node"*, which is exactly what
+            // this is: RM registers it `Parents = RS_LIST(classId(Subdevice))`,
+            // `RS_FLAGS_ALLOC_NON_PRIVILEGED`, and every control on it is tunnelled whole to
+            // GSP without the kernel reading it
+            // (`ogkm-580: resource_list.h:439-448`, `rmapi/binary_api.c:61-127`).
+            //
+            // ⊘ The label is **checked to be inert**, not assumed to be — the hazard that
+            // bit §14.21 and §14.24 runs in this direction. `ObjectKind::Other` and
+            // `ObjectKind::Unknown` are each matched in **zero** places in the tree: the
+            // graph branches only on `Device`, `Client`, `Memory` and `Event`
+            // (`rmgraph.rs:1346, 1429, 2372, 2399`), the projection only on `VaSpace`,
+            // `Tsg`, `CtxShare`, `Channel` and `EngineObject` (`project.rs:726, 758`), and
+            // `origin_of_kind` (`rmgraph.rs:2228`) is a discriminant compare no caller can
+            // aim at this variant. So the change from `Unknown` to `Other` moves no
+            // decision, and that is what makes the truthful name affordable.
+            //
+            // ⚠ ⊘ NOT `EngineObject` — that is the one variant that rewrites a **sibling**
+            // node's routing (`project.rs:726-739`), and this class has no engine.
+            nv::NV2081_BINAPI => ObjectKind::Other,
             _ => ObjectKind::Unknown,
         }
     }

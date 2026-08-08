@@ -1,5 +1,10 @@
-//! The command policy that answers the fourteen `GSP_RM_CONTROL`s the guest's RM cannot get
-//! past — twelve from the chip row's own tables, and two that are verbs rather than tables.
+//! The command policy that answers the twenty-five `GSP_RM_CONTROL`s the guest's RM cannot
+//! get past — most from the chip row's own tables, two that are verbs rather than tables,
+//! and ★ one ([`WantedTable::GpuInfoV2`]) whose reply is a **function of the request**.
+//!
+//! ⊘ The count is stated here only as orientation; [`WantedTable::ALL`] is the universe
+//! every gate quantifies over, and it is the array — not this sentence — that decides what
+//! is served.
 //!
 //! ⚠ The type names say *table* and most of them are not one:
 //! `NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO` is an identity,
@@ -72,6 +77,7 @@ use kayfabe_abi::fifochannels::{
 use kayfabe_abi::gmmustatic::{
     self, GMMU_STATIC_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
 };
+use kayfabe_abi::gpuinfo::{self, GPU_GET_INFO_V2_PARAMS_SIZE, NV2080_CTRL_CMD_GPU_GET_INFO_V2};
 use kayfabe_abi::grstatic;
 use kayfabe_abi::gvaspacepdes;
 use kayfabe_abi::inittables::{
@@ -571,6 +577,26 @@ pub enum WantedTable {
     /// control IS issued, and refusing it sends the whole function to `cleanup:` — the same
     /// `NV_ERR_INVALID_STATE` in `KernelFifo`, from a different cause.
     GrContextBuffersInfo,
+    /// `NV2080_CTRL_CMD_GPU_GET_INFO_V2` (`0x20800102`) — ★★★ the **first control this
+    /// policy serves whose reply is a function of the request**, and the first one where
+    /// most of the answer was already written by the guest's own kernel.
+    ///
+    /// `[measured 2026-08-08, real GA106]` refusing it makes `cuInit` return `100`. It is
+    /// **co-equal** with admitting `NV2081_BINAPI`: neither alone changes `cuInit`'s answer,
+    /// which is why they land together (`execution_plane_increments.md` §14.27's injection
+    /// matrix).
+    ///
+    /// ⊘ **No fixed-body row can answer it, and no eleven-row table either.** The eleven
+    /// `(index, value)` pairs §14.27 published are an *ioctl-boundary* reading; ten of them
+    /// are resolved inside `getGpuInfos`'s own `switch` and never reach a GSP, and only the
+    /// entries carrying `INDEX_FORWARD_TO_PHYSICAL` (bit 31) are ours to fill. The whole
+    /// derivation, the three recorded GSP-level calls it rests on, and the two per-chip
+    /// identity indices this port refuses by name are in [`kayfabe_abi::gpuinfo`].
+    ///
+    /// ⚠ The guest's `gpuInfoListSize` is a **guest-supplied count used as a loop bound over
+    /// a buffer**; it is bounded against `NV2080_CTRL_GPU_INFO_MAX_LIST_SIZE` before it
+    /// indexes anything, exactly as RM bounds it.
+    GpuInfoV2,
 }
 
 impl WantedTable {
@@ -601,7 +627,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 24] = [
+    pub const ALL: [WantedTable; 25] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -626,6 +652,7 @@ impl WantedTable {
         Self::GvaspaceServerReservedPdes,
         Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
+        Self::GpuInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -683,6 +710,7 @@ impl WantedTable {
             Self::GrContextBuffersInfo => {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO
             }
+            Self::GpuInfoV2 => NV2080_CTRL_CMD_GPU_GET_INFO_V2,
         }
     }
 
@@ -719,6 +747,7 @@ impl WantedTable {
                 gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
             }
             Self::GrContextBuffersInfo => grstatic::CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
+            Self::GpuInfoV2 => GPU_GET_INFO_V2_PARAMS_SIZE,
         }
     }
 
@@ -1255,6 +1284,38 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::GrContextBuffersInfo => {
                 match grstatic::encode_context_buffers_info(&self.chip.gr_context_buffers) {
                     Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The only arm that reads the request as a whole, and the only one whose
+            // reply is the request EDITED. Both properties are forced by the control:
+            //
+            // - The guest kernel has already written its own answers into the entries it
+            //   resolved, and marked only the ones it could not with bit 31
+            //   (`ogkm-580: subdevice_ctrl_gpu_kernel.c:548, 566`). Re-encoding from a table
+            //   would overwrite the kernel's own state with a transcription.
+            // - `[measured 2026-08-08, real GA106 (RTX 3060, GPU-d0913685), driver
+            //   580.159.04, `rmladder --gpu-info-sweep` R21]` real GSP returns the untouched
+            //   tail verbatim: the sweep seeds every byte past the declared entries with
+            //   `0xCD` and reads them back unchanged. So the copy is what hardware does, not
+            //   a shortcut.
+            //
+            // ⊘ The slice is in bounds by the pre-arm size check above — `req.params_size ==
+            // want.params_size()` and `payload.len() >= params_at + params_size` are both
+            // already asserted — and `answer_gpu_get_info_v2` re-checks the length anyway,
+            // because a bound that lives only in a caller is a bound one refactor from gone.
+            WantedTable::GpuInfoV2 => {
+                let at = req.params_at;
+                match gpuinfo::answer_gpu_get_info_v2(
+                    &cmd.payload[at..at + GPU_GET_INFO_V2_PARAMS_SIZE],
+                    self.chip.forwarded_gpu_info,
+                ) {
+                    Ok(p) => p,
+                    // ⊘ Refused BY NAME, and the whole call — which is RM's own shape, its
+                    // loop breaking on the first index it cannot answer. The two indices
+                    // that land here (`0x23`, `0x24`) are per-chip identity values
+                    // `[measured 2026-08-08]` to DIFFER between two physical RTX 3060 parts;
+                    // see `kayfabe_abi::gpuinfo`.
                     Err(_) => return refuse(),
                 }
             }

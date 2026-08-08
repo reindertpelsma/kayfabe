@@ -513,6 +513,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: FalconInventoryRow {
             // Inside RM's 71-slot check, outside the 64-entry table it indexes.
             falcons: &SIXTY_FIVE,
@@ -635,6 +636,7 @@ const fn copy_of_ga106() -> ChipProfile {
         gr_static: kayfabe_abi::grstatic::GA106_GR_STATIC,
         gr_info: kayfabe_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kayfabe_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
         constructed_falcons: FalconInventoryRow::NONE,
         fb_length: 0,
     }

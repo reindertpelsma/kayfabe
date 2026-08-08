@@ -682,6 +682,117 @@ fn binapi_probe(
     }
 }
 
+/// ★★★ R21 — **every `GPU_GET_INFO_V2` index, asked of a real GA106, ONE AT A TIME.**
+///
+/// `execution_plane_increments.md` §14.28. The increment that needed this was handed a
+/// table of **eleven** `(index, value)` rows read off an interposed `cuInit`, and that
+/// table is at the **ioctl** boundary — which is the wrong boundary for this port by one
+/// layer, and the error is not conservative.
+///
+/// ⊘ **Ten of those eleven never reach a GSP.** `getGpuInfos`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:88-580`)
+/// answers thirty-two indices from **kernel** state and forwards only the `default:` arm,
+/// marking each forwarded entry by OR-ing `INDEX_FORWARD_TO_PHYSICAL` (`0x8000_0000`,
+/// `:83`, ct_asserted equal to `NV2080_CTRL_GPU_INFO_INDEX_RESERVED` = bit 31) into the
+/// index word. A port that answers all eleven from the ioctl table is answering ten
+/// questions it was never asked, from values the guest kernel had already written.
+///
+/// ## Why the sweep is one call per index
+///
+/// `getGpuInfos` **breaks out of its loop on the first non-`NV_OK` status** (`:566-569`) and
+/// returns it for the whole call. A 70-index request therefore measures *"the first index
+/// that fails"* and nothing after it. One index per call makes each answer independent, and
+/// makes a refusal attributable to the index that earned it.
+///
+/// ## What this rung is and is not an oracle for
+///
+/// ★ For an index the kernel **forwards**, the value RM hands back to usermode is the value
+/// GSP-RM produced — the kernel copies the RPC reply straight over its own params — so this
+/// rung IS the oracle for exactly the rows this port has to serve.
+/// ⊘ For an index the kernel **resolves itself**, the value here is the *guest kernel's*
+/// and says nothing about what a GSP would answer. Those rows are printed with a `KERNEL`
+/// mark and must not be copied into the port's table. Which set an index is in is a clean
+/// read of the open switch above; it is not measured here and is not guessable from a
+/// reply.
+///
+/// ⚠ The unused tail of the 564-byte struct is seeded `0xCD` so *"RM wrote back the whole
+/// params"* separates from *"RM wrote back the entries I declared"* — R18's reason.
+fn gpu_info_sweep(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle) {
+    // `ogkm-580: ctrl2080gpu.h:122` — NV2080_CTRL_GPU_INFO_MAX_LIST_SIZE.
+    const MAX_LIST: u32 = 0x46;
+    // `4 + 8 * 0x46`, and confirmed on the wire as `size=564` in the real-GA106 cuInit
+    // trace (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:42`).
+    const PARAMS: usize = 4 + 8 * (MAX_LIST as usize);
+    const CMD: u32 = 0x2080_0102;
+
+    println!(
+        "info  R21 gpuinfo sweep   = {MAX_LIST} indices x 1 call each, {PARAMS}-byte params, \
+         tail seeded 0xCD"
+    );
+    println!("info  R21 legend          = idx status data   (the port serves FORWARDED rows only)");
+
+    for index in 0..MAX_LIST {
+        let mut params = vec![0xCDu8; PARAMS];
+        // gpuInfoListSize = 1, then one NV2080_CTRL_GPU_INFO { index, data }.
+        params[0..4].copy_from_slice(&1u32.to_le_bytes());
+        params[4..8].copy_from_slice(&index.to_le_bytes());
+        params[8..12].copy_from_slice(&0u32.to_le_bytes());
+        let result = rm.control(subdevice, ControlCmd(CMD), &mut params);
+        let echoed = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+        let data = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+        let tail_written = params[12..].iter().any(|&b| b != 0xCD);
+        match result {
+            Ok(()) => println!(
+                "★     R21 {index:#04x}  NV_OK      data={data:#010x} ({data})  echo={echoed:#010x}\
+                 {}",
+                if tail_written {
+                    "  tail=WRITTEN"
+                } else {
+                    "  tail=untouched"
+                }
+            ),
+            Err(e) => println!("info  R21 {index:#04x}  refused    {e:?}"),
+        }
+    }
+
+    // ★ The control experiment: libcuda's OWN eleven-index request, byte for byte off the
+    // interposed trace, issued as one call. If this reproduces the trace's `out=` line then
+    // the per-index sweep above and the capture are measuring the same machine, and any
+    // disagreement between them is a fact about the *request shape* rather than about the
+    // instrument.
+    const LIBCUDA_INDICES: [u32; 11] = [
+        0x11, 0x22, 0x27, 0x2a, 0x37, 0x3b, 0x3c, 0x3d, 0x2d, 0x3a, 0x44,
+    ];
+    let mut params = vec![0u8; PARAMS];
+    params[0..4].copy_from_slice(&(LIBCUDA_INDICES.len() as u32).to_le_bytes());
+    for (i, idx) in LIBCUDA_INDICES.iter().enumerate() {
+        params[4 + 8 * i..8 + 8 * i].copy_from_slice(&idx.to_le_bytes());
+    }
+    match rm.control(subdevice, ControlCmd(CMD), &mut params) {
+        Ok(()) => {
+            let pairs: String = (0..LIBCUDA_INDICES.len())
+                .map(|i| {
+                    let idx = u32::from_le_bytes([
+                        params[4 + 8 * i],
+                        params[5 + 8 * i],
+                        params[6 + 8 * i],
+                        params[7 + 8 * i],
+                    ]);
+                    let data = u32::from_le_bytes([
+                        params[8 + 8 * i],
+                        params[9 + 8 * i],
+                        params[10 + 8 * i],
+                        params[11 + 8 * i],
+                    ]);
+                    format!("{idx:#x}={data} ")
+                })
+                .collect();
+            println!("★     R21 libcuda 11     = NV_OK  {pairs}");
+        }
+        Err(e) => println!("FAIL  R21 libcuda 11     = refused {e:?} — the trace says NV_OK"),
+    }
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -971,6 +1082,7 @@ fn main() -> std::process::ExitCode {
     let mut want_timer = false;
     let mut want_probe: Option<Vec<(u32, usize)>> = None;
     let mut want_binapi: Option<Vec<(u32, usize)>> = None;
+    let mut want_gpu_info = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -991,6 +1103,7 @@ fn main() -> std::process::ExitCode {
             "--timer" => want_timer = true,
             "--engines" => want_engines = true,
             "--doorbell-census" => want_census = true,
+            "--gpu-info-sweep" => want_gpu_info = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1066,6 +1179,18 @@ fn main() -> std::process::ExitCode {
     if let Some(specs) = want_probe {
         probe_ctrl(&mut rm, subdevice, &specs);
         println!("done — probe only");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R21 runs here and RETURNS, for R18's reason: it issues seventy-one controls on the
+    // subdevice and allocates nothing, so every refusal is the index's.
+    if want_gpu_info {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        gpu_info_sweep(&mut rm, subdevice);
+        println!("done — gpu-info sweep only");
         return std::process::ExitCode::SUCCESS;
     }
 

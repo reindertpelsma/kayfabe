@@ -394,6 +394,14 @@ impl Arch for WireClassArch {
             nv::AMPERE_DMA_COPY_B => ObjectKind::EngineObject {
                 engine: EngineKind::Ce,
             },
+            // ⚠ Mirrored from `Ga10xArch::classify` — see the reasoning there. ★ And the two
+            // rows below it are the trap this table's own comment warns about, paid off: a
+            // wire id missing HERE is silently `Unknown` in every wire-bytes test while the
+            // shipped arch is right, and `NV20_SUBDEVICE_0` and
+            // `NV01_EVENT_KERNEL_CALLBACK_EX` had been missing since this table was written.
+            nv::NV2081_BINAPI => ObjectKind::Other,
+            nv::NV20_SUBDEVICE_0 => ObjectKind::Subdevice,
+            nv::NV01_EVENT_KERNEL_CALLBACK_EX => ObjectKind::Event,
             _ => self.0.classify(class),
         }
     }

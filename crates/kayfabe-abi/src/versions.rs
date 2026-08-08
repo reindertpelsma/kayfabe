@@ -1077,6 +1077,39 @@ impl DriverAbiTable {
             classes::NV20_SUBDEVICE_0 | classes::NV01_EVENT_KERNEL_CALLBACK_EX => {
                 Some(AllocParams::NoDeclaredFacts)
             }
+            // ★★★ `NV2081_BINAPI` (`0x2081`) — the class **libcuda** needs, and the first
+            // row in this table admitted because an *injection experiment* named it rather
+            // than because a boot logged it. `[measured 2026-08-08, real GA106, real
+            // libcuda, one status forced at a time]` (`execution_plane_increments.md`
+            // §14.27):
+            //
+            //     refuse alloc 0x2081  -> cuInit(0) = 100
+            //     refuse ctrl  0x20810108 (the only control ON it) -> cuInit(0) = 0
+            //
+            // ⊘ So the class is load-bearing and its opaque control is not — the exact
+            // opposite of what §14.26 predicted, and a reminder that *"has no oracle"* is a
+            // statement about our instruments while *"is required"* is one about the driver.
+            //
+            // ⚠ `NoDeclaredFacts` is again the STRONG reading. `NV2081_ALLOC_PARAMETERS` is
+            // `{ NvU32 reserved }` — one word, **no handle and no pointer**
+            // (`ogkm-580: src/common/sdk/nvidia/inc/class/cl2081.h:36-38`) — registered
+            // `RS_OPTIONAL` (`resource_list.h:444`), so a NULL is legal by declaration; and
+            // measured on the ioctl boundary, real libcuda sends exactly that: `paramsSize=0`
+            // with a NULL pointer. There is nothing here to decode.
+            //
+            // ⊘ **Admitting the class is not serving what the class does**, and here that
+            // gap is unusually wide: `binapiControl_IMPL` forwards every control on this
+            // handle to GSP-RM *whole*, without the kernel interpreting it
+            // (`ogkm-580: src/nvidia/src/kernel/rmapi/binary_api.c:61-127`), so the object's
+            // entire purpose is a tunnel this port does not dig. That is affordable because
+            // the one control measured on it is measured NOT to matter; a second control
+            // appearing on this handle is a new fact and not covered by this row.
+            //
+            // ★ The alloc itself is inert on the device: `RS_FLAGS_ALLOC_NON_PRIVILEGED`,
+            // `Parents = RS_LIST(classId(Subdevice))` (`resource_list.h:439-448`) — an
+            // unprivileged leaf under a Subdevice that allocates no engine, owns no channel
+            // and schedules nothing.
+            classes::NV2081_BINAPI => Some(AllocParams::NoDeclaredFacts),
             _ => None,
         }
     }

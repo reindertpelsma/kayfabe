@@ -101,7 +101,7 @@
 //!
 //! `[measured]` by reading `ogkm-580`'s generated export table on 2026-08-01 — the
 //! `/*flags=*/` and `/*accessRight=*/` words beside each `methodId` in
-//! `src/nvidia/generated/g_subdevice_nvoc.c` — **four of the twelve controls this port
+//! `src/nvidia/generated/g_subdevice_nvoc.c` — **five of the twenty-five controls this port
 //! already serves are in branch (a)**:
 //!
 //! | control | `flags` | site | `bCacheable` |
@@ -110,7 +110,17 @@
 //! | `0x2080_0a36` `INTERNAL_GPU_GET_CHIP_INFO` | `0x404c0` | `:2253` | **yes** |
 //! | `0x2080_0a41` `INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP` | `0x4c0` | `:2403` | **yes** |
 //! | `0x2080_0a40` `INTERNAL_GET_DEVICE_INFO_TABLE` | `0x1c4c0` | `:2388` | **yes** |
-//! | the other eight | — | — | no (`CACHEABLE_ANY` clear) |
+//! | ★ `0x2080_0102` `GPU_GET_INFO_V2` | `0x30118` | `:151` | **yes**, and by a DIFFERENT bit |
+//! | the rest | — | — | no (`CACHEABLE_ANY` clear) |
+//!
+//! ⚠ The fifth row, added at §14.28, is cacheable through `RMCTRL_FLAGS_CACHEABLE_BY_INPUT`
+//! (`0x20000`) with plain `RMCTRL_FLAGS_CACHEABLE` (`0x400`) **clear** — the first row here
+//! that reaches branch (a) by the input-keyed half of `CACHEABLE_ANY` rather than the
+//! blanket one. ★ That is the *right* half for it, and it is the reason the exposure stays
+//! tolerable even though this control's reply is not a constant: the guest's cache is keyed
+//! on the request params, and this port's answer is a **pure function** of exactly those
+//! params and a build-time [`crate::ChipProfile`] row. Two different index lists get two
+//! different cache entries, which is what `BY_INPUT` means.
 //!
 //! ★★ **Two consequences worth more than the guard.**
 //!
@@ -185,7 +195,7 @@ const CONTROL_HEADER: usize = 40;
 /// `NV_OK`.
 const NV_OK: u32 = 0;
 
-/// The four served controls the **guest's own** export table marks cacheable — branch (a),
+/// The five served controls the **guest's own** export table marks cacheable — branch (a),
 /// which no reply of ours can influence. Module docs §3 carries the flag words and the
 /// generated-source line for each.
 ///
@@ -193,7 +203,16 @@ const NV_OK: u32 = 0;
 /// [`crate::inittables::WantedTable::ALL`] on purpose: this is a fact about the *guest's*
 /// table, not about what we serve. The two universes are related only by intersection, and
 /// `tests/tests/sticky_answer.rs` asserts that relationship rather than assuming it.
-pub const BRANCH_A_CACHEABLE: [u32; 4] = [0x2080_1803, 0x2080_0a36, 0x2080_0a41, 0x2080_0a40];
+pub const BRANCH_A_CACHEABLE: [u32; 5] = [
+    0x2080_1803,
+    0x2080_0a36,
+    0x2080_0a41,
+    0x2080_0a40,
+    // ★ §14.28. Cacheable by INPUT (`flags = 0x30118`), so the guest keys its cache on the
+    // request — and this port's reply is a pure function of that same request plus a
+    // constant chip row. See the module docs' §3 table.
+    0x2080_0102,
+];
 
 /// `rmapiControlIsCacheable(flags, accessRight, NV_TRUE)` — a transcription, not a
 /// paraphrase (`ogkm-580: src/nvidia/src/kernel/rmapi/rmapi_cache.c:152-172`,
@@ -545,7 +564,7 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
     //
     // ★★★ The row's executor could not notice, and the reason is this repository's own
     // named trap: `the_not_a_control_rows_decline_every_control_command` sweeps
-    // `WantedTable::ALL` — **`InitTablePolicy`'s** 24 ids — so it quantified over a
+    // `WantedTable::ALL` — **`InitTablePolicy`'s** 25 ids — so it quantified over a
     // universe that contains neither control this policy answers, and passed for a year of
     // commits by asking about the wrong list (`gates_quantified_over_a_list`). A false
     // claim, an executing test, and a green suite.

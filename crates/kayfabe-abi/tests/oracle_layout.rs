@@ -791,6 +791,16 @@ fn class_ids_match_the_headers() {
         0xc797,
         "ogkm-580: clc797.h:32 (= ogkm-610)"
     );
+    // ★★★ The class **libcuda** needs: `[measured 2026-08-08, real GA106]`, forcing this
+    // alloc to `NV_ERR_NOT_SUPPORTED` and nothing else takes `cuInit(0)` from 0 to 100.
+    // ⊘ NOT part of the guest KERNEL's boot subgraph — no boot before `amb1_ee1994b` ever
+    // put it on the wire, which is why it was admitted from an injection experiment rather
+    // than from a dmesg line.
+    assert_eq!(
+        classes::NV2081_BINAPI,
+        0x2081,
+        "ogkm-580: cl2081.h:33 (= ogkm-610)"
+    );
 }
 
 /// `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS` and `NV_CTXSHARE_ALLOCATION_PARAMETERS`

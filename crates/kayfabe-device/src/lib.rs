@@ -489,6 +489,20 @@ pub struct ChipProfile {
     /// established. See [`kayfabe_abi::grstatic::CONTEXT_BUFFER_ABSENT`] — `NV_U32_MAX`
     /// means *absent*, and two of GA106's rows are genuinely `0`.
     pub gr_context_buffers: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
+    /// ★★★ The `GPU_GET_INFO_V2` indices this chip's **GSP** answers — and only those.
+    ///
+    /// ⊘ Deliberately not "the GPU info table". The guest kernel resolves thirty-two of the
+    /// seventy indices from its own state and forwards only what it cannot
+    /// (`ogkm-580: subdevice_ctrl_gpu_kernel.c:88-580`), so a row here is a claim about what
+    /// **GSP-RM** returns, not about what a `nvidia-smi` query eventually prints. Entering a
+    /// kernel-resolved index would put a transcribed constant where the guest had already
+    /// written its own answer.
+    ///
+    /// ⚠ It is **short on purpose** — one row on GA106. Two of the forwarded indices this
+    /// port has seen demanded (`0x23`, `0x24`) were measured to **differ between two
+    /// physical GA106s**, so they are per-chip identity values and no chip-family row may
+    /// state them. They are refused by name instead. See [`kayfabe_abi::gpuinfo`].
+    pub forwarded_gpu_info: &'static [(u32, u32)],
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and
@@ -969,10 +983,7 @@ pub fn served_policy(
     Box::new(census::ControlCensus::new(
         driver,
         census,
-        sticky::StickyAnswerGuard::new(
-            driver,
-            served_chain(chip, driver, logs, probe_arm, links),
-        ),
+        sticky::StickyAnswerGuard::new(driver, served_chain(chip, driver, logs, probe_arm, links)),
     ))
 }
 
