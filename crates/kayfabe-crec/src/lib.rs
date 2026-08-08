@@ -205,14 +205,20 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
         // the replay answers a recorded capture, and the C whose replies it diffs
         // against never probe-armed anything.
         kayfabe_device::census::ControlCensusLog::new(),
-        // ⊘ **No object-model link, and this is a decision the differential depends on.**
-        // `cap1`/`cap1b` are the C's replies, and the C had no object model — it answered
-        // `GSP_RM_ALLOC` from its own tables. Installing one here would diff our object
-        // model's answers against the C's forged ones and call the disagreement a
-        // regression. The port's chain and this one now differ by exactly this link, which
-        // is why `crates/kayfabe-device/tests/served_chain_objects.rs` pins that the rest
-        // of the chain is unchanged by its presence.
-        None,
+        // ⊘ **NEITHER object-model seat, and this is a decision the differential depends
+        // on.** `cap1`/`cap1b` are the C's replies, and the C had no object model — it
+        // answered `GSP_RM_ALLOC` from its own tables. Installing one here would diff our
+        // object model's answers against the C's forged ones and call the disagreement a
+        // regression. The port's chain and this one now differ by exactly these two links,
+        // which is why `tests/tests/served_chain_seats.rs` pins that the rest of the chain is
+        // unchanged by their presence. ⚠ It cites a file that EXISTS; the sentence this
+        // replaced named `crates/kayfabe-device/tests/served_chain_objects.rs`, which never
+        // did.
+        //
+        // ⚠ The publication seat could not change a replayed byte even if it were seated
+        // (`kayfabe_gsp::CommandObserver` has no return value), but it would declare into
+        // an object model, and the replay has none to declare into.
+        kayfabe_device::ObjectLinks::default(),
     )
 }
 

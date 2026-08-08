@@ -1104,16 +1104,20 @@ fn the_control_refusal_order_matches_the_alloc_arms() {
         }),
     );
     // A command that IS in the table, and is one we cannot express, is a DIFFERENT
-    // refusal at the same step — the whole reason the table has two arms.
+    // refusal at the same step — the whole reason the table has two arms. ★ The
+    // *revocation* since §14.23: `0x90f10106` used to sit here and now has a decoder, so
+    // the id that still means "in the table, inexpressible" is `0x00801814`. ⊘ It also
+    // has no `params_size`, which is why it refuses here rather than at the size check
+    // below.
     assert_eq!(
         xlate(&all_wrong(
             spd::C,
             w::RMAPI_RPC_FLAGS_NONE,
             32,
-            w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
+            w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY
         )),
         Err(BridgeRefusal::PageDirControlNotModelled {
-            cmd: w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+            cmd: w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
         }),
     );
     // Command fixed, size still a lie -> the size.
@@ -1164,7 +1168,21 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         // would make "which controls serialize" unanswerable from a census.
         BridgeRefusal::SerializedControlParams { cmd: 0x0080_1813 },
         BridgeRefusal::UnknownControl { cmd: 0x2080_012b },
-        BridgeRefusal::PageDirControlNotModelled { cmd: 0x90f1_0106 },
+        BridgeRefusal::PageDirControlNotModelled { cmd: 0x0080_1814 },
+        // ★★★ §14.23's three, and they are three because they are three different
+        // diagnoses about one message: nothing to attribute it to, impossible content, and
+        // a root in memory this port cannot address.
+        BridgeRefusal::PublishedPdesUnnamedVaspace { cmd: 0x90f1_0106 },
+        BridgeRefusal::PublishedPdesMalformed {
+            cmd: 0x90f1_0106,
+            err: kayfabe_abi::gvaspacepdes::ServerReservedPdesError::LevelCountOutOfRange {
+                got: 7,
+            },
+        },
+        BridgeRefusal::PublishedPdesRootAperture {
+            cmd: 0x90f1_0106,
+            aperture: kayfabe_abi::gvaspacepdes::GMMU_APERTURE_SYS_COH,
+        },
         BridgeRefusal::ControlParamsSizeMismatch {
             cmd: 0x0080_1813,
             declared: 16,
@@ -1508,10 +1526,11 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
             w::message(
                 fn_id::GSP_RM_CONTROL,
                 1,
+                // ★ The revocation since §14.23 — see the sibling test.
                 &w::control_body(
                     A,
                     spd::DEV,
-                    w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                    w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
                     0,
                     w::RMAPI_RPC_FLAGS_NONE,
                     &[],
@@ -2501,10 +2520,11 @@ fn hostile_traffic_through_the_ring_leaves_the_valid_stream_untouched() {
         (
             w::Step {
                 function: fn_id::GSP_RM_CONTROL,
+                // ★ The revocation since §14.23 — see the sibling test.
                 body: w::control_body(
                     x::A,
                     spd::DEV,
-                    w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                    w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
                     0,
                     w::RMAPI_RPC_FLAGS_NONE,
                     &[],
@@ -4520,35 +4540,279 @@ fn a_zero_hvaspace_names_the_implicit_vas_and_is_refused() {
     );
 }
 
-/// ★★ **The §7-item-1 gap, pinned by exact variant.** The three commands that move a
-/// page-directory binding and that this port cannot express are refused *as that*, not as
-/// "unknown control" — because the two say different things to whoever reads the census.
+/// ★★ **The §7-item-1 gap, pinned by exact variant** — and it is now **one** command, not
+/// three. The revocation moves a page-directory binding and `RmEvent` has no verb for it,
+/// so it is refused *as that*, not as "unknown control", because the two say different
+/// things to whoever reads the census.
 ///
-/// If this ever fires in a real boot it names, precisely, the decoder the address plane is
-/// waiting on.
+/// ⊘ The other two ids left this test on 2026-08-08 (§14.23): they are **publications** and
+/// they are now translated, which is what `a_publication_becomes_a_set_page_dir_event`
+/// asserts. A test that still demanded a refusal from them would have been a green gate on
+/// the exact defect the increment removed.
 #[test]
 fn a_page_dir_bearing_control_is_refused_as_itself_not_as_unknown() {
-    for cmd in [
-        // The construct-time declaration for every ordinary RM-managed VAS.
-        w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
-        // The same payload for the GPU-group global VAS, on the bare-metal arm.
-        w::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
-        // The revocation — one MORE than the command we model, and the opposite of it.
-        w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
-    ] {
-        let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
-        assert_eq!(
-            xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
-            Err(BridgeRefusal::PageDirControlNotModelled { cmd }),
-            "cmd {cmd:#x}",
-        );
-    }
+    let cmd = w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY;
+    let body = w::control_body(spd::C, spd::DEV, cmd, 0, w::RMAPI_RPC_FLAGS_NONE, &[]);
+    assert_eq!(
+        xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+        Err(BridgeRefusal::PageDirControlNotModelled { cmd }),
+        "cmd {cmd:#x}",
+    );
     // ★ The adjacency assertion. 0x801813 and 0x801814 differ in one bit and mean
     // opposite things; a table with an off-by-one would bind a VASpace to a page
     // directory that was just revoked.
     assert_eq!(
         w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
         w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY + 1,
+    );
+}
+
+/// Handles and values for a **publication**, kept apart from [`spd`] because the two
+/// controls name their VA space in different places and that is the whole class of bug
+/// here: `SET_PAGE_DIRECTORY` names it in a **params** field, a publication names it in the
+/// RPC **header**'s `hObject`.
+mod pubv {
+    /// The client the publication is issued in — the RPC body's `hClient`.
+    pub const C: u32 = 0xc1e0_0006;
+    /// ★★★ The VA SPACE — the RPC body's `hObject`. Not a params field.
+    /// `[measured 2026-08-08, boot ship3_d5369b5]`: `gvas cmd 0x90f10106 hClient
+    /// 0xc1e00006 hObject 0x0000000a`.
+    pub const VAS: u32 = 0x0000_000a;
+    /// The root page directory that boot published for it, verbatim.
+    pub const ROOT: u64 = 0x0000_0002_efa9_c000;
+}
+
+/// One 184-byte publication body, built from the ABI's own encoder so the test states
+/// *values* and not *offsets*.
+fn publication_params(root: u64, root_aperture: u32, num_levels: u32) -> Vec<u8> {
+    use kayfabe_abi::gvaspacepdes::{GMMU_FMT_MAX_LEVELS, PdeLevel, ServerReservedPdes};
+    let mut levels = [PdeLevel::default(); GMMU_FMT_MAX_LEVELS];
+    // ★ The measured GA106 shape: four levels, shifts 47/38/29/21, each level one page
+    // below the last. Only `levels[0]` is the root and only it may reach the event.
+    for (i, lv) in levels.iter_mut().enumerate().take(4) {
+        *lv = PdeLevel {
+            phys_address: root - (i as u64) * 0x1000,
+            size: if i == 0 { 0x20 } else { 0x1000 },
+            aperture: if i == 0 {
+                root_aperture
+            } else {
+                kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO
+            },
+            page_shift: [47u8, 38, 29, 21][i],
+        };
+    }
+    kayfabe_abi::gvaspacepdes::encode_server_reserved_pdes(&ServerReservedPdes {
+        h_subdevice: 0,
+        subdevice_id: 0,
+        page_size: 0x20_0000,
+        virt_addr_lo: 0x1_0000_0000,
+        virt_addr_hi: 0x1_1fff_ffff,
+        num_levels,
+        levels,
+    })
+}
+
+/// A publication message on either of the two ids.
+fn publication_msg(cmd: u32, client: u32, vaspace: u32, params: &[u8]) -> Vec<u8> {
+    w::message(
+        fn_id::GSP_RM_CONTROL,
+        3,
+        &w::control_body(
+            client,
+            vaspace,
+            cmd,
+            params.len() as u32,
+            w::RMAPI_RPC_FLAGS_NONE,
+            params,
+        ),
+    )
+}
+
+/// ★★★ **§14.23 — the publication becomes a fact, and the VA space comes from the
+/// HEADER.**
+///
+/// The defect this replaces: `[measured 2026-08-08, boots ship_7a881a7 / ship3_d5369b5]`
+/// the port answered `control 0x90f10106 result 0x00000000 x4`, logged all five
+/// publications, and produced **no event** — so `Vas::pdb` was empty and every promote-ctx
+/// could only refuse `ContextVasUndeclared`.
+///
+/// ⊘ The `hObject` assertion is the load-bearing half. A translator that read the VA space
+/// from anywhere in the 184-byte body would pass every "an event was produced" test and
+/// attribute four roots to nothing.
+#[test]
+fn a_publication_becomes_a_set_page_dir_event_keyed_on_the_headers_hobject() {
+    for cmd in [
+        w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        w::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+    ] {
+        let params = publication_params(
+            pubv::ROOT,
+            kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+            4,
+        );
+        assert_eq!(
+            xlate(&publication_msg(cmd, pubv::C, pubv::VAS, &params)),
+            Ok(Translation::Event(expected_set_page_dir(
+                pubv::C,
+                pubv::VAS,
+                pubv::ROOT
+            ))),
+            "cmd {cmd:#x}",
+        );
+    }
+    // ★ And the VA space really does travel from the header: change ONLY `hObject` and the
+    // event's VA space changes with it. Without this, a hard-coded or params-derived
+    // handle passes the assertion above.
+    let params = publication_params(
+        pubv::ROOT,
+        kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+        4,
+    );
+    assert_eq!(
+        xlate(&publication_msg(
+            w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+            pubv::C,
+            0x0000_000c,
+            &params
+        )),
+        Ok(Translation::Event(expected_set_page_dir(
+            pubv::C,
+            0x0000_000c,
+            pubv::ROOT
+        ))),
+    );
+}
+
+/// ★★★ **A publication rooted anywhere but the framebuffer is REFUSED, not reinterpreted.**
+///
+/// `Pdb` is documented as a per-GPU **FB** address; `GMMU_APERTURE_SYS_{COH,NONCOH}` roots
+/// are guest-physical ones, and `c_ceutils_ring_resolution.md` §2 measured a sysmem-rooted
+/// PDB as a live channel's own root on a real GA106. Decoding one into a `Pdb` would be the
+/// same number meaning a different memory.
+///
+/// ⊘ `GMMU_APERTURE_INVALID` is refused too, and it is the trap in the pair: it is a *real
+/// enum value* meaning "there is no sub-level here", so a translator that treated 0 as
+/// "unset, assume vidmem" would publish a root at whatever address rode beside it.
+#[test]
+fn a_publication_rooted_outside_the_framebuffer_is_refused_by_name() {
+    use kayfabe_abi::gvaspacepdes as g;
+    for aperture in [
+        g::GMMU_APERTURE_INVALID,
+        g::GMMU_APERTURE_PEER,
+        g::GMMU_APERTURE_SYS_NONCOH,
+        g::GMMU_APERTURE_SYS_COH,
+        // A value the header does not define at all.
+        9,
+    ] {
+        let params = publication_params(pubv::ROOT, aperture, 4);
+        assert_eq!(
+            xlate(&publication_msg(
+                w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                pubv::C,
+                pubv::VAS,
+                &params
+            )),
+            Err(BridgeRefusal::PublishedPdesRootAperture {
+                cmd: w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                aperture,
+            }),
+            "aperture {aperture}",
+        );
+    }
+    // ⊘ And the fork is on `levels[0]` ONLY. A publication whose ROOT is vidmem and whose
+    // deeper levels are not is accepted, because only the root becomes the `Pdb` — the
+    // deeper levels are §14.12's "for a different path, must not be reused".
+    let mut params = publication_params(
+        pubv::ROOT,
+        kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+        4,
+    );
+    // `levels[1].aperture` — offset 0x28 + 24 + 16.
+    params[0x28 + 24 + 16..0x28 + 24 + 20]
+        .copy_from_slice(&kayfabe_abi::gvaspacepdes::GMMU_APERTURE_SYS_COH.to_le_bytes());
+    assert!(matches!(
+        xlate(&publication_msg(
+            w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+            pubv::C,
+            pubv::VAS,
+            &params
+        )),
+        Ok(Translation::Event(RmEvent::SetPageDir { .. })),
+    ));
+}
+
+/// ★★ **A publication that names no VA space is refused, never attributed by guessing.**
+///
+/// `[measured 2026-08-08, boot ship3_d5369b5]` the GPU-group global arm arrives with
+/// `hClient 0x00000000 hObject 0x00000000` — so this is not a hypothetical malformed
+/// message, it is one real arm of the pair, every boot. ⊘ Its `hClient` of zero means it is
+/// refused one step earlier as `ReservedClient`, which is asserted here as well so the two
+/// refusals do not silently swap places.
+#[test]
+fn a_publication_naming_no_vaspace_is_refused_and_the_global_arm_is_reserved_client() {
+    let params = publication_params(
+        pubv::ROOT,
+        kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+        4,
+    );
+    assert_eq!(
+        xlate(&publication_msg(
+            w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+            pubv::C,
+            0,
+            &params
+        )),
+        Err(BridgeRefusal::PublishedPdesUnnamedVaspace {
+            cmd: w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        }),
+    );
+    // The real global arm, as the boot sends it: both handles zero.
+    assert_eq!(
+        xlate(&publication_msg(
+            w::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+            0,
+            0,
+            &params
+        )),
+        Err(BridgeRefusal::ReservedClient),
+    );
+}
+
+/// ★ **The guest's own ABI rules are the refusal, and the declared size is checked exactly.**
+#[test]
+fn a_malformed_publication_is_refused_as_malformed_and_a_lying_size_as_a_size() {
+    use kayfabe_abi::gvaspacepdes as g;
+    const CMD: u32 = w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES;
+    // `numLevelsToCopy = 0` — a publication of no levels is not a publication
+    // (`ctrl90f1.h`'s own rule, via `decode_server_reserved_pdes`).
+    let params = publication_params(pubv::ROOT, g::GMMU_APERTURE_VIDEO, 0);
+    assert_eq!(
+        xlate(&publication_msg(CMD, pubv::C, pubv::VAS, &params)),
+        Err(BridgeRefusal::PublishedPdesMalformed {
+            cmd: CMD,
+            err: g::ServerReservedPdesError::LevelCountOutOfRange { got: 0 },
+        }),
+    );
+    // Past the array bound.
+    let params = publication_params(pubv::ROOT, g::GMMU_APERTURE_VIDEO, 7);
+    assert_eq!(
+        xlate(&publication_msg(CMD, pubv::C, pubv::VAS, &params)),
+        Err(BridgeRefusal::PublishedPdesMalformed {
+            cmd: CMD,
+            err: g::ServerReservedPdesError::LevelCountOutOfRange { got: 7 },
+        }),
+    );
+    // ⊘ A declared `paramsSize` that is not the struct's own size is refused as a SIZE,
+    // before the body is looked at — §4.3's exact check, not a lower bound.
+    let params = publication_params(pubv::ROOT, g::GMMU_APERTURE_VIDEO, 4);
+    let body = w::control_body(pubv::C, pubv::VAS, CMD, 32, w::RMAPI_RPC_FLAGS_NONE, &params);
+    assert_eq!(
+        xlate(&w::message(fn_id::GSP_RM_CONTROL, 3, &body)),
+        Err(BridgeRefusal::ControlParamsSizeMismatch {
+            cmd: CMD,
+            declared: 32,
+            expected: g::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE,
+        }),
     );
 }
 

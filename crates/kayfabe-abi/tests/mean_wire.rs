@@ -1827,12 +1827,22 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
         "the generated id and the hand-written one agree",
     );
 
-    // Known to move a page-directory binding, and not modelled. Three commands,
-    // three different reasons — see `ControlParams::PageDirNotModelled`.
-    for cmd in [0x0080_1814u32, 0x90f1_0106, 0x2080_0a9f] {
+    // Known to move a page-directory binding, and not modelled. ONE command now — the
+    // revocation, which `RmEvent` has no verb for. See `ControlParams::PageDirNotModelled`.
+    assert_eq!(
+        t.control_params(ControlCmd(0x0080_1814)),
+        Some(ControlParams::PageDirNotModelled),
+    );
+
+    // ★★★ The two PUBLICATION ids, which left `PageDirNotModelled` on 2026-08-08 (§14.23).
+    // They are the ids that actually carry a page-directory base on the boot path: §14.9's
+    // census of a real GA106 init measured `SET_PAGE_DIRECTORY` at ZERO occurrences and
+    // this pair at five. ⊘ The adjacency argument above applies to them too — `0x90f10105`
+    // and `0x90f10107` are asserted absent below.
+    for cmd in [0x90f1_0106u32, 0x2080_0a9f] {
         assert_eq!(
             t.control_params(ControlCmd(cmd)),
-            Some(ControlParams::PageDirNotModelled),
+            Some(ControlParams::VaspacePublishedPdes),
             "cmd {cmd:#x}",
         );
     }
@@ -1876,6 +1886,21 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
         ControlParams::PageDirNotModelled.params_size(),
         None,
         "no decoder means no size to claim",
+    );
+    // ★ 184, and asserted BOTH ways for `PromoteCtx`'s reason below: against the header's
+    // own size and against the composition the decoder computes — 0x28 of prefix plus six
+    // 24-byte level records.
+    assert_eq!(
+        ControlParams::VaspacePublishedPdes.params_size(),
+        Some(kayfabe_abi::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE),
+    );
+    assert_eq!(ControlParams::VaspacePublishedPdes.params_size(), Some(184));
+    assert_eq!(
+        ControlParams::VaspacePublishedPdes.params_size(),
+        Some(
+            0x28 + kayfabe_abi::gvaspacepdes::GMMU_FMT_MAX_LEVELS
+                * kayfabe_abi::gvaspacepdes::LEVEL_SIZE
+        ),
     );
     // ★ 560, and it is asserted BOTH ways: against the literal the captured host RPC
     // recorded (`psize=560`), and against the composition the port actually computes —

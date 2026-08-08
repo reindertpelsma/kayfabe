@@ -595,9 +595,18 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // numbers and not one, because "we announced it", "we could not" and "we did and the
     // guest's own LEAF_EN hides it" are three different next moves for an operator. This
     // is the reason the wire ABI moved to 21.
+    // ★★★ 60 -> 63 at `execution_plane_increments.md` §14.23: `gvas_pub_seen`,
+    // `gvas_pub_applied` and `gvas_pub_unexpected` — the page-directory publication counted
+    // by the seat that CARRIES IT INTO THE OBJECT MODEL, beside the three already counted
+    // by the recorder that only logs it. ⊘ Two counts of one event, deliberately: until
+    // 2026-08-08 the port decoded this control, answered `NV_OK` and dropped the value, so
+    // `gvas_pub_total` read 5 while `Vas::pdb` was empty and every promote-ctx refused. A
+    // single number could not have said that, and `seen == 0` beside a non-zero `total` is
+    // what a front seat that was never filled now looks like. This is the reason the wire
+    // ABI moved to 22.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (60 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (63 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS

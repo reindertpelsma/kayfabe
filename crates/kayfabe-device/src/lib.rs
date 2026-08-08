@@ -861,6 +861,52 @@ pub struct ChainLogs {
     pub gvas_pub: gvaspub::GvasPubLog,
 }
 
+/// ★★★ **The two seats a composition root's object model takes in the served chain**, as
+/// one value — and they are two because they are two *different jobs at two different
+/// positions*.
+///
+/// | field | seat | job |
+/// |---|---|---|
+/// | [`Self::publications`] | **first**, ahead of every answering link | see a fact carried inside a control that another link is the correct answerer for, and carry it into the object model |
+/// | [`Self::objects`] | between the answering links and the recorders | *answer* the object-declaring verbs and the controls it claims by id |
+///
+/// ★★ **The types are different, and that is the design.** The front seat is a
+/// [`kayfabe_gsp::CommandObserver`] — it has no return value, so it **cannot** answer, and
+/// the property *"an observer seated ahead of the answerer does not change a reply byte"*
+/// is checked by `rustc` rather than by a reviewer or by a test. That distinction was not
+/// free: the `objects` seat's own obligation carried a citation to
+/// `tests/served_chain_objects.rs` from the day it was written, and that file has never
+/// existed in this repository.
+///
+/// ⊘ A struct rather than two more positional parameters, for [`ChainLogs`]' reason: two
+/// bare `Option<Box<dyn …>>` arguments in a row is the shape where a caller silently
+/// passes the right link into the wrong seat, and the front seat would then answer nothing
+/// while the object seat would never see a publication — a defect with no red test and no
+/// changed byte.
+///
+/// ⊘ `Default` is **both seats empty**, which is the register-only configuration
+/// ([`plane::RegPlane::new`]) and not a degraded product mode: a device with no object
+/// model refuses the verbs by name, which is what every register test wants.
+#[derive(Default)]
+pub struct ObjectLinks {
+    /// ★★★ §14.23 — the observer that carries the guest's page-directory publication into
+    /// the object model. `kayfabe_rmrpc::PublicationObserver` is the one this port installs.
+    pub publications: Option<Box<dyn kayfabe_gsp::CommandObserver>>,
+    /// The object-model link. `kayfabe_rmrpc::ObjectPolicy` is the composable form; ⚠
+    /// `kayfabe_rmrpc::GraphPolicy` answers **every** command and installing it here would
+    /// silence [`unserviced::UnservicedLedger`] permanently.
+    pub objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
+}
+
+impl core::fmt::Debug for ObjectLinks {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ObjectLinks")
+            .field("publications", &self.publications.is_some())
+            .field("objects", &self.objects.is_some())
+            .finish()
+    }
+}
+
 /// ★★ **The one command-policy chain this device answers with** — built here rather than
 /// inside [`plane::RegPlane::new`] so that the *differential* drives the same chain a
 /// guest does.
@@ -911,7 +957,7 @@ pub fn served_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
     logs: ChainLogs,
     census: census::ControlCensusLog,
-    objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
+    links: ObjectLinks,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     // ★ The notifier PROBE SET comes out of the census log — deliberately, and not as a
     // convenience: the census is what the end-of-run report prints, so reading the set
@@ -925,7 +971,7 @@ pub fn served_policy(
         census,
         sticky::StickyAnswerGuard::new(
             driver,
-            served_chain(chip, driver, logs, probe_arm, objects),
+            served_chain(chip, driver, logs, probe_arm, links),
         ),
     ))
 }
@@ -943,7 +989,7 @@ pub fn served_chain(
     driver: kayfabe_abi::versions::DriverAbiTable,
     logs: ChainLogs,
     probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
-    objects: Option<Box<dyn kayfabe_gsp::CommandPolicy>>,
+    links: ObjectLinks,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE, and the missing `..` is load-bearing for [`Shim::audit`]'s reason
     // one crate over: a latch added to `ChainLogs` and not seated in a link below is a fact
@@ -955,6 +1001,10 @@ pub fn served_chain(
         bar_pdes,
         gvas_pub,
     } = logs;
+    let ObjectLinks {
+        publications,
+        objects,
+    } = links;
     let mut links: Vec<Box<dyn kayfabe_gsp::CommandPolicy>> = vec![
         // ★★★ FIRST, and the position is the whole of it — see `gvaspub`'s module docs.
         // This link records the guest's page-directory publication (`0x90f10106` /
@@ -968,6 +1018,26 @@ pub fn served_chain(
         // Seating an always-`None` observer ahead of it is what keeps those two facts
         // compatible (`execution_plane_increments.md` §14.8).
         Box::new(gvaspub::GvasPubRecorder::new(driver, gvas_pub)),
+    ];
+    // ★★★ **§14.23 — the FRONT seat, and it is a `CommandObserver` rather than a policy.**
+    //
+    // The recorder above writes the guest's page-directory publication into a *log*; this
+    // seat is where the same publication reaches the **object model** as a real
+    // `RmEvent::SetPageDir`, because `[measured 2026-08-08, boots ship_7a881a7 /
+    // ship3_d5369b5]` recording it was all the port did — `control 0x90f10106 result
+    // 0x00000000 x4`, five publications logged, `Vas::pdb` empty, and therefore every
+    // promote-ctx refusing `ContextVasUndeclared`. ⊘ Recording is not forwarding.
+    //
+    // ★★ It is seated HERE, ahead of `InitTablePolicy`, for the recorder's reason exactly:
+    // that link *terminates* the chain for those two ids, so a seat below it is a seat that
+    // never sees them. And it is typed as an observer so the thing that keeps this seat
+    // honest — *"it must not change a reply byte"* — is `rustc`'s job rather than a
+    // sentence: `kayfabe_gsp::CommandObserver::observe` returns nothing to return.
+    links.extend(
+        publications
+            .map(|o| Box::new(kayfabe_gsp::Observing(o)) as Box<dyn kayfabe_gsp::CommandPolicy>),
+    );
+    links.extend::<Vec<Box<dyn kayfabe_gsp::CommandPolicy>>>(vec![
         // ★ The probe set rides into exactly one link: the event-plane arm. It is empty
         // unless the `probe-arm-notifier` device property named indices, and the set in
         // effect is recorded in the census so the boot's own report proves what it ran
@@ -985,7 +1055,7 @@ pub fn served_chain(
         // publishes its system info".
         Box::new(bar2::BarPdePolicy::new(driver, bar_pdes)),
         Box::new(inert::InertPolicy::new()),
-    ];
+    ]);
     // ★★★ The object-model link, if the composition root has one. Its POSITION is the
     // decision, and it is between the answering links and the recorders:
     //
@@ -1001,8 +1071,16 @@ pub fn served_chain(
     // `unserviced::UnservicedLedger` permanently — the port would lose the only instrument
     // that can say what it has not built. `kayfabe_rmrpc::ObjectPolicy` is the composable
     // form and declines by default; this crate cannot name either type (it has no
-    // `kayfabe-core` dependency, deliberately), so the obligation is stated here and
-    // `tests/served_chain_objects.rs` is where it is checked.
+    // `kayfabe-core` dependency, deliberately), so the obligation is stated here.
+    //
+    // ⊘⊘ **That obligation was checked by a file that does not exist.** This comment read
+    // *"the obligation is stated here and `tests/served_chain_objects.rs` is where it is
+    // checked"* from the day the seat was created; `crates/kayfabe-device/tests/` has never
+    // contained that file, and `kayfabe-crec` cites it a second time. The claim is now
+    // discharged by `tests/tests/served_chain_seats.rs` in the conformance suite (this
+    // crate cannot name `kayfabe-rmrpc`), which quantifies over
+    // `kayfabe_rmrpc::OBJECT_VERBS` + `OBJECT_CONTROLS` rather than restating them — and
+    // the FRONT seat below is discharged by its type instead of by any test at all.
     links.extend(objects);
     links.extend::<Vec<Box<dyn kayfabe_gsp::CommandPolicy>>>(vec![
         // ★ Two recorders, both terminal-shaped (`respond` never answers), so precedence

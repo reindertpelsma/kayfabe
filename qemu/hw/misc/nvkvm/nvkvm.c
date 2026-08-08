@@ -1458,6 +1458,16 @@ static void nvkvm_report_registers(NvkvmState *s)
                 "boot-path source of a page-directory root — SET_PAGE_DIRECTORY is never "
                 "sent)",
                 a.gvas_pub_total, a.gvas_pub_len, a.gvas_pub_undecodable);
+    /* ★★★ §14.23 — and what the OBJECT MODEL made of them, which is a different link's
+     * count.  Until 2026-08-08 the line above was the whole story: the port decoded this
+     * control, answered NV_OK and dropped the value, so every promote-ctx could only refuse
+     * `ContextVasUndeclared`.  `applied` is the number a claim about the page-directory
+     * plane may cite; `seen` is its denominator, and `seen == 0` beside a non-zero `total`
+     * means the seat that forwards them was never filled. */
+    info_report("nvkvm:   of those, %" PRIu64 " reached the object model, %" PRIu64
+                " ACCEPTED (Vas::pdb populated from the guest's own publication), %" PRIu64
+                " not an event",
+                a.gvas_pub_seen, a.gvas_pub_applied, a.gvas_pub_unexpected);
     {
         uint64_t i, j, shown = a.gvas_pub_len;
 

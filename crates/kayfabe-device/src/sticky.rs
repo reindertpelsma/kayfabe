@@ -449,7 +449,7 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 14] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",
@@ -536,18 +536,44 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 14] = [
     // link, which is why the link is a `served_chain` argument and not a second policy the
     // plane holds beside the guard).
     //
-    // ⊘ The disposition is `NotAControl` and **not** `Guarded`, deliberately, because the
-    // two say different things. `Guarded` is a claim about a caller: it holds only while
-    // `served_policy` is the installer, and `served_chain` exists precisely so a test can
-    // build the chain WITHOUT the guard. `NotAControl` is a claim about the TYPE — this
-    // policy claims exactly `kayfabe_rmrpc::OBJECT_VERBS`, which contains no
-    // `GSP_RM_CONTROL`, so no reply of its can reach either cache-populating call site
-    // however it is composed. The stronger, unconditional statement is the one worth
-    // pinning, and `the_not_a_control_rows_decline_every_control_command` executes it.
+    // ⊘⊘ **CORRECTED 2026-08-08, and the correction is the interesting part.** This row
+    // read `NotAControl`, argued as *"this policy claims exactly
+    // `kayfabe_rmrpc::OBJECT_VERBS`, which contains no `GSP_RM_CONTROL`"* — and that
+    // stopped being true when `#177` gave `ObjectPolicy` a second list,
+    // `kayfabe_rmrpc::OBJECT_CONTROLS`, so it now answers `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`
+    // and `NVA06F_CTRL_CMD_BIND` with `NV_OK` and a body.
+    //
+    // ★★★ The row's executor could not notice, and the reason is this repository's own
+    // named trap: `the_not_a_control_rows_decline_every_control_command` sweeps
+    // `WantedTable::ALL` — **`InitTablePolicy`'s** 24 ids — so it quantified over a
+    // universe that contains neither control this policy answers, and passed for a year of
+    // commits by asking about the wrong list (`gates_quantified_over_a_list`). A false
+    // claim, an executing test, and a green suite.
+    //
+    // ⇒ `Guarded` is the true statement: `served_policy` wraps the WHOLE chain, this link
+    // included, so both reply fields are zeroed on the way out. ⚠ It is weaker on purpose —
+    // it is a claim about the installer, and `served_chain` exists precisely so a test can
+    // build the chain without the guard. Anything installing this policy outside
+    // `served_policy` owes the guard itself.
     PolicyDisposition {
         name: "ObjectPolicy",
         path: "crates/kayfabe-rmrpc/src/policy.rs",
-        disposition: StickyDisposition::NotAControl,
+        disposition: StickyDisposition::Guarded,
+    },
+    // ★★★ §14.23 — the observer ADAPTER (`kayfabe_gsp::Observing`), and its row is the
+    // strongest of all of them because it is not a property of the code inside `respond`:
+    // the type's whole body is `{ self.0.observe(cmd); None }`, and the wrapped
+    // `CommandObserver` **has no return value to give it**. So `NeverAnswers` here is not
+    // "this implementation happens to return `None` on every path" but "no implementation
+    // of the wrapped trait could make it return anything else".
+    //
+    // ⊘ That is exactly what makes the chain's FRONT seat legal: a link seated ahead of the
+    // answerer must not be able to answer, and `served_chain`'s front seat takes a
+    // `CommandObserver` rather than a `CommandPolicy` for that reason.
+    PolicyDisposition {
+        name: "Observing",
+        path: "crates/kayfabe-gsp/src/boot.rs",
+        disposition: StickyDisposition::NeverAnswers,
     },
     // ★★ `#149`. `BarPdePolicy` answers exactly `UPDATE_BAR_PDE` (fn 70) and declines
     // everything else, so `NotAControl` is the unconditional statement — it is a claim

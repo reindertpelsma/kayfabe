@@ -199,7 +199,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// times and still not know how many channels there were.
 ///
 /// [`DOORBELL_SERVED_LOCAL`]: crate::shim_unsafe::DOORBELL_SERVED_LOCAL
-pub const ABI_VERSION: u32 = 21;
+pub const ABI_VERSION: u32 = 22;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1447,6 +1447,26 @@ pub struct KayfabeRegAudit {
     /// an absent row: *"the guest published something we could not read"* and *"the guest
     /// published nothing"* are different diagnoses and only one of them is our defect.
     pub gvas_pub_undecodable: u64,
+    /// ★★★ **§14.23 — publications the FRONT SEAT saw**, i.e. arrived on one of
+    /// `kayfabe_rmrpc::PUBLICATION_CONTROLS`.
+    ///
+    /// ⊘ Counted by a *different* link from [`Self::gvas_pub_total`] and deliberately not
+    /// folded into it: that one is the recorder's (it decodes and logs), this one is the
+    /// observer's (it decodes and **declares into the object model**). Two numbers that
+    /// should agree, produced independently — so a front seat that was never filled reads
+    /// as `0` beside a non-zero `gvas_pub_total` instead of hiding behind it.
+    pub gvas_pub_seen: u64,
+    /// ★★★ **§14.23 — publications the OBJECT MODEL ACCEPTED.** The number that says
+    /// `Vas::pdb` was populated from the guest's own statement, and therefore the number a
+    /// claim about the page-directory plane is allowed to cite.
+    ///
+    /// Its refusals are named in the bridge-refusal census
+    /// (`BridgeRefusal::PublishedPdes*`), not here.
+    pub gvas_pub_applied: u64,
+    /// Translations of a claimed publication control that were not an `RmEvent` —
+    /// unreachable by construction and counted rather than asserted, because this runs on a
+    /// vCPU thread where a panic aborts the VM.
+    pub gvas_pub_unexpected: u64,
     /// The rows, in first-seen order.
     pub gvas_pub: [KayfabeGvasPublication; GVAS_PUBLICATION_SLOTS],
     /// ★ How many notifier indices the `probe-arm-notifier` device property named — the
@@ -2086,6 +2106,14 @@ pub struct Regs {
     /// [`Regs::refusals`] is: the policy that owns the object model is boxed into the
     /// chain and unreachable afterwards.
     isolates: kayfabe_core::gpu::SharedIsolateCensus,
+    /// ★★★ **§14.23** — what the publication seat saw and what the object model accepted,
+    /// kept here for [`Regs::refusals`]' reason: the observer is boxed into the chain's
+    /// front seat and is unreachable afterwards.
+    ///
+    /// ⊘ It is the **non-vacuity** half of every claim about the page-directory plane: a
+    /// boot reporting no publication refusals and `seen = 0` is a seat that was never
+    /// filled, and without this number that boot is indistinguishable from a healthy one.
+    publications: kayfabe_rmrpc::SharedPublicationCensus,
     /// ★★★ **E10e** — the CPU copy-engine executor's shell state, shared with the doorbell
     /// port. See [`CeShellState`]; this handle exists so [`Regs::attach_ram`] can install
     /// the memory plane into a port that was built before one existed.
@@ -2151,13 +2179,14 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (objects, refusals, rings, isolates, device) = object_policy(abi.driver, chip.engines)?;
+        let (links, refusals, rings, isolates, publications, device) =
+            object_policy(abi.driver, chip.engines)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
             Box::new(HostMonotonicClock::new()),
             probe_arm,
-            Some(objects),
+            links,
         )
         .map_err(|e| classify_chip(&e))?;
         // ★★★ **THE COMPOSITION ROOT'S FRAMEBUFFER DECISION, made here and nowhere else.**
@@ -2222,6 +2251,7 @@ impl Regs {
             refusals,
             rings,
             isolates,
+            publications,
             ce,
         })
     }
@@ -2494,6 +2524,14 @@ impl Regs {
             undecodable: gvas_pub_undecodable,
             sample: gvas_pub_rows,
         } = self.plane.gvas_publications();
+        // ★★★ §14.23 — and the SEAT's own numbers, destructured with no `..` for the same
+        // reason: a counter added to `PublicationCensus` and not wired here is a fact the C
+        // shell can never read.
+        let kayfabe_rmrpc::PublicationCensus {
+            seen: gvas_pub_seen,
+            applied: gvas_pub_applied,
+            unexpected: gvas_pub_unexpected,
+        } = self.publications.snapshot();
         let mut gvas_pub = [KayfabeGvasPublication::default(); GVAS_PUBLICATION_SLOTS];
         for (slot, r) in gvas_pub.iter_mut().zip(gvas_pub_rows.iter()) {
             let mut levels = [KayfabePdeLevel::default(); GVAS_MAX_LEVELS];
@@ -2615,6 +2653,9 @@ impl Regs {
             gvas_pub_total,
             gvas_pub_len,
             gvas_pub_undecodable,
+            gvas_pub_seen,
+            gvas_pub_applied,
+            gvas_pub_unexpected,
             gvas_pub,
             served_total,
             served_len,
@@ -2671,11 +2712,16 @@ impl Regs {
 /// answers every `GSP_RM_ALLOC` with the named refusal that stopped the last boot, and
 /// serving that silently is how a port comes to be measured for something it is not doing.
 type ObjectLink = (
-    Box<dyn kayfabe_gsp::CommandPolicy>,
+    // ★★★ §14.23 — the TWO seats, as `kayfabe_device::ObjectLinks` builds them: the
+    // publication observer (front, cannot answer) and the object policy. Both declare into
+    // the one shell below.
+    kayfabe_device::ObjectLinks,
     kayfabe_rmrpc::SharedRefusalCensus,
     // ★ §8.2.2 — the GPFIFO-ring census, recorder-only.
     kayfabe_rmrpc::SharedRingCensus,
     kayfabe_core::gpu::SharedIsolateCensus,
+    // ★★★ §14.23 — what the publication seat saw and what the model accepted.
+    kayfabe_rmrpc::SharedPublicationCensus,
     // ★★★ E2 — and the shell itself, because the doorbell port needs the SAME one.
     Arc<kayfabe_rt::device::SharedDevice>,
 );
@@ -2734,7 +2780,36 @@ fn object_policy(
     // mechanism. Before this the only channel that could say "the forwarding plane you
     // asked for did not come up" was a host-side `ps`.
     let isolates = policy.isolate_census();
-    Ok((Box::new(policy), refusals, rings, isolates, device))
+    // ★★★ **§14.23 — the publication seat, over a SECOND handle onto the SAME shell.**
+    //
+    // That is what `kayfabe_rmrpc::ObjectModel` was made a port for (E2): the doorbell path
+    // already holds its own handle onto this exact `SharedDevice`, and a page-directory base
+    // landing in a different graph from the one promotions resolve against would be a
+    // routing table that can never resolve. ⊘ Not a second `Gpu`; the same one.
+    //
+    // ★ It shares `refusals`, so a publication this seat refuses appears in the one census
+    // the boot report prints rather than in a second tally nothing reads.
+    let publications = kayfabe_rmrpc::PublicationObserver::over(
+        &driver,
+        kayfabe_abi::GuestOs::Linux,
+        Box::new(SharedObjectModel(Arc::clone(&device))),
+        refusals.clone(),
+    );
+    // ★ Taken BEFORE the observer is boxed, for the reason the refusal census is:
+    // afterwards there is no `PublicationObserver` left to ask.
+    let publication_census = publications.census();
+    let links = kayfabe_device::ObjectLinks {
+        publications: Some(Box::new(publications)),
+        objects: Some(Box::new(policy)),
+    };
+    Ok((
+        links,
+        refusals,
+        rings,
+        isolates,
+        publication_census,
+        device,
+    ))
 }
 
 // =====================================================================================

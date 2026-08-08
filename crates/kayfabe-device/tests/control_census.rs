@@ -46,7 +46,7 @@ fn chain_with_census() -> (Box<dyn CommandPolicy>, ControlCensusLog) {
         driver(),
         kayfabe_device::ChainLogs::default(),
         census.clone(),
-        None,
+        kayfabe_device::ObjectLinks::default(),
     );
     (chain, census)
 }
@@ -239,7 +239,7 @@ fn the_census_changes_no_byte_of_any_reply() {
                 driver(),
                 kayfabe_device::ChainLogs::default(),
                 kayfabe_abi::eventnotify::ProbeArmSet::default(),
-                None,
+                kayfabe_device::ObjectLinks::default(),
             ),
         ));
     let arming = arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT);
@@ -319,7 +319,7 @@ fn a_plane_reports_the_probe_set_it_was_built_with() {
         abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER).expect("bench table"),
         Box::new(StillClock),
         ProbeArmSet::parse("35").expect("parses"),
-        None,
+        kayfabe_device::ObjectLinks::default(),
     )
     .expect("GA106 is servable");
     assert_eq!(

@@ -96,7 +96,7 @@ fn chain_with_log() -> (Box<dyn CommandPolicy>, GvasPubLog) {
             ..Default::default()
         },
         kayfabe_device::census::ControlCensusLog::new(),
-        None,
+        kayfabe_device::ObjectLinks::default(),
     );
     (chain, log)
 }

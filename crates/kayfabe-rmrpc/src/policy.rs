@@ -1251,11 +1251,214 @@ impl CommandPolicy for ObjectPolicy {
     }
 }
 
+// =====================================================================================
+// ★★★ The PUBLICATION observer — §14.23
+// =====================================================================================
+
+/// The `RpcFunction::RmControl` command ids [`PublicationObserver`] carries into the object
+/// model, and the **only** ones.
+///
+/// ⊘ Public and closed so a test quantifies over it rather than restating it
+/// (`gates_quantified_over_a_list`), exactly like [`OBJECT_CONTROLS`]. ⊘ And it is a
+/// different list from that one on purpose: these two ids are **not answered here**. The
+/// device chain's `InitTablePolicy` answers them and must keep answering them; this list
+/// says only *which controls carry a fact this port must not drop*.
+pub const PUBLICATION_CONTROLS: &[u32] = &[
+    kayfabe_abi::gvaspacepdes::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+    kayfabe_abi::gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+];
+
+/// ★★★ **The guest's page-directory publication, carried into the object model** — the
+/// link that makes `Vas::pdb` a fact instead of a line in a report.
+///
+/// # Why this is an OBSERVER and not a policy, and why it is a second seat
+///
+/// `0x90f10106` is **served** — `[measured 2026-08-08, boots ship_7a881a7 / ship3_d5369b5]`
+/// `control 0x90f10106 result 0x00000000 x4` — and the link that serves it is
+/// `kayfabe_device::inittables::InitTablePolicy`, which is the correct answerer and is
+/// pinned as such by two of that crate's tests. A device policy chain is a `find_map`, so
+/// a link that needs to *see* this control has to sit **ahead** of the one that answers it.
+///
+/// A [`CommandPolicy`] in that seat could re-route the reply by returning `Some`; a
+/// [`kayfabe_gsp::CommandObserver`] cannot, because it has nothing to return. That trait's
+/// docs carry the argument, including the obligation-that-was-never-checked this port
+/// already paid for.
+///
+/// # ⊘ Why it does not reuse `Bridge`, which is the reuse this crate normally insists on
+///
+/// [`Bridge::deliver`] runs the [`Reassembler`] first, and there must be exactly **one**
+/// reassembler over a command stream: a second one seated ahead of [`ObjectPolicy`] would
+/// consume the same continuation fragments into a second, independent buffer — two
+/// half-messages where the guest sent one. So this link calls
+/// [`translate`](crate::translate) directly, on **whole** commands only, and a fragmented
+/// publication therefore refuses by name rather than being silently half-absorbed.
+///
+/// ⊘ That is a real limit, stated: a `GSP_RM_CONTROL` carrying 184 bytes of params in a
+/// 36-byte header does not fragment on any transport this port has observed, and if one
+/// ever does, [`BridgeRefusal::PublishedPdesMalformed`] is what says so.
+///
+/// # ★ The census is SHARED, not its own
+///
+/// It takes a [`SharedRefusalCensus`] at construction — the same handle [`ObjectPolicy`]
+/// publishes — so a publication this link refuses appears in the one census the boot
+/// report prints. Two censuses would be two answers to *"what did the bridge refuse?"*,
+/// and the report prints one.
+pub struct PublicationObserver {
+    abi: DriverAbiTable,
+    guest_os: GuestOs,
+    gpu: Box<dyn ObjectModel>,
+    refusals: SharedRefusalCensus,
+    census: SharedPublicationCensus,
+}
+
+/// What [`PublicationObserver`] saw and what the object model did with it.
+///
+/// ★★★ **Two numbers, and the first is the denominator of the second.** *"No refusals"*
+/// over a boot in which `seen == 0` is a link that was never seated, which is this port's
+/// most-repeated instrument failure (`skipped_oracle_kills_the_guard`,
+/// `gate_read_through_grep_cannot_fail`). A report that printed only `applied` could not
+/// tell *"the guest published nothing"* from *"we never looked"*.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PublicationCensus {
+    /// Publications that arrived on a command in [`PUBLICATION_CONTROLS`], well-formed or
+    /// not.
+    pub seen: u64,
+    /// ★★★ Publications the object model **accepted** — the number that says `Vas::pdb` was
+    /// populated from the guest's own statement.
+    ///
+    /// ⊘ `seen - applied` is not the refusal count on its own: a publication for a VA space
+    /// the guest has not allocated yet **parks** in the graph and is counted here as
+    /// applied, because the graph accepted the fact. The refusals are named in
+    /// [`SharedRefusalCensus`].
+    pub applied: u64,
+    /// Translations of a claimed control that were not an `RmEvent`.
+    ///
+    /// ⊘ Unreachable by construction today (see [`PublicationObserver::observe`]) and
+    /// counted anyway rather than asserted: this runs on a vCPU thread inside QEMU, where a
+    /// panic is an abort of the whole VM. A number is a better instrument than a hypervisor
+    /// that dies to report that a translator arm changed shape.
+    pub unexpected: u64,
+}
+
+/// [`PublicationCensus`] as a handle the composition root keeps after handing the observer
+/// away — same shape, and the same ownership argument, as [`SharedRingCensus`].
+#[derive(Debug, Clone, Default)]
+pub struct SharedPublicationCensus(std::sync::Arc<std::sync::Mutex<PublicationCensus>>);
+
+impl SharedPublicationCensus {
+    /// A fresh, empty census.
+    #[must_use]
+    pub fn new() -> SharedPublicationCensus {
+        SharedPublicationCensus::default()
+    }
+
+    /// A point-in-time copy.
+    #[must_use]
+    pub fn snapshot(&self) -> PublicationCensus {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn note(&self, f: impl FnOnce(&mut PublicationCensus)) {
+        f(&mut self.0.lock().unwrap_or_else(|e| e.into_inner()));
+    }
+}
+
+impl PublicationObserver {
+    /// An observer that declares into an object model somebody else owns, recording its
+    /// refusals into `census`.
+    ///
+    /// ★ `gpu` is a **second** [`ObjectModel`] handle onto the **same** model, which is
+    /// what that port exists for (E2: *"a second `Gpu` behind the doorbell would be a
+    /// routing table that can never resolve"*). ⊘ Handing this a model of its own would be
+    /// precisely that defect: page-directory bases landing in a graph no promotion can see.
+    #[must_use]
+    pub fn over(
+        abi: &DriverAbiTable,
+        guest_os: GuestOs,
+        gpu: Box<dyn ObjectModel>,
+        refusals: SharedRefusalCensus,
+    ) -> PublicationObserver {
+        PublicationObserver {
+            abi: *abi,
+            guest_os,
+            gpu,
+            refusals,
+            census: SharedPublicationCensus::new(),
+        }
+    }
+
+    /// The census as a **handle**, for the composition root that must keep reading it after
+    /// boxing this observer — see [`SharedPublicationCensus`].
+    #[must_use]
+    pub fn census(&self) -> SharedPublicationCensus {
+        self.census.clone()
+    }
+
+    /// Whether this observer carries `cmd` — the predicate [`Self::observe`] gates on,
+    /// exposed so a test asks the type rather than a copy of its list.
+    #[must_use]
+    pub fn claims(cmd: u32) -> bool {
+        PUBLICATION_CONTROLS.contains(&cmd)
+    }
+
+    /// A point-in-time copy of what this observer has seen — see [`PublicationCensus`].
+    #[must_use]
+    pub fn snapshot(&self) -> PublicationCensus {
+        self.census.snapshot()
+    }
+}
+
+impl core::fmt::Debug for PublicationObserver {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PublicationObserver")
+            .field("driver", &self.abi.version())
+            .field("census", &self.census.snapshot())
+            .finish_non_exhaustive()
+    }
+}
+
+impl kayfabe_gsp::CommandObserver for PublicationObserver {
+    /// Gate, translate, apply — and there is no fourth step, because there is nothing to
+    /// answer.
+    fn observe(&mut self, cmd: &RpcCommand) {
+        if cmd.function != kayfabe_gsp::RpcFunction::RmControl {
+            return;
+        }
+        // ⊘ A header this crate cannot even decode is not this link's finding: the chain
+        // below still sees the command, and the FSM's own ledger records what nobody
+        // answered. Counting it here would double-count a malformed envelope.
+        let Ok(req) = self.abi.decode_rpc_control(&cmd.payload) else {
+            return;
+        };
+        if !PublicationObserver::claims(req.cmd) {
+            return;
+        }
+        self.census.note(|c| c.seen = c.seen.saturating_add(1));
+        match translate(&self.abi, self.guest_os, cmd) {
+            Ok(Translation::Event(ev)) => match self.gpu.apply(ev) {
+                Ok(()) => self.census.note(|c| c.applied = c.applied.saturating_add(1)),
+                // ★ The graph's own refusal, named — a publication for a VA space the
+                // guest has not allocated **parks** rather than refusing
+                // (`RmGraph::pending_pdbs`), so reaching this arm means something
+                // stronger than an ordering surprise.
+                Err(e) => self.refusals.record(&BridgeRefusal::Graph(e)),
+            },
+            Ok(_) => self
+                .census
+                .note(|c| c.unexpected = c.unexpected.saturating_add(1)),
+            Err(r) => self.refusals.record(&r),
+        }
+    }
+}
+
 // The concurrency contract, compile-time-asserted (decision #17). `GraphPolicy` must be
 // `Send` or it cannot be a `CommandPolicy` at all — the FSM takes `&mut dyn CommandPolicy`
 // and `kayfabe_gsp::boot` asserts the trait object is `Send`.
 kayfabe_util::assert_send_sync!(RefusalCensus);
 kayfabe_util::assert_send!(GraphPolicy<'static>);
+// ★ Same claim as `ObjectPolicy`'s below, one seat earlier in the chain: this one holds a
+// second handle onto the same object model and the FSM holds it across vCPU threads.
+kayfabe_util::assert_send!(PublicationObserver);
 // ★ `ObjectPolicy` OWNS its `Gpu`, so this asserts something `GraphPolicy`'s bound cannot:
 // that the whole object model — spine, procs, isolate factory — is `Send` when it is moved
 // into a policy the FSM holds across vCPU threads. The `Gpu` behind a `&mut` was already

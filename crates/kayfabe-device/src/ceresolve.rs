@@ -98,40 +98,22 @@
 use kayfabe_arch::{Aperture, GmmuFmt};
 use kayfabe_mmu::walker::{FbRead, PtPage, TranslateFault, Translation};
 
+pub use kayfabe_abi::gvaspacepdes::{
+    GMMU_APERTURE_INVALID, GMMU_APERTURE_PEER, GMMU_APERTURE_SYS_COH, GMMU_APERTURE_SYS_NONCOH,
+    GMMU_APERTURE_VIDEO, decode_aperture,
+};
+
 use crate::gvaspub::GvasPubSnapshot;
 
-// ★★★ **`GMMU_APERTURE`, transcribed from the enum's own declaration order** — `ogkm-580:
-// src/nvidia/inc/libraries/mmu/gmmu_fmt.h:280-325`, an unnumbered C enum, so the ORDER is
-// the encoding.
+// ★★★ **`GMMU_APERTURE` lives in `kayfabe_abi::gvaspacepdes`, and is re-exported here.**
 //
-// ⚠⚠ **Every one of these four was wrong when this module was first written, and a boot is
-// what said so.** `[measured 2026-08-08, boot run_p35_a34025b]`: the walling channel's own
-// publication carries `aperture 1` on all four levels, our device printed
-// `root=0x2efa9c000/ap1/sh47`, and the resolver refused it `ROOTAP1` — *"aperture 1 is not
-// this device's framebuffer"* — because the values had been assumed from the **PDE FIELD**
-// encoding (`kern_gmmu_fmt_gm10x.c:165-182`, `0=INVALID 1=VIDEO 2=SYS_COH 3=SYS_NONCOH`)
-// rather than read from the **enum** this control's `levels[].aperture` field actually
-// carries. The two agree on `INVALID` and `VIDEO` and disagree on everything else.
-//
-// ★ Note `SYS_NONCOH` precedes `SYS_COH`, which is the reverse of every other list in this
-// port and is exactly the sort of ordering nobody re-checks. `gpu_vaspace.c:3798-3808` is
-// the corroborating half: the *sender* fills the same field from `ADDR_FBMEM →
-// GMMU_APERTURE_VIDEO` / `ADDR_SYSMEM → GMMU_APERTURE_SYS_{COH,NONCOH}`, and
-// `:4291-4296` is the receiver switching it back.
-
-/// `GMMU_APERTURE_INVALID` — ⊘ **a real value, not a blank**: *"only supported for GPU PDEs
-/// to distinguish invalid sub-levels"*. A level that publishes it has published *"there is
-/// no sub-level here"*, which is not the same statement as an aperture.
-pub const GMMU_APERTURE_INVALID: u32 = 0;
-/// `GMMU_APERTURE_VIDEO` — the receiver's own fork value
-/// (`ogkm-580: gpu_vaspace.c:4291-4292` switches `VIDEO → ADDR_FBMEM`).
-pub const GMMU_APERTURE_VIDEO: u32 = 1;
-/// `GMMU_APERTURE_PEER`.
-pub const GMMU_APERTURE_PEER: u32 = 2;
-/// `GMMU_APERTURE_SYS_NONCOH`. ⚠ **Three, and it comes BEFORE coherent.**
-pub const GMMU_APERTURE_SYS_NONCOH: u32 = 3;
-/// `GMMU_APERTURE_SYS_COH`.
-pub const GMMU_APERTURE_SYS_COH: u32 = 4;
+// It was declared in this module first — and the values were **wrong**, all four of them,
+// until a boot said so (`[measured 2026-08-08, boot run_p35_a34025b]`; the derivation and
+// the measurement are on the constants themselves). The bridge now needs the same enum to
+// decide whether a published root is a framebuffer address, so the choice was *one
+// declaration or two transcriptions of the enum that has already been transcribed wrong
+// once*. It is one, it is in the crate that owns every NVIDIA constant (decision #2's
+// quarantine), and this re-export keeps every existing consumer's path working.
 
 /// ★★★ **The permission to walk** — §7 rule 1, in the type system.
 ///
@@ -232,24 +214,6 @@ pub struct VasRoot {
     pub virt_addr_hi: u64,
 }
 
-/// Decode a `GMMU_APERTURE_*` value. `None` is *"a value the header does not define"*,
-/// which the receiver itself asserts on (`ogkm-580: gpu_vaspace.c:4503-4511`).
-#[must_use]
-pub fn decode_aperture(raw: u32) -> Option<Aperture> {
-    match raw {
-        GMMU_APERTURE_VIDEO => Some(Aperture::Vidmem),
-        GMMU_APERTURE_PEER => Some(Aperture::Peer),
-        GMMU_APERTURE_SYS_COH => Some(Aperture::SysmemCoherent),
-        GMMU_APERTURE_SYS_NONCOH => Some(Aperture::SysmemNonCoherent),
-        // ⊘ `GMMU_APERTURE_INVALID` lands here with everything else the enum does not
-        // define, and deliberately: *"this sub-level is absent"* and *"a value we do not
-        // recognise"* are both **not an aperture**, and both must refuse. The raw word
-        // travels beside the decode (`VasRoot::aperture_raw`) so the report can still
-        // distinguish them.
-        _ => None,
-    }
-}
-
 /// ★★★ The published root of the VA space `(client, vaspace)`, from a publication
 /// snapshot — **or `None`, which is a finding and not a lookup miss to paper over**.
 ///
@@ -273,7 +237,7 @@ pub fn published_root(snap: &GvasPubSnapshot, client: u32, vaspace: u32) -> Opti
         .iter()
         .rfind(|p| p.client == client && p.object == vaspace)
         .map(|p| {
-            let l0 = p.pdes.levels[0];
+            let l0 = p.pdes.root();
             VasRoot {
                 phys: l0.phys_address,
                 aperture: decode_aperture(l0.aperture),

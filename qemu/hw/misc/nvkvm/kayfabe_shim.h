@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 21u
+#define KAYFABE_SHIM_ABI 22u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -743,6 +743,20 @@ typedef struct KayfabeRegAudit {
     uint64_t gvas_pub_total;
     uint64_t gvas_pub_len;
     uint64_t gvas_pub_undecodable;
+    /* ★★★ THE SEAT THAT CARRIES A PUBLICATION INTO THE OBJECT MODEL (§14.23), counted by a
+     * DIFFERENT link from the three above.  `gvas_pub_total` is the recorder's (decode +
+     * log); `gvas_pub_seen` is the observer's (decode + declare), and `gvas_pub_applied` is
+     * how many the object model ACCEPTED — i.e. how many VA spaces now carry the guest's
+     * own page-directory base.
+     *
+     * ⊘ Two counts of one event on purpose.  Until 2026-08-08 the port RECORDED this
+     * control and answered NV_OK without forwarding it, so `gvas_pub_total` was 5 while the
+     * object model held nothing; a single number could not have said that.  A boot with
+     * `gvas_pub_total` non-zero and `gvas_pub_seen` zero is a front seat that was never
+     * filled.  `gvas_pub_unexpected` is unreachable by construction and printed anyway. */
+    uint64_t gvas_pub_seen;
+    uint64_t gvas_pub_applied;
+    uint64_t gvas_pub_unexpected;
     KayfabeGvasPublication gvas_pub[KAYFABE_GVAS_PUBLICATION_SLOTS];
     /* ★ THE PROBE SET THIS BOOT RAN WITH — from the `probe-arm-notifier` device property,
      * recorded by the plane's census at construction from the same value the event-plane

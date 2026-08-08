@@ -141,6 +141,62 @@ pub const LEVEL_SIZE: usize = 24;
 /// (`ctrl2080internal.h:1906-1908`).
 pub const COPY_SERVER_RESERVED_PDES_PARAMS_SIZE: usize = 0x28 + GMMU_FMT_MAX_LEVELS * LEVEL_SIZE;
 
+// ★★★ **`GMMU_APERTURE`, transcribed from the enum's own declaration order** — `ogkm-580:
+// src/nvidia/inc/libraries/mmu/gmmu_fmt.h:280-325`, an unnumbered C enum, so the ORDER is
+// the encoding.
+//
+// ⚠⚠ **Every one of these four was wrong when they were first written, and a boot is what
+// said so.** `[measured 2026-08-08, boot run_p35_a34025b]`: the walling channel's own
+// publication carries `aperture 1` on all four levels, our device printed
+// `root=0x2efa9c000/ap1/sh47`, and the resolver refused it `ROOTAP1` — *"aperture 1 is not
+// this device's framebuffer"* — because the values had been assumed from the **PDE FIELD**
+// encoding (`kern_gmmu_fmt_gm10x.c:165-182`, `0=INVALID 1=VIDEO 2=SYS_COH 3=SYS_NONCOH`)
+// rather than read from the **enum** this control's `levels[].aperture` field actually
+// carries. The two agree on `INVALID` and `VIDEO` and disagree on everything else
+// (`two_encodings_agreeing_on_the_first_values`).
+//
+// ★ Note `SYS_NONCOH` precedes `SYS_COH`, which is the reverse of every other list in this
+// port and is exactly the sort of ordering nobody re-checks. `gpu_vaspace.c:3798-3808` is
+// the corroborating half: the *sender* fills the same field from `ADDR_FBMEM →
+// GMMU_APERTURE_VIDEO` / `ADDR_SYSMEM → GMMU_APERTURE_SYS_{COH,NONCOH}`, and
+// `:4291-4296` is the receiver switching it back.
+//
+// ★★ **They live HERE, in the ABI crate, and there is exactly one declaration.** They were
+// written in `kayfabe_device::ceresolve` first, which re-exports them; a second
+// transcription in the bridge — the crate that now turns `levels[0]` into an
+// `RmEvent::SetPageDir` — would be this enum's own recorded bug, committed twice.
+
+/// `GMMU_APERTURE_INVALID` — ⊘ **a real value, not a blank**: *"only supported for GPU PDEs
+/// to distinguish invalid sub-levels"*. A level that publishes it has published *"there is
+/// no sub-level here"*, which is not the same statement as an aperture.
+pub const GMMU_APERTURE_INVALID: u32 = 0;
+/// `GMMU_APERTURE_VIDEO` — the receiver's own fork value
+/// (`ogkm-580: gpu_vaspace.c:4291-4292` switches `VIDEO → ADDR_FBMEM`).
+pub const GMMU_APERTURE_VIDEO: u32 = 1;
+/// `GMMU_APERTURE_PEER`.
+pub const GMMU_APERTURE_PEER: u32 = 2;
+/// `GMMU_APERTURE_SYS_NONCOH`. ⚠ **Three, and it comes BEFORE coherent.**
+pub const GMMU_APERTURE_SYS_NONCOH: u32 = 3;
+/// `GMMU_APERTURE_SYS_COH`.
+pub const GMMU_APERTURE_SYS_COH: u32 = 4;
+
+/// Decode a `GMMU_APERTURE_*` value. `None` is *"a value the header does not define"*,
+/// which the receiver itself asserts on (`ogkm-580: gpu_vaspace.c:4503-4511`).
+#[must_use]
+pub fn decode_aperture(raw: u32) -> Option<kayfabe_arch::Aperture> {
+    match raw {
+        GMMU_APERTURE_VIDEO => Some(kayfabe_arch::Aperture::Vidmem),
+        GMMU_APERTURE_PEER => Some(kayfabe_arch::Aperture::Peer),
+        GMMU_APERTURE_SYS_COH => Some(kayfabe_arch::Aperture::SysmemCoherent),
+        GMMU_APERTURE_SYS_NONCOH => Some(kayfabe_arch::Aperture::SysmemNonCoherent),
+        // ⊘ `GMMU_APERTURE_INVALID` lands here with everything else the enum does not
+        // define, and deliberately: *"this sub-level is absent"* and *"a value we do not
+        // recognise"* are both **not an aperture**, and both must refuse. The raw word
+        // travels beside the decode so a report can still distinguish them.
+        _ => None,
+    }
+}
+
 const O_H_SUBDEVICE: usize = 0x00;
 const O_SUBDEVICE_ID: usize = 0x04;
 const O_PAGE_SIZE: usize = 0x08;
@@ -183,6 +239,25 @@ pub struct ServerReservedPdes {
     /// The published levels. Entries at or past [`Self::num_levels`] are decoded but carry
     /// no meaning; they are kept so the re-encode is faithful.
     pub levels: [PdeLevel; GMMU_FMT_MAX_LEVELS],
+}
+
+impl ServerReservedPdes {
+    /// ★★★ **`levels[0]` — the ROOT page directory of the VA space this publication names.**
+    ///
+    /// One function so *"index 0 is the root"* is stated once rather than at each consumer.
+    /// The derivation, both halves: `_gvaspacePopulatePDEentries` starts at
+    /// `pGpuState->pFmt->pRoot` and descends via `mmuFmtGetNextLevel` at the **bottom** of
+    /// its loop, filling `levels[i]` top-down (`ogkm-580: gpu_vaspace.c:3974-4031`); the
+    /// receiver consumes it **bottom-up** (`for (i = numLevelsToCopy - 1; i >= 0; i--)`,
+    /// `:4492`) — root consumed last, so root is index 0.
+    ///
+    /// ⊘ Always meaningful: [`decode_server_reserved_pdes`] refuses `numLevelsToCopy == 0`
+    /// ([`ServerReservedPdesError::LevelCountOutOfRange`]), so a decoded publication has at
+    /// least this one level and this is never an out-of-range read dressed as a default.
+    #[must_use]
+    pub fn root(&self) -> PdeLevel {
+        self.levels[0]
+    }
 }
 
 /// Why a publication was refused.

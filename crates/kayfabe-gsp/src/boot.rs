@@ -318,6 +318,58 @@ pub trait CommandPolicy: Send {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply>;
 }
 
+/// ★★★ **A link that SEES every command and cannot answer one** — the seam for a fact the
+/// guest states inside a control that some *other* link is the correct answerer for.
+///
+/// # Why this is a second trait and not a `CommandPolicy` that promises to return `None`
+///
+/// A device policy chain is a `find_map`: the first `Some` terminates it. So a link that
+/// must observe a control whose *answer* belongs to a link further down has to be seated
+/// **ahead** of the answerer — at which point *"and it always declines"* is the only thing
+/// standing between an observer and a silently re-routed reply.
+///
+/// This port has already paid for the difference between an obligation that is *stated* and
+/// one that is *checked*: `kayfabe_device::served_chain`'s object-link seat carries the
+/// sentence *"the link must not claim more than it serves … the obligation is stated here
+/// and `tests/served_chain_objects.rs` is where it is checked"*, and that file **has never
+/// existed** — the obligation was load-bearing, well written, cited by a second crate, and
+/// unchecked for its whole life.
+///
+/// ⇒ This trait has **no return value**. An observer cannot answer, cannot re-route a
+/// reply and cannot change a byte the guest reads, because there is nothing for it to
+/// return — the property is `rustc`'s rather than a reviewer's. `gates_quantified_over_a_list`
+/// in its other direction: the strongest gate is the one that cannot be spelled wrong.
+///
+/// `Send` for [`CommandPolicy`]'s reason exactly: it is held by the FSM across vCPU threads.
+pub trait CommandObserver: Send {
+    /// Look at one command. Whatever this learns, it cannot be an answer.
+    ///
+    /// ⊘ Called for **every** command, before any link has answered — so an implementation
+    /// owes its own gate on the ones it means to observe, and must be cheap on the rest.
+    fn observe(&mut self, cmd: &RpcCommand);
+}
+
+/// The adapter that seats a [`CommandObserver`] in a [`CommandPolicy`] chain.
+///
+/// ★ `respond` is *literally* `{ self.0.observe(cmd); None }` — the whole type. It is here,
+/// beside the two traits, rather than in the crate that builds chains, so that the one
+/// place an observer becomes a policy is the one place both traits are declared.
+pub struct Observing(pub Box<dyn CommandObserver>);
+
+impl CommandPolicy for Observing {
+    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        self.0.observe(cmd);
+        // ⊘ Unconditional, and the only `return` in the type. See [`CommandObserver`].
+        None
+    }
+}
+
+impl core::fmt::Debug for Observing {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Observing").finish_non_exhaustive()
+    }
+}
+
 /// A safe default policy: echo the request back with `NV_OK`.
 ///
 /// `C: src/qemu/nvkvm_gpu_emul.c:2410-2416` is the C's generic path — every command that is

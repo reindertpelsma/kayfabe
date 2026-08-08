@@ -10610,10 +10610,14 @@ fn rb_hostile() -> Vec<(w::Step, FaultTag)> {
         (
             w::Step {
                 function: fn_id::GSP_RM_CONTROL,
+                // ★ The REVOCATION, not the publication. `0x90f10106` carried this tag
+                // until §14.23 gave it a decoder; `0x00801814` is what
+                // `PageDirNotModelled` still means — a page-directory verb `RmEvent` has
+                // no way to express.
                 body: w::control_body(
                     rb::C1,
                     rb::DEV,
-                    w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+                    w::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY,
                     0,
                     w::RMAPI_RPC_FLAGS_NONE,
                     &[],

@@ -170,10 +170,10 @@ fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
             ..Default::default()
         },
         kayfabe_device::census::ControlCensusLog::new(),
-        // ★ No object-model link. This test is about fn 47 reaching `InertPolicy` and NOT
-        // reaching the ledger; adding one would make the assertion depend on a link that
-        // has no opinion about fn 47 at all.
-        None,
+        // ★ Neither object-model seat. This test is about fn 47 reaching `InertPolicy`
+        // and NOT reaching the ledger; adding one would make the assertion depend on a link
+        // that has no opinion about fn 47 at all.
+        kayfabe_device::ObjectLinks::default(),
     );
     let reply = chain
         .respond(&command(

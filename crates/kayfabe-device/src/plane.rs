@@ -1159,7 +1159,7 @@ impl RegPlane {
             abi,
             clock,
             kayfabe_abi::eventnotify::ProbeArmSet::default(),
-            None,
+            crate::ObjectLinks::default(),
         )
     }
 
@@ -1173,11 +1173,12 @@ impl RegPlane {
     /// the default. It is a decision one composition root makes, and it is spelled out at
     /// the one place that makes it.
     ///
-    /// `objects` is the [`kayfabe_gsp::CommandPolicy`] the object model is behind. This
-    /// crate cannot name its type: it has no `kayfabe-core` dependency, deliberately (*"a
-    /// GSP FSM that can see the RM graph starts firing on graph state"*), so what crosses
-    /// is a trait object and the port owns the choice. See [`crate::served_chain`] for
-    /// where in the chain it lands and what it must not claim.
+    /// `links` is [`crate::ObjectLinks`] — the object model's **two** seats in the chain
+    /// (see that type for why they are two, and why only one of them can answer). This
+    /// crate cannot name either link's concrete type: it has no `kayfabe-core` dependency,
+    /// deliberately (*"a GSP FSM that can see the RM graph starts firing on graph state"*),
+    /// so what crosses is a pair of trait objects and the port owns the choice. See
+    /// [`crate::served_chain`] for where in the chain each lands and what it must not claim.
     ///
     /// # Errors
     ///
@@ -1187,7 +1188,7 @@ impl RegPlane {
         abi: GspAbi,
         clock: Box<dyn NanoClock>,
         probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
-        objects: Option<Box<dyn CommandPolicy>>,
+        links: crate::ObjectLinks,
     ) -> Result<RegPlane, ChipError> {
         let rom = crate::rom_for(chip)?;
         let model = (chip.gsp_model)();
@@ -1224,7 +1225,7 @@ impl RegPlane {
                         gvas_pub: gvas_pub.clone(),
                     },
                     census.clone(),
-                    objects,
+                    links,
                 ),
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),

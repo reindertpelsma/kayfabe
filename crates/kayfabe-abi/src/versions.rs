@@ -1058,11 +1058,11 @@ impl DriverAbiTable {
         match cmd.0 {
             ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY => Some(ControlParams::SetPageDir),
             ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX => Some(ControlParams::PromoteCtx),
-            NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY
-            | NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
+            NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES
             | NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER => {
-                Some(ControlParams::PageDirNotModelled)
+                Some(ControlParams::VaspacePublishedPdes)
             }
+            NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY => Some(ControlParams::PageDirNotModelled),
             _ => None,
         }
     }
@@ -1414,25 +1414,43 @@ pub enum ControlParams {
     /// [`DriverAbiTable::decode_set_page_dir`]. The one control this port turns
     /// into a fact.
     SetPageDir,
-    /// ★★ **Known to move a VASpace's page-directory binding, and not modelled.**
+    /// ★★★ **The guest PUBLISHING where a VA space's page directories live** —
+    /// [`crate::gvaspacepdes::decode_server_reserved_pdes`], whose
+    /// [`root()`](crate::gvaspacepdes::ServerReservedPdes::root) is the VA space's
+    /// page-directory base.
     ///
-    /// Three commands, three different reasons, one answer — and the answer is a
-    /// *named* refusal rather than silence, because the absence of a PDB is
-    /// invisible downstream (a channel simply defers at its first doorbell,
-    /// forever):
+    /// Two command ids, one 184-byte params struct, and the second is a
+    /// `ROUTE_TO_PHYSICAL` wrapper around the first at offset 0:
     ///
-    /// - `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) —
-    ///   carries the root PD as `levels[0].physAddress` for **every ordinary
-    ///   RM-managed VAS**, at construct time. Not decoded here: its params are a
-    ///   184-byte struct ending in a six-element array of 24-byte level records
-    ///   whose size has been *computed*, not read from any layout assertion, so
-    ///   it needs the generator and a `RUSTC_OFFSETS` pin rather than a
-    ///   hand-transcription.
+    /// - `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) — issued at
+    ///   construct time for **every ordinary RM-managed VAS** on a GSP client;
     /// - `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER`
     ///   (`0x20800a9f`) — the same payload for the GPU-group global VAS.
-    /// - `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`0x00801814`) — the
-    ///   *revocation*. `RmEvent` has no verb for it, and inventing one is a core
-    ///   change rather than a bridge change.
+    ///
+    /// ★★★ **This is where a page-directory base comes from on the boot path, and
+    /// [`Self::SetPageDir`] is not.** §14.9's census of a real GA106 boot measured
+    /// `SET_PAGE_DIRECTORY` at **zero** occurrences and this pair at **five**;
+    /// `SET_PAGE_DIRECTORY` reaches the wire only for a `SHARED_MANAGEMENT` /
+    /// `IS_EXTERNALLY_OWNED` VASpace, because the handler asserts on exactly that
+    /// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:3109`).
+    ///
+    /// ⚠ **The VA space is named by the RPC HEADER's `hObject`, not by a params field**
+    /// (`rmCtrlParams.hObject = hVASpace`, `ogkm-580: gpu_vaspace.c:5174-5177`) — the one
+    /// field a port drops first, and without it a root belongs to no address space.
+    VaspacePublishedPdes,
+    /// ★★ **Known to move a VASpace's page-directory binding, and not modelled.**
+    ///
+    /// `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`0x00801814`) — the *revocation*.
+    /// [`crate::view::SetPageDir`]'s event has no verb for it, and inventing one is a core
+    /// change rather than a bridge change. Answered with a *named* refusal rather than
+    /// silence, because the state of a PDB is invisible downstream: a channel whose
+    /// address space is wrong simply defers at its first doorbell, forever.
+    ///
+    /// ⊘ The two *publication* ids left this variant on 2026-08-08 for
+    /// [`Self::VaspacePublishedPdes`]. The reason they were here — *"its params are a
+    /// 184-byte struct … so it needs the generator and a `RUSTC_OFFSETS` pin rather than a
+    /// hand-transcription"* — was answered by [`crate::gvaspacepdes`], which decodes,
+    /// validates against `ctrl90f1.h`'s own rules and pins its size with a `const` assert.
     PageDirNotModelled,
     /// ★★ `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` —
     /// [`DriverAbiTable::decode_promote_ctx`]. The **address-plane** control: it
@@ -1465,6 +1483,15 @@ impl ControlParams {
     pub const fn params_size(self) -> Option<usize> {
         match self {
             ControlParams::SetPageDir => Some(ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE),
+            // 184, and it is checked EXACTLY like every other row here: the two senders
+            // pass `sizeof(NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS)` verbatim
+            // (`ogkm-580: gpu_vaspace.c:4151, 5185`), so a different declared size is a
+            // guest that means a different struct. ⊘ Not a lower bound — the decoder
+            // refuses anything but this length (`ServerReservedPdesError::WrongSize`), and
+            // this makes the refusal name the *command* as well as the buffer.
+            ControlParams::VaspacePublishedPdes => {
+                Some(crate::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE)
+            }
             ControlParams::PageDirNotModelled => None,
             // 560 — and it is a PRODUCT of two machine-checked numbers plus the
             // transcribed prefix, never a literal. `subdeviceCtrlCmdGpuPromoteCtx`'s

@@ -110,12 +110,18 @@ fn chain_with_objects() -> (
             ..Default::default()
         },
         kayfabe_device::census::ControlCensusLog::new(),
-        Some(Box::new(ObjectPolicy::new(
-            abi(),
-            GuestOs::Linux,
-            port_gpu(),
-            kayfabe_device::ga10x::GA106_ENGINES,
-        ))),
+        kayfabe_device::ObjectLinks {
+            objects: Some(Box::new(ObjectPolicy::new(
+                abi(),
+                GuestOs::Linux,
+                port_gpu(),
+                kayfabe_device::ga10x::GA106_ENGINES,
+            ))),
+            // ⊘ No publication seat. This file's subject is `GSP_RM_ALLOC` reaching the
+            // object model; the front seat claims only `GSP_RM_CONTROL` ids and would
+            // change no assertion here.
+            ..Default::default()
+        },
     );
     (policy, log)
 }
@@ -135,7 +141,7 @@ fn chain_without_objects() -> (
             ..Default::default()
         },
         kayfabe_device::census::ControlCensusLog::new(),
-        None,
+        kayfabe_device::ObjectLinks::default(),
     );
     (policy, log)
 }

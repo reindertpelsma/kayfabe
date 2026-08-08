@@ -2756,19 +2756,22 @@ mod tests {
 
     /// ★ The capability gate must not **pre-empt** the more informative refusals.
     ///
-    /// `SetPageDir` is the one control the port turns into a fact and
-    /// `PageDirNotModelled` is the port's most valuable diagnostic; both are only
-    /// reachable if the gate lets them through first. This is the test that fails if
-    /// someone "tidies up" the Mode-2 rows out of the table because the C did not have
-    /// them.
+    /// `SetPageDir` and `VaspacePublishedPdes` are the controls the port turns into a
+    /// fact and `PageDirNotModelled` is the port's named diagnostic for the one it does
+    /// not; all three are only reachable if the gate lets them through first. This is the
+    /// test that fails if someone "tidies up" the Mode-2 rows out of the table because the
+    /// C did not have them.
     #[test]
     fn the_page_directory_controls_survive_the_gate() {
         let abi = table_for(crate::versions::BENCH_DRIVER).expect("bench");
         for (cmd, want) in [
             (0x0080_1813u32, ControlParams::SetPageDir),
             (0x0080_1814, ControlParams::PageDirNotModelled),
-            (0x2080_0a9f, ControlParams::PageDirNotModelled),
-            (0x90f1_0106, ControlParams::PageDirNotModelled),
+            // ★★★ The two PUBLICATION ids, and they are the ones that actually carry a
+            // page-directory base on the boot path — §14.9 measured `0x00801813` at zero
+            // occurrences in a whole init and these two at five.
+            (0x2080_0a9f, ControlParams::VaspacePublishedPdes),
+            (0x90f1_0106, ControlParams::VaspacePublishedPdes),
             // ★ The address-plane control joins the same pairing: it is the only other
             // control the port turns into facts, and it is equally worth failing loudly
             // if a tidy-up removes its row.

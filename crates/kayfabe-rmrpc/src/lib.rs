@@ -196,8 +196,9 @@ mod reasm;
 
 pub use fault::{FaultEmitRefusal, rc_triggered_for};
 pub use policy::{
-    GraphPolicy, OBJECT_CONTROLS, OBJECT_VERBS, ObjectModel, ObjectPolicy, RefusalCensus,
-    RingCensus, SharedRefusalCensus, SharedRingCensus,
+    GraphPolicy, OBJECT_CONTROLS, OBJECT_VERBS, ObjectModel, ObjectPolicy, PUBLICATION_CONTROLS,
+    PublicationCensus, PublicationObserver, RefusalCensus, RingCensus, SharedPublicationCensus,
+    SharedRefusalCensus, SharedRingCensus,
 };
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
@@ -702,6 +703,63 @@ pub enum BridgeRefusal {
     /// component, which is the exact shape this project has already been bitten by twice.
     /// So it is refused, and the refusal names the gap.
     ImplicitVaspace,
+    /// ★★ **A page-directory publication whose RPC header names no VA space** —
+    /// `hObject == 0` on `0x90f10106` / `0x20800a9f`.
+    ///
+    /// [`kayfabe_abi::versions::ControlParams::VaspacePublishedPdes`]'s whole point is
+    /// that the address space is named by the **header**, not by a params field
+    /// (`rmCtrlParams.hObject = hVASpace`, `ogkm-580: gpu_vaspace.c:5174-5177`). A
+    /// publication that names none carries four page-directory levels attributable to
+    /// nothing, and [`Self::ImplicitVaspace`]'s argument applies verbatim: passing
+    /// `HObject(0)` through would attach a PDB to a node key the guest never declared,
+    /// where it parks silently and forever.
+    ///
+    /// ⊘ Refused rather than guessed. There is no "the client's only VA space" fallback —
+    /// `[measured 2026-08-08, boot ship3_d5369b5]` one boot publishes five roots across
+    /// four clients, so *"whichever one that client published"* is a real wrong answer and
+    /// not a theoretical one.
+    PublishedPdesUnnamedVaspace {
+        /// `cmd`.
+        cmd: u32,
+    },
+    /// ★ **A page-directory publication that contradicted its own header's rules** —
+    /// see [`kayfabe_abi::gvaspacepdes::ServerReservedPdesError`], every variant of which
+    /// is a rule from `ctrl90f1.h` rather than a preference of ours.
+    ///
+    /// ⊘ Not folded into [`Self::Abi`]: that variant is *"a layout decoder refused"*,
+    /// which is a statement about **bytes**, and this is a statement about a **guest that
+    /// published something impossible** — an inverted VA range, a level of zero bytes.
+    PublishedPdesMalformed {
+        /// `cmd`.
+        cmd: u32,
+        /// Which of the header's own rules the publication broke.
+        err: kayfabe_abi::gvaspacepdes::ServerReservedPdesError,
+    },
+    /// ★★★ **The published ROOT is not in the framebuffer, so its address is not a
+    /// [`Pdb`].**
+    ///
+    /// `levels[0].aperture` is a `GMMU_APERTURE_*` value and the receiver forks on it:
+    /// `VIDEO → ADDR_FBMEM`, `SYS_{COH,NONCOH} → ADDR_SYSMEM`, and it *asserts* on
+    /// anything else (`ogkm-580: gpu_vaspace.c:4503-4511`).
+    /// [`kayfabe_arch::ids::Pdb`] is documented as a per-GPU **FB** address, so a
+    /// sysmem-rooted publication decoded into one would be a guest-physical address
+    /// wearing a framebuffer offset's type — the same number meaning a different memory.
+    ///
+    /// ⚠ **Not hypothetical.** `c_ceutils_ring_resolution.md` §2 measured a sysmem-rooted
+    /// PDB as an executing channel's own root on a real GA106 (2026-07-25), and
+    /// [`kayfabe_device::ceresolve::CeResolve::RootAperture`] already refuses the same
+    /// fork one layer down rather than reading a sysmem root out of the framebuffer. This
+    /// is that refusal at the point the fact is *born* instead of at the point it is used.
+    ///
+    /// ⊘ The day `Pdb` carries its aperture, this becomes a second arm rather than a
+    /// refusal — and until then a refusal is the only answer that is not a wrong address.
+    PublishedPdesRootAperture {
+        /// `cmd`.
+        cmd: u32,
+        /// The raw `GMMU_APERTURE_*` word, so a value the header does not define at all is
+        /// distinguishable from a defined one we do not back.
+        aperture: u32,
+    },
     /// `hClient == 0`. `NV01_NULL_OBJECT` is not a namespace; the core reserves
     /// `HClient(0)` as its system anchor and would refuse it too. Refused here as a
     /// well-formedness property of the *message* — which needs no graph state, and so is
@@ -879,6 +937,22 @@ impl Faulted for BridgeRefusal {
                 FaultTag("BridgeRefusal::ControlParamsSizeMismatch")
             }
             BridgeRefusal::ImplicitVaspace => FaultTag("BridgeRefusal::ImplicitVaspace"),
+            // ★ Three flat tags, not delegated to `ServerReservedPdesError`'s eight
+            // variants. The contained value is a well-formedness rule of ONE message the
+            // guest is not expected to break, and the recorder counts undecodable
+            // publications separately (`gvas_pub_undecodable`) — so a per-rule tag would
+            // split a number that is zero in every healthy boot into eight zeroes. The
+            // three tags here are the three *different diagnoses*: unattributable,
+            // impossible, and rooted somewhere this port cannot address.
+            BridgeRefusal::PublishedPdesUnnamedVaspace { .. } => {
+                FaultTag("BridgeRefusal::PublishedPdesUnnamedVaspace")
+            }
+            BridgeRefusal::PublishedPdesMalformed { .. } => {
+                FaultTag("BridgeRefusal::PublishedPdesMalformed")
+            }
+            BridgeRefusal::PublishedPdesRootAperture { .. } => {
+                FaultTag("BridgeRefusal::PublishedPdesRootAperture")
+            }
             BridgeRefusal::ParamsSizeExceedsPayload { .. } => {
                 FaultTag("BridgeRefusal::ParamsSizeExceedsPayload")
             }
@@ -1349,6 +1423,12 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         return translate_promote_ctx(abi, client, params);
     }
 
+    // ★★★ The PUBLICATION. Same discipline as the arm above: the VA space leaves as the
+    // guest's own `hObject` and the graph resolves it.
+    if shape == ControlParams::VaspacePublishedPdes {
+        return translate_published_pdes(client, HObject(h.object), h.cmd, params);
+    }
+
     let p = abi.decode_set_page_dir(params)?;
     // ★ Zero is not "unspecified" here — it names the client/device pair's *implicit*
     // VASpace, an object this RPC does not identify. See `BridgeRefusal::ImplicitVaspace`.
@@ -1359,6 +1439,87 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         client,
         vaspace: HObject(p.h_vaspace),
         pdb: Pdb(p.phys_address),
+    }))
+}
+
+/// ★★★ `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) and its
+/// `ROUTE_TO_PHYSICAL` twin `0x20800a9f` → [`RmEvent::SetPageDir`].
+///
+/// # Why this exists, and it is a correction to this function's neighbour
+///
+/// [`translate_control`]'s own rustdoc has said since B2 that
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` is *"necessary and **not sufficient**"*,
+/// because an ordinary RM-managed VAS declares its root through this control instead. That
+/// sentence was written as a **source reading** and it was right; what followed it was
+/// wrong, and a boot is what said so.
+///
+/// ⊘ **The port RECORDED this control and did not FORWARD it, and recording is not
+/// forwarding.** `[measured 2026-08-08, boots ship_7a881a7 / ship3_d5369b5, revs
+/// `7a881a7` / `d5369b5`]`: `control 0x90f10106 result 0x00000000 x4` — served, `NV_OK`,
+/// four times — and `kayfabe_device::gvaspub::GvasPubRecorder` wrote all five publications
+/// (four client-arm + the global arm) into a **census log** whose whole output was a number
+/// in a report. `Vas::pdb` stayed `None`, so `kayfabe_core::promote::route_promote_ctx`
+/// could only ever answer [`kayfabe_core::promote::PromoteFault::ContextVasUndeclared`],
+/// which is exactly the refusal the same boots printed. A fact the guest states four times
+/// and the port answers `NV_OK` to, that then reaches nothing, is the C artifact's shape
+/// with better instrumentation.
+///
+/// # ★★ What is read, and from where — the header, not the params
+///
+/// | fact | source | why not the other one |
+/// |---|---|---|
+/// | namespace | the RPC header's `hClient` | this crate's governing rule; read once at the top of [`translate_control`] |
+/// | **which VA space** | the RPC header's **`hObject`** | `rmCtrlParams.hObject = hVASpace` (`ogkm-580: gpu_vaspace.c:5174-5177`), where `hVASpace` is the `VaSpaceApi` resource's own handle (`:4070`). ⊘ **No params field names it at all** — a port that read only the body would have four indistinguishable roots for four address spaces |
+/// | the PDB | [`ServerReservedPdes::root()`](kayfabe_abi::gvaspacepdes::ServerReservedPdes::root)`.phys_address` | index 0 is the root; the derivation and its corroborating half are on that method |
+///
+/// # ⊘ What is DROPPED, and the one that is a refusal rather than a drop
+///
+/// `levels[1..]`, `pageSize`, `virtAddrLo/Hi`, `hSubDevice`/`subDeviceId` have no home in
+/// [`RmEvent`] and are not invented one here. ⚠ §14.12 is explicit that the deeper levels
+/// *must not* be reused — they are the levels on the path to `vaStartServerRMOwned`, not
+/// the levels of an arbitrary walk — so dropping them is correct rather than lossy.
+///
+/// The **aperture** is not dropped: it is [`BridgeRefusal::PublishedPdesRootAperture`],
+/// because a `Pdb` is a framebuffer address and a sysmem root is not one.
+///
+/// # ⊘ And what this still does NOT do
+///
+/// It declares a page-directory **base**. It does not build a page table, does not walk
+/// one, and gives no channel a mapping: `mode2_address_table.md`'s forward-population rule
+/// is unchanged and `MISS = FAULT` still holds. The only thing that changes downstream is
+/// that a VA space the guest told us about can now be *named* by its own root.
+fn translate_published_pdes(
+    client: HClient,
+    vaspace: HObject,
+    cmd: u32,
+    params: &[u8],
+) -> Result<Translation, BridgeRefusal> {
+    // ★ The header named no address space. Refused, never guessed — see the variant.
+    if vaspace == HObject(0) {
+        return Err(BridgeRefusal::PublishedPdesUnnamedVaspace { cmd });
+    }
+    // ⊘ The decoder is `kayfabe_abi`'s and it VALIDATES: every refusal it can return is a
+    // rule `ctrl90f1.h` itself states, so a refusal here is "the guest contradicted its own
+    // ABI" rather than "we did not like it". `translate_control` has already pinned
+    // `paramsSize` to the struct's exact size, so a `WrongSize` from here means the payload
+    // was shorter than the size the guest declared.
+    let pdes = kayfabe_abi::gvaspacepdes::decode_server_reserved_pdes(params)
+        .map_err(|err| BridgeRefusal::PublishedPdesMalformed { cmd, err })?;
+    let root = pdes.root();
+    // ★★★ THE FORK. `GMMU_APERTURE_VIDEO` is the only value whose address is a framebuffer
+    // offset, which is what `Pdb` is documented to be. Everything else — sysmem (measured
+    // on real GA106 as a live channel's root), peer, and every value the header does not
+    // define — is refused rather than reinterpreted at the same number.
+    if root.aperture != kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO {
+        return Err(BridgeRefusal::PublishedPdesRootAperture {
+            cmd,
+            aperture: root.aperture,
+        });
+    }
+    Ok(Translation::Event(RmEvent::SetPageDir {
+        client,
+        vaspace,
+        pdb: Pdb(root.phys_address),
     }))
 }
 

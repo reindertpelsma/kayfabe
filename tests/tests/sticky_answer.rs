@@ -98,11 +98,12 @@ fn guarded() -> Box<dyn CommandPolicy> {
         abi(),
         kayfabe_device::ChainLogs::default(),
         kayfabe_device::census::ControlCensusLog::new(),
-        // ⊘ No object-model link. This file's subject is `GSP_RM_CONTROL` replies and the
-        // two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control at
-        // all, so including it would add a link that cannot change a single assertion
-        // here — and would quietly make these tests depend on the object model realizing.
-        None,
+        // ⊘ Neither object-model seat. This file's subject is `GSP_RM_CONTROL` replies and
+        // the two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control
+        // at all and the publication seat cannot answer one, so including either would add
+        // a link that cannot change a single assertion here — and would quietly make these
+        // tests depend on the object model realizing.
+        kayfabe_device::ObjectLinks::default(),
     )
 }
 
@@ -112,11 +113,12 @@ fn unguarded() -> Box<dyn CommandPolicy> {
         abi(),
         kayfabe_device::ChainLogs::default(),
         kayfabe_abi::eventnotify::ProbeArmSet::default(),
-        // ⊘ No object-model link. This file's subject is `GSP_RM_CONTROL` replies and the
-        // two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control at
-        // all, so including it would add a link that cannot change a single assertion
-        // here — and would quietly make these tests depend on the object model realizing.
-        None,
+        // ⊘ Neither object-model seat. This file's subject is `GSP_RM_CONTROL` replies and
+        // the two fields the guard zeroes; `kayfabe_rmrpc::ObjectPolicy` claims no control
+        // at all and the publication seat cannot answer one, so including either would add
+        // a link that cannot change a single assertion here — and would quietly make these
+        // tests depend on the object model realizing.
+        kayfabe_device::ObjectLinks::default(),
     )
 }
 
@@ -257,7 +259,12 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
         .collect();
     assert_eq!(
         rows,
-        vec!["FaultBufferRecorder", "GvasPubRecorder", "UnservicedLedger"],
+        vec![
+            "FaultBufferRecorder",
+            "GvasPubRecorder",
+            "UnservicedLedger",
+            "Observing",
+        ],
         "a NeverAnswers row was added or removed without extending this test",
     );
 
@@ -269,6 +276,17 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
         kayfabe_device::unserviced::UnservicedLedger::new(abi(), unserviced_log.clone());
     let gvas_log = kayfabe_device::gvaspub::GvasPubLog::new();
     let mut gvas = kayfabe_device::gvaspub::GvasPubRecorder::new(abi(), gvas_log.clone());
+    // ★★★ §14.23 — the observer adapter, over an observer that COUNTS. If `Observing`
+    // could answer, this is the seat where the answer would replace `InitTablePolicy`'s;
+    // the counter below is what proves the declines are decisions and not ignorance.
+    let counted = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    struct Counting(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+    impl kayfabe_gsp::CommandObserver for Counting {
+        fn observe(&mut self, _cmd: &RpcCommand) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    let mut observing = kayfabe_gsp::Observing(Box::new(Counting(counted.clone())));
 
     let gss = a_served_control() | 0x0000_8000;
     let its_own = kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER;
@@ -293,6 +311,10 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
             gvas.respond(&c).is_none(),
             "GvasPubRecorder answered {cmd:#010x}",
         );
+        assert!(
+            observing.respond(&c).is_none(),
+            "Observing answered {cmd:#010x}",
+        );
     }
     for cmd in [pub_cmd, pub_cmd | 0x0000_8000] {
         let c = control(cmd, pub_size, RMCTRL_FLAGS_CACHEABLE, 0);
@@ -304,6 +326,11 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
         assert!(
             ledger.respond(&c).is_none(),
             "UnservicedLedger answered {cmd:#010x}",
+        );
+        assert!(
+            observing.respond(&c).is_none(),
+            "Observing answered its front-seat control {cmd:#010x} — that reply would \
+             replace InitTablePolicy's",
         );
     }
     // ★ Non-vacuity, and it is the whole reason this is not `assert!(true)`: both policies
@@ -331,6 +358,13 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
     // does not recognise it — which is the correct behaviour and worth pinning: setting bit
     // 15 does not smuggle a control past a policy's id check, it names another control.
     assert_eq!(fault_log.total(), 1, "the recorder never saw its control");
+    // ⊘ FIVE — every command the sweeps above posted reached the wrapped observer. A zero
+    // would mean `Observing` short-circuits, and its `None`s would prove nothing.
+    assert_eq!(
+        counted.load(std::sync::atomic::Ordering::Relaxed),
+        5,
+        "Observing did not pass the traffic through to its observer",
+    );
 }
 
 /// `NotAControl` means the policy returns `None` for **every** fn-76 command, which is what
@@ -353,7 +387,6 @@ fn the_not_a_control_rows_decline_every_control_command() {
             "StaticInfoPolicy",
             "GuestSystemInfoPolicy",
             "InertPolicy",
-            "ObjectPolicy",
             "BarPdePolicy",
         ],
         "a NotAControl row was added or removed without extending this test",
@@ -378,24 +411,13 @@ fn the_not_a_control_rows_decline_every_control_command() {
             "InertPolicy",
             Box::new(kayfabe_device::inert::InertPolicy::new()),
         ),
-        // ★★★ The one row here that is INSTALLED IN THE PORT. The other three are device
-        // links; this is the object model. Built with the same `Ga10xArch` +
-        // `StillbornIsolates` composition `kayfabe_qemu_raw::shim` builds, so what is
-        // swept is the policy a guest actually meets.
-        (
-            "ObjectPolicy",
-            Box::new(kayfabe_rmrpc::ObjectPolicy::new(
-                &abi(),
-                kayfabe_abi::GuestOs::Linux,
-                kayfabe_core::gpu::Gpu::new(
-                    Box::new(kayfabe_chips::Ga10xArch::new()),
-                    Box::new(kayfabe_isolate::StillbornIsolates::new("test")),
-                    kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
-                )
-                .expect("the port's object model realizes"),
-                kayfabe_device::ga10x::GA106_ENGINES,
-            )),
-        ),
+        // ⊘⊘ **`ObjectPolicy` LEFT this list on 2026-08-08.** It was here claiming
+        // `NotAControl`, and `#177` had already made that false — it answers
+        // `kayfabe_rmrpc::OBJECT_CONTROLS` (`0xa06f0103`, `0xa06f0104`) with `NV_OK` and a
+        // body. The sweep below could not see it: it quantifies over `WantedTable::ALL`,
+        // which is **`InitTablePolicy`'s** id list and contains neither of them, so a false
+        // claim sat under an executing test. Its row is `Guarded` now, and the lesson is
+        // this file's own: a gate is only as true as the list it quantifies over.
         // ★★ `#149`. It answers exactly `UPDATE_BAR_PDE` (fn 70) and declines every other
         // function, so no reply of its can reach `rpcRmApiControl_GSP`'s two cache-populating
         // call sites however it is composed.
