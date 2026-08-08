@@ -2678,3 +2678,62 @@ the shape that drops the fork.
    (`ogkm-580: gpu_vaspace.c:4039-4051`). So it publishes the levels backing the *server-RM-owned
    sub-range*. ★ That does not weaken it: `levels[0]` is the root of the **whole** VAS regardless
    of which VA the walk was seeded with, because every walk in a VAS starts at the same root.
+
+### 14.10 E10e item (1), BUILT — the publication is LATCHED and the report carries it (`d79b67f`)
+
+`[built]` at `62a06af` + `d79b67f`, GPU-free; ⊘ **no boot of this revision has been taken yet**,
+so everything below is a property of the tree and of its tests, not of a guest. The one number
+this increment exists to produce — `levels[0]` per publication, with its `hObject` — is a
+**boot output** and is deliberately not asserted here.
+
+**What was built.** `kayfabe_device::gvaspub`: a `GvasPubLog` modelled on `bar2::BarPdeLog`, and
+a `GvasPubRecorder` `CommandPolicy` that decodes `0x90f10106` / `0x20800a9f` and records, per
+publication, the control id, the header's `hClient` **and `hObject`**, `virt_addr_lo`/`hi`,
+`page_size`, `num_levels` and every `PdeLevel` (`phys_address`, `size`, `aperture`, `page_shift`).
+Surfaced through `RegPlane::gvas_publications()`, into `PlaneResidue`, over the shim wire as
+`KayfabeGvasPublication` / `KayfabePdeLevel` (ABI 16 → 17), and printed by `nvkvm.c` at teardown
+with `levels[0]` labelled **ROOT**.
+
+**Three decisions, each of which had a wrong alternative.**
+
+1. **Seated FIRST in `served_chain`, and it declines everything.** `InitTablePolicy` *terminates*
+   the `find_map` for these two ids, so a recorder at the tail — where the other two recorders
+   live — could never see one. ⊘ Re-routing *who answers* was the alternative and it is
+   forbidden: `gvaspace_pdes` and `cap1b_differential` pin `InitTablePolicy` as the answerer.
+   An always-`None` observer ahead of it is what makes both facts hold at once, which is what
+   §14.8 asked for. `sticky::POLICY_DISPOSITIONS` carries it as `NeverAnswers` (a claim about
+   the **type**), not `Guarded` (a claim about a caller).
+2. **`hObject` is threaded, not dropped.** `translate_control` reads `req.client` and `req.cmd`
+   and never `req.object` (`crates/kayfabe-rmrpc/src/lib.rs:1256`); nothing here goes through
+   `translate_control` at all, because `kayfabe_abi::view::RpcControlReq` already carries
+   `object` and `InitTablePolicy` classifies off the same header. ★ Independently corroborated
+   after the fact by `c_ceutils_ring_resolution.md`: the C artifact's PDB source was **also**
+   `0x90f10106`, keyed `{hClient, hVASpace}`, root aperture taken from `levels[0]`.
+3. **The whole `PdeLevel` is kept, aperture included, at every level.** ⚠ Do **not** read this
+   record as an FB address: `c_ceutils_ring_resolution.md` measured a **sysmem-rooted** PDB as an
+   executing channel's own root on a real GA106 (2026-07-25), and `bUseBar1` is **per-instance**
+   (one CeUtils instance sysmem-backed and another vidmem-backed in one run). There is no single
+   right answer to "which aperture", which is why the fork travels with every level and why this
+   log stores rather than resolves.
+
+**⊘⊘⊘ What it does NOT do, and this is the increment's shape.** It does not populate
+`chan.vas_pdb`, does not create a `Vas` in `proc.vases`, and does not relax `NoVas`. §14.8's
+measurement stands: granting the channel a VAS before the executor is reachable turns a loud,
+correct `NoVas` refusal into a doorbell that reports **Served** over work that did not happen.
+⇒ **The wall must be unchanged by this increment.** A boot of this revision that does *not* end
+at `memmgrMemSet … NV_ERR_TIMEOUT (0x65) @ mem_mgr.c:463` with `doorbell: NoVas(ChanId(1))` is
+evidence that an observer changed something it should not have, and is a defect rather than
+progress.
+
+**Bite-check** (`--no-fail-fast`, both mutations restored). Dropping `hObject` from the
+de-duplication key killed `two_va_spaces_publishing_the_same_levels_are_two_rows_not_one` and
+`the_distinct_count_keeps_counting_past_the_sample_cap`. Making the recorder answer its own ids
+killed six tests across four files — including `cap1b_differential`'s two, i.e. **the C oracle's
+own replay is what catches an observer that starts answering.**
+
+**The join this sets up, and the instrument that will settle it.** Guest patch `0002` prints
+`hVASpaceId` for the CeUtils channel from the guest's own `channelWaitForFinishPayload`. If that
+handle equals an `hObject` in this log, the VAS→channel join becomes a fact the guest itself
+stated rather than one we joined up. If it differs, that is the more valuable result and this record is what
+makes the disagreement visible at all. ⊘ Patch `0002` is bring-up instrumentation, so any rung
+claimed on a boot carrying it is a **diagnosis**, not the milestone.
