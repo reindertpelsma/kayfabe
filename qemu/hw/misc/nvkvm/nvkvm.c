@@ -1559,15 +1559,26 @@ static void nvkvm_report_registers(NvkvmState *s)
      */
     /*
      * ★ THE PROBE SET FIRST, unconditionally, empties included: the census rows below are
-     * only interpretable against the probe set the boot ran with — an arming of a
-     * non-silent index served with result 0 means one thing under an empty probe (a
+     * only interpretable against the probe set the boot ran with — an arming of an
+     * UNLISTED index served with result 0 means one thing under an empty probe (a
      * defect) and another under a probe naming it (the measurement that was asked for).
      * Three boots ran probe-off while looking armed from the launching shell; this line
      * is what makes that impossible to misread again.
+     *
+     * ⚠ §14.19 CORRECTED THE SENTENCE THIS PRINTS.  It said an empty probe means "every
+     * non-silent notifier arming refused", and that became false the moment
+     * kayfabe_abi::eventnotify::DELIVERED_NOTIFIERS existed: index 35 is served in the
+     * SHIPPING configuration, because this device now raises the non-stall vector its
+     * arming promises (see the `completions:` line above).  A report line that names the
+     * wrong reason for a served row is worse than none — an operator reading "every
+     * non-silent arming refused" beside `arming event 35 ... result 0x00000000` would
+     * diagnose the census, not the boot.
      */
     if (a.probe_arm_len == 0) {
-        info_report("nvkvm: probe-arm set: EMPTY (shipping configuration: every "
-                    "non-silent notifier arming refused)");
+        info_report("nvkvm: probe-arm set: EMPTY (shipping configuration: an arming is "
+                    "served only if the index is on SILENT_NOTIFIERS — the event cannot "
+                    "occur — or DELIVERED_NOTIFIERS — this device raises it; all others "
+                    "refused)");
     } else {
         uint64_t i, pshown = a.probe_arm_len;
         char pbuf[KAYFABE_PROBE_ARM_SLOTS * 12 + 1];

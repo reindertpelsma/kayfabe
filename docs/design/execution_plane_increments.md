@@ -3737,3 +3737,109 @@ one does *not* establish: the guest's `LEAF_EN` for a CE non-stall vector is set
 this port has never observed, so `nonstall_masked` is the number to read first — a boot with
 `raises > 0, unvectored = 0, masked > 0` is a delivered message the guest's own scan will
 never attribute, and it looks exactly like success from every other angle.
+
+### 14.20 ★★★★ BOOTED, SHIPPING CONFIGURATION — **`nvidia-smi` prints a device with the probe EMPTY** (`7a881a7`)
+
+`[measured 2026-08-08]`, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver
+**580.159.04 Open**), source revision **`7a881a7`** verified by
+`strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:7a881a7e7ee7054f09a7965baad68414e7280ce3` in each. Boots `ship_7a881a7` and
+`ship_7a881a7_b`, **`probe-arm set: EMPTY`**, **STOCK** guest module
+(`(dvs-builder@U22-I3-AF04-09-6) Wed Apr 29`, the `.run`'s own banner — no patch, no
+`KAYFABE-BRINGUP` lines). Evidence:
+`docs/reference/bench_evidence/run_ship_7a881a7{,_b}_{dmesg,qemu,probe,serial}.log`.
+
+#### `nvidia-smi`, verbatim
+
+```text
+Sat Aug  8 14:05:01 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 N/A |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=6  →  SMI_RC=0
+```
+
+⊘ `RmInitAdapter failed!` **does not appear in the boot at all** — the string is absent from
+both 38-line captures, where every previous shipping boot ended on it. The adapter
+initialised.
+
+#### ★★ REPRODUCED, and the two runs are indistinguishable
+
+`ship_7a881a7_b` at the same revision: guest dmesg **byte-identical**, 38/38 lines with
+timestamps stripped; `SMI_RC=0`; and the device's own report identical line for line
+(`2 announced, 0 UNVECTORED, 2 masked`; `1 bind engineType 11 (COPY2)`; both index-35
+armings `result 0x00000000`). ⊘ Recorded because `#13` is the standing proof that *"it
+worked once"* is not a result on this bench.
+
+#### The device's own report, and the three numbers that matter
+
+```text
+nvkvm: probe-arm set: EMPTY
+nvkvm:   arming event 35 action 2 client 0xc1e00005 object 0x0000000b result 0x00000000 x1
+nvkvm:   arming event 35 action 2 client 0xc1e00006 object 0x0000000c result 0x00000000 x1
+nvkvm: channel binds (0xa06f0104): 1 total, 1 distinct
+nvkvm:   bind engineType 11 (COPY2) client 0xc1e00006 object 0x00000002 result 0x00000000 x1
+nvkvm: doorbells: 2 arrived, 2 served, 0 REFUSED by name; last token 0x00010002
+nvkvm: completions: 2 announced (non-stall vector raised), 0 UNVECTORED, 2 would be masked
+```
+
+- ★★★ §14.18's ordering prediction **held**: serving the arming is what let the guest reach
+  the bind, and the bind names **COPY2** in the shipping configuration — an engine this
+  device had never been told about in a probe-empty boot before.
+- ★★★ **`0 UNVECTORED`** — every copy this shell performed was announced. That is the
+  counter whose non-zero value would be the promise of serving index 35 broken quietly.
+
+#### ⊘⊘ AND THE MEASUREMENT REFUTES HALF OF WHY WE BUILT IT — `2 would be masked`
+
+★ **The guest never enabled the leaf.** Vector `0x07` is leaf 0, bit 7; both announcements
+were latched with `LEAF_EN(0)` bit 7 clear, so the guest's own non-stall scan —
+`intrReadRegLeaf(j) & intrReadRegLeafEnSet(j)`, `ogkm-580: intr_nonstall_tu102.c:253-255` —
+**cannot see them**. The message was delivered and the ISR could not attribute it.
+
+⇒ **The boot did not consume the notification, and it succeeded anyway.** So the scrubber
+needed the arming to be *accepted*, not the event to be *received* — which is exactly what
+§14.18's `[measured]` probe boot had already found (*"it registers and continues"*) and what
+this shipping boot now confirms with the delivery in place.
+
+⊘ **What that does and does not change.** It does **not** make the raise optional: accepting
+a completion arming while delivering nothing is the promise this repository refuses to make,
+and the honest ground for serving 35 is that we raise it. It **does** mean this boot is
+**no evidence at all** that the guest receives it — and without `nonstall_masked`, a boot in
+which the vector never arrived would have looked exactly like this one. ★ The counter §14.19
+added as a hedge is the only reason this paragraph exists rather than an unearned
+*"delivery works"*.
+
+⚠ Where the enable comes from is now the open question: nothing in these two boots wrote
+`LEAF_EN_SET(0)` bit 7, so either the guest enables CE non-stall leaves on a path
+`RmInitAdapter` does not reach, or it enables them per-engine at a point this port has not
+served yet. ⊘ Unmeasured; do not assume the first.
+
+#### What this establishes, and what it does not
+
+- ✔ A **stock** NVIDIA driver initialises its adapter against this emulated GPU and
+  `nvidia-smi` enumerates the device, with **no probe, no guest patch** — reproduced.
+- ⊘ `Name` reads `ERR!` and every telemetry field reads `N/A`: the device is enumerated, and
+  the controls behind the name/clock/power queries are not served. That is a **description**
+  of what is missing, not a failure of the enumeration.
+- ⊘ **Nothing about CUDA.** `kgraphicsCreateGoldenImageChannel` still fails on four refused
+  alloc classes (`0x0070`, `0xc36f`, `0x402c`, and `0x2081` in the probe boots), so the GR
+  golden context does not exist and `cuInit` is unchanged. ★ Which is itself a correction:
+  those four refusals do **not** block the adapter — they were assumed to be upstream of
+  everything, and the adapter now initialises with all four still refused.
