@@ -2299,6 +2299,25 @@ impl RmGraph {
     /// silently disarmed the F1 [`crate::project::ProjectionError::PdbCollision`] guard
     /// for that value).
     ///
+    /// ★★★ **The live resource NODE named by identity** — its origin handle (hence its
+    /// owning `hClient`), its class and its [`AllocFacts`].
+    ///
+    /// # Why by IDENTITY and not by handle, restated because it is the same trap
+    ///
+    /// Exactly [`Self::pdb_of_resource`]'s argument: a handle-shaped lookup answers about
+    /// the *current tenant* of a recycled handle value, so a dup-kept ghost would report
+    /// its successor's facts. Every caller here holds a [`ResourceKey`] already
+    /// (`kayfabe_core::gpu::Channel::key`), so nothing is gained by widening it.
+    ///
+    /// ⊘ This exposes no fact the projection does not already derive; it exists so a
+    /// consumer that needs **two** declared facts of one channel — the `hClient` its
+    /// namespace is in and the `hVASpace` it named — can read them from the one node that
+    /// declared both, rather than joining two projections that could disagree.
+    #[must_use]
+    pub fn node_of_resource(&self, id: ResourceKey) -> Option<&RmNode> {
+        self.resource_at(id).map(|r| &r.node)
+    }
+
     /// **MISS ⇒ DEFER**, exactly as [`Self::pdb_of`].
     #[must_use]
     pub fn pdb_of_resource(&self, id: ResourceKey) -> Option<Pdb> {

@@ -927,7 +927,12 @@ struct PlaneCounters {
 /// about any format: `kayfabe_arch::GmmuFmt::level_shift` answers `None` for a row it does
 /// not have, so scanning further finds nothing and only costs calls. Sixteen is already
 /// three times the deepest regime this project has read.
-const MAX_FORMAT_LEVELS: u8 = 16;
+/// How many format levels a root's `pageShift` is searched against.
+///
+/// ⊘ `pub(crate)`: [`crate::ceresolve`] derives a published root's level with the exact
+/// same search `bar2_phys` does for BAR2's, and two constants would be two answers to one
+/// question.
+pub(crate) const MAX_FORMAT_LEVELS: u8 = 16;
 
 /// Why a windowed access did not resolve to a framebuffer address.
 ///
@@ -972,6 +977,57 @@ impl FbRead for FbStoreReader<'_> {
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.fb.read(phys, buf).is_ok()
     }
+}
+
+/// Why a [`RegPlane::read_published_va`] produced no bytes.
+///
+/// ⊘ Two arms, not one string: *"the walk refused"* and *"the walk resolved and the store
+/// refused"* are different findings about different components, and a caller that reported
+/// them identically would spend a boot telling them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishedVaRead {
+    /// The walk did not produce an address; its own finding, whole.
+    Unresolved(crate::ceresolve::CeResolve),
+    /// The address resolved and the store that owns that aperture refused it, by name.
+    Store(&'static str),
+}
+
+impl PublishedVaRead {
+    /// One line naming what happened, for a boot report.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        match self {
+            PublishedVaRead::Unresolved(r) => r.describe(),
+            PublishedVaRead::Store(why) => format!("RESOLVED but the store refused: {why}"),
+        }
+    }
+}
+
+/// The walk, with the plane's state already locked — the one body
+/// [`RegPlane::resolve_published_va`] and [`RegPlane::read_published_va`] share, so the two
+/// entry points cannot come to disagree about which format or which framebuffer answers.
+fn resolve_locked(
+    s: &mut PlaneState,
+    chip: &'static ChipProfile,
+    root: &crate::ceresolve::VasRoot,
+    va: u64,
+    demand: crate::ceresolve::Demand,
+) -> crate::ceresolve::CeResolve {
+    let limits = crate::ceresolve::CeAddrLimits {
+        // ★ The chip's own advertised length — the same number `SparseFb` was sized from
+        // and the emulated GSP answers `FB_GET_INFO` with, so the §7 rule-5 bound cannot
+        // disagree with the store it bounds.
+        fb_len: chip.fb_length,
+        // See `CeAddrLimits`: this port has no query for the guest's RAM extent, and a
+        // fabricated bound would be worse than a stated absence.
+        gpa_limit: None,
+    };
+    let PlaneState { mmu, fb, .. } = s;
+    let Some(fmt) = mmu.as_deref() else {
+        return crate::ceresolve::CeResolve::NoMmuPort;
+    };
+    let mut src = FbStoreReader { fb: fb.as_mut() };
+    crate::ceresolve::resolve(fmt, &mut src, root, va, limits, demand)
 }
 
 impl RegPlane {
@@ -1220,6 +1276,111 @@ impl RegPlane {
     #[must_use]
     pub fn gvas_publications(&self) -> GvasPubSnapshot {
         self.gvas_pub.snapshot()
+    }
+
+    /// ★★★ **Resolve one GPU virtual address in a VA space the guest published** — the
+    /// `crate::ceresolve` walk, over **this plane's own** framebuffer and page-table
+    /// format.
+    ///
+    /// # ⊘ The trigger discipline is the argument, not a comment
+    ///
+    /// `demand` is `gmmu_publication_discipline.md` §7 rule 1: the guest event that
+    /// authorised the walk. There is no constructor for a [`crate::ceresolve::Demand`]
+    /// that does not name one, so this method cannot be used to prefetch — which is §6.2's
+    /// unsafe case, and the one whose three interleavings all produce a *plausible-looking
+    /// wrong physical page* rather than an error.
+    ///
+    /// # Why it belongs on the plane
+    ///
+    /// The page tables were written by the guest **through this plane's BAR2 window**, into
+    /// the same [`crate::FbStore`] `bar2_phys` reads and the BAR0 moving window writes. A
+    /// resolver reaching a second store would answer out of a framebuffer the guest never
+    /// wrote — the exact disagreement `bar2_phys`'s own docs refuse. So the byte source is
+    /// not a parameter: it is this plane's, or the answer is about a different device.
+    ///
+    /// ★ The framebuffer bound for §7 rule 5 comes from the **chip's own advertised
+    /// length** — the same number the emulated GSP answers `FB_GET_INFO` with and the same
+    /// one `SparseFb` was sized from, so the limit cannot disagree with the store.
+    #[must_use]
+    pub fn resolve_published_va(
+        &self,
+        client: u32,
+        vaspace: u32,
+        va: u64,
+        demand: crate::ceresolve::Demand,
+    ) -> crate::ceresolve::CeResolve {
+        let Some(root) =
+            crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+        else {
+            return crate::ceresolve::CeResolve::NoPublication;
+        };
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        resolve_locked(&mut s, self.chip, &root, va, demand)
+    }
+
+    /// ★★ **Resolve a published GPU VA and READ the bytes behind it** — resolution and
+    /// access in one lock acquisition, routed to the store the **leaf's own aperture**
+    /// names.
+    ///
+    /// # ⊘ The aperture is the router, and it is not optional
+    ///
+    /// A vidmem leaf is an offset into this device's framebuffer; a sysmem leaf is a guest
+    /// physical address. The two are different number spaces that collide freely — at 8 GiB
+    /// a GPU VA is itself a legal GPA (`execution_plane_increments.md` §8.2.3's measured
+    /// warning) — so serving one out of the other's store is the *silent wrong bytes*
+    /// failure the whole address plane exists to refuse. `c_ceutils_ring_resolution.md` §4
+    /// measured a CeUtils finishPayload in **each** aperture within one run, so neither
+    /// answer is the safe default.
+    ///
+    /// ⊘ Peer memory is refused: this device backs none.
+    ///
+    /// # Errors
+    /// The resolution itself, whenever it was not [`crate::ceresolve::CeResolve::Resolved`]
+    /// — returned whole so a caller reports the walk's own finding rather than "read
+    /// failed" — or the store's refusal sentence.
+    pub fn read_published_va(
+        &self,
+        client: u32,
+        vaspace: u32,
+        va: u64,
+        buf: &mut [u8],
+        demand: crate::ceresolve::Demand,
+    ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
+        let Some(root) =
+            crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+        else {
+            return Err(PublishedVaRead::Unresolved(
+                crate::ceresolve::CeResolve::NoPublication,
+            ));
+        };
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let r = resolve_locked(&mut s, self.chip, &root, va, demand);
+        let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
+            return Err(PublishedVaRead::Unresolved(r));
+        };
+        match aperture {
+            Aperture::Vidmem => {
+                s.fb.read(phys, buf)
+                    .map(|()| r)
+                    .map_err(|e| PublishedVaRead::Store(e.why))
+            }
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => s
+                .ram
+                .read(phys, buf)
+                .map(|()| r)
+                .map_err(|e| PublishedVaRead::Store(e.why)),
+            Aperture::Peer => Err(PublishedVaRead::Store(
+                "the leaf names PEER memory and this device backs no peer aperture",
+            )),
+        }
+    }
+
+    /// The published page-directory root of one `(hClient, hVASpace)` pair, for a report
+    /// that wants to state the root it walked from. ⊘ Reading a root is not walking one;
+    /// no [`crate::ceresolve::Demand`] is needed and none is implied.
+    #[must_use]
+    pub fn published_root(&self, client: u32, vaspace: u32) -> Option<crate::ceresolve::VasRoot> {
+        crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
     }
 
     /// The publication latch itself, as a shared handle — for

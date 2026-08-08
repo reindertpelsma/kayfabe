@@ -490,8 +490,19 @@ fn the_archive_realizes_exactly_one_object_model() {
         code.contains("SharedObjectModel(Arc::clone(&device))"),
         "the object bridge must declare into the shared handle"
     );
+    // ★ The doorbell port grew a second field (a `Weak<RegPlane>`, for the addressing
+    // probe), so the spelling moved from a tuple struct to a named one. The PROPERTY is
+    // unchanged and is what is asserted: its `device` is a clone of the one handle above,
+    // not a second shell.
     assert!(
-        code.contains("SharedDoorbell(Arc::clone(&device))"),
+        code.contains("SharedDoorbell {") && code.contains("device: Arc::clone(&device),"),
         "…and the doorbell port must ring the same one"
+    );
+    // ⊘ And the plane handle it now also holds must be WEAK. The plane owns this port; a
+    // strong handle is a cycle that never frees, and nothing else in the archive would say
+    // so — the device would simply leak one register plane per realize.
+    assert!(
+        code.contains("plane: Arc::downgrade(&plane),"),
+        "the doorbell port's back-reference to its own plane must be weak"
     );
 }

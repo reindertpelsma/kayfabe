@@ -174,7 +174,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// times and still not know how many address spaces there were.
 ///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 17;
+pub const ABI_VERSION: u32 = 18;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -854,7 +854,7 @@ pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
 /// (`FwdFault::MalformedToken` ≠ `FwdFault::UnknownVchid` — two different diagnoses with
 /// two different fixes), and the sentence is the variant's payload, which is prose. A
 /// single blob would make the only machine-readable half a substring search.
-pub const DOORBELL_REFUSAL_LEN: usize = 192;
+pub const DOORBELL_REFUSAL_LEN: usize = 448;
 /// How many bytes of a doorbell refusal's **kind** the audit carries.
 ///
 /// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
@@ -1600,12 +1600,27 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
 /// - **The target GPU is [`GpuId::ZERO`]**, because this device is one GPU — the same id
 ///   `Gpu::realize` carves the system proc's arena for. The day a shim realizes two, this
 ///   comes from the device instance and not from a constant.
-struct SharedDoorbell(Arc<kayfabe_rt::device::SharedDevice>);
+struct SharedDoorbell {
+    device: Arc<kayfabe_rt::device::SharedDevice>,
+    /// ★★★ The register plane this port is installed in — **weak**, because the plane owns
+    /// this port and a strong handle would be a cycle that never frees.
+    ///
+    /// It is here for one purpose and it is an observing one: when the core refuses a
+    /// doorbell, the plane is what can say **why the channel's own addresses do or do not
+    /// resolve** — it holds the guest's published page-directory roots
+    /// (`kayfabe_device::gvaspub`) and the framebuffer the guest wrote its page tables into
+    /// through BAR2. Without it a `NoVas` refusal names the absence and nothing else, and
+    /// `execution_plane_increments.md` §14.12 asked for exactly the missing half:
+    /// *"are the intermediate entries on the path to `0x4_2000_0000` actually present in our
+    /// emulated FB? A miss is a fault."*
+    plane: std::sync::Weak<RegPlane>,
+}
 
 impl core::fmt::Debug for SharedDoorbell {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("SharedDoorbell")
             .field("gpu", &DOORBELL_TARGET_GPU.0)
+            .field("plane", &self.plane.upgrade().is_some())
             .finish_non_exhaustive()
     }
 }
@@ -1615,7 +1630,7 @@ const DOORBELL_TARGET_GPU: kayfabe_rt::GpuId = kayfabe_rt::GpuId(0);
 
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
     fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
-        match self.0.doorbell(DOORBELL_TARGET_GPU, token, &[]) {
+        match self.device.doorbell(DOORBELL_TARGET_GPU, token, &[]) {
             Ok(o) => kayfabe_device::DoorbellReport::Served {
                 token,
                 proc: o.proc.0,
@@ -1632,10 +1647,120 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
                 token,
                 refusal: kayfabe_device::DoorbellRefused {
                     kind: kayfabe_device::Faulted::fault_tag(&f),
-                    why: format!("{f:?}"),
+                    // ★★★ The refusal, **plus what this channel's own addresses resolve
+                    // to**. See `SharedDoorbell::addressing_probe`.
+                    why: format!("{f:?}{}", self.addressing_probe(token)),
                 },
             },
         }
+    }
+}
+
+/// ★★★ **The finishPayload semaphore's offset from the GPFIFO ring's base** — `0x8004`.
+///
+/// `[src]` `ogkm-580: channel_utils.c:242-250, 671-672`: `gpfifo_va = pbGpuVA +
+/// channelPbSize` and `finishPayloadOffset = channelPbSize + GPFIFO_SIZE (0x8000) + 4`, so
+/// the difference is `GPFIFO_SIZE + 4` and is **independent of `channelPbSize`** — which is
+/// the whole reason it can be derived from the ring address alone. The C artifact derived
+/// the same constant and its arithmetic reproduces on our own boot: `0x120064000 + 0x8004 =
+/// 0x12006c004`, and the guest printed exactly that
+/// (`c_ceutils_ring_resolution.md` §4; `execution_plane_increments.md` §14.11).
+const FINISH_PAYLOAD_FROM_RING: u64 = 0x8004;
+
+/// How many bytes of the ring the probe reads — **one** GPFIFO entry.
+///
+/// ⊘ One, not the ring. The probe's question is *"does this channel's addressing resolve"*,
+/// and one entry answers it; reading 4096 entries would be a guest-sized copy performed for
+/// a diagnostic, and the first entry is the only one the submission is guaranteed to have
+/// written.
+const PROBE_RING_BYTES: usize = kayfabe_abi::submit::GP_ENTRY_SIZE as usize;
+
+impl SharedDoorbell {
+    /// ★★★ **What this channel's own addresses resolve to** — appended to a refusal so the
+    /// boot states the finding instead of leaving it to be inferred.
+    ///
+    /// # ⊘ This is an OBSERVER. It serves nothing and it changes nothing the guest can see.
+    ///
+    /// The core has already refused; this runs afterwards and its entire output is text in
+    /// a report. It does not populate `Channel::vas_pdb`, does not create a `Vas` and does
+    /// not relax the refusal — `execution_plane_increments.md` §14.8 measured why that
+    /// order is binding: granting the CeUtils channel a VAS *before* an executor is
+    /// reachable turns a loud, correct `NoVas` into a doorbell reporting **Served** over
+    /// work that did not happen.
+    ///
+    /// # ★★ Why walking here is permitted at all
+    ///
+    /// `gmmu_publication_discipline.md` §6.1/§7 rule 1: a walk is safe **iff** it is
+    /// triggered by a real translation demand, so that it runs strictly after the guest's
+    /// own publication window for those addresses. **A doorbell is that demand** — the
+    /// guest wrote the ring, published the mappings the work touches, ran §3's flush, and
+    /// only then wrote the token. ⊘ And it is the *only* commit point on this path: §5
+    /// measured **both** invalidate transports at zero here, so nothing else could serve as
+    /// the trigger. The permission is carried as a value
+    /// ([`kayfabe_device::ceresolve::Demand::from_doorbell`]) precisely so a future
+    /// prefetch cannot acquire it by editing a comment.
+    ///
+    /// # The three addresses, and why each one
+    ///
+    /// 1. **the ring** — `gpFifoOffset`, a GPU virtual address the channel itself declared;
+    /// 2. **the first GPFIFO entry's target**, read out of the ring and decoded — the
+    ///    pushbuffer the submission points at. This is the step that proves the chain
+    ///    rather than one address of it;
+    /// 3. **the finishPayload semaphore**, at [`FINISH_PAYLOAD_FROM_RING`] — the word the
+    ///    guest is polling while it times out, so its aperture is the `#12` question.
+    ///
+    /// Returns the empty string when there is nothing to say (no plane, no channel facts,
+    /// no declared VA space or ring) — an empty suffix leaves the refusal exactly as it was.
+    fn addressing_probe(&self, token: u64) -> String {
+        let Some(plane) = self.plane.upgrade() else {
+            return String::new();
+        };
+        let Ok(facts) = self.device.ce_channel_facts(DOORBELL_TARGET_GPU, token) else {
+            return String::new();
+        };
+        // ⊘ A channel that named no VA space has no address space to resolve in, and a
+        // channel that declared no ring has no address to resolve. Neither is a walk we may
+        // invent an argument for.
+        let (Some(vaspace), Some(ring_va)) = (facts.vaspace, facts.ring_va) else {
+            return format!(" | c=0x{:x} vas=none ring=none", facts.client);
+        };
+        let demand = kayfabe_device::ceresolve::Demand::from_doorbell;
+        let root = plane.published_root(facts.client, vaspace);
+        let ring = plane.resolve_published_va(facts.client, vaspace, ring_va, demand());
+        let fin = plane.resolve_published_va(
+            facts.client,
+            vaspace,
+            ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING),
+            demand(),
+        );
+        // The pushbuffer the ring's first entry points at — read the entry, decode it, walk
+        // its target. ⊘ Every step can fail and every failure is reported as itself: a ring
+        // that would not read and a ring that read as a malformed entry are different facts.
+        let mut gp = [0u8; PROBE_RING_BYTES];
+        let pb = match plane.read_published_va(facts.client, vaspace, ring_va, &mut gp, demand()) {
+            Err(e) => format!("ringread={}", e.describe()),
+            Ok(_) => match kayfabe_abi::submit::gp_entry_decode(u64::from_le_bytes(gp)) {
+                None => format!("gp0=0x{:016x} NOT-A-GP-ENTRY", u64::from_le_bytes(gp)),
+                Some(d) => format!(
+                    "gp0=0x{:x}+{:#x} pb={}",
+                    d.gpu_va,
+                    d.len_bytes,
+                    plane
+                        .resolve_published_va(facts.client, vaspace, d.gpu_va, demand())
+                        .tag()
+                ),
+            },
+        };
+        format!(
+            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}",
+            facts.client,
+            root.map_or_else(
+                || "none".to_string(),
+                |r| format!("0x{:x}/ap{}/sh{}", r.phys, r.aperture_raw, r.page_shift)
+            ),
+            ring.tag(),
+            fin.tag(),
+        )
     }
 }
 
@@ -1644,7 +1769,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
 /// ⊘ Hand-written [`core::fmt::Debug`] since E2, because `SharedDevice` deliberately has
 /// none — see [`SharedObjectModel`].
 pub struct Regs {
-    plane: RegPlane,
+    plane: Arc<RegPlane>,
     /// ★★★ **E2** — the L1 shell that owns the object model, held here because **two**
     /// paths now reach it: the object bridge (boxed into the register plane's served
     /// chain, and unreachable afterwards) and the doorbell port. Before E2 there was one
@@ -1787,7 +1912,14 @@ impl Regs {
         //
         // ★ The port is a `SharedDevice` handle and not a second object model; see
         // [`SharedObjectModel`] for why that identity is the whole increment.
-        plane.set_doorbell(Box::new(SharedDoorbell(Arc::clone(&device))));
+        // ★★ The plane is `Arc`-ed BEFORE its doorbell port is installed, because the port
+        // holds a `Weak` back to it (see [`SharedDoorbell::plane`]). `set_doorbell` takes
+        // `&self`, so the order costs nothing and the cycle is broken by construction.
+        let plane = Arc::new(plane);
+        plane.set_doorbell(Box::new(SharedDoorbell {
+            device: Arc::clone(&device),
+            plane: Arc::downgrade(&plane),
+        }));
         Ok(Regs {
             plane,
             device,

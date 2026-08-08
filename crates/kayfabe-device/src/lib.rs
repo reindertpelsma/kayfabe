@@ -53,6 +53,7 @@
 pub mod abi;
 pub mod bar2;
 pub mod census;
+pub mod ceresolve;
 pub mod cpuintr;
 pub mod doorbell;
 pub mod faultbuffer;

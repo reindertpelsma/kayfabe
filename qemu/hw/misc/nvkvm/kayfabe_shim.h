@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 17u
+#define KAYFABE_SHIM_ABI 18u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -365,7 +365,7 @@ typedef struct KayfabeBridgeRefusal {
  * is the fault variant's payload, which is prose.  A single blob would make the only
  * machine-readable half a substring search. */
 #define KAYFABE_DOORBELL_KIND_LEN 64u
-#define KAYFABE_DOORBELL_REFUSAL_LEN 192u
+#define KAYFABE_DOORBELL_REFUSAL_LEN 448u
 
 typedef struct KayfabeDoorbellRefusal {
     uint8_t kind[KAYFABE_DOORBELL_KIND_LEN];  /* NUL-PADDED, not NUL-terminated */

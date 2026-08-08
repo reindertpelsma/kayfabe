@@ -1356,6 +1356,72 @@ impl SharedDevice {
         }
     }
 
+    /// ★★★ **The declared facts a doorbell's channel needs to be resolvable at all** —
+    /// its owning `hClient`, the `hVASpace` it named, and the GPFIFO ring it declared.
+    ///
+    /// # Why these three, and why from ONE node
+    ///
+    /// A GPU virtual address only means something inside an address space, and this port's
+    /// only boot-path statement of where an address space's page directories live is keyed
+    /// `(hClient, hVASpace)` (`kayfabe_device::gvaspub`; `execution_plane_increments.md`
+    /// §14.9's census measured `SET_PAGE_DIRECTORY` at **zero**). Both handles and the ring
+    /// address are declared by the **same** `RM_ALLOC` — the channel's — so they are read
+    /// off the one graph node that declared them rather than joined from two projections
+    /// that could disagree.
+    ///
+    /// ★ `[measured 2026-08-08]`, boot `run_p2_c89899a`, this join holds from both sides:
+    /// the guest's own `channelWaitForFinishPayload` printed `hClient=0xc1e00006
+    /// hVASpaceId=0xa` while our device recorded `gvas … hClient 0xc1e00006 hObject
+    /// 0x0000000a`, and `workSubmitToken=0x10002` equals the token the doorbell carried.
+    ///
+    /// ⊘ **Read-only, and it resolves nothing.** It hands out declared facts; the walk that
+    /// turns them into an address is `kayfabe_device::RegPlane::resolve_published_va`, and
+    /// it needs a separate authorisation (`gmmu_publication_discipline.md` §7 rule 1).
+    ///
+    /// # Errors
+    /// [`FwdFault`] from `route_doorbell`, or [`FwdFault::UnknownVchid`] if the routed
+    /// channel is gone; [`FwdFault::NoVas`] if the channel's own graph node is not live, so
+    /// the absence is named rather than answered with defaults.
+    pub fn ce_channel_facts(
+        &self,
+        target_gpu: GpuId,
+        token: u64,
+    ) -> Result<CeChannelFacts, FwdFault> {
+        self.route_act(
+            |spine| {
+                let r = kayfabe_fwd::route_doorbell(spine, target_gpu, token)?;
+                Ok((r.proc, r))
+            },
+            |spine, proc, route| {
+                let chan = proc
+                    .channels
+                    .get(&route.chan)
+                    .ok_or(FwdFault::UnknownVchid {
+                        gpu: route.gpu,
+                        vchid: route.vchid,
+                    })?;
+                let node = spine
+                    .rmgraph
+                    .node_of_resource(chan.key)
+                    .ok_or(FwdFault::NoVas(route.chan))?;
+                Ok(CeChannelFacts {
+                    proc: route.proc,
+                    chan: route.chan,
+                    vchid: route.vchid,
+                    client: node.key.client.0,
+                    // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
+                    // zero: a GSP-managed channel that named no VA space and one that named
+                    // handle zero are the same wire byte but different facts, and only the
+                    // first is what `Channel::vas_pdb == None` means.
+                    vaspace: node.facts.h_vaspace.map(|h| h.0),
+                    ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
+                    ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
+                    vas_pdb: chan.vas_pdb,
+                })
+            },
+        )?
+    }
+
     /// ★ THE one gated ring path (inherited law 7), route/act split per R4 and
     /// plan/execute/commit per R1.
     ///
@@ -2057,4 +2123,34 @@ impl SharedDevice {
             Err(err) => SignalOutcome::ObserveRefused { proc, ev, err },
         }
     }
+}
+
+/// ★★★ **What a doorbell's channel DECLARED about its own addressing** — the three facts a
+/// published-VA-space walk needs, plus the routing identities that named them.
+///
+/// ⊘ Every field is a *declared* fact read off the channel's own `RM_ALLOC`; nothing here is
+/// resolved, validated or defaulted. A resolver that wanted a fourth fact should read it
+/// from the same node rather than infer it from these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeChannelFacts {
+    /// The owning proc the token routed to.
+    pub proc: ProcId,
+    /// The channel it routed to.
+    pub chan: ChanId,
+    /// The decoded vChid.
+    pub vchid: VChid,
+    /// `hClient` — the namespace the channel, and its VA space's publication, live in.
+    pub client: u32,
+    /// `hVASpace` as the channel declared it. `None` = GSP-managed, no VA space named.
+    pub vaspace: Option<u32>,
+    /// `gpFifoOffset` — a **GPU VIRTUAL** address (`ogkm-580: ctrl2080fifo.h:809`).
+    /// `None` = the channel's alloc params declared no ring at all, which is different
+    /// from `Some(0)` (a ring the driver deliberately declares at zero for its golden-context
+    /// channel, `ogkm-580: kernel_graphics.c:2420-2424`).
+    pub ring_va: Option<u64>,
+    /// `gpFifoEntries` that came with [`Self::ring_va`], or `0`.
+    pub ring_entries: u32,
+    /// The channel's bound page-directory base, if the port has one. `None` is the
+    /// `FwdFault::NoVas` state.
+    pub vas_pdb: Option<Pdb>,
 }
