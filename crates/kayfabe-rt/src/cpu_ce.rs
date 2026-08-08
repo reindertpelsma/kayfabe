@@ -27,7 +27,7 @@
 //! move first; E10d signals only after.
 
 use kayfabe_arch::ids::{GpuVa, Pdb};
-use kayfabe_arch::{Aperture, Backing, CpuPlane, Residency, ResidencyOracle};
+use kayfabe_arch::{Aperture, Backing, CpuOperand, CpuPlane, PlaneAddr, ResidencyOracle};
 use kayfabe_device::{FbRefused, FbStore};
 use kayfabe_fwd::{COMPLETION_VECTOR, CeSpan, FwdFault};
 use kayfabe_isolate::{CeExecutor, CeSource};
@@ -81,38 +81,44 @@ fn ram_fault(e: VmmError) -> FwdFault {
 /// ★ Note the plane itself is unchanged for a host-owned backing: managed memory is still
 /// guest RAM read through the `Vmm`. Place and ownership are independent, which is why they
 /// are two fields.
-fn touchable(r: Residency, addr: u64) -> Result<CpuPlane, FwdFault> {
-    match r.backing {
-        Backing::Stable => Ok(r.plane),
-        Backing::HostOwned => Err(FwdFault::CeUnstableBacking { addr }),
+fn touchable(op: CpuOperand) -> Result<CpuPlane, FwdFault> {
+    match op.residency.backing {
+        Backing::Stable => Ok(op.residency.plane),
+        Backing::HostOwned => Err(FwdFault::CeUnstableBacking { addr: op.addr.0 }),
     }
 }
 
-/// Read `buf.len()` bytes from `plane` at physical/guest address `addr` into `buf`.
+/// Read `buf.len()` bytes from `plane` at [`PlaneAddr`] `addr` into `buf`.
+///
+/// ⊘ **`addr` is a [`PlaneAddr`], never a `u64`,** and that signature is load-bearing rather
+/// than decorative: the whole of §14.14's REFUTED 4 is this function having been reachable
+/// with a GPU virtual address, which for a physical operand is the same number and for a
+/// virtual one is a different page.
 fn read_plane(
     fb: &mut dyn FbStore,
     vmm: &mut dyn Vmm,
     plane: CpuPlane,
-    addr: u64,
+    addr: PlaneAddr,
     buf: &mut [u8],
 ) -> Result<(), FwdFault> {
     match plane {
-        CpuPlane::Fb => fb.read(addr, buf).map_err(fb_fault),
-        CpuPlane::GuestRam => vmm.gpa_read(addr, buf).map_err(ram_fault),
+        CpuPlane::Fb => fb.read(addr.0, buf).map_err(fb_fault),
+        CpuPlane::GuestRam => vmm.gpa_read(addr.0, buf).map_err(ram_fault),
     }
 }
 
-/// Write `bytes` to `plane` at physical/guest address `addr`.
+/// Write `bytes` to `plane` at [`PlaneAddr`] `addr`. See [`read_plane`] for why the type of
+/// `addr` is the point.
 fn write_plane(
     fb: &mut dyn FbStore,
     vmm: &mut dyn Vmm,
     plane: CpuPlane,
-    addr: u64,
+    addr: PlaneAddr,
     bytes: &[u8],
 ) -> Result<(), FwdFault> {
     match plane {
-        CpuPlane::Fb => fb.write(addr, bytes).map_err(fb_fault),
-        CpuPlane::GuestRam => vmm.gpa_write(addr, bytes).map_err(ram_fault),
+        CpuPlane::Fb => fb.write(addr.0, bytes).map_err(fb_fault),
+        CpuPlane::GuestRam => vmm.gpa_write(addr.0, bytes).map_err(ram_fault),
     }
 }
 
@@ -149,12 +155,14 @@ pub fn execute_ours(
     );
     let dst = span.sub.dst;
     let len = span.sub.len;
-    // The destination plane must exist for anything to be written.
-    let dst_plane = touchable(
-        span.dst_plane
-            .ok_or(FwdFault::CpuCeStraddle { dst, dst_end: true })?,
-        dst,
-    )?;
+    // ★★★ The destination **place** must exist for anything to be written — and it is the
+    // place, not `sub.dst`, that says where. `sub.dst` is a GPU virtual address (the `HostCe`
+    // arm submits it to a host VAS); this executor reaches bytes in *our* stores and has no
+    // MMU, so it uses the address the partition resolved (§14.14 REFUTED 4).
+    let dst_op = span
+        .dst_place
+        .ok_or(FwdFault::CpuCeStraddle { dst, dst_end: true })?;
+    let dst_plane = touchable(dst_op)?;
 
     match span.sub.src {
         CeSource::Constant(pattern) => {
@@ -163,28 +171,34 @@ pub fn execute_ours(
             let mut chunk = vec![0u8; CHUNK.min(usize::try_from(len).unwrap_or(CHUNK))];
             while off < len {
                 let take = (len - off).min(chunk.len() as u64) as usize;
-                // Phase every byte by its ABSOLUTE destination address, not by its offset
-                // within this chunk — a fill cut at an unaligned address must still land
-                // the same bytes.
+                // Phase every byte by its ABSOLUTE address in the destination PLANE, not by
+                // its offset within this chunk — a fill cut at an unaligned address must
+                // still land the same bytes, which is what makes a split fill byte-identical
+                // to a whole one.
+                //
+                // ★ Phasing by the plane address rather than by the VA is the same answer
+                // wherever the engine's own is defined: a mapping is page-granular, so a VA
+                // and its backing agree on the low bits, and `Ga10xPushbuffer::remap_fill`
+                // refuses a fill whose destination is not element-aligned in the first place
+                // (§14.14's sixth refusal). Where they could differ — a test binding with an
+                // arbitrary `phys` — the plane address is the one the guest will read back.
                 for (i, b) in chunk[..take].iter_mut().enumerate() {
-                    let a = dst.wrapping_add(off + i as u64);
-                    *b = p[(a % 4) as usize];
+                    let a = dst_op.addr.offset(off + i as u64);
+                    *b = p[(a.0 % 4) as usize];
                 }
-                write_plane(fb, vmm, dst_plane, dst.wrapping_add(off), &chunk[..take])?;
+                write_plane(fb, vmm, dst_plane, dst_op.addr.offset(off), &chunk[..take])?;
                 off += take as u64;
             }
             Ok(())
         }
-        CeSource::Address(src) => {
-            // A real copy needs BOTH ends reachable; a missing source plane is the same
+        CeSource::Address(_) => {
+            // A real copy needs BOTH ends reachable; a missing source place is the same
             // straddle, named on the source end.
-            let src_plane = touchable(
-                span.src_plane.ok_or(FwdFault::CpuCeStraddle {
-                    dst,
-                    dst_end: false,
-                })?,
-                src,
-            )?;
+            let src_op = span.src_place.ok_or(FwdFault::CpuCeStraddle {
+                dst,
+                dst_end: false,
+            })?;
+            let src_plane = touchable(src_op)?;
             let mut off: u64 = 0;
             let mut chunk = vec![0u8; CHUNK.min(usize::try_from(len).unwrap_or(CHUNK))];
             while off < len {
@@ -193,10 +207,10 @@ pub fn execute_ours(
                     fb,
                     vmm,
                     src_plane,
-                    src.wrapping_add(off),
+                    src_op.addr.offset(off),
                     &mut chunk[..take],
                 )?;
-                write_plane(fb, vmm, dst_plane, dst.wrapping_add(off), &chunk[..take])?;
+                write_plane(fb, vmm, dst_plane, dst_op.addr.offset(off), &chunk[..take])?;
                 off += take as u64;
             }
             Ok(())
@@ -240,15 +254,18 @@ pub fn execute_ours_spans(
 
 /// The CPU plane a resolved binding's aperture names — the E10d completion analogue of
 /// E10b's operand classification. A peer aperture is refused by name.
-fn sem_plane(aperture: Aperture, phys: u64) -> Result<CpuPlane, FwdFault> {
+fn sem_plane(aperture: Aperture, phys: PlaneAddr) -> Result<CpuPlane, FwdFault> {
     // ⊘ ASKED, not computed here. The same oracle the operand classification consults, so a
     // semaphore and the copy that releases it can never come to disagree about where one
     // aperture's bytes are — and a later oracle that knows about host-owned backings covers
     // the completion write for free.
-    let r = kayfabe_fwd::DeclaredResidency
-        .residency_of_aperture(aperture, phys)
-        .ok_or(FwdFault::CePeerOperand { addr: phys })?;
-    touchable(r, phys)
+    let residency = kayfabe_fwd::DeclaredResidency
+        .residency_of_aperture(aperture, phys.0)
+        .ok_or(FwdFault::CePeerOperand { addr: phys.0 })?;
+    touchable(CpuOperand {
+        residency,
+        addr: phys,
+    })
 }
 
 /// ★★★ **Write a copy-engine request's finishPayload semaphores where the guest polls
@@ -296,7 +313,7 @@ pub fn write_completion(
     // 1. WRITE every payload first. A refusal here returns before any signal.
     for &(addr, payload) in releases {
         let (binding, off) = table.resolve(pdb, addr).map_err(FwdFault::Address)?;
-        let phys = binding.phys.wrapping_add(off);
+        let phys = PlaneAddr(binding.phys).offset(off);
         let plane = sem_plane(binding.aperture, phys)?;
         // One-word (4-byte) release: the low 32 bits, little-endian.
         let bytes = (payload as u32).to_le_bytes();

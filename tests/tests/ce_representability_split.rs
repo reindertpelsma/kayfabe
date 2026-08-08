@@ -30,6 +30,7 @@ use kayfabe_arch::CpuPlane;
 use kayfabe_arch::PhysTarget;
 use kayfabe_arch::Residency;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
+use kayfabe_arch::{CpuOperand, PlaneAddr};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_fwd::{
@@ -127,6 +128,23 @@ fn table_of(base: u64, runs: &[(u64, Kind)]) -> AddressTable {
         at += len;
     }
     t
+}
+
+/// The CPU place a [`table_of`] binding gives a VA: `phys = 0x7000_0000 + (va - base)`, and
+/// [`Aperture::Vidmem`] ⇒ the emulated framebuffer.
+///
+/// ⊘ **Unread on this file's execution path**, and correct anyway. Every span here runs
+/// through the mock isolate (`plan_ce_split` → `VerbPlan::CeSplit`), which reads only
+/// [`CeSubCopy`] and models memory keyed by the **VA** — which is exactly why this file could
+/// not see §14.14's REFUTED 4 (a translating and a non-translating executor satisfy
+/// split-vs-whole identically). A control whose fields disagree with the subject's is a
+/// control that stops being one the day the path changes, so they are stated rather than
+/// left `None`. The executor's own behaviour is pinned in `cpu_ce_executor.rs`.
+fn fake_place(base: u64, va: u64) -> Option<CpuOperand> {
+    Some(CpuOperand {
+        residency: Residency::stable(CpuPlane::Fb),
+        addr: PlaneAddr(0x7000_0000 + (va - base)),
+    })
 }
 
 /// A checked-out worker on a standalone mock isolate, plus its recorder — the isolate is
@@ -594,8 +612,8 @@ fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issue
                             dst_kind: Representability::HostBacked,
                             src_kind: matches!(work, CeWork::Copy)
                                 .then_some(Representability::HostBacked),
-                            dst_plane: None,
-                            src_plane: None,
+                            dst_place: None,
+                            src_place: None,
                         }];
                         let whole_image = image_after(&mut worker, vas, &rec, &whole, dst, len);
                         assert_same_bytes(
@@ -686,8 +704,10 @@ fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
             },
             dst_kind: Representability::Fabricated,
             src_kind: matches!(work, CeWork::Copy).then_some(Representability::Fabricated),
-            dst_plane: Some(Residency::stable(CpuPlane::Fb)),
-            src_plane: matches!(work, CeWork::Copy).then_some(Residency::stable(CpuPlane::Fb)),
+            dst_place: fake_place(base, dst),
+            src_place: matches!(work, CeWork::Copy)
+                .then(|| fake_place(base, dst))
+                .flatten(),
         }];
         let whole_image = image_after(&mut worker, vas, &rec, &whole, dst, len);
         assert_same_bytes(
@@ -932,14 +952,22 @@ fn a_physical_sys_from_vid_copy_carries_the_two_operands_distinct_cpu_planes() {
         )
     );
     assert_eq!(
-        s.dst_plane,
-        Some(Residency::stable(CpuPlane::GuestRam)),
-        "the SYSMEM destination lands in guest RAM — the plane the shell must WRITE"
+        s.dst_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::GuestRam),
+            addr: PlaneAddr(addr.0),
+        }),
+        "the SYSMEM destination lands in guest RAM — the plane the shell must WRITE — and a \
+         PHYSICAL operand's plane address IS the address the command named"
     );
     assert_eq!(
-        s.src_plane,
-        Some(Residency::stable(CpuPlane::Fb)),
-        "the LOCAL_FB source is read from the emulated framebuffer, at the SAME number"
+        s.src_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::Fb),
+            addr: PlaneAddr(addr.0),
+        }),
+        "the LOCAL_FB source is read from the emulated framebuffer, at the SAME number — one \
+         number, two planes, and only the plane tells the two bytes apart"
     );
 }
 
@@ -961,10 +989,19 @@ fn swapping_the_targets_swaps_the_planes_the_address_is_not_consulted() {
     )
     .expect("partitions");
     assert_eq!(spans.len(), 1);
-    assert_eq!(spans[0].dst_plane, Some(Residency::stable(CpuPlane::Fb)));
     assert_eq!(
-        spans[0].src_plane,
-        Some(Residency::stable(CpuPlane::GuestRam))
+        spans[0].dst_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::Fb),
+            addr: PlaneAddr(addr.0),
+        })
+    );
+    assert_eq!(
+        spans[0].src_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::GuestRam),
+            addr: PlaneAddr(addr.0),
+        })
     );
 }
 
@@ -1008,8 +1045,11 @@ fn noncoherent_sysmem_is_guest_ram_like_coherent() {
     )
     .expect("partitions");
     assert_eq!(
-        spans[0].dst_plane,
-        Some(Residency::stable(CpuPlane::GuestRam))
+        spans[0].dst_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::GuestRam),
+            addr: PlaneAddr(0x8000),
+        })
     );
 }
 
@@ -1060,14 +1100,20 @@ fn a_fabricated_virtual_operand_takes_its_plane_from_the_aperture() {
     .expect("partitions");
     assert_eq!(spans.len(), 2, "the aperture boundary splits the scrub");
     assert_eq!(
-        spans[0].dst_plane,
-        Some(Residency::stable(CpuPlane::Fb)),
-        "vidmem run → framebuffer"
+        spans[0].dst_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::Fb),
+            addr: PlaneAddr(0xDEAD_0000),
+        }),
+        "vidmem run → framebuffer, AT THE BOUND PHYSICAL — not at the VA 0x100_0000"
     );
     assert_eq!(
-        spans[1].dst_plane,
-        Some(Residency::stable(CpuPlane::GuestRam)),
-        "sysmem run → guest RAM"
+        spans[1].dst_place,
+        Some(CpuOperand {
+            residency: Residency::stable(CpuPlane::GuestRam),
+            addr: PlaneAddr(0xBEEF_0000),
+        }),
+        "sysmem run → guest RAM, at ITS bound physical"
     );
     assert!(
         spans.iter().all(|s| s.sub.by == CeExecutor::Ours),

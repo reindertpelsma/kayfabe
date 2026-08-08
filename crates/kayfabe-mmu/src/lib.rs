@@ -311,6 +311,15 @@ impl Binding {
     }
 }
 
+/// One run of [`AddressTable::spans`]' partition: `(va, len, answer)`, where the answer is
+/// `None` for a hole and `Some((binding, offset-of-this-run-within-it))` for a covered run.
+///
+/// ⊘ The offset is half the value: a run generally starts *inside* a binding, so
+/// `binding.phys` on its own is the address of a different byte. Returning it is what stops
+/// a consumer resolving the run's own address from the binding's base — or, as
+/// `execution_plane_increments.md` §14.14 records, not resolving it at all.
+pub type BindingRun = (u64, u64, Option<(Binding, u64)>);
+
 /// A resolution failure. Every variant is LOUD: callers propagate, they never guess.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddressFault {
@@ -490,8 +499,17 @@ impl AddressTable {
     /// ★★★ **The range algebra's one primitive** (`#102` stage C2,
     /// `eight_blockers_resolved.md` §12.3): partition `[va, va+len)` into the maximal
     /// runs over which this table's answer is CONSTANT — each either covered by exactly
-    /// one binding (`Some`, with the offset already *inside* that binding, so a caller
-    /// never recomputes it) or a hole (`None`).
+    /// one binding (`Some((binding, offset-of-this-span-within-it))`) or a hole (`None`).
+    ///
+    /// ★★★ **The `u64` beside each binding is the span's OFFSET INTO IT**, and it is what
+    /// makes the binding's address usable without a second lookup: a span generally starts
+    /// *inside* a binding rather than at its base, so `binding.phys` alone is the address of
+    /// a different byte. Returning it is not a convenience — `[measured 2026-08-08]` the
+    /// executor that consumed this partition wrote at the span's **virtual** address because
+    /// the physical one was not in hand here, which is `#12`'s where-mistake
+    /// (`execution_plane_increments.md` §14.14 REFUTED 4). ⊘ The doc used to claim the offset
+    /// was *"already inside that binding"*; it was not, and the sentence read as though it
+    /// were, which is how the gap survived a review.
     ///
     /// This exists because §12.3's ruling is *"the operand ranges must be PARTITIONED,
     /// not classified whole"*: one privileged copy-engine request can cover fabricated
@@ -520,11 +538,11 @@ impl AddressTable {
     /// guarantees above are the container's, restated here because this is the signature
     /// callers read.
     #[must_use]
-    pub fn spans(&self, va: GpuVa, len: u64) -> Vec<(u64, u64, Option<Binding>)> {
+    pub fn spans(&self, va: GpuVa, len: u64) -> Vec<BindingRun> {
         self.map
             .spans(va.0, len)
             .into_iter()
-            .map(|(s, l, b)| (s, l, b.copied()))
+            .map(|(s, l, b)| (s, l, b.map(|(v, off)| (*v, off))))
             .collect()
     }
 

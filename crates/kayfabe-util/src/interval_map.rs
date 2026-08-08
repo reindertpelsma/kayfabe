@@ -48,6 +48,16 @@ pub struct IntervalMap<V> {
 }
 
 // Manual `Default` so `V: Default` is NOT required (an empty map needs no value).
+/// One run of [`IntervalMap::spans`]' partition: `(start, len, answer)`, where the answer is
+/// `None` for a hole and `Some((value, offset-of-this-run-within-its-range))` for a covered
+/// run.
+///
+/// ⊘ A named type rather than the tuple written out, because the third element is where the
+/// meaning is: a run generally begins *inside* a range, and a caller that took the value
+/// without the offset would hold the description of a different byte. See
+/// [`IntervalMap::spans`] for why the offset is returned rather than re-derived.
+pub type SpanRun<'a, V> = (u64, u64, Option<(&'a V, u64)>);
+
 impl<V> Default for IntervalMap<V> {
     fn default() -> Self {
         IntervalMap {
@@ -169,8 +179,17 @@ impl<V> IntervalMap<V> {
     /// Honouring the wrap would let a hostile length reach a range at the BOTTOM of the
     /// space from a request aimed at the top. `len == 0` yields no spans: an empty request
     /// is empty, not a fault.
+    ///
+    /// ★★★ **A covered span carries its OFFSET INTO THE RANGE** — `(value, span.start −
+    /// range.start)`. A span generally begins *inside* a range rather than at its base, so a
+    /// caller holding only the value holds the description of a different byte; recovering
+    /// the offset with a second `lookup` is both a wasted probe and a place to be wrong.
+    /// `[measured 2026-08-08]` the copy-engine executor wrote at its span's **virtual**
+    /// address precisely because the physical one was not available at this seam
+    /// (`execution_plane_increments.md` §14.14 REFUTED 4), so the offset is returned rather
+    /// than left to be re-derived.
     #[must_use]
-    pub fn spans(&self, start: u64, len: u64) -> Vec<(u64, u64, Option<&V>)> {
+    pub fn spans(&self, start: u64, len: u64) -> Vec<SpanRun<'_, V>> {
         let begin = u128::from(start);
         let end = (begin + u128::from(len)).min(1u128 << 64);
         let mut out = Vec::new();
@@ -181,7 +200,7 @@ impl<V> IntervalMap<V> {
                 Some((r_start, r_len, v)) => {
                     let r_end = u128::from(r_start) + u128::from(r_len);
                     let run_end = r_end.min(end);
-                    out.push((here, (run_end - at) as u64, Some(v)));
+                    out.push((here, (run_end - at) as u64, Some((v, here - r_start))));
                     at = run_end;
                 }
                 None => {

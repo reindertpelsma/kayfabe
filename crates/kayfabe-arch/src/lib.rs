@@ -525,6 +525,109 @@ pub enum CpuPlane {
     GuestRam,
 }
 
+/// ★★★ **AN ADDRESS INSIDE A [`CpuPlane`]** — where a byte actually lives in the store that
+/// holds it. Its own type, and that is the entire point.
+///
+/// # ⊘ Why this is a NEWTYPE and not a second `u64` field
+///
+/// `[measured 2026-08-08]` two functions in **one module** (`kayfabe_rt::cpu_ce`) disagreed
+/// about what the address in a copy-engine sub-copy meant: `execute_ours` wrote the
+/// destination plane **at the address as given** — a GPU virtual address for a virtual
+/// operand — while `write_completion`, ten lines away, *resolved* the address and wrote at
+/// `binding.phys + off`. For a physical operand the two coincide, which is exactly why every
+/// test in the tree passed: `cpu_ce_executor.rs`'s cases were all physical, and
+/// `ce_representability_split.rs` asserted only split-vs-whole, a property a translating and
+/// a non-translating executor satisfy *identically*. The real destination
+/// (`memmgrTestCeUtils`' memset, `bUseVasForCeCopy = 1`) is **virtual**, so the data half
+/// filled the wrong page while the completion half released a truthful-looking semaphore over
+/// it — `#12`'s where-mistake, which cost the C artifact weeks.
+///
+/// Standing owner directive (`no_real_phys_only_gpga_or_gpa`, 2026-08-05): this is *"the same
+/// species as VA≠GPA, whose fix was a **NEWTYPE not a rename**"*. A sibling `u64` beside
+/// [`crate::ids::GpuVa`]`.0` leaves the two mutually assignable and the conflation returns the
+/// first time somebody is tired; two types make the mix-up a **compile error**.
+///
+/// # ⚠ It is NOT one number space — it is one number space *per plane*
+///
+/// A `PlaneAddr` is meaningless without the [`CpuPlane`] it indexes: a framebuffer offset and
+/// a guest-physical address collide numerically and name different bytes. That is why it
+/// travels inside a [`CpuOperand`] beside its [`Residency`] rather than on its own, and why
+/// `PhysTarget`/[`Aperture`] exist at all.
+///
+/// ⊘ **Not a host-physical address.** Nothing in this port has one, by design
+/// (`no_real_phys_only_gpga_or_gpa`): this is a framebuffer offset or a guest-physical
+/// address, chosen by the plane.
+///
+/// # ★ The separation, proved rather than asserted
+///
+/// A newtype nobody tested is a rename. These four doctests are the mechanical half: each
+/// `compile_fail` row is paired with a **compiling twin that differs by exactly one line**, so
+/// a row cannot go green because the snippet stopped compiling for an unrelated reason
+/// (`should_panic_matches_the_wrong_site`, in its compile-time form).
+///
+/// A GPU virtual address does not become a plane address:
+/// ```compile_fail
+/// let va = kayfabe_arch::ids::GpuVa(0x4_2000_0000);
+/// let here: kayfabe_arch::PlaneAddr = va;
+/// // error[E0308]: mismatched types
+/// //   expected struct `PlaneAddr`, found struct `GpuVa`
+/// ```
+/// …and the twin that does compile, which is the deliberate act of stating which it is:
+/// ```
+/// let va = kayfabe_arch::ids::GpuVa(0x4_2000_0000);
+/// let here = kayfabe_arch::PlaneAddr(va.0);
+/// ```
+///
+/// A plane address does not silently become a bare integer either — which is what stops it
+/// being fed back to something that wants a VA:
+/// ```compile_fail
+/// let here = kayfabe_arch::PlaneAddr(0x2f2c_b004);
+/// let raw: u64 = here;
+/// // error[E0308]: mismatched types
+/// //   expected `u64`, found struct `PlaneAddr`
+/// ```
+/// ```
+/// let here = kayfabe_arch::PlaneAddr(0x2f2c_b004);
+/// let raw: u64 = here.0;
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlaneAddr(pub u64);
+
+impl PlaneAddr {
+    /// This address advanced by `by` bytes, wrapping — the caller has already bounded the
+    /// length, and the store re-validates the result, so a wrap is a refused access rather
+    /// than a panic (boundary-1 posture).
+    #[must_use]
+    pub const fn offset(self, by: u64) -> PlaneAddr {
+        PlaneAddr(self.0.wrapping_add(by))
+    }
+}
+
+impl core::fmt::Display for PlaneAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "PlaneAddr({:#x})", self.0)
+    }
+}
+
+/// ★★★ **A CPU-reachable operand, WHOLE: where its bytes are, who guarantees they stay, and
+/// the address they are at in that store.**
+///
+/// ⊘ **One `Option`, not two.** The place and the address in it are present under exactly the
+/// same condition — the operand is ours to touch — and a pair of independently-optional
+/// fields is a state where one is `Some` and the other `None`, which has no meaning and which
+/// nothing would ever check. Bundling them is what makes *"the plane address is present
+/// exactly when the plane is"* a fact about the type rather than a comment about a struct.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CpuOperand {
+    /// Where the bytes live and who guarantees they stay there.
+    pub residency: Residency,
+    /// ★★★ The address **in [`Residency::plane`]** — never a GPU virtual address. For a
+    /// physical operand it is the address the command named; for a virtual one it is the
+    /// resolved binding's address plus the run's offset into it, computed where the binding
+    /// is in hand and never recovered downstream.
+    pub addr: PlaneAddr,
+}
+
 /// ★★★ **WHO GUARANTEES THE BYTES STAY WHERE THEY ARE**, for the duration of an operation.
 ///
 /// # ⚠ Why this is a second field and not a third [`CpuPlane`] variant (owner, 2026-08-08)

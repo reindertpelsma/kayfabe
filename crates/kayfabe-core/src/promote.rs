@@ -394,7 +394,12 @@ pub fn apply_promote_ctx(
     for r in &p.ranges {
         let mut covered = false;
         for (start, _len, binding) in vas.table.spans(r.va, r.len) {
-            let Some(b) = binding else { continue };
+            // The span's offset into the binding is unread here: this asks whether an
+            // IDENTICAL range is already bound, and an identical range starts at the
+            // binding's base by definition (`start == r.va.0` below).
+            let Some((b, _within)) = binding else {
+                continue;
+            };
             covered = true;
             // An identical re-promote is the ONE overlap that is not a conflict: same
             // start, same length, same contents, and previously bound by this source.

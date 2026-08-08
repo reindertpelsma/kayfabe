@@ -9,7 +9,7 @@
 //! move.
 
 use kayfabe_arch::ids::{GpuVa, Pdb};
-use kayfabe_arch::{Aperture, CeWork, CpuPlane, PhysTarget, Residency};
+use kayfabe_arch::{Aperture, CeWork, CpuOperand, CpuPlane, PhysTarget, PlaneAddr, Residency};
 use kayfabe_device::{FbStore, SparseFb};
 use kayfabe_fwd::{CeSpan, CeSubCopy, FwdFault, Representability, partition_ce};
 use kayfabe_isolate::{CeExecutor, CeSource};
@@ -19,6 +19,19 @@ use kayfabe_rt::cpu_ce::{execute_ours, execute_ours_spans, write_completion};
 use kayfabe_vmm::{IrqSpec, Vmm};
 
 const FB_LIMIT: u64 = 1 << 28; // 256 MiB advertised framebuffer
+
+/// The place of a **physical** operand: a stable backing, and the plane address is the
+/// address the command named — physical operands bypass the MMU, so there is nothing to
+/// resolve. ⊘ This coincidence is precisely what let §14.14's REFUTED 4 hide in this file:
+/// every hand-built span here is physical, so an executor that used `sub.dst` and one that
+/// used the plane address were indistinguishable. See
+/// [`a_virtual_destination_lands_at_the_BOUND_PHYSICAL_not_at_the_va`].
+fn phys_place(plane: CpuPlane, addr: u64) -> Option<CpuOperand> {
+    Some(CpuOperand {
+        residency: Residency::stable(plane),
+        addr: PlaneAddr(addr),
+    })
+}
 
 /// A physical `sys ← vid` copy span, built the way E10b's `partition_ce` builds it: both
 /// operands physical, destination `COHERENT_SYSMEM` (guest RAM), source `LOCAL_FB`.
@@ -158,8 +171,8 @@ fn a_fill_is_address_phased_and_split_invariant() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: None,
-        dst_plane: Some(Residency::stable(CpuPlane::Fb)),
-        src_plane: None,
+        dst_place: phys_place(CpuPlane::Fb, base),
+        src_place: None,
     }];
     execute_ours_spans(&mut fb_whole, &mut vmm, &whole).unwrap();
 
@@ -176,8 +189,8 @@ fn a_fill_is_address_phased_and_split_invariant() {
             },
             dst_kind: Representability::PhysicalOperand,
             src_kind: None,
-            dst_plane: Some(Residency::stable(CpuPlane::Fb)),
-            src_plane: None,
+            dst_place: phys_place(CpuPlane::Fb, dst),
+            src_place: None,
         }];
         execute_ours_spans(&mut fb_split, &mut vmm, &span).unwrap();
     }
@@ -206,8 +219,8 @@ fn a_straddle_with_no_destination_plane_is_refused_by_name() {
         },
         dst_kind: Representability::HostBacked, // real device memory: no CPU plane
         src_kind: None,
-        dst_plane: None,
-        src_plane: None,
+        dst_place: None,
+        src_place: None,
     };
     let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("a straddle must refuse");
     assert!(
@@ -231,8 +244,8 @@ fn a_copy_with_no_source_plane_is_refused_on_the_source_end() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: Some(Representability::HostBacked),
-        dst_plane: Some(Residency::stable(CpuPlane::GuestRam)),
-        src_plane: None,
+        dst_place: phys_place(CpuPlane::GuestRam, 0x2000),
+        src_place: None,
     };
     let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("must refuse");
     assert!(
@@ -263,6 +276,250 @@ fn a_multi_chunk_copy_streams_correctly() {
         seed,
         "every byte of a multi-chunk copy landed, in order"
     );
+}
+
+// =====================================================================================
+// ★★★ E10e — THE VIRTUAL DESTINATION. `execution_plane_increments.md` §14.14 REFUTED 4.
+//
+// ⊘ THE TEST-UNIVERSE GAP THIS SECTION CLOSES. Every `execute_ours` case above uses a
+// PHYSICAL operand, where the address the command named IS the address in the store — so an
+// executor that wrote at `CeSubCopy::dst` and one that wrote at the resolved plane address
+// were **indistinguishable**, and the whole file was green over the defect. The neighbouring
+// property file (`ce_representability_split.rs`) could not see it either: it binds `phys !=
+// va` but asserts split-vs-whole, which both behaviours satisfy identically. Neither was a
+// weak assertion; the *universe* was missing a case.
+//
+// `memmgrTestCeUtils`' memset destination is virtual — `bUseVasForCeCopy = 1` with
+// `dstAddressSpace == ADDR_FBMEM` ⇒ `dstAddr + fbAliasVA - startFbOffset`
+// (`ogkm-580: channel_utils.c:1090-1095`) — so this is the shape of the wall, not a
+// hypothetical.
+// =====================================================================================
+
+/// The PDB of the address space the virtual-destination cases resolve in.
+const VDST_PDB: Pdb = Pdb(0x0420_0000);
+
+/// A table binding one page of `va` to `phys` in `aperture`.
+fn table_binding(va: u64, len: u64, phys: u64, aperture: Aperture) -> AddressTable {
+    let mut t = AddressTable::new();
+    t.bind(
+        VDST_PDB,
+        GpuVa(va),
+        len,
+        Binding {
+            phys,
+            aperture,
+            host: None,
+        },
+    )
+    .expect("bind");
+    t
+}
+
+/// ★★★ **THE FAILING CASE.** A **virtual** fill destination lands at the address the binding
+/// resolves to, and the page at the numerically-identical VA is **untouched**.
+///
+/// ⊘ Both halves are the assertion. Landing the bytes at the right place is one; not landing
+/// them at the wrong place is the other, and only the second distinguishes a translating
+/// executor from one that got lucky because the two addresses were the same number.
+#[test]
+fn a_virtual_destination_fills_the_bound_physical_and_not_the_va() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    // The shape §14.14 measured: VA 0x22000 bound to framebuffer offset 0x0400_0000.
+    const VA: u64 = 0x2_2000;
+    const PHYS: u64 = 0x0400_0000;
+    const LEN: u64 = 0x40;
+    let t = table_binding(VA, 0x1000, PHYS, Aperture::Vidmem);
+
+    // Seed BOTH candidate destinations with a distinguishable value, so "untouched" is a
+    // positive observation rather than the absence of one.
+    fb.write(PHYS, &[0x11; LEN as usize]).unwrap();
+    fb.write(VA, &[0x22; LEN as usize]).unwrap();
+
+    let pattern = 0x0403_0201u32;
+    let spans = partition_ce(
+        Some(&t),
+        GpuVa(VA),
+        true, // ★ VIRTUAL destination — the case the file did not have
+        PhysTarget::LocalFb,
+        GpuVa(0),
+        true,
+        PhysTarget::LocalFb,
+        LEN,
+        CeWork::Fill { pattern },
+    )
+    .expect("a virtual fill partitions");
+    assert_eq!(spans.len(), 1, "one binding, one span");
+    assert_eq!(spans[0].sub.by, CeExecutor::Ours, "fabricated ⇒ ours");
+    assert_eq!(
+        spans[0].sub.dst, VA,
+        "⊘ the sub-copy still carries the VA — the HostCe arm submits it to a host VAS"
+    );
+    assert_eq!(
+        spans[0].dst_place.map(|p| p.addr),
+        Some(PlaneAddr(PHYS)),
+        "…and the PLACE carries the resolved framebuffer address, beside it"
+    );
+
+    execute_ours_spans(&mut fb, &mut vmm, &spans).expect("the fill runs");
+
+    let mut at_phys = [0u8; LEN as usize];
+    fb.read(PHYS, &mut at_phys).unwrap();
+    let expect: Vec<u8> = (0..LEN)
+        .map(|i| pattern.to_le_bytes()[((PHYS + i) % 4) as usize])
+        .collect();
+    assert_eq!(
+        at_phys.to_vec(),
+        expect,
+        "★★★ the fill landed at the BOUND PHYSICAL — where the guest's mapping points"
+    );
+
+    let mut at_va = [0u8; LEN as usize];
+    fb.read(VA, &mut at_va).unwrap();
+    assert_eq!(
+        at_va.to_vec(),
+        vec![0x22; LEN as usize],
+        "⊘ and NOT at the virtual address. This is the half that goes red on the executor \
+         that wrote at `CeSubCopy::dst`: it filled 0x22000 and left 0x4000000 as its seed, \
+         then a truthful-looking semaphore was released over it — #12's where-mistake"
+    );
+}
+
+/// The same, in the plane the wall actually takes: a **sysmem** virtual destination lands in
+/// guest RAM at the bound GPA. `[measured 2026-08-08, boot `run_p35_84d857d`]` the walling
+/// CeUtils channel's ring, pushbuffer and finishPayload are all guest RAM.
+///
+/// ⊘ Not a duplicate of the vidmem case: the two planes are different stores reached through
+/// different ports, and an executor could translate for one and not the other.
+#[test]
+fn a_virtual_sysmem_destination_fills_guest_ram_at_the_bound_gpa() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    const VA: u64 = 0x4_2006_c000;
+    const GPA: u64 = 0x2f2c_b000;
+    let t = table_binding(VA, 0x1000, GPA, Aperture::SysmemCoherent);
+    vmm.gpa_write(GPA, &[0u8; 8]).unwrap();
+
+    let spans = partition_ce(
+        Some(&t),
+        GpuVa(VA),
+        true,
+        PhysTarget::LocalFb,
+        GpuVa(0),
+        true,
+        PhysTarget::LocalFb,
+        8,
+        CeWork::Fill {
+            pattern: 0x5A5A_5A5A,
+        },
+    )
+    .expect("partitions");
+    execute_ours_spans(&mut fb, &mut vmm, &spans).expect("runs");
+    assert_eq!(
+        vmm.ram_read(GPA, 8),
+        vec![0x5A; 8],
+        "the sysmem-bound virtual destination filled guest RAM at the bound GPA"
+    );
+    // ⊘ And the guest-RAM page numbered by the VIRTUAL address is untouched — the half that
+    // goes red on a non-translating executor, which would have filled it instead.
+    assert_eq!(
+        vmm.ram_read(VA, 8),
+        vec![0u8; 8],
+        "⊘ nothing was written at the virtual address read as a GPA"
+    );
+}
+
+/// ★ A virtual destination reached at a **non-zero offset into its binding** — the run starts
+/// inside the mapping, so the plane address is `phys + (va - binding_base)`.
+///
+/// ⊘ Its own case because an executor that resolved the binding and then used its *base*
+/// address would pass the two tests above (both start at the binding's base) and rewrite the
+/// first bytes of every mapping. That is the same class of near-miss as using the VA.
+#[test]
+fn a_virtual_destination_inside_a_binding_lands_at_phys_plus_the_offset() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    const BASE_VA: u64 = 0x10_0000;
+    const BASE_PHYS: u64 = 0x0200_0000;
+    const OFF: u64 = 0x480;
+    let t = table_binding(BASE_VA, 0x1000, BASE_PHYS, Aperture::Vidmem);
+    fb.write(BASE_PHYS, &[0x33; 0x1000]).unwrap();
+
+    let spans = partition_ce(
+        Some(&t),
+        GpuVa(BASE_VA + OFF),
+        true,
+        PhysTarget::LocalFb,
+        GpuVa(0),
+        true,
+        PhysTarget::LocalFb,
+        4,
+        CeWork::Fill { pattern: 0 },
+    )
+    .expect("partitions");
+    assert_eq!(
+        spans[0].dst_place.map(|p| p.addr),
+        Some(PlaneAddr(BASE_PHYS + OFF)),
+        "the offset into the binding is applied, not dropped"
+    );
+    execute_ours_spans(&mut fb, &mut vmm, &spans).unwrap();
+    let mut got = [0xFFu8; 8];
+    fb.read(BASE_PHYS + OFF - 4, &mut got).unwrap();
+    assert_eq!(
+        got,
+        [0x33, 0x33, 0x33, 0x33, 0, 0, 0, 0],
+        "the four zeroed bytes start exactly at phys+off, and the byte before is untouched"
+    );
+}
+
+/// ★★★ **`mem_mgr.c:467-470`, GPU-free** — the readback compare that is the real acceptance
+/// for `memmgrTestCeUtils`, over a **virtual source**: `memmgrMemCopy(sys ← vid, 4 bytes,
+/// PREFER_CE)` then `NV_ASSERT_TRUE(sysmemData == vidmemData)`.
+///
+/// The source is the framebuffer surface the memset just filled, named through the channel's
+/// own VAS alias; the destination is guest RAM. An executor that read the *virtual* address
+/// out of the framebuffer would read an unrelated page here and the compare would fail —
+/// which is exactly the outcome §14.14 called *"the good outcome of a bad fix"*.
+#[test]
+fn the_readback_compare_passes_over_a_virtual_source_and_a_physical_destination() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    // ⊘ Inside the advertised framebuffer on purpose: a VA *outside* it would make the
+    // non-translating executor fail with an `FbRefused` rather than with WRONG BYTES, and
+    // the wrong-bytes outcome is the one this test has to be able to observe.
+    const SRC_VA: u64 = 0x0100_0000;
+    const SRC_PHYS: u64 = 0x0800_0000;
+    const SYS: u64 = 0x3f00_0000;
+    let t = table_binding(SRC_VA, 0x1000, SRC_PHYS, Aperture::Vidmem);
+
+    // memmgrMemSet(vid, 0xAB, CE) already happened: the surface holds the fill.
+    fb.write(SRC_PHYS, &[0xAB; 4]).unwrap();
+    // …and the VA-numbered page holds something else, so a non-translating read is visible.
+    fb.write(SRC_VA, &[0x00; 4]).unwrap();
+    vmm.gpa_write(SYS, &0xDEAD_BEEFu32.to_le_bytes()).unwrap();
+
+    let spans = partition_ce(
+        Some(&t),
+        GpuVa(SYS),
+        false, // physical sysmem destination
+        PhysTarget::CoherentSysmem,
+        GpuVa(SRC_VA),
+        true, // ★ VIRTUAL source
+        PhysTarget::LocalFb,
+        4,
+        CeWork::Copy,
+    )
+    .expect("partitions");
+    execute_ours_spans(&mut fb, &mut vmm, &spans).expect("the copy runs");
+
+    let mut vidmem_data = [0u8; 4];
+    fb.read(SRC_PHYS, &mut vidmem_data).unwrap();
+    assert_eq!(
+        vmm.ram_read(SYS, 4),
+        vidmem_data.to_vec(),
+        "★★★ NV_ASSERT_TRUE(sysmemData == vidmemData) — the guest's own acceptance"
+    );
+    assert_eq!(vidmem_data, [0xAB; 4], "…and it is not comparing two zeros");
 }
 
 // =====================================================================================
@@ -455,11 +712,14 @@ fn a_host_owned_backing_is_refused_even_though_its_plane_is_reachable() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: None,
-        dst_plane: Some(kayfabe_arch::Residency {
-            plane: CpuPlane::GuestRam,
-            backing: kayfabe_arch::Backing::HostOwned,
+        dst_place: Some(CpuOperand {
+            residency: kayfabe_arch::Residency {
+                plane: CpuPlane::GuestRam,
+                backing: kayfabe_arch::Backing::HostOwned,
+            },
+            addr: PlaneAddr(0x3000),
         }),
-        src_plane: None,
+        src_place: None,
     };
     let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("a host-owned backing must refuse");
     assert!(
@@ -486,10 +746,13 @@ fn a_host_owned_source_is_refused_at_the_source_address() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: Some(Representability::PhysicalOperand),
-        dst_plane: Some(Residency::stable(CpuPlane::GuestRam)),
-        src_plane: Some(kayfabe_arch::Residency {
-            plane: CpuPlane::GuestRam,
-            backing: kayfabe_arch::Backing::HostOwned,
+        dst_place: phys_place(CpuPlane::GuestRam, 0x4000),
+        src_place: Some(CpuOperand {
+            residency: kayfabe_arch::Residency {
+                plane: CpuPlane::GuestRam,
+                backing: kayfabe_arch::Backing::HostOwned,
+            },
+            addr: PlaneAddr(0x9_0000),
         }),
     };
     let err = execute_ours(&mut fb, &mut vmm, &span).expect_err("must refuse");
@@ -519,8 +782,8 @@ fn a_stable_guest_ram_destination_is_still_filled() {
         },
         dst_kind: Representability::PhysicalOperand,
         src_kind: None,
-        dst_plane: Some(Residency::stable(CpuPlane::GuestRam)),
-        src_plane: None,
+        dst_place: phys_place(CpuPlane::GuestRam, 0x5000),
+        src_place: None,
     };
     execute_ours(&mut fb, &mut vmm, &span).expect("a stable backing must still be served");
     let mut got = [0u8; 8];

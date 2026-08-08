@@ -73,7 +73,9 @@
 //! (disjoint borrows, no shared lock).
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, RunlistId, VChid};
-use kayfabe_arch::{Aperture, CpuPlane, PhysTarget, PushRange, Residency, ResidencyOracle};
+use kayfabe_arch::{
+    Aperture, CpuOperand, CpuPlane, PhysTarget, PlaneAddr, PushRange, Residency, ResidencyOracle,
+};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
@@ -3019,19 +3021,28 @@ pub struct CeSpan {
     /// Where the source address lives — `None` for a scrub or a fill, which have no
     /// source operand (`C: :6320` "No src is set.").
     pub src_kind: Option<Representability>,
-    /// ★★★ **E10b — the CPU plane the destination operand's bytes live in**, `Some` exactly
-    /// when the destination is CPU-resident (the emulated framebuffer or guest RAM), `None`
-    /// when it is real device memory the isolate reaches or untracked. The shell CPU
-    /// executor reads it to choose which store to write; a `by == CeExecutor::Ours` sub-copy
-    /// whose destination plane is `None` is a straddle no single executor can run and the
-    /// executor refuses it rather than guessing a store.
-    pub dst_plane: Option<Residency>,
-    /// ★★★ **E10b — the CPU plane the source operand's bytes live in.** `None` for a
-    /// scrub/fill (no source operand), for a real-device-memory source, or an untracked one.
-    /// Distinct from [`Self::dst_plane`] because the two ends can differ —
-    /// `memmgrTestCeUtils`' `sys ← vid` copy reads the framebuffer and writes guest RAM in
-    /// one instruction.
-    pub src_plane: Option<Residency>,
+    /// ★★★ **E10b/E10e — the destination operand AS THE CPU REACHES IT**: the plane its
+    /// bytes live in, who guarantees they stay, and — since §14.14 — **the address they are
+    /// at in that plane**. `Some` exactly when the destination is CPU-resident (the emulated
+    /// framebuffer or guest RAM), `None` when it is real device memory the isolate reaches or
+    /// untracked. The shell CPU executor reads it to choose which store to write *and where*;
+    /// a `by == CeExecutor::Ours` sub-copy whose destination place is `None` is a straddle no
+    /// single executor can run and the executor refuses it rather than guessing a store.
+    ///
+    /// ⊘⊘ **This is NOT [`CeSubCopy::dst`], and the difference is the whole of §14.14's
+    /// REFUTED 4.** `sub.dst` stays a **GPU virtual address**, because the `HostCe` arm
+    /// submits it to a host VAS where the host MMU walks for exactly that number. This is
+    /// where the same byte lives in *our* store. For a physical operand the two coincide —
+    /// which is why a whole test file could exercise the executor and never see that it wrote
+    /// at the wrong one. [`kayfabe_arch::PlaneAddr`] is a distinct type so the mistake cannot
+    /// be made again without failing to compile.
+    pub dst_place: Option<CpuOperand>,
+    /// ★★★ **E10b/E10e — the source operand as the CPU reaches it.** `None` for a scrub/fill
+    /// (no source operand), for a real-device-memory source, or an untracked one. Distinct
+    /// from [`Self::dst_place`] because the two ends can differ — `memmgrTestCeUtils`' `sys ←
+    /// vid` copy reads the framebuffer and writes guest RAM in one instruction, at two
+    /// unrelated addresses.
+    pub src_place: Option<CpuOperand>,
 }
 
 /// Upper bound on the sub-copies ONE copy-engine request may partition into.
@@ -3137,23 +3148,42 @@ fn residency_of_aperture(aperture: Aperture, addr: u64) -> Result<Residency, Fwd
 /// vidmem page in the framebuffer, a fabricated sysmem page in guest RAM) and the shell
 /// executor must know which to touch. `HostBacked`/`Untracked` are not ours to run, so they
 /// carry no plane.
+///
+/// ★★★ **E10e — and the ADDRESS in that plane is computed here too, from the binding.**
+/// `binding.phys + within` is the only place both halves are in hand; the run's start is a
+/// **virtual** address and the byte is not there. Deriving it downstream is what
+/// §14.14 REFUTED 4 measured going wrong (`#12`'s where-mistake), and the two are different
+/// types now so the derivation cannot be skipped silently.
+///
+/// `within` is the run's offset **inside** the binding, as [`AddressTable::spans`] reports
+/// it — not the run's offset into the request. A copy that starts halfway through a mapping
+/// resolves to halfway through its backing.
 fn representability_of(
     binding: Option<&Binding>,
+    within: u64,
     addr: u64,
-) -> Result<(Representability, Option<Residency>), FwdFault> {
+) -> Result<(Representability, Option<CpuOperand>), FwdFault> {
     match binding {
         Some(b) if b.host.is_some() => Ok((Representability::HostBacked, None)),
         Some(b) => {
-            let plane = residency_of_aperture(b.aperture, addr)?;
-            Ok((Representability::Fabricated, Some(plane)))
+            let residency = residency_of_aperture(b.aperture, addr)?;
+            Ok((
+                Representability::Fabricated,
+                Some(CpuOperand {
+                    residency,
+                    addr: PlaneAddr(b.phys).offset(within),
+                }),
+            ))
         }
         None => Ok((Representability::Untracked, None)),
     }
 }
 
-/// One resolved run of an operand's range: `(start, len, representability, cpu-plane)` —
-/// the plane present exactly when the run's `representability.executor() == CeExecutor::Ours`.
-type OperandRun = (u64, u64, Representability, Option<Residency>);
+/// One resolved run of an operand's range: `(start, len, representability, cpu-operand)` —
+/// the operand present exactly when the run's `representability.executor() ==
+/// CeExecutor::Ours`. `start` is the run's address **in the operand's own space** (a VA for a
+/// virtual operand); the plane address is inside the [`CpuOperand`].
+type OperandRun = (u64, u64, Representability, Option<CpuOperand>);
 
 /// The partition of one operand's range, as [`OperandRun`]s — the `plane`
 /// present exactly when `kind.executor() == CeExecutor::Ours`.
@@ -3177,12 +3207,18 @@ fn operand_runs(
         return Ok(Vec::new());
     }
     if !is_virtual {
-        let plane = residency_of_target(target, addr.0)?;
+        // ★ A physical operand's address IS its plane address — the command bypassed the
+        // MMU, so there is nothing to resolve. ⊘ This coincidence is exactly what hid the
+        // §14.14 defect: every executor test used this arm.
+        let residency = residency_of_target(target, addr.0)?;
         return Ok(vec![(
             addr.0,
             len,
             Representability::PhysicalOperand,
-            Some(plane),
+            Some(CpuOperand {
+                residency,
+                addr: PlaneAddr(addr.0),
+            }),
         )]);
     }
     match table {
@@ -3190,8 +3226,9 @@ fn operand_runs(
             .spans(addr, len)
             .into_iter()
             .map(|(s, l, b)| {
-                let (kind, plane) = representability_of(b.as_ref(), s)?;
-                Ok((s, l, kind, plane))
+                let (kind, place) =
+                    representability_of(b.as_ref().map(|(x, _)| x), b.map_or(0, |(_, o)| o), s)?;
+                Ok((s, l, kind, place))
             })
             .collect(),
         // No table for this channel's VAS at all: nothing is tracked, so nothing is
@@ -3205,6 +3242,23 @@ fn operand_runs(
                 Ok(vec![(addr.0, eff, Representability::Untracked, None)])
             }
         }
+    }
+}
+
+/// Do two adjacent sub-copies' places join up — same store, same ownership, and the second's
+/// bytes starting exactly `prev_len` after the first's?
+///
+/// ★★★ **This is a correctness condition the merge did not previously have to state**, and
+/// carrying the plane address is what exposed it. Before §14.14 the merge compared
+/// [`Residency`] alone, so two spans landing in *different, non-adjacent* bindings that
+/// happened to share an aperture merged into ONE instruction — harmless while the executor
+/// used the VA (the host MMU re-walked each page) and a **write past the end of the first
+/// backing** the moment it uses the plane address. Contiguity, not equality.
+fn plane_follows(prev: Option<CpuOperand>, next: Option<CpuOperand>, prev_len: u64) -> bool {
+    match (prev, next) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a.residency == b.residency && a.addr.offset(prev_len) == b.addr,
+        _ => false,
     }
 }
 
@@ -3276,13 +3330,28 @@ pub fn partition_ce(
     let mut si = 0usize;
     let mut s_consumed: u64 = 0;
     while off < eff {
-        let (_, d_len, d_kind, d_plane) = dst_runs[di];
+        let (_, d_len, d_kind, d_run_place) = dst_runs[di];
         let d_left = d_len - d_consumed;
-        let (s_left, s_kind, s_plane) = if !has_src {
+        // ★★★ The plane address advances with the cut, exactly as `sub.dst` does — a
+        // sub-copy starting `d_consumed` bytes into its run reaches bytes `d_consumed`
+        // further into the backing. ⊘ Reusing the run's own address for every cut of it
+        // would rewrite the first page of a mapping once per span.
+        let d_place = d_run_place.map(|p| CpuOperand {
+            addr: p.addr.offset(d_consumed),
+            ..p
+        });
+        let (s_left, s_kind, s_place) = if !has_src {
             (u64::MAX, None, None)
         } else if si < src_runs.len() {
-            let (_, s_len, s_kind, s_plane) = src_runs[si];
-            (s_len - s_consumed, Some(s_kind), s_plane)
+            let (_, s_len, s_kind, s_run_place) = src_runs[si];
+            (
+                s_len - s_consumed,
+                Some(s_kind),
+                s_run_place.map(|p| CpuOperand {
+                    addr: p.addr.offset(s_consumed),
+                    ..p
+                }),
+            )
         } else {
             (eff - off, Some(Representability::Untracked), None)
         };
@@ -3319,10 +3388,11 @@ pub fn partition_ce(
             },
             dst_kind: d_kind,
             src_kind: s_kind,
-            // ★ E10b: each operand's own plane rides along, so the shell knows which store
-            // to touch per end. A scrub/fill or a HostCe/untracked end carries `None`.
-            dst_plane: d_plane,
-            src_plane: s_plane,
+            // ★ E10b/E10e: each operand's own plane **and its address in that plane** ride
+            // along, so the shell knows which store to touch and where. A scrub/fill or a
+            // HostCe/untracked end carries `None`.
+            dst_place: d_place,
+            src_place: s_place,
         });
         off += take;
         d_consumed += take;
@@ -3348,8 +3418,14 @@ pub fn partition_ce(
                 if prev.sub.by == s.sub.by
                     && prev.dst_kind == s.dst_kind
                     && prev.src_kind == s.src_kind
-                    && prev.dst_plane == s.dst_plane
-                    && prev.src_plane == s.src_plane
+                    // ★★★ The places must be CONTIGUOUS to merge, not equal. Two adjacent
+                    // spans of one binding never have the same plane address — the second
+                    // starts where the first ended — so an equality test here would silently
+                    // stop merging, and (worse) a test that ignored the place entirely would
+                    // merge two spans whose backings are NOT adjacent into one instruction
+                    // that runs off the end of the first.
+                    && plane_follows(prev.dst_place, s.dst_place, prev.sub.len)
+                    && plane_follows(prev.src_place, s.src_place, prev.sub.len)
                     && prev.sub.dst.wrapping_add(prev.sub.len) == s.sub.dst =>
             {
                 prev.sub.len += s.sub.len;

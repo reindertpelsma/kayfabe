@@ -947,10 +947,11 @@ impl ViewerIndex {
                 continue;
             };
             for (s, l, mapped) in cov.spans(region.base, region.len) {
-                let Some(&view_base) = mapped else { continue };
-                // The covering range may start before the query. Recover its own start so
-                // the view offset is right for a partial overlap.
-                let Some((c_start, _, _)) = cov.lookup(s) else {
+                // ★ The covering range may start before the query, so the span carries its
+                // own offset into it — `IntervalMap::spans`' second element. It used to be
+                // recovered here with a second `lookup`; the container returns it now, which
+                // is the same fix `AddressTable::spans` needed for the CE operand split.
+                let Some((&view_base, within)) = mapped else {
                     continue;
                 };
                 let Ok(run) = GpgaRegion::new(region.aperture, s, l) else {
@@ -960,7 +961,7 @@ impl ViewerIndex {
                     viewer: id,
                     kind: v.kind,
                     region: run,
-                    view_off: view_base + (s - c_start),
+                    view_off: view_base + within,
                 });
             }
         }
