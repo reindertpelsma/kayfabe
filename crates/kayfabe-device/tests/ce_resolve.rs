@@ -1,0 +1,539 @@
+//! ★★★ `crate::ceresolve` — the walk from a page-directory root the GUEST PUBLISHED.
+//!
+//! # ⊘ What these tests are written to catch, in the order it would bite
+//!
+//! The resolver's failure modes are all *silent*: it either answers the wrong address or it
+//! answers the right one for the wrong VA space, and in both cases everything downstream
+//! looks healthy. So the assertions here are on **exact variants** and on the *distinction*
+//! between two near-neighbour findings, never on `is_some()`
+//! (`docs/design/testing_doctrine.md`).
+//!
+//! The format below is a deliberately tiny two-level one rather than GA10x's: this crate
+//! does not depend on `kayfabe-chips`, and — more to the point — a test that borrowed the
+//! real format would be asserting the *format's* behaviour again instead of the resolver's.
+//! `crates/kayfabe-chips/tests/ga10x_gmmu.rs` owns the format; this owns the walk's
+//! preconditions and its refusal vocabulary.
+
+use kayfabe_abi::gvaspacepdes::{GMMU_FMT_MAX_LEVELS, PdeLevel, ServerReservedPdes};
+use kayfabe_arch::{Aperture, GmmuFmt, GmmuVersion, LevelShift, PageSize, PdeEdge, PteDecode};
+use kayfabe_device::ceresolve::{
+    CeAddrLimits, CeResolve, Demand, GMMU_APERTURE_INVALID, GMMU_APERTURE_SYS_COH,
+    GMMU_APERTURE_VIDEO, published_root, resolve,
+};
+use kayfabe_device::gvaspub::{GvasPubLog, GvasPublication};
+use kayfabe_mmu::walker::FbRead;
+
+/// A two-level format: level 0 indexes bits `[30:21]` (512 slots of 8 bytes), level 1 is a
+/// 2 MiB leaf table. Entries are `[valid:1][sparse:1][aperture_sys:1][addr << 12]`.
+#[derive(Debug)]
+struct TinyFmt;
+
+const E_VALID: u128 = 1;
+const E_SPARSE: u128 = 2;
+const E_SYS: u128 = 4;
+
+/// The address field holds the page frame, so an entry naming byte address `a` stores
+/// `a >> 12` at bit 12 — the same shape every real format has, and the reason `decode_entry`
+/// shifts it back rather than returning the field.
+fn pde(next: u64) -> u128 {
+    E_VALID | (u128::from(next >> 12) << 12)
+}
+fn leaf(phys: u64) -> u128 {
+    E_VALID | (u128::from(phys >> 12) << 12)
+}
+fn leaf_sys(phys: u64) -> u128 {
+    E_VALID | E_SYS | (u128::from(phys >> 12) << 12)
+}
+
+impl GmmuFmt for TinyFmt {
+    fn version(&self) -> GmmuVersion {
+        GmmuVersion::Ver2
+    }
+    fn page_sizes(&self) -> &[PageSize] {
+        &[PageSize(2 << 20)]
+    }
+    fn entry_size(&self, level: u8) -> u8 {
+        if level < 2 { 8 } else { 0 }
+    }
+    fn levels(&self) -> u8 {
+        2
+    }
+    fn level_shift(&self, level: u8) -> Option<LevelShift> {
+        match level {
+            0 => Some(LevelShift {
+                shift: 30,
+                entries: 512,
+            }),
+            1 => Some(LevelShift {
+                shift: 21,
+                entries: 512,
+            }),
+            _ => None,
+        }
+    }
+    fn decode_entry(&self, level: u8, raw: u128) -> PteDecode {
+        if raw & E_SPARSE != 0 {
+            return PteDecode::Sparse;
+        }
+        if raw & E_VALID == 0 {
+            return PteDecode::Invalid;
+        }
+        let phys = ((raw >> 12) as u64) << 12;
+        let aperture = if raw & E_SYS != 0 {
+            Aperture::SysmemCoherent
+        } else {
+            Aperture::Vidmem
+        };
+        if level == 0 {
+            PteDecode::Pde {
+                edge: PdeEdge {
+                    next: phys,
+                    aperture,
+                    child_level: 1,
+                },
+                also: None,
+            }
+        } else {
+            PteDecode::Leaf {
+                phys,
+                aperture,
+                size: PageSize(2 << 20),
+                read_only: false,
+            }
+        }
+    }
+}
+
+/// A flat byte image standing in for the framebuffer the guest wrote its tables into.
+struct Fb(Vec<u8>);
+
+impl Fb {
+    fn new() -> Fb {
+        Fb(vec![0u8; 0x8000])
+    }
+    fn put(&mut self, at: u64, e: u128) {
+        let at = at as usize;
+        self.0[at..at + 8].copy_from_slice(&(e as u64).to_le_bytes());
+    }
+}
+
+impl FbRead for Fb {
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        let at = phys as usize;
+        match self.0.get(at..at + buf.len()) {
+            Some(s) => {
+                buf.copy_from_slice(s);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+const ROOT: u64 = 0x1000;
+const L1: u64 = 0x2000;
+/// The VA the tree below maps: root slot 1 (`va >> 30`), leaf slot 2 (`(va >> 21) & 511`).
+const VA: u64 = (1 << 30) | (2 << 21) | 0x1234;
+const LEAF_PHYS: u64 = 0x4000;
+
+fn tree() -> Fb {
+    let mut fb = Fb::new();
+    fb.put(ROOT + 8, pde(L1));
+    fb.put(L1 + 16, leaf(LEAF_PHYS));
+    fb
+}
+
+fn root_at(phys: u64, aperture: u32, page_shift: u8) -> kayfabe_device::ceresolve::VasRoot {
+    kayfabe_device::ceresolve::VasRoot {
+        phys,
+        aperture: kayfabe_device::ceresolve::decode_aperture(aperture),
+        aperture_raw: aperture,
+        page_shift,
+        virt_addr_lo: 0,
+        virt_addr_hi: 0,
+    }
+}
+
+const LIMITS: CeAddrLimits = CeAddrLimits {
+    fb_len: 0x8000,
+    gpa_limit: None,
+};
+
+// =====================================================================================
+// The walk itself
+// =====================================================================================
+
+#[test]
+fn a_published_root_resolves_a_va_two_levels_down_with_its_page_offset_applied() {
+    let r = resolve(
+        &TinyFmt,
+        &mut tree(),
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(
+        r,
+        CeResolve::Resolved {
+            // ★ The offset within the 2 MiB page is part of the answer, not the caller's
+            // job — a caller that had to add it could add it twice.
+            phys: LEAF_PHYS + 0x1234,
+            aperture: Aperture::Vidmem,
+            page_size: 2 << 20,
+            read_only: false,
+            level: 1,
+        },
+        "the whole point of the increment: the guest's own root resolves the guest's own VA"
+    );
+}
+
+#[test]
+fn the_leaf_aperture_is_carried_and_is_not_assumed_to_be_the_roots() {
+    // ⚠ `c_ceutils_ring_resolution.md` §4: a CeUtils finishPayload was measured in EACH
+    // aperture within ONE run. A resolver that reported the root's aperture for the leaf
+    // would answer a guest-RAM address out of a framebuffer.
+    let mut fb = tree();
+    fb.put(L1 + 16, leaf_sys(LEAF_PHYS));
+    let r = resolve(
+        &TinyFmt,
+        &mut fb,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert!(
+        matches!(
+            r,
+            CeResolve::Resolved {
+                aperture: Aperture::SysmemCoherent,
+                ..
+            }
+        ),
+        "a sysmem leaf under a vidmem root must report SYSMEM, got {r:?}"
+    );
+}
+
+#[test]
+fn an_unmapped_slot_is_a_fault_and_not_a_zero() {
+    // MISS = FAULT. An all-zero entry is what `MMU_WALK_FILL_INVALID` writes, and reading
+    // it as "physical address zero" is the first page of the framebuffer.
+    let r = resolve(
+        &TinyFmt,
+        &mut Fb::new(),
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert!(
+        matches!(r, CeResolve::Fault(_)),
+        "expected a fault, got {r:?}"
+    );
+    assert_eq!(r.place(), None, "a refusal must not present as an address");
+}
+
+#[test]
+fn sparse_and_unmapped_are_distinguishable_findings() {
+    // §7 rule 4. Two different bugs live in conflating them, so the report must tell them
+    // apart — `describe()` is what a boot prints and it is where the distinction survives.
+    let mut sparse = tree();
+    sparse.put(L1 + 16, E_SPARSE);
+    let s = resolve(
+        &TinyFmt,
+        &mut sparse,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    let mut unmapped = tree();
+    unmapped.put(L1 + 16, 0);
+    let u = resolve(
+        &TinyFmt,
+        &mut unmapped,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert!(matches!(s, CeResolve::Fault(_)) && matches!(u, CeResolve::Fault(_)));
+    assert_ne!(s, u, "sparse and unmapped must not collapse to one value");
+    assert_ne!(s.describe(), u.describe(), "…nor to one sentence");
+    assert_ne!(s.tag(), u.tag(), "…nor to one compact tag");
+}
+
+// =====================================================================================
+// The preconditions this module owns
+// =====================================================================================
+
+#[test]
+fn a_sysmem_rooted_publication_is_refused_and_never_read_out_of_the_framebuffer() {
+    // ⚠ MEASURED on a real GA106 (2026-07-25): a sysmem-rooted PDB was an executing
+    // channel's own root. Walking it against `fb` would read a page of the framebuffer that
+    // merely shares the number, and answer confidently.
+    let mut fb = tree();
+    let r = resolve(
+        &TinyFmt,
+        &mut fb,
+        &root_at(ROOT, GMMU_APERTURE_SYS_COH, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(
+        r,
+        CeResolve::RootAperture {
+            raw: GMMU_APERTURE_SYS_COH
+        }
+    );
+}
+
+#[test]
+fn gmmu_aperture_video_is_one_and_the_constants_are_the_enums_own_order() {
+    // ⚠⚠ MEASURED 2026-08-08 (boot `run_p35_a34025b`): these were assumed from the PDE
+    // *field* encoding and every value but INVALID was wrong, so the walling channel's own
+    // `aperture 1` root was refused as PEER. The enum is unnumbered
+    // (`ogkm-580: gmmu_fmt.h:280-325`), so its ORDER is the encoding — and SYS_NONCOH
+    // precedes SYS_COH, which is the reverse of every other list in this port.
+    assert_eq!(GMMU_APERTURE_INVALID, 0);
+    assert_eq!(GMMU_APERTURE_VIDEO, 1);
+    assert_eq!(kayfabe_device::ceresolve::GMMU_APERTURE_PEER, 2);
+    assert_eq!(kayfabe_device::ceresolve::GMMU_APERTURE_SYS_NONCOH, 3);
+    assert_eq!(GMMU_APERTURE_SYS_COH, 4);
+    assert_eq!(
+        kayfabe_device::ceresolve::decode_aperture(GMMU_APERTURE_VIDEO),
+        Some(Aperture::Vidmem),
+        "the value a real GA106 publishes for a GSP-managed page directory"
+    );
+}
+
+#[test]
+fn gmmu_aperture_invalid_is_a_declaration_and_decodes_to_no_aperture() {
+    // ⊘ Zero is *"this sub-level is absent"* (`gmmu_fmt.h:281-285`), not video memory. A
+    // decoder that answered `Vidmem` for it would walk a root the guest said is not there.
+    assert_eq!(
+        kayfabe_device::ceresolve::decode_aperture(GMMU_APERTURE_INVALID),
+        None
+    );
+    let r = resolve(
+        &TinyFmt,
+        &mut tree(),
+        &root_at(ROOT, GMMU_APERTURE_INVALID, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(
+        r,
+        CeResolve::RootAperture {
+            raw: GMMU_APERTURE_INVALID
+        }
+    );
+}
+
+#[test]
+fn an_undefined_root_aperture_reports_the_number_the_guest_actually_sent() {
+    let r = resolve(
+        &TinyFmt,
+        &mut tree(),
+        &root_at(ROOT, 9, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(
+        r,
+        CeResolve::RootAperture { raw: 9 },
+        "an aperture the header does not define must be reported verbatim, not as a decoded \
+         substitute — the number is the diagnosis"
+    );
+}
+
+#[test]
+fn the_start_level_comes_from_the_published_page_shift_and_a_wrong_one_is_refused() {
+    // ⊘ Not assumed to be zero. `bar2_phys` derives BAR2's level the same way and for the
+    // same reason: the entry alone does not say which format row it belongs to.
+    let r = resolve(
+        &TinyFmt,
+        &mut tree(),
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 47),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(r, CeResolve::NoRootLevel { page_shift: 47 });
+}
+
+#[test]
+fn a_page_shift_naming_the_leaf_level_starts_there_rather_than_at_the_root() {
+    // The derivation is a real lookup, not a `!= 0` check: seeded at shift 21 the walk
+    // starts at level 1, so a root address pointing straight at a leaf table resolves.
+    let r = resolve(
+        &TinyFmt,
+        &mut tree(),
+        &root_at(L1, GMMU_APERTURE_VIDEO, 21),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert!(
+        matches!(r, CeResolve::Resolved { phys, level: 1, .. } if phys == LEAF_PHYS + 0x1234),
+        "got {r:?}"
+    );
+}
+
+#[test]
+fn a_leaf_at_or_beyond_the_framebuffer_limit_is_refused_as_a_torn_entry() {
+    // §7 rule 5, the cheap torn-read detector: a stale high half moves the address out of
+    // range. ⊘ It must be a REFUSAL — an out-of-range address that reads as a resolution is
+    // §6.2(1)'s wrong physical page.
+    let mut fb = tree();
+    fb.put(L1 + 16, leaf(0x8000));
+    let r = resolve(
+        &TinyFmt,
+        &mut fb,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(
+        r,
+        CeResolve::AddressOutOfRange {
+            phys: 0x8000 + 0x1234,
+            aperture: Aperture::Vidmem,
+            limit: 0x8000
+        }
+    );
+}
+
+#[test]
+fn a_sysmem_leaf_is_not_bounded_by_the_framebuffer_limit() {
+    // ⊘ The two number spaces are unrelated; bounding a guest-physical address by the
+    // framebuffer's length would refuse every sysmem mapping above the FB size, which is
+    // most of guest RAM. `CeAddrLimits::gpa_limit` is `None` and the module says so.
+    let mut fb = tree();
+    fb.put(L1 + 16, leaf_sys(0x40000));
+    let r = resolve(
+        &TinyFmt,
+        &mut fb,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert!(
+        matches!(
+            r,
+            CeResolve::Resolved {
+                aperture: Aperture::SysmemCoherent,
+                ..
+            }
+        ),
+        "got {r:?}"
+    );
+}
+
+// =====================================================================================
+// Choosing the root — the join that makes the walk legitimate
+// =====================================================================================
+
+fn publication(client: u32, object: u32, phys: u64) -> GvasPublication {
+    let mut levels = [PdeLevel {
+        phys_address: 0,
+        size: 0,
+        aperture: 0,
+        page_shift: 0,
+    }; GMMU_FMT_MAX_LEVELS];
+    levels[0] = PdeLevel {
+        phys_address: phys,
+        size: 0x20,
+        aperture: GMMU_APERTURE_VIDEO,
+        page_shift: 47,
+    };
+    GvasPublication {
+        cmd: 0x90f1_0106,
+        client,
+        object,
+        pdes: ServerReservedPdes {
+            h_subdevice: 0,
+            subdevice_id: 0,
+            page_size: 0x20_0000,
+            virt_addr_lo: 0x1_0000_0000,
+            virt_addr_hi: 0x1_1fff_ffff,
+            num_levels: 4,
+            levels,
+        },
+        count: 1,
+    }
+}
+
+#[test]
+fn the_root_is_keyed_on_hobject_as_well_as_hclient() {
+    // ★★★ §14.10 decision 2. One client publishing two VA spaces is the MEASURED shape of
+    // the boot this exists for; a lookup on `hClient` alone answers with whichever it
+    // published last — an address space that is not the channel's.
+    let log = GvasPubLog::new();
+    log.note(publication(0xc1e0_0006, 0x0a, 0x2efa_9000));
+    log.note(publication(0xc1e0_0006, 0x0c, 0xdead_0000));
+    let snap = log.snapshot();
+    assert_eq!(
+        published_root(&snap, 0xc1e0_0006, 0x0a).unwrap().phys,
+        0x2efa_9000
+    );
+    assert_eq!(
+        published_root(&snap, 0xc1e0_0006, 0x0c).unwrap().phys,
+        0xdead_0000
+    );
+}
+
+#[test]
+fn a_pair_that_published_nothing_gets_no_root_and_no_neighbours() {
+    // ⊘ The C's resolver ladder ended in a blind any-VAS probe and it collapsed two
+    // clients' semaphores onto one page (`c_ceutils_ring_resolution.md` §5.9). There is no
+    // fallback here: the absence is the answer.
+    let log = GvasPubLog::new();
+    log.note(publication(0xc1e0_0006, 0x0a, 0x2efa_9000));
+    let snap = log.snapshot();
+    assert_eq!(
+        published_root(&snap, 0xc1e0_0005, 0x0a),
+        None,
+        "wrong client must not match"
+    );
+    assert_eq!(
+        published_root(&snap, 0xc1e0_0006, 0x0b),
+        None,
+        "wrong object must not match"
+    );
+    assert_eq!(published_root(&snap, 0, 0), None);
+}
+
+#[test]
+fn a_republication_of_one_pair_wins_over_the_earlier_tree() {
+    // A VA space torn down and rebuilt differs in nothing but arrival order, and the
+    // current tree is the later one.
+    let log = GvasPubLog::new();
+    log.note(publication(0xc1e0_0006, 0x0a, 0x1111_0000));
+    log.note(publication(0xc1e0_0006, 0x0a, 0x2222_0000));
+    assert_eq!(
+        published_root(&log.snapshot(), 0xc1e0_0006, 0x0a)
+            .unwrap()
+            .phys,
+        0x2222_0000
+    );
+}
+
+#[test]
+fn a_publication_carries_its_root_aperture_and_page_shift_through_unchanged() {
+    let log = GvasPubLog::new();
+    let mut p = publication(0xc1e0_0006, 0x0a, 0x2efa_9000);
+    p.pdes.levels[0].aperture = GMMU_APERTURE_SYS_COH;
+    p.pdes.levels[0].page_shift = 47;
+    log.note(p);
+    let r = published_root(&log.snapshot(), 0xc1e0_0006, 0x0a).unwrap();
+    assert_eq!(r.aperture, Some(Aperture::SysmemCoherent));
+    assert_eq!(r.aperture_raw, GMMU_APERTURE_SYS_COH);
+    assert_eq!(r.page_shift, 47);
+}
