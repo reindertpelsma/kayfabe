@@ -62,7 +62,17 @@ one `traces/real_ga106/README.md` **independently** identifies as reachable only
 capture with `nvidia-smi -q` — *"a client-driven query rather than an init control."*
 
 ⇒ The transcript covers the init set exactly, missing precisely the one command that is by
-definition not part of init. ★ That asymmetry is the proof: a capture cut short drops an
+definition not part of init.
+
+★★★★ **⊘⊘ AND THE INFERENCE DRAWN FROM THAT SENTENCE WAS THE WALL** (`[measured 2026-08-08]`,
+boot `gis1_e6ed6bc`, `execution_plane_increments.md` §14.29). Every word of the derivation
+above is right, and `0x20800a4c` `INTERNAL_GPU_GET_SMC_MODE` really is not an init control.
+It is reached by `libcuda`, through `GPU_GET_INFO_V2` index `0x2a`, and refusing it returned
+`cuInit(0) -> 100` for four rungs while ten other indices of the same request were answered
+correctly. ⇒ *"Not reached during `RmInitAdapter`"* and *"not needed"* are different
+statements, and every oracle this file reasons over was `nvidia-smi`-driven, so none of them
+could distinguish them. **The single unexplained row in a set-difference is not residue — it
+is the one place a shared blind spot can show through.** ★ That asymmetry is the proof: a capture cut short drops an
 *arbitrary* tail, not exactly the one row its own author had already classified as post-init.
 Two independent artefacts agree, and neither was written to answer this question.
 

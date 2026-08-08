@@ -5073,3 +5073,165 @@ the first non-`NV_OK` and returns it for the whole call, `:566-569`), or the RM 
 `kayfabe_device::sticky::BRANCH_A_CACHEABLE`, whose whole thesis is that *no reply of ours can
 influence it*. ⊘ Do not pick between them from source; the guest will say which, and the
 instrument that asks is already built.
+
+### 14.29 ★★★★ THE WALL FELL — one index of eleven, and it was `0x20800a4c`
+
+#### ⊘⊘ First, the refutation of the framing I was handed — and it is my predecessor's own
+
+§14.28 handed me two candidates and called them co-equal: *"`getGpuInfos`'s switch bailing
+on an arm before it reaches `default:` … or the RM control **cache**."* ★ **They were never
+co-equal**, and one measurement separates them completely. The cache hypothesis makes a
+prediction — *"the answer does not depend on which index is asked"* — and the bisect below
+falsifies it in eleven lines. ⇒ A pair of candidates is only co-equal until someone writes
+down what each predicts; §14.28 named them and stopped one step short of that.
+
+⚠ And the second thing that framing got wrong: it called the two §14.28 halves *"both
+necessary"* and treated `GpuInfoV2` as the half that might still be wrong. `GpuInfoV2` was
+**already correct** — all ten of its kernel-answered indices match a real GA106 exactly. The
+half that was missing was a control **nobody had classified as part of `cuInit` at all**.
+
+#### `[measured 2026-08-08, boot `gis1_e6ed6bc`, real GA106 on `vh`, shipping config, `probe-arm set: EMPTY`, STOCK module]`
+
+The instrument is `scripts/rpctrace/cuda_ioctl_trace.c` with a new `NVSWEEP_GPUINFO` mode,
+driven by `scripts/bench/guest_gpuinfo_sweep.sh`. ★ It reuses **libcuda's own
+`hClient`/`hObject`**, on the same fd, in the same process, at the same instant — so it needs
+no client-allocation path of its own and a disagreement with `rmladder` R21 is a fact about
+the machine rather than about a second unverified harness. It fires once, AFTER the observed
+call has completed and been logged.
+
+```text
+SWEEP-BEGIN hClient=0xc1d0000c hObject=0x5c000003 observed_n=11
+SWEEPIDX pos=0  idx=0x11 status=0x00000000        SWEEPPFX len=1 status=0x00000000
+SWEEPIDX pos=1  idx=0x22 status=0x00000000        SWEEPPFX len=2 status=0x00000000
+SWEEPIDX pos=2  idx=0x27 status=0x00000000        SWEEPPFX len=3 status=0x00000000
+SWEEPIDX pos=3  idx=0x2a status=0x00000056  ★     SWEEPPFX len=4 status=0x00000056  ★
+SWEEPIDX pos=4..10 (0x37,0x3b,0x3c,0x3d,0x2d,0x3a,0x44)  all status=0x00000000
+                                                  SWEEPPFX len=5..11 status=0x00000056
+```
+
+⇒ **Exactly one** of libcuda's eleven indices poisons the call, and the prefix sweep puts the
+break at exactly its position. ⊘ The cache is refuted: ten of eleven answer `NV_OK` on the
+same handle at the same instant.
+
+`GPU_SMC_MODE` (`0x2a`) is **not** answered from kernel state on a bare-metal GSP client. Its
+arm issues `NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE` (`0x20800a4c`) on the **physical**
+RMAPI and assigns *its* status to the loop (`ogkm-580: subdevice_ctrl_gpu_kernel.c:232-266`);
+the loop `break`s on the first non-`NV_OK` and returns it **for the whole call**
+(`:566-569`). Corroboration at the other boundary, same boot: `unserviced fn 76 cmd
+0x20800a4c` — and in seven earlier committed bench boots.
+
+★ And the ten that already worked matched a real GA106 **exactly** (`0x11=0 0x22=0 0x27=0
+0x37=1 0x3b=0 0x3c=0 0x3d=1 0x2d=0 0x3a=0 0x44=0`). §14.28's arm was right all along.
+
+#### ⊘⊘ THE REASON IT SURVIVED: a correct set-difference and a wrong inference
+
+`docs/reference/remaining_boot_surface.md` §1 computed `rows − transcript = {0x20800a4c}`
+over two committed artefacts and concluded: *"The transcript covers the init set exactly,
+missing precisely the one command that is **by definition not part of init**."* ★ Every word
+of the derivation is right. The inference — that the leftover was therefore uninteresting —
+is what carried the wall for four rungs.
+
+⇒ *"Not reached during `RmInitAdapter`"* and *"not needed"* are different statements, and
+**every oracle this project owns was `nvidia-smi`-driven**, so none of them could have
+distinguished them (`traces/real_ga106/README.md`, "the method row is also this directory's
+blind spot"). The single unexplained row in a set-difference is not residue; it is the only
+place the blind spot could show through.
+
+#### The value, and where it must NOT come from
+
+⊘ **Not from the C oracle.** `C: mode2_initctrl_ga106.h:6243` records this row `psize 4,
+dlen 0` — one of the eleven **empty** rows, nine of which hardware contradicts, and
+`traces/real_ga106/README.md` already marks it *"⚠ coincides"*: nothing **about the row**
+distinguishes it from the nine that are wrong. The value comes from two positive measurements
+on two different physical parts (`rpc_bodies_real_ga106.txt:617-628` = `00 00 00 00`;
+`rmladder_r21 … 0x2a NV_OK data=0`), read by two different instruments.
+
+★ `kayfabe_abi::smcmode` encodes an **enum**, never a `u32`. On this control the correct
+answer *is* four zero bytes, so — unlike `ce_fault_method_buffer_size`, where zero is the
+sentinel for *unstated* and realize refuses it — **a numeric sentinel is unavailable by
+construction**. The type is the only place *"UNSUPPORTED, measured"* survives a refactor
+apart from *"nothing was written"*. `tests/internal_gpu_get_smc_mode.rs` poison-fills the
+request with `0xAA` for exactly that reason: no assertion on the *value* could tell a served
+answer from an unwritten buffer here.
+
+#### The hazard check, run first, in the direction that has bitten three times
+
+*"What is keyed on `0x20800a4c` being absent?"* — **nothing behavioural.** It has no
+`sweep::TRIAGE` row (it was never in the sweep universe: not an init control), no capability
+entry, and no `sticky::BRANCH_A_CACHEABLE` row — its own export flags are `0xc0`
+(`ogkm-580: g_subdevice_nvoc.c:2530-2540`), which carries no `RMCTRL_FLAGS_CACHEABLE_*` bit.
+The only mentions are `kayfabe_abi::oracle`'s empty-row table — a fact about the *C table*,
+unaffected by what we serve — and two reference docs.
+
+#### `[measured 2026-08-08, boot `w1429_49b182a`, both stamps `49b182a…`]` THE WALL IS DOWN
+
+```text
+SWEEPIDX pos=0..10   ALL status=0x00000000   (pos=3 idx=0x2a was 0x56 at e6ed6bc)
+SWEEPPFX len=1..11   ALL status=0x00000000
+CTRL cmd=0x20800102 … size=564 status=0x00000000     ← the real eleven-index call
+nvkvm: control 0x20800a4c result 0x00000000 x5       ← served, and GONE from unserviced
+```
+
+#### ⊘⊘⊘ AND `cuInit` STILL RETURNS 100 — the wall MOVED, five ioctls further
+
+`cup2`, verbatim, boot `v1429_49b182a`, shipping config, stock module:
+
+```text
+SMI_RC=0
+=== cup2: run ===
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+CUP2_RC=1
+```
+
+The guest-side trace says where it now stops:
+
+```text
+0x20800102  status=0x00000000   ← the §14.28/§14.29 wall, now served
+0x20801701  status=0x00000000
+0x20801823  status=0x00000000   ← BUS_GET_INFO_V2, 3 entries (0x00,0x02,0x0b)
+0x20801801  status=0x00000000
+0x20801823  status=0x00000056   ★ THE NEW WALL — the SECOND call, 6 entries
+FREE ×3 ; cuInit(0) -> 100
+```
+
+★★ **The oracle for it is already committed and the request bytes are identical.**
+`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:46` is the same six-entry request,
+answered `status=0x00000000` by a real part; line 44 is the three-entry call, and our guest
+already reproduces **that** one byte for byte.
+
+```text
+in : 06000000 |0f000000 03000000|10000000 00000000|2c000000 05000000|
+               2d000000 00000000|03000000 00000000|06000000 00000000
+out: 06000000 |0f000000 00000000|10000000 07000000|2c000000 00000000|
+               2d000000 20300003|03000000 033d4500|06000000 00000000
+```
+
+⚠⚠ **And §14.28's trap is present again, in the same shape — read this before building a
+table from those bytes.** Of the six indices, exactly **one** is RPC-forwarded on a GSP
+client: `0x2d` `PCIE_GEN_INFO`, the first case label of `getBusInfos`'s
+`bSendRpc = IS_VIRTUAL(pGpu) || IS_GSP_CLIENT(pGpu)` group (`ogkm-580:
+kern_bus_ctrl.c:283-296`). The other five — `0x0f` `BUS_NUMBER`, `0x10` `DEVICE_NUMBER`,
+`0x2c` `DOMAIN_NUMBER`, `0x03` `PCIE_GPU_LINK_CAPS`, `0x06` `PCIE_DOWNSTREAM_LINK_CAPS` — are
+computed by the guest's own kernel and **must not be written by this port**. And
+`kbusSendBusInfo` forwards **one entry at a time** under `NV_CHECK_OK_OR_RETURN`
+(`:333`), so a single refused entry returns for the whole call — the same failure mode as
+`getGpuInfos`, reached by a different mechanism.
+
+⊘ `[unmeasured]` **What `0x2d` must carry.** `0x03003020` is what one part answered.
+`PCIE_GEN_INFO` describes the **link**, not the die, so it is the `0x23`/`0x24` shape: no
+chip-family row may state it. ⇒ The next rung is an `rmladder` sweep of `BUS_GET_INFO_V2` on
+the host — unprivileged, exactly the way R21 obtains `GPU_INFO` — before any value is written
+down. ⚠ A single-part reading pasted into a chip row here would be the `0x20802a08` mistake
+with a different id.
+
+#### What landed
+
+| piece | where |
+|---|---|
+| `NVSWEEP_GPUINFO` — the in-guest bisect, on the caller's own handles | `scripts/rpctrace/cuda_ioctl_trace.c` |
+| `guest_gpuinfo_sweep.sh` — the `POST_CAPTURE_HOOK` that drives it | `scripts/bench/` |
+| ★ `guest_cuinit_trace.sh`: `NVTRACE_FILE` → `NVTRACE_OUT`. The interposer reads `NVTRACE_OUT`, so that line wrote **no file**; §14.28's trace survives only because ssh carried stderr, and the script's own `wc -l`/`cat` were reading a path that never existed | `scripts/bench/` |
+| `kayfabe_abi::smcmode` — enum ABI, two-part provenance, 5 unit tests | `crates/kayfabe-abi/src/smcmode.rs` |
+| `ChipProfile::smc_mode`, typed; `WantedTable::InternalGpuGetSmcMode`; served universe **25 → 26**, attributed | `kayfabe-device` |
+| 5 integration tests over a `0xAA`-poisoned request | `tests/internal_gpu_get_smc_mode.rs` |
+| the two bisect captures, annotated with their boot tags and stamps | `traces/real_ga106/gpuinfo_bisect_guest_gis1_e6ed6bc.txt`, `cuinit_bisect_guest_w1429_49b182a.txt` |

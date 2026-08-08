@@ -1,0 +1,119 @@
+# §14.29 — the GPU_GET_INFO_V2 BISECT that named the wall, taken INSIDE THE GUEST.
+#
+# boot `gis1_e6ed6bc`, 2026-08-08, vast bench `vh`, real GA106 `GPU-d0913685-...`,
+# shipping config, `probe-arm set: EMPTY`, STOCK guest module, both stamps
+# kayfabe-rev:e6ed6bcf8647a0df459c80c9f11a922be3da1936.
+#
+# ⚠ AN EXPERIMENT, NOT A CAPTURE. `scripts/rpctrace/cuda_ioctl_trace.c` with
+# `NVSWEEP_GPUINFO=1` issues ~90 controls libcuda never issued. It reuses libcuda's own
+# hClient/hObject so the answers are the ones libcuda would have got, and it fires only
+# AFTER the observed call completed, so the subject is unperturbed.
+#
+# ★★★ THE RESULT: `SWEEPIDX pos=3 idx=0x2a status=0x56`, the other ten NV_OK, and the
+# prefix sweep breaking at exactly `len=4`. ONE index of eleven poisons the whole call —
+# `GPU_SMC_MODE`, whose getGpuInfos arm forwards to `0x20800a4c` and propagates its status
+# (ogkm-580: subdevice_ctrl_gpu_kernel.c:232-266, :566-569).
+#
+# ⊘ This REFUTES the RM control cache as the cause: the failure depends entirely on WHICH
+# index is asked, on one handle at one instant, and a cache hit cannot.
+#
+# ★ SWEEPALL is positionally diffable against
+# `rmladder_r21_gpuinfo_sweep_real_ga106.txt`, which asks a real GA106 the same 70
+# questions in the same shape. The `0x56` rows there are the indices `getGpuInfos`
+# forwards to a GSP and this port does not yet serve.
+#
+Warning: Permanently added '[184.144.255.144]:42525' (ED25519) to the list of known hosts.
+SWEEP-BEGIN hClient=0xc1d0000c hObject=0x5c000003 observed_n=11  (params=564, tail seeded 0xCD)
+SWEEPIDX pos=0 idx=0x00000011 status=0x00000000 echo=0x00000011 data=0x00000000 tail=untouched
+SWEEPIDX pos=1 idx=0x00000022 status=0x00000000 echo=0x00000022 data=0x00000000 tail=untouched
+SWEEPIDX pos=2 idx=0x00000027 status=0x00000000 echo=0x00000027 data=0x00000000 tail=untouched
+SWEEPIDX pos=3 idx=0x0000002a status=0x00000056 echo=0x0000002a data=0x00000000 tail=untouched
+SWEEPIDX pos=4 idx=0x00000037 status=0x00000000 echo=0x00000037 data=0x00000001 tail=untouched
+SWEEPIDX pos=5 idx=0x0000003b status=0x00000000 echo=0x0000003b data=0x00000000 tail=untouched
+SWEEPIDX pos=6 idx=0x0000003c status=0x00000000 echo=0x0000003c data=0x00000000 tail=untouched
+SWEEPIDX pos=7 idx=0x0000003d status=0x00000000 echo=0x0000003d data=0x00000001 tail=untouched
+SWEEPIDX pos=8 idx=0x0000002d status=0x00000000 echo=0x0000002d data=0x00000000 tail=untouched
+SWEEPIDX pos=9 idx=0x0000003a status=0x00000000 echo=0x0000003a data=0x00000000 tail=untouched
+SWEEPIDX pos=10 idx=0x00000044 status=0x00000000 echo=0x00000044 data=0x00000000 tail=untouched
+SWEEPPFX len=1 status=0x00000000 last_echo=0x00000011 last_data=0x00000000
+SWEEPPFX len=2 status=0x00000000 last_echo=0x00000022 last_data=0x00000000
+SWEEPPFX len=3 status=0x00000000 last_echo=0x00000027 last_data=0x00000000
+SWEEPPFX len=4 status=0x00000056 last_echo=0x0000002a last_data=0x00000000
+SWEEPPFX len=5 status=0x00000056 last_echo=0x00000037 last_data=0x00000000
+SWEEPPFX len=6 status=0x00000056 last_echo=0x0000003b last_data=0x00000000
+SWEEPPFX len=7 status=0x00000056 last_echo=0x0000003c last_data=0x00000000
+SWEEPPFX len=8 status=0x00000056 last_echo=0x0000003d last_data=0x00000000
+SWEEPPFX len=9 status=0x00000056 last_echo=0x0000002d last_data=0x00000000
+SWEEPPFX len=10 status=0x00000056 last_echo=0x0000003a last_data=0x00000000
+SWEEPPFX len=11 status=0x00000056 last_echo=0x00000044 last_data=0x00000000
+SWEEPALL idx=0x00 status=0x00000056 echo=0x00000000 data=0x00000000 tail=untouched
+SWEEPALL idx=0x01 status=0x00000000 echo=0x00000001 data=0x00000000 tail=untouched
+SWEEPALL idx=0x02 status=0x00000000 echo=0x00000002 data=0x00000000 tail=untouched
+SWEEPALL idx=0x03 status=0x00000056 echo=0x00000003 data=0x00000000 tail=untouched
+SWEEPALL idx=0x04 status=0x00000000 echo=0x00000004 data=0x00000000 tail=untouched
+SWEEPALL idx=0x05 status=0x00000056 echo=0x00000005 data=0x00000000 tail=untouched
+SWEEPALL idx=0x06 status=0x00000056 echo=0x00000006 data=0x00000000 tail=untouched
+SWEEPALL idx=0x07 status=0x00000056 echo=0x00000007 data=0x00000000 tail=untouched
+SWEEPALL idx=0x08 status=0x00000056 echo=0x00000008 data=0x00000000 tail=untouched
+SWEEPALL idx=0x09 status=0x00000056 echo=0x00000009 data=0x00000000 tail=untouched
+SWEEPALL idx=0x0a status=0x00000056 echo=0x0000000a data=0x00000000 tail=untouched
+SWEEPALL idx=0x0b status=0x00000056 echo=0x0000000b data=0x00000000 tail=untouched
+SWEEPALL idx=0x0c status=0x00000056 echo=0x0000000c data=0x00000000 tail=untouched
+SWEEPALL idx=0x0d status=0x00000056 echo=0x0000000d data=0x00000000 tail=untouched
+SWEEPALL idx=0x0e status=0x00000056 echo=0x0000000e data=0x00000000 tail=untouched
+SWEEPALL idx=0x0f status=0x00000056 echo=0x0000000f data=0x00000000 tail=untouched
+SWEEPALL idx=0x10 status=0x00000056 echo=0x00000010 data=0x00000000 tail=untouched
+SWEEPALL idx=0x11 status=0x00000000 echo=0x00000011 data=0x00000000 tail=untouched
+SWEEPALL idx=0x12 status=0x00000000 echo=0x00000012 data=0x00000000 tail=untouched
+SWEEPALL idx=0x13 status=0x00000000 echo=0x00000013 data=0x00000000 tail=untouched
+SWEEPALL idx=0x14 status=0x00000056 echo=0x00000014 data=0x00000000 tail=untouched
+SWEEPALL idx=0x15 status=0x00000056 echo=0x00000015 data=0x00000000 tail=untouched
+SWEEPALL idx=0x16 status=0x00000056 echo=0x00000016 data=0x00000000 tail=untouched
+SWEEPALL idx=0x17 status=0x00000056 echo=0x00000017 data=0x00000000 tail=untouched
+SWEEPALL idx=0x18 status=0x00000056 echo=0x00000018 data=0x00000000 tail=untouched
+SWEEPALL idx=0x19 status=0x00000056 echo=0x00000019 data=0x00000000 tail=untouched
+SWEEPALL idx=0x1a status=0x00000056 echo=0x0000001a data=0x00000000 tail=untouched
+SWEEPALL idx=0x1b status=0x00000000 echo=0x0000001b data=0x00000000 tail=untouched
+SWEEPALL idx=0x1c status=0x00000056 echo=0x0000001c data=0x00000000 tail=untouched
+SWEEPALL idx=0x1d status=0x00000056 echo=0x0000001d data=0x00000000 tail=untouched
+SWEEPALL idx=0x1e status=0x00000056 echo=0x0000001e data=0x00000000 tail=untouched
+SWEEPALL idx=0x1f status=0x00000000 echo=0x0000001f data=0x00000001 tail=untouched
+SWEEPALL idx=0x20 status=0x00000056 echo=0x00000020 data=0x00000000 tail=untouched
+SWEEPALL idx=0x21 status=0x00000056 echo=0x00000021 data=0x00000000 tail=untouched
+SWEEPALL idx=0x22 status=0x00000000 echo=0x00000022 data=0x00000000 tail=untouched
+SWEEPALL idx=0x23 status=0x00000056 echo=0x00000023 data=0x00000000 tail=untouched
+SWEEPALL idx=0x24 status=0x00000056 echo=0x00000024 data=0x00000000 tail=untouched
+SWEEPALL idx=0x25 status=0x00000000 echo=0x00000025 data=0x00000000 tail=untouched
+SWEEPALL idx=0x26 status=0x00000056 echo=0x00000026 data=0x00000000 tail=untouched
+SWEEPALL idx=0x27 status=0x00000000 echo=0x00000027 data=0x00000000 tail=untouched
+SWEEPALL idx=0x28 status=0x00000000 echo=0x00000028 data=0x00000000 tail=untouched
+SWEEPALL idx=0x29 status=0x00000056 echo=0x00000029 data=0x00000000 tail=untouched
+SWEEPALL idx=0x2a status=0x00000056 echo=0x0000002a data=0x00000000 tail=untouched
+SWEEPALL idx=0x2b status=0x00000000 echo=0x0000002b data=0x00000001 tail=untouched
+SWEEPALL idx=0x2c status=0x00000000 echo=0x0000002c data=0x00000806 tail=untouched
+SWEEPALL idx=0x2d status=0x00000000 echo=0x0000002d data=0x00000000 tail=untouched
+SWEEPALL idx=0x2e status=0x00000056 echo=0x0000002e data=0x00000000 tail=untouched
+SWEEPALL idx=0x2f status=0x00000000 echo=0x0000002f data=0x00000000 tail=untouched
+SWEEPALL idx=0x30 status=0x00000000 echo=0x00000030 data=0x00000000 tail=untouched
+SWEEPALL idx=0x31 status=0x00000000 echo=0x00000031 data=0x00000001 tail=untouched
+SWEEPALL idx=0x32 status=0x00000056 echo=0x00000032 data=0x00000000 tail=untouched
+SWEEPALL idx=0x33 status=0x00000000 echo=0x00000033 data=0x00000000 tail=untouched
+SWEEPALL idx=0x34 status=0x00000000 echo=0x00000034 data=0x00000000 tail=untouched
+SWEEPALL idx=0x35 status=0x00000000 echo=0x00000035 data=0x00000000 tail=untouched
+SWEEPALL idx=0x36 status=0x00000000 echo=0x00000036 data=0x00000001 tail=untouched
+SWEEPALL idx=0x37 status=0x00000000 echo=0x00000037 data=0x00000001 tail=untouched
+SWEEPALL idx=0x38 status=0x00000056 echo=0x00000038 data=0x00000000 tail=untouched
+SWEEPALL idx=0x39 status=0x00000056 echo=0x00000039 data=0x00000000 tail=untouched
+SWEEPALL idx=0x3a status=0x00000000 echo=0x0000003a data=0x00000000 tail=untouched
+SWEEPALL idx=0x3b status=0x00000000 echo=0x0000003b data=0x00000000 tail=untouched
+SWEEPALL idx=0x3c status=0x00000000 echo=0x0000003c data=0x00000000 tail=untouched
+SWEEPALL idx=0x3d status=0x00000000 echo=0x0000003d data=0x00000001 tail=untouched
+SWEEPALL idx=0x3e status=0x00000056 echo=0x0000003e data=0x00000000 tail=untouched
+SWEEPALL idx=0x3f status=0x00000000 echo=0x0000003f data=0x00000000 tail=untouched
+SWEEPALL idx=0x40 status=0x00000056 echo=0x00000040 data=0x00000000 tail=untouched
+SWEEPALL idx=0x41 status=0x00000000 echo=0x00000041 data=0x00000000 tail=untouched
+SWEEPALL idx=0x42 status=0x00000000 echo=0x00000042 data=0x00000000 tail=untouched
+SWEEPALL idx=0x43 status=0x00000056 echo=0x00000043 data=0x00000000 tail=untouched
+SWEEPALL idx=0x44 status=0x00000000 echo=0x00000044 data=0x00000000 tail=untouched
+SWEEPALL idx=0x45 status=0x00000000 echo=0x00000045 data=0x00000000 tail=untouched
+SWEEP-END
