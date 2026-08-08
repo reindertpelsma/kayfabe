@@ -168,6 +168,151 @@ pub const FB_LENGTH_OFF: usize = align_up(
     8,
 );
 
+/// `NV2080_GPU_MAX_NAME_STRING_LENGTH` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:320`) — the width of each of the
+/// three name arrays, **including** the terminating NUL.
+pub const NAME_STRING_LEN: usize = 64;
+
+/// Byte offset of `gpuNameString[64]` — past `fb_length`, `fbio_mask`, `fb_bus_width`,
+/// `fb_ram_type`, `fbp_mask` and `l2_cache_size`
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:93-99`).
+///
+/// ★ **Confirmed against the real board, not derived twice.** The captured RTX 3060 fn-65
+/// reply carries `"NVIDIA GeForce RTX 3060"` at exactly **1388** and `"GA106-A"` at 1452
+/// (`C: docs/research/captures/ga106_gspstaticinfo_580.log`) — a row *with* a body, which
+/// is the half of that capture set `CLAUDE.md` records as trustworthy byte-for-byte.
+pub const NAME_STRING_OFF: usize = FB_LENGTH_OFF + 8 + 8 + 4 + 4 + 8 + 4;
+
+/// Byte offset of `gpuShortNameString[64]`.
+pub const SHORT_NAME_STRING_OFF: usize = NAME_STRING_OFF + NAME_STRING_LEN;
+
+/// Byte offset of `gpuNameString_Unicode[64]` — `NvU16`, i.e. UTF-16LE, 128 bytes wide.
+pub const NAME_STRING_UNICODE_OFF: usize = SHORT_NAME_STRING_OFF + NAME_STRING_LEN;
+
+/// ★★★ **A model name this device declares** — `gpuNameString` / `gpuShortNameString`.
+///
+/// # ★★★ Where the value must come from, and why this type does NOT say
+///
+/// A model name is a **model** string, not a board identity: every RTX 3060 on earth
+/// answers `"NVIDIA GeForce RTX 3060"`, because the string says *what chip this is*. Under
+/// the owner's standing **READ-NATIVE, WRITE-TRAP** ruling (2026-07-31) the right source
+/// is therefore the **host GPU's own answer** —
+/// `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` (`0x20800110`), already on this port's capability
+/// allowlist with origin `Nvproxy` — so a host holding an AD102 presents an AD102's name
+/// with **no new chip row to write**. A hardcoded per-generation table is the thing that
+/// ruling exists to prevent.
+///
+/// ⊘ **Contrast [`GpuGid`], and the contrast is the whole point.** A UUID is a
+/// per-*board* identity, and forwarding the host's verbatim breaks on **collision**, not
+/// on secrecy: two guests on one host would report one identity for two "different" GPUs,
+/// and one physical GPU backing two vGPUs *inside* one guest breaks CUDA enumeration
+/// outright. Its requirement is *stable across reboots of the same VM, unique across VMs*
+/// — so that one is queried for **structure** and derived from a VM identity for
+/// **value**. Name: forward. Identity: derive.
+///
+/// # ⊘ Which is why [`GspStaticInfo::name`] is an `Option` and this type has no default
+///
+/// Nothing on the fn-65 path can issue a host ioctl: fn 65 is the **second RPC of the
+/// whole driver life** (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4232`,
+/// inside `kgspInitRm`, called from `arch/nvalloc/unix/src/osinit.c:2024`), so no guest RM
+/// object exists yet, and the system proc's isolate — the only device-level host-verb
+/// carrier — is materialized by the *first accepted guest RM event*
+/// (`tests/tests/isolate_spawn_is_guest_caused.rs`), strictly later. The value must
+/// therefore already be in hand when the policy is built, which makes this a **seam** and
+/// not a query site.
+///
+/// ⇒ `None` is what a port that has not been handed one says, and it leaves the array
+/// **zero** — which the guest surfaces as `Name: ERR!`. `c_oracle_empty_rows_are_wrong` is
+/// the memory: *an absent measurement must not decode as a value*. A default constant here
+/// would be a string that looks measured, which is the failure mode that cost this project
+/// a buffer overrun with a hardware writer.
+///
+/// # What the guest does with it
+///
+/// `gpuGetNameString_FWCLIENT` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/gpu_gspclient.c:269-290`) `portMemCopy`s the field straight
+/// out of `pGpu->pGspStaticInfo` — the ASCII array for
+/// `NV2080_CTRL_GPU_GET_NAME_STRING_FLAGS_TYPE_ASCII` and the UTF-16 one otherwise. There
+/// is no second producer on a GSP client. `[measured 2026-08-08, boot p35_8088019]` a zero
+/// field there is what `nvidia-smi` prints as `Name: ERR!`.
+///
+/// # The invariants, in the type
+///
+/// ASCII, non-empty, and short enough to NUL-terminate inside
+/// [`NAME_STRING_LEN`] — so the array RM copies out is always a C string. ⊘ The check is
+/// in the constructor and not in the encoder for [`GpuGid`]'s reason: an encoder check
+/// leaves a caller holding an unusable value until the wire. ★ And it is the check a
+/// **host-supplied** string will need most: `GET_NAME_STRING` hands back a fixed 64-byte
+/// array from another kernel, and this port must not forward whatever is in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuName(&'static str);
+
+impl GpuName {
+    /// A model string, or `None` if it cannot be delivered as a NUL-terminated ASCII
+    /// array of [`NAME_STRING_LEN`] bytes.
+    ///
+    /// ⚠ `len() < NAME_STRING_LEN`, strictly: a name of exactly 64 bytes would fill the
+    /// array with no room for the terminator, and RM copies the whole fixed-width array
+    /// into a buffer it then treats as a string.
+    #[must_use]
+    pub const fn new(s: &'static str) -> Option<GpuName> {
+        let b = s.as_bytes();
+        if b.is_empty() || b.len() >= NAME_STRING_LEN {
+            return None;
+        }
+        let mut i = 0;
+        while i < b.len() {
+            // Printable ASCII only. A NUL inside the string would truncate it silently,
+            // and a non-ASCII byte cannot be widened to the UTF-16 array by doubling.
+            if b[i] < 0x20 || b[i] > 0x7e {
+                return None;
+            }
+            i += 1;
+        }
+        Some(GpuName(s))
+    }
+
+    /// [`GpuName::new`] for a `const` item — an unusable name is a **compile** error
+    /// rather than a runtime `None` some caller has to invent an answer for.
+    ///
+    /// ★ This is the door a chip row uses, which is why the failure has to happen at the
+    /// row and not thirteen seconds into a boot.
+    #[must_use]
+    pub const fn declared(s: &'static str) -> GpuName {
+        match GpuName::new(s) {
+            Some(n) => n,
+            None => panic!(
+                "a declared GPU name must be non-empty printable ASCII shorter than \
+                 NV2080_GPU_MAX_NAME_STRING_LENGTH (64), so RM's fixed-width copy is a \
+                 NUL-terminated C string"
+            ),
+        }
+    }
+
+    /// The declared string.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        self.0
+    }
+}
+
+/// Write `name` into a [`NAME_STRING_LEN`]-byte array at `off`, NUL-padded.
+fn put_name(body: &mut [u8], off: usize, name: GpuName) {
+    let b = name.as_str().as_bytes();
+    body[off..off + b.len()].copy_from_slice(b);
+}
+
+/// Write `name` into a [`NAME_STRING_LEN`]-element UTF-16LE array at `off`, NUL-padded.
+///
+/// ★ A plain byte-doubling, and it is correct *because* [`GpuName`] refuses non-ASCII:
+/// every code point is one UTF-16 unit whose high byte is zero.
+fn put_name_unicode(body: &mut [u8], off: usize, name: GpuName) {
+    for (i, b) in name.as_str().as_bytes().iter().enumerate() {
+        body[off + i * 2] = *b;
+        body[off + i * 2 + 1] = 0;
+    }
+}
+
 /// One FB region, as the guest's RM will file it.
 ///
 /// Deliberately **not** `#[repr(C)]`: [`encode_gsp_static_info`] is the only thing that
@@ -314,6 +459,15 @@ pub struct GspStaticInfo<'a> {
     pub fb_length: u64,
     /// `gidInfo.data[0..16]` — this GPU's UUID. See [`GpuGid`] for what fails without it.
     pub gid: GpuGid,
+    /// `gpuNameString[]` — the model name, e.g. `"NVIDIA GeForce RTX 3060"`, or `None`
+    /// if this port has not been told one.
+    ///
+    /// ⊘ `None` writes **zero**, which the guest surfaces as `nvidia-smi`'s `Name: ERR!`
+    /// — loud, attributable, and not a value. See [`GpuName`] for why there is no default
+    /// and where the value is supposed to come from.
+    pub name: Option<GpuName>,
+    /// `gpuShortNameString[]` — the chip-level name, e.g. `"GA106-A"`, or `None`.
+    pub short_name: Option<GpuName>,
 }
 
 /// A `GspStaticConfigInfo` this port will not put on the wire.
@@ -491,6 +645,19 @@ pub fn encode_gsp_static_info(
         // of every one of its five rows at zero.
     }
     body[FB_LENGTH_OFF..FB_LENGTH_OFF + 8].copy_from_slice(&info.fb_length.to_le_bytes());
+    // ★★ All three name arrays, because a real GSP writes all three and
+    // `gpuGetNameString_FWCLIENT` reads the UTF-16 one whenever the caller does not ask
+    // for ASCII (`ogkm-580: gpu_gspclient.c:278-287`). Filling only the array the boot
+    // path happens to read is the too-capable/too-strict pair from
+    // `mock_fidelity_both_directions` in its quieter half: a client asking for Unicode
+    // would get an empty string and no error.
+    if let Some(name) = info.name {
+        put_name(&mut body, NAME_STRING_OFF, name);
+        put_name_unicode(&mut body, NAME_STRING_UNICODE_OFF, name);
+    }
+    if let Some(short) = info.short_name {
+        put_name(&mut body, SHORT_NAME_STRING_OFF, short);
+    }
     Ok(body)
 }
 
@@ -502,6 +669,79 @@ mod tests {
     /// test here, never the value.
     fn a_gid() -> GpuGid {
         GpuGid::derive(b"gspstaticinfo unit test")
+    }
+
+    /// A model name for the encoder tests. What is under test is where the bytes land.
+    fn a_name() -> Option<GpuName> {
+        Some(GpuName::declared("NVIDIA Test Part 9999"))
+    }
+
+    /// A short name for the encoder tests.
+    fn a_short_name() -> Option<GpuName> {
+        Some(GpuName::declared("TT999-Z"))
+    }
+
+    /// ★★ [`GpuName`] refuses everything RM's fixed-width copy could not survive.
+    ///
+    /// ⊘ Exact-`None` assertions and a non-vacuity case, never `is_none()` alone: what is
+    /// under test is that the *boundary* is where it is claimed to be. 63 bytes is the
+    /// longest name that still NUL-terminates inside
+    /// `NV2080_GPU_MAX_NAME_STRING_LENGTH`, and 64 is the first that does not — RM would
+    /// copy the whole array into a buffer it then treats as a C string.
+    #[test]
+    fn a_name_that_rm_could_not_read_back_as_a_c_string_is_unconstructible() {
+        assert_eq!(GpuName::new(""), None, "an empty model name is not a name");
+        assert!(GpuName::new("A").is_some());
+
+        const SIXTY_THREE: &str = "123456789012345678901234567890123456789012345678901234567890123";
+        assert_eq!(SIXTY_THREE.len(), 63);
+        assert!(
+            GpuName::new(SIXTY_THREE).is_some(),
+            "63 bytes still leaves room for the terminator"
+        );
+        const SIXTY_FOUR: &str = "1234567890123456789012345678901234567890123456789012345678901234";
+        assert_eq!(SIXTY_FOUR.len(), 64);
+        assert_eq!(
+            GpuName::new(SIXTY_FOUR),
+            None,
+            "a 64-byte name fills the array with no room for the NUL"
+        );
+
+        // Non-ASCII cannot be widened to the UTF-16 array by doubling, and a control
+        // character (including an embedded NUL) would truncate the string silently.
+        assert_eq!(GpuName::new("NVIDIA GeForce RTX 3060\u{00ae}"), None);
+        assert_eq!(GpuName::new("NVIDIA\u{0}RTX"), None);
+        assert_eq!(GpuName::new("NVIDIA\nRTX"), None);
+        // Non-vacuity: every character a real model string uses is accepted.
+        assert!(GpuName::new("NVIDIA GeForce RTX 3060").is_some());
+        assert!(GpuName::new("GA106-A").is_some());
+    }
+
+    /// ★ The Unicode array is the ASCII one widened, and it is written because a real GSP
+    /// writes it — `gpuGetNameString_FWCLIENT` reads it for every `type` that is not
+    /// `..._FLAGS_TYPE_ASCII` (`ogkm-580: gpu_gspclient.c:278-287`).
+    #[test]
+    fn all_three_name_arrays_are_written_and_nul_padded() {
+        let fb = 1 << 20;
+        let body = encode_gsp_static_info(
+            &GspStaticInfo {
+                fb_regions: &one_region(fb),
+                fb_length: fb,
+                gid: a_gid(),
+                name: Some(GpuName::declared("AB")),
+                short_name: Some(GpuName::declared("C")),
+            },
+            GspStaticInfoWire::Pre610,
+        )
+        .expect("encodes");
+        assert_eq!(&body[1388..1392], b"AB\0\0");
+        assert!(body[1390..1452].iter().all(|b| *b == 0));
+        assert_eq!(&body[1452..1455], b"C\0\0");
+        assert!(body[1453..1516].iter().all(|b| *b == 0));
+        assert_eq!(&body[1516..1521], b"A\0B\0\0");
+        assert!(body[1520..1644].iter().all(|b| *b == 0));
+        // ⊘ And nothing past the struct's three name arrays was touched.
+        assert!(body[1644..].iter().all(|b| *b == 0));
     }
 
     /// A minimal well-formed table: one usable region spanning a 1 MiB framebuffer.
@@ -525,6 +765,17 @@ mod tests {
         assert_eq!(FB_REGION_ENTRY_SIZE, 56);
         assert_eq!(FB_REGION_INFO_PARAMS_SIZE, 904);
         assert_eq!(FB_LENGTH_OFF, 1352);
+        // ★ The three name arrays. 1388 and 1452 are not arithmetic here: they are where
+        // `"NVIDIA GeForce RTX 3060"` and `"GA106-A"` were FOUND in the real board's own
+        // fn-65 reply (`C: docs/research/captures/ga106_gspstaticinfo_580.log`), so this
+        // assertion is a struct read checked against silicon rather than against itself.
+        assert_eq!(NAME_STRING_OFF, 1388);
+        assert_eq!(SHORT_NAME_STRING_OFF, 1452);
+        assert_eq!(NAME_STRING_UNICODE_OFF, 1516);
+        // The UTF-16 array is 128 bytes wide and still inside the struct.
+        assert_eq!(NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN, 1644);
+        // ⊘ …and 1644 is inside the struct, with 148 bytes of unmodelled tail after it.
+        assert_eq!(GSP_STATIC_CONFIG_INFO_SIZE - 1644, 148);
         assert_eq!(GSP_STATIC_CONFIG_INFO_SIZE, 1792);
         // The alignment hole ahead of the region table is four bytes nothing names.
         assert_eq!(FB_REGION_INFO_PARAMS_OFF - (24 + 268 + 48), 4);
@@ -566,6 +817,8 @@ mod tests {
                 fb_regions: &one_region(fb),
                 fb_length: fb,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -600,9 +853,20 @@ mod tests {
             body[1248..1352].iter().all(|b| *b == 0),
             "sriov/engineCaps untouched"
         );
+        // ⊘ The tail past `fb_length`, in two pieces, because exactly one field between
+        // here and the end of the struct is now stated: the three name arrays at
+        // 1388..1644. `fbio_mask`, `fb_bus_width`, `fb_ram_type`, `fbp_mask` and
+        // `l2_cache_size` are real on the captured board and left zero here, because this
+        // port does not advertise them.
         assert!(
-            body[1360..].iter().all(|b| *b == 0),
-            "the tail past fb_length"
+            body[1360..NAME_STRING_OFF].iter().all(|b| *b == 0),
+            "fbio_mask .. l2_cache_size"
+        );
+        assert!(
+            body[NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN..]
+                .iter()
+                .all(|b| *b == 0),
+            "the tail past the three name arrays"
         );
         assert_eq!(u32::from_le_bytes(body[344..348].try_into().unwrap()), 1);
         assert_eq!(u64::from_le_bytes(body[1352..1360].try_into().unwrap()), fb);
@@ -615,6 +879,8 @@ mod tests {
                 fb_regions: &[],
                 fb_length: 1 << 20,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -642,6 +908,8 @@ mod tests {
                 fb_regions: &rows,
                 fb_length: 17 << 20,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -665,6 +933,8 @@ mod tests {
                 fb_regions: &rows,
                 fb_length: 0x1001,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -706,6 +976,8 @@ mod tests {
                 fb_regions: &rows,
                 fb_length: 0x2_0000,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -728,6 +1000,8 @@ mod tests {
                 fb_regions: &one_region(fb),
                 fb_length: fb * 2,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::Pre610,
         )
@@ -749,6 +1023,8 @@ mod tests {
                 fb_regions: &one_region(fb),
                 fb_length: fb,
                 gid: a_gid(),
+                name: a_name(),
+                short_name: a_short_name(),
             },
             GspStaticInfoWire::From610_43_02,
         )

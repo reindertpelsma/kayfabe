@@ -40,7 +40,7 @@
 
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::gspstaticinfo::{
-    GSP_STATIC_CONFIG_INFO_SIZE, GpuGid, GspStaticInfo, encode_gsp_static_info,
+    GSP_STATIC_CONFIG_INFO_SIZE, GpuGid, GpuName, GspStaticInfo, encode_gsp_static_info,
 };
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
@@ -59,6 +59,8 @@ pub struct StaticInfoPolicy {
     chip: &'static ChipProfile,
     driver: DriverAbiTable,
     gid: GpuGid,
+    name: Option<GpuName>,
+    short_name: Option<GpuName>,
 }
 
 impl StaticInfoPolicy {
@@ -84,7 +86,49 @@ impl StaticInfoPolicy {
         driver: DriverAbiTable,
         gid: GpuGid,
     ) -> StaticInfoPolicy {
-        StaticInfoPolicy { chip, driver, gid }
+        StaticInfoPolicy {
+            chip,
+            driver,
+            gid,
+            name: None,
+            short_name: None,
+        }
+    }
+
+    /// ★★★ **The door the model name comes through** — and it is deliberately the only
+    /// one, with no default behind it.
+    ///
+    /// ⊘ There is no `ChipProfile::name_string`, on purpose. A per-generation constant is
+    /// a row somebody must add for every GPU that will ever exist, and it contradicts the
+    /// owner's standing **READ-NATIVE, WRITE-TRAP** ruling (2026-07-31): the model name is
+    /// a *read*, and a read should be the **host GPU's own answer**
+    /// (`NV2080_CTRL_CMD_GPU_GET_NAME_STRING`, `0x20800110`, already on the capability
+    /// allowlist). A port that asks the host supports whatever card is in the box; a port
+    /// with a table supports the cards somebody remembered.
+    ///
+    /// ⚠ **The lifetime, stated because it constrains who may call this.** Fn 65 is the
+    /// **second RPC of the entire driver life** (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4232`, inside `kgspInitRm`, called from
+    /// `arch/nvalloc/unix/src/osinit.c:2024`, immediately after `SET_GUEST_SYSTEM_INFO`),
+    /// so **no guest RM object exists yet** — while the only device-level host-verb
+    /// carrier this port has, the system proc's isolate, is materialized by the *first
+    /// accepted guest RM event* (`tests/tests/isolate_spawn_is_guest_caused.rs`, E0b),
+    /// which is strictly later. ⇒ nothing inside the fn-65 path can issue a host ioctl,
+    /// and the value must already be in hand when the policy is built.
+    ///
+    /// ★ **Which is why the answer is not "query or fail".** Owner ruling, 2026-08-08:
+    /// fill in every field obtainable by unprivileged ioctl, **derive** the rest on the
+    /// fly for any architecture, and prove the derived structure by compiling the
+    /// driver's own parser as an oracle — the pattern `#116` already runs for the VBIOS.
+    /// A derived value stops being a guess the moment RM's own code accepts it. This
+    /// setter is the seam both halves arrive through.
+    ///
+    /// ⊘ Absence is [`None`], never a stand-in: `c_oracle_empty_rows_are_wrong`.
+    #[must_use]
+    pub fn with_name(mut self, name: GpuName, short_name: GpuName) -> StaticInfoPolicy {
+        self.name = Some(name);
+        self.short_name = Some(short_name);
+        self
     }
 
     /// The UUID [`StaticInfoPolicy::new`] derives, exposed so a test can state the
@@ -119,6 +163,11 @@ impl StaticInfoPolicy {
                 fb_regions: self.chip.fb_regions,
                 fb_length: self.chip.fb_length,
                 gid: self.gid,
+                // ⊘ `None` until a source exists — see `StaticInfoPolicy::with_name`
+                // and `kayfabe_abi::gspstaticinfo::GpuName`. This port has not been told
+                // the model name, so it writes zero and the guest says so.
+                name: self.name,
+                short_name: self.short_name,
             },
             self.driver.gsp_static_info_wire(),
         )

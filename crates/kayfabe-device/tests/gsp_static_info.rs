@@ -27,7 +27,7 @@
 //! *this* device's own two publications agreeing — not about the oracle.
 
 use kayfabe_abi::gspstaticinfo::{
-    FbRegion, GSP_STATIC_CONFIG_INFO_SIZE, GspStaticInfo, GspStaticInfoError,
+    FbRegion, GSP_STATIC_CONFIG_INFO_SIZE, GpuName, GspStaticInfo, GspStaticInfoError,
     encode_gsp_static_info,
 };
 use kayfabe_abi::versions::{BENCH_DRIVER, GspStaticInfoWire, table_for};
@@ -155,6 +155,11 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
             fb_regions: &ORACLE_ROWS,
             fb_length: TWELVE_GIB,
             gid: a_test_gid(),
+            // ⊘ The layout test states a name so the FB assertions below run against a
+            // fully-populated body; the shipped device states none. See
+            // `a_name_this_port_was_never_told_is_served_as_zero_for_every_chip_row`.
+            name: Some(GpuName::declared("NVIDIA GeForce RTX 3060")),
+            short_name: Some(GpuName::declared("GA106-A")),
         },
         GspStaticInfoWire::Pre610,
     )
@@ -234,6 +239,111 @@ fn the_served_body_carries_a_non_zero_uuid_for_every_chip_row() {
             "{}: gidInfo.data is all zero, which the guest reads as NV_ERR_INVALID_STATE",
             chip.name
         );
+    }
+}
+
+/// ★★★ **The model name lands where the real board puts it — and its ABSENCE is loud.**
+///
+/// `[measured 2026-08-08, boot p35_8088019]` a zero `gpuNameString` is what `nvidia-smi`
+/// prints as `Name: ERR!`. The field is read by `gpuGetNameString_FWCLIENT`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_gspclient.c:269-290`), which `portMemCopy`s
+/// it straight out of `pGpu->pGspStaticInfo`; on a GSP client there is no other producer.
+///
+/// ## ⊘ What this test does NOT do, and it is the point
+///
+/// It does **not** assert that the shipped device serves a name. It cannot: there is no
+/// `ChipProfile::name_string` and there must not be one — the value's source is the **host
+/// GPU's own `NV2080_CTRL_CMD_GPU_GET_NAME_STRING`** under the owner's READ-NATIVE ruling,
+/// and that query has an unsolved lifetime (see [`StaticInfoPolicy::with_name`]). What is
+/// settled here is the **layout**: given a name, it lands at 1388/1452/1516 exactly where
+/// a real GA106 puts its own; given none, all three arrays stay zero.
+///
+/// ★ The strings below come from the real board's own fn-65 reply
+/// (`C: docs/research/captures/ga106_gspstaticinfo_580.log`) — a capture row **with a
+/// body**, which is the half `CLAUDE.md` records as trustworthy byte-for-byte. They are
+/// the oracle for *where the bytes go*, not a value this port ships.
+#[test]
+fn a_declared_name_lands_where_the_real_ga106_puts_its_own() {
+    let body = policy()
+        .with_name(
+            GpuName::declared("NVIDIA GeForce RTX 3060"),
+            GpuName::declared("GA106-A"),
+        )
+        .body()
+        .expect("GA106 encodes");
+    // Literals for the offsets, for the reason stated at length above: reading them back
+    // off the constants under test would make the assertion agree with the arithmetic.
+    assert_eq!(
+        &body[1388..1388 + 23],
+        b"NVIDIA GeForce RTX 3060",
+        "gpuNameString — at the oracle's own offset"
+    );
+    assert_eq!(&body[1452..1452 + 7], b"GA106-A", "gpuShortNameString");
+    // NUL-terminated, both: RM copies the whole fixed-width array out and treats it as a
+    // C string.
+    assert!(
+        body[1388 + 23..1452].iter().all(|b| *b == 0),
+        "gpuNameString is not NUL-padded to its 64 bytes"
+    );
+    assert!(body[1452 + 7..1516].iter().all(|b| *b == 0));
+    // ★ And the UTF-16 array, which `gpuGetNameString_FWCLIENT` reads for every `type`
+    // that is not `..._FLAGS_TYPE_ASCII`. Leaving it zero would answer a Unicode caller
+    // with an empty string and no error.
+    let unicode: Vec<u8> = b"NVIDIA GeForce RTX 3060"
+        .iter()
+        .flat_map(|c| [*c, 0])
+        .collect();
+    assert_eq!(
+        &body[1516..1516 + 46],
+        &unicode[..],
+        "gpuNameString_Unicode"
+    );
+    assert!(body[1516 + 46..1516 + 128].iter().all(|b| *b == 0));
+}
+
+/// ★★★ **An unstated name is ZERO, not a stand-in** — `c_oracle_empty_rows_are_wrong`.
+///
+/// ⊘ This is the assertion that makes the missing chip-row constant a *decision* rather
+/// than an omission. The tempting fix for `Name: ERR!` is a default string, and a default
+/// would answer for a card nobody asked, on a host nobody queried, with the guest unable
+/// to tell the difference. Zero is what this port knows, and `nvidia-smi` saying `ERR!` is
+/// that fact reaching the operator.
+///
+/// ★ The precedent is not an aesthetic argument: `C: src/qemu/mode2_initctrl_ga106.h` has
+/// 11 of 56 rows with `dlen = 0`, and every one checked against a real GA106 is
+/// contradicted — `0x20802a08` decodes from its empty row as size 0 where the part
+/// answers 20480, which is a buffer overrun with a hardware writer. An empty capture is
+/// evidence of nothing; a default here would be the same mistake with a nicer string.
+///
+/// ⚠ Quantified over [`CHIPS`] (`gates_quantified_over_a_list`) so a chip row added later
+/// cannot smuggle a name in by a route this test does not watch.
+///
+/// [`CHIPS`]: kayfabe_device::CHIPS
+#[test]
+fn a_name_this_port_was_never_told_is_served_as_zero_for_every_chip_row() {
+    for chip in kayfabe_device::CHIPS {
+        let body = StaticInfoPolicy::new(chip, *table_for(BENCH_DRIVER).expect("bench ABI"))
+            .body()
+            .expect("every shipped chip row encodes");
+        assert!(
+            body[1388..1516].iter().all(|b| *b == 0),
+            "{}: a name was served without anyone declaring one — if a chip-row constant \
+             has been added, read StaticInfoPolicy::with_name before deleting this test",
+            chip.name
+        );
+        assert!(
+            body[1516..1644].iter().all(|b| *b == 0),
+            "{}: gpuNameString_Unicode",
+            chip.name
+        );
+        // ⊘ Non-vacuity: the same policy DOES serve one when told, so this test is about
+        // absence and not about an encoder that has stopped writing.
+        let told = StaticInfoPolicy::new(chip, *table_for(BENCH_DRIVER).expect("bench ABI"))
+            .with_name(GpuName::declared("X"), GpuName::declared("Y"))
+            .body()
+            .expect("encodes");
+        assert_eq!(&told[1388..1390], b"X\0");
+        assert_eq!(&told[1452..1454], b"Y\0");
     }
 }
 
