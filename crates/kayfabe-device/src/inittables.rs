@@ -673,6 +673,35 @@ pub enum WantedTable {
     /// (`0x20000`), so like [`Self::BusGetInfoV2`] it is **not** a
     /// [`crate::sticky::BRANCH_A_CACHEABLE`] row.
     BusGetPcieSupportedGpuAtomics,
+    /// `NV2080_CTRL_CMD_FB_GET_INFO_V2` (`0x20801303`) — ★★★ the wall §14.31 named, and the
+    /// first this port serves that **states no new number at all**.
+    ///
+    /// `[measured 2026-08-08, boot `gt1431_ff7a0ea`]` `cuInit` asks this control four times.
+    /// The first three are answered `NV_OK` by the guest's own kernel and never reach us;
+    /// the fourth — seven indices, byte-identical to a request a real GA106 answers `NV_OK`
+    /// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:50`) — is `0x56`.
+    ///
+    /// ⊘⊘ **It is absent from both boot ledgers, and that is NOT because it never arrives.**
+    /// `[measured 2026-08-09]` that boot's summary lines read `67 UNSERVICED … 32 distinct`
+    /// and `101 answered, 32 distinct cmd/result rows` — **both at their caps**
+    /// ([`crate::unserviced::UNSERVICED_SAMPLE_MAX`],
+    /// `kayfabe_qemu_raw::shim::SERVED_CONTROL_SLOTS`), so every command first seen after
+    /// the thirty-second was dropped without a word. §14.31 read the miss as *"the guest
+    /// kernel refuses it from its own state"*; the RPC does go out. See
+    /// [`kayfabe_abi::fbinfo`] for the whole refutation.
+    ///
+    /// ★ Three of the seven indices really *are* the guest kernel's own
+    /// (`ogkm-580: kern_mem_sys_ctrl.c:335, 711, 716`) and four are forwarded — and unlike
+    /// [`Self::BusGetInfoV2`] the forward is **one compacted RPC**, not one per index, so the
+    /// request this policy sees carries four entries and not seven. All four are
+    /// **projections of [`crate::ChipProfile::memory_system`]**, the row already served to
+    /// `0x20800a1c`; nothing here is a second description of the same silicon.
+    ///
+    /// ⚠ Its flags are `0x10118` (`ogkm-580: g_subdevice_nvoc.c:5845-5859`) — the same word
+    /// [`Self::BusGetInfoV2`] carries, and neither `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor
+    /// `_CACHEABLE_BY_INPUT` (`0x20000`) — so it is not a [`crate::sticky::BRANCH_A_CACHEABLE`]
+    /// row.
+    FbGetInfoV2,
 }
 
 impl WantedTable {
@@ -703,7 +732,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 28] = [
+    pub const ALL: [WantedTable; 29] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -732,6 +761,7 @@ impl WantedTable {
         Self::InternalGpuGetSmcMode,
         Self::BusGetInfoV2,
         Self::BusGetPcieSupportedGpuAtomics,
+        Self::FbGetInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -797,6 +827,7 @@ impl WantedTable {
             Self::BusGetPcieSupportedGpuAtomics => {
                 kayfabe_abi::gpuatomics::NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS
             }
+            Self::FbGetInfoV2 => kayfabe_abi::fbinfo::NV2080_CTRL_CMD_FB_GET_INFO_V2,
         }
     }
 
@@ -841,6 +872,7 @@ impl WantedTable {
             Self::BusGetPcieSupportedGpuAtomics => {
                 kayfabe_abi::gpuatomics::PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE
             }
+            Self::FbGetInfoV2 => kayfabe_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE,
         }
     }
 
@@ -1474,6 +1506,37 @@ impl CommandPolicy for InitTablePolicy {
                     &cmd.payload
                         [at..at + kayfabe_abi::gpuatomics::PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE],
                     &kayfabe_abi::gpuatomics::GpuAtomicOp::none_supported(),
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The fourth request-editing arm, and the first that introduces NO NEW
+            // NUMBER: all four values are projections of `self.chip.memory_system`, the row
+            // this policy already serves to `0x20800a1c`. Two are that row's fields
+            // verbatim (`l2CacheSize`, `ramType`); two are derived from `ltcCount` by
+            // relations named with their architecture in `kayfabe_abi::fbinfo`. A second
+            // table of measured words is exactly what would let this device tell RM its L2
+            // is 2.25 MiB under one control id and something else under another.
+            //
+            // ⊘ Three of the seven indices in libcuda's ioctl are the guest kernel's own
+            // (`ogkm-580: kern_mem_sys_ctrl.c:335, 711, 716`) and never arrive here — our
+            // own boot already answers `TOTAL_RAM_SIZE` byte-identically to a real GA106
+            // without this arm. Anything not in the derived set is refused BY NAME: on this
+            // control zero means "no L2", "unknown RAM" or "no FB partitions", never blank.
+            WantedTable::FbGetInfoV2 => {
+                let at = req.params_at;
+                let geometry = kayfabe_abi::fbinfo::FbGeometry {
+                    l2_cache_size: self.chip.memory_system.l2_cache_size,
+                    ram_type: self.chip.memory_system.ram_type,
+                    ltc_count: self.chip.memory_system.ltc_count,
+                };
+                let Ok(answers) = geometry.forwarded_answers() else {
+                    return refuse();
+                };
+                match kayfabe_abi::fbinfo::answer_fb_get_info_v2(
+                    &cmd.payload[at..at + kayfabe_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE],
+                    &answers,
                 ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),

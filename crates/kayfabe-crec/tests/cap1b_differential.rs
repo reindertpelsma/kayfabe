@@ -377,6 +377,17 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `kayfabe-abi` unit tests over `answer_bus_get_info_v2` and nothing at the policy
     // boundary — so `kayfabe-device/tests/bus_get_info_v2.rs` was written here to make this
     // admission true rather than merely quiet.
+    // ⚠⚠⚠ §14.32 adds a TENTH, `GpuInfoV2`'s kind again — **a different demander**.
+    // `FbGetInfoV2` (`0x20801303`) is asked four times by `cuInit`; the first three are
+    // answered entirely by the guest's own kernel (`ogkm-580: kern_mem_sys_ctrl.c:335, 711,
+    // 716` and friends) and never become an RPC at all, and the fourth is the one this port
+    // now serves. `cap1b` is an `RmInitAdapter` capture driven by `nvidia-smi`, in which
+    // `libcuda` never runs. ⊘ No closure limit reaches a process that never ran.
+    //
+    // ★ Its reply plane is covered at the policy boundary by
+    // `kayfabe-device/tests/fb_get_info_v2.rs` — written with this row rather than after it,
+    // so this admission is true at the moment it is made. ⊘ And it is a real coverage cost,
+    // named: nothing in the `cap1b` pair would notice this arm breaking.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
@@ -387,6 +398,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::InternalGpuGetSmcMode,
         WantedTable::BusGetInfoV2,
         WantedTable::BusGetPcieSupportedGpuAtomics,
+        WantedTable::FbGetInfoV2,
     ]
     .into_iter()
     .collect();
@@ -417,22 +429,24 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // of libcuda. `[measured 2026-08-08]` the first two were landed without updating either
     // count, so this assertion has been failing since §14.29; the numbers below are the
     // inherited red repaired and attributed, not a bar moved to fit a new row.
-    assert_eq!(universe.len(), 28, "non-vacuity: the universe is not empty");
+    // ⊘ 28 -> 29 at §14.32 (`0x20801303`), the WEAKEST kind again and for the same reason.
+    assert_eq!(universe.len(), 29, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        9,
+        10,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
-    // ⚠⚠ **The cost of 6 -> 9, stated rather than absorbed.** Three of nine exceptions are
+    // ⚠⚠ **The cost of 6 -> 10, stated rather than absorbed.** FOUR of ten exceptions are
     // now `cuInit`-path controls, and a differential that cannot see them cannot regress
     // them. What stands in for it is a policy-boundary test per control —
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_info_v2,
-    // bus_get_pcie_supported_gpu_atomics}.rs` — which checks the envelope, the inner status
-    // and the params offset but NOT that the reply reaches a real guest queue. ⊘ The only
-    // instrument that covers that is a boot (`only_live_boots_are_proof`), and the durable
-    // fix is a `cuInit`-driven capture: the exception set shrinks by three the day one
-    // exists, and by nothing at all until then.
+    // bus_get_pcie_supported_gpu_atomics,fb_get_info_v2}.rs` — which checks the envelope,
+    // the inner status and the params offset but NOT that the reply reaches a real guest
+    // queue. ⊘ The only instrument that covers that is a boot (`only_live_boots_are_proof`),
+    // and the durable fix is a `cuInit`-driven capture: the exception set shrinks by FOUR
+    // the day one exists, and by nothing at all until then. ⚠ That number growing once per
+    // rung is itself the signal — the capture is now four rungs overdue.
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.

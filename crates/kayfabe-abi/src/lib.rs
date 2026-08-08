@@ -104,6 +104,7 @@ pub mod deviceinfo;
 pub mod eventnotify;
 pub mod falconinfo;
 pub mod faultbuffer;
+pub mod fbinfo;
 pub mod fifochannels;
 pub mod fmbsize;
 pub mod generated;

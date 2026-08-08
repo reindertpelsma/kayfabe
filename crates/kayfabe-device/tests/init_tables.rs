@@ -351,7 +351,18 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // ⊘ It is also the row that REFUTED the instrument: §14.30 read `--probe-ctrl`'s `0x56`
     // as caller-dependence, when `capType` is an `[IN]` field and the probe's own `0xCD`
     // seed was the invalid captype. See `kayfabe_abi::gpuatomics`.
-    assert_eq!(WantedTable::ALL.len(), 28, "the served universe's size");
+    // ★★★★ 28 -> 29 at §14.32: `0x20801303` FB_GET_INFO_V2, and it is the first of the
+    // twenty-nine that states **no new number at all** — all four forwarded indices are
+    // projections of `ChipProfile::memory_system`, the row already served to `0x20800a1c`.
+    // Attributed, not ratcheted: `[measured 2026-08-08, boot `gt1431_ff7a0ea`]` `cuInit`
+    // stops at this control's FOURTH call (the first three are answered by the guest's own
+    // kernel) with `0x56`, on a request a real GA106 answers `NV_OK`
+    // (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:50`).
+    // ⊘ It is also the row that REFUTED the instrument a second time: §14.31 read its
+    // absence from both boot ledgers as *"the command never reaches the emulated GSP"*.
+    // `[measured 2026-08-09]` both ledgers were SATURATED at their 32-entry caps in that
+    // boot, so the absence meant nothing. See `kayfabe_abi::fbinfo`.
+    assert_eq!(WantedTable::ALL.len(), 29, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

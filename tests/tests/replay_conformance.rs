@@ -1409,7 +1409,22 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     //
     // ⚠ §14.30 landed the first of these two without touching this gate, so it has been RED
     // since; `[measured]` it fails at `78bee9e`. This is that inherited red repaired.
-    let unevidenced_by_this_capture: BTreeSet<u32> = BTreeSet::from([0x2080_1823, 0x2080_182a]);
+    //
+    // ⚠⚠ §14.32 adds a THIRD, `0x20801303` `FB_GET_INFO_V2`, and it is the same kind and the
+    // same reason: this capture is `nvidia-smi`'s `RmInitAdapter` and the demander is
+    // `libcuda`. ⊘ **Its size is the best-evidenced of the three.** `[measured]` a real
+    // GA106 answers `size=1028` on **five separate calls** of this control at the ioctl
+    // boundary (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:36,37,41,50,66`), and
+    // `[measured]` **our own guest** issues four of them at the identical size
+    // (`cuinit_trace_guest_gt1431_ff7a0ea.txt`). The GSP RPC carries a params struct of the
+    // very same 1028-byte type: `_kmemsysGetFbInfos` allocates a whole
+    // `NV2080_CTRL_FB_GET_INFO_V2_PARAMS`, fills the still-unset indices compacted from slot
+    // zero, and passes `sizeof(*pRpcParams)` (`ogkm-580: kern_mem_sys_ctrl.c:952-990`) — so
+    // only the *count* differs between the ioctl and the RPC, never the size.
+    // ⊘ Stated, not assumed away, exactly as the two above are: the durable fix for all
+    // three is one `cuInit`-driven GSP capture.
+    let unevidenced_by_this_capture: BTreeSet<u32> =
+        BTreeSet::from([0x2080_1303, 0x2080_1823, 0x2080_182a]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
         "an exemption for a control this port does not claim is an exemption for nothing"
