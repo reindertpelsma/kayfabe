@@ -4718,8 +4718,9 @@ INJECT ALLOC hClass=0x00002081 real_status=0x00000000 forced=0x00000056
 cuInit(0) -> 100
 ```
 
-★ I inherited this framing, restated it, and went looking for the reply body first. The
-measurement that overturned it took under a minute once the instrument existed. ⊘ **"Has no
+★ I inherited this framing, restated it, and went looking for the reply body first. The run
+that overturned it (`[measured 2026-08-08, real GA106 on `vh`, rev `6c9e3d2bb`]`) took under
+a minute once the instrument existed. ⊘ **"Has no
 oracle" is a statement about our instruments; "is required" is a statement about the driver.
 They are unrelated, and I had silently treated the first as evidence for the second.**
 
@@ -4815,7 +4816,7 @@ wearing a `[measured]` section's clothes. ⊘ `cup2` still fails `cuInit(0) -> 1
 ★ What it *does* do is make the next increment a specification rather than a search, and it
 subtracts a wall rather than climbing one.
 
-#### ⇒ The next increment, now fully specified by measurement
+#### ⇒ The next increment, specified by the injection matrix above (`[measured 2026-08-08, real GA106 on `vh`]`)
 
 **Both of these, together — neither alone changes `cuInit`'s answer:**
 
