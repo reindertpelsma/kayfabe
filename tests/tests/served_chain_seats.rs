@@ -299,6 +299,26 @@ fn the_publication_seat_sees_the_commands_the_link_below_it_answers() {
 
     let all = every_command();
     let total = all.len();
+    // ⊘ Counted from the SWEEP, not from `PUBLICATION_CONTROLS.len()`. The two ids are
+    // *also* members of `WantedTable::ALL` — `InitTablePolicy` is their answerer, which is
+    // the whole reason this seat has to sit ahead of it — so the sweep posts each of them
+    // twice and a hard-coded 2 is a wrong number that reads like the right one.
+    let want_publications = all
+        .iter()
+        .filter(|(_, c)| {
+            abi()
+                .decode_rpc_control(&c.payload)
+                .ok()
+                .is_some_and(|r| {
+                    c.function == RpcFunction::RmControl
+                        && kayfabe_rmrpc::PUBLICATION_CONTROLS.contains(&r.cmd)
+                })
+        })
+        .count();
+    assert!(
+        want_publications >= 2 * kayfabe_rmrpc::PUBLICATION_CONTROLS.len(),
+        "the sweep stopped covering both publication ids from both lists",
+    );
     for (_, cmd) in &all {
         // ★ The reply is discarded on purpose: this test is about REACH, and the bytes are
         // the previous test's subject.
@@ -312,7 +332,7 @@ fn the_publication_seat_sees_the_commands_the_link_below_it_answers() {
     );
     assert_eq!(
         pubs.load(Ordering::Relaxed),
-        kayfabe_rmrpc::PUBLICATION_CONTROLS.len(),
+        want_publications,
         "the front seat did not see the publication controls — which is exactly what a seat \
          BELOW InitTablePolicy would look like, with every reply byte still identical",
     );
