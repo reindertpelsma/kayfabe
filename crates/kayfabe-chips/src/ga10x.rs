@@ -1054,8 +1054,93 @@ impl Ga10xPushbuffer {
             // register write; read in `ce_launch` only when the operand is physical.
             submit::ce::SET_SRC_PHYS_MODE => Some(6),
             submit::ce::SET_DST_PHYS_MODE => Some(7),
+            // ★ The remap (constant-fill) registers. `SET_REMAP_COMPONENTS` is latched
+            // like any other write and read in `remap_fill`; see its docs for why the map
+            // is REQUIRED rather than defaulted.
+            submit::ce::SET_REMAP_CONST_A => Some(8),
+            submit::ce::SET_REMAP_CONST_B => Some(9),
+            submit::ce::SET_REMAP_COMPONENTS => Some(10),
             _ => None,
         }
+    }
+
+    /// ★★★ **Decode a remap-enabled launch's constant fill: the repeating pattern and the
+    /// size of one element** — or `None`, which is a refusal and never a default.
+    ///
+    /// # What the component map actually decides, and why ignoring it is two bugs
+    ///
+    /// `[src]` `ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:330-420` — the driver's
+    /// own three memset entry points on this class:
+    /// - `memset_1` writes an `NvU8` into `CONST_B` with `COMPONENT_SIZE_ONE` /
+    ///   `NUM_DST_COMPONENTS_ONE` ⇒ a **1-byte** element;
+    /// - `memset_4` writes an `NvU32` with `COMPONENT_SIZE_FOUR` ⇒ a **4-byte** element,
+    ///   and divides its byte count by four before pushing `LINE_LENGTH_IN`;
+    /// - `memset_8` spreads a 64-bit value across `CONST_A` (X) and `CONST_B` (Y) with
+    ///   `NUM_DST_COMPONENTS_TWO` ⇒ an **8-byte** element.
+    ///
+    /// So the map fixes both the pattern's **period** and the unit `LINE_LENGTH_IN`
+    /// counts. ⚠ RM's own scrub path is the *1-byte* map (`ogkm-580:
+    /// channel_utils.c:1029-1033`), which is why `memmgrMemSet(…, value, …)` writes
+    /// `value & 0xFF` to every byte — the same end-state its `TRANSFER_TYPE_PROCESSOR`
+    /// arm produces with `portMemSet(pDst, value, size)` (`ogkm-580: mem_utils.c:1122`).
+    /// A decoder that assumed a 4-byte little-endian pattern would agree with hardware
+    /// only on byte-uniform values, i.e. exactly where a test cannot see the difference.
+    ///
+    /// # ⊘ Each `None` is a different thing this codec cannot say
+    ///
+    /// - **`SET_REMAP_COMPONENTS` was never latched.** The map is not optional and its
+    ///   reset value is not something this port has measured; every real writer in reach
+    ///   pushes it immediately before the launch. Defaulting it would invent both the
+    ///   element size and the pattern.
+    /// - **A `CONST_A`/`CONST_B` the map selects was never latched.** Same rule as the
+    ///   offsets: `0` is a legal pattern, so *written*-ness is asked for separately.
+    /// - **A selector naming a SOURCE component** (`SRC_X..SRC_W`). That is a remapped
+    ///   **copy** — a swizzle of source bytes — not a constant fill, and
+    ///   [`kayfabe_arch::CeWork::Fill`] has no way to express it.
+    /// - **`NO_WRITE`.** The engine skips that component; the destination keeps its old
+    ///   bytes. A fill reported over it would claim writes that never happen.
+    /// - **An element size that does not divide 4.** [`kayfabe_arch::CeWork::Fill`]
+    ///   carries a `u32` whose phase downstream is `pattern[addr % 4]`, so it can express
+    ///   periods 1, 2 and 4 exactly and **cannot** express 3, 6, 8, 12 or 16. ⊘ Refused by
+    ///   name rather than truncated: `memset_8`'s 8-byte period is a real shape the driver
+    ///   emits, and answering it with its low four bytes would write the wrong half of
+    ///   every other element. Widening `CeWork::Fill` is the fix; this refusal is the
+    ///   placeholder that cannot be mistaken for support.
+    ///
+    /// Returns `(pattern, element_bytes)` with `element_bytes ∈ {1, 2, 4}` and `pattern`
+    /// already normalised so that `pattern.to_le_bytes()[a % 4]` is the byte hardware
+    /// writes at destination address `a` — **given** the element alignment `ce_launch`
+    /// separately requires.
+    fn remap_fill(state: &MethodState, subch: usize) -> Option<(u32, u64)> {
+        let map = state.latched(subch, 10)?;
+        let comp_bytes = submit::ce::remap_component_bytes(map);
+        let num_dst = submit::ce::remap_num_dst_components(map);
+        // 1..=4 components of 1..=4 bytes: at most 16, so this cannot overflow a u32 and
+        // the `usize` below is exact on every target this builds for.
+        let element = comp_bytes * num_dst;
+        if !4u32.is_multiple_of(element) {
+            return None;
+        }
+        // Lay one element out byte by byte, in destination order.
+        let mut elem = [0u8; 4];
+        for c in 0..num_dst {
+            let konst = match submit::ce::remap_dst_sel(map, c) {
+                submit::ce::REMAP_DST_SEL_CONST_A => state.latched(subch, 8)?,
+                submit::ce::REMAP_DST_SEL_CONST_B => state.latched(subch, 9)?,
+                // `SRC_*`, `NO_WRITE`, and the two values the header does not define.
+                _ => return None,
+            };
+            let bytes = konst.to_le_bytes();
+            for b in 0..comp_bytes {
+                elem[(c * comp_bytes + b) as usize] = bytes[b as usize];
+            }
+        }
+        // Repeat the element across four bytes. `element` divides 4, so this is exact.
+        let mut pattern = [0u8; 4];
+        for (i, p) in pattern.iter_mut().enumerate() {
+            *p = elem[i % element as usize];
+        }
+        Some((u32::from_le_bytes(pattern), u64::from(element)))
     }
 
     /// A latched `SET_{SRC,DST}_PHYS_MODE` slot → [`kayfabe_arch::PhysTarget`]. An operand
@@ -1088,12 +1173,18 @@ impl Ga10xPushbuffer {
     ///   `length × count` would name a span the engine never touches when the pitch
     ///   exceeds the line, and would *under*-report the destination's extent when it does
     ///   not. The address plane acts on that number.
-    /// - **`REMAP_ENABLE == TRUE`.** That is a constant fill, and
-    ///   [`kayfabe_arch::CeWork::Fill`]'s own docs say *"the pattern is part of the
-    ///   fact"* — it lives in `SET_REMAP_CONST_A` (`0x700`) selected by a
-    ///   `SET_REMAP_COMPONENTS` (`0x708`) component map this codec does not yet validate.
-    ///   A fill decoded without it could say *that* a fill happened and never *what it
-    ///   wrote*, which is not a forwardable intent.
+    /// - **`REMAP_ENABLE == TRUE` with a component map this codec cannot express.** The
+    ///   map is decoded by [`Ga10xPushbuffer::remap_fill`], which lists its own five
+    ///   refusals; each is a distinct thing about the fill we cannot say, and none of them
+    ///   is *"fills are unsupported"*.
+    /// - **`REMAP_ENABLE == TRUE` with a destination not aligned to the element.** The
+    ///   engine phases the pattern from the **start of the transfer** — element `i` of the
+    ///   fill lands at `dst + i·element` — while [`kayfabe_arch::CeWork::Fill`]'s
+    ///   downstream phases it from the **absolute destination address** (`pattern[a % 4]`,
+    ///   which is what makes a split fill byte-identical to a whole one). Those two agree
+    ///   for every byte **iff** `dst` is a multiple of the element size. ⊘ So the
+    ///   alignment is checked here, where the element size is known, rather than assumed
+    ///   from the fact that the drivers in reach happen to align their memsets.
     /// - **An operand that was never latched.** The heart of it. `0` is a legal offset and
     ///   a legal length, so [`MethodState`] tracks *written*-ness separately and this asks
     ///   for it. A `CeLaunchDma` assembled from `unwrap_or_default()` is precisely the
@@ -1110,17 +1201,48 @@ impl Ga10xPushbuffer {
         if flags & submit::ce::LAUNCH_TRANSFER_MASK == submit::ce::LAUNCH_TRANSFER_NONE {
             return None;
         }
-        if flags & (submit::ce::LAUNCH_MULTI_LINE_ENABLE | submit::ce::LAUNCH_REMAP_ENABLE) != 0 {
+        // ⊘ ONE refusal per fact. These two used to share a line, and collapsing them is
+        // what let a whole work kind sit undecoded behind a comment about pitch: a
+        // multi-line launch is a *geometry* this codec does not model, a remap-enabled one
+        // is a *work kind* it now does.
+        if flags & submit::ce::LAUNCH_MULTI_LINE_ENABLE != 0 {
             return None;
         }
+        // ★ The work kind, and with it the unit `LINE_LENGTH_IN` counts. See
+        // `remap_fill`: under `REMAP_ENABLE` the length is in ELEMENTS, and an element is
+        // `COMPONENT_SIZE × NUM_DST_COMPONENTS` bytes (`ogkm-580: uvm_maxwell_ce.c:359,
+        // :371`). A decoder that read it as bytes would under-report a 4-byte fill's
+        // extent by 4× — silently, and in the direction that leaves guest memory
+        // un-written rather than faulting.
+        let (work, element) = if flags & submit::ce::LAUNCH_REMAP_ENABLE != 0 {
+            let (pattern, element) = Self::remap_fill(state, subch)?;
+            (CeWork::Fill { pattern }, element)
+        } else {
+            (CeWork::Copy, 1)
+        };
         let up = |v: u32| u64::from(v & submit::ce::OFFSET_UPPER_MASK) << 32;
-        let src = up(state.latched(subch, 0)?) | u64::from(state.latched(subch, 1)?);
+        // ⊘ A fill has NO SOURCE OPERAND, and RM proves it: `channelPushMemoryProperties`
+        // pushes `OFFSET_IN_UPPER/_LOWER` only on the `bCeMemcopy` arm (`ogkm-580:
+        // channel_utils.c:1036-1067`), so a memset's source slots are **never latched**.
+        // Requiring them would refuse every fill the driver sends; reporting whatever a
+        // *previous* copy on this subchannel left in them would report a stale address as
+        // the fill's source. Zero, explicitly, matching `CeLaunchDma::src`'s own docs
+        // (*"meaningless for Scrub/Fill"*).
+        let src = match work {
+            CeWork::Copy => up(state.latched(subch, 0)?) | u64::from(state.latched(subch, 1)?),
+            CeWork::Scrub | CeWork::Fill { .. } => 0,
+        };
         let dst = up(state.latched(subch, 2)?) | u64::from(state.latched(subch, 3)?);
         // ★ `LINE_COUNT` is deliberately NOT required. With `MULTI_LINE_ENABLE_FALSE` the
         // engine ignores it, so demanding it would refuse a copy real hardware performs —
         // and `rm::ce_pushbuffer` writes it only because it shares a header with
         // `LINE_LENGTH_IN`.
-        let len = u64::from(state.latched(subch, 4)?);
+        let len = u64::from(state.latched(subch, 4)?) * element;
+        // See the type docs: the absolute-address phase downstream and the engine's
+        // transfer-relative phase coincide exactly on an element-aligned destination.
+        if !dst.is_multiple_of(element) {
+            return None;
+        }
         // ★ Non-`?`: the phys-mode registers are NOT required operands. An operand may be
         // physical and never have written its target (the engine then reads the reset
         // value, `LOCAL_FB`), so demanding it would refuse a copy real hardware performs —
@@ -1133,7 +1255,7 @@ impl Ga10xPushbuffer {
             src_is_virtual: flags & submit::ce::LAUNCH_SRC_PHYSICAL == 0,
             dst_target: Self::phys_target(state.latched(subch, 7)),
             src_target: Self::phys_target(state.latched(subch, 6)),
-            work: CeWork::Copy,
+            work,
         })
     }
 

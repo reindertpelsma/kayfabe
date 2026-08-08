@@ -1879,6 +1879,101 @@ pub mod ce {
     /// the constant is deliberately **absent** rather than present-and-wrong. `port_the_c`
     /// says reproduce the C and subtract its named bugs; this is one of them, named.
     pub const NO_MEMORY_SCRUB_ON_THIS_CLASS: () = ();
+
+    // ---------------------------------------------------------------------------------
+    // ★★★ THE REMAP (constant-fill) REGISTERS — `SET_REMAP_CONST_A/_B` and the component
+    // map that says what an element of the fill actually IS.
+    //
+    // ⚠⚠ **`SET_REMAP_COMPONENTS` is not decoration: it changes the meaning of TWO other
+    // registers**, and a decoder that fires a remap-enabled launch without reading it gets
+    // both of them wrong. `[src]` `ogkm-580:
+    // kernel-open/nvidia-uvm/uvm_maxwell_ce.c:330-420` is the driver stating both, in
+    // code that runs on this exact class:
+    //
+    // 1. **`LINE_LENGTH_IN` counts ELEMENTS, not bytes.** `uvm_hal_maxwell_ce_memset_4`
+    //    does `size /= 4` before handing `size` to `memset_common`, which pushes
+    //    `LINE_LENGTH_IN = size` and then advances `dst.address += memset_this_time *
+    //    memset_element_size` (`:359`, `:371`, `:396-402`). An element is
+    //    `COMPONENT_SIZE × NUM_DST_COMPONENTS` bytes.
+    // 2. **The pattern's PERIOD is the element, not four bytes.** `memset_1` puts an
+    //    `NvU8` in `CONST_B` with `COMPONENT_SIZE_ONE` (`:379-386`) — a **byte** fill;
+    //    `memset_8` puts a 64-bit value across `CONST_A`+`CONST_B` with
+    //    `NUM_DST_COMPONENTS_TWO` (`:407-419`) — an **8-byte** period.
+    //
+    // ★ And RM's own scrub/memset path is the 1-byte map: `channelPushMemoryProperties`
+    // pushes `DST_X = CONST_A | COMPONENT_SIZE_ONE | NUM_DST_COMPONENTS_ONE` (`ogkm-580:
+    // channel_utils.c:1029-1033`) — so `memmgrMemSet`'s CE arm writes `pattern & 0xFF` to
+    // every byte, exactly as its own `TRANSFER_TYPE_PROCESSOR` arm's
+    // `portMemSet(pDst, value, size)` does (`ogkm-580: mem_utils.c:1122`). The two arms of
+    // one operation must be observationally equal, and that is the corroboration.
+
+    /// `NVC7B5_SET_REMAP_CONST_A` @ `0x700` — the `A` constant a component map may select
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:177-178` = `clb0b5.h`'s
+    /// `NVB0B5_SET_REMAP_CONST_A`, same address).
+    pub const SET_REMAP_CONST_A: u32 = 0x0000_0700;
+    /// `NVC7B5_SET_REMAP_CONST_B` @ `0x704` (`clc7b5.h:179-180`).
+    pub const SET_REMAP_CONST_B: u32 = 0x0000_0704;
+    /// `NVC7B5_SET_REMAP_COMPONENTS` @ `0x708` (`clc7b5.h:181`).
+    pub const SET_REMAP_COMPONENTS: u32 = 0x0000_0708;
+
+    /// The width of one `DST_{X,Y,Z,W}` selector field, in bits — the four are at `2:0`,
+    /// `6:4`, `10:8` and `14:12` (`clc7b5.h:182, :190, :198, :206`), i.e. a **stride of
+    /// four bits** with the top bit of each nibble unused.
+    ///
+    /// ⊘ Expressed as a stride rather than four constants because a decoder walks
+    /// `0..NUM_DST_COMPONENTS`, and four separately-named shifts is how the fourth one
+    /// ends up copy-pasted from the third.
+    pub const REMAP_DST_SEL_STRIDE: u32 = 4;
+    /// Mask of one `DST_*` selector (three bits).
+    pub const REMAP_DST_SEL_MASK: u32 = 0x7;
+    /// `SET_REMAP_COMPONENTS_DST_*_CONST_A` — value 4 (`clc7b5.h:187`).
+    pub const REMAP_DST_SEL_CONST_A: u32 = 4;
+    /// `SET_REMAP_COMPONENTS_DST_*_CONST_B` — value 5 (`clc7b5.h:188`).
+    pub const REMAP_DST_SEL_CONST_B: u32 = 5;
+    /// `SET_REMAP_COMPONENTS_DST_*_SRC_{X,Y,Z,W}` — values `0..=3` (`clc7b5.h:183-186`).
+    ///
+    /// ⊘ Named so a decoder can **refuse** them rather than fall through: a selector
+    /// naming a SOURCE component is a remapped *copy* (a swizzle), not a constant fill, and
+    /// there is no pattern to report for it. `_NO_WRITE` (6, `clc7b5.h:189`) is a third
+    /// thing again — a component the engine skips — and folding either into "fill" would
+    /// claim bytes were written that were not.
+    pub const REMAP_DST_SEL_SRC_MAX: u32 = 3;
+    /// `SET_REMAP_COMPONENTS_DST_*_NO_WRITE` — value 6 (`clc7b5.h:189`).
+    pub const REMAP_DST_SEL_NO_WRITE: u32 = 6;
+
+    /// `SET_REMAP_COMPONENTS_COMPONENT_SIZE` — field `17:16` (`clc7b5.h:214`).
+    pub const REMAP_COMPONENT_SIZE_SHIFT: u32 = 16;
+    /// Mask of `COMPONENT_SIZE`, after shifting.
+    pub const REMAP_COMPONENT_SIZE_MASK: u32 = 0x3;
+    /// `SET_REMAP_COMPONENTS_NUM_DST_COMPONENTS` — field `25:24` (`clc7b5.h:224`).
+    pub const REMAP_NUM_DST_COMPONENTS_SHIFT: u32 = 24;
+    /// Mask of `NUM_DST_COMPONENTS`, after shifting.
+    pub const REMAP_NUM_DST_COMPONENTS_MASK: u32 = 0x3;
+
+    /// Bytes per component, from the raw `COMPONENT_SIZE` field.
+    ///
+    /// ⚠ **`_ONE` is encoded as `0`**, `_TWO` as `1`, `_THREE` as `2`, `_FOUR` as `3`
+    /// (`clc7b5.h:215-218`) — the field is *size minus one*, which is why every one of
+    /// RM's and UVM's `DRF_DEF(…, _ONE)` terms contributes a literal zero and a decoder
+    /// that read the field as the size would report a **zero-byte element**.
+    #[must_use]
+    pub const fn remap_component_bytes(components: u32) -> u32 {
+        ((components >> REMAP_COMPONENT_SIZE_SHIFT) & REMAP_COMPONENT_SIZE_MASK) + 1
+    }
+
+    /// How many destination components an element has, from the raw
+    /// `NUM_DST_COMPONENTS` field. Same *minus one* encoding as
+    /// [`remap_component_bytes`] (`clc7b5.h:225-228`).
+    #[must_use]
+    pub const fn remap_num_dst_components(components: u32) -> u32 {
+        ((components >> REMAP_NUM_DST_COMPONENTS_SHIFT) & REMAP_NUM_DST_COMPONENTS_MASK) + 1
+    }
+
+    /// The `DST_*` selector for destination component `c` (`0` = X … `3` = W).
+    #[must_use]
+    pub const fn remap_dst_sel(components: u32, c: u32) -> u32 {
+        (components >> (REMAP_DST_SEL_STRIDE * c)) & REMAP_DST_SEL_MASK
+    }
 }
 
 // =====================================================================================

@@ -645,11 +645,40 @@ pub enum CeWork {
     /// describe *that* a fill happened and never *what it wrote*, which is not a
     /// forwardable intent. It is also what makes the fill's split-invariance testable at
     /// all: a byte-uniform pattern hides every phase error.
+    ///
+    /// # ⚠⚠ `[src]` LIMIT — a `u32` cannot express the driver's whole fill vocabulary
+    ///
+    /// ⊘ A **reading of the driver**, said as one: no boot has sent an 8-byte fill through
+    /// this port. What the source establishes is that the shape exists and is emitted by
+    /// code compiled for this class; whether this port's guest ever reaches it is not
+    /// something a source read can answer.
+    ///
+    /// `[src]` `ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:379-419` — the period of
+    /// a real CE fill is set by `SET_REMAP_COMPONENTS`, and the driver emits **three**
+    /// periods on this class: 1 byte (`memset_1`), 4 bytes (`memset_4`) and **8 bytes**
+    /// (`memset_8`, `NUM_DST_COMPONENTS_TWO` across `CONST_A`+`CONST_B`). This field's
+    /// downstream phase is `pattern[addr % 4]`, so periods 1, 2 and 4 are expressible
+    /// exactly and **8 is not**.
+    ///
+    /// ⊘ `kayfabe_chips::Ga10xPushbuffer` therefore **refuses** an 8-byte-element fill by
+    /// name rather than truncating it to its low four bytes — which would write the wrong
+    /// half of every other element, silently. Widening this variant (to element bytes plus
+    /// an element width) is the fix; until then the refusal is what keeps the gap visible.
+    /// ★ Note the C artifact is *positively wrong* here rather than merely narrow: it
+    /// writes `remapA` per 32-bit word unconditionally and reads no component map at all,
+    /// so it disagrees with hardware on RM's own 1-byte scrub map for every pattern above
+    /// `0xFF`.
     Fill {
         /// The 32-bit pattern, repeated across the destination. Its phase is taken from
         /// the DESTINATION ADDRESS (component `n` of a 4-byte-aligned word), never from
         /// the start of a sub-copy — which is what makes splitting a fill at an
         /// unaligned offset produce the same bytes as filling the range whole.
+        ///
+        /// ⚠ A decoder is responsible for **normalising** its element into this
+        /// representation: a 1-byte-element fill of `v` arrives here as
+        /// `u32::from_le_bytes([v; 4])`, not as `v`. The absolute-address phase is only
+        /// equal to the engine's transfer-relative phase on an element-aligned
+        /// destination, which is a condition the decoder checks.
         pattern: u32,
     },
 }

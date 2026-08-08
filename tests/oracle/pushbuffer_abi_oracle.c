@@ -379,6 +379,98 @@ static void emit_ce_run(const char *name, NvU32 sub, int bind, NvU32 obj_class,
                       obj_class, src, dst, line_len, line_count, flags, 0);
 }
 
+/*
+ * ★★★ ONE WHOLE CE **MEMSET** RUN — the shape RM and UVM actually emit for a constant
+ * fill, which is NOT the copy shape with one flag flipped.
+ *
+ * The differences are structural and each one is a decoder trap:
+ *
+ * 1. **`SET_REMAP_CONST_A/_B` + `SET_REMAP_COMPONENTS` come first** (`ogkm-580:
+ *    src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:1029-1033` for RM's scrub map;
+ *    `kernel-open/nvidia-uvm/uvm_maxwell_ce.c:379-419` for UVM's three).
+ * 2. **`OFFSET_IN_UPPER/_LOWER` are NEVER pushed.** `channelPushMemoryProperties` writes
+ *    the source pair only on its `bCeMemcopy` arm (`channel_utils.c:1036-1067`), so a
+ *    fill's source registers are simply never latched. A decoder that requires them
+ *    refuses every memset the driver sends.
+ * 3. **`LINE_LENGTH_IN` counts ELEMENTS, not bytes.** `uvm_hal_maxwell_ce_memset_4` does
+ *    `size /= 4` before pushing it, and `memset_common` advances the destination by
+ *    `memset_this_time * memset_element_size` (`uvm_maxwell_ce.c:355-372, :391-403`).
+ *
+ * The `dec_*` line carries the component map read back through NVIDIA's OWN `DRF_VAL`, so
+ * the Rust side models the engine from the driver's extraction rather than from ours.
+ */
+static void emit_ce_fill_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_len,
+                             NvU32 const_a, NvU32 const_b, NvU32 components, NvU32 flags,
+                             int push_map, int push_consts)
+{
+    NvU32 w[32];
+    unsigned n = 0, i;
+    NvU32 out_up, out_lo;
+
+    w[n++] = hdr_inc(sub, NVC56F_SET_OBJECT, 1);
+    w[n++] = DRF_NUM(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B);
+
+    /* ⊘ The two constants and the map are pushed independently, because "the map arrived
+     * and the constant it selects did not" is a distinct refusal from "no map at all" and
+     * a corpus that could not express it would not reach the second one. */
+    if (push_consts) {
+        w[n++] = hdr_inc(sub, NVC7B5_SET_REMAP_CONST_A, 2);
+        w[n++] = DRF_NUM(C7B5, _SET_REMAP_CONST_A, _V, const_a);
+        w[n++] = DRF_NUM(C7B5, _SET_REMAP_CONST_B, _V, const_b);
+    }
+    if (push_map) {
+        w[n++] = hdr_inc(sub, NVC7B5_SET_REMAP_COMPONENTS, 1);
+        w[n++] = components;
+    }
+
+    /* Destination only — two words at 0x408, exactly `NV_PUSH_INC_2U(OFFSET_OUT_UPPER,
+     * …, OFFSET_OUT_LOWER, …)`. */
+    out_up = DRF_NUM(C7B5, _OFFSET_OUT_UPPER, _UPPER, (NvU32) (dst >> 32));
+    out_lo = (NvU32) dst;
+    w[n++] = hdr_inc(sub, NVC7B5_OFFSET_OUT_UPPER, 2);
+    w[n++] = out_up;
+    w[n++] = out_lo;
+
+    /* ⊘ ONE word, not two: the memset path pushes `LINE_LENGTH_IN` alone
+     * (`channel_utils.c:828`), so `LINE_COUNT` is never written either. */
+    w[n++] = hdr_inc(sub, NVC7B5_LINE_LENGTH_IN, 1);
+    w[n++] = DRF_NUM(C7B5, _LINE_LENGTH_IN, _VALUE, line_len);
+
+    w[n++] = hdr_inc(sub, NVC7B5_LAUNCH_DMA, 1);
+    w[n++] = flags;
+
+    printf("cerun %s %u", name, n);
+    for (i = 0; i < n; i++)
+        printf(" 0x%08x", (unsigned) w[i]);
+    printf("\n");
+    printf("cedec %s parts=%u class=0x%x src=0x0 dst=0x%llx len=0x%x count=0x0 "
+           "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u "
+           "map=%d consts=%d consta=0x%x constb=0x%x compsize=%u numdst=%u "
+           "dstx=%u dsty=%u dstz=%u dstw=%u\n",
+           name, CE_PART_ALL,
+           (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B),
+           (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_OUT_UPPER, _UPPER, out_up) << 32)
+                                 | (NvU64) DRF_VAL(C7B5, _OFFSET_OUT_LOWER, _VALUE, out_lo)),
+           (unsigned) DRF_VAL(C7B5, _LINE_LENGTH_IN, _VALUE,
+                              DRF_NUM(C7B5, _LINE_LENGTH_IN, _VALUE, line_len)),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SRC_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DST_TYPE, flags),
+           push_map, push_consts,
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_CONST_A, _V,
+                              DRF_NUM(C7B5, _SET_REMAP_CONST_A, _V, const_a)),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_CONST_B, _V,
+                              DRF_NUM(C7B5, _SET_REMAP_CONST_B, _V, const_b)),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_X, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_Y, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_Z, components),
+           (unsigned) DRF_VAL(C7B5, _SET_REMAP_COMPONENTS, _DST_W, components));
+}
+
 int main(void)
 {
     NvU32 userd_size = 0xDEADBEEFu, userd_shift = 0xDEADBEEFu;
@@ -852,6 +944,127 @@ int main(void)
             emit_ce_run_parts(name, 2, CE_PART_ALL, AMPERE_DMA_COPY_B,
                               0x00A5000011000ull, 0x00A5000022000ull, 0x1000, 1, base,
                               1u << i);
+        }
+
+        /*
+         * ==========================================================================
+         * ★★★ THE CONSTANT FILL — the shape `memmgrTestCeUtils`' `memmgrMemSet` sends,
+         * and every neighbour of it, built out of the driver's own component maps.
+         * ==========================================================================
+         */
+        {
+            NvU32 fill_base = (base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_REMAP_ENABLE))
+                            | DRF_DEF(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, _TRUE);
+            /* RM's own scrub/memset map, verbatim (`channel_utils.c:1031-1033`). */
+            NvU32 map_rm = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_A)
+                         | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _ONE)
+                         | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+            /* UVM's `memset_1` — same widths, CONST_B (`uvm_maxwell_ce.c:383-385`). */
+            NvU32 map_uvm1 = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_B)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _ONE)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+            /* UVM's `memset_4` — a FOUR-byte element (`uvm_maxwell_ce.c:398-400`). */
+            NvU32 map_uvm4 = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_B)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _FOUR)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+            /* A TWO-byte element: not emitted by either driver in reach, but the field
+             * enumerates it and it is the only period between 1 and 4. */
+            NvU32 map_two = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_A)
+                          | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _TWO)
+                          | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+            /* Two 2-byte components: a 4-byte element assembled from BOTH constants, so
+             * a decoder that read only CONST_A gets the top half wrong. */
+            NvU32 map_ab = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_A)
+                         | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_Y, _CONST_B)
+                         | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _TWO)
+                         | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _TWO);
+            /* UVM's `memset_8` — an EIGHT-byte period (`uvm_maxwell_ce.c:414-417`). */
+            NvU32 map_uvm8 = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_A)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_Y, _CONST_B)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _FOUR)
+                           | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _TWO);
+            /* A THREE-byte element — a period that divides neither 4 nor 8. */
+            NvU32 map_three = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _CONST_A)
+                            | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _THREE)
+                            | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+            /* A selector naming a SOURCE component: a swizzle, not a fill. */
+            NvU32 map_src = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _SRC_X)
+                          | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _FOUR)
+                          | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+            /* `NO_WRITE` — the engine skips the component and the old bytes survive. */
+            NvU32 map_nowrite = DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _DST_X, _NO_WRITE)
+                              | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _COMPONENT_SIZE, _FOUR)
+                              | DRF_DEF(C7B5, _SET_REMAP_COMPONENTS, _NUM_DST_COMPONENTS, _ONE);
+
+            /*
+             * ⊘ Every accepted pattern below is deliberately NON-BYTE-UNIFORM where its
+             * element can express one. `memmgrTestCeUtils` itself memsets with **zero**
+             * (`ogkm-580: mem_mgr.c:463`), and a corpus that only used its value would be
+             * satisfied by a decoder that dropped the pattern entirely.
+             */
+            emit_ce_fill_run("fill_rm_scrubmap", 2, 0x22000, 0x1000,
+                             0x0403UL | 0x02010000UL, 0xBBBBBBBBu, map_rm, fill_base, 1, 1);
+            emit_ce_fill_run("fill_uvm1", 2, 0x22000, 0x1000,
+                             0xAAAAAAAAu, 0x0403UL | 0x02010000UL, map_uvm1, fill_base, 1, 1);
+            emit_ce_fill_run("fill_uvm4", 2, 0x22000, 0x400,
+                             0xAAAAAAAAu, 0x0403UL | 0x02010000UL, map_uvm4, fill_base, 1, 1);
+            emit_ce_fill_run("fill_two", 2, 0x22000, 0x800,
+                             0x0403UL | 0x02010000UL, 0xBBBBBBBBu, map_two, fill_base, 1, 1);
+            emit_ce_fill_run("fill_consta_and_constb", 2, 0x22000, 0x400,
+                             0x0201u, 0x0403u, map_ab, fill_base, 1, 1);
+            /* ★ The actual boot case: RM's map, pattern ZERO, four BYTES — one element. */
+            emit_ce_fill_run("fill_memmgrtestceutils", 2, 0x22000, 4,
+                             0x0u, 0x0u, map_rm, fill_base, 1, 1);
+            /* ★ A PHYSICAL destination — `memmgrTestCeUtils` reaches this arm whenever
+             * `bUseVasForCeCopy` is false, and it is a different downstream decision. */
+            emit_ce_fill_run("fill_dstphys", 2, 0x22000, 0x1000,
+                             0x0403UL | 0x02010000UL, 0u, map_rm,
+                             (fill_base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_DST_TYPE))
+                                 | DRF_DEF(C7B5, _LAUNCH_DMA, _DST_TYPE, _PHYSICAL), 1, 1);
+            /* ★ A 4-byte element on a 4-ALIGNED destination is accepted; the unaligned
+             * twin below is not, and the two differ only in `OFFSET_OUT_LOWER`. */
+            emit_ce_fill_run("fill_uvm4_aligned", 2, 0x22004, 0x40,
+                             0u, 0x0403UL | 0x02010000UL, map_uvm4, fill_base, 1, 1);
+
+            /* ⊘ The refusals, each naming ONE thing the decoder cannot say. */
+            emit_ce_fill_run("refusefill_nomap", 2, 0x22000, 0x1000,
+                             0x11111111u, 0x22222222u, map_rm, fill_base, 0, 1);
+            emit_ce_fill_run("refusefill_noconst", 2, 0x22000, 0x1000,
+                             0x11111111u, 0x22222222u, map_rm, fill_base, 1, 0);
+            emit_ce_fill_run("refusefill_srccomponent", 2, 0x22000, 0x400,
+                             0x11111111u, 0x22222222u, map_src, fill_base, 1, 1);
+            emit_ce_fill_run("refusefill_nowrite", 2, 0x22000, 0x400,
+                             0x11111111u, 0x22222222u, map_nowrite, fill_base, 1, 1);
+            emit_ce_fill_run("refusefill_period8", 2, 0x22000, 0x200,
+                             0x11111111u, 0x22222222u, map_uvm8, fill_base, 1, 1);
+            emit_ce_fill_run("refusefill_period3", 2, 0x22000, 0x400,
+                             0x11111111u, 0x22222222u, map_three, fill_base, 1, 1);
+            emit_ce_fill_run("refusefill_unaligned4", 2, 0x22002, 0x40,
+                             0u, 0x0403UL | 0x02010000UL, map_uvm4, fill_base, 1, 1);
+            emit_ce_fill_run("refusefill_multiline", 2, 0x22000, 0x400,
+                             0x11111111u, 0x22222222u, map_rm,
+                             (fill_base & ~DRF_SHIFTMASK(NVC7B5_LAUNCH_DMA_MULTI_LINE_ENABLE))
+                                 | DRF_DEF(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, _TRUE),
+                             1, 1);
+
+            printf("remap COMPONENT_SIZE_ONE %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_COMPONENT_SIZE_ONE);
+            printf("remap COMPONENT_SIZE_FOUR %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_COMPONENT_SIZE_FOUR);
+            printf("remap NUM_DST_COMPONENTS_ONE %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_NUM_DST_COMPONENTS_ONE);
+            printf("remap NUM_DST_COMPONENTS_FOUR %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_NUM_DST_COMPONENTS_FOUR);
+            printf("remap DST_X_CONST_A %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_DST_X_CONST_A);
+            printf("remap DST_X_CONST_B %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_DST_X_CONST_B);
+            printf("remap DST_X_NO_WRITE %u\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS_DST_X_NO_WRITE);
+            printf("remap SET_REMAP_CONST_A 0x%x\n", (unsigned) NVC7B5_SET_REMAP_CONST_A);
+            printf("remap SET_REMAP_CONST_B 0x%x\n", (unsigned) NVC7B5_SET_REMAP_CONST_B);
+            printf("remap SET_REMAP_COMPONENTS 0x%x\n",
+                   (unsigned) NVC7B5_SET_REMAP_COMPONENTS);
         }
 
         printf("launch TRANSFER_MASK 0x%08x\n",

@@ -134,6 +134,9 @@ struct Oracle {
     methods: BTreeMap<String, u32>,
     /// `launch <NAME> 0x..`.
     launch: BTreeMap<String, u32>,
+    /// ★ `remap <NAME> 0x..` — the constant-fill method addresses and the component
+    /// map's enumerated values, straight out of `clc7b5.h`.
+    remap: BTreeMap<String, u32>,
     /// `class <NAME> 0x..`.
     classes: BTreeMap<String, u32>,
     /// `gpentry <name> k=v …`.
@@ -209,6 +212,11 @@ fn run(tag: &str, path: &str) -> Oracle {
                 let name = t.next().expect("launch name").to_string();
                 o.launch
                     .insert(name, num(t.next().expect("launch value")) as u32);
+            }
+            "remap" => {
+                let name = t.next().expect("remap name").to_string();
+                o.remap
+                    .insert(name, num(t.next().expect("remap value")) as u32);
             }
             "class" => {
                 let name = t.next().expect("class name").to_string();
@@ -1375,6 +1383,383 @@ fn a_hostile_ring_cannot_grow_the_accumulator() {
         assert_eq!(
             (src.0, dst.0, len),
             (num(&d["src"]), num(&d["dst"]), num(&d["len"]))
+        );
+    }
+}
+
+// ===========================================================================================
+// ★★★ THE CONSTANT FILL — `REMAP_ENABLE`, the component map, and the two things it decides
+//
+// ⚠⚠ WHY THIS SECTION EXISTS AT ALL. Before it, `kayfabe_arch::CeWork::Fill` was produced by
+// **no decoder in the tree**: `Ga10xPushbuffer::ce_launch` refused every remap-enabled launch
+// outright, and the only producer was `kayfabe_mocks::MockPushbuffer`'s invented encoding —
+// whose `Fill` arm had, at that revision, **zero callers**. Every test that mentioned `Fill`
+// constructed the value by hand and handed it to `ce_executor_c` or `partition_ce`, so the
+// whole path from a guest's bytes to `CeSource::Constant` was green over a case a real chip
+// could not express. That is `mock_fidelity_both_directions`, and it is what these tests
+// close: the words below are NVIDIA's own `DRF_NUM` encodings and the decode is the real
+// `Ga10xPushbuffer`.
+// ===========================================================================================
+
+/// One element of a constant fill, as **the engine** lays it out — modelled from NVIDIA's
+/// own `DRF_VAL` of the component map, never from `Ga10xPushbuffer`'s reading of it.
+///
+/// ⊘ This is the independent observer. It is deliberately a different shape of code from
+/// `remap_fill`: that one normalises into a `u32` for the downstream phase, this one just
+/// says *"what byte does the engine put at element offset `i`"*, which is the question the
+/// class header answers.
+fn engine_element(d: &BTreeMap<String, String>) -> Option<Vec<u8>> {
+    let comp_bytes = num(&d["compsize"]) + 1;
+    let num_dst = num(&d["numdst"]) + 1;
+    let const_a = num(&d["consta"]) as u32;
+    let const_b = num(&d["constb"]) as u32;
+    let sel = ["dstx", "dsty", "dstz", "dstw"];
+    let mut elem = Vec::new();
+    for c in 0..num_dst as usize {
+        let konst = match num(&d[sel[c]]) {
+            4 => const_a, // DST_*_CONST_A
+            5 => const_b, // DST_*_CONST_B
+            _ => return None,
+        };
+        elem.extend_from_slice(&konst.to_le_bytes()[..comp_bytes as usize]);
+    }
+    Some(elem)
+}
+
+/// The whole destination image a fill of `line_len` elements writes, as the engine writes
+/// it: element `i` at `dst + i·element`, no phase relative to any address.
+fn engine_fill_image(d: &BTreeMap<String, String>) -> Option<Vec<u8>> {
+    let elem = engine_element(d)?;
+    let n = num(&d["len"]) as usize;
+    Some((0..n * elem.len()).map(|i| elem[i % elem.len()]).collect())
+}
+
+/// The names of the accepted fill corpus.
+fn fill_names(o: &Oracle) -> Vec<&String> {
+    o.ceruns.keys().filter(|n| n.starts_with("fill_")).collect()
+}
+
+/// ★★★ **A CE `memset` run decodes to `CeWork::Fill`, with the driver's own pattern and
+/// the driver's own LENGTH** — and the length is the half nobody would think to check.
+///
+/// Two facts, both `[src]` from `ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c`:
+///
+/// 1. **`LINE_LENGTH_IN` counts ELEMENTS under `REMAP_ENABLE`.** `memset_4` divides its
+///    byte count by four before pushing it (`:396`) and `memset_common` advances the
+///    destination by `memset_this_time * memset_element_size` (`:371`). A decoder that read
+///    it as bytes under-reports a 4-byte fill's extent by 4× — and *silently*, in the
+///    direction that leaves guest memory unwritten rather than faulting.
+/// 2. **The pattern's PERIOD is the element**, not four bytes. RM's own memset map is
+///    `COMPONENT_SIZE_ONE` (`channel_utils.c:1031-1033`), so `memmgrMemSet(…, v, …)` writes
+///    `v & 0xFF` to every byte — the same end state its `TRANSFER_TYPE_PROCESSOR` arm
+///    reaches with `portMemSet(pDst, value, size)` (`mem_utils.c:1122`). ⊘ A decoder that
+///    assumed a 4-byte little-endian pattern agrees with hardware **only on byte-uniform
+///    values** — i.e. exactly where the boot case (`memmgrTestCeUtils` memsets with zero,
+///    `mem_mgr.c:463`) cannot tell the two apart.
+#[test]
+fn a_ce_memset_run_decodes_to_the_drivers_own_fill() {
+    let oracles = require_oracle!("a_ce_memset_run_decodes_to_the_drivers_own_fill");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let accepted = fill_names(&o);
+        // ⊘ `gates_quantified_over_a_list`: the corpus size is asserted, so a case that
+        // stopped being emitted shortens this test instead of silencing it.
+        assert_eq!(
+            accepted.len(),
+            8,
+            "[{tag}] the accepted-fill corpus is RM's scrub map, UVM's memset_1/_4, a \
+             2-byte element, a two-constant element, the boot case, a physical \
+             destination and an aligned 4-byte element: {accepted:?}"
+        );
+        let mut periods = std::collections::BTreeSet::new();
+        for name in accepted {
+            let words = &o.ceruns[name];
+            let d = &o.cedec[name];
+            let got = decode_fresh(words);
+            let launches: Vec<&PushMethod> = got
+                .iter()
+                .filter(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+                .collect();
+            assert_eq!(
+                launches.len(),
+                1,
+                "[{tag}] {name}: a memset run fires exactly one launch, got {got:?}"
+            );
+            let PushMethod::CeLaunchDma {
+                dst,
+                src,
+                len,
+                dst_is_virtual,
+                work,
+                ..
+            } = *launches[0]
+            else {
+                unreachable!("filtered")
+            };
+            let elem = engine_element(d).expect("an accepted case has a constant element");
+            periods.insert(elem.len());
+
+            let kayfabe_arch::CeWork::Fill { pattern } = work else {
+                panic!("[{tag}] {name}: a remap-enabled launch is a FILL, got {work:?}");
+            };
+            // ★ The pattern, compared against the ENGINE's element repeated to four bytes
+            // — which is what `CeWork::Fill`'s absolute-address phase means. Built from
+            // NVIDIA's `DRF_VAL` of the map, so a decoder and its test cannot share a
+            // wrong belief about the field extents.
+            let want: [u8; 4] = core::array::from_fn(|i| elem[i % elem.len()]);
+            assert_eq!(
+                pattern.to_le_bytes(),
+                want,
+                "[{tag}] {name}: the pattern is the engine's element, phased to 4 bytes"
+            );
+            // ★★ THE LENGTH, in bytes = elements × element size.
+            assert_eq!(
+                len,
+                num(&d["len"]) * elem.len() as u64,
+                "[{tag}] {name}: LINE_LENGTH_IN counts ELEMENTS under REMAP_ENABLE"
+            );
+            assert_eq!(dst.0, num(&d["dst"]), "[{tag}] {name}: OFFSET_OUT");
+            assert_eq!(
+                u64::from(!dst_is_virtual),
+                num(&d["dstphys"]),
+                "[{tag}] {name}: DST_TYPE"
+            );
+            // ⊘ A fill has NO SOURCE, and the run never pushed `OFFSET_IN_*` — so this is
+            // not "we ignored it", it is "there was nothing there". A decoder reporting a
+            // stale offset from a previous copy on the same subchannel fails here.
+            assert_eq!(
+                src.0, 0,
+                "[{tag}] {name}: a fill's source is absent, not defaulted from stale state"
+            );
+        }
+        // ⊘ Non-vacuity: a corpus that only ever exercised one element size would pass
+        // every assertion above with `element` hard-coded to that size.
+        assert!(
+            periods.len() >= 3,
+            "[{tag}] the corpus must span several element sizes, saw {periods:?}"
+        );
+    }
+}
+
+/// ★★★ **The fill's decoded bytes, driven all the way through the REAL executor.**
+///
+/// Decode with `Ga10xPushbuffer` → partition with `kayfabe_fwd::partition_ce` → run on
+/// `kayfabe_rt::cpu_ce::execute_ours_spans` → read the destination back out of the store.
+/// The comparison is against `engine_fill_image`, which is built from NVIDIA's `DRF_VAL` of
+/// the component map and knows nothing about our representation.
+///
+/// ⊘ This is the test whose ABSENCE was the finding. `CeSource::Constant` and the fill arm
+/// of `execute_ours` were reachable from no decoder at all, so "the fill writes the right
+/// bytes" had never been asserted over anything a real chip emits.
+#[test]
+fn the_decoded_fill_writes_the_bytes_the_engine_writes() {
+    use kayfabe_arch::{Aperture, PhysTarget};
+    use kayfabe_device::{FbStore, SparseFb};
+    use kayfabe_mmu::{AddressTable, Binding};
+
+    let oracles = require_oracle!("the_decoded_fill_writes_the_bytes_the_engine_writes");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        for name in fill_names(&o) {
+            let d = &o.cedec[name];
+            let want = engine_fill_image(d).expect("an accepted case has a constant element");
+            let got = decode_fresh(&o.ceruns[name]);
+            let Some(PushMethod::CeLaunchDma {
+                dst,
+                len,
+                dst_is_virtual,
+                dst_target,
+                work,
+                ..
+            }) = got
+                .iter()
+                .copied()
+                .find(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+            else {
+                panic!("[{tag}] {name}: no launch fired")
+            };
+            assert_eq!(
+                len as usize,
+                want.len(),
+                "[{tag}] {name}: the decoded extent is the engine's"
+            );
+
+            // A framebuffer destination in both operand forms: a VIRTUAL one needs a
+            // binding (the address table is the guest's TLB), a PHYSICAL one is answered
+            // by its `_TARGET`. Both end in `CpuPlane::Fb`, so one store serves both.
+            //
+            // ⚠⚠ **The virtual binding here is deliberately the IDENTITY, and that is a
+            // scoping decision this test states rather than hides.** `partition_ce` puts
+            // the operand's **VA** in `CeSubCopy::dst` and `cpu_ce::execute_ours` writes
+            // the destination plane *at that address*, while `cpu_ce::write_completion`
+            // resolves its semaphore through the table and writes at `binding.phys + off`.
+            // The two halves of one executor therefore disagree about what a virtual
+            // address means, and only the completion half translates. Binding `phys ==
+            // va` makes the two agree, which is what lets THIS test be about the fill's
+            // BYTES and nothing else — but it is not a fact about the executor, and a
+            // non-identity binding is where the data write lands in the wrong page. See
+            // `execution_plane_increments.md` §14.14.
+            let mut table = AddressTable::new();
+            let pdb = Pdb(0x1000);
+            if dst_is_virtual {
+                table
+                    .bind(
+                        pdb,
+                        dst,
+                        len,
+                        Binding {
+                            phys: dst.0,
+                            aperture: Aperture::Vidmem,
+                            host: None,
+                        },
+                    )
+                    .expect("bind the fill's destination");
+            }
+            let spans = kayfabe_fwd::partition_ce(
+                dst_is_virtual.then_some(&table),
+                dst,
+                dst_is_virtual,
+                dst_target,
+                GpuVa(0),
+                true,
+                PhysTarget::LocalFb,
+                len,
+                work,
+            )
+            .unwrap_or_else(|e| panic!("[{tag}] {name}: partition refused: {e:?}"));
+
+            let mut fb = SparseFb::new(1 << 28);
+            let mut vmm = kayfabe_mocks::MockVmm::new();
+            // ⊘ Seed with a byte that appears in NO expected image, so a fill that wrote
+            // nothing — or wrote short — is caught rather than reading as a pass.
+            let base = dst.0;
+            fb.write(base, &vec![0x5Au8; want.len()]).expect("seed");
+            let ran = kayfabe_rt::cpu_ce::execute_ours_spans(&mut fb, &mut vmm, &spans)
+                .unwrap_or_else(|e| panic!("[{tag}] {name}: the executor refused: {e:?}"));
+            assert!(ran > 0, "[{tag}] {name}: no sub-copy ran");
+
+            let mut image = vec![0u8; want.len()];
+            fb.read(base, &mut image)
+                .expect("read the destination back");
+            assert_eq!(
+                image, want,
+                "[{tag}] {name}: the bytes in the destination are the ones the engine \
+                 writes for this component map"
+            );
+        }
+    }
+}
+
+/// ⊘ **The fill refusals, each one field from a legal memset** — and each a distinct thing
+/// the decoder cannot say, never a blanket *"fills are unsupported"*.
+///
+/// ★ Two of them are the ones that matter most:
+/// - **`refusefill_period8`** is UVM's own `memset_8` (`uvm_maxwell_ce.c:407-419`), a real
+///   shape the driver emits. `CeWork::Fill` carries a `u32`, so its 8-byte period is not
+///   expressible; answering it with the low four bytes would write the wrong half of every
+///   other element, silently. The refusal is what keeps that gap visible until the variant
+///   is widened.
+/// - **`refusefill_unaligned4`** differs from `fill_uvm4_aligned` in `OFFSET_OUT_LOWER`
+///   alone. The engine phases an element from the START OF THE TRANSFER; `CeWork::Fill`'s
+///   downstream phases it from the ABSOLUTE ADDRESS. Those agree for every byte iff the
+///   destination is element-aligned, so an unaligned 4-byte fill is refused rather than
+///   answered with a rotated pattern.
+#[test]
+fn a_ce_memset_run_one_field_from_legal_refuses() {
+    let oracles = require_oracle!("a_ce_memset_run_one_field_from_legal_refuses");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let refusals: Vec<&String> = o
+            .ceruns
+            .keys()
+            .filter(|n| n.starts_with("refusefill_"))
+            .collect();
+        assert_eq!(
+            refusals.len(),
+            8,
+            "[{tag}] eight named fill refusals: no map, no constant, a SRC_* selector, \
+             NO_WRITE, an 8-byte period, a 3-byte period, an unaligned 4-byte element \
+             and MULTI_LINE: {refusals:?}"
+        );
+        for name in refusals {
+            let got = decode_fresh(&o.ceruns[name]);
+            assert!(
+                !got.iter()
+                    .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+                "[{tag}] {name}: MUST NOT fire — {got:?}"
+            );
+            assert!(
+                got.contains(&PushMethod::Opaque),
+                "[{tag}] {name}: refused BY NAME, not skipped: {got:?}"
+            );
+        }
+    }
+}
+
+/// The remap method addresses and every enumerated value this port's decode reads, against
+/// the class header's own — the anchor that makes the round-tripped tests elsewhere mean
+/// something.
+#[test]
+fn the_remap_field_extents_are_the_class_headers_own() {
+    let oracles = require_oracle!("the_remap_field_extents_are_the_class_headers_own");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let g = |k: &str| *o.remap.get(k).unwrap_or_else(|| panic!("[{tag}] no {k}"));
+        assert_eq!(
+            g("SET_REMAP_CONST_A"),
+            submit::ce::SET_REMAP_CONST_A,
+            "[{tag}]"
+        );
+        assert_eq!(
+            g("SET_REMAP_CONST_B"),
+            submit::ce::SET_REMAP_CONST_B,
+            "[{tag}]"
+        );
+        assert_eq!(
+            g("SET_REMAP_COMPONENTS"),
+            submit::ce::SET_REMAP_COMPONENTS,
+            "[{tag}]"
+        );
+        assert_eq!(
+            g("DST_X_CONST_A"),
+            submit::ce::REMAP_DST_SEL_CONST_A,
+            "[{tag}]"
+        );
+        assert_eq!(
+            g("DST_X_CONST_B"),
+            submit::ce::REMAP_DST_SEL_CONST_B,
+            "[{tag}]"
+        );
+        assert_eq!(
+            g("DST_X_NO_WRITE"),
+            submit::ce::REMAP_DST_SEL_NO_WRITE,
+            "[{tag}]"
+        );
+        // ⚠ THE MINUS-ONE ENCODING. `_ONE` is the literal 0 and `_FOUR` is 3, which is why
+        // every `DRF_DEF(…, _ONE)` in RM and UVM contributes nothing to the word and why a
+        // decoder reading the field as the size reports a ZERO-byte element.
+        assert_eq!(
+            g("COMPONENT_SIZE_ONE"),
+            0,
+            "[{tag}] _ONE is encoded as zero"
+        );
+        assert_eq!(g("COMPONENT_SIZE_FOUR"), 3, "[{tag}]");
+        assert_eq!(g("NUM_DST_COMPONENTS_ONE"), 0, "[{tag}]");
+        assert_eq!(g("NUM_DST_COMPONENTS_FOUR"), 3, "[{tag}]");
+        assert_eq!(
+            submit::ce::remap_component_bytes(g("COMPONENT_SIZE_ONE") << 16),
+            1,
+            "[{tag}]"
+        );
+        assert_eq!(
+            submit::ce::remap_component_bytes(g("COMPONENT_SIZE_FOUR") << 16),
+            4,
+            "[{tag}]"
+        );
+        assert_eq!(
+            submit::ce::remap_num_dst_components(g("NUM_DST_COMPONENTS_FOUR") << 24),
+            4,
+            "[{tag}]"
         );
     }
 }

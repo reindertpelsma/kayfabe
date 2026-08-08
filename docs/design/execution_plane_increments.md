@@ -3057,3 +3057,156 @@ and a CE *fill* is exactly a remap-enabled launch — so decoding this submissio
 `SET_REMAP_CONST_A` / `SET_REMAP_COMPONENTS` and a `CeWork::Fill`, which E10a–E10d did not build.
 That, plus driving `parse → execute_ours_spans → write_completion` off the doorbell with the
 **sysmem** plane, is what E10e item (c) still owes. ⊘ None of it is an addressing question any more.
+
+### 14.14 ★★★ E10e item (c), part 1 — the FILL DECODES, and four premises were refuted getting there (2026-08-08)
+
+§14.13 closed with *"decoding this submission needs `SET_REMAP_CONST_A` /
+`SET_REMAP_COMPONENTS` and a `CeWork::Fill`"*. That is built. What the building found is worth
+more than the decode, and all four are recorded before the increment.
+
+#### ⊘ REFUTED 1 — `CeWork::Fill` was produced by NO decoder, and its only "coverage" ran through the mock
+
+`[src]`, a whole-tree read at `4c3348f`. `kayfabe_arch::CeWork::Fill` had exactly three
+mentions outside its own definition:
+
+| site | what it does | is a real `Ga10x` decode in its path? |
+|---|---|---|
+| `tests/tests/pushbuffer_parser.rs:197` | hand-builds `FILL` and hands it to `ce_executor_c` | **no** — `ce_executor_c` is a pure predicate; no decoder is involved |
+| `tests/tests/ce_representability_split.rs:80` | hand-builds `FILL` and hands it to `partition_ce` / `cpu_ce` | **no** |
+| `crates/kayfabe-fwd/src/lib.rs:3315` | the consumer, `Fill { pattern } => CeSource::Constant(pattern)` | **unreachable** — nothing produced a `CeLaunchDma` with `work: Fill` |
+
+⇒ **The answer to "which Fill tests have a real `Ga10x` decode in their path" was: none, and it
+could not have been otherwise** — `Ga10xPushbuffer::ce_launch` refused every remap-enabled
+launch at `ga10x.rs:1113`. ★ And it is *worse* than mock-only coverage: `kayfabe_mocks`
+round-trips `CeWork::Fill` (`lib.rs:518`, `:598`) but **`MockPushbuffer::ce_launch_dma_full` has
+five callers and every one passes `Copy` or `Scrub`**. The mock's Fill arm had zero callers too.
+So the whole path from a guest's bytes to `CeSource::Constant` was not merely green over a case
+a real chip refuses — it was never exercised at all, in either direction. This is
+`mock_fidelity_both_directions` with the mock not even being the culprit: the *capability* was
+declared in three places and reachable from none.
+
+#### ⊘ REFUTED 2 — the pattern is NOT a 4-byte word, and `LINE_LENGTH_IN` is NOT bytes
+
+`[src]` `ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:330-420`, the driver's own three
+memset entry points on this class. `SET_REMAP_COMPONENTS` decides **two** things nothing else
+carries:
+
+1. **`LINE_LENGTH_IN` counts ELEMENTS.** `uvm_hal_maxwell_ce_memset_4` does `size /= 4`
+   *before* `memset_common` pushes `LINE_LENGTH_IN`, and `memset_common` advances the
+   destination by `memset_this_time * memset_element_size` (`:359`, `:371`, `:396`). An element
+   is `COMPONENT_SIZE × NUM_DST_COMPONENTS` bytes.
+2. **The pattern's PERIOD is the element.** `memset_1` puts an `NvU8` in `CONST_B` with
+   `COMPONENT_SIZE_ONE`; `memset_8` spreads a 64-bit value across `CONST_A`+`CONST_B` with
+   `NUM_DST_COMPONENTS_TWO`.
+
+⚠ **And RM's memset path — the one behind `mem_mgr.c:463` — is the 1-BYTE map**
+(`ogkm-580: channel_utils.c:1029-1033`: `DST_X = CONST_A | COMPONENT_SIZE_ONE |
+NUM_DST_COMPONENTS_ONE`). So `memmgrMemSet(…, value, …)` writes `value & 0xFF` to **every
+byte** — which is exactly what its own `TRANSFER_TYPE_PROCESSOR` arm produces with
+`portMemSet(pDst, value, size)` (`ogkm-580: mem_utils.c:1122`). Two arms of one operation must
+be observationally equal, and that is the corroboration this rests on.
+
+⇒ The brief's rule *"use a pattern whose four bytes differ, the phase comes from the
+destination address"* is **right for a 4-byte element and wrong for RM's**. The decoder's job
+is to **normalise**: a 1-byte-element fill of `v` becomes `u32::from_le_bytes([v; 4])`, which
+`cpu_ce`'s existing `pattern[a % 4]` phasing then reproduces byte for byte, unchanged.
+★ Note the C artifact is *positively wrong* here rather than narrow: it writes `remapA` per
+32-bit word unconditionally (`C: nvkvm_gpu_emul.c:6349`) and reads no component map at all, so
+it disagrees with hardware on RM's own scrub map for every pattern above `0xFF`.
+
+⚠ The two encodings that make this easy to get backwards: `COMPONENT_SIZE_ONE` and
+`NUM_DST_COMPONENTS_ONE` are both the **literal zero** (`clc7b5.h:215`, `:225`) — the fields are
+*size minus one* — so every `DRF_DEF(…, _ONE)` in RM and UVM contributes nothing to the word,
+and a decoder reading the field as the size reports a **zero-byte element**.
+
+#### ⊘ REFUTED 3 — a fill has no source operand, and requiring one refuses every memset
+
+`[src]` `ogkm-580: channel_utils.c:1036-1067`: `channelPushMemoryProperties` pushes
+`OFFSET_IN_UPPER/_LOWER` **only** on its `bCeMemcopy` arm. A memset's source registers are
+never latched, so `ce_launch`'s `state.latched(subch, 0)?` would have refused every fill the
+driver sends even after the remap gate opened. Reporting whatever a *previous* copy on that
+subchannel left in them would report a stale address as the fill's source; the decode now
+reports `src = 0` explicitly for the no-source work kinds.
+
+#### What landed
+
+`kayfabe_abi::submit::ce` gains the three method addresses and the map's field extents (with
+`remap_component_bytes` / `remap_num_dst_components` carrying the minus-one encoding), and
+`Ga10xPushbuffer` gains `remap_fill`. The two refusals that shared a line at `ga10x.rs:1113` are
+now separate, and the fill has **five** of its own, each a distinct thing the codec cannot say:
+no component map; a selected `CONST_*` never latched; a `DST_* = SRC_*` selector (a swizzle, not
+a fill); `NO_WRITE`; and an element size that does not divide 4.
+
+⊘ **The last one is UVM's `memset_8`, and it is refused rather than truncated.** `CeWork::Fill`
+carries a `u32`, so an 8-byte period is not expressible; answering with its low four bytes would
+write the wrong half of every other element, silently. Widening the variant is the fix, and the
+named refusal is what keeps the gap from reading as support.
+
+★ A **sixth** refusal is about the representation rather than the map: the engine phases an
+element from the **start of the transfer** while `CeWork::Fill`'s downstream phases it from the
+**absolute destination address**. Those agree for every byte iff `dst % element == 0`, so an
+unaligned element-sized fill is refused. `[src]` both drivers align their memsets, which is
+exactly why the condition must be checked rather than inherited from them.
+
+Coverage: `tests/oracle/pushbuffer_abi_oracle.c` grows `emit_ce_fill_run`, which emits the
+memset shape — remap registers first, **no** `OFFSET_IN_*`, `LINE_LENGTH_IN` alone, then
+`LAUNCH_DMA` — with the component map read back through NVIDIA's own `DRF_VAL`. Eight accepted
+cases (RM's scrub map, UVM's `memset_1`/`memset_4`, a 2-byte element, a two-constant element,
+`memmgrTestCeUtils`' own zero-pattern 4-byte case, a physical destination, an aligned 4-byte
+element) and eight refusals. `the_decoded_fill_writes_the_bytes_the_engine_writes` drives
+`Ga10xPushbuffer` → `partition_ce` → `cpu_ce::execute_ours_spans` → a read-back of the store,
+against a destination image modelled from NVIDIA's extraction of the map.
+
+#### ⊘⊘ REFUTED 4 — and this one BLOCKS item (c): the two halves of the executor disagree about what a VA is
+
+`[measured 2026-08-08, local test run of `the_decoded_fill_writes_the_bytes_the_engine_writes`
+at this revision]`. Binding the fill's destination VA `0x22000` to `phys = 0x0400_0000` and
+running the decoded work through `partition_ce` → `cpu_ce::execute_ours_spans`, the bytes landed
+at **`0x22000` in the framebuffer store** — the *virtual* address — and `0x0400_0000` was
+untouched. Reading back at the VA passes; reading back at the bound physical fails.
+
+The mechanism, `[src]` and short:
+- `kayfabe_fwd::operand_runs` returns `AddressTable::spans`' run start, which is a **VA**, and
+  `partition_ce` puts it in `CeSubCopy::dst` unchanged. `Binding::phys` is consulted only for
+  the *representability* answer.
+- `cpu_ce::execute_ours` then does `write_plane(…, dst.wrapping_add(off), …)` — it writes the
+  destination plane **at the VA**.
+- `cpu_ce::write_completion`, in the same module, does `table.resolve(pdb, addr)` and writes at
+  `binding.phys + off` — it **does** translate.
+
+⇒ **The completion half translates and the data half does not.** No test in the tree could see
+it: `cpu_ce_executor.rs` uses an `AddressTable` only for `write_completion` and every one of its
+`execute_ours` cases is a *physical* operand (where the address genuinely is the plane address);
+`ce_representability_split.rs` binds `phys ≠ va` but asserts only **split-vs-whole equality**, a
+property both a translating and a non-translating executor satisfy identically.
+
+⊘ This is `#12`'s where-mistake — *"landing the data where the guest cannot see it"* — in the
+half the C paid weeks for, and it is a **blocker for item (c)**: `memmgrTestCeUtils`' memset has
+a **virtual** destination (`bUseVasForCeCopy = 1` with `dstAddressSpace == ADDR_FBMEM` ⇒
+`dstAddr + fbAliasVA - startFbOffset`, `ogkm-580: channel_utils.c:1090-1095`), so wiring the
+doorbell executor today would fill the wrong framebuffer page and then release a truthful-looking
+semaphore over it. The one absolute rule survives — the bytes *are* written — but rule 2 of
+`ce_executor_tree.md`'s two prohibitions does not.
+
+The fix is not a special case: `CeSpan` must carry the operand's **plane address** beside the
+plane it already carries (`dst_plane` / `src_plane`), present exactly when the plane is, computed
+in `operand_runs` where the binding and the run's offset into it are both in hand. `CeSubCopy::dst`
+must stay the VA, because the `HostCe` arm submits it to a host VAS. ⊘ Two different addresses in
+one field is the defect; one field each is the fix.
+
+#### What item (c) still owes, after this
+
+1. **The `CeSpan` plane-address fix above.** ⊘ Ordered first: it is the difference between
+   forwarding and forgery on this channel's own destination.
+2. Driving `parse_pushbuffer → execute_ours_spans → write_completion` off the doorbell. ⚠ Note
+   the resolution route is `ceresolve`'s published-root walk, while `partition_ce` and
+   `write_completion` both take an `AddressTable` — so the join needs the walk's answers to
+   reach the table (a TLB fill at the demand, which is what the table *is*) or an operand
+   resolver seam. That is a design decision, not a wiring detail, and §7 rule 6's *"never cache
+   the walk"* has to be argued against `mode2_address_table.md`'s blessed staleness rather than
+   assumed compatible.
+3. ★ And `mem_mgr.c:463` is not the last stop: the very next line is
+   `memmgrMemCopy(sys ← vid, 4 bytes, PREFER_CE)` followed by
+   `NV_ASSERT_TRUE(sysmemData == vidmemData)` (`ogkm-580: mem_mgr.c:467-470`) — a real
+   **virtual-source, physical-destination** CE copy whose bytes are read back and compared. The
+   acceptance for `memmgrTestCeUtils` is that compare, not the memset.
