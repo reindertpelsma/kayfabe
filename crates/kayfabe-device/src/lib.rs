@@ -835,6 +835,30 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
     Ok(image)
 }
 
+/// ★★★ **The observation latches a served chain writes into**, as one value.
+///
+/// ⊘ A struct rather than four more parameters, and the reason is not tidiness: every one
+/// of these is a log that the **plane also holds**, so the composition root must hand the
+/// *same* handle to both. Four positional `Log::new()`s at a call site is exactly the shape
+/// that silently acquires a fifth built fresh in the wrong place — the aperture would go on
+/// being published, nothing would receive it, and every later access would refuse with a
+/// diagnosis pointing at the guest ([`plane::RegPlane::bar_pde_log`] argues the same case
+/// for the same reason). Named fields make that a compile error at the construction site.
+///
+/// ★ It is `Clone` because every field is a shared handle (`Arc` inside): cloning it hands
+/// out the same latches, never copies of them.
+#[derive(Debug, Clone, Default)]
+pub struct ChainLogs {
+    /// The commands **nothing answered** ([`unserviced`]).
+    pub unserviced: unserviced::UnservicedLog,
+    /// The replayable-fault-buffer registrations this port declines ([`faultbuffer`]).
+    pub fault_buffer: faultbuffer::FaultBufferLog,
+    /// The bus apertures' published root page-directory entries ([`bar2`]).
+    pub bar_pdes: bar2::BarPdeLog,
+    /// The VA spaces' published page-directory levels ([`gvaspub`]).
+    pub gvas_pub: gvaspub::GvasPubLog,
+}
+
 /// ★★ **The one command-policy chain this device answers with** — built here rather than
 /// inside [`plane::RegPlane::new`] so that the *differential* drives the same chain a
 /// guest does.
@@ -879,30 +903,6 @@ pub fn rom_for(chip: &ChipProfile) -> Result<Vec<u8>, ChipError> {
 /// also absent — so "id absent" discriminated nothing. The census records the two positive
 /// states so absence finally means *never seen*. See [`census`]'s module docs; it returns
 /// the inner reply unchanged, byte for byte, and `tests/control_census.rs` pins that.
-/// ★★★ **The observation latches a served chain writes into**, as one value.
-///
-/// ⊘ A struct rather than four more parameters, and the reason is not tidiness: every one
-/// of these is a log that the **plane also holds**, so the composition root must hand the
-/// *same* handle to both. Four positional `Log::new()`s at a call site is exactly the shape
-/// that silently acquires a fifth built fresh in the wrong place — the aperture would go on
-/// being published, nothing would receive it, and every later access would refuse with a
-/// diagnosis pointing at the guest ([`plane::RegPlane::bar_pde_log`] argues the same case
-/// for the same reason). Named fields make that a compile error at the construction site.
-///
-/// ★ It is `Clone` because every field is a shared handle (`Arc` inside): cloning it hands
-/// out the same latches, never copies of them.
-#[derive(Debug, Clone, Default)]
-pub struct ChainLogs {
-    /// The commands **nothing answered** ([`unserviced`]).
-    pub unserviced: unserviced::UnservicedLog,
-    /// The replayable-fault-buffer registrations this port declines ([`faultbuffer`]).
-    pub fault_buffer: faultbuffer::FaultBufferLog,
-    /// The bus apertures' published root page-directory entries ([`bar2`]).
-    pub bar_pdes: bar2::BarPdeLog,
-    /// The VA spaces' published page-directory levels ([`gvaspub`]).
-    pub gvas_pub: gvaspub::GvasPubLog,
-}
-
 #[must_use]
 pub fn served_policy(
     chip: &'static ChipProfile,

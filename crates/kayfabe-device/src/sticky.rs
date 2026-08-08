@@ -449,7 +449,7 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 13] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 14] = [
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",
@@ -486,6 +486,21 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 13] = [
     PolicyDisposition {
         name: "FaultBufferRecorder",
         path: "crates/kayfabe-device/src/faultbuffer.rs",
+        disposition: StickyDisposition::NeverAnswers,
+    },
+    // ★★★ The VA-space page-directory recorder (`crate::gvaspub`), and its row is the
+    // stronger claim of the two available. It sits **first** in `served_chain` — ahead of
+    // every answering link, which is the only seat from which it can see a control
+    // `InitTablePolicy` terminates the chain for — so `Guarded` would be true and would
+    // say nothing about the seat. `NeverAnswers` is a claim about the TYPE: `respond`
+    // returns `None` on every path without exception, so there is no reply of its own for
+    // a cache to keep and none for `find_map` to short-circuit on, however it is composed.
+    // ⊘ That is also the property that makes seating an observer ahead of the answerer
+    // legal at all, and `the_never_answers_rows_answer_nothing` executes it here rather
+    // than leaving it to `gvas_publication.rs` alone.
+    PolicyDisposition {
+        name: "GvasPubRecorder",
+        path: "crates/kayfabe-device/src/gvaspub.rs",
         disposition: StickyDisposition::NeverAnswers,
     },
     PolicyDisposition {

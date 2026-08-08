@@ -44,9 +44,7 @@ fn chain_with_census() -> (Box<dyn CommandPolicy>, ControlCensusLog) {
     let chain = kayfabe_device::served_policy(
         kayfabe_device::chip_for_device_id(0x2504).expect("GA106 is in the table"),
         driver(),
-        kayfabe_device::unserviced::UnservicedLog::new(),
-        kayfabe_device::faultbuffer::FaultBufferLog::new(),
-        kayfabe_device::bar2::BarPdeLog::new(),
+        kayfabe_device::ChainLogs::default(),
         census.clone(),
         None,
     );
@@ -225,9 +223,7 @@ fn the_census_changes_no_byte_of_any_reply() {
             kayfabe_device::served_chain(
                 kayfabe_device::chip_for_device_id(0x2504).expect("GA106 is in the table"),
                 driver(),
-                kayfabe_device::unserviced::UnservicedLog::new(),
-                kayfabe_device::faultbuffer::FaultBufferLog::new(),
-                kayfabe_device::bar2::BarPdeLog::new(),
+                kayfabe_device::ChainLogs::default(),
                 kayfabe_abi::eventnotify::ProbeArmSet::default(),
                 None,
             ),

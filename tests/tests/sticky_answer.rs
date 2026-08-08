@@ -243,8 +243,11 @@ fn every_disposition_row_points_at_the_file_that_implements_it() {
 /// `NeverAnswers` means exactly that, against the sharpest input available: a **bit-15
 /// fn-76 control**, which is the only shape either cache branch can act on.
 ///
-/// ★ `FaultBufferRecorder` is given the control it actually decodes, with the GSS-legacy
-/// bit set — so "it declined" is not "it did not recognise the command".
+/// ★ `FaultBufferRecorder` and `GvasPubRecorder` are each given the control they actually
+/// decode, with the GSS-legacy bit set — so "it declined" is not "it did not recognise the
+/// command". For `GvasPubRecorder` that is load-bearing beyond the cache question: it is
+/// seated FIRST in `served_chain`, ahead of every answering link, so a `Some` of its own
+/// would short-circuit `find_map` and REPLACE `InitTablePolicy`'s reply.
 #[test]
 fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
     let rows: Vec<&str> = POLICY_DISPOSITIONS
@@ -254,7 +257,7 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
         .collect();
     assert_eq!(
         rows,
-        vec!["FaultBufferRecorder", "UnservicedLedger"],
+        vec!["FaultBufferRecorder", "GvasPubRecorder", "UnservicedLedger"],
         "a NeverAnswers row was added or removed without extending this test",
     );
 
@@ -264,9 +267,18 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
     let unserviced_log = kayfabe_device::unserviced::UnservicedLog::new();
     let mut ledger =
         kayfabe_device::unserviced::UnservicedLedger::new(abi(), unserviced_log.clone());
+    let gvas_log = kayfabe_device::gvaspub::GvasPubLog::new();
+    let mut gvas = kayfabe_device::gvaspub::GvasPubRecorder::new(abi(), gvas_log.clone());
 
     let gss = a_served_control() | 0x0000_8000;
     let its_own = kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER;
+    // ⊘ `control()` zero-fills the params, and 184 zeros are NOT a legal publication
+    // (`pageSize = 0` is refused by name). That is fine and is asserted as what it is
+    // below: the recorder recognised the id, tried to decode, and counted an UNDECODABLE
+    // — which is the non-vacuity this test needs (it saw the traffic) without pretending
+    // a zeroed body is a driver's.
+    let pub_cmd = kayfabe_abi::gvaspacepdes::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES;
+    let pub_size = kayfabe_abi::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE;
     for cmd in [gss, its_own, its_own | 0x0000_8000] {
         let c = control(cmd, 32, RMCTRL_FLAGS_CACHEABLE, 0);
         assert!(
@@ -277,13 +289,43 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
             ledger.respond(&c).is_none(),
             "UnservicedLedger answered {cmd:#010x}",
         );
+        assert!(
+            gvas.respond(&c).is_none(),
+            "GvasPubRecorder answered {cmd:#010x}",
+        );
+    }
+    for cmd in [pub_cmd, pub_cmd | 0x0000_8000] {
+        let c = control(cmd, pub_size, RMCTRL_FLAGS_CACHEABLE, 0);
+        assert!(
+            gvas.respond(&c).is_none(),
+            "GvasPubRecorder answered its OWN control {cmd:#010x} — seated first in the \
+             chain, that reply would replace InitTablePolicy's",
+        );
+        assert!(
+            ledger.respond(&c).is_none(),
+            "UnservicedLedger answered {cmd:#010x}",
+        );
     }
     // ★ Non-vacuity, and it is the whole reason this is not `assert!(true)`: both policies
     // SAW the traffic. A recorder that declined because it never ran would pass above.
     assert_eq!(
         unserviced_log.total(),
-        3,
+        5,
         "the ledger never saw the traffic"
+    );
+    // ⊘ ONE, for the reason stated below the fault recorder's own count: `pub_cmd | 0x8000`
+    // is a DIFFERENT command word and names no publication. A zero here would mean the
+    // decline above was ignorance rather than a decision.
+    let gvas_snap = gvas_log.snapshot();
+    assert_eq!(
+        gvas_snap.undecodable, 1,
+        "the publication recorder never SAW its own control, so its declines prove nothing"
+    );
+    // ⊘ ONE, for the reason stated below the fault recorder's own count: `pub_cmd | 0x8000`
+    // is a DIFFERENT command word and names no publication.
+    assert_eq!(
+        gvas_snap.total, 0,
+        "a zeroed body is not a legal publication"
     );
     // ⊘ ONE, not two. `its_own | 0x8000` is a *different command word*, so the recorder
     // does not recognise it — which is the correct behaviour and worth pinning: setting bit
