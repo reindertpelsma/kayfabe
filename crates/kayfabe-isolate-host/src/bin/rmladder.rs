@@ -793,6 +793,193 @@ fn gpu_info_sweep(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle
     }
 }
 
+/// ★★★ R22 — **every `BUS_GET_INFO_V2` index, asked of a real GA106, ONE AT A TIME — and
+/// `PCIE_GEN_INFO` asked REPEATEDLY, because the question is whether it holds still.**
+///
+/// `execution_plane_increments.md` §14.29 ends at a second `0x20801823` answered `0x56` by
+/// this port, whose six indices are `0x0f 0x10 0x2c 0x2d 0x03 0x06`. Of those, **exactly
+/// one is RPC-forwarded on a GSP client** — `0x2d` `PCIE_GEN_INFO`, the first case label of
+/// `getBusInfos`'s `bSendRpc = IS_VIRTUAL(pGpu) || IS_GSP_CLIENT(pGpu)` group
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus_ctrl.c:296-334`). The other five are
+/// computed by the guest's own kernel and are **not this port's to write**, exactly as ten
+/// of `GPU_GET_INFO_V2`'s eleven were not.
+///
+/// ## Why one call per index, again
+///
+/// `getBusInfos` forwards each entry through `kbusSendBusInfo` under
+/// `NV_CHECK_OK_OR_RETURN` (`:333`), so a multi-entry request measures *"the first entry
+/// that fails"* and nothing after it. One index per call makes each answer attributable.
+///
+/// ⚠ And note what `kbusSendBusInfo_IMPL` actually puts on the wire
+/// (`ogkm-580: kern_bus.c:1065-1101`): a **fresh `NV2080_CTRL_BUS_GET_INFO_V2_PARAMS` with
+/// `busInfoListSize = 1`** and the single entry copied into slot 0. So the *ioctl* the
+/// guest issues is six entries and the *RPC* this port must answer is **one** — a second
+/// place where the boundary the trace was read at is not the boundary the port serves.
+///
+/// ## ★ The question this rung exists to settle, with both predictions written down first
+///
+/// `[unmeasured before this run]` whether `0x2d` may be a chip-family row at all.
+///
+/// | hypothesis | prediction |
+/// |---|---|
+/// | **H1 — die constant.** `PCIE_GEN_INFO` describes the GPU. | every field is a property of GA106; the value is the same on every GA106 and never moves on one box. |
+/// | **H2 — link state.** It describes the *link*, like `0x23`/`0x24` describe the *die*. | at least one field tracks the **current** negotiated speed, so the SAME part answers differently as the link trains up and down, and a value baked into a chip row is wrong on a different slot/riser/bifurcation. |
+///
+/// H2 predicts drift **on one box with no second part to rent**, which is why this rung
+/// samples `0x2d` repeatedly and decodes it rather than printing one number. `nvidia-smi`
+/// on the bench says `gen.gpumax=4 gen.max=3 gen.current=1` — three different generations
+/// in one machine — so if any of the three is in the word, H1 is dead.
+fn bus_info_sweep(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle) {
+    // `ogkm-580: ctrl2080bus.h:341` — NV2080_CTRL_BUS_INFO_MAX_LIST_SIZE.
+    const MAX_LIST: u32 = 0x34;
+    // `4 + 8 * 0x34`, and confirmed on the wire as `size=420` in the real-GA106 cuInit
+    // trace (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:44,46`).
+    const PARAMS: usize = 4 + 8 * (MAX_LIST as usize);
+    const CMD: u32 = 0x2080_1823;
+    // `ogkm-580: ctrl2080bus.h:329`.
+    const PCIE_GEN_INFO: u32 = 0x2d;
+
+    /// Build a `NV2080_CTRL_BUS_GET_INFO_V2_PARAMS` from `(index, data)` pairs written
+    /// verbatim — the `data` words included, so a request off the trace can be replayed
+    /// with libcuda's own stale buffer contents rather than a tidied-up version of it.
+    fn request(entries: &[(u32, u32)], seed: u8) -> Vec<u8> {
+        let mut p = vec![seed; PARAMS];
+        p[0..4].copy_from_slice(&(entries.len() as u32).to_le_bytes());
+        for (i, &(idx, data)) in entries.iter().enumerate() {
+            let at = 4 + 8 * i;
+            p[at..at + 4].copy_from_slice(&idx.to_le_bytes());
+            p[at + 4..at + 8].copy_from_slice(&data.to_le_bytes());
+        }
+        p
+    }
+
+    fn pairs(p: &[u8]) -> Vec<(u32, u32)> {
+        let n = u32::from_le_bytes([p[0], p[1], p[2], p[3]]) as usize;
+        (0..n.min(MAX_LIST as usize))
+            .map(|i| {
+                let at = 4 + 8 * i;
+                (
+                    u32::from_le_bytes([p[at], p[at + 1], p[at + 2], p[at + 3]]),
+                    u32::from_le_bytes([p[at + 4], p[at + 5], p[at + 6], p[at + 7]]),
+                )
+            })
+            .collect()
+    }
+
+    /// Decode the `NV2080_CTRL_BUS_INFO_PCIE_LINK_CAP_*` fields
+    /// (`ogkm-580: ctrl2080bus.h:355-390`). ⚠ The decode is a **reading aid printed beside
+    /// the raw word**, never a substitute for it: the raw `u32` is what a port would have
+    /// to serve, and a field layout the header states for `LINK_CAPS` is only *documented*
+    /// to apply to `GEN_INFO` by a comment (`:154-175`).
+    fn decode(v: u32) -> String {
+        // `GEN_GEN1 == 0`, so the printed generation is the field value plus one. ⚠ `gen`
+        // is a reserved keyword in edition 2024 and cannot be the name here.
+        let generation = |n: u32| n + 1;
+        format!(
+            "MAX_SPEED={} MAX_WIDTH={} ASPM={} GEN=gen{} CURR_LEVEL=gen{} GPU_GEN=gen{} \
+             SPEED_CHANGES={} hi31_25={:#x}",
+            v & 0xf,
+            (v >> 4) & 0x3f,
+            (v >> 10) & 0x3,
+            generation((v >> 12) & 0xf),
+            generation((v >> 16) & 0xf),
+            generation((v >> 20) & 0xf),
+            (v >> 24) & 0x1,
+            v >> 25,
+        )
+    }
+
+    println!(
+        "info  R22 businfo sweep   = {MAX_LIST} indices x 1 call each, {PARAMS}-byte params, \
+         tail seeded 0xCD"
+    );
+    println!("info  R22 legend          = idx status data   (the port serves 0x2d ONLY)");
+
+    for index in 0..MAX_LIST {
+        let mut params = request(&[(index, 0)], 0xCD);
+        let result = rm.control(subdevice, ControlCmd(CMD), &mut params);
+        let echoed = u32::from_le_bytes([params[4], params[5], params[6], params[7]]);
+        let data = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+        let tail_written = params[12..].iter().any(|&b| b != 0xCD);
+        match result {
+            Ok(()) => println!(
+                "★     R22 {index:#04x}  NV_OK      data={data:#010x} ({data})  echo={echoed:#010x}\
+                 {}",
+                if tail_written {
+                    "  tail=WRITTEN"
+                } else {
+                    "  tail=untouched"
+                }
+            ),
+            Err(e) => println!("info  R22 {index:#04x}  refused    {e:?}"),
+        }
+    }
+
+    // ★★★ The two requests libcuda actually issues, replayed BYTE FOR BYTE off
+    // `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:44` and `:46` — stale `data`
+    // words included, because libcuda reuses the buffer and the second call's request
+    // carries the first call's answers. A replay that zeroed them would be a different
+    // request, and this port's whole failure mode is a request-dependent reply.
+    for (line, entries) in [
+        (44usize, &[(0x00, 0), (0x02, 0), (0x0b, 0)][..]),
+        (
+            46,
+            &[
+                (0x0f, 3),
+                (0x10, 0),
+                (0x2c, 5),
+                (0x2d, 0),
+                (0x03, 0),
+                (0x06, 0),
+            ][..],
+        ),
+    ] {
+        let mut params = request(entries, 0x00);
+        match rm.control(subdevice, ControlCmd(CMD), &mut params) {
+            Ok(()) => {
+                let out: String = pairs(&params)
+                    .iter()
+                    .map(|(i, d)| format!("{i:#04x}={d:#010x} "))
+                    .collect();
+                println!("★     R22 libcuda:{line:<3}    = NV_OK  {out}");
+            }
+            Err(e) => println!(
+                "FAIL  R22 libcuda:{line:<3}    = refused {e:?} — the committed trace says NV_OK"
+            ),
+        }
+    }
+
+    // ★★★ H1 vs H2. Sixteen reads of the ONE forwarded index, spaced, each decoded. H1
+    // predicts sixteen identical words; H2 predicts the `CURR_LEVEL` field moving with the
+    // link, which on an idle GA106 sits at gen1 and climbs the moment anything touches it.
+    // ⊘ Sixteen identical words do NOT prove H1 — an idle link is a constant link — so the
+    // decode is printed with them: a word that CONTAINS a current-speed field is
+    // link-describing whether or not it happened to move during this run.
+    println!("info  R22 0x2d x16        = is PCIE_GEN_INFO a constant? (H1) or link state? (H2)");
+    let mut seen: Vec<u32> = Vec::new();
+    for round in 0..16 {
+        let mut params = request(&[(PCIE_GEN_INFO, 0)], 0xCD);
+        match rm.control(subdevice, ControlCmd(CMD), &mut params) {
+            Ok(()) => {
+                let v = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
+                if !seen.contains(&v) {
+                    seen.push(v);
+                }
+                println!("★     R22 0x2d #{round:<2}      = {v:#010x}  {}", decode(v));
+            }
+            Err(e) => println!("info  R22 0x2d #{round:<2}      = refused {e:?}"),
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    println!(
+        "info  R22 0x2d distinct   = {} value(s): {}",
+        seen.len(),
+        seen.iter()
+            .map(|v| format!("{v:#010x} "))
+            .collect::<String>()
+    );
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -1083,6 +1270,7 @@ fn main() -> std::process::ExitCode {
     let mut want_probe: Option<Vec<(u32, usize)>> = None;
     let mut want_binapi: Option<Vec<(u32, usize)>> = None;
     let mut want_gpu_info = false;
+    let mut want_bus_info = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -1104,6 +1292,7 @@ fn main() -> std::process::ExitCode {
             "--engines" => want_engines = true,
             "--doorbell-census" => want_census = true,
             "--gpu-info-sweep" => want_gpu_info = true,
+            "--bus-info-sweep" => want_bus_info = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1191,6 +1380,18 @@ fn main() -> std::process::ExitCode {
         );
         gpu_info_sweep(&mut rm, subdevice);
         println!("done — gpu-info sweep only");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R22 runs here and RETURNS, for R21's reason: it issues fifty-four controls on the
+    // subdevice and allocates nothing, so every refusal is the index's.
+    if want_bus_info {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        bus_info_sweep(&mut rm, subdevice);
+        println!("done — bus-info sweep only");
         return std::process::ExitCode::SUCCESS;
     }
 
