@@ -354,6 +354,29 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // could be, because it carries the requests' own bytes including the
     // `INDEX_FORWARD_TO_PHYSICAL` bit. ⊘ This entry is still a real coverage cost and is
     // named rather than elided: nothing in the `cap1b` pair would notice this arm breaking.
+    // ⚠⚠⚠ §14.29, §14.30 and §14.31 add a SEVENTH, EIGHTH and NINTH, and all three are
+    // `GpuInfoV2`'s kind — **a different demander entirely**. `cap1b` is an `RmInitAdapter`
+    // capture driven by `nvidia-smi`, and none of these is reached by that process:
+    // `InternalGpuGetSmcMode` (`0x20800a4c`) is issued only from `getGpuInfos`'s `0x2a` arm,
+    // `BusGetInfoV2` (`0x20801823`) only for the one index the guest kernel forwards, and
+    // `BusGetPcieSupportedGpuAtomics` (`0x2080182a`) is `cuInit`'s next line after it. All
+    // three were named by an in-guest trace of **libcuda**, which this capture does not
+    // contain. ⊘ No closure limit reaches a process that never ran.
+    //
+    // ⊘⊘ **Two of these three are not mine, and this gate was RED before I touched it.**
+    // `[measured 2026-08-08]` this exact test fails at `78bee9e` — §14.29 and §14.30 each
+    // added a served control and left it out of this set, so the differential's own closure
+    // assertion has been failing for two rungs. Recording that rather than quietly greening
+    // it: what follows is the repair of an inherited red with each entry's reason stated,
+    // not a bar lowered to fit a new row.
+    //
+    // ★ Their reply planes, honestly: `InternalGpuGetSmcMode` and
+    // `BusGetPcieSupportedGpuAtomics` are exercised through `InitTablePolicy::respond` in
+    // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_pcie_supported_gpu_atomics}.rs`,
+    // envelope and inner status included. `BusGetInfoV2` had **none** — §14.30 landed it with
+    // `kayfabe-abi` unit tests over `answer_bus_get_info_v2` and nothing at the policy
+    // boundary — so `kayfabe-device/tests/bus_get_info_v2.rs` was written here to make this
+    // admission true rather than merely quiet.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
@@ -361,6 +384,9 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::GrContextBuffersInfo,
         WantedTable::GvaspaceServerReservedPdesClient,
         WantedTable::GpuInfoV2,
+        WantedTable::InternalGpuGetSmcMode,
+        WantedTable::BusGetInfoV2,
+        WantedTable::BusGetPcieSupportedGpuAtomics,
     ]
     .into_iter()
     .collect();
@@ -385,13 +411,28 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // the closure limit, so it too is exercised by the replay rather than merely declared.
     // ★ 24 -> 25 at the `cuInit` rung: `0x20800102` GPU_GET_INFO_V2, and it is the WEAKEST
     // kind of addition this pair can see — it goes straight into the exception set below.
-    assert_eq!(universe.len(), 25, "non-vacuity: the universe is not empty");
+    // ⊘ 25 -> 28 across §14.29 (`0x20800a4c`), §14.30 (`0x20801823`) and §14.31
+    // (`0x2080182a`) — and all three are the WEAKEST kind, straight into the exception set,
+    // because `cap1b` is `nvidia-smi`-driven and all three were named by an in-guest trace
+    // of libcuda. `[measured 2026-08-08]` the first two were landed without updating either
+    // count, so this assertion has been failing since §14.29; the numbers below are the
+    // inherited red repaired and attributed, not a bar moved to fit a new row.
+    assert_eq!(universe.len(), 28, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        6,
+        9,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
+    // ⚠⚠ **The cost of 6 -> 9, stated rather than absorbed.** Three of nine exceptions are
+    // now `cuInit`-path controls, and a differential that cannot see them cannot regress
+    // them. What stands in for it is a policy-boundary test per control —
+    // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_info_v2,
+    // bus_get_pcie_supported_gpu_atomics}.rs` — which checks the envelope, the inner status
+    // and the params offset but NOT that the reply reaches a real guest queue. ⊘ The only
+    // instrument that covers that is a boot (`only_live_boots_are_proof`), and the durable
+    // fix is a `cuInit`-driven capture: the exception set shrinks by three the day one
+    // exists, and by nothing at all until then.
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.

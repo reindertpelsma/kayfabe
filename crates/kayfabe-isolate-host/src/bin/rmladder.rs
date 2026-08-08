@@ -1029,8 +1029,8 @@ fn atomics_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle)
     /// `ogkm-580: ctrl2080bus.h:1275-1287`, in declaration order — the array index IS the
     /// op type, so the order is the ABI.
     const OP_NAMES: [&str; OP_COUNT] = [
-        "IADD", "IMIN", "IMAX", "INC", "DEC", "IAND", "IOR", "IXOR", "EXCH", "CAS", "FADD",
-        "FMIN", "FMAX",
+        "IADD", "IMIN", "IMAX", "INC", "DEC", "IAND", "IOR", "IXOR", "EXCH", "CAS", "FADD", "FMIN",
+        "FMAX",
     ];
 
     /// `capType` at `[0..4]`, `dbdf` at `[4..8]`, then 13 x `{NvBool bSupported; NvU32
@@ -1092,12 +1092,9 @@ fn atomics_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle)
     for (label, cap_type, dbdf, tail) in arms {
         let mut p = request(cap_type, dbdf, tail);
         let result = rm.control(subdevice, ControlCmd(CMD), &mut p);
-        match result {
-            Err(e) => {
-                println!("info  R23 {label} = refused {e:?}");
-                continue;
-            }
-            Ok(()) => {}
+        if let Err(e) = result {
+            println!("info  R23 {label} = refused {e:?}");
+            continue;
         }
         let echo_cap = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
         let echo_dbdf = u32::from_le_bytes([p[4], p[5], p[6], p[7]]);

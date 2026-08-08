@@ -653,6 +653,26 @@ pub enum WantedTable {
     /// [`Self::GpuInfoV2`] it is **not** a [`crate::sticky::BRANCH_A_CACHEABLE`] row, and a
     /// value that moves with the link is never cached by the guest for the life of the boot.
     BusGetInfoV2,
+    /// `NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS` (`0x2080182a`) — ★★★ the wall
+    /// §14.30 left standing, and the one whose **instrument was the wall**.
+    ///
+    /// `[measured 2026-08-08, boot `gt1430_0dbbabc`]` `cuInit` reaches this control and gets
+    /// `0x56`; the boot ledger carries `unserviced fn 76 cmd 0x2080182a` exactly once,
+    /// because its flags `0x40048` include `ROUTE_TO_PHYSICAL` and the whole 112-byte struct
+    /// is RPC'd to a GSP as one call (`ogkm-580: g_subdevice_nvoc.c:6806-6819`).
+    ///
+    /// ⊘ §14.30 recorded that `rmladder --probe-ctrl` was refused `0x56` on the same
+    /// physical part that answers libcuda `NV_OK`, and inferred caller-dependence from the
+    /// `_DISPATCH` suffix. **Refuted**: `capType` is an `[IN]` field and `probe_ctrl` seeds
+    /// every byte `0xCD`, so the probe asked an undeclared captype. `[measured 2026-08-08,
+    /// real GA106, `rmladder --atomics-probe` (R23)]` the **same bare Subdevice** answers
+    /// `NV_OK` for `capType = SYSMEM`. The whole eight-arm measurement, the value, and why
+    /// this zero is not the `0x20802a08` zero are in [`kayfabe_abi::gpuatomics`].
+    ///
+    /// ⚠ Its flags carry neither `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor `_CACHEABLE_BY_INPUT`
+    /// (`0x20000`), so like [`Self::BusGetInfoV2`] it is **not** a
+    /// [`crate::sticky::BRANCH_A_CACHEABLE`] row.
+    BusGetPcieSupportedGpuAtomics,
 }
 
 impl WantedTable {
@@ -683,7 +703,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 27] = [
+    pub const ALL: [WantedTable; 28] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -711,6 +731,7 @@ impl WantedTable {
         Self::GpuInfoV2,
         Self::InternalGpuGetSmcMode,
         Self::BusGetInfoV2,
+        Self::BusGetPcieSupportedGpuAtomics,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -773,6 +794,9 @@ impl WantedTable {
                 kayfabe_abi::smcmode::NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE
             }
             Self::BusGetInfoV2 => kayfabe_abi::businfo::NV2080_CTRL_CMD_BUS_GET_INFO_V2,
+            Self::BusGetPcieSupportedGpuAtomics => {
+                kayfabe_abi::gpuatomics::NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS
+            }
         }
     }
 
@@ -814,6 +838,9 @@ impl WantedTable {
                 kayfabe_abi::smcmode::INTERNAL_GPU_GET_SMC_MODE_PARAMS_SIZE
             }
             Self::BusGetInfoV2 => kayfabe_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE,
+            Self::BusGetPcieSupportedGpuAtomics => {
+                kayfabe_abi::gpuatomics::PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE
+            }
         }
     }
 
@@ -1419,9 +1446,34 @@ impl CommandPolicy for InitTablePolicy {
                         .encode(),
                 )];
                 match kayfabe_abi::businfo::answer_bus_get_info_v2(
-                    &cmd.payload
-                        [at..at + kayfabe_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
+                    &cmd.payload[at..at + kayfabe_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
                     &answers,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The third request-editing arm, and the first whose REFUSAL is itself a
+            // measured hardware behaviour rather than an admission of ignorance.
+            // `[measured 2026-08-08, real GA106 `GPU-d0913685`, R23,
+            // `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`]` a real part answers
+            // `capType = SYSMEM(0)` with thirteen `bSupported=FALSE, attributes=0` written
+            // into a `0xCD`-seeded buffer, and refuses `_CAPTYPE_GPU(1)`, `_CAPTYPE_P2P(2)`
+            // and every undeclared value with `0x56`.
+            //
+            // ⊘ So `answer_...` refuses everything but SYSMEM, and the refusal here is the
+            // right answer rather than a gap: answering GPU/P2P "all unsupported" would
+            // return `NV_OK` where hardware returns `NV_ERR_NOT_SUPPORTED`.
+            //
+            // ⊘ And the value takes no chip argument: PCIe atomics to coherent sysmem need
+            // the ROOT COMPLEX to be an AtomicOp completer, so this is `PCIE_GEN_INFO`'s
+            // species — a fact about a machine and a link, never about a die.
+            WantedTable::BusGetPcieSupportedGpuAtomics => {
+                let at = req.params_at;
+                match kayfabe_abi::gpuatomics::answer_bus_get_pcie_supported_gpu_atomics(
+                    &cmd.payload
+                        [at..at + kayfabe_abi::gpuatomics::PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE],
+                    &kayfabe_abi::gpuatomics::GpuAtomicOp::none_supported(),
                 ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),

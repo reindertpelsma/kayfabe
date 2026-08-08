@@ -452,7 +452,11 @@ mod tests {
         assert_eq!(PcieGen::Gen1.number(), 1);
         // …and the undefined encodings are refused rather than folded into Gen6.
         for v in 6..16 {
-            assert_eq!(PcieGen::from_field(v), None, "field {v} names no generation");
+            assert_eq!(
+                PcieGen::from_field(v),
+                None,
+                "field {v} names no generation"
+            );
         }
     }
 
@@ -503,7 +507,10 @@ mod tests {
             0x0022_2000,
             "a Turing part derives its own word from the same one line"
         );
-        assert_eq!(PcieGenInfo::fully_trained(PcieGen::Gen5).encode(), 0x0044_4000);
+        assert_eq!(
+            PcieGenInfo::fully_trained(PcieGen::Gen5).encode(),
+            0x0044_4000
+        );
     }
 
     /// ★★★ The RPC this port actually answers: ONE entry, because `kbusSendBusInfo` sends
@@ -580,7 +587,10 @@ mod tests {
         let all: Vec<(u32, u32)> = (0..BUS_INFO_MAX_LIST_SIZE as u32).map(|i| (i, 0)).collect();
         let table: Vec<(u32, u32)> = all.clone();
         let rep = answer_bus_get_info_v2(&build_request(&all), &table).expect("52 entries legal");
-        assert_eq!(decode_bus_info_pairs(&rep).expect("well formed").len(), 0x34);
+        assert_eq!(
+            decode_bus_info_pairs(&rep).expect("well formed").len(),
+            0x34
+        );
     }
 
     /// An index past the array is named before it is looked up.

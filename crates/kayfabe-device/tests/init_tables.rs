@@ -340,7 +340,18 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // measurement that FORBIDS a chip constant: the same physical GA106 answered
     // `0x00302000` idle and `0x00322000` under load, so the served word comes off one enum
     // (`ChipProfile::pcie_max_gen`) through `PcieGenInfo::fully_trained`, never a table.
-    assert_eq!(WantedTable::ALL.len(), 27, "the served universe's size");
+    // ★★★★ 27 -> 28 at §14.31: `0x2080182a` BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS, and it is
+    // the first of the twenty-eight whose **refusal** is a measured hardware behaviour
+    // rather than a gap. Attributed, not ratcheted: `[measured 2026-08-08, boot
+    // `gt1430_0dbbabc`]` `cuInit` stops here with `0x56` and the ledger carries
+    // `unserviced fn 76 cmd 0x2080182a` once; `[measured 2026-08-08, real GA106, `rmladder
+    // --atomics-probe` (R23)]` a real part answers `capType=SYSMEM(0)` with thirteen
+    // `bSupported=FALSE` written into a `0xCD`-seeded buffer, and refuses `_GPU(1)`,
+    // `_P2P(2)` and every undeclared captype with `0x56` — so this row refuses them too.
+    // ⊘ It is also the row that REFUTED the instrument: §14.30 read `--probe-ctrl`'s `0x56`
+    // as caller-dependence, when `capType` is an `[IN]` field and the probe's own `0xCD`
+    // seed was the invalid captype. See `kayfabe_abi::gpuatomics`.
+    assert_eq!(WantedTable::ALL.len(), 28, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

@@ -1354,27 +1354,80 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
 
     // ⊘ NON-VACUITY. If this port served nothing in the capture, every assertion above
     // would pass having tested only the refusal arm.
+    // ⊘⊘ 87 -> 95, and the attribution is EXACT rather than apportioned to whoever moved
+    // it. `[measured 2026-08-08]` by printing `claimed_outcome` over this capture: the
+    // whole +8 is §14.29's `0x20800a4c`, which `rpctrace_ga106_boot1.bin` demands **eight
+    // times**. §14.30's `0x20801823` and §14.31's `0x2080182a` each contribute **ZERO** —
+    // neither appears in this capture at all.
+    //
+    // ⚠ That zero is a coverage statement, not a formality: this is the only GSP-level
+    // capture of a real GA106 the repo owns, and it does not contain either control, so
+    // nothing here can regress them. Their oracles are `rmladder` R22/R23 and the in-guest
+    // libcuda trace, which is why those files are committed under `traces/real_ga106/`.
+    //
+    // ⚠ And the pin was left stale by §14.29: this assertion has been RED since that rung
+    // landed. `[measured]` it fails at `78bee9e` too. The number below is that inherited red
+    // repaired with the delta measured rather than assumed — the mistake to avoid here is
+    // subtracting two non-adjacent revisions and attributing the whole gap to the newest.
     assert_eq!(
         (n_claimed, n_unclaimed),
-        (87, 223),
+        (95, 215),
         "`[measured]` 2026-08-03: 87 of the 310 recorded control calls are ones this port \
-         claims (84 before §14.28 added `0x20800102`, which the capture demands 3 times). The served arm is not near-vacuous and the number is pinned so a silent \
-         collapse of it is red"
+         claims (84 before §14.28 added `0x20800102`, which the capture demands 3 times); \
+         `[measured]` 2026-08-08: 95 after §14.29's `0x20800a4c`, demanded 8 times. The \
+         served arm is not near-vacuous and the number is pinned so a silent collapse of it \
+         is red"
     );
 
     // ★★★ **Every control this port claims was judged against real firmware.** Derived
     // from `WantedTable::ALL` rather than restated as a number, so the universe cannot be
     // shortened without the gate noticing (`gates_quantified_over_a_list`).
+    // ⊘⊘ **Two controls this port claims are NOT demanded by any committed GSP-level
+    // capture, and the check's own instruction is followed rather than deleted: here is why
+    // an unevidenced-*by-this-capture* size is acceptable for exactly these two.**
+    //
+    // `rpctrace_ga106_boot1.bin` is an `RmInitAdapter` capture. `0x20801823`
+    // `BUS_GET_INFO_V2` (§14.30) and `0x2080182a` `BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS`
+    // (§14.31) are **libcuda's**, and no capture of a `cuInit` at the GSP boundary exists.
+    //
+    // ★ Their sizes are nonetheless measured, on real hardware, by two other instruments:
+    // - `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:44,46,48` — a real GA106
+    //   answering `size=420` and `size=112` at the **ioctl** boundary, and
+    // - `rmladder` R22 / R23 on a second physical GA106, which issue those exact struct
+    //   sizes against the real driver and are answered `NV_OK`
+    //   (`rmladder_r22_businfo_sweep_real_ga106.txt`,
+    //   `rmladder_r23_atomics_real_ga106.txt`).
+    //
+    // ⚠ What is genuinely unevidenced is the **GSP RPC reply's** `paramsSize` for these two
+    // — an ioctl size is the struct RM allocates, and this gate is about what a GSP puts
+    // back on the queue. For a `ROUTE_TO_PHYSICAL` control the whole struct is RPC'd
+    // unchanged (`ogkm-580: rmapi/control.c:898-910`), so the two coincide by construction
+    // for `0x2080182a`; for `0x20801823` the RPC carries a **one-entry** params struct of
+    // the same 420-byte type (`kern_bus.c:1065-1101`), so the size is the type's either way.
+    // ⊘ Stated, not assumed away: the durable fix is a `cuInit`-driven GSP capture, and this
+    // exemption shrinks to nothing the day one exists.
+    //
+    // ⚠ §14.30 landed the first of these two without touching this gate, so it has been RED
+    // since; `[measured]` it fails at `78bee9e`. This is that inherited red repaired.
+    let unevidenced_by_this_capture: BTreeSet<u32> = BTreeSet::from([0x2080_1823, 0x2080_182a]);
+    assert!(
+        unevidenced_by_this_capture.is_subset(&claimed),
+        "an exemption for a control this port does not claim is an exemption for nothing"
+    );
     assert_eq!(
-        size_checked, claimed,
+        size_checked,
+        claimed
+            .difference(&unevidenced_by_this_capture)
+            .copied()
+            .collect::<BTreeSet<_>>(),
         "this port claims a control that no committed capture demands, so there is NO \
          hardware evidence for the size it answers. Capture a boot that demands it, or \
          say here why an unevidenced size is acceptable — do not delete the check"
     );
     assert_eq!(
         size_checked.len(),
-        25,
-        "25 distinct controls had their reply paramsSize judged against a real GA106 GSP \
+        26,
+        "26 distinct controls had their reply paramsSize judged against a real GA106 GSP \
          on 580.159.04, and every one agreed"
     );
     // And refusal really is the majority answer, which is the honest shape of this port
