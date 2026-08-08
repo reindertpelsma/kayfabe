@@ -1758,6 +1758,43 @@ struct SharedDoorbell {
     /// at device realize and the guest-memory handle only exists once the memory plane has
     /// a base address (see [`Regs::attach_ram`]).
     ce: Arc<CeShellState>,
+    /// ★★★ **§14.24 — is the shell's own CPU copy-engine executor the ONLY executor this
+    /// build has?** Decided once, at realize, from [`selected_isolate_plane`].
+    ///
+    /// # ⊘⊘ Why this replaced a `vas_pdb.is_none()` test, and it is a MEASURED refutation
+    ///
+    /// [`SharedDoorbell::try_ce_submission`]'s precondition 2 used to read *"`vas_pdb` must
+    /// be `None`. A channel the core can address is the core's."* That inference — **the
+    /// core can ADDRESS it, therefore the core can SERVE it** — was true only while the
+    /// port did not know the channel's address space, and §14.23 made it know.
+    ///
+    /// `[measured 2026-08-08, boot pub1_3e43e9a, rev 3e43e9a]`: with the guest's own
+    /// page-directory publication reaching `Vas::pdb`, `facts.vas_pdb` became `Some` for the
+    /// CeUtils scrubber's channel, this executor declined it as *"not ours"*, the doorbell
+    /// fell through to a forwarding plane that is **`Stillborn` in every shipping build**,
+    /// and the report read `doorbells: 1 arrived, 0 served, 1 REFUSED
+    /// [FwdFault::IsolateRetired]` where the previous revision read `2 arrived, 2 served
+    /// [CpuCe::ServedLocally]`. `memmgrMemSet` then timed out (`NV_ERR_TIMEOUT 0x65` at
+    /// `mem_mgr.c:463`), `ce_utils.c:349` failed its `lastCompletedPayload ==
+    /// lastSubmittedPayload` assertion, and `RmInitAdapter failed! (0x25:0x65:1249)`.
+    ///
+    /// ⇒ **The milestone had been resting on the port's ignorance.** `nvidia-smi` enumerated
+    /// a device because this executor served the scrubber's copy, and it served that copy
+    /// *because* the channel's address space was unknown to us. A correct fact took the
+    /// executor away — which is §14.21's shape exactly, one plane over: an accurate port
+    /// state is fatal when a fallback was keyed on the inaccuracy.
+    ///
+    /// ★ So the question the gate asks is now the question it always meant: not *"can the
+    /// core address this channel?"* but **"is there any other executor?"**. When
+    /// [`IsolatePlane::Stillborn`] is installed the answer is no, by that plane's own
+    /// declared meaning ([`STILLBORN_WHY`]: *"no host verb can be issued"*), and the shell's
+    /// CPU executor is not a fallback — it is the executor.
+    ///
+    /// ⊘ **Not a fallback-after-refusal.** The decision is made from the composition root's
+    /// own declared choice, before any doorbell arrives; nothing here retries a refused
+    /// submission on a second path. A build that selects a real isolate plane keeps the old
+    /// routing exactly — a channel the core can address goes to the core.
+    local_ce_is_the_only_executor: bool,
 }
 
 /// ★★★ **E10e — what the shell owns on behalf of the CPU copy-engine executor.**
@@ -1874,9 +1911,11 @@ impl SharedDoorbell {
     ///
     /// 1. **The channel's declared facts must exist** — `ce_channel_facts` failing means the
     ///    token did not route, which is the *core's* refusal to report, not ours.
-    /// 2. **`vas_pdb` must be `None`.** A channel the core can address is the core's; taking
-    ///    it here would move a working path onto a new one for no reason and would be the
-    ///    "second path" this increment is explicitly not allowed to build.
+    /// 2. **The core must be able to SERVE the channel**, not merely address it — i.e.
+    ///    `vas_pdb` is `Some` *and* this build installed a forwarding plane. ⊘ The `and` is
+    ///    §14.24's correction and it was measured, not reasoned: see
+    ///    [`SharedDoorbell::local_ce_is_the_only_executor`] for the boot in which the first
+    ///    half alone cost the adapter.
     /// 3. **A published VA space and a declared ring**, or there is nothing to resolve.
     /// 4. **A memory plane.** Between realize and `attach_ram` there is none, and a CE
     ///    submission then is refused by name rather than served out of a null.
@@ -1903,8 +1942,10 @@ impl SharedDoorbell {
             .device
             .ce_channel_facts(DOORBELL_TARGET_GPU, token)
             .ok()?;
-        if facts.vas_pdb.is_some() {
-            return None; // the core can address this channel; it is not ours.
+        // ★★★ §14.24 — see `SharedDoorbell::local_ce_is_the_only_executor` for the boot
+        // that turned this from `vas_pdb.is_none()` into a question about EXECUTORS.
+        if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor {
+            return None; // the core can address AND serve this channel; it is not ours.
         }
         let (vaspace, ring_va) = (facts.vaspace?, facts.ring_va?);
         let plane = self.plane.upgrade()?;
@@ -2179,7 +2220,7 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (links, refusals, rings, isolates, publications, device) =
+        let (links, refusals, rings, isolates, publications, isolate_plane, device) =
             object_policy(abi.driver, chip.engines)?;
         let plane = RegPlane::with_objects(
             chip,
@@ -2244,6 +2285,10 @@ impl Regs {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
             ce: Arc::clone(&ce),
+            // ★★★ §14.24 — from the composition root's OWN selector reading, not from a
+            // second one. `Stillborn` means, in that plane's own words, *"no host verb can
+            // be issued"*, so nothing but this shell's CPU executor can run a copy.
+            local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn,
         }));
         Ok(Regs {
             plane,
@@ -2722,6 +2767,12 @@ type ObjectLink = (
     kayfabe_core::gpu::SharedIsolateCensus,
     // ★★★ §14.23 — what the publication seat saw and what the model accepted.
     kayfabe_rmrpc::SharedPublicationCensus,
+    // ★★★ §14.24 — WHICH isolate plane this build installed, carried out so the doorbell
+    // port's executor question is answered from the SAME reading of the selector that built
+    // the isolate factory. ⊘ Not re-read at the doorbell site: two readings of one env var
+    // is two facts that can disagree, which is the shape this file already refuses for the
+    // probe set and for the chip's engine slice.
+    IsolatePlane,
     // ★★★ E2 — and the shell itself, because the doorbell port needs the SAME one.
     Arc<kayfabe_rt::device::SharedDevice>,
 );
@@ -2733,7 +2784,8 @@ fn object_policy(
     // descriptions of one silicon.
     engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
 ) -> Result<ObjectLink, (Status, &'static str)> {
-    let isolates = isolate_factory(selected_isolate_plane()?)?;
+    let isolate_plane = selected_isolate_plane()?;
+    let isolates = isolate_factory(isolate_plane)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
         isolates,
@@ -2808,6 +2860,7 @@ fn object_policy(
         rings,
         isolates,
         publication_census,
+        isolate_plane,
         device,
     ))
 }
