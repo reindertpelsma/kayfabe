@@ -388,6 +388,22 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `kayfabe-device/tests/fb_get_info_v2.rs` — written with this row rather than after it,
     // so this admission is true at the moment it is made. ⊘ And it is a real coverage cost,
     // named: nothing in the `cap1b` pair would notice this arm breaking.
+    // ⚠⚠⚠ §14.33 adds an ELEVENTH, `GpuInfoV2`'s kind a fifth time — **a different
+    // demander**, and this one twice over. `CeGetAllPhysicalCaps` (`0x20802a0b`) reaches an
+    // emulated GSP only as `subdeviceCtrlCmdCeGetAllCaps_IMPL`'s forward
+    // (`ogkm-580: kernel_ce_shared.c:315-320`), and the caller that asks for it is `cuInit`;
+    // `cap1b` is an `RmInitAdapter` capture driven by `nvidia-smi`, in which `libcuda` never
+    // runs. ⊘ No closure limit reaches a process that never ran.
+    //
+    // ★ And its reply plane is covered better here than by any other row on this list, which
+    // is worth stating because "covered elsewhere" is the sentence that lets a gap through.
+    // `kayfabe-device/tests/ce_get_all_physical_caps.rs` does not compare this port against
+    // itself: it parses the reply out of **two independent real-GA106 captures** — libcuda's
+    // `cuInit` through a full CUDA context, and an `rmladder` bare `Subdevice` with no
+    // channel — asserts those two agree, and then asserts the served bytes equal them. A
+    // differential against a `nvidia-smi` capture would be a weaker oracle than that, not a
+    // stronger one. ⊘ The envelope is still this file's kind of coverage and is still absent;
+    // that part of the cost is real and is named.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
@@ -399,6 +415,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::BusGetInfoV2,
         WantedTable::BusGetPcieSupportedGpuAtomics,
         WantedTable::FbGetInfoV2,
+        WantedTable::CeGetAllPhysicalCaps,
     ]
     .into_iter()
     .collect();
@@ -430,23 +447,37 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // count, so this assertion has been failing since §14.29; the numbers below are the
     // inherited red repaired and attributed, not a bar moved to fit a new row.
     // ⊘ 28 -> 29 at §14.32 (`0x20801303`), the WEAKEST kind again and for the same reason.
-    assert_eq!(universe.len(), 29, "non-vacuity: the universe is not empty");
+    // ⊘ 29 -> 30 at §14.33 (`0x20802a0b`), the WEAKEST kind a FIFTH time and for the same
+    // reason. ⚠⚠⚠ Five consecutive rungs have each added a control this differential cannot
+    // see, and each has written "the durable fix is a `cuInit`-driven capture" and then not
+    // made one. ★ The note below said the capture was *four rungs overdue*; it is now five,
+    // and the sentence has been carried forward unchanged so many times that carrying it
+    // forward is what a reader now expects. `a_flag_is_not_progress`: a repeat flag is
+    // evidence the answer is nearby, and this one is a queue item, not a paragraph.
+    assert_eq!(universe.len(), 30, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        10,
+        11,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
-    // ⚠⚠ **The cost of 6 -> 10, stated rather than absorbed.** FOUR of ten exceptions are
+    // ⚠⚠ **The cost of 6 -> 11, stated rather than absorbed.** FIVE of eleven exceptions are
     // now `cuInit`-path controls, and a differential that cannot see them cannot regress
     // them. What stands in for it is a policy-boundary test per control —
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_info_v2,
-    // bus_get_pcie_supported_gpu_atomics,fb_get_info_v2}.rs` — which checks the envelope,
-    // the inner status and the params offset but NOT that the reply reaches a real guest
-    // queue. ⊘ The only instrument that covers that is a boot (`only_live_boots_are_proof`),
-    // and the durable fix is a `cuInit`-driven capture: the exception set shrinks by FOUR
-    // the day one exists, and by nothing at all until then. ⚠ That number growing once per
-    // rung is itself the signal — the capture is now four rungs overdue.
+    // bus_get_pcie_supported_gpu_atomics,fb_get_info_v2,ce_get_all_physical_caps}.rs` —
+    // which checks the envelope, the inner status and the params offset but NOT that the
+    // reply reaches a real guest queue. ⊘ The only instrument that covers that is a boot
+    // (`only_live_boots_are_proof`), and the durable fix is a `cuInit`-driven capture: the
+    // exception set shrinks by FIVE the day one exists, and by nothing at all until then.
+    //
+    // ★ §14.33's one is the least bad of the five and the reason is worth stating, because
+    // "covered elsewhere" is exactly the sentence that lets a gap through unread:
+    // `ce_get_all_physical_caps.rs` does not compare this port against itself, it compares
+    // it against **two independent real-GA106 captures** and asserts those two agree first.
+    // That is a stronger oracle for the *payload* than this differential is. It is a weaker
+    // one for the *envelope*, which is the part this file uniquely covers and the part that
+    // stays uncovered.
 
     // fn 65 is `StaticInfoPolicy`, and fn 228 is `InertPolicy`. Both are answered here too,
     // so all three answering links of the chain are exercised in one run.

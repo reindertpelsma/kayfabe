@@ -1423,8 +1423,26 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // only the *count* differs between the ioctl and the RPC, never the size.
     // ⊘ Stated, not assumed away, exactly as the two above are: the durable fix for all
     // three is one `cuInit`-driven GSP capture.
+    //
+    // ⚠⚠ §14.33 adds a FOURTH, `0x20802a0b` `CE_GET_ALL_PHYSICAL_CAPS`, same kind and same
+    // reason — this capture is `nvidia-smi`'s and the demander is `libcuda`. ⊘ **And its
+    // size is better evidenced than any of the three above, at three independent boundaries
+    // that cannot drift apart**, which is why the exemption is mechanical rather than a gap:
+    //   1. the export row declares `paramSize = sizeof(NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS)`
+    //      (`ogkm-580: g_subdevice_nvoc.c:7714`), and `0x20802a0b` is that type by `typedef`
+    //      (`ctrl2080ce.h:340`) — `NvU8 capsTbl[64][2]` then an 8-aligned `NvU64`, **136**;
+    //   2. the guest kernel passes that same `sizeof(*pCeCapsParams)` **explicitly** on the
+    //      forward (`kernel_ce_shared.c:315-320`), so the RPC's size is the type's by source
+    //      and not by inference — and the control carries `ROUTE_TO_PHYSICAL`, so the struct
+    //      is RPC'd unchanged (`rmapi/control.c:898-910`);
+    //   3. `[measured 2026-08-09, real GA106 `GPU-d0913685`]` **two independent callers**
+    //      observe 136 bytes on the wire — libcuda's `cuInit`
+    //      (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:62`, `size=136`) and an
+    //      `rmladder` bare `Subdevice` (`traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`).
+    // ⊘ Still stated rather than assumed away, and it still shrinks to nothing the day a
+    // `cuInit`-driven GSP capture exists.
     let unevidenced_by_this_capture: BTreeSet<u32> =
-        BTreeSet::from([0x2080_1303, 0x2080_1823, 0x2080_182a]);
+        BTreeSet::from([0x2080_1303, 0x2080_1823, 0x2080_182a, 0x2080_2a0b]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
         "an exemption for a control this port does not claim is an exemption for nothing"
