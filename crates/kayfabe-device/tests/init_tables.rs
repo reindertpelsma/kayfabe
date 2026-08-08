@@ -362,7 +362,21 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // absence from both boot ledgers as *"the command never reaches the emulated GSP"*.
     // `[measured 2026-08-09]` both ledgers were SATURATED at their 32-entry caps in that
     // boot, so the absence meant nothing. See `kayfabe_abi::fbinfo`.
-    assert_eq!(WantedTable::ALL.len(), 29, "the served universe's size");
+    // ★★★★ 29 -> 30 at §14.33: `0x20802a0b` CE_GET_ALL_PHYSICAL_CAPS, and it is the first
+    // of the thirty whose reply is **constructed rather than the request edited** — the
+    // struct is `[OUT]`-only and the guest has already zeroed it. Attributed, not ratcheted:
+    // `[measured 2026-08-08, boot `gt1432_20e319b`]` `cuInit` stops at `0x20802a0a` with
+    // `0x56`, and `0x20802a0b` — the id that control forwards to the PHYSICAL RMAPI under
+    // `NV_ASSERT_OK_OR_RETURN`, i.e. the one that actually reaches us — is in that boot's
+    // unserviced ledger. Nothing new is stated: `present` is `ChipProfile::engines`' own
+    // `DEV_TYPE_ENUM_LCE` rows.
+    // ⊘ It is also the row that REFUTED the instrument a THIRD time, twice over: §14.32
+    // specified `rmladder --probe-ctrl 0x20802a0b:136` as the cheap way to settle the zero
+    // tail. `[measured 2026-08-09, real GA106,
+    // `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]` that control is
+    // KERNEL_PRIVILEGED and refuses every usermode caller, and the reachable sibling
+    // `portMemSet`s the probe's own seed away before forwarding. See `kayfabe_abi::cecaps`.
+    assert_eq!(WantedTable::ALL.len(), 30, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

@@ -702,6 +702,35 @@ pub enum WantedTable {
     /// `_CACHEABLE_BY_INPUT` (`0x20000`) — so it is not a [`crate::sticky::BRANCH_A_CACHEABLE`]
     /// row.
     FbGetInfoV2,
+    /// `NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS` (`0x20802a0b`) — ★★★ §14.32's wall, and
+    /// **the id that fails is not this one**.
+    ///
+    /// `[measured 2026-08-08, boot `gt1432_20e319b`]` `cuInit` fails at
+    /// `NV2080_CTRL_CMD_CE_GET_ALL_CAPS` (`0x20802a0a`), which this port must **not** serve:
+    /// `subdeviceCtrlCmdCeGetAllCaps_IMPL` is the guest kernel's own
+    /// (`ogkm-580: kernel_ce_shared.c:282-336`), and it reaches an emulated GSP only as its
+    /// forward of the **physical** id under `NV_ASSERT_OK_OR_RETURN`. Serving `0x20802a0a`
+    /// would be answering a boundary the guest never asks us about.
+    ///
+    /// ★ And unlike §14.31's, this rung's ledger silence is *trustworthy in the other
+    /// direction*: `0x20802a0b` **is** in boot `gt1432_20e319b`'s unserviced list
+    /// (`34 distinct`, no truncation line), one of the two rows the cap raise made visible.
+    /// The repaired instrument produced the target directly, having spent two rungs hiding
+    /// it.
+    ///
+    /// ⊘⊘ The reply is `[OUT]`-only and **constructed, not edited** — the first such arm.
+    /// Every byte is a projection of [`crate::ChipProfile::engines`], the same slice
+    /// [`Self::DeviceInfo`] and [`Self::InternalDeviceInfo`] serve; `present` is that
+    /// slice's `DEV_TYPE_ENUM_LCE` rows and the one per-CE caps bit is
+    /// `NV_CE_GRCE_ALLOWED_LCE_MASK` intersected with them. See [`kayfabe_abi::cecaps`] for
+    /// the two refutations of §14.32 this cost, for why the probe it specified cannot run,
+    /// and for why serving the caller-observed bytes is provably right rather than assumed.
+    ///
+    /// ⚠ Its flags are `0x101d0` (`ogkm-580: g_subdevice_nvoc.c:7705-7718`) — carrying
+    /// `ROUTE_TO_PHYSICAL` and `INTERNAL`, and **neither** `RMCTRL_FLAGS_CACHEABLE`
+    /// (`0x400`) nor `_CACHEABLE_BY_INPUT` (`0x20000`) — so it is not a
+    /// [`crate::sticky::BRANCH_A_CACHEABLE`] row either.
+    CeGetAllPhysicalCaps,
 }
 
 impl WantedTable {
@@ -732,7 +761,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 29] = [
+    pub const ALL: [WantedTable; 30] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -762,6 +791,7 @@ impl WantedTable {
         Self::BusGetInfoV2,
         Self::BusGetPcieSupportedGpuAtomics,
         Self::FbGetInfoV2,
+        Self::CeGetAllPhysicalCaps,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -828,6 +858,9 @@ impl WantedTable {
                 kayfabe_abi::gpuatomics::NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS
             }
             Self::FbGetInfoV2 => kayfabe_abi::fbinfo::NV2080_CTRL_CMD_FB_GET_INFO_V2,
+            Self::CeGetAllPhysicalCaps => {
+                kayfabe_abi::cecaps::NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS
+            }
         }
     }
 
@@ -873,6 +906,7 @@ impl WantedTable {
                 kayfabe_abi::gpuatomics::PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE
             }
             Self::FbGetInfoV2 => kayfabe_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE,
+            Self::CeGetAllPhysicalCaps => kayfabe_abi::cecaps::CE_GET_ALL_CAPS_PARAMS_SIZE,
         }
     }
 
@@ -1541,6 +1575,35 @@ impl CommandPolicy for InitTablePolicy {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }
+            }
+            // ★★★ The FIRST arm that does not read the request at all. Every other reply
+            // this policy builds is the guest's own buffer with fields overwritten;
+            // `NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS` documents both its members `[out]`
+            // (`ogkm-580: ctrl2080ce.h:315-322`) and the guest kernel has already
+            // `portMemSet` the whole 136 bytes to zero before forwarding
+            // (`kernel_ce_shared.c:312`), so there is nothing to echo and `params_at` is
+            // never dereferenced here.
+            //
+            // ⊘ And it states no new number either: `present` is the `DEV_TYPE_ENUM_LCE`
+            // rows of `chip.engines` — the same slice `WantedTable::DeviceInfo` and
+            // `WantedTable::InternalDeviceInfo` serve — and the one per-CE caps bit is
+            // `NV_CE_GRCE_ALLOWED_LCE_MASK` intersected with them. A device that advertises
+            // four copy engines to the guest's FIFO and five to its CE layer would be two
+            // descriptions of one silicon.
+            //
+            // ⚠ The error arm is load-bearing in the usual direction and then some: the
+            // caller wraps this control in `NV_ASSERT_OK_OR_RETURN`, so a refusal is the
+            // whole of `CE_GET_ALL_CAPS` failing — which is exactly the `0x56` this rung
+            // exists to remove. It is still right: every projection `from_engines` declines
+            // is a chip row that would already have failed `encode_internal_device_info_table`
+            // (`kgmmuInitCeMmuFaultIdRange_GA100` needs an LCE row to boot at all), and a
+            // `present` of zero is a declared value meaning "this GPU has no copy engines".
+            WantedTable::CeGetAllPhysicalCaps => {
+                let Ok(geometry) = kayfabe_abi::cecaps::CeGeometry::from_engines(self.chip.engines)
+                else {
+                    return refuse();
+                };
+                kayfabe_abi::cecaps::encode_ce_get_all_physical_caps(&geometry)
             }
         };
 

@@ -98,6 +98,7 @@ pub mod bifstatic;
 pub mod bringup;
 pub mod businfo;
 pub mod capability;
+pub mod cecaps;
 pub mod chipinfo;
 pub mod confcompute;
 pub mod deviceinfo;
