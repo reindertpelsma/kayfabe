@@ -41,6 +41,30 @@ for.
    thing being satisfied is first-party code we could no longer read.
 
    ⊘ So this is a real cost, but a smaller and more specific one than "no reference exists".
+
+   ★★★ **AND THE OWNER SHARPENED IT FURTHER, which is what actually settles the question.** Three
+   points, all theirs:
+
+   - **Nouveau does not implement every op the proprietary driver runs.** A GSP-less guest runs the
+     proprietary driver, which will issue sequences nouveau never issues. Those have **no
+     reference at all** — not a second-hand one, none.
+   - ★★ **Nouveau's own bring-up may be REPLAY, not understanding.** Sequences captured from the
+     proprietary driver or lifted from optimised disassembly, replayed to satisfy the GPU, with
+     even the authors knowing only part of what they do. ⇒ we would be copying **magic without
+     meaning**, unable to tell a load-bearing operation from an incidental one.
+   - ⇒ **We would be building against a replay, because there is no spec and nobody to show us
+     one.**
+
+   ★★★ **The consequence is the real one: this project's CENTRAL VERIFICATION TECHNIQUE would not
+   exist.** Everything that has gone right here came from *compiling the guest's own acceptance
+   checks and running them* — five oracles, and every debugging win of the campaign. Against a
+   replay there is **no acceptance path to compile**, because nouveau is not the thing we must
+   satisfy; the closed proprietary driver is.
+
+   ⚠ And we know what that failure mode looks like, because the C artifact lived it **with**
+   readable source available: it resolved one VA to three different wrong pages, reversed its own
+   aperture conclusion twice, and shipped `dlen = 0` rows that were positively wrong
+   (`c_oracle_empty_rows_are_wrong`). Remove the oracle and that stops being the exception.
 2. **The affected silicon is old.** GSP-less means pre-Turing in practice; Pascal is 2016.
 3. **Those parts already have an answer.** vGPU unlock exists for them and is reported reliable.
 4. **The ecosystem moved.** Current drivers — including nouveau, and including Windows guests —
