@@ -126,6 +126,7 @@ pub mod oracle;
 pub mod pcibars;
 pub mod rc;
 pub mod regaccessmap;
+pub mod smcmode;
 pub mod submit;
 pub mod transcribed;
 pub mod vbios;

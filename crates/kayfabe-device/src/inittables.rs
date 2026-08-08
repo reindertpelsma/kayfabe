@@ -597,6 +597,39 @@ pub enum WantedTable {
     /// a buffer**; it is bounded against `NV2080_CTRL_GPU_INFO_MAX_LIST_SIZE` before it
     /// indexes anything, exactly as RM bounds it.
     GpuInfoV2,
+    /// `NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE` (`0x20800a4c`) — ★★★★ **the control that
+    /// decided `cuInit`**, and the one every instrument this port owns was structurally
+    /// unable to see.
+    ///
+    /// # `[measured 2026-08-08, boot `gis1_e6ed6bc`]` Why it is not optional
+    ///
+    /// It is not asked during `RmInitAdapter` — `docs/reference/remaining_boot_surface.md`
+    /// §1 proved that by set-difference and concluded the row was therefore *"by definition
+    /// not part of init"*. Correct, and the wrong thing to conclude: libcuda asks
+    /// `GPU_GET_INFO_V2` for index `0x2a` (`GPU_SMC_MODE`), whose arm issues **this** control
+    /// on the physical RMAPI and assigns its status to the enclosing loop
+    /// (`ogkm-580: subdevice_ctrl_gpu_kernel.c:232-266`). The loop `break`s on the first
+    /// non-`NV_OK` and returns it **for the whole call** (`:566-569`).
+    ///
+    /// ⇒ Refusing this one internal control fails an eleven-index request in which the other
+    /// **ten indices were already answered correctly** — and it fails it *inside the guest
+    /// kernel*, with no RPC, so [`Self::GpuInfoV2`]'s own ledger row stayed green while
+    /// `cuInit` returned 100. The in-guest bisect that named it is `SWEEPIDX pos=3
+    /// idx=0x2a status=0x56` with all ten others `NV_OK`, and `SWEEPPFX` breaking at exactly
+    /// `len=4` (`scripts/bench/guest_gpuinfo_sweep.sh`).
+    ///
+    /// ⊘ That also refutes the RM **control cache** as the cause: the failure depends
+    /// entirely on *which* index is asked, on the same handle at the same instant, and a
+    /// cache hit cannot. This control's own flags are `0xc0`
+    /// (`ogkm-580: g_subdevice_nvoc.c:2530-2540`) — no `RMCTRL_FLAGS_CACHEABLE_*` bit — so it
+    /// is not a [`crate::sticky::BRANCH_A_CACHEABLE`] row either.
+    ///
+    /// # The value
+    ///
+    /// [`crate::ChipProfile::smc_mode`], `[measured]` `Unsupported` on two physical GA106
+    /// parts by two different instruments. ⊘ **Not** from the C oracle, whose row for this id
+    /// is one of the eleven `dlen = 0` rows; the argument is in [`kayfabe_abi::smcmode`].
+    InternalGpuGetSmcMode,
 }
 
 impl WantedTable {
@@ -627,7 +660,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 25] = [
+    pub const ALL: [WantedTable; 26] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -653,6 +686,7 @@ impl WantedTable {
         Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
         Self::GpuInfoV2,
+        Self::InternalGpuGetSmcMode,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -711,6 +745,9 @@ impl WantedTable {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO
             }
             Self::GpuInfoV2 => NV2080_CTRL_CMD_GPU_GET_INFO_V2,
+            Self::InternalGpuGetSmcMode => {
+                kayfabe_abi::smcmode::NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE
+            }
         }
     }
 
@@ -748,6 +785,9 @@ impl WantedTable {
             }
             Self::GrContextBuffersInfo => grstatic::CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
             Self::GpuInfoV2 => GPU_GET_INFO_V2_PARAMS_SIZE,
+            Self::InternalGpuGetSmcMode => {
+                kayfabe_abi::smcmode::INTERNAL_GPU_GET_SMC_MODE_PARAMS_SIZE
+            }
         }
     }
 
@@ -1318,6 +1358,18 @@ impl CommandPolicy for InitTablePolicy {
                     // see `kayfabe_abi::gpuinfo`.
                     Err(_) => return refuse(),
                 }
+            }
+            // ★★★★ The control that decided `cuInit`. A pure function of the chip row — this
+            // control carries no request field — so there is nothing to validate and nothing
+            // that can fail, which is why this arm cannot refuse and does not pretend it can.
+            //
+            // ⚠ The value is an ENUM on the chip row, not a `u32`, and that is load-bearing
+            // rather than tidy: the wire answer on GA106 is four zero bytes, byte-identical
+            // to what the C oracle's EMPTY row for this id decodes to. A `u32` field left at
+            // its default would be indistinguishable from the measurement. See
+            // `kayfabe_abi::smcmode` for the two-part provenance.
+            WantedTable::InternalGpuGetSmcMode => {
+                kayfabe_abi::smcmode::encode_smc_mode(self.chip.smc_mode)
             }
         };
 

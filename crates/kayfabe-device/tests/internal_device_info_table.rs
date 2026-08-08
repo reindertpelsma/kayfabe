@@ -902,6 +902,7 @@ fn bad_chip(
         gr_info: g.gr_info,
         gr_context_buffers: g.gr_context_buffers,
         forwarded_gpu_info: g.forwarded_gpu_info,
+        smc_mode: g.smc_mode,
         fb_length: g.fb_length,
     }))
 }

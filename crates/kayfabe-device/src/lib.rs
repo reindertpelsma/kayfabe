@@ -503,6 +503,24 @@ pub struct ChipProfile {
     /// physical GA106s**, so they are per-chip identity values and no chip-family row may
     /// state them. They are refused by name instead. See [`kayfabe_abi::gpuinfo`].
     pub forwarded_gpu_info: &'static [(u32, u32)],
+    /// ★★★★ **The SMC (MIG) mode this part reports** — the answer to
+    /// `NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE`, and the field whose absence returned
+    /// `cuInit(0) -> 100` for the whole of §14.22-§14.28.
+    ///
+    /// `getGpuInfos`'s arm for `GPU_INFO_INDEX_GPU_SMC_MODE` (`0x2a`) forwards to this
+    /// control and propagates its status to the **entire** `GPU_GET_INFO_V2` call
+    /// (`ogkm-580: subdevice_ctrl_gpu_kernel.c:232-266`, `:566-569`), so a chip that cannot
+    /// state a mode fails ten indices it answered correctly. See
+    /// [`crate::inittables::WantedTable::InternalGpuGetSmcMode`].
+    ///
+    /// ⚠ A [`kayfabe_abi::smcmode::SmcMode`] and **not** a `u32`, with no realize check —
+    /// deliberately the opposite shape to [`ChipProfile::ce_fault_method_buffer_size`] above.
+    /// There, zero is a sentinel for *"unstated"* and must be refused. Here the wire answer
+    /// on GA106 **is** zero and it is a named meaning (`..._SMC_MODE_UNSUPPORTED`), so a
+    /// numeric sentinel is unavailable: it would be byte-identical to the measurement. The
+    /// type is what carries the distinction, which is why an unstated row cannot compile
+    /// rather than being caught at realize.
+    pub smc_mode: kayfabe_abi::smcmode::SmcMode,
     /// `fb_length` — the same framebuffer, in bytes.
     ///
     /// ⚠ **The third statement of one fact.** `NV_USABLE_FB_SIZE_IN_MB` is the first and

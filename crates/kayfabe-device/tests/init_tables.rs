@@ -324,7 +324,15 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // rather than by a boot log. ⊘ And the eleven-row table that experiment published is at
     // the ioctl boundary: ten of those indices are answered by the guest's own kernel and
     // never reach a GSP. See `kayfabe_abi::gpuinfo`.
-    assert_eq!(WantedTable::ALL.len(), 25, "the served universe's size");
+    // ★★★★ 25 -> 26 at §14.29: `0x20800a4c` INTERNAL_GPU_GET_SMC_MODE. Attributed, not
+    // ratcheted — this is the id an in-guest bisect named as THE reason `cuInit` returned
+    // 100, and the bisect is the evidence: of libcuda's eleven `GPU_GET_INFO_V2` indices,
+    // exactly one (`0x2a`) failed alone and the prefix sweep broke at exactly its position.
+    // Its arm forwards to this control and propagates the status to the whole call.
+    // ⊘ It is NOT admitted by the injection matrix, which is structurally incapable of
+    // finding it (§14.28: injection subtracts an answer from a system that works, and every
+    // one of the sixteen ids it cleared was cleared on real firmware).
+    assert_eq!(WantedTable::ALL.len(), 26, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

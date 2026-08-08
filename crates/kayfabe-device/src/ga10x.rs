@@ -1507,6 +1507,11 @@ pub static GA106: ChipProfile = ChipProfile {
     // and libcuda's own ioctl. ⊘ NOT the eleven-row ioctl table — ten of those indices are
     // answered by the guest's own kernel and never reach a GSP.
     forwarded_gpu_info: kayfabe_abi::gpuinfo::GA106_FORWARDED_GPU_INFO,
+    // ★★★ `[measured]` on TWO physical GA106 parts by two different instruments — the raw
+    // RPC body (`rpc_bodies_real_ga106.txt:617-628`, `00 00 00 00`) and the whole
+    // `getGpuInfos` arm read unprivileged (`rmladder_r21 … 0x2a NV_OK data=0x0`). GeForce
+    // silicon has no MIG. ⊘ NOT from the C oracle's row for this id, which is empty.
+    smc_mode: kayfabe_abi::smcmode::GA106_SMC_MODE,
     fb_length: GA106_FB_LENGTH,
 };
 
