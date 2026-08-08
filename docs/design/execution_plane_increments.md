@@ -4611,6 +4611,34 @@ What is already known, from RM's source rather than from a table:
   must come from a real GA106 (`../nvkvm-rs/traces/real_ga106/`) or the control must be
   refused **by name**.
 
+#### ⊘⊘ AND `0x20810108` HAS NO ORACLE — checked in all three, before anyone reaches for one
+
+The next increment's control cannot be answered from anything this project owns, and that is
+worth establishing **now** rather than after a day of looking:
+
+| source | has `0x20810108`? |
+|---|---|
+| the C's captured control table `mode2_initctrl_ga106.h` (56 rows) | ⊘ **no row.** `gsp_demand_list_cap1.md` §5.1 lists it among the *"demanded but absent from the table"* six |
+| `cap1_coldboot_hermetic` | the **request** only — record 309 234, `UNRESOLVED` (`gsp_demand_list_cap1.tsv:72`). A demand is not a reply |
+| `traces/real_ga106/rpc_{transcript,bodies}_real_ga106.txt` | ⊘ **no hit at all** (`grep 20810108` → nothing) |
+
+★ And the three failures have **one** cause, which is the same cause as §14.22's phantom:
+every oracle this project owns was produced by driving `RmInitAdapter` with **`nvidia-smi`**
+(`traces/real_ga106/README.md`, "method"), and `0x20810108` is issued by **libcuda**. ⇒ A
+world with no CUDA process in it cannot witness a control only CUDA asks for — the same
+sentence that explains why the `0x2081` grep came back empty. ⊘ Two independent instruments
+agreeing is not corroboration when they share the defect (`a_table_does_not_decide_behaviour`
+— *"a correction from the same source is not an independent check"*).
+
+⇒ **The instrument for the next increment is a new capture, not a lookup.** The obvious
+candidate is `crates/kayfabe-isolate-host/src/bin/rmladder.rs` — already a *deterministic
+cross-machine oracle* (`rm_ladder_is_a_deterministic_oracle`: two physical GA106s differed by
+exactly one `hClient` line) — extended to allocate `NV2081_BINAPI` under a Subdevice and issue
+`0x20810108` against the **host** GA106 that `vh` already has. ⚠ Whether an unprivileged
+client may do so at all is itself unmeasured; `resource_list.h:445` says
+`RS_FLAGS_ALLOC_NON_PRIVILEGED`, which is a statement about the *alloc* and not about the
+control.
+
 ⊘ It is not bundled here for the reason §14.24 taught: this increment's boot is already
 measured, and a second wall-moving change inside it would make a regression unattributable.
 
