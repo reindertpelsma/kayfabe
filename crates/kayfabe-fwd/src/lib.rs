@@ -326,6 +326,29 @@ pub enum FwdFault {
         /// The virtual address that had nowhere to resolve.
         va: GpuVa,
     },
+    /// ★★★ **E10e — the PUBLISHED-ROOT WALK refused this virtual address.**
+    ///
+    /// The channel that walls has no `Vas`; its addresses are resolved by descending the
+    /// guest's own page tables from the root the guest published (`0x90f10106`), on the
+    /// guest's own doorbell demand. That descent has its own refusal vocabulary — an
+    /// unmapped or sparse entry **at a named level**, a root in an aperture this device
+    /// does not back, a leaf beyond the framebuffer bound — and this is where it crosses
+    /// into the forwarding plane.
+    ///
+    /// ⊘ `kind` is a `&'static str` and not a payload because the walk's finding is
+    /// `kayfabe_device::ceresolve::CeResolve`, which this pure crate cannot name and this
+    /// `Copy` enum could not hold. It is produced by an **exhaustive match in the crate
+    /// that owns that type** (`CeResolve::kind`), so a new walk outcome fails *that* build
+    /// until it is named here-compatible. The finding's full detail — the level, the
+    /// address, the limit — travels beside the fault in
+    /// `kayfabe_rt::ceutils::CeUtilsRefusal`, whose type is free to be as large as the
+    /// truth requires.
+    CeWalk {
+        /// The virtual address the walk was asked for.
+        va: GpuVa,
+        /// The walk's own finding, by its stable kind.
+        kind: &'static str,
+    },
     /// ★★★ **E10c — a `CeExecutor::Ours` sub-copy whose needed CPU plane is `None`** — a
     /// straddle no single executor can run.
     ///
@@ -2416,14 +2439,14 @@ pub fn signal_golden_capture(gpu: &mut Gpu, event: OsEventRef) -> Result<OsEvent
 /// attacker-controlled length is never an arbitrary allocation (boundary-1). Real
 /// pushbuffer segments are far smaller; a range hitting this cap is simply truncated
 /// (the surplus decodes to nothing actionable, MISS=FAULT at use).
-const MAX_PUSH_RANGE_BYTES: usize = 1 << 20;
+pub const MAX_PUSH_RANGE_BYTES: usize = 1 << 20;
 
 /// Upper bound on the TOTAL method bytes one `parse_pushbuffer` call will read across
 /// ALL of a ring's GPFIFO ranges. `MAX_PUSH_RANGE_BYTES` bounds any single range, but a
 /// hostile ring can declare *many* maxed-out ranges; this caps their sum so the decoded
 /// method vector cannot grow without bound either (boundary-1). Ranges past the budget
 /// are skipped (their content decodes to nothing actionable — MISS=FAULT at use).
-const MAX_PUSH_TOTAL_BYTES: usize = 8 << 20;
+pub const MAX_PUSH_TOTAL_BYTES: usize = 8 << 20;
 
 // ---------------------------------------------------------------------------------
 // ★★★ TWO DECISIONS, NOT ONE (`eight_blockers_resolved.md` §11.5 / §12).

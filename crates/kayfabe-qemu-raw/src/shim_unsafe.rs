@@ -137,12 +137,15 @@ pub struct KayfabeRegWrite {
     pub raise_cpu_intr: i32,
     /// ★★★ **E2** — this write was a **usermode doorbell**:
     /// [`DOORBELL_NONE`] (it was not one — the *control*), [`DOORBELL_SERVED`] (the core
-    /// answered with a `DoorbellOutcome`) or [`DOORBELL_REFUSED`] (the core refused it by
-    /// name, and `doorbell_kind` is that name).
+    /// answered with a `DoorbellOutcome`), [`DOORBELL_SERVED_LOCAL`] (**E10e** — the shell's
+    /// own CPU copy-engine executor did the work) or [`DOORBELL_REFUSED`] (refused by name,
+    /// and `doorbell_kind` is that name).
     ///
-    /// ⊘ Three values and no fourth: *"counted as a doorbell, went nowhere, looked
+    /// ⊘ Four values and no fifth: *"counted as a doorbell, went nowhere, looked
     /// healthy"* is unrepresentable, which is the whole shape of
-    /// [`kayfabe_device::DoorbellReport`].
+    /// [`kayfabe_device::DoorbellReport`]. The two servings are separate values because they
+    /// are separate events — one rang a host channel and one moved bytes with the CPU — and
+    /// a boot that could not tell them apart could not tell forwarding from emulation.
     pub doorbell: i32,
     /// The work-submit token the guest stored. Meaningful only when `doorbell` is not
     /// [`DOORBELL_NONE`].
@@ -164,6 +167,15 @@ pub const DOORBELL_NONE: i32 = 0;
 pub const DOORBELL_SERVED: i32 = 1;
 /// [`KayfabeRegWrite::doorbell`] — the core refused it, by name.
 pub const DOORBELL_REFUSED: i32 = 2;
+/// ★★★ **E10e** — [`KayfabeRegWrite::doorbell`]: the **shell** served it, on the CPU, with
+/// no host ring involved. `doorbell_kind` carries the constant name below; what the executor
+/// did reaches the shell once, through `KayfabeRegAudit::doorbell_local_serving`, for the
+/// reason the refusal's sentence does — a `format!`ed string has no `'static` address.
+pub const DOORBELL_SERVED_LOCAL: i32 = 3;
+
+/// The `doorbell_kind` a [`DOORBELL_SERVED_LOCAL`] write carries. A constant, because there
+/// is exactly one way to be served locally; the variation is in the audit's sentence.
+const SERVED_LOCAL_KIND: &str = "CpuCe::ServedLocally";
 
 impl KayfabeRegWrite {
     /// The wire form of the port's outcome. The one place the sentence becomes an address.
@@ -190,6 +202,12 @@ impl KayfabeRegWrite {
             Some(kayfabe_device::DoorbellReport::Served { token, .. }) => {
                 (DOORBELL_SERVED, *token, core::ptr::null(), 0)
             }
+            Some(kayfabe_device::DoorbellReport::ServedLocally { token, .. }) => (
+                DOORBELL_SERVED_LOCAL,
+                *token,
+                SERVED_LOCAL_KIND.as_ptr(),
+                SERVED_LOCAL_KIND.len() as u64,
+            ),
             Some(kayfabe_device::DoorbellReport::Refused { token, refusal }) => (
                 DOORBELL_REFUSED,
                 *token,

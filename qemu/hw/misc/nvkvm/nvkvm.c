@@ -363,6 +363,14 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
                             " REFUSED [%.*s]",
                             w.doorbell_token, (uint64_t)addr,
                             (int)w.doorbell_kind_len, (const char *)w.doorbell_kind);
+            } else if (w.doorbell == KAYFABE_DOORBELL_SERVED_LOCAL) {
+                /* ★★★ E10e.  The shell's own CPU copy-engine executor did this one; the
+                 * per-run detail is in the teardown report, so this line is only the
+                 * ATTRIBUTION half — which write, at which instant, and served by whom. */
+                info_report("nvkvm: DOORBELL token 0x%08" PRIx64 " at +0x%" PRIx64
+                            " SERVED-LOCAL [%.*s]",
+                            w.doorbell_token, (uint64_t)addr,
+                            (int)w.doorbell_kind_len, (const char *)w.doorbell_kind);
             } else {
                 info_report("nvkvm: DOORBELL token 0x%08" PRIx64 " at +0x%" PRIx64 " SERVED",
                             w.doorbell_token, (uint64_t)addr);
@@ -1659,6 +1667,12 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.doorbells, a.doorbells_served, a.doorbells_refused,
                 a.doorbell_last_token_valid ? "" : "n/a ",
                 a.doorbell_last_token, s->doorbells_logged);
+    if (a.doorbell_local_serving.present) {
+        int len = (int)(a.doorbell_local_serving.len > KAYFABE_DOORBELL_REFUSAL_LEN
+                        ? KAYFABE_DOORBELL_REFUSAL_LEN : a.doorbell_local_serving.len);
+        info_report("nvkvm:   last CPU-CE serving: %.*s",
+                    len, (const char *)a.doorbell_local_serving.text);
+    }
     if (a.doorbell_refusal.present) {
         int klen = (int)(a.doorbell_refusal.kind_len > KAYFABE_DOORBELL_KIND_LEN
                          ? KAYFABE_DOORBELL_KIND_LEN : a.doorbell_refusal.kind_len);

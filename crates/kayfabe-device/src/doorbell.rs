@@ -68,6 +68,32 @@ pub enum DoorbellReport {
         /// True if this dispatch is what scheduled the channel (its first submission).
         scheduled_now: bool,
     },
+    /// ★★★ **E10e — the SHELL served it, on the CPU, and no host ring was involved.**
+    ///
+    /// A GSP-managed copy-engine channel (RM's `CeUtils`) has no address space this port
+    /// ever learned and no host channel behind it; its operands live in the emulated
+    /// framebuffer and in guest RAM, both of which the shell holds and neither of which a
+    /// real engine can be pointed at. `ce_executor_tree.md`'s STEP 2 answer for that is a
+    /// CPU copy, and `kayfabe_rt::ceutils` is where it happens.
+    ///
+    /// ⊘ **A third arm rather than a `Served` with `host_token: 0`.** This crate's own
+    /// doorbell doctrine is that *"counted as a doorbell, went nowhere, looked fine"* must
+    /// be unrepresentable; a zero in a field whose documentation says *"the HOST token that
+    /// was rung"* is that shape wearing a number. The two servings are genuinely different
+    /// events with different evidence, and a boot that could not tell them apart could not
+    /// tell a forwarded copy from an emulated one.
+    ServedLocally {
+        /// The guest's token — see [`DoorbellReport::Served::token`].
+        token: u64,
+        /// The proc the token routed to.
+        proc: u32,
+        /// The channel it routed to.
+        chan: u32,
+        /// ★ What the shell actually **did** — spans run, bytes moved, where the
+        /// finishPayload landed. Every number in it is a thing that happened, so a report
+        /// built from it cannot claim more than the work did.
+        note: String,
+    },
     /// The core **refused** it, by name.
     ///
     /// ★ A `kind` and a sentence, which is increment **E1**'s standard applied one seam
@@ -97,10 +123,15 @@ pub struct DoorbellRefused {
 }
 
 impl DoorbellReport {
-    /// Whether the core served this doorbell.
+    /// Whether this doorbell was served — by the core's forwarding path **or** by the
+    /// shell's own CPU executor. ⊘ Both, deliberately: a caller asking *"did the guest's
+    /// submission happen"* must not have to enumerate the ways it could have.
     #[must_use]
     pub fn is_served(&self) -> bool {
-        matches!(self, DoorbellReport::Served { .. })
+        matches!(
+            self,
+            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. }
+        )
     }
 
     /// The refusal, if this is one.
@@ -108,7 +139,7 @@ impl DoorbellReport {
     pub fn refusal(&self) -> Option<&DoorbellRefused> {
         match self {
             DoorbellReport::Refused { refusal, .. } => Some(refusal),
-            DoorbellReport::Served { .. } => None,
+            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. } => None,
         }
     }
 
@@ -116,7 +147,9 @@ impl DoorbellReport {
     #[must_use]
     pub fn token(&self) -> u64 {
         match self {
-            DoorbellReport::Served { token, .. } | DoorbellReport::Refused { token, .. } => *token,
+            DoorbellReport::Served { token, .. }
+            | DoorbellReport::ServedLocally { token, .. }
+            | DoorbellReport::Refused { token, .. } => *token,
         }
     }
 }

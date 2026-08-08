@@ -573,6 +573,11 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // `bar_pde_updates`' refusal half's reason: "published something unreadable" and
     // "published nothing" are different diagnoses and an absence cannot tell them apart.
     // This is the reason the wire ABI moved to 17.
+    // ★ +`KayfabeDoorbellServing` at `execution_plane_increments.md` §14.15 / E10e item
+    // (c): the LAST doorbell the shell's own CPU copy-engine executor served, and what it
+    // did. ⊘ Its own structure and not a second `KayfabeDoorbellRefusal` — the two carry
+    // the same bytes and mean opposite things, and a header in which a serving is declared
+    // as a refusal reads as a bug. This is the reason the wire ABI moved to 19.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
         (55 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
@@ -582,6 +587,7 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeDoorbellRefusal>()
+            + size_of::<kayfabe_qemu_raw::shim::KayfabeDoorbellServing>()
             + kayfabe_qemu_raw::shim::SERVED_CONTROL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeServedControl>()
             + kayfabe_qemu_raw::shim::NOTIFIER_ARMING_SLOTS

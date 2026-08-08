@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
+kayfabe-abi.workspace = true
 kayfabe-mmu.workspace = true
 kayfabe-completion.workspace = true
 kayfabe-isolate.workspace = true

@@ -52,6 +52,7 @@
 /// memory only through the `Vmm`/`FbStore` traits, which re-validate against bounds the
 /// audited raw crates own (`l1_os_shell.md` §4.1/§4.2.1.1), so the unsound surface stays
 /// contained and this file carries no `_unsafe` suffix.
+pub mod ceutils;
 pub mod cpu_ce;
 pub mod device;
 pub mod executor;

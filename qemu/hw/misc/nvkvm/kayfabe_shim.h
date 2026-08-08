@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 18u
+#define KAYFABE_SHIM_ABI 19u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -317,6 +317,17 @@ typedef struct KayfabeRegWrite {
 #define KAYFABE_DOORBELL_NONE    0
 #define KAYFABE_DOORBELL_SERVED  1
 #define KAYFABE_DOORBELL_REFUSED 2
+/* ★★★ E10e — the SHELL served it, on the CPU, with no host ring involved: a GSP-managed
+ * copy-engine channel (RM's CeUtils) whose operands live in the emulated framebuffer and in
+ * guest RAM, neither of which a real engine can be pointed at.  `doorbell_kind` carries the
+ * constant name "CpuCe::ServedLocally"; WHAT the executor did reaches this shell once, at
+ * teardown, through KayfabeRegAudit::doorbell_local_serving.
+ *
+ * ⊘ A fourth value rather than reusing _SERVED, because the two are different events with
+ * different evidence — one rang a host channel, the other moved bytes with the CPU — and a
+ * report that cannot tell forwarding from emulation is the one thing this device's evidence
+ * must never do. */
+#define KAYFABE_DOORBELL_SERVED_LOCAL 3
 
 /* Register-plane counters.  u64-only and address-free, like KayfabeAudit.
  *
@@ -377,6 +388,21 @@ typedef struct KayfabeDoorbellRefusal {
      * zeros — so a reader needs a field that is zero ONLY in the never-happened case. */
     uint64_t present;
 } KayfabeDoorbellRefusal;
+
+/* ★★★ E10e — a doorbell the SHELL served itself: one sentence naming what the CPU
+ * copy-engine executor did (spans run, bytes moved, where the finishPayload landed).
+ *
+ * ⊘ Its own structure rather than a second KayfabeDoorbellRefusal.  The two carry the same
+ * bytes and mean opposite things, and a header in which a serving is declared as a refusal
+ * is a header that reads as a bug.  It carries no `kind` because there is exactly one way to
+ * be served locally; a constant name would be a field that never varies. */
+typedef struct KayfabeDoorbellServing {
+    uint8_t text[KAYFABE_DOORBELL_REFUSAL_LEN];  /* NUL-PADDED, not NUL-terminated */
+    uint64_t len;
+    /* ⊘ Non-zero exactly when the shell served a doorbell itself — the validity flag, for
+     * KayfabeDoorbellRefusal::present's reason. */
+    uint64_t present;
+} KayfabeDoorbellServing;
 
 typedef struct KayfabeIsolateRefusal {
     uint8_t text[KAYFABE_ISOLATE_REFUSAL_LEN];  /* NUL-PADDED, not NUL-terminated */
@@ -615,6 +641,12 @@ typedef struct KayfabeRegAudit {
     uint64_t doorbell_last_token;
     uint64_t doorbell_last_token_valid;
     KayfabeDoorbellRefusal doorbell_refusal;
+    /* ★★★ E10e — the LAST doorbell the shell's own CPU copy-engine executor served, and
+     * what it did.  Last, where the refusal above is first: a refusal is a diagnosis and a
+     * flood of rings must not push it out; a serving is PROGRESS, and the last one is how
+     * far the guest got.  memmgrTestCeUtils issues a MemSet and then a MemCopy
+     * (ogkm-580: mem_mgr.c:463, :467), so "which was the last to land" is the question. */
+    KayfabeDoorbellServing doorbell_local_serving;
 
     /* ★★★ §8.2.2 — THE GPFIFO RING THE GUEST DECLARED.
      *

@@ -360,6 +360,26 @@ impl CeResolve {
         }
     }
 
+    /// ★★★ **This finding's stable KIND** — the one word a consumer outside this crate can
+    /// carry when it cannot carry the value.
+    ///
+    /// ⊘ Exhaustive by construction: a new [`CeResolve`] variant fails *this* match, which
+    /// is the point. `kayfabe_fwd::FwdFault::CeWalk` holds one of these because it is a
+    /// `Copy` enum in a pure crate that cannot name this type at all — see that variant for
+    /// why the detail travels separately rather than being flattened into a sentence here.
+    #[must_use]
+    pub fn kind(&self) -> &'static str {
+        match *self {
+            CeResolve::NoPublication => "NoPublication",
+            CeResolve::NoMmuPort => "NoMmuPort",
+            CeResolve::RootAperture { .. } => "RootAperture",
+            CeResolve::NoRootLevel { .. } => "NoRootLevel",
+            CeResolve::Fault(_) => "Fault",
+            CeResolve::AddressOutOfRange { .. } => "AddressOutOfRange",
+            CeResolve::Resolved { .. } => "Resolved",
+        }
+    }
+
     /// ★ A **compact** form of the same finding, for a report with a fixed byte budget.
     ///
     /// ⊘ Compact, never lossy in the direction that matters: a refusal never renders as

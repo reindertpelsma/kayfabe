@@ -871,6 +871,17 @@ pub struct DoorbellLog {
     pub last_token: Option<u64>,
     /// The first ring the port refused — kind and sentence — or `None` if none was.
     pub first_refusal: Option<DoorbellRefused>,
+    /// ★★★ **E10e — the MOST RECENT ring the SHELL served itself**, whole
+    /// ([`DoorbellReport::ServedLocally::note`]): what the CPU copy-engine executor
+    /// actually did — spans run, bytes moved, where the finishPayload landed.
+    ///
+    /// ⊘ **Last, where [`Self::first_refusal`] is first, and the asymmetry is the point.**
+    /// A refusal is a *diagnosis* and a flood of identical rings must not push it out of
+    /// the one line a teardown report has room for; a serving is *progress*, and the last
+    /// one is how far the guest got. `memmgrTestCeUtils` issues a `MemSet` and then a
+    /// `MemCopy`, so "which one was the last to land" is the whole question the report is
+    /// asked (`ogkm-580: mem_mgr.c:463` vs `:467`).
+    pub last_local_serving: Option<String>,
 }
 
 impl core::fmt::Debug for RegPlane {
@@ -1000,6 +1011,62 @@ impl PublishedVaRead {
             PublishedVaRead::Unresolved(r) => r.describe(),
             PublishedVaRead::Store(why) => format!("RESOLVED but the store refused: {why}"),
         }
+    }
+}
+
+/// ★★★ **One CE submission's borrowed view of the register plane** — see
+/// [`RegPlane::ce_session`], which is the only way to obtain one.
+///
+/// It is deliberately three capabilities and no more:
+/// [`CePlane::resolve`] (the guest's own page-table walk, from the root the guest
+/// published), [`CePlane::fb`] (the emulated framebuffer, which is both where the page
+/// tables live and where a vidmem operand's bytes go) and [`CePlane::root`] (for the
+/// report). ⊘ It exposes **no guest-RAM port**: the executor's guest-RAM side is the
+/// shell's own `Vmm`, so that a copy's bytes and a completion's bytes cannot travel by two
+/// different descriptions of one memory plane.
+pub struct CePlane<'a> {
+    state: &'a mut PlaneState,
+    chip: &'static ChipProfile,
+    root: crate::ceresolve::VasRoot,
+    demand: crate::ceresolve::Demand,
+}
+
+impl core::fmt::Debug for CePlane<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CePlane")
+            .field("root", &self.root)
+            .finish_non_exhaustive()
+    }
+}
+
+impl CePlane<'_> {
+    /// The page-directory root this session walks from — `levels[0]` of the publication
+    /// the guest made for its `(hClient, hVASpace)` pair.
+    #[must_use]
+    pub fn root(&self) -> crate::ceresolve::VasRoot {
+        self.root
+    }
+
+    /// ★★★ Resolve one GPU virtual address in this session's VA space, on the demand the
+    /// session was opened with.
+    ///
+    /// ⊘ Nothing is cached, here or anywhere below (`gmmu_publication_discipline.md` §7
+    /// rule 6): every call is a fresh descent, which is what a TLB does and what makes the
+    /// answer valid for this demand and no other.
+    pub fn resolve(&mut self, va: u64) -> crate::ceresolve::CeResolve {
+        resolve_locked(self.state, self.chip, &self.root, va, self.demand)
+    }
+
+    /// The emulated framebuffer this device backs.
+    pub fn fb(&mut self) -> &mut dyn FbStore {
+        self.state.fb.as_mut()
+    }
+
+    /// The framebuffer length this chip advertises — the bound a vidmem address is legal
+    /// against, taken from the chip rather than from the store so the two cannot disagree.
+    #[must_use]
+    pub fn fb_len(&self) -> u64 {
+        self.chip.fb_length
     }
 }
 
@@ -1381,6 +1448,50 @@ impl RegPlane {
     #[must_use]
     pub fn published_root(&self, client: u32, vaspace: u32) -> Option<crate::ceresolve::VasRoot> {
         crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+    }
+
+    /// ★★★ **One CE submission's worth of this plane, under ONE lock acquisition**
+    /// (`execution_plane_increments.md` §14.15 obstacle 3, the *"the plane hands out its
+    /// stores"* half of the owner's two options).
+    ///
+    /// # Why a session and not more `resolve_published_va`-shaped calls
+    ///
+    /// Serving one guest submission needs the plane **many times**: resolve the ring, read
+    /// it, resolve and read each pushbuffer range, resolve every operand run of every
+    /// `LAUNCH_DMA`, write the destination bytes, resolve the finishPayload and write it.
+    /// Doing that through per-call locking would take and drop the FSM mutex dozens of
+    /// times *inside one guest-visible event*, so a second vCPU could re-point the BAR0
+    /// window or replace the format between two steps of a single copy. A submission is
+    /// one atomic thing to the guest; this makes it one to us.
+    ///
+    /// ⊘ **The root is resolved ONCE, before the lock**, and a channel whose
+    /// `(client, vaspace)` published nothing gets `None` rather than a session that will
+    /// refuse every question — the absence of a publication is a fact about the guest, not
+    /// about a walk.
+    ///
+    /// ⚠ **Lock order.** This is the plane's own mutex and the caller must hold **no core
+    /// lock** when it calls: the command-policy chain already takes the core's ranked locks
+    /// *under* this mutex (`kayfabe_rmrpc::policy::Bridge`, boxed into `PlaneState::policy`),
+    /// so plane→core is the established order and core→plane is its inversion. That is why
+    /// the CE executor runs off `DoorbellPort::ring` — which `RegPlane::write` documents as
+    /// being called with no plane lock held — rather than from inside
+    /// `kayfabe_fwd::apply_pushbuffer`, which runs under a proc lock.
+    pub fn ce_session<R>(
+        &self,
+        client: u32,
+        vaspace: u32,
+        demand: crate::ceresolve::Demand,
+        f: impl FnOnce(&mut CePlane<'_>) -> R,
+    ) -> Option<R> {
+        let root = crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)?;
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut ce = CePlane {
+            state: &mut s,
+            chip: self.chip,
+            root,
+            demand,
+        };
+        Some(f(&mut ce))
     }
 
     /// The publication latch itself, as a shared handle — for
@@ -2231,7 +2342,10 @@ impl RegPlane {
             port.ring(token)
         };
         match &report {
-            DoorbellReport::Served { .. } => {
+            // ★ Both servings count as served — `doorbells == served + refused` is the
+            // invariant [`Counters::doorbells`] states, and a third arm that counted as
+            // neither would break it silently. Which serving it was is in the report.
+            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. } => {
                 self.c.doorbells_served.fetch_add(1, Ordering::Relaxed);
             }
             DoorbellReport::Refused { .. } => {
@@ -2245,6 +2359,9 @@ impl RegPlane {
                 && let DoorbellReport::Refused { refusal, .. } = &report
             {
                 log.first_refusal = Some(refusal.clone());
+            }
+            if let DoorbellReport::ServedLocally { note, .. } = &report {
+                log.last_local_serving = Some(note.clone());
             }
         }
         WriteOutcome {

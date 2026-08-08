@@ -173,8 +173,23 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// register write, and stamping it per-access would make an operator read it thousands of
 /// times and still not know how many address spaces there were.
 ///
+/// ★ Bumped to **19** at `execution_plane_increments.md` **§14.15 / E10e item (c)**, the
+/// ABI-3 reason a thirteenth time, and in **both** structures at once. [`KayfabeRegAudit`]
+/// gained `doorbell_local_serving` ([`KayfabeDoorbellServing`]), so an ABI-18 shim would
+/// allocate the old layout and this archive would write past the end of it;
+/// [`KayfabeRegWrite`]'s `doorbell` field gained a fourth value
+/// (`DOORBELL_SERVED_LOCAL`) — which alone would not need a bump, but a shim that did not
+/// know the value would print a shell-executed copy as an ordinary forwarded one, and a
+/// report that cannot tell emulation from forwarding is the one thing this device's
+/// evidence must never do.
+///
+/// ★★ **`KayfabeRegWrite` grew a VALUE and not a field, for E2's reason.** Which doorbell
+/// served a submission is a property of *that write*, at *that* instant, and the whole
+/// point of the timestamped per-doorbell line is attribution.
+///
 /// [`KayfabeRegWrite`]: crate::shim_unsafe::KayfabeRegWrite
-pub const ABI_VERSION: u32 = 18;
+/// [`DOORBELL_SERVED_LOCAL`]: crate::shim_unsafe::DOORBELL_SERVED_LOCAL
+pub const ABI_VERSION: u32 = 19;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -960,6 +975,37 @@ impl Default for KayfabeDoorbellRefusal {
     }
 }
 
+/// ★★★ **E10e — a doorbell the SHELL served itself, in the wire shape**: one sentence
+/// naming what the CPU copy-engine executor did.
+///
+/// ⊘ **A separate structure from [`KayfabeDoorbellRefusal`] rather than a reuse of it.**
+/// The two carry the same bytes and mean opposite things, and a header in which a serving
+/// is declared as a refusal is a header that reads as a bug to the next person — the same
+/// "two facts, two types" argument [`kayfabe_device::DoorbellReport`]'s third arm makes one
+/// crate over. It carries no `kind`, because there is only one way to be served locally and
+/// a constant name would be a field that never varies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabeDoorbellServing {
+    /// The sentence's bytes, NUL-padded.
+    pub text: [u8; DOORBELL_REFUSAL_LEN],
+    /// How many bytes of [`Self::text`] are the sentence.
+    pub len: u64,
+    /// ⊘ Non-zero exactly when the shell served a doorbell itself — the validity flag, for
+    /// [`KayfabeDoorbellRefusal::present`]'s reason.
+    pub present: u64,
+}
+
+impl Default for KayfabeDoorbellServing {
+    fn default() -> KayfabeDoorbellServing {
+        KayfabeDoorbellServing {
+            text: [0; DOORBELL_REFUSAL_LEN],
+            len: 0,
+            present: 0,
+        }
+    }
+}
+
 /// How many distinct VA-space page-directory publications [`KayfabeRegAudit`] carries.
 ///
 /// ★ Matches `kayfabe_device::gvaspub::GVAS_PUBLICATION_SAMPLE_MAX`, and `gvas_pub_len`
@@ -1269,6 +1315,10 @@ pub struct KayfabeRegAudit {
     /// ⊘ First, not last: a flood of identical rings must not be able to push the
     /// diagnosis out of the one line a teardown report has room for.
     pub doorbell_refusal: KayfabeDoorbellRefusal,
+    /// ★★★ **E10e** — the **last** doorbell the shell's own CPU copy-engine executor
+    /// served, and what it did. See [`kayfabe_device::DoorbellLog::last_local_serving`]
+    /// for why this one is last where the refusal above is first.
+    pub doorbell_local_serving: KayfabeDoorbellServing,
     /// ★★★ **§8.2.2** — channel allocs whose params declared a GPFIFO ring, decoded and
     /// counted. See `kayfabe_rmrpc::RingCensus` for what the census is *for*; this is its
     /// wire shape.
@@ -1614,6 +1664,36 @@ struct SharedDoorbell {
     /// *"are the intermediate entries on the path to `0x4_2000_0000` actually present in our
     /// emulated FB? A miss is a fault."*
     plane: std::sync::Weak<RegPlane>,
+    /// ★★★ **E10e** — the shell state the CPU copy-engine executor needs, shared with
+    /// [`Regs`] because the two halves are installed at different times: the port is built
+    /// at device realize and the guest-memory handle only exists once the memory plane has
+    /// a base address (see [`Regs::attach_ram`]).
+    ce: Arc<CeShellState>,
+}
+
+/// ★★★ **E10e — what the shell owns on behalf of the CPU copy-engine executor.**
+///
+/// Two things, and neither of them can live in the register plane:
+///
+/// - the **guest-memory port**. `kayfabe_rt::cpu_ce` takes a `&mut dyn Vmm` and uses three
+///   of its methods (`gpa_read`, `gpa_write`, `raise_irq`). §14.15 obstacle 3 offered two
+///   ways to reach it — unify the guest-RAM port across `Vmm` and
+///   `kayfabe_device::GuestRam`, or *"the driver runs where the `Vmm` is and the plane
+///   hands out its stores"*. This is the second: the executor's signature is unchanged, so
+///   its completion interrupt goes through the real hypervisor port rather than through a
+///   new one invented for it. ⊘ It is the **same** [`QemuVmm`] handle [`MachineRam`] wraps
+///   — one description of guest memory, two users — and it is `None` outside
+///   `attach_ram`/`detach_ram`, which is a refusal rather than a null check: a CE
+///   submission arriving while the memory plane is detached is refused by name.
+/// - the per-channel **GPFIFO cursor**. See `kayfabe_rt::ceutils::GpCursor` for why the
+///   ring's read position is state the shell must keep rather than derive.
+#[derive(Debug, Default)]
+struct CeShellState {
+    /// The memory plane, once realized. See the type docs.
+    vmm: std::sync::Mutex<Option<QemuVmm>>,
+    /// Per `(proc, chan)` GPFIFO read cursors.
+    cursors:
+        std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::GpCursor>>,
 }
 
 impl core::fmt::Debug for SharedDoorbell {
@@ -1628,8 +1708,30 @@ impl core::fmt::Debug for SharedDoorbell {
 /// The GPU a `nvkvm-gpu` device is. See [`SharedDoorbell`]'s docs.
 const DOORBELL_TARGET_GPU: kayfabe_rt::GpuId = kayfabe_rt::GpuId(0);
 
+/// One refused doorbell report, so the three refusal sites in [`SharedDoorbell`] cannot
+/// come to disagree about the shape of a refusal.
+fn refused(
+    token: u64,
+    kind: kayfabe_device::FaultTag,
+    why: String,
+) -> kayfabe_device::DoorbellReport {
+    kayfabe_device::DoorbellReport::Refused {
+        token,
+        refusal: kayfabe_device::DoorbellRefused { kind, why },
+    }
+}
+
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
     fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
+        // ★★★ **E10e — the CPU copy-engine branch is tried FIRST, and only for a channel
+        // the core cannot serve at all.** `try_ce_submission` answers `None` unless the
+        // routed channel has **no `Vas`** (`vas_pdb == None`), which is precisely the case
+        // `plan_doorbell` refuses `NoVas`. So no channel changes hands: this arm serves
+        // exactly the doorbells that were refused before it existed, and every other
+        // doorbell takes the forwarding path below, unchanged.
+        if let Some(report) = self.try_ce_submission(token) {
+            return report;
+        }
         match self.device.doorbell(DOORBELL_TARGET_GPU, token, &[]) {
             Ok(o) => kayfabe_device::DoorbellReport::Served {
                 token,
@@ -1676,6 +1778,119 @@ const FINISH_PAYLOAD_FROM_RING: u64 = 0x8004;
 const PROBE_RING_BYTES: usize = kayfabe_abi::submit::GP_ENTRY_SIZE as usize;
 
 impl SharedDoorbell {
+    /// ★★★ **E10e item (c) — SERVE a doorbell on a VAS-less copy-engine channel, on the
+    /// CPU, in the shell.** `None` means *"not ours"*, and the forwarding path runs.
+    ///
+    /// # ⊘ The four preconditions, and why each one is a refusal to act rather than a check
+    ///
+    /// 1. **The channel's declared facts must exist** — `ce_channel_facts` failing means the
+    ///    token did not route, which is the *core's* refusal to report, not ours.
+    /// 2. **`vas_pdb` must be `None`.** A channel the core can address is the core's; taking
+    ///    it here would move a working path onto a new one for no reason and would be the
+    ///    "second path" this increment is explicitly not allowed to build.
+    /// 3. **A published VA space and a declared ring**, or there is nothing to resolve.
+    /// 4. **A memory plane.** Between realize and `attach_ram` there is none, and a CE
+    ///    submission then is refused by name rather than served out of a null.
+    ///
+    /// # ⚠ The cursor is committed only on success
+    ///
+    /// `run_submission` takes the cursor **by value** and hands the advanced one back only
+    /// in its success value. A refused submission therefore leaves the ring exactly where it
+    /// was, so the guest's own retry (`[measured 2026-08-08, boot
+    /// run_p2_c89899a]`: `channelWaitForFinishPayload` retries once before failing) re-reads
+    /// the entry it could not run rather than skipping past it. A cursor advanced through a
+    /// refusal would turn one loud failure into a silently dropped copy — `#13`'s `CE-DROP`
+    /// by another route.
+    ///
+    /// # ⚠ Lock order: plane, then core
+    ///
+    /// The plane's session is taken first and `SharedDevice::with_pushbuffer` (rank 0) runs
+    /// inside it. That is the established direction — the command-policy chain already calls
+    /// the core under the plane's mutex — and it is why the whole executor lives out here
+    /// rather than inside `apply_pushbuffer`, which holds a rank-1 proc lock.
+    /// ⊘ `ce_channel_facts` is called and **completed** before the plane lock is taken.
+    fn try_ce_submission(&self, token: u64) -> Option<kayfabe_device::DoorbellReport> {
+        let facts = self
+            .device
+            .ce_channel_facts(DOORBELL_TARGET_GPU, token)
+            .ok()?;
+        if facts.vas_pdb.is_some() {
+            return None; // the core can address this channel; it is not ours.
+        }
+        let (vaspace, ring_va) = (facts.vaspace?, facts.ring_va?);
+        let plane = self.plane.upgrade()?;
+        let chan = kayfabe_rt::ceutils::CeUtilsChannel {
+            client: facts.client,
+            vaspace,
+            ring_va,
+            ring_entries: facts.ring_entries,
+        };
+        let key = (facts.proc.0, facts.chan.0);
+        let cursor = *self
+            .ce
+            .cursors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&key)
+            .unwrap_or(&kayfabe_rt::ceutils::GpCursor::default());
+
+        let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(vmm) = held.as_mut() else {
+            return Some(refused(
+                token,
+                kayfabe_device::FaultTag("Shim::NoMemoryPlane"),
+                "the memory plane is not attached, so a copy-engine submission has no guest \
+                 memory to read or write; refused rather than served out of nothing"
+                    .to_string(),
+            ));
+        };
+        // ⊘ The walk's authorisation, as a value: the guest rang THIS channel's doorbell,
+        // so the addresses of THIS submission are past their publication window
+        // (`gmmu_publication_discipline.md` §6.1 / §7 rule 1).
+        let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+        let outcome = plane.ce_session(facts.client, vaspace, demand, |ce| {
+            self.device.with_pushbuffer(|pb| {
+                kayfabe_rt::ceutils::run_submission(ce, pb, vmm, chan, cursor)
+            })
+        });
+        drop(held);
+
+        let Some(outcome) = outcome else {
+            // No publication for this `(hClient, hVASpace)` — a fact about the guest, and
+            // the one refusal `ce_session` answers before a byte is read.
+            return Some(refused(
+                token,
+                kayfabe_device::FaultTag("CeResolve::NoPublication"),
+                format!(
+                    "no page-directory root was published for (hClient 0x{:x}, hVASpace \
+                     0x{vaspace:x}){}",
+                    facts.client,
+                    self.addressing_probe(token)
+                ),
+            ));
+        };
+        Some(match outcome {
+            Ok(run) => {
+                self.ce
+                    .cursors
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(key, run.cursor);
+                kayfabe_device::DoorbellReport::ServedLocally {
+                    token,
+                    proc: facts.proc.0,
+                    chan: facts.chan.0,
+                    note: run.describe(),
+                }
+            }
+            Err(r) => refused(
+                token,
+                kayfabe_device::Faulted::fault_tag(&r.fault),
+                format!("{}{}", r.describe(), self.addressing_probe(token)),
+            ),
+        })
+    }
+
     /// ★★★ **What this channel's own addresses resolve to** — appended to a refusal so the
     /// boot states the finding instead of leaving it to be inferred.
     ///
@@ -1796,6 +2011,10 @@ pub struct Regs {
     /// [`Regs::refusals`] is: the policy that owns the object model is boxed into the
     /// chain and unreachable afterwards.
     isolates: kayfabe_core::gpu::SharedIsolateCensus,
+    /// ★★★ **E10e** — the CPU copy-engine executor's shell state, shared with the doorbell
+    /// port. See [`CeShellState`]; this handle exists so [`Regs::attach_ram`] can install
+    /// the memory plane into a port that was built before one existed.
+    ce: Arc<CeShellState>,
 }
 
 impl core::fmt::Debug for Regs {
@@ -1916,9 +2135,11 @@ impl Regs {
         // holds a `Weak` back to it (see [`SharedDoorbell::plane`]). `set_doorbell` takes
         // `&self`, so the order costs nothing and the cycle is broken by construction.
         let plane = Arc::new(plane);
+        let ce = Arc::new(CeShellState::default());
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
+            ce: Arc::clone(&ce),
         }));
         Ok(Regs {
             plane,
@@ -1926,6 +2147,7 @@ impl Regs {
             refusals,
             rings,
             isolates,
+            ce,
         })
     }
 
@@ -1981,6 +2203,13 @@ impl Regs {
     pub fn attach_ram(&self, shim: &Shim) {
         self.plane
             .set_ram(Box::new(MachineRam::new(shim.machine().vmm())));
+        // ★★★ **E10e** — the same handle, for the CPU copy-engine executor. ⊘ The SAME
+        // one, cloned rather than re-derived: `QemuVmm` is a handle onto the machine's
+        // memory plane, so two of them are one plane and cannot disagree — which is the
+        // property that lets a copy's bytes and its finishPayload travel by one
+        // description of guest memory. Installed here for `MachineRam`'s own reason: the
+        // memory plane does not exist at device realize.
+        *self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner()) = Some(shim.machine().vmm());
     }
 
     /// Put the plane back to refusing every guest-memory access, by name.
@@ -1992,6 +2221,10 @@ impl Regs {
     /// answer at that point and it is the one this restores.
     pub fn detach_ram(&self) {
         self.plane.set_ram(Box::new(kayfabe_device::RefusingRam));
+        // The teardown half, and not optional for the same reason: a copy-engine
+        // submission arriving after the machine released its slots must be refused by
+        // name, not served against a handle onto memory that is gone.
+        *self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     /// Serve one register read.
@@ -2121,7 +2354,19 @@ impl Regs {
         let kayfabe_device::DoorbellLog {
             last_token,
             first_refusal,
+            last_local_serving,
         } = self.plane.doorbell_log();
+        let mut doorbell_local_serving = KayfabeDoorbellServing::default();
+        if let Some(note) = last_local_serving {
+            doorbell_local_serving.present = 1;
+            // ⊘ Truncated on a CHARACTER boundary, for the reason every sentence here is.
+            let mut take = note.len().min(DOORBELL_REFUSAL_LEN);
+            while take > 0 && !note.is_char_boundary(take) {
+                take -= 1;
+            }
+            doorbell_local_serving.text[..take].copy_from_slice(&note.as_bytes()[..take]);
+            doorbell_local_serving.len = take as u64;
+        }
         let mut doorbell_refusal = KayfabeDoorbellRefusal::default();
         if let Some(r) = first_refusal {
             doorbell_refusal.present = 1;
@@ -2266,6 +2511,7 @@ impl Regs {
             doorbell_last_token: last_token.unwrap_or(0),
             doorbell_last_token_valid: u64::from(last_token.is_some()),
             doorbell_refusal,
+            doorbell_local_serving,
             gpfifo_ring_declarations,
             gpfifo_ring_nonzero,
             gpfifo_ring_va: gpfifo_ring_first.map_or(0, |(va, _)| va),

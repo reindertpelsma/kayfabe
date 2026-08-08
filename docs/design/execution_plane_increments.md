@@ -3310,3 +3310,106 @@ detail"* is understated. `[src]`, a read of the doorbell path at `97fe402`:
 ⊘ Landing any subset of these without the rest reproduces §14.8 exactly: a doorbell that
 reports **Served** over work that did not happen. The wall is unchanged, and `NoVas(ChanId(1))`
 is still the correct refusal until all four are closed together.
+
+### 14.16 ★★★ E10e item (c), part 3 — the WIRING, all four obstacles closed together (2026-08-08)
+
+⊘ **`[built]`, not `[measured]`.** Everything below is a property of the tree and of its
+tests; no boot of this revision existed when it was written. §14.8's rule is why the four
+had to close in one increment: any subset produces a doorbell reporting **Served** over work
+that did not happen.
+
+#### ⚠ Attribution correction, for §14.15's obstacle 2 and for commit `8cdde02`
+
+`8cdde02`'s subject says the operand-resolver seam was taken *"as the owner ruled"*. **It was
+not an owner ruling.** It is the **coordinator's** call, *derived* from
+`gmmu_publication_discipline.md` §7 rule 6 (*"never cache the walk"*) plus the fact that rule
+7 — the rule that would bound such a cache — is **vacuous on this path** (§5 measured both
+invalidate transports at zero, so there is no event to invalidate a cache with). The owner's
+standing rulings here are three and none of them is this one: residency must not become a
+retrofit, reuse existing code, and ⊘ no research-artifact hacks.
+
+★ The distinction is the claim ledger's whole purpose: **a judgement attributed to the owner
+reads as settled and a future reader will not re-examine it.** This one is derived, and it
+is re-openable if the seam ever turns out to cost more than the cache would. ⊘ `8cdde02`
+itself is not rewritten — history-rewriting in this shared tree has already cost a rescue.
+
+#### The four obstacles, and what closed each
+
+| # | §14.15's obstacle | closed by |
+|---|---|---|
+| 1 | *nothing in the adapter calls the parse/forward path; `SharedDoorbell` holds no `Vmm`* | `SharedDoorbell::try_ce_submission` + `CeShellState`, the shell state installed at `attach_ram` beside `MachineRam` — **the same `QemuVmm` handle, cloned**, so a copy's bytes and its finishPayload travel by one description of guest memory |
+| 2 | *the two consumers want an `AddressTable`; this channel has no `Vas`* | `kayfabe_fwd::OperandResolver` (`8cdde02`) with `kayfabe_rt::ceutils::WalkOperands` as its second implementation — the published-root walk, storing nothing |
+| 3 | *`RegPlane` holds both stores under one lock; `cpu_ce` takes `&mut dyn Vmm`; `raise_irq` has no port* | the owner's **second** option: *"the driver runs where the `Vmm` is and the plane hands out its stores"*. `RegPlane::ce_session` → `CePlane { resolve, fb }`; `cpu_ce`'s signature is **unchanged**, so `raise_irq` goes through the real hypervisor port and no new one was invented |
+| 4 | *the decode needs a per-channel `MethodState`* | a **submission-local** accumulator, stated as a claim about RM rather than assumed: `[src] channel_utils.c:806-990` builds each CeUtils block whole — both operands, both phys-mode targets, the remap registers, `LINE_LENGTH_IN`, the semaphore registers and `LAUNCH_DMA` — every time. ⚠ Not a general answer; a channel that latched once and fired many times would need the per-channel state, and the codec's own un-latched refusals are what would make that visible |
+
+#### ★★★ The lock order is the reason the driver lives in the shell, and it is `[src]`
+
+`apply_pushbuffer` runs under the device read lock **and** the issuing proc's mutex. The
+resolution this channel needs comes from `RegPlane` — and the plane's command-policy chain
+**already calls into the core under the plane's own mutex** (`kayfabe_rmrpc::policy::Bridge`
+is boxed into `PlaneState::policy`). So **plane→core is the established order**, and
+resolving from inside the core's act phase would be its inversion: a guest-buildable ABBA
+(`l1_os_shell.md` §6.3), constructed on purpose.
+
+⇒ The executor runs off `DoorbellPort::ring`, which `RegPlane::write` documents as being
+called with **no plane lock held**, and takes the two in the sanctioned order — the core
+first (`ce_channel_facts`, completed and released), the plane second (one `ce_session` for
+the whole submission, with `SharedDevice::with_pushbuffer` at rank 0 inside it).
+⊘ This is not a preference. It is why item (c) could not have been *"call `parse_pushbuffer`
+from the doorbell"*, which is what §14.7's ordering note (c) had assumed.
+
+#### ★ Three things the wiring had to decide, each with a wrong alternative
+
+1. **Which entries a doorbell consumes.** The honest source is the channel's USERD `GPPut`
+   (`[src] channel_utils.c:523`) and this port does not know where this channel's USERD
+   lives. So a per-channel **cursor** answers *"which have we already run"* and the ring's
+   own encoding answers *"is there more"* — an unwritten entry is zero and decodes to
+   nothing, because RM zero-initialises the buffer (`TRANSFER_FLAGS_SHADOW_INIT_MEM`).
+   ★ The arithmetic corroborates from the other side: RM writes the entry at
+   `lastSubmittedEntry` (0 on a fresh channel) naming method block `putIndex =
+   lastSubmittedEntry + 1`, i.e. `pbGpuVA + 1 × 0x64` — and §14.13's boot printed exactly
+   `gp0=0x420000064+0x60`.
+   ⊘ **The cursor is returned in the success value, never advanced through a `&mut`.** A
+   cursor advanced by a submission that then refused would skip the entry it could not run —
+   `#13`'s `CE-DROP` by another route — and making it structural means no caller can commit
+   one by accident.
+2. **A `HostCe` span on this path is a REFUSAL.** `execute_ours_spans` *skips* a `HostCe`
+   sub-copy (it is the isolate's) and this driver has no isolate path, so a silent skip would
+   move some bytes, release the semaphore and report a completion over a partly-done copy —
+   §14.8's exact shape. It refuses by name instead.
+3. **A doorbell that brought no readable entry is NOT served**, and neither is one that
+   decoded no launch. The guest rang for work; finding none and saying "served" is the silent
+   no-op the whole increment exists not to produce.
+
+#### The evidence the wire now carries (ABI **18 → 19**)
+
+`DoorbellReport::ServedLocally` — a **third** arm, not a `Served` with `host_token: 0`. A
+zero in a field whose documentation says *"the HOST token that was rung"* is exactly the
+*"counted as a doorbell, went nowhere, looked fine"* shape this crate's doorbell doctrine
+forbids. On the wire it is `KAYFABE_DOORBELL_SERVED_LOCAL` plus
+`KayfabeRegAudit::doorbell_local_serving`, which carries the **last** local serving's
+sentence (last, where the refusal is first: a refusal is a diagnosis, a serving is progress,
+and `memmgrTestCeUtils` issues a `MemSet` and *then* a `MemCopy`).
+
+#### Coverage, and the two bite-checks
+
+`tests/tests/e10e_ceutils_doorbell.rs` drives RM's own memset block — remap registers, no
+`OFFSET_IN_*`, `LINE_LENGTH_IN` alone, the engine-class `SET_SEMAPHORE_A/B/PAYLOAD` run, then
+`LAUNCH_DMA` — through a real `Ga10xPushbuffer`, a real `Ga10xGmmu` tree in a `SparseFb`, and
+a real published root, at `phys != va` throughout.
+
+- ★★★ **The completion word.** The host-FIFO semaphore four bytes below the finishPayload is
+  **poisoned** and asserted untouched. `[bite]` changing the release to `c.addr - 4` reddens
+  `a_ceutils_memset_on_a_vas_less_channel_fills_the_resolved_page_and_releases_the_finish_payload`
+  and nothing else — restored.
+- ★★★ **The doorbell join.** `[bite]` dropping `hObject` from `published_root`'s key reddens
+  four tests across three files — `a_channel_with_no_published_root_opens_no_session`,
+  `a_pair_that_published_nothing_gets_no_root_and_no_neighbours`,
+  `the_root_is_keyed_on_hobject_as_well_as_hclient` — restored.
+
+#### ⊘ What is still owed
+
+A **boot**. `only_live_boots_are_proof`: none of the above is a claim about a guest, and the
+acceptance is `memmgrTestCeUtils`' own readback compare at `ogkm-580: mem_mgr.c:467-470` —
+which no forged completion can satisfy, because it reads the real bytes the copy did or did
+not move.

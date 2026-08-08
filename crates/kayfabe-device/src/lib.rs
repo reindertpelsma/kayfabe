@@ -87,7 +87,7 @@ use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
 pub use plane::{
-    Counters, DoorbellLog, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane,
+    CePlane, Counters, DoorbellLog, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane,
     SteppingClock, WriteOutcome,
 };
 

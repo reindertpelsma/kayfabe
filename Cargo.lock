@@ -298,6 +298,7 @@ dependencies = [
 name = "kayfabe-rt"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-completion",
  "kayfabe-core",

@@ -740,6 +740,30 @@ impl SharedDevice {
             .collect()
     }
 
+    /// ★★★ **This device's own pushbuffer codec**, for the duration of `f` — a **spine op**
+    /// (rank-0 read guard).
+    ///
+    /// # Why a borrow through a closure, and why it exists at all
+    ///
+    /// The E10e shell driver (`crate::ceutils`) decodes a CeUtils submission's method words
+    /// outside the core, because that channel's addresses resolve through the register
+    /// plane rather than through a `Vas`. It must decode them with **this device's** codec:
+    /// a second `Arch` constructed in the adapter would be a second description of the wire
+    /// format, and the two would agree until the day they did not.
+    ///
+    /// ⊘ A closure rather than a returned reference, because the codec lives inside the
+    /// spine behind the device lock and a `&dyn PushbufferAbi` handed out here would outlive
+    /// its guard — the same constraint `decode_pt_writes`'s `fmt` parameter states one seam
+    /// over.
+    ///
+    /// ⚠ **Lock order.** This takes rank 0. A caller holding the register plane's mutex may
+    /// call it (plane→core is the established order, set by the command-policy chain); a
+    /// caller holding a rank-1 proc lock may not — that is the rank order, unchanged.
+    pub fn with_pushbuffer<R>(&self, f: impl FnOnce(&dyn kayfabe_arch::PushbufferAbi) -> R) -> R {
+        let g = self.state.read();
+        f(g.spine.arch().pushbuffer())
+    }
+
     /// The device-global page-table ownership index's answer for `phys` — **spine op**
     /// (read guard), a diagnostic window over [`kayfabe_core::gpu::Spine::pt_page_owner`].
     ///
