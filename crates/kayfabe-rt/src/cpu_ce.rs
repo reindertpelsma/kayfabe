@@ -26,12 +26,11 @@
 //! that did not move the bytes, or landing them where the guest cannot read them. The bytes
 //! move first; E10d signals only after.
 
-use kayfabe_arch::ids::{GpuVa, Pdb};
-use kayfabe_arch::{Aperture, Backing, CpuOperand, CpuPlane, PlaneAddr, ResidencyOracle};
+use kayfabe_arch::ids::GpuVa;
+use kayfabe_arch::{Backing, CpuOperand, CpuPlane, PlaneAddr};
 use kayfabe_device::{FbRefused, FbStore};
 use kayfabe_fwd::{COMPLETION_VECTOR, CeSpan, FwdFault};
 use kayfabe_isolate::{CeExecutor, CeSource};
-use kayfabe_mmu::AddressTable;
 use kayfabe_vmm::{Vmm, VmmError};
 
 /// The bounded staging-buffer size for one copy step. A guest controls a copy's length, so
@@ -252,20 +251,85 @@ pub fn execute_ours_spans(
 // §14.5 E10d). This is the `sem_releases` consumer.
 // =====================================================================================
 
-/// The CPU plane a resolved binding's aperture names — the E10d completion analogue of
-/// E10b's operand classification. A peer aperture is refused by name.
-fn sem_plane(aperture: Aperture, phys: PlaneAddr) -> Result<CpuPlane, FwdFault> {
-    // ⊘ ASKED, not computed here. The same oracle the operand classification consults, so a
-    // semaphore and the copy that releases it can never come to disagree about where one
-    // aperture's bytes are — and a later oracle that knows about host-owned backings covers
-    // the completion write for free.
-    let residency = kayfabe_fwd::DeclaredResidency
-        .residency_of_aperture(aperture, phys.0)
-        .ok_or(FwdFault::CePeerOperand { addr: phys.0 })?;
-    touchable(CpuOperand {
-        residency,
-        addr: phys,
-    })
+/// ★★★ **One finishPayload release, with its address already RESOLVED to a plane
+/// address** — the output of [`resolve_releases`] and the input of
+/// [`write_resolved_completion`].
+///
+/// # ⊘ Why the split exists, and it is a borrow fact rather than a style one
+///
+/// `write_completion` used to resolve and write in one pass, which is right when the
+/// resolver and the destination store are different objects. On the CeUtils path they are
+/// **the same object**: the resolver walks the guest's page tables out of the emulated
+/// framebuffer, and the executor writes the guest's bytes into that same framebuffer
+/// (`execution_plane_increments.md` §14.13 — the walling channel's page directories are
+/// vidmem). One `&mut` cannot be held twice, so the resolution is a **phase** and its
+/// result is a value.
+///
+/// ★ The ordering the split must not lose is *resolve → write → signal*, and it does not:
+/// [`write_resolved_completion`] still writes every payload before raising anything, and
+/// raises nothing at all on a refusal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResolvedRelease {
+    /// The virtual address the guest's pushbuffer named, kept for the report.
+    pub va: GpuVa,
+    /// Where that address lives, and at what address in that plane.
+    pub op: CpuOperand,
+    /// The payload the release carries. Written as its low 32 bits (a one-word release).
+    pub payload: u64,
+}
+
+/// ★★★ **Phase 1 of the completion tail — resolve every release's VA through the operand
+/// resolver, refusing by name rather than writing anywhere.**
+///
+/// # Errors
+/// - Whatever the resolver refuses with — [`FwdFault::Address`] for a table miss (MISS =
+///   FAULT: a completion aimed at nothing is not written and does not signal),
+///   [`FwdFault::CeNoTable`] where there is no address space to miss in, or the walk's own
+///   named fault.
+/// - [`FwdFault::CePeerOperand`] if it resolves into peer memory.
+pub fn resolve_releases(
+    ops: &mut dyn kayfabe_fwd::OperandResolver,
+    releases: &[(GpuVa, u64)],
+) -> Result<Vec<ResolvedRelease>, FwdFault> {
+    releases
+        .iter()
+        .map(|&(va, payload)| {
+            Ok(ResolvedRelease {
+                va,
+                op: ops.resolve_word(va)?,
+                payload,
+            })
+        })
+        .collect()
+}
+
+/// ★★★ **Phase 2 of the completion tail — write every resolved payload, and only then
+/// raise the completion interrupt.**
+///
+/// See [`write_completion`] for the `#12` argument this ordering is.
+///
+/// # Errors
+/// - [`FwdFault::CeUnstableBacking`] if a release's backing is not ours to hold still.
+/// - [`FwdFault::CpuCeFb`] / [`FwdFault::NonRamGpa`] / [`FwdFault::GpaRead`] on a store
+///   refusal. In every error case **no interrupt is raised**.
+pub fn write_resolved_completion(
+    fb: &mut dyn FbStore,
+    vmm: &mut dyn Vmm,
+    releases: &[ResolvedRelease],
+) -> Result<usize, FwdFault> {
+    // 1. WRITE every payload first. A refusal here returns before any signal.
+    for r in releases {
+        let plane = touchable(r.op)?;
+        // One-word (4-byte) release: the low 32 bits, little-endian.
+        let bytes = (r.payload as u32).to_le_bytes();
+        write_plane(fb, vmm, plane, r.op.addr, &bytes)?;
+    }
+    // 2. SIGNAL — only now, and only because every write above returned Ok. The guest's
+    //    poll of `pbCpuVA` already sees the values; the interrupt wakes a blocking waiter.
+    if !releases.is_empty() {
+        vmm.raise_irq(COMPLETION_VECTOR).map_err(ram_fault)?;
+    }
+    Ok(releases.len())
 }
 
 /// ★★★ **Write a copy-engine request's finishPayload semaphores where the guest polls
@@ -306,23 +370,9 @@ fn sem_plane(aperture: Aperture, phys: PlaneAddr) -> Result<CpuPlane, FwdFault> 
 pub fn write_completion(
     fb: &mut dyn FbStore,
     vmm: &mut dyn Vmm,
-    table: &AddressTable,
-    pdb: Pdb,
+    ops: &mut dyn kayfabe_fwd::OperandResolver,
     releases: &[(GpuVa, u64)],
 ) -> Result<usize, FwdFault> {
-    // 1. WRITE every payload first. A refusal here returns before any signal.
-    for &(addr, payload) in releases {
-        let (binding, off) = table.resolve(pdb, addr).map_err(FwdFault::Address)?;
-        let phys = PlaneAddr(binding.phys).offset(off);
-        let plane = sem_plane(binding.aperture, phys)?;
-        // One-word (4-byte) release: the low 32 bits, little-endian.
-        let bytes = (payload as u32).to_le_bytes();
-        write_plane(fb, vmm, plane, phys, &bytes)?;
-    }
-    // 2. SIGNAL — only now, and only because every write above returned Ok. The guest's
-    //    poll of `pbCpuVA` already sees the values; the interrupt wakes a blocking waiter.
-    if !releases.is_empty() {
-        vmm.raise_irq(COMPLETION_VECTOR).map_err(ram_fault)?;
-    }
-    Ok(releases.len())
+    let resolved = resolve_releases(ops, releases)?;
+    write_resolved_completion(fb, vmm, &resolved)
 }

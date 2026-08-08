@@ -312,6 +312,20 @@ pub enum FwdFault {
         /// The operand's address.
         addr: u64,
     },
+    /// ★★★ **E10e — a point resolution was asked of a channel that has no address table
+    /// at all** ([`TableOperands::Untracked`]).
+    ///
+    /// ⊘ Separate from [`AddressFault::Miss`], which is *"this table does not cover that
+    /// VA"* — a fact about an address space that exists. This is *"there is no address
+    /// space to miss in"*, and the two have different fixes: a miss means the guest never
+    /// published the mapping, this means the port never learned the address space. The
+    /// distinction is the same one [`FwdFault::NoVas`] draws for a range query, restated
+    /// where a **completion semaphore** is the thing being resolved — and a completion
+    /// written at a guessed address is `#12`.
+    CeNoTable {
+        /// The virtual address that had nowhere to resolve.
+        va: GpuVa,
+    },
     /// ★★★ **E10c — a `CeExecutor::Ours` sub-copy whose needed CPU plane is `None`** — a
     /// straddle no single executor can run.
     ///
@@ -3183,7 +3197,140 @@ fn representability_of(
 /// the operand present exactly when the run's `representability.executor() ==
 /// CeExecutor::Ours`. `start` is the run's address **in the operand's own space** (a VA for a
 /// virtual operand); the plane address is inside the [`CpuOperand`].
-type OperandRun = (u64, u64, Representability, Option<CpuOperand>);
+pub type OperandRun = (u64, u64, Representability, Option<CpuOperand>);
+
+/// ★★★ **THE OPERAND-RESOLVER SEAM** — how a *virtual* copy-engine operand becomes a place
+/// (`execution_plane_increments.md` §14.15 obstacle 2; owner's ruling, 2026-08-08).
+///
+/// # Why this exists at all
+///
+/// [`partition_ce`] and `kayfabe_rt::cpu_ce::write_completion` both used to take an
+/// [`AddressTable`] outright. That is the right answer for every channel that *has* a
+/// `Vas` — and it is not available for the one channel the CE branch exists to serve: the
+/// GSP-managed CeUtils channel walls `NoVas(ChanId(1))`, and its only route to an address
+/// is `kayfabe_device::ceresolve`'s walk from the page-directory root the guest published
+/// (§14.13, where all three of its addresses resolved).
+///
+/// ## ⊘ Why this and NOT a TLB fill at the demand
+///
+/// The alternative was to run the walk and *write its answers into an `AddressTable`*, so
+/// the existing consumers were unchanged. **A table filled from a walk is a cache of the
+/// walk**, and `gmmu_publication_discipline.md` §7 rule 6 is *"never cache the walk — the
+/// result is valid for this fault only"*. Rule 7 (*"serialise against the observed
+/// invalidate"*) is what would have bounded such a cache, and it is **vacuous on this
+/// path**: §5 measured **both** invalidate transports at zero, so there is no event to
+/// invalidate a cache with. A cache with no invalidation is stale for the life of the
+/// device. The seam keeps every resolution on the guest's own demand, which is §6.1's
+/// discipline unchanged and needs no new argument.
+///
+/// # ⊘ It answers for VIRTUAL operands only
+///
+/// A *physical*-mode operand bypassed the MMU by construction, so there is nothing to
+/// resolve and [`partition_ce`] answers it without consulting a resolver at all. Handing a
+/// physical address to a resolver would be asking the MMU about an address that never went
+/// through it.
+pub trait OperandResolver {
+    /// Partition the **virtual** range `[addr, addr+len)` into the maximal runs over which
+    /// this resolver's answer is constant, in ascending order, covering the effective range
+    /// exactly (a wrapping range is clipped, never wrapped — see [`AddressTable::spans`]).
+    ///
+    /// # Errors
+    /// [`FwdFault`], by variant. An implementation that resolves by *walking* faults by
+    /// name at the level it failed; one that resolves by *table lookup* reports an
+    /// uncovered run as [`Representability::Untracked`], which is a hole rather than a
+    /// fault because an untracked VA is forwardable.
+    fn resolve_runs(&mut self, addr: GpuVa, len: u64) -> Result<Vec<OperandRun>, FwdFault>;
+
+    /// Resolve ONE aligned word's worth of virtual address — the completion-semaphore
+    /// query, which is a point query and not a range one.
+    ///
+    /// ⊘ Deliberately **not** a default over [`OperandResolver::resolve_runs`]: the two
+    /// have different refusal postures. A hole is a legitimate answer to a range query and
+    /// is never a legitimate answer here — a completion written at an address that
+    /// resolved to nothing is `#12`'s where-mistake — so each implementation states its own
+    /// refusal instead of inheriting a lossy one.
+    ///
+    /// # Errors
+    /// [`FwdFault`], by variant: the implementation's own miss/fault, or
+    /// [`FwdFault::CePeerOperand`] for a peer aperture.
+    fn resolve_word(&mut self, addr: GpuVa) -> Result<CpuOperand, FwdFault>;
+}
+
+/// ★★★ The [`OperandResolver`] this port has had all along: **one channel's own
+/// [`AddressTable`]**, or the honest absence of one.
+///
+/// ⊘ `Untracked` is a variant rather than an `Option<&AddressTable>` field because the two
+/// arms answer differently *and* refuse differently, and a `None` inside one arm reads as a
+/// missing value rather than as a decision.
+#[derive(Debug)]
+pub enum TableOperands<'a> {
+    /// The channel has a `Vas` and this is its table, keyed by the PDB a miss is reported
+    /// against.
+    Table {
+        /// The address table to resolve in.
+        table: &'a AddressTable,
+        /// The PDB, carried so a miss names the address space it missed in.
+        pdb: Pdb,
+    },
+    /// The channel has no address table at all — nothing is tracked, so nothing is ours.
+    Untracked,
+}
+
+impl<'a> TableOperands<'a> {
+    /// The resolver for a channel whose `Vas` was found (or not).
+    #[must_use]
+    pub fn new(table: Option<&'a AddressTable>, pdb: Option<Pdb>) -> TableOperands<'a> {
+        match (table, pdb) {
+            (Some(table), Some(pdb)) => TableOperands::Table { table, pdb },
+            _ => TableOperands::Untracked,
+        }
+    }
+}
+
+impl OperandResolver for TableOperands<'_> {
+    fn resolve_runs(&mut self, addr: GpuVa, len: u64) -> Result<Vec<OperandRun>, FwdFault> {
+        match self {
+            TableOperands::Table { table, .. } => table
+                .spans(addr, len)
+                .into_iter()
+                .map(|(s, l, b)| {
+                    let (kind, place) = representability_of(
+                        b.as_ref().map(|(x, _)| x),
+                        b.map_or(0, |(_, o)| o),
+                        s,
+                    )?;
+                    Ok((s, l, kind, place))
+                })
+                .collect(),
+            // No table for this channel's VAS at all: nothing is tracked, so nothing is
+            // ours. The same clipping rule the table's own range query uses.
+            TableOperands::Untracked => {
+                let end = (u128::from(addr.0) + u128::from(len)).min(1u128 << 64);
+                let eff = (end - u128::from(addr.0)) as u64;
+                if eff == 0 {
+                    Ok(Vec::new())
+                } else {
+                    Ok(vec![(addr.0, eff, Representability::Untracked, None)])
+                }
+            }
+        }
+    }
+
+    fn resolve_word(&mut self, addr: GpuVa) -> Result<CpuOperand, FwdFault> {
+        match self {
+            TableOperands::Table { table, pdb } => {
+                let (binding, off) = table.resolve(*pdb, addr).map_err(FwdFault::Address)?;
+                let phys = PlaneAddr(binding.phys).offset(off);
+                let residency = residency_of_aperture(binding.aperture, phys.0)?;
+                Ok(CpuOperand {
+                    residency,
+                    addr: phys,
+                })
+            }
+            TableOperands::Untracked => Err(FwdFault::CeNoTable { va: addr }),
+        }
+    }
+}
 
 /// The partition of one operand's range, as [`OperandRun`]s — the `plane`
 /// present exactly when `kind.executor() == CeExecutor::Ours`.
@@ -3195,9 +3342,10 @@ type OperandRun = (u64, u64, Representability, Option<CpuOperand>);
 /// addresses collide numerically.
 ///
 /// # Errors
-/// [`FwdFault::CePeerOperand`] if any run resolves into peer memory.
+/// [`FwdFault::CePeerOperand`] if any run resolves into peer memory, plus whatever the
+/// resolver's own virtual arm refuses with.
 fn operand_runs(
-    table: Option<&AddressTable>,
+    ops: &mut dyn OperandResolver,
     addr: GpuVa,
     is_virtual: bool,
     target: PhysTarget,
@@ -3221,28 +3369,7 @@ fn operand_runs(
             }),
         )]);
     }
-    match table {
-        Some(t) => t
-            .spans(addr, len)
-            .into_iter()
-            .map(|(s, l, b)| {
-                let (kind, place) =
-                    representability_of(b.as_ref().map(|(x, _)| x), b.map_or(0, |(_, o)| o), s)?;
-                Ok((s, l, kind, place))
-            })
-            .collect(),
-        // No table for this channel's VAS at all: nothing is tracked, so nothing is
-        // ours. The same clipping rule the table's own range query uses.
-        None => {
-            let end = (u128::from(addr.0) + u128::from(len)).min(1u128 << 64);
-            let eff = (end - u128::from(addr.0)) as u64;
-            if eff == 0 {
-                Ok(Vec::new())
-            } else {
-                Ok(vec![(addr.0, eff, Representability::Untracked, None)])
-            }
-        }
-    }
+    ops.resolve_runs(addr, len)
 }
 
 /// Do two adjacent sub-copies' places join up — same store, same ownership, and the second's
@@ -3292,7 +3419,7 @@ fn plane_follows(prev: Option<CpuOperand>, next: Option<CpuOperand>, prev_len: u
 /// [`FwdFault::CePeerOperand`] if an operand resolves into peer memory.
 #[allow(clippy::too_many_arguments)]
 pub fn partition_ce(
-    dst_table: Option<&AddressTable>,
+    ops: &mut dyn OperandResolver,
     dst: GpuVa,
     dst_is_virtual: bool,
     dst_target: PhysTarget,
@@ -3302,7 +3429,7 @@ pub fn partition_ce(
     len: u64,
     work: kayfabe_arch::CeWork,
 ) -> Result<Vec<CeSpan>, FwdFault> {
-    let dst_runs = operand_runs(dst_table, dst, dst_is_virtual, dst_target, len)?;
+    let dst_runs = operand_runs(ops, dst, dst_is_virtual, dst_target, len)?;
     // The destination decides how much of the request exists at all (a clipped
     // destination clips the whole copy).
     let eff: u64 = dst_runs.iter().map(|(_, l, _, _)| *l).sum();
@@ -3313,7 +3440,7 @@ pub fn partition_ce(
     // intersect — its representability is a property of its destination alone.
     let has_src = matches!(work, kayfabe_arch::CeWork::Copy);
     let src_runs = if has_src {
-        operand_runs(dst_table, src, src_is_virtual, src_target, eff)?
+        operand_runs(ops, src, src_is_virtual, src_target, eff)?
     } else {
         Vec::new()
     };
@@ -3749,8 +3876,13 @@ pub fn apply_pushbuffer(
                 let dst_table = chan_pdb
                     .and_then(|pdb| proc.vases.get(&(cgpu, pdb)))
                     .map(|v| &v.table);
+                // ★ §14.15 obstacle 2 — the operand-resolver seam. Here it is the
+                // channel's own address table, which is what every channel with a `Vas`
+                // resolves through; the VAS-less CeUtils channel takes the same seam with
+                // `kayfabe_rt::ceutils`'s published-root walk on the other side of it.
+                let mut ops = TableOperands::new(dst_table, chan_pdb);
                 let spans = partition_ce(
-                    dst_table,
+                    &mut ops,
                     dst,
                     dst_is_virtual,
                     dst_target,

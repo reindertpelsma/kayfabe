@@ -1758,8 +1758,10 @@ fn the_decoded_fill_writes_the_bytes_the_engine_writes() {
                     )
                     .expect("bind the fill's destination");
             }
+            let mut ops =
+                kayfabe_fwd::TableOperands::new(dst_is_virtual.then_some(&table), Some(pdb));
             let spans = kayfabe_fwd::partition_ce(
-                dst_is_virtual.then_some(&table),
+                &mut ops,
                 dst,
                 dst_is_virtual,
                 dst_target,

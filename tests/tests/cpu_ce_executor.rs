@@ -36,8 +36,9 @@ fn phys_place(plane: CpuPlane, addr: u64) -> Option<CpuOperand> {
 /// A physical `sys ← vid` copy span, built the way E10b's `partition_ce` builds it: both
 /// operands physical, destination `COHERENT_SYSMEM` (guest RAM), source `LOCAL_FB`.
 fn sys_from_vid(sys: u64, vid: u64, len: u64) -> Vec<CeSpan> {
+    let mut ops = kayfabe_fwd::TableOperands::Untracked;
     partition_ce(
-        None,
+        &mut ops,
         GpuVa(sys),
         false,
         PhysTarget::CoherentSysmem,
@@ -105,8 +106,9 @@ fn a_physical_copy_moves_guest_ram_bytes_into_the_framebuffer() {
     let witness = 0xFEED_BEEFu32.to_le_bytes();
     vmm.gpa_write(SYS, &witness).unwrap();
 
+    let mut ops = kayfabe_fwd::TableOperands::Untracked;
     let spans = partition_ce(
-        None,
+        &mut ops,
         GpuVa(VID),
         false,
         PhysTarget::LocalFb,
@@ -132,8 +134,9 @@ fn a_scrub_zeroes_the_framebuffer_destination() {
     let mut vmm = MockVmm::new();
     const VID: u64 = 0x0300_0000;
     fb.write(VID, &[0xff; 16]).unwrap();
+    let mut ops = kayfabe_fwd::TableOperands::Untracked;
     let spans = partition_ce(
-        None,
+        &mut ops,
         GpuVa(VID),
         false,
         PhysTarget::LocalFb,
@@ -337,8 +340,9 @@ fn a_virtual_destination_fills_the_bound_physical_and_not_the_va() {
     fb.write(VA, &[0x22; LEN as usize]).unwrap();
 
     let pattern = 0x0403_0201u32;
+    let mut ops = kayfabe_fwd::TableOperands::new(Some(&t), Some(VDST_PDB));
     let spans = partition_ce(
-        Some(&t),
+        &mut ops,
         GpuVa(VA),
         true, // ★ VIRTUAL destination — the case the file did not have
         PhysTarget::LocalFb,
@@ -400,8 +404,9 @@ fn a_virtual_sysmem_destination_fills_guest_ram_at_the_bound_gpa() {
     let t = table_binding(VA, 0x1000, GPA, Aperture::SysmemCoherent);
     vmm.gpa_write(GPA, &[0u8; 8]).unwrap();
 
+    let mut ops = kayfabe_fwd::TableOperands::new(Some(&t), Some(VDST_PDB));
     let spans = partition_ce(
-        Some(&t),
+        &mut ops,
         GpuVa(VA),
         true,
         PhysTarget::LocalFb,
@@ -445,8 +450,9 @@ fn a_virtual_destination_inside_a_binding_lands_at_phys_plus_the_offset() {
     let t = table_binding(BASE_VA, 0x1000, BASE_PHYS, Aperture::Vidmem);
     fb.write(BASE_PHYS, &[0x33; 0x1000]).unwrap();
 
+    let mut ops = kayfabe_fwd::TableOperands::new(Some(&t), Some(VDST_PDB));
     let spans = partition_ce(
-        Some(&t),
+        &mut ops,
         GpuVa(BASE_VA + OFF),
         true,
         PhysTarget::LocalFb,
@@ -498,8 +504,9 @@ fn the_readback_compare_passes_over_a_virtual_source_and_a_physical_destination(
     fb.write(SRC_VA, &[0x00; 4]).unwrap();
     vmm.gpa_write(SYS, &0xDEAD_BEEFu32.to_le_bytes()).unwrap();
 
+    let mut ops = kayfabe_fwd::TableOperands::new(Some(&t), Some(VDST_PDB));
     let spans = partition_ce(
-        Some(&t),
+        &mut ops,
         GpuVa(SYS),
         false, // physical sysmem destination
         PhysTarget::CoherentSysmem,
@@ -567,8 +574,7 @@ fn a_finish_payload_lands_where_the_guest_polls_and_then_the_irq_fires() {
     let n = write_completion(
         &mut fb,
         &mut vmm,
-        &table,
-        SEM_PDB,
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
         &[(GpuVa(SEM_VA), 0x1234_5678)],
     )
     .expect("the completion writes");
@@ -602,8 +608,7 @@ fn a_one_word_release_writes_four_bytes_and_spares_the_neighbour() {
     write_completion(
         &mut fb,
         &mut vmm,
-        &table,
-        SEM_PDB,
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
         &[(GpuVa(SEM_VA), 0xFFFF_FFFF_DEAD_BEEF)],
     )
     .unwrap();
@@ -629,8 +634,7 @@ fn an_unresolved_semaphore_faults_and_raises_no_interrupt() {
     let err = write_completion(
         &mut fb,
         &mut vmm,
-        &table,
-        SEM_PDB,
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
         &[(GpuVa(0x700_0000), 7)],
     )
     .expect_err("an unresolved semaphore must fault");
@@ -665,8 +669,7 @@ fn a_finish_payload_in_vidmem_lands_in_the_framebuffer_store() {
     write_completion(
         &mut fb,
         &mut vmm,
-        &table,
-        SEM_PDB,
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
         &[(GpuVa(SEM_VA), 0xCAFE)],
     )
     .unwrap();
@@ -793,4 +796,88 @@ fn a_stable_guest_ram_destination_is_still_filled() {
         [0xDD, 0xCC, 0xBB, 0xAA, 0xDD, 0xCC, 0xBB, 0xAA],
         "the fill still lands, phased by the destination address"
     );
+}
+
+// =====================================================================================
+// ★★★ §14.15 obstacle 2 — THE OPERAND-RESOLVER SEAM. The completion tail no longer takes
+// an `AddressTable`; it takes a resolver, and the two refusals below are the ones the
+// seam has to keep distinguishable for the VAS-less CeUtils channel to be servable at all.
+// =====================================================================================
+
+/// ⊘ *"There is no address space to miss in"* is a DIFFERENT finding from *"this address
+/// space does not cover that VA"*, and the seam must not flatten them: a miss means the
+/// guest never published the mapping, `CeNoTable` means the port never learned the address
+/// space. ⊘ And **no interrupt** either way.
+#[test]
+fn a_completion_on_a_channel_with_no_address_table_refuses_by_its_own_name() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    let err = write_completion(
+        &mut fb,
+        &mut vmm,
+        &mut kayfabe_fwd::TableOperands::Untracked,
+        &[(GpuVa(0x900_0000), 3)],
+    )
+    .expect_err("a channel with no table cannot resolve a completion");
+    assert!(
+        matches!(err, FwdFault::CeNoTable { va } if va == GpuVa(0x900_0000)),
+        "the absence of a table is its own refusal, naming the VA: {err:?}"
+    );
+    assert!(
+        vmm.irqs.is_empty(),
+        "⊘ no completion interrupt for a semaphore that had nowhere to resolve"
+    );
+    // …and the same resolver's RANGE query is a hole rather than a fault, because an
+    // untracked operand range is forwardable. Two questions, two postures, one seam.
+    let runs = kayfabe_fwd::OperandResolver::resolve_runs(
+        &mut kayfabe_fwd::TableOperands::Untracked,
+        GpuVa(0x900_0000),
+        0x1000,
+    )
+    .expect("a range query over an untracked channel is a hole, not a fault");
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].2, Representability::Untracked);
+}
+
+/// ★★★ The seam's two phases compose to exactly what the one-shot did — and the SPLIT is
+/// what the shell needs, because on the CeUtils path the resolver and the destination store
+/// are the same object (the walk reads page tables out of the very framebuffer the executor
+/// writes into) and one `&mut` cannot be held twice.
+#[test]
+fn resolving_then_writing_a_completion_is_the_same_as_doing_both_at_once() {
+    const SEM_VA: u64 = 0x310_0000;
+    const SEM_PHYS: u64 = 0x41_0000;
+    let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
+    let releases = [(GpuVa(SEM_VA), 0x0BAD_F00Du64)];
+
+    let mut fb_a = SparseFb::new(FB_LIMIT);
+    let mut vmm_a = MockVmm::new();
+    write_completion(
+        &mut fb_a,
+        &mut vmm_a,
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
+        &releases,
+    )
+    .expect("one-shot");
+
+    let mut fb_b = SparseFb::new(FB_LIMIT);
+    let mut vmm_b = MockVmm::new();
+    let resolved = kayfabe_rt::cpu_ce::resolve_releases(
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
+        &releases,
+    )
+    .expect("phase 1 resolves");
+    assert_eq!(resolved[0].op.addr, PlaneAddr(SEM_PHYS));
+    assert_eq!(resolved[0].op.residency.plane, CpuPlane::GuestRam);
+    assert!(
+        vmm_b.irqs.is_empty(),
+        "⊘ phase 1 writes nothing and signals nothing"
+    );
+    kayfabe_rt::cpu_ce::write_resolved_completion(&mut fb_b, &mut vmm_b, &resolved)
+        .expect("phase 2 writes");
+
+    assert_eq!(vmm_a.ram_read(SEM_PHYS, 4), vmm_b.ram_read(SEM_PHYS, 4));
+    assert_eq!(vmm_a.ram_read(SEM_PHYS, 4), 0x0BAD_F00Du32.to_le_bytes());
+    assert_eq!(vmm_a.irqs, vmm_b.irqs);
+    assert_eq!(vmm_b.irqs, vec![IrqSpec::Msix(0)]);
 }

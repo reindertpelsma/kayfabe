@@ -60,8 +60,9 @@ fn pc(
     len: u64,
     work: CeWork,
 ) -> Result<Vec<CeSpan>, FwdFault> {
+    let mut ops = kayfabe_fwd::TableOperands::new(dst_table, Some(A_PDB));
     partition_ce(
-        dst_table,
+        &mut ops,
         dst,
         dst_is_virtual,
         PhysTarget::LocalFb,
@@ -925,8 +926,9 @@ fn a_physical_sys_from_vid_copy_carries_the_two_operands_distinct_cpu_planes() {
     // number is legal and its two planes must STILL come out different. Nothing but the
     // `_TARGET` disambiguates them.
     let addr = GpuVa(0x10_0000);
+    let mut ops = kayfabe_fwd::TableOperands::Untracked; // physical operands consult no table
     let spans = partition_ce(
-        None, // physical operands consult no table
+        &mut ops,
         addr,
         false, // dst physical
         PhysTarget::CoherentSysmem,
@@ -976,8 +978,9 @@ fn a_physical_sys_from_vid_copy_carries_the_two_operands_distinct_cpu_planes() {
 #[test]
 fn swapping_the_targets_swaps_the_planes_the_address_is_not_consulted() {
     let addr = GpuVa(0x20_0000);
+    let mut ops = kayfabe_fwd::TableOperands::Untracked;
     let spans = partition_ce(
-        None,
+        &mut ops,
         addr,
         false,
         PhysTarget::LocalFb, // dst now FB
@@ -1009,8 +1012,9 @@ fn swapping_the_targets_swaps_the_planes_the_address_is_not_consulted() {
 /// is not host-representable in this model. ⊘ Not defaulted to a framebuffer copy.
 #[test]
 fn a_peer_physical_operand_is_refused_by_name_never_mistaken_for_fb() {
+    let mut ops = kayfabe_fwd::TableOperands::Untracked;
     let err = partition_ce(
-        None,
+        &mut ops,
         GpuVa(0x4000),
         false,
         PhysTarget::Peer,
@@ -1032,8 +1036,9 @@ fn a_peer_physical_operand_is_refused_by_name_never_mistaken_for_fb() {
 /// executor does not have and does not need).
 #[test]
 fn noncoherent_sysmem_is_guest_ram_like_coherent() {
+    let mut ops = kayfabe_fwd::TableOperands::Untracked;
     let spans = partition_ce(
-        None,
+        &mut ops,
         GpuVa(0x8000),
         false,
         PhysTarget::NonCoherentSysmem,
@@ -1086,8 +1091,9 @@ fn a_fabricated_virtual_operand_takes_its_plane_from_the_aperture() {
     .expect("sysmem bind");
     // A scrub across BOTH runs: the destination alone decides, and the two runs must carry
     // different planes (Fb then GuestRam) even though the target arg is the same LOCAL_FB.
+    let mut ops = kayfabe_fwd::TableOperands::new(Some(&t), Some(A_PDB));
     let spans = partition_ce(
-        Some(&t),
+        &mut ops,
         GpuVa(base),
         true,
         PhysTarget::LocalFb,

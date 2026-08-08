@@ -51,6 +51,7 @@ impl Faulted for FwdFault {
             FwdFault::NoTarget { .. } => FaultTag("FwdFault::NoTarget"),
             FwdFault::CePeerOperand { .. } => FaultTag("FwdFault::CePeerOperand"),
             FwdFault::CeUnstableBacking { .. } => FaultTag("FwdFault::CeUnstableBacking"),
+            FwdFault::CeNoTable { .. } => FaultTag("FwdFault::CeNoTable"),
             FwdFault::CpuCeStraddle { .. } => FaultTag("FwdFault::CpuCeStraddle"),
             FwdFault::CpuCeFb { .. } => FaultTag("FwdFault::CpuCeFb"),
             // ★ Delegated, so an address fault's tag names WHICH address fault. A miss

@@ -139,8 +139,9 @@ fn pc(
     len: u64,
     work: CeWork,
 ) -> Result<Vec<kayfabe_fwd::CeSpan>, kayfabe_fwd::FwdFault> {
+    let mut ops = kayfabe_fwd::TableOperands::new(dst_table, Some(kayfabe_arch::ids::Pdb(0)));
     partition_ce(
-        dst_table,
+        &mut ops,
         dst,
         dst_is_virtual,
         PhysTarget::LocalFb,
