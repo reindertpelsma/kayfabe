@@ -9,16 +9,32 @@ on a patched guest is a **diagnosis**, not the milestone.
 
 ## Applying
 
-The guest runs NVIDIA **open 580.159.04**. The `.run` installer extracts to a kernel-open
-source tree whose RM core is `src/nvidia/`; the patches here are `-p1` against that tree
-root (same layout as the vendored oracle
-`/workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04`). Rebuild the module
-in-guest after patching.
+⊘⊘ **NOT against the `.run` tree — that route does not exist, and this section used to say it
+did.** `[measured 2026-08-08]` `sh NVIDIA-580.run -x` produces a tree that contains
+**`kernel-open/nvidia/nv-kernel.o_binary`, a 17 MB precompiled RM blob**, and **no
+`channel_utils.c` anywhere**. `-m=kernel-open` selects the *open-licensed kernel interface*; it
+does **not** make RM build from source. Anyone following the old instruction reaches a tree with
+no file to patch and concludes guest instrumentation is impossible. It is not.
+
+★ **The route that works**, measured end to end on 2026-08-08:
 
 ```sh
-cd <extracted-.run-tree>          # contains src/nvidia/...
-patch -p1 < 0001-bringup-scrubber-init-printk.patch
+# 1. The FULL SOURCE tree is the vendored oracle, not the installer payload.
+cp -a /workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04 ./ogkm
+cd ./ogkm
+patch -p1 < 0002-bringup-ceutils-finishpayload-wait.patch
+
+# 2. Build where the TARGET kernel's headers are. For the guest that means IN-GUEST
+#    (guest runs 6.8.0-136-generic; the bench host runs 6.8.0-59 and its modules will
+#    not load in the guest -- vermagic).
+make modules -j"$(nproc)"
+
+# 3. Confirm the instrumentation actually reached the linked module, not just the .c:
+strings kernel-open/nvidia.ko | grep -c KAYFABE-BRINGUP     # expect the NV_PRINTF count
 ```
+
+⚠ Step 3 is not ceremony. A patch can apply, compile, and still be absent from the module if it
+lands in a file the build excludes. Grep the **linked `.ko`**, never the source.
 
 ## Patches
 
