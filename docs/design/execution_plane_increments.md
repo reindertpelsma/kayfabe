@@ -3845,3 +3845,114 @@ served yet. ⊘ Unmeasured; do not assume the first.
   golden context does not exist and `cuInit` is unchanged. ★ Which is itself a correction:
   those four refusals do **not** block the adapter — they were assumed to be upstream of
   everything, and the adapter now initialises with all four still refused.
+
+### 14.21 ⊘⊘ REVERTED: serving `GPU_PROMOTE_CTX` **kills the adapter**, because `NV_ERR_NOT_SUPPORTED` is the only status RM tolerates here (`[measured 2026-08-08, boot ship2_7c5d74d, rev 7c5d74d]`, against `ship_7a881a7`)
+
+`[measured 2026-08-08]`, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver
+**580.159.04 Open**), source revision **`7c5d74d`** verified by
+`strings … | grep -o 'kayfabe-rev:[0-9a-f]*'` on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:7c5d74dc5c37520ad0a3447be8c18c3649632fed` in each. Boot `ship2_7c5d74d`,
+**`probe-arm set: EMPTY`**, **STOCK** guest module. Compared against `ship_7a881a7` (§14.20).
+
+#### What was built, and it worked exactly as designed
+
+`NV2080_CTRL_CMD_GPU_PROMOTE_CTX` joined `OBJECT_CONTROLS` with an arm routing through
+`Bridge::deliver` — the third `a_table_does_not_decide_behaviour`: `control_params` decoded
+it, `translate_promote_ctx` translated it, `Bridge::deliver` had an apply arm and
+`Gpu::promote_ctx` performed it, and `respond_control` gated on a list that did not name it.
+Refusals answered `NV_ERR_INVALID_OBJECT_HANDLE` (`0x33`) or `NV_ERR_INVALID_STATE` (`0x40`),
+per this repo's standing rule that `0x56` is the FSM's *"nobody claimed this"* signature and
+must never be reused for a decision.
+
+#### ★★★ The A/B, one variable, and the diff is FOUR LINES
+
+Guest dmesg, `ship_7a881a7` vs `ship2_7c5d74d`, timestamps stripped — **identical** except:
+
+| | `ship_7a881a7` | `ship2_7c5d74d` |
+|---|---|---|
+| `kgrobjPromoteContext` @ `kernel_graphics_object.c:224` | `NV_ERR_NOT_SUPPORTED (0x56)` | `NV_ERR_INVALID_STATE (0x40)` |
+| `kgraphicsCreateGoldenImageChannel` @ `:508` | `0x56` | `0x40` |
+| what follows | the RC watchdog runs, then **17 more lines**, no bail | `RmInitNvDevice: *** Cannot load state into the device` |
+| `nvidia-smi` | full device table, `SMI_RC=0` | `SMI_RC=6`, `RmInitAdapter failed! (0x25:0x40:1249)` |
+
+⊘ **We answered a better status and lost the milestone.** Nothing else changed.
+
+#### ★★★ Why, in RM's own source — this is a READING that the boot sent us to find
+
+`gpuStatePostLoad` (`ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:3437-3439`):
+
+```c
+// RMCONFIG:  Bail on errors unless the feature/object/engine/class
+//            is simply unsupported
+if (rmStatus == NV_ERR_NOT_SUPPORTED)
+    rmStatus = NV_OK;
+if (rmStatus != NV_OK)
+    goto gpuStatePostLoad_exit;
+```
+
+The golden-image channel is built from the FIFO engine's post-load callback
+(`kfifoStateLoad_GM107` → `kfifoTriggerPostSchedulingEnableCallback`,
+`ogkm-580: kernel_fifo_gm107.c:229-234`, which returns any error verbatim). So the whole
+chain — promote-ctx → `_kgrAlloc` → `kgraphicsCreateGoldenImageChannel` → the FIFO engine's
+`StatePostLoad` — lands on that one comparison. **`NV_ERR_NOT_SUPPORTED` is converted to
+`NV_OK` and swallowed; every other status is fatal to `RmInitAdapter`.**
+
+⇒ ★★ **The standing rule has a counter-instance — `[measured 2026-08-08, boots ship_7a881a7
+and ship2_7c5d74d]` plus the `gpu.c:3437-3439` reading above — and it needs a scope rather
+than a repeal.** *"⊘ Never `NV_ERR_NOT_SUPPORTED` for a decided refusal"* is right wherever it was
+established — `GPFIFO_SCHEDULE`, `BIND` — because there the guest's error path *reads* the
+status. It is **wrong for any control whose failure propagates into an engine's
+`StatePostLoad`**, where `0x56` is the only status that keeps the adapter alive and a
+"better" one silently converts an enumerating GPU into a dead one. Before choosing a refusal
+status, ask **where the caller's error goes**, not only what the control's header documents.
+
+#### The refusal itself was CORRECT, and it names the real gap
+
+`nvkvm: bridge refusal PromoteFault::ContextVasUndeclared x1` — one refusal, the true one.
+The golden-image channel's VASpace has declared no page-directory base, which is §14.9's
+measurement restated from the other side: the boot issues `SET_PAGE_DIRECTORY` **zero**
+times, the boot-path root arrives on `0x90f10106`, and that publication does not reach
+`Vas::pdb` in the object model. ⇒ On the boot path **every** promote-ctx can only refuse, so
+claiming the control buys nothing and costs the adapter.
+
+#### ⊘ REVERTED, and what that decision is
+
+The claim, the arm and the two status constants are **removed**; the `NV40_I2C` named
+refusal and this section stay. The port must not claim a control it cannot perform when a
+*decided* refusal is fatal where an *unserviced* one is tolerated — the difference is
+`gpuStatePostLoad`'s one comparison, and it is not ours to argue with.
+
+★ The re-enable condition is now exact and testable: **when the `0x90f10106` publication
+reaches `Vas::pdb`, promote-ctx SUCCEEDS rather than refuses**, `NV_OK` replaces the refusal,
+and the status question disappears entirely. Serving it before then is strictly negative.
+
+#### ⚠ And a bench trap that invalidated the first boot of this section, silently
+
+`scripts/build_qom_shim.sh <src> [<build-dir>]` defaults its build dir to
+`<src>/build-nvkvm`; `scripts/bench/boot_nvkvm.sh` hard-codes
+`Q=/workspace/bench/qemu-build/qemu-system-x86_64`. ⇒ The **obvious** invocation
+(`build_qom_shim.sh /workspace/bench/qemu-10.2.4`) builds a binary the boot harness never
+runs, and leaves the previous revision's binary in place — the `862c7c2` stale-artifact
+failure, one level up. Boot `ship_7c5d74d` was produced that way and is **void**: its
+`run_ship_7c5d74d_probe.log` stamps `kayfabe-rev:7a881a7…` while the tree said `7c5d74d`.
+★ The only reason it was caught is that `boot_capture.sh` prints the revision **read out of
+the binary it is about to run**, and prints it beside nothing else that agrees with it.
+⇒ Always pass the build dir: `build_qom_shim.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build`.
+
+#### ★ `vh` is now a real gate host
+
+Both vendored open-kernel-modules trees are installed at the default paths
+`tests/build.rs` looks for (`/workspace/nvidia-gpu-passthrough/research_clones/{ogkm-580.159.04,ogkm}`,
+130 MB + 143 MB). `scripts/ci_gates.sh --all` there now exits **0** with
+`ALL GATES CLEAN (23 steps, floor 23 for --all mode)` and an oracle census of
+**`SKIPPED=0` in all five families** — `GMMU RAN=15`, `PUSHBUFFER RAN=24`, `TOKEN RAN=3`,
+`USERD-CHID RAN=5`, `VBIOS RAN=13`. Previously every family reported SKIPPED and the green
+covered no compiled oracle at all (`skipped_oracle_kills_the_guard`).
+
+⚠ **A gate run on `vh` measures `vh`'s tree.** The first `--all` run of this session reported
+the claim ledger at 382/67 against a ceiling of 381/66 (`[measured 2026-08-08, gates3.log on
+vh, rev 7c5d74d]`) — and the tree it measured was
+`7a881a7` plus four hand-copied files, three doc commits behind master. On the real HEAD the
+ledger is **381/66/17 with `MEASURED` 882 → 886**. Sync with a bundle before believing a
+gate: it is the same species as the stale-binary trap above, and it costs a wrong ratchet.

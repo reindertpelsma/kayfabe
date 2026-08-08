@@ -785,37 +785,6 @@ pub struct PromoteCtx {
 pub const MAX_PROMOTE_ENTRIES: usize =
     crate::generated::ctrl::NV2080_CTRL_GPU_PROMOTE_CONTEXT_MAX_ENTRIES;
 
-/// `NV_ERR_INVALID_OBJECT_HANDLE` — what this port answers when `hObject` does not
-/// resolve in `hChanClient`'s handle table, or resolves to something that is not a
-/// channel or channel group.
-///
-/// ★ Grounded in the path RM's own dispatcher takes, not in the control's doc comment.
-/// A `0x2080012b` naming an unresolvable handle never reaches a promote implementation at
-/// all: resserv fails it at `clientGetResourceRef` and that is the status it produces
-/// (`ogkm-580: nvstatuscodes.h:80`).
-///
-/// ⊘ **Deliberately NOT `NV_ERR_NOT_SUPPORTED` (`0x56`)**, even though this control's own
-/// header lists it. That list is copy-pasted boilerplate — it explains `0x56` as *"The
-/// Class does not support version info retrieval"*, a sentence about a different control
-/// entirely (`ogkm-580: ctrl2080gpu.h:978-983`) — so it is not evidence about promote-ctx.
-/// And `0x56` is [`kayfabe_gsp::GspFsm::answer`](https://docs.rs)'s *"nobody claimed this
-/// command"* signature, which the guest prints as raw hex: reusing it would make *"I
-/// resolved your handle and refused"* indistinguishable from *"no code path exists"* in
-/// the one place anyone reads. Same argument, and the same 0x56 trap, as
-/// [`crate::submit::GPFIFO_SCHEDULE_REFUSED_STATUS`].
-pub const PROMOTE_CTX_UNKNOWN_OBJECT_STATUS: u32 = 0x33;
-
-/// `NV_ERR_INVALID_STATE` — what this port answers when `hObject` **resolved** but the
-/// promotion could not be applied: the context names no routable address space, its
-/// owning proc has retired, or the decode refused the message.
-///
-/// The split from [`PROMOTE_CTX_UNKNOWN_OBJECT_STATUS`] is the same one
-/// [`crate::submit::BIND_REFUSED_STATUS`] makes against
-/// [`crate::submit::BIND_UNKNOWN_ENGINE_STATUS`]: *"I cannot see what you named"* and
-/// *"I saw it and it is not in a state I can act on"* are different facts about the
-/// device, and a boot log that conflates them cannot be read.
-pub const PROMOTE_CTX_REFUSED_STATUS: u32 = 0x40;
-
 impl PromoteCtx {
     /// Build from a decoded prefix and the entries that survived decoding.
     pub(crate) fn new(
