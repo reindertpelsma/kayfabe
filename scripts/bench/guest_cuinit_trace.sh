@@ -18,7 +18,12 @@ $GSSH 'cat > /tmp/cuinit_probe.c'     < /workspace/bench/cuinit_probe.c
 $GSSH 'gcc -O0 -shared -fPIC -o /tmp/cuda_ioctl_trace.so /tmp/cuda_ioctl_trace.c -ldl 2>&1; echo SO_RC=$?'
 $GSSH 'gcc -O0 -o /tmp/cuinit_probe /tmp/cuinit_probe.c -ldl 2>&1; echo PROBE_RC=$?'
 echo "=== run cuInit under the interposer ==="
-$GSSH 'cd /tmp && rm -f /tmp/gtrace.txt && LD_PRELOAD=/tmp/cuda_ioctl_trace.so NVTRACE_FILE=/tmp/gtrace.txt timeout 180 /tmp/cuinit_probe 2>&1; echo PROBE_EXIT=$?'
+# ⊘⊘ `NVTRACE_FILE` was a MISNAME — the interposer reads `NVTRACE_OUT` (`trace_init`), so
+# this line wrote NO file and the whole trace reached us only as the ssh session's stderr.
+# `[measured 2026-08-08]` The two commands below it (`wc -l`, `cat`) were therefore reading a
+# path that never existed, and the trace §14.28 is built on lives in a transcript rather than
+# on the box — the serial-log trap (`CLAUDE.md`, trap 1) reproduced by a typo in an env var.
+$GSSH 'cd /tmp && rm -f /tmp/gtrace.txt && LD_PRELOAD=/tmp/cuda_ioctl_trace.so NVTRACE_OUT=/tmp/gtrace.txt timeout 180 /tmp/cuinit_probe 2>&1; echo PROBE_EXIT=$?'
 echo "=== trace size ==="
 $GSSH 'wc -l /tmp/gtrace.txt 2>&1'
 echo "=== the whole trace ==="

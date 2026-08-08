@@ -85,6 +85,46 @@
  *                                        NV_ERR_NOT_SUPPORTED — the status our
  *                                        port's refusal actually puts on the
  *                                        wire, not an arbitrary error)
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * ★★★ THE THIRD MODE: `NVSWEEP_GPUINFO=1` — BISECT `GPU_GET_INFO_V2` IN PLACE
+ *
+ * `execution_plane_increments.md` §14.28 ends on one line of this very trace:
+ * libcuda's eleven-index `0x20800102` comes back `status=0x56` with `out ==
+ * in`, and **no RPC ever crosses to our port** — so the whole of this project's
+ * GSP-boundary instrumentation is blind to it. §14.28 named two candidates and
+ * refused to pick: an arm of `getGpuInfos` failing before `default:` (its loop
+ * `break`s on the first non-`NV_OK` and returns it for the WHOLE call,
+ * `ogkm-580: subdevice_ctrl_gpu_kernel.c:566-569`), or the RM control cache
+ * replaying a negative.
+ *
+ * ★ The measurement that discriminates them is to ask each index ON ITS OWN.
+ * An arm-level failure is attributable to exactly one index; a cache hit cannot
+ * depend on which index was asked. `rmladder`'s R21 rung already does this —
+ * but R21 runs on the HOST, against real firmware, and the question is about
+ * the GUEST.
+ *
+ * ⊘ A guest-side R21 would need its own client/device/subdevice, i.e. a second
+ * implementation of the setup whose fidelity nobody has checked. This mode
+ * instead **reuses libcuda's own `hClient`/`hObject`**, on the same fd, in the
+ * same process, at the same instant — so any difference from R21 is a fact
+ * about the machine and not about the harness.
+ *
+ * It fires ONCE, on the first `0x20800102` carrying more than one index, and it
+ * runs AFTER that call has been made and logged, so the subject of the
+ * measurement is never perturbed by the measurement. Three sweeps, in order:
+ *
+ *   SWEEPIDX  each index of the observed request, one call each
+ *   SWEEPPFX  prefixes of the observed request, length 1..N — names the
+ *             POSITION at which a batch starts failing, which separates "one
+ *             bad arm" from "a conjunction"
+ *   SWEEPALL  every index 0x00..0x45, one call each — positionally diffable
+ *             against `traces/real_ga106/rmladder_r21_gpuinfo_sweep_real_ga106.txt`
+ *
+ * ⚠ Like `NVFAULT_*`, a run with `SWEEP` lines in it is an EXPERIMENT and not a
+ * capture of what libcuda does: it issues ~90 controls libcuda never issued.
+ * The banner says so, in the file, so a later reader cannot mistake one for the
+ * other.
  */
 
 #define _GNU_SOURCE
@@ -123,6 +163,15 @@ static size_t hex_max = 256;
 static const char *fault_ctrl;
 static const char *fault_alloc;
 static uint32_t fault_status = 0x56; /* NV_ERR_NOT_SUPPORTED */
+
+/*
+ * `NVSWEEP_GPUINFO` — the §14.28 bisect. Off (0) unless set. `sweep_done`
+ * makes it fire exactly once: libcuda issues `GPU_GET_INFO_V2` more than once
+ * over a full `cuInit`, and ninety extra controls per occurrence would bury the
+ * trace the sweep is meant to explain.
+ */
+static int sweep_gpuinfo;
+static int sweep_done;
 
 /*
  * Is `id` named in a comma-separated env list of hex numbers?
@@ -188,6 +237,20 @@ static void trace_init(void) {
     const char *s = getenv("NVFAULT_STATUS");
     if (s != NULL && s[0] != '\0') {
       fault_status = (uint32_t)strtoul(s, NULL, 0);
+    }
+  }
+  {
+    const char *s = getenv("NVSWEEP_GPUINFO");
+    if (s != NULL && s[0] != '\0' && s[0] != '0') {
+      char line[256];
+      int n;
+      sweep_gpuinfo = 1;
+      n = snprintf(line, sizeof(line),
+                   "SWEEP-CONFIG gpuinfo=on  ⚠ THIS RUN ISSUES CONTROLS LIBCUDA "
+                   "DID NOT — IT IS AN EXPERIMENT, NOT A CAPTURE\n");
+      if (n > 0) {
+        emit(line, (size_t)n);
+      }
     }
   }
   if ((fault_ctrl != NULL && fault_ctrl[0] != '\0') ||
@@ -274,6 +337,140 @@ static void hexdump(char *out, size_t out_cap, const void *p, uint32_t size,
 #define SNAP_MAX 65536
 #define HEX_CAP (2 * SNAP_MAX + 8)
 
+/*
+ * ★★★ The §14.28 bisect. See the header block for why it reuses the caller's
+ * handles instead of allocating its own.
+ *
+ * `nvos54` is the CALLER's 32-byte NVOS54, copied — `hClient` and `hObject`
+ * come from it verbatim and nothing else does. `params`/`paramsSize`/`status`
+ * are overwritten with our own buffer, so the caller's buffer is never touched:
+ * an instrument that wrote into libcuda's params would change the very call it
+ * was launched from.
+ */
+
+/* `ogkm-580: ctrl2080gpu.h:122` NV2080_CTRL_GPU_INFO_MAX_LIST_SIZE. */
+#define GPUINFO_MAX_LIST 0x46u
+/* `4 + 8 * 0x46` — and confirmed on the wire as `size=564`. */
+#define GPUINFO_PARAMS (4u + 8u * GPUINFO_MAX_LIST)
+#define GPUINFO_CMD 0x20800102u
+
+/*
+ * One `GPU_GET_INFO_V2` with `n` (index, 0) pairs. Returns the RM status;
+ * `out_idx`/`out_data` receive the first `n` echoed pairs when non-NULL.
+ *
+ * ⚠ The unused tail is seeded 0xCD, R18's reason: it separates "RM wrote back
+ * the entries I declared" from "RM wrote back the whole params". A zeroed tail
+ * would make those two indistinguishable, which is the ambiguity
+ * `traces/real_ga106/README.md` warns about for in==out.
+ */
+static uint32_t gpuinfo_call(int fd, unsigned long request,
+                             const unsigned char *nvos54, const uint32_t *idx,
+                             uint32_t n, uint32_t *out_idx, uint32_t *out_data,
+                             int *tail_written) {
+  static unsigned char params[GPUINFO_PARAMS];
+  unsigned char nv[NVOS54_SIZE];
+  uint64_t pp;
+  uint32_t psize = GPUINFO_PARAMS;
+  uint32_t zero = 0;
+  uint32_t i;
+
+  memset(params, 0xCD, sizeof(params));
+  memcpy(params, &n, sizeof(n));
+  for (i = 0; i < n; i++) {
+    memcpy(params + 4 + 8 * i, &idx[i], sizeof(idx[i]));
+    memcpy(params + 8 + 8 * i, &zero, sizeof(zero));
+  }
+
+  memcpy(nv, nvos54, sizeof(nv));
+  pp = (uint64_t)(uintptr_t)params;
+  memcpy(nv + 16, &pp, sizeof(pp));
+  memcpy(nv + 24, &psize, sizeof(psize));
+  memcpy(nv + 28, &zero, sizeof(zero));
+
+  (void)real_ioctl(fd, request, nv);
+
+  if (tail_written != NULL) {
+    *tail_written = 0;
+    for (i = 4 + 8 * n; i < GPUINFO_PARAMS; i++) {
+      if (params[i] != 0xCD) {
+        *tail_written = 1;
+        break;
+      }
+    }
+  }
+  for (i = 0; i < n; i++) {
+    if (out_idx != NULL) {
+      out_idx[i] = rd32(params, 4 + 8 * i);
+    }
+    if (out_data != NULL) {
+      out_data[i] = rd32(params, 8 + 8 * i);
+    }
+  }
+  return rd32(nv, 28);
+}
+
+static void gpuinfo_sweep(int fd, unsigned long request,
+                          const unsigned char *nvos54, const uint32_t *req_idx,
+                          uint32_t req_n) {
+  char line[512];
+  uint32_t echoed[GPUINFO_MAX_LIST];
+  uint32_t data[GPUINFO_MAX_LIST];
+  uint32_t i;
+  size_t n;
+
+  n = (size_t)snprintf(line, sizeof(line),
+                       "SWEEP-BEGIN hClient=0x%08x hObject=0x%08x observed_n=%u"
+                       "  (params=%u, tail seeded 0xCD)\n",
+                       rd32(nvos54, 0), rd32(nvos54, 4), req_n, GPUINFO_PARAMS);
+  emit(line, n);
+
+  /* (1) each index of the OBSERVED request, alone. An arm-level failure is
+   * attributable to exactly one of these; a cache hit cannot be. */
+  for (i = 0; i < req_n; i++) {
+    int tail = 0;
+    uint32_t st = gpuinfo_call(fd, request, nvos54, &req_idx[i], 1, echoed, data,
+                               &tail);
+    n = (size_t)snprintf(line, sizeof(line),
+                         "SWEEPIDX pos=%u idx=0x%08x status=0x%08x "
+                         "echo=0x%08x data=0x%08x tail=%s\n",
+                         i, req_idx[i], st, echoed[0], data[0],
+                         tail ? "WRITTEN" : "untouched");
+    emit(line, n);
+  }
+
+  /* (2) prefixes. Names the POSITION at which the batch starts failing —
+   * which is what separates one bad arm from a conjunction, and is also the
+   * only way to see an index that fails ONLY in company. */
+  for (i = 1; i <= req_n; i++) {
+    uint32_t st = gpuinfo_call(fd, request, nvos54, req_idx, i, echoed, data,
+                               NULL);
+    n = (size_t)snprintf(line, sizeof(line),
+                         "SWEEPPFX len=%u status=0x%08x last_echo=0x%08x "
+                         "last_data=0x%08x\n",
+                         i, st, echoed[i - 1], data[i - 1]);
+    emit(line, n);
+  }
+
+  /* (3) the whole index space, one call each — positionally diffable against
+   * `rmladder_r21_gpuinfo_sweep_real_ga106.txt`, which asks a real GA106 the
+   * identical seventy questions in the identical shape. */
+  for (i = 0; i < GPUINFO_MAX_LIST; i++) {
+    int tail = 0;
+    uint32_t one = i;
+    uint32_t st = gpuinfo_call(fd, request, nvos54, &one, 1, echoed, data,
+                               &tail);
+    n = (size_t)snprintf(line, sizeof(line),
+                         "SWEEPALL idx=0x%02x status=0x%08x echo=0x%08x "
+                         "data=0x%08x tail=%s\n",
+                         i, st, echoed[0], data[0],
+                         tail ? "WRITTEN" : "untouched");
+    emit(line, n);
+  }
+
+  n = (size_t)snprintf(line, sizeof(line), "SWEEP-END\n");
+  emit(line, n);
+}
+
 int ioctl(int fd, unsigned long request, ...) {
   va_list ap;
   void *arg;
@@ -351,6 +548,30 @@ int ioctl(int fd, unsigned long request, ...) {
       n = sizeof(line);
     }
     emit(line, n);
+
+    /* ★★★ §14.28's bisect, fired AFTER the observed call has completed and
+     * been logged — the subject is never perturbed by the measurement. The
+     * gate is `>= 2` indices because the guest kernel's OWN one-index calls
+     * (seq303/seq780 of `rpctrace_ga106_boot1.bin`) succeed and are not the
+     * question; libcuda's is the eleven-index one. */
+    if (sweep_gpuinfo && !sweep_done && cmd == GPUINFO_CMD &&
+        params_size >= GPUINFO_PARAMS && params != 0) {
+      const unsigned char *pb = (const unsigned char *)(uintptr_t)params;
+      uint32_t req_n = rd32(pb, 0);
+      if (req_n >= 2 && req_n <= GPUINFO_MAX_LIST) {
+        uint32_t req_idx[GPUINFO_MAX_LIST];
+        uint32_t i;
+        sweep_done = 1;
+        for (i = 0; i < req_n; i++) {
+          /* ⚠ Mask off bit 31. The kernel OR-s INDEX_FORWARD_TO_PHYSICAL into
+           * the index word of every entry it forwards, so a post-call read of
+           * a SUCCEEDING request hands back `0x80000011`, not `0x11`. Replaying
+           * that verbatim would ask a question libcuda never asked. */
+          req_idx[i] = rd32(pb, 4 + 8 * i) & 0x00FFFFFFu;
+        }
+        gpuinfo_sweep(fd, request, p, req_idx, req_n);
+      }
+    }
     return rc;
   }
 
