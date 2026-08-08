@@ -3504,7 +3504,8 @@ context. `nvidia-smi` is the **next** milestone's oracle, not this one's.
 - ✔ The four obstacles closed together, on a real guest: a VAS-less channel's ring,
   pushbuffer, operands and finishPayload all resolved through the published-root walk, its
   bytes moved by the shell CPU executor, and the word the guest polls advanced.
-- ✔ `[measured]` the completion address is right, by the strongest oracle available: the
+- ✔ `[measured 2026-08-08, boots p35_754e393 and p35_754e393_b, rev 754e393]` the
+  completion address is right, by the strongest oracle available: the
   guest's own readback compare and the fourteen seconds of boot after it.
 - ⊘ It establishes **nothing** about the isolate's `HostCe` branch, which this path refuses
   by name and never took, and nothing about a multi-launch or multi-entry submission — the
@@ -3524,7 +3525,7 @@ guest allocates a different page each boot and the walk followed it — a hard-c
 cached translation or a lucky numerical coincidence would have produced the same number
 twice.
 
-#### ★ The `cuda.h` errand, done — and the trap it carries is CONFIRMED
+#### ★ The `cuda.h` errand, done — and its trap, `[measured 2026-08-08, bench guest on vh, boot cudahdr, rev 754e393]`
 
 `[measured 2026-08-08]` NVIDIA's own driver-API header is now at
 **`/usr/local/include/cuda.h`** in the bench guest (`CUDA_VERSION 12090`, 1 168 299 bytes),
