@@ -104,6 +104,106 @@
 //! `cap1b` carries it at `rpc.sequence` **25** (txn 1001), `paylen 60` = 40 header + 20
 //! params — an independent confirmation of the struct size below — inside the replay's
 //! closure limit of 1028. `cargo run -p kayfabe-crec --example cap1b_report`.
+//!
+//! ## ★★★ INDEX 35 — what refusing it costs, and what serving it would COMMIT US TO
+//!
+//! `[measured 2026-08-08, boot `noprobe_8088019`, rev `8088019`, stock 580.159.04 guest,
+//! probe set EMPTY]` — `docs/reference/bench_evidence/run_noprobe_8088019_{qemu,dmesg}.log`.
+//! This is the one refusal standing between the shipping configuration and a device table
+//! from `nvidia-smi`, so the argument for it is written out rather than assumed.
+//!
+//! ### 1. The refusal, and the guest's whole fall from it
+//!
+//! The device census names it exactly once:
+//!
+//! ```text
+//! arming event 35 action 2 client 0xc1e00005 object 0x0000000b result 0x00000056 x1 REFUSED
+//! ```
+//!
+//! `0x56` is `NV_ERR_NOT_SUPPORTED`, from [`SILENT_NOTIFIERS`] not admitting the index.
+//! ⚠ The guest does **not** treat that as a warning. `kernel_graphics.c:508` is the
+//! standing reminder that a wall which logs `LEVEL_ERROR` need not be the wall that ends
+//! the function — so the attribution here rests on a **status fingerprint**, not on
+//! proximity. `_memmgrMemUtilsScrubInitRegisterCallback` manufactures `NV_ERR_GENERIC`
+//! (`0xFFFF`) at `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/mem_utils.c:1929-1934`, and
+//! that exact value appears at every frame of the guest's own dmesg on the way out:
+//!
+//! | frame | `ogkm-580` site |
+//! |---|---|
+//! | `"event notification control failed"` → `NV_ERR_GENERIC` | `mem_utils.c:1929-1934` |
+//! | `memmgrMemUtilsChannelSchedulingSetup` | `mem_utils.c:2022` |
+//! | `memmgrMemUtilsCopyEngineInitialize_GM107` | `mem_utils_gm107.c:1027` |
+//! | `ceutilsConstruct` | `ce_utils.c:304` |
+//! | `scrubberConstruct` → `objCreate(…, CeUtils, …)` | `mem_scrub.c:181` |
+//! | `memmgrScrubHandlePostSchedulingEnable_GP100` | `mem_mgr_scrub_gp100.c:63` |
+//! | `memmgrScrubHandlePostSchedulingEnable_HAL` | `mem_mgr.c:487` |
+//! | `kfifoTriggerPostSchedulingEnableCallback` → `NV_ASSERT(0)` | `kernel_fifo.c:3129` |
+//!
+//! and `gpumgrStateLoadGpu` then fails at
+//! `arch/nvalloc/unix/src/osinit.c:1244-1250`, which is
+//! `RM_SET_ERROR(*status, RM_INIT_GPU_LOAD_FAILED)` and the boot's verdict line:
+//!
+//! ```text
+//! NVRM: RmInitNvDevice: *** Cannot load state into the device
+//! NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0xffff:1249)
+//! ```
+//!
+//! ⇒ `0x25` is that arm's `RM_INIT_GPU_LOAD_FAILED`, `0xffff` is the `NV_ERR_GENERIC` this
+//! refusal minted eight frames earlier, and `1249` is the `return` after it. The three
+//! numbers name one place, the way `8088019`'s `(0x43:0x59:2239)` did for the UUID.
+//!
+//! ### 2. ★★★ Serving it honestly DOES require real event delivery — and of a named kind
+//!
+//! ⊘ This is not the general "we deliver no events" hand-wave. The registration is
+//! **non-stalling**: `nv0005AllocParams.notifyIndex = NV2080_NOTIFIERS_FIFO_EVENT_MTHD |
+//! NV01_EVENT_NONSTALL_INTR` (`mem_utils.c:1901`), and the non-stall path does not read
+//! `notifyActions[]` at all —
+//!
+//! - `eventGetEngineTypeFromSubNotifyIndex` maps index 35 → `RM_ENGINE_TYPE_HOST`
+//!   (`src/nvidia/src/kernel/rmapi/event_notification.c:480-484`);
+//! - `_gpuEngineEventNotificationListNotify` walks
+//!   `pGpu->engineNonstallIntrEventNotifications[RM_ENGINE_TYPE_HOST]` and consults no
+//!   `notifyActions` (`event_notification.c:279+`). Only the *stalling* path,
+//!   `gpuNotifySubDeviceEvent_IMPL`, does (`gpu_rmapi.c:572-575`);
+//! - and the one producer for `RM_ENGINE_TYPE_HOST` is **`intr.c:1201-1204`**, inside the
+//!   guest's *own* non-stall interrupt service, under `pIntr->bDefaultNonstallNotify` —
+//!   which is `NV_TRUE` for GA106 by name (`src/nvidia/generated/g_intr_nvoc.c:299-308`).
+//!
+//! ⇒ what the arming asks the GSP for is bookkeeping; what actually delivers is **the CPU
+//! non-stall interrupt tree**, which is this device's to raise. Saying "armed" is therefore
+//! a promise to raise a non-stall vector when the engine's work completes, and there is no
+//! reading of it under which the promise is free.
+//!
+//! ### 3. ★ What makes it an INCREMENT and not an impossibility
+//!
+//! Three of the four pieces already exist, which is why this belongs in the file rather
+//! than on a wishlist:
+//!
+//! - **The vectors are already published, from real hardware.** `GA106_INTR_TABLE` (24
+//!   rows, verbatim from the C capture's single `0x20800a5c` reply) carries a real
+//!   `vectorNonStall` on eight of them: GR (`MC_ENGINE_IDX` 84) → `0x00`, NVENC (38) →
+//!   `0x01`, SEC2 (47) → `0x02`, NVDEC (65) → `0x03`, CE2 (17) → `0x07`, CE3 (18) →
+//!   `0x08`, OFA0 (81) → `0x09`, CE4 (19) → `0x0a`.
+//! - **The interrupt plane works.** `kayfabe_device::cpuintr` drives
+//!   `NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_*` and the driver's own loopback self-test passes:
+//!   `[measured 2026-08-08, boot p35_8088019]` `interrupts: 3 vectors delivered, 0
+//!   undeliverable`.
+//! - **The completion moment is owned, not inferred.** E10e made the scrubber's CE copy
+//!   real and it runs synchronously off the doorbell, so "the work finished" is an instant
+//!   this device is standing at.
+//!
+//! ⚠ **The one thing not settled, and it is a measurement rather than a design.** Which CE
+//! the scrubber lands on: `ceutilsGetFirstAsyncCe` takes the first CE that is not a GRCE
+//! (`ce_utils.c:66-81`), and the captured table gives **CE0 (15) and CE1 (16) no non-stall
+//! vector at all**. If the scrubber's `pChannel->ceId` is one of those two, then this
+//! device has published — on real hardware's authority — that there is no vector to raise,
+//! and index 35 must stay refused on that *stronger* ground rather than this one. One boot
+//! that logs the chosen `ceId` decides it.
+//!
+//! ⊘ **Until then the refusal stands.** Admitting 35 into [`SILENT_NOTIFIERS`] would be
+//! promising a completion notification for work that really happens, which is the exact
+//! shape this module's own rule forbids — and the boot it buys is
+//! [`ProbeArmSet`]'s reachability result, not a rung.
 
 /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080event.h:79`).
