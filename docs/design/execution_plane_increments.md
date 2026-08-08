@@ -4419,8 +4419,11 @@ channel to be created, but will not submit any work to it."* ⇒ **`gpFifoOffset
 ★ And the one branch that *could* have run work is not on this chip:
 `_kgraphicsPostSchedulingEnableHandler:509-511` calls `kgraphicsInitializeBug4208224WAR_HAL`
 only when `kgraphicsIsBug4208224WARNeeded_HAL`, which `g_kernel_graphics_nvoc.c:464-480` wires
-to `_TU102` for `TU102 | TU104 | TU106` and to `_3dd2c9` — the `return NV_FALSE` stub —
-everywhere else. GA106 gets the stub.
+to `_TU102` for `TU102 | TU104 | TU106` and to `_3dd2c9` everywhere else — and `_3dd2c9`
+is literally `static inline NvBool …(…) { return NV_FALSE; }`
+(`ogkm-580: g_kernel_graphics_nvoc.h:928-930`; its sibling
+`kgraphicsInitializeBug4208224WAR_56cd7a` is `{ return NV_OK; }` at `:922-924`). GA106 gets
+the stub, so the WAR neither runs nor fails.
 
 ⇒ The kernel side of the golden image channel is **allocate and free**. The golden image
 itself is GSP-RM's to produce, on the far side of the `GSP_RM_ALLOC` we answer.
