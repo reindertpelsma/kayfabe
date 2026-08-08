@@ -1526,6 +1526,18 @@ static void nvkvm_report_registers(NvkvmState *s)
                 info_report("nvkvm:   unserviced fn %u cmd 0x%08x", fn, cmd);
             }
         }
+        /*
+         * ⊘⊘ THE LINE WHOSE ABSENCE COST A ROOT CAUSE.  A saturated list used to be
+         * indistinguishable from a complete one -- §14.31 read a miss from a full 32-slot
+         * ledger as "this control never reaches the emulated GSP".  Printed only when it
+         * is true, and phrased so the reader cannot conclude anything from an absence.
+         */
+        if (a.unserviced_len > shown) {
+            info_report("nvkvm:   ⊘ unserviced list TRUNCATED: %" PRIu64 " distinct, only "
+                        "%" PRIu64 " shown — a command MISSING from the rows above may "
+                        "simply not have fit. Absence here is NOT evidence of absence.",
+                        a.unserviced_len, shown);
+        }
     }
 
     /*
@@ -1627,6 +1639,13 @@ static void nvkvm_report_registers(NvkvmState *s)
             info_report("nvkvm:   control 0x%08x result 0x%08x x%" PRIu64 "%s",
                         r->cmd, r->rpc_result, r->count,
                         r->rpc_result ? " REFUSED" : "");
+        }
+        /* ⊘ The same statement for the other list, for the same reason. */
+        if (a.served_len > shown) {
+            info_report("nvkvm:   ⊘ control census TRUNCATED: %" PRIu64 " distinct, only "
+                        "%" PRIu64 " shown — a control MISSING from the rows above may "
+                        "simply not have fit. Absence here is NOT evidence of absence.",
+                        a.served_len, shown);
         }
     }
 

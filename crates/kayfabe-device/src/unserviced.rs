@@ -170,9 +170,25 @@ use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
 /// How many distinct unserviced commands are remembered.
 ///
-/// ★ Small and fixed, like `crate::plane::UNCLAIMED_SAMPLE_MAX`. The counter says how
-/// many; this says which.
-pub const UNSERVICED_SAMPLE_MAX: usize = 32;
+/// ★ Small and fixed, like `crate::plane::UNCLAIMED_SAMPLE_MAX`. [`UnservicedLog::distinct`]
+/// says how many; this says which.
+///
+/// ⊘⊘ **32 was not enough, and the shortfall was SILENT — this is the cap that produced a
+/// wrong root cause.** `[measured 2026-08-09, boot `gt1431_ff7a0ea`,
+/// `/workspace/bench/run_gt1431_ff7a0ea_qemu.log`]` that boot's summary read
+/// `67 UNSERVICED …, 32 distinct` and printed exactly 32 rows — the set was **saturated**,
+/// and every command first seen after the thirty-second was dropped with no line anywhere.
+/// `execution_plane_increments.md` §14.31 read `0x20801303`'s absence from that list as
+/// *"the command never reaches the emulated GSP; the guest kernel refuses it from its own
+/// state"*, and built a rung on it. The RPC does go out.
+///
+/// ⇒ ★★ **An absence from a saturated list is not evidence of absence** — the third
+/// distinct way this project has been bitten by a check that cannot fail
+/// (`pgrep_comm_truncation_trap`, `gate_read_through_grep_cannot_fail`). Raised to 64, and
+/// — far more important than the number — [`UnservicedLog::distinct`] now counts the
+/// **true** distinct total so a saturated list says so out loud. See
+/// [`kayfabe_abi::fbinfo`] for the whole measurement.
+pub const UNSERVICED_SAMPLE_MAX: usize = 64;
 
 /// One command nothing answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,6 +207,7 @@ pub struct UnservicedCommand {
 pub struct UnservicedLog {
     seen: Arc<Mutex<Vec<UnservicedCommand>>>,
     total: Arc<AtomicU64>,
+    distinct: Arc<AtomicU64>,
 }
 
 impl UnservicedLog {
@@ -207,6 +224,32 @@ impl UnservicedLog {
         self.total.load(Ordering::Relaxed)
     }
 
+    /// ★★★ **How many distinct commands were seen — the truth, past
+    /// [`UNSERVICED_SAMPLE_MAX`].**
+    ///
+    /// ⊘ This exists because its absence produced a wrong root cause. `UNSERVICED_SLOTS`'s
+    /// own doc asserted *"`unserviced_len` reports the truth even when it exceeds this, so
+    /// a full array is never mistaken for a complete list"* — and `unserviced_len` was
+    /// [`Self::sample`]`.len()`, which is **clamped by construction and can never exceed
+    /// it**. A load-bearing rationale that was false, in the shape
+    /// `safety_comment_is_not_the_check` names: the prose was the least verified part.
+    /// [`crate::census::ControlCensusLog`] had kept a separate distinct counter all along,
+    /// which is why the served list's count was truthful and this one's was not.
+    #[must_use]
+    pub fn distinct(&self) -> u64 {
+        self.distinct.load(Ordering::Relaxed)
+    }
+
+    /// Whether the remembered set is **shorter than the truth** — i.e. the sample is
+    /// saturated and rows have been dropped.
+    ///
+    /// ★ A named question rather than a comparison a reader has to think of, because the
+    /// whole failure was nobody thinking of it.
+    #[must_use]
+    pub fn truncated(&self) -> bool {
+        self.distinct() > UNSERVICED_SAMPLE_MAX as u64
+    }
+
     /// The distinct commands remembered, in first-seen order.
     #[must_use]
     pub fn sample(&self) -> Vec<UnservicedCommand> {
@@ -215,10 +258,19 @@ impl UnservicedLog {
     }
 
     /// Record one. Idempotent for the distinct set; always counted in the total.
+    ///
+    /// ⊘ The distinct counter is incremented **under the same lock** as the membership
+    /// test and **before** the capacity test, so it counts every first-seen command whether
+    /// or not there was a slot for it. Counting after the `push` is what made the old
+    /// length agree with the sample instead of with reality.
     pub fn note(&self, entry: UnservicedCommand) {
         self.total.fetch_add(1, Ordering::Relaxed);
         let mut s = self.seen.lock().unwrap_or_else(|e| e.into_inner());
-        if s.len() < UNSERVICED_SAMPLE_MAX && !s.contains(&entry) {
+        if s.contains(&entry) {
+            return;
+        }
+        self.distinct.fetch_add(1, Ordering::Relaxed);
+        if s.len() < UNSERVICED_SAMPLE_MAX {
             s.push(entry);
         }
     }

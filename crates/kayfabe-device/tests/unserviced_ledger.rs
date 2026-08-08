@@ -91,16 +91,60 @@ fn a_repeated_control_counts_but_does_not_grow_the_list() {
 #[test]
 fn the_distinct_set_is_bounded_so_a_guest_cannot_grow_it() {
     let (mut l, log) = ledger();
-    // 32 is the cap, spelled out; one more than the cap is offered.
-    assert_eq!(UNSERVICED_SAMPLE_MAX, 32);
-    for i in 0..40u32 {
+    // 64 is the cap, spelled out; more than the cap is offered.
+    assert_eq!(UNSERVICED_SAMPLE_MAX, 64);
+    for i in 0..80u32 {
         l.respond(&control(0x2080_0000 + i));
     }
-    assert_eq!(log.sample().len(), 32);
-    assert_eq!(log.total(), 40, "the counter is the honest one");
-    // First-seen order, so the list names the EARLIEST commands rather than a random 32.
+    assert_eq!(log.sample().len(), 64);
+    assert_eq!(log.total(), 80, "the counter is the honest one");
+    // First-seen order, so the list names the EARLIEST commands rather than a random 64.
     assert_eq!(log.sample()[0].cmd, Some(0x2080_0000));
-    assert_eq!(log.sample()[31].cmd, Some(0x2080_001f));
+    assert_eq!(log.sample()[63].cmd, Some(0x2080_003f));
+}
+
+/// ⊘⊘ **The property whose ABSENCE produced a wrong root cause.**
+///
+/// `[measured 2026-08-09, boot `gt1431_ff7a0ea`]` the boot ledger printed
+/// `67 UNSERVICED …, 32 distinct` from a list saturated at its 32-slot cap, and the count it
+/// printed was the *sample's* clamped length — so a full list was byte-identical in the log
+/// to a complete one. `execution_plane_increments.md` §14.31 read `0x20801303`'s absence
+/// from it as *"the command never reaches the emulated GSP"* and specified a rung on that.
+///
+/// The counter must therefore be **larger than the sample** when the sample saturates, and
+/// [`UnservicedLog::truncated`] must say so. A test that only checked `sample().len()` — the
+/// one above — passes identically either way, which is why it could not have caught this.
+#[test]
+fn a_saturated_sample_says_so_rather_than_reading_as_complete() {
+    let (mut l, log) = ledger();
+    for i in 0..(UNSERVICED_SAMPLE_MAX as u32 + 17) {
+        l.respond(&control(0x2080_0000 + i));
+    }
+    assert_eq!(
+        log.sample().len(),
+        UNSERVICED_SAMPLE_MAX,
+        "the sample is capped"
+    );
+    assert_eq!(
+        log.distinct(),
+        UNSERVICED_SAMPLE_MAX as u64 + 17,
+        "…and the distinct COUNT is not — it counts before the capacity test"
+    );
+    assert!(log.truncated(), "a saturated list must announce itself");
+    // …and an unsaturated one must not, or the banner becomes noise nobody reads.
+    let (mut l2, log2) = ledger();
+    for i in 0..8u32 {
+        l2.respond(&control(0x2080_0000 + i));
+    }
+    assert_eq!(log2.distinct(), 8);
+    assert!(!log2.truncated());
+    // ⊘ Repeats must not inflate the distinct count — the counter sits behind the
+    // membership test, not in front of it.
+    for _ in 0..50 {
+        l2.respond(&control(0x2080_0000));
+    }
+    assert_eq!(log2.distinct(), 8, "a repeat is not a new distinct command");
+    assert_eq!(log2.total(), 58);
 }
 
 #[test]

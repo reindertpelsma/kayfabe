@@ -199,7 +199,16 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// times and still not know how many channels there were.
 ///
 /// [`DOORBELL_SERVED_LOCAL`]: crate::shim_unsafe::DOORBELL_SERVED_LOCAL
-pub const ABI_VERSION: u32 = 22;
+/// ★ Bumped to **23** for the ledger-saturation repair, the ABI-3 reason a fifteenth time:
+/// [`UNSERVICED_SLOTS`] and [`SERVED_CONTROL_SLOTS`] both went 32 → 64, so an ABI-22 shim
+/// would allocate the old layout and this archive would write 512 bytes past the end of the
+/// unserviced array alone.
+///
+/// ⊘ The width is the smaller half of the change. `unserviced_len` now carries the **true**
+/// distinct count rather than the sample's clamped length — an ABI-22 reader would have
+/// indexed `unserviced[0..unserviced_len]` out of bounds the first time a boot exceeded the
+/// cap, which is the second reason this could not be a silent widening.
+pub const ABI_VERSION: u32 = 23;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -819,9 +828,22 @@ pub struct KayfabeChipIdentity {
 /// How many distinct unserviced commands [`KayfabeRegAudit`] carries.
 ///
 /// ★ A fixed array rather than a caller-supplied buffer: the shim's whole discipline is
-/// that the hypervisor passes no pointer it has to size. `unserviced_len` reports the
-/// truth even when it exceeds this, so a full array is never mistaken for a complete list.
-pub const UNSERVICED_SLOTS: usize = 32;
+/// that the hypervisor passes no pointer it has to size.
+///
+/// ⊘⊘ **This doc used to say "`unserviced_len` reports the truth even when it exceeds this,
+/// so a full array is never mistaken for a complete list" — and that was FALSE.**
+/// `unserviced_len` was filled from the *sample's* length, which
+/// `kayfabe_device::unserviced::UnservicedLog::note` clamps to the cap, so it could never
+/// exceed it and a full array read exactly like a complete one. `[measured 2026-08-09]`
+/// boot `gt1431_ff7a0ea` printed `32 distinct` from a saturated 32-slot list, and
+/// `execution_plane_increments.md` §14.31 concluded from a resulting miss that a control
+/// *"never reaches the emulated GSP"*. It does.
+///
+/// ★ Now true rather than asserted: `unserviced_len` is
+/// [`kayfabe_device::unserviced::UnservicedLog::distinct`], which counts before the
+/// capacity test, and the C shell prints an explicit truncation line when it exceeds this.
+/// The width is 64 as well, so the boot that found this has headroom.
+pub const UNSERVICED_SLOTS: usize = 64;
 
 /// The low half of a packed [`KayfabeRegAudit::unserviced`] entry when the function was not
 /// a `GSP_RM_CONTROL` — i.e. there is no control command to name.
@@ -889,9 +911,13 @@ pub const DOORBELL_KIND_LEN: usize = 64;
 
 /// How many distinct `(cmd, rpc_result)` served-control rows [`KayfabeRegAudit`] carries.
 ///
-/// ★ Matches `kayfabe_device::census::SERVED_SAMPLE_MAX`, and `served_len` reports the
-/// truth even when it exceeds this — a full array is never mistaken for a complete list.
-pub const SERVED_CONTROL_SLOTS: usize = 32;
+/// ★ Matches `kayfabe_device::census::SERVED_SAMPLE_MAX`. Here the claim really does hold:
+/// `served_len` is `CensusSnapshot::served_distinct`, a counter kept beside the sample and
+/// incremented before the capacity test — which is exactly what
+/// [`UNSERVICED_SLOTS`]'s length was not. `[measured 2026-08-09]` boot `gt1431_ff7a0ea`
+/// reported 32 distinct served rows against a 32-slot array, so the next control this port
+/// served would have been counted and not shown; 64 is that headroom.
+pub const SERVED_CONTROL_SLOTS: usize = 64;
 
 /// How many distinct notifier-arming rows [`KayfabeRegAudit`] carries.
 pub const NOTIFIER_ARMING_SLOTS: usize = 16;
@@ -1204,7 +1230,7 @@ impl Default for KayfabeIsolateRefusal {
 }
 
 /// The register plane's counters, in the wire shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct KayfabeRegAudit {
     /// Register reads dispatched into the plane.
@@ -1478,6 +1504,90 @@ pub struct KayfabeRegAudit {
     pub probe_arm_len: u64,
     /// The indices, in the order the property named them.
     pub probe_arm: [u32; PROBE_ARM_SLOTS],
+}
+
+impl Default for KayfabeRegAudit {
+    /// ⊘ Hand-written rather than derived, and the reason is a language bound rather than a
+    /// design one: `[T; N]` implements `Default` only up to `N == 32`, and
+    /// [`UNSERVICED_SLOTS`] / [`SERVED_CONTROL_SLOTS`] are 64. Every field is its own type's
+    /// default, so an all-zero audit still means *"nothing happened"* exactly as before.
+    fn default() -> KayfabeRegAudit {
+        KayfabeRegAudit {
+            reads: Default::default(),
+            writes: Default::default(),
+            boot_reg_reads: Default::default(),
+            ptimer_reads: Default::default(),
+            ptimer_writes_refused: Default::default(),
+            rom_reads: Default::default(),
+            gsp_reads: Default::default(),
+            gsp_writes: Default::default(),
+            unclaimed_reads: Default::default(),
+            unclaimed_writes: Default::default(),
+            fb_window_reads: Default::default(),
+            fb_window_writes: Default::default(),
+            fb_reads: Default::default(),
+            fb_writes: Default::default(),
+            fb_refusals: Default::default(),
+            bar2_reads: Default::default(),
+            bar2_writes: Default::default(),
+            bar2_faults: Default::default(),
+            bar_pde_updates: Default::default(),
+            bar2_root_entry: Default::default(),
+            bar0_window_reads: Default::default(),
+            bar0_window_writes: Default::default(),
+            fb_resident_bytes: Default::default(),
+            faults: Default::default(),
+            ram_refusals: Default::default(),
+            irq_requests: Default::default(),
+            cpu_intr_accesses: Default::default(),
+            cpu_intr_raises: Default::default(),
+            cpu_intr_masked: Default::default(),
+            nonstall_raises: Default::default(),
+            nonstall_unvectored: Default::default(),
+            nonstall_masked: Default::default(),
+            commands: Default::default(),
+            commands_unserviced: Default::default(),
+            unserviced_len: Default::default(),
+            unserviced: [0; UNSERVICED_SLOTS],
+            bridge_refusals: Default::default(),
+            bridge_refusal_len: Default::default(),
+            bridge_refusal: Default::default(),
+            isolates_materialized: Default::default(),
+            isolates_live: Default::default(),
+            isolates_no_plane: Default::default(),
+            isolates_spawn_failed: Default::default(),
+            isolate_refusal: Default::default(),
+            doorbells: Default::default(),
+            doorbells_served: Default::default(),
+            doorbells_refused: Default::default(),
+            doorbell_last_token: Default::default(),
+            doorbell_last_token_valid: Default::default(),
+            doorbell_refusal: Default::default(),
+            doorbell_local_serving: Default::default(),
+            gpfifo_ring_declarations: Default::default(),
+            gpfifo_ring_nonzero: Default::default(),
+            gpfifo_ring_va: Default::default(),
+            gpfifo_ring_entries: Default::default(),
+            served_total: Default::default(),
+            served_len: Default::default(),
+            served: [KayfabeServedControl::default(); SERVED_CONTROL_SLOTS],
+            arming_total: Default::default(),
+            arming_len: Default::default(),
+            armings: Default::default(),
+            bind_total: Default::default(),
+            bind_len: Default::default(),
+            binds: Default::default(),
+            gvas_pub_total: Default::default(),
+            gvas_pub_len: Default::default(),
+            gvas_pub_undecodable: Default::default(),
+            gvas_pub_seen: Default::default(),
+            gvas_pub_applied: Default::default(),
+            gvas_pub_unexpected: Default::default(),
+            gvas_pub: Default::default(),
+            probe_arm_len: Default::default(),
+            probe_arm: Default::default(),
+        }
+    }
 }
 
 /// How many probe-arm indices [`KayfabeRegAudit`] carries — the full
@@ -2449,9 +2559,11 @@ impl Regs {
         } = self.plane.counters();
         let (bar_pde_updates, bar_pde_refusals) = self.plane.bar_pde_counts();
         // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
-        // never silently clipped to look complete. The plane's own sample is bounded by
-        // the same order of magnitude, so this is a shape conversion and not a policy.
+        // ⊘⊘ which it did NOT before 2026-08-09: it was `sample.len()`, clamped by the
+        // sample's own cap, so it could not report a truncation and a saturated list read
+        // as a complete one. It is now the plane's true distinct count.
         let sample = self.plane.unserviced_sample();
+        let unserviced_distinct = self.plane.unserviced_distinct();
         let mut unserviced = [0u64; UNSERVICED_SLOTS];
         for (slot, e) in unserviced.iter_mut().zip(sample.iter()) {
             *slot = (u64::from(e.function) << 32) | u64::from(e.cmd.unwrap_or(UNSERVICED_NO_CMD));
@@ -2674,7 +2786,7 @@ impl Regs {
             nonstall_masked,
             commands,
             commands_unserviced,
-            unserviced_len: sample.len() as u64,
+            unserviced_len: unserviced_distinct,
             unserviced,
             bridge_refusals,
             bridge_refusal_len,

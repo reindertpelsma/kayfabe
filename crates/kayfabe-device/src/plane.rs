@@ -1755,6 +1755,18 @@ impl RegPlane {
         self.unserviced.sample()
     }
 
+    /// ★★★ **How many distinct commands went unserviced — the truth, past
+    /// [`crate::unserviced::UNSERVICED_SAMPLE_MAX`].**
+    ///
+    /// ⊘ Separate from [`Self::unserviced_sample`]`().len()` on purpose: that length is
+    /// clamped by the sample's own cap, and reporting it as a distinct count is what let a
+    /// saturated ledger read as a complete one. See
+    /// [`crate::unserviced::UnservicedLog::distinct`].
+    #[must_use]
+    pub fn unserviced_distinct(&self) -> u64 {
+        self.unserviced.distinct()
+    }
+
     /// ★★★ The control census — what was **answered**, and with what result, including the
     /// served-but-refused class the unserviced list structurally cannot see
     /// (`crate::census`).

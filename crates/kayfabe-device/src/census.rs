@@ -59,7 +59,14 @@ use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 ///
 /// ★ Sized like [`crate::unserviced::UNSERVICED_SAMPLE_MAX`] and for its reason. The
 /// distinct counter says how many; this says which.
-pub const SERVED_SAMPLE_MAX: usize = 32;
+///
+/// ⊘ **32 was exactly used up.** `[measured 2026-08-09, boot `gt1431_ff7a0ea`]` that boot
+/// reported `101 answered, 32 distinct cmd/result rows` — `served_distinct` is truthful
+/// past the cap (unlike the unserviced ledger's length was), so 32 was the real count and
+/// the very next served control this port added would have had its row **dropped from the
+/// printed list** while the count said 33. An operator would have read a served control as
+/// unserved. Raised to 64 alongside [`crate::unserviced::UNSERVICED_SAMPLE_MAX`].
+pub const SERVED_SAMPLE_MAX: usize = 64;
 
 /// How many distinct `(client, object, event, action, rpc_result)` arming rows are kept.
 pub const ARMING_SAMPLE_MAX: usize = 16;

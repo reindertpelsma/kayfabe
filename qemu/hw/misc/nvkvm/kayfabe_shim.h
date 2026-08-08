@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 22u
+#define KAYFABE_SHIM_ABI 23u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -338,8 +338,16 @@ typedef struct KayfabeRegWrite {
  * boot rests on that. */
 
 /* How many distinct unserviced commands KayfabeRegAudit carries, and the low half of a
- * packed entry that names no control. */
-#define KAYFABE_UNSERVICED_SLOTS 32u
+ * packed entry that names no control.
+ *
+ * ⊘⊘ 32 -> 64, and the width is the SMALLER half of the change.  [measured 2026-08-09] boot
+ * gt1431_ff7a0ea printed "67 UNSERVICED ..., 32 distinct" from a list that was SATURATED at
+ * 32, because unserviced_len was filled from the sample's own clamped length and could not
+ * exceed the array.  A full list therefore read exactly like a complete one, and
+ * execution_plane_increments.md §14.31 concluded from a resulting miss that a control
+ * "never reaches the emulated GSP".  It does.  unserviced_len is now the TRUE distinct
+ * count, and the printer says so out loud when it exceeds the array. */
+#define KAYFABE_UNSERVICED_SLOTS 64u
 #define KAYFABE_UNSERVICED_NO_CMD 0xFFFFFFFFu
 
 /* How many distinct BRIDGE-REFUSAL tags KayfabeRegAudit carries, and how many bytes of
@@ -420,10 +428,15 @@ typedef struct KayfabeIsolateRefusal {
  * record seen-and-served and seen-and-refused positively, so absence finally means "never
  * seen".
  *
- * `served_len` / `arming_len` report the truth even when they exceed the arrays, exactly
- * as `unserviced_len` does.  KAYFABE_CTRL_NO_REPLY marks an arming no policy answered (the
+ * `served_len` / `arming_len` report the truth even when they exceed the arrays.  ⚠ So does
+ * `unserviced_len` — but only since ABI 23; before that it was the sample's clamped length
+ * and a saturated ledger was indistinguishable from a complete one.  KAYFABE_CTRL_NO_REPLY marks an arming no policy answered (the
  * FSM refused it by name) — deliberately not 0, which is NV_OK. */
-#define KAYFABE_SERVED_CONTROL_SLOTS 32u
+/* ⊘ 32 -> 64.  Unlike unserviced_len, served_len WAS truthful past the array — it is a
+ * counter kept beside the sample — but [measured 2026-08-09] that same boot reported
+ * exactly 32 distinct served rows against a 32-slot array, so the very next control this
+ * port served would have been counted and NOT shown. */
+#define KAYFABE_SERVED_CONTROL_SLOTS 64u
 #define KAYFABE_NOTIFIER_ARMING_SLOTS 16u
 #define KAYFABE_CHANNEL_BIND_SLOTS 16u
 #define KAYFABE_CTRL_NO_REPLY 0xFFFFFFFFu
