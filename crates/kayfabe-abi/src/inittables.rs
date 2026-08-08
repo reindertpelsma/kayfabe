@@ -156,6 +156,28 @@ pub struct IntrTableEntry {
 /// `NV2080_INTR_VECTOR_INVALID` — the "this engine has no vector of that kind" marker.
 pub const INTR_VECTOR_INVALID: u32 = 0xffff_ffff;
 
+/// `MC_ENGINE_IDX_CE0` — `ogkm-580: src/nvidia/inc/kernel/gpu/intr/engine_idx.h:54`.
+pub const MC_ENGINE_IDX_CE0: u16 = 15;
+
+/// `MC_ENGINE_IDX_CE_MAX` is `MC_ENGINE_IDX_CE19` = 34, so twenty rows
+/// (`ogkm-580: engine_idx.h:73-74`).
+pub const MC_ENGINE_IDX_CE_COUNT: u16 = 20;
+
+/// `MC_ENGINE_IDX_CE(x)` (`ogkm-580: engine_idx.h:173`), bounded by `MC_ENGINE_IDX_IS_CE`
+/// (`:187-188`).
+///
+/// ⊘ `None` past `CE19` rather than a computed number: `MC_ENGINE_IDX_VIC` is 35, i.e. the
+/// row **immediately** after `CE19`, so an unbounded `CE0 + x` does not run off into unused
+/// space — it names a different engine, and the interrupt table would answer for it.
+#[must_use]
+pub const fn mc_engine_idx_ce(index: u32) -> Option<u16> {
+    if index < MC_ENGINE_IDX_CE_COUNT as u32 {
+        Some(MC_ENGINE_IDX_CE0 + index as u16)
+    } else {
+        None
+    }
+}
+
 /// Why a table could not be encoded.
 ///
 /// Every variant is a row this port refuses to put on the wire, and each names both the

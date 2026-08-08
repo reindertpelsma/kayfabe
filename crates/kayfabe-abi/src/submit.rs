@@ -957,6 +957,46 @@ pub const NV2080_ENGINE_TYPE_SW: u32 = 0x0000_0022;
 /// spaces are different enums; see [`nv2080_to_rm_engine_type`].
 pub const RM_ENGINE_TYPE_SW: u32 = 0x0000_002d;
 
+/// `RM_ENGINE_TYPE_COPY0` — `ogkm-580: gpu_engine_type.h:43`.
+///
+/// ⚠ Numerically equal to [`ENGINE_TYPE_COPY0`] and **not the same constant**. See
+/// [`nv2080_to_rm_engine_type`] for the collision table; the two agree here and diverge
+/// nine ordinals later, which is exactly the shape that makes one name for both wrong.
+pub const RM_ENGINE_TYPE_COPY0: u32 = 0x0000_0009;
+
+/// `RM_ENGINE_TYPE_COPY_SIZE` — how many copy engines the RM enum reserves
+/// (`ogkm-580: gpu_engine_type.h:131`).
+pub const RM_ENGINE_TYPE_COPY_SIZE: u32 = 20;
+
+/// ★★★ *"Which copy engine is this, in **RM** engine space?"* — `RM_ENGINE_TYPE_IS_COPY`
+/// then `RM_ENGINE_TYPE_COPY_IDX`, transcribed as one function
+/// (`ogkm-580: gpu_engine_type.h:139-141`).
+///
+/// # ⊘ This is NOT [`copy_index_of_engine_type`], and the difference is a real bug
+///
+/// In `NV2080_ENGINE_TYPE` space the copy engines are two discontiguous decades with
+/// `NVDEC0` sitting in the gap; in **RM** space `RM_ENGINE_TYPE_COPY0..COPY19` are one
+/// unbroken run `0x09..=0x1c` (`gpu_engine_type.h:43-62`). Feeding an RM-space value to the
+/// `NV2080` inverse answers `None` for `COPY10..COPY19` — a real engine reported as *"not a
+/// copy engine"* — and feeding an `NV2080` value to this one turns `NVDEC0` (`0x13`) into
+/// **copy engine 10**. Both directions are silent, which is why the two live side by side
+/// with this paragraph between them.
+///
+/// ⊘ `None` means *"not a copy engine"* and never *"copy engine 0"*, for
+/// [`copy_index_of_engine_type`]'s reason: CE0 is one of the two indices whose non-stall
+/// vector this port's captured table publishes as `INVALID`, so a zero default would fake
+/// precisely the answer that must never be faked.
+#[must_use]
+pub const fn rm_copy_index_of_engine_type(rm_engine_type: u32) -> Option<u32> {
+    if rm_engine_type >= RM_ENGINE_TYPE_COPY0
+        && rm_engine_type < RM_ENGINE_TYPE_COPY0 + RM_ENGINE_TYPE_COPY_SIZE
+    {
+        Some(rm_engine_type - RM_ENGINE_TYPE_COPY0)
+    } else {
+        None
+    }
+}
+
 /// Decode a [`BindParams`] image.
 ///
 /// ⊘ There is **no validity check here and that is deliberate**: every 32-bit value is a

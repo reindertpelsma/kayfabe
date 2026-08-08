@@ -89,6 +89,29 @@ pub enum DoorbellReport {
         proc: u32,
         /// The channel it routed to.
         chan: u32,
+        /// ★★★ **§14.18 — the engine this channel was BOUND to**, in `RM_ENGINE_TYPE`
+        /// space, or `None` if the guest never bound it.
+        ///
+        /// # Why the report carries it rather than the port resolving it
+        ///
+        /// A completion this device witnessed owes the guest the non-stall interrupt its
+        /// arming was accepted on (`kayfabe_abi::eventnotify`'s index-35 argument), and the
+        /// vector for it is a join of the **chip's** interrupt table with the **channel's**
+        /// bound engine. This crate holds the first (`crate::ChipProfile::intr_table`) and
+        /// must never learn what a channel is; the port holds the second and must never
+        /// learn what a vector is. So the engine crosses as a plain integer and
+        /// [`crate::nonstall::non_stall_vector`] does the join on this side.
+        ///
+        /// ⊘ `None` is *"the guest bound no engine to this channel"* and never a default.
+        /// A completion on a channel with no bind is a completion this device cannot
+        /// announce, and it is counted (`crate::Counters::nonstall_unvectored`) rather
+        /// than silently notified against a guessed engine — the guess would be CE0, whose
+        /// row publishes no vector at all.
+        ///
+        /// ⚠ `RM_ENGINE_TYPE`, not the wire's `NV2080_ENGINE_TYPE`: the two collide above
+        /// `0x12` and `kayfabe_abi::submit::nv2080_to_rm_engine_type` is where the
+        /// conversion happens, once, before the core records it.
+        engine: Option<u32>,
         /// ★ What the shell actually **did** — spans run, bytes moved, where the
         /// finishPayload landed. Every number in it is a thing that happened, so a report
         /// built from it cannot claim more than the work did.

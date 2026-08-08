@@ -352,14 +352,41 @@ impl CpuIntrTree {
                 self.top_en[i] &= !val;
                 None
             }
-            CpuIntrReg::LeafTrigger => Some(self.trigger(val)),
+            CpuIntrReg::LeafTrigger => {
+                Some(self.latch((u64::from(val) & TRIGGER_VECTOR_MASK) as u32))
+            }
         }
     }
 
-    /// `LEAF_TRIGGER` — latch the vector's pending bits and report what a gating model
-    /// would have done. See [`TriggerOutcome`].
-    fn trigger(&mut self, val: u32) -> TriggerOutcome {
-        let vector = (u64::from(val) & TRIGGER_VECTOR_MASK) as u32;
+    /// ★★★ **Latch a vector this DEVICE raises** — the entry point that is not a guest
+    /// `LEAF_TRIGGER` write (`execution_plane_increments.md` §14.18, step 1).
+    ///
+    /// # Why it had to exist, and why it is the *same* code as the trigger
+    ///
+    /// Until §14.18 the only producer of a pending bit was the guest asking the device to
+    /// interrupt the guest — the `_osVerifyInterrupts` loopback. A **completion** vector is
+    /// the opposite direction: the device announcing that an engine finished the guest's
+    /// work, which is the whole of what
+    /// [`crate::DoorbellReport::ServedLocally`] now owes its notifier arming
+    /// (`kayfabe_abi::eventnotify`'s index-35 argument).
+    ///
+    /// ★ It shares [`CpuIntrTree::write`]'s body rather than duplicating it, because the
+    /// guest's ISR cannot tell the two apart and neither may the pending state: the leaf
+    /// bit, the derived TOP summary and the mask reading are one description of the tree,
+    /// and a second latch that maintained them slightly differently is the two-places-must-
+    /// agree defect [`CpuIntrTree::recompute_top`] already argues against.
+    ///
+    /// ⊘ **The caller must have witnessed the work.** This function cannot check that and
+    /// does not try; what it guarantees is only that a latch is honest *about the tree*.
+    /// The one caller is [`crate::RegPlane::ring_doorbell`], and it latches only on a
+    /// `ServedLocally` report — after the bytes moved and the finishPayload advanced.
+    ///
+    /// ⚠ `vector` is a **GPU interrupt-tree vector**, e.g. `vectorNonStall` out of the
+    /// chip's interrupt table — not an MSI-X index. It is masked to
+    /// `LEAF_TRIGGER_VECTOR`'s `11:0` here as well, so the two entry points cannot
+    /// disagree about the field width the register block declares.
+    pub fn latch(&mut self, vector: u32) -> TriggerOutcome {
+        let vector = (u64::from(vector) & TRIGGER_VECTOR_MASK) as u32;
         let leaf = vector_to_leaf_reg(vector);
         let bit = vector_to_leaf_bit(vector);
         let subtree = vector_to_subtree(vector);

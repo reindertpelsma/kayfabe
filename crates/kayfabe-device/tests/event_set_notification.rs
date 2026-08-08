@@ -23,11 +23,14 @@
 //!
 //! ## ⚠ What it does NOT establish
 //!
-//! ⊘ **Nothing about delivery.** This port raises no interrupt and delivers no
-//! notification; [`kayfabe_abi::eventnotify::SILENT_NOTIFIERS`] is the argument for why
-//! accepting a registration is nonetheless honest, and it is an argument about
-//! `NV2080_NOTIFIERS_POWER_RESUME` specifically. No test here can show that an event which
-//! *can* occur is delivered, because none is.
+//! ⊘ **Nothing about delivery.** ★ §14.18 narrowed this paragraph rather than deleting it.
+//! This port *does* now raise a non-stall vector when its CPU copy-engine executor finishes
+//! a copy ([`kayfabe_abi::eventnotify::DELIVERED_NOTIFIERS`], `RegPlane::announce_completion`),
+//! which is why index 35 is served here — but **no test in this file exercises that**: the
+//! delivery lives in the register plane and is covered by
+//! `crates/kayfabe-device/tests/completion_notification.rs`. What this file establishes is
+//! only that the arming is decided by the two lists, and a green run of it is not evidence
+//! that anything was delivered.
 //!
 //! ⊘ **No boot is claimed here.** That a served `0x20800301` lets
 //! `memmgrStateInitLocked_IMPL` complete is `[inferred]` from `ogkm-580: mem_mgr.c:625,
@@ -643,33 +646,102 @@ fn arming_of(event: u32) -> RpcCommand {
 }
 
 #[test]
-fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_it() {
-    // ⊘ The default first, because the default is what every shipping boot runs: index 35
-    // is a COMPLETION notifier and `InitTablePolicy::new` must refuse to arm it.
+fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_an_unlisted_one() {
+    // ★★★ §14.18 CHANGED THE FIRST HALF OF THIS TEST, and the change is the increment.
+    //
+    // ⊘ It used to assert that the DEFAULT policy refuses index 35, on the ground that a
+    // completion notifier may not be armed by a device that delivers nothing. That ground
+    // is gone: `RegPlane::announce_completion` latches the ringing channel's bound engine's
+    // `vectorNonStall` at the instant the shell's CPU copy-engine executor finishes the
+    // copy, so 35 is now in `DELIVERED_NOTIFIERS` — accepted because it is *delivered*,
+    // never because it is silent. See `kayfabe_abi::eventnotify::DELIVERED_NOTIFIERS`.
+    //
+    // ⚠ What did NOT change is the shape being guarded: the probe must still be a set that
+    // admits exactly what it names, and the default must still refuse an index on neither
+    // list. Index 37 carries that half now, and it is a *legal* index — the guard is about
+    // the promise, not about the wire bounds.
     assert_ne!(
         policy()
-            .respond(&arming_of(FIFO_EVENT_MTHD))
+            .respond(&arming_of(37))
             .expect("claimed")
             .rpc_result,
         0,
-        "the DEFAULT policy probe-arms index 35 — the probe has become the product"
+        "the DEFAULT policy arms an index on neither list — the promise has widened \
+         without an argument"
     );
-    // The probe admits what it names…
-    let mut probed = probed_policy("35");
+    // 35 is served by the DEFAULT policy now, and by the delivered list rather than the
+    // silent one. ⊘ Asserted from both sides so a future migration between the two lists
+    // fails here: the two carry different arguments and only one of them is true.
+    assert!(kayfabe_abi::eventnotify::is_delivered_notifier(
+        FIFO_EVENT_MTHD
+    ));
+    assert!(!kayfabe_abi::eventnotify::is_silent_notifier(
+        FIFO_EVENT_MTHD
+    ));
     assert_eq!(
-        probed
+        policy()
             .respond(&arming_of(FIFO_EVENT_MTHD))
             .expect("served")
             .rpc_result,
         0,
-        "a probe naming 35 serves the arming — reachability instrumentation"
+        "index 35 is delivered, so the SHIPPING policy — probe set empty — serves its arming"
     );
-    // …and nothing it does not name: 37 is another legal, non-silent index.
-    assert_ne!(
-        probed.respond(&arming_of(37)).expect("claimed").rpc_result,
+    // The probe admits what it names…
+    let mut probed = probed_policy("37");
+    assert_eq!(
+        probed.respond(&arming_of(37)).expect("served").rpc_result,
         0,
-        "the probe is a set, not a switch: an unnamed non-silent index stays refused"
+        "a probe naming 37 serves the arming — reachability instrumentation"
     );
+    // …and nothing it does not name: 36 is another legal index on neither list.
+    assert_ne!(
+        probed.respond(&arming_of(36)).expect("claimed").rpc_result,
+        0,
+        "the probe is a set, not a switch: an unnamed, undelivered index stays refused"
+    );
+}
+
+/// ★★★ **The delivered list is PINNED, and every row carries its argument.**
+///
+/// `gates_quantified_over_a_list`: a promise whose universe can grow without a red test is
+/// not a promise. ⊘ And the two lists must stay **disjoint** — an index in both would be
+/// accepted under two contradictory arguments ("the event cannot occur" and "the event
+/// occurs and we raise it"), and whichever one a later reader found first would be taken
+/// as settled.
+#[test]
+fn the_delivered_list_is_exactly_index_35_and_is_disjoint_from_the_silent_one() {
+    use kayfabe_abi::eventnotify::DELIVERED_NOTIFIERS;
+    let indices: Vec<u32> = DELIVERED_NOTIFIERS.iter().map(|n| n.index).collect();
+    assert_eq!(indices, vec![FIFO_EVENT_MTHD]);
+    assert_eq!(
+        kayfabe_abi::eventnotify::NV2080_NOTIFIERS_FIFO_EVENT_MTHD,
+        35
+    );
+    for n in DELIVERED_NOTIFIERS {
+        assert!(
+            n.why.len() > 80,
+            "notifier {} is DELIVERED without an argument",
+            n.index
+        );
+        assert!(
+            n.why.contains("ogkm-580:"),
+            "notifier {} claims delivery without citing the tree it read",
+            n.index
+        );
+        // ★ The argument must name where the delivery IS. A row whose sentence only
+        // explains why the arming is harmless is a `SILENT_NOTIFIERS` argument wearing this
+        // list's name, which is the migration this pair of lists exists to prevent.
+        assert!(
+            n.why.contains("vectorNonStall"),
+            "notifier {}'s argument does not name the vector it raises",
+            n.index
+        );
+        assert!(
+            !kayfabe_abi::eventnotify::is_silent_notifier(n.index),
+            "notifier {} is on BOTH lists — two contradictory arguments for one index",
+            n.index
+        );
+    }
 }
 
 #[test]

@@ -1441,6 +1441,12 @@ impl SharedDevice {
                     ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
                     ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
                     vas_pdb: chan.vas_pdb,
+                    // ★ Off the SAME proc the channel was routed in, so a bind recorded for
+                    // another proc's slot of the same index can never be read as this
+                    // channel's — the join is `(proc, chan)`, exactly as `ExecPlane` keys
+                    // it. ⊘ Read here rather than joined later for `ce_channel_facts`' own
+                    // stated reason: two projections of one fact can disagree.
+                    bound_engine: proc.exec.bound.get(&route.chan).copied(),
                 })
             },
         )?
@@ -2177,4 +2183,21 @@ pub struct CeChannelFacts {
     /// The channel's bound page-directory base, if the port has one. `None` is the
     /// `FwdFault::NoVas` state.
     pub vas_pdb: Option<Pdb>,
+    /// ★★★ **§14.18 — the engine the guest bound this channel to** (`NVA06F_CTRL_CMD_BIND`,
+    /// `0xa06f0104`), in **`RM_ENGINE_TYPE`** space, or `None` if it never sent one.
+    ///
+    /// ⊘ The one fact §14.18 named as owed: *"the doorbell path must be able to name the
+    /// engine the ringing channel was bound to — `Gpu::bind_channel` records it, the
+    /// doorbell path does not read it"*. A completion cannot be announced without it,
+    /// because the vector that announces it is a property of the engine.
+    ///
+    /// ⚠ Read from `kayfabe_core::gpu::ExecPlane::bound`, which stores **RM** engine space
+    /// on purpose; it is not the raw `engineType` off the wire, and the two collide above
+    /// `0x12`. ⊘ `None` is carried as `None` and never folded to an engine id: a channel
+    /// with no bind and a channel bound to engine zero would otherwise be the same fact,
+    /// and only the first means *"this device may not announce a completion here"*.
+    ///
+    /// ⚠ It is a *declared* fact like every other field here — the guest said it, we
+    /// recorded it. It is not a claim that any engine ran.
+    pub bound_engine: Option<u32>,
 }

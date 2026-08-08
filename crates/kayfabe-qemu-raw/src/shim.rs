@@ -199,7 +199,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// times and still not know how many channels there were.
 ///
 /// [`DOORBELL_SERVED_LOCAL`]: crate::shim_unsafe::DOORBELL_SERVED_LOCAL
-pub const ABI_VERSION: u32 = 20;
+pub const ABI_VERSION: u32 = 21;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1291,6 +1291,15 @@ pub struct KayfabeRegAudit {
     /// `#151`: of those, how many real silicon would have masked. See
     /// `kayfabe_device::cpuintr::TriggerOutcome::would_be_masked`.
     pub cpu_intr_masked: u64,
+    /// ★★★ §14.18: CE completions this device **announced** with the bound engine's
+    /// `vectorNonStall`. See `kayfabe_device::Counters::nonstall_raises`.
+    pub nonstall_raises: u64,
+    /// ★★★ §14.18: CE completions it could **not** announce. ⊘ The number that must be
+    /// zero — every one of them is work that happened and was never notified.
+    pub nonstall_unvectored: u64,
+    /// ★★ §14.18: of the raises, how many the guest's own `LEAF_EN` would hide from its
+    /// non-stall scan. See `kayfabe_device::Counters::nonstall_masked`.
+    pub nonstall_masked: u64,
     /// Commands decoded off the guest's command queue.
     pub commands: u64,
     /// ★★ Of those, the ones **no policy answered**, and which the emulated GSP therefore
@@ -1940,6 +1949,12 @@ impl SharedDoorbell {
                     token,
                     proc: facts.proc.0,
                     chan: facts.chan.0,
+                    // ★★★ §14.18 — carried ONLY on the success arm, and that placement is
+                    // the promise: the plane latches this engine's non-stall vector off a
+                    // `ServedLocally`, so an engine reaching it is an engine whose copy
+                    // really ran. ⊘ The refusal arm below carries none, because a refused
+                    // submission moved no bytes and owes no notification.
+                    engine: facts.bound_engine,
                     note: run.describe(),
                 }
             }
@@ -2348,6 +2363,9 @@ impl Regs {
             cpu_intr_accesses,
             cpu_intr_raises,
             cpu_intr_masked,
+            nonstall_raises,
+            nonstall_unvectored,
+            nonstall_masked,
             commands,
             commands_unserviced,
             doorbells,
@@ -2568,6 +2586,9 @@ impl Regs {
             cpu_intr_accesses,
             cpu_intr_raises,
             cpu_intr_masked,
+            nonstall_raises,
+            nonstall_unvectored,
+            nonstall_masked,
             commands,
             commands_unserviced,
             unserviced_len: sample.len() as u64,

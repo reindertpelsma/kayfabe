@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 20u
+#define KAYFABE_SHIM_ABI 21u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -599,6 +599,20 @@ typedef struct KayfabeRegAudit {
     uint64_t cpu_intr_accesses;
     uint64_t cpu_intr_raises;
     uint64_t cpu_intr_masked;
+    /* ★★★ §14.18 — THE COMPLETION NOTIFICATION.  A copy-engine submission this shell
+     * served on the CPU ends with the bound engine's `vectorNonStall` latched into the
+     * interrupt tree, because serving notifier index 35 is a promise to raise one when the
+     * work completes (see kayfabe_abi::eventnotify).
+     *
+     * ⊘ READ `nonstall_unvectored` FIRST: it counts copies that really happened and were
+     * never announced, which is the promise being broken quietly.  Its healthy value is 0.
+     * `nonstall_masked` is the other half of a hang diagnosis — the message was delivered
+     * but the guest's own LEAF_EN would hide the vector from its non-stall scan
+     * (ogkm-580: intr_nonstall_tu102.c:344-346), and without this number that is
+     * indistinguishable from never having raised. */
+    uint64_t nonstall_raises;
+    uint64_t nonstall_unvectored;
+    uint64_t nonstall_masked;
     uint64_t commands;
     /* ★★★ THE LIST A BOOT IS WORTH.
      *

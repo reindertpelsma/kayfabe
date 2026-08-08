@@ -587,9 +587,17 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // SERVES (`kceGetGrceMaskReg` is the `NV_ERR_NOT_SUPPORTED` stub below GB202,
     // `ogkm-580: g_kernel_ce_nvoc.c:847-858`), so inferring the answer from our own table
     // is circular. This is the reason the wire ABI moved to 20.
+    // ★ 57 -> 60 at `execution_plane_increments.md` §14.18: `nonstall_raises`,
+    // `nonstall_unvectored` and `nonstall_masked` — whether the completion this device
+    // WITNESSED was actually announced to the guest. ⊘ `nonstall_unvectored` is the one
+    // that must be zero: it counts copies this shell really performed and never notified,
+    // which is the promise made by serving notifier index 35 being broken quietly. Three
+    // numbers and not one, because "we announced it", "we could not" and "we did and the
+    // guest's own LEAF_EN hides it" are three different next moves for an operator. This
+    // is the reason the wire ABI moved to 21.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (57 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (60 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS

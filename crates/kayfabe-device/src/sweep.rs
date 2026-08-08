@@ -869,7 +869,18 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               skip it, and a stock guest sets neither). ⊘ Probe-off is UNCHANGED (first \
               arming still refused by SILENT_NOTIFIERS, 0x25:0xffff:1249): the advance is \
               reachability under the probe, NOT a rung, and the honest next step is \
-              delivering the CE copy, not admitting index 35",
+              delivering the CE copy, not admitting index 35. \
+              (g) ★★★★ BOTH of (f)'s named next steps are DONE, and neither was an \
+              admission. The CE copy is real and the guest's own readback compare passed \
+              ([measured] 2026-08-08, boots p35_754e393 and p35_754e393_b, §14.17: \
+              mem_mgr.c does not appear in the boot at all), and index 35 is now served \
+              from DELIVERED_NOTIFIERS — never SILENT_NOTIFIERS — because the completion is \
+              ANNOUNCED: RegPlane::announce_completion latches the ringing channel's bound \
+              engine's vectorNonStall at the ServedLocally instant (§14.19). ⊘ The bind \
+              this very row serves is what names that engine, so (d)'s 'a reply cannot \
+              close the execution plane' is still true and is now also the reason the row \
+              matters: [measured] 2026-08-08, boots cebind_p35 and cup2_p35 at 5a035e0, the \
+              engine it carried was COPY2, MC_ENGINE_IDX 17, vectorNonStall 0x07",
     },
 ];
 

@@ -63,6 +63,7 @@ pub mod guestsysinfo;
 pub mod gvaspub;
 pub mod inert;
 pub mod inittables;
+pub mod nonstall;
 pub mod plane;
 pub mod staticinfo;
 pub mod sticky;

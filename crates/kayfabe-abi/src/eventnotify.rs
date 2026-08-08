@@ -236,12 +236,29 @@
 //! question was always *"if we serve the arming, is there a vector for the CE the guest
 //! then binds?"*, and the answer is yes, `0x07`.
 //!
-//! ⊘ **The refusal still stands until the wiring exists.** Admitting 35 into
-//! [`SILENT_NOTIFIERS`] would be promising a completion notification for work that really
-//! happens, which is the exact shape this module's own rule forbids — and the boot it buys
-//! is [`ProbeArmSet`]'s reachability result, not a rung. What the measurement changes is
-//! *which* refusal is honest: not "the hardware publishes no vector", but "the vector is
-//! published and this device does not yet raise it".
+//! ### ★★★★ SETTLED, and the refusal is GONE — the wiring exists (§14.19)
+//!
+//! ⊘ Index 35 is **not** in [`SILENT_NOTIFIERS`] and must never be: admitting it there
+//! would promise a completion notification for work that really happens, which is the exact
+//! shape this module's own rule forbids. It is in [`DELIVERED_NOTIFIERS`], on the opposite
+//! argument — the event occurs and this device **raises** it.
+//!
+//! The fourth piece landed as `kayfabe_device::nonstall::non_stall_vector` +
+//! `kayfabe_device::RegPlane::announce_completion`: at the instant the shell's CPU
+//! copy-engine executor reports `DoorbellReport::ServedLocally` — after the bytes moved and
+//! the finishPayload was advanced — the ringing channel's **bound** engine
+//! (`CeChannelFacts::bound_engine`, the one fact §14.18 named as owed) is resolved to its
+//! `vectorNonStall` and latched into `kayfabe_device::cpuintr`. The doorbell is a register
+//! write, so `WriteOutcome::raise_cpu_intr` carries it out on the wire that already existed.
+//!
+//! ⊘ **And the promise is auditable rather than asserted.** Every local serving lands in
+//! exactly one of `Counters::nonstall_raises` or `Counters::nonstall_unvectored`; the
+//! second is work that happened and was never announced, its healthy value is **zero**, and
+//! every boot prints it. `Counters::nonstall_masked` is the third number, and it is the one
+//! that separates *"we never raised"* from *"we raised into a leaf the guest had not
+//! enabled"* — the guest's own non-stall scan is `LEAF & LEAF_EN_SET`
+//! (`ogkm-580: intr_nonstall_tu102.c:253-255`), and without the counter those two hangs are
+//! the same silence.
 
 /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080event.h:79`).
@@ -293,6 +310,11 @@ pub const NV2080_NOTIFIERS_TIMER: u32 = 11;
 /// `NV2080_NOTIFIERS_POWER_RESUME` (`ogkm-580: cl2080_notification.h:235`).
 pub const NV2080_NOTIFIERS_POWER_RESUME: u32 = 194;
 
+/// `NV2080_NOTIFIERS_FIFO_EVENT_MTHD` (`ogkm-580: cl2080_notification.h:72`) — the
+/// **completion** notifier the scrubber arms, and the one this port now delivers. See
+/// [`DELIVERED_NOTIFIERS`].
+pub const NV2080_NOTIFIERS_FIFO_EVENT_MTHD: u32 = 35;
+
 /// ★★★ **The notifier indices this device can truthfully promise silence for.**
 ///
 /// A registration this port accepts is a statement that it will deliver the event when it
@@ -315,6 +337,64 @@ pub const SILENT_NOTIFIERS: &[SilentNotifier] = &[SilentNotifier {
           of events this port fails to deliver for it is zero, which is a measurement and \
           not an excuse",
 }];
+
+/// ★★★ **The notifier indices this device accepts because it DELIVERS them** — the other
+/// half of [`SILENT_NOTIFIERS`], and the one that had to be built rather than argued.
+///
+/// # The two lists are two different promises, and that is why they are two lists
+///
+/// [`SILENT_NOTIFIERS`] accepts an arming because the event **cannot occur**, so *"we
+/// delivered none"* and *"none happened"* are the same sentence. This one accepts an arming
+/// because the event **does** occur and this device raises it — a strictly stronger claim,
+/// and the only other one that is not a lie.
+///
+/// ⊘ **A row here is a load-bearing statement about the code, not about the notifier.** It
+/// says: there is a moment in this port at which the corresponding event demonstrably
+/// happened, and a path from that moment to a vector the guest will see. If either half is
+/// removed, the row must go with it — `mutate_the_refusals_not_the_mechanism` is why the
+/// bite-check for this list deletes the *delivery*, not the row.
+///
+/// ⊘ And ⊘ **index 35 must never be moved into [`SILENT_NOTIFIERS`]**. Its events are not
+/// impossible; they are the scrubber's own copy completions, which this device performs.
+/// Filing it as silent would be the exact promise-without-a-mechanism this module forbids,
+/// wearing the wrong list's argument.
+pub const DELIVERED_NOTIFIERS: &[DeliveredNotifier] = &[DeliveredNotifier {
+    index: NV2080_NOTIFIERS_FIFO_EVENT_MTHD,
+    why: "NV2080_NOTIFIERS_FIFO_EVENT_MTHD is registered NON-STALLING (nv0005AllocParams\
+          .notifyIndex carries NV01_EVENT_NONSTALL_INTR, ogkm-580: mem_utils.c:1901), and \
+          the non-stall path consults no notifyActions: eventGetEngineTypeFromSubNotifyIndex \
+          maps 35 to RM_ENGINE_TYPE_HOST (event_notification.c:480-484) and the sole producer \
+          for it is the guest's OWN non-stall interrupt service, intr.c:1201-1204, under \
+          bDefaultNonstallNotify — NV_TRUE for GA106 by name (g_intr_nvoc.c:299-308). So what \
+          this arming asks the GSP for is bookkeeping, and what actually delivers is the CPU \
+          non-stall interrupt tree, which is THIS device's to raise. It now does: a \
+          copy-engine submission the shell served on the CPU ends by latching the ringing \
+          channel's bound engine's vectorNonStall into kayfabe_device::cpuintr, and only \
+          after the bytes moved and the finishPayload was advanced. [measured 2026-08-08, \
+          boots cebind_p35 and cup2_p35 at 5a035e0] the engine the scrubber binds is COPY2, \
+          MC_ENGINE_IDX 17, whose captured row publishes vectorNonStall = 0x07 — so there is \
+          a vector, and it is raised. The count of completions this port fails to announce \
+          is kayfabe_device::Counters::nonstall_unvectored, printed in every boot's own \
+          report, and a non-zero one is this row being false",
+}];
+
+/// One row of [`DELIVERED_NOTIFIERS`] — an index, and the argument that this port raises it.
+///
+/// ★ The argument is a field for [`SilentNotifier`]'s reason: a test can demand every row
+/// carry one, and a row added without one fails the build rather than the boot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeliveredNotifier {
+    /// The `NV2080_NOTIFIERS_*` index.
+    pub index: u32,
+    /// Why this port may accept an arming for it — i.e. where the delivery is.
+    pub why: &'static str,
+}
+
+/// Whether this port **delivers** `index` — see [`DELIVERED_NOTIFIERS`].
+#[must_use]
+pub fn is_delivered_notifier(index: u32) -> bool {
+    DELIVERED_NOTIFIERS.iter().any(|n| n.index == index)
+}
 
 /// One row of [`SILENT_NOTIFIERS`] — an index, and the argument for accepting it.
 ///

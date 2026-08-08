@@ -1381,6 +1381,20 @@ static void nvkvm_report_registers(NvkvmState *s)
                 s->irq_vectors_delivered, s->irq_vectors_undeliverable,
                 s->irq_requests_dropped);
 
+    /* ★★★ §14.18 — THE COMPLETION-NOTIFICATION LINE, printed unconditionally for the same
+     * reason as the one above.  Serving notifier index 35 is a promise to raise a non-stall
+     * vector when the engine's work completes; this line is whether the promise was kept.
+     *
+     * ⊘ `unvectored` is the one to read and its healthy value is ZERO: each one is a copy
+     * this shell really performed and never announced.  `masked` is the second half of a
+     * hang diagnosis — the message went out, but the guest's own LEAF_EN would hide the
+     * vector from its non-stall scan, which without this number looks exactly like never
+     * having raised at all. */
+    info_report("nvkvm: completions: %" PRIu64 " announced (non-stall vector raised), %" PRIu64
+                " UNVECTORED (work done, nothing told the guest), %" PRIu64
+                " would be masked by the guest's own LEAF_EN",
+                a.nonstall_raises, a.nonstall_unvectored, a.nonstall_masked);
+
     /*
      * ★★★ #146 — THE FRAMEBUFFER LINE, printed unconditionally INCLUDING when every number
      * is zero, for the reason every other unconditional block here is: "no line appeared"

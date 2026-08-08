@@ -3663,3 +3663,77 @@ SMI_RC=6
 with `NVRM: RmInitAdapter failed! (0x25:0xffff:1249)`. ⊘ **`nvidia-smi` does NOT print a
 device with the probe empty.** The milestone has not been reached; §14.17's wall is still the
 index-35 arming, exactly where it was.
+
+### 14.19 ★★★ §14.18 STEP 1 BUILT — the completion is **announced**, and index 35 is served from a second list
+
+⊘ **`[built]`, not `[measured]`.** Everything below is a property of the tree and of its
+tests; no boot of this revision existed when it was written. `only_live_boots_are_proof`.
+
+#### What landed, in the four pieces §14.18 named
+
+| piece | where |
+|---|---|
+| a latch entry point that is not a guest `LEAF_TRIGGER` write | `CpuIntrTree::latch` — the **same body** as the trigger, shared rather than duplicated, because the guest's ISR cannot tell the two apart and neither may the pending state |
+| the engine the ringing channel was bound to | `CeChannelFacts::bound_engine`, read off the **same proc** the token routed in (`ExecPlane::bound` is keyed `(proc, chan)`) and carried on `DoorbellReport::ServedLocally { engine }` |
+| engine → vector | `kayfabe_device::nonstall::non_stall_vector` — `RM_ENGINE_TYPE` → `MC_ENGINE_IDX` → the chip's captured `vectorNonStall` |
+| raise | `RegPlane::announce_completion`, off `WriteOutcome::raise_cpu_intr`. ⊘ **No new shell code and no new wire**: a doorbell is a register write and the shell already delivers on that flag (`nvkvm.c:381`) |
+
+#### ★★★ Index 35 is admitted by a **second list**, and the two lists must never merge
+
+`SILENT_NOTIFIERS` accepts an arming because the event *cannot occur*. `DELIVERED_NOTIFIERS`
+— new — accepts one because it *does* occur and this device raises it. ⊘ Moving 35 into the
+first would keep a sentence that no longer supports it, which is why
+`the_delivered_list_is_exactly_index_35_and_is_disjoint_from_the_silent_one` asserts the two
+are disjoint and that every delivered row's argument names the vector it raises.
+
+#### ⊘ The promise is AUDITABLE, not asserted — and one number must be zero
+
+Every local serving lands in exactly one of `nonstall_raises` or `nonstall_unvectored`
+(`every_local_serving_is_either_announced_or_counted_as_unannounced`). The second counts work
+that happened and was never announced: **its healthy value is 0**, and every boot prints it.
+
+★ `nonstall_masked` is the third, and it is the one that will pay for itself: the guest's own
+non-stall scan is `intrReadRegLeaf(j) & intrReadRegLeafEnSet(j)`
+(`ogkm-580: intr_nonstall_tu102.c:253-255`), so a vector latched into a leaf the guest has not
+enabled is **invisible to its ISR even though the message was delivered** — and without the
+counter that hang is byte-identical to never having raised. ⊘ This device still raises
+regardless of the enables (`cpuintr`'s standing decision) and records the disagreement.
+
+Wire ABI **20 → 21** for the three counters, plus the shell's own
+`nvkvm: completions: …` line.
+
+#### ⊘⊘ A DEFECT this increment found, and it was made dangerous by this increment
+
+`RegPlane::device_reset` did **not** reset `PlaneState::cpu_intr`, and `RegPlane::residue`
+recorded the reason as *"the tree's own arrays are transient — every bit the guest sets it
+clears again in the same ISR"*. That was true while the only producer was
+`_osVerifyInterrupts`' loopback, which clears its own bit before returning.
+
+★ It is **false** of a completion vector: this device latches it, and only a guest that lives
+long enough to run `_intrServiceNonStallLeaf_TU102` clears it. A guest that resets in between
+hands the next one a `MC_ENGINE_IDX_CE2` bit pending for a copy that never happened in its
+life — a **fabricated completion notification, across a device life**, from the one path this
+whole increment exists to keep honest. Fixed (`device_reset` rebuilds the tree; it is also the
+register block's own stated reset, `ampere/ga102/dev_vm.h:52,56,60`), and the residue comment
+is corrected rather than deleted.
+
+#### Coverage
+
+`crates/kayfabe-device/tests/completion_notification.rs`, written against the three ways the
+promise can break: announcing work that did not happen, not announcing work that did, and
+announcing it where the guest cannot see it. The chip's own table is read independently
+(`the_vector_under_test_is_the_one_this_chips_captured_table_publishes_for_ce2`) so a table
+edit reddens before every other assertion silently changes meaning.
+
+`[bite]` **7/7 bite**, `mutate_the_refusals_not_the_mechanism`-style — announce a forwarded
+doorbell too; drop the unvectored counter; hard-code CE2's vector; let a pending bit survive a
+reset; stop admitting the delivered list; decode an `INVALID` row to zero; stop recording
+`masked`. Each reddened its own test and nothing else; all restored.
+
+#### ⊘ What is still owed
+
+A **boot**, in the shipping configuration (`probe-arm set: EMPTY`). ⊘ And note what a green
+one does *not* establish: the guest's `LEAF_EN` for a CE non-stall vector is set by a path
+this port has never observed, so `nonstall_masked` is the number to read first — a boot with
+`raises > 0, unvectored = 0, masked > 0` is a delivered message the guest's own scan will
+never attribute, and it looks exactly like success from every other angle.

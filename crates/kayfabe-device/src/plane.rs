@@ -386,6 +386,39 @@ pub struct Counters {
     /// is the evidence that the enable bookkeeping and the guest's expectations disagree,
     /// and it is the only thing that could ever justify turning gating on.
     pub cpu_intr_masked: u64,
+    /// ★★★ **§14.18 — completions this device ANNOUNCED with a non-stall vector.**
+    ///
+    /// One per [`crate::DoorbellReport::ServedLocally`] whose channel's bound engine
+    /// resolved to a `vectorNonStall` ([`crate::nonstall::non_stall_vector`]). ⊘ A
+    /// *separate* number from [`Counters::cpu_intr_raises`], which counts the guest asking
+    /// the device to interrupt the guest: they are two causes and a boot that delivered the
+    /// wrong number of vectors must be diagnosable as to which.
+    ///
+    /// ★ `nonstall_raises + nonstall_unvectored` is the number of completions, so the two
+    /// together say *"every copy we served, we either announced or could not"* — the
+    /// invariant that makes a silent completion impossible to hide.
+    pub nonstall_raises: u64,
+    /// ★★★ Completions this device could **not** announce, with the reason available in
+    /// the serving's own note.
+    ///
+    /// ⊘ **This is the one number that must be zero in a healthy boot**, and it is the
+    /// whole reason serving notifier index 35 is honest: it counts work that really
+    /// happened and was never notified. `[measured 2026-08-08, boot cebind_p35 at
+    /// 5a035e0]` the scrubber binds COPY2, whose row publishes `vectorNonStall = 0x07`, so
+    /// the expected value is 0. A non-zero one is not a crash — it is the promise being
+    /// broken quietly, printed.
+    pub nonstall_unvectored: u64,
+    /// ★★ Of the [`Counters::nonstall_raises`], how many real silicon would have **masked**
+    /// — see [`crate::cpuintr::TriggerOutcome::would_be_masked`].
+    ///
+    /// ⚠ Sharper here than for the loopback trigger, and worth reading before concluding a
+    /// delivery worked: the guest's own non-stall scan is
+    /// `intrReadRegLeaf(j) & intrReadRegLeafEnSet(j)`
+    /// (`ogkm-580: intr_nonstall_tu102.c:344-346`), so a vector latched while its
+    /// `LEAF_EN` bit is clear is **invisible to the ISR** even though the message was
+    /// delivered. A non-zero value here with a hung scrubber is that exact diagnosis, and
+    /// without the counter the two are the same silence.
+    pub nonstall_masked: u64,
     /// ★★★ **E2** — guest MMIO writes that landed on the usermode doorbell register
     /// ([`crate::doorbell_reg`]), i.e. work-submit tokens the guest rang.
     ///
@@ -675,8 +708,17 @@ pub struct WriteOutcome {
     pub fb_refusal: Option<FbRefused>,
     /// The status-queue interrupt should be announced to the guest.
     pub raise_status_irq: bool,
-    /// ★★★ The guest wrote `CPU_INTR_LEAF_TRIGGER` and a vector is now pending: **deliver a
-    /// message-signalled interrupt**.
+    /// ★★★ A vector is now pending: **deliver a message-signalled interrupt**.
+    ///
+    /// ★★ **TWO producers since §14.18, and one field**, which is the opposite of the
+    /// split argued for below — deliberately, because they are the same *action* on the
+    /// same tree: either the guest wrote `CPU_INTR_LEAF_TRIGGER` (the `_osVerifyInterrupts`
+    /// loopback) or this device latched an engine's `vectorNonStall` because a completion
+    /// it witnessed really happened ([`RegPlane::announce_completion`]). The guest's ISR
+    /// cannot tell them apart — it reads TOP/LEAF and demultiplexes — so a second flag
+    /// would be a distinction the wire could not carry. Which one it was is in
+    /// [`Counters::cpu_intr_raises`] vs [`Counters::nonstall_raises`], where the question
+    /// is actually asked.
     ///
     /// ⚠ A second field beside [`WriteOutcome::raise_status_irq`] and not the same one,
     /// even though today both end in one `msix_notify`. They are two different *causes* —
@@ -926,6 +968,9 @@ struct PlaneCounters {
     cpu_intr_accesses: AtomicU64,
     cpu_intr_raises: AtomicU64,
     cpu_intr_masked: AtomicU64,
+    nonstall_raises: AtomicU64,
+    nonstall_unvectored: AtomicU64,
+    nonstall_masked: AtomicU64,
     doorbells: AtomicU64,
     doorbells_served: AtomicU64,
     doorbells_refused: AtomicU64,
@@ -1548,6 +1593,9 @@ impl RegPlane {
             cpu_intr_accesses,
             cpu_intr_raises,
             cpu_intr_masked,
+            nonstall_raises,
+            nonstall_unvectored,
+            nonstall_masked,
             doorbells,
             doorbells_served,
             doorbells_refused,
@@ -1581,6 +1629,9 @@ impl RegPlane {
             cpu_intr_accesses: g(cpu_intr_accesses),
             cpu_intr_raises: g(cpu_intr_raises),
             cpu_intr_masked: g(cpu_intr_masked),
+            nonstall_raises: g(nonstall_raises),
+            nonstall_unvectored: g(nonstall_unvectored),
+            nonstall_masked: g(nonstall_masked),
             doorbells: g(doorbells),
             doorbells_served: g(doorbells_served),
             doorbells_refused: g(doorbells_refused),
@@ -1658,10 +1709,17 @@ impl RegPlane {
             unclaimed,
             fb_window,
             bar0_window,
-            // ★ Carried out as three counters rather than as state. The tree's own arrays
-            // are transient — every bit the guest sets it clears again in the same ISR —
-            // so a snapshot of them at teardown says nothing, while "how many vectors did
-            // this life ask for, and would any have been masked" is the whole question.
+            // ★ Carried out as counters rather than as state: *"how many vectors did this
+            // life ask for, how many could it not announce, and would any have been
+            // masked"* is the question a teardown report is asked, and a snapshot of the
+            // arrays would answer none of it.
+            //
+            // ⚠ **The old reason given here was wrong and is corrected**: it said the
+            // arrays are *transient*, because *"every bit the guest sets it clears again in
+            // the same ISR"*. Since §14.18 this device sets bits the guest may never clear
+            // — see [`RegPlane::device_reset`], which now rebuilds the tree for exactly
+            // that reason. The field is excluded because it is reported as counters, not
+            // because it cannot hold anything across a life.
             cpu_intr: _,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
             // device state and is carried out as `fb_resident_bytes` just below.
@@ -1782,6 +1840,26 @@ impl RegPlane {
         s.fsm.device_reset();
         s.bar0_window = Bar0Window::new();
         s.fb.device_reset();
+        // ★★★ **AND THE INTERRUPT TREE** — `#151`'s state, and §14.18 is what made leaving
+        // it out dangerous rather than merely untidy.
+        //
+        // ⚠ The old argument for skipping it (it survives in this method's absence, and in
+        // `RegPlane::residue`'s note) was that *"every bit the guest sets it clears again in
+        // the same ISR"*. That was true while the ONLY producer was `_osVerifyInterrupts`'
+        // loopback, which clears its own bit before returning. It is **false** now: a
+        // non-stall completion vector is latched by THIS device
+        // ([`RegPlane::announce_completion`]) and cleared only by a guest that lives long
+        // enough to run `_intrServiceNonStallLeaf_TU102`. A guest that resets between the
+        // two leaves a CE completion bit set, and the next guest's very first non-stall
+        // scan finds `MC_ENGINE_IDX_CE2` pending for a copy that never happened in its
+        // life — a fabricated completion notification, across a device life, from the one
+        // path this whole increment exists to keep honest.
+        //
+        // ⊘ And it is the register block's own stated reset:
+        // `NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_LEAF_VALUE_INIT` and both `_EN_*_VALUE_INIT`
+        // are `0x00000000` (`ogkm-580: ampere/ga102/dev_vm.h:52,56,60`), so a device that
+        // came back from a power-on reset with pending bits is not modelling silicon.
+        s.cpu_intr = CpuIntrTree::new();
         // ★★★ And the published roots. See `crate::bar2::BarPdeLog::device_reset` for why
         // this one is a cross-life *information* leak and not merely stale state.
         self.bar_pdes.device_reset();
@@ -2364,14 +2442,83 @@ impl RegPlane {
                 log.last_local_serving = Some(note.clone());
             }
         }
+        // ★★★ **§14.18 — THE COMPLETION IS ANNOUNCED**, and only a completion is.
+        let raise_cpu_intr = match &report {
+            DoorbellReport::ServedLocally { engine, .. } => self.announce_completion(*engine),
+            // ⊘ Not `Served`: a forwarded doorbell's work finishes on a HOST engine, at an
+            // instant this device is not standing at, and the host's own completion path is
+            // `kayfabe_completion`'s. Announcing here would be a notification for work whose
+            // end we did not witness — the doorbell doctrine's own prohibition, one field
+            // over. ⊘ And not `Refused`, which is the same claim with the sign flipped.
+            DoorbellReport::Served { .. } | DoorbellReport::Refused { .. } => false,
+        };
         WriteOutcome {
             // ★ `claimed`, because this device DOES own the offset — whatever the core then
             // decided. A doorbell reported as unclaimed would tell an operator the aperture
             // is unmodelled, which is the opposite of what happened.
             claimed: true,
             doorbell: Some(report),
+            raise_cpu_intr,
             ..WriteOutcome::nothing()
         }
+    }
+
+    /// ★★★ **§14.18 — latch the non-stall vector that says an engine finished the guest's
+    /// work**, and answer whether a message should be delivered.
+    ///
+    /// # ⊘ The precondition is the CALLER's, and it is the only one that matters
+    ///
+    /// This must be reached **only** from a [`DoorbellReport::ServedLocally`], i.e. after
+    /// the shell's CPU copy-engine executor moved the bytes and advanced the finishPayload
+    /// (`execution_plane_increments.md` §14.17). *"The completion and the notification are
+    /// the same truth claim"* — a latch on any other path would be this device announcing
+    /// work it did not witness, which is the exact shape [`crate::DoorbellReport`]'s own
+    /// doctrine makes unrepresentable one field over.
+    ///
+    /// # ★★★ Why a failed lookup is a LOUD zero and not a silent one
+    ///
+    /// Three things can go wrong and all three mean the same thing to the guest: work
+    /// happened and nothing told it. So every one of them lands in
+    /// [`Counters::nonstall_unvectored`] — the counter whose healthy value is zero — rather
+    /// than being folded into "did not raise". ⊘ There is deliberately no fallback vector:
+    /// the obvious one would be CE0's, whose row publishes `INTR_VECTOR_INVALID`, so a
+    /// default would be inventing the one answer hardware explicitly refuses to give.
+    ///
+    /// # ⚠ Masked is recorded, not acted on
+    ///
+    /// `crate::cpuintr`'s standing decision — raise regardless of the enable bits, count
+    /// the disagreement — applies unchanged, and it matters more here than for the loopback
+    /// trigger: the guest's non-stall scan ANDs `LEAF` with `LEAF_EN_SET`
+    /// (`ogkm-580: intr_nonstall_tu102.c:344-346`), so a masked latch is a message the ISR
+    /// will not attribute. [`Counters::nonstall_masked`] is what makes that one boot's
+    /// finding instead of an argument.
+    fn announce_completion(&self, engine: Option<u32>) -> bool {
+        let Some(rm_engine_type) = engine else {
+            // The guest never sent `NVA06F_CTRL_CMD_BIND` for this channel, so there is no
+            // engine to name a vector — counted, never guessed.
+            self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        let Ok(vector) = crate::nonstall::non_stall_vector(self.chip.intr_table, rm_engine_type)
+        else {
+            self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let outcome = s.cpu_intr.latch(vector);
+        drop(s);
+        if outcome.out_of_range {
+            // A vector the captured table publishes but this chip's `LEAF` family has no
+            // row for. Nothing was latched, so nothing may be delivered — and it is the
+            // same broken promise as the two above, so it is counted the same way.
+            self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        }
+        self.c.nonstall_raises.fetch_add(1, Ordering::Relaxed);
+        if outcome.would_be_masked {
+            self.c.nonstall_masked.fetch_add(1, Ordering::Relaxed);
+        }
+        true
     }
 
     fn note_unclaimed(&self, bar: u8, off: u64) {

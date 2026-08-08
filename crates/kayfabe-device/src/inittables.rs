@@ -1037,10 +1037,19 @@ impl CommandPolicy for InitTablePolicy {
                 ) else {
                     return refuse();
                 };
-                // ⊘ The second disjunct is a PROBE and is off unless the device property
+                // ★★★ §14.18 — TWO admitting lists, and they are two different promises:
+                // `SILENT_NOTIFIERS` accepts an arming because the event cannot occur on
+                // this device, `DELIVERED_NOTIFIERS` because it does occur and this device
+                // raises it (`RegPlane::announce_completion`). ⊘ Neither is a widening of
+                // the other and an index must never migrate between them: the arguments
+                // are about different facts, so a row that moved would keep a sentence
+                // that no longer supports it.
+                //
+                // ⊘ The third disjunct is a PROBE and is off unless the device property
                 // names an index — see `eventnotify::ProbeArmSet`. A boot that gets
                 // further because of it measures REACHABILITY, never correctness.
                 if !eventnotify::is_silent_notifier(reg.event)
+                    && !eventnotify::is_delivered_notifier(reg.event)
                     && !self.probe_arm.contains(reg.event)
                 {
                     return refuse();
