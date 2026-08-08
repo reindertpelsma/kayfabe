@@ -3549,3 +3549,117 @@ compile then fails on a missing `CUdevice`. ⇒ Check the **content**
 (`grep -q CUDA_VERSION`), never the path. `gcc -fsyntax-only -I/usr/local/include` over a
 translation unit whose only line is `#include <cuda.h>` succeeds, which is the property the
 next rung needs and the only one this errand claims.
+
+### 14.18 ★★★ MEASURED: the scrubber binds **COPY2**, and COPY2 **has** a non-stall vector (2026-08-08, `5a035e0`)
+
+Two boots, both artifacts stamped `kayfabe-rev:5a035e0d22721d4b8fc974afa851e657dffbabbe`
+(`libkayfabe_qemu_raw.a` and `qemu-system-x86_64`), bench serialised.
+
+**The question.** §14.17 left index-35 arming refused because this device delivers no event.
+A stronger ground was available *if* the guest's scrubber landed on CE0 or CE1: the captured
+`GA106_INTR_TABLE` gives `MC_ENGINE_IDX` 15 (CE0) and 16 (CE1) `vectorNonStall = INVALID`,
+so the refusal would rest on hardware's own authority that there is no vector to raise, and
+any delivery path would have been built for a vector that does not exist.
+
+**Why it could not be reasoned out.** `ceutilsGetFirstAsyncCe` takes the first CE that is
+not a GRCE (`ogkm-580: ce_utils.c:66-81`). On GA106 `ceIsCeGrce` does **not** read a GRCE
+mask register — `kceGetGrceMaskReg` is halified to the `NV_ERR_NOT_SUPPORTED` stub for
+everything below GB202 (`ogkm-580: generated/g_kernel_ce_nvoc.c:847-858`) — so it falls
+through to the partner-list walk (`kernel_ce_shared.c:76-135`) over **the device-info table
+this port serves**. Deriving the pick from our own table is circular. It had to be read off
+the wire, which is what `kayfabe_device::census::ChannelBind` (`5a035e0`) was built to do.
+
+**The answer**, boot `cup2_p35`:
+
+```text
+nvkvm: channel binds (0xa06f0104): 2 total, 2 distinct
+nvkvm:   bind engineType 11 (COPY2) client 0xc1e00006 object 0x00000002 result 0x0 x1
+nvkvm:   bind engineType 11 (COPY2) client 0xc1e00011 object 0x00000002 result 0x0 x1
+```
+
+`NV2080_ENGINE_TYPE` 11 is `COPY2` (`COPY0 = 9`) ⇒ `ceId = 2` ⇒ `MC_ENGINE_IDX` 17 ⇒
+**`vectorNonStall = 0x07`**. Replicated on boot `cebind_p35` (one bind, same engine) and by a
+*second, different* client here — RM's `RmInitAdapter` scrubber and CUDA's own — so it is not
+a property of one caller.
+
+⇒ **A vector exists.** The refusal cannot be re-grounded on the table's silence. The honest
+sentence is now *"the vector is published and this device does not yet raise it"*.
+
+#### ⚠ The second measurement `[measured 2026-08-08, boot `cebind1` at `5a035e0`]` — it constrains the ORDER of the remaining work
+
+Boot `cebind1`, the same revision in **shipping** configuration:
+
+```text
+nvkvm: probe-arm set: EMPTY (shipping configuration: every non-silent notifier arming refused)
+nvkvm:   arming event 35 action 2 client 0xc1e00005 object 0x0000000b result 0x00000056 x1 REFUSED
+nvkvm: channel binds (0xa06f0104): 0 total, 0 distinct
+```
+
+**The bind is downstream of the arming.** `NVA06F_CTRL_CMD_BIND` is sent at
+`ogkm-580: mem_utils.c:1966`, *after* the `0x20800301` at `:1930` in the same function, so
+refusing the arming bails `_memmgrMemUtilsScrubInitScheduleChannel` before the guest ever
+names a copy engine. ⇒ The CE2 reading is observable **only under probe `[35]`** — not a
+caveat on it, but the correct conditional: the question was always *"if we serve the arming,
+is there a vector for the CE the guest then binds?"*
+
+#### The remaining piece is smaller than it looks — one MSI-X vector, guest demuxes
+
+⊘ `vectorNonStall = 0x07` is a **GPU interrupt-tree vector**, not an MSI-X index. This device
+already delivers **one** message and lets the guest's ISR demultiplex through the TOP/LEAF
+pending bits (`nvkvm.c`, `NVKVM_STALL_VECTOR`, and the C makes the same choice at
+`C: src/qemu/nvkvm_gpu_emul.c:4386-4388`). So the wiring is:
+
+1. `CpuIntrTree` gains a latch entry point that is not a guest `LEAF_TRIGGER` write —
+   today `write(LeafTrigger, v)` is the only producer of a pending bit.
+2. At the CE completion moment — `DoorbellReport::ServedLocally`, i.e. the copy really ran —
+   resolve the ringing channel's bound engine to its `vector_non_stall` and latch it.
+3. `PlaneState::ring_doorbell` returns a `WriteOutcome`, which **already carries
+   `raise_cpu_intr`**, and a doorbell **is** a register write. ⇒ no ABI change, no new shell
+   code, no second wire.
+4. Only then may 35 be served — and it must be served because delivery happens, never as an
+   entry in `SILENT_NOTIFIERS`.
+
+The one fact step 2 still owes: the doorbell report must be able to name the engine the
+ringing channel was bound to. `Gpu::bind_channel` records it; the doorbell path does not read
+it yet.
+
+#### ⊘ Where the ladder actually stops today `[measured 2026-08-08, boot `cup2_p35` at `5a035e0`, probe `[35]`]` — a measurement, NOT a rung
+
+`cup2` builds clean in the guest (`gcc -O0 … -lcuda`, real header at `/usr/local/include/cuda.h`,
+found by content) and stops on its **first** call:
+
+```text
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+```
+
+The guest's own dmesg names the cause, and it is upstream of `GPU_PROMOTE_CTX` rather than at
+it — the golden-image channel never gets built:
+
+```text
+NVRM: Assertion failed: … returned from pRmApi->AllocWithHandle(…, classNum, …) @ kernel_graphics.c:2519
+NVRM: Check failed: … returned from kgraphicsCreateGoldenImageChannel(…) @ kernel_graphics.c:508
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x00000070 … status=0x00000056
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x0000c36f … status=0x00000056
+NVRM: Check failed: … returned from kgrobjPromoteContext(…) @ kernel_graphics_object.c:224
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x0000402c … status=0x00000056
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x00002081 … status=0x00000056
+```
+
+Device side, same boot: `bridge refusals: 14 total, 3 distinct` —
+`AllocClassNotPermitted::NotOnAllowlist ×4`, `UnmappedAllocClass ×3`, `FreeUnknown ×7` — plus
+`60 UNSERVICED` commands over 25 distinct ids. ⇒ `GPU_PROMOTE_CTX` **does** bite (it is in the
+list) but it is not the first thing to fix: four alloc classes are refused before it.
+
+#### And the shipping-configuration boot, stated so it cannot be misread
+
+Boot `cebind1`, `probe-arm set: EMPTY`, stock guest module:
+
+```text
+=== nvidia-smi (the device open) ===
+No devices were found
+SMI_RC=6
+```
+
+with `NVRM: RmInitAdapter failed! (0x25:0xffff:1249)`. ⊘ **`nvidia-smi` does NOT print a
+device with the probe empty.** The milestone has not been reached; §14.17's wall is still the
+index-35 arming, exactly where it was.
