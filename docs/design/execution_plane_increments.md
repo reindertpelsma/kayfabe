@@ -3210,3 +3210,103 @@ one field is the defect; one field each is the fix.
    `NV_ASSERT_TRUE(sysmemData == vidmemData)` (`ogkm-580: mem_mgr.c:467-470`) — a real
    **virtual-source, physical-destination** CE copy whose bytes are read back and compared. The
    acceptance for `memmgrTestCeUtils` is that compare, not the memset.
+
+### 14.15 ★★★ E10e item (c), parts 1b + 2 — the PLANE-ADDRESS newtype and the CE COMPLETION, both landed; and what the wiring still owes (2026-08-08)
+
+Two commits, both GPU-free, both at `scripts/ci_gates.sh --all` **exit 0** (23 steps, ledger
+`381/66/17`, all five oracle families `RAN` with `SKIPPED=0`): `97fe402` (the newtype) and
+`e95c04a` (the completion decode). ⊘ **Neither wires the doorbell.** No boot was taken at
+either revision, so nothing below is a claim about a guest.
+
+#### 1. §14.14's REFUTED 4 is FIXED, and the fix is a type (`97fe402`)
+
+`kayfabe_arch::PlaneAddr` — an address *inside* a [`CpuPlane`] — and
+`kayfabe_arch::CpuOperand { residency, addr }`, which `CeSpan::{dst,src}_place` carries in
+place of the old `{dst,src}_plane: Option<Residency>`. `cpu_ce`'s `read_plane`/`write_plane`
+take a `PlaneAddr`, so writing at `CeSubCopy::dst` no longer compiles; `CeSubCopy::dst` stays
+a VA because the `HostCe` arm submits it to a host VAS. Two `compile_fail` doctests, each
+paired with a compiling twin one line different, hold the separation
+(`error[E0308]: mismatched types … expected struct 'PlaneAddr', found struct 'GpuVa'`).
+
+★ **Two corrections fell out of it, and both were latent defects rather than churn:**
+
+1. `IntervalMap::spans` / `AddressTable::spans` now return each run's **offset into its
+   range**. The doc claimed the offset was *"already inside that binding"*; it was not, and
+   that sentence is why the physical address was unavailable at the one seam that needed it.
+   `gpga::viewers_of`'s compensating second `lookup` is deleted in favour of it.
+2. The span **merge** now requires the two places to be **contiguous**, not equal. Comparing
+   `Residency` alone merged two spans lying in *different, non-adjacent* bindings that
+   happened to share an aperture — harmless while the executor used the VA (the host MMU
+   re-walks each page) and a **write past the end of the first backing** the moment it uses
+   the plane address.
+
+The missing test universe is closed with four cases in `tests/tests/cpu_ce_executor.rs`,
+including one at a **non-zero offset into a binding** (an executor that resolved the binding
+and then used its *base* passes the other three) and `mem_mgr.c:467-470`'s readback compare
+over a virtual source. Bite-checked in both halves.
+
+#### 2. ⊘⊘ THE REFUTATION — the completion word we could decode was the WRONG ONE (`e95c04a`)
+
+`[src]` `ogkm-580: channel_utils.c` — **one** CeUtils pushbuffer block releases **two**
+semaphores:
+
+| word | transport | address | meaning |
+|---|---|---|---|
+| finishPayload | **engine class**: `SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA.SEMAPHORE_TYPE` (`:645, 671-673`; `:832, 838-840`) | `pbGpuVA + finishPayloadOffset` | *the copy retired* — what `channelWaitForFinishPayload` spins on |
+| host semaphore | **host FIFO**: `SEM_ADDR_LO…SEM_EXECUTE` (`:698-746`) | `pbGpuVA + semaOffset` = **4 bytes lower** (`:250`) | *HOST has read all the methods* |
+
+`PushMethod::SemRelease` decoded **only the second**. `[measured 2026-08-08, boot
+`run_p35_84d857d`]` those two words are guest RAM `0x2f2c_b000` and `0x2f2c_b004` on the
+walling channel, and the guest's own probe printed `semaVA=0x42006c004 semaOffset=0x6c000`
+(§14.11). ⇒ **an executor fed from the releases the port could already decode would have
+advanced `…b000`, reported a completion, and left the guest spinning on `…b004`** — `#12`'s
+where-mistake displaced by four bytes, with our own counters agreeing it was served. The
+brief for this increment named `0x2f2cb004` correctly and the wiring as specified would
+still have written the other word.
+
+`kayfabe_arch::CeCompletion` is carried **inside** `PushMethod::CeLaunchDma`, not beside it:
+the engine writes the payload *after* the copy retires, and a sibling `PushMethod` would be
+an unordered fact an executor could serve first. Three refusals take the **whole launch**
+down (four-word/with-timestamp, conditional-interrupt, and a release whose registers were
+never latched) — reporting the copy and dropping its release moves bytes and leaves the
+guest waiting forever on work we really did.
+
+★ **And it found a defect in our own compiled oracle.** `pushbuffer_abi_oracle.c`'s `base`
+`LAUNCH_DMA` word carried `_SEMAPHORE_TYPE, _RELEASE_ONE_WORD_SEMAPHORE` while **neither**
+`emit_ce_run_parts` nor `emit_ce_fill_run` ever pushed `SET_SEMAPHORE_A/B/PAYLOAD` — it had
+copied `rm::ce_pushbuffer`'s flags without its method runs, so every accepted case asked a
+real engine for a release into whatever those three registers happened to hold. Invisible for
+exactly one reason: nothing read the field. The moment `ce_completion` did, **every launch in
+the corpus stopped firing** — the decoder being right about a harness that was wrong.
+(`rm::ce_pushbuffer` itself is correct; it pushes the registers *and* sets the flag.)
+
+#### ⊘ 3. What item (c) STILL owes — and the four obstacles below are each `[src]`, a read of this tree
+
+The wiring was **not** attempted, because §14.14 item 2's *"a design decision, not a wiring
+detail"* is understated. `[src]`, a read of the doorbell path at `97fe402`:
+
+1. **Nothing in the adapter calls the parse/forward path at all.** `grep -rn
+   'parse_pushbuffer|submit_ring|forward_ce|cpu_ce::' crates/kayfabe-qemu-raw/src/` returns
+   **0**. `SharedDoorbell::ring` reaches `SharedDevice::doorbell` and nothing else, and it
+   holds no `Vmm` — the executor's guest-RAM port does not exist on that path.
+2. **The two consumers want an `AddressTable`; the walling channel has no `Vas`.**
+   `partition_ce` takes `Option<&AddressTable>` and `write_completion` takes `&AddressTable`,
+   while the only resolution route for this channel is `ceresolve`'s published-root walk
+   (§14.13). Either the walk's answers reach a table (a TLB fill at the demand — which has to
+   be argued against §7 rule 6's *"never cache the walk"*, not assumed compatible) or an
+   **operand-resolver seam** is introduced that both consumers take. The second keeps rule 6
+   intact and is the cheaper of the two to justify; neither is a wiring change.
+3. **`RegPlane` holds BOTH stores under one lock** (`PlaneState::fb` + `PlaneState::ram`),
+   which is the good news — but they are a `FbStore` and a `kayfabe_gsp::GuestRam`, while
+   `cpu_ce` takes `&mut dyn Vmm`, and `write_completion`'s `raise_irq(COMPLETION_VECTOR)` has
+   **no port on the plane at all**. So the executor cannot simply be called from where the
+   bytes are; either the guest-RAM port is unified across the two traits, or the driver runs
+   where the `Vmm` is and the plane hands out its stores.
+4. **The pushbuffer decode needs a per-channel `MethodState`**, which lives in
+   `Proc::channels` — unreachable for a channel that has no `Vas`. A submission-local
+   accumulator is *probably* right for CeUtils (RM pushes the whole block every time) but it
+   is a behavioural difference that must be stated, not assumed.
+
+⊘ Landing any subset of these without the rest reproduces §14.8 exactly: a doorbell that
+reports **Served** over work that did not happen. The wall is unchanged, and `NoVas(ChanId(1))`
+is still the correct refusal until all four are closed together.
