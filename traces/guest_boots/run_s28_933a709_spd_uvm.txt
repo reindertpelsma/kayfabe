@@ -1,0 +1,29 @@
+UVM ioctl fd=12 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffc16070010
+    IN 
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffc16070010
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffc16070010
+    IN 
+      +00: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 01 00 00 00 00 00 00 00
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000025 nr=37 (UVM_REGISTER_GPU) arg=0x7ffc1606fb90
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 1f 00 00 00
+  ★ UVM_REGISTER_GPU rmStatus = 0x0000001f <-- THE FAILURE, invisible to a return-code check
+UVM ioctl fd=12 cmd=0x30000002 nr=2 (UVM_DEINITIALIZE) arg=(nil)
+  -> rc=0 errno=0

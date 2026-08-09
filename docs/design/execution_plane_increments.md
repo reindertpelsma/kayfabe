@@ -8979,3 +8979,147 @@ commit must state which branch it took:
 ⊘ (b) is a **print, not a gate**: the control is served either way. ⊘ And no doc, refusal
 name or log string in this increment says *"route 4's object"* — the wire has not been
 asked yet.
+
+## §16.31 ★★★★★ BOOTED `s28_933a709_spd` — §16.29.4 CONFIRMED, and the wall moved INSIDE `commit`
+
+`[measured 2026-08-09, boot `s28_933a709_spd` at `933a709`]`, binary **and** archive both
+stamped `kayfabe-rev:933a709dbc49c107d8f6ab60bf70183bfe69c2c9`, evidence
+`traces/guest_boots/run_s28_933a709_spd_{qemu,dmesg,probe}.log` +
+`_{rmtrace,uvm}.txt`, all five non-empty and checked non-empty **before** being read.
+
+⊘ **Stated first: `cup2` is still `FAIL cuInit(0) -> initialization error (3)` (`CUP2_RC=1`).**
+Nothing was made to work. A refused control became a served one and the failure moved
+**two source lines**, from RM's RPC gate into RM's own local commit.
+
+### 16.31.1 ★★★★ THE FALSIFIER, SCORED — and it landed on the row §16.29.6 could not see
+
+`0x00801813` is **served**: `control 0x00801813 result 0x00000000 x1`, and it is **gone**
+from the unserviced list. Then, 102 microseconds apart:
+
+```text
+[53.111956] NVRM: nvAssertFailedNoLog: Assertion failed: vaLimitNew <= pGVAS->vaLimitMax @ gpu_vaspace.c:3094
+[53.112058] NVRM: nvAssertFailedNoLog: Assertion failed: NULL != pGpuState->pRootInternal @ gpu_vaspace.c:3332
+```
+
+That is **exactly** §16.30.5's middle row: `:3332` survives, accompanied by a **new** assert
+from `gvaspaceExternalRootDirCommit`'s range.
+
+⇒ ★★★★ **§16.29.4 is CONFIRMED.** RM got **past** the RPC gate at `dma.c:508-520` — which
+is the entire content of the claim — ran `gvaspaceExternalRootDirCommit`, and failed one of
+that function's **own local** checks. `:3332` is then its rollback firing exactly as
+§16.29.4 said it would.
+
+⊘⊘ **§16.29.6's falsifier as written would have scored this a REFUTATION.** *"If the assert
+survives, §16.29.4 is refuted"* — the assert survived, and §16.29.4 is right. ★★★★ The
+sharpening was not pedantry: it was load-bearing on the **first** boot that used it, and it
+was only possible because RM's checks are `NV_ASSERT*` and therefore log their own
+`file:line`. **A falsifier that cannot tell "the blocker" from "the only blocker" scores a
+confirmation as a refutation.**
+
+★★ **Corroborated from the other end of the stack, by an independent instrument.**
+`UVM_REGISTER_GPU rmStatus` moved **`0x56` → `0x1f`** — falsifier (a)'s second half, which
+asked only for *"moved, not necessarily to 0"*. And `0x1f` is `NV_ERR_INVALID_ARGUMENT`,
+which is precisely what `NV_ASSERT_OR_RETURN(vaLimitNew <= pGVAS->vaLimitMax,
+NV_ERR_INVALID_ARGUMENT)` at `:3094` returns. ⇒ The status the guest's *userspace* sees and
+the assert in the guest's *kernel* name the same failure, measured separately.
+
+### 16.31.2 ★★★★★ THE HANDLE — read off the wire, and `3686b8b`'s premise is REFUTED
+
+```text
+nvkvm: SET_PAGE_DIRECTORY (0x00801813): 1 ACCEPTED, 0 refused; latest hClient 0xc1d0000a
+       hObject 0xcaf00000 hVASpace 0xcaf00005 physAddress 0x200000 numEntries 4 flags 0x8 (aperture 0)
+```
+
+⊘⊘ **`hVASpace = 0xcaf00005`, NOT `0`.** `3686b8b`'s subject line — *"route 4's own object,
+**named**"* — rested on the guest sending `0` so that the header's *"if it's 0, it assumes
+the implicit VA space associated with the client/device pair"* would apply. **The guest
+sends an explicit handle.** The premise is refuted; the header citation was always sound and
+was always about a case that does not occur here.
+
+★★★★★ **And the conclusion survives anyway — by a different, now-MEASURED route.** The same
+boot's route-4 census carries:
+
+```text
+gvas cmd 0x90f10106 hClient 0xc1d0000a hObject 0xcaf00005 va [0x100000000..0x11fffffff] pageSize 0x200000 levels 4
+```
+
+`(hClient 0xc1d0000a, hVASpace 0xcaf00005)` **≡** `(hClient 0xc1d0000a, hObject 0xcaf00005)`.
+⇒ **Two page-directory transports, two independent decodes, one boot, and they name the SAME
+VA space** — the very pair `gvaspub.rs` records as *"the one `cuInit` walls on"*. This is the
+"two independent derivations" §16.29.5b asked for, and they **agree on identity**.
+
+★★★ **The finding is the shape of the agreement, and it is worth more than the agreement.**
+A true conclusion was being carried by a false premise. Had the guest sent `0`, the port
+would have had to *infer* the VA space from the client/device pair; instead the guest names
+it, and the name matches independently. ⇒ ⚠ **A claim that happens to be right is not a
+claim that was measured** — and a doc asserting the `hVASpace = 0` mechanism would have been
+fiction that survived every review precisely because its conclusion checked out.
+
+⊘ **Also settled: neither branch the brief predicted was correct.** My coordinator's third
+branch read *"non-zero ⇒ route 4 is about a **different** object"*. It is the **same**
+object, reached by an explicit handle rather than by the implicit-VAS rule.
+
+### 16.31.3 ⊘ ONE INFERENCE OF MINE, MADE AND RETRACTED WITHIN THE SAME READING
+
+Seeing `va [0x100000000..0x11fffffff]` beside the failing `vaLimitMax` assert, I first read
+it as *"the VA space covers 512 MiB, so `vaLimitMax ≈ 0x11fffffff`"* — which closes the
+arithmetic beautifully. ⊘ **It is wrong.** **All eleven** publication rows in this boot carry
+the **identical** `va [0x100000000..0x11fffffff] pageSize 0x200000 levels 4`, across four
+different clients and six different objects. A range that is identical for every VA space in
+the system is the **server-reserved PDE window** RM copies for itself, not any VAS's limit.
+
+★★ A number that fits the hypothesis and is **constant across every row** is describing the
+instrument, not the subject. `observed_error_plus_plausible_mechanism`: the mechanism was
+plausible, the error was real, and the join between them was invented.
+
+### 16.31.4 ★★★ THE INVARIANCE CONTROL — the change is targeted, and the census proves it
+
+| census line | `s27` | `s28` |
+|---|---|---|
+| commands decoded | 454 | **454** |
+| commands UNSERVICED | 84 total, 38 distinct | **83 total, 37 distinct** |
+| controls answered | 130, 45 distinct | **131, 46 distinct** |
+| bridge refusals | 18 total, 6 distinct | **identical** |
+| isolates | 2/2/2 | **identical** |
+| doorbells | 24/24/0, last `0x00010001` | **identical** |
+| VA-space publications | 12 total, 11 distinct, 0 UNDECODABLE | **identical** |
+
+⇒ **Exactly one command moved from the unserviced list to the served list and nothing else
+changed.** −1/−1 unserviced, +1/+1 served, every other line byte-identical. That is what
+makes the two `dmesg` windows comparable at all.
+
+### 16.31.5 ⇒ THE NEXT WALL, stated with its arithmetic and with what is NOT known
+
+`gpu_vaspace.c:3091-3094`:
+```c
+vaLimitNew = mmuFmtEntryIndexVirtAddrHi(pGpuState->pFmt->pRoot, 0, pParams->numEntries - 1);
+NV_ASSERT_OR_RETURN(vaLimitNew >= pGVAS->vaLimitInternal, NV_ERR_INVALID_ARGUMENT);  // :3093 PASSED
+NV_ASSERT_OR_RETURN(vaLimitNew <= pGVAS->vaLimitMax,      NV_ERR_INVALID_ARGUMENT);  // :3094 FAILED
+```
+
+**What is measured:** `numEntries = 4` (off the wire, this port's own record); `:3093`
+passed; `:3094` failed. ⇒ `vaLimitInternal <= vaLimitNew` and **`vaLimitNew > vaLimitMax`**:
+four entries of `pGpuState->pFmt->pRoot` cover **more VA than the VA space's own maximum**.
+
+**What is NOT measured, and must not be assumed:** the value of `pFmt->pRoot->virtAddrBitLo`
+on the guest side, and the value of `pGVAS->vaLimitMax`. ⚠ Neither appears in any log this
+boot produced. The arithmetic *"4 entries at shift 47 covers 2⁴⁹, so `vaLimitMax < 2⁴⁹−1`"*
+is a **hypothesis**, and the shift it names is this port's belief about GA106, not a reading
+of the guest's format.
+
+★ Two candidate rungs, and the first is cheap:
+1. **Make the guest print both numbers.** They are two `NvU64`s in a struct the guest owns;
+   an `UVM_ERR_PRINT`-shaped probe or a `gvaspaceGetVaLimit` read settles `vaLimitMax`
+   directly, and `pFmt->pRoot` is reachable from the same `pGpuState`. ⊘ Until then any
+   claim about *which side is wrong* is unsourced.
+2. **Suspect what THIS port advertises about the GMMU.** `vaLimitMax` is fixed at VA-space
+   construct and `pFmt` is chosen from the GMMU static info this device serves, so a
+   mismatch between the format we advertise and the root size UVM sizes against would
+   produce exactly this assert. ★ `two_encodings_agreeing_on_the_first_values` is the
+   cautionary precedent: two encodings can agree on every value anyone has checked and
+   diverge on the one that matters.
+
+⊘ **`0x801814` still does not appear**, in either boot — as §16.30.3 predicted from
+`NV_RM_RPC_CONTROL`'s `(status == NV_OK)` guard. The rollback ran (its assert is in the log)
+and the RPC was suppressed. ★ A prediction made from source before the boot and confirmed by
+it.
