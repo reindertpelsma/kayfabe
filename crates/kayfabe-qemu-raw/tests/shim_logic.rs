@@ -669,9 +669,28 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // WAS updated in the same commit (`kayfabe_shim.h:635-639`, same five names in the same
     // order), so the wire ABI is consistent and it is this arithmetic that was stale — but
     // the gate that would have said so was itself red, which is why nobody read it.
+    // ★★★★ 96 -> 105 at §16.30: the `0x00801813 SET_PAGE_DIRECTORY` install record — nine
+    // words (`set_page_dir_total`, `_refused`, `_valid`, `_client`, `_object`,
+    // `_h_vaspace`, `_phys`, `_num_entries`, `_flags`). This is the reason the wire ABI
+    // moved to 33.
+    //
+    // ⊘ NINE and not two, and `_valid` is the one that earns its word twice over. Every
+    // other field is ambiguous at zero and `_h_vaspace` is the worst of them: `0` is a
+    // REAL handle naming the client/device pair's implicit VA space
+    // (`ogkm-580: ctrl0080dma.h:812-815`), so without a separate latched bit the report
+    // could not tell "the guest installed a root into the implicit VAS" — the whole
+    // hypothesis §16.30 tests — from "no SET ever arrived". ★ `_num_entries` and `_flags`
+    // are carried because they, not the address, decide whether RM's LOCAL
+    // `gvaspaceExternalRootDirCommit` survives after this port answers `NV_OK`
+    // (`ogkm-580: gpu_vaspace.c:3085-3109`), which is exactly the way this rung can half-
+    // succeed.
+    //
+    // ★ This gate BIT when the fields landed (16800 vs 16728, a 72-byte delta that is
+    // 9 x 8 exactly), which is what makes the arithmetic below a check rather than a
+    // restatement — cf. §16.18, whose bump was missed because the gate was already red.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (96 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (105 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS

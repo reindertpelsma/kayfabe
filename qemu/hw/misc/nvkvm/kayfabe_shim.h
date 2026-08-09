@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 32u
+#define KAYFABE_SHIM_ABI 33u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -944,6 +944,35 @@ typedef struct KayfabeRegAudit {
     uint64_t access_cntr_buffer_pages;
     /* Access-counter registrations whose params did NOT decode. */
     uint64_t access_cntr_buffers_malformed;
+    /* ★★★★ §16.30 -- NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY (0x00801813) ACCEPTED,
+     * including re-installations.  ⚠ 0 here is a FINDING: the two boots that named this
+     * control REFUSED it, and RM's rollback is what fires the one dmesg line unique to
+     * cuInit's window.  A boot leaving this at 0 did not test the rung. */
+    uint64_t set_page_dir_total;
+    /* Arrived and were REFUSED -- serialized params, or a declared size that is not
+     * sizeof.  Non-zero invalidates the record below. */
+    uint64_t set_page_dir_refused;
+    /* ★★★ Whether the record below means anything.  ⊘⊘ READ THIS FIRST.  hVASpace == 0 is
+     * a REAL handle value naming the client/device pair's implicit VA space, so a reported
+     * 0 with no valid bit beside it cannot be told from "no SET ever arrived".  Every
+     * field below is ambiguous at zero. */
+    uint64_t set_page_dir_valid;
+    /* hClient from the RPC control header. */
+    uint64_t set_page_dir_client;
+    /* hObject from that header -- hDevice, NOT the VA space.  ⚠ The opposite convention
+     * from 0x90f10106, whose header hObject IS the VA space. */
+    uint64_t set_page_dir_object;
+    /* ★★★ hVASpace from the PARAMS -- reported exactly as it arrived, interpreted by
+     * nobody.  Whether it is 0 (the Device's implicit VAS) or a real handle (a user VAS,
+     * which is what UVM allocates) is the open question §16.30 exists to answer. */
+    uint64_t set_page_dir_h_vaspace;
+    /* physAddress -- guest-physical, in the aperture named by flags. */
+    uint64_t set_page_dir_phys;
+    /* numEntries -- decides RM's next three checks after we answer NV_OK. */
+    uint64_t set_page_dir_num_entries;
+    /* flags, raw -- aperture in bits 1:0, plus ALL_CHANNELS / EXTEND_VASPACE /
+     * IGNORE_CHANNEL_BUSY. */
+    uint64_t set_page_dir_flags;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

@@ -528,6 +528,13 @@ pub struct PlaneResidue {
     /// held the previous guest's VAS roots would attribute that guest's address spaces to
     /// this one's channels the moment anything consumes them.
     pub gvas_pub: GvasPubSnapshot,
+    /// ★★★★ The page-directory root the guest INSTALLED via `0x00801813`
+    /// (`crate::setpagedir`), if any.
+    ///
+    /// In the residue for `gvas_pub`' reason exactly: a reloaded device still reporting
+    /// the previous guest's installed root would answer *"this address space is rooted
+    /// here"* about a page directory belonging to a guest that no longer exists.
+    pub set_page_dir: Option<crate::setpagedir::SetPageDirRecord>,
     /// ★★★ How many bytes of framebuffer the store is holding.
     ///
     /// ⊘ Content, not identity — this is a *size*, and it is here because the alternative
@@ -940,6 +947,11 @@ pub struct RegPlane {
     /// take the FSM's lock behind a doorbell, and a caller that replaced the policy still
     /// gets to read what the guest published.
     gvas_pub: GvasPubLog,
+    /// ★★★★ **The page-directory root the guest INSTALLS** (`crate::setpagedir`) —
+    /// `0x00801813`, refused by this port in every boot before §16.30. Held here for
+    /// `bar_pdes`' two reasons: reading it must not take the FSM's lock behind a doorbell,
+    /// and a caller that replaced the policy still gets to read what the guest installed.
+    set_page_dir: crate::setpagedir::SetPageDirLog,
     /// ★★★ **E2 — the usermode doorbell seam** (`crate::doorbell`).
     ///
     /// ⚠ **Outside [`RegPlane::state`], and that is a requirement rather than a
@@ -1262,6 +1274,7 @@ impl RegPlane {
         let fault_buffer = crate::faultbuffer::FaultBufferLog::new();
         let bar_pdes = BarPdeLog::new();
         let gvas_pub = GvasPubLog::new();
+        let set_page_dir = crate::setpagedir::SetPageDirLog::new();
         // ★ The probe set is recorded into the census FIRST, and `served_policy` reads it
         // back out of the same log — so "the set the report prints" and "the set the
         // event-plane arm reads" are one stored value, not two values this line promises
@@ -1287,6 +1300,7 @@ impl RegPlane {
                         fault_buffer: fault_buffer.clone(),
                         bar_pdes: bar_pdes.clone(),
                         gvas_pub: gvas_pub.clone(),
+                        set_page_dir: set_page_dir.clone(),
                     },
                     census.clone(),
                     links,
@@ -1304,6 +1318,7 @@ impl RegPlane {
             fault_buffer,
             bar_pdes,
             gvas_pub,
+            set_page_dir,
             // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
             doorbell: RwLock::new(Box::new(RefusingDoorbell)),
             doorbell_log: Mutex::new(DoorbellLog::default()),
@@ -1437,6 +1452,35 @@ impl RegPlane {
     #[must_use]
     pub fn bar_pde_log(&self) -> BarPdeLog {
         self.bar_pdes.clone()
+    }
+
+    /// ★★★★ The page-directory root the guest **installed** via `0x00801813`, if any.
+    ///
+    /// ⊘ The only channel, and for a reason neither `bar_pdes` nor `gvas_pub` has: RM
+    /// reads this control's status and **rolls back on failure**
+    /// (`ogkm-580: dma.c:531-551`), so a boot in which it was refused is a boot in which
+    /// the guest's own VA space never got a root. See `crate::setpagedir`.
+    ///
+    /// ★ `None` and a zeroed record are different answers: `hVASpace == 0` is a real
+    /// handle meaning the client/device pair's implicit VA space, so `Option` is the
+    /// distinction rather than a sentinel.
+    #[must_use]
+    pub fn set_page_dir(&self) -> Option<crate::setpagedir::SetPageDirRecord> {
+        self.set_page_dir.latest()
+    }
+
+    /// How many `SET_PAGE_DIRECTORY` commands were accepted, and how many refused.
+    #[must_use]
+    pub fn set_page_dir_counts(&self) -> (u64, u64) {
+        (self.set_page_dir.total(), self.set_page_dir.refused())
+    }
+
+    /// The install latch itself, as a shared handle — [`RegPlane::bar_pde_log`]'s reason
+    /// exactly: [`RegPlane::set_policy`] replaces the whole chain, and the link that
+    /// decodes `0x801813` lives in it.
+    #[must_use]
+    pub fn set_page_dir_log(&self) -> crate::setpagedir::SetPageDirLog {
+        self.set_page_dir.clone()
     }
 
     /// ★★★ What the guest has published about its **VA spaces'** page-directory roots
@@ -1848,6 +1892,7 @@ impl RegPlane {
             fault_buffer,
             bar_pdes,
             gvas_pub,
+            set_page_dir,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what this device
             // life SAW through it is carried out as `doorbell` just below.
             doorbell: _,
@@ -1901,6 +1946,7 @@ impl RegPlane {
             bar0_window: *bar0_window,
             bar_pdes: bar_pdes.pdes(),
             gvas_pub: gvas_pub.snapshot(),
+            set_page_dir: set_page_dir.latest(),
             fb_resident_bytes: fb.resident_bytes(),
             doorbell,
         }
@@ -2057,6 +2103,10 @@ impl RegPlane {
         // address space, and the whole purpose of recording it is that something will
         // eventually follow it.
         self.gvas_pub.device_reset();
+        // ★★★★ And the INSTALLED root, for the same reason a third time. `0x00801813`
+        // hands us a `physAddress` the guest chose; carrying it across a device life would
+        // report the previous guest's page directory as this one's.
+        self.set_page_dir.device_reset();
         // ★★ E2 — and the doorbell log, for the same reason: a token the PREVIOUS guest
         // rang, reported after a reset as this life's, is a false attribution in exactly
         // the direction that would make an E2 acceptance run pass on somebody else's ring.

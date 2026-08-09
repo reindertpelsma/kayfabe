@@ -65,6 +65,7 @@ pub mod inert;
 pub mod inittables;
 pub mod nonstall;
 pub mod plane;
+pub mod setpagedir;
 pub mod staticinfo;
 pub mod sticky;
 pub mod sweep;
@@ -960,6 +961,15 @@ pub struct ChainLogs {
     pub bar_pdes: bar2::BarPdeLog,
     /// The VA spaces' published page-directory levels ([`gvaspub`]).
     pub gvas_pub: gvaspub::GvasPubLog,
+    /// ★★★★ The page-directory root the guest INSTALLS via `0x00801813` ([`setpagedir`]).
+    ///
+    /// ⊘ A second log rather than a row in [`Self::gvas_pub`], and the separation is the
+    /// point: `0x90f10106` publishes **four `PdeLevel`s keyed by the header's `hObject`**,
+    /// while `0x801813` installs **one `physAddress` keyed by a params field**, with `0`
+    /// meaning the client/device pair's implicit VA space. Folding the second into the
+    /// first's 184-byte body would require synthesising levels the guest never sent — an
+    /// invented encoding that would make the record look like a measurement.
+    pub set_page_dir: setpagedir::SetPageDirLog,
 }
 
 /// ★★★ **The two seats a composition root's object model takes in the served chain**, as
@@ -1098,6 +1108,7 @@ pub fn served_chain(
         fault_buffer,
         bar_pdes,
         gvas_pub,
+        set_page_dir,
     } = logs;
     let ObjectLinks {
         publications,
@@ -1170,6 +1181,19 @@ pub fn served_chain(
         // reader meets "the guest publishes its bus-aperture root" next to "the guest
         // publishes its system info".
         Box::new(bar2::BarPdePolicy::new(driver, bar_pdes)),
+        // ★★★★ §16.30 — `0x00801813 SET_PAGE_DIRECTORY`, the page-directory root the guest
+        // INSTALLS. Beside `BarPdePolicy` deliberately: both latch a root the guest hands
+        // us and answer exactly one thing, so a reader meets them together.
+        //
+        // ⊘ **Position is safe rather than merely convenient, and it was checked rather
+        // than assumed.** This link claims one control **by id**, so the only way it could
+        // change another link's behaviour is if something below also claimed `0x801813`:
+        // `WantedTable::from_cmd` has no arm for it (`inittables.rs`), and
+        // `kayfabe_rmrpc::OBJECT_CONTROLS` lists three ids and this is not one of them
+        // (`policy.rs:891-904`). The two boots that named it — `s26_0484a3b_cup2` and
+        // `s27_c73d3ab_uvm` — carry it in the **unserviced** census, which is the positive
+        // statement that nothing answered it at all.
+        Box::new(setpagedir::SetPageDirPolicy::new(driver, set_page_dir)),
         Box::new(inert::InertPolicy::new()),
     ]);
     // ★★★ The object-model link, if the composition root has one. Its POSITION is the

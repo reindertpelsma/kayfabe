@@ -242,7 +242,12 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// gained the framebuffer aperture's five words (`bar1_reads`, `bar1_writes`,
 /// `bar1_faults`, `bar1_pde_base`, `bar1_root_published`), so an ABI-31 shim would allocate
 /// the old layout and this archive would write **40 bytes** past the end of it.
-pub const ABI_VERSION: u32 = 32;
+///
+/// ★★★★ Bumped to **33** at §16.30, the ABI-3 reason a twenty-first time:
+/// [`KayfabeRegAudit`] gained the `0x00801813 SET_PAGE_DIRECTORY` install record
+/// (`set_page_dir_*`, nine words), so an ABI-32 shim would allocate the old layout and
+/// this archive would write **72 bytes** past the end of it.
+pub const ABI_VERSION: u32 = 33;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -2037,6 +2042,52 @@ pub struct KayfabeRegAudit {
     pub access_cntr_buffer_pages: u64,
     /// Access-counter registrations whose params did **not** decode.
     pub access_cntr_buffers_malformed: u64,
+    /// ★★★★ §16.30 — how many `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`0x00801813`)
+    /// commands this port **accepted**, including re-installations.
+    ///
+    /// ⚠ **`0` here is a FINDING and not a quiet success.** `[measured 2026-08-09, boots
+    /// `s26_0484a3b_cup2` / `s27_c73d3ab_uvm`]` the control arrived and was refused, and
+    /// RM's rollback (`ogkm-580: dma.c:531-551`) is what fires the one `dmesg` line unique
+    /// to `cuInit`'s window. A boot in which this stays `0` did not test the rung.
+    pub set_page_dir_total: u64,
+    /// How many arrived and were **refused** — FINN-serialized, or a declared `paramsSize`
+    /// that is not `sizeof`. Non-zero invalidates the record beside it.
+    pub set_page_dir_refused: u64,
+    /// ★★★ Whether [`Self::set_page_dir_h_vaspace`] and its siblings mean anything.
+    ///
+    /// ⊘⊘ **Load-bearing, and the sharpest `_valid` in this struct.** `hVASpace == 0` is a
+    /// **real handle value** — it names the client/device pair's implicit VA space
+    /// (`ogkm-580: ctrl0080dma.h:812-815`) — so a reported `0` with no `_valid` beside it
+    /// cannot be told from *"no SET ever arrived"*. Every other field here has the same
+    /// hazard at `0`. Reading any of them without this one first is how an absence gets
+    /// decoded as a measurement.
+    pub set_page_dir_valid: u64,
+    /// `hClient` from the RPC control header of the most recent accepted `SET`.
+    pub set_page_dir_client: u64,
+    /// `hObject` from that header — **`hDevice`**, not the VA space
+    /// (`ogkm-580: dma.c:508-518`). ⚠ The opposite convention from `0x90f10106`, whose
+    /// header `hObject` **is** the VA space; see [`Self::gvas_pub`].
+    pub set_page_dir_object: u64,
+    /// ★★★ `hVASpace` from the **params** — the VA space this root is installed into,
+    /// reported exactly as it arrived.
+    ///
+    /// ⊘ **Not interpreted here and not interpreted by the printer.** Whether this boot
+    /// sends `0` (the Device's implicit VA space) or a real handle (a user VA space, which
+    /// is what UVM allocates) is the open question §16.30 exists to answer from a boot
+    /// rather than from header semantics.
+    pub set_page_dir_h_vaspace: u64,
+    /// `physAddress` — where the guest put the page directory, in the aperture named by
+    /// [`Self::set_page_dir_flags`]. Guest-physical.
+    pub set_page_dir_phys: u64,
+    /// `numEntries` — the directory's size in entries.
+    ///
+    /// ★ Carried because it, not the address, decides RM's next three checks
+    /// (`ogkm-580: gpu_vaspace.c:3093-3097`): a root smaller than the RM-managed region of
+    /// the VA heap fails `commit` *after* this port answered `NV_OK`.
+    pub set_page_dir_num_entries: u64,
+    /// `flags`, raw — aperture in bits `1:0`, plus `ALL_CHANNELS`, `EXTEND_VASPACE`,
+    /// `IGNORE_CHANNEL_BUSY`.
+    pub set_page_dir_flags: u64,
 }
 
 impl Default for KayfabeRegAudit {
@@ -2148,6 +2199,15 @@ impl Default for KayfabeRegAudit {
             access_cntr_buffer_size: Default::default(),
             access_cntr_buffer_pages: Default::default(),
             access_cntr_buffers_malformed: Default::default(),
+            set_page_dir_total: Default::default(),
+            set_page_dir_refused: Default::default(),
+            set_page_dir_valid: Default::default(),
+            set_page_dir_client: Default::default(),
+            set_page_dir_object: Default::default(),
+            set_page_dir_h_vaspace: Default::default(),
+            set_page_dir_phys: Default::default(),
+            set_page_dir_num_entries: Default::default(),
+            set_page_dir_flags: Default::default(),
         }
     }
 }
@@ -3934,6 +3994,11 @@ impl Regs {
             .iter()
             .filter(|n| matches!(n, Fbn::ShadowMalformed { .. }))
             .count() as u64;
+        // ★★★★ §16.30 — read ONCE, so the record and its two counters describe one
+        // snapshot. Reading `latest()` again below could straddle a concurrent install and
+        // report a `valid` that belongs to a different row than the fields beside it.
+        let set_page_dir = self.plane.set_page_dir();
+        let (set_page_dir_total, set_page_dir_refused) = self.plane.set_page_dir_counts();
         let access_cntr_buffers_registered = self.plane.access_cntr_buffers_registered();
         let (access_cntr_buffer_size, access_cntr_buffer_pages) = fault_buffer_sample
             .iter()
@@ -4165,6 +4230,19 @@ impl Regs {
             access_cntr_buffer_size,
             access_cntr_buffer_pages,
             access_cntr_buffers_malformed,
+            // ★★★★ §16.30 — the `0x00801813` install record. ⊘ `set_page_dir_valid` is
+            // written from `Option::is_some` and NOT inferred from any of the values
+            // below, because `hVASpace == 0` is a real handle and every one of them is
+            // ambiguous at zero.
+            set_page_dir_total,
+            set_page_dir_refused,
+            set_page_dir_valid: u64::from(set_page_dir.is_some()),
+            set_page_dir_client: set_page_dir.map_or(0, |r| u64::from(r.client)),
+            set_page_dir_object: set_page_dir.map_or(0, |r| u64::from(r.object)),
+            set_page_dir_h_vaspace: set_page_dir.map_or(0, |r| u64::from(r.h_vaspace)),
+            set_page_dir_phys: set_page_dir.map_or(0, |r| r.phys_address),
+            set_page_dir_num_entries: set_page_dir.map_or(0, |r| u64::from(r.num_entries)),
+            set_page_dir_flags: set_page_dir.map_or(0, |r| u64::from(r.flags)),
         }
     }
 }

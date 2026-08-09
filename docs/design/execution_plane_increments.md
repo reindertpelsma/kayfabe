@@ -8827,3 +8827,155 @@ and only an explicit copy separates "observed" from "kept where anybody will fin
 that a freshly written harness was wrong on its first tagged use (§16.28.7's gate dropped a
 disjunct and failed a good boot). Fixed in the same commit: the full traces are now emitted into
 the probe log **and** copied to the bench directory before anything powers anything off.
+
+## §16.30 ★★★★ SERVE `0x00801813` — with the falsifier written BEFORE the boot, and sharpened
+
+`[built 2026-08-09]`, not yet booted. This section is written **before** the boot so the
+boot can refute it. ⊘ Nothing here is a measurement of the guest; §16.30.5 is the only
+part a boot can settle, and it is stated as a prediction with three readings, exactly one
+of which confirms §16.29.4.
+
+### 16.30.1 ⊘⊘ WHAT THIS INCREMENT REFUTES — including two claims in my own brief
+
+**1. ★★★★ `3686b8b`'s subject line over-claims, and the commit body contains both halves.**
+`3686b8b` is titled *"the refused `0x801813` CARRIES a page-directory publication — **route
+4's own object, named**"*. Two propositions are folded together there and only one is
+sourced:
+
+| claim | status |
+|---|---|
+| *"`hVASpace = 0` means the client/device pair's implicit VA space"* | ★ **CORRECT AND CITED** — `ogkm-580: ctrl0080dma.h:812-815` says it in words. This is the header speaking, not us. |
+| *"the SET names route 4's object"* | ⊘ **NOT MEASURED.** The header says what a `0` *would* mean. It does not say the guest **sent** a `0`. |
+
+⇒ The gap is exactly **one `u32` read off the wire**, and it has never been read. ★ The
+counter-hypothesis is live and specific: the C artifact's own notes make `0x801813` UVM's
+transport for **user** VA spaces — the ones a kernel-internal VAS never takes. If the guest
+sends a non-zero handle, the SET and route 4 are about **different objects**, the
+convergence between §16.28 and §16.29 is coincidence, and every doc asserting it is
+fiction. ⚠ **A non-zero handle is a finding worth its own rung, not a nuisance.**
+
+**2. ★★★★ §16.29.6's falsifier is TOO STRONG, and this increment refuses to inherit it.**
+It reads: *"if the assert survives, §16.29.4 is refuted."* That conflates *"the RPC was the
+blocker"* with *"the RPC was the **only** blocker."* Answering `NV_OK` gets RM past
+`dma.c:508-520` and no further: `gvaspaceExternalRootDirCommit` then runs **locally** and
+can still fail on any of eight of its own checks (`ogkm-580: gpu_vaspace.c:3057, 3067,
+3085, 3088, 3093, 3094, 3097, 3109`), and a failure there takes the **same**
+`SLI_LOOP_BREAK` into the **same** rollback and fires the **same** assert at `:3332`.
+⇒ §16.30.5 restates the falsifier three-valued. ★ It is still falsifiable — sharper, not
+weaker: the discriminating reading is now *narrower* than "the assert survived."
+
+**3. ⊘ §16.29.5's second open item offered two options and the true one was neither.** It
+said `0x801814`'s absence meant *"either the census has a blind spot for it, or the branch
+differs in the shipped build."* See §16.30.3: there is a third, it is RM's own macro, and
+it converts the absence from a hole into **corroboration**.
+
+**4. ⊘ And one of mine, before it reached a doc.** I first read
+`gvaspaceExternalRootDirCommit`'s `:3109` assert — `SHARED_MANAGEMENT || externallyOwned` —
+as *refuting* the chain outright, since the `:3332` assert is only reachable on a VAS that
+is **not** externally owned (`gpu_vaspace.c:3320-3328` returns early for one). It does not:
+`SHARED_MANAGEMENT` **without** externally-owned is a legal combination, so the chain
+survives. ★ An assert that constrains a path is not an assert that closes it.
+
+### 16.30.2 ★★★ THE ELIMINATION TABLE, RE-DERIVED RATHER THAN INHERITED
+
+§16.29.4 eliminated two of `gvaspaceExternalRootDirRevoke_IMPL`'s three call sites. Both
+eliminations **survive** a first-hand re-read, and one is now stronger than recorded:
+
+| site | verdict | why, re-derived |
+|---|---|---|
+| `gpu_vaspace.c:1251` | ⊘ impossible | ★ **confirmed verbatim**: the call sits inside `if (NULL != pGpuState->pRootInternal)` (`:1246-1253`), which is exactly the condition `:3332` asserts. Inside the guard the assert cannot fire. |
+| `dma.c:629` | ⊘ did not run | ★ **stronger than "the census lacks `0x801814`"**: that handler initialises `status = NV_OK` (`dma.c:582`) and RPCs at `dma.c:606-615` **before** it revokes at `:629`. Had it run, its own `0x801814` would have been on the wire *ahead of* the assert. |
+| `dma.c:539` | ★ the only survivor | the rollback arm of `0x801813` |
+
+★ `read_the_caller_not_the_id`, applied to an inherited conclusion: the predecessor was
+right, and the reason it is now safe to build on is that it was checked, not that it was
+repeated.
+
+### 16.30.3 ★★★★ WHY `0x00801814` IS ABSENT — the third option, and it CORROBORATES
+
+`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:223-242`:
+
+```c
+#define NV_RM_RPC_CONTROL(pGpu, hClient, hObject, cmd, pParams, paramSize, status)  \
+    do {                                                                            \
+        OBJRPC *pRpc = GPU_GET_RPC(pGpu);                                           \
+        NV_ASSERT(pRpc != NULL);                                                    \
+        if ((status == NV_OK) && (pRpc != NULL))          /* ← the guard */         \
+        …
+```
+
+**`NV_RM_RPC_CONTROL` is a no-op when `status != NV_OK` on entry.** The rollback block at
+`dma.c:531-551` runs **precisely because `status != NV_OK`**, and `status` is *not*
+reassigned before the `UNSET` macro is reached — `gvaspaceExternalRootDirRevoke`'s return
+is **discarded** at `:539`. ⇒ ★★★ **The `UNSET` RPC is structurally unsendable from the
+rollback arm.** Its absence is not a blind spot, not a different build; it is what RM
+guarantees.
+
+★★ **And it discriminates.** `dma.c:629`'s RPC is issued with `status` freshly `NV_OK`, so
+*that* path would have shown `0x801814`. The absence therefore argues **for** `dma.c:539`
+and **against** `dma.c:629` — it is evidence, and it points the same way §16.29.4 did.
+
+⊘ **The instrument was checked before the absence was trusted**
+(`a_saturated_instrument_looks_exactly_like_absence`). `s27` is **not** saturated on any of
+the three lists a control can land on: **38 distinct** unserviced rows printed against a
+sample cap of **64**; all **45** served-control rows printed, of which exactly **one**
+carries a non-zero result (`0x2080012b`, `x2 REFUSED`); and 6 named bridge-refusal kinds,
+none page-directory. `0x801814` is on none of them.
+
+### 16.30.4 ★ WHAT WAS BUILT
+
+`crates/kayfabe-device/src/setpagedir.rs` — a chain link that answers `0x00801813` `NV_OK`
+and **latches what it accepted**: both header handles and all seven params fields. Seated
+among the answering links beside `bar2::BarPdePolicy`.
+
+- ⊘ **It records, because answering while recording nothing is §16.29.5b's refusal wearing
+  an acceptance's clothes.** The record crosses the shim (ABI **32 → 33**, nine words) and
+  is printed unconditionally by `qemu/hw/misc/nvkvm/nvkvm.c`.
+- ★★★ **`set_page_dir_valid` is a separate word and it is load-bearing.** `hVASpace == 0`
+  is a *real handle value*, so a reported `0` without a latched bit beside it cannot be
+  told from *"no SET ever arrived"* — and **a zero nobody watched arrive is a non-claim,
+  not a measurement.** The `else` branch of the printer says so in words rather than
+  printing zeros. This is the C oracle's `dlen=0` shape (`c_oracle_empty_rows_are_wrong`)
+  and it is refused the same way.
+- ⊘⊘ **It does NOT** create a `Vas`, populate `Channel::vas_pdb`, or relax any downstream
+  refusal — `gvaspub`'s reason exactly: a served-but-inert data path converts a *loud*
+  refusal into a *silent* timeout.
+- ★ **Targeting is proved, not asserted.** `tests/set_page_directory.rs::seating_the_link_changes_no_other_reply_byte`
+  drives the whole production chain with and without the link over six ids and compares
+  reply bytes. The link claims **one id**; `WantedTable::from_cmd` has no arm for it and
+  `kayfabe_rmrpc::OBJECT_CONTROLS` (`policy.rs:891-904`) lists three ids and this is not
+  one of them.
+- ★ **The tests were bite-checked**, because a green test I wrote myself is unverified
+  (`the_bite_check_that_could_not_bite`): forcing `respond` to decline turned **8 of 11**
+  red, and the 3 that stayed green are the decline/empty-log cases, which *should* be
+  unaffected. The shim's own size gate also bit on the way in — **16800 vs 16728**, a
+  72-byte delta that is 9 × 8 exactly.
+
+### 16.30.5 ⇒ THE FALSIFIER, in two parts, both written BEFORE the boot
+
+**(a) The chain.** Three readings, and only one confirms §16.29.4:
+
+| next boot's `cuInit` dmesg window | reading |
+|---|---|
+| `:3332` **gone** and `UVM_REGISTER_GPU rmStatus ≠ 0x56` | ★ **§16.29.4 CONFIRMED**; the wall moved. |
+| `:3332` **survives**, and a **new** assert appears from `gpu_vaspace.c:3057-3109` | ★ **§16.29.4 CONFIRMED** — RM got *past* the RPC and failed in the LOCAL `commit`. The wall moved *inside* `gvaspaceExternalRootDirCommit`. ⊘ This is the reading §16.29.6 would have mis-scored as a refutation. |
+| `:3332` **survives, alone and unaccompanied** | ⊘ **§16.29.4 REFUTED.** The revoke came from somewhere the elimination table did not reach, and §16.30.2 is where to look first. |
+
+★ The middle row is readable **only because every one of those eight is an `NV_ASSERT*`
+and therefore logs its own `file:line`.** That is what makes the falsifier three-valued
+rather than a coin flip.
+
+**(b) The handle.** The boot log must print the **observed** `hVASpace`, and the boot's
+commit must state which branch it took:
+
+- `set_page_dir_valid = 0` ⇒ ⊘ **the rung was not exercised at all** — say so, and read
+  nothing else on the line. A `0` from an unwritten field is reading back our own silence.
+- `set_page_dir_valid = 1, hVASpace = 0` ⇒ the guest named the client/device pair's
+  implicit VA space, and *only then* is §16.28's convergence a measured claim.
+- `set_page_dir_valid = 1, hVASpace ≠ 0` ⇒ ★★★ **a finding.** The SET is about a VA space
+  the guest named explicitly, `3686b8b`'s subject line is wrong, and route 4 is about a
+  different object. That earns its own rung.
+
+⊘ (b) is a **print, not a gate**: the control is served either way. ⊘ And no doc, refusal
+name or log string in this increment says *"route 4's object"* — the wire has not been
+asked yet.

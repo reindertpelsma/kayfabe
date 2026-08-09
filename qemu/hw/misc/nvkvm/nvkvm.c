@@ -1811,6 +1811,37 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.bar2_root_entry);
 
     /*
+     * ★★★★ §16.30 — THE PAGE-DIRECTORY ROOT THE GUEST INSTALLS (0x00801813).
+     *
+     * Printed UNCONDITIONALLY, all-zeros included, and THE PRECONDITION IS PRINTED FIRST.
+     * `hVASpace == 0` is a real handle value — it names the client/device pair's implicit
+     * VA space — so "installed a root into VAS 0" and "no SET ever arrived" would print
+     * identically without `valid`.  This device has been bitten by an absence decoded as a
+     * measurement before (the C oracle's dlen=0 rows), and this is the same shape.
+     *
+     * ⊘ The handle is REPORTED, never named.  Whether it is the Device's implicit VA space
+     * or a user VA space (which is what UVM allocates) is what this line exists to settle
+     * from a boot rather than from header semantics — so the printer must not editorialise.
+     */
+    if (a.set_page_dir_valid) {
+        info_report("nvkvm: SET_PAGE_DIRECTORY (0x00801813): %" PRIu64 " ACCEPTED, %" PRIu64
+                    " refused; latest hClient 0x%" PRIx64 " hObject 0x%" PRIx64
+                    " hVASpace 0x%" PRIx64 " physAddress 0x%" PRIx64 " numEntries %" PRIu64
+                    " flags 0x%" PRIx64 " (aperture %" PRIu64 ")",
+                    a.set_page_dir_total, a.set_page_dir_refused,
+                    a.set_page_dir_client, a.set_page_dir_object,
+                    a.set_page_dir_h_vaspace, a.set_page_dir_phys,
+                    a.set_page_dir_num_entries, a.set_page_dir_flags,
+                    a.set_page_dir_flags & 0x3u);
+    } else {
+        info_report("nvkvm: SET_PAGE_DIRECTORY (0x00801813): NO RECORD LATCHED "
+                    "(%" PRIu64 " accepted, %" PRIu64 " refused) — this is NOT "
+                    "\"installed into VA space 0\"; it is \"nothing was installed\". "
+                    "A boot that reaches cuInit with 0 accepted did not exercise the rung.",
+                    a.set_page_dir_total, a.set_page_dir_refused);
+    }
+
+    /*
      * ★★★★ §16.18 — THE FRAMEBUFFER APERTURE, TRANSLATED.  Printed unconditionally,
      * all-zeros included, and the PRECONDITION IS PRINTED FIRST.
      *
