@@ -32,13 +32,31 @@
 //! | **namespace attribution** — which client is acting | the RPC **envelope**'s `hClient` ([`CtxPromotion::client`]) |
 //! | **object resolution** — whose handle table `hObject` is a handle in | `hChanClient` ([`CtxPromotion::chan_client`]) |
 //!
-//! RM sets them from two different objects and does not require them to be equal
-//! (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics_object.c:130-135`), so
+//! RM sets them from two different objects and does not require them to be equal, so
 //! refusing a mismatch would refuse a stream the guest's own driver emits. What is
 //! refused is the thing that actually matters and that the C could not even see: a
-//! promotion whose **acting** client is not in the component that owns the address space
-//! it is writing into ([`PromoteFault::ForeignContextObject`]). Attribution is checked
-//! against resolution instead of being discarded.
+//! promotion whose **acting** client is neither in the component that owns the address
+//! space it is writing into **nor kernel-privileged**
+//! ([`PromoteFault::ForeignContextObject`]). Attribution is checked against resolution
+//! instead of being discarded.
+//!
+//! ★★★★ ⚠ **The citation for "not required to be equal" was for YEARS the WRONG SITE,
+//! and the wrong site says the opposite.** This paragraph cited
+//! `ogkm-580: kernel_graphics_object.c:130-135` — which is real and does set
+//! `params.hChanClient = RES_GET_CLIENT_HANDLE(pChannelDescendant)` at `:131` and issue
+//! the control with `RES_GET_CLIENT_HANDLE(pSubdevice)` at `:136`. But **on that path they
+//! are always equal**: `:74-79` obtains the subdevice with
+//! `subdeviceGetByDeviceAndGpu(RES_GET_CLIENT(pKernelGraphicsObject), …)`, i.e. in the
+//! graphics object's own client. The site where they genuinely differ — and the one
+//! `[measured 2026-08-09, boot s38_411d280_route]` — is
+//! `nvGpuOpsBindChannelResources` (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:10870`
+//! and `:10891-10893`), where the envelope is `retainedChannel->session->handle` (UVM's)
+//! and `hChanClient` is the user's.
+//!
+//! ⊘ So the doc's *claim* was true, its *citation* was to a site that establishes the
+//! opposite, and the check written beside it took the site's behaviour rather than the
+//! claim. `a_correct_citation_narrowed_by_the_reading` — except here reading the cited
+//! lines is what catches it, and reading only the sentence above them is what does not.
 //!
 //! # Two passes, because R3 says so
 //!
@@ -134,6 +152,21 @@ pub struct PromoteRoute {
     pub gpu: GpuId,
     /// The address space's page-directory base.
     pub pdb: Pdb,
+    /// ★★★ §16.44 — the **acting** (envelope) client's namespace is a live declaration of
+    /// [`kayfabe_arch::ClientKind::Kernel`].
+    ///
+    /// Read here, at rank 0, because that is the only rank that holds the
+    /// [`Spine`] — [`apply_promote_ctx`] takes the owning [`Proc`] alone and cannot look
+    /// a foreign namespace up. See [`PromoteFault::ForeignContextObject`] for what it
+    /// licenses and what it deliberately does not.
+    ///
+    /// ⊘ **`false` on absence, and that is the MISS = FAULT posture, not a default.** A
+    /// client with no live root declaration is not "probably a user client" and is not
+    /// "probably kernel" either; it groups with nobody
+    /// ([`crate::rmgraph::RmGraph::client_kinds`]), and the promotion is refused under
+    /// [`PromoteFault::ForeignContextObject`] unless the *component* test passes on its
+    /// own. Nothing is permitted by an absence.
+    pub acting_kernel: bool,
 }
 
 /// What a promotion did. Every entry is accounted for: `bound + already +
@@ -239,8 +272,8 @@ pub enum PromoteFault {
         /// The address space.
         pdb: Pdb,
     },
-    /// ★★★ **The acting client is not in the component that owns the address space it
-    /// is promoting into.**
+    /// ★★★ **A foreign USER client is promoting into an address space it is not part
+    /// of.**
     ///
     /// `hChanClient`/`hObject` name *someone's* channel; the envelope's `hClient` names
     /// who is asking. Without this check, a client may declare bindings in a **victim's**
@@ -250,9 +283,58 @@ pub enum PromoteFault {
     /// The check is component-scoped, not handle-scoped, precisely because two concurrent
     /// CUDA processes share a duplicated client: the question is *"is the acting
     /// namespace part of this process?"*, which is what [`Proc`] is.
+    ///
+    /// # ★★★★ §16.44 — what this variant STOPPED refusing, and why the narrowing is RM's
+    ///
+    /// It used to fire on *any* acting client outside the owning component, and
+    /// `[measured 2026-08-09, boot s38_411d280_route]` that refused a stream RM's own
+    /// source emits: envelope `0xc1d0000a` (**UVM's** session client), `hChanClient`
+    /// `0xc1d0000c` (`cup2`'s), `hObject` `0x5c000019` (`cup2`'s channel). ⊘ The two are
+    /// **not** required to be equal, and the emitting site is
+    /// `nvGpuOpsBindChannelResources`, which sets
+    /// `pParams->hChanClient = RES_GET_CLIENT_HANDLE(pKernelChannel)` — the *user's*
+    /// client — and issues the control with `retainedChannel->session->handle` — **UVM's**
+    /// — as the envelope (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:10870`,
+    /// `:10891-10893`). The `kernel_graphics_object.c` site cited beside
+    /// [`crate::promote`]'s module doc is the *other* one, and there they are always
+    /// equal because the subdevice is looked up in the graphics object's own client
+    /// (`:74-79`).
+    ///
+    /// ★ So the widened predicate is not "let UVM into `cup2`'s component" — nothing does
+    /// that, and §12.27 deliberately keeps every kernel client in the ONE reserved system
+    /// component so a global UVM client cannot merge every CUDA process into one. It is
+    /// **"a kernel-privileged client may act on a user client's channel"**, which is
+    /// *exactly* RM's own rule on this path: reaching
+    /// `nvGpuOpsBindChannelResources` at all requires a live `UVM_CHANNEL_RETAINER`
+    /// (`0xc574`), and RM registers that class
+    /// **`RS_FLAGS_ALLOC_KERNEL_PRIVILEGED`** with
+    /// `Parents = RS_LIST(classId(Device), classId(KernelChannelGroupApi))`
+    /// (`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:394-400`). Its constructor
+    /// resolves the *named* client with `serverGetClientUnderLock` and applies **no
+    /// ownership test beyond that privilege gate**
+    /// (`ogkm-580: .../gpu/fifo/uvm_channel_retainer.c`), so RM permits precisely what
+    /// this now permits, and no more.
+    ///
+    /// ⊘ **The injection this variant exists for still refuses**, because the widening is
+    /// keyed on [`kayfabe_arch::ClientKind::Kernel`], which is *declared* — it comes from
+    /// `NV0000_ALLOC_PARAMETERS.processID == 0xFFFF_FFFF`
+    /// ([`kayfabe_abi::GuestOs::client_kind_from_process_id`]), a field the guest's
+    /// **kernel** RM writes and a guest userspace process never can. A hostile CUDA
+    /// process naming a victim's client and channel is a user client, is outside the
+    /// owning component, and lands here exactly as before.
     ForeignContextObject {
-        /// The envelope's `hClient`.
+        /// The envelope's `hClient` — who is **acting**.
         client: HClient,
+        /// ★ `hChanClient` — whose handle table [`Self::ForeignContextObject::object`] was
+        /// resolved in.
+        ///
+        /// Carried because this variant is *about* two clients disagreeing and printed
+        /// only one of them. `[measured 2026-08-09]` §16.43 had to **infer** `hChanClient`
+        /// from a census exemplar and from the previous boot's differently-shaped fault,
+        /// and wrote the inference into the design doc as though it were a quoted field.
+        /// ⊘ A refusal that cannot name the thing it refuses over is the defect, not the
+        /// evidence — `a_wall_that_can_carry_no_name`.
+        chan_client: HClient,
         /// `hObject`.
         object: HObject,
         /// The proc that owns the address space.
@@ -316,6 +398,7 @@ pub enum PromoteFault {
 /// (hop 3) — ★ one name per hop, so a census row names which lookup missed.
 pub fn route_promote_ctx(
     spine: &Spine,
+    acting: HClient,
     chan_client: HClient,
     object: HObject,
 ) -> Result<PromoteRoute, PromoteFault> {
@@ -353,7 +436,20 @@ pub fn route_promote_ctx(
             object,
             pdb,
         })?;
-    Ok(PromoteRoute { proc, gpu, pdb })
+    // ★★★ §16.44 — the acting namespace's DECLARED kind, read at the only rank that can
+    // see it. A linear scan is deliberate: `client_kinds` is a bulk iterator precisely so
+    // callers do not grow the O(clients x clients) call pattern it exists to avoid, and a
+    // promotion is a handful of controls per process lifetime, not a data-plane verb.
+    let acting_kernel = spine
+        .rmgraph
+        .client_kinds()
+        .any(|(k, kind)| k.client == acting && kind == kayfabe_arch::ClientKind::Kernel);
+    Ok(PromoteRoute {
+        proc,
+        gpu,
+        pdb,
+        acting_kernel,
+    })
 }
 
 /// ★ **ACT (rank 1, one proc).** Forward-populate `p`'s complete ranges into the routed
@@ -389,10 +485,24 @@ pub fn apply_promote_ctx(
     if proc.id != route.proc {
         return Err(PromoteFault::RetiredProc(route.proc));
     }
-    // ★★★ Attribution checked AGAINST resolution. See `ForeignContextObject`.
-    if !proc.client_values().contains(&p.client) {
+    // ★★★ Attribution checked AGAINST resolution, in TWO arms. See
+    // `ForeignContextObject` for the measurement and the `ogkm` citations.
+    //
+    //   (A) the acting client is in the owning component  — `kgrobjPromoteContext`, where
+    //       RM looks the subdevice up in the graphics object's OWN client, so envelope
+    //       and `hChanClient` are equal by construction;
+    //   (B) the acting client is a declared KERNEL client — `nvGpuOpsBindChannelResources`,
+    //       where the envelope is UVM's session and `hChanClient` is the user's. RM gates
+    //       that path on `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED`, so (B) is RM's own rule and
+    //       not a widening past it.
+    //
+    // ⊘ (B) is NOT "UVM is part of the process". Nothing puts it there and §12.27 keeps
+    // every kernel client in the one reserved system component on purpose. What remains
+    // refused is a foreign USER client, which is the injection this guard was written for.
+    if !route.acting_kernel && !proc.client_values().contains(&p.client) {
         return Err(PromoteFault::ForeignContextObject {
             client: p.client,
+            chan_client: p.chan_client,
             object: p.object,
             owner: route.proc,
         });

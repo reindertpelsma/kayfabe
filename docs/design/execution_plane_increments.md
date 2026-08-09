@@ -9524,3 +9524,165 @@ no new `RmGraphError` tag appeared, and accepted publications went **up**.
 ⇒ All three of `b4f00f3`'s named legs are now measured: **(1)** the VA space is `0x5c000007`, via
 the **CtxShare**; **(2)** the refusal belonged to `cup2`'s own channel `0x5c000019`; **(3)** the
 route is **necessary and not sufficient**.
+
+## §16.44 ★★★★★ THE MEMBERSHIP RULE — and the question it was posed as is the WRONG QUESTION
+
+`[rev to be stamped at the boot]`. This section is written **before** `s39` and its falsifier is
+committed with it.
+
+### 16.44.1 ⊘⊘ REFUTED — "what makes UVM's kernel client part of a CUDA process's component?"
+
+§16.43 handed the next rung that question. **Nothing makes it part of that component, and
+nothing may.** §12.27 assigns every declared `ClientKind::Kernel` client to the ONE reserved
+system component *by rule and never by dup*, and a dup **into** a kernel client is defined
+there as a **reference, not a merge** — precisely so that UVM's single global session client
+cannot fuse every CUDA process on the box into one blast radius. Widening `Proc::clients` to
+admit it would have deleted the isolation this port exists to provide, in the name of fixing it.
+
+★ And `s38`'s own census says so in numbers, which is what settles it rather than the argument
+(`traces/guest_boots/run_s38_411d280_route_qemu.log:162`):
+
+```
+{4x pdb=Y … tsg=ok(h0xcaf00005=>c0xc1d0000a/0xcaf00005)
+     p0/c6:vc3 Ce c0xc1d0000a/0xcaf00012  p0/c7:vc4 Ce c0xc1d0000a/0xcaf0001d …}
+{8x pdb=Y … cs=ok(h0x5c000007=>c0xc1d0000c/0x5c000007)
+     p2/c0:vc7 GrCompute c0xc1d0000c/0x5c000019 …}
+```
+
+⊘ The four channels UVM's client holds are **`p0`** — the system proc — carrying UVM's *own*
+`0xcaf…` handles in UVM's *own* TSG. `cup2`'s eight are `p2`. The briefing's reading that "UVM's
+client is already inside this component by another path" is **refuted by the proc column**: it is
+inside the *system* component by another path, which is a different component.
+
+### 16.44.2 ★★★★ THE CITATION WAS TO A SITE THAT ESTABLISHES THE OPPOSITE
+
+`promote.rs`'s module doc and `translate_promote_ctx`'s rustdoc both cite
+`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_graphics_object.c:130-135` for *"the two are
+usually equal and are **not required** to be"*. ★ The lines are real and were verified this rung
+(`:131` sets `params.hChanClient = RES_GET_CLIENT_HANDLE(pChannelDescendant)`; `:136` issues the
+control with `RES_GET_CLIENT_HANDLE(pSubdevice)`) — ⚠ **but on that path they are ALWAYS equal**,
+because `:74-79` obtains the subdevice with
+`subdeviceGetByDeviceAndGpu(RES_GET_CLIENT(pKernelGraphicsObject), pDevice, pGpu, &pSubdevice)`
+— *in the graphics object's own client*. The cited site is the counter-example to its own claim.
+
+★★★ The site where they genuinely differ is **`nvGpuOpsBindChannelResources`**
+(`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:10870`, `:10891-10893`):
+
+```c
+pParams->hChanClient = RES_GET_CLIENT_HANDLE(pKernelChannel);   // the USER's client
+pParams->hObject     = RES_GET_HANDLE(pKernelChannel);
+status = pRmApi->Control(pRmApi,
+                         retainedChannel->session->handle,      // UVM's session client
+                         retainedChannel->rmSubDevice->subDeviceHandle,
+                         NV2080_CTRL_CMD_GPU_PROMOTE_CTX, …);
+```
+
+That is `s38`'s envelope `0xc1d0000a` / `hChanClient` `0xc1d0000c` exactly. ⇒ **The claim was
+true, the citation was to the wrong site, and the check written beside it took the SITE's
+behaviour rather than the CLAIM's.** ⊘ This is not `a_comment_that_names_an_exception`, which is
+what §16.43 filed it as: the comment named the exception *and cited a source that does not
+contain it*, so anyone who followed the citation to check would have found the code correct.
+★ **Opening the cited file is what catches this; reading the sentence above the citation is what
+does not** — the inverse of `a_correct_citation_narrowed_by_the_reading`.
+
+### 16.44.3 ★★★★★ THE RULE, STATED — and it is RM's, not ours
+
+> A promotion's **acting** (envelope) client may write into an address space it is not a
+> component member of **iff it is a declared `ClientKind::Kernel` client.**
+
+This is not a licence invented to get past a wall; it is the gate RM itself applies on the only
+path that produces the shape. Reaching `nvGpuOpsBindChannelResources` requires a live
+`UVM_CHANNEL_RETAINER` (`0xc574`), which RM registers
+
+```
+/* Internal Class */ UvmChannelRetainer,
+/* Parents        */ RS_LIST(classId(Device), classId(KernelChannelGroupApi)),
+/* Alloc Param    */ RS_REQUIRED(NV_UVM_CHANNEL_RETAINER_ALLOC_PARAMS),
+/* Flags          */ RS_FLAGS_ALLOC_KERNEL_PRIVILEGED | …
+```
+
+(`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:394-400`), and whose constructor resolves
+the *named* client with `serverGetClientUnderLock` and applies **no ownership test at all beyond
+that privilege gate** (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/uvm_channel_retainer.c`). ⇒ we
+permit exactly what RM permits, and no more — `refuse_by_name_means_the_name_is_true`.
+
+⊘ **The injection still refuses, and the reason is a DECLARED field, not a convention.**
+`ClientKind::Kernel` comes from `NV0000_ALLOC_PARAMETERS.processID == 0xFFFF_FFFF`
+(`kayfabe_abi::GuestOs::client_kind_from_process_id`), written by the guest's **kernel** RM. A
+hostile CUDA process is a user client, is outside the owning component, and lands on
+`ForeignContextObject` exactly as before. ⚠ Note what this does **not** defend against: a
+compromised guest *kernel*. It never did — that is the host boundary's job, not this guard's.
+Both halves are pinned against the same handles and the same ranges by
+`a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_may_not`.
+
+### 16.44.4 ★★★ THE INSTRUMENT — and it already existed, twice
+
+★★★★★ Per the standing rule *"before building any instrument, search for it — and search for it
+DISABLED"*, three of the four numbers this rung wanted were **already being printed**:
+
+| wanted | where it already is |
+|---|---|
+| how many promotions, how many accepted | `control 0x2080012b result 0x00000000 x3` / `result 0x00000056 x3` — **6 promotions, 3 `NV_OK`, 3 refused** in `s38` (`…_qemu.log:192-193`); `s37` was `x2`/`x3` |
+| which class the `NotOnAllowlist` delta is | the **guest's own** `GspRmAlloc failed: … hClass=…` lines in `run_<tag>_probe.log` |
+| which channels are in which proc | the VA-space census's `p<proc>/c<chan>` prefix |
+
+⊘ **No new instrument was built for any of them.** The one thing genuinely missing was that
+`ForeignContextObject` — the fault that is *about two clients disagreeing* — printed only one of
+them, so §16.43 had to **infer** `hChanClient` from a census exemplar and from the previous
+boot's differently-shaped fault, and wrote the inference into this document looking like a quoted
+field. It now carries `chan_client`. That is a struct field on an existing variant: the shim
+prints the fault's `Debug`, so it costs **zero ABI change**.
+
+### 16.44.5 ★★★★ THE `NotOnAllowlist` DELTA IS NAMED, AND IT IS NOT BENIGN
+
+§16.43.3 asked the next rung to name the class behind `NotOnAllowlist x2 → x3` before assuming it
+was benign. Diffing `s37`'s and `s38`'s guest-side `GspRmAlloc failed` lines names it with **no
+code and no boot** (`run_s38_411d280_route_probe.log:97`):
+
+```
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0003e;
+      hObject=0xcaf00041; hClass=0x0000c574; paramsSize=0x00000008; status=0x00000056
+```
+
+`0xc574` = **`UVM_CHANNEL_RETAINER`**; `paramsSize=8` = exactly its two `NvHandle`s. It is the
+**only** class `s38` asks for that `s37` did not, it appears in no other boot in the tree, and it
+is absent from `CLASSES_SHARED`. ⇒ **UVM tried to legitimise the very cross-namespace channel
+reference that then faults as `ForeignContextObject`, and we refused it** — followed at `:98` by
+the free of the same handle and at `:101` by
+`nvAssertFailedNoLog: Assertion failed: status == NV_OK @ nv_gpu_ops.c:10328`.
+
+★★ ⚠ **AND THAT LEAVES A DISAGREEMENT THIS RUNG DOES NOT RESOLVE — recorded, not absorbed.**
+`nvGpuOpsRetainChannel` does `goto error` on that alloc failure (`nv_gpu_ops.c:10225-10232`), and
+the `error:` path only frees (`_nvGpuOpsReleaseChannel`, `:10304-10340`). So a failed retain
+should mean `nvGpuOpsBindChannelResources` **never runs** — yet its promotion is what we
+observe. Either the promote precedes the retainer alloc, or an emitter not in
+{`kernel_graphics_object.c`, `nv_gpu_ops.c`, `kernel_falcon.c`} produced it. ⊘ Do **not** read
+§16.44.2's attribution as settled on this point: the *client shape* is measured, the *emitting
+call site* is inferred. The new `chan_client` field plus ordering in `s39` is what decides it.
+
+⇒ ⊘ **`0xc574` is deliberately NOT admitted in this rung.** Its params declare a real fact — "kernel
+client K retains channel `(hClient, hChannel)`" — which is precisely the retention edge a *tightened*
+guard would key on instead of the blanket kernel arm. Admitting it as `NoDeclaredFacts` would record
+that fact as nothing and burn the evidence, which is the direction `admitting_the_class_is_not_serving_it`
+warns about. It is the next rung, with an `AllocParams` shape and a graph edge.
+
+### 16.44.6 ★ THE FALSIFIER FOR `s39`, THREE-VALUED, COMMITTED BEFORE THE BOOT
+
+⚠ Three-valued because several of these checks share one error path, and a two-valued reading
+scores a confirmation as a refutation — twice proven in this campaign.
+
+| | outcome | reading |
+|---|---|---|
+| **P** | `ForeignContextObject` **x0**, `control 0x2080012b` accepted count **3 → 4+**, and `cup2` prints `rv == 0xabcd1234` | sufficient. Climb to `cupctx2_min`. |
+| **Q** | `ForeignContextObject` **x0** and the accepted count rises, but `cuCtxCreate` still returns `801` under a **different named wall** | ★ **CONFIRMATION of §16.44.3, not refutation** — the guard was necessary and not sufficient. The new name says which hop. Expect `0xc574` to be it. |
+| **R** | `ForeignContextObject` still x1, **or** a *new* promote fault appears (`Malformed`, `Collides`, `TooManyRanges`), **or** a green counter regresses (accepted publications < 12, doorbells < 163, `cup2` GrCompute channels < 8) | refuted — the predicate is wrong or the arm is mis-wired. |
+| **S** | no census printed / `cup2` never runs / revision stamp disagrees | **not a result.** Re-run; do not score. |
+
+★ Two sub-predictions, recorded separately so they can fail on their own:
+- **(a)** the promotion binds **ZERO** ranges. `nvGpuOpsBindChannelResources` writes only
+  `bufferId` and `gpuVirtAddr` — never `gpuPhysAddr`/`size` — so every entry should decode as
+  `PromoteEntry::PromoteOnly` and land in `declined.promote_only`. If `bound > 0`, §16.44.2's
+  emitter attribution is **wrong** and §16.44.5's disagreement resolves against it.
+- **(b)** `NotOnAllowlist` stays **x3** (`0xc574` is untouched this rung) and `FreeUnknown` moves
+  only if `cup2` gets further. Neither is a scoring input; they are named so a change is not
+  read as noise.

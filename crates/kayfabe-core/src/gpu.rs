@@ -4053,7 +4053,8 @@ impl Gpu {
         &mut self,
         p: &crate::promote::CtxPromotion,
     ) -> Result<crate::promote::PromoteJoin, crate::promote::PromoteFault> {
-        let route = crate::promote::route_promote_ctx(&self.spine, p.chan_client, p.object)?;
+        let route =
+            crate::promote::route_promote_ctx(&self.spine, p.client, p.chan_client, p.object)?;
         let proc = if route.proc == Gpu::SYSTEM_PROC {
             &mut self.system
         } else {

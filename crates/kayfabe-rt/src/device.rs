@@ -1949,7 +1949,7 @@ impl SharedDevice {
         // ROUTE — rank 0 only. No proc lock is held while this runs.
         let route = {
             let route_in = |spine: &kayfabe_core::gpu::Spine| {
-                kayfabe_core::promote::route_promote_ctx(spine, p.chan_client, p.object)
+                kayfabe_core::promote::route_promote_ctx(spine, p.client, p.chan_client, p.object)
             };
             match self.mode {
                 LockMode::Sharded => route_in(&self.state.read().spine),

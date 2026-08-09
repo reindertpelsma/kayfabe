@@ -851,6 +851,7 @@ fn a_foreign_acting_client_cannot_promote_into_another_procs_address_space() {
         }),
         Err(PromoteFault::ForeignContextObject {
             client: B_CLIENT,
+            chan_client: A_CLIENT,
             object: H_GR_CHANNEL,
             owner,
         }),
@@ -872,6 +873,93 @@ fn a_foreign_acting_client_cannot_promote_into_another_procs_address_space() {
         vec![gr_range(GR_VA, 0x2_ef94_6000)],
     ))
     .expect("the owner may promote into its own address space");
+}
+
+/// ★★★★ **§16.44 — the membership rule, stated and testable in BOTH directions.**
+///
+/// The predicate is *not* "UVM is part of the CUDA process's component" — nothing puts it
+/// there, and §12.27 keeps every kernel client in the ONE reserved system component on
+/// purpose, precisely so a global UVM client cannot merge every CUDA process into one. It
+/// is **"a kernel-privileged client may act on a user client's channel"**, which is RM's
+/// own rule on the path that emits this: reaching `nvGpuOpsBindChannelResources` requires
+/// a live `UVM_CHANNEL_RETAINER`, and RM registers that class
+/// `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:394-400`) with no ownership
+/// test beyond the privilege gate (`.../gpu/fifo/uvm_channel_retainer.c`).
+///
+/// ⊘ The two halves are asserted **against the same handles and the same ranges**, so the
+/// only variable is the acting client's declared [`ClientKind`]. A test that only showed
+/// the permit would be `injection_measures_necessity_never_sufficiency` in reverse: it
+/// would not show that anything is still refused.
+#[test]
+fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_may_not() {
+    const K_CLIENT: HClient = HClient(0xC1D0_000A);
+    let mut gpu = {
+        let (factory, rec) = MockIsolateFactory::new();
+        let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
+        let mut g = Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa)
+            .expect("device realizes");
+        let mut s = Scenario::new();
+        s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));
+        s.compute_process(B_CLIENT, B_PDB, identical_handles(0x20, 0x21));
+        // UVM's session client: a bare KERNEL root, owning nothing of A's. It is NOT in
+        // A's component and must not become so — only its DECLARED KIND licenses it.
+        s.push(RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: HObject(K_CLIENT.0),
+            handle: HObject(K_CLIENT.0),
+            class: mock_classes::CLIENT,
+            facts: kayfabe_tests::kernel_client(),
+        });
+        for ev in s.events {
+            g.apply(ev).expect("scenario applies cleanly");
+        }
+        Guarded::new("promote_ctx::kernel_arm", g, rec)
+    };
+    let owner = pid_of(&gpu, A_PDB);
+
+    // ── the REFUSAL half: a foreign USER client, same handles. ───────────────────────
+    assert_eq!(
+        gpu.promote_ctx(&CtxPromotion {
+            client: B_CLIENT,
+            chan_client: A_CLIENT,
+            object: H_GR_CHANNEL,
+            ranges: vec![gr_range(GR_VA, 0x2_ef94_6000)],
+            declined: PromoteDeclined::default(),
+        }),
+        Err(PromoteFault::ForeignContextObject {
+            client: B_CLIENT,
+            chan_client: A_CLIENT,
+            object: H_GR_CHANNEL,
+            owner,
+        }),
+        "★ the injection the guard exists for is UNCHANGED by the widening",
+    );
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GR_VA),
+        Err(AddressFault::Miss {
+            pdb: A_PDB,
+            va: GR_VA
+        }),
+        "★ and nothing was written on the way to that refusal",
+    );
+
+    // ── the PERMIT half: the KERNEL client, the very same handles and ranges. ────────
+    let join = gpu
+        .promote_ctx(&CtxPromotion {
+            client: K_CLIENT,      // envelope: UVM's session
+            chan_client: A_CLIENT, // params: the user's namespace, per ogkm nv_gpu_ops.c:10870
+            object: H_GR_CHANNEL,
+            ranges: vec![gr_range(GR_VA, 0x2_ef94_6000)],
+            declined: PromoteDeclined::default(),
+        })
+        .expect("★ a kernel-privileged client may promote on a user client's behalf");
+    assert_eq!(join.route.proc, owner, "★ it routed to the VAS's OWNER, not to the actor");
+    assert_eq!(join.bound, 1);
+    assert!(
+        resolve_in(&gpu, A_PDB, GR_VA).is_ok(),
+        "★ and the binding landed in the OWNER's address space",
+    );
 }
 
 /// The all-or-nothing property, and every content refusal by exact variant.
