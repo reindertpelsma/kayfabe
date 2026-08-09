@@ -1892,10 +1892,22 @@ static void nvkvm_report_registers(NvkvmState *s)
      * whether that address is a framebuffer offset or a guest-physical one
      * (VIDEO=1 -> ADDR_FBMEM, SYS_COH/SYS_NONCOH -> ADDR_SYSMEM, :4503-4511).
      */
+    /* ⊘ This line used to end "— SET_PAGE_DIRECTORY is never sent", and that clause was
+     * MEASURED FALSE from the moment `0x00801813` was served (§16.30).  `[measured, boots
+     * s28_933a709_spd and s31_675af4a_echofix]` the census printed
+     *
+     *     SET_PAGE_DIRECTORY (0x00801813): 1 ACCEPTED, 0 refused; …
+     *     VA-space page-directory publications: … SET_PAGE_DIRECTORY is never sent
+     *
+     * — two lines apart, in the same report, contradicting each other.  ★ A claim frozen
+     * into a log string does not age with the code that made it true, and it is read as
+     * evidence precisely because it sits inside a measurement.  So this line now reports
+     * only what it counts, and says which sources it counts, without claiming anything
+     * about what the guest does NOT do. */
     info_report("nvkvm: VA-space page-directory publications: %" PRIu64 " total, %" PRIu64
-                " distinct, %" PRIu64 " UNDECODABLE (0x90f10106 / 0x20800a9f; the ONLY "
-                "boot-path source of a page-directory root — SET_PAGE_DIRECTORY is never "
-                "sent)",
+                " distinct, %" PRIu64 " UNDECODABLE (counted from 0x90f10106 / 0x20800a9f "
+                "ONLY; ⊘ 0x00801813 publishes a root too and is counted on its own line "
+                "above, so these totals are NOT every root the guest published)",
                 a.gvas_pub_total, a.gvas_pub_len, a.gvas_pub_undecodable);
     /* ★★★★ THE ROOT TABLE'S COMPLETENESS — printed only when it is NOT complete, because
      * a line that is always there is a line nobody reads.  A non-zero value means the
