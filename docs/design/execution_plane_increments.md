@@ -6658,3 +6658,85 @@ what made the adjudication possible, which is the argument for persisting them.
   Expected 0 got 190`, giving `cuInit → 999`. That is the stale-queue chain, not a regression:
   the emulated GSP's WPR2 only resets on a full QEMU restart. ⇒ **one device-opening consumer per
   boot**, and `pu1448` is the A/B that matters because its hook is byte-identical to `us1445`'s.
+
+---
+
+## §14.41 — `0x20800a9b` SERVED: the wall moves off the replayable fault buffer
+
+`[measured 2026-08-09, boot `fb1503` at `3afa896`]`, one device-opening consumer, probe set
+EMPTY, evidence verbatim under `docs/reference/bench_evidence/run_fb1503_3afa896_*.log`.
+
+### The A/B, one control apart
+
+```
+  pu1448 @ ef20ccc :  NVRM: faultbufConstruct_IMPL: Failed to setup Replayable Fault buffer
+                            (status=0x00000056).
+                      unserviced fn 76 cmd 0x20800a9b
+  fb1503 @ 3afa896 :  ⊘ that line is GONE.
+                      control 0x20800a9b result 0x00000000 x1
+                      NVRM: faultbufCtrlCmdMmuFaultBufferRegisterNonReplayBuf_IMPL: Error
+                            allocating client shadow fault buffer for non-replayable faults
+                      unserviced fn 76 cmd 0x20800a9d   ← THE NEXT RUNG
+                      unserviced fn 76 cmd 0x20800a9c   ← its UNREGISTER partner
+```
+
+`UVM_REGISTER_GPU rmStatus` is **still `0x56`** and `cup2` still returns 1. ⊘ The rung moved;
+`cuInit` did not pass. Stated first so no line below can read as more than it is.
+
+### ★★★ Three predictions this boot CONFIRMED, and one of them was a design decision
+
+1. **The two controls agree on the geometry, measured.** The device's own report:
+   `replayable fault buffer: 1 registration(s) SERVED NV_OK; first 0x31000 B = 49 pages, 0
+   malformed`. `0x31000` is exactly the `replayableFaultBufferSize` this port answers to
+   `0x20800a59` (`ga10x.rs:1515-1520`), and 49 = `0x31000 / 4096` — comfortably under the
+   vendor's 256-entry `faultBufferPteArray` bound. The guest registered back what we
+   advertised. ⊘ `register_fault_buffer.rs::the_size_the_guest_registers_is_the_size_this_port_advertised`
+   asserted this against the policy; the boot is the second, independent source.
+2. ★★★ **Leaving `0x20800a9c` UNREGISTER unserved was the right call, and it is now MEASURED
+   rather than inferred.** The commit predicted, from `ogkm-580: kern_gmmu.c:1325-1333`, that
+   CPU-RM logs the unregister's failure and proceeds. The guest said exactly that:
+   `NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed
+   (status=0x00000056), proceeding...` ⇒ the register/unregister pair could have been a latch
+   that only closes; refusing to model half of it costs nothing, and the guest says so in its
+   own words.
+3. **Exactly ONE registration.** The `> 1` warning path did not fire, so the receiver's
+   double-register rule (`ogkm-580: kern_gmmu.c:3117`) is still unexercised — and correctly
+   still unmodelled, on evidence rather than on a paragraph.
+
+### ★★ And the unbuilt half printed itself
+
+```
+nvkvm: replayable fault buffer: 1 registration(s) SERVED NV_OK; first 0x31000 B = 49 pages, 0 malformed
+nvkvm:   ⊘ fault DELIVERY is UNBUILT: this port raises no replayable fault and never advances
+         MMU_FAULT_BUFFER_PUT(1), so a fault the guest should have been told about becomes a HANG
+         inside UVM's replayable-fault service loop, not an error
+         (docs/design/resume_from_fault.md §7 steps 5b-5d)
+```
+
+⇒ The boot that first served the control is also the first boot that states what serving it did
+not buy. That is the whole of why the marker had to land in the same commit as the answer: a
+census row reading `control 0x20800a9b result 0x00000000` is indistinguishable from a built
+feature, and the failure it hides has no message at all.
+
+### The next rung
+
+`0x20800a9d` — the **client shadow fault buffer for NON-replayable faults**. ⚠ Do not assume it
+is the replayable case again: `simulated_gpu_fault.md` §3.3 records that on a GSP client the
+**GSP** is what copies non-replayable faults into the client shadow buffer
+(`nvGpuOpsReportNonReplayableFault`, `ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:11154-11185`),
+i.e. **we** would be the writer. If that holds, answering `NV_OK` there claims a capability in a
+strictly stronger sense than it did here, and the honesty question must be re-asked from scratch
+rather than inherited from this rung.
+
+### Harness notes
+
+- The guest auto-loads `nvidia` at ~17 s; `dmesg` at that point carries the module banner and
+  **no** RM init. So a boot's first device open is genuinely the probe's, and this one had one
+  device-opening consumer. ⊘ `run_fb1503_3afa896_dmesg.log` is persisted and asserted to contain
+  `NVRM` before being cited.
+- `is the CE wall ARMED or DORMANT?` → **`NEITHER LINE PRESENT`**. ⊘ So this boot says nothing
+  about the CE wall in either direction; do not read the absence of `memmgrTestCeUtils`'s failure
+  as evidence the CE path works.
+- The end-of-run census is emitted by `nvkvm_exit_notify`, i.e. **only on QEMU exit**. A boot left
+  running has no census, and grepping its `qemu.log` for a control id finds nothing whether or not
+  the control arrived. ⇒ quit the monitor before citing any census line.
