@@ -2566,6 +2566,18 @@ const FINISH_PAYLOAD_FROM_RING: u64 = 0x8004;
 /// written.
 const PROBE_RING_BYTES: usize = kayfabe_abi::submit::GP_ENTRY_SIZE as usize;
 
+/// How many bytes of the refused submission's **pushbuffer** the header census reads.
+///
+/// ⊘ A bound, and it is printed beside what it produced (`pbm[Nw of MB]`) so a truncation
+/// is visible rather than silent — `RING_PAGE_DUMPS`' own lesson. 128 bytes covers both
+/// shapes this path sees: RM's CeUtils block is `CE_METHOD_SIZE_PER_BLOCK` = `0x64`, and
+/// `[measured 2026-08-09, boot s20_25295aa_cup2]` the refused UVM push was `0x68`.
+const PROBE_PUSH_BYTES: usize = 128;
+
+/// How many framed methods the census prints. Enough for a whole CeUtils block (7 runs) or
+/// a UVM `channel_init` push, and a hard stop against a hostile pushbuffer of tiny runs.
+const PROBE_PUSH_METHODS: usize = 12;
+
 impl SharedDoorbell {
     /// ★★★ **E10e item (c) — SERVE a doorbell on a VAS-less copy-engine channel, on the
     /// CPU, in the shell.** `None` means *"not ours"*, and the forwarding path runs.
@@ -2857,12 +2869,13 @@ impl SharedDoorbell {
                     u64::from_le_bytes(gp)
                 ),
                 Some(d) => format!(
-                    "gp[{idx}]@0x{gp_va:x}=0x{:x}+{:#x} pb={}",
+                    "gp[{idx}]@0x{gp_va:x}=0x{:x}+{:#x} pb={} {}",
                     d.gpu_va,
                     d.len_bytes,
                     plane
                         .resolve_published_va(facts.client, vaspace, d.gpu_va, demand())
-                        .tag()
+                        .tag(),
+                    self.push_headers(&plane, facts.client, vaspace, d.gpu_va, d.len_bytes)
                 ),
             },
         };
@@ -2948,6 +2961,74 @@ impl SharedDoorbell {
     /// exactly the case a literal stride would silently mis-report. ⊘ And the count dumped
     /// is printed beside the count required, so a truncation at [`RING_PAGE_DUMPS`] is
     /// visible rather than silent — this whole method exists because a bound went unread.
+    /// ★★★★ **The refused submission's method headers, FRAMED** — subchannel, method offset,
+    /// form and argument count for each, straight out of the pushbuffer the refused GPFIFO
+    /// entry points at.
+    ///
+    /// # ⊘ It exists because `opaque == methods` is a count, and a count names no engine
+    ///
+    /// `[measured 2026-08-09, boot s20_25295aa_cup2]` the refusal reported
+    /// `methods: 7, opaque: 7, set_object: None` — seven method pairs read, and the chip's
+    /// codec recognized **not one** of them. That is a real finding and it is still not an
+    /// answer: *"these are another engine's methods"* and *"we framed the bytes wrong and
+    /// every header is garbage"* both produce `7/7`, and they are opposite bugs. The
+    /// subchannel and the method offset separate them in one line — CE's `LAUNCH_DMA` is
+    /// `0x300`, the host FIFO's `SEM_ADDR_LO` is `0x5c`, and a mis-framed read produces
+    /// neither but nonsense that climbs.
+    ///
+    /// ⊘ **OBSERVER.** It reads guest memory the refusal has already been decided over,
+    /// through the same resolver, on the same doorbell demand, and returns text. It latches
+    /// nothing and it cannot relax anything.
+    ///
+    /// ★ Framed by [`kayfabe_abi::submit::method_header_decode`] — the crate that owns the
+    /// wire format — and **not** by a second parser written here. A header it cannot decode
+    /// stops the walk and says so, because continuing past one would invent the offsets of
+    /// everything after it.
+    fn push_headers(
+        &self,
+        plane: &kayfabe_device::RegPlane,
+        client: u32,
+        vaspace: u32,
+        push_va: u64,
+        len_bytes: u64,
+    ) -> String {
+        let take = (len_bytes as usize).min(PROBE_PUSH_BYTES) & !3;
+        if take == 0 {
+            return "pbm=EMPTY-RANGE".to_string();
+        }
+        let mut buf = vec![0u8; take];
+        let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+        if let Err(e) = plane.read_published_va(client, vaspace, push_va, &mut buf, demand) {
+            return format!("pbm=UNREADABLE({})", e.describe());
+        }
+        let words: Vec<u32> = buf
+            .chunks_exact(4)
+            .map(|w| u32::from_le_bytes(w.try_into().unwrap_or([0; 4])))
+            .collect();
+        let mut out = format!("pbm[{}w of {}B]:", words.len(), len_bytes);
+        let mut i = 0usize;
+        let mut shown = 0usize;
+        while i < words.len() && shown < PROBE_PUSH_METHODS {
+            let h = words[i];
+            let Some(d) = kayfabe_abi::submit::method_header_decode(h) else {
+                out.push_str(&format!(" [{shown}]=0x{h:08x}/UNDECODABLE-HEADER"));
+                break;
+            };
+            out.push_str(&format!(
+                " [{shown}]sub{}/m0x{:x}/{:?}/n{}",
+                d.subchannel, d.method, d.form, d.arg_words
+            ));
+            // ⊘ The first argument, for the runs where it is the whole fact (a `SET_OBJECT`'s
+            // class, a semaphore's address half). Printed as itself, never interpreted here.
+            if d.arg_words > 0 && i + 1 < words.len() {
+                out.push_str(&format!("=0x{:x}", words[i + 1]));
+            }
+            i += 1 + d.arg_words;
+            shown += 1;
+        }
+        out
+    }
+
     fn ring_pages(&self, client: u32, vaspace: u32, ring_va: u64, entries: u32) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
