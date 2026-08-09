@@ -582,10 +582,7 @@ static void nvkvm_region_init_io(NvkvmState *s, MemoryRegion *mr,
 static bool nvkvm_bars_realize(NvkvmState *s, Error **errp)
 {
     PCIDevice *pci = PCI_DEVICE(s);
-    /* ⊘ `ri`, not `i`: this function already declares `i` in five inner blocks, and a
-     * function-scope `i` shadowed every one of them (-Wshadow=local x6). A shadowed loop
-     * counter is how an edit to one block silently starts driving another. */
-    unsigned ri;
+    unsigned i;
 
     QEMU_BUILD_BUG_ON(ARRAY_SIZE(nvkvm_regions) != NVKVM_N_REGIONS);
     /* ★★★ The two hand-mirrored halves of the publication census, PINNED AT COMPILE TIME.
@@ -1345,9 +1342,13 @@ static void nvkvm_report_registers(NvkvmState *s)
     KayfabeRegAudit a;
     /* ★ §16.16's trap-status table needs this device's own PCI bookkeeping and a loop
      * index. Declared here because this file is built with QEMU's C dialect settings and
-     * the rest of the function already declares at the top. */
+     * the rest of the function already declares at the top.
+     * ⊘ `ri`, not `i`: THIS function already declares `i` inside five later blocks, and a
+     * function-scope `i` shadowed every one of them (-Wshadow=local x6, caught by the
+     * bench's own first compile of §16.16). A shadowed loop counter is how an edit to one
+     * census block silently starts driving another. */
     PCIDevice *pci = PCI_DEVICE(s);
-    unsigned i;
+    unsigned ri;
 
     /*
      * ★★ `unclaimed_reads` is the number to read.
