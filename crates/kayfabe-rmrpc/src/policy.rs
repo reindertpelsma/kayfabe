@@ -261,13 +261,37 @@ impl SharedPromoteDiag {
 /// ⊘ It rides the existing [`SharedPromoteDiag`] slots as one more rendered row, so it
 /// costs **no ABI change**: `PROMOTE_DIAG_SLOTS` is 4 and `s40` used 2.
 #[derive(Clone, Default)]
-pub struct SharedPromoteTally(std::sync::Arc<std::sync::Mutex<BTreeMap<u16, [u32; 3]>>>);
+pub struct SharedPromoteTally {
+    per_id: std::sync::Arc<std::sync::Mutex<BTreeMap<u16, [u32; 3]>>>,
+    /// ★★★★★ §16.51 — **the CUMULATIVE join outcome**, `[bound, joined, joined_global,
+    /// already, globals_added]`, summed over every accepted promotion.
+    ///
+    /// # ⊘ Why the per-promotion counters were not enough, MEASURED
+    ///
+    /// `[measured 2026-08-09, rev 21f967b, boot s42_21f967b_gpuscope]`: the join **fired**
+    /// — `orphans(awaiting_phys)` fell `10 → 9` and `already` rose `0 → 1` against `s41b`
+    /// — and the `ACCEPTED` row still printed `joined_global=0`. That row is latched
+    /// **last-wins**, and the cross-address-space join is a **one-shot event that happens
+    /// early**: by the last promotion the range it produced is already bound, so it counts
+    /// as `already` and the counter that names the mechanism reads zero.
+    ///
+    /// ★ So the counter was right, on the success path, unconditional — and the **latch**
+    /// destroyed it anyway. A new failure class, and a narrow one: *an unconditional
+    /// success-path counter on a LAST-WINS latch measures only the last occurrence, and a
+    /// one-shot event is invisible at the end of the run.* The falsifier's own outcome-P
+    /// row was written as `joined_global>0` and was therefore **unscoreable from the line
+    /// it named** — `a_prediction_with_no_readout_was_never_a_test`, one level in.
+    ///
+    /// ⇒ this accumulates instead, beside the per-id row that already had to exist for
+    /// exactly the same reason.
+    totals: std::sync::Arc<std::sync::Mutex<[u64; 5]>>,
+}
 
 impl SharedPromoteTally {
     /// Fold one promotion's declarations in, keyed by `buffer_id`.
     fn record(&self, p: &kayfabe_core::promote::CtxPromotion) {
         use kayfabe_core::promote::PromoteHalf;
-        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = self.per_id.lock().unwrap_or_else(|e| e.into_inner());
         for h in &p.halves {
             let slot = g.entry(h.buffer_id()).or_default();
             match h {
@@ -290,10 +314,34 @@ impl SharedPromoteTally {
     /// 16-bit wire field, but the ids RM emits come from a fixed enum and the row count is
     /// bounded by how many distinct ones ever appear — the guest drives the *counts*, and
     /// the shim's own `[CLIPPED …]` stamp bounds the sentence.
+    /// Fold one ACCEPTED promotion's join outcome into the cumulative totals.
+    ///
+    /// ⊘ Separate from [`Self::record`] on purpose: `record` counts what the **wire
+    /// declared** and runs for every accepted promotion's params; this counts what the
+    /// **join did**. Merging them would make "ten VA halves arrived" and "one of them
+    /// bound" the same number again, which is the confusion `PromoteDeclined` exists to
+    /// prevent one layer down.
+    fn record_join(&self, j: &kayfabe_core::promote::PromoteJoin) {
+        let mut t = self.totals.lock().unwrap_or_else(|e| e.into_inner());
+        t[0] += u64::from(j.bound);
+        t[1] += u64::from(j.joined);
+        t[2] += u64::from(j.joined_global);
+        t[3] += u64::from(j.already);
+        t[4] += u64::from(j.globals_added);
+    }
+
     fn render(&self) -> String {
-        let g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let g = self.per_id.lock().unwrap_or_else(|e| e.into_inner());
+        let t = *self.totals.lock().unwrap_or_else(|e| e.into_inner());
+        // ★ The cumulative row is emitted even when no id was ever declared: `0 0 0 0 0`
+        // is a reading ("no promotion was ever accepted"), and its ABSENCE would be
+        // indistinguishable from the render having been skipped.
+        let totals = format!(
+            " || CUMULATIVE bound={} joined={} joined_global={} already={} globals_added={}",
+            t[0], t[1], t[2], t[3], t[4]
+        );
         if g.is_empty() {
-            return "no buffer_id ever declared".to_owned();
+            return format!("no buffer_id ever declared{totals}");
         }
         let mut out = String::new();
         for (bid, [phys, va, complete]) in g.iter() {
@@ -304,6 +352,7 @@ impl SharedPromoteTally {
                 "{{bid={bid:#x} phys={phys} va={va} complete={complete}}}"
             ));
         }
+        out.push_str(&totals);
         out
     }
 }
@@ -933,6 +982,12 @@ impl Bridge {
                         // (§16.47.4), and the reason `s40` could not score its own
                         // two-phase account.
                         tally.record(&p);
+                        // ★★★★★ §16.51 — and the JOIN outcome, cumulatively. See
+                        // `SharedPromoteTally::totals`: the `ACCEPTED` row above is
+                        // last-wins, and the cross-address-space join is a one-shot event
+                        // that happens early, so `joined_global` reads 0 there even on the
+                        // boot where it fired.
+                        tally.record_join(&join);
                         diag.latch_last(
                             FaultTag("promote-ctx TALLY (cumulative, all promotions)"),
                             tally.render(),

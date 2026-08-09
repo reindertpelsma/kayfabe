@@ -10396,3 +10396,99 @@ page-table writes. ⇒ `CUP2_RC=1` is expected in **P, Q and R alike**, and a ru
 kernel at all** — it is `cuCtxCreate` + a 4-byte CE round-trip — so even a green `cup2`
 would be a control-plane result and not evidence about compute. The scoreable quantities
 are `joined_global` and `globals_known`.
+
+## §16.51 ★★★★★ BOOTED `s42_21f967b_gpuscope` — **OUTCOME P**, and the counter that proved it read ZERO
+
+`[measured 2026-08-09, rev 21f967b, boot s42_21f967b_gpuscope]`. Binary stamped
+`kayfabe-rev:21f967b0de2b…` on **both** `qemu-build/qemu-system-x86_64` and the linked
+`libkayfabe_qemu_raw.a`, verified against `git rev-parse HEAD` before the boot. Evidence:
+`traces/guest_boots/run_s42_21f967b_gpuscope_{qemu,dmesg,probe}.log`, tracked and passing
+`scripts/bench/assert_boot_evidence.sh`. ⚠ A third, older archive exists under
+`/workspace/bench/cargo-target/` (the `CARGO_TARGET_DIR` trap); the linked one was the
+fresh one and the stamps agree.
+
+### 16.51.1 THE CHANGE IS OBSERVATIONALLY NEUTRAL — `R″` REFUTED
+
+Every `s41b` guest-facing number is **byte-identical**: `0x2080012b` accepted **x11** /
+refused **x2**, `NotOnAllowlist` **x10**, `FreeUnknown` **x15**, `UnmappedAllocClass` x3,
+`ReservedClient` x2, doorbells **170**, `CUP2_RC=1`, `cuCtxCreate → 801`. No `HalfConflict`,
+no `Malformed`, no new `PromoteFault`. ⇒ the scoping did not perturb the guest's stream.
+
+### 16.51.2 ★★★★★ THE JOIN FIRED — and the row that names it says `joined_global=0`
+
+```
+promote-ctx ACCEPTED (last): bound=0 joined=0 joined_global=0 globals_known=1
+  globals_added=0 already=1 parked=0 half_already=9 half_unusable=0
+  orphans(awaiting_va=0,awaiting_phys=9)
+  declined.promote_only=10 declined.initialize_only=0 entries=0 halves=10
+  client=0xc1d0000a chan_client=0xc1d0000c object=0x5c000037 proc=ProcId(2)
+```
+
+Against `s41b`, three numbers moved and **only** three:
+
+| | `s41b` | `s42` | |
+|---|---|---|---|
+| `orphans(awaiting_phys)` | **10** | **9** | one VA half is no longer parked |
+| `half_already` | **10** | **9** | so only nine remain to be re-declared |
+| `already` | **0** | **1** | …because the range it produced **is in the table** |
+
+⇒ **one of cup2's ten orphaned VA halves bound, across address spaces.** `already` counts
+ranges already bound byte-identically by a previous promotion; it was `0` for every
+promotion of `s41b` and is `1` here. A range exists now that did not exist then, and the
+only mechanism that could have created it is the GPU-scoped join.
+
+★★★ **And it is the one id the classification said could pair, and no other.**
+`globals_known=1`: exactly **one** `PhysHalfScope::PerGpu` physical was ever published, and
+the tally names it — `{bid=0xa phys=2}`, PRIV_ACCESS_MAP. Of the ten VA halves cup2
+declares, the other nine cannot pair, each for a reason §16.50.3 gives **from source**:
+
+| ids | why they stay orphaned |
+|---|---|
+| `0x3`, `0x4`, `0x5`, `0x6` | `PhysHalfScope::Never` — tally `phys=0`, nothing emits their physical. §16.49.4 step 2, untouched exactly as predicted. |
+| `0x9`, `0xb` | `PerGpu` but tally `phys=0` — RM did not emit their physical this boot (`bInitialized` already set, or a NULL memdesc) |
+| `0x0`, `0x1`, `0x2` | `PerContext` — their physicals (tally `phys=1` each) belong to the proc that declared them, and MUST NOT cross. The negative control holding in production. |
+
+⇒ **1 of 1 possible joins fired.** The nine that did not are nine the source says cannot,
+and the instrument distinguishes the two reasons without any further boot.
+
+### 16.51.3 ★★★★★ ⊘ A NEW INSTRUMENT FAILURE CLASS — an unconditional SUCCESS-path counter, destroyed by a LAST-WINS LATCH
+
+`joined_global` was built to exactly the standard the last two rungs paid for: on the
+**success** path, emitted **unconditionally**, counted at bind time so it is a strict subset
+of `joined`. It reads **`0`** on the boot where it fired.
+
+★ The reason is the **latch**, not the counter. The `ACCEPTED` row is `latch_last` — it
+keeps the *last* accepted promotion — and the cross-address-space join is a **one-shot event
+that happens early**: once `0xa` binds, every later promotion re-declares it identically and
+it scores as `already`, forever. By the last promotion there is nothing left to join.
+
+⊘ **So §16.50.7's outcome-P row was UNSCOREABLE FROM THE LINE IT NAMED.** It said
+*"`globals_known>0` **and** `joined_global>0`"*, and the true outcome printed
+`globals_known=1 joined_global=0`. Had I scored the falsifier mechanically I would have read
+a **P as a Q** — "publication works, the draw does not" — and spent the next rung debugging
+a drain that was working. It was `orphans` and `already`, neither of them the counter this
+rung was built around, that carried the result.
+
+★ The class, stated so it is not re-derived: **"on the success path" and "unconditional" are
+not sufficient — the counter must also survive the AGGREGATION it is read through. A
+last-wins latch measures only the last occurrence, so a one-shot event is invisible at the
+end of the run.** This is `a_prediction_with_no_readout_was_never_a_test` one level in: I
+checked that each falsifier branch named a *line*, and did not check that the line's
+*latching discipline* could still hold the value when the branch came true.
+
+⇒ **Fixed in the same rung, not deferred**: `SharedPromoteTally` now accumulates the join
+outcome across every accepted promotion and renders
+`|| CUMULATIVE bound=N joined=N joined_global=N already=N globals_added=N` beside the per-id
+row. ⊘ It is emitted even when nothing was ever declared, because the absence of the row and
+a row of zeros must not look the same.
+
+### 16.51.4 ⇒ THE NEXT RUNG
+
+1. ★ **`0x9` and `0xb` are `PerGpu` with `phys=0`** — they *can* publish and did not. That is
+   a different question from `0x3`–`0x6`'s `Never`, and the instrument now separates them.
+   Why does RM not emit their phase 1? `bInitialized` already set on a prior context
+   (`:1796`) is the first hypothesis and it is checkable from the trace.
+2. `0x3`–`0x6` remain §16.49.4 step 2: their backing is an **allocation-time** fact
+   (`kgraphicsGetGlobalCtxBuffers`) this port has not recovered. ⊘ Step 1's success does not
+   touch it, and `globals_known` is what keeps that visible.
+3. ⊘ `0xc574` stays where §16.48.1 put it: not the wall.
