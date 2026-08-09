@@ -9251,3 +9251,108 @@ score A, B and C identically and learn nothing.
 channel is parented to the TSG (`rmtrace`), so route 1 declines and route 3 commits; and of the
 two libcuda VA spaces only `0x5c000008`'s transport reaches the object model. ⊘ Recorded so the
 boot can refute it — the last five rungs each refuted part of their own brief.
+
+## §16.41 ★★★★ BOOTED `s36_3a0146c_vascensus` — the instrument FIRED, and it measured the WRONG EVENT
+
+`[measured 2026-08-09, rev `3a0146c`, RTX 3060 / GA106, binary stamped
+`kayfabe-rev:3a0146cd…` and verified before the boot]`. Evidence:
+`traces/guest_boots/run_s36_3a0146c_vascensus_{qemu,dmesg,probe}.log`.
+
+### 16.41.1 ★★★ THE INVARIANCE CONTROL — s36 reproduces s35 refusal for refusal
+
+The commit changed instruments only, and the boot proves it rather than asserting it. Every
+refusal row is identical to `s35_03a7e10_dup`'s:
+
+```
+bridge refusals: 19 total, 7 distinct
+  AllocClassNotPermitted::NotOnAllowlist x2   AllocClassNotPermitted::Refused x2
+  ReservedClient x2                           UnmappedAllocClass x3
+  PromoteFault::ContextVasUndeclared x1       PromoteFault::UnknownContextObject x2
+  RmGraphError::FreeUnknown x7
+control 0x2080012b result 0x00000000 x2 · result 0x00000056 x3 REFUSED
+doorbells: 124 arrived, 124 served, 0 REFUSED by name
+```
+
+⇒ the fault-variant split is observationally neutral to the guest, as §16.40.2 predicted from
+`rpc_result`'s source.
+
+### 16.41.2 ★★★★ FALSIFIER OUTCOME **B IS REFUTED** — the wall is hop 2, measured
+
+`PromoteFault::ContextVasNoOwner` **does not appear in this boot**, and
+`ContextVasUndeclared x1` does. Since §16.40.2 split the two hops apart, that is now a
+*measurement* rather than a reading:
+
+⇒ ★★★ **The refusal is `Spine::ctx_vas` (hop 2): no `(gpu, pdb)` was ever derived for the
+failing context object.** It is **not** the owner index losing a root it had. `b4f00f3`'s
+hypothesis — that a page-directory base is missing for the VA space the channel names —
+**survives its first test that could have killed it**, and the alternative that would have
+made routing `0x00801813` pointless is eliminated.
+
+⊘ This is exactly the ambiguity three previous rungs could not resolve: `s35` printed the same
+`ContextVasUndeclared x1` and it stood for *either* hop. One name per hop settled it in one
+boot, at zero extra cost.
+
+### 16.41.3 ⊘⊘ AND THE DIAGNOSIS LATCHED THE WRONG REFUSAL — my own instrument, refuted
+
+The new line printed, and what it printed was:
+
+```
+promote-ctx FIRST REFUSAL: PromoteFault::UnknownContextObject
+  UnknownContextObject { client: HClient(3251634184), object: HObject(826366208) }
+  census[2 chans, 2 outcomes]
+    {1x pdb=N own=not-declared cs=not-declared tsg=mid-miss(h0xa,wrong-kind(Device))
+         dev=dev-default(dev0xa=>h0xc) p0/c0:vc1 Ce c0xc1e00005/0x2}
+    {1x pdb=Y own=ok(h0xa=>c0xc1e00006/0xa) cs=not-attempted tsg=not-attempted
+         dev=not-attempted p0/c1:vc2 Ce c0xc1e00006/0x2}
+```
+
+`3251634184` = `0xc1d00008`, `826366208` = `0x31415900` — **kernel RM's** promotion, refused
+long before `cup2` ran, with a census of the **two CE channels** alive at that instant. The
+refusal this rung is about was never latched, **because it was not first.**
+
+★★★ **The defect is in the word "first", and I imported it from a precedent that does not
+transfer.** `KayfabeDoorbellRefusal` latches the first because its flood is *identical rings
+from one guest*, so first is representative. A boot's promote refusals are **several distinct
+refusals from different callers** — kernel RM, UVM, libcuda — and "first" selects the earliest,
+which is the one nobody asked about. ⊘ *"Bounded"* was the requirement; *"first"* was one
+implementation of it, and I copied the implementation instead of re-deriving the requirement.
+
+★ It is `a_correct_capture_can_answer_the_wrong_question` a second time in one increment, and
+note how well it hides: the line is **present**, **well-formed**, **internally consistent**, and
+its census is **true** — two channels really were live at that instant. Nothing about the output
+says it is answering a different question. Only knowing that `0x31415900` is not a libcuda handle
+separates it from the answer.
+
+⇒ **FIXED at §16.41.4**: the latch is keyed on the [`FaultTag`], so each *kind* of refusal
+carries its own first. Still bounded and still guest-independent — `PromoteFault` has ten
+variants, a fixed finite set, so a guest drives the counts and never the number of rows.
+
+### 16.41.4 ⚠ THE BUILD TRAP FIRED, and the standing warning caught it BEFORE the boot
+
+The first build produced a `qemu-system-x86_64` stamped **`kayfabe-rev:03a7e10`** — the
+*previous* rung's revision — while `libkayfabe_qemu_raw.a` was correctly stamped `3a0146c`.
+
+Cause: I exported `CARGO_TARGET_DIR=/workspace/bench/cargo-target`, so `cargo` built the archive
+there, while `scripts/build_qom_shim.sh` copies `$REPO/target/release/libkayfabe_qemu_raw.a` —
+a **stale file from 20:08 that still existed**, so the script's `[ -f "$ARCHIVE" ]` guard passed
+and it linked the old archive against the new C shell.
+
+⊘ The build exited **0** and the binary contained my new `promote-ctx` strings (they live in
+`nvkvm.c`, which *is* copied fresh), so every cheap signal said the build was current. Only the
+revision stamp disagreed. ⇒ ★ `CLAUDE.md`'s *"any bench claim must carry the SOURCE REVISION it
+was measured at"* is not bookkeeping; it is the only check that fires here. **Do not set
+`CARGO_TARGET_DIR` when running `build_qom_shim.sh`** — the script's archive path is not derived
+from it.
+
+★ Note what would have happened otherwise: ABI 34's C header against the ABI-33 archive, caught
+at realize by `kayfabe_shim_abi_version() != KAYFABE_SHIM_ABI`. The version check would have
+turned a silent wrong-binary boot into a named refusal — which is what it is for — but the boot
+would have been spent.
+
+### 16.41.5 ⇒ WHAT `s36` STILL DOES NOT SAY
+
+⊘ **Which VA space the failing channel names is STILL unread.** Outcome A's discriminator — the
+route string and `pdb=Y|N` for `cup2`'s own channel — needs the `ContextVasUndeclared` row, and
+that row was not latched. The next boot is the same instrument with §16.41.3's fix, and the
+falsifier of §16.40.5 stands unchanged: **A** (with `tsg=ok(h0x5c00000X…)`, `pdb=N`) versus
+**C**/**D**. **B is already eliminated.**

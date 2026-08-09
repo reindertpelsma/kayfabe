@@ -403,6 +403,20 @@ typedef struct KayfabeBridgeRefusal {
  * `kayfabe_qemu_raw::shim::PROMOTE_DIAG_LEN`; the pair is what `KAYFABE_SHIM_ABI` guards. */
 #define KAYFABE_PROMOTE_DIAG_LEN 2048u
 
+/* ★★★★ §16.40 — how many promote-ctx refusal KINDS cross.  `PromoteFault` has ten variants,
+ * so this is bounded by a FIXED FINITE SET and never by anything the guest supplies. */
+#define KAYFABE_PROMOTE_DIAG_SLOTS 4u
+
+/* ★★★★ §16.40 — one promote-ctx refusal KIND, with the address plane's state at the first
+ * refusal carrying it.  Both arrays are NUL-PADDED, not NUL-terminated: print with an
+ * explicit precision taken from the matching `_len`, never with %s. */
+typedef struct KayfabePromoteDiag {
+    uint8_t  tag[KAYFABE_BRIDGE_REFUSAL_TAG_LEN];
+    uint64_t tag_len;
+    uint8_t  text[KAYFABE_PROMOTE_DIAG_LEN];
+    uint64_t text_len;
+} KayfabePromoteDiag;
+
 typedef struct KayfabeDoorbellRefusal {
     uint8_t kind[KAYFABE_DOORBELL_KIND_LEN];  /* NUL-PADDED, not NUL-terminated */
     uint8_t text[KAYFABE_DOORBELL_REFUSAL_LEN];
@@ -848,7 +862,8 @@ typedef struct KayfabeRegAudit {
      * census never happened.  A diagnostic for the ADDRESS plane was gated on the EXECUTION
      * plane failing, and fixing the second silenced the first with no line in the report to
      * say so.  Three rungs then recorded "which VA space the channel names is unread". */
-    uint8_t  promote_diag[KAYFABE_PROMOTE_DIAG_LEN];
+    KayfabePromoteDiag promote_diag[KAYFABE_PROMOTE_DIAG_SLOTS];
+    /* DISTINCT kinds latched — the truth even past the array.  0 = none refused. */
     uint64_t promote_diag_len;
 
     /* ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATIONS — see the block above

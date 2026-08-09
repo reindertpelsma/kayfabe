@@ -693,11 +693,12 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
         (106 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
-            // ★★★★ §16.40 — the promote-ctx diagnosis: one byte array plus its length
-            // (the length is the 106th u64 above). ⊘ A `[u8; N]` adds no alignment
-            // padding here because every neighbour is 8-aligned and N is a multiple of 8;
-            // if that ever stops being true this assert is what says so.
-            + kayfabe_qemu_raw::shim::PROMOTE_DIAG_LEN
+            // ★★★★ §16.40 — the promote-ctx diagnosis: one row per refusal KIND, plus the
+            // distinct count (the 106th u64 above). ⊘ Per-kind and not per-boot because a
+            // boot-global "first" latched kernel RM's refusal and never the one the rung
+            // was about (`s36_3a0146c_vascensus`).
+            + kayfabe_qemu_raw::shim::PROMOTE_DIAG_SLOTS
+                * size_of::<kayfabe_qemu_raw::shim::KayfabePromoteDiag>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
                 * size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>()
             + size_of::<kayfabe_qemu_raw::shim::KayfabeIsolateRefusal>()

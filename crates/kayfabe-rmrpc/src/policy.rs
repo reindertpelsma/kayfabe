@@ -165,7 +165,7 @@ impl RefusalCensus {
 /// is already in the tag census, so nothing is lost by keeping one sentence — and the
 /// first is the one that matters, because every later one is downstream of it.
 #[derive(Debug, Clone, Default)]
-pub struct SharedPromoteDiag(std::sync::Arc<std::sync::Mutex<Option<String>>>);
+pub struct SharedPromoteDiag(std::sync::Arc<std::sync::Mutex<BTreeMap<FaultTag, String>>>);
 
 impl SharedPromoteDiag {
     /// A fresh, unlatched diagnosis.
@@ -174,22 +174,40 @@ impl SharedPromoteDiag {
         SharedPromoteDiag::default()
     }
 
-    /// The latched sentence, or `None` if no promotion was ever refused.
+    /// The latched sentences, one per [`FaultTag`], in tag order.
     ///
-    /// ⊘ `None` is a **finding**: it means either that every promotion was served or that
+    /// ⊘ Empty is a **finding**: it means either that every promotion was served or that
     /// none arrived, and the tag census discriminates those two. It never means "the
     /// instrument was off".
     #[must_use]
-    pub fn get(&self) -> Option<String> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    pub fn rows(&self) -> Vec<(FaultTag, String)> {
+        let g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        g.iter().map(|(t, s)| (*t, s.clone())).collect()
     }
 
-    /// Latch `s`, if nothing is latched yet. Later calls are dropped.
-    fn latch(&self, s: String) {
+    /// Latch `s` for `tag`, if that tag has nothing latched yet.
+    ///
+    /// ★★★★ **Per TAG, and the first version of this was per BOOT — which measured the
+    /// wrong event.** `[measured 2026-08-09, boot `s36_3a0146c_vascensus`]`: a
+    /// boot-global "first refusal" latched
+    /// `PromoteFault::UnknownContextObject { client: 0xc1d00008, object: 0x31415900 }` —
+    /// **kernel RM's** promotion, refused long before `cup2` ran, with a census of the two
+    /// CE channels that existed at that instant. The refusal the rung is *about*
+    /// (`ContextVasUndeclared`, `x1` in the same boot) was never latched, because it was
+    /// not first.
+    ///
+    /// ⊘ The `doorbell_refusal` precedent that suggested "first" does not transfer: there,
+    /// the flood is *identical rings from one guest*, so first is representative. Here the
+    /// boot contains **several distinct refusals from different callers**, and first is
+    /// simply the earliest — which is the one nobody asked about. Keying on the tag makes
+    /// each *kind* of refusal carry its own first, which is what the census counts anyway.
+    ///
+    /// ★ Still bounded and still guest-independent: [`FaultTag`] comes from a fixed finite
+    /// set (`kayfabe_core::promote::PromoteFault` has ten variants), so a hostile guest can
+    /// drive the *counts* but never the number of rows.
+    fn latch(&self, tag: FaultTag, s: String) {
         let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        if g.is_none() {
-            *g = Some(s);
-        }
+        g.entry(tag).or_insert(s);
     }
 }
 
@@ -768,8 +786,9 @@ impl Bridge {
                     // `None` marks no channel — promote-ctx names an `hObject`, and
                     // resolving it to a `ChanId` here would be a second resolution of the
                     // question that just failed.
+                    let tag = r.fault_tag();
                     self.promote_diag
-                        .latch(format!("{} {f:?}{}", r.fault_tag().0, gpu.vas_census(None)));
+                        .latch(tag, format!("{f:?}{}", gpu.vas_census(None)));
                 }
             }
         }

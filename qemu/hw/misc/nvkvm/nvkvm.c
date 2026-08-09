@@ -2072,15 +2072,36 @@ static void nvkvm_report_registers(NvkvmState *s)
                     "refused this boot. ⊘ Read this against the 0x2080012b rows in the "
                     "control census below: absent there too means none arrived.");
     } else {
-        uint64_t n = a.promote_diag_len;
+        uint64_t i, shown = a.promote_diag_len;
 
-        if (n > KAYFABE_PROMOTE_DIAG_LEN) {
-            n = KAYFABE_PROMOTE_DIAG_LEN;
+        /*
+         * ★★★★ ONE ROW PER REFUSAL KIND, and per-kind is a CORRECTION.  MEASURED, boot
+         * `s36_3a0146c_vascensus`: a boot-global "first refusal" latched kernel RM's
+         * `UnknownContextObject { client 0xc1d00008, object 0x31415900 }` — refused long
+         * before cup2 ran, with a census of the two CE channels alive at that instant —
+         * while `ContextVasUndeclared`, the refusal this rung is ABOUT and `x1` in the same
+         * boot, was never latched because it was not first.  ⊘ The doorbell precedent that
+         * suggested "first" does not transfer: there the flood is identical rings from one
+         * guest, here the boot holds several DISTINCT refusals from different callers.
+         */
+        info_report("nvkvm: promote-ctx refusals: %" PRIu64 " distinct kind(s), each with "
+                    "the VA-space census AS IT STOOD AT ITS FIRST refusal",
+                    a.promote_diag_len);
+        if (shown > KAYFABE_PROMOTE_DIAG_SLOTS) {
+            shown = KAYFABE_PROMOTE_DIAG_SLOTS;
         }
-        /* %.*s, never %s: NUL-PADDED, and a sentence that exactly fills the array carries
-         * no terminator.  The archive stamps its own `[CLIPPED …]` tail. */
-        info_report("nvkvm: promote-ctx FIRST REFUSAL: %.*s", (int)n,
-                    (const char *)a.promote_diag);
+        for (i = 0; i < shown; i++) {
+            const KayfabePromoteDiag *d = &a.promote_diag[i];
+            int tl = (int)(d->tag_len > KAYFABE_BRIDGE_REFUSAL_TAG_LEN
+                           ? KAYFABE_BRIDGE_REFUSAL_TAG_LEN : d->tag_len);
+            int sl = (int)(d->text_len > KAYFABE_PROMOTE_DIAG_LEN
+                           ? KAYFABE_PROMOTE_DIAG_LEN : d->text_len);
+
+            /* %.*s, never %s: NUL-PADDED, and a name or sentence that exactly fills its
+             * array carries no terminator.  The archive stamps its own `[CLIPPED …]`. */
+            info_report("nvkvm:   promote-ctx %.*s: %.*s",
+                        tl, (const char *)d->tag, sl, (const char *)d->text);
+        }
     }
 
     /*

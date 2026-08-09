@@ -1001,6 +1001,14 @@ const CENSUS_EXEMPLARS: usize = 3;
 /// [`copy_sentence`] stamps a visible `[CLIPPED …]` tail rather than truncating silently,
 /// so a clipped diagnosis can never read as a complete one.
 pub const PROMOTE_DIAG_LEN: usize = 2048;
+
+/// ★★★★ §16.40 — how many promote-ctx refusal KINDS cross the ABI.
+///
+/// `kayfabe_core::promote::PromoteFault` has ten variants, so this is bounded by a fixed
+/// finite set and never by anything the guest supplies. Four is every kind any boot has
+/// produced (`s35`/`s36`: two), and `promote_diag_len` reports the truth past the array so
+/// a full one is never mistaken for a complete list.
+pub const PROMOTE_DIAG_SLOTS: usize = 4;
 /// How many bytes of a doorbell refusal's **kind** the audit carries.
 ///
 /// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
@@ -1559,6 +1567,35 @@ pub struct KayfabeBridgeRefusal {
     pub count: u64,
 }
 
+/// ★★★★ §16.40 — one promote-ctx refusal KIND, with the address plane's state at the first
+/// refusal carrying it.
+///
+/// Mirrors [`KayfabeBridgeRefusal`]'s shape (NUL-**padded**, explicit lengths, `Default`
+/// written out because the arrays are wider than the derive covers) for its reasons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabePromoteDiag {
+    /// The [`kayfabe_trace::FaultTag`]'s bytes, NUL-padded.
+    pub tag: [u8; BRIDGE_REFUSAL_TAG_LEN],
+    /// How many bytes of [`Self::tag`] are the name.
+    pub tag_len: u64,
+    /// The sentence: the fault's own fields, then the VA-space census. NUL-padded.
+    pub text: [u8; PROMOTE_DIAG_LEN],
+    /// How many bytes of [`Self::text`] are the sentence.
+    pub text_len: u64,
+}
+
+impl Default for KayfabePromoteDiag {
+    fn default() -> KayfabePromoteDiag {
+        KayfabePromoteDiag {
+            tag: [0; BRIDGE_REFUSAL_TAG_LEN],
+            tag_len: 0,
+            text: [0; PROMOTE_DIAG_LEN],
+            text_len: 0,
+        }
+    }
+}
+
 impl Default for KayfabeBridgeRefusal {
     fn default() -> KayfabeBridgeRefusal {
         KayfabeBridgeRefusal {
@@ -1931,8 +1968,9 @@ pub struct KayfabeRegAudit {
     /// See `kayfabe_rmrpc::SharedPromoteDiag` for why one sentence rather than a census,
     /// and `kayfabe_core::gpu::Gpu::vas_census_string` for why it is sampled at the
     /// refusal instead of here.
-    pub promote_diag: [u8; PROMOTE_DIAG_LEN],
-    /// How many bytes of [`Self::promote_diag`] are the sentence. `0` = nothing latched.
+    pub promote_diag: [KayfabePromoteDiag; PROMOTE_DIAG_SLOTS],
+    /// How many **distinct** promote-refusal kinds were latched — the truth even past
+    /// [`PROMOTE_DIAG_SLOTS`]. `0` = no promotion was ever refused.
     pub promote_diag_len: u64,
     /// ★★★ **The VA-space page-directory publications** — every publication that decoded,
     /// including repeats and rows past [`GVAS_PUBLICATION_SLOTS`].
@@ -2211,7 +2249,7 @@ impl Default for KayfabeRegAudit {
             bind_total: Default::default(),
             bind_len: Default::default(),
             binds: Default::default(),
-            promote_diag: [0; PROMOTE_DIAG_LEN],
+            promote_diag: [KayfabePromoteDiag::default(); PROMOTE_DIAG_SLOTS],
             promote_diag_len: Default::default(),
             gvas_pub_total: Default::default(),
             gvas_pub_len: Default::default(),
@@ -3915,11 +3953,17 @@ impl Regs {
         // here. ⊘ Nothing is SAMPLED at this point: by teardown the CUDA process is gone
         // and its channels with it, so a census taken here would be a true sentence about
         // the wrong instant. `copy_sentence` stamps its own `[CLIPPED …]` tail.
-        let mut promote_diag = [0u8; PROMOTE_DIAG_LEN];
-        let promote_diag_len = self
-            .promote_diag
-            .get()
-            .map_or(0, |d| copy_sentence(&mut promote_diag, &d));
+        let diag_rows = self.promote_diag.rows();
+        let mut promote_diag = [KayfabePromoteDiag::default(); PROMOTE_DIAG_SLOTS];
+        for (row, (tag, text)) in promote_diag.iter_mut().zip(diag_rows.iter()) {
+            let tb = tag.0.as_bytes();
+            let take = tb.len().min(BRIDGE_REFUSAL_TAG_LEN);
+            row.tag[..take].copy_from_slice(&tb[..take]);
+            row.tag_len = take as u64;
+            row.text_len = copy_sentence(&mut row.text, text);
+        }
+        // ⊘ From the map, not the loop: a set larger than the array must say so.
+        let promote_diag_len = diag_rows.len() as u64;
         // ★★★ E1 — the isolate plane, DESTRUCTURED with no `..` for [`Shim::audit`]'s
         // reason: a census field added and not wired here is a number the C shell can
         // never read, and nothing goes red. `rustc` refuses the pattern instead.
