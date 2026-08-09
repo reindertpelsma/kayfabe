@@ -7573,7 +7573,7 @@ is not *"our framebuffer is not written"* — it demonstrably is, 337 854 times 
 particular bytes never arrived"*.
 
 ⇒ ⧗ **THE NEXT MEASUREMENT, and it needs no new plumbing beyond a census.** `[src]`
-`SparseFb` holds its written pages in a `BTreeMap` and reports only a total
+`SparseFb` holds its written pages in a `HashMap` and reports only a total
 (`[measured, this boot]` `resident 368640 bytes` = 90 pages).
 **Report WHICH framebuffer frames are resident** — the count, the extent, and whether the
 ring's frame is among them. Three outcomes, three different fixes: the ring's frame is absent
@@ -7586,3 +7586,57 @@ things are settled by named boots — BAR1's innocence by `bar1_03a679f` above, 
 correctness by `wlk1_dcd096c` (§16.10), the page tables' arrival by `fbd1_f760a4b` (§16.9) —
 so the remaining candidates are about *ordering and timing* as much as about *routing*, and
 nothing here separates them yet.
+
+### 16.13 ★★★★★ BOOTED `res1_fc21926` — the ring's frame was NEVER WRITTEN, and two of the three outcomes are refuted
+
+`[measured 2026-08-09, boot `res1_fc21926`, archive **and** QEMU binary both stamped
+`kayfabe-rev:fc21926c9a8e405e…`, GA106 bench `vh`, stock 580.159.04 guest, probe set EMPTY]`:
+
+```text
+framebuffer residency: 90 page(s) spanning [0x0..0x2efbd5000] — 3079126 page(s) of extent,
+  so the resident set is SPARSE.
+fbL0@0x4000    …  nz2/4096  resY
+fbL1@0x5000    …  nz2/4096  resY
+ctlL0@0x2efbae000 … nz4/4096 resY
+fbRING@0x20000 =0000…0000  nz0/4096  resN-NEVER-WRITTEN
+```
+
+⇒ ★★★★★ **Outcome 1.** The ring's frame is **not resident**: nothing ever aimed a write at
+framebuffer offset `0x20000`. It is not *"written with zeros"* — **outcome 2 is refuted**,
+and that distinction was invisible to every boot before this one because
+[`FbStore::read`] returns *zero and `Ok`* for a page nobody wrote.
+
+⊘ **Outcome 3 — "written and then erased by `device_reset`" — is refuted by the same line.**
+`device_reset` clears the *whole* store, and the page-table pages at `0x4000`/`0x5000` are
+**resident**. A reset that erased the ring would have erased them too. ⚠ It is refuted only
+up to ordering: a reset between the ring write and a *later* page-table write would survive
+this argument, and nothing here excludes that. A first-writer sequence number would; the
+byte census and the residency bit both cannot.
+
+★ And the resident set is **90 pages spread across the whole 11.7 GiB aperture** — sparse,
+not clustered. So this is not a store that only ever received one region's worth of traffic.
+
+⇒ **The wall, restated as narrowly as the evidence now allows:** every reachable vidmem write
+path lands in the one store the walker reads (`ring_write_path_map.md`), that store received
+337 854 BAR0-window writes and 286 352 BAR2 writes with **zero refusals**, the guest's own
+five-level walk names `0x20000` for its ring, and **no write was ever aimed there**.
+
+### 16.14 ⊘⊘ `translated-window drops 0r/0w` IS A VACUOUS ZERO — `[src]`, re-derived here
+
+`[src]`, checked rather than taken on report: `fb_window_reads` increments at
+`plane.rs:2005` and `fb_window_writes` at `:2242`; both sit in the
+`WindowRefusal::NoAddressModel` arm; that refusal is returned **only** for
+`FbWindow::FbAperture` (`:2110`), i.e. BAR1; and BAR1 registers with
+`nvkvm_reservation_ops` and never crosses the shim seam — `kayfabe_shim.h` has **no BAR1
+spelling at all** (`KAYFABE_BUS_BAR_REGS 0u`, `KAYFABE_BUS_BAR_INST 2u`).
+
+⇒ The pair **cannot move in this build**, and the report's own sentence claimed it counted
+*"the two GMMU-translated windows"* — wrong twice: it counts **one** (BAR2's refusals go to
+`bar2_faults`), and that one is unreachable. ⊘ Its zero was **true, unfalsifiable, and read
+as evidence** that no translated window ever dropped a byte. The `pgrep -x
+qemu-system-x86_64` shape exactly: a check that cannot fail always passes.
+
+★ Fixed by the rule §16.12 established rather than by deleting the counter: the report now
+**says the zero is vacuous and why**, and a non-zero value prints a warning that the
+counter's own precondition has changed and every BAR1 conclusion in that boot needs
+re-reading. **A counter must carry its own precondition into the log.**

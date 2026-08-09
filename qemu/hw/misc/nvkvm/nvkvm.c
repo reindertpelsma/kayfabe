@@ -1417,10 +1417,41 @@ static void nvkvm_report_registers(NvkvmState *s)
      */
     info_report("nvkvm: framebuffer: %" PRIu64 " reads / %" PRIu64 " writes served through "
                 "the BAR0 moving window (%" PRIu64 " window register reads / %" PRIu64
-                " writes), fb refusals %" PRIu64 ", translated-window drops %" PRIu64
-                "r/%" PRIu64 "w, resident %" PRIu64 " bytes",
+                " writes), fb refusals %" PRIu64 ", resident %" PRIu64 " bytes",
                 a.fb_reads, a.fb_writes, a.bar0_window_reads, a.bar0_window_writes,
-                a.fb_refusals, a.fb_window_reads, a.fb_window_writes, a.fb_resident_bytes);
+                a.fb_refusals, a.fb_resident_bytes);
+    /*
+     * ★★★★ THE COUNTER THAT CANNOT MOVE, and it used to be printed as if it could.
+     *
+     * This line used to end "translated-window drops %ur/%uw" and its own comment claimed
+     * the pair counted "the two GMMU-TRANSLATED windows".  MEASURED 2026-08-09, and the
+     * sentence was wrong twice over:
+     *   - it counts ONE window, not two — BAR2's refusals go to `bar2_faults`;
+     *   - and that one is UNREACHABLE.  Both increment sites (plane.rs:2005, :2242) sit in
+     *     the `WindowRefusal::NoAddressModel` arm, which is returned only for
+     *     `FbWindow::FbAperture` — i.e. BAR1 — and BAR1 registers with
+     *     nvkvm_reservation_ops and NEVER CROSSES THIS SEAM.  This header has no BAR1
+     *     spelling at all (only KAYFABE_BUS_BAR_REGS 0u and KAYFABE_BUS_BAR_INST 2u).
+     *
+     * ⊘ So its `0r/0w` was VACUOUS — true, unfalsifiable, and read by three rungs as
+     * evidence that no translated window ever dropped a byte.  Same shape as
+     * `pgrep -x qemu-system-x86_64`, which can never match and therefore always passes.
+     *
+     * ★ A counter must carry its own precondition into the log.  This one's precondition is
+     * FALSE in this build, so the honest thing to print is that, not a zero.
+     */
+    if (a.fb_window_reads || a.fb_window_writes) {
+        warn_report("nvkvm:   ⚠ translated-window drops %" PRIu64 "r/%" PRIu64 "w — and this "
+                    "counter was believed UNREACHABLE in this build. A non-zero value means "
+                    "BAR1 now crosses the shim seam; re-read plane.rs's NoAddressModel arm "
+                    "before trusting any BAR1 conclusion in this boot.",
+                    a.fb_window_reads, a.fb_window_writes);
+    } else {
+        info_report("nvkvm:   translated-window drops: 0r/0w, and ⊘ THIS ZERO IS VACUOUS — "
+                    "the only increment sites are reached solely for BAR1, which registers "
+                    "with nvkvm_reservation_ops and never crosses this seam. It is not "
+                    "evidence that no translated window dropped a byte.");
+    }
     /*
      * ★★★★ §16.13 — WHICH bytes, not how many.  MEASURED 2026-08-09 (boot bar1_03a679f):
      * the framebuffer page the guest's own page tables name for its GPFIFO ring dumped as
