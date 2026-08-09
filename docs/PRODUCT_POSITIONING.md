@@ -85,6 +85,76 @@ product**, not rigour for its own sake.
 advertised, *"safe for hostile guests"* is the claim being **sold**. Precedent: the C's `/dev`
 `O_PATH` escape was found by an **audit**, never by tests.
 
+### ★★★ 2.1 Rootless on the host by construction — and that changes WHO can adopt it
+
+**Owner ruling, 2026-08-09.** kayfabe requires **exactly the privileges an ordinary CUDA process
+requires, which is none**. It uses the same `/dev/nvidia*` interface any `import torch` uses.
+
+| | what the HOST ADMIN must do first |
+|---|---|
+| **NVIDIA vGPU** | install the vGPU Manager kernel module, stand up a **licence server**, configure mdev/SR-IOV — with licensing enforced **per VM** `[inferred]` |
+| **VFIO passthrough** | bind the device to `vfio-pci`, set IOMMU kernel parameters, usually reserve hugepages `[inferred]` |
+| **kayfabe** | ⊘ **nothing** |
+
+⚠ The two comparison rows are `[inferred]` from NVIDIA's and the kernel's documented deployment
+requirements; they are **not** measured here and carry no URL yet. ⊘ Do not upgrade them to
+`[measured]` without one. Our own row is `[measured]` — see below.
+
+★★ **The second-order consequence is the more important one: a TENANT can run it, not only an
+operator.** vGPU and VFIO both require the *host administrator* to reconfigure the machine per
+deployment; kayfabe requires nothing of the host at all. That changes **who can adopt it**, not
+merely how easily — and it is the difference between a product an infrastructure team must bless
+and one a user can start.
+
+**Cite it as `[measured]`, because it is:**
+
+- The isolate **surrenders every capability** and gets its own user namespace; an unprivileged,
+  userns-confined process demonstrably drives the GPU (`2575177`).
+- An **unprivileged process can obtain the PTIMER mapping** (`e20c3a2`).
+  ⊘ ⚠ Not `977d5af` — that commit is *"#128: two prose inaccuracies I introduced, both counting
+  things wrongly"* and has nothing to do with PTIMER. The wrong hash was caught only because it
+  was checked before being written down (`a_wrong_citation_is_more_durable_than_none`).
+- A static musl image in a **sealed memfd**, `execveat`'d into its own namespaces (`4cd39b0`).
+
+#### ⊘ Three objections raised and deflated — recorded so they are not re-raised
+
+1. *"We have never run non-root end to end."* **True, and it stays true until it is tested.** But
+   it is one `sudo -u`: the C's Mode-1 VMM already made **every NVIDIA call unprivileged**, and
+   the Rust port needs few ioctls beyond that set. ⇒ **Owed as an acceptance test AFTER `cup2`
+   passes** — a confirmation, not a discovery.
+2. *"The tap device needs `CAP_NET_ADMIN`."* ⊘ **This mistook a BENCH ARTIFACT for an
+   architectural constraint.** `nvktap0` is how our *harness* wires the guest; rootless VMs use
+   slirp / user-mode networking and need no privilege. ★★ **The harness's requirements are not
+   the product's requirements** — worth stating as a general caution, because this is the second
+   time a bench-local fact has been promoted to an architectural one (`CLAUDE.md`'s
+   ssh-config trap, ⊘ corrected 2026-08-08).
+3. *"`uffd` is `EPERM` unprivileged, so parity is unproven."* ⊘ **Checked and refuted.** No Rust
+   file invokes `userfaultfd(2)` — `grep` for `SYS_userfaultfd`/`__NR_userfaultfd`/`UFFDIO_`
+   over `crates/` returns **nothing**; every mention is a **doc comment describing a capability**.
+   `docs/design/gl11_region_arguments.md:214-217` calls the region lock *"a capability we keep
+   for a case we have not yet met, not a load-bearing part of the data plane"* — ⚠ **stated
+   conditionally there** (*"if §2.1 survives the GSP build and §3 resolves to BAR2"*), so quote
+   it with its condition or not at all — and records `[measured]` **0 cost unarmed**. ⇒ Unarmed
+   and **not a live privilege requirement**; the syscall grep above is the load-bearing half of
+   this bullet, the design quote only corroborates it. ★ Nor does the event plane reintroduce
+   one: an **eventfd is a plain fd** and
+   **`/dev/kvm` is a group** on essentially every distribution.
+   ⚠ Correction to the framing as given: the claim *"uffd appears in only two files"* is wrong —
+   it appears in ten or more, all prose. The **substance** (no live syscall) survives; the count
+   does not.
+
+#### ★ The honest wording to publish TODAY
+
+> *"No privilege is required for anything we have built."*
+
+⊘ **Not** *"full parity with root"*. That earns its **"full"** once the remaining planes land —
+the event/interrupt switchboard (#199) above all.
+
+⚠ **And record the acceptance test here, because this is exactly the kind of claim that is true
+when written and quietly false a month later:** a **rootless end-to-end boot** — VMM, isolate and
+guest all as an ordinary user with no capabilities — owed after `cup2` passes. Until that boot
+exists, §2.1 is an argument from component measurements, not from a running system.
+
 ## 3. ⊘ A correction: what Windows GPU-P actually says
 
 An earlier draft claimed *"Microsoft documents GPU-P as a trusted-guest feature, not a security
