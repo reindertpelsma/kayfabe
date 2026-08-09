@@ -8,9 +8,33 @@
 //!   door stays open, and NO real NVOS struct/ioctl number appears here (Axis A is
 //!   quarantined to `kayfabe-abi`).
 //! - [`Isolate`] / [`IsolateFactory`] — the per-guest-process sandboxed host worker.
-//!   One isolate per `Proc` (`session_id == ProcId`), giving **blast-radius
-//!   containment**: a bug forwarding process A cannot touch process B's host
-//!   handles/mappings (threat-model boundary 2, arch doc §4.3.5).
+//!   One isolate per `Proc` (`session_id == ProcId`).
+//!
+//! ## ★★★ Why one isolate per guest process — read this before changing the granularity
+//!
+//! ⊘ **Not primarily for blast radius.** The founding reason is **VA identity**:
+//! NVIDIA's driver, and UVM especially, treats the address a buffer has in the
+//! *calling process* as *the* address. `nvproxy` gets that for free because a guest
+//! process **is** a host process; in a VM it is not, and that is exactly why porting
+//! `nvproxy` to QEMU was believed impossible. One host process per guest process
+//! restores the identity, and `#14` **is** the collision that follows when it is lost;
+//! `#102` is the tree asserting its negation.
+//!
+//! ★ **State it precisely, because the loose version is refutable.** An address passed
+//! as an *argument* IS re-addressable — every NVIDIA object can be shared out of an
+//! isolate and re-mapped at an arbitrary VMM address, which is how Mode 2 passed LLM
+//! compute. What cannot be re-addressed is an address the driver takes **implicitly
+//! from the calling process**: `mm` is not a parameter. UVM is the clean case — managed
+//! memory's contract is CPU VA == GPU VA and its `va_space` is bound to the caller's
+//! `mm`, so two guest processes with overlapping managed VAs cannot both be registered
+//! in one host `mm`. ⊘ The GPU-VAS argument does *not* carry this on its own: one RM
+//! client may own many `VASpace` objects.
+//!
+//! ⇒ **Coarsening this granularity — one isolate shared by two guest processes —
+//! reintroduces `#14` no matter what it does for security.** Blast-radius containment
+//! (a bug forwarding process A cannot touch process B's host handles/mappings —
+//! threat-model boundary 2, arch doc §4.3.5) is real and is the *third* reason, not the
+//! first. Full ordering and its history: `docs/design/isolate_founding_rationale.md`.
 //!
 //! The real implementation (spawn, `CLONE_NEW*` namespaces, pivot_root, seccomp,
 //! socket wire protocol — the Mode-1 stub posture) is an adapter crate concern.
