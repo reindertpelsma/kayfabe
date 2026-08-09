@@ -8774,6 +8774,35 @@ such a publication; `0x801813` is the guest **asking us to install one**, and we
   "it did not happen"** (`a_saturated_instrument_looks_exactly_like_absence`). Settle which,
   before anything is built on the count.
 
+### 16.29.5b ★★★ WHAT THE REFUSED CONTROL ACTUALLY CARRIES — and why it is route 4's own object
+
+`NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS` (`ogkm-580: ctrl0080dma.h:790-828`) is a **page-directory
+publication stated outright**, not one that has to be inferred:
+
+- `physAddress` — physical address of the new page directory, in the aperture named by `flags`
+- `numEntries` — its size in entries
+- `hVASpace` — ★★★ *"handle for the allocated VA space that this control call should operate on.
+  **If it's 0, it assumes to use the implicit allocated VA space associated with the
+  client/device pair.**"*
+- `chId`, `pasid`, and an `ALL_CHANNELS` flag meaning *"update the instance blocks for all
+  channels using the VAS"*
+
+⇒ ★★★ **This is exactly the object §16.28 spent a rung recovering by inference.** Route 4 resolves
+a publication for the **Device's default VA space**; `hVASpace = 0` in this control *is* that VA
+space, named by the guest itself. And `ALL_CHANNELS` names the instance-block update that
+§16.28.13 filed as *"checked and named, not done"*.
+
+★ So serving `0x801813` is not answering a question we cannot answer — it is accepting a fact the
+guest is **handing** us, in the vocabulary the address table already speaks
+(`no_real_phys_only_gpga_or_gpa`: `physAddress` here is a guest-physical address, which is what
+the table stores). ⊘ That is the opposite of forging a completion: nothing is invented, and the
+guest's own `gvaspaceExternalRootDirCommit` still does the local half.
+
+⚠ ⊘ **But it is NOT free and must not be waved through.** Answering `NV_OK` while recording
+nothing would be a refusal wearing an acceptance's clothes — the guest would proceed believing
+its root is installed on the GSP side. The rung must record the publication and be able to show
+it, or refuse by a name that is true.
+
 ### 16.29.6 ⇒ THE NEXT RUNG, stated as a falsifiable prediction
 
 **Serve `0x00801813`.** If §16.29.4 is right, the boot after it must show **both** of:
