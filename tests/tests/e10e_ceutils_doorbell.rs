@@ -365,9 +365,22 @@ fn a_doorbell_that_brings_no_new_entry_is_refused_and_signals_nothing() {
     let irqs_after_first = vmm.irqs.len();
 
     let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("no second entry exists");
+    // ★★★ Named for WHAT HAPPENED. This asserted `PushTooFragmented` — a bound of ours on
+    // how many address-table spans one range may cut into — for a ring that produced no
+    // range at all, and `[measured 2026-08-09, boots `uvm2_d0fbac0` / `scan1_00865a7` /
+    // `vaspan_994bbdc`]` four consecutive boot logs therefore reported the UVM wall as a
+    // fragmentation limit that was never reached. ⊘ "Refuse by name" is a claim that the
+    // name is TRUE, not that there is one.
     assert!(
-        matches!(err.fault, FwdFault::PushTooFragmented { .. }),
-        "the empty ring is named, not served: {err:?}"
+        matches!(
+            err.fault,
+            FwdFault::RingBroughtNoEntry {
+                index: 1,
+                entries: 4096,
+                ..
+            }
+        ),
+        "the empty ring is named for itself, not served and not mislabelled: {err:?}"
     );
     assert_eq!(
         vmm.irqs.len(),

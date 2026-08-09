@@ -7229,3 +7229,71 @@ about the walk.
 ⚠ Do not skip to widening the `Fb` store. If `reservation_touches` is **zero**, BAR1 is
 innocent and the bytes went somewhere else entirely — and a fix aimed at the wrong store
 would be an invented answer that happens to make a refusal disappear.
+
+### 16.7 §16.6's INSTRUMENT, built — and three report caps found on the way, one of them a false diagnosis
+
+The rung §16.6 left was *"print the publication row for `(0xc1d0000a, 0xcaf00005)` — whole
+body, all four levels — beside a working row"*, and it said the report had to be widened
+**before** anything is changed about the walk. Nothing about the walk, the address plane or
+the executor is touched here.
+
+**What now prints, and where.**
+
+1. **The row the LOOKUP chose, on the refusal line itself.** `publication_row`
+   (`crates/kayfabe-qemu-raw/src/shim.rs`) reads
+   `GvasPubSnapshot::roots` — the *same* map `ceresolve::published_root` reads, not a second
+   projection — and formats `arm`, `count`, `num_levels`, `pageSize`, the subdevice pair,
+   `virtAddrLo..Hi` and **every declared level** as `Ln=<phys>/sz<size>/ap<aperture>/sh<shift>`.
+   Each field separates one of §16.6's three outcomes: the **arm** decides *decoded from the
+   wrong arm*, the **count** decides *a stale publication last-write-wins picked*, and
+   `L0.size` plus `L1..L3` decide *a real root RM had not yet backed*. An **absent** row
+   prints `ABSENT-FROM-ROOT-TABLE(n rows, m REFUSED-BY-CAP)`, because §16.3 is the boot where
+   *"the guest published none"* and *"our table dropped it"* were the entire bug.
+2. **The census sample, 8 → 32 rows.** `GVAS_PUBLICATION_SAMPLE_MAX` and
+   `KAYFABE_GVAS_PUBLICATION_SLOTS`. `[measured 2026-08-09, boots `uvm1_b731e3c` …
+   `vaspan_994bbdc`]` every one published **12 total, 11 distinct** and printed the first
+   **eight**; the refusing pair sat past the cap in all six. ★ De-duplication keys on the
+   **whole body**, so a VA space re-published with different levels takes two rows here while
+   `roots` keeps only the later one — the table says which root won, the sample says what it
+   beat, and that pair is what makes a stale publication visible at all.
+
+**⊘ And two more bounded collections were found by auditing the instrument I was about to
+load up** — standing rule (b), *audit every bounded collection for which side of the boundary
+it sits on*:
+
+3. **The doorbell sentence buffer was SATURATING SILENTLY.** `DOORBELL_REFUSAL_LEN` was
+   **448**; `[measured 2026-08-09, boot `vaspan_994bbdc`, rev `994bbdc10`]` the refusal was
+   **262 bytes**, and the four
+   `PdeLevel`s this rung appends are ~180 more — landing the sentence *on* the cap. The copy
+   was a bare `s.len().min(LEN)`, so a clipped sentence and a complete one produce **the same
+   log line**, and the levels are at the END. Now 1024, and `copy_sentence` stamps a literal
+   `[CLIPPED, sentence was N bytes]` tail on every one of the three sentence buffers, so
+   saturation is a statement instead of an absence.
+
+4. ★★★★ **THE WALL HAS BEEN REPORTED UNDER THE WRONG NAME FOR FOUR BOOTS.** `[measured
+   2026-08-09, boots `uvm2_d0fbac0`, `scan1_00865a7`, `vaspan_994bbdc`]` the UVM channel's
+   refusal reads:
+
+   ```text
+   [FwdFault::PushTooFragmented] PushTooFragmented { va: GpuVa(4848680960), len: 0 }
+   ```
+
+   `PushTooFragmented` means *"one GPFIFO range cut into more address-table spans than
+   `MAX_PUSH_SPANS`"* — **a bound of ours**, raised in `kayfabe_fwd::pushbuffer_ranges`. The
+   `[src]` fact is the opposite: `ranges.is_empty()` at `kayfabe-rt/src/ceutils.rs`, i.e.
+   **no range existed to fragment**, because the ring read back as zeros (`scan=64/1024
+   declared, unread=0, nonzero=NONE`). Four boot logs therefore named a limit that was never
+   reached, and the only hint was `len: 0`.
+
+   ⇒ New variant `FwdFault::RingBroughtNoEntry { ring_va, index, entries }`, carrying the
+   index so *"the cursor ran past the end"* and *"index 0 of a ring the guest never wrote"*
+   are two readings of it rather than one. ⊘ *Refuse by name* is a claim that the name is
+   **TRUE**, not that there is one — a wrong name is a specific, actionable, **false**
+   diagnosis, which is worse than an unnamed refusal. The test that pinned the old name
+   asserted, in its own words, *"the empty ring is named"*; it was named, and named something
+   else.
+
+**⊘ What this rung deliberately does not do.** No walk, no aperture, no `Fb` store, no
+executor, no completion. Nothing is emitted that the guest did not ask for. The doorbell is
+still refused, and after §16.7 it is refused **by its own name** with the deciding row
+attached.
