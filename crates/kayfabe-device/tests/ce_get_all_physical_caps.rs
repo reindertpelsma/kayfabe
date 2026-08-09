@@ -25,7 +25,7 @@
 //! the hardware, which is the thing being measured.
 
 use kayfabe_abi::cecaps::{
-    self, CE_GET_ALL_CAPS_PARAMS_SIZE, CeCaps, GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE, MAX_CES,
+    self, CE_GET_ALL_CAPS_PARAMS_SIZE, CeCaps, GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE,
     NV2080_CTRL_CMD_CE_GET_ALL_CAPS, NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS, cap,
 };
 use kayfabe_abi::deviceinfo::DEV_TYPE_ENUM_LCE;
@@ -250,13 +250,13 @@ fn present_is_the_same_engine_slice_the_device_info_table_serves() {
     assert_eq!(names.len(), present.count_ones() as usize);
 
     // Every present CE carries caps; every absent one carries none.
-    for i in 0..MAX_CES {
+    for (i, caps) in tbl.iter().enumerate() {
         let has = present & (1u64 << i) != 0;
         assert_eq!(
-            tbl[i] != CeCaps::NONE,
+            *caps != CeCaps::NONE,
             has,
             "CE{i}: present={has} but caps={:#06x}",
-            tbl[i].as_u16()
+            caps.as_u16()
         );
     }
 }

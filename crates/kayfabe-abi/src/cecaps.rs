@@ -593,13 +593,13 @@ mod tests {
     #[test]
     fn the_three_kernel_or_able_bits_are_clear_on_every_present_ce() {
         let (present, tbl) = decode_ce_get_all_physical_caps(&real_ga106_reply()).expect("decode");
-        for i in 0..MAX_CES {
+        for (i, caps) in tbl.iter().enumerate() {
             if present & (1u64 << i) == 0 {
                 continue;
             }
             for bit in [cap::SYSMEM_READ, cap::SYSMEM_WRITE, cap::NVLINK_P2P] {
                 assert!(
-                    !tbl[i].has(bit),
+                    !caps.has(bit),
                     "CE{i} carries a bit the guest kernel would have OR'd in from NVLink \
                      topology; the physical-reply argument in this module's header rests on \
                      all three being clear"

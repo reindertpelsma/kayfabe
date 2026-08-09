@@ -421,7 +421,7 @@ impl FbGeometry {
         if self.l2_cache_size == 0 {
             return Err(FbInfoError::L2CacheSizeZero);
         }
-        if self.l2_cache_size % GA10X_L2_SLICE_BYTES != 0 {
+        if !self.l2_cache_size.is_multiple_of(GA10X_L2_SLICE_BYTES) {
             return Err(FbInfoError::L2NotSliceAligned {
                 bytes: self.l2_cache_size,
                 slice: GA10X_L2_SLICE_BYTES,
