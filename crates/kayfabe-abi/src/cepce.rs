@@ -117,6 +117,45 @@ pub const PCE_MASK_OFF: usize = 4;
 /// confusing them (see [`crate::cecaps::MAX_CES`]).
 pub const MAX_PCES: usize = 32;
 
+/// ★★★ **What serving the two CE-description controls did NOT buy** — printed by the device
+/// beside the census whenever `0x20802a02` was answered, so no boot reports the served rows
+/// without it.
+///
+/// ⊘ This sentence is **not** a prediction, and that is what separates it from the three
+/// fault-buffer ones it sits beside. `[measured 2026-08-09, boot `ce1442` at `8ea44dc`]` the
+/// very first boot that served these controls went on to submit CE work and get **no
+/// completion back**:
+///
+/// ```text
+/// [68.241725] NVRM: scrubberDestruct:  Timed out when waiting for the scrub to complete …
+/// [72.242957] NVRM: nvAssertFailedNoLog: Assertion failed:
+///                   pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+/// ```
+///
+/// ★ The causal chain is exact and worth stating, because it is what makes these two controls
+/// the *reason* the guest got that far: `queryCopyEngines` sets `ceCaps->supported = NV_TRUE`
+/// only after **both** answer `NV_OK` (`ogkm-580: nv_gpu_ops.c:8519-8537`), and UVM's own gate
+/// is `ce_is_usable(cap) = cap->supported && !cap->grce`
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2913-2923`). With
+/// [`crate::cecaps::GA10X_GRCE_LCE_MASK`] = `{LCE0, LCE1}`, that leaves **LCE2 and LCE3** as
+/// usable async copy engines, and `ces_validate` (`:2927-2955`) further requires each to carry
+/// `sysmem` and `p2p` — which [`crate::cecaps::GA10X_LCE_BASE_CAPS`] asserts. ⇒ Answering
+/// these two is precisely what licenses RM and UVM to *build channels on those engines and
+/// push real copies down them*.
+///
+/// ⊘⊘ **A description is not an engine.** Nothing in either control moves a byte, advances a
+/// semaphore, or retires a payload. The failure mode is the fault plane's again — not an
+/// error the caller can read, but a **4000 ms timeout and a blown assertion** — so the gap has
+/// to be stated rather than left for a reader to infer from a census row that says `result
+/// 0x00000000`.
+pub const CE_COMPLETION_UNBOUGHT: &str = "CE COMPLETION is UNBUILT: serving 0x20802a07 and \
+     0x20802a02 is what makes queryCopyEngines set supported=NV_TRUE and UVM treat LCE2/LCE3 \
+     as usable async copy engines (ce_is_usable = supported && !grce, uvm_channel.c:2913-2923) \
+     — but this port DESCRIBES those engines and does not complete their work, so submitted CE \
+     work retires no payload and the guest gets a TIMEOUT plus a blown assertion \
+     (scrubberDestruct's 4000 ms wait, then ce_utils.c:349 lastCompletedPayload == \
+     lastSubmittedPayload), never an error it can read (execution_plane_increments.md)";
+
 /// ★★★ The measured PCE mask of each logical copy engine on a **GA106**, indexed by LCE
 /// instance.
 ///

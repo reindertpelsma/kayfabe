@@ -1647,6 +1647,59 @@ static void nvkvm_report_registers(NvkvmState *s)
                         "simply not have fit. Absence here is NOT evidence of absence.",
                         a.served_len, shown);
         }
+
+        /*
+         * ★★★ §14.42 — THE CE PLANE'S UNBOUGHT HALF, and the fourth sentence of its kind.
+         *
+         * The three fault-buffer sentences above hang off dedicated counters.  This one is
+         * keyed on the CENSUS instead, and the difference is deliberate rather than lazy:
+         * those controls needed their SIZES reported, so the audit had to carry fields;
+         * here the only question is "was it answered at all", which the census already
+         * records exactly.  ⊘ The cost of that choice is named below and is real.
+         *
+         * ⊘ Why the sentence exists: `control 0x20802a02 result 0x00000000` reads as
+         * "handled", and what it actually bought is a DESCRIPTION of four copy engines.
+         * `queryCopyEngines` sets ceCaps->supported = NV_TRUE only once BOTH 0x20802a07 and
+         * 0x20802a02 answer NV_OK (ogkm-580: nv_gpu_ops.c:8519-8537), and UVM's own
+         * ce_is_usable() is `supported && !grce` (kernel-open/nvidia-uvm/uvm_channel.c:
+         * 2913-2923) — so answering them is exactly what licenses RM and UVM to build
+         * channels on LCE2/LCE3 and push real copies down them.  This port does not
+         * complete that work, and the guest does NOT get an error when it isn't completed:
+         * it gets a 4000 ms timeout and a blown assertion.  [measured, boot ce1442 at
+         * 8ea44dc, the first boot that served these]  A reader who meets only the census row
+         * will look for an error and find none — the fault plane's failure shape exactly.
+         *
+         * ⚠ THE WEAKNESS, STATED: the census TRUNCATES at KAYFABE_SERVED_CONTROL_SLOTS, and
+         * this scan can only see the rows that fit.  A boot that served 0x20802a02 and
+         * overflowed the census would print the row-truncation warning above and NOT this
+         * sentence.  ⊘ So absence of this line is not evidence the controls were unserved —
+         * the same caveat that governs the rows themselves, inherited rather than escaped.
+         * Promote it to a counter the day that truncation is observed.
+         */
+        {
+            uint64_t i;
+            bool ce_described = false;
+
+            for (i = 0; i < shown; i++) {
+                if (a.served[i].cmd == 0x20802a02u && a.served[i].rpc_result == 0) {
+                    ce_described = true;
+                    break;
+                }
+            }
+            if (ce_described) {
+                info_report("nvkvm:   ⊘ CE COMPLETION is UNBUILT: serving 0x20802a07 and "
+                            "0x20802a02 is what makes queryCopyEngines set "
+                            "supported=NV_TRUE and UVM treat LCE2/LCE3 as usable async copy "
+                            "engines (ce_is_usable = supported && !grce, "
+                            "uvm_channel.c:2913-2923) — but this port DESCRIBES those "
+                            "engines and does not complete their work, so submitted CE work "
+                            "retires no payload and the guest gets a TIMEOUT plus a blown "
+                            "assertion (scrubberDestruct's 4000 ms wait, then "
+                            "ce_utils.c:349 lastCompletedPayload == lastSubmittedPayload), "
+                            "never an error it can read "
+                            "(execution_plane_increments.md)");
+            }
+        }
     }
 
     /*

@@ -1274,10 +1274,28 @@ fn the_c_shell_prints_the_same_unbuilt_half_the_abi_declares() {
         ],
     );
 
+    // ★★ The FOURTH sentence, §14.42's, and the only one of the four that is a MEASUREMENT
+    // rather than a prediction: boot `ce1442` served these controls and then timed out
+    // waiting for a CE completion, so the sentence names an observed failure shape. ⊘ Its
+    // gap is also the only one that is not a *buffer* — the other three are about writing
+    // into memory the guest allocated; this one is about retiring a payload.
+    assert_two_descriptions_agree(
+        &printed_sentence(&text, "info_report(\"nvkvm:   ⊘ CE COMPLETION is UNBUILT"),
+        kayfabe_abi::cepce::CE_COMPLETION_UNBOUGHT,
+        &[
+            "CE COMPLETION is UNBUILT",
+            "supported=NV_TRUE",
+            "ce_utils.c:349",
+            "TIMEOUT",
+            "execution_plane_increments.md",
+        ],
+    );
+
     let all = [
         kayfabe_abi::faultbuffer::DELIVERY_UNBUILT,
         kayfabe_abi::faultbuffer::SHADOW_DELIVERY_UNBUILT,
         kayfabe_abi::faultbuffer::ACCESS_COUNTER_DELIVERY_UNBUILT,
+        kayfabe_abi::cepce::CE_COMPLETION_UNBOUGHT,
     ];
     for (i, x) in all.iter().enumerate() {
         for y in all.iter().skip(i + 1) {

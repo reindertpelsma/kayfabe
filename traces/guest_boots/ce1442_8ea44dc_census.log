@@ -1,0 +1,98 @@
+2026-08-09T06:43:36.812913Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T06:43:36.813838Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T06:44:03.301004Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T06:44:03.303176Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-09T06:44:04.745110Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010001 at +0xbb0090 REFUSED [FwdFault::NoVas]
+2026-08-09T06:44:04.745314Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010001 at +0xbb0090 REFUSED [FwdFault::NoVas]
+2026-08-09T06:44:19.020259Z qemu-system-x86_64: info: nvkvm: commands: 420 decoded, 84 UNSERVICED (refused by name; the guest logs these quietly, which is why they are here), 38 distinct
+2026-08-09T06:44:19.020282Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+2026-08-09T06:44:19.020304Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+2026-08-09T06:44:19.020325Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+2026-08-09T06:44:19.020373Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+2026-08-09T06:44:19.020396Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+2026-08-09T06:44:19.020417Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+2026-08-09T06:44:19.020439Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+2026-08-09T06:44:19.020460Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+2026-08-09T06:44:19.020482Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+2026-08-09T06:44:19.020504Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+2026-08-09T06:44:19.020525Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+2026-08-09T06:44:19.020547Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+2026-08-09T06:44:19.020569Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+2026-08-09T06:44:19.020590Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+2026-08-09T06:44:19.020612Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+2026-08-09T06:44:19.020633Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080013f
+2026-08-09T06:44:19.020655Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x402c0101
+2026-08-09T06:44:19.020677Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x00800294
+2026-08-09T06:44:19.020698Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20810108
+2026-08-09T06:44:19.020720Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20810110
+2026-08-09T06:44:19.020741Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080014b
+2026-08-09T06:44:19.020763Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800157
+2026-08-09T06:44:19.020785Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20801357
+2026-08-09T06:44:19.020806Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080852e
+2026-08-09T06:44:19.020828Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20808513
+2026-08-09T06:44:19.020850Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802068
+2026-08-09T06:44:19.020871Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080a618
+2026-08-09T06:44:19.020893Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080a612
+2026-08-09T06:44:19.020925Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20809009
+2026-08-09T06:44:19.020947Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x208f1105
+2026-08-09T06:44:19.020969Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38
+2026-08-09T06:44:19.020990Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080012f
+2026-08-09T06:44:19.021012Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a12
+2026-08-09T06:44:19.021034Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800ab8
+2026-08-09T06:44:19.021055Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0xa06c010a
+2026-08-09T06:44:19.021077Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a9e
+2026-08-09T06:44:19.021098Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a9c
+2026-08-09T06:44:19.021120Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a1e
+2026-08-09T06:44:19.021142Z qemu-system-x86_64: info: nvkvm: bridge refusals: 18 total, 6 distinct (these ANSWER the command and so never reach the unserviced list)
+2026-08-09T06:44:19.021164Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist x2
+2026-08-09T06:44:19.021186Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::Refused x2
+2026-08-09T06:44:19.021228Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::ReservedClient x2
+2026-08-09T06:44:19.021250Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::UnmappedAllocClass x3
+2026-08-09T06:44:19.021272Z qemu-system-x86_64: info: nvkvm:   bridge refusal PromoteFault::UnknownContextObject x2
+2026-08-09T06:44:19.021294Z qemu-system-x86_64: info: nvkvm:   bridge refusal RmGraphError::FreeUnknown x7
+2026-08-09T06:44:19.021429Z qemu-system-x86_64: info: nvkvm: controls: 123 answered, 44 distinct cmd/result rows (result 0 = served; non-zero = served-but-REFUSED, which reaches no other list)
+2026-08-09T06:44:19.021467Z qemu-system-x86_64: info: nvkvm:   control 0x20800a36 result 0x00000000 x2
+2026-08-09T06:44:19.021491Z qemu-system-x86_64: info: nvkvm:   control 0x20800a41 result 0x00000000 x2
+2026-08-09T06:44:19.021513Z qemu-system-x86_64: info: nvkvm:   control 0x208001b0 result 0x00000000 x4
+2026-08-09T06:44:19.021535Z qemu-system-x86_64: info: nvkvm:   control 0x20800a40 result 0x00000000 x2
+2026-08-09T06:44:19.021557Z qemu-system-x86_64: info: nvkvm:   control 0x20801112 result 0x00000000 x2
+2026-08-09T06:44:19.021579Z qemu-system-x86_64: info: nvkvm:   control 0x20800a5c result 0x00000000 x2
+2026-08-09T06:44:19.021601Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1c result 0x00000000 x2
+2026-08-09T06:44:19.021622Z qemu-system-x86_64: info: nvkvm:   control 0x20801803 result 0x00000000 x2
+2026-08-09T06:44:19.021644Z qemu-system-x86_64: info: nvkvm:   control 0x20800af3 result 0x00000000 x4
+2026-08-09T06:44:19.021666Z qemu-system-x86_64: info: nvkvm:   control 0x20800aac result 0x00000000 x2
+2026-08-09T06:44:19.021688Z qemu-system-x86_64: info: nvkvm:   control 0x20800a61 result 0x00000000 x8
+2026-08-09T06:44:19.021710Z qemu-system-x86_64: info: nvkvm:   control 0x20802a08 result 0x00000000 x11
+2026-08-09T06:44:19.021732Z qemu-system-x86_64: info: nvkvm:   control 0x20800301 result 0x00000000 x6
+2026-08-09T06:44:19.021754Z qemu-system-x86_64: info: nvkvm:   control 0x20800a59 result 0x00000000 x2
+2026-08-09T06:44:19.021776Z qemu-system-x86_64: info: nvkvm:   control 0x20800a6c result 0x00000000 x8
+2026-08-09T06:44:19.021798Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9f result 0x00000000 x2
+2026-08-09T06:44:19.021820Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1f result 0x00000000 x2
+2026-08-09T06:44:19.021855Z qemu-system-x86_64: info: nvkvm:   control 0x20800a2a result 0x00000000 x2
+2026-08-09T06:44:19.021878Z qemu-system-x86_64: info: nvkvm:   control 0x20800a26 result 0x00000000 x2
+2026-08-09T06:44:19.021900Z qemu-system-x86_64: info: nvkvm:   control 0x20800a22 result 0x00000000 x2
+2026-08-09T06:44:19.021922Z qemu-system-x86_64: info: nvkvm:   control 0x20800a3d result 0x00000000 x2
+2026-08-09T06:44:19.021944Z qemu-system-x86_64: info: nvkvm:   control 0x20800a48 result 0x00000000 x2
+2026-08-09T06:44:19.021965Z qemu-system-x86_64: info: nvkvm:   control 0x20800a32 result 0x00000000 x2
+2026-08-09T06:44:19.021987Z qemu-system-x86_64: info: nvkvm:   control 0x90f10106 result 0x00000000 x10
+2026-08-09T06:44:19.022009Z qemu-system-x86_64: info: nvkvm:   control 0xa06f0103 result 0x00000000 x4
+2026-08-09T06:44:19.022031Z qemu-system-x86_64: info: nvkvm:   control 0xa06f0104 result 0x00000000 x2
+2026-08-09T06:44:19.022053Z qemu-system-x86_64: info: nvkvm:   control 0x2080012b result 0x00000000 x2
+2026-08-09T06:44:19.022075Z qemu-system-x86_64: info: nvkvm:   control 0x2080012b result 0x00000056 x2 REFUSED
+2026-08-09T06:44:19.022097Z qemu-system-x86_64: info: nvkvm:   control 0x20800a4c result 0x00000000 x5
+2026-08-09T06:44:19.022119Z qemu-system-x86_64: info: nvkvm:   control 0x20800102 result 0x00000000 x2
+2026-08-09T06:44:19.022141Z qemu-system-x86_64: info: nvkvm:   control 0x20801823 result 0x00000000 x1
+2026-08-09T06:44:19.022163Z qemu-system-x86_64: info: nvkvm:   control 0x2080182a result 0x00000000 x1
+2026-08-09T06:44:19.022184Z qemu-system-x86_64: info: nvkvm:   control 0x20801303 result 0x00000000 x2
+2026-08-09T06:44:19.022229Z qemu-system-x86_64: info: nvkvm:   control 0x20802a0b result 0x00000000 x1
+2026-08-09T06:44:19.022252Z qemu-system-x86_64: info: nvkvm:   control 0x20803801 result 0x00000000 x1
+2026-08-09T06:44:19.022274Z qemu-system-x86_64: info: nvkvm:   control 0x20803601 result 0x00000000 x1
+2026-08-09T06:44:19.022295Z qemu-system-x86_64: info: nvkvm:   control 0x20808159 result 0x00000000 x1
+2026-08-09T06:44:19.022317Z qemu-system-x86_64: info: nvkvm:   control 0x20808162 result 0x00000000 x1
+2026-08-09T06:44:19.022373Z qemu-system-x86_64: info: nvkvm:   control 0x2080182b result 0x00000000 x1
+2026-08-09T06:44:19.022403Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9b result 0x00000000 x1
+2026-08-09T06:44:19.022425Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9d result 0x00000000 x1
+2026-08-09T06:44:19.022447Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1d result 0x00000000 x1
+2026-08-09T06:44:19.022469Z qemu-system-x86_64: info: nvkvm:   control 0x20802a07 result 0x00000000 x4
+2026-08-09T06:44:19.022491Z qemu-system-x86_64: info: nvkvm:   control 0x20802a02 result 0x00000000 x4
+2026-08-09T06:44:19.022749Z qemu-system-x86_64: info: nvkvm: isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)
