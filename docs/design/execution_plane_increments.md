@@ -10725,3 +10725,156 @@ control and the teardown burst.*
 the port is byte-identical, so anything that moves is the instrument, not the port.
 ⊘ **And a green `cup2` would still not be a compute result**: it launches no kernel
 (`cuMemAlloc` + a 4-byte CE round-trip), so the first real compute rung remains `cup3`.
+
+## §16.55 ★★★★★ BOOTED `s44_b17381c_rmtrace` — **OUTCOME P**. THE REFUSAL HAS A NAME: `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`
+
+`[measured 2026-08-10, boot s44_b17381c_rmtrace]`. Binary stamped
+`kayfabe-rev:b17381c70416a371cfdded98c2b35dff60c6cb27` on **both** `qemu-build/qemu-system-x86_64`
+and the linked `qemu-10.2.4/hw/misc/nvkvm/libkayfabe_qemu_raw.a`. ★ The stamp is `b17381c` and
+that is **correct, not stale**: `git diff --stat b17381c 4706b9f` is four files, all docs and
+traces, **zero lines under `crates/` or `qemu/`**, so the binary IS HEAD behaviourally and this
+rung required **no rebuild at all**. Box repo synced to `f4fa6e3` before the boot, hook sha256
+verified identical on both sides. Evidence:
+`traces/guest_boots/run_s44_b17381c_rmtrace_{qemu,dmesg,probe}.log`, tracked, passing
+`assert_boot_evidence.sh`.
+
+### 16.55.1 ★★★★★ THE ANSWER — four refusals reach libcuda, and the LAST one is followed by teardown
+
+The complete ordered list of RM ioctls returning a non-zero status to libcuda, all 249 records
+of `cup2` in scope, from `run_s44_b17381c_rmtrace_probe.log`:
+
+```
+ 39: CTRL cmd=0x20810108 hClient=0xc1d0000c hObject=0x5c000004 size=992  status=0x00000056
+ 48: CTRL cmd=0x2080012f hClient=0xc1d0000c hObject=0x5c000003 size=1464 status=0x00000056
+ 90: CTRL cmd=0x2080200a hClient=0xc1d0000c hObject=0x5c000003 size=8    status=0x00000056  in=12000000ffffffff out=12000000ffffffff
+196: CTRL cmd=0xa06c0101 hClient=0xc1d0000c hObject=0x5c000012 size=3    status=0x00000056  in=010000 out=010000
+```
+
+⇒ **`0xa06c0101` = `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`, on `hObject=0x5c000012`, record 196 of 249.**
+**The very next record is a `FREE`, and every record after it is `FREE` or `ESC nr=0x4f` (unmap)
+— pure teardown.** §16.54.4's candidate, confirmed at the boundary.
+
+★ And `0x5c000012` is not any handle: the immediately preceding records show it is the **parent
+of every channel `cuCtxCreate` just built**:
+
+```
+ALLOC hClass=0x0000c56f hParent=0x5c000012 hObject=0x5c000037   ← AMPERE_CHANNEL_GPFIFO_A
+ALLOC hClass=0x0000c7c0 hParent=0x5c000037 hObject=0x5c000038   ← AMPERE_COMPUTE_B
+ALLOC hClass=0x0000c7b5 hParent=0x5c000037 hObject=0x5c000039   ← the copy object
+CTRL  cmd=0x906f0101 (GET_CLASS_ENGINEID)     status=0
+CTRL  cmd=0xc36f0108 (GET_WORK_SUBMIT_TOKEN)  status=0  out=0e000000
+CTRL  cmd=0x20801218                          status=0
+CTRL  cmd=0xa06c0101 hObject=0x5c000012 size=3 status=0x00000056   ← THE WALL
+FREE  …
+```
+
+`0x5c000012` is the **TSG** (`hClass=0x0000a06c`, `KEPLER_CHANNEL_GROUP_A`, allocated once).
+libcuda builds the whole context — TSG, eight channels, eight compute objects, eight copy
+objects, all `status=0` — and then asks RM to **schedule the group**. We answer
+`NV_ERR_NOT_SUPPORTED`, and it unwinds.
+
+★★ `in=010000` is `{bEnable=1, bSkipSubmit=0, bSkipEnable=0}` — **byte-for-byte the three-byte
+payload the C oracle sends to the real host driver** at `nvkvm_gpu_emul.c:8044`. `out=010000`,
+unchanged, because nothing serviced it.
+
+### 16.55.2 ★★★★ THE MECHANISM, END TO END, MEASURED AT BOTH ENDS
+
+Neither end alone names this. Together they close it:
+
+| plane | evidence | fact |
+|---|---|---|
+| guest userspace | `s44` trace record 196 | libcuda issues `0xa06c0101` and reads back `0x56` |
+| our device | `s43`/`s44` qemu log, `unserviced fn 76 cmd 0xa06c0101` | the kernel forwarded it as `GSP_RM_CONTROL` and **nothing in our chain answered** |
+| our source | `capability.rs:777` vs `policy.rs:1283-1296` | it is **allowlisted** (so no *bridge* refusal) but absent from `OBJECT_CONTROLS`, whose entire membership is `0xa06f0103`, `0xa06f0104`, `0x2080012b` |
+| the C oracle | `cap3` fn=76 histogram: `0xa06c0101 ×3` | the guest issues it on the **successful** path too — it is not an artefact of our failure |
+| the C oracle | `nvkvm_gpu_emul.c:3057` | the C answers unrecognised controls **`NV_OK` by default**, and separately schedules the *host* TSG itself (`:8044`, `:4052`, `:4191`, `:9131`, `:9577`) |
+
+★★★ **`admitted` and `served` are two different gates, and passing the first is what made this
+invisible.** An id on the alloc/control allowlist raises no bridge refusal, produces no
+`FaultTag`, and appears in no refusal census — it falls silently to the `UnservicedLedger` and
+is answered `NOT_SUPPORTED`. ⇒ **The allowlist is a statement about what we permit, never about
+what we implement**, and a census built on refusals cannot see the gap between them.
+
+### 16.55.3 ★★★★★ THREE FORGIVEN, ONE FATAL — `not_supported_is_the_forgiven_status`, MEASURED
+
+The other three `0x56`s are the control: `cuInit`, `cuDeviceGetCount`, `cuDeviceGetName`,
+`cuDeviceGetAttribute` ×2 and `cuDeviceTotalMem` **all succeed after them**.
+
+| cmd | resolved | verdict |
+|---|---|---|
+| `0x20810108` | `NV2081_BINAPI` | forgiven — the §14.26 "phantom" |
+| `0x2080012f` | `NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS` | forgiven — ★ and **`0x56` is the CORRECT answer**: the C returns it deliberately (`nvkvm_gpu_emul.c:3111`) because a GeForce GA106 has no ECC and real hardware returns `0x56` |
+| `0x2080200a` | `NV2080_CTRL_CMD_PERF_BOOST` | forgiven |
+| `0xa06c0101` | `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` | **FATAL** |
+
+⇒ four identical statuses, three absorbed and one terminal, in one 249-record stream. ★ The
+discriminator is not the status, not the caller and not the log level — it is **what the caller
+does next**. Only an ORDERED trace can show that, which is precisely what all three device
+censuses (set-union, tag-projection, order-free counting map) destroy.
+
+### 16.55.4 ⊘ REFUTED — the "ten refusals / zero failures" asymmetry does not exist
+
+The coordinator's reframe rested on `s43` showing **zero** `GspRmAlloc failed … hClass=` against
+our **ten** `NotOnAllowlist`. Measured, and it is refuted twice over:
+
+- `s43` and `s44` **each carry four** `GspRmAlloc failed … hClass=` lines, **naming their
+  classes**: `0x70` (`NV01_MEMORY_SYSTEM_DYNAMIC`), `0xc36f` (`VOLTA_CHANNEL_GPFIFO_A`, the RC
+  watchdog's channel), `0x402c` (`NV40_I2C`), `0x208f` (`NV20_SUBDEVICE_DIAG`). They are in
+  **`run_s4*_dmesg.log`** — a *different file* from the probe log that was enumerated.
+- `0x402c` is present in **every** boot `s38`→`s44` (dmesg + qemu log), not "gone since `s38`".
+  It looks absent only because the probe log holds `dmesg | tail -40`, a window that has since
+  moved past it.
+
+★★★★ **The enumeration was correct and it ran over the wrong population.** "I enumerated
+`status=0x…` across the whole probe log" is true, methodical, and answers a question about a
+different time window — `a_correct_capture_can_answer_the_wrong_question`, with `tail -40` as
+the reduction that did it. ⊘ Same shape as CLAUDE.md's serial-log trap: the file exists, is
+freshly timestamped, is named after the boot, and is **not where the datum lives**.
+
+⇒ And `s44` settles the underlying question directly, which no amount of dmesg could: **all 52
+of libcuda's allocations return `status=0`.** Every `NotOnAllowlist` refusal in this boot is
+kernel-RM's, none is on `cuCtxCreate`'s path, and the alloc-class family is retired as the wall.
+⊘ `0xc574` **is** `s38`-only, as claimed — that one holds.
+
+### 16.55.5 ⚠ MY OWN POSITIVE CONTROL WAS WRONG, and the instrument survived it
+
+`PROMOTE_CTX_SEEN=0`. I chose `0x2080012b` as the "a control we independently KNOW this boot
+issues" check — and it is **structurally invisible** to this instrument: `kgrobjPromoteContext`
+is called by kernel RM, so it never crosses the *userspace* ioctl boundary. The device census
+counts it (x11/x2) precisely because the device sees the kernel's RPC.
+
+★ The class: **a positive control must be drawn from the population the instrument can see, not
+from the population the question is about.** A control chosen from another plane fails on a
+working instrument and would have scored a good boot as outcome `T`. What actually proved the
+instrument live was the payload — 249 RM records, 316 UVM, `hClass=0xc7c0 ×8`, `0xc56f ×8`,
+`0xa06c ×1`: the entire context-build sequence, which nothing but a loaded interposer could
+produce. ⇒ replace it with `ALLOC hClass=0x0000a06c` next rung.
+
+### 16.55.6 `T` REFUTED — the interposer is observationally neutral
+
+Every guest-facing number **byte-identical to `s43`**: `commands: 589 decoded, 104 UNSERVICED`,
+`bridge refusals: 34 total, 6 distinct`, `controls: 143 answered, 46 distinct`,
+`doorbells: 170 arrived, 170 served, 0 REFUSED`, `0x2080012b` **x11** accepted / **x2** refused,
+`NotOnAllowlist x10`, `Refused x2`, `ReservedClient x2`, `UnmappedAllocClass x3`,
+`UnknownContextObject x2`, `FreeUnknown x15`, `isolates: 2/2/2`. `CUP2_RC=1`,
+`cuCtxCreate → 801`, `cuDeviceTotalMem → 11959 MiB`. **UVM plane: 28 `rmStatus` rows, ZERO
+non-zero** — outcome `S` is excluded, and the empty list is distinguishable from a missing one
+because the total is printed beside it.
+
+### 16.55.7 ⇒ WHAT THIS OPENS, and what it does NOT
+
+⊘ **Do not read this as "implement `0xa06c0101` and `cup2` goes green."** What is measured is
+that it is the *first* thing `cuCtxCreate` cannot get past, and `nothing after record 196 is
+anything but teardown` — so the port has **never executed** whatever libcuda does after a
+successful schedule. There may be further walls; this rung names the first.
+
+★ The C oracle also tells us what "servicing" it must mean, and it is not an ack:
+`nvkvm_gpu_emul.c:8038` — *"The guest's GPFIFO_SCHEDULE is a control (not forwarded by
+shadow_fwd), so the host TSG is idle until we schedule it."* The C **answers the guest `NV_OK`
+and separately issues `0xa06c0101` to the real host TSG**, having first issued `0xa06c0102`
+(`BIND`). ⇒ a bare `NV_OK` would move the wall without scheduling anything, and would be
+`a_flag_is_not_progress` in its purest form.
+
+⚠ And `0xa06c0102` (`NVA06C_CTRL_CMD_BIND`) exists as a constant in `submit.rs:486` but is **not
+an allowlist row** — the C issues BIND before SCHEDULE at `:4048` and `:9574`. Worth checking
+whether the guest issues it and what we do with it, before anything is built.

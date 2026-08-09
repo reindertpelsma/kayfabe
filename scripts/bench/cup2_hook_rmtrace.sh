@@ -144,6 +144,13 @@ $GSSH 'grep -n "rmStatus = 0x" /tmp/uvmtrace.txt 2>/dev/null | grep -v "rmStatus
 echo "--- and the UVM total, so an EMPTY list above is distinguishable from a MISSING one ---"
 $GSSH 'echo "uvm rmStatus rows total: $(grep -c "rmStatus = 0x" /tmp/uvmtrace.txt 2>/dev/null || echo 0)"'
 
+# ⊘ `s44` carried only the 80-record tail + the census into the repo; the full 249-record
+#   stream stayed in the guest's /tmp and died with the poweroff. The stream is ~250 lines —
+#   there was never a reason to cap it. Carry ALL of it, so the evidence in the tree is the
+#   measurement and not a window onto it.
+echo "=== rmtrace: ★ THE COMPLETE RM STREAM, every record, in order ==="
+$GSSH 'cat -n /tmp/nvtrace.txt' | cut -c1-300
+
 echo "=== rmtrace: the LAST 80 RM records (the tail is cuCtxCreate + teardown) ==="
 $GSSH 'tail -80 /tmp/nvtrace.txt 2>/dev/null | cut -c1-300'
 
