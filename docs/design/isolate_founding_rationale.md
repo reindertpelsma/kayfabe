@@ -135,8 +135,39 @@ the owner's reading and it is the one to lead with.
 ⚠ Also recorded from the C, and it refines the whole picture: in Mode 1 the UVM work was **split** —
 part isolate-created, but the **map sequence, using a second fd, ran in the VMM**, one of the very
 few operations the VMM performed directly, under an ioctl set **stricter** than the isolate's. ⇒ The
-boundary was never "everything in the isolate"; it was already a considered split, which is exactly
-what §1b's re-addressability result predicts.
+boundary was never "everything in the isolate"; it was already a considered split.
+
+### ★★★ ADDENDUM (2026-08-09) — the half §1c MISSED, and it explains that split
+
+⊘ §1c deflated the UVM `mm` argument and **stopped there**. A second, independent kernel constraint
+exists that §1c never considered, and unlike UVM's it is **not opt-out**:
+
+```c
+/* linux: virt/kvm/kvm_main.c:4414, kvm_vcpu_ioctl() */
+if (vcpu->kvm->mm != current->mm || vcpu->kvm->vm_dead)
+    return -EIO;
+```
+`[measured]` — read by me on 2026-08-09 in `research_clones/linux`. **KVM binds a VM to the `mm`
+that created it and refuses every vCPU ioctl from any other process.** No flag disables it.
+
+⇒ Combined with UVM's `va_space` binding at `UVM_INITIALIZE` (`uvm_va_space_mm.c:195`), this pins a
+**topology**, not a preference:
+- The process that runs the vCPUs **is** the VMM, by kernel decree.
+- Guest RAM lives in that process's `mm` (memslot `userspace_addr` are VMM HVAs).
+- ⇒ **UVM operations that must see guest memory have to run in the VMM**, not in an isolate — the
+  addresses they name exist only in the VMM's `mm`.
+
+★★ So the Mode-1 split above was **not** an inconsistency or a convenience. It is what these two
+kernel constraints force, and the C found it the expensive way.
+
+⇒ **What this does to the isolate argument, honestly:** it does **not** restore "UVM forces
+isolates" — if anything it moves UVM *out* of the isolate. What it establishes is that the boundary
+is **necessarily a SPLIT**: a small, strictly-audited set of operations on the VMM side, the rest in
+per-process isolates. ⊘ Any design that says "everything in the isolate" **or** "everything in the
+VMM" is wrong, and the kernel enforces the error from both directions.
+⚠ The 2026-08-09 C-mining survey reports that `#14` shows up on this very path in Mode 1 as
+`MAP_FIXED_NOREPLACE → EEXIST → cuCtxCreate 304`. ⊘ Recorded without a file:line and **not yet
+adjudicated** — treat as a lead, not a citation, until someone names where it was observed.
 
 ⚠ Stale comment found while citing this: `C: src/qemu/nvkvm_isolate.c:152-153` says
 *"/dev/nvidia-uvm is intentionally absent: UVM is opened by QEMU, never by the sandboxed stub"* —

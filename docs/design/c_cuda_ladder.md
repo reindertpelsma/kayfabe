@@ -74,16 +74,42 @@ where), never the absence of an intermittent hang.
   A frame-pointer / stack corruption, not a clean error return, immediately after a **successful**
   `RM_ALLOC` of the GR compute object (class `0xc7c0`, `AMPERE_COMPUTE_B`)
   (`[measured]` `C: docs/design/mode2_cuctxcreate_problem.md:22-28`, 2026-06-06).
-- **What it actually was.** The `0xc7c0` alloc **reply** zeroed `pAllocParms` bytes 8–15, which
-  held libcuda's saved `rbp`; the host preserves them. The mechanism: the reply set semantic
-  `paramsSize=0` but left the RPC element SHORT, so the guest GSP-client deserialize zero-padded
-  its local params buffer and the guest RM's class-size `copy_to_user` wrote those zeros over
-  libcuda's stack → `pop %rbp` = 0 → SIGSEGV (`[measured]` `C: docs/design/mode2_cuctxcreate_resume.md:265-281`,
+- **What it actually was.** `[measured]` The `0xc7c0` alloc **reply** zeroed `pAllocParms` bytes
+  8–15 where the host preserves them (`C: docs/design/mode2_cuctxcreate_resume.md:265-281`,
   2026-06-10, byte-diff of host vs guest `0xc7c0` reply on the `consolidation` branch).
-- **What fixed it.** Fix **M8.4**: keep the request params bytes in the response payload
-  (`memcpy(resp+112, cmd+112, req_psize)`) AND extend the element length so the copyout restores
-  libcuda's stack, while still reporting semantic `paramsSize=0`. cup2 then no longer segfaults in
-  `cuCtxCreate` (`[measured]` `C: docs/design/mode2_cuctxcreate_resume.md:277-281`, 2026-06-10).
+- ⊘ **CORRECTED 2026-08-09 — the MECHANISM this entry used to state was WRONG, and it pointed
+  porters at the wrong field.** The retracted text read: *"the reply set semantic `paramsSize=0` but
+  left the RPC element SHORT, so the guest zero-padded its local params buffer"*, tagged
+  `[measured]`. It was a **reconstruction**, and both halves are refuted against driver source:
+  - ⊘ **`paramsSize` is INERT on this path.** `ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11177`
+    takes the size from the **class** (`rmapiGetClassAllocParamSize`), and `:11237-11241` copies
+    `class_size` bytes from the reply payload **without ever reading `rpc_params->paramsSize`**
+    (identical `ogkm-610: :11043-11047`). `serverDeserializeAllocUp` returns `NV_OK` without
+    touching it on the non-serialized path.
+  - ⊘ **The element was never SHORT.** `rpc_length = 32 + payload` = 64, element header 48 ⇒ 112
+    bytes; with params echoed, 128. **Both are one element of 4096** — the element count does not
+    change. Receive copies whole elements (`ogkm-580: message_queue_cpu.c:648-650`) and
+    `rpc.length` is only a checksum extent (`:680-682`).
+  ⇒ ★ **The real invariant is simply: supply `class_size` valid bytes at the params offset.** The
+  crash came from handing over a **zero-filled** window, not from a length.
+  ⚠ The *"those bytes held libcuda's saved `rbp`"* story is `[inferred]`, not measured: the SIGSEGV
+  address and `rbp=0` are gdb observations, but that bytes 8–15 **are** the saved-rbp slot requires
+  libcuda's stack buffer to be <16 bytes, which nothing measures.
+- **What fixed it.** Fix **M8.4** shipped two changes together: `memcpy(resp+112, cmd+112, req_psize)`
+  **and** an element-length store. ★ Only the **memcpy** is load-bearing; the length store is inert
+  (tidy — it brings the params under the guest's checksum). `[measured]` cup2 then no longer
+  segfaults in `cuCtxCreate` (`C: docs/design/mode2_cuctxcreate_resume.md:277-281`, 2026-06-10) —
+  ⚠ but **post hoc**, and since both changes landed together it discriminates neither.
+- ⊘ **Do not trust this entry's provenance in the C.** `nvkvm_gpu_emul.c` carries **four mutually
+  exclusive `PROVEN` stories** for this one symptom, in two directly-negating pairs (`:3440-3446`
+  *"drop the params"* vs `:3012-3023` *"keep the params"*; M7 `:680-684` *"paramsSize→0 was moot"*
+  vs M8.1 `:3000-3010` *"paramsSize=0 PROVED cuCtxCreate succeeds"*). Driver source settles it
+  against M8.1. See `isolate_founding_rationale.md` §1c for the same failure in another subsystem
+  the same night.
+- ★ **Open rider, not fixed by M8.4**: echoing is a **restore, not a fill**.
+  `NV_GR_ALLOCATION_PARAMETERS.caps` (offset 12) is an **OUT** field, and `0xc56f` / `0x83de` /
+  `0x0079` are `RS_REQUIRED` with out-fields too. Echoing hands the guest **stale IN values where
+  hardware writes results** — it stops the crash; it does not make the alloc correct.
 - **★ The record self-corrects here.** An earlier diagnosis (`mode2_cuctxcreate_resume.md` §0.2)
   pinned the crash to a GR page-table poll; §0.5 (2026-06-10) then overturns that as **post-crash
   teardown**, not a live poll — the FREE-storm after the `0xc7c0` echo is the guest tearing down
