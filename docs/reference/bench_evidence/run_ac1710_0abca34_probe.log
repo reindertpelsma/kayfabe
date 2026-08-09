@@ -1,0 +1,84 @@
+GCC_CUP2_RC=0
+GCC_SHIM_RC=0
+=== clear the ring buffer, then run cup2 UNDER the UVM interposer ===
+CLEARED
+FAIL cuInit(0) -> initialization error (3)
+CUP2_RC=1
+=== ★★★ THE UVM PLANE (this is the measurement) ===
+UVM ioctl fd=11 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffeabb15310
+    IN 
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffeabb15310
+  -> rc=0 errno=0
+UVM ioctl fd=11 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffeabb15310
+    IN 
+      +00: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 01 00 00 00 00 00 00 00
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=11 cmd=0x00000025 nr=37 (UVM_REGISTER_GPU) arg=0x7ffeabb14e90
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 56 00 00 00
+  ★ UVM_REGISTER_GPU rmStatus = 0x00000056 <-- THE FAILURE, invisible to a return-code check
+UVM ioctl fd=11 cmd=0x30000002 nr=2 (UVM_DEINITIALIZE) arg=(nil)
+  -> rc=0 errno=0
+UVM_LINES=29
+=== the rmStatus lines alone ===
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+  ★ UVM_REGISTER_GPU rmStatus = 0x00000056 <-- THE FAILURE, invisible to a return-code check
+=== dmesg produced BY cup2 ALONE ===
+[   34.807561] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   34.807861] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   35.820567] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   35.879023] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   35.879356] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   35.879444] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   40.922841] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000c; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   41.212084] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000c; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   41.269064] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   41.295081] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   41.295452] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0000c; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   41.313884] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   41.313888] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   41.313889] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   41.313891] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   41.315717] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0000c; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   41.315721] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   41.324210] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000d; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   41.761485] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS, &physicalCaps, sizeof(physicalCaps)) @ kernel_ce.c:550
+[   41.761555] NVRM: queryCopyEngines: queryCopyEngines:8511: Call not supported [NV_ERR_NOT_SUPPORTED]
+[   41.769067] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   41.770113] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   41.771154] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[   45.782264] NVRM: _threadNodeCheckTimeout: _threadNodeCheckTimeout: currentTime: f420473935e40 >= f420473935e40
+[   45.782272] NVRM: _threadNodeCheckTimeout: _threadNodeCheckTimeout: Timeout was set to: 4000 msecs!
+[   45.782283] NVRM: scrubberDestruct:  Timed out when waiting for the scrub to complete the pending work .
+[   49.783611] NVRM: nvAssertFailedNoLog: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+[   49.905034] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0000d; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[   49.905039] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[   49.905112] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[   49.905171] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[   49.906570] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   50.771642] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+=== anything UVM printed for itself (UVM_ERR_PRINT lands here) ===
+[   41.771154] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+=== ★★ is the CE wall ARMED or DORMANT? (one line decides it) ===
+NEITHER LINE PRESENT — the CeUtils decision was not printed at this loglevel
+=== nvidia-uvm module state ===
+nvidia_uvm           2166784  0
+nvidia              14417920  2 nvidia_uvm,nvidia_modeset
+crw-rw-rw- 1 root root 237, 0 Aug  9 06:01 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237, 1 Aug  9 06:01 /dev/nvidia-uvm-tools

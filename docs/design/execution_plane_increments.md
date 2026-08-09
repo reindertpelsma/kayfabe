@@ -6816,3 +6816,67 @@ extrapolated from one.
   that is an instrument gap, not a result.
 - `scrubberDestruct` / `ce_utils.c:349` fire ~4 s and ~8 s after the last real error, on the
   unwind path, at the same relative position as in every previous boot. ⊘ Teardown, not cause.
+
+---
+
+## §14.41 rungs 3+4 — BOOTED `ac1710`: the fault plane is BEHIND us
+
+`[measured 2026-08-09, boot `ac1710` at `0abca34`]`, one device-opening consumer, probe set
+EMPTY, evidence under `docs/reference/bench_evidence/run_ac1710_0abca34_*.log`.
+
+```
+  sh1605 @ 075395f :  uvmInitializeAccessCntrBuffer(...) @ access_cntr_buffer.c:72
+                      UVM_REGISTER_GPU rmStatus = 0x0000001f   NV_ERR_INVALID_ARGUMENT
+  ac1710 @ 0abca34 :  ⊘ that line is GONE. The access counter buffer constructs.
+                      NVRM: ... NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS @ kernel_ce.c:550
+                      NVRM: queryCopyEngines: queryCopyEngines:8511: Call not supported
+                      UVM_REGISTER_GPU rmStatus = 0x00000056
+                      unserviced fn 76 cmd 0x20802a07   ← THE NEXT RUNG
+```
+
+`cup2` still returns 1. ⊘ Stated first.
+
+### ★★★ The `[predicted]` rung, now MEASURED — `[measured 2026-08-09, boot `ac1710` at `0abca34`]`
+
+```
+nvkvm: access counter buffer: 1 registration(s) SERVED NV_OK; first 0x2000 B = 2 pages, 0 malformed
+```
+
+`0x2000` = 8192 = **256 advertised entries × 32 bytes**, and 2 pages is `2 *
+ACCESS_COUNTER_ENTRIES_PER_PAGE`'s own arithmetic coming back to us through the guest. ⇒ Two
+things established at once `[measured 2026-08-09, boot `ac1710` at `0abca34`]`: `0x20800a1d` really is sent (it was served in the same commit on a
+prediction, and the prediction held), and the guest sized its buffer from **exactly** the
+fiction we advertised at BAR0 `0xB83110`. ★ That closes the loop on the fiction: it is not
+merely accepted, it is *propagated* — which is the strongest possible reason for the
+`[ADVERTISED FICTION]` label to be on the register row where a dump will meet it.
+
+### ★★★ The UNREGISTER ruling now holds on THREE pairs
+
+```
+NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: ... failed (status=0x00000056), proceeding...
+NVRM: kgmmuFaultBufferReplayableDestroy_IMPL:      ... failed (status=0x00000056), proceeding...
+NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+```
+
+`0x20800a9c`, `0x20800a9e` and now `0x20800a1e` — all three refused, all three
+logged-and-proceeded. ⇒ *"Do not model half of a register/unregister pair"* now holds on three
+independent pairs `[measured 2026-08-09, boots `fb1503`, `sh1605` and `ac1710`]`, and the cost
+is still zero.
+
+### Where `cuInit` is now
+
+The wall has left the **fault plane entirely**. Four rungs ago it was
+`faultbufConstruct_IMPL`; it is now `queryCopyEngines` — copy-engine capability discovery
+inside the same `UVM_REGISTER_GPU`. The next rung is `0x20802a07`
+`NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS`, the per-instance sibling of `0x20802a0b`
+`CE_GET_ALL_PHYSICAL_CAPS` which this port **already serves** — so the answer is likely to
+be a projection of a table already in the tree rather than a new fact.
+⚠ Verify that rather than assume it: `ce_get_all_physical_caps.rs` derives its bytes from two
+independent real-GA106 captures, and a sibling control that *looks* like a slice of the same
+table is exactly the shape that invites an unchecked reuse.
+
+### The three markers, all printing
+
+All three unbuilt-half sentences appear in this boot's own report, each naming its own gap. ⊘
+None of them has become true; they are louder now precisely because more of the plane is
+served around them.
