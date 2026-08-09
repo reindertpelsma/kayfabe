@@ -9855,3 +9855,88 @@ scored backwards here.
 attribution of the emitting call site is **wrong**, and §16.45's open disagreement (a failed
 retainer alloc should make that function unreachable, yet its promotion is what we see)
 resolves against it.
+
+## §16.47 ★★★★★ BOOTED `s40_4733730_acceptcensus` — **OUTCOME P**, and `bound=0` EXPOSES A TWO-PHASE PROMOTE
+
+`[measured 2026-08-09, rev `4733730`, binary stamped `kayfabe-rev:4733730ea688…` on **both**
+artifacts, verified before the boot]`. Evidence:
+`traces/guest_boots/run_s40_4733730_acceptcensus_{qemu,dmesg,probe}.log`.
+
+### 16.47.1 THE INSTRUMENT WORKS, AND IT IS OBSERVATIONALLY NEUTRAL
+
+The row `s39` could not produce:
+
+```
+promote-ctx ACCEPTED (last, with the census AT it): bound=0 already=0
+  declined.promote_only=10 declined.initialize_only=0 entries=0
+  client=0xc1d0000a chan_client=0xc1d0000c object=0x5c000037 proc=ProcId(2)
+  census[14 chans, 4 outcomes] {…}
+```
+
+★ `census[14 chans, 4 outcomes]` — **back**, from `s39`'s `census[2 chans]`, without the bug it
+used to ride on. And **every** guest-facing number is byte-identical to `s39`: `0x2080012b`
+accepted **x11** / refused **x2**, `NotOnAllowlist` **x10**, `FreeUnknown` **x15**,
+`UnmappedAllocClass` x3, `Refused` x2, `ReservedClient` x2, doorbells **170**, `CUP2_RC=1`, no
+`ForeignContextObject`. ⇒ **P**: the instrument fires and changes nothing.
+
+### 16.47.2 ★★★★★ `client` AND `chan_client` ARE NOW MEASURED FIELDS, NOT AN INFERENCE
+
+`client=0xc1d0000a chan_client=0xc1d0000c` — printed, from the wire. §16.43.2 asserted exactly
+this pair and had to derive it from a census exemplar plus the previous boot's differently-shaped
+fault; §16.44.2 built the whole membership argument on it. ⊘ The inference was **correct**, and
+it is now not an inference. That is the difference the `chan_client` field was added for.
+
+### 16.47.3 ★★★★★ SUB-PREDICTION (a) **CONFIRMED** — and it is much worse news than it looks
+
+§16.44.6(a) predicted the promotion binds **zero** ranges. `bound=0`, `entries=0`,
+`declined.promote_only=10`. ⇒ confirmed, and the entry *shape* independently re-confirms the
+emitter: ten entries each declaring a VA and no `gpuPhysAddr`/`size` is precisely what
+`nvGpuOpsBindChannelResources` writes — `bufferId` and `gpuVirtAddr` only
+(`ogkm-580: nv_gpu_ops.c:10886-10888`). ⊘ **§16.45's open disagreement is resolved in favour of
+that attribution**, by the parameter shape rather than by the handles.
+
+★★★★★ **But `bound=0` on ELEVEN acceptances means the promote plane is currently a NO-OP for the
+address table.** Eleven promotions were answered `NV_OK`, and the number of VA→backing bindings
+they produced is **zero**. `a_wall_that_can_carry_no_name`, inverted: we are answering `NV_OK` and
+performing nothing, which is the C's behaviour that this port's crate docs name as the
+anti-pattern.
+
+The cause is structural and RM states it in a comment, in the file we already read
+(`ogkm-580: src/nvidia/src/kernel/gpu/falcon/kernel_falcon.c:266`):
+
+> `// Promote physical address only. VA will be promoted later as part of nvgpuBindChannelResources`
+
+⇒ **For an externally-owned (UVM) VA space, RM promotes in TWO PHASES**: phase 1 carries
+`gpuPhysAddr`/`size` with `bNonmapped = NV_TRUE` and **no VA** (our `initialize_only`); phase 2
+carries the VA and **no physical** (our `promote_only`). `PromotedRange` requires *both in one
+entry* — `promote.rs`'s "only the both-preparers-ran state reaches here" — so under this shape
+**neither phase can ever produce a bindable range**, and the join never happens.
+
+⊘ This is not a bug in the refusal: binding `va → phys 0` really would be manufacturing an
+address. It is a **missing join**. And the field to join on is already there and already
+documented as the thing the C threw away — `PromotedRange::buffer_id`
+(`NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_*`), whose rustdoc says *"Carried rather than dropped.
+The C artifact never stored it, so its table could not tell one context buffer from another."*
+★ It was carried for this, one rung before anyone knew.
+
+### 16.47.4 ⊘ A LIMIT OF `latch_last`, NAMED IMMEDIATELY
+
+Last-wins shows the **final** accepted promotion and nothing about the other ten. The phase-1
+(`initialize_only`) promotions are therefore **invisible** in this row — `declined.initialize_only=0`
+describes the last promotion only, and must not be read as "no promotion ever declared a physical
+buffer". ⚠ That reading would refute §16.47.3's two-phase account using evidence that cannot
+address it. The next rung needs a **per-`buffer_id` tally across all promotions**, not a
+prettier single row.
+
+### 16.47.5 ⇒ THE NEXT RUNG, RE-ORDERED BY THIS MEASUREMENT
+
+★ §16.45.7's item 1 (admit `0xc574`) is **demoted**. It is a real refusal on a real path, but
+`bound=0` says the address plane would still bind nothing even if every retain succeeded.
+
+1. **★★★★★ Join the two promote phases on `(chan_client, object, buffer_id)`** — phase 1 supplies
+   `phys`/`size`/`aperture`, phase 2 supplies `va`; a `PromotedRange` is complete when both have
+   arrived, and is refused only when a `buffer_id` is still half-declared at use. This is the
+   whole of why eleven `NV_OK`s bind nothing.
+2. Instrument it first (§16.47.4): a per-`buffer_id` accumulation census, so the join can be
+   scored rather than asserted.
+3. Then `0xc574`, with the retention edge (§16.45.7 item 1 unchanged in content, only in order).
