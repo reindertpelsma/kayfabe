@@ -85,6 +85,7 @@
 //! means *"the isolate's fabricated aperture does not reach this address"* and must never
 //! be spelled as zeros. See [`FbStore`] for why those two cannot be one type today.
 
+use kayfabe_arch::FbWindow;
 use std::collections::HashMap;
 
 /// ★★ **The BAR0 moving window register, decoded** — `NV_PBUS_BAR0_WINDOW`.
@@ -276,6 +277,34 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// precondition is *"there is a store to ask"*.
     fn residency(&self) -> Option<FbResidency>;
 
+    /// ★★★★ **Write, NAMING THE WRITER** — §16.15's instrument.
+    ///
+    /// Identical to [`FbStore::write`] in every observable effect on the bytes; the only
+    /// difference is that the store records `by` as the page's **first** writer if the page
+    /// is created by this call. See [`FbWriter`].
+    ///
+    /// ⊘ The default implementation ignores `by` and delegates, so a store that does not
+    /// track origins is not forced to lie about them.
+    ///
+    /// # Errors
+    /// As [`FbStore::write`].
+    fn write_tagged(&mut self, phys: u64, bytes: &[u8], by: FbWriter) -> Result<(), FbRefused> {
+        let _ = by;
+        self.write(phys, bytes)
+    }
+
+    /// Who wrote the page containing `phys` FIRST, and when in sequence — [`None`] when
+    /// this store cannot say, **or when no page is resident there**.
+    ///
+    /// ⊘ The two [`None`]s are distinguished by [`FbStore::is_resident`], deliberately: a
+    /// caller that needs to tell *"no store"* from *"never written"* already has the method
+    /// that answers it, and folding a third state in here would make the common case carry
+    /// the rare one.
+    fn page_origin(&self, phys: u64) -> Option<FbPageOrigin> {
+        let _ = phys;
+        None
+    }
+
     /// Whether this store holds a page for `phys` — [`None`] when it cannot say.
     ///
     /// ⊘ Deliberately **not** derivable from [`FbStore::read`]: a read of an unwritten
@@ -314,6 +343,91 @@ pub struct FbResidency {
     pub lo: Option<u64>,
     /// The highest resident framebuffer address, or [`None`] when nothing is resident.
     pub hi: Option<u64>,
+    /// ★★★★ **How many resident pages each writer was FIRST to touch.**
+    ///
+    /// Indexed by [`FbWriter::index`]. See [`FbWriter`] for why first-writer and not
+    /// last-writer, and why [`FbWriter::Unattributed`] is a real answer.
+    pub by_writer: [u64; FB_WRITER_KINDS],
+}
+
+/// How many distinct [`FbWriter`] kinds there are.
+pub const FB_WRITER_KINDS: usize = 5;
+
+/// ★★★★ **WHO wrote a framebuffer page first** — `execution_plane_increments.md` §16.15.
+///
+/// # ⊘ Why this exists, and it is the only discriminator left
+///
+/// `[measured 2026-08-09, boot `res1_fc21926`]` the page the guest's own page tables name
+/// for its GPFIFO ring is **not resident** — nothing ever aimed a write at it — while
+/// **624 206** writes landed in **90** distinct pages spread across the whole 11.7 GiB
+/// aperture. The guest demonstrably wrote its ring; some page took those bytes. Residency
+/// says *which pages exist*; only this says **which window put them there**.
+///
+/// ★ **FIRST writer, not last.** A page rewritten 6 900 times by a later path would
+/// otherwise report that path and erase the one fact worth having — who *created* it. The
+/// creation event is what attributes a page to a write path; every subsequent write is
+/// evidence about traffic, not about origin.
+///
+/// ⊘ [`FbWriter::Unattributed`] is **an answer, not a default.** A caller that writes
+/// through [`FbStore::write`] genuinely does not say which window it is, and recording a
+/// window it did not name would be inventing attribution — the same error class as decoding
+/// an empty capture to zeros. It is spelled out so a census that is mostly `Unattributed`
+/// reads as *"we did not instrument that path"* rather than as a finding about the guest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbWriter {
+    /// One of the register-aperture windows, named.
+    Window(FbWindow),
+    /// The shell's own CPU copy executor (`kayfabe_rt::cpu_ce`).
+    Executor,
+    /// A write whose origin the caller did not state. ⊘ Not "unknown window" — *"nobody
+    /// said"*.
+    Unattributed,
+}
+
+impl FbWriter {
+    /// A stable index into [`FbResidency::by_writer`].
+    #[must_use]
+    pub fn index(self) -> usize {
+        match self {
+            FbWriter::Window(FbWindow::Pramin) => 0,
+            FbWriter::Window(FbWindow::FbAperture) => 1,
+            FbWriter::Window(FbWindow::InstanceWindow) => 2,
+            FbWriter::Executor => 3,
+            FbWriter::Unattributed => 4,
+        }
+    }
+
+    /// One short word for a diagnostic.
+    #[must_use]
+    pub fn tag(self) -> &'static str {
+        match self {
+            FbWriter::Window(FbWindow::Pramin) => "PRAMIN",
+            FbWriter::Window(FbWindow::FbAperture) => "BAR1",
+            FbWriter::Window(FbWindow::InstanceWindow) => "BAR2",
+            FbWriter::Executor => "EXEC",
+            FbWriter::Unattributed => "UNATTRIBUTED",
+        }
+    }
+
+    /// The name for each [`FbWriter::index`], in index order — for a report that prints the
+    /// whole census.
+    #[must_use]
+    pub fn tags() -> [&'static str; FB_WRITER_KINDS] {
+        ["PRAMIN", "BAR1", "BAR2", "EXEC", "UNATTRIBUTED"]
+    }
+}
+
+/// What a store knows about one page's creation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbPageOrigin {
+    /// Who wrote it first.
+    pub by: FbWriter,
+    /// A monotonic sequence number, so two pages can be ORDERED against each other.
+    ///
+    /// ⊘ Ordering only — it is not a timestamp and not a write count. It exists because
+    /// §16.13's refutation of *"written and then erased"* holds only **up to ordering**, and
+    /// neither the byte census nor the residency bit can close that.
+    pub seq: u64,
 }
 
 /// An [`FbStore`] that refuses every access, by name. The construction default.
@@ -431,6 +545,13 @@ pub struct SparseFb {
     cap: u64,
     /// Page frame → 4 KiB of bytes.
     pages: HashMap<u64, Box<[u8; FB_PAGE as usize]>>,
+    /// ★★★★ Page frame → who created it and in what order. Parallel to
+    /// [`SparseFb::pages`] and cleared with it; see [`FbWriter`].
+    origin: HashMap<u64, FbPageOrigin>,
+    /// The monotonic sequence stamped on the next page CREATION. ⊘ Bumped only when a page
+    /// is created, not on every write: it orders origins, and a per-write counter would
+    /// order traffic instead — a different and much noisier fact.
+    seq: u64,
 }
 
 impl SparseFb {
@@ -447,6 +568,8 @@ impl SparseFb {
             limit,
             cap,
             pages: HashMap::new(),
+            origin: HashMap::new(),
+            seq: 0,
         }
     }
 
@@ -524,6 +647,12 @@ impl FbStore for SparseFb {
     }
 
     fn write(&mut self, phys: u64, bytes: &[u8]) -> Result<(), FbRefused> {
+        // ⊘ An untagged write records `Unattributed` — NOT a guessed window. See
+        // [`FbWriter::Unattributed`].
+        self.write_tagged(phys, bytes, FbWriter::Unattributed)
+    }
+
+    fn write_tagged(&mut self, phys: u64, bytes: &[u8], by: FbWriter) -> Result<(), FbRefused> {
         if !self.covers(phys, bytes.len()) {
             return Err(FbRefused {
                 phys,
@@ -546,6 +675,15 @@ impl FbStore for SparseFb {
         }
         let mut done = 0usize;
         for (frame, off, take) in SparseFb::runs(phys, bytes.len()) {
+            // ★★★★ FIRST writer, recorded once. `or_insert_with` on the origin map is what
+            // makes it first-and-not-last: a page rewritten 6 900 times by a later path
+            // keeps the attribution of whoever CREATED it, which is the fact that names a
+            // write path. The sequence bumps only here, so it orders CREATIONS.
+            if !self.pages.contains_key(&frame) {
+                self.seq += 1;
+                self.origin
+                    .insert(frame, FbPageOrigin { by, seq: self.seq });
+            }
             let page = self
                 .pages
                 .entry(frame)
@@ -561,11 +699,20 @@ impl FbStore for SparseFb {
     }
 
     fn residency(&self) -> Option<FbResidency> {
+        let mut by_writer = [0u64; FB_WRITER_KINDS];
+        for o in self.origin.values() {
+            by_writer[o.by.index()] += 1;
+        }
         Some(FbResidency {
             pages: self.pages.len() as u64,
             lo: self.pages.keys().min().map(|f| f * FB_PAGE),
             hi: self.pages.keys().max().map(|f| f * FB_PAGE),
+            by_writer,
         })
+    }
+
+    fn page_origin(&self, phys: u64) -> Option<FbPageOrigin> {
+        self.origin.get(&(phys / FB_PAGE)).copied()
     }
 
     /// ⊘ Asked about the **page**, and answered `Some(false)` for an address inside the
@@ -582,6 +729,13 @@ impl FbStore for SparseFb {
         // the guest that caused it — but not any of its BYTES. The leak this guards is a
         // content leak; a retained bucket array carries no guest data.
         self.pages.clear();
+        // ★★★ The origins go with the bytes, and the sequence RESTARTS. A page's creation
+        // record that outlived the guest that created it would attribute one device life's
+        // write path to the next one's page — the same cross-life confusion the byte clear
+        // exists to prevent, one field over. `#130` quantifies over ALL of the device's
+        // state, and this is device state.
+        self.origin.clear();
+        self.seq = 0;
     }
 }
 
