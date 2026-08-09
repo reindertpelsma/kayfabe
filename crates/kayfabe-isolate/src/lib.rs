@@ -30,13 +30,24 @@
 //! in one host `mm`. ⊘ The GPU-VAS argument does *not* carry this on its own: one RM
 //! client may own many `VASpace` objects.
 //!
-//! ★★ **And UVM is where sharing was tried and REFUSED.** The C passed
-//! `/dev/nvidia-uvm` into the sandbox by `SCM_RIGHTS`, and `UVM_MM_INITIALIZE`
-//! answered `NV_ERR_INVALID_ARGUMENT` *because the file had been opened by a
-//! different `mm` than the caller* (`C: src/stub/nvkvm_stub.c:246-253`). The remedy
-//! was for the stub to open the device **itself** and drop the passed fd. ⇒ The one
-//! object that cannot be shared is the one VA identity rests on, and the driver
-//! enforces it by error code.
+//! ⊘ **CORRECTED — do not repeat the strong version of this.** An earlier revision
+//! said UVM's `mm` binding is enforced by the driver *by error code*, citing the C's
+//! `SCM_RIGHTS` rejection. The rejection was real, but `uvm_api_mm_initialize`
+//! contains **no `current->mm` comparison** in 580, 610 or 575
+//! (`ogkm-580: kernel-open/nvidia-uvm/uvm.c:59-137`) — the C's stated mechanism is a
+//! reconstruction. The `mm` is captured at `UVM_INITIALIZE`
+//! (`uvm_va_space_mm.c:195`) and is **skipped entirely** under
+//! `UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` (`uvm_va_space_mm.c:172-179`) — which
+//! gVisor's `nvproxy` forcibly sets on every app precisely to share one host UVM fd
+//! (`gvisor/pkg/sentry/devices/nvproxy/uvm.go:188-200`).
+//!
+//! ⇒ What survives is an **allocator** argument, not a kernel-refusal one: UVM VA
+//! ranges are identity-mapped and `MAP_EXTERNAL_ALLOCATION` carries raw VAs, so one
+//! shared `va_space` means one flat host VA allocator in which two guest processes at
+//! the same VA collide — `#14` again. ★ The strongest argument is therefore the RM
+//! **namespace** one below (a new host process with a new `hClient` is separation RM
+//! performs, not separation we assert). Full treatment, including what was
+//! overstated: `docs/design/isolate_founding_rationale.md` §1c.
 //!
 //! ⇒ **Coarsening this granularity — one isolate shared by two guest processes —
 //! reintroduces `#14` no matter what it does for security.** Blast-radius containment

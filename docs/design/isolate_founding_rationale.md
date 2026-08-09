@@ -64,24 +64,83 @@ half of it does not force an isolate.** Two corrections, both to my own text abo
 **An address passed as an ARGUMENT is re-addressable. An address the driver takes IMPLICITLY from
 the calling process is not — and `mm` is not a parameter.**
 
-- ★★★ **UVM is the clean case, and the C already hit it head-on.** Managed memory's contract *is*
-  CPU VA == GPU VA, and a UVM `va_space` binds to the **caller's `mm`** — there is no handle to
-  re-address and nothing to pass.
+- **UVM: unconditional, but ⊘ NOT the knock-down argument this document first claimed.**
+  See §1c, which corrects it. In short: every CUDA process initialises UVM whether or not it ever
+  touches managed memory, but the `mm` binding is **opt-out**, and a production system ships the
+  opt-out.
 
-  **And this is exactly where sharing was tried and REFUSED.** The C records that
-  `UVM_MM_INITIALIZE` returns `NV_ERR_INVALID_ARGUMENT` *"when the file passed via `uvm_fd` was
-  opened by a different `mm` than the caller"* — QEMU opened `/dev/nvidia-uvm` and passed it by
-  `SCM_RIGHTS`, and the driver rejected the isolate's call because the file's owning `mm` was
-  QEMU's (`C: src/stub/nvkvm_stub.c:246-253`). The remedy was not a wrapper or a check: the stub
-  **opens the device itself, twice, before seccomp, and DROPS the passed fd**.
+## 1c. ⊘ CORRECTION (2026-08-09, same night) — I OVERSTATED THE UVM RECEIPT
 
-  ⇒ ★★ **The one object that cannot be shared is the one the whole VA-identity argument rests on**,
-  and the driver enforces it *by error code*, not by convention. Mode 2 forwards guest managed VAs
-  straight to host `cudaMallocManaged` (`mode2_uvm_residency.md`), so this sits on our path.
+An earlier revision of this file (commit `7f81f5c`) claimed the driver enforces `mm` identity **by
+error code**, citing the C. ★ That claim is **too strong**, and the correction matters more than the
+original because a decision was about to be built on it.
 
-  ⚠ Stale comment found while citing this: `C: src/qemu/nvkvm_isolate.c:152-153` still says
-  *"/dev/nvidia-uvm is intentionally absent: UVM is opened by QEMU, never by the sandboxed stub"* —
-  which the stub's own workaround contradicts. Believe the stub. Do not port the comment.
+**What holds** `[measured]`, and it is worth having:
+- **UVM init is UNCONDITIONAL.** A program that only calls `cuInit`/`cuDeviceGetCount` and never
+  allocates managed memory still opens `/dev/nvidia-uvm` **twice** and runs `UVM_INITIALIZE`,
+  `UVM_MM_INITIALIZE`, `UVM_PAGEABLE_MEM_ACCESS`, `UVM_REGISTER_GPU`,
+  `UVM_PAGEABLE_MEM_ACCESS_ON_GPU`, `UVM_CREATE_RANGE_GROUP` — all inside `cuInit`, before
+  `cuDeviceGetCount` returns (`C: docs/research/captures/ga106_cuinit_shim.log:14-18, :93-95`, real
+  GA106; independently on 575.51.03 + CUDA 12.9 at `C: docs/CUINIT_BLOCKER.md:193-205`).
+- And it is **causal**, not incidental: *"cuInit gates `cuDeviceGetCount > 0` on `UVM_REGISTER_GPU`
+  succeeding"* (`C: docs/CUINIT_BLOCKER.md:202-204`), with the run table at `:318-325` showing
+  `cuInit FAILED: 100` when UVM init was broken. ⇒ There is no "case 1" of CUDA-without-UVM to
+  design for.
+
+**What does NOT hold** — three findings, each `[src]` against the drivers on disk:
+1. ⊘ **`uvm_api_mm_initialize` contains no `current->mm` comparison at all.** Its only
+   `NV_ERR_INVALID_ARGUMENT` paths are "not a UVM file" and "fd is not `UVM_FD_VA_SPACE`"
+   (`ogkm-580: kernel-open/nvidia-uvm/uvm.c:59-137`; byte-identical in `ogkm-610`; the 575.51.03
+   source quoted at `C: docs/CUINIT_BLOCKER.md:210-217` shows the same three checks). ⇒ The C's
+   comment at `C: src/stub/nvkvm_stub.c:242-253` is a **reconstruction**: the `SCM_RIGHTS` rejection
+   was real, but the attributed mechanism is unsupported — most likely the fd failed the
+   `UVM_FD_VA_SPACE` test, not an `mm` test. ★ **An observed error plus a plausible mechanism is not
+   a measured mechanism**, and this one survived into three documents including mine.
+2. The `mm` **is** captured — but at `UVM_INITIALIZE`, not `MM_INITIALIZE`: `uvm.c:953`
+   `uvm_va_space_create()` → `uvm_va_space.c:264` `uvm_va_space_mm_register()` →
+   `uvm_va_space_mm.c:195` `va_space_mm->mm = current->mm`.
+3. ★★★ **And it is skipped entirely under a flag.** `uvm_va_space_mm_enabled()` returns false when
+   `initialization_flags & UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE` (`= 0x2`,
+   `C: src/abi/uvm.h:55`) is set (`ogkm-580: uvm_va_space_mm.c:172-179`). With it false,
+   `va_space_mm->mm` is never set and the real cross-process gate — *"when the VA space is
+   associated with an mm, all vmas under the VA space must come from that mm"* (`uvm.c:782-788`,
+   `-EINVAL`) — **is never armed**.
+   ⇒ ★ **gVisor already ships this exact opt-out**: `nvproxy` forcibly ORs
+   `MULTI_PROCESS_SHARING_MODE` into every app's `UVM_INITIALIZE` — comment verbatim *"This is
+   necessary to share the host UVM FD between sentry and application processes"* — then masks the
+   flag back out of the reply so the app never sees it
+   (`gvisor/pkg/sentry/devices/nvproxy/uvm.go:188-200`).
+   ⚠ And on our own bench the binding was inert for a second reason anyway: `UVM_MM_INITIALIZE`
+   returns `NV_WARN_NOTHING_TO_DO` on the vanilla host because that build has
+   `UVM_CAN_USE_MMU_NOTIFIERS() = 0` (`C: docs/CUINIT_BLOCKER.md:236-240`).
+
+### ⇒ What the isolate argument actually rests on, restated honestly
+
+⊘ **"UVM state is `mm`-bound, therefore one host process per guest process is forced" DOES NOT
+FOLLOW.** The binding is opt-out, and gVisor's `nvproxy` ships that opt-out on every app it runs
+(`gvisor/pkg/sentry/devices/nvproxy/uvm.go:188-200`).
+
+What survives is **weaker in kind and still real**: UVM VA ranges are **identity-mapped**
+(`uvm.c:793`, `vm_start == vm_pgoff << PAGE_SHIFT`), and `MAP_EXTERNAL_ALLOCATION` /
+`ALLOC_SEMAPHORE_POOL` carry **raw VAs**. So sharing one host `va_space` across guests does not hit
+an `mm` impossibility — it collapses every guest into **one flat host VA allocator**, where two
+guest processes at the same VA collide. ⇒ That is `#14` again, and it is an *allocator* problem, not
+a *kernel-refusal* problem: solvable in principle, at the cost of owning a global VA plan across
+mutually distrusting tenants.
+
+★★ **So the strongest remaining argument is §2, not §1** — a new host process with a **new
+`hClient`** is separation RM itself performs, on hardware, rather than separation we assert. That is
+the owner's reading and it is the one to lead with.
+
+⚠ Also recorded from the C, and it refines the whole picture: in Mode 1 the UVM work was **split** —
+part isolate-created, but the **map sequence, using a second fd, ran in the VMM**, one of the very
+few operations the VMM performed directly, under an ioctl set **stricter** than the isolate's. ⇒ The
+boundary was never "everything in the isolate"; it was already a considered split, which is exactly
+what §1b's re-addressability result predicts.
+
+⚠ Stale comment found while citing this: `C: src/qemu/nvkvm_isolate.c:152-153` says
+*"/dev/nvidia-uvm is intentionally absent: UVM is opened by QEMU, never by the sandboxed stub"* —
+contradicted by the stub's own workaround at `nvkvm_stub.c:246-253`. Believe the stub.
 - **§2's RM namespace argument is untouched** by sharing: it is about *handles*, not addresses, and
   no amount of re-mapping makes one process into two clients.
 
