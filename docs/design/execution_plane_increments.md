@@ -10080,3 +10080,101 @@ GR context-buffer gap under MISS = FAULT; `promote.rs`'s own module doc says tha
 the CE page-table writes, not here. ⇒ **`CUP2_RC=1` is expected in P, Q and R alike**, and a
 rung scored on `cup2` alone would read all three as the same failure. The scoreable quantity is
 `joined`.
+
+## §16.49 ★★★★★ BOOTED `s41b_62e757f_twophase` — **OUTCOME R**, and R is the ANSWER, not a setback
+
+`[measured 2026-08-09, rev `62e757f`, binary stamped `kayfabe-rev:62e757f1f6f7…` on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64`, verified before the
+boot]`. Evidence: `traces/guest_boots/run_s41b_62e757f_twophase_{qemu,dmesg,probe}.log`, and a
+companion driver-init-only boot `run_s41_62e757f_twophase_*` (no `cup2`).
+
+### 16.49.1 THE CHANGE IS OBSERVATIONALLY NEUTRAL — `R″` REFUTED
+
+Every `s40` guest-facing number is **byte-identical**: `0x2080012b` accepted **x11** / refused
+**x2**, `NotOnAllowlist` **x10**, `FreeUnknown` **x15**, `UnmappedAllocClass` x3, `Refused` x2,
+`ReservedClient` x2, doorbells **170**, `CUP2_RC=1`, `cuCtxCreate → 801`. No `HalfConflict`, no
+`Malformed`, no new `PromoteFault` of any kind. ⇒ a change advertised as a pure join **was** one.
+
+★ `R′` did not fire either, and its absence is a *positive* result: `half_already=10` on the last
+promotion means eight channels re-declared the same ten VA halves **byte-identically**. So the
+per-VAS key's one live worry — that channels sharing a VA space might carry different VAs for one
+`buffer_id` — is **refuted by measurement**, not merely unobserved.
+
+### 16.49.2 ★★★★★ `joined=0` — AND THE TALLY SAYS EXACTLY WHY
+
+```
+promote-ctx ACCEPTED (last): bound=0 joined=0 already=0 parked=0 half_already=10
+  half_unusable=0 orphans(awaiting_va=0,awaiting_phys=10)
+  declined.promote_only=10 declined.initialize_only=0 entries=0 halves=10
+  client=0xc1d0000a chan_client=0xc1d0000c object=0x5c000037 proc=ProcId(2)
+
+promote-ctx TALLY (cumulative, all promotions):
+  {bid=0x0 phys=1 va=8 complete=2} {bid=0x1 phys=1 va=8 complete=0}
+  {bid=0x2 phys=1 va=8 complete=2} {bid=0x3 phys=0 va=10 complete=0}
+  {bid=0x4 phys=0 va=10 complete=0} {bid=0x5 phys=0 va=10 complete=0}
+  {bid=0x6 phys=0 va=10 complete=0} {bid=0x9 phys=0 va=8 complete=2}
+  {bid=0xa phys=2 va=8 complete=0} {bid=0xb phys=0 va=8 complete=2}
+```
+
+Named from `ogkm-580: ctrl2080gpu.h:932-944`: `0x0` MAIN, `0x1` PM, `0x2` PATCH, `0x3`
+BUFFER_BUNDLE_CB, `0x4` PAGEPOOL, `0x5` ATTRIBUTE_CB, `0x6` RTV_CB_GLOBAL, `0x9` FECS_EVENT,
+`0xa` PRIV_ACCESS_MAP, `0xb` UNRESTRICTED_PRIV_ACCESS_MAP.
+
+⇒ **Outcome R.** Four ids — MAIN, PM, PATCH, PRIV_ACCESS_MAP — carried **both** a physical half
+and VA halves across the run, and `joined` is still **0**. Per the falsifier's own R row that
+means *"the key is wrong"*, and the `orphans` field says which way:
+**`awaiting_va=0, awaiting_phys=10`** — cup2's address space holds **ten VA halves and not one
+physical half**. The physicals arrived; they arrived **somewhere else**.
+
+★★★★ ⇒ **§16.48.3's cross-VAS limit is not a hypothetical. It is THE mechanism.** That paragraph
+was written as a caveat — *"⚠ where two channels do not share a VA space this orphans the halves
+… `Vas::promote_orphans` is the number that will say whether it happens"* — and the number said
+**yes**, on the first boot, in the shape the caveat predicted. ⊘ Recording this as a design note
+that turned out to be the finding, rather than re-writing it as though it had been the plan.
+
+The companion `s41` boot (driver init only, no `cup2`) is the control: `proc=ProcId(0)`,
+`bound=4 joined=0 parked=5 orphans(awaiting_va=1,awaiting_phys=4)`, tally
+`{bid=0xa phys=1 va=0}` — a physical half parked under **proc 0** for the very id that cup2's
+address space later waits on. Two address spaces, one buffer, neither holding both halves.
+
+### 16.49.3 ★★★ AND FOUR IDS CAN NEVER PAIR, BY RM'S OWN CODE
+
+`0x5` ATTRIBUTE_CB and `0x6` RTV_CB_GLOBAL (and `0x7` GFXP_POOL) fall through to a single arm in
+`kgrctxPrepareInitializeCtxBuffer_IMPL`:
+
+```c
+1752:  case …_ATTRIBUTE_CB:      // fall-through
+1754:  case …_RTV_CB_GLOBAL:     // fall-through
+1756:  case …_GFXP_POOL:
+1757:      // No initialization from kernel RM
+1758:      return NV_OK;
+```
+
+(`ogkm-580: kernel_graphics_context.c:1752-1758`, `*pbAddEntry` left `NV_FALSE`.) ⇒ for those ids
+a phase-1 entry is **never emitted by anyone**, which the tally shows as `phys=0` and which no
+join can ever fix. `0x3`/`0x4` are gated by `pCtxBuffers->bInitialized[internalId]` (`:1777`,
+`:1796`) — promoted once per GPU, not once per context.
+
+⊘ **So "join the two phases" was never going to be sufficient on its own, and the instrument is
+what makes that visible in one boot instead of three.** The physical side of a *global* context
+buffer is not a per-VAS fact at all; it is a per-GPU one that RM declares once and then never
+re-states.
+
+### 16.49.4 ⇒ THE NEXT RUNG
+
+1. **★★★★★ The physical half of a global context buffer is GPU-scoped, not VAS-scoped.** Park
+   phase-1 physicals for the global ids (`0x3`–`0x9`, `0xa`, `0xb`) at the **GPU** level and let
+   any VAS's phase 2 join against them; keep MAIN/PM/PATCH per-VAS, where they belong. ⚠ The
+   scoping must be **derived from RM's own arms** (`kgrctxGetGlobalContextBufferInternalId` names
+   exactly which ids are global) and not from the ids that happened to orphan in this boot.
+2. `0x5`/`0x6`/`0x7` will still not pair — nothing emits their physical. Their backing has to come
+   from the same place RM gets it (`kgraphicsGetGlobalCtxBuffers`), i.e. it is an
+   **allocation-time** fact this port has not yet recovered, not a promotion-time one. ⊘ Do not
+   let step 1's success hide that step 2 is untouched.
+3. ⊘ `0xc574` stays where §16.48.1 put it: not the wall, and not this ladder's business.
+
+★ And the prediction that held: `cup2` still fails at `cuCtxCreate`, exactly as §16.48.6 said it
+would in P, Q **and** R alike. A rung scored on `cup2` would have read this boot as identical to
+`s39` and `s40`. The scoreable quantity was `joined`, and it is `joined` plus `orphans` that
+turned "the join does not fire" into "the halves are in two different address spaces, and here is
+the RM arm that puts them there".
