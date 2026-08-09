@@ -482,7 +482,31 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 14] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
+    // ★★★ `SetPageDirPolicy` (§16.30, row added §16.33). `Guarded`, and for this one the
+    // guard is doing REAL work rather than discharging a formality.
+    //
+    // ⊘ The row was missing for three commits — the same lapse `ControlCensus<P>` records
+    // below, and caught the same way: by the derive-from-source test, not by review.
+    //
+    // ★ Why it matters here more than for most rows: until §16.33 this policy answered with
+    // an EMPTY body, which took `StickyAnswerGuard`'s `reply.body.is_empty()` early return —
+    // the zero-fill had already written zeros into both flag words, so there was nothing to
+    // rewrite. §16.33 makes it echo the request's payload (because the guest copies the
+    // reply's params back over the caller's struct, `ogkm-580: rpc.c:11085-11090`), and that
+    // payload carries the GUEST'S OWN `rmctrlFlags`/`rmctrlAccessRight`. Those words now
+    // reach the guard with whatever the guest put in them, and the guard's unconditional
+    // rewrite to `0` is what keeps branch (b) closed. ⇒ the echo and the guard are coupled:
+    // this reply is only safe because `served_policy` wraps the whole chain
+    // (`crates/kayfabe-device/src/lib.rs:1083`).
+    //
+    // ⊘ The rewrite touches only the two header words; the params region — which is the
+    // entire point of the echo — is untouched by it.
+    PolicyDisposition {
+        name: "SetPageDirPolicy",
+        path: "crates/kayfabe-device/src/setpagedir.rs",
+        disposition: StickyDisposition::Guarded,
+    },
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",

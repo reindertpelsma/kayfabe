@@ -381,13 +381,71 @@ impl CommandPolicy for SetPageDirPolicy {
             sub_device_id: p.sub_device_id,
             pasid: p.pasid,
         });
-        // ★ An **empty** body with `NV_OK`. Every field of this struct is `[IN]` — the
-        // header documents no output (`ogkm-580: ctrl0080dma.h:785-826`) and RM's caller
-        // reads nothing back from it — so there is nothing to reflect, and reflecting the
-        // request would be the echo this port stopped doing (task #127).
+        // ★★★★★ THE REPLY MUST CARRY THE REQUEST'S PARAMS BACK.
+        //
+        // ⊘ This arm used to answer `NV_OK` with `body: Vec::new()`, reasoning: *"Every
+        // field of this struct is `[IN]` — the header documents no output (`ogkm-580:
+        // ctrl0080dma.h:785-826`) and RM's caller reads nothing back from it — so there is
+        // nothing to reflect, and reflecting the request would be the echo this port
+        // stopped doing (task #127)."*
+        //
+        // Both halves of that sentence are true and the conclusion is still wrong, because
+        // **the copy-back is done by the transport, which never reads the SDK header**:
+        //
+        // ```c
+        // if (paramsSize != 0)
+        //     portMemCopy(pParamStructPtr, paramsSize, rpc_params->params, paramsSize);
+        // ```
+        // (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11085-11090`, on the `NV_OK` path of
+        // `rpcRmApiControl_GSP`.) It is unconditional for every control that returns
+        // `NV_OK`; "no `[out]` fields documented" is not "the caller does not read the
+        // buffer back". ⇒ *nothing is reflected* and *the caller's struct is preserved* are
+        // opposite outcomes here, not the same one.
+        //
+        // And [`RpcCommand::reply`] does not leave the window alone — it builds
+        // `vec![0u8; self.payload.len()]` and stamps `body` into its front
+        // (`kayfabe-gsp/src/rpc.rs:472-475`), so an **empty body is a full-length ZERO
+        // FILL**, not an absence.
+        //
+        // # ★★★ The measured consequence — this is `s28`'s wall, arithmetically exact
+        //
+        // The guest therefore read back an all-zero struct and `dma.c:523` handed *that*
+        // to `gvaspaceExternalRootDirCommit` — the RPC fires FIRST (`dma.c:508-521`), the
+        // local commit reads the same `pParams` afterwards. With `numEntries == 0`:
+        //
+        //   gpu_vaspace.c:3091  vaLimitNew = mmuFmtEntryIndexVirtAddrHi(pRoot, 0, 0u - 1)
+        //                                  = ((NvU64)0xFFFF_FFFF << 47) + (2^47 - 1)
+        //                                  = 0xFFFF_FFFF_FFFF_FFFF     (wraps to NvU64 max)
+        //   gpu_vaspace.c:3093  vaLimitNew >= vaLimitInternal  -> PASSES for any value
+        //   gpu_vaspace.c:3094  vaLimitNew <= vaLimitMax       -> FIRES, NV_ERR_INVALID_ARGUMENT
+        //
+        // which is `[measured, boot s28_933a709_spd]` exactly the observed pair — `:3094`
+        // first, then `:3332` 102 us later from the `dma.c:531-551` rollback (which can only
+        // fire because `pGpuState->pRootInternal` is set *after* :3094, at `:3204-3206`) —
+        // and `UVM_REGISTER_GPU rmStatus = 0x1f`, the value :3094 returns.
+        //
+        // ⊘ The census line `numEntries 4` is not a contradiction: it is this module
+        // decoding the guest's REQUEST. The 4 was real on the way in and gone on the way
+        // back. ★ A correct capture of the inbound half cannot see an outbound defect.
+        //
+        // # ★★ This port already knew, and cited these exact lines
+        //
+        // `kayfabe-abi/src/submit.rs:715-718` (`encode_gpfifo_schedule`) and `:1021-1025`
+        // (`encode_bind`) both echo the request for this reason and both cite
+        // `rpc.c:11085-11090`. `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` is named there as
+        // the control that taught it. ⇒ the knowledge was in the tree; this arm reasoned
+        // from the header's `[in]` markings instead of from the transport.
+        //
+        // # Why the whole payload, verbatim, and why the decode is still live
+        //
+        // Every field IS `[in]`, so the faithful reply body is byte-identical to the
+        // request — there is no field whose value we could improve on. ⊘ And the anti-echo
+        // rule (task #127) is not violated in substance: it exists so a decode cannot
+        // become dead code, and this arm's decode still feeds `self.log.publish` above,
+        // which is the census the whole module exists for.
         Some(Reply {
             rpc_result: NV_OK,
-            body: Vec::new(),
+            body: cmd.payload.clone(),
         })
     }
 }

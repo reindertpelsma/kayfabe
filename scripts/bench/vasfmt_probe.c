@@ -298,6 +298,19 @@ int main(void) {
     return 2;
   }
 
+  /* ⊘ /dev/nvidiactl ALONE IS NOT ENOUGH, and the failure mode is a plausible answer.
+   *
+   * `[measured 2026-08-09, boot s30_933a709_vafmt2]` this probe's second version opened
+   * only `/dev/nvidiactl` and `GET_ATTACHED_IDS` answered `NV_OK` with **every one of the
+   * 32 entries `NV0000_CTRL_GPU_INVALID_ID`** — a successful control reporting no GPU.
+   * RM attaches the adapter on the first `open()` of the per-GPU node, not of the control
+   * node; `nvidia-smi` and libcuda both hold `/dev/nvidia0` open across their RM calls.
+   * ★ A control that returns NV_OK over an empty table is the sharpest form of "an empty
+   * capture is evidence of NOTHING": it has a status saying it worked. */
+  int dev_fd = open("/dev/nvidia0", O_RDWR);
+  printf("open(/dev/nvidia0) fd=%d%s\n", dev_fd,
+         dev_fd < 0 ? " ⊘ FAILED — GET_ATTACHED_IDS below will report no GPU" : "");
+
   uint32_t hClient = rm_alloc("client", 0, 0, 0x0 /*NV01_ROOT*/, NULL, 0);
   if (!hClient) return 3;
 

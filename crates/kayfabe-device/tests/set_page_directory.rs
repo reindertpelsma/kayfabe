@@ -136,12 +136,48 @@ fn the_whole_served_chain_answers_set_page_directory_with_nv_ok() {
         "RM reads this control's status and ROLLS BACK on failure (ogkm-580: dma.c:531-551); \
          any non-zero here reproduces the wall verbatim"
     );
-    assert!(
-        reply.body.is_empty(),
-        "every field of NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS is [IN] \
-         (ogkm-580: ctrl0080dma.h:785-826), so there is nothing to reflect"
+    // ★★★★ THIS ASSERTION USED TO DEMAND `reply.body.is_empty()`, on the grounds that
+    // "every field of NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS is [IN] (ogkm-580:
+    // ctrl0080dma.h:785-826), so there is nothing to reflect". ⊘ The premise is true, the
+    // citation is real, and the conclusion is the bug — so this test was pinning the defect
+    // in place with a correct quotation.
+    //
+    // The copy-back is the TRANSPORT's, and it never reads the SDK header:
+    // `portMemCopy(pParamStructPtr, paramsSize, rpc_params->params, paramsSize)` runs on
+    // the NV_OK path for every control (`ogkm-580: rpc.c:11085-11090`). And an empty body
+    // is not an absence — `RpcCommand::reply` zero-fills to the request's own length
+    // (`kayfabe-gsp/src/rpc.rs:472-475`). ⇒ the empty body CLEARED the caller's
+    // `numEntries`, and `dma.c:523` then handed the zeroed struct to
+    // `gvaspaceExternalRootDirCommit`, where `numEntries == 0` makes `vaLimitNew`
+    // 0xFFFF_FFFF_FFFF_FFFF and `gpu_vaspace.c:3094` fires. That is `s28_933a709_spd`.
+    //
+    // ⇒ the observable property is not "nothing is reflected" but **"the caller's struct
+    // survives the round trip"**, which for an all-`[IN]` control means byte-identical.
+    let sent = set_command(0xc1d0_000a, 0x5c00_0002, &body);
+    assert_eq!(
+        reply.body.len(),
+        sent.payload.len(),
+        "the reply must be a FULL-LENGTH payload: RpcCommand::reply zero-fills anything \
+         shorter (kayfabe-gsp/src/rpc.rs:472-475), and the guest copies paramsSize bytes \
+         of it back over the caller's struct (ogkm-580: rpc.c:11085-11090)"
     );
-    assert_eq!(log.total(), 1, "the acceptance must be RECORDED, not merely returned");
+    // ⊘ The assertion is on the PARAMS REGION, not on the whole payload. `StickyAnswerGuard`
+    // wraps this chain (`lib.rs:1083`) and unconditionally rewrites the reply's
+    // `rmctrlFlags`/`rmctrlAccessRight` header words to `0`, so a whole-payload equality
+    // would pass only for a fixture whose flags happen to be zero and would break the day
+    // the fixture got realistic — a test green for a reason unrelated to its name.
+    assert_eq!(
+        &reply.body[PARAMS_AT..PARAMS_AT + Nv0080CtrlDmaSetPageDirectoryParams::SIZE],
+        &sent.payload[PARAMS_AT..PARAMS_AT + Nv0080CtrlDmaSetPageDirectoryParams::SIZE],
+        "every params field is [IN], so the caller's numEntries/physAddress/hVASpace must \
+         come back EXACTLY as sent. Zeros here are gpu_vaspace.c:3094 in the guest: \
+         numEntries=0 makes vaLimitNew 0xFFFF_FFFF_FFFF_FFFF."
+    );
+    assert_eq!(
+        log.total(),
+        1,
+        "the acceptance must be RECORDED, not merely returned"
+    );
     assert_eq!(log.refused(), 0);
 }
 
@@ -153,8 +189,19 @@ fn every_params_field_and_both_header_handles_are_recorded_as_they_arrived() {
     let mut p = policy(&log);
     // ⊘ Deliberately seven DISTINCT values: a decode that transposed two fields would
     // still pass against a body of zeros or repeats.
-    let body = params(0x0000_00ab_cdef_1000, 0x0000_0200, 0x0000_0005, 0xcaf0_0005, 7, 1, 0x1234);
-    assert!(p.respond(&set_command(0xc1d0_000a, 0x5c00_0002, &body)).is_some());
+    let body = params(
+        0x0000_00ab_cdef_1000,
+        0x0000_0200,
+        0x0000_0005,
+        0xcaf0_0005,
+        7,
+        1,
+        0x1234,
+    );
+    assert!(
+        p.respond(&set_command(0xc1d0_000a, 0x5c00_0002, &body))
+            .is_some()
+    );
 
     let rec = log.latest().expect("an accepted SET latches a record");
     assert_eq!(rec.client, 0xc1d0_000a, "hClient comes from the RPC HEADER");
@@ -171,7 +218,10 @@ fn every_params_field_and_both_header_handles_are_recorded_as_they_arrived() {
         PdbAperture::SysmemCoherent,
         "the aperture is bits 1:0 of flags; 0x5 is _SYSMEM_COH with ALL_CHANNELS set"
     );
-    assert_eq!(rec.h_vaspace, 0xcaf0_0005, "hVASpace is a PARAMS field, not a header one");
+    assert_eq!(
+        rec.h_vaspace, 0xcaf0_0005,
+        "hVASpace is a PARAMS field, not a header one"
+    );
     assert_eq!(rec.ch_id, 7);
     assert_eq!(rec.sub_device_id, 1);
     assert_eq!(rec.pasid, 0x1234);
@@ -191,7 +241,11 @@ fn a_reinstall_replaces_the_record_and_counts_both() {
         "a re-installation is a real event; RM re-publishes a root on every re-bind and a \
          latch alone cannot say whether that happened once or twice"
     );
-    assert_eq!(log.latest().expect("latched").phys_address, 0x9000, "most recent wins");
+    assert_eq!(
+        log.latest().expect("latched").phys_address,
+        0x9000,
+        "most recent wins"
+    );
 }
 
 // ── Property 3: ★★★ hVASpace == 0 is a VALUE ───────────────────────────────────────────
@@ -246,7 +300,9 @@ fn a_declared_size_that_is_not_sizeof_is_refused_and_latches_nothing() {
         (Nv0080CtrlDmaSetPageDirectoryParams::SIZE - 4) as u32,
         &body,
     );
-    let reply = p.respond(&cmd).expect("a recognised id is ANSWERED even when refused");
+    let reply = p
+        .respond(&cmd)
+        .expect("a recognised id is ANSWERED even when refused");
     assert_eq!(reply.rpc_result, NV_ERR_INVALID_ARGUMENT);
     assert_eq!(log.refused(), 1);
     assert_eq!(log.total(), 0);
@@ -363,7 +419,10 @@ fn seating_the_link_changes_no_other_reply_byte() {
 fn a_device_reset_forgets_the_installed_root() {
     let log = SetPageDirLog::new();
     let mut p = policy(&log);
-    assert!(p.respond(&set_command(1, 2, &params(0x7000, 512, 0, 0, 0, 0, 0))).is_some());
+    assert!(
+        p.respond(&set_command(1, 2, &params(0x7000, 512, 0, 0, 0, 0, 0)))
+            .is_some()
+    );
     assert!(log.valid());
 
     log.device_reset();
