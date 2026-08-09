@@ -102,6 +102,125 @@ So the same "one table entry" carries a **behavioural** difference on both the s
 receive side, plus a guest-memory-safety bound (`mode2_gsp_port_plan.md` §4.6). A layout table
 that only carries offsets is not sufficient for this axis.
 
+### 3.1 ★★★ `DriverAbiTable` carries LAYOUT and no BEHAVIOURAL BOUNDS — and that gap is now a support defect
+
+> **Owner ruling, 2026-08-09** (`vmm_integration_and_support_matrix.md` §2): the **VMM** is the
+> one axis where a version floor is a legitimate engineering tool. On the **NVIDIA driver
+> version**, the **kernel version** and the **GPU architecture** we must be *"open to support all
+> major versions"*, and the subset must **at least** contain every version NVIDIA still ships
+> updates for. ⇒ **Narrowing the driver axis to make an implementation easier is a product
+> defect, not a trade-off**, and every site below is now filed as one.
+
+This section closes the prediction three paragraphs above (*"a layout table that only carries
+offsets is not sufficient for this axis"*) with the audit that confirms it, done 2026-08-09 by
+reading each site.
+
+#### The shape, and the ⊘ refutation that makes it worth reading
+
+The audit was commissioned to fix a **test double** that was stricter than a driver we support:
+`tests/src/gspworld.rs`'s mock guest refused `rpc_length < 32`, which is 580's bound, while 610
+admits `rpc.length == 0`.
+
+⊘ **That is already fixed, and it was fixed the right way.** `tests/src/gspworld.rs:262-264`
+reads `if self.version.major >= 610 { 0 } else { 32 }` behind `Profile::min_rpc_length()`,
+consumed at `:1268`; the in-file note dates it *"★ FIXED 2026-08-06"*. The sibling —
+the mock enforcing whole MCTP/NVDM transport words where 610 validates only a version nibble and
+a vendor id — is fixed too, at `tests/src/gspworld.rs:1332-1336`, which masks with
+`t.header_validated_mask`, is recorded as a MATCH row in `mock_fidelity_audit.md:315`, and is
+pinned by `tests/tests/gsp_boot.rs:1449-1467`.
+
+★★★ **The finding is the INVERSE, and it is worse.** The double was made version-aware and **the
+product was not**. The min-`rpc.length` rule now exists in exactly one place in the tree —
+`tests/src/gspworld.rs:263`, as a raw `major >= 610` **in test code** — while the shipped
+decoders keep a version-free 32. So the narrowness did not disappear; it **migrated from the
+double to the product**, which is the one direction no test can catch, because a double that is
+*more* permissive than the product simply gets refused and the refusal reads as correct.
+
+⇒ The generalisable rule: **when a fidelity defect is fixed on the double, ask immediately
+whether the same predicate exists on the product.** A double and a product that disagree about a
+bound are a bug wherever the disagreement lies, and fixing only the double moves the bug to the
+side with no oracle. Cf. [[mock-fidelity-both-directions]].
+
+#### The sites, most load-bearing first
+
+| # | site | what it enforces | version reality | verdict |
+|---|---|---|---|---|
+| **D1** | `crates/kayfabe-device/src/guestsysinfo.rs:94-96` | the guest's declared `(VGX_MAJOR, VGX_MINOR)` must **equal** ours exactly; mismatch → `NV_ERR_NOT_SUPPORTED` at `:117` | **590 / 595 share 580's 48-byte element form** but declare a different VGX pair, so they resolve to the 580 row and are refused **at RPC message one** | ⊘ **product defect** — the widest narrowing in the tree |
+| **D2** | `crates/kayfabe-abi/src/versions.rs:338,367,386,405,424,461` | six of the eight `TABLES` rows carry `vgx: None` → `NoVersionForDriver` → the same refusal | the table advertises 8 supported versions; the handshake supports **2** (`:485`, `:507`) | ⊘ **product defect**, and it makes D1 worse |
+| **D3** | `crates/kayfabe-gsp/src/element.rs:331` | `rpc_length < RpcEnvelope::SIZE` (32) → `MsgLenOutOfRange`, for **every** version | its own rustdoc at `:289-293` says 610 admits `rpc.length == 0` and calls refusing it *"the authorised RPC-element-parsing deviation"* | ◐ **needs a decision** — see below |
+| **D4** | `crates/kayfabe-abi/src/view.rs:584-592` | the same 32-byte floor in `rpc_payload_len` | reached from `DriverAbiTable::decode_rpc_envelope` (`versions.rs:1361`), i.e. **through a table that knows the version and ignores it** | ⊘ defect; cheapest fix of the set (`&self` already in hand) |
+| **D5** | `tests/src/gspworld.rs:892`, `:914` | `msg_size = PAGE`, `staging_bytes = STAGING_BYTES` as literals, consumed by the panic at `:1298-1306` | `DriverAbiTable` already carries both per version (`versions.rs:605`, `:614`), and `Profile::element_size_max()` already routes through it — the constructor bypasses it | ◐ latent; inert today (both versions 4096/65536), same shape as the pre-2026-08-06 defect |
+| **D6** | `tests/src/rpctrace.rs:79` | `ELEM_HDR_SIZE = 48` as a decode offset; a shorter record is silently `continue`d at `:540-541` | 610's header is 16 (`versions.rs:144`) | ◐ correct for today's 580 captures; a 610 capture is **mis-decoded, not refused**, in a module whose stated posture is *"a trace with a hole is refused outright"* (`rpctrace.rs:8-9`) |
+| **D7** | `tests/src/gspworld.rs:1268-1273` | the length check's **position**: hoisted and `return`ed, where both drivers consume the element and bump `rxSeqNum` first | the bound is right; the *effect* is still narrower than either driver | ◐ open; already recorded at `mock_fidelity_audit.md:218-241` |
+
+⊘ **Checked and found NOT narrower**, recorded so this is not re-walked: `gspworld::Guest::rx_link`
+(`:990-1032`, all nine codes, both tags identical); `send_declaring` (`:1106-1157`, deliberately
+*more* permissive); `tests/src/rpcwire.rs` (its one assert is a stride sanity check, `:134`);
+`tests/src/guest.rs` (no driver bound anywhere);
+`crates/kayfabe-vmm-qemu/src/mock_host.rs` (stands in for QEMU, not for a driver — all refusals
+version-free); `crates/kayfabe-mocks/src/lib.rs:1164-1182` (divergences are in the permissive
+direction); `crates/kayfabe-chips/src/ga10x.rs:525-527` (argued unreachable-input at `:519-523`).
+
+#### ★★ The decision Ruling 2 forces: a **behavioural** column on `DriverAbiTable`
+
+The mechanism already exists and is the right one — `DriverAbiTable` (`versions.rs:257`), the
+8-row `TABLES` (`:325`), `table_for`'s newest-≤ selector (`:541`) and the loud
+`AbiError::NoTableForVersion` miss (`wire.rs:64`). What it lacks is a place to put a **rule**
+rather than an **offset**.
+
+> **DECIDED (Ruling 2, 2026-08-09): every version-dependent bound becomes a `DriverAbiTable`
+> entry. ⊘ Never an `if version ==`, and ⊘ never a bare constant in a logic crate.**
+
+That is not a new rule; it is §5 rule 1 of this document (*"No `if guest_version == …` in a logic
+crate"*) applied to bounds instead of to offsets. The concrete shape:
+
+1. **Add `min_rpc_length(&self) -> u32` to `DriverAbiTable`**, beside the existing
+   `gsp_element_size_min` (`versions.rs:605`) and `gsp_element_size_max` (`:614`).
+2. **`element.rs:331` and `view.rs:584` read it.** `view.rs`'s caller already holds a
+   `DriverAbiTable`; `element.rs`'s `MsgLen::new` already takes `layout`, `element_size_min` and
+   `element_size_max`, so it is one more parameter of exactly the kind it already accepts.
+3. **`gspworld.rs:263`'s `major >= 610` is DELETED** and reads the table. The test-side predicate
+   stops being the tree's only statement of the rule, and a wrong table entry becomes a **failing
+   test** rather than a silent agreement between two hand-written copies of the same number.
+4. **D5 and D6 read `gsp_element_size_*` / `gsp_element_wire().hdr_size()`** instead of literals.
+
+⚠ **Step 2 requires a decision this document does NOT make, and it must not be made by an edit.**
+`element.rs:289-302` argues that refusing `rpc.length == 0` at 610 is deliberate hardening — 610's
+own check admits it, after which *"a zero-length message silently consumes an element and then
+produces garbage upstream."* That may well be right: we are the **GSP**, and a zero-length message
+from a real driver would be a driver bug, so refusing it costs a supported driver nothing.
+⇒ ★ **The refactor is unconditionally correct; the 610 VALUE is a separate question.** Move the
+number into the table first, at its current value, so the site is *nameable*; then decide whether
+610's entry is `0` (match the driver) or `32` (a named, argued hardening refusal). Landing both in
+one change would hide a behaviour decision inside a mechanical one — cf.
+[[a-queue-item-is-a-hypothesis]].
+⊘ Note that today the two are already inconsistent: `element.rs:301-302` calls 32 *"a strict
+tightening of 610's"* and `gspworld.rs:1224-1225` calls the same 32 *"stricter than the driver it
+models"* and fixed it. **The same number is documented as a feature in one file and as a defect in
+another, and we wrote both.**
+
+#### D1/D2: the widest one, and the protocol already offers the answer
+
+D1 is not a bound to move into a table — it is a **missing negotiation**. `compatibility_matrix.md:90-92`
+records that the protocol defines down-negotiation (`rpc.c:8765-8801`): a GSP speaking a different
+version replies non-`NV_OK` **with its own pair in the body**, and the guest retries at that pair
+or reports *"host too old"*. `crates/kayfabe-abi/src/guestsysinfo.rs:135-141` names it in the
+`VersionMismatch` variant's own docs and says it is not built.
+
+Under Ruling 2, *"the layout axis and the handshake axis do not agree about which guests are
+supported, and the handshake is the binding one"* (`compatibility_matrix.md:86-88`) describes a
+**defect**, not a scope. The remedy is the two the protocol already provides: fill in the six
+`vgx: None` rows (D2), and implement down-negotiation so a pair we do not carry is answered with
+ours instead of refused (D1).
+
+⊘ **Not fixed here, and not scheduled here.** These are product changes to logic crates with a
+real behavioural decision in each; this section's job is to establish that they are **defects**
+rather than boundaries, which is what the ruling changed.
+
+★ [not compiled] Nothing in §3.1 was implemented or built. Every line number was opened and read
+on 2026-08-09; no `cargo` command was run for this section, and no claim here is a claim about
+compilation.
+
 ★ **What is now measurable rather than estimated.** Two of the three items above are read from
 driver source at a named tag, so they are facts about the *guest driver*, not about our stack:
 the `NVOS46` boundary and the GSP element break. **That is all.** They bound where a *layout*

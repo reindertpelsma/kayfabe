@@ -1,6 +1,55 @@
 # The C's CUDA ladder — every wall between a working `nvidia-smi` and a correct matmul
 
-**Purpose.** kayfabe is one wall from `nvidia-smi` (the `memmgrTestCeUtils` CE copy). The wall
+> ## ★★★ OWNER RULING 2026-08-09 — `nvidia-smi` IS NOT ONE THING, and this file's opening line treated it as one
+>
+> > *"partially side quest and milestone, it is still important to ship. **basic nvidia-smi is a
+> > milestone (that it even runs and displays running processes)**, fixing all extra info errors
+> > is a side quest."*
+>
+> Split it before reading anything below:
+>
+> | half | what it is | weight |
+> |---|---|---|
+> | ✅ **`nvidia-smi` RUNS and its process table SHOWS RUNNING PROCESSES** | the only part that reports **guest-side truth** rather than device statics — it is the observable that tells an operator their workload is on the GPU | ★★★ **SHIP MILESTONE** |
+> | ◐ every info field correct (`Name`, clocks, power, temperature, utilization, ECC, PCIe gen, VBIOS) | device statics and telemetry, report-only, decided by table entries | **side quest, deferrable** |
+>
+> ⚠ **The state of the two halves is very different, and the phrasing below hides that.** Half
+> one is *partly* reached: a stock driver enumerates a device and `SMI_RC=0`
+> (`execution_plane_increments.md` §14.20). But the captured output at
+> `execution_plane_increments.md:3771-3777` shows the process table reading
+> **`No running processes found`** — so the half that carries the milestone weight is the half
+> that is **not** demonstrated. Half two is openly absent and says so
+> (`:3840-3842`: `Name` = `ERR!`, every telemetry field `N/A`, *"a **description** of what is
+> missing, not a failure of the enumeration"*).
+>
+> ⊘ **So the sentence directly below is retired as a scoping claim.** *"One wall from
+> `nvidia-smi`"* is true of the **enumeration**, and it was never true of the process list —
+> the C reached `nvidia-smi` with an **empty** process table too
+> (`mem: nvidia_smi_works.md`, C era: *"the per-process table is empty… NVML process accounting
+> surfaces the host-side stub process, not the guest PID"*). Treating `nvidia-smi` as atomic is
+> what let a demonstrated enumeration read as a demonstrated milestone.
+>
+> ★ The controls behind the process list, so the next reader does not re-derive them:
+> `NV2080_CTRL_CMD_GPU_GET_PIDS` (`0x2080018d`) and `NV2080_CTRL_CMD_GPU_GET_PID_INFO`
+> (`0x2080018e`) — both present in our capability table at
+> `crates/kayfabe-abi/src/capability.rs:717-718`. ★★ **The C does NOT forward them**, and its
+> reason is the design, not a shortcut: *"the stub runs in its own pid namespace and as a
+> distinct RM client… Instead the guest module — the authority on which guest processes hold GPU
+> sessions — synthesizes the answer from its session table"*
+> (`C: src/guest/nvkvm_main.c:821-828`). ⇒ the process list is answered from **our** notion of
+> which guest procs hold sessions, which is exactly why it is guest-side truth and exactly why it
+> is the half worth shipping. ⚠ `guest_blast_radius.md:571-579` records the C's host-side
+> `GET_PID_INFO` path as *"a privileged capability whose trigger is a guest message… not ported"*
+> — so the Rust answer must be the synthesis, never the forward.
+>
+> Tracking: task **#191** is the milestone half (non-stall interrupt delivery for notifier 35 —
+> what makes the process list work); task **#190** is the side quest (static-info identity
+> policy, the GPU UUID). Both were re-scoped to this split on 2026-08-09. ⊘ Do not let #190
+> block #191 or first compute.
+
+**Purpose.** ~~kayfabe is one wall from `nvidia-smi`~~ **kayfabe is one wall from `nvidia-smi`
+ENUMERATING A DEVICE** (the `memmgrTestCeUtils` CE copy) — see the ruling box above for why that
+is not the same as the `nvidia-smi` milestone. The wall
 after that is the CUDA ladder, and the C research artifact already climbed all of it, up to
 `cuCtxCreate → 2048² matmul at bad=0 maxerr=0` on a stock guest. This file is the ordered wall
 list, the rung table, and the run recipe, so the Rust does not rediscover any of it. It records

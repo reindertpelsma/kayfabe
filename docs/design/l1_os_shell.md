@@ -75,10 +75,18 @@ and the whole-lifecycle reclamation invariant**.
 >
 > **3. Unresolved internal contradictions — reported, NOT resolved, because the code does not
 > settle them.** Each is a question for the owner:
-> - **The QEMU backport is simultaneously cancelled and required.** §10's decision box says
+> - ~~**The QEMU backport is simultaneously cancelled and required.** §10's decision box says
 >   *"we require a minimum QEMU; we do **NOT** carry a backport … The backport is
 >   **cancelled**"*, and §9.3 agrees. But §7.9's trap-path row, §10's own *"≥ 10.2.0, **or our
->   patched 9.2.0**"*, and decisions #35 and #48 all still treat the backport as the remedy.
+>   patched 9.2.0**"*, and decisions #35 and #48 all still treat the backport as the remedy.~~
+>   ★★★ **RESOLVED 2026-08-09 by owner ruling — `../design/vmm_integration_and_support_matrix.md`.**
+>   The two halves were never in conflict: **a version floor is a legitimate engineering tool on
+>   the VMM axis; a maintained fork is what to avoid.** Ruling 2 makes the VMM the *only* axis of
+>   the six in `compatibility_matrix.md` that may carry a floor at all, which is what settles it.
+>   ★ And this bullet was **stale when it was written**: decisions #35 and #48 had already been
+>   corrected to CANCELLED on 2026-07-28 (`:3873-3876`, `:3998-4001`), and §7.9's row carries its
+>   own correction at `:3080`. The two genuinely live sites were `:1532-1537` and
+>   `../reference/qemu_bql_spike.md` §2/§4/§5; both are bannered as of 2026-08-09.
 > - **The reentrancy-guard pairing** is *"upstream's, not ours to maintain"* (§10.1) and still
 >   a task we owe (L2-Q task 2, §9.3's pairing gate, decisions #35/#37).
 > - **ioeventfd's hand-off clause** — §10.1 states it *deletes* L2-Q task 4's
@@ -1529,7 +1537,24 @@ itself is BQL-free (`accel/kvm/kvm-all.c:3182`, *"Called outside BQL"*) — the 
 > clause is the only reason this surfaced at plan time instead of in the L2 adapter's first
 > week — which is the argument for writing such clauses even when the API "obviously" exists.
 
-**The remedy — the 10.2.0 backport.** **[src]** Upstream reintroduced the capability in **QEMU
+> ### ★★★ THE REMEDY IS THE FLOOR, NOT THE BACKPORT — banner added 2026-08-09
+>
+> The paragraph below is the **historical measurement** of a patched 9.2, and it is retained
+> because the numbers in it are real. It is **not** the plan. The backport was cancelled hours
+> after it was proposed (§10's decision box, `c3ec258`), and the shipping answer is a **stock
+> ≥ 10.2 build**, asserted at realize.
+>
+> ★ **This is the paragraph that kept the contradiction alive** — it was the last present-tense
+> *"the remedy is a backport"* in this document, and the banner-and-strike pass of 2026-07-28
+> reached §6.3's bullet, §7.9's row, §10's *"or our patched 9.2.0"* and decisions #35/#48 but not
+> this one. Read *"with the backport"* below as *"on a stock ≥ 10.2 build"*: it is the same code
+> path, and `4174495408af` / `73c520b08887` are upstream's own commits, not ours.
+>
+> Why the floor and the fork were ever confused, and the ruling that separates them for good:
+> `../design/vmm_integration_and_support_matrix.md` §2 and §6 (owner, 2026-08-09) — **the VMM is
+> the one axis where a version floor is legitimate; a maintained fork is what to avoid.**
+
+**~~The remedy —~~ the 10.2.0 backport, as measured.** **[src]** Upstream reintroduced the capability in **QEMU
 10.2.0** as **`memory_region_enable_lockless_io()`** (commit `73c520b08887`, Aug 2025), KVM-path
 only (TCG ignores it). **[measured]** The backport to 9.2.0 is **~4 lines**, `system/physmem.c`
 being the only load-bearing hunk, and it **applies cleanly**. **[measured]** Stock 9.2 reports

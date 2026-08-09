@@ -47,7 +47,10 @@ E8's two conflict policies — **fixed** in v2 (`7c4c61a`); the cited-but-missin
 
 `viewer_install.rs:86` still says "is an owner decision" for a verb that exists; `grstatic.rs:51`/`:724`
 still carry `[assumed]` for something boot `stateload1` **measured**; §10 item 6 still states three
-assertions B3 retracted; the QEMU-backport prose survives a **CANCELLED** ruling; and a trybuild gate
+assertions B3 retracted; ~~the QEMU-backport prose survives a **CANCELLED** ruling~~ (★ **fixed
+2026-08-09** — the surviving prose was in `l1_os_shell.md:1532-1537` and
+`../reference/qemu_bql_spike.md`, both now bannered; the governing decision is
+`vmm_integration_and_support_matrix.md`); and a trybuild gate
 claims "all ten rows" where nine exist — that last is nearer a bug than a chore.
 
 ---
@@ -853,8 +856,19 @@ something true.
 
 ## Q23 — five doc contradictions the audit would not resolve (`#60`)
 
-Each needs a decision, not an edit: (1) the QEMU backport is simultaneously **cancelled** and
-**the remedy**; (2) ★ the region lock has **three standings all written the same day** — uffd
+Each needs a decision, not an edit: ~~(1) the QEMU backport is simultaneously **cancelled** and
+**the remedy**;~~ **(1) ★★★ DECIDED 2026-08-09 —
+`vmm_integration_and_support_matrix.md`.** The owner ruled the general question this
+contradiction was an instance of: **a version floor is a legitimate engineering tool on the VMM
+axis, and a maintained fork is what to avoid.** Those were never the same thing, which is why
+both halves could be written honestly and read as a conflict. Ruling 2 goes further and makes the
+VMM the **only** axis of the six in `compatibility_matrix.md` that may carry a floor.
+★ The audit was right that this needed a decision rather than an edit — and the edit it *would*
+have made would have been wrong, because the live sites were not the ones on record: decisions
+#35/#48 had already been corrected on 2026-07-28, and the two sites still reading as a live
+backport plan were `l1_os_shell.md:1532-1537` and `../reference/qemu_bql_spike.md` §2/§4/§5.
+Both bannered 2026-08-09; site-by-site before/after in `vmm_portability_seam_audit.md` §6.
+(2) ★ the region lock has **three standings all written the same day** — uffd
 kept / uffd displaced by permanent-RO with arm64 unsound / arm64 refused outright — and arm64 is
 downstream of that choice; (3) the reentrancy-guard pairing is both "upstream's own function,
 nothing to maintain" and an owed task in three places; (4) §10.1 says a clause deletes two rules

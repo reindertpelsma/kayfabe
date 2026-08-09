@@ -115,6 +115,19 @@ load-bearing. Get to hardware early and let it delete assumptions.
   2026-07-29**; (2) replay the C's recorded `cap1` against the Rust GSP; (3) the full event.
 - **"Correct result" has a literal bar:** `cup8` — 2048² matmul, `bad=0 maxerr=0`, byte-exact,
   the same source file the C passes.
+- ★★★ **`nvidia-smi` is TWO things, and only one is a milestone** (owner ruling 2026-08-09):
+  ✅ **it runs AND its process table shows running processes** = a **ship milestone** — the only
+  part reporting *guest-side truth* rather than device statics; ◐ every info field correct
+  (`Name`, clocks, power, temp, ECC) = a **side quest**. ⚠ Enumeration with `SMI_RC=0` is already
+  reached and is **not** the milestone: the captured table reads `No running processes found`.
+  ⊘ Do not cite *"one wall from `nvidia-smi`"* as a scope claim — it is about the enumeration.
+  Full split, and the two controls behind the process list: `docs/design/c_cuda_ladder.md`
+  (top box). Tasks: **#191** = the milestone half, **#190** = the side quest.
+- ★★ **How we integrate with a VMM, and which axes may carry a version floor** — decided, do not
+  re-litigate: `docs/design/vmm_integration_and_support_matrix.md`. One line: *a version floor is
+  legitimate on the **VMM** axis and nowhere else; narrowing kernel / NVIDIA-driver / GPU-arch
+  support to ease an implementation is a **product defect**.* What a second VMM would actually
+  cost, counted: `docs/design/vmm_portability_seam_audit.md`.
 - Key docs: `docs/design/host_execution_plane.md` (the memory plane + execution plane
   decisions, **and §1.6's five findings from building them**),
   `docs/design/c_rust_trace_differential.md` (the oracle and its limits).

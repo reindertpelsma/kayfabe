@@ -202,7 +202,7 @@ These are decided. This document builds on them and does not reopen them.
 
 | # | Law | Where it was decided | What L2-Q owes it |
 |---|---|---|---|
-| L1 | **QEMU ≥ 10.2.0 is a hard floor. The backport is CANCELLED** — we run on a **stock** ≥ 10.2 with no patch of ours in it. | `l1_os_shell.md` §10 decision box (`c3ec258`) | A compile-time refusal **and** a realize-time assertion (§3.5), both negative-tested. ★ Five sites in `l1_os_shell.md` still describe a carried patch (`:1299`, `:2879`, `:3211` *"≥ 10.2.0, **or our patched 9.2.0**"*, decision #35, decision #48) and **§6.3.1 / §14.6 read present-tense as if the remedy were a backport**. They are a dated measurement, not a live plan; **nothing in this document designs against them.** |
+| L1 | **QEMU ≥ 10.2.0 is a hard floor. The backport is CANCELLED** — we run on a **stock** ≥ 10.2 with no patch of ours in it. ★ **And the two are not in tension**: `vmm_integration_and_support_matrix.md` §2 rules that the VMM is the **one** axis where a version floor is a legitimate engineering tool, so *"floor, not fork"* is the whole resolution. | `l1_os_shell.md` §10 decision box (`c3ec258`); ★ `vmm_integration_and_support_matrix.md` §2 / §6 (owner, 2026-08-09) | A compile-time refusal **and** a realize-time assertion (§3.5), both negative-tested. ★★ **CORRECTED 2026-08-09 — this cell's own citation was wrong, and it is the reason the contradiction outlived four corrections.** It said *"Five sites in `l1_os_shell.md` still describe a carried patch (`:1299`, `:2879`, `:3211`, decision #35, decision #48)"*. Re-read at the current revision: `:1299` is a bare `>`, `:2879` is a sentence about the retire/reap discipline and `:3211` is about reconciling §7 — **none of the three is about the backport**, and **decisions #35 and #48 were both corrected to CANCELLED on 2026-07-28** and no longer describe a carried patch. The real live sites are `l1_os_shell.md:1532-1537` and `../reference/qemu_bql_spike.md` §2/§4/§5, all now bannered. ⇒ this row inherits [[a-wrong-citation-is-more-durable-than-none]]: a contradiction *report* that cites the wrong lines sends every reader who checks it to three innocent sentences, and they conclude the report is noise. |
 | L2 | **★ There is no pairing left to maintain.** Upstream's single `memory_region_enable_lockless_io()` sets `disable_reentrancy_guard` itself. The one obligation that is genuinely **ours** is coverage: the guard's *state* is per-**device**, the opt-out is per-**`MemoryRegion`**. | `qemu_102_facilities.md` §2; §9.3's re-specified gate | ★ **Enumerability**, not just "one helper": one function holds the complete region table and applies the marking, so *"did we miss a region?"* is answered by reading one function — plus a realize-time self-check over that table (§3.3, §11). |
 | L3 | **Once lockless IO is taken, R1/R3/R5 are CORRECTNESS, not latency.** | `qemu_bql_spike.md` §4; upstream's own doc comment | §4 is written against R1/R3/R5 rather than against latency, and §11 makes the re-audit a deliverable artifact. |
 | L4 | **`gpa_read`/`gpa_write` must PROVE RAM**, never merely refuse devices. | `qemu_102_facilities.md` §11.3 + its three corrections; `kayfabe_vmm::GuestRamMap` | §5.2 — a `MemoryListener`-fed positive map, with a classification **narrower than `memory_region_is_ram()`** (§5.3, a finding). |
@@ -1205,10 +1205,26 @@ Stated separately because these are the parts most likely to be read past.
     grep structurally cannot check it, because a missed region is an omission and an omission
     has no token to match.** §3.3 discharges it with one table, one constructor, one
     registration loop and a realize-time self-check over `mr->lockless_io`.
-11. **★ Five sites still describe a carried backport.** `l1_os_shell.md:1299`, `:2879`, `:3211`
+11. ~~**★ Five sites still describe a carried backport.** `l1_os_shell.md:1299`, `:2879`, `:3211`
     (*"≥ 10.2.0, or our patched 9.2.0"*), decision #35 and decision #48, plus the present-tense
     reading of §6.3.1 and §14.6. Nothing here designs against them; recorded so the next reader
-    of §10 does not.
+    of §10 does not.~~
+    ★★★ **STRUCK 2026-08-09 — the item was wrong in the count, in the line numbers and in two
+    of the five names**, and it is the reason the contradiction it reported survived four
+    separate corrections. Re-read at the current revision: `:1299` is a bare `>`; `:2879` is a
+    sentence about the retire/reap discipline; `:3211` is about reconciling §7 — **none of the
+    three is about the backport at all**. Decisions #35 and #48 were **both corrected to
+    CANCELLED on 2026-07-28** (`l1_os_shell.md:3873-3876`, `:3998-4001`) and had already stopped
+    describing a carried patch when this item was written.
+    ⇒ ★ The live sites were two, not five, and one of them is in a file this item never named:
+    `l1_os_shell.md:1532-1537` (*"The remedy — the 10.2.0 backport"*, present tense) and
+    `../reference/qemu_bql_spike.md` §2/§4/§5 — **a reference file that self-declares it
+    out-ranks design docs and carried no cancellation banner at all.** Both are bannered as of
+    2026-08-09; the resolution is `vmm_integration_and_support_matrix.md` §6.
+    ⇒ ★★ The lesson worth more than the fix: **a contradiction report is a citation, and a wrong
+    citation is more durable than none.** Anybody who checked these three line numbers found
+    three innocent sentences and reasonably concluded the report was noise — which is exactly
+    how a real contradiction acquires a reputation for being already handled.
 
 **Two things in the framing of this task that turned out to be right and are worth confirming
 explicitly**, since the rest of this section is corrections: the "one change, not two" rule for

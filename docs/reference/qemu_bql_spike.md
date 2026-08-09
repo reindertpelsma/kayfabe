@@ -8,11 +8,32 @@ target, what does dispatching without the BQL actually buy, and what does it bre
 580.159.04), against **QEMU 9.2.0** — the version in `/opt/qemu-src`, pinned by
 `C: scripts/build_qemu.sh:10` *(was cited as `:9`, which is blank — verified 2026-07-28)*.
 
-> ★ **Two standing caveats on this whole file.** (1) It measured **9.2.0**, and the project
+> ★ **Three standing caveats on this whole file.** (1) It measured **9.2.0**, and the project
 > now declares a **≥ 10.2 floor**, so every number here is a measurement of a version we no
 > longer target — §§4 and 7 carry specific banners. (2) That bench **no longer exists**: the
 > host died at the provider and was replaced (instance 46062615, same GA106). Re-running any
 > of these measurements needs `C: scripts/build_qemu.sh` bumped off 9.2.0 first.
+>
+> ★★★ **(3) ADDED 2026-08-09 — THE BACKPORT IS CANCELLED, and this file needed saying so more
+> than any other.** §2's *"the backport to 9.2.0 is ~4 lines and applies cleanly"*, §4's
+> *"the obvious hand-rolled alternative to the backport"* and §5 limit 4's *"the backport was
+> measured for behaviour, not soaked"* all read as a **live plan to carry a patch**. It was
+> cancelled on 2026-07-26, hours after it was proposed (`../design/l1_os_shell.md` §10's
+> decision box, `c3ec258`): we **declare a minimum QEMU of ≥ 10.2.0 and assert it at realize**,
+> and carry no patch.
+>
+> ⚠ **This file is why the contradiction survived four correction passes elsewhere.** It states
+> its own precedence at the top — *"where this file and a design doc disagree, this file wins
+> and the design doc gets amended"* — and it carried **no cancellation banner at all** while
+> every design doc that cited it did. A reference that out-ranks the design docs and lags them
+> does not merely go stale: it **re-authorises** the position the design docs retracted.
+> ⇒ Read every *"the backport"* below as *"upstream's `memory_region_enable_lockless_io()`,
+> which is present on a stock ≥ 10.2 build"* — the same code path, none of it ours.
+>
+> The ruling that separates a version floor from a fork, and makes the floor legitimate rather
+> than a compromise: `../design/vmm_integration_and_support_matrix.md` §2 (owner, 2026-08-09) —
+> **the VMM is the one axis where a version floor is an engineering tool.** §5 limit 4's soak
+> risk is therefore **void**: there is nothing of ours to carry across a QEMU upgrade.
 
 **Why it is a reference and not a design doc.** §6.3 told the L2 adapter to *"verify it exists
 and behaves as expected on the target QEMU version — this is an API-availability check, not an
