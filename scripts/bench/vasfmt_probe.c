@@ -163,6 +163,9 @@ typedef struct {
    * `paramsSize` against the class's own size, so a struct that is merely LARGER is
    * rejected outright — the padding rules are part of the ABI, not a local detail. */
 } id_info_t;
+_Static_assert(sizeof(id_info_t) == 40,
+               "NV0000_CTRL_GPU_GET_ID_INFO_PARAMS is 40 bytes (last member NvS32 numaId at "
+               "offset 36). RM validates paramsSize against the class size.");
 
 /* NV_VASPACE_ALLOCATION_PARAMETERS — nvos.h:3154-3164 */
 typedef struct {
@@ -194,12 +197,24 @@ typedef struct {
   pt_fmt_t pageTableBigFormat;
   pt_fmt_t pageTable4KFormat[16];
   uint32_t hVASpace;
-  uint32_t _pad0;
+  /* ⊘ NO hand-written pads here either. `[measured, s33_675af4a_vafmt4]` an earlier
+   * version declared `uint32_t _pad0` after `hVASpace` and `uint32_t _pad1` after
+   * `vaSpaceId` "to align the NV_DECLARE_ALIGNED members", and RM answered `0x1f`: the
+   * pads made `sizeof` **200** where the real struct is **192**.
+   *
+   * ★ `NV_DECLARE_ALIGNED(NvU64 x, 8)` does not mean "a pad is needed"; it means "the
+   * compiler must align this to 8", which C already does for a `uint64_t`. Writing the
+   * pad as well DOUBLE-pads: `hVASpace` ends at 164, natural alignment puts `vaRangeLo`
+   * at 168, but an explicit 4-byte pad puts it at 176 and drags the tail out by 8.
+   * ⇒ this is the same defect as `id_info_t`'s trailing pad, made twice in one file.
+   * Sizes here are now derived by compiling the header's OWN field list, not by hand. */
   uint64_t vaRangeLo;
   uint32_t vaSpaceId;
-  uint32_t _pad1;
   uint64_t supportedPageSizeMask;
 } vacaps_t;
+_Static_assert(sizeof(vacaps_t) == 192,
+               "NV0080_CTRL_DMA_ADV_SCHED_GET_VA_CAPS_PARAMS is 192 bytes; RM validates "
+               "paramsSize against the class size and refuses anything else outright");
 
 /* MMU_FMT_LEVEL — mmu_fmt_types.h:72-116 (24 bytes: 5 u8, pad, u32 tag, pad, ptr) */
 typedef struct {
