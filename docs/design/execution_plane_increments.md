@@ -7438,3 +7438,90 @@ per-level dump measures rather than assumes.
 `Demand`, no allocation (`SparseFb::read` does not fault a page in, so the residency counter
 this boot reports — `368640 bytes` — is unperturbed by the dump). No completion, no payload,
 nothing emitted the guest did not ask for.
+
+### 16.10 ★★★★★ BOOTED `wlk1_dcd096c` — the walk is COMPLETE AND CORRECT, and it lands on an EMPTY page
+
+`[measured 2026-08-09, boot `wlk1_dcd096c`, archive **and** QEMU binary both stamped
+`kayfabe-rev:dcd096c62afd5c2e…`, GA106 bench `vh`, stock 580.159.04 guest, probe set EMPTY,
+one device-opening consumer]`:
+
+```text
+walk: L0@0x4000[ch1 lf0 sp0 inv3]    =PDE@0x0         ->0x5000/Vidmem
+      L1@0x5000[ch1 lf0 sp0 inv511]  =PDE@0x0         ->0x6000/Vidmem
+      L2@0x6000[ch2 lf0 sp0 inv510]  =PDE@0x120000000 ->0x8000/Vidmem
+      L3@0x8000[ch2 lf8 sp0 inv247]  =PDE@0x121000000 ->0xa000/Vidmem
+      L4@0xa000[ch0 lf2 sp0 inv30]   =LEAF@0x121010000->0x20000/Vidmem/sz0x10000
+```
+
+★★★ **The leaf's own VA base is `0x121010000` — the ring address exactly — and it maps to
+`V:0x20000` with a 64 KiB page.** That is byte-identical to `resolve`'s independent answer
+printed in the same sentence (`rng=V:0x20000`). ⇒ The two projections **agree**, which is
+what §16.2 wall 1 taught us to check rather than assume.
+
+⊘⊘ **THIS REFUTES THIS RUNG'S OWN PREMISE, WHICH WAS MINE.** §16.9 argued *"entry 0 is not
+the entry the walk consumes — for `va = 0x121010000` the level-2 index is
+`(va >> 29) & 0x1ff = 9`"*. Both halves are wrong:
+
+- **The tree is FIVE levels, not four.** The publication declares `lv4` (shifts 47/38/29/21)
+  and the descent runs `L0…L4`. The published levels are only the **top four** of the
+  format's five, so any index arithmetic done against the publication's shifts describes a
+  different tree. ⊘ The trace does no arithmetic — it selects on the `vabase`
+  `decode_page` stamps — which is the only reason it is right where my reasoning was not.
+- **The pages beyond the published range ARE populated and ARE found.** `L2` carries two
+  children, `L3` two children and eight leaves, `L4` two leaves. The guest wrote them, we
+  read them, the descent follows them.
+
+⇒ ★★★★ **The address plane is now exonerated END TO END for this channel.** Root
+attribution, aperture decode, the five-level descent, the leaf's page size and the final
+translation are all correct. §16.5's *"a root at `0x4000`, walked, produces plausible-looking
+leaves"* is refuted: they are not *plausible-looking*, they are **right**.
+
+⇒ The wall is one step further out and is now a single sentence: **the guest's own page
+tables say its GPFIFO ring lives at framebuffer offset `0x20000`, and our framebuffer has
+never had a byte written there.** The page tables reached our store (§16.9 read them back);
+the ring contents did not.
+
+### 16.11 ⊘⊘⊘ §16.5's "BAR1 IS INNOCENT" DOES NOT FOLLOW FROM THE NUMBER IT CITES
+
+`[src]` `qemu/hw/misc/nvkvm/nvkvm.c:71-73`, the enum's own comment:
+
+> `NVKVM_KIND_RESERVATION` — *"A pure-MMIO reservation the archive **shadows with its own
+> slots**. Its callbacks are **not reached in normal operation**; if one fires, the shadow is
+> missing."*
+
+and `:485-490`, the counter's own comment: *"Reached only where the archive's slot does not
+cover the range … **Counted so 'the shadow is missing' is a number** rather than a
+suspicion."*
+
+⇒ `reservation_touches` counts **how often the shadow was ABSENT**. It does **not** count
+guest accesses to BAR1 — by the code's own statement, an access the shadow serves never
+reaches the callback and is therefore never counted. §16.5 read the number the other way:
+
+> *"**Three.** … It is three, against 624 206 accesses through the two paths that do reach
+> the framebuffer store. ⇒ **BAR1 is innocent**; the guest did not write its ring there."*
+
+⊘ **That inference is unsound.** `3` is consistent with the guest never touching BAR1 **and
+equally consistent with the guest writing gigabytes through it into a shadow memslot** — the
+two are indistinguishable in that counter, which is the exact shape
+`a_saturated_instrument_looks_exactly_like_absence` names, inverted: not a full list read as
+complete, but a **miss counter read as a hit counter**.
+
+⚠ **This is a CANDIDATE, not a finding, and it is stated as one.** Nothing here measures that
+a BAR1 shadow slot exists in this build, nor that it holds the ring bytes. What is measured
+is that the *evidence which cleared BAR1 cannot bear that weight*. It matters because
+`:1431` already records what the shadow arm is — *"a plain RAM slot with **no connection to
+the framebuffer**"* — so bytes written there are in **neither store the address plane
+reads**, which is precisely the shape §16.10 now requires: correct page tables naming
+`V:0x20000`, and nothing ever written to `V:0x20000`.
+
+⇒ ⧗ **The next measurement, and it is decidable:** report whether a BAR1 shadow slot is
+installed, its extent, and how many of its bytes are non-zero — beside the existing
+`reservation_touches`. A non-zero shadow is guest data in a store nothing reads; an absent
+shadow restores §16.5's conclusion by a route that actually supports it.
+
+★ **The general lesson, and it is new in kind for this project.** Every instrument failure so
+far has been a *report* that clipped, a *name* that was wrong, or a *list* that saturated.
+This one is a counter that is **correct, well-documented, and measures a different thing than
+the sentence built on it**. Reading its own comment was enough to refute a committed
+conclusion — no boot required. ⇒ Before citing a counter, read what its **increment site**
+says it counts, not what its **name** suggests.
