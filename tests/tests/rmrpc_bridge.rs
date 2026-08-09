@@ -3165,11 +3165,59 @@ fn every_class_in_the_table_decodes_its_declared_facts_and_only_those() {
         "Device: `deviceId` @ +0 and nothing else — `hClientShare` and `vaMode` are set \
          here precisely so a decoder that read one of them fails",
     );
+    // ★★★★ §16.28 — THIS ROW USED TO ASSERT `AllocFacts::default()`, justified as *"its
+    // params are geometry, and a decoder that invented a fact from them would be inventing
+    // it from garbage"*. ⊘ That justification was WRONG in the load-bearing direction, and
+    // it is why four rungs of the §16 campaign hunted for an address space whose one
+    // identifying wire field was sitting behind a comment saying there was nothing to read.
+    // `index` is not geometry: `NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE` (`= 0x03`) is
+    // NVIDIA's own *"Acquire reference to device vaspace"* (`ogkm-580: nvos.h:3187`) — the
+    // field that says the alloc CREATES NOTHING and is a transient name for the parent
+    // Device's existing address space.
+    //
+    // ★ The row's underlying CONCERN — a decoder must not invent facts — is preserved and
+    // strengthened: three rows now, so the discriminator itself is pinned in both
+    // directions and the unread case is pinned as its own third answer.
+    let vas_params = |index: u32| {
+        let mut b = [0xffu8; 56];
+        b[..4].copy_from_slice(&index.to_le_bytes());
+        b
+    };
     assert_eq!(
-        xlate(&msg(w::FERMI_VASPACE_A, &[0xff; 56])),
+        xlate(&msg(w::FERMI_VASPACE_A, &vas_params(0xffff_ffff))),
+        want(
+            w::FERMI_VASPACE_A,
+            AllocFacts {
+                vaspace_role: Some(kayfabe_arch::VaSpaceRole::Own),
+                ..Default::default()
+            }
+        ),
+        "★ VASpace: 56 bytes of 0xff still declare nothing but the role, and an index this \
+         port does not recognise is `Own` — never `DeviceDefault`. Garbage must not be able \
+         to claim a Device's address space",
+    );
+    assert_eq!(
+        xlate(&msg(w::FERMI_VASPACE_A, &vas_params(3))),
+        want(
+            w::FERMI_VASPACE_A,
+            AllocFacts {
+                vaspace_role: Some(kayfabe_arch::VaSpaceRole::DeviceDefault),
+                ..Default::default()
+            }
+        ),
+        "★★★★ index 3 = NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE, and it is the ONLY value \
+         that reads as the Device's default — the whole of §16.28's fourth route rests on \
+         this one comparison. ⊘ Every other field of those 56 bytes is still 0xff and still \
+         declares nothing",
+    );
+    assert_eq!(
+        xlate(&msg(w::FERMI_VASPACE_A, &[])),
         want(w::FERMI_VASPACE_A, AllocFacts::default()),
-        "★ VASpace: 56 bytes of 0xff declare NOTHING. Its params are geometry, and a \
-         decoder that invented a fact from them would be inventing it from garbage",
+        "⊘ AND AN EMPTY PARAMS BLOCK IS STILL ACCEPTED, with the role UNREAD (`None`) — not \
+         refused and not folded to `Own`. A class this port admits today must not become \
+         one it rejects because somebody wrote a reader for it \
+         (`accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`), and an unreadable \
+         declaration is never a positive claim in either direction",
     );
     assert_eq!(
         xlate(&msg(w::KEPLER_CHANNEL_GROUP_A, &w::tsg_params(cp::VAS, 9))),

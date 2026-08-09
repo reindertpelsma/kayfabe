@@ -8550,3 +8550,43 @@ resolve through the object model carry the *same* number in their instance block
 do, the object model is confirmed as a convenience over the machine's own record — and route 4
 gains a second, independent derivation. ⊘ It is not needed to unblock: the wall is already down
 and the walk already resolves.
+
+### 16.28.14 ⊘ THE SUITE CAUGHT §16.28 ONE COMMIT LATE — and the failing test held the refuted comment
+
+`[measured 2026-08-09, `KAYFABE_SLOW=1 cargo test --workspace --no-fail-fast` on `vh` at
+`0484a3b`]` — **210 targets `ok`, exactly one FAILED**:
+`every_class_in_the_table_decodes_its_declared_facts_and_only_those`
+(`tests/tests/rmrpc_bridge.rs:3168`), and it is §16.28's own.
+
+⊘ **The honest part first: this was committed before the workspace suite was run.** `b0aeae7`
+cites `cargo clippy --workspace --all-targets` clean and `miss_taxonomy` 25/25, and both were
+true — but the guard that actually covered the change was in a different target, and it was not
+run until after the commit and after the boot. ⇒ **Clippy plus the tests you thought of is not
+the suite**; the whole point of a workspace suite is the target you did not think of.
+
+★ And what it was guarding is the same wrong comment §16.28.3 records, transcribed into an
+assertion:
+
+> `xlate(FERMI_VASPACE_A, [0xff; 56]) == AllocFacts::default()`
+> *"★ VASpace: 56 bytes of 0xff declare NOTHING. Its params are geometry, and a decoder that
+> invented a fact from them would be inventing it from garbage"*
+
+⇒ The refuted claim existed in **two** places — a rustdoc table and a test — and the test made
+it look verified. ★ `a_wrong_citation_is_more_durable_than_none`, with the extra twist that a
+green test is a much stronger endorsement than a comment.
+
+**Fixed by strengthening, never by weakening.** One row became three, so the discriminator is
+pinned in both directions and the unread case is its own third answer:
+
+| params | expected | what it forbids |
+|---|---|---|
+| `index = 0xffff_ffff` | `Some(Own)` | ⊘ garbage claiming a Device's address space |
+| `index = 3` | `Some(DeviceDefault)` | the whole fourth route rests on this one comparison |
+| **empty** | `None` (unread), and **still accepted** | ⊘ a class the port admits becoming one it rejects because a reader was written for it |
+
+⊘ The row's underlying concern — *a decoder must not invent facts* — is preserved verbatim; only
+its false premise about `index` is gone. `rmrpc_bridge` 114/114, `miss_taxonomy` 25/25, clippy
+clean.
+
+⚠ ⊘ **This does not touch s26.** The failing assertion is a test-side expectation; the shipped
+decoder is unchanged by the fix, so the binary that booted is the binary this describes.
