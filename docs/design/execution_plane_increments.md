@@ -8012,3 +8012,120 @@ and `git diff --stat` confirmed the file actually changed on both passes
 this increment's to move and were moved with their reasons: class counts +1 at **all four**
 boundaries (75→76, 83→84, 89→90, 91→92 — moving *together* is the evidence the row went
 into the shared base) and decoded classes 13→14.
+
+## 16.25 ★★★★ The `NoVas` null MADE TO DISCRIMINATE — and it named the wall in one boot
+
+`[measured 2026-08-09, boot `s24_cf18883_cup2`, bench `vh`, GA106/RTX 3060, host
+580.159.04 Open, STOCK guest, hook `cup2_hook_deadline.sh` — the same hook s20–s23
+carried. Rev `cf188835a8f4…` stamped in BOTH the archive and the QEMU binary, matching a
+clean `HEAD`.]`
+
+### 16.25.1 What was wrong with the instrument
+
+s23 refused **15 of 24 doorbells** `FwdFault::NoVas(ChanId(3))` and printed
+
+```text
+c=0xc1e00010 vas=NONE-DECLARED dec=NONE userd=h0x9/off0x0 ring=0x120064000
+```
+
+`project::resolve_channel_vas` has **three** routes — the channel's own `hVASpace`, its
+CtxShare's, its parent TSG's — and all three returned the identical `None`. `dec=NONE`
+reports only that **the channel** declared none. `shim.rs:2414` had already written the bug
+report as a comment: *"a `NoVas` refusal names the absence and nothing else."* Four
+consecutive rungs were framed on guesses about that absence.
+
+The fix was report-only: `resolve_declared_handle` now returns `Result<&RmNode,
+HandleMiss>` (so the *reason* is produced by the code that makes the *decision*, never by a
+parallel diagnoser), `resolve_channel_vas` returns `(Option<&RmNode>, VasRoutes)`, and the
+refusal carries both the routes and a **census of every live channel grouped by outcome**,
+because nine doorbells were served and the served channels are the control.
+
+### 16.25.2 ★★★★ THE MEASUREMENT — the discriminator is exact
+
+```text
+doorbells: 24 arrived, 9 served, 15 REFUSED by name       (byte-identical to s23)
+NoVas(ChanId(3)) | c=0xc1e00010 … route[own=not-declared cs=not-declared
+                                        tsg=mid-miss(h0xa,wrong-kind(Device))]
+census[6 chans, 3 outcomes]
+  {1x pdb=N own=not-declared cs=not-declared tsg=mid-miss(h0xa,wrong-kind(Device))
+       p0/c3*:vc1 Ce c0xc1e00010/0x2}                     ← THE WALL, and it is ONE channel
+  {1x pdb=Y own=ok(h0xa=>c0xc1e00011/0xa) cs=not-attempted tsg=not-attempted
+       p0/c4:vc2  Ce c0xc1e00011/0x2}
+  {4x pdb=Y own=not-declared cs=not-declared tsg=ok(h0xcaf00005=>c0xc1d0000a/0xcaf00005)
+       p0/c6:vc3 c7:vc4 c8:vc5 +1 more  Ce c0xc1d0000a/…}
+```
+
+Three facts fall out that no previous boot could state:
+
+1. **The wall is ONE channel.** Six live channels, and exactly one has `pdb=N`. All 15
+   refusals are that one channel rung 15 times — not a class of channels.
+2. **The other five resolve, by two different routes**, so the machinery works: one on its
+   own `hVASpace`, four (the UVM channels, on `0xc1d0000a` — the same client prefix the
+   page-directory publications arrive on) through their parent TSG.
+3. ★★★ **The refused channel declares NOTHING and its parent is a `Device`.** Route 3
+   looked up its parent handle `0xa` and found a **Device**, not a TSG. ⊘ All three routes
+   are *correct*: there genuinely is nothing declared to inherit from.
+
+⊘ **The wall did not move**, and it was never going to: this increment adds no behaviour.
+`cup2` is still `FAIL cuInit(0) -> initialization error (3)` (`CUP2_RC=1`). The doorbell
+counts are byte-identical to s23. That invariance is the evidence the change is
+observational.
+
+### 16.25.3 ★★★★ WHY THERE IS NO FOURTH ROUTE — and why no instrument could have found it
+
+RM source, not inference (`ogkm` 580.159.04):
+
+- `kernel_channel.c:350-375` — when a channel's parent is a **Device** rather than a TSG,
+  RM **internally allocates a TSG to wrap it**, forwarding `tsgParams.hVASpace =
+  pChannelGpfifoParams->hVASpace` (here `NV01_NULL_OBJECT`). Its own comment: *"Internally
+  allocate a TSG to wrap this channel. **There is no point in mirroring this allocation in
+  the host**, as the channel is already mirrored."*
+- `kernel_ctxshare.c:127` → `vaspaceGetByHandleOrDeviceDefault(pClient, hDevice, hVASpace,
+  &pVAS)`.
+- `vaspace.c:178` — `vaspaceGetByHandleOrDeviceDefault_IMPL`: when `hVASpace ==
+  NV01_NULL_OBJECT` it resolves **the DEVICE** and returns **the device's default VA
+  space**.
+
+⇒ The missing route is: **a channel that declares neither `hVASpace` nor `hCtxShare`, and
+whose parent is a Device, inherits that DEVICE's default VA space.**
+
+★★★ And note the shape of the trap, because it is the reusable lesson: the intermediate we
+were looking for **is deliberately never sent to us**. RM allocates that wrapper TSG on the
+CPU side and explicitly declines to mirror it. So this is not a fact we failed to observe
+and could have caught by observing harder — it is a fact that is *unobservable by
+construction*, and must therefore be **derived and then oracled**
+(`derive_what_you_cannot_query_then_oracle_it`). Every rung that assumed better
+instrumentation would eventually surface the missing parent was chasing an object that does
+not exist on the wire.
+
+⊘ **Deliberately NOT fixed here.** Adding the fourth route is a behaviour change and needs
+its own boot to be attributable — and it carries a real open question this boot does not
+answer: whether the Device's default VA space is a VASpace the guest allocated (findable in
+the graph) or one RM created implicitly with the Device (which we would have to mint). The
+`0xc1e00010` namespace shows no VASpace in this capture, but the capture has no object
+census, so that is **unmeasured, not empty** — `c_oracle_empty_rows_are_wrong`.
+
+## 16.26 ⊘ The owed red test: the GATE was right, the SETUP was stale
+
+`stress_multi_vcpu_interleaved_ops` failed 5/5 at `11b1377` (§16.24.7) and reproduces at
+`bc53173` on the bench: `NotScheduled { chan: ChanId(0), vchid: VChid(258) }`.
+
+**Root cause.** `3ab1305` (#177, 2026-08-03) made `plan_doorbell` gate on
+`proc.exec.requested`, which only `Gpu::schedule_channel` — the guest's own `0xa06f0103` —
+writes. That gate is #177's entire point: it is what makes serving the control a *performed
+transition* rather than a fabricated promise. `stress_gpu` builds its device from
+`Scenario::compute_process`, which emits `Alloc`/`SetPageDir` and nothing else, so from
+`3ab1305` onward the test asserted a doorbell would be served on a channel nobody had asked
+to schedule. Every other test needing a live doorbell already calls `schedule_channel`.
+
+★ It **looked** like a race and was not one: `VChid(258)` = `gr_vchid(2)` every run, because
+the per-thread RNG is deterministic. A deterministic "concurrency" failure is a tell that
+the concurrency is not the cause — `suspect_the_instrument_first`.
+
+★★★ It survived six days because `skip_slow!` means `cargo test --workspace` never runs it
+and reports **green**. Fixed by having the setup do what a real guest does. **3/3 green on a
+4-core box** (the flake-prone configuration), full ~23 s soak each.
+
+★ And the wider suite is better than recorded: `KAYFABE_SLOW=1 cargo test --workspace
+--no-fail-fast` at `bc53173` on the bench had **exactly one failing target** — this one. The
+"6 tests red" of §16.22 no longer holds.
