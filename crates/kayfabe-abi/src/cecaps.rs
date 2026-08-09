@@ -933,8 +933,8 @@ mod tests {
         let g = ga106();
         for (index, want) in [(0usize, 0x03e3u16), (1, 0x03e3), (2, 0x03e2), (3, 0x03e2)] {
             let engine_type = crate::submit::engine_type_copy(index as u32).expect("first block");
-            let out = answer_ce_get_physical_caps(&caps_v2_request(engine_type), &g)
-                .expect("advertised");
+            let out =
+                answer_ce_get_physical_caps(&caps_v2_request(engine_type), &g).expect("advertised");
             let caps = CeCaps([out[CAPS_V2_TBL_OFF], out[CAPS_V2_TBL_OFF + 1]]);
             assert_eq!(caps.as_u16(), want, "LCE{index}");
             assert_eq!(
@@ -968,7 +968,14 @@ mod tests {
         let err = answer_ce_get_physical_caps(&caps_v2_request(0x0d), &ga106())
             .expect_err("LCE4 is not advertised by this part");
         assert!(
-            matches!(err, CePhysicalCapsError::EngineNotPresent { index: 4, present: 0x0f, .. }),
+            matches!(
+                err,
+                CePhysicalCapsError::EngineNotPresent {
+                    index: 4,
+                    present: 0x0f,
+                    ..
+                }
+            ),
             "{err}"
         );
     }
@@ -978,7 +985,10 @@ mod tests {
     fn a_non_copy_engine_type_is_refused() {
         let err = answer_ce_get_physical_caps(&caps_v2_request(0x01), &ga106())
             .expect_err("graphics is not a copy engine");
-        assert!(matches!(err, CePhysicalCapsError::NotACopyEngine { .. }), "{err}");
+        assert!(
+            matches!(err, CePhysicalCapsError::NotACopyEngine { .. }),
+            "{err}"
+        );
     }
 
     /// ★★★ The two-branch encoding at its discontinuity: `0x13` is one past `COPY9` and is
@@ -987,7 +997,10 @@ mod tests {
     fn the_copy9_to_copy10_gap_is_refused() {
         let err = answer_ce_get_physical_caps(&caps_v2_request(0x13), &ga106())
             .expect_err("0x13 is in the gap");
-        assert!(matches!(err, CePhysicalCapsError::NotACopyEngine { .. }), "{err}");
+        assert!(
+            matches!(err, CePhysicalCapsError::NotACopyEngine { .. }),
+            "{err}"
+        );
     }
 
     /// A short request is refused rather than read past its end.

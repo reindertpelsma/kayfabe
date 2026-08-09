@@ -478,6 +478,24 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::GssLegacy8159,
         WantedTable::GssLegacy8162,
         WantedTable::C2cInfo,
+        // ⚠ §14.43's rung, and it is the same structural class again — a module boundary,
+        // not a closure limit. `0xa06c010a` has exactly one call site in the open tree
+        // (`ogkm-580: kernel_channel_group_api.c:494`, inside `kchangrpapiConstruct_IMPL`),
+        // so it is issued only when something allocates a `KEPLER_CHANNEL_GROUP_A`.
+        // `[measured 2026-08-09, boot `ce1442` at `8ea44dc`]` decides which something: the
+        // `kchangrpapiConstruct_IMPL` failure appears in `cup2`'s dmesg delta (58-73 s,
+        // `traces/guest_boots/ce1442_8ea44dc_probe.log:75`) and **nowhere** in the
+        // `nvidia-smi` device-open window of the same boot (28-39 s,
+        // `..._dmesg.log`) — so no TSG is allocated on the `RmInitAdapter` path at all.
+        // `cap1b` is an `RmInitAdapter` capture driven by `nvidia-smi`. ⊘ No closure limit
+        // reaches a control the capture's driver never issues.
+        //
+        // ★ Its reply plane is covered where it can be: `kayfabe_abi::fmbpromote`'s own
+        // tests sweep the decoder and pin the round trip, and
+        // `crates/kayfabe-device/tests/promote_fault_method_buffers.rs` asserts the reply at
+        // THIS policy's boundary — the call-site coverage `WantedTable::C2cInfo` was shipped
+        // twice without. ⊘ The envelope is still absent and that cost is real.
+        WantedTable::PromoteFaultMethodBuffers,
     ]
     .into_iter()
     .collect();
@@ -550,10 +568,16 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // both, unlike the two GSS-legacy rows — and unusually for this list, `0x20802a02`'s
     // reply plane already has a capture of **its own boundary** (`R24`), which no other
     // entry here can say.
-    assert_eq!(universe.len(), 40, "non-vacuity: the universe is not empty");
+    // ⊘ 40 -> 41 at §14.43 (`0xa06c010a`), a FOURTEENTH exception and the first that is not
+    // a subdevice control. Its class is the same "the capture's driver never issued it" one,
+    // but it is measured rather than argued from a caller chain: `[measured 2026-08-09, boot
+    // `ce1442`]` the sole caller `kchangrpapiConstruct_IMPL` fails in `cup2`'s dmesg delta
+    // and never in the same boot's `nvidia-smi` window. ★ A `cuInit`-driven capture would
+    // close it.
+    assert_eq!(universe.len(), 41, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        21,
+        22,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

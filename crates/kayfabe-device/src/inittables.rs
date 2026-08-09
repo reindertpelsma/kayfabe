@@ -1003,6 +1003,31 @@ pub enum WantedTable {
     /// first principles — C2C is a Grace-Hopper-class fabric and this die has none — so the
     /// argument survives the capture being deleted. See [`kayfabe_abi::c2cinfo`].
     C2cInfo,
+    /// `NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS` (`0xa06c010a`) — ★★★ §14.43's
+    /// wall, and **the first row in this table that is not a subdevice control at all**.
+    ///
+    /// `[measured 2026-08-09, boot `ce1442` at `8ea44dc`]` `cuInit` gets past
+    /// `queryCopyEngines` for the first time and dies six lines into
+    /// `kchangrpapiConstruct_IMPL` instead:
+    /// `NVRM: kchangrpapiConstruct_IMPL: Control call to update method buffer memdesc failed`,
+    /// with `unserviced fn 76 cmd 0xa06c010a` in the same boot's census
+    /// (`traces/guest_boots/ce1442_8ea44dc_census.log:42`). The `NV_PRINTF` is followed by a
+    /// hard `goto failed` (`ogkm-580: kernel_channel_group_api.c:492-505`), so the channel
+    /// group — the TSG every UVM channel and every compute channel hangs off — never exists.
+    ///
+    /// ★★★ It is `KERNEL_PRIVILEGED` (flags `0x14240`,
+    /// `ogkm-580: g_kernel_channel_group_api_nvoc.c:326-341`), so it cannot be measured on a
+    /// real part — and it needs no measurement, because **every field is `[input]`**. This is
+    /// the one place in this table where "derive, never invent" resolves to *there is nothing
+    /// to state*: the reply is the guest's own facts, re-encoded from what the decoder
+    /// accepted. See [`kayfabe_abi::fmbpromote`] for the honesty question re-asked per id, for
+    /// why the `_v1E_07` RPC is a decoy, and for the compiler-pinned layout at both tags.
+    ///
+    /// ⊘ The refusal arm is **not** defensive: it is C defect **D1**'s habitat. A guest
+    /// declaring more runqueues than the two-element array holds is refused by name rather
+    /// than clamped, and a buffer whose aperture this port cannot name is refused rather than
+    /// folded into sysmem.
+    PromoteFaultMethodBuffers,
 }
 
 impl WantedTable {
@@ -1033,7 +1058,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 40] = [
+    pub const ALL: [WantedTable; 41] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1074,6 +1099,7 @@ impl WantedTable {
         Self::GssLegacy8159,
         Self::GssLegacy8162,
         Self::C2cInfo,
+        Self::PromoteFaultMethodBuffers,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1159,6 +1185,9 @@ impl WantedTable {
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
             Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162,
             Self::C2cInfo => kayfabe_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
+            Self::PromoteFaultMethodBuffers => {
+                kayfabe_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
+            }
         }
     }
 
@@ -1221,6 +1250,9 @@ impl WantedTable {
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE,
             Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162_PARAMS_SIZE,
             Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
+            Self::PromoteFaultMethodBuffers => {
+                kayfabe_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
+            }
         }
     }
 
@@ -2224,6 +2256,36 @@ impl CommandPolicy for InitTablePolicy {
                 Ok(p) => p,
                 Err(_) => return refuse(),
             },
+            // ★★★ §14.43 — the **acknowledgement** arm, and the only one in this table whose
+            // reply contains no fact of this port's own. Every field of
+            // `NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS` is `[input]`, so the
+            // whole content of a correct answer is *"received, and here is what I read"*.
+            //
+            // ⊘ The re-encode is deliberately **not** `raw.to_vec()`, which is what
+            // `WantedTable::RegisterAccessCntrBuffer` does one arm above. Copying the slice
+            // would let a byte the validation rejected reach the guest anyway, by travelling
+            // around the check inside the same buffer; re-encoding from the decoded view makes
+            // the reply structurally incapable of carrying a record the decoder did not
+            // accept. That is the same argument `encode_event_set_notification` makes for not
+            // echoing, arrived at from the opposite direction.
+            //
+            // ⚠ `refuse()` here answers `NV_ERR_NOT_SUPPORTED`, which the caller turns into a
+            // failed channel-group construct — the wall this arm exists to remove. So the
+            // error branch is genuinely the *worse* outcome and is still right: each shape it
+            // declines is one this port cannot name (a runqueue count past the array, an
+            // aperture that is neither sysmem nor FB, a sized buffer at address zero), and
+            // answering `NV_OK` to those would be claiming to have recorded something we
+            // could not read.
+            WantedTable::PromoteFaultMethodBuffers => {
+                let at = req.params_at;
+                let Some(raw) = cmd.payload.get(at..at + want.params_size()) else {
+                    return refuse();
+                };
+                match kayfabe_abi::fmbpromote::decode_promote_fault_method_buffers(raw) {
+                    Ok(req) => kayfabe_abi::fmbpromote::encode_promote_fault_method_buffers(&req),
+                    Err(_) => return refuse(),
+                }
+            }
         };
 
         // ★★ The sticky-answer tripwire, at the serve site rather than in a comment. The

@@ -456,7 +456,14 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // very `CeGeometry` `0x20802a0b` already serves, stating no new number — while
     // `0x20802a02` carries `NON_PRIVILEGED`, so a real GA106 was simply asked (`R24`), and
     // its LCE4 refusal corroborates `present = 0x0f` from a third independent control.
-    assert_eq!(WantedTable::ALL.len(), 40, "the served universe\'s size");
+    // ★★★★ 40 -> 41 at §14.43: `0xa06c010a`
+    // NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS, the wall §14.42's rung exposed
+    // and the FIRST row in this universe that is not a subdevice control. It is
+    // `KERNEL_PRIVILEGED` like `0x20802a07`, so it cannot be measured — and unlike
+    // `0x20802a07` it needs no derivation either, because EVERY field is `[input]`. The
+    // reply is the guest's own facts re-encoded from what the decoder accepted; this port
+    // states no number of its own anywhere in it. See `kayfabe_abi::fmbpromote`.
+    assert_eq!(WantedTable::ALL.len(), 41, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

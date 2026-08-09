@@ -1198,9 +1198,7 @@ fn ce_pce_mask_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHan
         "info  R24 pce-mask probe  = {CMD:#010x}, {PARAMS}-byte params, one bare Subdevice, \
          no channel"
     );
-    println!(
-        "info  R24 ceEngineType is [IN] — seeding ONLY the pceMask word, NOT the R18 blanket"
-    );
+    println!("info  R24 ceEngineType is [IN] — seeding ONLY the pceMask word, NOT the R18 blanket");
     println!("info  R24 cecaps measured present=0x0f (LCE0..3); asking 0..=4 to MEASURE the edge");
 
     for i in 0..=4u32 {

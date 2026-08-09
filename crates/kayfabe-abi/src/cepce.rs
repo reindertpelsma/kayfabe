@@ -356,12 +356,18 @@ mod tests {
     #[test]
     fn the_four_measured_masks_come_back() {
         // `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`, verbatim.
-        for (index, engine_type, want) in
-            [(0usize, 0x09u32, 0x20u32), (1, 0x0a, 0x10), (2, 0x0b, 0x10), (3, 0x0c, 0x20)]
-        {
-            let out =
-                answer_ce_get_ce_pce_mask(&request(engine_type), GA106_PRESENT, GA106_LCE_PCE_MASKS)
-                    .expect("an advertised engine is answered");
+        for (index, engine_type, want) in [
+            (0usize, 0x09u32, 0x20u32),
+            (1, 0x0a, 0x10),
+            (2, 0x0b, 0x10),
+            (3, 0x0c, 0x20),
+        ] {
+            let out = answer_ce_get_ce_pce_mask(
+                &request(engine_type),
+                GA106_PRESENT,
+                GA106_LCE_PCE_MASKS,
+            )
+            .expect("an advertised engine is answered");
             assert_eq!(out.len(), CE_GET_CE_PCE_MASK_PARAMS_SIZE);
             // `ceEngineType` is `[IN]`: it must come back exactly as sent.
             assert_eq!(
@@ -385,7 +391,10 @@ mod tests {
     fn lce4_is_refused_the_way_hardware_refuses_it() {
         let err = answer_ce_get_ce_pce_mask(&request(0x0d), GA106_PRESENT, GA106_LCE_PCE_MASKS)
             .expect_err("LCE4 is not advertised by this part");
-        assert!(matches!(err, CePceMaskError::EngineNotPresent { index: 4, .. }), "{err}");
+        assert!(
+            matches!(err, CePceMaskError::EngineNotPresent { index: 4, .. }),
+            "{err}"
+        );
     }
 
     /// A non-copy engine type is refused by name — RM's own `!RM_ENGINE_TYPE_IS_COPY` arm.
@@ -394,7 +403,10 @@ mod tests {
     fn a_non_copy_engine_is_refused() {
         let err = answer_ce_get_ce_pce_mask(&request(0x01), GA106_PRESENT, GA106_LCE_PCE_MASKS)
             .expect_err("graphics is not a copy engine");
-        assert!(matches!(err, CePceMaskError::NotACopyEngine { .. }), "{err}");
+        assert!(
+            matches!(err, CePceMaskError::NotACopyEngine { .. }),
+            "{err}"
+        );
     }
 
     /// ★★★ The two-branch encoding, at the discontinuity that a `- 0x09` shortcut gets wrong.
@@ -406,7 +418,10 @@ mod tests {
     fn the_gap_between_copy9_and_copy10_is_not_a_copy_engine() {
         let err = answer_ce_get_ce_pce_mask(&request(0x13), u64::MAX, GA106_LCE_PCE_MASKS)
             .expect_err("0x13 is in the gap between COPY9 and COPY10");
-        assert!(matches!(err, CePceMaskError::NotACopyEngine { .. }), "{err}");
+        assert!(
+            matches!(err, CePceMaskError::NotACopyEngine { .. }),
+            "{err}"
+        );
     }
 
     /// ⊘ The drift arm: an engine the device advertises with no mask on the chip row is a
@@ -416,7 +431,14 @@ mod tests {
         let err = answer_ce_get_ce_pce_mask(&request(0x0d), 0x1f, GA106_LCE_PCE_MASKS)
             .expect_err("LCE4 advertised but not stated");
         assert!(
-            matches!(err, CePceMaskError::NoMaskForEngine { index: 4, stated: 4, .. }),
+            matches!(
+                err,
+                CePceMaskError::NoMaskForEngine {
+                    index: 4,
+                    stated: 4,
+                    ..
+                }
+            ),
             "{err}"
         );
     }
@@ -426,7 +448,10 @@ mod tests {
     fn a_short_request_is_refused() {
         let err = answer_ce_get_ce_pce_mask(&[0u8; 7], GA106_PRESENT, GA106_LCE_PCE_MASKS)
             .expect_err("7 bytes is short of the struct");
-        assert!(matches!(err, CePceMaskError::ShortParams { len: 7, need: 8 }), "{err}");
+        assert!(
+            matches!(err, CePceMaskError::ShortParams { len: 7, need: 8 }),
+            "{err}"
+        );
     }
 
     /// ★★ The structural cross-check the module header claims: four LCEs, **two** distinct

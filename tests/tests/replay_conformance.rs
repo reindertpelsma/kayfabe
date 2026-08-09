@@ -1596,6 +1596,30 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         //
         // ⊘ Same `nvidia-uvm`-never-ran reason for its absence from `cap1b`.
         0x2080_2a02,
+        // ★★★ §14.43. Pure `[IN]` like §14.41's three, so the "size we answer" **is** the
+        // size the guest sent and there is no unevidenced number in the reply at all — the
+        // only claim is the layout.
+        //
+        // ⊘ And that layout is not a hand-count: it is compiler-pinned at **both** vendored
+        // tags by building the vendored declarations with `offsetof`/`sizeof` under real
+        // `NV_DECLARE_ALIGNED` semantics — `sizeof = 88`, `methodBufferMemdesc +0`,
+        // `bar2Addr +64`, `numValidEntries +80`, `MAX_RUNQUEUES = 2` — the discipline
+        // `docs/design/gpu_promote_ctx.md` §1.2 sets, and `88` is also the `paramSize` the
+        // export row advertises (`ogkm-580: g_kernel_channel_group_api_nvoc.c:336`). Two
+        // independent sources, neither a capture.
+        //
+        // ⚠ It could not be evidenced by a capture of *any* kind even in principle: flags
+        // `0x14240` carry neither `PRIVILEGED` nor `NON_PRIVILEGED`, so the id is
+        // `KERNEL_PRIVILEGED` and `rmladder` cannot reach it from usermode. Recording that
+        // is the point — an unmeasurable id must be exempted for its own stated reason and
+        // must not borrow a neighbour's measurement.
+        //
+        // ⊘ Absent from `cap1b` for the module reason its neighbours give, sharpened by a
+        // measurement: `[measured 2026-08-09, boot `ce1442` at `8ea44dc`]` the sole caller
+        // `kchangrpapiConstruct_IMPL` fails in `cup2`'s dmesg delta and **never** in the
+        // same boot's `nvidia-smi` window, so no TSG is allocated on the `RmInitAdapter`
+        // path this capture records.
+        0xa06c_010a,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
