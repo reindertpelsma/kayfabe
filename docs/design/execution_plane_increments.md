@@ -9356,3 +9356,93 @@ route string and `pdb=Y|N` for `cup2`'s own channel — needs the `ContextVasUnd
 that row was not latched. The next boot is the same instrument with §16.41.3's fix, and the
 falsifier of §16.40.5 stands unchanged: **A** (with `tsg=ok(h0x5c00000X…)`, `pdb=N`) versus
 **C**/**D**. **B is already eliminated.**
+
+## §16.42 ★★★★★ BOOTED `s37_0dfe7f7_pertag` — leg 1 MEASURED, the chain CLOSES, and my prediction was wrong about the ROUTE
+
+`[measured 2026-08-09, rev `0dfe7f7`, binary stamped `kayfabe-rev:0dfe7f7add…` and verified
+before the boot]`. Evidence: `traces/guest_boots/run_s37_0dfe7f7_pertag_{qemu,dmesg,probe}.log`.
+
+### 16.42.1 ★★★★★ THE LINE THAT ANSWERS THE RUNG
+
+```
+promote-ctx refusals: 2 distinct kind(s), each with the VA-space census AS IT STOOD AT ITS FIRST refusal
+  promote-ctx PromoteFault::ContextVasUndeclared:
+    ContextVasUndeclared { client: HClient(3251634188), object: HObject(1543503897) }
+    census[7 chans, 4 outcomes]
+      …
+      {1x pdb=N own=not-declared cs=ok(h0x5c000007=>c0xc1d0000c/0x5c000007)
+           tsg=not-attempted dev=not-attempted p2/c0:vc7 GrCompute c0xc1d0000c/0x5c000019}
+```
+
+`3251634188` = **`0xc1d0000c`**, `1543503897` = **`0x5c000019`**. Both are `cup2`'s own, and
+both are corroborated by `cup2`'s `rmtrace` **from the same boot**:
+`ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000019`.
+
+⇒ **the refused promotion is `cup2`'s `AMPERE_CHANNEL_GPFIFO_A`**, its VA space resolves to
+**`0x5c000007`**, and that VA space has **`pdb=N`**. Leg 1 of `b4f00f3`'s three is measured.
+
+### 16.42.2 ⊘ MY PREDICTION WAS WRONG — right VA space, WRONG ROUTE, and the difference matters
+
+§16.40.5 predicted `tsg=ok(...)`: the channel is parented to the TSG `0x5c000012`, so I
+reasoned route 3 would commit. The boot says **`cs=ok(h0x5c000007=>c0xc1d0000c/0x5c000007)`**
+and **`tsg=not-attempted`**.
+
+★ Route **2** — the `FERMI_CONTEXT_SHARE_A` — commits first and `resolve_channel_vas` never
+reaches the TSG (each route *commits*; there is no fall-through). ⊘ A parent handle is not a
+routing answer: the channel's `hParent` really is the TSG, and the VA space still comes from
+its `hCtxShare`. Reading the alloc tree told me the right VA space **for the wrong reason**,
+and a fix written against the TSG's declared `hVASpace` would have been aimed at a hop that
+never runs.
+
+★★ This is why the census prints all four routes and not just the winner: `own=not-declared
+cs=ok(…) tsg=not-attempted dev=not-attempted` is a complete account of *why* this VA space and
+not another. A one-line "vas=0x5c000007" would have been true and would not have caught me.
+
+### 16.42.3 ★★★★★ THE CHAIN, END TO END, ALL FROM MEASURED FACTS
+
+| # | fact | source |
+|---|---|---|
+| 1 | `cup2`'s channel `0x5c000019` declares no `hVASpace`; its **CtxShare** names `0x5c000007` | `s37` census, this boot |
+| 2 | `0x5c000007` is libcuda's **FIRST** `FERMI_VASPACE_A` (of two: `…07`, `…08`) | `s35`/`s37` `rmtrace` |
+| 3 | UVM **dups `0x5c000007`** into `0xcaf00036` | `GspRmDupObject … hObject=0xcaf00036; hObjectSrc=0x5c000007`, `run_s31_675af4a_echofix_probe.log:307` |
+| 4 | `0x00801813` publishes a root **for `0xcaf00036`** | `SET_PAGE_DIRECTORY … hVASpace 0xcaf00036 physAddress 0x201000`, every boot since `s35` |
+| 5 | `0x00801813` is **not** in `PUBLICATION_CONTROLS`, so that root never reaches the object model | `policy.rs`, source |
+| 6 | libcuda's *second* VA space `0x5c000008` publishes through `0x90f10106`, which **is** routed | `s35`/`s37` gvas rows |
+| 7 | ⇒ VASPACE #1 has no `pdb` ⇒ `Spine::ctx_vas` misses ⇒ `ContextVasUndeclared` (hop 2, per §16.41.2) | this boot |
+
+★★★ **Two VA spaces, two publication transports, and only one of them routed.** The port has
+been answering `NV_OK` to the other since §16.30 and writing it into a report.
+⊘ *"Recording is not forwarding"* — the sentence `PublicationObserver`'s own docs already make
+about `0x90f10106`, unnoticed one control over.
+
+### 16.42.4 ⇒ THE FIX, and why it is an OBSERVER entry
+
+`PUBLICATION_CONTROLS` gains `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`. **No new mechanism**:
+`translate_control` already produces `RmEvent::SetPageDir` for it, `RmEvent::SetPageDir` sets
+`pdb` on the **resource**, and a `Dup` binds the alias to the source's resource id — so a root
+published under `0xcaf00036` lands on `0x5c000007`'s resource, which is what `ctx_vas` resolves
+through. This list was the entire missing route.
+
+⚠ §14.21 measured this control being *claimed*, killing the adapter, and being reverted. That
+risk is **answering** it with a status the guest's error path reads. `SetPageDirPolicy` keeps
+answering it, byte for byte; `PublicationObserver` is a `CommandObserver` whose `observe`
+returns nothing to return and so **cannot change a reply**. Identical shape to `0x90f10106`'s.
+
+### 16.42.5 ⇒ THE FALSIFIER FOR THE FIX BOOT, three-valued, committed BEFORE it
+
+| # | what the report says | reading |
+|---|---|---|
+| **P** | `promote-ctx refusals` loses the `ContextVasUndeclared` row (or that census row turns **`pdb=Y`**), **and** `control 0x2080012b result 0x56` drops from `x3` | the route was **sufficient**. Leg 3 answered. Next wall is whatever `AMPERE_COMPUTE_B` hits after `kgrobjPromoteContext`. |
+| **Q** | the `cs=ok(h0x5c000007…)` row turns **`pdb=Y`** but the promotion is refused under a **different** name (`ContextVasNoOwner`, `UnknownVas`, `ForeignContextObject`) | the route was **necessary and not sufficient** — `injection_measures_necessity_never_sufficiency`. ★ This is a CONFIRMATION of §16.42.3, not a refutation: the PDB arrived; a *later* hop refuses. The new name says which. |
+| **R** | the row is still **`pdb=N`** | the route did not land. ⊘ Then check `VA-space page-directory publications` for a **new refusal**, and `PdbCollision` in particular: `0x5c000008` already claims a root, and two VA spaces claiming one `(gpu, pdb)` is a loud projection error. |
+| **S** | a *new* `RmGraphError` appears, or publications-accepted falls | the observer's apply is refused where the recorder's was not. Read the tag; the graph refuses by name. |
+
+⊘ **Q is the outcome I expect to be scored wrongly**, so it is written first: a two-valued
+"did cup2 get further?" would call it a failure. It is the hypothesis being *confirmed* and the
+wall moving one hop deeper, which is what six of the last eight rungs have actually produced.
+
+⚠ And §16.40.4's recorded defect now matters directly: `10 ACCEPTED (Vas::pdb populated)`
+counts **parked** publications as accepted. If this fix lands and the row stays `pdb=N`, that
+counter cannot tell whether the root was applied or parked for a handle that never resolved —
+read the `pdb=Y|N` in the promote census, which is a fact about the channel, not about our
+bookkeeping.

@@ -145,13 +145,19 @@ fn every_command() -> Vec<(String, RpcCommand)> {
         v.push((format!("object-control {cmd:#010x}"), control(cmd, 8)));
     }
     for &cmd in kayfabe_rmrpc::PUBLICATION_CONTROLS {
-        v.push((
-            format!("publication {cmd:#010x}"),
-            control(
-                cmd,
-                kayfabe_abi::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE,
-            ),
-        ));
+        // ★★★★ §16.42 — the params size is PER ID, not one size for the list. It used to be
+        // `COPY_SERVER_RESERVED_PDES_PARAMS_SIZE` for every member, which was correct only
+        // while every member happened to be a `0x90f1`-shaped publication. `translate_control`
+        // pins `paramsSize` to the struct's EXACT size and refuses a mismatch by name, so
+        // posting `0x00801813` at the wrong size would exercise the size refusal instead of
+        // the seat — a sweep that runs, goes green, and tests something else.
+        let size = if cmd == kayfabe_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
+        {
+            kayfabe_abi::generated::ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE
+        } else {
+            kayfabe_abi::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
+        };
+        v.push((format!("publication {cmd:#010x}"), control(cmd, size)));
     }
     // A control nobody claims, so the ledger arm is in the sweep too.
     v.push(("unclaimed control".into(), control(0x2080_0a4b, 8)));
@@ -315,23 +321,38 @@ fn the_publication_seat_sees_the_commands_the_link_below_it_answers() {
 
     let all = every_command();
     let total = all.len();
-    // ⊘ Counted from the SWEEP, not from `PUBLICATION_CONTROLS.len()`. The two ids are
-    // *also* members of `WantedTable::ALL` — `InitTablePolicy` is their answerer, which is
-    // the whole reason this seat has to sit ahead of it — so the sweep posts each of them
-    // twice and a hard-coded 2 is a wrong number that reads like the right one.
-    let want_publications = all
-        .iter()
-        .filter(|(_, c)| {
-            abi().decode_rpc_control(&c.payload).ok().is_some_and(|r| {
-                c.function == RpcFunction::RmControl
-                    && kayfabe_rmrpc::PUBLICATION_CONTROLS.contains(&r.cmd)
+    // ⊘ Counted from the SWEEP, not from `PUBLICATION_CONTROLS.len()`.
+    //
+    // ★★★★ §16.42 — and quantified PER ID, because the old `>= 2 * len()` encoded a hidden
+    // assumption that stopped being true. It held only while EVERY member was *also* a
+    // `WantedTable::ALL` entry, so the sweep posted each one twice. `0x00801813` is answered
+    // by `SetPageDirPolicy`, not `InitTablePolicy`, so it appears once — and a list-wide
+    // multiplier turned "one member is covered once" into "the sweep stopped covering both
+    // ids", which names the wrong defect. ⊘ A gate whose message misdescribes its own
+    // failure costs a reader the time the gate saved.
+    //
+    // The invariant this test actually needs is *"every publication id reaches the seat"*,
+    // so that is what is asserted, per id, with the id in the message.
+    let posted = |cmd: u32| {
+        all.iter()
+            .filter(|(_, c)| {
+                abi()
+                    .decode_rpc_control(&c.payload)
+                    .ok()
+                    .is_some_and(|r| c.function == RpcFunction::RmControl && r.cmd == cmd)
             })
-        })
-        .count();
-    assert!(
-        want_publications >= 2 * kayfabe_rmrpc::PUBLICATION_CONTROLS.len(),
-        "the sweep stopped covering both publication ids from both lists",
-    );
+            .count()
+    };
+    for &cmd in kayfabe_rmrpc::PUBLICATION_CONTROLS {
+        assert!(
+            posted(cmd) >= 1,
+            "the sweep stopped covering publication id {cmd:#010x}",
+        );
+    }
+    let want_publications: usize = kayfabe_rmrpc::PUBLICATION_CONTROLS
+        .iter()
+        .map(|&c| posted(c))
+        .sum();
     for (_, cmd) in &all {
         // ★ The reply is discarded on purpose: this test is about REACH, and the bytes are
         // the previous test's subject.

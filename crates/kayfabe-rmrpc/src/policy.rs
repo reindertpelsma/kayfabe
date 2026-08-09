@@ -1514,6 +1514,42 @@ impl CommandPolicy for ObjectPolicy {
 pub const PUBLICATION_CONTROLS: &[u32] = &[
     kayfabe_abi::gvaspacepdes::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
     kayfabe_abi::gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
+    // ★★★★ §16.42 — `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`. The THIRD transport by which
+    // the guest publishes a page-directory root, and the one `cup2`'s own address space
+    // depends on. It was absent from this list for six increments while
+    // `kayfabe_device::setpagedir::SetPageDirPolicy` answered it `NV_OK` and wrote it into a
+    // report — `⊘ recording is not forwarding`, the same sentence this list's own docs
+    // already make about `0x90f10106`.
+    //
+    // ★★★ THE CHAIN, closed end to end in ONE boot with same-boot identity
+    // (`[measured 2026-08-09, boot `s37_0dfe7f7_pertag`]`):
+    //
+    //   promote-ctx ContextVasUndeclared { client 0xc1d0000c, object 0x5c000019 }
+    //     … {1x pdb=N own=not-declared cs=ok(h0x5c000007=>c0xc1d0000c/0x5c000007)
+    //            p2/c0:vc7 GrCompute c0xc1d0000c/0x5c000019}
+    //
+    // - `0x5c000019` is `cup2`'s `AMPERE_CHANNEL_GPFIFO_A` (its own `rmtrace`, same boot).
+    // - It declares no `hVASpace` of its own; route 2 commits — the **CtxShare** — and
+    //   resolves to `0x5c000007`, libcuda's **FIRST** `FERMI_VASPACE_A`.
+    // - `0x5c000007` is exactly the handle UVM dups: `GspRmDupObject … hObject=0xcaf00036;
+    //   hClientSrc=…; hObjectSrc=0x5c000007` (`run_s31_675af4a_echofix_probe.log:307`).
+    // - And `0x00801813` publishes that root under the alias: `SET_PAGE_DIRECTORY … hVASpace
+    //   0xcaf00036 physAddress 0x201000` (every boot since `s35`).
+    // - libcuda's *second* VA space, `0x5c000008`, publishes through `0x90f10106` — which is
+    //   already on this list. **Two VA spaces, two transports, one of them routed.**
+    //
+    // ⇒ the PDB the channel's VA space is refused for not having is on the wire, on this
+    // transport, and nothing carried it into the graph. `RmEvent::SetPageDir` sets `pdb` on
+    // the **resource**, and a `Dup` binds the alias to the source's resource id, so the root
+    // published under `0xcaf00036` lands on `0x5c000007`'s resource — the one `ctx_vas`
+    // resolves through. No new mechanism; this list was the missing route.
+    //
+    // ⚠ §14.21's warning does not lapse and is why this is an OBSERVER entry rather than a
+    // new answerer: the risk it recorded was *claiming* this control and answering with a
+    // status the guest's error path reads. `SetPageDirPolicy` keeps answering it, unchanged;
+    // `PublicationObserver` is a `CommandObserver` and **cannot change a reply byte**
+    // (`observe` returns nothing to return). Exactly the shape that made `0x90f10106` safe.
+    kayfabe_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
 ];
 
 /// ★★★ **The guest's page-directory publication, carried into the object model** — the
