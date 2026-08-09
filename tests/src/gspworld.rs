@@ -1057,7 +1057,12 @@ impl Guest {
         free
     }
 
-    /// Send one command, exactly as `GspMsgQueueSendCommand` does.
+    /// Send one command, exactly as `GspMsgQueueSendCommand` does, **declaring the whole
+    /// payload** in `rpc.length`.
+    ///
+    /// ⚠ That is right for `GSP_RM_CONTROL` and wrong for `GSP_RM_ALLOC` — see
+    /// [`Guest::send_declaring`], which is the shape an alloc actually has on the wire and
+    /// the one this method cannot produce.
     ///
     /// # Errors
     ///
@@ -1070,9 +1075,50 @@ impl Guest {
         sequence: u32,
         payload: &[u8],
     ) -> Result<u32, &'static str> {
-        let rpc_length = 32 + payload.len() as u32;
+        self.send_declaring(ram, function, sequence, payload, payload.len())
+    }
+
+    /// ★★★ Send one command whose declared `rpc.length` covers only `declared_body` of the
+    /// payload — **the shape `GSP_RM_ALLOC` genuinely has**, and the one no fixture in this
+    /// tree could produce until 2026-08-09.
+    ///
+    /// `rpcWriteCommonHeader` is given `sizeof(*rpc_params) + paramsSize` for a control
+    /// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:10979-10986`) but plain
+    /// `sizeof(rpc_gsp_rm_alloc_v03_00)` for an alloc (`:11196-11199`) — whose last member
+    /// is a flexible `params[]`, so `sizeof` is 32 and the declared length stops exactly
+    /// where the params begin (`rpc_common.c:183`). The params are `portMemCopy`'d in
+    /// afterwards and `length` is never updated; whole elements are then copied into the
+    /// queue (`message_queue_cpu.c:563-565`), so they arrive regardless.
+    ///
+    /// ⚠ **And they land outside the checksum.** The fold covers `msgLen` bytes only
+    /// (`ogkm-580: message_queue_cpu.c:519`) = the *declared* length, so an alloc's params
+    /// have no integrity check on either side. That is reproduced here rather than
+    /// papered over: a harness that checksummed them would be a stricter protocol than the
+    /// driver's, and every claim about the params window would be made against a guest
+    /// that does not exist.
+    ///
+    /// ⊘ `declared_body` is **not** clamped to `payload.len()`: a guest that over-declares
+    /// is exactly the hostile case, and this is the constructor for it.
+    ///
+    /// # Errors
+    ///
+    /// `"no free space"` when the ring is full.
+    pub fn send_declaring(
+        &mut self,
+        ram: &mut FakeRam,
+        function: u32,
+        sequence: u32,
+        payload: &[u8],
+        declared_body: usize,
+    ) -> Result<u32, &'static str> {
+        let rpc_length = 32 + declared_body as u32;
+        let carried_len = 32 + payload.len() as u32;
+        // ★ Two extents, and they are only equal when the declared length covers the
+        // whole payload. The RUN is sized by what is actually carried — the driver copies
+        // whole elements — while the CHECKSUM is folded over the declared `msgLen`.
         let msg_len = self.p.hdr() as u32 + rpc_length;
-        let n = msg_len.div_ceil(self.msg_size);
+        let carried = self.p.hdr() as u32 + carried_len;
+        let n = carried.max(msg_len).div_ceil(self.msg_size);
         if n > self.free_space(ram) {
             return Err("no free space");
         }

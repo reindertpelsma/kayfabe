@@ -63,6 +63,7 @@ use crate::ring::{MsgqAbi, MsgqGeometry, RxCursor, TxCursor, available_elements,
 use crate::rpc::{Disposition, RpcAbi, RpcCommand, RpcFunction};
 use kayfabe_abi::NV_ERR_NOT_SUPPORTED;
 use kayfabe_abi::versions::DriverAbiTable;
+use kayfabe_abi::view::RpcEnvelope;
 use kayfabe_arch::{
     Arch, ArchBootState, BootContext, BootPhase, BootStep, GspObservation, RegWrite,
 };
@@ -1405,7 +1406,21 @@ impl GspFsm {
         // with a zeroed body — never the request reflected, and never a fabricated
         // `NV_OK`. See this method's docs for the measurement that made echoing
         // indefensible and for why zeroing alone is not the fix either.
+        // ★★★ The one function whose reply may exceed its declared length, and it is a
+        // protocol fact rather than a relaxation: `GSP_RM_ALLOC`'s `rpc.length` stops
+        // where its flexible `params[]` begins, and the guest copies that window back
+        // **unconditionally**, class-sized, from a fixed offset. Sizing an alloc reply
+        // like every other reply hands the guest a zeroed params window — i.e. a
+        // `memset` of libcuda's stack — with no status anywhere to see it. The whole
+        // derivation, the clamps and the ⚠ that this is a RESTORE and not a FILL live on
+        // `RpcCommand::reply_alloc`; ⊘ `RpcCommand::reply` is unchanged.
+        let payload_max = (self.abi.element_size_max as usize)
+            .saturating_sub(self.abi.element.hdr_size())
+            .saturating_sub(RpcEnvelope::SIZE);
         let out = match policy.respond(cmd) {
+            Some(r) if cmd.function == RpcFunction::RmAlloc => {
+                cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
+            }
             Some(r) => cmd.reply(r.rpc_result, &r.body),
             None => {
                 report.unserviced.push(Unserviced {

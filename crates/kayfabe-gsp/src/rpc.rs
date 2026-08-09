@@ -53,6 +53,7 @@
 
 use crate::element::{IncomingRpc, OutgoingRpc};
 use crate::fault::GspFault;
+use kayfabe_abi::versions::DriverAbiTable;
 
 /// The `NV_VGPU_MSG_*` ids this path needs, supplied by the ABI layer.
 ///
@@ -405,8 +406,26 @@ pub struct RpcCommand {
     /// Treat them as hostile bytes inside a bounded window, which is what
     /// `AllocParams::NoDeclaredFacts` already assumes of every params blob.
     ///
-    /// ⊘ Reply sizing must NEVER use this. A reply is clamped to `payload`, because that
-    /// is the window the guest reads its answer out of.
+    /// ⊘ **Reply sizing must NEVER use `delivered.len()`** — and note the unit, because
+    /// the rule used to be stated in a weaker one.
+    ///
+    /// # ★ The rule is "never a GUEST-CHOSEN length", not "always `payload.len()`"
+    ///
+    /// §7-G6 is written as *"clamped to **the request**"*
+    /// (`docs/design/mode2_gsp_port_plan.md:1271-1274`), and this doc used to render that
+    /// as *"clamped to `payload`"*. Those two coincide **only for `GSP_RM_CONTROL`**,
+    /// where `rpcWriteCommonHeader` is given `sizeof(*rpc_params) + paramsSize`
+    /// (`ogkm-580: rpc.c:10979-10986`) so the declared length **includes** `params[]`.
+    /// For `GSP_RM_ALLOC` it is given plain `sizeof(rpc_gsp_rm_alloc_v03_00)`
+    /// (`ogkm-580: rpc.c:11196-11199`) — the declared length **excludes** them. Right
+    /// rule, wrong unit, for exactly the one function whose reply has to carry params.
+    ///
+    /// What the `⊘` genuinely guards is `delivered.len()` = `elemCount * RM_PAGE_SIZE`,
+    /// a number the **guest** picked: sizing a reply by it lets the guest choose how many
+    /// host bytes come back. [`RpcCommand::reply_alloc`] clamps to the guest's own
+    /// *declared* `paramsSize` intersected with what arrived, which never reads
+    /// `delivered.len()` as a length — it only bounds a copy by it. No host bytes, no
+    /// guest-chosen extent.
     pub delivered: Vec<u8>,
 }
 
@@ -454,6 +473,101 @@ impl RpcCommand {
         let mut payload = vec![0u8; self.payload.len()];
         let take = body.len().min(payload.len());
         payload[..take].copy_from_slice(&body[..take]);
+        OutgoingRpc {
+            function: self.code,
+            sequence: self.sequence,
+            rpc_result,
+            rpc_result_private: rpc_result,
+            payload,
+        }
+    }
+
+    /// The reply a `GSP_RM_ALLOC` earns: `body` (this port's 32-byte fixed header)
+    /// followed by the request's **own** `params[]` bytes, copied back verbatim.
+    ///
+    /// # ★★★ Why an alloc reply cannot be sized like every other reply
+    ///
+    /// [`Self::reply`] sizes the reply payload to `self.payload.len()`, which for
+    /// `GSP_RM_ALLOC` is the fixed header **only** — `rpc_gsp_rm_alloc_v03_00`'s last
+    /// member is a flexible `params[]` and `rpcWriteCommonHeader` is given plain
+    /// `sizeof(...)` (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11196-11199`,
+    /// `rpc_common.c:183`). `crate::element::encode_message` then builds
+    /// `vec![0u8; total]` and stamps the payload into its front, so everything past the
+    /// declared length reaches the guest as **zeros**.
+    ///
+    /// The guest reads that window back **unconditionally and at a fixed offset**:
+    ///
+    /// ```text
+    /// if (!(flags & RMAPI_ALLOC_FLAGS_SERIALIZED) && (paramsSize > 0))
+    ///     portMemCopy(pAllocParams, paramsSize, rpc_params->params, paramsSize);
+    /// ```
+    ///
+    /// (`ogkm-580: rpc.c:11238-11241`, identical at `ogkm-610: :11043-11047`) where
+    /// `paramsSize` is a **local**, seeded from `rmapiGetClassAllocParamSize(hClass)` at
+    /// `:11178` — the **class** size. ⊘ Not the reply's `paramsSize` field, ⊘ not
+    /// `rpc.length`, ⊘ not the element count. Receive copies whole elements
+    /// (`message_queue_cpu.c:648-650`) and `rpc.length` is only a checksum extent
+    /// (`:680-682, :759-770`), so nothing on the guest side bounds that read by anything
+    /// we send. The `NV_ESC_RM_ALLOC` copy-out is class-sized too
+    /// (`alloc_free.c:135-142`, `param_copy.c:306`).
+    ///
+    /// ⇒ a zero-filled window is not "no answer", it is **`memset(caller's params, 0)`**,
+    /// performed by the guest kernel on a buffer that for every userspace alloc lives on
+    /// **libcuda's stack**. Its symptom is a SIGSEGV inside libcuda with no status
+    /// anywhere, which is why no census, ledger or id-diff can see it.
+    ///
+    /// # ⚠ This is a RESTORE, not a FILL — and the difference is an open item
+    ///
+    /// Echoing puts the guest's own `[IN]` bytes back where it left them. It does **not**
+    /// write the `[OUT]` fields a real GSP writes: `NV_GR_ALLOCATION_PARAMETERS.caps`
+    /// (+12) is `[OUT]`, and `0xc56f` / `0x83de` / `0x0079` carry out-fields too. So this
+    /// stops the clobber and leaves *stale `[IN]` values where hardware writes results*.
+    /// ⊘ Do not record it as "alloc replies are correct now".
+    ///
+    /// # The clamps, and which of them is the security-relevant one
+    ///
+    /// `n = min(paramsSize, arrived − params_at, payload_max − params_at)`.
+    /// `paramsSize` is the guest's assertion about its own message and `arrived` bounds it
+    /// by what the guest actually submitted; the bytes copied are the **guest's own**,
+    /// back into the **guest's own** window. ⊘ The reply extent is never
+    /// `delivered.len()` — see [`Self::delivered`] for why that, and only that, is the
+    /// number §7-G6 forbids.
+    ///
+    /// # ⊘ Mis-dispatch cannot widen a reply
+    ///
+    /// Every path that is not *"a `GSP_RM_ALLOC` whose `body` is exactly the fixed
+    /// header"* delegates to [`Self::reply`], so calling this for a control, for a
+    /// malformed alloc, or for a refusal (`body` empty) is the general clamp and nothing
+    /// else. A caller-side inversion here is inert rather than dangerous, which is the
+    /// property `a defect in an ARGUMENT is invisible to every test of the callee` says
+    /// to build in.
+    #[must_use]
+    pub fn reply_alloc(
+        &self,
+        rpc_result: u32,
+        body: &[u8],
+        abi: &DriverAbiTable,
+        payload_max: usize,
+    ) -> OutgoingRpc {
+        if self.function != RpcFunction::RmAlloc {
+            return self.reply(rpc_result, body);
+        }
+        let wire = self.wire_body();
+        let Ok(h) = abi.decode_rpc_alloc(wire) else {
+            return self.reply(rpc_result, body);
+        };
+        // ★ Exactly the fixed header, never "at least": a longer `body` would put the
+        // echoed params at the wrong offset, and this port produces no such body. An
+        // empty one is the named-refusal shape and takes the general clamp.
+        if body.len() != h.params_at {
+            return self.reply(rpc_result, body);
+        }
+        let arrived = wire.len().saturating_sub(h.params_at);
+        let room = payload_max.saturating_sub(h.params_at);
+        let n = (h.params_size as usize).min(arrived).min(room);
+        let mut payload = vec![0u8; h.params_at + n];
+        payload[..h.params_at].copy_from_slice(body);
+        payload[h.params_at..].copy_from_slice(&wire[h.params_at..h.params_at + n]);
         OutgoingRpc {
             function: self.code,
             sequence: self.sequence,
