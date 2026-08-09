@@ -203,7 +203,7 @@ const NV_OK: u32 = 0;
 /// [`crate::inittables::WantedTable::ALL`] on purpose: this is a fact about the *guest's*
 /// table, not about what we serve. The two universes are related only by intersection, and
 /// `tests/tests/sticky_answer.rs` asserts that relationship rather than assuming it.
-pub const BRANCH_A_CACHEABLE: [u32; 5] = [
+pub const BRANCH_A_CACHEABLE: [u32; 6] = [
     0x2080_1803,
     0x2080_0a36,
     0x2080_0a41,
@@ -212,6 +212,20 @@ pub const BRANCH_A_CACHEABLE: [u32; 5] = [
     // request — and this port's reply is a pure function of that same request plus a
     // constant chip row. See the module docs' §3 table.
     0x2080_0102,
+    // ★★★ §14.35 — `NV2080_CTRL_CMD_GSP_GET_FEATURES`, `flags = 0x40549`
+    // (`ogkm-580: g_subdevice_nvoc.c:9466`), carrying plain `RMCTRL_FLAGS_CACHEABLE`
+    // (`0x400`). It is the FIRST row here whose reply is not a projection of a build-time
+    // `ChipProfile`: three fields are header constants, but `firmwareVersion` is latched
+    // from the guest's own fn 1 (`crate::inittables::InitTablePolicy::guest_firmware`).
+    //
+    // ⇒ So the question this array exists to force gets its first real answer instead of
+    // "it is a constant, therefore fine". It is still **correct to cache**, and the reason
+    // is a lifetime argument rather than a constancy one: the latch is written once per
+    // driver load, during the version handshake, and every `0x20803601` a guest can issue
+    // arrives after it — the guest's cache and our latch are populated in that order and
+    // neither outlives the driver load. ⊘ A guest that reloads its driver re-sends fn 1
+    // and rebuilds both.
+    0x2080_3601,
 ];
 
 /// `rmapiControlIsCacheable(flags, accessRight, NV_TRUE)` — a transcription, not a

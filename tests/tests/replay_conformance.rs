@@ -1113,6 +1113,55 @@ fn replay(requests: &[Control], policy: &mut dyn CommandPolicy) -> Vec<Answer> {
     let init = w.link_and_drain();
     assert_eq!(init.len(), 1, "the bind posts exactly GSP_INIT_DONE");
 
+    // ★★★ **The version handshake, which this harness used to skip — and skipping it made
+    // the replay model a boot no guest performs.** `RmRpcSetGuestSystemInfo` is the guest's
+    // first post-init RPC and a guest whose fn 1 fails never initialises the adapter at all
+    // (`kayfabe_device::guestsysinfo`, run `t127a`), so *every* control in a real demand
+    // sequence arrives after it. §14.35 is where that mattered: `0x20803601` answers with a
+    // `firmwareVersion` latched from this message, so without it the replay saw a refusal
+    // and property 4 read it as a control this port "claims and still refuses".
+    //
+    // ⊘ The fix is the harness, not the pin. Adding a `CLAIMED_BUT_REFUSED` row would have
+    // been wrong twice over: the row's own contract demands an ARGUMENT-keyed refusal
+    // (`served > 0 && refused > 0`) and this one refused every call, and pinning it would
+    // have recorded a harness gap as a property of the port. `suspect_the_instrument_first`.
+    {
+        let mut body = vec![0u8; kayfabe_abi::guestsysinfo::SET_GUEST_SYSTEM_INFO_SIZE];
+        // The vGPU version words `GuestSystemInfoPolicy` reads.
+        let vgx = P580
+            .table()
+            .vgx_version()
+            .expect("the 580 row states a VGX version");
+        body[kayfabe_abi::guestsysinfo::VGX_MAJOR_OFF
+            ..kayfabe_abi::guestsysinfo::VGX_MAJOR_OFF + 4]
+            .copy_from_slice(&vgx.major.to_le_bytes());
+        body[kayfabe_abi::guestsysinfo::VGX_MINOR_OFF
+            ..kayfabe_abi::guestsysinfo::VGX_MINOR_OFF + 4]
+            .copy_from_slice(&vgx.minor.to_le_bytes());
+        // ★ `NV_VERSION_STRING`, exactly as `rpc.c:8724-8727` copies it — and the bench's,
+        // because the hardware trace this file replays was taken against that driver.
+        let v = b"580.159.04";
+        let at = kayfabe_abi::guestsysinfo::GUEST_DRIVER_VERSION_OFF;
+        body[at..at + v.len()].copy_from_slice(v);
+        w.guest
+            .send(
+                &mut w.ram,
+                rpcwire::fn_id::SET_GUEST_SYSTEM_INFO,
+                0x0fff,
+                &body,
+            )
+            .expect("the ring has room for the handshake");
+        w.doorbell_with(policy)
+            .expect("the doorbell services the handshake");
+        let msgs = w.guest.recv(&mut w.ram).expect("a clean status stream");
+        assert_eq!(msgs.len(), 1, "the handshake is answered exactly once");
+        assert_eq!(
+            msgs[0].function,
+            rpcwire::fn_id::SET_GUEST_SYSTEM_INFO,
+            "the reply echoes the function"
+        );
+    }
+
     let mut out = Vec::with_capacity(requests.len());
     for (i, c) in requests.iter().enumerate() {
         let body = rpcwire::control_body(
@@ -1369,12 +1418,18 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // landed. `[measured]` it fails at `78bee9e` too. The number below is that inherited red
     // repaired with the delta measured rather than assumed — the mistake to avoid here is
     // subtracting two non-adjacent revisions and attributing the whole gap to the newest.
+    // ⊘ 95 -> 96 at §14.35 (`0x20803601`), and the +1 is attributed by measurement rather
+    // than by arithmetic: this capture demands `GSP_GET_FEATURES` **once**. ★ It moved from
+    // the unclaimed arm to the claimed one only because this function now sends the version
+    // handshake — see the fn-1 block above. Without it the control is served-but-refusing,
+    // which is what property 4 caught.
     assert_eq!(
         (n_claimed, n_unclaimed),
-        (95, 215),
+        (96, 214),
         "`[measured]` 2026-08-03: 87 of the 310 recorded control calls are ones this port \
          claims (84 before §14.28 added `0x20800102`, which the capture demands 3 times); \
-         `[measured]` 2026-08-08: 95 after §14.29's `0x20800a4c`, demanded 8 times. The \
+         `[measured]` 2026-08-08: 95 after §14.29's `0x20800a4c`, demanded 8 times; \
+         `[measured]` 2026-08-09: 96 after §14.35's `0x20803601`, demanded once. The \
          served arm is not near-vacuous and the number is pinned so a silent collapse of it \
          is red"
     );
@@ -1472,10 +1527,17 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
          hardware evidence for the size it answers. Capture a boot that demands it, or \
          say here why an unevidenced size is acceptable — do not delete the check"
     );
+    // ★★★ 26 -> 27 at §14.35, and it goes in the OTHER direction from the last five rungs:
+    // `0x20803601` needs **no** exemption row, because this capture demands it once and its
+    // 72-byte reply size was judged against the real GA106 GSP rather than exempted from
+    // the check. ⊘ Worth separating from `cap1b_differential.rs`'s seventh exemption: that
+    // file's capture is `nvidia-smi`-driven and cannot see this control, while THIS capture
+    // is a GSP-level `rpctrace` that does. The two are different instruments, and a rung
+    // invisible to one can still be evidenced by the other.
     assert_eq!(
         size_checked.len(),
-        26,
-        "26 distinct controls had their reply paramsSize judged against a real GA106 GSP \
+        27,
+        "27 distinct controls had their reply paramsSize judged against a real GA106 GSP \
          on 580.159.04, and every one agreed"
     );
     // And refusal really is the majority answer, which is the honest shape of this port

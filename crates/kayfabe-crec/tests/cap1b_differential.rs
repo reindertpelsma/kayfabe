@@ -417,6 +417,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::FbGetInfoV2,
         WantedTable::CeGetAllPhysicalCaps,
         WantedTable::GrmgrGetGrFsInfo,
+        WantedTable::GspGetFeatures,
     ]
     .into_iter()
     .collect();
@@ -457,10 +458,19 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // evidence the answer is nearby, and this one is a queue item, not a paragraph.
     // ⊘ 30 -> 31 at §14.34 (`0x20803801`), the WEAKEST kind a SIXTH time: `GRMGR_GET_GR_FS_INFO`
     // is issued by `cuInit` and `cap1b` is `nvidia-smi`'s `RmInitAdapter`.
-    assert_eq!(universe.len(), 31, "non-vacuity: the universe is not empty");
+    // ⊘ 31 -> 32 at §14.35 (`0x20803601`), the WEAKEST kind a SEVENTH time — and this one
+    // is the first that `cap1b` could not cover **even if it were `cuInit`-driven**, which
+    // is a different fact and worth separating from the other six. `GSP_GET_FEATURES`'s
+    // reply is not a projection of a chip row: its `firmwareVersion` is latched from the
+    // guest's own fn 1, so a replay differential would be comparing this port's answer
+    // against a string recorded from a *different* guest's driver. ★ The oracle for it is
+    // therefore the real-GA106 trace plus `ogkm`'s own `NV_VERSION_STRING`, which
+    // `kayfabe_abi::gspfeatures`'s unit tests assert byte-for-byte, and the honest reading
+    // is that a `cuInit` capture shrinks the exception set by SIX, not seven.
+    assert_eq!(universe.len(), 32, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        12,
+        13,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

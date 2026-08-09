@@ -61,6 +61,50 @@ pub const VGX_MAJOR_OFF: usize = 0;
 /// Byte offset of `vgxVersionMinorNum`.
 pub const VGX_MINOR_OFF: usize = 4;
 
+/// Byte offset of `guestDriverVersion` — after the six `NvU32`
+/// (`ogkm-580:`/`ogkm-610: g_rpc-structures.h:36-47`).
+pub const GUEST_DRIVER_VERSION_OFF: usize = 6 * 4;
+
+/// `sizeof(guestDriverVersion)` — `char[0x100]` (same citation).
+pub const GUEST_STRING_LEN: usize = 0x100;
+
+/// ★★★ The guest driver's own `NV_VERSION_STRING`, which it sends **unprompted** in this
+/// message and which is the only measured source for
+/// [`crate::gspfeatures`]'s `firmwareVersion`.
+///
+/// `RmRpcSetGuestSystemInfo` copies `NV_VERSION_STRING` in verbatim
+/// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:8724-8727`), and that macro is
+/// `"580.159.04"` in the 580.159.04 tree (`ogkm-580: src/common/inc/nvUnixVersion.h:7`) —
+/// byte-identical to the `firmwareVersion` a real GA106 returns from
+/// `NV2080_CTRL_CMD_GSP_GET_FEATURES` (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:73`).
+/// GSP firmware ships inside the driver package, so the two are the same string by
+/// construction rather than by coincidence.
+///
+/// ⊘ The bytes are the **guest's**, so nothing here trusts them: the value is returned as a
+/// borrowed `&str` and the only consumer validates it into a bounded type
+/// ([`crate::gspfeatures::FirmwareVersion::parse`]). This function's own contract is
+/// narrow — find a NUL and decode UTF-8 — and it refuses rather than repairing either.
+///
+/// # Errors
+///
+/// [`GuestSystemInfoError::Truncated`] if the payload cannot hold the struct;
+/// [`GuestSystemInfoError::DriverVersionUnterminated`] if the array carries no NUL;
+/// [`GuestSystemInfoError::DriverVersionNotUtf8`] otherwise.
+pub fn decode_guest_driver_version(payload: &[u8]) -> Result<&str, GuestSystemInfoError> {
+    if payload.len() < SET_GUEST_SYSTEM_INFO_SIZE {
+        return Err(GuestSystemInfoError::Truncated {
+            need: SET_GUEST_SYSTEM_INFO_SIZE,
+            got: payload.len(),
+        });
+    }
+    let arr = &payload[GUEST_DRIVER_VERSION_OFF..GUEST_DRIVER_VERSION_OFF + GUEST_STRING_LEN];
+    let end = arr
+        .iter()
+        .position(|&b| b == 0)
+        .ok_or(GuestSystemInfoError::DriverVersionUnterminated)?;
+    core::str::from_utf8(&arr[..end]).map_err(|_| GuestSystemInfoError::DriverVersionNotUtf8)
+}
+
 /// The vGPU RPC version a driver speaks.
 ///
 /// Two `NvU32` on the wire even though both values fit in a byte, because
@@ -96,6 +140,13 @@ pub enum GuestSystemInfoError {
         /// What this port speaks.
         ours: VgxVersion,
     },
+    /// `guestDriverVersion` carries no NUL, so the array declares no end.
+    ///
+    /// ⊘ Refused rather than taking all 0x100 bytes: a version string with trailing
+    /// garbage would be reported back to the guest's own users as its firmware version.
+    DriverVersionUnterminated,
+    /// `guestDriverVersion` is not UTF-8 up to its NUL.
+    DriverVersionNotUtf8,
 }
 
 impl core::fmt::Display for GuestSystemInfoError {
@@ -115,6 +166,15 @@ impl core::fmt::Display for GuestSystemInfoError {
                 "the guest speaks vGPU RPC {:#x}.{:#x} and this port speaks {:#x}.{:#x}; \
                  the down-negotiation branch is not built",
                 guest.major, guest.minor, ours.major, ours.minor
+            ),
+            Self::DriverVersionUnterminated => write!(
+                f,
+                "the guest's guestDriverVersion[0x100] carries no NUL, so it declares no \
+                 end; taking all of it would report a version with trailing garbage"
+            ),
+            Self::DriverVersionNotUtf8 => write!(
+                f,
+                "the guest's guestDriverVersion is not UTF-8 up to its NUL"
             ),
         }
     }

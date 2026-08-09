@@ -240,6 +240,30 @@ pub struct InitTablePolicy {
     /// shell). A boot that goes further because of this set measures REACHABILITY, never
     /// correctness — see `ProbeArmSet`'s docs.
     probe_arm: eventnotify::ProbeArmSet,
+    /// ★★★ **The guest's own `NV_VERSION_STRING`**, latched off `SET_GUEST_SYSTEM_INFO`
+    /// (fn 1) and served back as [`WantedTable::GspGetFeatures`]'s `firmwareVersion`.
+    ///
+    /// ★ **Why this policy latches it rather than [`crate::guestsysinfo`].** The two are
+    /// separate links with no shared state, and adding some would be the larger change;
+    /// but this link is seated **ahead** of `GuestSystemInfoPolicy` in the chain
+    /// (`crate::gsp_policy_chain`), so it sees fn 1 first and can read it without
+    /// answering it. The observation returns `None`, which is a decline — the version
+    /// handshake is still answered downstream, by the link that owns it, and no reply byte
+    /// changes. ⊘ That ordering is load-bearing rather than incidental, and
+    /// `tests/gsp_get_features.rs` executes it.
+    ///
+    /// ⚠ `None` until fn 1 arrives, and then `GspGetFeatures` **refuses** rather than
+    /// guessing. The safe direction, and unreachable in practice: `kgspInitRm` sends fn 1
+    /// during the version handshake — a boot where it fails never initialises the adapter
+    /// at all (`crate::guestsysinfo`'s `t127a`) — while `0x20803601` arrives at `cuInit`,
+    /// hundreds of commands later.
+    ///
+    /// ⊘ It is also `None` when the guest's string is one this port will not repeat: the
+    /// bytes are guest-controlled, so they are validated into
+    /// [`kayfabe_abi::gspfeatures::FirmwareVersion`] at the latch and dropped if they fail.
+    /// Refusing one report-only control is a strictly smaller failure than putting an
+    /// unvalidated guest buffer into a string `nvidia-smi` prints.
+    guest_firmware: Option<kayfabe_abi::gspfeatures::FirmwareVersion>,
 }
 
 /// Which of the two tables a command asked for. Returned by [`InitTablePolicy::wanted`] so
@@ -754,6 +778,34 @@ pub enum WantedTable {
     /// ⚠ Flags `0x10248` carry neither `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor
     /// `_CACHEABLE_BY_INPUT` (`0x20000`), so not a [`crate::sticky::BRANCH_A_CACHEABLE`] row.
     GrmgrGetGrFsInfo,
+    /// `NV2080_CTRL_CMD_GSP_GET_FEATURES` (`0x20803601`) — ★★★ §14.35's wall, and the
+    /// first control this port serves whose reply is a fact about the **guest** rather
+    /// than about the silicon.
+    ///
+    /// `[measured 2026-08-09, boot `gt1434_373c145`]` `unserviced fn 76 cmd 0x20803601`;
+    /// a real GA106 answers `NV_OK` with all four fields set
+    /// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:73`).
+    ///
+    /// ⊘ **No id translation, and no local body to race.** Flags `0x40549` carry
+    /// `ROUTE_TO_PHYSICAL`, and the generated dispatch installs
+    /// `subdeviceCtrlCmdGspGetFeatures_92bfc3` — a bare `NV_ERR_NOT_SUPPORTED` stub — on
+    /// every `RmVariantHal` except `VF` (`ogkm-580: g_subdevice_nvoc.c:10711-10719`,
+    /// `g_subdevice_nvoc.h:8017-8020`). A bare-metal GSP client is not `VF`, so `NV_OK`
+    /// here can only ever have come off the RPC. See [`kayfabe_abi::gspfeatures`] for why
+    /// this is a stronger statement than §14.35's prologue argument.
+    ///
+    /// ★★★ Its `firmwareVersion` is **latched from the guest's own fn 1**, not projected
+    /// from a constant: [`InitTablePolicy::guest_firmware`]. The two candidates that look
+    /// right and are not — the host driver's version, and this policy's own
+    /// `DriverAbiTable::version()` (`[measured]` `580.65.06`, not `580.159.04`) — are laid
+    /// out in [`kayfabe_abi::gspfeatures`]'s module docs.
+    ///
+    /// ⚠ Flags `0x40549` **do** carry `RMCTRL_FLAGS_CACHEABLE` (`0x400`), so unlike every
+    /// row above this one it **is** a [`crate::sticky::BRANCH_A_CACHEABLE`] row — the
+    /// first one this port serves. The decision that branch forces is made in
+    /// [`kayfabe_abi::gspfeatures`]'s docs: the answer is constant for the life of a
+    /// driver load, so caching it is correct.
+    GspGetFeatures,
 }
 
 impl WantedTable {
@@ -784,7 +836,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 31] = [
+    pub const ALL: [WantedTable; 32] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -816,6 +868,7 @@ impl WantedTable {
         Self::FbGetInfoV2,
         Self::CeGetAllPhysicalCaps,
         Self::GrmgrGetGrFsInfo,
+        Self::GspGetFeatures,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -886,6 +939,7 @@ impl WantedTable {
                 kayfabe_abi::cecaps::NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS
             }
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO,
+            Self::GspGetFeatures => kayfabe_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES,
         }
     }
 
@@ -933,6 +987,7 @@ impl WantedTable {
             Self::FbGetInfoV2 => kayfabe_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE,
             Self::CeGetAllPhysicalCaps => kayfabe_abi::cecaps::CE_GET_ALL_CAPS_PARAMS_SIZE,
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE,
+            Self::GspGetFeatures => kayfabe_abi::gspfeatures::GSP_GET_FEATURES_PARAMS_SIZE,
         }
     }
 
@@ -982,7 +1037,20 @@ impl InitTablePolicy {
             // agrees with the guest — represented here as no slot at all.
             notify_actions: [None; NOTIFY_SUBDEVICE_SLOTS],
             probe_arm,
+            // ⊘ Not a default value: nothing is known about the guest until it speaks, and
+            // `GspGetFeatures` refuses while this is `None` rather than inventing one.
+            guest_firmware: None,
         }
+    }
+
+    /// The guest driver version this policy has latched off fn 1, if any.
+    ///
+    /// Exposed so a test can ask what was observed without reaching into the reply plane,
+    /// and so the distinction *"not yet seen"* / *"seen and refused"* has a name on this
+    /// side too. See the field's docs.
+    #[must_use]
+    pub fn guest_firmware(&self) -> Option<kayfabe_abi::gspfeatures::FirmwareVersion> {
+        self.guest_firmware
     }
 
     /// Which table this command asks for, if any — the classification step on its own.
@@ -1006,6 +1074,37 @@ fn refuse() -> Option<Reply> {
 
 impl CommandPolicy for InitTablePolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ★★★ The one command this link READS without ANSWERING. `SET_GUEST_SYSTEM_INFO`
+        // carries the guest's own `NV_VERSION_STRING` (`ogkm-580: rpc.c:8724-8727`), which
+        // is the only source for `GspGetFeatures`'s `firmwareVersion` that a run backs:
+        // `[measured 2026-08-09, real GA106 on 580.159.04]` the string it carries is the
+        // one hardware returns, and `gsp_get_features.rs::
+        // the_firmware_version_follows_the_guest_and_not_any_constant` is the test that
+        // fails if this port ever takes it from a constant instead. This link
+        // is seated ahead of `GuestSystemInfoPolicy`, so it sees the message first; the
+        // `None` below is a decline, so that link still answers the handshake and no reply
+        // byte changes. ⊘ Deliberately NOT an `Observing` seat: an observer cannot hold the
+        // state, and this is state one *served* control needs.
+        if cmd.function == RpcFunction::SetGuestSystemInfo {
+            // ⊘ Guest bytes, so validated rather than stored. A string this port will not
+            // repeat leaves the latch `None` and costs one refused report-only control,
+            // which is the small side of the trade.
+            //
+            // ★★ **The most recent handshake always wins, including when it fails.** Both
+            // failure modes — a message that does not decode, and a string this port will
+            // not repeat — land on `None`, so the latch says what the guest is saying
+            // *now* rather than what it once said. ⚠ Written as one assignment on purpose:
+            // the first draft skipped the write when the decode failed and cleared on a
+            // parse failure, which made two failures of one message behave differently and
+            // could have reported a string the guest had already replaced. `tests/
+            // gsp_get_features.rs::the_latch_always_reflects_the_most_recent_handshake` is
+            // that defect's fixture.
+            self.guest_firmware =
+                kayfabe_abi::guestsysinfo::decode_guest_driver_version(&cmd.payload)
+                    .ok()
+                    .and_then(|text| kayfabe_abi::gspfeatures::FirmwareVersion::parse(text).ok());
+            return None;
+        }
         if cmd.function != RpcFunction::RmControl {
             return None;
         }
@@ -1679,6 +1778,40 @@ impl CommandPolicy for InitTablePolicy {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }
+            }
+            // ★★★ The first arm whose reply is a fact about the GUEST, not about the
+            // silicon — and the first this port serves that the guest's own export table
+            // marks `CACHEABLE`, i.e. the first `crate::sticky::BRANCH_A_CACHEABLE` row.
+            //
+            // ⊘ It states no new number in the strongest sense available: nothing here is
+            // tabulated at all. Three fields are named constants out of `ctrl2080gsp.h`,
+            // and the fourth is the string the guest itself sent at fn 1 — so the value
+            // this port reports is MEASURED from this boot's guest rather than projected
+            // from a build-time constant that could silently disagree with it. The two
+            // constants that look right and are not (`host_driver`'s version, and
+            // `self.driver.version()` = 580.65.06) are laid out in `kayfabe_abi::gspfeatures`.
+            //
+            // ⚠ The error arm is a whole-control refusal and that is the right size: the
+            // field is report-only (no RM reader — see the abi module), so refusing costs
+            // a `cuInit` rung and a loud ledger row, while answering with an unlatched or
+            // unvalidated string would put a value this port invented in front of a user.
+            WantedTable::GspGetFeatures => {
+                let Some(firmware) = self.guest_firmware else {
+                    return refuse();
+                };
+                kayfabe_abi::gspfeatures::encode_gsp_get_features(
+                    // `NV2080_CTRL_GSP_GET_FEATURES_UVM_ENABLED_TRUE`, and bit 1 clear:
+                    // `VGPU_GSP_MIG_REFACTORING` is a MIG feature and this is a GeForce
+                    // part — the same fact `kayfabe_abi::smcmode` reports as `Unsupported`.
+                    kayfabe_abi::gspfeatures::GspFeatures::GA106,
+                    // `bValid` — truthful rather than copied. The header defines it as "RM
+                    // is a GSP client with GPU support offloaded to GSP firmware", which is
+                    // exactly what this port arranges.
+                    true,
+                    // `bDefaultGspRmGpu` — GSP-RM is on by default for Ampere GeForce.
+                    true,
+                    &firmware,
+                )
             }
         };
 

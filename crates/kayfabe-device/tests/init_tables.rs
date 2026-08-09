@@ -389,7 +389,23 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // this port does not model could have been given a per-query `NV_ERR_NOT_SUPPORTED`
     // inside an `NV_OK` reply, which reaches neither ledger. `kayfabe_abi::grfsinfo` refuses
     // per-query only where RM itself does and takes the whole control down otherwise.
-    assert_eq!(WantedTable::ALL.len(), 31, "the served universe's size");
+    // ★★★★ 31 -> 32 at §14.35: `0x20803601` GSP_GET_FEATURES, and it is the first of the
+    // thirty-two whose reply is a fact about the **guest** rather than about the silicon —
+    // three header constants plus a `firmwareVersion` latched from the guest's own
+    // `SET_GUEST_SYSTEM_INFO` (`ogkm-580: rpc.c:8724-8727`). Attributed, not ratcheted:
+    // `[measured 2026-08-09, boot `gt1434_373c145`]` `unserviced fn 76 cmd 0x20803601`,
+    // against a real GA106 that answers `NV_OK` with all four fields set
+    // (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:73`). Nothing new is tabulated
+    // at all — which is a stronger statement than the "no new number" the last two rungs
+    // made, because there is no per-chip row to be wrong.
+    // ⚠ It is also the FIRST served row `crate::sticky::BRANCH_A_CACHEABLE` covers (flags
+    // `0x40549` carry `RMCTRL_FLAGS_CACHEABLE`), so the guard at the serve site stops being
+    // unreachable and the cache-lifetime decision is made rather than inherited.
+    // ⊘ And the first whose two plausible constant sources are both WRONG: the host
+    // driver's version is another machine's fact, and this policy's own
+    // `DriverAbiTable::version()` is `[measured]` `580.65.06` where hardware says
+    // `580.159.04` — the reading §14.35's own wording invited. See `kayfabe_abi::gspfeatures`.
+    assert_eq!(WantedTable::ALL.len(), 32, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

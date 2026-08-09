@@ -816,7 +816,28 @@ fn branch_a_is_a_subset_of_what_this_port_serves_from_a_constant_row() {
     // branch (a) through `CACHEABLE_BY_INPUT` rather than the blanket `CACHEABLE` bit — and
     // the first whose reply is not a constant. ⊘ The argument still holds and is checked one
     // level up: the reply is a pure function of the very params the guest keys its cache on.
-    assert_eq!(BRANCH_A_CACHEABLE.len(), 5);
+    //
+    // ★★★ 5 -> 6 at §14.35: `0x20803601` GSP_GET_FEATURES, `flags = 0x40549`, plain
+    // `CACHEABLE`. ⊘⊘ **This is the first row for which this test's own title is FALSE**, and
+    // that is worth more than the row: its `firmwareVersion` is not served from a
+    // `ChipProfile` row at all, it is latched from the guest's own `SET_GUEST_SYSTEM_INFO`
+    // (`kayfabe_device::inittables::InitTablePolicy::guest_firmware`). So the docstring's
+    // *"each is served, so each is answered from a `ChipProfile` row"* no longer follows,
+    // and the argument has to be redone here exactly as the docstring says it must be.
+    //
+    // ★ Redone, and it survives — on a LIFETIME argument rather than a constancy one. The
+    // guest populates its control cache from a reply; we populate the latch from fn 1; the
+    // guest sends fn 1 once per driver load, during the version handshake, and cannot issue
+    // any control before it (a guest whose fn 1 fails never finishes `RmInitAdapter` —
+    // `kayfabe_device::guestsysinfo`, run `t127a`). So within one driver load the latch is
+    // written before the first cacheable answer and never again, which is exactly the
+    // property caching needs. A driver reload rebuilds both sides together.
+    //
+    // ⚠ What would break it, stated so the next reader does not have to re-derive it: any
+    // future served control in this list whose answer depends on state the guest can change
+    // *after* it has issued that control once. That one is unserveable-as-answered and the
+    // choice becomes refuse-or-be-wrong-forever.
+    assert_eq!(BRANCH_A_CACHEABLE.len(), 6);
 }
 
 /// **Neither guard can help branch (a), and this states the only two levers there are.**

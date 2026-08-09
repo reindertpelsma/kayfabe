@@ -115,6 +115,7 @@ pub mod gpuinfo;
 pub mod grfsinfo;
 pub mod grinfo;
 pub mod grstatic;
+pub mod gspfeatures;
 pub mod gspstaticinfo;
 pub mod guest_os;
 pub mod guestsysinfo;

@@ -1072,7 +1072,12 @@ pub fn served_chain(
     //
     // The recorder above writes the guest's page-directory publication into a *log*; this
     // seat is where the same publication reaches the **object model** as a real
-    // `RmEvent::SetPageDir`, because `[measured 2026-08-08, boots ship_7a881a7 /
+    // set-page-dir event — ⊘ named in prose rather than as the core's type, because this
+    // crate already names the GSP transport's decoded command and the bridge-exclusivity
+    // gate (`gsp_core_bridge.md` §1.2) permits exactly one crate to name both vocabularies.
+    // `kayfabe-rmrpc` is that crate; a comment here claiming the seam would be a doc
+    // asserting a seam this crate does not have, which is the drift §8 had to correct
+    // twice. `[measured 2026-08-08, boots ship_7a881a7 /
     // ship3_d5369b5]` recording it was all the port did — `control 0x90f10106 result
     // 0x00000000 x4`, five publications logged, `Vas::pdb` empty, and therefore every
     // promote-ctx refusing `ContextVasUndeclared`. ⊘ Recording is not forwarding.
