@@ -1495,6 +1495,34 @@ impl RegPlane {
         }
     }
 
+    /// ★★★ **Read RAW framebuffer bytes at a framebuffer-physical address** — no walk, no
+    /// translation, no [`crate::ceresolve::Demand`], and **strictly an observation**.
+    ///
+    /// # ⊘ Why this exists, and why it is not a second data path
+    ///
+    /// `execution_plane_increments.md` §16.8's question is *"what does OUR framebuffer
+    /// actually hold at the address the guest published?"*, and that is a question about
+    /// **our own store**, not about the guest's address space. Every other reader here goes
+    /// through the guest's page tables, which is exactly the thing under suspicion: the
+    /// walk from the failing root descends successfully and lands on an unwritten page, and
+    /// telling *"a real page-table pool we are addressing from the wrong base"* from
+    /// *"noise the walk descended into"* needs the bytes themselves.
+    ///
+    /// ⊘ **It reads and it changes nothing** — no allocation in the store beyond what a
+    /// read already implies, no cache, no effect the guest can observe. It is the same
+    /// `read` the BAR0 moving window serves, addressed directly.
+    ///
+    /// ⚠ `buf` is caller-bounded and the caller is a diagnostic. An unwritten address
+    /// inside the advertised framebuffer reads **zero and succeeds** ([`FbStore::read`]),
+    /// which is precisely the fact §16.8 must be able to distinguish from *refused*.
+    ///
+    /// # Errors
+    /// The store's own sentence when it does not back the range at all.
+    pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.read(phys, buf).map_err(|e| e.why)
+    }
+
     /// The published page-directory root of one `(hClient, hVASpace)` pair, for a report
     /// that wants to state the root it walked from. ⊘ Reading a root is not walking one;
     /// no [`crate::ceresolve::Demand`] is needed and none is implied.

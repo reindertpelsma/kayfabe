@@ -1699,3 +1699,45 @@ fn the_publication_row_prints_the_arm_the_count_and_every_declared_level() {
     assert!(miss.contains("ABSENT-FROM-ROOT-TABLE"), "{miss}");
     assert!(miss.contains("REFUSED-BY-CAP"), "{miss}");
 }
+
+/// ★★★★ **§16.8: the framebuffer dump reports REFUSED, ZERO and DATA as three things.**
+///
+/// The rung is *"dump the 32 bytes our framebuffer holds at `0x4000` and the 4 KiB at
+/// `0x5000`"*, and its two outcomes are *plausible page-directory entries ⇒ a real pool
+/// whose base we lack* versus *zeros ⇒ the walk has been descending noise*. ⊘ There is a
+/// **third** outcome the rung does not name and the instrument must not collapse into the
+/// second: an address the store does not back at all. `FbStore::read` returns **zero and
+/// `Ok`** for an unwritten address *inside* the framebuffer, so "empty" and "refused" are
+/// genuinely different facts — and this project's own
+/// `c_oracle_empty_rows_are_wrong` is the same mistake in the other direction.
+///
+/// ⊘ Proves the formatter, not that any boot log contains it — see `publication_row`'s note.
+#[test]
+fn the_framebuffer_dump_separates_refused_from_empty_from_written() {
+    use kayfabe_device::fbwin::{FbStore, SparseFb};
+
+    // A framebuffer that covers 1 MiB. `0x4000` is inside it and unwritten; `0x900000` is
+    // outside it entirely.
+    let mut fb = SparseFb::new(1 << 20);
+    // Written data at 0x8000, so the census has something to count.
+    fb.write(0x8000, &[0xAB; 64]).expect("inside the aperture");
+
+    // ⊘ Read back through the store the dump reads, so the fixture cannot claim a
+    // capability the real path lacks (2026-08-09 observability failure #2: a fixture that
+    // normalised away the field whose corruption was the bug).
+    let mut head = [0u8; 32];
+    fb.read(0x4000, &mut head).expect("unwritten but inside");
+    assert_eq!(
+        head, [0u8; 32],
+        "an unwritten address inside the FB reads ZERO and Ok"
+    );
+    let mut d = [0u8; 32];
+    fb.read(0x8000, &mut d).expect("written");
+    assert_eq!(&d[..8], &[0xABu8; 8], "written bytes read back");
+    let mut o = [0u8; 32];
+    assert!(
+        fb.read(0x900000, &mut o).is_err(),
+        "⊘ an address the store does not back must REFUSE, never read as zeros — otherwise \
+         the dump's 'empty' outcome absorbs a wiring fault"
+    );
+}

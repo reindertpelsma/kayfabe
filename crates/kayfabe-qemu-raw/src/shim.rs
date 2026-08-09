@@ -221,7 +221,13 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// no marker, so a clipped refusal read as a complete one. [`copy_sentence`] now stamps a
 /// visible `[CLIPPED …]` tail, which is a behaviour change an ABI-27 reader must not see
 /// half of.
-pub const ABI_VERSION: u32 = 28;
+///
+/// ★ Bumped to **29** at §16.8, the ABI-3 reason a seventeenth time: [`DOORBELL_REFUSAL_LEN`]
+/// went 1024 → 2048 in **both** sentence structs, so an ABI-28 shim would allocate the old
+/// layout and this archive would write 1 024 bytes past the end of each. `[measured, boot
+/// `row1_44b7d69`]` the 502-byte sentence that boot emitted is why the 448 before it was not
+/// a precaution, and §16.8's framebuffer dump can reach ~1 260 bytes on the refusing path.
+pub const ABI_VERSION: u32 = 29;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -927,15 +933,152 @@ pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
 /// boundary it sits on* — and this one sits on the report side, where saturation is
 /// indistinguishable from a short answer.
 ///
-/// ⇒ Widened to 1024 **and** made loud: [`copy_sentence`] stamps a `[CLIPPED …]` tail, so
-/// the failure mode is now a visible statement instead of an absence.
-pub const DOORBELL_REFUSAL_LEN: usize = 1024;
+/// ⇒ Widened **and** made loud: [`copy_sentence`] stamps a `[CLIPPED …]` tail, so the
+/// failure mode is now a visible statement instead of an absence.
+///
+/// # ★ 1024 → 2048 at §16.8, and the 448 is now MEASURED to have been fatal
+///
+/// `[measured 2026-08-09, boot `row1_44b7d69`, rev `44b7d69e3`]` the sentence that boot
+/// actually emitted is **502 bytes** — `wc -c` over the text after the refusal kind in
+/// `traces/guest_boots/run_row1_44b7d69_qemu.log`. ⊘ At the old 448 it would have been cut
+/// **54 bytes short, silently**, and the 54 bytes at the end are `L2=…` and `L3=…`: the two
+/// deepest published levels, which are half of §16.8's entire finding. The widening was not
+/// precautionary.
+///
+/// §16.8's framebuffer dump adds ~380 bytes of hex and census on the good path — and up to
+/// ~760 on the refusing path, because [`fb_level_dump`] carries the **store's own sentence**
+/// and `kayfabe_device::fbwin::OUTSIDE_FRAMEBUFFER` alone is ~190 bytes. ⊘ Sized against the
+/// **refusing** path, not the good one: a diagnostic that fits only when nothing went wrong
+/// is a diagnostic that clips exactly when it is read.
+pub const DOORBELL_REFUSAL_LEN: usize = 2048;
 /// How many bytes of a doorbell refusal's **kind** the audit carries.
 ///
 /// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
 /// `&'static str` from a fixed finite set, and 64 bytes covers every one of them with room
 /// to spare.
 pub const DOORBELL_KIND_LEN: usize = 64;
+
+/// How many bytes of a published page-directory LEVEL the §16.8 dump shows.
+///
+/// ★ 32, because that is the `size` **every one of the eleven publications declares for its
+/// root** (`[measured 2026-08-09, boot `row1_44b7d69`]`: `level[0] … size 0x20` on all of
+/// them), so a root's dump is the whole root and not a prefix of it. The deeper levels
+/// declare `0x1000` and are shown as a 32-byte head plus a non-zero census over the whole
+/// page — the census is what answers *"is anything there at all"*, which is §16.8's actual
+/// question, and 4 KiB of hex in a refusal sentence would be unreadable and would not fit.
+pub const FB_DUMP_HEAD: usize = 32;
+
+/// How many bytes of a level the §16.8 dump COUNTS non-zero bytes over.
+///
+/// ⊘ A page, because *"the head is zero"* and *"the page is empty"* are different findings
+/// and the first is what a 32-byte window can see. A page-directory whose first entries are
+/// invalid but whose later ones are not would read as empty through the head alone.
+pub const FB_DUMP_CENSUS: usize = 4096;
+
+/// ★★★★ **What OUR framebuffer actually holds at one published level** —
+/// `execution_plane_increments.md` §16.8's rung, and it is deliberately a dump rather than
+/// a verdict.
+///
+/// # ⊘ The question, stated so it can only have measured answers
+///
+/// `[measured 2026-08-09, boot `row1_44b7d69`]` the eleven publications split in two: nine
+/// carry roots at `~0x2efa_xxxx` (≈ 11.7 GiB, this GA106's framebuffer size) whose levels
+/// **descend**, and two carry four **ascending, consecutive, 4 KiB** pages from `0x0` and
+/// from `0x4000` — contiguous with each other, the signature of offsets into one buffer
+/// rather than of physical pages. Our walk reads both families as framebuffer physical
+/// addresses; the second descends successfully and lands on an unwritten page, which
+/// decodes as *"the ring is empty"* instead of faulting.
+///
+/// ⇒ Two outcomes, two different fixes, and the bytes decide:
+///
+/// - **plausible page-directory entries at `0x4000`/`0x5000`** ⇒ there is a real pool there
+///   and what we lack is its **base**;
+/// - **zero, or bytes unrelated to a page directory** ⇒ the walk has been descending
+///   **noise** and `V:0x20000` is a coincidence.
+///
+/// ⊘ **It prints and it concludes nothing.** No base is inferred, no aperture is
+/// re-decoded, nothing is emitted the guest did not ask for. `refused=` is its own outcome:
+/// an address the store does not back at all is a third answer, and it must not read as
+/// zeros ([`kayfabe_device::fbwin::FbStore::read`] returns **zero and `Ok`** for an
+/// unwritten address *inside* the framebuffer, so refused and empty are genuinely
+/// different facts here).
+fn fb_level_dump(plane: &kayfabe_device::plane::RegPlane, label: &str, phys: u64) -> String {
+    let mut head = [0u8; FB_DUMP_HEAD];
+    let head_s = match plane.fb_peek(phys, &mut head) {
+        Err(why) => return format!(" {label}@0x{phys:x}=REFUSED({why})"),
+        Ok(()) => head.iter().fold(String::new(), |mut a, b| {
+            use core::fmt::Write as _;
+            let _ = write!(a, "{b:02x}");
+            a
+        }),
+    };
+    // ⊘ The census is a SEPARATE read and its failure is reported separately: a store that
+    // backs 32 bytes and refuses the page is a fact, not a reason to drop the head we have.
+    let mut page = vec![0u8; FB_DUMP_CENSUS];
+    let nz = match plane.fb_peek(phys, &mut page) {
+        Err(_) => "?".to_string(),
+        Ok(()) => page.iter().filter(|b| **b != 0).count().to_string(),
+    };
+    format!(" {label}@0x{phys:x}={head_s} nz{nz}/{FB_DUMP_CENSUS}")
+}
+
+/// ★★★★ **The §16.8 dump, for the REFUSING row and for a CONTROL row chosen from the
+/// table** — `L0` and `L1` of each.
+///
+/// # ⊘ The control is DERIVED, never written down
+///
+/// §16.8's rung names `0x2efa9b000` — the CeUtils VA space's `levels[1]` in boot
+/// `row1_44b7d69`. ⊘ That number **may not be hard-coded**: the guest's physical memory
+/// allocator re-allocates every boot, and §14's own proof that our translation is real
+/// rather than constant was that one VA resolved to two different physical addresses across
+/// two boots. A literal here would read correctly on exactly one boot and silently dump an
+/// unrelated page on every other, which is `a_table_does_not_decide_behaviour` wearing a
+/// hex number.
+///
+/// So the control is picked **from the publication table**: the first row whose root
+/// differs from the refusing row's, printed **with its own `(hClient, hObject)`** so a
+/// reader can see which VA space they are comparing against rather than trusting that the
+/// right one was chosen. ⊘ If there is no other row, the comparison is stated absent — an
+/// empty control must not read as a matching one.
+fn fb_dump_pair(
+    plane: &kayfabe_device::plane::RegPlane,
+    pubs: &kayfabe_device::gvaspub::GvasPubSnapshot,
+    client: u32,
+    vaspace: u32,
+) -> String {
+    let Some(bad) = pubs.roots.get(&(client, vaspace)) else {
+        return String::new();
+    };
+    let bad_root = bad.pdes.root().phys_address;
+    let mut out = fb_level_dump(plane, "fbL0", bad_root);
+    if bad.pdes.num_levels > 1 {
+        out.push_str(&fb_level_dump(
+            plane,
+            "fbL1",
+            bad.pdes.levels[1].phys_address,
+        ));
+    }
+    // ⊘ The control names ITSELF. A dump labelled only "control" is a dump whose subject the
+    // reader has to infer, and inferring which VA space a number came from is exactly what
+    // §16.2 wall 1 cost a boot.
+    match pubs
+        .roots
+        .iter()
+        .find(|(_, p)| p.pdes.root().phys_address != bad_root && p.pdes.num_levels > 1)
+    {
+        None => out.push_str(" ctl=NO-OTHER-ROOT-PUBLISHED"),
+        Some(((cc, co), p)) => {
+            out.push_str(&format!(" ctl=0x{cc:x}/0x{co:x}"));
+            out.push_str(&fb_level_dump(plane, "ctlL0", p.pdes.root().phys_address));
+            out.push_str(&fb_level_dump(
+                plane,
+                "ctlL1",
+                p.pdes.levels[1].phys_address,
+            ));
+        }
+    }
+    out
+}
 
 /// ★★★ **Copy a diagnostic sentence into a fixed wire buffer, and SAY SO when it did not
 /// fit** — returning the number of bytes written.
@@ -2485,7 +2628,11 @@ impl SharedDoorbell {
         // ★★★★ §16.6 — THE WHOLE ROW THE LOOKUP CHOSE, read out of the SAME table
         // `published_root` reads. Six boots named this pair in a refusal and printed no
         // body for it; see [`publication_row`] for what each field decides.
-        let row = publication_row(&plane.gvas_publications(), facts.client, vaspace);
+        let pubs = plane.gvas_publications();
+        let row = publication_row(&pubs, facts.client, vaspace);
+        // ★★★★ §16.8's rung: what does OUR framebuffer actually hold at the addresses this
+        // row published, and at a WORKING row's? See [`fb_level_dump`].
+        let fbdump = fb_dump_pair(&plane, &pubs, facts.client, vaspace);
         let ring = plane.resolve_published_va(facts.client, vaspace, ring_va, demand());
         let fin = plane.resolve_published_va(
             facts.client,
@@ -2512,7 +2659,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}",
+            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),

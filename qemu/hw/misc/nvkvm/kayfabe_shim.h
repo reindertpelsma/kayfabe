@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 28u
+#define KAYFABE_SHIM_ABI 29u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -391,7 +391,13 @@ typedef struct KayfabeBridgeRefusal {
  * bare min(), so a clipped sentence and a complete one printed IDENTICALLY and the levels
  * would have been the first thing lost.  It now stamps a literal " [CLIPPED, sentence was
  * N bytes]" tail, so saturation is a statement rather than an absence. */
-#define KAYFABE_DOORBELL_REFUSAL_LEN 1024u
+/* ★ 1024 -> 2048 at §16.8.  MEASURED (boot row1_44b7d69): the sentence that boot emitted is
+ * 502 bytes, so the 448 this replaced would have cut 54 bytes — L2= and L3=, half of §16.8's
+ * finding — off the end SILENTLY.  §16.8's framebuffer dump adds ~380 bytes on the good path
+ * and up to ~760 on the refusing one, because a level dump carries the FB store's own
+ * sentence and OUTSIDE_FRAMEBUFFER alone is ~190 bytes.  ⊘ Sized against the refusing path:
+ * a diagnostic that fits only when nothing went wrong clips exactly when it is read. */
+#define KAYFABE_DOORBELL_REFUSAL_LEN 2048u
 
 typedef struct KayfabeDoorbellRefusal {
     uint8_t kind[KAYFABE_DOORBELL_KIND_LEN];  /* NUL-PADDED, not NUL-terminated */
