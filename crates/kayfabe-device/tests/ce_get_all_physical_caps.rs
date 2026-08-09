@@ -25,13 +25,13 @@
 //! the hardware, which is the thing being measured.
 
 use kayfabe_abi::cecaps::{
-    self, cap, CeCaps, CE_GET_ALL_CAPS_PARAMS_SIZE, GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE,
-    MAX_CES, NV2080_CTRL_CMD_CE_GET_ALL_CAPS, NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS,
+    self, CE_GET_ALL_CAPS_PARAMS_SIZE, CeCaps, GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE, MAX_CES,
+    NV2080_CTRL_CMD_CE_GET_ALL_CAPS, NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS, cap,
 };
 use kayfabe_abi::deviceinfo::DEV_TYPE_ENUM_LCE;
-use kayfabe_abi::versions::{table_for, BENCH_DRIVER};
+use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_device::inittables::{InitTablePolicy, WantedTable};
-use kayfabe_device::{chip_for_device_id, ChipProfile};
+use kayfabe_device::{ChipProfile, chip_for_device_id};
 use kayfabe_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
 /// `RpcControlReq::HEADER`.
@@ -59,8 +59,11 @@ fn ce_command(cmd_id: u32) -> RpcCommand {
     payload[4..8].copy_from_slice(&0xabcd_2080u32.to_le_bytes()); // hObject
     payload[8..12].copy_from_slice(&cmd_id.to_le_bytes());
     payload[12..16].copy_from_slice(&0u32.to_le_bytes()); // status
-    payload[16..20]
-        .copy_from_slice(&u32::try_from(CE_GET_ALL_CAPS_PARAMS_SIZE).expect("fits").to_le_bytes());
+    payload[16..20].copy_from_slice(
+        &u32::try_from(CE_GET_ALL_CAPS_PARAMS_SIZE)
+            .expect("fits")
+            .to_le_bytes(),
+    );
     payload[20..24].copy_from_slice(&0u32.to_le_bytes()); // rmapiRpcFlags: flat, not FINN
     payload[24..40].fill(0);
     RpcCommand {
@@ -235,8 +238,8 @@ fn present_is_the_same_engine_slice_the_device_info_table_serves() {
         if e.engine_data[kayfabe_abi::deviceinfo::engine_info_type::DEV_TYPE_ENUM]
             == DEV_TYPE_ENUM_LCE
         {
-            from_engines |= 1u64
-                << e.engine_data[kayfabe_abi::deviceinfo::engine_info_type::INSTANCE_ID];
+            from_engines |=
+                1u64 << e.engine_data[kayfabe_abi::deviceinfo::engine_info_type::INSTANCE_ID];
             names.push(e.name);
         }
     }

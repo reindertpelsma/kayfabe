@@ -138,7 +138,7 @@
 //! are consumed bits, not diagnostics — which is the reason to state the measured ones and
 //! refuse to invent the rest.
 
-use crate::deviceinfo::{engine_info_type, DEV_TYPE_ENUM_LCE};
+use crate::deviceinfo::{DEV_TYPE_ENUM_LCE, engine_info_type};
 use crate::inittables::FifoDeviceEntry;
 
 /// `NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS` — `ogkm-580: ctrl2080ce.h:336`. ★ **This** is
@@ -453,7 +453,10 @@ pub fn decode_ce_get_all_physical_caps(
     };
     let mut tbl = Vec::with_capacity(MAX_CES);
     for i in 0..MAX_CES {
-        tbl.push(CeCaps([body[i * CAPS_TBL_SIZE], body[i * CAPS_TBL_SIZE + 1]]));
+        tbl.push(CeCaps([
+            body[i * CAPS_TBL_SIZE],
+            body[i * CAPS_TBL_SIZE + 1],
+        ]));
     }
     let mut present = [0u8; 8];
     present.copy_from_slice(&body[PRESENT_OFF..PRESENT_OFF + 8]);
@@ -548,7 +551,10 @@ mod tests {
 
     #[test]
     fn ga106_geometry_reproduces_the_real_reply_byte_for_byte() {
-        assert_eq!(encode_ce_get_all_physical_caps(&ga106()), real_ga106_reply());
+        assert_eq!(
+            encode_ce_get_all_physical_caps(&ga106()),
+            real_ga106_reply()
+        );
     }
 
     /// ⊘ The measured `present` is `0x0f`, and `NV_CE_MAX_LCE_MASK` says `0x1f`. Pinned so
@@ -628,7 +634,10 @@ mod tests {
             CeGeometry::from_engines(&[gr_row()]),
             Err(CeCapsError::NoCopyEngines)
         );
-        assert_eq!(CeGeometry::from_engines(&[]), Err(CeCapsError::NoCopyEngines));
+        assert_eq!(
+            CeGeometry::from_engines(&[]),
+            Err(CeCapsError::NoCopyEngines)
+        );
     }
 
     /// ⊘ An instance id with no slot refuses rather than wrapping into another CE's row.
