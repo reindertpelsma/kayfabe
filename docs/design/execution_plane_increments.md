@@ -6314,3 +6314,47 @@ this port *is* a GSP client with the GPU offloaded to firmware, `:45-49`),
 `NvU32 + NvBool + NvBool + NvU8[64]` = 70, padded to **72** (`ctrl2080gsp.h:66, 70-75`), and
 `[measured]` the wire agrees: the reply's only written bytes are offsets 0, 4, 5 and the
 ASCII run at 6.
+
+#### ★★★ §14.35 BOOTED — the wall is down, and the value came off the GUEST rather than a table
+
+`[measured 2026-08-09, boot `gf1435` at `d24ad77`, real GA106 on `vh`, probe flags: **NONE**]`
+Both artifacts stamped `kayfabe-rev:d24ad776…` (archive **and** `qemu-system-x86_64`), so this
+is not the `862c7c2` shape.
+
+**The rung landed byte-for-byte.** The guest's own trace:
+
+```text
+CTRL cmd=0x20803601 hClient=0xc1d0000c hObject=0x5c000003 size=72 status=0x00000000 rc=0
+  out=0100000001013538302e3135392e3034 0000…
+```
+
+— identical to the real GA106's `out=` at `cuinit_ioctl_trace_real_ga106.txt:73`, and
+`0x20803601` appears **zero** times in that boot's unserviced ledger. ★ The ASCII run decodes
+`"580.159.04"`, and it got there by being **latched from the guest's own fn 1**, not from any
+constant this port holds — the two constants that look right are refuted in
+`kayfabe_abi::gspfeatures`.
+
+##### Where `cuInit` now stops, positionally
+
+Our trace is **89 lines**, the same length as the real GA106's, and a positional diff on
+`(kind, id, size, status)` gives **77 of 87 rows identical**. ⊘ But the raw count understates
+it, because rows 81-88 are not disagreements — they are *our teardown* (`ESC 0x4f`, `FREE`)
+where hardware continues. There are exactly **TWO** substantive divergences:
+
+| ln | id | real | ours | verdict |
+|---|---|---|---|---|
+| 40 | `0x20810108` | `NV_OK` | `0x56` | **benign, re-confirmed** — `cuInit` runs 40 further rows past it |
+| 80 | `0x20808159` | `NV_OK` | `0x56` | ★★★ **THE NEW WALL, and it is FATAL** — every row after it is teardown |
+
+⊘⊘ **And one row that looks like a divergence and is not:** `0x2080012f` answers `0x56` at row
+49 — **on real hardware too** (`cuinit_ioctl_trace_real_ga106.txt:49`). Our refusal *matches*
+there, so it must not be counted as a wall or "fixed". That is the third time on this ladder a
+`0x56` has been read as ours when it was the driver's.
+
+⇒ The wall moved from row 73 to row **80**: seven further calls served, `cuInit` still `100`.
+
+##### ★★ What this boot settles about `0x20810108`, and what it does not
+
+Row 40's refusal is now measured non-fatal **twice**, at two different wall positions. ⊘ That is
+still only evidence about *reachability*, never about correctness: `injection_measures_necessity_
+never_sufficiency`. A served-but-wrong answer there would look exactly like this.
