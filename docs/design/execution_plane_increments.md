@@ -8489,3 +8489,64 @@ causality** (`scrubber_teardown_is_not_the_wall`, measured once already in this 
 actually fails on, from the guest side, with `scripts/bench/guest_cuinit_trace.sh` — the
 instrument that answers "where", rather than reasoning from the loudest line in a log that
 also contains a successful `nvidia-smi`.
+
+### 16.28.11 ★★★★ THE OWNER'S PHYSICAL QUESTION — *"how is a real GPU supposed to know?"*
+
+> *"if the vaspace is never allocated, how is a real GPU supposed to know, with a host driver?"*
+
+★★★ **The question is right and it cuts through the abstraction.** Hardware has never heard of
+a `VaSpace` object. The whole `Client → Device → TSG → CtxShare → VASpace` hierarchy is **RM's
+bookkeeping** — handles in a namespace. What the engine consumes is the channel's **instance
+block**, one field of which is the **page-directory base**; the host fetches from the GPFIFO,
+hits a virtual address, and walks from *that* number. No objects, no handles. ⇒ The wrapper TSG
+exists to satisfy **RM's own invariant** (every channel belongs to a scheduling group), not the
+hardware's.
+
+⇒ **Record this as a first-class distinction: the object model is bookkeeping; the instance
+block and the page tables are the machine.** Anywhere this port reasons about objects, the
+question to ask is what hardware actually reads. It is the same
+*measure-at-the-boundary-not-inside* move that produced §16.28 in the first place — reading RM's
+emitter rather than reasoning about our own census.
+
+### 16.28.12 ⊘ AND IT ALREADY HOLDS HERE — because §16.28 MINTED NOTHING
+
+The concern the question raises is about a **mint**: a minted VA space must still name an
+address a real GPU could have walked. ⊘ **Route 4 mints nothing and invents no address.** Both
+halves of what it produces are the guest's own:
+
+| what route 4 hands over | where it comes from |
+|---|---|
+| the **name** `hVASpace = 0xc` | the handle **RM itself** minted, allocated `FERMI_VASPACE_A` at, published under, and freed (`gpu_vaspace.c:4101-4135`) |
+| the **address** the walk roots on | the guest's own `0x90f10106` publication for `(hClient 0xc1e00010, hObject 0xc)`, recorded and ACCEPTED in every boot since `uvm1_b731e3c` |
+
+⇒ **The physical acceptance criterion is not merely met, it is measured.** *"What would the
+instance block have contained?"* — the page-directory root of the Device's default VA space, and
+that is exactly the number the guest's own driver published under that name. The proof it is a
+real address and not a plausible one is that the walk **succeeded**: `va=0x12006c004 ->
+S:0x4d09004` on the walling channel's own ring, feeding a 65536 B copy (§16.28.8).
+
+### 16.28.13 ★★ THE INSTANCE-BLOCK ROUTE — checked, named, and NOT needed to unblock
+
+⊘ Recorded so nobody re-asks, and because it remains the **strongest available oracle**: two
+independent derivations of one number.
+
+- **This port does not capture the instance block at all.** `kayfabe_abi::submit` names the
+  field's offset in a comment (*"+144 instanceMem"*) and nothing reads it. ⇒ The check the
+  question proposes cannot be run against s26's logs; it needs an instrument first.
+- ★ **The C oracle DID capture it, and measured it EMPTY.** `nvkvm_gpu_emul.c:2877` reads
+  `instanceMem.base` from `cmd + 256` into `chan_inst_block`, and the field's own declaration
+  says *"unused: GSP-managed, empty"* (`:225`), with `:369` stating the consequence outright:
+  *"This is the channel PDB source (the GSP-managed instblk is empty …)"* — which is **why the C
+  rooted its walk from the `0x90f10106` publication instead**, i.e. from exactly the source
+  route 4 uses.
+- ⚠ **But that negative is scoped to GSP-managed channels, and nobody has asked it of this
+  Device-parented one.** ⊘ An empty read is evidence of emptiness only if the read is sound
+  (`c_oracle_empty_rows_are_wrong`), and the C's reading was never aimed at this channel.
+
+⇒ **Owed, as an oracle rather than as a fix**: capture `instanceMem.base` /
+`instanceMem.addressSpace` off the channel alloc the way `gpFifoOffset` is already captured,
+print it beside the resolved PDB for **all six** channels, and check whether the five that
+resolve through the object model carry the *same* number in their instance blocks. ★ If they
+do, the object model is confirmed as a convenience over the machine's own record — and route 4
+gains a second, independent derivation. ⊘ It is not needed to unblock: the wall is already down
+and the walk already resolves.
