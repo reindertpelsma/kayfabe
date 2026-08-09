@@ -1572,6 +1572,22 @@ impl PushbufferAbi for Ga10xPushbuffer {
                     // `method + 4·i`: an incrementing header walks consecutive method
                     // ADDRESSES, and the class headers name methods in bytes.
                     let addr = h.method.wrapping_add(4 * (i as u32));
+                    // ★★★ §16.24's TRIPWIRE, evaluated here for `LAUNCH_DMA`'s reason: the
+                    // binding in force is the one at *this* position in the stream, so the
+                    // question "is this subchannel a `GP100_UVM_SW`?" is asked against the
+                    // state as the engine would see it, not against the state after the run.
+                    //
+                    // ⊘ It fires on the FAULT methods only — `SET_OBJECT` and
+                    // `NO_OPERATION` are routine, and the bind in particular is at the head
+                    // of every UVM CE push. See `kayfabe_abi::submit::uvm_sw`.
+                    if submit::uvm_sw::is_fault_method(addr)
+                        && state.object(subch) == Some(ClassId(nv::GP100_UVM_SW))
+                    {
+                        // ★ Reported, and reported EARLY: this wins over anything later in
+                        // the same run, because a submission carrying a fault cancel is not
+                        // a submission whose copies this port is entitled to serve.
+                        return PushMethod::UvmSwFaultMethod { method: addr };
+                    }
                     if addr == submit::SET_OBJECT {
                         // ★ Binding CLEARS this subchannel — see `MethodState::bind_object`.
                         state.bind_object(subch, ClassId(arg & submit::SET_OBJECT_NVCLASS_MASK));

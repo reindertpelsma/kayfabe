@@ -918,6 +918,30 @@ pub enum PushMethod {
         /// True if a membar must be honored before the parser advances.
         membar: bool,
     },
+    /// ★★★ **§16.24's admission, expired** — a `GP100_UVM_SW` fault method arrived on a
+    /// subchannel bound to that class.
+    ///
+    /// This variant is not a capability; it is a **tripwire**, and it exists so that a
+    /// scope written in prose has to fire instead of being re-read. §16.24 admitted
+    /// `GP100_UVM_SW` (`0xc076`) because UVM's `channelAllocate` cannot build a channel
+    /// without it, and bounded the admission with an argument: the object's only in-band
+    /// use is to hold a subchannel for `FAULT_CANCEL_A`, and this port raises no fault for
+    /// UVM to cancel. The moment a cancel or a clear-faulted method reaches this decoder,
+    /// that argument is false and everything downstream of it is unsupported.
+    ///
+    /// ⊘ **Not raised by the bind.** `uvm_hal_pascal_host_init` pushes
+    /// `SET_OBJECT GP100_UVM_SW` at the head of every UVM CE push
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_pascal_host.c:314-318`), so the bind is
+    /// routine and `[measured 2026-08-09, boot s23_10a769c]` present on nine served
+    /// doorbells. See `kayfabe_abi::submit::uvm_sw` for the predicate and its refutation
+    /// of the wider reading.
+    ///
+    /// The `method` is the address **read out of the stream**, not a value this port chose
+    /// — the distinction `NotAnEngine(ClassId(0))` cost six boots for getting wrong.
+    UvmSwFaultMethod {
+        /// The `NVC076_*` method address that arrived, verbatim from the pushbuffer.
+        method: u32,
+    },
     /// Any method this arch does not model — passed through verbatim, acted on by no
     /// core code (trap-min, decision #6). NEVER guessed into one of the above.
     Opaque,

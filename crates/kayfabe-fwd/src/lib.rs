@@ -538,6 +538,34 @@ pub enum FwdFault {
         /// recomputed through any resolver.
         set_object: Option<ClassId>,
     },
+    /// ★★★ **§16.24's admission scope, EXPIRED** — the submission carries a
+    /// `GP100_UVM_SW` fault method, so UVM is acting on a fault this port never delivered.
+    ///
+    /// # ⊘ Why this is a refusal and not a log line
+    ///
+    /// §16.24 admitted `GP100_UVM_SW` (`0xc076`) with an argument attached: UVM's
+    /// `channelAllocate` cannot build a channel without it
+    /// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`), and the object's
+    /// only in-band use is to hold a subchannel for `FAULT_CANCEL_A` — which nothing can
+    /// reach, because this port raises no replayable fault and pushes no shadow-queue
+    /// entry. A submission containing one of those methods is that argument being false.
+    ///
+    /// ⊘ Serving the rest of such a submission would be the *silent* failure this
+    /// repository keeps measuring: the copies would run, the cancel would be walked past,
+    /// and UVM would proceed believing a fault it is tracking had been cancelled. That is
+    /// a wrong ANSWER, not a missing one — the `a_saturated_instrument` family. Refusing
+    /// says the true thing.
+    ///
+    /// ⚠ **Nothing has ever raised this**, and that is the point: `[measured 2026-08-09,
+    /// boot s23_10a769c]` nine doorbells served, zero of these, while the routine
+    /// `SET_OBJECT GP100_UVM_SW` that heads every UVM CE push was present throughout. It
+    /// is a tripwire under an assumption, not a wall anybody stands at.
+    UvmFaultMethodWithoutFaultDelivery {
+        /// The `NVC076_*` method address read out of the guest's own pushbuffer.
+        /// ⊘ Not a constant chosen here — see [`FwdFault::SubmissionHasNoLaunch`] for the
+        /// six boots the opposite habit cost.
+        method: u32,
+    },
     /// A GPFIFO range cut into more address-table spans than [`MAX_PUSH_SPANS`] — a loud
     /// refusal, never a truncated read. See that constant for why the bound exists.
     ///
@@ -4092,6 +4120,14 @@ pub fn apply_pushbuffer(
                 out.invalidates.push((pdb, membar));
                 // A membar is a hard barrier: the interpreter honors it before
                 // advancing (recorded here; the real transport blocks on refresh).
+            }
+            // ★★★ §16.24's tripwire on the forwarding parse too, and it RETURNS rather
+            // than counting — the same ordering property `kayfabe_rt::ceutils` states: a
+            // submission carrying a fault cancel must not have its copies partitioned and
+            // handed on while the cancel is dropped. ⊘ `out` is discarded with the `?`, so
+            // no span from this parse can reach an executor.
+            kayfabe_arch::PushMethod::UvmSwFaultMethod { method } => {
+                return Err(FwdFault::UvmFaultMethodWithoutFaultDelivery { method });
             }
             kayfabe_arch::PushMethod::Opaque => out.opaque += 1,
         }

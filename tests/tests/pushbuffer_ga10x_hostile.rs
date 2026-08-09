@@ -1071,3 +1071,117 @@ fn a_non_incrementing_run_at_the_operand_addresses_latches_nothing() {
         );
     }
 }
+
+// =====================================================================================
+// §16.24 — the TRIPWIRE under the `GP100_UVM_SW` admission
+// =====================================================================================
+
+/// ★★★★ **The hedge, made executable — and the check that it can actually BITE.**
+///
+/// §16.24 admitted `GP100_UVM_SW` (`0xc076`) because UVM's `channelAllocate` cannot build
+/// a channel without it (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`),
+/// and bounded the admission with a sentence: *the object's only in-band use is to hold a
+/// subchannel for `FAULT_CANCEL_A`, and this port raises no fault for UVM to cancel.*
+///
+/// ⊘ **A bound written only in prose is the shape that cost this campaign six boots.** The
+/// per-doorbell `MethodState` carried a comment naming its own exception — *"not a general
+/// answer: a channel whose driver latches once and fires many times would need the
+/// per-channel state"* — and the code took the rule. This test is that lesson applied to
+/// the sentence above: the scope is a predicate now, and here is the proof it discriminates.
+///
+/// Four cases, one test, so the positive cannot be deleted without the negatives:
+///
+/// 1. ⊘ **`SET_OBJECT GP100_UVM_SW` must NOT fire.** `uvm_hal_pascal_host_init` is
+///    `if (uvm_channel_is_ce(push->channel)) NV_PUSH_1U(C076, SET_OBJECT, GP100_UVM_SW);`
+///    (`ogkm-580: kernel-open/nvidia-uvm/uvm_pascal_host.c:314-318`) — the host HAL's
+///    per-push init hook, so the bind heads **every** UVM CE pushbuffer.
+///    `[measured 2026-08-09, boot s23_10a769c]` nine doorbells were served with it present.
+///    ⇒ A tripwire on the bind fires on every healthy submission and means nothing.
+/// 2. ⊘ **`NO_OPERATION` must NOT fire** — `clc076.h:36`, a routine method asserting
+///    nothing about faults. This is why the predicate is a range and not `!= SET_OBJECT`.
+/// 3. ★ **Every fault method MUST fire**, each reported with **its own address read out of
+///    the stream** — not a constant chosen at the raise site, which is the defect
+///    `FwdFault::SubmissionHasNoLaunch` was built to end.
+/// 4. ⊘ **The same addresses on a subchannel bound to the COPY ENGINE must NOT fire.** The
+///    binding is load-bearing: `0x104` is `FAULT_CANCEL_A` on `GP100_UVM_SW` and something
+///    else entirely on `AMPERE_DMA_COPY_B`, and a codec that read the address without the
+///    class would refuse healthy copies.
+#[test]
+fn a_uvm_sw_fault_method_trips_and_the_routine_ones_do_not() {
+    use kayfabe_abi::generated::classes as nv;
+    use kayfabe_abi::submit;
+    let pb = Ga10xPushbuffer;
+    const SUBCH: u32 = 5;
+
+    // Bind `class` on SUBCH the way a push does, then send one method at `addr`.
+    let send = |class: u32, addr: u32| {
+        let mut st = kayfabe_arch::MethodState::new();
+        let bind = submit::method_header_inc(SUBCH, submit::SET_OBJECT, 1).expect("encodable");
+        let _ = pb.decode_run(&mut st, &[(bind, vec![class])]);
+        let hdr = submit::method_header_inc(SUBCH, addr, 1).expect("encodable");
+        pb.decode_run(&mut st, &[(hdr, vec![0xdead_beef])])
+    };
+    let tripped = |ms: &[PushMethod]| {
+        ms.iter().find_map(|m| match m {
+            PushMethod::UvmSwFaultMethod { method } => Some(*method),
+            _ => None,
+        })
+    };
+
+    // ---- 1 + 2: the routine methods, which are the ones a live guest actually sends ----
+    let bind_only = {
+        let mut st = kayfabe_arch::MethodState::new();
+        let bind = submit::method_header_inc(SUBCH, submit::SET_OBJECT, 1).expect("encodable");
+        pb.decode_run(&mut st, &[(bind, vec![nv::GP100_UVM_SW])])
+    };
+    assert_eq!(
+        tripped(&bind_only),
+        None,
+        "★ `SET_OBJECT GP100_UVM_SW` heads EVERY UVM CE push (uvm_pascal_host.c:314-318) \
+         and nine served doorbells in boot s23_10a769c carried it — a tripwire here would \
+         fire on every healthy submission"
+    );
+    assert_eq!(
+        tripped(&send(nv::GP100_UVM_SW, submit::uvm_sw::NO_OPERATION)),
+        None,
+        "⊘ `NO_OPERATION` (clc076.h:36) asserts nothing about faults — which is why the \
+         predicate is a RANGE and not `anything that is not SET_OBJECT`"
+    );
+
+    // ---- 3: THE POSITIVE — every fault method, each carrying its own address ----------
+    let faults = [
+        ("FAULT_CANCEL_A", submit::uvm_sw::FAULT_CANCEL_A),
+        ("FAULT_CANCEL_B", submit::uvm_sw::FAULT_CANCEL_B),
+        ("FAULT_CANCEL_C", submit::uvm_sw::FAULT_CANCEL_C),
+        ("CLEAR_FAULTED_A", submit::uvm_sw::CLEAR_FAULTED_A),
+        ("CLEAR_FAULTED_B", submit::uvm_sw::CLEAR_FAULTED_B),
+    ];
+    for (name, addr) in faults {
+        assert_eq!(
+            tripped(&send(nv::GP100_UVM_SW, addr)),
+            Some(addr),
+            "{name} ({addr:#x}) must trip §16.24's bound, and must report ITS OWN address"
+        );
+    }
+    // Non-vacuity on the report: the five addresses are distinct, so `Some(addr)` above is
+    // the stream's value and not one constant satisfying all five.
+    assert_eq!(
+        faults
+            .iter()
+            .map(|(_, a)| *a)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        5,
+        "the five fault methods must be five distinct addresses, or case 3 proves nothing"
+    );
+
+    // ---- 4: the CLASS is load-bearing, not the address -------------------------------
+    for (name, addr) in faults {
+        assert_eq!(
+            tripped(&send(nv::AMPERE_DMA_COPY_B, addr)),
+            None,
+            "{name} ({addr:#x}) on a COPY-ENGINE subchannel is a copy-engine method — the \
+             tripwire keys on the bound class, never on the bare address"
+        );
+    }
+}

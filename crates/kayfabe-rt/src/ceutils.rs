@@ -574,6 +574,27 @@ pub fn run_submission(
         _ => None,
     });
 
+    // ★★★ §16.24's TRIPWIRE, and it bites BEFORE the execute loop below — deliberately.
+    //
+    // The admission of `GP100_UVM_SW` was bounded by *"this port raises no fault for UVM to
+    // cancel"*. A fault method in these bytes is that bound expiring, and the one thing
+    // that must NOT happen then is for the copies beside it to run while the cancel is
+    // walked past: that would leave UVM believing a fault it tracks was cancelled, which is
+    // a wrong answer rather than a missing one. So the whole submission is refused, by a
+    // name that says which assumption failed, before a single byte moves.
+    //
+    // ⚠ Placed here rather than inside the loop so it cannot be reached *after* a partial
+    // execution — the ordering property, not just the refusal, is what makes it safe.
+    if let Some(method) = decoded.iter().find_map(|m| match m {
+        PushMethod::UvmSwFaultMethod { method } => Some(*method),
+        _ => None,
+    }) {
+        return Err(CeUtilsRefusal {
+            fault: FwdFault::UvmFaultMethodWithoutFaultDelivery { method },
+            detail: last,
+        });
+    }
+
     // ---- 4. EXECUTE each launch, then release its completion. ---------------------------
     for m in decoded {
         // ★★★ **A launch that transfers nothing and exists only to release** — and it is

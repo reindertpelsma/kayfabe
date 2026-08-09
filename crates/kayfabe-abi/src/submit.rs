@@ -1806,6 +1806,72 @@ pub mod fifo {
 pub const SET_OBJECT_NVCLASS_MASK: u32 = 0xFFFF;
 
 // =====================================================================================
+// `GP100_UVM_SW`'s methods — the TRIPWIRE under §16.24's admission
+// =====================================================================================
+
+/// `GP100_UVM_SW` (`0xc076`) method offsets — `ogkm-580:
+/// src/common/sdk/nvidia/inc/class/clc076.h:35-77`. The class has **eight** method
+/// addresses and no more; the header is 58 lines long and this module is all of it.
+///
+/// # ★★★ Why this module exists at all: an assumption that must FIRE when it expires
+///
+/// §16.24 admitted `GP100_UVM_SW` because UVM's `channelAllocate` cannot make a channel
+/// without it. The admission carries a scope, stated in `capability.rs`: *"the object
+/// exists to hold a subchannel for `FAULT_CANCEL_A`, and this port raises no fault for UVM
+/// to cancel."* ⊘ **That sentence is a prediction, and a prediction written only in prose
+/// is the exact shape that cost this campaign six boots** — the per-doorbell `MethodState`
+/// carried a comment naming its own exception (*"a channel whose driver latches once and
+/// fires many times would need the per-channel state"*) and the code took the rule anyway.
+/// So the scope is compiled instead of narrated: [`is_fault_method`] is the predicate, and
+/// a decoder that sees one reports it rather than walking past it.
+///
+/// # ⊘ The trigger is NOT `SET_OBJECT GP100_UVM_SW`, and that reading is REFUTED by source
+///
+/// `uvm_hal_pascal_host_init` (`ogkm-580: kernel-open/nvidia-uvm/uvm_pascal_host.c:314-318`)
+/// is `if (uvm_channel_is_ce(push->channel)) NV_PUSH_1U(C076, SET_OBJECT, GP100_UVM_SW);`
+/// — the host HAL's per-push init hook, so the bind is at the head of **every** UVM CE
+/// pushbuffer. `[measured 2026-08-09, boot s23_10a769c]` nine doorbells were served with it
+/// present. A tripwire on the bind would fire on every healthy submission and mean nothing.
+///
+/// ★ What expires the assumption is a **cancel**: `FAULT_CANCEL_A/B/C` are pushed only by
+/// `uvm_hal_pascal_cancel_faults_*` and `CLEAR_FAULTED_A/B` only by the faulted-channel
+/// recovery path — both reachable only once something has told UVM a fault occurred, which
+/// this port never does (the boot census says so in its own words: *"fault DELIVERY is
+/// UNBUILT"*). `NO_OPERATION` is excluded for the same reason as `SET_OBJECT`: it asserts
+/// nothing about faults.
+pub mod uvm_sw {
+    /// `NVC076_SET_OBJECT` @ `0x0` (`clc076.h:35`). Routine — see the module docs.
+    pub const SET_OBJECT: u32 = 0x0000_0000;
+    /// `NVC076_NO_OPERATION` @ `0x100` (`clc076.h:36`). Routine.
+    pub const NO_OPERATION: u32 = 0x0000_0100;
+    /// `NVC076_FAULT_CANCEL_A` @ `0x104` (`clc076.h:40`) — the instance pointer's low
+    /// bits and its aperture.
+    pub const FAULT_CANCEL_A: u32 = 0x0000_0104;
+    /// `NVC076_FAULT_CANCEL_B` @ `0x108` (`clc076.h:49`) — the instance pointer's high
+    /// bits.
+    pub const FAULT_CANCEL_B: u32 = 0x0000_0108;
+    /// `NVC076_FAULT_CANCEL_C` @ `0x10c` (`clc076.h:52`) — client, GPC and
+    /// `MODE_TARGETED`/`MODE_GLOBAL`.
+    pub const FAULT_CANCEL_C: u32 = 0x0000_010c;
+    /// `NVC076_CLEAR_FAULTED_A` @ `0x110` (`clc076.h:61`).
+    pub const CLEAR_FAULTED_A: u32 = 0x0000_0110;
+    /// `NVC076_CLEAR_FAULTED_B` @ `0x114` (`clc076.h:75`).
+    pub const CLEAR_FAULTED_B: u32 = 0x0000_0114;
+
+    /// Is `addr` one of this class's **fault** methods — the five that mean UVM is acting
+    /// on a fault this port never delivered?
+    ///
+    /// ⊘ Deliberately NOT *"anything that is not `SET_OBJECT`"*: `NO_OPERATION` is a legal
+    /// routine method, and a predicate that swept it in would fire on a healthy push. The
+    /// range is contiguous in the header and is stated as its endpoints so that a method
+    /// NVIDIA adds between them is caught rather than missed.
+    #[must_use]
+    pub const fn is_fault_method(addr: u32) -> bool {
+        addr >= FAULT_CANCEL_A && addr <= CLEAR_FAULTED_B
+    }
+}
+
+// =====================================================================================
 // The copy engine's methods
 // =====================================================================================
 

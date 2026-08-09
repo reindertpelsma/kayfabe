@@ -65,6 +65,9 @@ impl Faulted for FwdFault {
             FwdFault::PushbufferAperture { .. } => FaultTag("FwdFault::PushbufferAperture"),
             FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
             FwdFault::SubmissionHasNoLaunch { .. } => FaultTag("FwdFault::SubmissionHasNoLaunch"),
+            FwdFault::UvmFaultMethodWithoutFaultDelivery { .. } => {
+                FaultTag("FwdFault::UvmFaultMethodWithoutFaultDelivery")
+            }
             FwdFault::PushTooFragmented { .. } => FaultTag("FwdFault::PushTooFragmented"),
             FwdFault::Rm(e) => e.fault_tag(),
             FwdFault::NotAnEngine(_) => FaultTag("FwdFault::NotAnEngine"),
