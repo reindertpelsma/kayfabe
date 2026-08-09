@@ -1110,7 +1110,22 @@ pub fn served_chain(
         Box::new(inittables::InitTablePolicy::with_probe_arm(
             chip, driver, probe_arm,
         )),
-        Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
+        // ⊘⊘ EXPERIMENT ONLY, branch `exp/name-probe`, NOT for master. `StaticInfoPolicy`
+        // leaves `gpuNameString` zero by design, and boot `gt1439` measured what the guest
+        // does with that: `nvidia-smi` prints `Name: ERR!`, and rows 76/77 of the guest
+        // ioctl trace (`0x20800111` / `0x20800110`) come back all-zero where a real GA106
+        // returns "GA106-A" / "NVIDIA GeForce RTX 3060". After subtracting the tracer's own
+        // truncation and the PCI-slot / UUID / handle / clock differences, those two rows
+        // are the ONLY structural content defect left in cuInit's 87-row plane.
+        // This hardcode exists to answer one question in one boot: does cuInit still
+        // return 3 when the name is present? ⊘ It is not the design — the design is
+        // `StaticInfoPolicy::with_name`'s doc (read the host GPU's own answer).
+        Box::new(
+            staticinfo::StaticInfoPolicy::new(chip, driver).with_name(
+                kayfabe_abi::gspstaticinfo::GpuName::declared("NVIDIA GeForce RTX 3060"),
+                kayfabe_abi::gspstaticinfo::GpuName::declared("GA106-A"),
+            ),
+        ),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         // ★★★ `#149`. Position: among the ANSWERING links, before the recorders, and
         // before `InertPolicy` would have a chance to grow an arm for it. It answers
