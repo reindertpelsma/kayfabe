@@ -2349,7 +2349,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}",
+            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),
@@ -2357,9 +2357,88 @@ impl SharedDoorbell {
             ),
             ring.tag(),
             fin.tag(),
+            self.ring_scan(facts.client, vaspace, ring_va, facts.ring_entries),
+        )
+    }
+
+    /// ★★★ **Which GPFIFO entries of this ring are NON-ZERO** — the observation that
+    /// separates *"the guest wrote its entry somewhere we did not look"* from *"we are
+    /// reading the wrong store"*.
+    ///
+    /// # ⊘ Why one entry was not enough, and it is a MEASURED ambiguity
+    ///
+    /// `[measured 2026-08-09, boot `uvm2_d0fbac0`]` the UVM channel `cuInit` walls on
+    /// resolved end to end and then refused:
+    ///
+    /// ```text
+    /// [FwdFault::PushTooFragmented] … | c=0xc1d0000a vas=0xcaf00005 root=0x4000/ap1/sh47
+    ///   ring=0x121010000 rng=V:0x20000 fin=V:0x28004 gp0=0x0000000000000000 NOT-A-GP-ENTRY
+    /// ```
+    ///
+    /// The walk works; entry **0** is zero. Two completely different causes produce that
+    /// byte-for-byte, and the fix differs:
+    ///
+    /// 1. the guest's `GP_PUT` is not `0` — UVM submitted at some other index (a control
+    ///    GPFIFO entry, or a ring whose cursor did not start at zero), and the entry is
+    ///    *there*;
+    /// 2. we are reading a store the guest never wrote — the ring's leaf resolved to this
+    ///    device's emulated framebuffer (`V:`) while the CeUtils ring resolves to guest RAM
+    ///    (`S:`), and an aperture confusion reads a page of zeros that decodes as *"no
+    ///    work"* rather than faulting.
+    ///
+    /// A scan answers it: **any** non-zero entry means (1) and names the index; **all** zero
+    /// across the declared ring means (2) is live, and that is the whole point — an absence
+    /// over one sample and an absence over the whole ring are different findings.
+    ///
+    /// ⊘ **An OBSERVER**, like the walk above it: it reads, it formats, and it changes
+    /// nothing. It runs only on a refusal, so it costs a boot that is already failing.
+    /// ⚠ Bounded at [`RING_SCAN_ENTRIES`] regardless of what the channel declared — the
+    /// entry count is a guest-supplied number and a diagnostic must not become a
+    /// guest-sized read.
+    fn ring_scan(&self, client: u32, vaspace: u32, ring_va: u64, entries: u32) -> String {
+        let Some(plane) = self.plane.upgrade() else {
+            return String::new();
+        };
+        let n = (entries as usize).clamp(1, RING_SCAN_ENTRIES);
+        let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+        let mut nonzero: Vec<String> = Vec::new();
+        let mut unread = 0usize;
+        for i in 0..n {
+            let at = ring_va.wrapping_add((i * PROBE_RING_BYTES) as u64);
+            let mut gp = [0u8; PROBE_RING_BYTES];
+            match plane.read_published_va(client, vaspace, at, &mut gp, demand) {
+                Err(_) => unread += 1,
+                Ok(_) => {
+                    let raw = u64::from_le_bytes(gp);
+                    if raw != 0 && nonzero.len() < RING_SCAN_REPORT {
+                        nonzero.push(format!("[{i}]=0x{raw:016x}"));
+                    }
+                }
+            }
+        }
+        // ⊘ The scanned count is stated, so "all zero" can never be read as "we looked at
+        // the whole ring" when the declared entry count exceeded the bound.
+        format!(
+            " scan={}/{} declared, unread={}, nonzero={}",
+            n,
+            entries,
+            unread,
+            if nonzero.is_empty() {
+                "NONE — every scanned entry is ZERO".to_string()
+            } else {
+                nonzero.join(" ")
+            }
         )
     }
 }
+
+/// How many GPFIFO entries [`SharedDoorbell::ring_scan`] reads. See its docs for why it is
+/// a bound and not the channel's declared count.
+const RING_SCAN_ENTRIES: usize = 64;
+
+/// How many non-zero entries the scan NAMES. The rest are still counted by the scan's own
+/// range, which is printed beside it.
+const RING_SCAN_REPORT: usize = 4;
 
 /// The realized register plane — what the C shim holds behind its second opaque handle.
 ///
