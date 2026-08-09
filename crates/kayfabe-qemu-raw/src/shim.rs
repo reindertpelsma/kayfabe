@@ -2792,6 +2792,62 @@ impl SharedDoorbell {
     /// ⊘ Exemplars are capped at [`CENSUS_EXEMPLARS`] per group, and the cap is **reported**
     /// (`+N more`) rather than silently applied — an elided row must never read as an
     /// absent one, which is the C oracle's `dlen=0` mistake in miniature.
+    /// ★★★★ §16.27 — what the walling channel's own client namespace holds, by kind.
+    ///
+    /// Answers the one fork §16.25 left open (see
+    /// [`kayfabe_rt::device::SharedDevice::namespace_census`]): is there a `VaSpace` under
+    /// the Device this channel is parented on?
+    ///
+    /// ⊘ **`VaSpace` rows are printed IN FULL and never elided**, because they are the
+    /// answer; everything else is summarised as a count per kind. A cap that dropped the
+    /// one row the question is about would reproduce §16.25's mistake one level down.
+    fn namespace_census_line(&self, client: u32) -> String {
+        let rows = self.device.namespace_census(client);
+        if rows.is_empty() {
+            // ⊘ TRUE and loud: a refusal naming a client whose namespace holds nothing
+            // means the refusal and the graph disagree about whether the client exists.
+            return format!(" ns[c0x{client:x} EMPTY-NAMESPACE]");
+        }
+        let mut kinds: Vec<(String, usize)> = Vec::new();
+        for r in &rows {
+            let k = format!("{:?}", r.kind);
+            match kinds.iter_mut().find(|(n, _)| *n == k) {
+                Some((_, c)) => *c += 1,
+                None => kinds.push((k, 1)),
+            }
+        }
+        let mut out = format!(" ns[c0x{client:x} {} objs", rows.len());
+        for (k, c) in &kinds {
+            out.push_str(&format!(" {c}x{k}"));
+        }
+        // ★ Every VaSpace, in full: handle, the Device it hangs off, and whether it has
+        // ever been bound. `pdb=NONE` is a THIRD answer, distinct from both forks — the
+        // VASpace exists, the fourth route would find it, and it would still address
+        // nothing.
+        let mut any = false;
+        for r in rows.iter().filter(|r| r.is_vaspace()) {
+            any = true;
+            out.push_str(&match r.pdb {
+                Some(p) => format!(
+                    " | VAS h0x{:x} parent0x{:x} pdb=0x{p:x}",
+                    r.handle, r.parent
+                ),
+                None => format!(
+                    " | VAS h0x{:x} parent0x{:x} pdb=NONE-BOUND",
+                    r.handle, r.parent
+                ),
+            });
+        }
+        if !any {
+            // ★★★ The MINT fork, stated positively rather than by the absence of a row —
+            // an enumerated namespace with no VaSpace is a measurement; a report that just
+            // never mentioned one is not.
+            out.push_str(" | NO-VASPACE-IN-NAMESPACE");
+        }
+        out.push(']');
+        out
+    }
+
     fn vas_census_line(&self, refused: kayfabe_core::ChanId) -> String {
         let rows = self.device.channel_vas_census();
         if rows.is_empty() {
@@ -2893,23 +2949,32 @@ impl SharedDoorbell {
         // field that explains the refusal. ⚠ It is emitted on the REFUSAL path only.
         let routes = format!(" route[{}]", facts.vas_route);
         let census = self.vas_census_line(facts.chan);
+        // ★★★★ §16.27 — and WHAT THE WALLING CHANNEL'S OWN NAMESPACE HOLDS.
+        //
+        // §16.25 measured the shape (declares nothing, parent is a Device) and cited RM's
+        // answer for it (the DEVICE'S DEFAULT VA SPACE, `vaspace.c:178`). The one thing it
+        // could not say is whether that default VASpace is an object we were sent — which
+        // decides whether the missing fourth route is a LOOKUP or a MINT. ⊘ The refusal
+        // never enumerated the namespace, so "no VASpace was mentioned" was unmeasured,
+        // not empty. This enumerates it.
+        let ns = self.namespace_census_line(facts.client);
         let (vaspace, ring_va) = match (facts.vaspace, facts.ring_va) {
             (Some(v), Some(r)) => (v, r),
             (None, Some(r)) => {
                 return format!(
-                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=0x{r:x}{routes}{census}",
+                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=0x{r:x}{routes}{census}{ns}",
                     facts.client
                 );
             }
             (Some(v), None) => {
                 return format!(
-                    " | c=0x{:x} vas=0x{v:x} dec={declared}{userd} ring=NONE-DECLARED{routes}{census}",
+                    " | c=0x{:x} vas=0x{v:x} dec={declared}{userd} ring=NONE-DECLARED{routes}{census}{ns}",
                     facts.client
                 );
             }
             (None, None) => {
                 return format!(
-                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=NONE-DECLARED{routes}{census}",
+                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=NONE-DECLARED{routes}{census}{ns}",
                     facts.client
                 );
             }

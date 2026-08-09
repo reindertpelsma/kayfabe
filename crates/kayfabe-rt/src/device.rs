@@ -778,6 +778,47 @@ impl SharedDevice {
         out
     }
 
+    /// ★★★★ **§16.27 — every object one client namespace holds, by kind.**
+    ///
+    /// # The one question §16.25 measured but could not answer
+    ///
+    /// §16.25 established that the walling channel (`c0xc1e00010/0x2`) declares neither an
+    /// `hVASpace` nor an `hCtxShare`, and that its parent is a **Device**. RM's answer for
+    /// that exact shape is the **device's default VA space**
+    /// (`ogkm-580: kernel_channel.c:350-375` → `kernel_ctxshare.c:127` →
+    /// `vaspace.c:178` `vaspaceGetByHandleOrDeviceDefault_IMPL`, which resolves the Device
+    /// when `hVASpace == NV01_NULL_OBJECT`).
+    ///
+    /// Which leaves exactly one fork, and it decides the whole shape of the fourth route:
+    /// - the namespace **does** hold a `VaSpace` under that Device ⇒ the route is a
+    ///   **lookup** we are simply not performing; or
+    /// - it holds **none** ⇒ RM created the default VAS implicitly with the Device, it was
+    ///   never an `RM_ALLOC` on the wire, and the route must **mint** one.
+    ///
+    /// ⊘ §16.25's capture could not tell these apart, and ⊘ *"no VASpace appeared in the
+    /// refusal string"* is **not** evidence of the second: the refusal never enumerated the
+    /// namespace. An absent capture is unmeasured, not empty
+    /// (`c_oracle_empty_rows_are_wrong`). This method is what makes the fork measurable.
+    ///
+    /// ⊘ Read-only, allocates, and is called only from a refusal path.
+    #[must_use]
+    pub fn namespace_census(&self, client: u32) -> Vec<NamespaceRow> {
+        let st = self.state.read();
+        let g = &st.spine.rmgraph;
+        let mut out: Vec<NamespaceRow> = g
+            .nodes()
+            .filter(|n| n.key.client.0 == client)
+            .map(|n| NamespaceRow {
+                kind: n.kind,
+                handle: n.key.handle.0,
+                parent: n.parent.0,
+                pdb: g.pdb_of_resource(n.id()).map(|p| p.0),
+            })
+            .collect();
+        out.sort_by_key(|r| r.handle);
+        out
+    }
+
     /// ★★★ **This device's own pushbuffer codec**, for the duration of `f` — a **spine op**
     /// (rank-0 read guard).
     ///
@@ -2221,6 +2262,38 @@ impl SharedDevice {
             Ok(()) => SignalOutcome::Observed { proc, gpu, ev },
             Err(err) => SignalOutcome::ObserveRefused { proc, ev, err },
         }
+    }
+}
+
+/// ★★★★ **§16.27 — one object in a client namespace**, as reported by
+/// [`SharedDevice::namespace_census`]. ⊘ Report-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NamespaceRow {
+    /// What kind of RM object it is — the field that decides the fork: is there a
+    /// `VaSpace` in this namespace at all?
+    pub kind: kayfabe_arch::ObjectKind,
+    /// Its origin `hObject`.
+    pub handle: u32,
+    /// Its declared parent handle — so a `VaSpace` can be attributed to the same Device
+    /// the walling channel is parented on, rather than merely to the same client.
+    pub parent: u32,
+    /// Its PDB, if it has one. ★ A `VaSpace` with `pdb: None` is a *different* answer from
+    /// no `VaSpace` at all: it exists but has never been bound by `SET_PAGE_DIRECTORY`, so
+    /// the fourth route would resolve it and still address nothing.
+    pub pdb: Option<u64>,
+}
+
+impl NamespaceRow {
+    /// Is this the kind the §16.27 fork turns on?
+    ///
+    /// ⊘ A method rather than letting the reporter match on [`Self::kind`] itself: the
+    /// reporting crate (`kayfabe-qemu-raw`) does not depend on `kayfabe-arch`, and the
+    /// alternative — comparing `format!("{:?}", kind)` against the string `"VaSpace"` —
+    /// would make a *rename* silently turn every namespace into `NO-VASPACE-IN-NAMESPACE`,
+    /// i.e. silently answer the open question with the wrong fork.
+    #[must_use]
+    pub fn is_vaspace(&self) -> bool {
+        self.kind == kayfabe_arch::ObjectKind::VaSpace
     }
 }
 
