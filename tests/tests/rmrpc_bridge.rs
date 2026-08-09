@@ -3224,7 +3224,17 @@ fn every_class_in_the_table_decodes_its_declared_facts_and_only_those() {
     // — `{version, flags, size, caps}`, four NvU32, no handle and no pointer
     // (`ogkm-580: nvos.h:2716-2721`) — so `[0xff; 64]` is exactly as readable as a
     // well-formed one, and the assertion below is the statement that neither is read.
-    for class in [w::AMPERE_COMPUTE_B, w::AMPERE_DMA_COPY_B, w::AMPERE_B] {
+    // ★★ `GP100_UVM_SW` joins them on 2026-08-09 and is the STRONGEST of the four: RM
+    // registers it `RS_NONE` (`ogkm-580: resource_list.h:1539`), so no alloc-params struct
+    // is declared for the class ANYWHERE, and its one allocator passes `NULL, 0`. The
+    // `[0xff; 64]` below is therefore not "a params struct we decline to read" but bytes
+    // that could not be a params struct at all.
+    for class in [
+        w::AMPERE_COMPUTE_B,
+        w::AMPERE_DMA_COPY_B,
+        w::AMPERE_B,
+        w::GP100_UVM_SW,
+    ] {
         assert_eq!(
             xlate(&msg(class, &[0xff; 64])),
             want(class, AllocFacts::default()),

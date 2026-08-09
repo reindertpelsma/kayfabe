@@ -1016,6 +1016,36 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         name: "NVB8FA_VIDEO_OFA",
         origin: Origin::Nvproxy,
     },
+    // ★★★ `GP100_UVM_SW` (`0xc076`) — the LAST step of UVM's channel allocation, and the
+    // one that was destroying every UVM channel.
+    //
+    // `[measured 2026-08-09, boot s22_f4f3865]` four of these are refused in the `cuInit`
+    // window, one per UVM channel, and they are the last thing the guest asks for before
+    // it tears the adapter down — `hClient=0xc1d0000a; hParent=0xcaf000{12,1d,28,33};
+    // hClass=0x0000c076; paramsSize=0x00000000; status=0x00000056`. The refusal is fatal
+    // and has no forgiving caller: `channelAllocate` does `goto cleanup_free_controlpage`
+    // on it (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`), which fails
+    // `nvGpuOpsChannelAllocate`, `uvm_channel_manager_create` and `UVM_REGISTER_GPU`.
+    //
+    // ★ `Origin::Mode2Rpc` is exact, not a fallback. `grep -rn 0xc076 gvisor/` is EMPTY:
+    // the class is allocated by the guest's own KERNEL RM inside `nvGpuOpsChannelAllocate`
+    // (`RS_FLAGS_ALLOC_PRIVILEGED`, `Parents = RS_LIST(classId(KernelChannel))`,
+    // `ogkm-580: resource_list.h:1535-1544`), so as an ioctl it never crosses the boundary
+    // nvproxy gates. It reaches us only because in Mode 2 the transport is GSP RPC.
+    // That origin's obligation — *"a row with this origin has a consumer in the table that
+    // decides its params shape"* — is discharged by the `alloc_params` arm added with it.
+    //
+    // ⊘ What admitting it does NOT admit: the object's only in-band use is
+    // `uvm_hal_pascal_host_init` -> `NV_PUSH_1U(C076, SET_OBJECT, GP100_UVM_SW)`
+    // (`ogkm-580: kernel-open/nvidia-uvm/uvm_pascal_host.c:314-318`), reserving a
+    // subchannel for `FAULT_CANCEL_A`. The cancel methods are pushed only from UVM's
+    // fault-service path, which this port never enters because it raises no fault. A guest
+    // whose faults we DO start delivering is the case this row does not cover.
+    ClassEntry {
+        class: 0x0000c076,
+        name: "GP100_UVM_SW",
+        origin: Origin::Mode2Rpc,
+    },
     ClassEntry {
         class: 0x0000c361,
         name: "VOLTA_USERMODE_A",
@@ -1953,14 +1983,14 @@ mod tests {
                 "550.54.04",
                 (550, 54, 4),
                 155,
-                75,
+                76,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
                 156,
-                75,
+                76,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -1970,14 +2000,14 @@ mod tests {
                 "555.42.02",
                 (555, 42, 2),
                 155,
-                75,
+                76,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
                 156,
-                83,
+                84,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -1987,7 +2017,7 @@ mod tests {
                 "570.86.15",
                 (570, 86, 15),
                 158,
-                89,
+                90,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
@@ -1999,7 +2029,7 @@ mod tests {
                 "575.51.02",
                 (575, 51, 2),
                 159,
-                89,
+                90,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2012,7 +2042,7 @@ mod tests {
                 "580.65.06",
                 (580, 65, 6),
                 159,
-                91,
+                92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2025,7 +2055,7 @@ mod tests {
                 "610.43.02",
                 (610, 43, 2),
                 159,
-                91,
+                92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2419,6 +2449,9 @@ mod tests {
         cls(0x0000_c7c0, "AMPERE_COMPUTE_B");
         cls(0x0000_c7b5, "AMPERE_DMA_COPY_B");
         cls(0x0000_c797, "AMPERE_B");
+        // ★ §16.24 — the one class on this pin that no CUDA process and no RM bring-up
+        // path allocates: UVM's own kernel-side channel code does, once per CE channel.
+        cls(0x0000_c076, "GP100_UVM_SW");
         cls(0x0000_ceb7, "NVCEB7_VIDEO_ENCODER");
         cls(0x0000_d1b7, "NVD1B7_VIDEO_ENCODER");
     }
@@ -2438,13 +2471,21 @@ mod tests {
     /// ★ The four class counts move together because `GT200_DEBUGGER` was in the SHARED
     /// base: a class this port never modelled was permitted at *every* boundary, which is
     /// exactly the direction a default-deny table must not drift in.
+    ///
+    /// ★★ **+1 at every boundary on 2026-08-09 (§16.24): `GP100_UVM_SW` (`0xc076`).** It
+    /// is SHARED for the same reason `GT200_DEBUGGER` was — the class is Pascal-plus and
+    /// version-invariant, and UVM allocates it on every CE channel it creates on every
+    /// driver this table spans. ⚠ This ratchet is what makes admitting a class a
+    /// deliberate act; it moved because a boot named the row, and the four numbers moving
+    /// **together** is the evidence that the row went into the shared base rather than
+    /// into one boundary by accident.
     #[test]
     fn the_ported_surface_is_the_reviewed_size() {
         assert_eq!(bench().all_controls().count(), 159, "controls");
-        assert_eq!(at(550, 54, 4).all_classes().count(), 75, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 83, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 89, "classes at 570");
-        assert_eq!(bench().all_classes().count(), 91, "classes at 580");
+        assert_eq!(at(550, 54, 4).all_classes().count(), 76, "classes at 550");
+        assert_eq!(at(560, 28, 3).all_classes().count(), 84, "classes at 560");
+        assert_eq!(at(570, 86, 15).all_classes().count(), 90, "classes at 570");
+        assert_eq!(bench().all_classes().count(), 92, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 13, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 4, "denied classes");
     }
@@ -2532,7 +2573,11 @@ mod tests {
         // 12 → 13 on 2026-08-08 (`execution_plane_increments.md` §14.28): `NV2081_BINAPI`
         // (`0x2081`), the class an injection experiment on a real GA106 measured to be the
         // difference between `cuInit(0) = 100` and `cuInit(0) = 0`.
-        assert_eq!(seen, 13, "the port decodes thirteen classes today");
+        // 13 → 14 on 2026-08-09 (`execution_plane_increments.md` §16.24): `GP100_UVM_SW`
+        // (`0xc076`), UVM's per-channel fault-cancel SW object — refused four times in
+        // boot `s22_f4f3865`'s `cuInit` window, once per UVM channel, each refusal fatal
+        // to its channel at `ogkm-580: nv_gpu_ops.c:6120`.
+        assert_eq!(seen, 14, "the port decodes fourteen classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

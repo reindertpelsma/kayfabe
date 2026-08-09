@@ -505,6 +505,86 @@ fn the_3d_objects_params_are_never_read_however_they_arrive() {
 }
 
 // =================================================================================
+// 1c. §16.24 — UVM's per-channel fault-cancel SW object (`GP100_UVM_SW`, `0xc076`)
+// =================================================================================
+
+/// One UVM channel's handles, **transcribed from the boot's own dmesg**, unlike §1b's —
+/// UVM allocates these at runtime rather than spelling them as literals, so RM's source
+/// cannot supply them and the wire must.
+///
+/// `[measured 2026-08-09, boot s22_f4f3865, rev f4f3865]`, vast GA106 bench (RTX 3060,
+/// host driver 580.159.04 Open), `traces/guest_boots/run_s22_f4f3865_cup2_probe.log`:
+///
+/// ```text
+/// GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00012; hObject=0xcaf00015;
+///                    hClass=0x0000c076; paramsSize=0x00000000; status=0x00000056
+/// ```
+///
+/// ★ Four of these appear in that one `cuInit` window — parents `0xcaf00012`, `0xcaf0001d`,
+/// `0xcaf00028`, `0xcaf00033`, eleven handles apart — one per UVM channel, and they are
+/// the last thing the guest asks for before it tears the adapter down.
+const UVM_CHANNEL: u32 = 0xcaf0_0012;
+const UVM_SW_OBJ: u32 = 0xcaf0_0015;
+
+/// ★★★ **The rung §16.23 left, reproduced and then served.**
+///
+/// `GP100_UVM_SW` was permitted by NEITHER table: absent from the capability allowlist
+/// (so `BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist`, which is what the s22
+/// census counted) and absent from `DriverAbiTable::alloc_params`. Unlike §1b's
+/// `AMPERE_B`, whose refusal cost the guest a tree it was about to free three lines later,
+/// this refusal is **structurally fatal**: it is the last call of `channelAllocate`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`), it unwinds via
+/// `goto cleanup_free_controlpage`, and there is no forgiving caller above it —
+/// `nvGpuOpsChannelAllocate` fails, and with it `uvm_channel_manager_create` and
+/// `UVM_REGISTER_GPU`.
+///
+/// ⊘ This test asserts the port's ANSWER, never the guest's outcome. Whether admitting it
+/// gets UVM a working channel is a boot's question, not this file's.
+#[test]
+fn uvms_fault_cancel_sw_object_is_served_rather_than_unpermitted() {
+    let uvm_sw = || {
+        alloc_with(
+            2,
+            UVM_CHANNEL,
+            UVM_SW_OBJ,
+            0x0000_c076,
+            // ⊘ The boot's own `paramsSize=0x00000000`, and here that is not merely what
+            // the caller passed: RM registers the class `RS_NONE`
+            // (`ogkm-580: resource_list.h:1539`), so no params struct is declared for it.
+            &[],
+        )
+    };
+
+    // ⊘ The negative half FIRST, as in §1b: a chain with no object model still refuses it,
+    // so the green below is a statement about the object link and not about the fixture.
+    let (mut bare, bare_log) = chain_without_objects();
+    if let Some(r) = bare.respond(&uvm_sw()) {
+        assert_ne!(
+            r.rpc_result, 0,
+            "a chain that models no objects must not answer GP100_UVM_SW NV_OK"
+        );
+    }
+    assert_eq!(bare_log.total(), 1, "it must reach the unserviced ledger");
+
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
+    let _ = policy.deliver(&root_alloc(1)).expect("root accepted");
+    let _ = policy
+        .deliver(&uvm_sw())
+        .expect("GP100_UVM_SW with the boot's own zero-length params is accepted");
+    assert_eq!(policy.applied(), 2, "root + the SW object, both declared");
+    assert!(
+        policy.census().is_empty(),
+        "no refusal may remain: {:?}",
+        policy.census()
+    );
+}
+
+// =================================================================================
 // 2. What is served is NOT "everything"
 // =================================================================================
 

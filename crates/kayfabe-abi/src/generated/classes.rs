@@ -158,6 +158,64 @@ pub const FERMI_CONTEXT_SHARE_A: u32 = 0x9067;
 /// ogkm `src/common/sdk/nvidia/inc/class/clc56f.h`.
 pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
 
+/// `GP100_UVM_SW` — the **software** object UVM allocates on every CE channel it
+/// creates, so that it has a subchannel to push `FAULT_CANCEL_A` methods on
+/// (`RMCFG_CLASS_GP100_UVM_SW  // UVM SW class to support SW methods for fault cancel`,
+/// `ogkm-580: src/nvidia/generated/rmconfig.h:629`).
+///
+/// ★★★ It is on this path because it is the LAST step of UVM's channel allocation, and
+/// its failure destroys the channel. `channelAllocate`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:5730`) ends with
+///
+/// ```text
+/// // Allocate the SW method class for fault cancel
+/// if (isDevicePascalPlus(device) && (channel->tsg->engineType != ..._SEC2))
+/// {
+///     status = pRmApi->Alloc(pRmApi, session->handle, channel->channelHandle,
+///                            &channel->hFaultCancelSwMethodClass, GP100_UVM_SW, NULL, 0);
+///     if (status != NV_OK)
+///         goto cleanup_free_controlpage;
+/// }
+/// ```
+///
+/// (`:6110-6122`) — a GA106 is Pascal-plus and UVM's CE channels are not SEC2, so the
+/// branch always runs, and `goto cleanup_free_controlpage` unwinds the whole channel.
+/// ⊘ There is no forgiving caller above it: `nvGpuOpsChannelAllocate` fails, and with it
+/// `uvm_channel_manager_create` and `UVM_REGISTER_GPU`.
+///
+/// ★ `[measured 2026-08-09, boot s22_f4f3865]` — FOUR of these, one per UVM channel, all
+/// refused, and they are the last thing the guest asks for before it tears the adapter
+/// down: `hClient=0xc1d0000a; hParent=0xcaf000{12,1d,28,33}; hClass=0x0000c076;
+/// paramsSize=0x00000000; status=0x00000056`
+/// (`traces/guest_boots/run_s22_f4f3865_cup2_probe.log`), matched on the device side by
+/// `BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist`.
+///
+/// ⚠ Its alloc params are the STRONGEST case on this table for `NoDeclaredFacts`: RM
+/// registers the class with **`RS_NONE`** — no params struct exists at all
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:1535-1544`) — and the one
+/// allocator passes `NULL, 0`, measured on the wire as `paramsSize=0x00000000`. There is
+/// nothing here that could be decoded.
+///
+/// ⊘ **Admitting the class is not serving what the class does**, and here the gap is
+/// narrow rather than wide. The object's only in-band use is
+/// `uvm_hal_pascal_host_init` -> `NV_PUSH_1U(C076, SET_OBJECT, GP100_UVM_SW)`
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_pascal_host.c:314-318`), which reserves a
+/// subchannel for `FAULT_CANCEL_A`; the cancel methods themselves are pushed only from
+/// UVM's non-replayable-fault service path, which this port never enters because it
+/// raises no fault (`resume_from_fault.md` S2, and the boot census says so in its own
+/// words: *"fault DELIVERY is UNBUILT"*). ⊘ A guest whose faults we DO start delivering
+/// is the case this row does not cover.
+///
+/// ★ `RS_FLAGS_ALLOC_PRIVILEGED` and `Parents = RS_LIST(classId(KernelChannel))`
+/// (`resource_list.h:1541-1543`) — a privileged leaf under a channel, allocated by the
+/// guest's own KERNEL RM inside `nvGpuOpsChannelAllocate`. That is why gVisor's nvproxy
+/// has never seen it (`grep -rn 0xc076 gvisor/` is empty): as an ioctl it does not cross
+/// the boundary nvproxy gates. It reaches us only because in Mode 2 the transport is GSP
+/// RPC and we are the GSP — hence `Origin::Mode2Rpc`.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc076.h`.
+pub const GP100_UVM_SW: u32 = 0xc076;
+
 /// `AMPERE_COMPUTE_B` — the compute engine object a CUDA process allocates
 /// on its GR channel. Declares no `AllocFacts`; its whole protocol content is the
 /// edge (channel -> engine object) that refines the channel's `EngineKind`.

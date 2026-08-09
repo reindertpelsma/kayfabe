@@ -1089,7 +1089,27 @@ impl DriverAbiTable {
             // context proper is "silicon boundary, forward GR execution to the host"
             // (`c_cuda_ladder.md` §3). A guest that later runs its OWN GR engine against
             // a forged golden context is the case this row does NOT cover.
-            | classes::AMPERE_B => {
+            | classes::AMPERE_B
+            // ★★★ `GP100_UVM_SW` (`0xc076`) — UVM's per-channel fault-cancel SW object,
+            // and the row that decides whether UVM has ANY channel at all.
+            // `[measured 2026-08-09, boot s22_f4f3865]`: four refusals in the `cuInit`
+            // window, one per UVM channel, each one the LAST call of `channelAllocate`
+            // (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`) and each
+            // one taking its channel down with it via `goto cleanup_free_controlpage`.
+            //
+            // ⚠ `NoDeclaredFacts` is the STRONGEST reading on this table, stronger than
+            // `AMPERE_B`'s or `NV2081_BINAPI`'s: both of those are `RS_OPTIONAL`, i.e. a
+            // struct exists and a NULL is merely legal. This class is registered
+            // **`RS_NONE`** (`ogkm-580: resource_list.h:1539`) — no alloc-params struct is
+            // declared for it anywhere — and its one allocator passes `NULL, 0`, measured
+            // on the wire as `paramsSize=0x00000000`. There is no struct to decode, so
+            // "its params are never read" is a property of the ABI here, not a choice.
+            //
+            // ⊘ Admitting the class is not serving what the class does — see its
+            // `capability.rs` row for the scope, which is narrower than `AMPERE_B`'s: the
+            // object exists to hold a subchannel for `FAULT_CANCEL_A`, and this port
+            // raises no fault for UVM to cancel.
+            | classes::GP100_UVM_SW => {
                 Some(AllocParams::NoDeclaredFacts)
             }
             // ★★ The two classes the 2026-08-01 boot measured this table missing, and

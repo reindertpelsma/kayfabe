@@ -808,6 +808,15 @@ pub const AMPERE_DMA_COPY_B: u32 = 0xc7b5;
 /// (`ogkm-580: kernel_graphics.c:2519`).
 pub const AMPERE_B: u32 = 0xc797;
 
+/// `GP100_UVM_SW` — UVM's per-CE-channel fault-cancel **software** object
+/// (`ogkm-610: clc076.h:33`, `ogkm-580: clc076.h:33`).
+///
+/// ⊘ Not a CUDA process's object either. The one allocator is the guest's own kernel RM,
+/// in `channelAllocate`, as the LAST call of every UVM channel creation, with `NULL, 0`
+/// params — and `goto cleanup_free_controlpage` on failure
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`).
+pub const GP100_UVM_SW: u32 = 0xc076;
+
 /// `NV01_MEMORY_SYSTEM` (`ogkm-610: src/common/sdk/nvidia/inc/class/cl003e.h:33`,
 /// `ogkm-580: cl003e.h:33`) — a real
 /// class that this port **does not map**, used wherever a test needs one.
