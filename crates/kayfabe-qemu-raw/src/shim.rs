@@ -966,6 +966,15 @@ pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
 /// **refusing** path, not the good one: a diagnostic that fits only when nothing went wrong
 /// is a diagnostic that clips exactly when it is read.
 pub const DOORBELL_REFUSAL_LEN: usize = 2048;
+
+/// ★★★★ §16.25 — how many example channels [`SharedDoorbell::vas_census_line`] names per
+/// outcome group before it summarises the rest as `+N more`.
+///
+/// Three, because the comparison the census exists for needs only enough rows to see
+/// *which* channels share an outcome, not all of them — and because the whole sentence has
+/// [`DOORBELL_REFUSAL_LEN`] bytes for every other probe too. ⊘ The elision is always
+/// printed, never silent.
+const CENSUS_EXEMPLARS: usize = 3;
 /// How many bytes of a doorbell refusal's **kind** the audit carries.
 ///
 /// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
@@ -2762,6 +2771,69 @@ impl SharedDoorbell {
     ///
     /// Returns the empty string when there is nothing to say (no plane, no channel facts,
     /// no declared VA space or ring) — an empty suffix leaves the refusal exactly as it was.
+    /// ★★★★ §16.25 — every live channel's VA-space resolution, **grouped by outcome**, with
+    /// the refused channel marked.
+    ///
+    /// # Why grouped rather than one row per channel
+    ///
+    /// Two reasons, and the second is the load-bearing one.
+    ///
+    /// 1. **Budget.** The whole refusal sentence is [`DOORBELL_REFUSAL_LEN`] = 2048 bytes.
+    ///    24 channels × a full row would clip, and although [`copy_sentence`] stamps a clip
+    ///    marker (so a clipped sentence is at least *known* to be clipped), a report that
+    ///    routinely loses its tail is a report whose tail nobody can cite.
+    /// 2. ★ **Grouping IS the comparison.** The question this exists to answer is
+    ///    *"what is different about the refused channels?"*. Collapsing channels that share
+    ///    an outcome answers it directly: if the served and the refused channels fall into
+    ///    the same group, the route is **not** the discriminator and this rung is refuted on
+    ///    the spot; if they split, the group boundary names the difference. A flat list
+    ///    would leave that comparison for a human to do by eye across 24 lines.
+    ///
+    /// ⊘ Exemplars are capped at [`CENSUS_EXEMPLARS`] per group, and the cap is **reported**
+    /// (`+N more`) rather than silently applied — an elided row must never read as an
+    /// absent one, which is the C oracle's `dlen=0` mistake in miniature.
+    fn vas_census_line(&self, refused: kayfabe_core::ChanId) -> String {
+        let rows = self.device.channel_vas_census();
+        if rows.is_empty() {
+            // ⊘ A TRUE statement, and a loud one: a refusal naming ChanId(N) while the
+            // device holds no channels at all would mean the refusal and the census
+            // disagree about whether the channel exists.
+            return " census[NO-LIVE-CHANNELS]".to_string();
+        }
+        // Group key: the routes, plus whether a PDB resolved. `String` because
+        // `VasRoutes` is `Display`-shaped and the grouping is exactly "prints the same".
+        let mut groups: Vec<(String, bool, Vec<kayfabe_rt::device::ChannelVasRow>)> = Vec::new();
+        for r in &rows {
+            let key = r.route.to_string();
+            match groups
+                .iter_mut()
+                .find(|(k, p, _)| *k == key && *p == r.has_pdb)
+            {
+                Some((_, _, v)) => v.push(*r),
+                None => groups.push((key, r.has_pdb, vec![*r])),
+            }
+        }
+        let mut out = format!(" census[{} chans, {} outcomes]", rows.len(), groups.len());
+        for (key, has_pdb, v) in &groups {
+            let pdb = if *has_pdb { "pdb=Y" } else { "pdb=N" };
+            out.push_str(&format!(" {{{}x {pdb} {key}", v.len()));
+            for r in v.iter().take(CENSUS_EXEMPLARS) {
+                // ★ `*` marks the channel this refusal is ABOUT, so the reader never has to
+                // hold the ChanId in their head while scanning the groups.
+                let mark = if r.chan == refused { "*" } else { "" };
+                out.push_str(&format!(
+                    " p{}/c{}{mark}:vc{} {:?} c0x{:x}/0x{:x}",
+                    r.proc.0, r.chan.0, r.vchid.0, r.engine, r.client, r.handle
+                ));
+            }
+            if v.len() > CENSUS_EXEMPLARS {
+                out.push_str(&format!(" +{} more", v.len() - CENSUS_EXEMPLARS));
+            }
+            out.push('}');
+        }
+        out
+    }
+
     fn addressing_probe(&self, token: u64) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
@@ -2804,23 +2876,40 @@ impl SharedDoorbell {
             || " userd=UNREADABLE-AT-THIS-BOUNDARY".to_string(),
             |u| format!(" userd=h0x{:x}/off0x{:x}", u.handle, u.offset),
         );
+        // ★★★★ §16.25 — THE ROUTES, and the CENSUS TO READ THEM AGAINST.
+        //
+        // `[measured 2026-08-08, boot `s23_10a769c_cup2`]` 15 of 24 doorbells refused
+        // `FwdFault::NoVas(ChanId(3))` and printed `vas=NONE-DECLARED dec=NONE` — a string
+        // that reports only that **the channel itself** declared no `hVASpace`.
+        // `project::resolve_channel_vas` has THREE routes (own → CtxShare's → parent TSG's)
+        // and all three returned `None`; nothing said which of them ran, what each hit, or
+        // whether the CtxShare and TSG objects were found at all. A null that cannot tell
+        // its three causes apart sends its reader to guess, and four consecutive rungs were
+        // framed on guesses.
+        //
+        // ⊘ The census is here and not only on the refused channel because **nine doorbells
+        // in that same boot were SERVED**. Whatever resolves their VA space is the control:
+        // any field that reads the same on a served channel and a refused one is not the
+        // field that explains the refusal. ⚠ It is emitted on the REFUSAL path only.
+        let routes = format!(" route[{}]", facts.vas_route);
+        let census = self.vas_census_line(facts.chan);
         let (vaspace, ring_va) = match (facts.vaspace, facts.ring_va) {
             (Some(v), Some(r)) => (v, r),
             (None, Some(r)) => {
                 return format!(
-                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=0x{r:x}",
+                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=0x{r:x}{routes}{census}",
                     facts.client
                 );
             }
             (Some(v), None) => {
                 return format!(
-                    " | c=0x{:x} vas=0x{v:x} dec={declared}{userd} ring=NONE-DECLARED",
+                    " | c=0x{:x} vas=0x{v:x} dec={declared}{userd} ring=NONE-DECLARED{routes}{census}",
                     facts.client
                 );
             }
             (None, None) => {
                 return format!(
-                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=NONE-DECLARED",
+                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=NONE-DECLARED{routes}{census}",
                     facts.client
                 );
             }

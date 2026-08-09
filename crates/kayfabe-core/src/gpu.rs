@@ -294,6 +294,18 @@ pub struct Channel {
     /// binds its VA space through a `DUP_OBJECT` alias, and the alias may resolve to a
     /// dup-kept ghost whose origin handle the guest has since re-allocated.
     pub vas_origin: Option<ResourceKey>,
+    /// ★★★★ **§16.25 — which route produced [`Self::vas_origin`], and what the routes that
+    /// ran actually hit.** Graph-synced from [`crate::project::ChannelFacts::vas_route`],
+    /// refreshed on the same pass as [`Self::vas_pdb`] and [`Self::vas_origin`] for the
+    /// reason their own comment gives: they are one resolution, and refreshing a report on
+    /// a different pass from the decision it describes recreates the disagreement the
+    /// carried `vas_origin` exists to end.
+    ///
+    /// ⊘ **Report-only.** Nothing branches on it. It is here so that a `NoVas` refusal can
+    /// name which of the three declared-fact routes was tried — and so that the nine
+    /// **served** channels of boot `s23_10a769c_cup2` can be compared against the fifteen
+    /// refused ones on the same field. See [`crate::project::VasRoutes`].
+    pub vas_route: crate::project::VasRoutes,
     /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
     /// §2.2 "what the core tracks"): graph-synced from the projection — the channel
     /// class's declared kind, refined by the engine object allocated on it. NVENC
@@ -2429,6 +2441,7 @@ impl Spine {
                 vchid: facts.vchid,
                 vas_pdb: facts.vas_pdb,
                 vas_origin: facts.vas_origin,
+                vas_route: facts.vas_route,
                 engine: facts.engine,
                 host_channel: None,
                 host_token: None,
@@ -2447,6 +2460,8 @@ impl Spine {
             // (`project::resolve_channel_vas` produces both), and letting them refresh on
             // different passes would recreate the disagreement this field exists to end.
             entry.vas_origin = facts.vas_origin;
+            // ★★★★ §16.25 — on the SAME pass, for the same reason as `vas_origin` above.
+            entry.vas_route = facts.vas_route;
             entry.engine = facts.engine;
             entry.error_notifier = facts.error_notifier;
         }

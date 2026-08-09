@@ -36,10 +36,11 @@
 
 use std::collections::BTreeSet;
 
+use kayfabe_arch::ObjectKind;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, GpuError};
-use kayfabe_core::project::{NO_CONDEMNED, project};
+use kayfabe_core::project::{HandleMiss, NO_CONDEMNED, VasHop, VasRoutes, project};
 use kayfabe_core::rmgraph::{AllocFacts, NodeKey, ResourceKey, RmEvent, RmGraph, RmGraphError};
 use kayfabe_fwd::{FwdFault, handle_doorbell, resolve};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, mock_classes as mc};
@@ -1656,5 +1657,308 @@ fn a_client_root_free_purges_only_its_own_namespaces_parked_facts() {
         vec![(VA, MAP_LEN, Some(MEM_PHYS), Some(PDB0))],
         "★★ nor its parked map — exactly one mapping, the bystander's own, and the dead \
          namespace's VA appears nowhere",
+    );
+}
+
+// =================================================================================
+// ★★★★ §16.25 — THE NULL THAT DISCRIMINATES
+//
+// A miss taxonomy is only executable if the misses can be TOLD APART, and one of them
+// could not be. `project::resolve_channel_vas` has three routes to a channel's VA space
+// — its own `hVASpace`, its CtxShare's, its parent TSG's — and every failure of every
+// route produced the identical `None`.
+//
+// `[measured 2026-08-08, boot `s23_10a769c_cup2`]` that identical `None` reached the
+// operator as `FwdFault::NoVas(ChanId(3))` on **15 of 24 doorbells**, printed as
+// `vas=NONE-DECLARED dec=NONE` — a string that reports only that *the channel itself*
+// declared nothing. Whether its CtxShare or TSG declared one, whether those parents were
+// found at all, and which routes even ran were all invisible, and four consecutive rungs
+// were framed on guesses about it.
+//
+// These tests assert the report is a FUNCTION OF THE ROUTE — that the shapes which used
+// to be indistinguishable now print differently — and they assert the one behavioural
+// property the report exposes for the first time: `resolve_channel_vas` **commits** to a
+// route.
+// =================================================================================
+
+/// The four handles this section adds, kept out of the constants above because they are
+/// local to it.
+const H_VAS_B: HObject = HObject(0x5c00_0011);
+const H_CS: HObject = HObject(0x5c00_0021);
+const H_CS_GHOST: HObject = HObject(0x5c00_0022);
+/// Never allocated — the handle a CtxShare names into the void.
+const H_VAS_GHOST: HObject = HObject(0x5c00_00fe);
+const H_CH_OWN: HObject = HObject(0x5c00_0030);
+const H_CH_CS: HObject = HObject(0x5c00_0031);
+const H_CH_TSG: HObject = HObject(0x5c00_0032);
+const H_CH_NONE: HObject = HObject(0x5c00_0033);
+const H_CH_COMMIT: HObject = HObject(0x5c00_0034);
+
+/// Find one channel's projected facts wherever it landed — a user proc or the system
+/// component. ⊘ Searches both rather than assuming, so a test cannot pass by looking in
+/// the one place the channel happened to be filed.
+fn chan_facts(
+    b: &kayfabe_core::project::Boundaries,
+    h: HObject,
+) -> kayfabe_core::project::ChannelFacts {
+    let key = ResourceKey::first(NodeKey::new(C, h));
+    core::iter::once(&b.system)
+        .chain(b.procs.iter())
+        .find_map(|p| p.channels.get(&key).copied())
+        .unwrap_or_else(|| panic!("channel {h:?} is projected somewhere"))
+}
+
+/// A GR channel at `handle` under `parent`, declaring exactly the two handle facts given.
+fn chan_declaring(
+    parent: HObject,
+    handle: HObject,
+    vchid: VChid,
+    h_vaspace: Option<HObject>,
+    h_ctx_share: Option<HObject>,
+) -> RmEvent {
+    RmEvent::Alloc {
+        client: C,
+        parent,
+        handle,
+        class: mc::CHANNEL_GR,
+        facts: AllocFacts {
+            h_vaspace,
+            h_ctx_share,
+            userd_flags: MockArch::userd_flags_for(vchid),
+            ..Default::default()
+        },
+    }
+}
+
+/// ★★★★ **The three routes print differently, and so does having no route at all.**
+///
+/// Four channels, four route shapes, and — the point — the three that RESOLVE all carry
+/// the same `vas_pdb`, so `vas_pdb` alone cannot tell them apart. Only [`VasRoutes`] can.
+///
+/// ★ The fourth channel is the control the boot needed: it resolves nothing, and its
+/// report says **which** absence that is (`tsg=mid-miss(…,wrong-kind(Device))` — its
+/// parent is a Device, so there was never a TSG to inherit from), rather than repeating
+/// that the channel declared nothing.
+#[test]
+fn each_vas_route_reports_itself_and_the_no_route_case_names_its_absence() {
+    let (arch, mut g) = fresh_graph();
+    for ev in [
+        root_of(C),
+        device(C, H_ROOT, H_DEV),
+        vaspace(C, H_DEV, H_VAS),
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_VAS,
+            pdb: PDB0,
+        },
+        // A TSG that declares the same VA space, and a CtxShare under it that does too.
+        RmEvent::Alloc {
+            client: C,
+            parent: H_DEV,
+            handle: H_TSG,
+            class: mc::TSG,
+            facts: AllocFacts {
+                h_vaspace: Some(H_VAS),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: C,
+            parent: H_TSG,
+            handle: H_CS,
+            class: mc::CTXSHARE,
+            facts: AllocFacts {
+                h_vaspace: Some(H_VAS),
+                ..Default::default()
+            },
+        },
+        // Route 1: its own hVASpace.
+        chan_declaring(H_DEV, H_CH_OWN, VChid(0x20), Some(H_VAS), None),
+        // Route 2: no hVASpace of its own; inherits through the CtxShare.
+        chan_declaring(H_DEV, H_CH_CS, VChid(0x21), None, Some(H_CS)),
+        // Route 3: neither; inherits through the parent TSG.
+        chan_declaring(H_TSG, H_CH_TSG, VChid(0x22), None, None),
+        // No route at all: declares nothing and its parent is a Device, not a TSG.
+        chan_declaring(H_DEV, H_CH_NONE, VChid(0x23), None, None),
+    ] {
+        g.apply(&arch, ev).expect("the bring-up applies");
+    }
+    let b = project(&g, &arch, &NO_CONDEMNED).expect("projects");
+    let route_of = |h: HObject| chan_facts(&b, h).vas_route;
+    let pdb_of = |h: HObject| chan_facts(&b, h).vas_pdb;
+
+    // ---- Route 1 — its own handle, and the later routes were never asked.
+    assert_eq!(
+        route_of(H_CH_OWN),
+        VasRoutes {
+            own: VasHop::Resolved {
+                handle: H_VAS.0,
+                origin_client: C.0,
+                origin_handle: H_VAS.0,
+            },
+            ctx_share: VasHop::NotAttempted,
+            tsg: VasHop::NotAttempted,
+        },
+        "★ a channel that declares its own hVASpace resolves on route 1 and stops there",
+    );
+
+    // ---- Route 2 — the CtxShare's.
+    assert_eq!(
+        route_of(H_CH_CS),
+        VasRoutes {
+            own: VasHop::NotDeclared,
+            ctx_share: VasHop::Resolved {
+                handle: H_VAS.0,
+                origin_client: C.0,
+                origin_handle: H_VAS.0,
+            },
+            tsg: VasHop::NotAttempted,
+        },
+        "★★ THE UVM SHAPE: declares no hVASpace of its own and inherits through its \
+         CtxShare — the case whose `dec=NONE` used to be the whole report",
+    );
+
+    // ---- Route 3 — the parent TSG's.
+    assert_eq!(
+        route_of(H_CH_TSG),
+        VasRoutes {
+            own: VasHop::NotDeclared,
+            ctx_share: VasHop::NotDeclared,
+            tsg: VasHop::Resolved {
+                handle: H_VAS.0,
+                origin_client: C.0,
+                origin_handle: H_VAS.0,
+            },
+        },
+        "★ inherits through the parent TSG, and the report says which parent",
+    );
+
+    // ---- No route — and the report NAMES the absence instead of restating it.
+    assert_eq!(
+        route_of(H_CH_NONE),
+        VasRoutes {
+            own: VasHop::NotDeclared,
+            ctx_share: VasHop::NotDeclared,
+            tsg: VasHop::IntermediateMiss {
+                handle: H_DEV.0,
+                miss: HandleMiss::WrongKind(ObjectKind::Device),
+            },
+        },
+        "★★★ the discriminating null: not 'nothing resolved' but 'route 3 looked up this \
+         channel's parent and found a DEVICE, so there was never a TSG to inherit from'",
+    );
+
+    // ---- ★★★ And the reason the report was needed: `vas_pdb` cannot tell the three
+    // resolving routes apart, because all three resolve to the SAME VA space.
+    assert_eq!(
+        (
+            pdb_of(H_CH_OWN),
+            pdb_of(H_CH_CS),
+            pdb_of(H_CH_TSG),
+            pdb_of(H_CH_NONE)
+        ),
+        (Some(PDB0), Some(PDB0), Some(PDB0), None),
+        "★★ three identical `vas_pdb`s from three different routes — the decision field \
+         is blind to the route by construction, which is why the report is a second field \
+         and not a re-reading of this one",
+    );
+}
+
+/// ★★★★ **`resolve_channel_vas` COMMITS to a route, and the report is what makes that
+/// visible.**
+///
+/// The channel below has a CtxShare that resolves and names an `hVASpace` that does not
+/// exist — *and* a parent TSG that declares a perfectly good one. It resolves **nothing**:
+/// once the CtxShare chain held, route 2 returned its own miss and route 3 was never asked.
+///
+/// ⊘ This is long-standing behaviour, not a change — the `&&`-chain it was written as
+/// returned the final lookup's result unconditionally. It had simply never been *stated*,
+/// and it is the difference between "the TSG had no VA space" and "nobody asked the TSG",
+/// which is precisely the distinction a bare `None` destroyed.
+///
+/// ★ It is also the bite: if a later edit "fixes" route 2 into a fall-through, this test
+/// fails and names what changed, rather than a boot silently binding a channel to an
+/// address space it never asked for (decision #18C's confused deputy).
+#[test]
+fn a_committed_route_that_misses_leaves_the_later_routes_not_attempted() {
+    let (arch, mut g) = fresh_graph();
+    for ev in [
+        root_of(C),
+        device(C, H_ROOT, H_DEV),
+        vaspace(C, H_DEV, H_VAS_B),
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_VAS_B,
+            pdb: PDB0,
+        },
+        // The TSG declares a VA space that IS live and IS bound.
+        RmEvent::Alloc {
+            client: C,
+            parent: H_DEV,
+            handle: H_TSG,
+            class: mc::TSG,
+            facts: AllocFacts {
+                h_vaspace: Some(H_VAS_B),
+                ..Default::default()
+            },
+        },
+        // The CtxShare names one that was never allocated.
+        RmEvent::Alloc {
+            client: C,
+            parent: H_TSG,
+            handle: H_CS_GHOST,
+            class: mc::CTXSHARE,
+            facts: AllocFacts {
+                h_vaspace: Some(H_VAS_GHOST),
+                ..Default::default()
+            },
+        },
+        chan_declaring(H_TSG, H_CH_COMMIT, VChid(0x24), None, Some(H_CS_GHOST)),
+    ] {
+        g.apply(&arch, ev).expect("the bring-up applies");
+    }
+    let b = project(&g, &arch, &NO_CONDEMNED).expect("projects");
+    let facts = chan_facts(&b, H_CH_COMMIT);
+
+    assert_eq!(
+        facts.vas_route,
+        VasRoutes {
+            own: VasHop::NotDeclared,
+            ctx_share: VasHop::VasMiss {
+                handle: H_VAS_GHOST.0,
+                miss: HandleMiss::Absent,
+            },
+            tsg: VasHop::NotAttempted,
+        },
+        "★★★ route 2 was COMMITTED to and missed; route 3 was never attempted even though \
+         the parent TSG declares a live, bound VA space",
+    );
+    assert_eq!(
+        (facts.vas_origin, facts.vas_pdb),
+        (None, None),
+        "★ and the DECISION is unchanged by the report: nothing resolved, so the channel \
+         materializes with no VAS and its first doorbell faults by name",
+    );
+
+    // ★★★ THE REGRESSION STATEMENT. Two channels, both `vas_origin: None`, whose reports
+    // must NOT be equal — this inequality is the whole rung. Before §16.25 both printed
+    // `vas=NONE-DECLARED dec=NONE` and an operator could not tell them apart.
+    let mut g2 = g.clone();
+    g2.apply(
+        &arch,
+        chan_declaring(H_DEV, H_CH_NONE, VChid(0x25), None, None),
+    )
+    .expect("a second unresolvable channel applies");
+    let b2 = project(&g2, &arch, &NO_CONDEMNED).expect("projects");
+    let other = chan_facts(&b2, H_CH_NONE);
+    assert_eq!(
+        (other.vas_origin, facts.vas_origin),
+        (None, None),
+        "★ both channels resolve NOTHING — identical on every field that existed before",
+    );
+    assert_ne!(
+        other.vas_route, facts.vas_route,
+        "★★★★ …and they are DISTINGUISHABLE now. A null that cannot separate its causes \
+         is what sent four consecutive rungs to guess.",
     );
 }

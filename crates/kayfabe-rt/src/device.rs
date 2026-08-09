@@ -740,6 +740,44 @@ impl SharedDevice {
             .collect()
     }
 
+    /// ★★★★ **§16.25 — every live channel's VA-space resolution, as one census.**
+    ///
+    /// # Why a census and not just the refused channel's own row
+    ///
+    /// `[measured 2026-08-08, boot `s23_10a769c_cup2`]` 24 doorbells arrived, **9 were
+    /// served and 15 refused `FwdFault::NoVas`**. A refusal that describes only the refused
+    /// channel cannot be read: every field on it is equally consistent with "this is how
+    /// all channels look here" and with "this channel is the odd one out". The nine served
+    /// channels are the **control**, and a field that reads the same on a served channel and
+    /// a refused one is not the field that explains the refusal.
+    ///
+    /// ⊘ Read-only, resolves nothing, and allocates a `Vec` — a **diagnostic** path, called
+    /// when a doorbell has already been refused, never on the serving path.
+    ///
+    /// ★ Walks the live set one rank-1 lock at a time via [`Self::live_pids`] +
+    /// [`Self::with_proc`], never two at once (R3).
+    #[must_use]
+    pub fn channel_vas_census(&self) -> Vec<ChannelVasRow> {
+        let mut out = Vec::new();
+        for pid in self.live_pids() {
+            self.with_proc(pid, |p| {
+                for (cid, ch) in &p.channels {
+                    out.push(ChannelVasRow {
+                        proc: pid,
+                        chan: *cid,
+                        vchid: ch.vchid,
+                        engine: ch.engine,
+                        client: ch.key.origin.client.0,
+                        handle: ch.key.origin.handle.0,
+                        has_pdb: ch.vas_pdb.is_some(),
+                        route: ch.vas_route,
+                    });
+                }
+            });
+        }
+        out
+    }
+
     /// ★★★ **This device's own pushbuffer codec**, for the duration of `f` — a **spine op**
     /// (rank-0 read guard).
     ///
@@ -1445,6 +1483,11 @@ impl SharedDevice {
                     proc: route.proc,
                     chan: route.chan,
                     vchid: route.vchid,
+                    // ★★★★ §16.25 — carried off the channel, where the projection put it.
+                    // ⊘ NOT re-derived here: this whole struct exists because a second
+                    // derivation of the VA space disagreed with the first one and lost the
+                    // channel `cuInit` walls on (see [`CeChannelFacts::vaspace`]).
+                    vas_route: chan.vas_route,
                     // The namespace the VA SPACE lives in — which is the namespace its
                     // publication was issued in. ⊘ Falls back to the channel's own only
                     // when nothing resolved, so a refusal still names a client.
@@ -2181,6 +2224,35 @@ impl SharedDevice {
     }
 }
 
+/// ★★★★ **§16.25 — one live channel's VA-space resolution**, as reported by
+/// [`SharedDevice::channel_vas_census`].
+///
+/// ⊘ Report-only. It exists so a `NoVas` refusal can be read **against the channels that
+/// were served**, which is the only way to tell "this channel is the odd one out" from
+/// "this is how every channel here looks".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelVasRow {
+    /// The proc the channel belongs to.
+    pub proc: ProcId,
+    /// Its core-assigned slot — the `ChanId` a `FwdFault::NoVas` names.
+    pub chan: ChanId,
+    /// Its exec-plane demux identity.
+    pub vchid: VChid,
+    /// Its engine kind, refined by any engine object allocated on it.
+    pub engine: kayfabe_arch::ids::EngineKind,
+    /// The `hClient` of the channel's own origin declaration. ⚠ Not the VA space's
+    /// namespace — this is the channel's, so a row can be compared against the client
+    /// prefix a page-directory publication arrived on.
+    pub client: u32,
+    /// The channel's own origin `hObject`.
+    pub handle: u32,
+    /// Whether the channel resolved a PDB — i.e. whether the doorbell path can address it
+    /// at all. This is the field `FwdFault::NoVas` is thrown on.
+    pub has_pdb: bool,
+    /// ★ The discriminating half: which routes ran and what they hit.
+    pub route: kayfabe_core::project::VasRoutes,
+}
+
 /// ★★★ **What a doorbell's channel DECLARED about its own addressing** — the three facts a
 /// published-VA-space walk needs, plus the routing identities that named them.
 ///
@@ -2195,6 +2267,16 @@ pub struct CeChannelFacts {
     pub chan: ChanId,
     /// The decoded vChid.
     pub vchid: VChid,
+    /// ★★★★ **§16.25 — which of the three declared-fact routes resolved (or failed to
+    /// resolve) this channel's VA space, and what each route that ran actually hit.**
+    ///
+    /// [`Self::vaspace`] and [`Self::vaspace_declared`] are two projections of *the answer*;
+    /// this is the projection of *the search*. `vas=NONE-DECLARED dec=NONE` says the channel
+    /// declared no `hVASpace` and none resolved — but three different searches produce that
+    /// same pair, and until this field existed a refusal could not say which one ran.
+    ///
+    /// ⊘ Report-only, and carried rather than re-derived — see the assignment site.
+    pub vas_route: kayfabe_core::project::VasRoutes,
     /// `hClient` — **the namespace the channel's RESOLVED VA space lives in**, which is
     /// the namespace its publication was issued in (`kayfabe_device::gvaspub`'s key is the
     /// control RPC's `hClient`/`hObject` pair). Falls back to the channel's own namespace

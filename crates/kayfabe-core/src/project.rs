@@ -89,6 +89,7 @@
 //!   backing (`l1_concurrency.md` §12.27, the coherence re-verification).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{EngineKind, GpuId, HClient, HObject, Pdb, VChid};
@@ -141,6 +142,11 @@ pub struct ChannelFacts {
     pub vas_origin: Option<ResourceKey>,
     /// The PDB of that VASpace, once declared via `SetPageDir`.
     pub vas_pdb: Option<Pdb>,
+    /// ★★★★ §16.25 — **which of the three routes produced [`Self::vas_origin`], and what
+    /// the ones that ran actually hit.** Report-only; see [`VasRoutes`] for the boot in
+    /// which 15 of 24 doorbells refused `NoVas` and the report could say only that the
+    /// channel itself declared nothing.
+    pub vas_route: VasRoutes,
     /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
     /// §2.1/§2.2): the channel *class*'s declared kind, **refined by the engine
     /// object allocated on it** (an NVENC session on a GR-class channel makes it an
@@ -432,19 +438,221 @@ impl ClientUnion {
 /// wrong-kind case is never knowable and is fused into the same `None` by
 /// [`RmGraph::origin_of_kind`] — see that function, and `l1_concurrency.md` §12.30
 /// finding B for the open question.
+///
+/// # ★★★★ §16.25 — it returns a `Result`, and the `Err` is the whole point
+///
+/// The decision is unchanged (`.ok()` is exactly the old `Option`). What is new is that
+/// the **reason** for a miss is produced by *this* function — the one that makes the
+/// decision — rather than by a second, parallel "diagnose why" pass. A separate diagnoser
+/// is the "two descriptions of one fact" shape this port refuses everywhere else, and it
+/// drifts silently: the day the §12.44 guard changes, a diagnoser still reports the old
+/// story and reads exactly like a measurement.
+///
+/// ⊘ [`HandleMiss`] is **report-only**. No caller branches on which variant it is; every
+/// one of them collapses it with `.ok()`. Distinguishing `Absent` from `WrongKind` costs
+/// one extra [`RmGraph::origin_of`] **on the miss path only**.
 fn resolve_declared_handle<'g>(
     g: &'g RmGraph,
     live_root: &BTreeMap<HClient, ClientKey>,
     owner: ClientKey,
     handle: HObject,
     want: ObjectKind,
-) -> Option<&'g RmNode> {
+) -> Result<&'g RmNode, HandleMiss> {
     // ★★★ §12.44 — the declaration must still own its namespace. A superseded declaration
     // has no handle table to read, and the value's current tenant's table is not its own.
     if live_root.get(&owner.client) != Some(&owner) {
-        return None;
+        return Err(HandleMiss::OwnerSuperseded);
     }
-    g.origin_of_kind(NodeKey::new(owner.client, handle), want)
+    let key = NodeKey::new(owner.client, handle);
+    match g.origin_of_kind(key, want) {
+        Some(n) => Ok(n),
+        // ⊘ The kind check is the ONLY thing `origin_of_kind` adds over `origin_of`, so a
+        // node here is a node of the WRONG kind and nothing else. Reporting which kind is
+        // what separates "the guest never allocated this" from "the guest named a TSG
+        // where a VASpace was wanted" — decision #18C's fused `None`, un-fused for the
+        // report and still fused for the decision.
+        None => Err(match g.origin_of(key) {
+            None => HandleMiss::Absent,
+            Some(n) => HandleMiss::WrongKind(n.kind),
+        }),
+    }
+}
+
+/// ★★★★ §16.25 — why a declared handle did not resolve to an object of the wanted kind.
+///
+/// ⊘ **Report-only.** It exists so a `NoVas` refusal can say which of the three
+/// `resolve_channel_vas` routes was tried and what each one hit, instead of naming the
+/// absence and nothing else (`kayfabe_qemu_raw::shim`'s own comment, §16.16).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandleMiss {
+    /// ★★★ §12.44 — the owning declaration no longer owns its namespace, so it has no
+    /// handle table to read. ⚠ Distinct from [`Self::Absent`] in the way that matters: the
+    /// handle may well name a live object *in the value's current tenant's table*, and
+    /// reading it there would be the recycled-namespace confusion the guard exists to stop.
+    OwnerSuperseded,
+    /// Nothing resolves under `(owner.client, handle)` at all — the guest never allocated
+    /// it, or it has been freed and no dup keeps it alive.
+    Absent,
+    /// A live object resolves, but its kind is not the one wanted. Carries the kind that
+    /// **was** found, which is the fact that distinguishes a guest bug from ours.
+    WrongKind(ObjectKind),
+}
+
+impl fmt::Display for HandleMiss {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::OwnerSuperseded => write!(f, "owner-superseded"),
+            Self::Absent => write!(f, "absent"),
+            Self::WrongKind(k) => write!(f, "wrong-kind({k:?})"),
+        }
+    }
+}
+
+/// ★★★★ §16.25 — what ONE route of [`resolve_channel_vas`] did.
+///
+/// ⊘ Report-only; nothing branches on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VasHop {
+    /// ★★★ The route was **never tried**, because an earlier route already returned an
+    /// answer — including a returned *miss*. This is the variant that carries the
+    /// precedence rule into the report: `resolve_channel_vas` commits to a route the
+    /// moment that route's chain of declared facts holds, and does **not** fall through to
+    /// the next one when the final VASpace lookup then misses. `NotAttempted` on `tsg`
+    /// beside a `VasMiss` on `ctx_share` says exactly that, and it is the difference
+    /// between "the TSG had no VA space" and "nobody ever asked the TSG".
+    NotAttempted,
+    /// The channel declared no handle for this route.
+    NotDeclared,
+    /// The route's intermediate object (CtxShare / TSG) did not resolve.
+    IntermediateMiss {
+        /// The handle the channel named for the intermediate — its `hCtxShare`, or (for
+        /// the TSG route) its own declared `parent`.
+        handle: u32,
+        /// Why that handle did not resolve to an object of the wanted kind.
+        miss: HandleMiss,
+    },
+    /// The intermediate resolved, and itself declared no `hVASpace` — so this route had
+    /// nothing to inherit. ⊘ Not a failure of ours; a fact about the guest's object.
+    IntermediateNoVas {
+        /// The handle of the intermediate that was found and declared nothing.
+        handle: u32,
+    },
+    /// The intermediate resolved and named an `hVASpace`, but the intermediate's own
+    /// owning declaration could not be recovered, so the final hop had no namespace to
+    /// resolve *in*. ⚠ Its own variant because it is the one step that is neither the
+    /// guest's declaration nor the VASpace's existence — it is our graph failing to name
+    /// an owner for an object it just handed us.
+    IntermediateOwnerMiss {
+        /// The handle of the intermediate whose owning declaration could not be named.
+        handle: u32,
+    },
+    /// The final `hVASpace` lookup missed.
+    VasMiss {
+        /// The `hVASpace` that was looked up — the channel's own on route 1, the
+        /// intermediate's on routes 2 and 3.
+        handle: u32,
+        /// Why it did not resolve to a VASpace.
+        miss: HandleMiss,
+    },
+    /// Resolved. ★ `handle` differs from `origin_handle` exactly when the guest bound its
+    /// VA space through a `DUP_OBJECT` alias (§12.41), so the pair shows the dup being
+    /// followed rather than hiding it.
+    Resolved {
+        /// The `hVASpace` that was looked up.
+        handle: u32,
+        /// The `hClient` of the resolved VASpace's ORIGIN declaration. ⚠ Need not be the
+        /// channel's own client: a CtxShare or TSG owned by another namespace resolves its
+        /// `hVASpace` in *that* namespace.
+        origin_client: u32,
+        /// The `hObject` the resolved VASpace was originally allocated at.
+        origin_handle: u32,
+    },
+}
+
+impl VasHop {
+    /// The outcome of a final `hVASpace` hop — the one shape shared by all three routes.
+    fn of_vas(handle: HObject, got: Result<&RmNode, HandleMiss>) -> Self {
+        match got {
+            Ok(n) => Self::Resolved {
+                handle: handle.0,
+                origin_client: n.key.client.0,
+                origin_handle: n.key.handle.0,
+            },
+            Err(miss) => Self::VasMiss {
+                handle: handle.0,
+                miss,
+            },
+        }
+    }
+}
+
+impl fmt::Display for VasHop {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotAttempted => write!(f, "not-attempted"),
+            Self::NotDeclared => write!(f, "not-declared"),
+            Self::IntermediateMiss { handle, miss } => write!(f, "mid-miss(h0x{handle:x},{miss})"),
+            Self::IntermediateNoVas { handle } => write!(f, "mid-no-vas(h0x{handle:x})"),
+            Self::IntermediateOwnerMiss { handle } => write!(f, "mid-owner-miss(h0x{handle:x})"),
+            Self::VasMiss { handle, miss } => write!(f, "vas-miss(h0x{handle:x},{miss})"),
+            Self::Resolved {
+                handle,
+                origin_client,
+                origin_handle,
+            } => write!(
+                f,
+                "ok(h0x{handle:x}=>c0x{origin_client:x}/0x{origin_handle:x})"
+            ),
+        }
+    }
+}
+
+/// ★★★★ §16.25 — **the discriminating null**: what each of [`resolve_channel_vas`]'s three
+/// routes did, carried beside the `Option` it returns.
+///
+/// # Why this exists
+///
+/// `[measured 2026-08-08, boot `s23_10a769c_cup2`]` 15 of 24 doorbells refused
+/// `FwdFault::NoVas(ChanId(3))`, and the refusal printed `vas=NONE-DECLARED dec=NONE` —
+/// which says only that **the channel** declared no `hVASpace`. Whether its CtxShare or
+/// its parent TSG declared one, whether those parent objects were even found, and which of
+/// the three routes was tried at all were all invisible. Three routes returned `None` and
+/// the report could not tell them apart.
+///
+/// ⊘ **Report-only, and it changes no decision.** `resolve_channel_vas` returns the same
+/// `Option` it always did; this rides beside it. The point is that a reader can tell a
+/// channel that inherits nothing (`own=not-declared cs=not-declared tsg=not-declared` — a
+/// genuinely GSP-managed channel) from one whose CtxShare *was* found and named a VASpace
+/// that then missed (`cs=vas-miss(...)`), and those two produce the identical `None`.
+///
+/// ★ And it is built to discriminate the **working sibling**: nine doorbells in that same
+/// boot were served, so every served channel carries this too. A field that reads the same
+/// on a served channel and a refused one is not the field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VasRoutes {
+    /// The channel's own `hVASpace`.
+    pub own: VasHop,
+    /// The channel's CtxShare's `hVASpace`.
+    pub ctx_share: VasHop,
+    /// The channel's parent TSG's `hVASpace`.
+    pub tsg: VasHop,
+}
+
+impl VasRoutes {
+    /// The starting value: nothing tried yet. ⊘ Every field is overwritten by the route
+    /// that runs, so a surviving `NotAttempted` is a true statement that the route was
+    /// skipped — never a default that leaked through.
+    pub const NOT_ATTEMPTED: Self = Self {
+        own: VasHop::NotAttempted,
+        ctx_share: VasHop::NotAttempted,
+        tsg: VasHop::NotAttempted,
+    };
+}
+
+impl fmt::Display for VasRoutes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "own={} cs={} tsg={}", self.own, self.ctx_share, self.tsg)
+    }
 }
 
 /// Resolve a channel node's VASpace origin per the declared-facts precedence:
@@ -459,30 +667,102 @@ fn resolve_declared_handle<'g>(
 /// **MISS ⇒ DEFER** (same category and same caveat as [`resolve_declared_handle`]): the
 /// channel materializes with `vas_pdb: None` and rings nothing, because
 /// `kayfabe_fwd::gate_working_set_in` refuses a channel with no VAS by name.
+///
+/// # ★★★★ §16.25 — it also returns [`VasRoutes`], and that is REPORT ONLY
+///
+/// The `Option` is bit-for-bit the one this function always returned; every early return
+/// below is the same early return, at the same place, on the same condition. What rides
+/// beside it is a record of which routes ran and what each hit — see [`VasRoutes`] for the
+/// boot that made a bare `None` unreadable.
+///
+/// ⚠ **Note what the report preserves: this function COMMITS to a route.** Once a route's
+/// chain of declared facts holds, it returns that route's answer *even when the final
+/// VASpace lookup misses* — it does **not** fall through to the next route. That was always
+/// true and is unchanged; it is now *visible*, as a `NotAttempted` sitting beside a
+/// `VasMiss`. ⊘ Do not "fix" this into a fall-through without a boot to attribute it to:
+/// falling through would let a channel silently inherit a *different* address space from a
+/// parent it never asked, which is the confused-deputy shape decision #18C forbids.
 fn resolve_channel_vas<'g>(
     g: &'g RmGraph,
     live_root: &BTreeMap<HClient, ClientKey>,
     chan: &RmNode,
     owner: ClientKey,
-) -> Option<&'g RmNode> {
+) -> (Option<&'g RmNode>, VasRoutes) {
+    let mut r = VasRoutes::NOT_ATTEMPTED;
+
+    // ── Route 1: the channel's own `hVASpace`. ──────────────────────────────────────────
     if let Some(hv) = chan.facts.h_vaspace {
-        return resolve_declared_handle(g, live_root, owner, hv, ObjectKind::VaSpace);
+        let got = resolve_declared_handle(g, live_root, owner, hv, ObjectKind::VaSpace);
+        r.own = VasHop::of_vas(hv, got);
+        return (got.ok(), r);
     }
-    if let Some(hcs) = chan.facts.h_ctx_share
-        && let Some(cs) = resolve_declared_handle(g, live_root, owner, hcs, ObjectKind::CtxShare)
-        && let Some(hv) = cs.facts.h_vaspace
-        && let Some(cs_owner) = g.owner_key_of(NodeKey::new(owner.client, hcs))
-    {
-        return resolve_declared_handle(g, live_root, cs_owner, hv, ObjectKind::VaSpace);
+    r.own = VasHop::NotDeclared;
+
+    // ── Route 2: the CtxShare's. ────────────────────────────────────────────────────────
+    match chan.facts.h_ctx_share {
+        None => r.ctx_share = VasHop::NotDeclared,
+        Some(hcs) => {
+            match resolve_declared_handle(g, live_root, owner, hcs, ObjectKind::CtxShare) {
+                Err(miss) => {
+                    r.ctx_share = VasHop::IntermediateMiss {
+                        handle: hcs.0,
+                        miss,
+                    };
+                }
+                Ok(cs) => match cs.facts.h_vaspace {
+                    None => r.ctx_share = VasHop::IntermediateNoVas { handle: hcs.0 },
+                    Some(hv) => match g.owner_key_of(NodeKey::new(owner.client, hcs)) {
+                        None => r.ctx_share = VasHop::IntermediateOwnerMiss { handle: hcs.0 },
+                        Some(cs_owner) => {
+                            let got = resolve_declared_handle(
+                                g,
+                                live_root,
+                                cs_owner,
+                                hv,
+                                ObjectKind::VaSpace,
+                            );
+                            r.ctx_share = VasHop::of_vas(hv, got);
+                            // ⊘ Returns on a MISS too — the original `&&`-chain returned the
+                            // final lookup's result unconditionally once the chain held, so the
+                            // TSG route stays `NotAttempted`. Preserved deliberately.
+                            return (got.ok(), r);
+                        }
+                    },
+                },
+            }
+        }
     }
-    // Parent may be a TSG that declares the VAS.
-    if let Some(parent) = resolve_declared_handle(g, live_root, owner, chan.parent, ObjectKind::Tsg)
-        && let Some(hv) = parent.facts.h_vaspace
-        && let Some(tsg_owner) = g.owner_key_of(NodeKey::new(owner.client, chan.parent))
-    {
-        return resolve_declared_handle(g, live_root, tsg_owner, hv, ObjectKind::VaSpace);
+
+    // ── Route 3: the parent may be a TSG that declares the VAS. ─────────────────────────
+    match resolve_declared_handle(g, live_root, owner, chan.parent, ObjectKind::Tsg) {
+        Err(miss) => {
+            r.tsg = VasHop::IntermediateMiss {
+                handle: chan.parent.0,
+                miss,
+            };
+        }
+        Ok(parent) => match parent.facts.h_vaspace {
+            None => {
+                r.tsg = VasHop::IntermediateNoVas {
+                    handle: chan.parent.0,
+                }
+            }
+            Some(hv) => match g.owner_key_of(NodeKey::new(owner.client, chan.parent)) {
+                None => {
+                    r.tsg = VasHop::IntermediateOwnerMiss {
+                        handle: chan.parent.0,
+                    }
+                }
+                Some(tsg_owner) => {
+                    let got =
+                        resolve_declared_handle(g, live_root, tsg_owner, hv, ObjectKind::VaSpace);
+                    r.tsg = VasHop::of_vas(hv, got);
+                    return (got.ok(), r);
+                }
+            },
+        },
     }
-    None
+    (None, r)
 }
 
 /// ★ The condemnation input of an **un-condemned** device — the value every caller that
@@ -724,7 +1004,7 @@ pub fn project(
         // §12.44 — and `parent` is a fact about the OWNER's handle table, so a ghost
         // engine object never refines whatever the recycled value's next tenant put there.
         if let ObjectKind::EngineObject { engine } = node.kind
-            && let Some(chan) = resolve_declared_handle(
+            && let Ok(chan) = resolve_declared_handle(
                 g,
                 &live_root,
                 owner,
@@ -797,12 +1077,16 @@ pub fn project(
                 // ★★★ §12.41 — by resource identity, on both the channel and the VASpace
                 // its `hVASpace` resolves to (see the VaSpace arm).
                 let gpu = g.gpu_of_resource(node.id());
-                let vas = resolve_channel_vas(g, &live_root, node, owner);
+                // ★★★★ §16.25 — `vas_route` is the SECOND return of the SAME call that
+                // decides `vas`. ⊘ Not a re-derivation: a diagnosis computed by a separate
+                // pass is free to disagree with the decision it claims to explain.
+                let (vas, vas_route) = resolve_channel_vas(g, &live_root, node, owner);
                 let facts = ChannelFacts {
                     vchid,
                     gpu,
                     vas_origin: vas.map(RmNode::id),
                     vas_pdb: vas.and_then(|v| g.pdb_of_resource(v.id())),
+                    vas_route,
                     // The engine-object refinement wins over the channel-class default.
                     engine: engine_refine.get(&node.id()).copied().unwrap_or(engine),
                     // ★ Straight off the channel's OWN alloc facts, never refined and
@@ -845,7 +1129,7 @@ pub fn project(
             // solely for the promote join and does nothing when nobody promotes.
             ObjectKind::Tsg => {
                 if let Some(hv) = node.facts.h_vaspace
-                    && let Some(vas) =
+                    && let Ok(vas) =
                         resolve_declared_handle(g, &live_root, owner, hv, ObjectKind::VaSpace)
                     && let Some(gpu) = g.gpu_of_resource(node.id())
                     && let Some(pdb) = g.pdb_of_resource(vas.id())
