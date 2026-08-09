@@ -141,6 +141,25 @@ typedef struct {
   uint32_t subDeviceId;
 } nv2080_alloc_t;
 
+/* NV0000_CTRL_GPU_GET_ATTACHED_IDS_PARAMS — ctrl0000gpu.h:68-70 */
+typedef struct {
+  uint32_t gpuIds[32];
+} attached_ids_t;
+
+/* NV0000_CTRL_GPU_GET_ID_INFO_PARAMS — ctrl0000gpu.h:83-93 */
+typedef struct {
+  uint32_t gpuId;
+  uint32_t gpuFlags;
+  uint32_t deviceInstance;
+  uint32_t subDeviceInstance;
+  uint64_t szName;
+  uint32_t sliStatus;
+  uint32_t boardId;
+  uint32_t gpuInstance;
+  int32_t numaId;
+  uint32_t _pad0;
+} id_info_t;
+
 /* NV_VASPACE_ALLOCATION_PARAMETERS — nvos.h:3154-3164 */
 typedef struct {
   uint32_t index;
@@ -282,15 +301,52 @@ int main(void) {
   uint32_t hClient = rm_alloc("client", 0, 0, 0x0 /*NV01_ROOT*/, NULL, 0);
   if (!hClient) return 3;
 
+  /* ⊘ ASK RM which device instance the GPU IS. Do not assume 0.
+   *
+   * `[measured 2026-08-09, boot s29_933a709_vafmt]` this probe's first version passed
+   * `deviceId = 0` and RM answered `NV_ERR_INVALID_STATE` (0x40) from
+   * `device.c:366` — `gpumgrGetGpu(gpumgrGetPrimaryForDevice(0))` returned NULL, i.e.
+   * device instance 0 is not this GPU.  libcuda never assumes it either: `0x00000201`
+   * and `0x00000202` are both in the s28 RM trace, in that order, before its device
+   * alloc.  ★ The failure was in the INSTRUMENT, and it was caught only because every
+   * step names its own status instead of pressing on with a plausible handle. */
+  uint32_t deviceInst = 0, subDeviceInst = 0, gpuId = 0xffffffffu;
+  attached_ids_t aids;
+  memset(&aids, 0, sizeof aids);
+  for (int i = 0; i < 32; i++) aids.gpuIds[i] = 0xffffffffu;
+  if (rm_control("ATTACHED_IDS", hClient, hClient, 0x0201, &aids, sizeof aids) == 0) {
+    for (int i = 0; i < 32; i++)
+      if (aids.gpuIds[i] != 0xffffffffu) {
+        gpuId = aids.gpuIds[i];
+        break;
+      }
+    printf("★ ATTACHED_IDS: first gpuId=0x%08x\n", gpuId);
+  }
+  if (gpuId == 0xffffffffu) {
+    printf("★ FAILED: no attached gpuId. ⊘ Nothing below is a reading.\n");
+    return 3;
+  }
+  id_info_t ii;
+  memset(&ii, 0, sizeof ii);
+  ii.gpuId = gpuId;
+  if (rm_control("ID_INFO", hClient, hClient, 0x0202, &ii, sizeof ii) != 0) {
+    printf("★ FAILED: GET_ID_INFO. ⊘ Nothing below is a reading.\n");
+    return 3;
+  }
+  deviceInst = ii.deviceInstance;
+  subDeviceInst = ii.subDeviceInstance;
+  printf("★ ID_INFO: deviceInstance=%u subDeviceInstance=%u gpuInstance=%u flags=0x%x\n",
+         deviceInst, subDeviceInst, ii.gpuInstance, ii.gpuFlags);
+
   nv0080_alloc_t dp;
   memset(&dp, 0, sizeof dp);
-  dp.deviceId = 0;
+  dp.deviceId = deviceInst;
   uint32_t hDevice = rm_alloc("device", hClient, hClient, 0x0080, &dp, sizeof dp);
   if (!hDevice) return 3;
 
   nv2080_alloc_t sp;
   memset(&sp, 0, sizeof sp);
-  sp.subDeviceId = 0;
+  sp.subDeviceId = subDeviceInst;
   uint32_t hSubDev = rm_alloc("subdevice", hClient, hDevice, 0x2080, &sp, sizeof sp);
   /* a missing subdevice is survivable: GET_VA_CAPS is a Device control. */
 
