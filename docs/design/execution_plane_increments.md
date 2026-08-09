@@ -7359,3 +7359,82 @@ holds at `0x4000` and the 4 KiB at `0x5000`, and compare them with `0x2efa9b000`
 addresses hold plausible PDEs, they are a real pool we have the bytes for and only the base is
 missing; if they hold zeros or unrelated data, the walk has been descending noise and every
 address downstream of it — including `V:0x20000` — is a coincidence.
+
+### 16.9 ★★★★★ BOOTED `fbd1_f760a4b` — the tables at `0x4000` ARE REAL, and "the base we lack" is REFUTED
+
+`[measured 2026-08-09, boot `fbd1_f760a4b`, both artifacts stamped
+`kayfabe-rev:f760a4b3b8395abb…` (archive **and** QEMU binary), GA106 bench `vh`, stock
+580.159.04 guest, probe set EMPTY, one device-opening consumer]`. §16.8's rung, answered on
+its first boot:
+
+```text
+fbL0@0x4000       = 0205000000000000 00000000…  nz2/4096
+fbL1@0x5000       = 0206000000000000 00000000…  nz2/4096
+ctl=0x0/0x0
+ctlL0@0x2efbae000 = 02adfb2e00000000 00000000…  nz4/4096
+ctlL1@0x2efbad000 = 02acfb2e00000000 00000000…  nz4/4096
+```
+
+Decoded little-endian, entry 0 of each:
+
+| dumped page | entry 0 | flag byte | `(entry >> 8) << 12` | the publication's next level |
+|---|---|---|---|---|
+| `0x4000` (failing L0) | `0x0000_0000_0000_0502` | `0x02` | **`0x5000`** | `L1 = 0x5000` ✅ |
+| `0x5000` (failing L1) | `0x0000_0000_0000_0602` | `0x02` | **`0x6000`** | `L2 = 0x6000` ✅ |
+| `0x2efbae000` (control L0) | `0x0000_0000_2efb_ad02` | `0x02` | **`0x2efbad000`** | `L1 = 0x2efbad000` ✅ |
+| `0x2efbad000` (control L1) | `0x0000_0000_2efb_ac02` | `0x02` | **`0x2efbac000`** | `L2 = 0x2efbac000` ✅ |
+
+★★★★★ **Both families are the SAME ENCODING and both are SELF-CONSISTENT with their own
+publication.** Identical flag byte `0x02`, the page-frame number in the bits above it, and
+each entry points at exactly the next level the publication declared. The `nz` census says
+the same thing from the other side: `2` non-zero bytes in the failing pages and `4` in the
+control's — one entry written per page in **both**, the difference being only how many bytes
+the frame number needs.
+
+⇒ ⊘⊘ **BOTH ARMS OF §16.8's RUNG ARE WRONG, and that is the finding.** It offered *plausible
+PDEs ⇒ a real pool whose **base we lack*** versus *zeros ⇒ the walk has been descending
+noise*. The measurement is a **third** answer:
+
+- **NOT noise.** These are real, well-formed page-directory entries.
+- **NOT a base we lack.** They are at the base we are already using — the guest wrote them
+  into our framebuffer at exactly the offsets it published, and we read them back, chained
+  correctly, with no translation missing. A base that were wrong could not produce a chain
+  that agrees with the publication at every level.
+
+⇒ **The two families are not two kinds of address after all.** `~0x2efa_xxxx` and `0x4000`
+are both framebuffer physical addresses, both written by the guest, both read by us. The
+difference between them is **where the guest's allocator put the tables**, which is not a
+defect and not a discriminator. ⊘ §16.8's *"the signature of offsets into one shared buffer
+from a bump allocator"* is refuted as a claim about the address's KIND; it remains an
+accurate description of their *layout*, which is now known to be irrelevant.
+
+★ Corollary, and it is what makes the wall smaller: the address plane, the aperture decode,
+the root attribution and the descent are all **exonerated for the first two levels**. The
+refusal is unchanged and correctly named:
+
+```text
+[FwdFault::RingBroughtNoEntry] { ring_va: GpuVa(0x121010000), index: 0, entries: 1024 }
+  … rng=V:0x20000 fin=V:0x28004 scan=64/1024 declared, unread=0, nonzero=NONE
+```
+
+⧗ **WHERE THIS PUTS THE NEXT RUNG, stated so it is decidable and needs no new plumbing.**
+The dump above is **entry 0** of each page, and entry 0 is *not* the entry the ring's walk
+consumes. For `va = 0x121010000` the level-2 index is `(0x121010000 >> 29) & 0x1ff = 9`, not
+0 — and `nz2/4096` proves the level-1 page has **exactly one** non-zero entry, which is entry
+0. ⇒ Dump **the entry the walk actually indexes at each of the four levels**, for the ring VA
+and for a working channel's ring VA, in both families. That separates *"the leaf genuinely
+names `V:0x20000` and the guest never wrote the ring there"* from *"we index the wrong slot
+and `V:0x20000` is what the wrong slot happens to hold"*.
+
+⚠ And note the fact §16.5 raised, dismissed, and which is now the only structural asymmetry
+left: the ring VA `0x121010000` is **outside** the publication's own
+`virtAddrLo..Hi = 0x100000000..0x11fffffff`. That range is what
+`COPY_SERVER_RESERVED_PDES` reserves; the PDEs covering anything outside it are written by
+the guest through a different path. ⊘ **A candidate, not a finding** — the CeUtils ring is
+outside its range too and demonstrably moves bytes — and it is a candidate the next rung's
+per-level dump measures rather than assumes.
+
+⊘ **This rung changed nothing the guest can see.** `fb_peek` reads our own store; no walk, no
+`Demand`, no allocation (`SparseFb::read` does not fault a page in, so the residency counter
+this boot reports — `368640 bytes` — is unperturbed by the dump). No completion, no payload,
+nothing emitted the guest did not ask for.
