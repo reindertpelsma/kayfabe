@@ -150,6 +150,34 @@ fn stress_gpu(n: usize) -> (Guarded<Gpu>, SharedRecorder) {
         gpu.apply(ev).expect("scenario applies cleanly");
     }
     assert_eq!(gpu.procs.len(), n);
+    // ★★★★ **#177's GATE — the guest must ASK for a channel to be schedulable before it
+    // may ring it**, and this setup is the guest.
+    //
+    // `[measured 2026-08-09, `bc53173`, 5/5 deterministic]` without this loop every
+    // doorbell arm below refused `FwdFault::NotScheduled { chan: ChanId(0), vchid:
+    // VChid(258) }` — the first proc the RNG happened to pick, so it looked like a race
+    // and was not one. `plan_doorbell` gates on `proc.exec.requested`, which is written
+    // ONLY by `Gpu::schedule_channel` (the guest's own `0xa06f0103`), and
+    // `Scenario::compute_process` emits `Alloc`/`SetPageDir` and nothing else. So this
+    // test asserted a doorbell would be served on a channel nobody ever asked to schedule.
+    //
+    // ⊘ **The GATE is right; this SETUP was stale.** `3ab1305` (#177, 2026-08-03) added
+    // the gate deliberately, so the `NV_OK` for `0xa06f0103` would have something to
+    // perform. Every other test that needs a live doorbell already calls
+    // `schedule_channel` (`gpfifo_schedule.rs`, `l1_mean.rs`, `t0_subset_free.rs`,
+    // `l1_verb_seam.rs`, `t0_subset_free.rs`); this one was simply never updated.
+    //
+    // ★★★ And note WHY it survived five days: `skip_slow!` above means a plain
+    // `cargo test --workspace` never runs this test and reports green. A skipped oracle
+    // kills the guard — the gated set has to be run, and its exit code read.
+    for i in 0..n {
+        let client = HClient(0xA0 + i as u32);
+        let h = identical_handles(gr_vchid(i).0, ce_vchid(i).0);
+        for chan in [h.gr_channel, h.ce_channel] {
+            gpu.schedule_channel(client, chan, true)
+                .expect("the guest's own 0xa06f0103 is accepted for a live channel");
+        }
+    }
     (
         Guarded::new("concurrency_stress::stress_gpu", gpu, recorder.clone()),
         recorder,
