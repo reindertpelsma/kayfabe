@@ -130,6 +130,28 @@ $G 'tail -25 /tmp/rmtrace.txt 2>/dev/null | cut -c1-400'
 echo "=== RM plane line count + the MARK lines ==="
 $G 'wc -l /tmp/rmtrace.txt 2>&1; grep -a "^MARK" /tmp/rmtrace.txt 2>/dev/null || echo "(no MARK lines)"'
 
+# ★★★ `[measured 2026-08-09, THIS HOOK'S OWN FIRST RUN, boot `s27_c73d3ab_uvm`]` — THE
+# ARTIFACTS DIED WITH THE GUEST. This hook printed EXCERPTS and left the two trace files in
+# the guest's `/tmp`; `boot_capture.sh` phase 4 then powers the guest down, and an `scp` from
+# the guest afterwards produced two ZERO-BYTE files. The middle ~50 lines of that boot's RM
+# trace are unrecoverable. ⊘ Exactly the shape of every trap this repository already records
+# — the operation succeeds either way, and only an explicit copy separates "observed" from
+# "kept where anybody will find it later." A new instrument's first run is itself unverified.
+# ⇒ The FULL traces go into the probe log (which phase 6 carries into the repository) AND to
+# the bench directory, BEFORE anything powers anything off.
+BENCHDIR=${BENCH_DIR:-/workspace/bench}
+TAG=${1:-cuinitwall}
+echo "=== ★ THE FULL RM PLANE — verbatim, because this file dies with the guest ==="
+$G 'cat /tmp/rmtrace.txt 2>&1'
+for f in rmtrace uvm; do
+  $G "cat /tmp/$f.txt" > "$BENCHDIR/run_${TAG}_${f}.txt" 2>/dev/null
+  if [ -s "$BENCHDIR/run_${TAG}_${f}.txt" ]; then
+    echo "kept: $BENCHDIR/run_${TAG}_${f}.txt ($(wc -l < "$BENCHDIR/run_${TAG}_${f}.txt") lines)"
+  else
+    echo "★ FAILED TO KEEP $f — it survives ONLY as the probe-log excerpt above"
+  fi
+done
+
 echo "=== dmesg produced by cup2 ALONE (ring cleared immediately before it) ==="
 $G 'sudo dmesg'
 

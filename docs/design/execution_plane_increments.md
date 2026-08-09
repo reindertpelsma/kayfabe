@@ -8610,3 +8610,191 @@ serves it."* §14.24 measured the cost of the opposite (`pub1_3e43e9a`: an accur
 handed the scrubber to a `Stillborn` plane and cost the adapter). ⊘ It is recorded here as an
 *observed consequence*, not as a designed one — nothing was arranged for it, and a later change
 that gives route-4 channels a `Pdb` would silently undo it.
+
+---
+
+## §16.29 ★★★★ BOOTED `s27_c73d3ab_uvm` — the RC watchdog is REFUTED, and the wall has a NAME
+
+`[measured 2026-08-09, boot `s27_c73d3ab_uvm` at `c73d3ab`]`, binary and archive both stamped
+`kayfabe-rev:c73d3abfea3314b0073d989fdabcae7ee94f5e23`, evidence
+`traces/guest_boots/run_s27_c73d3ab_uvm_{qemu,dmesg,probe}.log`.
+
+⊘ **Stated first: `cup2` is still `FAIL cuInit(0) -> initialization error (3)` (`CUP2_RC=1`).**
+Nothing was made to work in this increment. What changed is that the failure now has a source-
+level chain instead of a nomination.
+
+### 16.29.1 ⊘⊘ What this increment REFUTES, starting with its own brief
+
+**1. The nominated instrument could not have answered the question.** §16.28.10 said *"the first
+move is `scripts/bench/guest_cuinit_trace.sh`"*. That script preloads
+`scripts/rpctrace/cuda_ioctl_trace.c` and nothing else, and that file gates every decode on
+`_IOC_TYPE(request) != NV_IOCTL_MAGIC` (`'F'`, `:493`). **UVM's ioctl magic is 0**
+(`UVM_IOCTL_BASE(i)` is literally `i`, `ogkm-580: uvm_ioctl.h:41`), so `/dev/nvidia-uvm` traffic
+passes it untouched. ⊘ The nominated instrument is **structurally blind to the only plane that
+fails** — and the brief said so one paragraph earlier and still named it. ★ **A warning written
+next to a wiring defect does not fix the wiring**; it makes the defect look considered.
+
+**2. "Guest-side instrumentation has been owed for six rungs" is false.** It was built and run at
+§14.40: `scripts/bench/uvm_ioctl_trace.c` + `guest_uvm_status.sh` printed `UVM_REGISTER_GPU
+rmStatus = 0x56` (`fb1503`), `0x1f` (`sh1605`) and `0x56` again (`ac1710`). What was owed was
+that instrument's **value at the current revision** — a re-read, not a build. ⇒ A capability
+recorded as *missing* when it is merely *stale* buys a rung of invented work.
+
+**3. ★★★★ THE RC WATCHDOG IS NOT THE WALL — refuted twice over, and the second proof was
+already in the tree.** §16.28.10 was right to distrust it; the reasons available were stronger
+than the one offered.
+
+- **From source.** `krcWatchdogInit` is called from `RmInitAdapter`
+  (`ogkm-580: osinit.c:2161`), and the very next branch reads:
+  ```c
+  else if (status.rmStatus == NV_ERR_NOT_SUPPORTED) {
+      NV_PRINTF(LEVEL_INFO, "krcWatchdogInit returned _NOT_SUPPORTED. … this is normal\n");
+  }
+  else { RM_SET_ERROR(status, RM_INIT_WATCHDOG_FAILED); … goto shutdown; }
+  ```
+  The whole chain (`0x70`, `0xc36f`, `kgrobjPromoteContext`, `kernel_rc_watchdog.c:1198`)
+  carries `0x56` = `NV_ERR_NOT_SUPPORTED` — the **explicitly forgiven** branch, printed at
+  `LEVEL_INFO` and continued past. ⇒ `not_supported_is_the_forgiven_status`, exactly.
+  ⊘ **Admitting `0xc36f` would have bought nothing.**
+- **From measurement, and it needed no new boot.** The identical four-line chain appears in
+  **`nvidia-smi`'s own adapter init** — `run_s26_0484a3b_cup2_dmesg.log:33.4–33.9`, on
+  `hClient=0xc1d00008` — in the boot where `SMI_RC=0`. ★ **A signature present in both a
+  success and a failure cannot be the discriminator.** That evidence was committed two rungs
+  ago and was read as *"a log that also contains a successful `nvidia-smi`"*; the stronger
+  reading is that the chain **is** `nvidia-smi`'s as well.
+
+**4. ⊘ And one refutation of my own, mid-increment.** I first filed
+`NULL != pGpuState->pRootInternal @ gpu_vaspace.c:3332` under *"teardown, so
+`scrubber_teardown_is_not_the_wall` applies"*. **Reading the callers refuted that** (§16.29.3).
+★ **A line that LOOKS like teardown can be the rollback arm of the failing call itself** — the
+position of a log line in time does not tell you which function emitted it.
+
+### 16.29.2 ★★★ THE MEASUREMENT — both userspace planes, one process, one clock
+
+`scripts/bench/guest_cuinit_wall.sh` (new) chains **both** interposers. Chaining is sound rather
+than a coin flip: each resolves its next hop with `dlsym(RTLD_NEXT, "ioctl")` and `RTLD_NEXT`
+searches the load order *after* the calling object, so `app → rm → uvm → libc`, each passing
+through what it does not claim. ⊘ Both trace files are asserted non-empty and `cup2.err` is
+printed, because that is where `ld.so` reports a preload it could not load.
+
+```text
+UVM ioctl fd=12 cmd=0x30000001 (UVM_INITIALIZE)          rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table)
+UVM ioctl fd=12 cmd=0x00000027 (UVM_PAGEABLE_MEM_ACCESS) rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000025 (UVM_REGISTER_GPU)        rmStatus = 0x00000056  ← THE FAILURE
+UVM ioctl fd=12 cmd=0x30000002 (UVM_DEINITIALIZE)
+```
+
+`UVM_REGISTER_GPU`'s IN block decodes cleanly and unremarkably — `rmCtrlFd = 0xffffffff` (-1,
+i.e. no SMC partition), `hClient = 0`, `hSmcPartRef = 0`, `numaEnabled = 0` — so **nothing about
+the request is malformed**; only the answer is.
+
+★ **The RM ioctl plane is CLEAN at the point of failure.** Of 96 traced RM calls, exactly **two**
+carry a non-zero status — `0x20810108` and `0x2080012f`, both `0x56`, both early (trace lines 39
+and 48), and **both already on the unserviced ledger**. Every one of the last 25 calls returns
+`status=0x00000000`, ending in ordinary `FREE`s. ⇒ **`cuInit` does not fail on anything libcuda
+asks RM for.** It fails inside `nvidia-uvm`'s kernel path, which reaches RM through in-kernel
+internal clients — invisible to any userspace interposer, which is why the *dmesg* is the
+instrument for the rest of it.
+
+★★ **Invariance control: the instrument changed nothing observable.** All five census lines are
+**byte-identical** to `s26`'s — commands 454/84/38, bridge refusals 18/6, controls 130/45,
+isolates 2/2/2, doorbells 24/24/0 last token `0x00010001`. A double `LD_PRELOAD` in the guest is
+therefore observational on the device plane.
+
+### 16.29.3 ★★★★ THE DISCRIMINATING DIFF — four lines, and only one of them is new
+
+`dmesg` was cleared immediately before `cup2`, so the hook's capture is `cuInit`'s **alone**;
+`run_s27_c73d3ab_uvm_dmesg.log` is `nvidia-smi`'s window, and it returned `SMI_RC=0`. Timestamps
+and handles normalised, the two windows differ by exactly four lines, all on `cup2`'s side:
+
+```text
+kgmmuClientShadowFaultBufferUnregister_IMPL: … failed (status=0x56), proceeding...   ┐ the three
+kgmmuFaultBufferReplayableDestroy_IMPL:      … failed (status=0x56), proceeding...   ├ logged-and-
+uvmTerminateAccessCntrBuffer_IMPL:           … failed (status=0x56), proceeding...   ┘ proceeded pairs (§14.41)
+nvAssertFailedNoLog: Assertion failed: NULL != pGpuState->pRootInternal @ gpu_vaspace.c:3332
+```
+
+Three are the register/unregister pairs §14.41 already ruled non-fatal at zero cost. **The fourth
+is the only line in this boot that is neither shared with a successful device open nor already
+known to be harmless.**
+
+### 16.29.4 ★★★★★ WHAT IT NAMES — `0x00801813`, and the chain closes from RM's own source
+
+`gpu_vaspace.c:3332` sits inside **`gvaspaceExternalRootDirRevoke_IMPL`**. That function has
+exactly **three** call sites, and two are eliminated by measurement:
+
+| site | what it is | verdict |
+|---|---|---|
+| `gpu_vaspace.c:1251` (`_gvaspaceGpuStateDestruct`) | VA-space teardown | ⊘ **impossible** — guarded by `if (NULL != pGpuState->pRootInternal)`, i.e. by the very condition the assert checks |
+| `dma.c:629` | the handler for `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`0x801814`) | ⊘ **did not run** — `0x801814` appears **nowhere** in this boot's census, neither served nor unserviced |
+| `dma.c:539` | the **rollback arm of `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`** (`0x801813`) | ★ the only one left |
+
+And `dma.c:508-530` is the mechanism, verbatim:
+
+```c
+if (IS_VIRTUAL_WITH_SRIOV(pGpu) || IS_GSP_CLIENT(pGpu)) {
+    NV_RM_RPC_CONTROL(pGpu, hClient, hDevice,
+                      NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY, …, status);
+    if (status != NV_OK) SLI_LOOP_BREAK;          // ← the local commit is SKIPPED
+}
+status = gvaspaceExternalRootDirCommit(pGVAS, hClient, pGpu, pParams);
+…
+if (status != NV_OK) { gvaspaceExternalRootDirRevoke(pGVAS, pGpu, &params); … }
+```
+
+⇒ **The chain, end to end, every link cited:**
+
+1. `0x00801813` = `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`ctrl0080dma.h:828`) is **demanded
+   and REFUSED by this port** — `nvkvm: unserviced fn 76 cmd 0x00801813`, in both `s26` and
+   `s27`.
+2. Because the RPC fails, RM `SLI_LOOP_BREAK`s **before** `gvaspaceExternalRootDirCommit`, so
+   `pGpuState->pRootInternal` is never populated.
+3. The failure's own rollback calls `gvaspaceExternalRootDirRevoke`, which asserts
+   `NULL != pGpuState->pRootInternal` and returns `NV_ERR_INVALID_STATE` — **the one line unique
+   to `cuInit`'s window.**
+4. The guest's Device VA space therefore **never gets its page-directory root installed**.
+
+★★★ This is the same object §16.28's fourth route is about — the publication of a
+page-directory root under the Device's default VA space. Route 4 taught this port to *resolve*
+such a publication; `0x801813` is the guest **asking us to install one**, and we refuse it.
+
+### 16.29.5 ⚠ TWO THINGS THIS DOES **NOT** ESTABLISH — named, so the next rung does not assume them
+
+- ⊘ **Who issues the SET is not settled.** `nvUvmInterfaceSetPageDirectory` is called from
+  `uvm_gpu.c:1305` (`configure_address_space`, on `UVM_REGISTER_GPU`'s path) **and** from
+  `uvm_va_space.c:1394`. ⚠ The `UVM_ERR_PRINT("nvUvmInterfaceSetPageDirectory() failed…")` at
+  `uvm_gpu.c:1312` **did not appear** in this boot's dmesg — all 28 lines are `NVRM:`. So
+  attributing this particular SET to that call site would be an inference, not a measurement.
+  ★ `read_the_caller_not_the_id`: the ledger names an id; only the caller names a function.
+- ⊘ **`0x801814` is missing from the wire and RM's source says it should be there.**
+  `dma.c:541-548` sends the `UNSET` RPC unconditionally inside the same rollback block, and our
+  census shows it neither served nor unserviced. ⇒ Either the census has a **blind spot** for
+  it, or the branch differs in the shipped build. ⚠ **"The census does not show it" is not
+  "it did not happen"** (`a_saturated_instrument_looks_exactly_like_absence`). Settle which,
+  before anything is built on the count.
+
+### 16.29.6 ⇒ THE NEXT RUNG, stated as a falsifiable prediction
+
+**Serve `0x00801813`.** If §16.29.4 is right, the boot after it must show **both** of:
+
+1. `NULL != pGpuState->pRootInternal @ gpu_vaspace.c:3332` **gone** from `cuInit`'s dmesg window;
+2. `UVM_REGISTER_GPU rmStatus` **≠ `0x56`** — moved, not necessarily to `0`.
+
+⊘ If `cuInit` still fails with the assert gone, the chain held and the wall moved. If the assert
+survives, §16.29.4 is refuted and the elimination in its table is where to look first.
+
+### 16.29.7 ⊘ THE HOOK'S OWN FIRST RUN LOST AN ARTIFACT
+
+`guest_cuinit_wall.sh` printed **excerpts** and left `/tmp/rmtrace.txt` and `/tmp/uvm.txt` inside
+the guest; `boot_capture.sh` phase 4 then powered the guest down, and a later `scp` produced two
+**zero-byte** files. The full UVM plane survives (it was printed in full), but the middle ~50
+lines of the RM trace are **unrecoverable for this boot** — which is why §16.29.2 quantifies the
+RM plane by its two non-zero rows and its last 25 calls rather than by a diff.
+
+★ Same shape as every trap this repository already records: *the operation succeeds either way,
+and only an explicit copy separates "observed" from "kept where anybody will find it later."*
+⊘ **A new instrument's first run is itself unverified** — this is the second time in three rungs
+that a freshly written harness was wrong on its first tagged use (§16.28.7's gate dropped a
+disjunct and failed a good boot). Fixed in the same commit: the full traces are now emitted into
+the probe log **and** copied to the bench directory before anything powers anything off.
