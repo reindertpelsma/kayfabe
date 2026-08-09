@@ -87,9 +87,25 @@
 //! `PCIE_GPU_LINK_CAPS`, `0x06` `PCIE_DOWNSTREAM_LINK_CAPS` — **exactly one is forwarded**.
 //! `getBusInfos`'s first `switch` sets `bSendRpc = IS_VIRTUAL(pGpu) || IS_GSP_CLIENT(pGpu)`
 //! for `PCIE_GEN_INFO` and twelve siblings; everything else is answered from the guest's own
-//! kernel state or from its own config space
-//! (`ogkm-580: kern_bus_ctrl.c:283-470`). A port that answered all six from the ioctl trace
-//! would overwrite five values the guest had already computed.
+//! kernel state (`ogkm-580: kern_bus_ctrl.c:283-470`). A port that answered all six from the
+//! ioctl trace would overwrite five values the guest had already computed.
+//!
+//! ### ⊘⊘ ★★★ CORRECTION 2026-08-09 — "or from its own config space" was WRONG, and the
+//! error was load-bearing
+//!
+//! This paragraph used to end *"…from the guest's own kernel state **or from its own config
+//! space**"*, and that half-sentence made `0x03 PCIE_GPU_LINK_CAPS` look like somebody
+//! else's problem — a plane QEMU already emulates. It is not. `kbifGetGpuLinkCapabilities`
+//! reads it with `GPU_BUS_CFG_RD32`, and on Maxwell and later that macro is
+//! `GPU_REG_RD32(DEVICE_BASE(NV_PCFG) + index)` — **BAR0 + `0x88084`**, the register
+//! aperture (`ogkm-580: kern_gpu_gm107.c:176-190`). ⊘ Nothing reads PCI configuration space.
+//!
+//! ⚠ The cost of the wrong half-sentence, `[measured 2026-08-09]`: `0x88084` was unclaimed
+//! and read `0`, `MAX_SPEED = 0` is not a legal encoding, and `cuInit` returned 3 for four
+//! days with the failing status visible nowhere but in `UVM_REGISTER_GPU`'s `params.rmStatus`.
+//! ⇒ [`PcieLinkCaps`], and the answer lives in the chip's BAR0 register table, not here.
+//! ★ A comment naming the plane a value comes from is a **claim**, and this one was never
+//! checked against the macro it was describing.
 //!
 //! ★★★ **And unlike `GPU_GET_INFO_V2` there is no forward bit to key on — because there does
 //! not need to be.** `kbusSendBusInfo_IMPL` forwards **one entry at a time**, in a *fresh*
@@ -148,7 +164,7 @@ pub enum PcieGen {
 impl PcieGen {
     /// The four-bit field value (`GEN1 == 0`).
     #[must_use]
-    pub fn field(self) -> u32 {
+    pub const fn field(self) -> u32 {
         match self {
             Self::Gen1 => 0,
             Self::Gen2 => 1,
@@ -159,10 +175,35 @@ impl PcieGen {
         }
     }
 
-    /// The generation number as a human writes it (`Gen4 -> 4`) — for messages only.
+    /// The generation number as a human writes it (`Gen4 -> 4`).
+    ///
+    /// ★★ **Not only for messages** — see [`Self::max_speed_field`], where this *is* the
+    /// wire encoding of a different field of the very same 32-bit word.
     #[must_use]
-    pub fn number(self) -> u32 {
+    pub const fn number(self) -> u32 {
         self.field() + 1
+    }
+
+    /// The same generation in `NV2080_CTRL_BUS_INFO_PCIE_LINK_CAP_MAX_SPEED`'s encoding
+    /// (`ogkm-580: ctrl2080bus.h:357-363`) — `_2500MBPS = 1` … `_64000MBPS = 6`.
+    ///
+    /// ★★★ **One word, two encodings of "which PCIe generation", off by one from each
+    /// other.** `..._GEN_GEN1` is `0` while `..._MAX_SPEED_2500MBPS` is `1`, and both sets of
+    /// fields live in the *same* `NV_XVE_LINK_CAPABILITIES` word: `GEN` 15:12, `CURR_LEVEL`
+    /// 19:16 and `GPU_GEN` 23:20 use the zero-based one, `MAX_SPEED` 3:0 uses the one-based
+    /// one. ⊘ Never reach for [`Self::field`] when filling `MAX_SPEED`: `Gen4` would go out
+    /// as `3` = 8 GT/s — a *legal* encoding, so nothing would refuse it and the link would
+    /// simply be understated by one generation forever.
+    ///
+    /// ★ The mirror hazard is worse and is why this returns a distinct method rather than a
+    /// documented convention: writing [`Self::field`] into `MAX_SPEED` for `Gen1` yields
+    /// **0**, which is not a legal `MAX_SPEED` at all — `calculatePCIELinkRateMBps`'s
+    /// `default` arm (`ogkm-580: nv_gpu_ops.c:2077-2079`) answers `NV_ERR_INVALID_STATE` and
+    /// prints *"Unknown PCIe speed"*. `[measured 2026-08-09, boot lc1446 @ 69f8817]` that is
+    /// exactly what an unserved (zero) register did, and it is what stopped `cuInit`.
+    #[must_use]
+    pub const fn max_speed_field(self) -> u32 {
+        self.number()
     }
 
     /// Decode a four-bit field. `None` for `6..=15`, which the header does not define.
@@ -246,6 +287,114 @@ impl PcieGenInfo {
             negotiated_gen: PcieGen::from_field((word >> GEN_SHIFT) & GEN_FIELD_MASK)?,
             current_gen: PcieGen::from_field((word >> CURR_LEVEL_SHIFT) & GEN_FIELD_MASK)?,
             gpu_gen: PcieGen::from_field((word >> GPU_GEN_SHIFT) & GEN_FIELD_MASK)?,
+        })
+    }
+}
+
+/// `NV2080_CTRL_BUS_INFO_PCIE_LINK_CAP_MAX_SPEED` 3:0 (`ogkm-580: ctrl2080bus.h:357`).
+const MAX_SPEED_SHIFT: u32 = 0;
+/// `NV2080_CTRL_BUS_INFO_PCIE_LINK_CAP_MAX_WIDTH` 9:4 (`ogkm-580: ctrl2080bus.h:364`) —
+/// six bits, so 16 lanes fits and 64 would not.
+const MAX_WIDTH_SHIFT: u32 = 4;
+/// See [`MAX_SPEED_SHIFT`].
+const MAX_SPEED_MASK: u32 = 0xf;
+/// See [`MAX_WIDTH_SHIFT`].
+const MAX_WIDTH_MASK: u32 = 0x3f;
+
+/// The lane count the emulated link is presented with.
+///
+/// ⊘ Deliberately **one constant here, not a chip-row field.** A row would invite a
+/// per-family transcription of whatever width the rented card happened to train at, and this
+/// is not describing a card: it is a property of the link *this port presents*, which is the
+/// same on every host by construction — the same argument [`PcieGenInfo::fully_trained`]
+/// already makes for the generation. x16 because that is the widest a PCIe endpoint
+/// negotiates and because a narrower claim would understate the bandwidth RM derives from it
+/// for no gain. `[measured]` a real GA106 answered `MAX_WIDTH = 16` through this same field
+/// (`traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt`, index `0x03` =
+/// `0x00454d03`), so the presented link is not wider than the part being emulated.
+pub const PRESENTED_LINK_WIDTH: u32 = 16;
+
+/// `NV_XVE_LINK_CAPABILITIES` — the PCI Express *Link Capabilities* word, as the guest
+/// kernel reads it out of the register aperture.
+///
+/// ## ★★★ Why this is a register and not a control, and why that matters
+///
+/// `NV2080_CTRL_BUS_INFO_INDEX_PCIE_GPU_LINK_CAPS` (index `0x03`) looks like a sibling of
+/// [`BUS_INFO_INDEX_PCIE_GEN_INFO`] (`0x2d`) and is not one. `getBusInfos`'s `bSendRpc`
+/// switch (`ogkm-580: kern_bus_ctrl.c:296-330`) names thirteen indices that a GSP client
+/// forwards, and `0x03` is **not among them**. It is answered inside the guest, by
+/// `kbifControlGetPCIEInfo_IMPL` -> `kbifGetGpuLinkCapabilities`
+/// (`ogkm-580: kernel_bif.c:1063-1076, 879-903`), which does
+/// `GPU_BUS_CFG_RD32(pGpu, NV_XVE_LINK_CAPABILITIES)` — and on Maxwell and later that macro
+/// reads **the register aperture**, `DEVICE_BASE(NV_PCFG) + 0x84` = BAR0 + `0x88084`
+/// (`ogkm-580: kern_gpu_gm107.c:176-190`; `dev_nv_xve.h:104`;
+/// `dev_nv_pcfg_xve_regmap.h:27`), ⊘ **not** PCI configuration space.
+///
+/// ⇒ Serving it correctly over the RPC plane is impossible; nothing is ever asked. The word
+/// has to be present in BAR0 or the guest computes its own answer from zeros.
+///
+/// ## ★★★ What that costs, `[measured 2026-08-09]`
+///
+/// Boot `lc1446` @ `69f8817`: BAR0 + `0x88084` read **`0x00000000`** (unclaimed; the whole
+/// `NV_PCFG` window is). `MAX_SPEED` = 0 is not one of the six legal encodings, so
+/// `calculatePCIELinkRateMBps` took its `default` arm, printed *"Unknown PCIe speed"* and
+/// returned `NV_ERR_INVALID_STATE` (`ogkm-580: nv_gpu_ops.c:2077-2079`). That status
+/// propagates out of `getPCIELinkRateMBps` -> `nvGpuOpsGetGpuInfo` (`:7220`) ->
+/// `nvUvmInterfaceGetGpuInfo` -> `uvm_gpu_retain_by_uuid`, and lands in
+/// `UVM_REGISTER_GPU`'s `params.rmStatus` as **`0x40`** — which boot `us1445` read directly
+/// (`scripts/bench/uvm_ioctl_trace.c`). libcuda then tore its context down and `cuInit`
+/// returned 3.
+///
+/// ⚠ **UVM prints nothing on this path**, and the ioctl returns 0 at the syscall boundary.
+/// Neither `strace` nor `dmesg` names it; only reading `params.rmStatus` does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PcieLinkCaps {
+    /// `MAX_SPEED` 3:0, held as a generation and encoded by [`PcieGen::max_speed_field`].
+    pub max_gen: PcieGen,
+    /// `MAX_WIDTH` 9:4, in lanes.
+    pub max_width: u32,
+}
+
+impl PcieLinkCaps {
+    /// The link this port presents: the die's own maximum generation, at
+    /// [`PRESENTED_LINK_WIDTH`] lanes.
+    ///
+    /// ⊘ Deliberately **not** the word a real GA106 answered. That was `0x00454d03`, whose
+    /// `MAX_SPEED` is `3` = 8 GT/s — one generation *below* the `gen4` die, because an
+    /// NVIDIA endpoint advertises the capability it trained to in the slot it is in. A
+    /// chip-family row stating `0x00454d03` would claim every GA106 everywhere sits in a
+    /// Gen3 slot; this says the weaker true thing instead, exactly as
+    /// [`PcieGenInfo::fully_trained`] does for `PCIE_GEN_INFO`.
+    #[must_use]
+    pub const fn fully_trained(max_gen: PcieGen) -> Self {
+        Self {
+            max_gen,
+            max_width: PRESENTED_LINK_WIDTH,
+        }
+    }
+
+    /// Pack the word. Every other bit — ASPM support, L0s/L1 exit latency, port number — is
+    /// left zero: they are optional-capability advertisements, and RM reads only these two
+    /// fields out of this register (`ogkm-580: nv_gpu_ops.c:2110-2113`).
+    #[must_use]
+    pub const fn encode(self) -> u32 {
+        ((self.max_gen.max_speed_field() & MAX_SPEED_MASK) << MAX_SPEED_SHIFT)
+            | ((self.max_width & MAX_WIDTH_MASK) << MAX_WIDTH_SHIFT)
+    }
+
+    /// Unpack a word — the inverse of [`Self::encode`], and how a measured reading is
+    /// checked against the field layout.
+    ///
+    /// `None` when `MAX_SPEED` is not one of the six encodings the header defines, which is
+    /// precisely the condition `calculatePCIELinkRateMBps` refuses. ★ So a `None` here and
+    /// an `NV_ERR_INVALID_STATE` there are the same predicate, written twice on purpose.
+    #[must_use]
+    pub fn decode(word: u32) -> Option<Self> {
+        let speed = (word >> MAX_SPEED_SHIFT) & MAX_SPEED_MASK;
+        Some(Self {
+            // `MAX_SPEED` is one-based; `PcieGen::from_field` is zero-based.
+            max_gen: PcieGen::from_field(speed.checked_sub(1)?)?,
+            max_width: (word >> MAX_WIDTH_SHIFT) & MAX_WIDTH_MASK,
         })
     }
 }
@@ -604,6 +753,86 @@ mod tests {
             }),
             "the bound comes first — a table row for an illegal index must not rescue it"
         );
+    }
+
+    /// `[measured 2026-08-08, real GA106]` `PCIE_GPU_LINK_CAPS` (index `0x03`) on the bench
+    /// part, from `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt`.
+    ///
+    /// ⊘ Present as an ORACLE FOR THE FIELD LAYOUT, never as the value to serve — its
+    /// `MAX_SPEED` is `Gen3`, the *slot's* ceiling, on a `Gen4` die.
+    const MEASURED_GPU_LINK_CAPS: u32 = 0x0045_4d03;
+
+    /// ★★★ The layout, checked against real silicon: the one measured word must decode to
+    /// the two things `nvidia-smi` and the part's own datasheet say — 8 GT/s over 16 lanes.
+    ///
+    /// This is what makes the shifts a fact rather than a transcription. A one-bit error in
+    /// `MAX_WIDTH_SHIFT` still decodes *plausibly* (`two_encodings_agreeing_on_the_first_values`
+    /// is exactly how the `0x03003020` mis-transcription survived review), so the assertion
+    /// is on the decoded values and not on the word.
+    #[test]
+    fn the_measured_link_caps_word_decodes_to_the_parts_real_link() {
+        let caps = PcieLinkCaps::decode(MEASURED_GPU_LINK_CAPS).expect("a legal MAX_SPEED");
+        assert_eq!(
+            caps.max_gen,
+            PcieGen::Gen3,
+            "MAX_SPEED 3:0 = 3 is _8000MBPS, and the bench root port is a Gen3 slot"
+        );
+        assert_eq!(caps.max_width, 16, "MAX_WIDTH 9:4 = 16 lanes");
+        // ⊘ And the DIE is Gen4 — so this word is NOT the die's generation, which is the
+        // whole reason `fully_trained` does not copy it.
+        assert_ne!(caps.max_gen, PcieGen::Gen4);
+    }
+
+    /// ★★★ THE BITE. `MAX_SPEED` is ONE-based while `GEN`/`CURR_LEVEL`/`GPU_GEN` in the same
+    /// word are ZERO-based, and the two live one method call apart.
+    ///
+    /// `[measured 2026-08-09, boot lc1446]` a `MAX_SPEED` of 0 is what an unserved register
+    /// produced, and it cost `cuInit`: `calculatePCIELinkRateMBps`'s `default` arm answers
+    /// `NV_ERR_INVALID_STATE` for anything outside `1..=6`. So this asserts the served field
+    /// against the SIX legal encodings by name, not against a remembered number.
+    #[test]
+    fn every_generation_encodes_to_a_speed_calculate_pcie_link_rate_accepts() {
+        for g in [
+            PcieGen::Gen1,
+            PcieGen::Gen2,
+            PcieGen::Gen3,
+            PcieGen::Gen4,
+            PcieGen::Gen5,
+            PcieGen::Gen6,
+        ] {
+            let word = PcieLinkCaps::fully_trained(g).encode();
+            let speed = word & MAX_SPEED_MASK;
+            assert!(
+                (1..=6).contains(&speed),
+                "{g:?} encoded MAX_SPEED={speed}, which calculatePCIELinkRateMBps refuses \
+                 (ogkm-580: nv_gpu_ops.c:2077-2079)"
+            );
+            // ⊘ The off-by-one, stated as an assertion: using `field()` here would put Gen1
+            // out as 0 — the exact value that stopped `cuInit`.
+            assert_eq!(speed, g.number());
+            assert_ne!(speed, g.field(), "the two encodings never coincide");
+            // Round-trips, and the width survives.
+            let back = PcieLinkCaps::decode(word).expect("we just built it legal");
+            assert_eq!(back.max_gen, g);
+            assert_eq!(back.max_width, PRESENTED_LINK_WIDTH);
+        }
+    }
+
+    /// The condition RM refuses, refused here by the same predicate.
+    #[test]
+    fn a_zero_link_caps_word_is_refused_rather_than_read_as_gen1() {
+        assert_eq!(
+            PcieLinkCaps::decode(0),
+            None,
+            "MAX_SPEED=0 names no PCIe generation; RM answers NV_ERR_INVALID_STATE for it, \
+             and a decoder that folded it to Gen1 would hide the very defect this exists for"
+        );
+        // ⊘ ...unlike PCIE_GEN_INFO's fields, where zero IS Gen1. The two encodings sharing
+        // one word is the hazard; this pair of assertions is the record of it.
+        assert!(PcieGenInfo::decode(0).is_some());
+        for v in 7..=0xf {
+            assert_eq!(PcieLinkCaps::decode(v), None, "MAX_SPEED={v} is undefined");
+        }
     }
 
     /// A truncated params buffer is refused rather than read short.

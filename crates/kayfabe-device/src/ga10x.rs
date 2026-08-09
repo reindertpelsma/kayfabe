@@ -500,6 +500,46 @@ const PMC_BOOT_0_GA106_A1: u32 = 0x1760_00A1;
 /// ⇒ `CHIP_ID[29:20] = 0x176` (`C: nvkvm_gpu_emul.c:70-72, 96`).
 const PMC_BOOT_42_GA106_A1: u32 = 0x176A_1000;
 
+/// `NV_PCFG` + `NV_XVE_LINK_CAPABILITIES` — BAR0 `0x88000` + `0x84`.
+///
+/// ★★★ **The register `cuInit` died on**, and the reason it hid for so long is that it does
+/// not look like a register question at all. RM asks itself
+/// `NV2080_CTRL_BUS_INFO_INDEX_PCIE_GPU_LINK_CAPS` (`0x03`), which reads like a control this
+/// port would answer — but `getBusInfos`'s `bSendRpc` switch forwards thirteen indices and
+/// `0x03` is not one of them (`ogkm-580: kern_bus_ctrl.c:296-330`). The guest answers it
+/// itself, out of *this* offset, via `kbifGetGpuLinkCapabilities` ->
+/// `GPU_BUS_CFG_RD32(NV_XVE_LINK_CAPABILITIES)`, and on Maxwell and later that macro reads
+/// the **register aperture** at `DEVICE_BASE(NV_PCFG) + index`
+/// (`ogkm-580: kern_gpu_gm107.c:176-190`), ⊘ not PCI configuration space. Addresses:
+/// `dev_nv_xve.h:104` (`0x84`), `dev_nv_pcfg_xve_regmap.h:27` (`NV_PCFG` = `0x0008_8000`).
+///
+/// ⚠ ⊘ **Serving it in config space would not have worked.** `[measured 2026-08-09, boot
+/// lc1446]` this device presents no PCI Express capability at all (`setpci CAP_EXP` -> *"no
+/// capabilities with that id"*), and it would not have mattered: RM never looks there.
+const XVE_LINK_CAPABILITIES: u64 = 0x0008_8084;
+
+/// GA106's PCI Express generation — the die's own maximum.
+///
+/// ★ `[measured 2026-08-08]` `GPU_GEN` reads `3` = `..._GEN_GEN4` on a real RTX 3060, and
+/// `nvidia-smi --query-gpu=pcie.link.gen.gpumax` on the same box says `4`. Two instruments,
+/// one die fact — and the ONLY field of `PCIE_GEN_INFO` that is one.
+///
+/// ★★ **Named once and used twice on purpose.** Two planes now depend on it — the
+/// `PCIE_GEN_INFO` RPC answer through [`ChipProfile::pcie_max_gen`] and the
+/// [`XVE_LINK_CAPABILITIES`] register below — and a port that stated the generation
+/// separately in each would be free to disagree with itself about the same die. ⊘ The
+/// register cannot read it back off the chip row: `GA106` already points at
+/// `GA106_BOOT_REGS`, so a row -> table -> row reference is a cycle the compiler rejects.
+/// One `const` above both is the shape that has no second statement to drift.
+const GA106_PCIE_MAX_GEN: kayfabe_abi::businfo::PcieGen = kayfabe_abi::businfo::PcieGen::Gen4;
+
+/// The value served at [`XVE_LINK_CAPABILITIES`], derived from [`GA106_PCIE_MAX_GEN`] —
+/// ⊘ never transcribed from a measured word. See
+/// [`kayfabe_abi::businfo::PcieLinkCaps::fully_trained`] for why the real part's
+/// `0x00454d03` is the wrong thing to copy.
+const XVE_LINK_CAPABILITIES_GA106: u32 =
+    kayfabe_abi::businfo::PcieLinkCaps::fully_trained(GA106_PCIE_MAX_GEN).encode();
+
 /// The registers that are constants of this silicon.
 static GA106_BOOT_REGS: &[BootReg] = &[
     BootReg {
@@ -534,6 +574,23 @@ static GA106_BOOT_REGS: &[BootReg] = &[
         off: USABLE_FB_SIZE_IN_MB_ADDR,
         value: FB_SIZE_MB as u32,
         name: "NV_USABLE_FB_SIZE_IN_MB",
+    },
+    // ★★★ A `BootReg` and not a `GspReg` by this module's own rule — its served value is a
+    // function of no boot state whatever. It is a statement about the link this device
+    // presents, which does not change while the GSP boots, or ever.
+    //
+    // ⚠ ⊘ This does NOT make the rest of the `NV_PCFG` window served. `[measured, boot
+    // lc1446]` `0x88000` (`NV_XVE_ID`) and `0x88088` (`NV_XVE_LINK_CONTROL_STATUS`) still
+    // read zero, and RM has four more `kbifGetBusOptionsAddr` offsets in there
+    // (`ogkm-580: kernel_bif_gm107.c:1004-1020`). None of them is on a path this port has
+    // measured a failure on, and adding them un-measured would be inventing five answers to
+    // questions nobody has been observed to ask. When one bites it will bite the same way
+    // this one did — as a specific status out of a specific caller — and the fix will be one
+    // more row here.
+    BootReg {
+        off: XVE_LINK_CAPABILITIES,
+        value: XVE_LINK_CAPABILITIES_GA106,
+        name: "NV_XVE_LINK_CAPABILITIES",
     },
 ];
 
@@ -1527,11 +1584,11 @@ pub static GA106: ChipProfile = ChipProfile {
     // `getGpuInfos` arm read unprivileged (`rmladder_r21 … 0x2a NV_OK data=0x0`). GeForce
     // silicon has no MIG. ⊘ NOT from the C oracle's row for this id, which is empty.
     smc_mode: kayfabe_abi::smcmode::GA106_SMC_MODE,
-    // ★ `[measured 2026-08-08]` GA106's `GPU_GEN` field reads `3` = `..._GEN_GEN4` on a real
-    // RTX 3060, and `nvidia-smi --query-gpu=pcie.link.gen.gpumax` on the same box says `4`.
-    // Two instruments, one die fact — and it is the ONLY field of `PCIE_GEN_INFO` that is
-    // one. ⊘ The other two moved on that same part between two runs.
-    pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
+    // ★ See [`GA106_PCIE_MAX_GEN`] — measured on a real RTX 3060 by two instruments, and it
+    // is the ONLY field of `PCIE_GEN_INFO` that is a die fact. ⊘ The other two moved on that
+    // same part between two runs. The constant is shared with `NV_XVE_LINK_CAPABILITIES`
+    // so the two planes cannot state different generations for one die.
+    pcie_max_gen: GA106_PCIE_MAX_GEN,
     fb_length: GA106_FB_LENGTH,
 };
 
