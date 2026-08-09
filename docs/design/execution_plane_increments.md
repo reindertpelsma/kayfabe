@@ -9446,3 +9446,81 @@ counts **parked** publications as accepted. If this fix lands and the row stays 
 counter cannot tell whether the root was applied or parked for a handle that never resolved —
 read the `pdb=Y|N` in the promote census, which is a fact about the channel, not about our
 bookkeeping.
+
+## §16.43 ★★★★★ BOOTED `s38_411d280_route` — **OUTCOME Q**, the route LANDED, and the wall moved one hop deeper
+
+`[measured 2026-08-09, rev `411d280`, binary stamped `kayfabe-rev:411d2803e…` and verified
+before the boot]`. Evidence: `traces/guest_boots/run_s38_411d280_route_{qemu,dmesg,probe}.log`.
+
+### 16.43.1 ★★★★★ THE ROUTE LANDED — five independent numbers moved, all in the same direction
+
+| fact | `s37` | `s38` |
+|---|---|---|
+| `cup2`'s channel `0x5c000019`, `cs=ok(h0x5c000007…)` | **`pdb=N`** | ★ **`pdb=Y`** |
+| `cup2`'s live GrCompute channels | 1 | **8** |
+| channels in the census | 7 | **14** |
+| publications reaching the object model / accepted | 12 / 10 | **14 / 12** |
+| doorbells | 124 | **163** |
+| `control 0x2080012b result 0x00000000` | x2 | **x3** |
+| `PromoteFault::ContextVasUndeclared` | **x1** | ⊘ **gone** |
+
+⇒ §16.42's chain is **confirmed end to end**. The page-directory root UVM published under the
+dup alias `0xcaf00036` now reaches `0x5c000007`'s **resource**, which is what `Spine::ctx_vas`
+resolves through, and the VA space `cup2`'s channel names has a PDB for the first time.
+
+### 16.43.2 ★★★★ THE NEW WALL, NAMED — and it is `PromoteFault::ForeignContextObject`
+
+```
+promote-ctx PromoteFault::ForeignContextObject:
+  ForeignContextObject { client: HClient(3251634186), object: HObject(1543503897), owner: ProcId(2) }
+```
+
+`3251634186` = **`0xc1d0000a`** — **UVM's** client. `1543503897` = **`0x5c000019`** —
+**`cup2`'s** channel. `ProcId(2)` = `cup2`'s proc.
+
+⇒ **UVM issues `GPU_PROMOTE_CTX` naming a channel that belongs to `cup2`'s address space**, and
+the cross-namespace guard refuses it: the envelope's `hClient` is not in the component that owns
+the address space being promoted into. `cuCtxCreate` still ends at
+`kgrobjPromoteContext … NV_ERR_NOT_SUPPORTED @ kernel_graphics_object.c` — **same symptom, a
+different and deeper mechanism.**
+
+★★★ ⚠ **AND THE CHECK REFUSES A CASE RM's OWN SOURCE DOCUMENTS AS LEGAL.** This is not a
+guess; `translate_promote_ctx`'s own rustdoc already states it, from `ogkm-580:
+kernel_graphics_object.c:130-135`:
+
+> RM sets `params.hChanClient = RES_GET_CLIENT_HANDLE(pChannelDescendant)` and then issues the
+> control with `RES_GET_CLIENT_HANDLE(pSubdevice)` as the envelope client; the two are usually
+> equal and **are not required** to be.
+
+`s38` is the boot where they are **not** equal: envelope `0xc1d0000a` (UVM's subdevice client),
+`hChanClient` `0xc1d0000c` (`cup2`'s). ⊘ So the port has a correct citation, in the right file,
+describing exactly this case — and the check written beside it treats the inequality as hostile.
+★ `a_correct_citation_narrowed_by_the_reading`, and this one was **written down before the boot
+that needed it**: the doc says "usually equal, not required", the code took "not equal ⇒ foreign".
+
+⊘ **Do not simply delete the check.** Its docstring records what it is for: *"without this, a
+client may declare bindings in a **victim's** address space by naming the victim's client and
+channel — the params-field injection the C could not even detect."* The question the next rung
+owns is **what makes UVM's kernel client part of a CUDA process's component**, which is the
+`proc_is_not_a_set_of_rm_clients` question, not a licence to open the guard.
+
+### 16.43.3 ⊘ WHAT ELSE MOVED, recorded so it is not read as noise
+
+`AllocClassNotPermitted::NotOnAllowlist` x2 → **x3** and `RmGraphError::FreeUnknown` x7 → **x8**.
+Both are consistent with `cup2` getting **further** (eight channels instead of one, so more
+allocs and more frees), but neither is *measured* to be — they are recorded here as unexplained
+deltas rather than absorbed into the win. ⚠ `NotOnAllowlist` in particular is a class the guest
+asked for and we refused; the next rung should name which class before assuming it is benign.
+
+### 16.43.4 ★ THE FALSIFIER, SCORED
+
+**Q**, and it was written **first** precisely because a two-valued reading scores it as failure:
+`cup2` still fails `cuCtxCreate` with the same `801`. But the route was the hypothesis, the route
+landed, and seven numbers moved. ⊘ **P** (sufficient) is refuted — the route was **necessary and
+not sufficient**, exactly as `injection_measures_necessity_never_sufficiency` warns and as
+`b4f00f3`'s third unmeasured leg asked. **R** and **S** are refuted: no publication was refused,
+no new `RmGraphError` tag appeared, and accepted publications went **up**.
+
+⇒ All three of `b4f00f3`'s named legs are now measured: **(1)** the VA space is `0x5c000007`, via
+the **CtxShare**; **(2)** the refusal belonged to `cup2`'s own channel `0x5c000019`; **(3)** the
+route is **necessary and not sufficient**.
