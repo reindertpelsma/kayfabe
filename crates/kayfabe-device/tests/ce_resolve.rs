@@ -668,3 +668,53 @@ fn a_level_whose_covering_slot_was_never_written_reports_invalid_slot() {
         "the census must show the page is wholly unwritten: {t}"
     );
 }
+
+/// ⊘⊘ **`vidmem_phys` refuses a SYSMEM leaf, and that refusal is the whole point.**
+///
+/// A vidmem leaf is an offset into this device's framebuffer; a sysmem leaf is a
+/// guest-physical address. The two number spaces collide freely, so a framebuffer reader
+/// handed a sysmem answer produces *plausible wrong bytes* — the failure the address plane
+/// exists to refuse. `c_ceutils_ring_resolution.md` §4 measured a CeUtils finishPayload in
+/// **each** aperture within one run, so neither answer is the safe default.
+#[test]
+fn vidmem_phys_answers_for_a_framebuffer_leaf_and_declines_for_a_guest_ram_one() {
+    let vid = resolve(
+        &TinyFmt,
+        &mut tree(),
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert_eq!(
+        vid.vidmem_phys(),
+        Some(LEAF_PHYS + 0x1234),
+        "a framebuffer leaf yields its offset, page offset included"
+    );
+
+    // The same tree with the leaf re-declared as system memory.
+    let mut fb = tree();
+    fb.put(L1 + 16, leaf_sys(LEAF_PHYS));
+    let sys = resolve(
+        &TinyFmt,
+        &mut fb,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    );
+    assert!(
+        matches!(sys, CeResolve::Resolved { .. }),
+        "the walk still SUCCEEDS — this is not a resolution failure: {sys:?}"
+    );
+    assert_eq!(
+        sys.vidmem_phys(),
+        None,
+        "⊘ …and yet it yields NO framebuffer offset. A guest-physical address read out of \
+         the framebuffer at the same number is the silent-wrong-bytes failure, not an edge \
+         case: {sys:?}"
+    );
+
+    // ⊘ And a refusal is not an address either.
+    assert_eq!(CeResolve::NoPublication.vidmem_phys(), None);
+}

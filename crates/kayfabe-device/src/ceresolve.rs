@@ -490,6 +490,35 @@ pub fn resolve(
     }
 }
 
+impl CeResolve {
+    /// ★★★ **The resolved address, but ONLY when it is a framebuffer offset** — for a
+    /// caller that is about to read this device's own framebuffer at it.
+    ///
+    /// # ⊘ Why this is a method and not a field access
+    ///
+    /// A vidmem leaf is an offset into this device's framebuffer; a sysmem leaf is a
+    /// **guest-physical address**. They are different number spaces that collide freely —
+    /// at 8 GiB a GPU VA is itself a legal GPA — so handing a sysmem answer to a
+    /// framebuffer reader produces *plausible wrong bytes*, which is the failure the whole
+    /// address plane exists to refuse (`RegPlane::read_published_va` makes the same
+    /// argument at the byte-serving end).
+    ///
+    /// ⊘ Returning [`None`] for a sysmem or peer leaf is therefore not a limitation; it is
+    /// the type declining to express the confusion. `Aperture` itself stays private, which
+    /// is why a caller cannot pattern-match its way around this.
+    #[must_use]
+    pub fn vidmem_phys(&self) -> Option<u64> {
+        match *self {
+            CeResolve::Resolved {
+                phys,
+                aperture: Aperture::Vidmem,
+                ..
+            } => Some(phys),
+            _ => None,
+        }
+    }
+}
+
 /// ★★★ **The page the descent starts from** — factored so [`resolve`] and [`walk_trace`]
 /// cannot derive it differently.
 ///

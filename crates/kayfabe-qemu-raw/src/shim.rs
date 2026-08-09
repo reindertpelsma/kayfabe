@@ -2643,6 +2643,14 @@ impl SharedDoorbell {
         // whose terminal leaf disagrees with `rng=` is itself the finding.
         let walk = plane.published_walk_trace(facts.client, vaspace, ring_va);
         let ring = plane.resolve_published_va(facts.client, vaspace, ring_va, demand());
+        // ★★★★ §16.12 — THE RING'S OWN PAGE. §16.10 proved the walk lands on `V:0x20000`
+        // correctly; the open question is whether OUR framebuffer has ever had a byte
+        // written there. ⊘ Addressed by the resolution's OWN answer, never by a literal:
+        // the leaf is a per-boot address and hard-coding one would read correctly on
+        // exactly one boot (§16.9's control-row argument, one level in).
+        let ringpage = ring
+            .vidmem_phys()
+            .map_or_else(String::new, |phys| fb_level_dump(&plane, "fbRING", phys));
         let fin = plane.resolve_published_va(
             facts.client,
             vaspace,
@@ -2668,7 +2676,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump} walk:{walk}",
+            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),

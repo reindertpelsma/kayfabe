@@ -135,6 +135,12 @@ struct NvkvmState {
     uint64_t bar2_size;
     uint64_t msix_size;
     uint64_t window_size;
+    /* ★★★★ Whether the BAR1 shadow reservation was actually INSTALLED — the precondition
+     * `reservation_touches` needs in order to mean anything.  See nvkvm_report_registers'
+     * BAR1 block: with no shadow the counter is a COMPLETE census of BAR1 accesses; with a
+     * shadow it is blind to every access the shadow served, and the same number would then
+     * mean the opposite thing. */
+    bool window_installed;
     bool     shareable_ram;
     /* 0 = the chip table's default row.  A hex PCI device id selects another. */
     uint32_t chip_device_id;
@@ -1219,6 +1225,7 @@ static void nvkvm_shim_realize(NvkvmState *s)
              * zero forever — it is the whole memory-plane decision as one number, and a
              * message that carried only the good news would never show it moving.
              */
+            s->window_installed = true;
             if (kayfabe_shim_audit(s->shim, &a) == KAYFABE_OK) {
                 info_report("nvkvm: reservation of 0x%" PRIx64 " bytes installed at 0x%" PRIx64
                             " (kernel slots live=%" PRIu64 " installs=%" PRIu64
@@ -1432,10 +1439,33 @@ static void nvkvm_report_registers(NvkvmState *s)
      * plain RAM slot with no connection to the framebuffer.  So a non-zero count is not a
      * statistic — it is bytes the copy engine can never see.
      */
-    info_report("nvkvm: BAR1 (flat aperture): %" PRIu64 " accesses reached the DISCARDING "
-                "fallback. ⊘ These bytes are in NEITHER store the address plane reads — "
-                "not the BAR0-window framebuffer and not guest RAM.",
-                s->reservation_touches);
+    /*
+     * ★★★★ AND WHETHER THE SHADOW EXISTS, because without it this number means the opposite
+     * thing.  MEASURED 2026-08-09 (§16.11): `reservation_touches` is incremented ONLY in
+     * nvkvm_reservation_read/write, and this enum's own comment says a RESERVATION's
+     * callbacks "are not reached in normal operation; if one fires, the shadow is missing".
+     * So it is a MISS counter.  §16.5 cited "three accesses, therefore BAR1 is innocent" —
+     * which reads it as a HIT counter, and that inference only holds while NO shadow is
+     * installed.  The shadow is installed exactly when the `window-size` property is
+     * non-zero, and it defaults to 0; the bench's command line never sets it.
+     *
+     * ⊘ A number whose meaning depends on a condition must PRINT THAT CONDITION.  Otherwise
+     * the day somebody sets `window-size` this line silently starts saying "the guest barely
+     * touched BAR1" about a boot in which it wrote gigabytes.
+     */
+    if (s->window_installed) {
+        info_report("nvkvm: BAR1 (flat aperture): %" PRIu64 " accesses reached the DISCARDING "
+                    "fallback — ⚠ AND A SHADOW OF 0x%" PRIx64 " BYTES IS INSTALLED, so this "
+                    "number is BLIND to every access the shadow served. It is NOT a census "
+                    "of BAR1 traffic and must not be cited as one.",
+                    s->reservation_touches, s->window_size);
+    } else {
+        info_report("nvkvm: BAR1 (flat aperture): %" PRIu64 " accesses reached the DISCARDING "
+                    "fallback, and NO shadow is installed (window-size=0), so this IS a "
+                    "complete census of BAR1 traffic. ⊘ These bytes are in NEITHER store the "
+                    "address plane reads — not the BAR0-window framebuffer and not guest RAM.",
+                    s->reservation_touches);
+    }
 
     /*
      * ★★★ #149 — THE TRANSLATED WINDOW.  Printed unconditionally, all-zeros included, for
