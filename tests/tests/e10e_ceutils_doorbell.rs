@@ -28,7 +28,7 @@ use kayfabe_device::gvaspub::GvasPublication;
 use kayfabe_device::{FbStore, NanoClock, RegPlane, SparseFb, SteppingClock};
 use kayfabe_fwd::FwdFault;
 use kayfabe_mocks::MockVmm;
-use kayfabe_rt::ceutils::{CeUtilsChannel, GpCursor, run_submission};
+use kayfabe_rt::ceutils::{CeUtilsChannel, GpCursor, MethodState, run_submission};
 use kayfabe_vmm::{IrqSpec, Vmm};
 
 // =====================================================================================
@@ -256,19 +256,35 @@ fn ring_once(
     vmm: &mut MockVmm,
     cursor: &mut GpCursor,
 ) -> Result<kayfabe_rt::ceutils::CeUtilsRun, kayfabe_rt::ceutils::CeUtilsRefusal> {
+    let mut state = MethodState::new();
+    ring_once_with(plane, vmm, cursor, &mut state)
+}
+
+/// ★★★★ The same doorbell, driven against a **channel** accumulator the caller keeps —
+/// the adapter's real shape (`CeShellState::states`, keyed and committed exactly like the
+/// cursor). ⊘ `ring_once` above is this with a fresh state each time, i.e. the behaviour
+/// that walled, kept so the two can be compared in one test file.
+fn ring_once_with(
+    plane: &RegPlane,
+    vmm: &mut MockVmm,
+    cursor: &mut GpCursor,
+    state: &mut MethodState,
+) -> Result<kayfabe_rt::ceutils::CeUtilsRun, kayfabe_rt::ceutils::CeUtilsRefusal> {
     let pb = kayfabe_chips::Ga10xPushbuffer;
     let out = plane
         .ce_session(
             CLIENT,
             VASPACE,
             kayfabe_device::ceresolve::Demand::from_doorbell(),
-            |ce| run_submission(ce, &pb, vmm, channel(), *cursor),
+            |ce| run_submission(ce, &pb, vmm, channel(), *cursor, *state),
         )
         .expect("the publication is present");
-    // ★ The adapter's own discipline, reproduced: commit the advanced cursor ONLY on
-    // success. A refusal hands one back at all, which is what makes the skip impossible.
+    // ★ The adapter's own discipline, reproduced: commit the advanced cursor AND the
+    // accumulator ONLY on success. A refusal hands neither back, which is what makes both
+    // the skipped entry and the half-applied engine state impossible.
     if let Ok(run) = &out {
         *cursor = run.cursor;
+        *state = run.state;
     }
     out
 }
@@ -448,7 +464,7 @@ fn a_channel_with_no_published_root_opens_no_session() {
         CLIENT,
         VASPACE + 1, // a VA space this client never published
         kayfabe_device::ceresolve::Demand::from_doorbell(),
-        |ce| run_submission(ce, &pb, &mut vmm, channel(), cursor),
+        |ce| run_submission(ce, &pb, &mut vmm, channel(), cursor, MethodState::new()),
     );
     assert!(
         opened.is_none(),
@@ -575,5 +591,194 @@ fn a_submission_with_no_set_object_reports_none_and_not_class_zero() {
         set_object, None,
         "★★★★ ABSENCE, reported as absence. `Some(ClassId(0))` here would be the old \
          literal wearing a new type"
+    );
+}
+
+// =====================================================================================
+// ★★★★ THE ACCUMULATOR IS PER-CHANNEL — UVM binds ONCE and fires forever after
+// =====================================================================================
+
+/// UVM's shape, not RM's: a copy block that writes its operands and fires, carrying **no
+/// `SET_OBJECT`**, on `NVA06F_SUBCHANNEL_COPY_ENGINE = 4`.
+///
+/// `[measured 2026-08-09, boot s21_dbf853a_cup2]` the refused submission framed to exactly
+/// this — `sub4/m0x400/n4` (the operand quad), `sub4/m0x418=0x20` (`LINE_LENGTH_IN`),
+/// `sub4/m0x300` (`LAUNCH_DMA`), then a `sub4/m0x240/n3` semaphore triple and a second
+/// `LAUNCH_DMA`. UVM binds the class in `channel_init`'s first push and never again.
+fn uvm_copy_block(dst_va: u64, bytes: u32, sema_va: u64, payload: u32) -> Vec<u8> {
+    let sub = submit::ce::FIXED_SUBCHANNEL as u32;
+    let hdr = |m, n| submit::method_header_inc(sub, m, n).expect("encodable");
+    let flags = submit::ce::LAUNCH_TRANSFER_NON_PIPELINED
+        | submit::ce::LAUNCH_FLUSH_ENABLE
+        | submit::ce::LAUNCH_REMAP_ENABLE
+        | submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD;
+    let runs: Vec<(u32, Vec<u32>)> = vec![
+        (
+            hdr(submit::ce::SET_REMAP_CONST_A, 1),
+            vec![u32::from_le_bytes([0xC3; 4])],
+        ),
+        (
+            hdr(submit::ce::SET_REMAP_COMPONENTS, 1),
+            vec![submit::ce::REMAP_DST_SEL_CONST_A],
+        ),
+        (
+            hdr(submit::ce::OFFSET_OUT_UPPER, 2),
+            vec![(dst_va >> 32) as u32, dst_va as u32],
+        ),
+        (hdr(submit::ce::LINE_LENGTH_IN, 1), vec![bytes]),
+        (
+            hdr(submit::ce::SET_SEMAPHORE_A, 3),
+            vec![
+                ((sema_va >> 32) as u32) & submit::ce::SET_SEMAPHORE_A_UPPER_MASK,
+                sema_va as u32,
+                payload,
+            ],
+        ),
+        (hdr(submit::ce::LAUNCH_DMA, 1), vec![flags]),
+    ];
+    let mut out = Vec::new();
+    for (h, args) in runs {
+        out.extend_from_slice(&h.to_le_bytes());
+        for a in args {
+            out.extend_from_slice(&a.to_le_bytes());
+        }
+    }
+    out
+}
+
+/// Publish the ring's **second** entry and its pushbuffer.
+///
+/// ⚠ Called AFTER the first doorbell, never before, and that ordering is the fixture being
+/// faithful rather than tidy: `MAX_ENTRIES_PER_DOORBELL` is 8 and the ring loop reads
+/// forward while entries decode, so a ring with both entries already written is consumed by
+/// **one** doorbell — which is a real behaviour and the wrong scenario. The bench's own
+/// sequence is two doorbells (`[measured 2026-08-09, boot s19_1dfde1b_cup2]`: token
+/// `0x00010003` SERVED at `14:15:46.427`, REFUSED at `14:15:46.624`), and the guest wrote
+/// entry `[1]` between them.
+fn publish_second(vmm: &mut MockVmm, second: &[u8]) -> u64 {
+    let second_va = PUSH_VA + 0x1000;
+    let e1 = submit::gp_entry(second_va, second.len() as u64).expect("representable");
+    vmm.gpa_write(phys_of(RING_VA + 8), &e1.to_le_bytes())
+        .expect("the ring's second entry");
+    vmm.gpa_write(phys_of(second_va), second)
+        .expect("the second method block");
+    second_va
+}
+
+/// ★★★★ **The second doorbell RUNS, because the class the FIRST one bound is still bound.**
+///
+/// # ⊘ BREAK THE ROUTE, NOT THE ASSERTION
+///
+/// The mechanism under test is *"the method accumulator survives between doorbells"*, so the
+/// acceptance set is both halves: with the accumulator carried the copy runs and the
+/// semaphore moves; with it rebuilt per doorbell — `ring_once`, the behaviour that shipped —
+/// the **same bytes on the same ring** must decode to nothing. Its sibling below is that
+/// negative, and it is what makes this test mean anything at all.
+///
+/// `[measured 2026-08-09, boot s21_dbf853a_cup2]` the negative is not hypothetical: it is
+/// what the bench did. `subchannel_speaks`' unbound arm requires the class to be bound
+/// somewhere in the state (`kayfabe-arch/src/lib.rs:1234`), a fresh state has no binding
+/// anywhere, so `ce_launch` returned `None` for a `LAUNCH_DMA` that was sitting right there,
+/// correctly framed, in the guest's own bytes.
+#[test]
+fn the_second_doorbell_runs_on_the_class_the_first_one_bound() {
+    const LEN: u32 = 0x20; // `LINE_LENGTH_IN=0x20` — the length the bench measured.
+    const PAYLOAD: u32 = 7;
+    let plane = plane_with_tree();
+    // Push 1: RM-shaped, and its ONLY role here is that it carries the `SET_OBJECT`.
+    let first = memset_block(DST_VA, 0x40, 0x11, PB_GPU_VA + FINISH_PAYLOAD_OFFSET, 1);
+    // Push 2: UVM-shaped — operands, a launch, a semaphore, and NO `SET_OBJECT`.
+    let second = uvm_copy_block(
+        DST_VA + 0x1000,
+        LEN,
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        PAYLOAD,
+    );
+    let mut vmm = guest_ram(&first);
+
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+    let run1 = ring_once_with(&plane, &mut vmm, &mut cursor, &mut state)
+        .expect("the first push binds and runs");
+    assert_eq!(run1.launches, 1, "the binding push ran");
+    publish_second(&mut vmm, &second);
+
+    let run2 = ring_once_with(&plane, &mut vmm, &mut cursor, &mut state)
+        .expect("★★★★ the second push runs on the STILL-BOUND class");
+    assert_eq!(run2.launches, 1, "the `LAUNCH_DMA` in its bytes FIRED");
+    assert_eq!(
+        run2.bytes,
+        u64::from(LEN),
+        "★ and it moved the bytes `LINE_LENGTH_IN` named"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(DST_VA + 0x1000), LEN as usize),
+        vec![0xC3; LEN as usize],
+        "★ at the resolved physical of the second push's own destination"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        PAYLOAD.to_le_bytes(),
+        "★★★ and the finishPayload carries the SECOND push's payload, after its bytes"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + SEMA_OFFSET), 4),
+        0xDEAD_BEEFu32.to_le_bytes(),
+        "⊘ the host semaphore four bytes lower is still untouched"
+    );
+}
+
+/// ★★★★ **THE NEGATIVE HALF: rebuild the accumulator per doorbell and the very same bytes
+/// decode to NOTHING.**
+///
+/// ⊘ Identical fixture, identical ring, identical pushbuffers — the *only* difference is
+/// `ring_once` (a fresh `MethodState` each call) in place of `ring_once_with`. If this ever
+/// goes green, the positive above proves nothing: it would mean the second push runs for
+/// some reason other than the binding it is supposed to depend on.
+///
+/// The refusal is asserted **by its fields**, because `SubmissionHasNoLaunch` with
+/// `opaque == methods` and `set_object: None` is the exact line the bench printed.
+#[test]
+fn with_a_per_doorbell_accumulator_the_same_second_push_decodes_to_nothing() {
+    let plane = plane_with_tree();
+    let first = memset_block(DST_VA, 0x40, 0x11, PB_GPU_VA + FINISH_PAYLOAD_OFFSET, 1);
+    let second = uvm_copy_block(DST_VA + 0x1000, 0x20, PB_GPU_VA + FINISH_PAYLOAD_OFFSET, 7);
+    let mut vmm = guest_ram(&first);
+
+    let mut cursor = GpCursor::default();
+    ring_once(&plane, &mut vmm, &mut cursor).expect("the first push still runs — it binds");
+    publish_second(&mut vmm, &second);
+    let before = vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4);
+
+    let err = ring_once(&plane, &mut vmm, &mut cursor)
+        .expect_err("★ the amnesia is the whole defect: no binding, no launch");
+    let FwdFault::SubmissionHasNoLaunch {
+        methods,
+        opaque,
+        set_object,
+        index,
+        ..
+    } = err.fault
+    else {
+        panic!("the wall the bench hit, reproduced by name: {err:?}");
+    };
+    assert_eq!(
+        index, 1,
+        "it is the SECOND ring entry, as the bench reported"
+    );
+    assert!(methods > 0, "the bytes were read and framed — {methods}");
+    assert_eq!(
+        opaque, methods,
+        "★★★★ and the codec recognized NOT ONE of them, with a `LAUNCH_DMA` sitting in \
+         them — `s21_dbf853a_cup2` printed `methods: 7, opaque: 7`"
+    );
+    assert_eq!(
+        set_object, None,
+        "because this push declares no class of its own"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        before,
+        "⊘ and nothing was signalled for the work that did not run"
     );
 }

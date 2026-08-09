@@ -2483,6 +2483,16 @@ struct CeShellState {
     /// Per `(proc, chan)` GPFIFO read cursors.
     cursors:
         std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::GpCursor>>,
+    /// ★★★★ Per `(proc, chan)` **method accumulators** — the engine state the channel's own
+    /// pushbuffer built up, kept between doorbells because that is where hardware keeps it.
+    ///
+    /// ⊘ Keyed identically to [`CeShellState::cursors`] and committed on the same arm, so a
+    /// channel's read position and its latched engine state can never be attributed to
+    /// different channels or advanced independently. `[measured 2026-08-09, boot
+    /// s21_dbf853a_cup2]` a per-doorbell accumulator made every UVM push after the first
+    /// decode to `Opaque` — UVM binds its CE class once and fires forever after.
+    states:
+        std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>,
 }
 
 impl core::fmt::Debug for SharedDoorbell {
@@ -2638,6 +2648,14 @@ impl SharedDoorbell {
             .unwrap_or_else(|e| e.into_inner())
             .get(&key)
             .unwrap_or(&kayfabe_rt::ceutils::GpCursor::default());
+        // ★ The channel's accumulator, or a fresh one on its first-ever doorbell.
+        let state = *self
+            .ce
+            .states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&key)
+            .unwrap_or(&kayfabe_rt::ceutils::MethodState::new());
 
         let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
         let Some(vmm) = held.as_mut() else {
@@ -2655,7 +2673,7 @@ impl SharedDoorbell {
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
         let outcome = plane.ce_session(facts.client, vaspace, demand, |ce| {
             self.device.with_pushbuffer(|pb| {
-                kayfabe_rt::ceutils::run_submission(ce, pb, vmm, chan, cursor)
+                kayfabe_rt::ceutils::run_submission(ce, pb, vmm, chan, cursor, state)
             })
         });
         drop(held);
@@ -2681,6 +2699,13 @@ impl SharedDoorbell {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(key, run.cursor);
+                // ⊘ Committed on the SAME arm as the cursor and nowhere else: a refused
+                // submission must leave the channel exactly where it was.
+                self.ce
+                    .states
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(key, run.state);
                 kayfabe_device::DoorbellReport::ServedLocally {
                     token,
                     proc: facts.proc.0,

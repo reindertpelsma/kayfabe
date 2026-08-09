@@ -33,9 +33,10 @@
 //!    taken the owner's second way: **the driver runs where the `Vmm` is and the plane
 //!    hands out its store**. `cpu_ce`'s signature is unchanged, so its `raise_irq` works
 //!    through the real `Vmm` and needs no new port.
-//! 4. *"The decode needs a per-channel `MethodState`"* — see [`run_submission`]'s own note:
-//!    the accumulator is **submission-local**, and that is a stated behavioural claim about
-//!    RM's CeUtils pushbuffer rather than an assumption.
+//! 4. *"The decode needs a per-channel `MethodState`"* — and it is **per-channel**, held by
+//!    the adapter beside the ring cursor and handed back in [`CeUtilsRun::state`]. ⚠ It was
+//!    submission-local until `s21_dbf853a_cup2`, on a claim that was true of RM's CeUtils
+//!    pushbuffer and false of UVM's; see [`run_submission`] for the measurement.
 //!
 //! # ⊘ What this must never do
 //!
@@ -56,6 +57,12 @@ use kayfabe_fwd::{
 };
 use kayfabe_isolate::CeExecutor;
 use kayfabe_vmm::{Vmm, VmmError};
+
+/// ★ Re-exported so the adapter that must **keep** a channel's accumulator between
+/// doorbells names the same type this driver decodes against, without taking a dependency
+/// on Axis-B to hold one value. ⊘ One description of the engine's method state, two
+/// holders — the shape `CeUtilsChannel` already uses for the channel's declared facts.
+pub use kayfabe_arch::MethodState;
 
 /// ★★ **How many GPFIFO entries one doorbell may consume.**
 ///
@@ -160,6 +167,15 @@ pub struct CeUtilsRun {
     /// **silently dropped copy** (`#13`'s `CE-DROP` by another route). Here a refusal
     /// carries no cursor at all, so there is nothing for a caller to commit by accident.
     pub cursor: GpCursor,
+    /// ★★★★ **The channel's method accumulator AFTER this submission** — the engine state
+    /// the guest's own `SET_OBJECT` and operand writes left behind.
+    ///
+    /// ⊘ Handed back in the success value for exactly [`CeUtilsRun::cursor`]'s reason, and
+    /// it is the same reason twice: a refusal must leave the channel where it was, so the
+    /// guest's retry re-latches from the same point rather than running against half of a
+    /// submission we did not finish. See [`run_submission`] for the boot in which rebuilding
+    /// this per doorbell made every UVM push decode to nothing.
+    pub state: MethodState,
 }
 
 impl CeUtilsRun {
@@ -409,18 +425,34 @@ fn read_va(
 /// (`[measured 2026-08-08, boot run_p35_84d857d]`: ring, pushbuffer and finishPayload all
 /// resolved to guest RAM).
 ///
-/// # ⊘ The `MethodState` is SUBMISSION-LOCAL, and that is a claim, not a convenience
+/// # ★★★★ The `MethodState` is PER-CHANNEL, and it was submission-local until it walled
 ///
-/// The engine's method accumulator is per-**channel** in hardware, and this driver starts a
-/// fresh one per doorbell. That is equivalent **for this channel** and the reason is in
-/// RM's own source: `[src] ogkm-580: channel_utils.c:806-990` builds each CeUtils block
-/// whole — `channelPushMemoryProperties` (both operands and both phys-mode targets), the
-/// remap registers, `LINE_LENGTH_IN`, the semaphore registers and `LAUNCH_DMA` — into one
-/// method block, every time. No CeUtils operand is ever inherited from a previous
-/// submission. ⚠ It is therefore **not** a general answer: a channel whose driver latches
-/// once and fires many times would need the per-channel state, and the codec's own
-/// un-latched refusals (`§14.14`, five of them for a fill alone) are what would make that
-/// visible as a refusal rather than as a defaulted operand.
+/// The engine's method accumulator is per-**channel** in hardware. This driver used to
+/// start a fresh one per doorbell, on a reason that was true and insufficient: `[src]
+/// ogkm-580: channel_utils.c:806-990` builds each **CeUtils** block whole —
+/// `channelPushMemoryProperties`, the remap registers, `LINE_LENGTH_IN`, the semaphore
+/// registers and `LAUNCH_DMA` — into one method block, every time, inheriting no operand.
+/// So a per-doorbell reset is equivalent *for that one driver*, and the old comment here
+/// named the exception itself: *"a channel whose driver latches once and fires many times
+/// would need the per-channel state."*
+///
+/// ⊘ **UVM is that driver, and it is the one at the wall.** `[measured 2026-08-09, boot
+/// s21_dbf853a_cup2]` the refused submission framed cleanly into seven methods —
+/// `sub4/m0x400/n4` (the operand quad), `sub4/m0x418=0x20` (`LINE_LENGTH_IN`, 32 bytes),
+/// `sub4/m0x300` (`LAUNCH_DMA`), `sub4/m0x240/n3` (the semaphore triple), `sub4/m0x300`
+/// again — and carried **no `SET_OBJECT`**. UVM binds the CE class once, in
+/// `channel_init`'s first push, and fires on `NVA06F_SUBCHANNEL_COPY_ENGINE = 4` forever
+/// after. `MethodState::subchannel_speaks`' unbound arm requires the class to be bound
+/// **somewhere in this state** (`kayfabe-arch/src/lib.rs:1234`), so a state rebuilt per
+/// doorbell answers `false` for every push after the first: `ce_launch` returned `None`,
+/// all seven methods decoded `Opaque`, and the submission reported no launch at all.
+///
+/// ⇒ the state is passed **in** and handed back in [`CeUtilsRun::state`], on exactly the
+/// same commit-on-success discipline as [`CeUtilsRun::cursor`]: a refused submission
+/// mutates nothing, so the guest's own retry re-reads and re-latches from where it was.
+/// ⊘ This is not a relaxation — nothing is inferred that the guest did not write. It is
+/// the *removal* of an amnesia our own decoder invented; the codec's un-latched refusals
+/// (`§14.14`) still refuse every operand the guest genuinely never wrote.
 ///
 /// # Errors
 /// [`CeUtilsRefusal`], always by name. ⊘ No completion is written on any error path, and no
@@ -432,10 +464,12 @@ pub fn run_submission(
     vmm: &mut dyn Vmm,
     chan: CeUtilsChannel,
     cursor: GpCursor,
+    state: MethodState,
 ) -> Result<CeUtilsRun, CeUtilsRefusal> {
     let mut last: Option<(GpuVa, CeResolve)> = None;
     let mut run = CeUtilsRun {
         cursor,
+        state,
         ..CeUtilsRun::default()
     };
     let entries = if chan.ring_entries == 0 {
@@ -513,8 +547,10 @@ pub fn run_submission(
     run.methods = methods.len();
 
     // ---- 3. DECODE the run against the chip's own codec. -------------------------------
-    let mut state = kayfabe_arch::MethodState::new();
-    let decoded = pb.decode_run(&mut state, &methods);
+    // ⊘ Against the CHANNEL's accumulator, carried in and handed back — see this function's
+    // docs for the boot in which rebuilding it per doorbell made every UVM push decode to
+    // nothing.
+    let decoded = pb.decode_run(&mut run.state, &methods);
 
     // ★★★★ THE CENSUS OF WHAT DECODED, taken BEFORE the execute loop consumes `decoded`.
     //

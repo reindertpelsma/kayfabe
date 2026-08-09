@@ -513,7 +513,7 @@ fn a_read_only_leaf_refuses_the_write_but_serves_the_read() {
 /// report is keyed on.
 #[test]
 fn a_chip_row_with_no_declared_root_has_no_address_model() {
-    let mut rowless: kayfabe_device::ChipProfile = GA106.clone();
+    let mut rowless: kayfabe_device::ChipProfile = GA106;
     rowless.bar1_pde_base = 0;
     let rowless: &'static kayfabe_device::ChipProfile = Box::leak(Box::new(rowless));
 
