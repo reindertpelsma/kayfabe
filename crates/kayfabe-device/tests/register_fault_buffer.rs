@@ -28,8 +28,10 @@ use kayfabe_abi::faultbuffer::{
     FAULT_BUFFER_MAX_PAGES, FAULT_BUFFER_PAGE_SIZE,
     NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
     NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
-    REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE, REGISTER_FAULT_BUFFER_PARAMS_SIZE,
-    SHADOW_FAULT_BUFFER_MAX_PAGES, SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+    NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER,
+    REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE, REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE,
+    REGISTER_FAULT_BUFFER_PARAMS_SIZE, SHADOW_FAULT_BUFFER_MAX_PAGES,
+    SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
 };
 use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_device::faultbuffer::{FaultBufferLog, FaultBufferNote};
@@ -373,6 +375,89 @@ fn the_shadow_unregister_is_a9e_and_neither_unregister_is_served() {
     assert_eq!(
         WantedTable::from_cmd(0x2080_0a9b),
         Some(WantedTable::RegisterFaultBuffer)
+    );
+}
+
+// =====================================================================================
+// 2c. ★★★ `0x20800a1d` — the access-counter buffer, reachable only once 0xB83110 is served
+// =====================================================================================
+
+fn accesscntr_params(index: u32, size: u32, pages: &[u64]) -> Vec<u8> {
+    let mut b = vec![0u8; REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE];
+    b[0..4].copy_from_slice(&index.to_le_bytes());
+    b[4..8].copy_from_slice(&size.to_le_bytes());
+    for (i, p) in pages.iter().enumerate() {
+        let o = 8 + i * 8;
+        b[o..o + 8].copy_from_slice(&p.to_le_bytes());
+    }
+    b
+}
+
+/// Identity echo over the 520-byte `[IN]` window.
+#[test]
+fn the_access_cntr_reply_is_the_guests_own_params_byte_for_byte() {
+    let mut p = policy();
+    let sent = accesscntr_params(0, 256 * 32, &[0x5_0000_0000, 0x5_0000_1000]);
+    let cmd = control(
+        NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER,
+        &sent,
+    );
+    let reply = p.respond(&cmd).expect("the control is served");
+    assert_eq!(reply.rpc_result, 0);
+    assert_eq!(status_of(&reply.body), 0);
+    assert_eq!(
+        &reply.body[PARAMS_AT..PARAMS_AT + REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE],
+        &sent[..],
+        "★ pure [IN]: any difference here is invention"
+    );
+}
+
+/// ★★★ ZERO is refused — and it is the SAME zero, one layer down.
+///
+/// A zero-size access-counter buffer is exactly what this port produced before it served
+/// BAR0 `0xB83110`, and the physical receiver refuses it by name
+/// (`numBufferPages == 0`, `ogkm-580: access_cntr_buffer_ctrl.c:231-253`). ⊘ This port must
+/// not answer `NV_OK` about a buffer that cannot exist just because the guest asked politely.
+#[test]
+fn a_zero_or_oversize_access_cntr_registration_is_refused() {
+    let mut p = policy();
+    let answer = |p: &mut InitTablePolicy, size: u32| {
+        p.respond(&control(
+            NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER,
+            &accesscntr_params(0, size, &[0x1000]),
+        ))
+        .expect("answered")
+        .rpc_result
+    };
+    assert_eq!(
+        answer(&mut p, 0),
+        NV_ERR_NOT_SUPPORTED,
+        "zero pages is illegal"
+    );
+    assert_eq!(
+        answer(&mut p, 256 * 32),
+        0,
+        "two pages, the advertised size"
+    );
+    assert_eq!(
+        answer(&mut p, 64 * 4096),
+        0,
+        "64 pages is exactly the bound"
+    );
+    assert_eq!(
+        answer(&mut p, 64 * 4096 + 1),
+        NV_ERR_NOT_SUPPORTED,
+        "65 pages is one too many"
+    );
+}
+
+/// ⊘ Its UNREGISTER partner `0x20800a1e` is not served either — the third pair, same ruling.
+#[test]
+fn the_access_cntr_unregister_is_a1e_and_is_not_served() {
+    assert!(WantedTable::from_cmd(0x2080_0a1e).is_none());
+    assert_eq!(
+        WantedTable::from_cmd(0x2080_0a1d),
+        Some(WantedTable::RegisterAccessCntrBuffer)
     );
 }
 

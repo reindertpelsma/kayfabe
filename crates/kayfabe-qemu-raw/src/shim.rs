@@ -208,7 +208,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// distinct count rather than the sample's clamped length — an ABI-22 reader would have
 /// indexed `unserviced[0..unserviced_len]` out of bounds the first time a boot exceeded the
 /// cap, which is the second reason this could not be a silent widening.
-pub const ABI_VERSION: u32 = 25;
+pub const ABI_VERSION: u32 = 26;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1571,6 +1571,26 @@ pub struct KayfabeRegAudit {
     pub shadow_fault_buffer_type: u64,
     /// Shadow registrations whose params did **not** decode.
     pub shadow_fault_buffers_malformed: u64,
+    /// ★★★ **ACCESS-COUNTER notification buffers the guest registered** (`0x20800a1d`).
+    ///
+    /// ⊘ A third count, for the third buffer, and this one is the sharpest: it is the only
+    /// buffer whose **size** this port also invents (`ga10x`'s
+    /// `ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED`, an admitted fiction). The printer
+    /// says both halves — we told the guest how big it is, and we never put anything in it.
+    ///
+    /// ⚠ **`0` here after a `cuInit` is a FINDING, not a quiet success.** The control is only
+    /// reachable once BAR0 `0xB83110` stops reading zero; before §14.41 it could never arrive,
+    /// so its absence from every previous ledger was evidence of nothing.
+    pub access_cntr_buffers_registered: u64,
+    /// `bufferSize` of the first access-counter registration, in bytes, or `0`.
+    ///
+    /// ★ `8192` is what this port's own advertised 256 entries × 32 bytes implies. Anything
+    /// else means the register and the registration disagree.
+    pub access_cntr_buffer_size: u64,
+    /// Pages the guest filled for it — `2` for the advertised size.
+    pub access_cntr_buffer_pages: u64,
+    /// Access-counter registrations whose params did **not** decode.
+    pub access_cntr_buffers_malformed: u64,
 }
 
 impl Default for KayfabeRegAudit {
@@ -1662,6 +1682,10 @@ impl Default for KayfabeRegAudit {
             shadow_fault_buffer_pages: Default::default(),
             shadow_fault_buffer_type: Default::default(),
             shadow_fault_buffers_malformed: Default::default(),
+            access_cntr_buffers_registered: Default::default(),
+            access_cntr_buffer_size: Default::default(),
+            access_cntr_buffer_pages: Default::default(),
+            access_cntr_buffers_malformed: Default::default(),
         }
     }
 }
@@ -2798,6 +2822,18 @@ impl Regs {
             .iter()
             .filter(|n| matches!(n, Fbn::ShadowMalformed { .. }))
             .count() as u64;
+        let access_cntr_buffers_registered = self.plane.access_cntr_buffers_registered();
+        let (access_cntr_buffer_size, access_cntr_buffer_pages) = fault_buffer_sample
+            .iter()
+            .find_map(|n| match n {
+                Fbn::AccessCntrRegistered(r) => Some((u64::from(r.size), r.pages.len() as u64)),
+                _ => None,
+            })
+            .unwrap_or((0, 0));
+        let access_cntr_buffers_malformed = fault_buffer_sample
+            .iter()
+            .filter(|n| matches!(n, Fbn::AccessCntrMalformed { .. }))
+            .count() as u64;
         // ★★★ The control census — DESTRUCTURED with no `..` for [`Shim::audit`]'s reason:
         // a field added to `CensusSnapshot` and not wired here is a fact the C shell can
         // never read, and nothing goes red. `rustc` refuses the pattern instead.
@@ -2975,6 +3011,10 @@ impl Regs {
             shadow_fault_buffer_pages,
             shadow_fault_buffer_type,
             shadow_fault_buffers_malformed,
+            access_cntr_buffers_registered,
+            access_cntr_buffer_size,
+            access_cntr_buffer_pages,
+            access_cntr_buffers_malformed,
         }
     }
 }

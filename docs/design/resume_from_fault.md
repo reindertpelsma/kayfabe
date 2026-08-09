@@ -715,6 +715,19 @@ green today:
    - `ACCESS_COUNTER_NOTIFY_BUFFER_SIZE = 256` ⇒ keep it (it is load-bearing for `cuInit`) but
      **write it down as a deliberate lie with its reason and citation**, so it is never mistaken
      for a modelled feature (S2).
+     > ✅ **LANDED §14.41** — `kayfabe_device::ga10x::ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED`,
+     > and the bullet was more right than it knew. `[measured 2026-08-09, boot `sh1605` at
+     > `075395f`]` this port was serving **zero** (the offset was simply unclaimed), and zero is
+     > `memdescCreate(0)` → `NV_ERR_INVALID_ARGUMENT` → `UVM_REGISTER_GPU rmStatus 0x1f` →
+     > `cuInit` fails. ⊘ *"Load-bearing"* was not a guess.
+     > ★ And the honest alternative was checked before the lie was told: reporting
+     > `accessCntrBufferCount = 0` would make UVM skip the whole plane
+     > (`ogkm-580: kernel-open/nvidia-uvm/uvm_gpu.c:1476`), but that count is answered by the
+     > **guest's own kernel** from an NVOC HAL field hard-set to 1
+     > (`ogkm-580: kern_mem_sys_ctrl.c:879-891`, `g_uvm_nvoc.c:271-286`) and no RPC of ours is
+     > consulted. The fiction is **forced**, not chosen. Its `BootReg` name carries
+     > `[ADVERTISED FICTION: entries advertised, none ever written]` so a register dump meets
+     > the caveat and the number together.
 
 **2. Write the error notifier. `#111` is a hang generator without it.** S5(a)/(b): CPU-RM does not
 write it with CC off, and the in-tree consumer spins forever on a zero. This is the single

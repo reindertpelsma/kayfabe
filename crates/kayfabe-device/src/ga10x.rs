@@ -542,6 +542,81 @@ const GA106_PCIE_MAX_GEN: kayfabe_abi::businfo::PcieGen = kayfabe_abi::businfo::
 const XVE_LINK_CAPABILITIES_GA106: u32 =
     kayfabe_abi::businfo::PcieLinkCaps::fully_trained(GA106_PCIE_MAX_GEN).encode();
 
+/// `NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE` — BAR0 `0xB80000 + 0x3110`
+/// (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_vm.h:209`, `R--4R`).
+///
+/// ★★★ **The register `cuInit` dies on when it reads zero, and this port read zero.**
+/// `[measured 2026-08-09, boot `sh1605` at `075395f`]`: with both fault buffers registering,
+/// `UVM_REGISTER_GPU` moved from `0x56` to `0x1f` `NV_ERR_INVALID_ARGUMENT`, reported as
+/// `uvmInitializeAccessCntrBuffer(...) @ access_cntr_buffer.c:72`. ⊘ **No new control entered
+/// the unserviced ledger** — nothing was missing; this offset was simply unclaimed, and an
+/// unclaimed BAR0 read is zero.
+const ACCESS_COUNTER_NOTIFY_BUFFER_SIZE: u64 = 0x00b8_3110;
+
+/// `NVC365_NOTIFY_BUF_SIZE` — bytes per access-counter notification entry
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc365.h:35`).
+const ACCESS_COUNTER_NOTIFY_ENTRY_BYTES: u32 = 32;
+
+/// `RM_PAGE_SIZE` — the granularity `memdescCreate` allocates the notify buffer at, and the
+/// stride UVM walks it in (`entriesPerPage = RM_PAGE_SIZE / NVC365_NOTIFY_BUF_SIZE`,
+/// `ogkm-580: src/nvidia/src/kernel/gpu/uvm/arch/volta/uvm_gv100.c:148-150`).
+const ACCESS_COUNTER_RM_PAGE_SIZE: u32 = 4096;
+
+/// Entries that fit one `RM_PAGE_SIZE` page — `4096 / 32` = **128**.
+const ACCESS_COUNTER_ENTRIES_PER_PAGE: u32 =
+    ACCESS_COUNTER_RM_PAGE_SIZE / ACCESS_COUNTER_NOTIFY_ENTRY_BYTES;
+
+/// ★★★ **AN ADMITTED FICTION, and it is written here rather than implied.**
+///
+/// The value served at [`ACCESS_COUNTER_NOTIFY_BUFFER_SIZE`]: a **count of entries**, which
+/// the guest multiplies by [`ACCESS_COUNTER_NOTIFY_ENTRY_BYTES`] to get a byte size
+/// (`uvmGetAccessCounterBufferSize_TU102` =
+/// `GPU_VREG_RD32(...) * NV_ACCESS_COUNTER_NOTIFY_BUF_SIZE`,
+/// `ogkm-580: src/nvidia/src/kernel/gpu/uvm/arch/turing/uvm_tu102.c:265-274`) and hands to
+/// `memdescCreate` (`ogkm-580: .../arch/volta/uvm_gv100.c:293-301`). `memdescCreate` of size
+/// **0** is `NV_ERR_INVALID_ARGUMENT`, which `accesscntrConstruct_IMPL` re-returns at
+/// `ogkm-580: src/nvidia/src/kernel/gpu/uvm/access_cntr_buffer.c:72`.
+///
+/// # ⊘⊘ Why this port cannot answer "unsupported" instead, which WOULD have been honest
+///
+/// UVM gates its **entire** access-counter plane on one line —
+/// `parent_gpu->access_counters_supported = (gpu_info->accessCntrBufferCount != 0)`
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_gpu.c:1476`) — so reporting a count of zero would
+/// make the guest skip all of this, and that is the answer this project's posture wants.
+/// ★ **It is not reachable.** That count comes from `NV2080_CTRL_CMD_FB_GET_INFO_V2` index
+/// `0x39`, and that index is answered by **the guest's own kernel** from
+/// `pUvm->accessCounterBufferCount` (`ogkm-580: kern_mem_sys_ctrl.c:879-891`), which is an
+/// **NVOC HAL field hard-set to 1** on this generation
+/// (`ogkm-580: src/nvidia/generated/g_uvm_nvoc.c:271-286`). No RPC of ours is consulted. ⇒ The
+/// guest will allocate an access-counter buffer whatever we say, and the only lever this port
+/// has is this register. The fiction is **forced**, not chosen — which is exactly why it is
+/// named as one instead of being left to look like a modelled feature.
+///
+/// # ⚠ Why 256, and the warrant is NOT a derivation
+///
+/// ⊘ There is nothing to derive it from: the number describes a buffer that does not exist,
+/// and no reading of `0xB83110` off a real GA106 exists anywhere in this tree. Its **entire**
+/// warrant is that the C artifact served exactly this and reached `cuCtxCreate → 2048² matmul`
+/// at `bad=0 maxerr=0` on a stock guest (`C: src/qemu/nvkvm_gpu_emul.c:1575-1580`) — a real
+/// driver accepted it end to end. ★ Saying that plainly is the point: dressing a
+/// measured-sufficient constant as a derivation is how `0x20802a08`'s empty row became a
+/// buffer overrun.
+///
+/// ★ It is nevertheless *written* as `2 * ACCESS_COUNTER_ENTRIES_PER_PAGE` rather than as the
+/// literal `256`, and the difference is small but real: the **page-multiple** is a constraint
+/// UVM's own walk imposes and the expression now carries it, so an edit cannot leave a partial
+/// final page by accident. ⊘ The `2` is the arbitrary half and stays arbitrary — this is a
+/// constraint made explicit, **not** a derivation, and calling it one would be the mistake this
+/// paragraph exists to prevent.
+///
+/// ⊘⊘ **And nothing is ever written into it.** This port raises no access-counter
+/// notification and never advances that buffer's `PUT`. `resume_from_fault.md` §S2 already
+/// ruled the consequence acceptable — *"the migration heuristics simply never fire"* — and
+/// §7 step 1's third bullet asked for exactly this: keep the value, and **write it down as a
+/// deliberate lie with its reason and citation, so it is never mistaken for a modelled
+/// feature.** This doc comment is that bullet being closed.
+const ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED: u32 = 2 * ACCESS_COUNTER_ENTRIES_PER_PAGE;
+
 /// The registers that are constants of this silicon.
 static GA106_BOOT_REGS: &[BootReg] = &[
     BootReg {
@@ -593,6 +668,15 @@ static GA106_BOOT_REGS: &[BootReg] = &[
         off: XVE_LINK_CAPABILITIES,
         value: XVE_LINK_CAPABILITIES_GA106,
         name: "NV_XVE_LINK_CAPABILITIES",
+    },
+    // ★★★ The one row in this table whose value is NOT a fact about silicon. Its `name`
+    // carries `[ADVERTISED FICTION]` so that a register dump, a refusal message or a grep
+    // meets the caveat at the same moment it meets the number — the caveat living only in a
+    // rustdoc is how a convenient lie becomes a remembered feature.
+    BootReg {
+        off: ACCESS_COUNTER_NOTIFY_BUFFER_SIZE,
+        value: ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED,
+        name: "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE [ADVERTISED FICTION:                entries advertised, none ever written]",
     },
 ];
 
@@ -1650,5 +1734,103 @@ impl kayfabe_arch::fault::MmuFaultCodes for Ga10xFaultCodes {
             // so it reports the strong one rather than choosing at random.
             A::Atomic => 0x2,
         }
+    }
+}
+
+#[cfg(test)]
+mod access_counter_tests {
+    use super::*;
+
+    /// `RM_PAGE_SIZE`, the granularity `memdescCreate` allocates the notify buffer at.
+    const RM_PAGE_SIZE: u32 = 4096;
+
+    /// ★★★ The arithmetic the GUEST performs on the value we advertise — the only thing about
+    /// this fiction that is checkable at all.
+    ///
+    /// `uvmGetAccessCounterBufferSize_TU102` multiplies our entry count by
+    /// `NVC365_NOTIFY_BUF_SIZE` (`ogkm-580: uvm_tu102.c:265-274`), and UVM then walks the
+    /// buffer **page by page** with `entriesPerPage = RM_PAGE_SIZE / NVC365_NOTIFY_BUF_SIZE`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/uvm/arch/volta/uvm_gv100.c:148-150`). A count
+    /// that is not a whole number of pages leaves a partial final page in that walk.
+    ///
+    /// ⊘ This does **not** validate 256 — nothing can, because no reading of `0xB83110` off a
+    /// real GA106 exists. It pins the *constraint*, so that a future edit of the number is
+    /// forced to keep the guest's own arithmetic whole. The number's warrant is stated where
+    /// it is declared and is exactly one thing: a real driver accepted it end to end.
+    #[test]
+    fn the_advertised_entry_count_is_a_whole_number_of_pages() {
+        assert_eq!(
+            ACCESS_COUNTER_NOTIFY_ENTRY_BYTES, 32,
+            "NVC365_NOTIFY_BUF_SIZE"
+        );
+        assert_eq!(
+            RM_PAGE_SIZE % ACCESS_COUNTER_NOTIFY_ENTRY_BYTES,
+            0,
+            "UVM's own `pageSizeModBufSize` — an entry may not straddle a page"
+        );
+        let entries_per_page = RM_PAGE_SIZE / ACCESS_COUNTER_NOTIFY_ENTRY_BYTES;
+        assert_eq!(entries_per_page, 128);
+        assert_eq!(
+            ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED % entries_per_page,
+            0,
+            "★ {} entries is not a whole number of {entries_per_page}-entry pages",
+            ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED,
+        );
+    }
+
+    /// ⊘⊘ **The value must not be zero, and this is the assertion that says why.**
+    ///
+    /// Zero is what this port served before §14.41 — not by choice but because the offset was
+    /// unclaimed, and an unclaimed BAR0 read is zero. `[measured 2026-08-09, boot `sh1605` at
+    /// `075395f`]` that produced `memdescCreate(0)` → `NV_ERR_INVALID_ARGUMENT` →
+    /// `accesscntrConstruct_IMPL` → `UVM_REGISTER_GPU rmStatus 0x1f` → `cuInit` failed.
+    #[test]
+    fn zero_entries_is_the_value_that_killed_cuinit() {
+        assert_ne!(
+            ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED, 0,
+            "memdescCreate(0) is NV_ERR_INVALID_ARGUMENT, and that is a measured wall"
+        );
+    }
+
+    /// ★★ The row is in the table, at the offset the guest reads, and its NAME carries the
+    /// caveat — so a register dump or a refusal message meets *"fiction"* at the same moment
+    /// it meets the number.
+    ///
+    /// ⊘ Quantified over the real table rather than restating the constant: a row deleted
+    /// from `GA106_BOOT_REGS` is exactly the regression that would silently reinstate the
+    /// zero, and asserting the constant alone could not see it.
+    #[test]
+    fn the_row_is_served_and_its_name_admits_what_it_is() {
+        let row = GA106_BOOT_REGS
+            .iter()
+            .find(|r| r.off == ACCESS_COUNTER_NOTIFY_BUFFER_SIZE)
+            .expect("★ the access-counter row left GA106_BOOT_REGS — cuInit dies without it");
+        assert_eq!(row.value, ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED);
+        assert!(
+            row.name.contains("ADVERTISED FICTION"),
+            "★ the caveat left the name: {}",
+            row.name
+        );
+        assert!(
+            row.name.contains("none ever written"),
+            "★ and the name must say WHAT is fictional — that no entry is ever written — \
+             not merely that something is: {}",
+            row.name
+        );
+    }
+
+    /// ⊘ One row per offset. Two rows claiming `0xB83110` would make which value the guest
+    /// sees an accident of table order.
+    #[test]
+    fn no_offset_is_claimed_twice_in_the_boot_table() {
+        let mut offs: Vec<u64> = GA106_BOOT_REGS.iter().map(|r| r.off).collect();
+        offs.sort_unstable();
+        let before = offs.len();
+        offs.dedup();
+        assert_eq!(
+            before,
+            offs.len(),
+            "a boot-register offset is claimed twice"
+        );
     }
 }

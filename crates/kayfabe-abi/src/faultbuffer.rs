@@ -446,6 +446,137 @@ pub fn decode_register_client_shadow_fault_buffer(
     })
 }
 
+// =====================================================================================
+// ★★★ `0x20800a1d` — the ACCESS COUNTER notification buffer
+// =====================================================================================
+
+/// `NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:160`).
+///
+/// ★ The third *register-a-buffer* control on the `UVM_REGISTER_GPU` path, and the one that
+/// only becomes reachable once `0xB83110` stops reading zero: `_uvmSetupAccessCntrBuffer`
+/// sends it **after** `memdescCreate` has succeeded
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/uvm/uvm.c:39-81`), so a port serving a zero-size
+/// access-counter buffer never sees it at all.
+///
+/// ⚠ `[predicted 2026-08-09 from `ogkm-580`, NOT yet measured]` at the time this landed. It
+/// is served in the same commit as the register precisely so that **one** boot adjudicates
+/// both — and if the guest never sends it, the control census will say so by its absence
+/// rather than this comment being quietly right.
+///
+/// # The honesty question, third time — and the answer is the SHADOW one, not the replayable
+///
+/// Pure `[IN]` (`accessCounterIndex`, `bufferSize`, `bufferPteArray[64]`), documented status
+/// set `{NV_OK}`, and `_uvmSetupAccessCntrBuffer` re-reads nothing after the call. So the
+/// identity echo is again the byte-accurate reply and nothing is fabricated.
+///
+/// ⊘ But as with `0x20800a9d`, the buffer is one **we** would have to fill: access-counter
+/// notifications are written by the GPU into this sysmem buffer and UVM polls `PUT`. This
+/// port writes no entry and raises no notification, so the migration heuristics never fire —
+/// which `docs/design/resume_from_fault.md` §S2 already ruled acceptable, in the same
+/// paragraph that made the buffer-size value a deliberate lie.
+/// [`ACCESS_COUNTER_DELIVERY_UNBUILT`] is that stated rather than implied.
+pub const NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER: u32 = 0x2080_0a1d;
+
+/// `NV2080_CTRL_INTERNAL_UVM_ACCESS_CNTR_BUFFER_MAX_PAGES` (`ogkm-580: ctrl2080internal.h:162`).
+///
+/// ★ **64, not 256 and not 3000** — a third buffer with a third bound. CPU-RM refuses
+/// `NV_ERR_BUFFER_TOO_SMALL` above it before sending (`ogkm-580: uvm.c:63-66`), and the
+/// physical receiver refuses `NV_ERR_INVALID_ARGUMENT` for `> 64` **or `== 0`**
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/uvm/access_cntr_buffer_ctrl.c:231-253`).
+pub const ACCESS_CNTR_BUFFER_MAX_PAGES: usize = 64;
+
+/// Offset of `bufferPteArray` — two `NvU32`s, then an 8-aligned `NvU64[]`.
+const ACCESS_CNTR_PTE_ARRAY_OFF: usize = 8;
+
+/// `sizeof(NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS)` = 520.
+pub const REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE: usize =
+    ACCESS_CNTR_PTE_ARRAY_OFF + ACCESS_CNTR_BUFFER_MAX_PAGES * 8;
+
+/// The C typedef, for a refusal that names what it was reading.
+pub const REGISTER_ACCESS_CNTR_BUFFER_C_NAME: &str =
+    "NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS";
+
+/// ★★★ **The half this port did NOT build for the access-counter buffer.**
+///
+/// ⊘ A third distinct sentence, for a third distinct gap. It is the only one of the three
+/// whose *size* this port also invents — `kayfabe_device::ga10x`'s
+/// `ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED`, an admitted fiction — so the report
+/// says both halves: we told the guest how big the buffer is, and we will never put anything
+/// in it.
+pub const ACCESS_COUNTER_DELIVERY_UNBUILT: &str = "access-counter NOTIFICATION is UNBUILT: \
+     this port advertised the buffer's size as a deliberate fiction (BAR0 0xB83110, which \
+     read zero and killed cuInit) and writes no entry into it and raises no notification, so \
+     UVM's migration heuristics never fire (resume_from_fault.md S2 ruled that acceptable)";
+
+/// Where the guest put its access-counter notification buffer, as it told us.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccessCntrBufferRegistration {
+    /// `accessCounterIndex`. ⊘ `0` is the only value this generation can send —
+    /// `uvmGetRegOffsetAccessCntrBufferSize_TU102` asserts it
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/uvm/arch/turing/uvm_tu102.c:107-118`) — so
+    /// anything else is a finding, kept raw.
+    pub index: u32,
+    /// `bufferSize`, in bytes. ★ For this port's advertised 256 entries this is
+    /// `256 * 32 = 8192`, i.e. two pages.
+    pub size: u32,
+    /// The guest-physical page frames, only as many as the guest filled.
+    pub pages: Vec<u64>,
+}
+
+impl AccessCntrBufferRegistration {
+    /// `NV_ROUNDUP(bufferSize, RM_PAGE_SIZE) / RM_PAGE_SIZE` — CPU-RM's own arithmetic
+    /// (`ogkm-580: uvm.c:57-61`). ⊘ One term here, unlike the shadow buffer's two.
+    #[must_use]
+    pub fn pages_for(size: u32) -> usize {
+        let n = u64::from(size).div_ceil(FAULT_BUFFER_PAGE_SIZE);
+        usize::try_from(n)
+            .unwrap_or(ACCESS_CNTR_BUFFER_MAX_PAGES)
+            .min(ACCESS_CNTR_BUFFER_MAX_PAGES)
+    }
+
+    /// Whether the geometry is one the physical receiver itself refuses.
+    ///
+    /// ★★ **Two conditions, not one, and the second is the difference from the other two
+    /// buffers**: `access_cntr_buffer_ctrl.c:231-253` refuses `numBufferPages > 64`
+    /// **or `numBufferPages == 0`**. A zero-size access-counter registration is illegal at
+    /// the receiver — which is the same zero that killed `cuInit` one layer up, arriving by
+    /// a different route.
+    #[must_use]
+    pub fn is_illegal_geometry(&self) -> bool {
+        let n = u64::from(self.size).div_ceil(FAULT_BUFFER_PAGE_SIZE);
+        n == 0 || n > ACCESS_CNTR_BUFFER_MAX_PAGES as u64
+    }
+}
+
+/// Decode `NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS`.
+///
+/// # Errors
+///
+/// [`AbiError::Truncated`] if the params are shorter than the declared struct.
+pub fn decode_register_access_cntr_buffer(
+    bytes: &[u8],
+) -> Result<AccessCntrBufferRegistration, AbiError> {
+    if bytes.len() < REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE {
+        return Err(AbiError::Truncated {
+            c_name: REGISTER_ACCESS_CNTR_BUFFER_C_NAME,
+            need: REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE,
+            got: bytes.len(),
+        });
+    }
+    let size = u32_at(bytes, 4)?;
+    let n = AccessCntrBufferRegistration::pages_for(size);
+    let mut pages = Vec::with_capacity(n);
+    for i in 0..n {
+        pages.push(u64_at(bytes, ACCESS_CNTR_PTE_ARRAY_OFF + i * 8)?);
+    }
+    Ok(AccessCntrBufferRegistration {
+        index: u32_at(bytes, 0)?,
+        size,
+        pages,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -664,6 +795,93 @@ mod tests {
         // ★ And the replayable one must NOT claim the RC substitute: UVM polls a register
         // there and an RC is not what it is waiting for.
         assert!(!DELIVERY_UNBUILT.contains("simulated_gpu_fault.md"));
+    }
+
+    // ═════════════════ 0x20800a1d — the access counter buffer ═════════════════
+
+    fn accesscntr_params(index: u32, size: u32, pages: &[u64]) -> Vec<u8> {
+        let mut b = vec![0u8; REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE];
+        b[0..4].copy_from_slice(&index.to_le_bytes());
+        b[4..8].copy_from_slice(&size.to_le_bytes());
+        for (i, p) in pages.iter().enumerate() {
+            let o = ACCESS_CNTR_PTE_ARRAY_OFF + i * 8;
+            b[o..o + 8].copy_from_slice(&p.to_le_bytes());
+        }
+        b
+    }
+
+    /// The layout, and the THIRD distinct page bound in this module.
+    #[test]
+    fn the_access_cntr_layout_and_its_own_bound() {
+        assert_eq!(
+            ACCESS_CNTR_PTE_ARRAY_OFF, 8,
+            "two NvU32 then an 8-aligned NvU64[]"
+        );
+        assert_eq!(ACCESS_CNTR_BUFFER_MAX_PAGES, 64);
+        assert_eq!(REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE, 520);
+        // ⊘ Three buffers, three bounds. Sharing one constant would be the tidier code and
+        // a silent way to accept a message CPU-RM would have refused.
+        assert_ne!(ACCESS_CNTR_BUFFER_MAX_PAGES, FAULT_BUFFER_MAX_PAGES);
+        assert_ne!(ACCESS_CNTR_BUFFER_MAX_PAGES, SHADOW_FAULT_BUFFER_MAX_PAGES);
+    }
+
+    /// ★★ The registration this port's own advertised entry count implies: 256 entries of
+    /// 32 bytes = 8192 = exactly two pages.
+    #[test]
+    fn the_registration_our_advertised_size_implies() {
+        let pages = [0x5_0000_0000u64, 0x5_0000_1000];
+        let p = accesscntr_params(0, 256 * 32, &pages);
+        let got = decode_register_access_cntr_buffer(&p).expect("well-formed");
+        assert_eq!(got.index, 0, "the only index this generation can send");
+        assert_eq!(got.size, 8192);
+        assert_eq!(got.pages, pages, "two pages, no forged tail");
+        assert!(!got.is_illegal_geometry());
+    }
+
+    /// ★★★ ZERO is illegal at the receiver, and that is a SECOND condition the other two
+    /// buffers do not have — the same zero that killed `cuInit`, arriving by another route.
+    #[test]
+    fn a_zero_or_oversize_access_cntr_geometry_is_illegal() {
+        let mk = |size| {
+            decode_register_access_cntr_buffer(&accesscntr_params(0, size, &[0x1000]))
+                .expect("well-formed")
+        };
+        assert!(
+            mk(0).is_illegal_geometry(),
+            "numBufferPages == 0 is refused"
+        );
+        assert!(!mk(1).is_illegal_geometry(), "one byte is one page");
+        assert!(
+            !mk(64 * 4096).is_illegal_geometry(),
+            "64 pages is the bound"
+        );
+        assert!(
+            mk(64 * 4096 + 1).is_illegal_geometry(),
+            "65 pages is one too many"
+        );
+    }
+
+    /// ⊘ THREE unbuilt-half sentences now, all distinct, each naming its own gap.
+    #[test]
+    fn the_three_unbuilt_halves_stay_three() {
+        let all = [
+            DELIVERY_UNBUILT,
+            SHADOW_DELIVERY_UNBUILT,
+            ACCESS_COUNTER_DELIVERY_UNBUILT,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            for b in all.iter().skip(i + 1) {
+                assert_ne!(a, b, "two gaps collapsed into one sentence");
+            }
+        }
+        assert!(
+            ACCESS_COUNTER_DELIVERY_UNBUILT.contains("0xB83110"),
+            "names the register"
+        );
+        assert!(
+            ACCESS_COUNTER_DELIVERY_UNBUILT.contains("fiction"),
+            "names what it is"
+        );
     }
 
     /// Short shadow params refuse by name and record nothing.

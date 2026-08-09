@@ -1865,6 +1865,23 @@ static void nvkvm_report_registers(NvkvmState *s)
         }
     }
 
+    /*
+     * ★★★ The THIRD buffer, and the only one whose SIZE this device also invents.  BAR0
+     * 0xB83110 is served as a deliberate fiction (it read zero, and zero is what killed
+     * cuInit); this line is where the number and the caveat are printed together.
+     */
+    if (a.access_cntr_buffers_registered) {
+        info_report("nvkvm: access counter buffer: %" PRIu64 " registration(s) SERVED NV_OK; "
+                    "first 0x%" PRIx64 " B = %" PRIu64 " pages, %" PRIu64 " malformed",
+                    a.access_cntr_buffers_registered, a.access_cntr_buffer_size,
+                    a.access_cntr_buffer_pages, a.access_cntr_buffers_malformed);
+        info_report("nvkvm:   ⊘ access-counter NOTIFICATION is UNBUILT: this port advertised "
+                    "the buffer's size as a deliberate fiction (BAR0 0xB83110, which read "
+                    "zero and killed cuInit) and writes no entry into it and raises no "
+                    "notification, so UVM's migration heuristics never fire "
+                    "(resume_from_fault.md S2 ruled that acceptable)");
+    }
+
     if (a.isolate_refusal.kind != KAYFABE_ISOLATE_REFUSAL_NONE) {
         const char *kind = a.isolate_refusal.kind == KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED
                            ? "spawn-failed" : "no-plane";

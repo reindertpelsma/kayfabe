@@ -50,9 +50,12 @@ use std::sync::{Arc, Mutex};
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use kayfabe_abi::faultbuffer::{
-    FaultBufferRegistration, NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
-    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER, ShadowFaultBufferRegistration,
-    decode_register_client_shadow_fault_buffer, decode_register_fault_buffer,
+    AccessCntrBufferRegistration, FaultBufferRegistration,
+    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
+    NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER, ShadowFaultBufferRegistration,
+    decode_register_access_cntr_buffer, decode_register_client_shadow_fault_buffer,
+    decode_register_fault_buffer,
 };
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandObserver, RpcCommand, RpcFunction};
@@ -86,6 +89,17 @@ pub enum FaultBufferNote {
         /// Bytes the params carried.
         len: usize,
     },
+    /// ★ `0x20800a1d` — an **access-counter** notification buffer registration decoded.
+    ///
+    /// ⊘ A third variant for the third buffer, for [`Self::ShadowRegistered`]'s reason: this
+    /// is the one whose SIZE this port also invents, so a report that could not tell it apart
+    /// from the other two could not say which fiction a boot was resting on.
+    AccessCntrRegistered(AccessCntrBufferRegistration),
+    /// `0x20800a1d` arrived and its params did **not** decode.
+    AccessCntrMalformed {
+        /// Bytes the params carried.
+        len: usize,
+    },
 }
 
 /// The shared record. Cloneable so the plane and the chain link hold the same one.
@@ -94,6 +108,7 @@ pub struct FaultBufferLog {
     seen: Arc<Mutex<Vec<FaultBufferNote>>>,
     total: Arc<AtomicU64>,
     shadow_total: Arc<AtomicU64>,
+    access_cntr_total: Arc<AtomicU64>,
 }
 
 /// How many registrations are remembered.
@@ -132,6 +147,12 @@ impl FaultBufferLog {
         self.shadow_total.load(Ordering::Relaxed)
     }
 
+    /// How many times `0x20800a1d` — the **access-counter** buffer — arrived.
+    #[must_use]
+    pub fn access_cntr_total(&self) -> u64 {
+        self.access_cntr_total.load(Ordering::Relaxed)
+    }
+
     /// The registrations remembered, in arrival order.
     #[must_use]
     pub fn sample(&self) -> Vec<FaultBufferNote> {
@@ -156,6 +177,10 @@ impl FaultBufferLog {
             }
             FaultBufferNote::ShadowRegistered(_) | FaultBufferNote::ShadowMalformed { .. } => {
                 self.shadow_total.fetch_add(1, Ordering::Relaxed);
+            }
+            FaultBufferNote::AccessCntrRegistered(_)
+            | FaultBufferNote::AccessCntrMalformed { .. } => {
+                self.access_cntr_total.fetch_add(1, Ordering::Relaxed);
             }
         }
         let mut s = self.seen.lock().unwrap_or_else(|e| e.into_inner());
@@ -189,9 +214,15 @@ impl CommandObserver for FaultBufferRecorder {
         let Ok(h) = self.driver.decode_rpc_control(&cmd.payload) else {
             return;
         };
-        let shadow = match h.cmd {
-            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER => false,
-            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER => true,
+        enum Which {
+            Replayable,
+            Shadow,
+            AccessCntr,
+        }
+        let which = match h.cmd {
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER => Which::Replayable,
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER => Which::Shadow,
+            NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER => Which::AccessCntr,
             _ => return,
         };
         // The declared params window, bounded by what actually arrived — the same
@@ -202,16 +233,19 @@ impl CommandObserver for FaultBufferRecorder {
             .get(h.params_at..)
             .and_then(|tail| tail.get(..h.params_size as usize))
             .unwrap_or(&[]);
-        self.log.note(if shadow {
-            match decode_register_client_shadow_fault_buffer(params) {
-                Ok(r) => FaultBufferNote::ShadowRegistered(r),
-                Err(_) => FaultBufferNote::ShadowMalformed { len: params.len() },
-            }
-        } else {
-            match decode_register_fault_buffer(params) {
+        self.log.note(match which {
+            Which::Replayable => match decode_register_fault_buffer(params) {
                 Ok(r) => FaultBufferNote::Registered(r),
                 Err(_) => FaultBufferNote::Malformed { len: params.len() },
-            }
+            },
+            Which::Shadow => match decode_register_client_shadow_fault_buffer(params) {
+                Ok(r) => FaultBufferNote::ShadowRegistered(r),
+                Err(_) => FaultBufferNote::ShadowMalformed { len: params.len() },
+            },
+            Which::AccessCntr => match decode_register_access_cntr_buffer(params) {
+                Ok(r) => FaultBufferNote::AccessCntrRegistered(r),
+                Err(_) => FaultBufferNote::AccessCntrMalformed { len: params.len() },
+            },
         });
         // ⊘ Nothing is returned, and nothing CAN be: `observe` has no return value, so
         // "this link changes no reply byte" is rustc's guarantee rather than a comment.

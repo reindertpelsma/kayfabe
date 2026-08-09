@@ -624,9 +624,14 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // printer emits a different sentence for each. `type` is carried RAW because anything but
     // `0` needs Confidential Compute and is therefore a finding, not a configuration. This is
     // the reason the wire ABI moved to 25.
+    // ★★★ 72 -> 76 at §14.41's THIRD rung: `access_cntr_buffers_{registered,malformed}`,
+    // `access_cntr_buffer_{size,pages}`. Four rather than five — there is no `type` field,
+    // because this buffer has only one. ⊘ A third count for a third buffer, and this one is
+    // the sharpest: it is the only buffer whose SIZE this device also invents. This is the
+    // reason the wire ABI moved to 26.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (72 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (76 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
@@ -1252,11 +1257,36 @@ fn the_c_shell_prints_the_same_unbuilt_half_the_abi_declares() {
         ],
     );
 
-    assert_ne!(
+    // ★★ The THIRD sentence. Its gap is the sharpest of the three: this is the buffer whose
+    // SIZE this port also invents, so the sentence has to carry the register that was faked
+    // as well as the delivery that was not built.
+    assert_two_descriptions_agree(
+        &printed_sentence(
+            &text,
+            "info_report(\"nvkvm:   ⊘ access-counter NOTIFICATION is UNBUILT",
+        ),
+        kayfabe_abi::faultbuffer::ACCESS_COUNTER_DELIVERY_UNBUILT,
+        &[
+            "access-counter NOTIFICATION is UNBUILT",
+            "0xB83110",
+            "deliberate fiction",
+            "resume_from_fault.md",
+        ],
+    );
+
+    let all = [
         kayfabe_abi::faultbuffer::DELIVERY_UNBUILT,
         kayfabe_abi::faultbuffer::SHADOW_DELIVERY_UNBUILT,
-        "★ two different gaps must not collapse into one sentence"
-    );
+        kayfabe_abi::faultbuffer::ACCESS_COUNTER_DELIVERY_UNBUILT,
+    ];
+    for (i, x) in all.iter().enumerate() {
+        for y in all.iter().skip(i + 1) {
+            assert_ne!(
+                x, y,
+                "★ two different gaps must not collapse into one sentence"
+            );
+        }
+    }
 }
 
 // =====================================================================================

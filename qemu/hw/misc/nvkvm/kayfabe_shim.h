@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 25u
+#define KAYFABE_SHIM_ABI 26u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -835,6 +835,22 @@ typedef struct KayfabeRegAudit {
     uint64_t shadow_fault_buffer_type;
     /* Shadow registrations whose params did NOT decode. */
     uint64_t shadow_fault_buffers_malformed;
+
+    /* ★★★ ACCESS-COUNTER notification buffers the guest registered (0x20800a1d) -- the third
+     * buffer, and the sharpest: it is the only one whose SIZE this port also invents
+     * (ga10x's ACCESS_COUNTER_NOTIFY_BUFFER_ENTRIES_ADVERTISED, an admitted fiction serving
+     * BAR0 0xB83110).  The printer says both halves.
+     *
+     * ⚠ 0 here AFTER a cuInit is a FINDING, not a quiet success: the control is only
+     * reachable once 0xB83110 stops reading zero, so its absence from every ledger before
+     * §14.41 was evidence of nothing. */
+    uint64_t access_cntr_buffers_registered;
+    /* bufferSize of the first, in bytes.  ★ 8192 = 256 advertised entries x 32. */
+    uint64_t access_cntr_buffer_size;
+    /* Pages the guest filled -- 2 for the advertised size. */
+    uint64_t access_cntr_buffer_pages;
+    /* Access-counter registrations whose params did NOT decode. */
+    uint64_t access_cntr_buffers_malformed;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

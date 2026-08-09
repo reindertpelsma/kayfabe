@@ -485,6 +485,8 @@ pub struct PlaneResidue {
     /// ⊘ Separate from [`Self::fault_buffers_registered`] because the two controls carry
     /// different promises — see `crate::faultbuffer`.
     pub shadow_fault_buffers_registered: u64,
+    /// How many **access-counter** buffer registrations (`0x20800a1d`) arrived.
+    pub access_cntr_buffers_registered: u64,
     /// ★★★ The BAR0 moving window's register, as the guest last wrote it.
     ///
     /// Device state, so it is in the residue: a reloaded device whose window still pointed
@@ -1745,6 +1747,7 @@ impl RegPlane {
             fault_buffers: fault_buffer.sample(),
             fault_buffers_registered: fault_buffer.total(),
             shadow_fault_buffers_registered: fault_buffer.shadow_total(),
+            access_cntr_buffers_registered: fault_buffer.access_cntr_total(),
             bar0_window: *bar0_window,
             bar_pdes: bar_pdes.pdes(),
             gvas_pub: gvas_pub.snapshot(),
@@ -1799,6 +1802,13 @@ impl RegPlane {
     #[must_use]
     pub fn shadow_fault_buffers_registered(&self) -> u64 {
         self.fault_buffer.shadow_total()
+    }
+
+    /// How many times the guest registered an **access-counter notification** buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER`, `0x20800a1d`).
+    #[must_use]
+    pub fn access_cntr_buffers_registered(&self) -> u64 {
+        self.fault_buffer.access_cntr_total()
     }
 
     /// The fault-buffer registrations remembered, capped at

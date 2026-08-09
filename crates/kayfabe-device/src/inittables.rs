@@ -480,6 +480,24 @@ pub enum WantedTable {
     /// deliberate choice, and built), is in [`kayfabe_abi::faultbuffer`], and
     /// [`kayfabe_abi::faultbuffer::SHADOW_DELIVERY_UNBUILT`] is what the boot report prints.
     RegisterClientShadowFaultBuffer,
+    /// `NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER` (`0x20800a1d`) — the third
+    /// register-a-buffer control on the `UVM_REGISTER_GPU` path, and the only one that was
+    /// **unreachable** until this port stopped serving zero at BAR0 `0xB83110`.
+    ///
+    /// `_uvmSetupAccessCntrBuffer` sends it only after `memdescCreate` has succeeded
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/uvm/uvm.c:39-81`), and that `memdescCreate` was
+    /// failing on a size of zero — so this control has never appeared in any of this port's
+    /// unserviced ledgers, and its absence there was evidence of nothing.
+    ///
+    /// ⚠ `[predicted from `ogkm-580`, NOT measured]` when it landed, deliberately: it is
+    /// served in the same commit as the register so one boot adjudicates both. If the guest
+    /// never sends it, the control census says so.
+    ///
+    /// Pure `[IN]`, `{NV_OK}`, identity echo — [`Self::RegisterFaultBuffer`]'s argument
+    /// exactly. ⊘ The unbuilt half is [`kayfabe_abi::faultbuffer::ACCESS_COUNTER_DELIVERY_UNBUILT`]
+    /// and it is the sharpest of the three: this is the buffer whose **size** this port also
+    /// invents.
+    RegisterAccessCntrBuffer,
     /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` — ★★★ the first variant that is **not a
     /// table**, and the only one whose reply is a function of the *request* alone.
     ///
@@ -959,7 +977,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 37] = [
+    pub const ALL: [WantedTable; 38] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -974,6 +992,7 @@ impl WantedTable {
         Self::GmmuStaticInfo,
         Self::RegisterFaultBuffer,
         Self::RegisterClientShadowFaultBuffer,
+        Self::RegisterAccessCntrBuffer,
         Self::EventSetNotification,
         Self::MemsysL2InvalidateEvict,
         Self::CeFaultMethodBufferSize,
@@ -1027,6 +1046,9 @@ impl WantedTable {
             }
             Self::RegisterClientShadowFaultBuffer => {
                 kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER
+            }
+            Self::RegisterAccessCntrBuffer => {
+                kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER
             }
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION
@@ -1101,6 +1123,9 @@ impl WantedTable {
             }
             Self::RegisterClientShadowFaultBuffer => {
                 kayfabe_abi::faultbuffer::REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE
+            }
+            Self::RegisterAccessCntrBuffer => {
+                kayfabe_abi::faultbuffer::REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE
             }
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
@@ -1526,6 +1551,25 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kayfabe_abi::faultbuffer::decode_register_client_shadow_fault_buffer(raw) {
                     Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
+                    Ok(_) | Err(_) => return refuse(),
+                }
+            }
+            // ★★★ `0x20800a1d` — third of the three, and its geometry check has TWO arms
+            // rather than one: the physical receiver refuses `numBufferPages > 64` **or
+            // `== 0`** (`ogkm-580: access_cntr_buffer_ctrl.c:231-253`). The zero arm is not
+            // decoration — a zero-size access-counter buffer is the same zero that killed
+            // `cuInit` one layer up, and refusing it here is refusing to answer `NV_OK` about
+            // a buffer that cannot exist.
+            WantedTable::RegisterAccessCntrBuffer => {
+                let raw = match cmd
+                    .payload
+                    .get(req.params_at..req.params_at + want.params_size())
+                {
+                    Some(s) => s,
+                    None => return refuse(),
+                };
+                match kayfabe_abi::faultbuffer::decode_register_access_cntr_buffer(raw) {
+                    Ok(r) if !r.is_illegal_geometry() => raw.to_vec(),
                     Ok(_) | Err(_) => return refuse(),
                 }
             }

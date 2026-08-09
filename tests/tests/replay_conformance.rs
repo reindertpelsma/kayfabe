@@ -1567,6 +1567,12 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // `nvidia-uvm` through a `C369` control, and an `nvidia-smi` capture never opens
         // `/dev/nvidia-uvm`.
         0x2080_0a9d,
+        // §14.41's third. Pure `[IN]` again, so the "size we answer" IS the size the guest
+        // sent; the only claim is the 520-byte layout (two `NvU32` then an 8-aligned
+        // `NvU64[64]`, `ogkm-580: ctrl2080internal.h:165-169`), asserted by
+        // `the_access_cntr_layout_and_its_own_bound`. Absent from an `nvidia-smi` capture for
+        // the same module reason as the other two.
+        0x2080_0a1d,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
