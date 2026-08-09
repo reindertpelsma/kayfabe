@@ -7808,3 +7808,207 @@ interrupt-delivery change unbooted, on the path that had just started working, i
 three locks it cannot see. Two of them are now at least *declared*
 (`tests/tests/unranked_locks.rs`, §16.22) — `Mutex<Option<QemuVmm>>` is held across the whole
 submission — but declaring is not witnessing, and the witness still cannot see them.
+
+---
+
+## 16.24 ★★★★★ BOOTED `s23_10a769c_cup2` — `GP100_UVM_SW` ADMITTED, four fatal refusals removed, and the wall DID NOT MOVE
+
+**Status: BOOTED.** vast GA106 bench (`vh`, RTX 3060 `10de:2504`, host driver **580.159.04
+Open**), stamp verified on **both** `target/release/libkayfabe_qemu_raw.a` (33.5 MB) and
+`qemu-build/qemu-system-x86_64` (84.8 MB) →
+`kayfabe-rev:10a769c6bd0c7c54eb09f9c670069a0e6827baf8` in each, matching a clean `HEAD`.
+**STOCK** guest module, `MODPROBE_RC=0`, `SMI_RC=0`, `probe-arm set: EMPTY`, hook
+`cup2_hook_deadline.sh` — the same hook s20/s21/s22 carried. Evidence:
+`traces/guest_boots/run_s23_10a769c_cup2_{dmesg,probe}.log`.
+
+### 16.24.1 ⊘⊘ WHAT THIS REFUTES FIRST — the rung I was handed, and it was the WRONG CALLER
+
+The brief named the rung as **GR context promotion**, citing
+
+```text
+NVRM: kgrobjPromoteContext(...) @ kernel_graphics_object.c:224 -> NV_ERR_NOT_SUPPORTED
+```
+
+⊘ **That line is the RC WATCHDOG's, not the golden-image channel's, and the handles say so
+outright.** `s22`'s own dmesg puts it between `hObject=0x31415900` / `0x3141590f` allocs and
+`kernel_rc_watchdog.c:1198`, and
+
+```text
+ogkm-580: src/nvidia/src/kernel/gpu/rc/kernel_rc_watchdog.c:64
+  #define WATCHDOG_PUSHBUFFER_CHANNEL_ID 0x31415900
+```
+
+names the owner exactly. §14.20/§14.22/§14.26 each measured that engine's refusals
+**non-fatal**, and §14.26 already closed the question the brief was re-asking: the
+golden-image channel **completes**, its `0xc797`/`0xbaba00xx` lines having left the log for
+good. `s22`'s device census agrees independently — `control 0x2080012b result 0x00000000
+x2` **alongside** `result 0x00000056 x2`, i.e. two promotions served and two refused, the
+refused pair being `PromoteFault::UnknownContextObject x2` on the watchdog.
+
+⇒ **§5 Q0 is CLOSED.** It was answered on 2026-08-08 and re-queued for a day afterwards
+because a `file:line` was read without its caller. Third instance of
+`read_the_caller_not_the_id`, and the first where the wrong caller was in a *brief* rather
+than in a ledger.
+
+### 16.24.2 ★ The wall the same log actually named — and it had never been read
+
+`s22`'s `cuInit` window ends like this, four lines apart, immediately before teardown:
+
+```text
+GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00012; hObject=0xcaf00015;
+                   hClass=0x0000c076; paramsSize=0x00000000; status=0x00000056
+   … and three more, hParent=0xcaf0001d / 0xcaf00028 / 0xcaf00033
+Assertion failed: NULL != pGpuState->pRootInternal @ gpu_vaspace.c:3332
+```
+
+`0xc076` is **`GP100_UVM_SW`** (`ogkm-580: clc076.h:33`), and it is the **last call of every
+UVM channel allocation**:
+
+```c
+// Allocate the SW method class for fault cancel
+if (isDevicePascalPlus(device) && (channel->tsg->engineType != ..._SEC2))
+{
+    status = pRmApi->Alloc(pRmApi, session->handle, channel->channelHandle,
+                           &channel->hFaultCancelSwMethodClass, GP100_UVM_SW, NULL, 0);
+    if (status != NV_OK)
+        goto cleanup_free_controlpage;
+}
+```
+
+(`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:6110-6122`, in `channelAllocate`
+`:5730`.) A GA106 is Pascal-plus and UVM's CE channels are not SEC2, so the branch always
+runs, and there is **no forgiving caller** above it — `nvGpuOpsChannelAllocate` fails, and
+with it `uvm_channel_manager_create` and `UVM_REGISTER_GPU`. Four parents, eleven handles
+apart: four UVM channels, each destroyed at its final step. The `pRootInternal` assert at
+`gvaspaceExternalRootDirRevoke_IMPL` (`gpu_vaspace.c:3277`, asserting at `:3332`) is the
+teardown that follows.
+
+⊘ `0xc076` was permitted by **neither** table — absent from `capability.rs` (hence
+`AllocClassNotPermitted::NotOnAllowlist`) and absent from `alloc_params`.
+
+### 16.24.3 ★★ `NoDeclaredFacts`, and why this row's version of it is the STRONGEST on the table
+
+`AMPERE_B` and `NV2081_BINAPI` are both `RS_OPTIONAL`: a params struct exists and a NULL is
+merely *legal by declaration*. `GP100_UVM_SW` is registered **`RS_NONE`** —
+
+```text
+ogkm-580: src/nvidia/src/kernel/rmapi/resource_list.h:1535-1544
+  /* External Class */ GP100_UVM_SW,  /* Alloc Param Info */ RS_NONE,
+  /* Flags */ RS_FLAGS_ALLOC_PRIVILEGED | … | RS_FLAGS_CHANNEL_DESCENDANT_COMMON,
+  /* Parents */ RS_LIST(classId(KernelChannel)),
+```
+
+— **no alloc-params struct is declared for the class anywhere**, and its one allocator
+passes `NULL, 0`, measured on the wire as `paramsSize=0x00000000`. *"Its params are never
+read"* is a property of the ABI here, not a choice this port made.
+
+★ `Origin::Mode2Rpc` is exact rather than a fallback: `grep -rn 0xc076 gvisor/` is **empty**
+(checked with `$?`, not through a pipe). A privileged leaf the guest's own **kernel** RM
+allocates inside `nvGpuOpsChannelAllocate` never crosses the ioctl boundary nvproxy gates;
+it reaches us only because in Mode 2 the transport is GSP RPC and we are the GSP.
+
+### 16.24.4 ★★★★ THE MEASUREMENT — exactly −4 and −4, and NOTHING ADDED
+
+Device census, `s22_f4f3865` → `s23_10a769c`:
+
+| row | s22 | s23 |
+|---|---|---|
+| `AllocClassNotPermitted::NotOnAllowlist` | **x6** | **x2** |
+| `RmGraphError::FreeUnknown` | **x11** | **x7** |
+| bridge refusals, total | 26 | 18 |
+| `AllocClassNotPermitted::Refused` | x2 | x2 |
+| `ReservedClient` / `UnmappedAllocClass` / `PromoteFault::UnknownContextObject` | x2 / x3 / x2 | x2 / x3 / x2 |
+| `commands` | 454 decoded, 84 UNSERVICED, 38 distinct | **identical** |
+| `controls` | 130 answered, 45 distinct rows | **identical** |
+| `doorbells` | 24 arrived, 9 served, 15 REFUSED | **identical** |
+| `gpfifo rings` | 10 declared, 8 non-zero | **identical** |
+
+★ **The four `0xc076` refusals are gone — `grep -c c076` over `s23`'s dmesg and probe logs
+is `0`** — and so are the four `GspRmFree failed … 0xcaf000{15,1e,2b,34}` lines, which were
+the guest tearing down the four dead channels. The `−4` and the `−4` are the same four
+objects, seen on the allocate side and the free side. **Six distinct refusal kinds before,
+the same six after: nothing was added.** The accuracy improvement cost nothing, which per
+§14.21/§14.24 was the thing to check rather than assume.
+
+### 16.24.5 ⊘⊘ AND THE WALL DID NOT MOVE — my own hypothesis, refuted by the boot
+
+```text
+FAIL cuInit(0) -> initialization error (3)     CUP2_RC=1
+doorbells: 24 arrived, 9 served, 15 REFUSED by name
+first doorbell refusal [FwdFault::NoVas] NoVas(ChanId(3))
+    | c=0xc1e00010 vas=NONE-DECLARED dec=NONE userd=h0x9/off0x0 ring=0x120064000
+```
+
+**Byte-for-byte s22's verdict.** I opened this increment expecting `0xc076` to be *the*
+wall: it is a refusal that RM's own source shows is fatal to every UVM channel, it sits
+immediately before the teardown, and removing it removed exactly what it should have. ⊘
+**And the guest's outcome did not change at all.**
+
+★ That is worth more than a moved wall, because it settles an ORDERING that no timestamp
+could. I had tried to place `0xc076` relative to the doorbell refusals by anchoring guest
+uptime against the host's wall clock, and concluded it came first. ⊘ **That reading is
+refuted**: had `0xc076` been upstream of the doorbells, removing it would have changed the
+doorbell census, and the census is identical to the entry. `0xc076` was a *downstream
+casualty* on a path already lost, and the live wall is the one the census has been naming
+all along.
+
+⇒ **The named next wall is `FwdFault::NoVas` — `NoVas(ChanId(3))`, 15 of 24 doorbells, on
+client `0xc1e00010` with `vas=NONE-DECLARED dec=NONE`**: the channel declares no VA space of
+its own and none resolves through its CtxShare or its TSG. ⊘ Note this is the same string
+s22 reported; what §16.24 buys is that it is now the *only* candidate rather than one of two.
+
+### 16.24.6 ★★ The hedge in §16.24's own comment, made EXECUTABLE rather than prose
+
+The admission carried a scope: *"the object's only in-band use is to hold a subchannel for
+`FAULT_CANCEL_A`, and this port raises no fault for UVM to cancel — a guest whose faults we
+DO deliver is the case this row does not cover."*
+
+⊘ **That is exactly the shape that cost six boots one rung ago** (§16.21: a comment naming
+its own exception, and the code taking the rule). So it is compiled instead of narrated:
+`kayfabe_abi::submit::uvm_sw::is_fault_method`, `PushMethod::UvmSwFaultMethod`, and
+`FwdFault::UvmFaultMethodWithoutFaultDelivery`, which **refuses the whole submission before
+the execute loop** — so a cancel can never be walked past while the copies beside it run.
+
+⊘⊘ **And the obvious trigger is REFUTED by source.** *"Fire when `SET_OBJECT
+GP100_UVM_SW` appears"* is wrong: `uvm_hal_pascal_host_init` is the host HAL's **per-push
+init hook** —
+
+```c
+void uvm_hal_pascal_host_init(uvm_push_t *push)
+{
+    if (uvm_channel_is_ce(push->channel))
+        NV_PUSH_1U(C076, SET_OBJECT, GP100_UVM_SW);
+}
+```
+
+(`ogkm-580: kernel-open/nvidia-uvm/uvm_pascal_host.c:314-318`) — so the bind heads **every**
+UVM CE pushbuffer, and `[measured, boot s23_10a769c]` nine served doorbells carried it. A
+tripwire there fires on every healthy submission and means nothing. `NO_OPERATION`
+(`clc076.h:36`) is excluded for the same reason. What expires the assumption is a **cancel**:
+`FAULT_CANCEL_A/B/C` and `CLEAR_FAULTED_A/B`, `0x104..=0x114`, reachable only once something
+has told UVM a fault occurred — which this port never does.
+
+★ Bite-checked, not merely written: with the predicate disabled the test fails
+`FAULT_CANCEL_A (0x104) must trip … left: None, right: Some(260)`; restored, 14/14 green;
+and `git diff --stat` confirmed the file actually changed on both passes
+(`the_bite_check_that_could_not_bite`).
+
+### 16.24.7 ⊘ Two things the suite says that are NOT this increment's
+
+- ★★ **`stress_multi_vcpu_interleaved_ops` is RED at the parent commit, 5/5, deterministic.**
+  `[measured 2026-08-09]` in an isolated `git worktree add --detach 11b1377`, with
+  `KAYFABE_SLOW=1`, it panics identically every time —
+  `doorbell routes: NotScheduled { chan: ChanId(0), vchid: VChid(258) } @
+  tests/tests/concurrency_stress.rs:421`, in 0.09 s. ⊘ **So "the suite is green at
+  `11b1377`" is refuted.** The test is `KAYFABE_SLOW`-gated, so a plain `cargo test
+  --workspace` **skips** it and reports green — `skipped_oracle_kills_the_guard`, and the
+  most likely origin of the green claim. It is a real, deterministic, pre-existing defect
+  and it is owed; it is not this increment's and was not bundled with it.
+- The claim-ledger ratchet is red at **69 (bar 66)** conflated and **18 (bar 17)** bare —
+  the residue already recorded as debt owed. ⊘ Unchanged by this increment, and ⊘ no bar
+  was raised.
+
+★ Otherwise **210 test targets `ok`**, and the three capability ratchets that fired were
+this increment's to move and were moved with their reasons: class counts +1 at **all four**
+boundaries (75→76, 83→84, 89→90, 91→92 — moving *together* is the evidence the row went
+into the shared base) and decoded classes 13→14.
