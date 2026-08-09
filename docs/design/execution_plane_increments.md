@@ -9686,3 +9686,128 @@ scores a confirmation as a refutation — twice proven in this campaign.
 - **(b)** `NotOnAllowlist` stays **x3** (`0xc574` is untouched this rung) and `FreeUnknown` moves
   only if `cup2` gets further. Neither is a scoring input; they are named so a change is not
   read as noise.
+
+## §16.45 ★★★★★ BOOTED `s39_fd92017_kernelarm` — **OUTCOME Q**, and the next wall was named IN the falsifier
+
+`[measured 2026-08-09, rev `fd92017`, binary stamped `kayfabe-rev:fd9201723d09…` on **both**
+`target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64`, verified before the
+boot]`. Evidence: `traces/guest_boots/run_s39_fd92017_kernelarm_{qemu,dmesg,probe}.log`.
+
+### 16.45.1 ★★★★★ THE GUARD OPENED, AND THE PROMOTE PLANE WENT FROM 3 TO 11
+
+| fact | `s38` | `s39` |
+|---|---|---|
+| `PromoteFault::ForeignContextObject` | x1 | ⊘ **gone** |
+| `control 0x2080012b result 0x00000000` (promotions **accepted**) | x3 | ★ **x11** |
+| `control 0x2080012b result 0x00000056` (refused) | x3 | **x2** (both the RC watchdog's) |
+| doorbells | 163 | **170** |
+| controls answered | 136 | **143** |
+| publications total / accepted | 12 / 11 | 12 / 11 (unchanged) |
+| `cup2` | fails at `cuCtxCreate` | **fails at `cuCtxCreate`** |
+
+⇒ **Outcome Q**, and it was written first precisely because a two-valued reading scores it as
+failure: `cup2` still stops after `cuDeviceTotalMem` with `CUP2_RC=1`. But the guard was the
+hypothesis, the guard opened, the accepted-promotion count nearly **quadrupled**, and no green
+counter moved backwards. ⊘ **R is refuted** — no new promote fault, no publication regression,
+doorbells up. §16.44.3's rule is confirmed: a kernel-privileged client acting on a user client's
+channel is a stream the guest's own driver emits, and refusing it was refusing RM.
+
+### 16.45.2 ★★★★★ THE NEW WALL — and the falsifier's own Q row NAMED IT IN ADVANCE
+
+§16.44.6 wrote *"Expect `0xc574` to be it."* It is, and the mechanism is measured — **six**
+occurrences of one assert in `run_s39_fd92017_kernelarm_probe.log`:
+
+```
+NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ nv_gpu_ops.c:10328
+```
+
+`:10328` is `nvGpuOpsRetainChannel`'s failure return. The lines bracketing it say what failed and
+what it cost:
+
+```
+NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0000a; hObject=0xcaf00059; status=0x00000056
+NVRM: … returned from pRmApi->Control(… NVA06F_CTRL_CMD_STOP_CHANNEL …) @ nv_gpu_ops.c:10957
+NVRM: … returned from pRmApi->Control(… NV2080_CTRL_CMD_GPU_EVICT_CTX …) @ nv_gpu_ops.c:10977
+NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: … failed (status=0x00000056), proceeding...
+NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed …
+```
+
+⇒ **UVM now gets all the way to retaining `cup2`'s channels — six of them — and every retain dies
+on the `UVM_CHANNEL_RETAINER` (`0xc574`) alloc we refuse**, then tears the channel back down
+through two more controls we do not serve. The promote plane is no longer the blocker; the
+**class allowlist** is. That is `0xc574` promoted from "an unexplained `NotOnAllowlist` delta"
+(§16.43.3) to "the named wall", in two rungs, without ever being guessed at.
+
+### 16.45.3 ★★★★ SUB-PREDICTION (b) REFUTED — and the two "unexplained deltas" are ONE EVENT
+
+§16.44.6(b) predicted `NotOnAllowlist` would stay **x3**. It went to **x10**. ⊘ Refuted, mine.
+
+But the miss is informative, because the *other* flagged delta moved by the identical amount:
+
+| | `s38` | `s39` | Δ |
+|---|---|---|---|
+| `AllocClassNotPermitted::NotOnAllowlist` | 3 | **10** | **+7** |
+| `RmGraphError::FreeUnknown` | 8 | **15** | **+7** |
+
+★★★ **They are the same seven events, counted twice.** A refused alloc is never entered in the
+object model, so the guest's subsequent `Free` of that very handle cannot resolve — which is
+exactly the `GspRmFree failed: hClient=0xc1d0000a; hObject=0xcaf00059`/`0xcaf0005d` pair in the
+dmesg, one per dead retainer. §16.43.3 recorded both as "consistent with `cup2` getting further,
+but not measured to be"; they are now measured, and the shared cause is `0xc574`.
+
+### 16.45.4 ⊘⊘ SUB-PREDICTION (a) IS **UNSCORED**, NOT CONFIRMED — the readout does not exist
+
+§16.44.6(a) predicted the promotion binds **zero** ranges. ⊘ **Nothing in the boot report can
+say.** The promote diagnosis latches only *refusals*; an accepted promotion contributes one
+`control 0x2080012b result 0x0` tick and nothing else — no `bound`, no `already`, no
+`declined.promote_only`. So the eleven acceptances are eleven opaque successes.
+
+⚠ **Recording this as "unscored" rather than quietly dropping it is the point.** A prediction with
+no instrument behind it is not a prediction that passed; `injection_measures_necessity_never_sufficiency`
+has a sibling here — **a claim nothing could have contradicted was never a test.** The `PromoteJoin`
+already carries all three numbers; only the report throws them away.
+
+### 16.45.5 ★★★★★ FIXING THE PROMOTE PLANE SWITCHED THE CENSUS OFF — the SAME class as last rung
+
+`s38`'s report carried `census[14 chans, 4 outcomes]`: every live channel, its proc, its VA-space
+route, its `pdb=Y/N`. `s39`'s carries only `census[2 chans, 2 outcomes]`.
+
+Nothing about the census broke. It is latched **only from inside a promote refusal**, and the
+14-channel snapshot was the one attached to `ForeignContextObject` — *the refusal this rung
+deleted*. ⊘ So the instrument that measured the win is only reachable while the bug is present,
+and closing the bug blinded it.
+
+★★★★★ **This is `a_small_count_is_not_a_small_event`'s cousin and it is now TWICE in two rungs.**
+The previous rung's headline finding was that the per-channel VA census *already existed and
+already crossed the shim ABI* but was reachable only from inside a **doorbell** refusal, so fixing
+the doorbell plane switched it off and it survived in 2 of 17 boot logs. The same structural
+mistake was then re-made one plane over, by the same hands, with the lesson already written down.
+⇒ **The rule is not "look for disabled instruments"; it is *an instrument hung off a refusal
+path has its own deletion scheduled by the fix it exists to guide*.** The census must be emitted
+unconditionally at the end-of-run report, not as a rider on a fault.
+
+### 16.45.6 ⚠ AND THE §16.44.5 METHOD DID NOT SURVIVE ITS OWN SECOND USE
+
+§16.44.5 named `0xc574` from the guest's `GspRmAlloc failed: … hClass=…` lines in the probe log,
+with no code and no boot. ⊘ In `s39` that method returns **nothing**: `grep -c "GspRmAlloc failed"`
+is **0**, because the probe log's dmesg is a *tail* and `s39`'s first retained line is
+`[   61.949060]` — the allocs happened earlier and fell out of the window that `cup2`'s assert
+flood pushed them from. The class evidence was not absent from the run; it was absent from the
+capture, and the capture gave no sign of it.
+⇒ The device knows the class — `BridgeRefusal::AllocClassNotPermitted { class, denial }` carries
+it — and only `FaultTag`'s `&'static str` collapse drops it before the report. **Name the class in
+the refusal row**, and stop depending on a guest-side tail of unbounded depth.
+
+### 16.45.7 ⇒ THE NEXT RUNG
+
+1. **Admit `0xc574` with a real `AllocParams` shape**, not `NoDeclaredFacts`: its two `NvHandle`s
+   are the retention edge `(kernel client K) retains (hChanClient, hObject)` — the fact a
+   *tightened* `ForeignContextObject` should key on instead of the blanket kernel arm §16.44.3
+   installed. That converts the rule from *"a kernel client may"* to *"a kernel client that has
+   observably retained this channel may"*, which is strictly narrower and still RM's.
+2. `NVA06F_CTRL_CMD_STOP_CHANNEL` and `NV2080_CTRL_CMD_GPU_EVICT_CTX` (`nv_gpu_ops.c:10957`,
+   `:10977`) are the next two refusals on the same path — but they are on the **teardown** leg, so
+   they may simply stop being asked once (1) lands. ⊘ Do not pre-emptively serve them.
+3. Emit the VA-space census **unconditionally** (§16.45.5) and **name the class** in the
+   `AllocClassNotPermitted` row (§16.45.6), and report `PromoteJoin`'s three counters
+   (§16.45.4). All three are report-side; none needs a new measurement.
