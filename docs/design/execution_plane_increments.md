@@ -10578,3 +10578,150 @@ proved, and it does change how much of the join was ever unmeasured.
 
 Next, unchanged from §16.51.4: `0x9`/`0xb` are `PerGpu` with `phys=0` — they *can* publish
 and did not; and `0x3`–`0x6` are `Never`, an allocation-time gap no join can close.
+
+## §16.54 ★★★★★ NAME THE REFUSAL — three of the brief's premises REFUTED before a line was written, and the falsifier for `s44`
+
+`[source-read 2026-08-10, rev 4706b9f]` ⊘ **This rung changes no port behaviour whatsoever.**
+`b17381c..4706b9f` is `git diff --stat`-verified as **four files, all documentation and
+traces, zero lines under `crates/` or `qemu/`** — so the bench binary stamped
+`kayfabe-rev:b17381c…` *is* HEAD behaviourally, and this boot needs **no rebuild**. ★ That
+retires the stamp trap for this rung by construction rather than by vigilance: there is
+nothing to re-link, so there is no stale archive to link.
+
+### 16.54.1 ⊘⊘ REFUTED — "the log format is not what I assumed". The DATUM IS NOT IN THE LOG.
+
+The brief records that greps for refused alloc-class ids came back empty and reads that as a
+format mismatch, prescribing *"enumerate, then filter"*. Enumerating settles it the other
+way, and the correction matters because the prescription would never have terminated:
+
+`crates/kayfabe-rmrpc/src/lib.rs:406-411` constructs the refusal **carrying the class**:
+
+```rust
+AllocClassNotPermitted { class: u32, denial: Denial },
+```
+
+and `lib.rs:898-905` maps it to the tag that gets counted:
+
+```rust
+BridgeRefusal::AllocClassNotPermitted { denial: Denial::NotOnAllowlist, .. }
+    => FaultTag("BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist"),
+```
+
+The `..` **drops `class`**, and `policy.rs:377` then counts by tag alone. ⇒ `NotOnAllowlist
+x10` is ten refusals *whose class ids were computed, held in the value, and thrown away one
+function call later*. ⊘ **No grep over that log can ever return a class id.** A search that
+comes back empty against a log which structurally cannot contain the datum is not a failed
+search — and "enumerate, then filter" applied to it yields a perfect enumeration of the wrong
+population, indefinitely.
+
+★ The general form, and it is the one worth keeping: **an absent datum and an unmatched
+pattern produce the identical observation — an empty result — and only reading the EMITTER
+tells them apart.** Enumerating the log is the right move for the second and useless for the
+first; the discriminator is upstream of the log.
+
+### 16.54.2 ★★★ ALL THREE censuses are AGGREGATIONS that destroy the question — §16.51.3, one level out
+
+The brief's lesson 1 is that a counter must survive the aggregation it is read through. The
+same audit applied to the three lists the previous rung was read from, from source:
+
+| census | structure | what it destroys |
+|---|---|---|
+| unserviced | `seen: Vec<UnservicedCommand>` deduplicated by `contains`, element `{function, cmd}`, **no count, no timestamp, no seq** (`kayfabe-device/src/unserviced.rs:206-283`) | **multiplicity and order.** `s43`: **104 events → 42 rows.** 62 occurrences left no mark. Nothing says whether an id fired in `cuInit`, in `cuCtxCreate`, or in teardown |
+| bridge refusals | `BTreeMap<FaultTag, usize>` (`policy.rs:86,361,377`) | **every payload.** `class`, `hClient`, `NodeKey` — all projected away by `fault_tag()` |
+| controls | `Vec<ServedControl{cmd, rpc_result, count}>`, cap 64 (`census.rs:101-111,249-268`) | **order.** Keeps counts (better than the other two) but cannot place a row in time, and sees only controls that were *answered* |
+
+⇒ **The device's end-of-run report cannot name what refuses `cuCtxCreate`, for any reader.**
+The previous rung's failure to find it was not a reading failure; the report is the wrong
+instrument, and no amount of care with it would have produced the name.
+
+### 16.54.3 ⊘ REFUTED — `0xc36f` is **VOLTA**, not Ampere; and the guest's refused allocs are all KERNEL RM's
+
+`crates/kayfabe-chips/tests/host_classes.rs:89-91` and `kayfabe-abi/src/capability.rs:1080`:
+**`0xc36f` = `VOLTA_CHANNEL_GPFIFO_A`; `AMPERE_CHANNEL_GPFIFO_A` is `0xc56f`.** `0xc56f` **is**
+on the alloc allowlist, as is `0xa06c` (`KEPLER_CHANNEL_GROUP_A`); `0xc36f` is **not**.
+
+`s43`'s boot dmesg carries four `GspRmAlloc failed … status=0x00000056`, and — the point —
+**dmesg carries the `hClass` that the device census discards:**
+
+| hClient | hClass | resolved (`ogkm-580`) |
+|---|---|---|
+| `0xc1d00008` | `0x00000070` | `NV01_MEMORY_SYSTEM_DYNAMIC` |
+| `0xc1d00008` | `0x0000c36f` | `VOLTA_CHANNEL_GPFIFO_A` — the RC watchdog's channel |
+| `0xc1d00009` | `0x0000402c` | `NV40_I2C` |
+| `0xc1d00001` | `0x0000208f` | `NV20_SUBDEVICE_DIAG` |
+
+★★ **Every one is a `0xc1d0xxxx` KERNEL RM client, and every one is in the *boot* dmesg, not
+in `cup2`'s delta.** `cup2`'s delta (`run_s43_…_probe.log:71-110`) contains **zero**
+`GspRmAlloc` failures — only `GspRmFree` ones. ⇒ **No allocation was refused during
+`cuCtxCreate`**, which retires the whole alloc-class family as the wall and confirms the
+brief's `PromoteFault`-is-the-watchdog finding from the independent direction.
+
+★ Note the cross-instrument shape: the datum the device census projects away (`hClass`) is
+present in dmesg, because RM prints its own arguments. **Two instruments blind in different
+places are worth more than one instrument trusted everywhere.**
+
+### 16.54.4 ★★★ WHAT IS LEFT, and the candidate the enumeration names
+
+`s43`'s 42 distinct unserviced ids resolved against `ogkm-580`'s `ctrl/` headers. Two matter:
+
+- **`0xa06c0101` = `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`** — the TSG schedule. It is
+  **allowlisted** (`capability.rs:777`, so it raises no *bridge* refusal) but it is **not in
+  `OBJECT_CONTROLS`** (`kayfabe-rmrpc/src/policy.rs:1283-1296`, which claims exactly three ids:
+  `0xa06f0103`, `0xa06f0104`, `0x2080012b`). ⇒ nothing in the chain answers it, it falls to the
+  `UnservicedLedger`, and it is answered `NV_ERR_NOT_SUPPORTED`. **Admitted, then unserved.**
+- **`0xa06f0112` = `NVA06F_CTRL_CMD_STOP_CHANNEL`** — **absent from the entire repo**. This one
+  is *explained*, not a candidate: it is exactly what `nv_gpu_ops.c:10957` reports failing, and
+  `:10957` is inside `nvGpuOpsStopChannel`, i.e. teardown. Confirms the brief's teardown
+  ruling by naming its mechanism.
+
+★★ And the silence is itself evidence. `cup2`'s dmesg delta shows **nothing at the moment of
+the refusal** — the first line is already `_nvGpuOpsReleaseChannel`'s
+`NV_ASSERT(status == NV_OK)` at `nv_gpu_ops.c:10328`, freeing `hChannelRetainer`. A control
+issued by **libcuda from userspace** that fails prints to no ring buffer at all. ⇒ a *userspace*
+control refusal is precisely the wall shape that is invisible to every instrument this rung
+inherited. `0xa06c0101` is issued by libcuda.
+
+⊘ **This is a candidate, not a finding.** It is coherent with six independent facts and that
+is exactly the state in which this campaign has been wrong before. It gets measured.
+
+### 16.54.5 THE INSTRUMENT — and it was ALREADY BUILT (§16.40's class, a third time)
+
+No new tracer. `scripts/rpctrace/cuda_ioctl_trace.c` (666 lines) already decodes
+`NV_ESC_RM_CONTROL` / `_ALLOC` / `_FREE` with `cmd`, `hClass`, and **the `status` word the
+caller reads back**; `scripts/bench/uvm_ioctl_trace.c` covers the UVM plane, whose verdict is
+in `params.rmStatus` and which every `_IOC_TYPE=='F'` filter misses structurally. Both were
+written to run on the **host** against real firmware. Pointing them at the **guest**, against
+our emulated GPU, is the new measurement. `scripts/bench/cup2_hook_rmtrace.sh` is the wiring.
+
+★ **Trace one increment to the character in the log** (the brief's lesson 1, discharged): one
+`write(2)` per ioctl to an `O_APPEND` fd. No latch, no max, no per-key overwrite, no sampling,
+**no dedup** — the increment *is* the line, and order is the file's order. The only bound is
+`NVTRACE_MAX`, which caps the hex width of a payload *inside* a line and so cannot hide a
+record; it is passed explicitly rather than defaulted.
+
+⚠ Two traps found while wiring it, both of the kind that make a real result read as a null one:
+- The UVM interposer prints `rmStatus = 0x%08x` **with spaces**; the RM one prints
+  `status=0x%08x`. A grep shaped like the RM row matches **zero** UVM rows, and the zero reads
+  as "no UVM failure". Both patterns are written against the `fprintf` they must match.
+- `cuda_ioctl_trace.c` doubles as a **fault injector** (`NVFAULT_CTRL`/`_ALLOC`/`_STATUS`,
+  `NVSWEEP_GPUINFO`). A trace with any of them set is not a capture. They are `env -u`'d, and
+  the trace is asserted to contain no `INJECT` line.
+
+### 16.54.6 THE FALSIFIER FOR `s44`, committed BEFORE the boot
+
+The scoreable quantity is **the ordered list of RM/UVM records with a non-zero status**, and
+the question is *which record, with which argument, sits between the last `cuDeviceTotalMem`
+control and the teardown burst.*
+
+| | outcome | the line it prints | reading |
+|---|---|---|---|
+| **P** | a `CTRL` record with `cmd=0xa06c0101` and a non-zero status, before the `FREE` burst | `CTRL cmd=0xa06c0101 … status=0x00000056` | ★★★★★ the wall is **named**: the TSG schedule, admitted by the allowlist and unserved by the chain. §16.54.4's candidate confirmed at the boundary |
+| **Q** | the failing record is a `CTRL` with **some other** `cmd` | `CTRL cmd=0x???????? … status=0x……` | ★★★★ **also a win — the deliverable is a NAME, not a specific name.** §16.54.4's candidate refuted and replaced in the same measurement |
+| **R** | the failing record is an `ALLOC` | `ALLOC hClass=0x???????? … status=0x……` | ⊘⊘ indicts §16.54.3: `cup2`'s dmesg delta shows no `GspRmAlloc` failure, so an alloc failing here would mean the delta is not the whole story. The trace names the class the census discards |
+| **S** | **every** RM and UVM record has status 0, and `cuCtxCreate` still returns 801 | the non-zero lists are both EMPTY *and* the totals beside them are non-zero | ★★★★★ **the most informative branch**: the refusal is **not at the ioctl boundary at all**. It is libcuda rejecting a value we answered *successfully but wrongly* — a `_wall_that_can_carry_no_name` — and the next instrument is a value diff against the C oracle, not another refusal hunt |
+| **T** | trace missing/empty, `INJECT` present, `PROMOTE_CTX_SEEN=0`, or any `s43` guest-facing number moves (`0x2080012b` x11/x2, `NotOnAllowlist x10`, `FreeUnknown x15`, doorbells **170**, `CUP2_RC=1`) | the VERIFY block | ⊘ not a result about the wall — the interposer perturbed the run or never loaded. `PROMOTE_CTX_SEEN` is the positive control: a control we independently KNOW this boot issues |
+
+★ **Predicted:** `CUP2_RC=1`, `cuCtxCreate → 801`, and every `s43` census number unchanged —
+the port is byte-identical, so anything that moves is the instrument, not the port.
+⊘ **And a green `cup2` would still not be a compute result**: it launches no kernel
+(`cuMemAlloc` + a 4-byte CE round-trip), so the first real compute rung remains `cup3`.
