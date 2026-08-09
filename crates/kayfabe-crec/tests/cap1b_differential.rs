@@ -416,6 +416,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::BusGetPcieSupportedGpuAtomics,
         WantedTable::FbGetInfoV2,
         WantedTable::CeGetAllPhysicalCaps,
+        WantedTable::GrmgrGetGrFsInfo,
     ]
     .into_iter()
     .collect();
@@ -454,22 +455,25 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // and the sentence has been carried forward unchanged so many times that carrying it
     // forward is what a reader now expects. `a_flag_is_not_progress`: a repeat flag is
     // evidence the answer is nearby, and this one is a queue item, not a paragraph.
-    assert_eq!(universe.len(), 30, "non-vacuity: the universe is not empty");
+    // ⊘ 30 -> 31 at §14.34 (`0x20803801`), the WEAKEST kind a SIXTH time: `GRMGR_GET_GR_FS_INFO`
+    // is issued by `cuInit` and `cap1b` is `nvidia-smi`'s `RmInitAdapter`.
+    assert_eq!(universe.len(), 31, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        11,
+        12,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
-    // ⚠⚠ **The cost of 6 -> 11, stated rather than absorbed.** FIVE of eleven exceptions are
+    // ⚠⚠ **The cost of 6 -> 12, stated rather than absorbed.** SIX of twelve exceptions are
     // now `cuInit`-path controls, and a differential that cannot see them cannot regress
     // them. What stands in for it is a policy-boundary test per control —
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_info_v2,
-    // bus_get_pcie_supported_gpu_atomics,fb_get_info_v2,ce_get_all_physical_caps}.rs` —
+    // bus_get_pcie_supported_gpu_atomics,fb_get_info_v2,ce_get_all_physical_caps,
+    // grmgr_get_gr_fs_info}.rs` —
     // which checks the envelope, the inner status and the params offset but NOT that the
     // reply reaches a real guest queue. ⊘ The only instrument that covers that is a boot
     // (`only_live_boots_are_proof`), and the durable fix is a `cuInit`-driven capture: the
-    // exception set shrinks by FIVE the day one exists, and by nothing at all until then.
+    // exception set shrinks by SIX the day one exists, and by nothing at all until then.
     //
     // ★ §14.33's one is the least bad of the five and the reason is worth stating, because
     // "covered elsewhere" is exactly the sentence that lets a gap through unread:

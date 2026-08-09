@@ -225,27 +225,49 @@ fn the_guest_kernels_own_indices_are_refused_not_overwritten() {
     }
 }
 
-/// ⊘ The next rung's three indices are refused too, by the same mechanism, so a reader can
-/// tell "not built yet" from "answered".
+/// ★★★ §14.34's three, at the policy boundary and against the real GA106's own reply
+/// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66` answers `{0x07, 6, 18}`).
+///
+/// ⊘ `LTS_COUNT` is the one to watch: it is a **projection of `l2_cache_size`**
+/// (`l2 / 128 KiB`), not a stated literal, so this test and the `0x1b` one below cannot
+/// disagree about the same silicon. The product `ltc x ltsPerLtc = 24` is pinned separately
+/// as the value it must NOT be.
 #[test]
-fn the_next_rungs_indices_are_refused_rather_than_guessed() {
-    for idx in [
-        FB_INFO_INDEX_FBP_MASK,
-        FB_INFO_INDEX_LTC_COUNT,
-        FB_INFO_INDEX_LTS_COUNT,
-    ] {
-        let (status, _) = reply_params(&fb_command(&[idx])).expect("claimed, then refused");
-        assert_ne!(status, 0, "index {idx:#x} must be refused");
+fn the_second_walls_three_indices_are_answered_from_the_same_l2_row() {
+    let want = [
+        (FB_INFO_INDEX_FBP_MASK, 0x07u32),
+        (FB_INFO_INDEX_LTC_COUNT, 6),
+        (FB_INFO_INDEX_LTS_COUNT, 18),
+    ];
+    for (idx, value) in want {
+        let (status, params) = reply_params(&fb_command(&[idx])).expect("served");
+        assert_eq!(status, 0, "index {idx:#x}");
+        assert_eq!(
+            fbinfo::decode_fb_info_pairs(&params).unwrap()[0],
+            (idx, value),
+            "index {idx:#x}"
+        );
     }
+    // ★ And all three in one request, which is the shape libcuda actually sends.
+    let (status, params) =
+        reply_params(&fb_command(&[0x1a, 0x22, 0x23])).expect("served as a batch");
+    assert_eq!(status, 0);
+    assert_eq!(
+        fbinfo::decode_fb_info_pairs(&params).unwrap(),
+        want.to_vec()
+    );
 }
 
 /// ⚠ **One unmeasured entry refuses the WHOLE call.** That is RM's shape — a single status
 /// covers the request — and it is the property that makes a partial answer impossible.
 #[test]
 fn one_unmeasured_entry_refuses_the_whole_request() {
+    // ⚠ `0x24` `L2CACHE_ONLY_MODE`, not `LTS_COUNT`: §14.34 serves that one, and a test
+    // whose "unmeasured" index quietly became measured would keep passing while proving
+    // nothing. The index used here must be one no rung has served.
     let (status, _) = reply_params(&fb_command(&[
         FB_INFO_INDEX_BUS_WIDTH,
-        FB_INFO_INDEX_LTS_COUNT,
+        0x24,
         FB_INFO_INDEX_L2CACHE_SIZE,
     ]))
     .expect("claimed, then refused");

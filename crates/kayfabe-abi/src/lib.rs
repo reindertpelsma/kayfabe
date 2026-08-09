@@ -112,6 +112,7 @@ pub mod generated;
 pub mod gmmustatic;
 pub mod gpuatomics;
 pub mod gpuinfo;
+pub mod grfsinfo;
 pub mod grinfo;
 pub mod grstatic;
 pub mod gspstaticinfo;

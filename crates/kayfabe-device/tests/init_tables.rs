@@ -376,7 +376,20 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]` that control is
     // KERNEL_PRIVILEGED and refuses every usermode caller, and the reachable sibling
     // `portMemSet`s the probe's own seed away before forwarding. See `kayfabe_abi::cecaps`.
-    assert_eq!(WantedTable::ALL.len(), 30, "the served universe's size");
+    // ★★★★ 30 -> 31 at §14.34: `0x20803801` GRMGR_GET_GR_FS_INFO, and it is the first of
+    // the thirty-one whose errors are PER-ITEM rather than per-call — RM logs a bad query in
+    // that query's own `status` and marches on (`ogkm-580: ctrl2080grmgr.h:42-50`), which is
+    // the exact opposite of `FbGetInfoV2`'s rule one row above. Attributed, not ratcheted:
+    // `[measured 2026-08-09, boot `gt1433_0de5ddb`]` `cuInit` stops at this control's only
+    // call with `0x56` on a request a real GA106 answers `NV_OK`
+    // (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:64`), and it is in that boot's
+    // unserviced ledger. Nothing new is stated: the one query `cuInit` asks is answered from
+    // `ChipProfile::gr_static`'s own GPC rows.
+    // ⚠ It is also the first row whose WRONG answer would have been INVISIBLE: a query type
+    // this port does not model could have been given a per-query `NV_ERR_NOT_SUPPORTED`
+    // inside an `NV_OK` reply, which reaches neither ledger. `kayfabe_abi::grfsinfo` refuses
+    // per-query only where RM itself does and takes the whole control down otherwise.
+    assert_eq!(WantedTable::ALL.len(), 31, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

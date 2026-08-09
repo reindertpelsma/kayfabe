@@ -1441,8 +1441,23 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     //      `rmladder` bare `Subdevice` (`traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`).
     // ⊘ Still stated rather than assumed away, and it still shrinks to nothing the day a
     // `cuInit`-driven GSP capture exists.
-    let unevidenced_by_this_capture: BTreeSet<u32> =
-        BTreeSet::from([0x2080_1303, 0x2080_1823, 0x2080_182a, 0x2080_2a0b]);
+    //
+    // ⚠⚠ §14.34 adds a FIFTH, `0x20803801` `GRMGR_GET_GR_FS_INFO`, same kind and same
+    // reason. ⊘ Its size is evidenced the same three ways as `0x20802a0b`'s and one more:
+    // the export row declares `sizeof(NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS)`
+    // (`ogkm-580: g_subdevice_nvoc.c:9529`), the header's own arithmetic gives
+    // `8 + 96 x 20 = 1928` (`ctrl2080grmgr.h:59, 239-256, 264-268`), the control carries
+    // `ROUTE_TO_PHYSICAL` so `rmresControl_Prologue_IMPL` RPCs the buffer UNCHANGED
+    // (`resource.c:255-291`) rather than repacking it, and `[measured 2026-08-09]` a real
+    // GA106 shows `size=1928` on the wire with the interposer's TRUNC marker ABSENT — i.e.
+    // the whole record, not a prefix.
+    let unevidenced_by_this_capture: BTreeSet<u32> = BTreeSet::from([
+        0x2080_1303,
+        0x2080_1823,
+        0x2080_182a,
+        0x2080_2a0b,
+        0x2080_3801,
+    ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
         "an exemption for a control this port does not claim is an exemption for nothing"

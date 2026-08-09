@@ -150,10 +150,40 @@
 //! passes for a value that is being read as the wrong quantity. ⊘ The field itself is
 //! **correct and is not touched here**; only the justification is.
 //!
-//! ⇒ `0x1a`/`0x22`/`0x23` are deliberately **not served by this rung**. `0x23` has exactly
-//! one supporting reading and a plausible-looking derivation that contradicts it, which is
-//! the configuration that has produced this project's silent wrong answers. It is the next
-//! rung, with the evidence written down.
+//! ⇒ §14.32 deliberately did **not serve** `0x1a`/`0x22`/`0x23`, on the grounds that `0x23`
+//! had exactly one supporting reading and a plausible-looking derivation contradicting it.
+//!
+//! ## ★★★ §14.34 serves all three — and `0x23` turns out to state NO NEW NUMBER EITHER
+//!
+//! The paragraph above contains its own resolution and nobody read it that way for two
+//! rungs: *"`18 × 128 KiB = 2304 KiB`, which is `l2_cache_size`"*. That is not a coincidence
+//! to note, it is a **derivation**:
+//!
+//! ```text
+//! LTS_COUNT = l2_cache_size / GA10X_L2_SLICE_BYTES = 0x0024_0000 / 131 072 = 18
+//! ```
+//!
+//! ⇒ `0x23` is a projection of [`FbGeometry::l2_cache_size`] — the field this module already
+//! serves to `0x1b` and the one `0x20800a1c` already carries — and the whole rung therefore
+//! states **no new number at all**, exactly as §14.32's four did. `a_flag_is_not_progress`:
+//! the answer was written down in the flag that deferred it.
+//!
+//! ⚠ **What the derivation rests on, stated rather than assumed.**
+//! [`GA10X_L2_SLICE_BYTES`] has **two** supporting points and no direct source line: this
+//! part (`18 × 128 KiB = 2304 KiB = l2_cache_size`) and GA102 (`kmemsysIsPagePLCable_GA102`'s
+//! `== 48` arm on a part whose L2 is 6 MiB, `48 × 128 KiB`). ⊘ It is **not** in any header;
+//! a Hopper profile must re-establish it rather than inherit it, which is why the constant
+//! carries its architecture in its name.
+//!
+//! ★ And note the shape this *avoids*: the alternative was a literal `18` in the GA106 chip
+//! row, which is the per-chip table the owner's `derive_what_you_cannot_query_then_oracle_it`
+//! directive forbids. The derivation cannot drift from `0x1b`; a literal could.
+//!
+//! ⚠ `0x1a` `FBP_MASK` carries an assumption of its own and it is **not** measurable on this
+//! part: `(1 << fbp_count) − 1` is the right mask only when the enabled FBPs are contiguous
+//! from zero. GA106's `0x07` is consistent with both that and with a captured literal, so
+//! this part cannot distinguish them — the same shape as `CHIPLET_GPC_MAP` in
+//! [`crate::grfsinfo`], recorded here so a floorswept part is where it gets settled.
 
 /// `NV2080_CTRL_CMD_FB_GET_INFO_V2` (`ogkm-580: ctrl2080fb.h:459`).
 pub const NV2080_CTRL_CMD_FB_GET_INFO_V2: u32 = 0x2080_1303;
@@ -328,15 +358,90 @@ impl FbGeometry {
     ///
     /// Whatever the four projections return; the whole set is refused rather than a
     /// partially-derived one served.
-    pub fn forwarded_answers(self) -> Result<[(u32, u32); 4], FbInfoError> {
+    pub fn forwarded_answers(self) -> Result<[(u32, u32); 7], FbInfoError> {
         Ok([
             (FB_INFO_INDEX_BUS_WIDTH, self.bus_width_bits()?),
             (FB_INFO_INDEX_RAM_TYPE, self.ram_type_checked()?),
             (FB_INFO_INDEX_FBP_COUNT, self.fbp_count()?),
+            (FB_INFO_INDEX_FBP_MASK, self.fbp_mask()?),
             (FB_INFO_INDEX_L2CACHE_SIZE, self.l2_cache_size_u32()?),
+            (FB_INFO_INDEX_LTC_COUNT, self.ltc_count_checked()?),
+            (FB_INFO_INDEX_LTS_COUNT, self.lts_count()?),
         ])
     }
+
+    /// `0x1a` `FBP_MASK` — which FB partitions are enabled.
+    ///
+    /// ⚠ `(1 << fbp_count) − 1`, which is right **only for contiguous FBPs from zero**.
+    /// `[measured]` GA106 answers `0x07` with `fbp_count = 3`, which is consistent with this
+    /// derivation *and* with a captured literal; this part cannot tell them apart. Recorded
+    /// rather than resolved — a floorswept part settles it.
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`FbGeometry::fbp_count`] returns.
+    pub fn fbp_mask(self) -> Result<u32, FbInfoError> {
+        let n = self.fbp_count()?;
+        // `fbp_count` is `ltc_count / 2` and `ltc_count` is bounded by the chip row, so this
+        // cannot reach 32 on any part this port models; the check is here because a shift
+        // past the width is UB-adjacent nonsense rather than a big number.
+        if n == 0 || n >= 32 {
+            return Err(FbInfoError::LtcCountZero);
+        }
+        Ok((1u32 << n) - 1)
+    }
+
+    /// `0x22` `LTC_COUNT` — `memory_system.ltc_count`, verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`FbInfoError::LtcCountZero`].
+    pub fn ltc_count_checked(self) -> Result<u32, FbInfoError> {
+        if self.ltc_count == 0 {
+            return Err(FbInfoError::LtcCountZero);
+        }
+        Ok(self.ltc_count)
+    }
+
+    /// `0x23` `LTS_COUNT` — the **active** slice count, projected from the L2 size.
+    ///
+    /// ⊘ **Not** `ltc_count × lts_per_ltc_count`. That product is the *configured* slice
+    /// count (`6 × 4 = 24` on GA106) and hardware answers **18**; the header defines this
+    /// index as *"the **active** LTS count across all active LTCs"*
+    /// (`ogkm-580: ctrl2080fb.h:251-254`). See this module's header for both readings and
+    /// why neither is wrong.
+    ///
+    /// # Errors
+    ///
+    /// [`FbInfoError::L2CacheSizeZero`] for a row that states no L2, and
+    /// [`FbInfoError::L2NotSliceAligned`] for one whose L2 is not a whole number of
+    /// [`GA10X_L2_SLICE_BYTES`] — refused rather than rounded, because a rounded slice count
+    /// is a wrong answer with no symptom.
+    pub fn lts_count(self) -> Result<u32, FbInfoError> {
+        if self.l2_cache_size == 0 {
+            return Err(FbInfoError::L2CacheSizeZero);
+        }
+        if self.l2_cache_size % GA10X_L2_SLICE_BYTES != 0 {
+            return Err(FbInfoError::L2NotSliceAligned {
+                bytes: self.l2_cache_size,
+                slice: GA10X_L2_SLICE_BYTES,
+            });
+        }
+        u32::try_from(self.l2_cache_size / GA10X_L2_SLICE_BYTES).map_err(|_| {
+            FbInfoError::L2CacheSizeTooWide {
+                bytes: self.l2_cache_size,
+            }
+        })
+    }
 }
+
+/// One GA10x L2 slice, in bytes.
+///
+/// ⚠ **Not in any header.** `[derived, two supporting points]` this part
+/// (`18 slices × 128 KiB = 2304 KiB = l2_cache_size`, both sides measured on a real GA106)
+/// and GA102 (`kmemsysIsPagePLCable_GA102`'s `== 48` arm, on a part whose L2 is 6 MiB).
+/// ⊘ A Hopper profile must re-establish it, which is what the `GA10X_` in the name is for.
+pub const GA10X_L2_SLICE_BYTES: u64 = 128 * 1024;
 
 /// Why an `FB_GET_INFO_V2` request could not be answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -396,6 +501,16 @@ pub enum FbInfoError {
     /// The chip row states `NV2080_CTRL_FB_INFO_RAM_TYPE_UNKNOWN`, which is a declared value
     /// meaning *unknown* rather than a blank.
     RamTypeUnknown,
+    /// The chip row's `l2CacheSize` is not a whole number of [`GA10X_L2_SLICE_BYTES`], so
+    /// the **active** slice count `0x23` asks for cannot be projected from it. Refused
+    /// rather than rounded: a rounded slice count is a wrong answer with no symptom, and
+    /// this port has already been bitten once by an `LTS_COUNT` that "checked out".
+    L2NotSliceAligned {
+        /// The offending L2 size in bytes.
+        bytes: u64,
+        /// [`GA10X_L2_SLICE_BYTES`].
+        slice: u64,
+    },
 }
 
 impl core::fmt::Display for FbInfoError {
@@ -444,6 +559,12 @@ impl core::fmt::Display for FbInfoError {
                 f,
                 "the chip row states ramType = NV2080_CTRL_FB_INFO_RAM_TYPE_UNKNOWN (0), a \
                  declared value meaning 'unknown' rather than an absence"
+            ),
+            Self::L2NotSliceAligned { bytes, slice } => write!(
+                f,
+                "l2CacheSize {bytes:#x} is not a whole number of {slice:#x}-byte GA10x L2 \
+                 slices, so the ACTIVE LTS count cannot be projected from it; rounding it \
+                 would be a wrong answer with no symptom"
             ),
         }
     }
@@ -612,33 +733,58 @@ mod tests {
         }
     }
 
-    /// ⊘ The next rung's three indices are refused too — `0x23` especially, whose obvious
-    /// derivation `ltc_count * lts_per_ltc_count = 24` contradicts the hardware's 18.
+    /// ★★★ §14.34's three, against the real GA106's own reply.
+    /// `[measured, `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66`]` the request
+    /// `{0x1a, 0x22, 0x23}` is answered `{0x07, 6, 18}`.
     #[test]
-    fn next_rungs_indices_are_refused_rather_than_guessed() {
-        let answers = GA106.forwarded_answers().unwrap();
-        for index in [
-            FB_INFO_INDEX_FBP_MASK,
-            FB_INFO_INDEX_LTC_COUNT,
-            FB_INFO_INDEX_LTS_COUNT,
-        ] {
-            let req = build_request(&[(index, 0)]);
-            assert_eq!(
-                answer_fb_get_info_v2(&req, &answers),
-                Err(FbInfoError::UnmeasuredIndex { index })
-            );
-        }
+    fn the_second_wall_request_is_answered_byte_for_byte() {
+        let req = build_request(&[
+            (FB_INFO_INDEX_FBP_MASK, 0),
+            (FB_INFO_INDEX_LTC_COUNT, 0),
+            (FB_INFO_INDEX_LTS_COUNT, 0),
+        ]);
+        let out = answer_fb_get_info_v2(&req, &GA106.forwarded_answers().unwrap()).unwrap();
+        assert_eq!(
+            decode_fb_info_pairs(&out).unwrap(),
+            [
+                (FB_INFO_INDEX_FBP_MASK, 0x07),
+                (FB_INFO_INDEX_LTC_COUNT, 6),
+                (FB_INFO_INDEX_LTS_COUNT, 18),
+            ]
+        );
     }
 
-    /// ⚠ One refused entry fails the WHOLE call, which is RM's own shape.
+    /// ★★★ `LTS_COUNT` is a **projection of `l2_cache_size`**, not a stated number — so it
+    /// cannot drift from what `0x1b` answers, and it is not the product either.
+    #[test]
+    fn lts_count_is_the_l2_size_in_slices_and_not_a_literal() {
+        assert_eq!(GA106.lts_count().unwrap(), 18);
+        assert_eq!(
+            u64::from(GA106.lts_count().unwrap()) * GA10X_L2_SLICE_BYTES,
+            GA106.l2_cache_size,
+            "the slice count and the L2 size are one fact"
+        );
+        // ⊘ And the product the obvious derivation would give is a different number.
+        assert_ne!(GA106.lts_count().unwrap(), 6 * 4);
+        // ⊘ An L2 that is not a whole number of slices refuses rather than rounding.
+        let odd = FbGeometry {
+            l2_cache_size: GA106.l2_cache_size + 1,
+            ..GA106
+        };
+        assert!(matches!(
+            odd.lts_count(),
+            Err(FbInfoError::L2NotSliceAligned { .. })
+        ));
+    }
+
+    /// ⚠ One refused entry still fails the WHOLE call, which is RM's own shape — checked on
+    /// an index this port genuinely does not model, now that the three above are served.
     #[test]
     fn one_unmeasured_entry_refuses_the_whole_request() {
-        let req = build_request(&[(0x0b, 0), (FB_INFO_INDEX_LTS_COUNT, 0), (0x1b, 0)]);
+        let req = build_request(&[(0x0b, 0), (0x24, 0), (0x1b, 0)]);
         assert_eq!(
             answer_fb_get_info_v2(&req, &GA106.forwarded_answers().unwrap()),
-            Err(FbInfoError::UnmeasuredIndex {
-                index: FB_INFO_INDEX_LTS_COUNT
-            })
+            Err(FbInfoError::UnmeasuredIndex { index: 0x24 })
         );
     }
 

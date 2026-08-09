@@ -731,6 +731,29 @@ pub enum WantedTable {
     /// (`0x400`) nor `_CACHEABLE_BY_INPUT` (`0x20000`) — so it is not a
     /// [`crate::sticky::BRANCH_A_CACHEABLE`] row either.
     CeGetAllPhysicalCaps,
+    /// `NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO` (`0x20803801`) — ★★★ §14.33's wall, and the
+    /// first control this port serves whose errors are **per-item, not per-call**.
+    ///
+    /// `[measured 2026-08-09, boot `gt1433_0de5ddb`]` `cuInit` reaches this as its 63rd
+    /// call and gets `0x56`; a real GA106 answers `NV_OK`
+    /// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:64`).
+    ///
+    /// ⊘ **No id translation.** Unlike [`Self::CeGetAllPhysicalCaps`], the id that fails is
+    /// the id to serve: flags `0x10248` carry `ROUTE_TO_PHYSICAL`, which compiles
+    /// `subdeviceCtrlCmdGrmgrGetGrFsInfo_IMPL`'s pointer to `NULL`
+    /// (`ogkm-580: control.h:159-161`) and RPCs `pParams->cmd` unmodified
+    /// (`resource.c:255-291`). The body is not in the open tree at all.
+    ///
+    /// ★★★ Its batch is **fault tolerant per query** (`ogkm-580: ctrl2080grmgr.h:42-50`):
+    /// a structural fault fails the call, a query-specific one is logged in that query's own
+    /// `status` and the loop marches on. ⚠ Which means a per-query refusal rides inside an
+    /// `NV_OK` reply and reaches **no ledger this port keeps** — so
+    /// [`kayfabe_abi::grfsinfo`] refuses per-query only where RM itself does, and takes the
+    /// whole control down for any type it merely does not model.
+    ///
+    /// ⚠ Flags `0x10248` carry neither `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor
+    /// `_CACHEABLE_BY_INPUT` (`0x20000`), so not a [`crate::sticky::BRANCH_A_CACHEABLE`] row.
+    GrmgrGetGrFsInfo,
 }
 
 impl WantedTable {
@@ -761,7 +784,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 30] = [
+    pub const ALL: [WantedTable; 31] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -792,6 +815,7 @@ impl WantedTable {
         Self::BusGetPcieSupportedGpuAtomics,
         Self::FbGetInfoV2,
         Self::CeGetAllPhysicalCaps,
+        Self::GrmgrGetGrFsInfo,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -861,6 +885,7 @@ impl WantedTable {
             Self::CeGetAllPhysicalCaps => {
                 kayfabe_abi::cecaps::NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS
             }
+            Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO,
         }
     }
 
@@ -907,6 +932,7 @@ impl WantedTable {
             }
             Self::FbGetInfoV2 => kayfabe_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE,
             Self::CeGetAllPhysicalCaps => kayfabe_abi::cecaps::CE_GET_ALL_CAPS_PARAMS_SIZE,
+            Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE,
         }
     }
 
@@ -1604,6 +1630,55 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 };
                 kayfabe_abi::cecaps::encode_ce_get_all_physical_caps(&geometry)
+            }
+            // ★★★ The first arm whose reply carries PER-ITEM statuses. Every other control
+            // here is served or refused as a whole; this one answers `NV_OK` with a status
+            // word inside each query, because that is RM's own contract
+            // (`ogkm-580: ctrl2080grmgr.h:42-50`) and refusing the batch is what a real
+            // GA106 does NOT do.
+            //
+            // ⊘ And it states no new number: `gpc_mask` is the row already served to
+            // `INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS`. The one query `cuInit` asks —
+            // `CHIPLET_GPC_MAP` — is the logical→physical GPC map, which is that mask's set
+            // bits in order.
+            //
+            // ⚠ The error arm is the loud one BY DESIGN. A query type this port does not
+            // model could have been answered with a per-query `NV_ERR_NOT_SUPPORTED`, which
+            // would have been invisible: the command is served, the result is `0`, and
+            // neither ledger would carry a word about it. `kayfabe_abi::grfsinfo` therefore
+            // returns an error for those and this arm refuses the whole control, which
+            // costs one boot and cannot be missed.
+            WantedTable::GrmgrGetGrFsInfo => {
+                let at = req.params_at;
+                // ⊘ `gpc_mask()` off the chip's OWN GR rows, never `GA106_GPC_MASK`: the
+                // constant is the same value today and would be a second statement of it.
+                // `GrStaticProfile::gpc_mask` derives from `gpcs.len()`, which is the slice
+                // `WantedTable::GrFloorsweepingMasks` encodes — one description of one
+                // silicon, the `deviceinfo` rule applied to the GR plane.
+                let Ok(gpc_mask) = self.chip.gr_static.gpc_mask() else {
+                    return refuse();
+                };
+                let tpc_masks: Vec<u32> = self
+                    .chip
+                    .gr_static
+                    .gpcs
+                    .iter()
+                    .map(|g| g.tpc_mask)
+                    .collect();
+                let geometry = kayfabe_abi::grfsinfo::GrFsGeometry {
+                    gpc_mask,
+                    // `physGfxGpcMask` — the same word `encode_floorsweeping_masks` writes
+                    // for all three GPC masks, and for the same reason: they cannot drift.
+                    gfx_gpc_mask: gpc_mask,
+                    tpc_masks: &tpc_masks,
+                };
+                match kayfabe_abi::grfsinfo::answer_gr_fs_info(
+                    &cmd.payload[at..at + kayfabe_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE],
+                    &geometry,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
             }
         };
 
