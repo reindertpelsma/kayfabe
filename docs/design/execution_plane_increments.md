@@ -6418,3 +6418,45 @@ deleted.
 `d24ad77` could not see it): whether `0x20808159`'s refusal is the *last* wall. Rows 81-88 are unobserved on our side — every one of
 them is currently our teardown — so the eight calls after it have never been exercised against
 this port at all.
+
+#### ★★★★ §14.37 BOOTED — `cuInit`'s CONTROL PLANE IS COMPLETE, and the wall is no longer a control
+
+`[measured 2026-08-09, boot `gf1438` at `20126b5`, real GA106 on `vh`, probe flags: **NONE**]`
+Both artifacts stamped `kayfabe-rev:20126b54…`.
+
+A positional diff of the guest's `cuInit` trace against
+`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt` on `(kind, id, status)` now leaves **one**
+control divergence in the whole of rows 2-87:
+
+| row | id | real | ours | verdict |
+|---|---|---|---|---|
+| 40 | `0x20810108` | `NV_OK` | `0x56` | benign — `[measured]` three boots running, `cuInit` proceeds 47 rows past it |
+
+Rows 85, 86 and 87 (`0x20808162`, `0x2080182b`, `0x20803002`) all match. ⇒ **every control
+`cuInit` issues is now either served correctly or refused exactly where a real GA106 also
+refuses** (`0x2080012f`, row 49).
+
+##### ★★★ Where it stops now, and why that is a change of KIND
+
+Real hardware's row 88 is `ALLOC hClass=0x000050a0` — `NV50_MEMORY_VIRTUAL`, the last row before
+`MARK stage1 cuInit END`. Our trace never reaches it: after row 87 libcuda goes straight to
+teardown (`ESC 0x4f`, `FREE …`). `cuInit` returns **3**.
+
+⊘⊘ **So the remaining gap is no longer a wall in the sense the last five rungs used the word.**
+Every previous rung had a named refusal at a known row, visible in the unserviced ledger and
+diffable by id. This one has neither: nothing is refused at row 88 because **the guest never asks**.
+That makes the ledger, the census and the id-diff — the three instruments this ladder has run on —
+all structurally blind to it, which is exactly the condition
+`a_saturated_instrument_looks_exactly_like_absence` warns about.
+
+⚠ And it is the predicted place: the original wall map's rung 4 called the alloc/RPC plane *"the
+real remaining work, and it is not values — it is new verbs"*, and said it was the one item whose
+**shape** is new rather than whose value is new. That prediction has held.
+
+##### ⊘ What `cuInit → 3` does NOT license
+
+`3` is `CUDA_ERROR_NOT_INITIALIZED`, and it is also the number the C artifact's echo defect
+produced at a completely different layer (`cudaErrorInitializationError`). ⊘ Do not read the two
+as the same finding. What is `[measured]` is positional: the trace grew from 89 lines at
+`d24ad77` to 96 at `20126b5`, and rows 81-87 moved from *"our teardown"* to *"matches hardware"*.
+That is the sound progress claim; the error code is not evidence of anything on its own.
