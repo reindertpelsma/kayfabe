@@ -474,10 +474,18 @@ pub fn run_submission(
     }
     // ⊘ A doorbell that brought no readable entry is NOT served. The guest rang for work;
     // if we found none, saying "served" is exactly §14.8's silent no-op.
+    //
+    // ★★★ And it is named for WHAT HAPPENED. This used to raise
+    // `FwdFault::PushTooFragmented { len: 0 }` — a bound of ours on how many address-table
+    // spans one range may cut into — for a case in which there is no range to cut. `[measured
+    // 2026-08-09, boots `uvm2_d0fbac0` / `scan1_00865a7` / `vaspan_994bbdc`]` four boots read
+    // their wall as a fragmentation limit that was never reached. A wrong name is a false
+    // diagnosis with a fix attached, which is worse than none.
     if ranges.is_empty() {
-        return Err(CeUtilsRefusal::plain(FwdFault::PushTooFragmented {
-            va: GpuVa(chan.ring_va),
-            len: 0,
+        return Err(CeUtilsRefusal::plain(FwdFault::RingBroughtNoEntry {
+            ring_va: GpuVa(chan.ring_va),
+            index: run.cursor.next % entries,
+            entries,
         }));
     }
 

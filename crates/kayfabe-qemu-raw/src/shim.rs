@@ -208,7 +208,20 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// distinct count rather than the sample's clamped length — an ABI-22 reader would have
 /// indexed `unserviced[0..unserviced_len]` out of bounds the first time a boot exceeded the
 /// cap, which is the second reason this could not be a silent widening.
-pub const ABI_VERSION: u32 = 27;
+///
+/// ★ Bumped to **28** at §16.6, the ABI-3 reason a sixteenth time and in **two** widths at
+/// once: [`GVAS_PUBLICATION_SLOTS`] went 8 → 32 (4 800 bytes of extra rows) and
+/// [`DOORBELL_REFUSAL_LEN`] went 448 → 1024 (576 more bytes in each of the two sentence
+/// structs). An ABI-27 shim would allocate all three old layouts and this archive would
+/// write well past the end of every one of them.
+///
+/// ⊘ And, as at ABI-23, the width is the smaller half. Both caps were **silent**: the
+/// publication array clipped the one row six boots' worth of refusals named
+/// (`(0xc1d0000a, 0xcaf00005)` sat past the eighth), and the sentence buffer truncated with
+/// no marker, so a clipped refusal read as a complete one. [`copy_sentence`] now stamps a
+/// visible `[CLIPPED …]` tail, which is a behaviour change an ABI-27 reader must not see
+/// half of.
+pub const ABI_VERSION: u32 = 28;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -901,13 +914,153 @@ pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
 /// (`FwdFault::MalformedToken` ≠ `FwdFault::UnknownVchid` — two different diagnoses with
 /// two different fixes), and the sentence is the variant's payload, which is prose. A
 /// single blob would make the only machine-readable half a substring search.
-pub const DOORBELL_REFUSAL_LEN: usize = 448;
+///
+/// # ★★ 448 → 1024, and the 448 was a SATURATING report nobody had audited
+///
+/// `[measured 2026-08-09, boot `vaspan_994bbdc`]` the refusal sentence this buffer carried
+/// was **292 bytes** of a 448-byte array — 156 of headroom — and §16.6's rung adds the
+/// deciding publication's four `PdeLevel`s to it, which is ~180 bytes more. ⇒ ~472 bytes
+/// into a 448-byte array: the levels would have been clipped off the END, which is exactly
+/// where the new information is. And the copy was a bare `min()`: a clipped sentence and a
+/// complete one produced **the same** log line, differing only in that the interesting tail
+/// was gone. ⊘ Standing rule (b) — *audit every bounded collection for which side of the
+/// boundary it sits on* — and this one sits on the report side, where saturation is
+/// indistinguishable from a short answer.
+///
+/// ⇒ Widened to 1024 **and** made loud: [`copy_sentence`] stamps a `[CLIPPED …]` tail, so
+/// the failure mode is now a visible statement instead of an absence.
+pub const DOORBELL_REFUSAL_LEN: usize = 1024;
 /// How many bytes of a doorbell refusal's **kind** the audit carries.
 ///
 /// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
 /// `&'static str` from a fixed finite set, and 64 bytes covers every one of them with room
 /// to spare.
 pub const DOORBELL_KIND_LEN: usize = 64;
+
+/// ★★★ **Copy a diagnostic sentence into a fixed wire buffer, and SAY SO when it did not
+/// fit** — returning the number of bytes written.
+///
+/// # ⊘ Why a clipped sentence must not look like a short one
+///
+/// Every sentence buffer in this ABI was filled by `let take = s.len().min(LEN)` and a
+/// `copy_from_slice`. That is byte-correct and **diagnostically silent**: a 500-byte
+/// refusal in a 448-byte array printed 448 bytes with nothing to say it had been cut, so
+/// an operator reading a boot log sees a sentence that ends early and reads it as *the
+/// whole finding*. This project has now paid for that shape nine times in one night under
+/// other names (a fixture that normalised the field away, an eight-row sample used as a
+/// lookup, two ledgers full at their caps) — the general rule being: **a bounded
+/// collection must be able to report its own saturation**, or absence and truncation are
+/// the same observation.
+///
+/// ★ The marker carries the sentence's **true length**, so the reader learns not only that
+/// it was clipped but by how much — which is what decides whether the buffer needs widening
+/// or the sentence needs shortening.
+///
+/// ⊘ Truncation lands on a **character** boundary, never a byte: these sentences carry
+/// `⊘`, `★` and `—`, and a cut mid-UTF-8 prints as a replacement character in the one line
+/// an operator reads.
+///
+/// ⚠ The marker is ASCII by construction, so appending it can never itself split a
+/// character. In the degenerate case where the buffer is too small to hold even the marker,
+/// the marker's own head wins the buffer: a reader must always be able to tell that
+/// something was dropped, and *"nothing legible fits"* is still that statement.
+#[must_use]
+pub fn copy_sentence(dst: &mut [u8], s: &str) -> u64 {
+    if s.len() <= dst.len() {
+        dst[..s.len()].copy_from_slice(s.as_bytes());
+        return s.len() as u64;
+    }
+    let marker = format!(" [CLIPPED, sentence was {} bytes]", s.len());
+    let mb = marker.as_bytes();
+    if mb.len() >= dst.len() {
+        let take = dst.len();
+        dst[..take].copy_from_slice(&mb[..take]);
+        return take as u64;
+    }
+    let mut take = dst.len() - mb.len();
+    while take > 0 && !s.is_char_boundary(take) {
+        take -= 1;
+    }
+    dst[..take].copy_from_slice(&s.as_bytes()[..take]);
+    dst[take..take + mb.len()].copy_from_slice(mb);
+    (take + mb.len()) as u64
+}
+
+/// ★★★★ **The WHOLE publication row for one `(hClient, hVASpace)`, all levels** — the
+/// instrument §16.6 is, and the one thing six consecutive boots could not print.
+///
+/// # ⊘ Why the root address alone was not enough, and it is a MEASURED gap
+///
+/// `[measured 2026-08-09, boots `uvm1_b731e3c` … `vaspan_994bbdc`]` every one of those
+/// boots refused the same doorbell and named the same pair —
+/// `(hClient 0xc1d0000a, hVASpace 0xcaf00005)` — and every one of them printed its root as
+/// `0x4000/ap1/sh47` and nothing else, while the eight-row census sample stopped before the
+/// row itself (§16.3 fixed the *lookup*, not the *report*). §16.5's anomaly is that
+/// `0x4000` sits nowhere near the `~0x2efa_xxxx` every other root in the boot occupies,
+/// and separating its three causes needs fields the root projection does not carry:
+///
+/// | field printed here | the outcome it separates |
+/// |---|---|
+/// | `arm` (`cmd`) | **decoded from the wrong arm** — `0x90f10106` is a client VA space, `0x20800a9f` is the GPU group's global one, and only the first names a `hVASpace` in its header |
+/// | `x` (`count`) | **a STALE publication last-write-wins picked**: `> 1` means this pair was published more than once and the table kept the later body |
+/// | `L0.size` | a **real root RM had not yet backed** — `[measured]` every healthy root in the boot publishes `size 0x20`, i.e. 32 bytes of root PDE, so a different size is a different kind of object |
+/// | `L1..L3` | whether the levels *below* the root are the same `~0x2efa_xxxx`/`0x1000` shape as a working VA space's, or move with the root |
+///
+/// ⊘ Read out of [`kayfabe_device::gvaspub::GvasPubSnapshot::roots`] — the **same** map
+/// `kayfabe_device::ceresolve::published_root` looks in — so the row printed is by
+/// construction the row that decided the walk, not a second projection that can disagree
+/// with it. `execution_plane_increments.md` §16.2 wall 1 was exactly two projections of one
+/// fact disagreeing, with the weaker one load-bearing.
+///
+/// ★ An **absent** row states the table's completeness beside itself. *"No row for this
+/// pair"* means *"the guest never published one"* only while
+/// [`kayfabe_device::gvaspub::GvasPubSnapshot::roots_refused`] is zero; §16.3 is the boot
+/// where that distinction was the whole bug, and a reader must not have to go and find the
+/// other line to know which sentence they are reading.
+///
+/// ⊘ `pub` so a test can drive the FORMATTER without a guest — and that is all such a test
+/// proves. Whether this string reaches a boot log is decided by
+/// [`Shim::addressing_probe`]'s caller and by [`DOORBELL_REFUSAL_LEN`], and the only oracle
+/// for that is a boot. (Observability failure #6 of 2026-08-09: an acceptance predicate
+/// satisfied by a test calling the function directly.)
+#[must_use]
+pub fn publication_row(
+    pubs: &kayfabe_device::gvaspub::GvasPubSnapshot,
+    client: u32,
+    vaspace: u32,
+) -> String {
+    let Some(p) = pubs.roots.get(&(client, vaspace)) else {
+        return format!(
+            " row=ABSENT-FROM-ROOT-TABLE({} rows, {} REFUSED-BY-CAP)",
+            pubs.roots.len(),
+            pubs.roots_refused
+        );
+    };
+    let mut levels = String::new();
+    // ⊘ `num_levels` and NOT `levels.len()`: entries at or past it are decoded so the
+    // re-encode is faithful and carry no meaning (`kayfabe_abi::gvaspacepdes`), so printing
+    // them would put addresses in the log that the guest never claimed. Clamped because the
+    // count came off the wire.
+    let n = (p.pdes.num_levels as usize).min(p.pdes.levels.len());
+    for (i, lv) in p.pdes.levels.iter().take(n).enumerate() {
+        levels.push_str(&format!(
+            " L{i}=0x{:x}/sz0x{:x}/ap{}/sh{}",
+            lv.phys_address, lv.size, lv.aperture, lv.page_shift
+        ));
+    }
+    format!(
+        " row=arm0x{:08x} x{} lv{}/{} pgsz0x{:x} sd0x{:x}/{} va[0x{:x}..0x{:x}]{levels}",
+        p.cmd,
+        p.count,
+        p.pdes.num_levels,
+        p.pdes.levels.len(),
+        p.pdes.page_size,
+        p.pdes.h_subdevice,
+        p.pdes.subdevice_id,
+        p.pdes.virt_addr_lo,
+        p.pdes.virt_addr_hi,
+    )
+}
 
 /// How many distinct `(cmd, rpc_result)` served-control rows [`KayfabeRegAudit`] carries.
 ///
@@ -1091,7 +1244,13 @@ impl Default for KayfabeDoorbellServing {
 /// ★ Matches `kayfabe_device::gvaspub::GVAS_PUBLICATION_SAMPLE_MAX`, and `gvas_pub_len`
 /// reports the truth even when it exceeds this — a full array is never mistaken for a
 /// complete list.
-pub const GVAS_PUBLICATION_SLOTS: usize = 8;
+///
+/// ★★★ **8 → 32 at §16.6**, and the eight was hiding the row the whole rung is about:
+/// `[measured 2026-08-09]` six consecutive boots published **11 distinct** VA spaces and
+/// printed the first eight, so `(hClient 0xc1d0000a, hObject 0xcaf00005)` — the pair every
+/// one of those boots names in its doorbell refusal — had its body printed in **none** of
+/// them. See `kayfabe_device::gvaspub::GVAS_PUBLICATION_SAMPLE_MAX`.
+pub const GVAS_PUBLICATION_SLOTS: usize = 32;
 
 /// `GMMU_FMT_MAX_LEVELS` — the `levels[]` bound the publication's own ABI declares
 /// (`ogkm-580: ctrl/ctrl90f1.h:37`).
@@ -2323,6 +2482,10 @@ impl SharedDoorbell {
         };
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell;
         let root = plane.published_root(facts.client, vaspace);
+        // ★★★★ §16.6 — THE WHOLE ROW THE LOOKUP CHOSE, read out of the SAME table
+        // `published_root` reads. Six boots named this pair in a refusal and printed no
+        // body for it; see [`publication_row`] for what each field decides.
+        let row = publication_row(&plane.gvas_publications(), facts.client, vaspace);
         let ring = plane.resolve_published_va(facts.client, vaspace, ring_va, demand());
         let fin = plane.resolve_published_va(
             facts.client,
@@ -2349,7 +2512,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}",
+            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),
@@ -2831,13 +2994,9 @@ impl Regs {
             };
             // ⊘ Truncated on a CHARACTER boundary, not on a byte: a sentence cut mid-UTF-8
             // would print as a replacement character in the one line an operator reads to
-            // find out why their forwarding plane is down.
-            let mut take = why.len().min(ISOLATE_REFUSAL_LEN);
-            while take > 0 && !why.is_char_boundary(take) {
-                take -= 1;
-            }
-            isolate_refusal.text[..take].copy_from_slice(&why.as_bytes()[..take]);
-            isolate_refusal.len = take as u64;
+            // find out why their forwarding plane is down — and truncation is now STATED
+            // rather than silent, which is the whole of `copy_sentence`'s docs.
+            isolate_refusal.len = copy_sentence(&mut isolate_refusal.text, &why);
         }
         // ★★★ **E2** — what the doorbell aperture saw, DESTRUCTURED with no `..` for
         // `Shim::audit`'s reason: a field added to `DoorbellLog` and not wired here is a
@@ -2850,13 +3009,9 @@ impl Regs {
         let mut doorbell_local_serving = KayfabeDoorbellServing::default();
         if let Some(note) = last_local_serving {
             doorbell_local_serving.present = 1;
-            // ⊘ Truncated on a CHARACTER boundary, for the reason every sentence here is.
-            let mut take = note.len().min(DOORBELL_REFUSAL_LEN);
-            while take > 0 && !note.is_char_boundary(take) {
-                take -= 1;
-            }
-            doorbell_local_serving.text[..take].copy_from_slice(&note.as_bytes()[..take]);
-            doorbell_local_serving.len = take as u64;
+            // ⊘ Truncated on a CHARACTER boundary and SAYING SO, for the reason every
+            // sentence here is — see [`copy_sentence`].
+            doorbell_local_serving.len = copy_sentence(&mut doorbell_local_serving.text, &note);
         }
         let mut doorbell_refusal = KayfabeDoorbellRefusal::default();
         if let Some(r) = first_refusal {
@@ -2865,14 +3020,11 @@ impl Regs {
             let ktake = kb.len().min(DOORBELL_KIND_LEN);
             doorbell_refusal.kind[..ktake].copy_from_slice(&kb[..ktake]);
             doorbell_refusal.kind_len = ktake as u64;
-            // ⊘ Truncated on a CHARACTER boundary, not on a byte, for the reason the
-            // isolate sentence above is.
-            let mut take = r.why.len().min(DOORBELL_REFUSAL_LEN);
-            while take > 0 && !r.why.is_char_boundary(take) {
-                take -= 1;
-            }
-            doorbell_refusal.text[..take].copy_from_slice(&r.why.as_bytes()[..take]);
-            doorbell_refusal.len = take as u64;
+            // ⊘ Truncated on a CHARACTER boundary and SAYING SO, for the reason the isolate
+            // sentence above is. ★ This is the buffer §16.6 loaded up with a whole
+            // publication body, and the one whose silent `min()` would have eaten the
+            // deciding levels first — they are at the END of the sentence.
+            doorbell_refusal.len = copy_sentence(&mut doorbell_refusal.text, &r.why);
         }
         // ★★★ §8.2.2 — the GPFIFO-ring census. Destructured with no `..` for the reason
         // the isolate census below is: a field added to `RingCensus` and not wired here

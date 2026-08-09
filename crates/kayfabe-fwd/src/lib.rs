@@ -455,8 +455,43 @@ pub enum FwdFault {
         /// The aperture the binding named.
         aperture: Aperture,
     },
+    /// ★★★ **The doorbell's ring brought NO decodable GPFIFO entry** — the guest rang for
+    /// work and the entry at the cursor read back as nothing.
+    ///
+    /// # ⊘ Why this is not [`FwdFault::PushTooFragmented`], which is what it used to say
+    ///
+    /// `[measured 2026-08-09, boots `uvm2_d0fbac0` / `scan1_00865a7` / `vaspan_994bbdc`]`
+    /// four consecutive boots reported the UVM channel's wall as
+    /// `[FwdFault::PushTooFragmented] { va: GpuVa(0x121010000), len: 0 }`. That name means
+    /// *"one range cut into more address-table spans than [`MAX_PUSH_SPANS`]"* — a
+    /// **fragmentation limit of ours**, raised at
+    /// [`pushbuffer_ranges`]. The measured fact was the opposite: no range existed at all,
+    /// because the ring read back as zeros (`scan=64/1024 declared, unread=0,
+    /// nonzero=NONE`). ⇒ Every boot log named a bound we never hit, for a submission that
+    /// never had a byte to fragment.
+    ///
+    /// ⊘ A refusal by the **wrong** name is worse than an unnamed one: it is a specific,
+    /// actionable, false diagnosis, and `len: 0` is the only thing that ever hinted the
+    /// sentence was not about fragmentation at all. `mode2_forwarding_model.md`'s *"refuse
+    /// by name"* is a claim about the name being TRUE, not about there being one.
+    ///
+    /// ★ It carries the index and the declared depth, so *"the cursor is past the end"* and
+    /// *"index 0 of a ring the guest never wrote"* are two readings of this variant and not
+    /// one.
+    RingBroughtNoEntry {
+        /// The ring's base GPU virtual address, as the channel declared it.
+        ring_va: GpuVa,
+        /// The entry index the cursor was at — `0` is the guest's first-ever submission.
+        index: u32,
+        /// How many entries the channel declared the ring holds.
+        entries: u32,
+    },
     /// A GPFIFO range cut into more address-table spans than [`MAX_PUSH_SPANS`] — a loud
     /// refusal, never a truncated read. See that constant for why the bound exists.
+    ///
+    /// ⊘ **A bound of OURS, never a statement about the guest** — and never the empty-ring
+    /// case, which is [`FwdFault::RingBroughtNoEntry`]. See that variant for the four boots
+    /// this one mislabelled.
     PushTooFragmented {
         /// The range's start VA.
         va: GpuVa,

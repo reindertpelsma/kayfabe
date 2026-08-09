@@ -1520,3 +1520,182 @@ fn the_audit_reports_the_probe_set_the_device_ran_with() {
     assert_eq!(audit.probe_arm[1], 37);
     assert_eq!(&audit.probe_arm[2..], &[0u32; 6]);
 }
+
+// ── §16.6: the two REPORT caps that hid the row deciding the wall ──────────────────
+
+/// ★★★ **A sentence that did not fit must SAY it did not fit.**
+///
+/// `[measured 2026-08-09, boot `vaspan_994bbdc`]` the doorbell refusal was 262 bytes in a
+/// 448-byte wire buffer filled by a bare `min()`. §16.6 appends the deciding VA space's
+/// whole publication body to that sentence — four `PdeLevel`s, ~180 bytes — which lands it
+/// on the cap, and the levels are at the **END**, so they are the first thing a silent
+/// truncation eats. ⊘ The old copy produced a byte-identical log line whether it had clipped
+/// or not, which is the shape this project has now paid for nine times in one night: a
+/// bounded collection that cannot report its own saturation makes absence and truncation the
+/// same observation.
+#[test]
+fn a_clipped_refusal_sentence_states_that_it_was_clipped_and_how_long_it_really_was() {
+    use kayfabe_qemu_raw::shim::copy_sentence;
+
+    // Fits: byte-for-byte, and NO marker — a marker on a complete sentence would be its own
+    // false statement.
+    let mut buf = [0u8; 64];
+    let n = copy_sentence(&mut buf, "root=0x4000/ap1/sh47") as usize;
+    assert_eq!(&buf[..n], b"root=0x4000/ap1/sh47");
+    assert!(
+        !String::from_utf8_lossy(&buf[..n]).contains("CLIPPED"),
+        "a sentence that fitted must not claim it was cut"
+    );
+
+    // Does not fit: the marker is present, it names the TRUE length, and the write stayed
+    // inside the buffer.
+    let long = "L0=0x4000/sz0x20/ap1/sh47".repeat(40);
+    let mut buf = [0u8; 128];
+    let n = copy_sentence(&mut buf, &long) as usize;
+    assert!(n <= buf.len(), "the copy must never run past the buffer");
+    let got = std::str::from_utf8(&buf[..n]).expect("a sentence is UTF-8 or it is unreadable");
+    assert!(
+        got.contains("CLIPPED"),
+        "a clipped sentence must be distinguishable from a short one: {got}"
+    );
+    assert!(
+        got.contains(&long.len().to_string()),
+        "the marker carries the TRUE length, which is what decides whether to widen the \
+         buffer or shorten the sentence: {got}"
+    );
+
+    // ⊘ And it clips on a CHARACTER boundary: these sentences carry `⊘`, `★` and `—`, and a
+    // byte cut prints as a replacement character in the one line an operator reads.
+    let stars = "★".repeat(200);
+    let mut buf = [0u8; 100];
+    let n = copy_sentence(&mut buf, &stars) as usize;
+    std::str::from_utf8(&buf[..n]).expect("clipped mid-character — the cut must land on a char");
+}
+
+/// ★★★★ **The report may not clip over the row that decides the boot.**
+///
+/// `[measured 2026-08-09]` six consecutive boots (`uvm1_b731e3c` … `vaspan_994bbdc`) each
+/// published **11 distinct** VA spaces and printed the first **eight**, so
+/// `(hClient 0xc1d0000a, hObject 0xcaf00005)` — the pair every one of those boots names in
+/// its doorbell refusal — had its body printed in none of them. §16.3 repaired the *lookup*
+/// (`GvasPubSnapshot::roots`, 256 rows) and left the *report* at eight.
+///
+/// ⊘ This is not "8 is wrong and 32 is right". It is: the report's cap must exceed what a
+/// real boot publishes, and the number that boot published is **11**. Asserted against the
+/// measurement so shrinking the cap back under it goes red here rather than three boots
+/// later.
+#[test]
+#[allow(clippy::assertions_on_constants)]
+fn the_publication_report_shows_more_rows_than_a_real_boot_publishes() {
+    // The measured distinct-publication count of every boot 2026-08-09.
+    const MEASURED_DISTINCT_PUBLICATIONS: usize = 11;
+    // ⊘ Yes, both sides are constants — that IS the property, and clippy's `const { … }`
+    // suggestion is declined on purpose: a const block cannot carry the interpolated
+    // sentence that names the boot their number is now below, and a failure whose message
+    // rots into "assertion failed" is a failure somebody silences.
+    assert!(
+        kayfabe_qemu_raw::shim::GVAS_PUBLICATION_SLOTS > MEASURED_DISTINCT_PUBLICATIONS,
+        "the wire report holds {} rows and a measured boot publishes {MEASURED_DISTINCT_PUBLICATIONS} \
+         distinct VA spaces — the row the doorbell refusal NAMES would print nowhere",
+        kayfabe_qemu_raw::shim::GVAS_PUBLICATION_SLOTS
+    );
+    // ★ And the two halves must agree: the archive fills `GVAS_PUBLICATION_SLOTS` from a
+    // `Vec` the device caps at `GVAS_PUBLICATION_SAMPLE_MAX`, so a slots array larger than
+    // the sample is dead space and a smaller one is a second, silent clip.
+    assert_eq!(
+        kayfabe_qemu_raw::shim::GVAS_PUBLICATION_SLOTS,
+        kayfabe_device::gvaspub::GVAS_PUBLICATION_SAMPLE_MAX,
+        "the wire array and the device's sample must be the same width or one of them clips \
+         without saying so"
+    );
+}
+
+/// ★★★★ **The row carries every field the three §16.6 outcomes are separated by.**
+///
+/// The rung is: print the publication row for `(0xc1d0000a, 0xcaf00005)` — whole body, all
+/// four levels — and the three fixes it can point at are *a real root RM had not yet
+/// backed*, *a stale publication last-write-wins picked over a later real one*, and *the
+/// body was decoded from the wrong arm*. Each needs a different field, so a row that prints
+/// the root address alone (which is what six boots printed) separates none of them.
+///
+/// ⊘ **This proves the formatter and nothing downstream of it.** Whether the string reaches
+/// a boot log is decided by the doorbell sentence buffer and by who calls the probe; the
+/// only oracle for that is a boot, and this test must not be mistaken for one — observability
+/// failure #6 of 2026-08-09 was an acceptance predicate satisfied by a test calling the
+/// function directly.
+#[test]
+fn the_publication_row_prints_the_arm_the_count_and_every_declared_level() {
+    use kayfabe_abi::gvaspacepdes::{PdeLevel, ServerReservedPdes};
+    use kayfabe_device::gvaspub::{GvasPubLog, GvasPublication};
+
+    let mut levels = [PdeLevel::default(); kayfabe_qemu_raw::shim::GVAS_MAX_LEVELS];
+    // `[measured 2026-08-09, boot `vaspan_994bbdc`, rev `994bbdc10`]` the shape every
+    // healthy root in that boot publishes, and the anomaly beside it: root `0x4000` where
+    // the working VA spaces sit at `~0x2efa_xxxx`.
+    levels[0] = PdeLevel {
+        phys_address: 0x4000,
+        size: 0x20,
+        aperture: 1,
+        page_shift: 47,
+    };
+    levels[1] = PdeLevel {
+        phys_address: 0x2efa_9b000,
+        size: 0x1000,
+        aperture: 1,
+        page_shift: 38,
+    };
+    levels[2] = PdeLevel {
+        phys_address: 0x2efa_9a000,
+        size: 0x1000,
+        aperture: 1,
+        page_shift: 29,
+    };
+    levels[3] = PdeLevel {
+        phys_address: 0x2efa_99000,
+        size: 0x1000,
+        aperture: 1,
+        page_shift: 21,
+    };
+    let pdes = ServerReservedPdes {
+        h_subdevice: 0,
+        subdevice_id: 0,
+        page_size: 0x200000,
+        virt_addr_lo: 0x1_0000_0000,
+        virt_addr_hi: 0x1_1fff_ffff,
+        num_levels: 4,
+        levels,
+    };
+    let log = GvasPubLog::new();
+    log.note(GvasPublication {
+        cmd: 0x90f1_0106,
+        client: 0xc1d0_000a,
+        object: 0xcaf0_0005,
+        pdes,
+        count: 1,
+    });
+    let snap = log.snapshot();
+    let s = kayfabe_qemu_raw::shim::publication_row(&snap, 0xc1d0_000a, 0xcaf0_0005);
+
+    // The ARM — separates "decoded from the wrong arm" from the other two.
+    assert!(s.contains("arm0x90f10106"), "{s}");
+    // The COUNT — `> 1` is the stale-publication finding, so it must be printed even at 1.
+    assert!(s.contains("x1"), "{s}");
+    // ALL FOUR levels, each with the size and aperture the root projection drops.
+    assert!(s.contains("L0=0x4000/sz0x20/ap1/sh47"), "{s}");
+    assert!(s.contains("L1=0x2efa9b000/sz0x1000/ap1/sh38"), "{s}");
+    assert!(s.contains("L2=0x2efa9a000/sz0x1000/ap1/sh29"), "{s}");
+    assert!(s.contains("L3=0x2efa99000/sz0x1000/ap1/sh21"), "{s}");
+    // ⊘ And NOT the meaningless tail: `levels[4..]` decode so the re-encode is faithful and
+    // carry no claim, so printing them would put addresses in the log the guest never made.
+    assert!(
+        !s.contains("L4="),
+        "levels past num_levels are not the guest's claim: {s}"
+    );
+
+    // ★ An ABSENT row is qualified by the table's own completeness — "no row for this pair"
+    // means "the guest published none" ONLY while nothing was refused by the cap, and §16.3
+    // is the boot where confusing those two was the entire bug.
+    let miss = kayfabe_qemu_raw::shim::publication_row(&snap, 0xc1d0_000a, 0xdead_beef);
+    assert!(miss.contains("ABSENT-FROM-ROOT-TABLE"), "{miss}");
+    assert!(miss.contains("REFUSED-BY-CAP"), "{miss}");
+}

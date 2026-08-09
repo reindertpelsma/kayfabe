@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 27u
+#define KAYFABE_SHIM_ABI 28u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -384,7 +384,14 @@ typedef struct KayfabeBridgeRefusal {
  * is the fault variant's payload, which is prose.  A single blob would make the only
  * machine-readable half a substring search. */
 #define KAYFABE_DOORBELL_KIND_LEN 64u
-#define KAYFABE_DOORBELL_REFUSAL_LEN 448u
+/* ★★ 448 -> 1024 at execution_plane_increments.md §16.6, and the widening is the SMALLER
+ * half of the change.  MEASURED 2026-08-09 (boot vaspan_994bbdc) the refusal sentence was
+ * 292 bytes of the 448, and §16.6 appends the deciding VA space's whole publication body —
+ * four PdeLevels, ~180 bytes — to the END of it, i.e. ~472 into a 448-byte array.  The Rust side used to fill this with a
+ * bare min(), so a clipped sentence and a complete one printed IDENTICALLY and the levels
+ * would have been the first thing lost.  It now stamps a literal " [CLIPPED, sentence was
+ * N bytes]" tail, so saturation is a statement rather than an absence. */
+#define KAYFABE_DOORBELL_REFUSAL_LEN 1024u
 
 typedef struct KayfabeDoorbellRefusal {
     uint8_t kind[KAYFABE_DOORBELL_KIND_LEN];  /* NUL-PADDED, not NUL-terminated */
@@ -515,7 +522,13 @@ typedef struct KayfabeChannelBind {
  * ⊘ `gvas_pub_undecodable` is a SEPARATE number, not an absent row: "the guest published
  * something we could not read" and "the guest published nothing" are different diagnoses
  * and only one of them is our defect.  Same argument as bar_pde_updates' refusal half. */
-#define KAYFABE_GVAS_PUBLICATION_SLOTS 8u
+/* ★★★ 8 -> 32 at execution_plane_increments.md §16.6.  MEASURED 2026-08-09: six
+ * consecutive boots each published 12 total / 11 DISTINCT VA spaces and this array showed
+ * the first EIGHT — so (hClient 0xc1d0000a, hObject 0xcaf00005), the pair every one of
+ * those boots names in its doorbell refusal, had its body printed in NONE of them.  §16.3
+ * repaired the LOOKUP (it now reads a 256-row table) and left the REPORT at eight, which is
+ * how the one row that decides the wall stayed invisible for three more boots. */
+#define KAYFABE_GVAS_PUBLICATION_SLOTS 32u
 #define KAYFABE_GVAS_MAX_LEVELS 6u
 
 typedef struct KayfabePdeLevel {

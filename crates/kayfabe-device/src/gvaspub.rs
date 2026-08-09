@@ -97,14 +97,29 @@ use kayfabe_abi::gvaspacepdes::{
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
-/// How many distinct publications the log remembers.
+/// How many distinct publications the **report** shows.
 ///
-/// ★ Eight, against a real boot's **five** (four client-arm + one global-arm, the §14.9
-/// census). Sized with headroom rather than to the measurement, because a port that grew a
-/// second device or a second VAS per device would otherwise silently start clipping the
-/// one thing this log exists to carry — and [`GvasPubSnapshot::distinct`] keeps counting
-/// past the cap, so a full sample is never mistaken for a complete list.
-pub const GVAS_PUBLICATION_SAMPLE_MAX: usize = 8;
+/// # ★★★ 8 → 32, and the eight was hiding the one row that decides the boot
+///
+/// Eight was sized against a real boot's **five** (four client-arm + one global-arm, the
+/// §14.9 census) *"with headroom"*. `[measured 2026-08-09, boots `uvm1_b731e3c` …
+/// `vaspan_994bbdc`]` every one of those boots published **12 total, 11 distinct**, so the
+/// report showed the first eight and the refusing VA space —
+/// `(hClient 0xc1d0000a, hObject 0xcaf00005)`, the one `cuInit` walls on — was **past the
+/// cap in every boot log ever taken**. §16.3 fixed the *lookup* by giving it
+/// [`GvasPubSnapshot::roots`] and left the report at eight, so six consecutive boots could
+/// name the pair in a refusal and never print its body.
+///
+/// ⊘ **This is a report and it may clip; what it may not do is clip over the interesting
+/// row.** 32 against a measured 11 is the same headroom rule applied to the measurement we
+/// now actually have, rather than to the one from before the UVM client existed.
+///
+/// ★ De-duplication keys on the **whole body**, not on `(client, object)`
+/// ([`GvasPubLog::note`]), so a VA space re-published with *different* levels occupies two
+/// rows here while [`GvasPubSnapshot::roots`] keeps only the later one. That is deliberate
+/// and it is what makes a stale-publication diagnosis visible at all: the table says which
+/// root won, the sample says what it beat.
+pub const GVAS_PUBLICATION_SAMPLE_MAX: usize = 32;
 
 /// ★★★★ **How many distinct VA spaces the AUTHORITATIVE table holds** — see
 /// [`GvasPubSnapshot::roots`] for the boot in which the eight-row *sample* was being used
