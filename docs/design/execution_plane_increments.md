@@ -7525,3 +7525,64 @@ This one is a counter that is **correct, well-documented, and measures a differe
 the sentence built on it**. Reading its own comment was enough to refute a committed
 conclusion — no boot required. ⇒ Before citing a counter, read what its **increment site**
 says it counts, not what its **name** suggests.
+
+### 16.12 ★★★★★ BOOTED `bar1_03a679f` — BAR1 is innocent AFTER ALL, and the ring page is EMPTY TO THE BYTE
+
+`[measured 2026-08-09, boot `bar1_03a679f`, archive **and** QEMU binary both stamped
+`kayfabe-rev:03a679fd566e7032…`, GA106 bench `vh`, stock 580.159.04 guest, probe set EMPTY]`.
+
+**Answer 1 — ⊘ my own §16.11 candidate is REFUTED, and by the route that supports it:**
+
+```text
+nvkvm: BAR1 (flat aperture): 3 accesses reached the DISCARDING fallback, and NO shadow is
+installed (window-size=0), so this IS a complete census of BAR1 traffic.
+```
+
+`[src]` the chain, which is what made this decidable without guessing: the shadow is
+installed at exactly one site (`nvkvm.c:1204`, gated `if (s->window_size != 0)`);
+`window_size` is the `window-size` property and `:2294` defaults it to **0**;
+`scripts/bench/boot_nvkvm.sh:24` sets `bar1-size` and `bar2-size` and **never** `window-size`;
+and the install's own `reservation of 0x… bytes installed` line appears in **zero** captured
+boots. ⇒ Every BAR1 access reaches the counted fallback, `3` is a **complete census**, and
+§16.5's *"BAR1 is innocent"* is **correct**.
+
+★★★★ **But it was correct by luck of configuration and said so nowhere.** The identical line
+would have read *"the guest barely touched BAR1"* about a boot in which it wrote gigabytes,
+the moment anyone set `window-size`. ⇒ **A number whose meaning depends on a condition must
+print that condition.** The report now branches, and the shadowed arm says outright that the
+count *"is NOT a census of BAR1 traffic and must not be cited as one"*. That is the general
+fix for the class §16.11 named — not *"read the increment site"* as advice, but a counter
+that carries its own precondition into the log.
+
+**Answer 2 — the wall, pinned to the byte:**
+
+```text
+fbL0@0x4000   =0205000000000000…  nz2/4096      ← the guest's page tables ARE in our store
+fbL1@0x5000   =0206000000000000…  nz2/4096
+fbRING@0x20000=0000000000000000000000000000000000000000000000000000000000000000  nz0/4096
+```
+
+⇒ ★★★★★ **`nz0/4096`. Not one non-zero byte in the ring's whole page.** The address the
+guest's own five-level walk names for its GPFIFO ring has **never been written** in this
+device's framebuffer.
+
+★ And the pair is the finding, not either half. **Both** addresses are vidmem, **both** are
+reached by the same two write paths (BAR0 moving window: 337 854 writes; BAR2 translated:
+286 352 writes), and **the page-table writes landed while the ring writes did not.** So this
+is not *"our framebuffer is not written"* — it demonstrably is, 337 854 times — it is *"these
+particular bytes never arrived"*.
+
+⇒ ⧗ **THE NEXT MEASUREMENT, and it needs no new plumbing beyond a census.** `[src]`
+`SparseFb` holds its written pages in a `BTreeMap` and reports only a total
+(`[measured, this boot]` `resident 368640 bytes` = 90 pages).
+**Report WHICH framebuffer frames are resident** — the count, the extent, and whether the
+ring's frame is among them. Three outcomes, three different fixes: the ring's frame is absent
+entirely (nothing ever addressed it); it is present but zero (something addressed it and
+wrote zeros); or the resident set clusters somewhere that says which *path* the ring writes
+took instead.
+
+⊘ **Do not let "the guest wrote it somewhere else" become the default hypothesis.** Three
+things are settled by named boots — BAR1's innocence by `bar1_03a679f` above, the walk's
+correctness by `wlk1_dcd096c` (§16.10), the page tables' arrival by `fbd1_f760a4b` (§16.9) —
+so the remaining candidates are about *ordering and timing* as much as about *routing*, and
+nothing here separates them yet.
