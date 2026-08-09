@@ -267,6 +267,33 @@ pub struct Channel {
     /// map. Named for what it IS — a [`Pdb`] — matching the projection's
     /// [`crate::project::ChannelFacts::vas_pdb`] (one concept, one name).
     pub vas_pdb: Option<Pdb>,
+    /// ★★★ **The VASpace RESOURCE this channel resolved to** — graph-synced from
+    /// [`crate::project::ChannelFacts::vas_origin`], the answer
+    /// `project::resolve_channel_vas` already computed through the declared precedence
+    /// (own `hVASpace` → CtxShare's → parent TSG's).
+    ///
+    /// # ⊘ Why this is carried rather than re-derived by whoever needs it
+    ///
+    /// `[measured 2026-08-09, boot `msr2_319d29a`]` — because a second derivation
+    /// **disagreed with this one, and lost the channel `cuInit` walls on**.
+    /// `kayfabe_rt::SharedDevice::ce_channel_facts` reported the VA space as
+    /// `node.facts.h_vaspace`, i.e. the channel's OWN declared handle, and the boot printed
+    ///
+    /// ```text
+    /// first doorbell refusal [FwdFault::IsolateRetired] … | c=0xc1d0000a
+    ///     vas=NONE-DECLARED ring=0x121010000
+    /// ```
+    ///
+    /// A UVM channel declares no `hVASpace` of its own — it inherits it through its
+    /// CtxShare/TSG — so that field is `None` while [`Self::vas_pdb`], derived from the
+    /// **resolved** node, is `Some`. The two projections of one fact disagreed, the
+    /// ring-reading path took the weaker one, and every UVM doorbell fell through to a plane
+    /// that reads no ring at all.
+    ///
+    /// ⚠ A [`ResourceKey`] and not a handle, for §12.41's reason: a channel legitimately
+    /// binds its VA space through a `DUP_OBJECT` alias, and the alias may resolve to a
+    /// dup-kept ghost whose origin handle the guest has since re-allocated.
+    pub vas_origin: Option<ResourceKey>,
     /// ★ The fine [`EngineKind`] of this channel's context (`execution_plane.md`
     /// §2.2 "what the core tracks"): graph-synced from the projection — the channel
     /// class's declared kind, refined by the engine object allocated on it. NVENC
@@ -2401,6 +2428,7 @@ impl Spine {
                 gpu,
                 vchid: facts.vchid,
                 vas_pdb: facts.vas_pdb,
+                vas_origin: facts.vas_origin,
                 engine: facts.engine,
                 host_channel: None,
                 host_token: None,
@@ -2415,6 +2443,10 @@ impl Spine {
             entry.gpu = gpu;
             entry.vchid = facts.vchid;
             entry.vas_pdb = facts.vas_pdb;
+            // ⊘ Refreshed with `vas_pdb`, never separately: the two are one resolution
+            // (`project::resolve_channel_vas` produces both), and letting them refresh on
+            // different passes would recreate the disagreement this field exists to end.
+            entry.vas_origin = facts.vas_origin;
             entry.engine = facts.engine;
             entry.error_notifier = facts.error_notifier;
         }

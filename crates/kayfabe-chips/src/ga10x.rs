@@ -1286,11 +1286,41 @@ impl Ga10xPushbuffer {
     /// is not a field of this class at all — see
     /// [`submit::ce::NO_MEMORY_SCRUB_ON_THIS_CLASS`] for the C bug that is.
     fn ce_launch(state: &MethodState, subch: usize, flags: u32) -> Option<PushMethod> {
-        if state.object(subch)? != ClassId(nv::AMPERE_DMA_COPY_B) {
+        // ★★★ `subchannel_speaks`, not `object(subch)?` — see that predicate's docs for
+        // UVM's own encoder, which binds the CE class on subchannel 0 and issues every CE
+        // method on subchannel 4. The old form refused all of them, and RM's `channel_utils`
+        // path (bind and fire on one subchannel) is why nothing noticed.
+        if !state.subchannel_speaks(subch, ClassId(nv::AMPERE_DMA_COPY_B)) {
             return None;
         }
+        // ★★★ **`DATA_TRANSFER_TYPE == NONE` is a RELEASE, not a nothing** — and reporting
+        // it as `None` cost the boot `uvm_channel_manager_create`.
+        //
+        // ⊘ This arm used to `return None`, with the sentence *"the engine moves no bytes;
+        // the launch exists to release a semaphore. There is no copy to report."* Every
+        // clause of that is true and the conclusion does not follow: there is no *copy* to
+        // report, and there is still a **release**. `[measured 2026-08-09, boots `fmb1` /
+        // `msr1` at `319d29a`]` `cuInit` hangs in `uvm_push_end_and_wait`, and the push it
+        // waits on — `channel_init`'s, the FIRST push on every UVM channel — is
+        // `SET_OBJECT` plus exactly this shape (`ogkm-580: uvm_channel.c:2518-2572, 1492,
+        // 1512-1513, 1043-1051` → `uvm_volta_ce.c:50-70`). So the entire content of that
+        // submission decoded to `Opaque`, the whole ring decoded to no launch at all, and
+        // the word `uvm_spin_loop` polls could never move.
+        //
+        // ⊘ It becomes [`PushMethod::CeRelease`] and NOT a zero-length `CeLaunchDma`: the
+        // release-only push never writes `OFFSET_OUT_*`, so the `state.latched(subch, 2)?`
+        // below would refuse it anyway — and satisfying that with a default would invent a
+        // destination address, which is the one thing this codec's refusals exist to stop.
         if flags & submit::ce::LAUNCH_TRANSFER_MASK == submit::ce::LAUNCH_TRANSFER_NONE {
-            return None;
+            // A release this codec cannot express refuses the whole launch, exactly as it
+            // does for a copy — `ce_completion`'s `None` arm and its reasons are unchanged.
+            // ⊘ And `Some(None)` — no transfer AND no release — is a genuine no-op with no
+            // fact in it, which stays `Opaque`.
+            let completion = Self::ce_completion(state, subch, flags)??;
+            return Some(PushMethod::CeRelease {
+                completion,
+                flush: flags & submit::ce::LAUNCH_FLUSH_ENABLE != 0,
+            });
         }
         // ⊘ ONE refusal per fact. These two used to share a line, and collapsing them is
         // what let a whole work kind sit undecoded behind a comment about pitch: a

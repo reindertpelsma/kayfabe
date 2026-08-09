@@ -2642,6 +2642,15 @@ pub struct PushbufferOutcome {
     pub ce_spans: Vec<CeSpan>,
     /// Semaphore releases observed → each `observe`d on the owning proc's queue.
     pub sem_releases: Vec<(GpuVa, u64)>,
+    /// ★★★ How many of [`PushbufferOutcome::sem_releases`] came from a
+    /// [`kayfabe_arch::PushMethod::CeRelease`] — a launch that moved **no bytes**.
+    ///
+    /// ⊘ Counted separately from the total for one reason, and it is a refusal to conflate:
+    /// a release behind a copy and a release that IS the submission are different claims
+    /// about what ran. A ring of `ce_releases == sem_releases.len()` with `ce_spans` empty
+    /// executed nothing and owes nothing — which is exactly UVM's `channel_init` push — and
+    /// a report that could not say so would look identical to one that dropped a copy.
+    pub ce_releases: usize,
     /// TLB invalidates seen (pdb, membar). A membar is honored as a hard barrier
     /// (the parser records it; a real transport blocks advance until refresh).
     pub invalidates: Vec<(Pdb, bool)>,
@@ -3964,6 +3973,27 @@ pub fn apply_pushbuffer(
                     proc.completion.observe(OsEventRef(c.addr.0 ^ c.payload))?;
                     out.sem_releases.push((c.addr, c.payload));
                 }
+            }
+            // ★★★ **A launch that moves no bytes and exists only to release** — see
+            // [`kayfabe_arch::PushMethod::CeRelease`] for UVM's `channel_init` push, which
+            // is nothing else.
+            //
+            // ⊘ It contributes to `sem_releases` and to **NOTHING** else: no `ce_spans` (it
+            // names no operand), no `classify_ce` (there is no destination to attribute),
+            // no `data_copies`. That asymmetry is the honesty: this method's whole content
+            // is the release, so recording anything more would be reporting work the guest
+            // did not ask for.
+            //
+            // ⚠ Appended in decode order, which keeps `sem_releases` behind any bytes an
+            // EARLIER launch in the same ring owes — the ordering `cpu_ce::write_completion`
+            // depends on. A release-only launch owes nothing itself, so its position in that
+            // sequence is the only ordering fact it carries, and it is preserved rather than
+            // hoisted.
+            kayfabe_arch::PushMethod::CeRelease { completion, .. } => {
+                proc.completion
+                    .observe(OsEventRef(completion.addr.0 ^ completion.payload))?;
+                out.sem_releases.push((completion.addr, completion.payload));
+                out.ce_releases += 1;
             }
             kayfabe_arch::PushMethod::SemRelease { addr, payload } => {
                 // Completion observe on the OWNING proc's queue (per-`Proc`, §2.4).

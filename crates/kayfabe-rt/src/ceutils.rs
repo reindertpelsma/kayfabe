@@ -135,6 +135,14 @@ pub struct CeUtilsRun {
     pub methods: usize,
     /// `LAUNCH_DMA`s the codec fired.
     pub launches: usize,
+    /// ★★★ How many of [`CeUtilsRun::launches`] moved **no bytes** — a
+    /// [`PushMethod::CeRelease`], i.e. `DATA_TRANSFER_TYPE == NONE`.
+    ///
+    /// ⊘ Reported separately so `describe()` cannot let a submission that only released
+    /// read as one that copied. `launches == releases` with `bytes == 0` is an honest and
+    /// complete serving of UVM's `channel_init` push — and it must be distinguishable from
+    /// a copy whose bytes we lost.
+    pub releases: usize,
     /// Sub-copies the partition produced.
     pub spans: usize,
     /// Bytes actually moved by the CPU executor.
@@ -167,10 +175,11 @@ impl CeUtilsRun {
     #[must_use]
     pub fn describe(&self) -> String {
         format!(
-            "cpu-ce: {} gp, {} methods, {} launch, {} span, {} B, {} sem{}",
+            "cpu-ce: {} gp, {} methods, {} launch ({} release-only), {} span, {} B, {} sem{}",
             self.entries,
             self.methods,
             self.launches,
+            self.releases,
             self.spans,
             self.bytes,
             self.completions,
@@ -498,6 +507,43 @@ pub fn run_submission(
 
     // ---- 4. EXECUTE each launch, then release its completion. ---------------------------
     for m in decoded {
+        // ★★★ **A launch that transfers nothing and exists only to release** — and it is
+        // EXECUTED here, in decode order, alongside the copies.
+        //
+        // # ⊘ Why this is not the forged completion this whole file refuses
+        //
+        // A forgery advances a payload for work that **did not run**. `DATA_TRANSFER_TYPE ==
+        // NONE` is the guest saying there is no work: the engine moves zero bytes, so
+        // writing the payload is not a claim *about* a copy — it **is** the entire act the
+        // guest asked the engine to perform. ⊘ Contrast the `SemRelease` arm below, which
+        // stays unacted-on for the opposite reason: that word is the *host*-FIFO semaphore
+        // beside a real copy, and advancing it would report on a transfer.
+        //
+        // ⚠ It is inside the same loop, in the same order, so a release that follows a copy
+        // in one ring is still written **after** that copy's bytes. Hoisting these would
+        // reorder a fence the guest set (`ogkm-580: uvm_channel.c:1055-1060`).
+        //
+        // `[measured 2026-08-09, boots fmb1/msr1 at 319d29a]` `cuInit` hangs in
+        // `uvm_push_end_and_wait`; the push it waits on is `channel_init`'s and contains
+        // exactly one of these and nothing else.
+        if let PushMethod::CeRelease { completion, .. } = m {
+            run.launches += 1;
+            run.releases += 1;
+            let resolved = {
+                let mut ops = WalkOperands::new(ce, &mut last);
+                crate::cpu_ce::resolve_releases(&mut ops, &[(completion.addr, completion.payload)])
+                    .map_err(|f| CeUtilsRefusal {
+                        fault: f,
+                        detail: last,
+                    })?
+            };
+            if let Some(r) = resolved.first() {
+                run.completion_at = Some((r.va, r.op.residency.plane, r.op.addr.0));
+            }
+            run.completions += crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved)
+                .map_err(CeUtilsRefusal::plain)?;
+            continue;
+        }
         let PushMethod::CeLaunchDma {
             dst,
             src,

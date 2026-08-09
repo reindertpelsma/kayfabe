@@ -573,6 +573,84 @@ static void emit_ce_sem_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_l
            (unsigned) DRF_VAL(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, pay));
 }
 
+/*
+ * ★★★ **UVM's `channel_init` push, transcribed method for method** — the FIRST push on
+ * every UVM channel, and the one `cuInit` was measured hanging on.
+ *
+ * `[src] ogkm-580`, and it is three functions:
+ *   - `kernel-open/nvidia-uvm/uvm_channel.c:2518-2572` `channel_init` — `ce_hal->init`,
+ *     `host_hal->init`, then `uvm_push_end_and_wait`;
+ *   - `:1492, 1512-1513` `uvm_channel_end_push` → `uvm_channel_tracking_semaphore_release`
+ *     (`:1053-1063`) → `do_semaphore_release` (`:1043-1051`);
+ *   - `kernel-open/nvidia-uvm/uvm_volta_ce.c:50-70` `uvm_hal_volta_ce_semaphore_release`:
+ *     `NV_PUSH_3U(C3B5, SET_SEMAPHORE_A/_B/_PAYLOAD)` then `NV_PUSH_1U(C3B5, LAUNCH_DMA,
+ *     FLUSH_ENABLE_TRUE | FLUSH_TYPE_SYS | DATA_TRANSFER_TYPE_NONE |
+ *     SEMAPHORE_TYPE_RELEASE_ONE_WORD_SEMAPHORE)`.
+ *
+ * ⊘⊘ **TWO SUBCHANNELS, and that is the point of this case.** `NV_PUSH_nU` takes its
+ * subchannel from `UVM_SUBCHANNEL_ ## class` (`uvm_push_macros.h:223-253`):
+ *   - `ce_hal->init` is `NV_PUSH_1U(B06F, SET_OBJECT, ceClass)` (`uvm_maxwell_ce.c:29-37`)
+ *     ⇒ `UVM_SUBCHANNEL_B06F` = `UVM_SUBCHANNEL_HOST` = **0** (`uvm_push_macros.h:82, 101`),
+ *     and the function's own comment says so;
+ *   - every CE method is `NV_PUSH_nU(C3B5, …)` ⇒ `UVM_SUBCHANNEL_C3B5` =
+ *     `UVM_SUBCHANNEL_CE` = `NVA06F_SUBCHANNEL_COPY_ENGINE` = **4**
+ *     (`uvm_push_macros.h:85, 109`; `cla06fsubch.h:30`).
+ *
+ * A decoder that requires the class on the SAME subchannel refuses every method UVM emits.
+ * RM's `channel_utils.c` binds and fires on one subchannel, which is exactly why the whole
+ * existing corpus above could not see this.
+ *
+ * ⊘ `sem_sub` is a parameter so the two-subchannel shape is a CASE and not a constant —
+ * the same-subchannel variant must still decode, or the fix would have traded one refusal
+ * for another.
+ */
+static void emit_ce_release_run(const char *name, NvU32 obj_sub, NvU32 sem_sub,
+                                NvU64 sem_addr, NvU32 payload, NvU32 flags, int bind)
+{
+    NvU32 w[16];
+    unsigned n = 0, i;
+    NvU32 sem_up, sem_lo, pay;
+
+    if (bind) {
+        /* `NV_PUSH_1U(B06F, SET_OBJECT, ceClass)` — the CHANNEL class's method 0x0, on
+         * whichever subchannel the macro named. */
+        w[n++] = hdr_inc(obj_sub, NVC56F_SET_OBJECT, 1);
+        w[n++] = DRF_NUM(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B);
+    }
+    sem_up = DRF_NUM(C7B5, _SET_SEMAPHORE_A, _UPPER, (NvU32) (sem_addr >> 32));
+    sem_lo = (NvU32) sem_addr;
+    pay    = DRF_NUM(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, payload);
+    w[n++] = hdr_inc(sem_sub, NVC7B5_SET_SEMAPHORE_A, 3);
+    w[n++] = sem_up;
+    w[n++] = sem_lo;
+    w[n++] = pay;
+    /* ⊘ NO `OFFSET_OUT_*`, NO `LINE_LENGTH_IN`. The release path pushes neither, which is
+     * why this cannot be expressed as a zero-length copy: there is no destination to name. */
+    w[n++] = hdr_inc(sem_sub, NVC7B5_LAUNCH_DMA, 1);
+    w[n++] = flags;
+
+    printf("cerun %s %u", name, n);
+    for (i = 0; i < n; i++)
+        printf(" 0x%08x", (unsigned) w[i]);
+    printf("\n");
+    printf("cedec %s parts=%u class=0x%x src=0x0 dst=0x0 len=0x0 count=0x0 "
+           "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u "
+           "objsub=%u semsub=%u bind=%d flush=%u semtype=%u sem=0x%llx payload=0x%x\n",
+           name, CE_PART_ALL,
+           (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _MULTI_LINE_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _REMAP_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SRC_TYPE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _DST_TYPE, flags),
+           (unsigned) obj_sub, (unsigned) sem_sub, bind,
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _FLUSH_ENABLE, flags),
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, flags),
+           (unsigned long long) (((NvU64) DRF_VAL(C7B5, _SET_SEMAPHORE_A, _UPPER, sem_up) << 32)
+                                 | (NvU64) DRF_VAL(C7B5, _SET_SEMAPHORE_B, _LOWER, sem_lo)),
+           (unsigned) DRF_VAL(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, pay));
+}
+
 int main(void)
 {
     NvU32 userd_size = 0xDEADBEEFu, userd_shift = 0xDEADBEEFu;
@@ -1206,6 +1284,35 @@ int main(void)
                                 0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_cond, 1);
                 emit_ce_sem_run("refusesem_nolatch", 2, 0x22000, 0x40,
                                 0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_one, 0);
+            }
+
+            /*
+             * ★★★ **UVM's `channel_init` push** — see `emit_ce_release_run`. The corpus is
+             * four cases, and each one is a different thing the codec must get right.
+             */
+            {
+                NvU32 rel = DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _NONE)
+                          | DRF_DEF(C7B5, _LAUNCH_DMA, _FLUSH_ENABLE, _TRUE)
+                          | DRF_DEF(C7B5, _LAUNCH_DMA, _FLUSH_TYPE, _SYS)
+                          | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE,
+                                    _RELEASE_ONE_WORD_SEMAPHORE);
+                /* THE case: bind on subchannel 0, fire on subchannel 4. */
+                emit_ce_release_run("release_uvm_channel_init", 0, 4,
+                                    0x0001AAAA55550000ULL, 1u, rel, 1);
+                /* ⊘ The same-subchannel variant must still decode — a fix that traded one
+                 * refusal for another would pass the case above and fail here. */
+                emit_ce_release_run("release_same_subchannel", 2, 2,
+                                    0x42006c004ULL, 7u, rel, 1);
+                /* ⊘ NON-VACUITY: nothing bound the CE class ANYWHERE. A codec that dropped
+                 * the class check outright, rather than relaxing it to "bound on this
+                 * channel", decodes this — and it must not. */
+                emit_ce_release_run("refuserelease_nobind", 0, 4,
+                                    0x42006c004ULL, 1u, rel, 0);
+                /* ⊘ No transfer AND no release is a genuine no-op with no fact in it. */
+                emit_ce_release_run("refuserelease_nosem", 0, 4, 0x42006c004ULL, 1u,
+                                    DRF_DEF(C7B5, _LAUNCH_DMA, _DATA_TRANSFER_TYPE, _NONE)
+                                        | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE, _NONE),
+                                    1);
             }
 
             printf("remap COMPONENT_SIZE_ONE %u\n",

@@ -1582,6 +1582,127 @@ fn a_completion_this_codec_cannot_express_refuses_the_whole_launch() {
     }
 }
 
+/// ★★★★ **UVM's `channel_init` push DECODES — the submission `cuInit` was measured hanging
+/// on.**
+///
+/// `[measured 2026-08-09, boots `fmb1` / `msr1` / `msr2` at `319d29a`]` `cuInit` spins in
+/// `uvm_spin_loop` ← `uvm_push_end_and_wait` ← `channel_pool_add` ←
+/// `uvm_channel_manager_create`. The push it waits on is `channel_init`'s
+/// (`ogkm-580: uvm_channel.c:2518-2572`), and it contains **no copy at all**: a `SET_OBJECT`
+/// and one `LAUNCH_DMA` with `DATA_TRANSFER_TYPE == NONE` that releases the channel's
+/// tracking semaphore (`:1492, 1512-1513, 1043-1051` → `uvm_volta_ce.c:50-70`).
+///
+/// This port refused it **twice over**, and both refusals were invisible to the whole corpus
+/// above because RM's `channel_utils.c` — the only writer that corpus models — does neither
+/// thing:
+///
+/// 1. **`DATA_TRANSFER_TYPE == NONE` returned `None`** with the sentence *"the engine moves
+///    no bytes … there is no copy to report"*. True, and beside the point: there is no
+///    *copy*, and there is still a **release**, which is the entire content of the push.
+/// 2. **The class is bound on a DIFFERENT SUBCHANNEL from the methods.** `NV_PUSH_nU` takes
+///    its subchannel from `UVM_SUBCHANNEL_ ## class` (`uvm_push_macros.h:223-253`), so
+///    `ce_hal->init`'s `NV_PUSH_1U(B06F, SET_OBJECT, ceClass)` binds subchannel **0**
+///    (`= UVM_SUBCHANNEL_HOST`, `:82, 101`; `uvm_maxwell_ce.c:29-37`, whose own comment says
+///    so) while every CE method is `NV_PUSH_nU(C3B5, …)` on subchannel **4**
+///    (`= NVA06F_SUBCHANNEL_COPY_ENGINE`, `:85, 109`; `cla06fsubch.h:30`).
+///
+/// ⊘ **The two non-vacuity cases are what keep the fix from being a hole**: `nobind` binds
+/// the CE class nowhere and must still be refused (the class check was *relaxed*, not
+/// dropped), and `nosem` transfers nothing and releases nothing, which is a no-op with no
+/// fact in it and must stay `Opaque`.
+#[test]
+fn uvms_release_only_launch_decodes_across_two_subchannels() {
+    let oracles = require_oracle!("uvms_release_only_launch_decodes_across_two_subchannels");
+    for (tag, path) in oracles {
+        let o = run(tag, path);
+        let names: Vec<&String> = o
+            .ceruns
+            .keys()
+            .filter(|n| n.starts_with("release_") || n.starts_with("refuserelease_"))
+            .collect();
+        // ⊘ `gates_quantified_over_a_list`: a case that stops being emitted shortens this
+        // test rather than silencing it.
+        assert_eq!(
+            names.len(),
+            4,
+            "[{tag}] UVM's own shape, the same-subchannel variant, and the two \
+             non-vacuity refusals: {names:?}"
+        );
+        let mut decoded = 0usize;
+        for name in names {
+            let d = &o.cedec[name];
+            let got = decode_fresh(&o.ceruns[name]);
+            // Every case in this corpus transfers nothing — asserted against NVIDIA's own
+            // `DRF_VAL`, so a corpus that drifted into emitting real copies is caught here
+            // rather than silently changing what this test is about.
+            assert_eq!(
+                num(&d["transfer"]),
+                0,
+                "[{tag}] {name}: this corpus is DATA_TRANSFER_TYPE_NONE by construction"
+            );
+            let releases: Vec<&PushMethod> = got
+                .iter()
+                .filter(|m| matches!(m, PushMethod::CeRelease { .. }))
+                .collect();
+            // ⊘ A release-only launch must NEVER decode as a copy: there is no destination
+            // latched, so any `CeLaunchDma` here would carry an invented address.
+            assert!(
+                !got.iter()
+                    .any(|m| matches!(m, PushMethod::CeLaunchDma { .. })),
+                "[{tag}] {name}: a launch that moves no bytes is not a copy: {got:?}"
+            );
+            if name.starts_with("refuserelease_") {
+                assert!(
+                    releases.is_empty(),
+                    "[{tag}] {name}: MUST be refused — {}: {got:?}",
+                    if name.contains("nobind") {
+                        "no subchannel of this channel ever named the CE class, so decoding \
+                         its methods as CE would be an invention"
+                    } else {
+                        "no transfer and no release is a no-op with no fact in it"
+                    }
+                );
+                assert!(
+                    got.contains(&PushMethod::Opaque),
+                    "[{tag}] {name}: refused BY NAME, not skipped: {got:?}"
+                );
+                continue;
+            }
+            decoded += 1;
+            assert_eq!(
+                releases.len(),
+                1,
+                "[{tag}] {name}: exactly one release fires: {got:?}"
+            );
+            let PushMethod::CeRelease { completion, flush } = *releases[0] else {
+                unreachable!("filtered")
+            };
+            // ★ Against NVIDIA's own recombination of the two halves, in NVIDIA's own
+            // order — a decoder that swapped `_A` and `_B` lands elsewhere and says so.
+            assert_eq!(
+                completion,
+                kayfabe_arch::CeCompletion {
+                    addr: kayfabe_arch::ids::GpuVa(num(&d["sem"])),
+                    payload: num(&d["payload"]),
+                },
+                "[{tag}] {name}: SET_SEMAPHORE_A (HIGH, 16:0) over SET_SEMAPHORE_B (LOW)"
+            );
+            assert_eq!(
+                flush,
+                num(&d["flush"]) != 0,
+                "[{tag}] {name}: FLUSH_ENABLE is carried, not dropped — UVM sets it \
+                 deliberately (`uvm_channel.c:1055-1060`)"
+            );
+        }
+        // ⊘ Non-vacuity for the whole test: a corpus of only refusals is satisfied by a
+        // decoder that hard-codes `None`.
+        assert_eq!(
+            decoded, 2,
+            "[{tag}] both the two-subchannel shape and the same-subchannel one must decode"
+        );
+    }
+}
+
 /// ★★★ **A CE `memset` run decodes to `CeWork::Fill`, with the driver's own pattern and
 /// the driver's own LENGTH** — and the length is the half nobody would think to check.
 ///

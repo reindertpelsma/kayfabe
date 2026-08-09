@@ -845,9 +845,65 @@ pub enum PushMethod {
         /// of them.
         completion: Option<CeCompletion>,
     },
+    /// ★★★ **A `LAUNCH_DMA` that transfers NO DATA and exists only to release its
+    /// engine-class semaphore** — `DATA_TRANSFER_TYPE == NONE` with a
+    /// `SEMAPHORE_TYPE` this codec can express.
+    ///
+    /// # ⊘ Why this is its own variant and NOT a `CeLaunchDma { len: 0 }`
+    ///
+    /// Because it has **no operands at all**. `uvm_hal_volta_ce_semaphore_release`
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_volta_ce.c:50-70`) pushes exactly four
+    /// words — `SET_SEMAPHORE_A`, `_B`, `_PAYLOAD`, then `LAUNCH_DMA` — and **never
+    /// writes `OFFSET_OUT_UPPER`/`_LOWER`**. A `CeLaunchDma` needs a latched destination
+    /// (that requirement is [`PushMethod::CeLaunchDma`]'s own anti-`unwrap_or_default`
+    /// rule) so this shape could not be expressed as one without inventing an address, and
+    /// a zero-length copy to an invented destination is precisely the fiction the codec's
+    /// refusals exist to prevent.
+    ///
+    /// # ★★★ Why decoding it is not a forged completion
+    ///
+    /// A forged completion advances a payload for work that **did not run**. Here the
+    /// guest's own encoding says there is no work: `DATA_TRANSFER_TYPE_NONE` moves zero
+    /// bytes, so writing the payload is not a claim *about* a copy — it **is** the whole
+    /// act the engine was asked to perform. ⊘ An executor must still honour the ordering
+    /// rule that governs [`PushMethod::CeLaunchDma::completion`]: releases are written in
+    /// submission order, behind any bytes an earlier launch in the same ring owed.
+    ///
+    /// # ⚠ What it cost to leave this undecoded
+    ///
+    /// `[measured 2026-08-09, boots `fmb1`/`msr1` at `319d29a`]` `cuInit` hangs in
+    /// `uvm_push_end_and_wait` ← `channel_pool_add` ← `uvm_channel_manager_create`. The
+    /// push it waits on is `channel_init`'s (`ogkm-580: uvm_channel.c:2518-2572`):
+    /// `SET_OBJECT` (`uvm_maxwell_ce.c:29-37`) then `uvm_channel_end_push`
+    /// (`uvm_channel.c:1492, 1512-1513`) → `do_semaphore_release` (`:1043-1051`) →
+    /// `uvm_hal_volta_ce_semaphore_release`. ⇒ **The entire content of the first push on
+    /// every UVM channel is one release-only launch.** Refusing it made the whole
+    /// submission decode to nothing, so the word `uvm_spin_loop` polls could never move.
+    CeRelease {
+        /// The semaphore this launch releases — the same engine-class
+        /// `SET_SEMAPHORE_A/B/PAYLOAD` triple [`PushMethod::CeLaunchDma::completion`]
+        /// carries, decoded by the same code.
+        ///
+        /// ⊘ Not `Option`: a launch that transfers nothing **and** releases nothing is a
+        /// no-op the codec reports as [`PushMethod::Opaque`], because there is no fact in
+        /// it. This variant exists only when there is something to release.
+        completion: CeCompletion,
+        /// `LAUNCH_DMA.FLUSH_ENABLE` — the engine flushes before writing the payload.
+        ///
+        /// ★ Carried because UVM sets it deliberately and its own comment says why
+        /// (`ogkm-580: uvm_channel.c:1055-1060`: *"that doesn't provide sufficient
+        /// ordering guarantees … just always uses a membar sys"*). An executor that
+        /// reordered this release ahead of writes it is meant to fence would be correct on
+        /// paper and wrong on the machine.
+        flush: bool,
+    },
     /// `SEM_RELEASE` / `SET_SEMAPHORE_A/B` + payload / finishPayload: the completion —
     /// a semaphore address in a VAS advanced to `payload`. Extracted for the
     /// completion plane's observe (`execution_plane.md` §2.4).
+    ///
+    /// ⚠ **The HOST-FIFO semaphore**, not the engine-class one — see [`CeCompletion`] for
+    /// the four-byte trap that distinction exists to prevent, and [`PushMethod::CeRelease`]
+    /// for the engine-class release that carries no copy.
     SemRelease {
         /// The semaphore address (in the channel's VAS).
         addr: GpuVa,
@@ -1111,6 +1167,51 @@ impl MethodState {
     #[must_use]
     pub fn object(&self, subch: usize) -> Option<ClassId> {
         self.object.get(subch).copied().flatten()
+    }
+
+    /// ★★★ **Is `class` bound on `subch`, or is `subch` unbound on a channel that bound
+    /// `class` somewhere?** The predicate a codec should ask before decoding a method
+    /// address as `class`'s.
+    ///
+    /// # ⚠ THE MEASUREMENT THAT FORCED THIS, and it is UVM's own encoder
+    ///
+    /// `[src] ogkm-580`: UVM binds the copy engine and issues its copy-engine methods on
+    /// **two different subchannels**, deliberately.
+    ///
+    /// - `uvm_hal_maxwell_ce_init` (`kernel-open/nvidia-uvm/uvm_maxwell_ce.c:29-37`) is
+    ///   `NV_PUSH_1U(B06F, SET_OBJECT, ceClass)`, and `NV_PUSH_1U` takes its subchannel
+    ///   from `UVM_SUBCHANNEL_ ## class` (`uvm_push_macros.h:223-225`), so this is
+    ///   `UVM_SUBCHANNEL_B06F` = `UVM_SUBCHANNEL_HOST` = **0** (`:82, :101`). The function's
+    ///   own comment says so: *"Notably this sends SET_OBJECT with the CE class on
+    ///   subchannel 0 instead of the recommended by HW subchannel 4."*
+    /// - Every CE method — `SET_SEMAPHORE_A/B/PAYLOAD`, `LAUNCH_DMA`, the offsets — goes
+    ///   out as `NV_PUSH_nU(C3B5, …)`, i.e. `UVM_SUBCHANNEL_C3B5` = `UVM_SUBCHANNEL_CE` =
+    ///   `NVA06F_SUBCHANNEL_COPY_ENGINE` = **4** (`:85, :109`; `cla06fsubch.h:30`).
+    ///
+    /// ⇒ A codec that required the class on the **same** subchannel refused *every method
+    /// UVM ever emits*. RM's own `channel_utils.c` binds and fires on one subchannel, which
+    /// is why the CeUtils path worked and hid this completely.
+    ///
+    /// # ⊘ Why the fallback is this shape and not a looser one
+    ///
+    /// The check exists so a method at, say, `0x300` on a **graphics** subchannel is not
+    /// decoded as `LAUNCH_DMA`. That protection is kept exactly: a subchannel bound to some
+    /// *other* class still answers `false`. What is relaxed is only the **unbound** case,
+    /// and only on a channel where the guest itself named `class` in this same method
+    /// state — so nothing is inferred that the guest did not say, and a channel that never
+    /// mentioned a copy engine can never have one decoded on it.
+    ///
+    /// ⊘ Deliberately **not** "default to the channel's engine kind": that would be a fact
+    /// from the object model reaching into the arch, and it would fire on a channel whose
+    /// engine object was allocated but whose pushbuffer never bound anything — an inference
+    /// about hardware we have not measured.
+    #[must_use]
+    pub fn subchannel_speaks(&self, subch: usize, class: ClassId) -> bool {
+        match self.object(subch) {
+            Some(bound) => bound == class,
+            // Unbound: only if the guest bound `class` on some subchannel of THIS channel.
+            None => subch < SUBCHANNELS && self.object.contains(&Some(class)),
+        }
     }
 
     /// Latch `value` into `slot` of `subch`. Out of range: nothing happens (total).

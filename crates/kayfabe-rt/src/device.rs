@@ -1428,16 +1428,32 @@ impl SharedDevice {
                     .rmgraph
                     .node_of_resource(chan.key)
                     .ok_or(FwdFault::NoVas(route.chan))?;
+                // ★★★ **THE RESOLVED VA SPACE**, off the same `Channel::vas_origin` that
+                // produced `vas_pdb` — see [`CeChannelFacts::vaspace`] for the boot in which
+                // this line's predecessor (`node.facts.h_vaspace`) reported
+                // `vas=NONE-DECLARED` for a channel whose `vas_pdb` was `Some`, and cost
+                // every UVM doorbell its only ring-reading path.
+                //
+                // ⊘ A `vas_origin` that no longer resolves in the graph yields `None` here
+                // rather than a stale handle: the resource died between the projection and
+                // this read, and naming a dead VA space would send `ce_session` looking for
+                // a publication that belongs to whatever inherits the handle value.
+                let vas_node = chan
+                    .vas_origin
+                    .and_then(|k| spine.rmgraph.node_of_resource(k));
                 Ok(CeChannelFacts {
                     proc: route.proc,
                     chan: route.chan,
                     vchid: route.vchid,
-                    client: node.key.client.0,
+                    // The namespace the VA SPACE lives in — which is the namespace its
+                    // publication was issued in. ⊘ Falls back to the channel's own only
+                    // when nothing resolved, so a refusal still names a client.
+                    client: vas_node.map_or(node.key.client.0, |v| v.key.client.0),
                     // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
                     // zero: a GSP-managed channel that named no VA space and one that named
                     // handle zero are the same wire byte but different facts, and only the
                     // first is what `Channel::vas_pdb == None` means.
-                    vaspace: node.facts.h_vaspace.map(|h| h.0),
+                    vaspace: vas_node.map(|v| v.key.handle.0),
                     ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
                     ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
                     vas_pdb: chan.vas_pdb,
@@ -2169,9 +2185,43 @@ pub struct CeChannelFacts {
     pub chan: ChanId,
     /// The decoded vChid.
     pub vchid: VChid,
-    /// `hClient` — the namespace the channel, and its VA space's publication, live in.
+    /// `hClient` — **the namespace the channel's RESOLVED VA space lives in**, which is
+    /// the namespace its publication was issued in (`kayfabe_device::gvaspub`'s key is the
+    /// control RPC's `hClient`/`hObject` pair). Falls back to the channel's own namespace
+    /// when no VA space resolved, so a report always names somebody.
+    ///
+    /// ⊘ It used to be *"the namespace the channel … live[s] in"*, unconditionally. That
+    /// is the same namespace only while the channel declares its own `hVASpace`; a channel
+    /// that inherits one through a CtxShare or TSG owned by a different client would have
+    /// been looked up under the wrong `hClient` — a publication miss dressed as a channel
+    /// with no published root.
     pub client: u32,
-    /// `hVASpace` as the channel declared it. `None` = GSP-managed, no VA space named.
+    /// ★★★ **The RESOLVED `hVASpace`** — the origin handle of the VASpace resource
+    /// `project::resolve_channel_vas` bound this channel to, through the declared
+    /// precedence (own `hVASpace` → CtxShare's → parent TSG's). `None` = no declared path
+    /// resolved, i.e. genuinely GSP-managed with no VA space.
+    ///
+    /// # ⊘⊘ It used to be `node.facts.h_vaspace`, and THAT LOST THE UVM CHANNEL
+    ///
+    /// `[measured 2026-08-09, boot `msr2_319d29a`, binary stamped
+    /// `kayfabe-rev:319d29a3…`]`. The channel `cuInit` walls on printed
+    ///
+    /// ```text
+    /// doorbells: 5 arrived, 4 served, 1 REFUSED by name; last token 0x00010003
+    ///   first doorbell refusal [FwdFault::IsolateRetired] … | c=0xc1d0000a
+    ///       vas=NONE-DECLARED ring=0x121010000
+    /// ```
+    ///
+    /// A UVM channel declares **no `hVASpace` of its own** — it inherits it — so this field
+    /// was `None`, `SharedDoorbell::try_ce_submission` returned `None` at `facts.vaspace?`
+    /// **before reading a byte of the ring**, and the doorbell fell through to a forwarding
+    /// path that reads no ring at all. Meanwhile [`CeChannelFacts::vas_pdb`], derived from
+    /// the **resolved** node, was `Some` — the core knew this channel's address space by a
+    /// route this field did not take.
+    ///
+    /// ⇒ Two projections of one fact, disagreeing, with the weaker one on the load-bearing
+    /// path. It is now the resolved one, so the two cannot disagree: both come from
+    /// `Channel::vas_origin`.
     pub vaspace: Option<u32>,
     /// `gpFifoOffset` — a **GPU VIRTUAL** address (`ogkm-580: ctrl2080fifo.h:809`).
     /// `None` = the channel's alloc params declared no ring at all, which is different
