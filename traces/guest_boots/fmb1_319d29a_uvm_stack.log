@@ -1,0 +1,59 @@
+--- sample 1 ---
+[<0>] uvm_spin_loop+0xf0/0x180 [nvidia_uvm]
+[<0>] wait_for_entry_with_spin+0x4d/0x1c0 [nvidia_uvm]
+[<0>] uvm_tracker_wait_for_entry+0x94/0xd0 [nvidia_uvm]
+[<0>] uvm_push_end_and_wait+0x3e/0x60 [nvidia_uvm]
+[<0>] channel_pool_add+0x7e4/0x1150 [nvidia_uvm]
+[<0>] uvm_channel_manager_create+0x7a3/0x930 [nvidia_uvm]
+[<0>] add_gpu+0x450/0x24d0 [nvidia_uvm]
+[<0>] uvm_gpu_retain_by_uuid+0x1d7/0x2d0 [nvidia_uvm]
+[<0>] uvm_va_space_register_gpu+0x51/0xbb0 [nvidia_uvm]
+[<0>] uvm_api_register_gpu+0x73/0xc0 [nvidia_uvm]
+[<0>] uvm_ioctl+0x131a/0x1cf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry.part.0+0x7b/0xf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry+0x6b/0x90 [nvidia_uvm]
+[<0>] __x64_sys_ioctl+0xa3/0xf0
+[<0>] x64_sys_call+0x12a3/0x25a0
+[<0>] do_syscall_64+0x87/0x180
+[<0>] entry_SYSCALL_64_after_hwframe+0x78/0x80
+--- sample 2 ---
+[<0>] uvm_gpu_semaphore_get_cpu_va+0x46/0x70 [nvidia_uvm]
+[<0>] uvm_spin_loop+0xf0/0x180 [nvidia_uvm]
+[<0>] wait_for_entry_with_spin+0x4d/0x1c0 [nvidia_uvm]
+[<0>] uvm_tracker_wait_for_entry+0x94/0xd0 [nvidia_uvm]
+[<0>] uvm_push_end_and_wait+0x3e/0x60 [nvidia_uvm]
+[<0>] channel_pool_add+0x7e4/0x1150 [nvidia_uvm]
+[<0>] uvm_channel_manager_create+0x7a3/0x930 [nvidia_uvm]
+[<0>] add_gpu+0x450/0x24d0 [nvidia_uvm]
+[<0>] uvm_gpu_retain_by_uuid+0x1d7/0x2d0 [nvidia_uvm]
+[<0>] uvm_va_space_register_gpu+0x51/0xbb0 [nvidia_uvm]
+[<0>] uvm_api_register_gpu+0x73/0xc0 [nvidia_uvm]
+[<0>] uvm_ioctl+0x131a/0x1cf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry.part.0+0x7b/0xf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry+0x6b/0x90 [nvidia_uvm]
+[<0>] __x64_sys_ioctl+0xa3/0xf0
+[<0>] x64_sys_call+0x12a3/0x25a0
+[<0>] do_syscall_64+0x87/0x180
+[<0>] entry_SYSCALL_64_after_hwframe+0x78/0x80
+--- sample 3 ---
+[<0>] uvm_gpu_tracking_semaphore_update_completed_value+0x128/0x3b0 [nvidia_uvm]
+--- sample 4 ---
+[<0>] uvm_spin_loop+0xf0/0x180 [nvidia_uvm]
+[<0>] wait_for_entry_with_spin+0x4d/0x1c0 [nvidia_uvm]
+[<0>] uvm_tracker_wait_for_entry+0x94/0xd0 [nvidia_uvm]
+[<0>] uvm_push_end_and_wait+0x3e/0x60 [nvidia_uvm]
+[<0>] channel_pool_add+0x7e4/0x1150 [nvidia_uvm]
+[<0>] uvm_channel_manager_create+0x7a3/0x930 [nvidia_uvm]
+[<0>] add_gpu+0x450/0x24d0 [nvidia_uvm]
+[<0>] uvm_gpu_retain_by_uuid+0x1d7/0x2d0 [nvidia_uvm]
+[<0>] uvm_va_space_register_gpu+0x51/0xbb0 [nvidia_uvm]
+[<0>] uvm_api_register_gpu+0x73/0xc0 [nvidia_uvm]
+[<0>] uvm_ioctl+0x131a/0x1cf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry.part.0+0x7b/0xf0 [nvidia_uvm]
+[<0>] uvm_unlocked_ioctl_entry+0x6b/0x90 [nvidia_uvm]
+[<0>] __x64_sys_ioctl+0xa3/0xf0
+[<0>] x64_sys_call+0x12a3/0x25a0
+[<0>] do_syscall_64+0x87/0x180
+[<0>] entry_SYSCALL_64_after_hwframe+0x78/0x80
+--- sample 5 ---
+[<0>] uvm_gpu_tracking_semaphore_update_completed_value+0x128/0x3b0 [nvidia_uvm]
