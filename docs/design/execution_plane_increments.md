@@ -7640,3 +7640,108 @@ qemu-system-x86_64` shape exactly: a check that cannot fail always passes.
 **says the zero is vacuous and why**, and a non-zero value prints a warning that the
 counter's own precondition has changed and every BAR1 conclusion in that boot needs
 re-reading. **A counter must carry its own precondition into the log.**
+
+---
+
+## §16.16 / §16.17 BOOTED `s16_5fcd259`, `s17_e8fde62` — ★★★★★ THE RING WRITE ARRIVES ON **BAR1** AND WE DESTROY IT
+
+`[measured 2026-08-09, boots `s16_5fcd259` and `s17_e8fde62`, archive AND QEMU binary both
+stamped with the boot's own revision and asserted EQUAL before booting, GA106 bench `vh`,
+stock 580.159.04 guest]`
+
+### The three writes, verbatim from `run_s17_e8fde62_qemu.log`
+
+```
+BAR1 access log: 3 of 3 access(es) recorded in full — complete
+  BAR1[0] WRITE off=0x90000 size=4 val=0x20000000
+  BAR1[1] WRITE off=0x90004 size=4 val=0x2801
+  BAR1[2] WRITE off=0xa008c size=4 val=0x1
+```
+
+Decoded — arithmetic shown so it can be checked rather than believed:
+
+| | value | decode |
+|---|---|---|
+| `BAR1[0]`+`BAR1[1]` | qword `0x0000_2801_2000_0000` | ★ **a valid GPFIFO entry**: `gpu_va = 0x1_2000_0000`, `len = 10 dwords = 40 bytes`, `subroutine=0`, `sync_wait=0` |
+| `BAR1[2]` | `off = 0xa008c`, `val = 1` | ★ **`GP_PUT = 1`** — `0x8c` is `USERD_GP_PUT` (`35*4`, `kayfabe-abi/src/submit.rs:1231`), USERD base `0xa0000` |
+
+⇒ This is `internal_channel_submit_work` **exactly as `ogkm-580:
+kernel-open/nvidia-uvm/uvm_channel.c:984-1015` writes it**: `set_gpfifo_entry` through a
+dereferenced CPU pointer, `mb()`, then `write_gpu_put`. The 8-byte entry arrives as two 4-byte
+stores because that is how the guest's CPU issues it.
+
+⊘⊘ **`nvkvm_reservation_write` (`qemu/hw/misc/nvkvm/nvkvm.c`) does `(void)val;`. All three
+writes are destroyed.** The bytes cease to exist; no store in the address plane ever sees them.
+
+### ★ This explains every number the campaign has collected, with nothing left over
+
+- the ring page is **`resN-NEVER-WRITTEN`** — of course: the write never reached a store, so
+  `SparseFb` never created the frame;
+- **BAR2: 286 352 writes, 0 refusals** — consistent, because the ring never went near BAR2;
+- **BAR1: 3 accesses, complete census** — and 3 is *exactly* one entry (two halves) plus one
+  `GP_PUT`. The number that looked like "the guest barely touched BAR1" was the whole
+  submission handshake;
+- the page tables at `0x4000`/`0x5000` **are** resident, `byBAR2#83`/`#84` — they arrive on an
+  aperture we do service;
+- **`GP_PUT` DID advance, 0 → 1.** ⊘ So "nothing was ever submitted" is **refuted**: work was
+  submitted, and we threw the submission away.
+
+### ⊘ What this REFUTES, including two of my own instrument's bounds
+
+- ⊘ **The memslot / missed-mapping hypothesis is dead.** The trap-status table asks the
+  *hypervisor*: all four regions resolve to **our own** region and every one is **`IO —
+  TRAPPED`**. No RAM row, no shadow (`window-size=0`), nothing overlaying a BAR except QEMU's
+  own `msix-table` inside the MSI-X container. ⇒ We saw the writes. We discarded them.
+- ⊘ **The scan cap was NOT the cause, and lifting it proved so.** `scan=1024/1024 declared
+  (COMPLETE: every declared entry was read), nonzero=NONE` — the *whole* ring is zero, not the
+  first 6.25 %. ★ The cap was still a real blindness and still had to go; it simply was not
+  this bug. Both statements are worth keeping.
+- ⊘ **The one-page dump was NOT the cause either.** All three pages of the allocation —
+  `fbRING[p0]@0x20000`, `fbRING[p1]@0x21000` and `fbFIN@0x28004` — read
+  `resN-NEVER-WRITTEN`. ★ This is the owner's **structure test** answered: three addresses in
+  one allocation, all pure zero, none ever created.
+- ⊘ **`userdOffset[0] = 0`**, so the documented silent-stall mechanism (a non-zero offset making
+  hardware see `GP_PUT == GP_GET` forever) is **not** in play.
+- ★★ **`dec=NONE`** — the channel declares **no `hVASpace` of its own**. The VA space the walk
+  uses is entirely **derived** through CtxShare/TSG. That remains true and remains unaudited;
+  it is simply no longer the leading candidate.
+
+### ★★★ Where the fix goes — and where it must NOT go
+
+⊘ **Do not "stop discarding" by giving BAR1 a store of its own.** BAR1 is an *aperture onto
+framebuffer memory*: a write at BAR1 offset X must land in **the same `SparseFb`, at the same
+framebuffer address, that the GMMU walk reads**, and a read-back through *either* aperture must
+agree. Anything else recreates the self-consistent-wrong-store defect one aperture over.
+
+★ The shape of the correct fix is already half-present and was never connected:
+
+- `crates/kayfabe-device/src/bar2.rs:131-136` — `BarPdes` **already carries a `bar1` field**,
+  documented *"The framebuffer aperture's root, if the guest has published one."* The boot
+  reports **`roots published 3`**;
+- `crates/kayfabe-device/src/plane.rs` — `window_phys` answers `FbWindow::FbAperture` with
+  `Err(WindowRefusal::NoAddressModel)`, which is the *only* reason BAR1 registers as a
+  discarding reservation at all;
+- `qemu/hw/misc/nvkvm/nvkvm.c` — BAR1's row is `NVKVM_KIND_RESERVATION`; BAR2's was changed to
+  `NVKVM_KIND_TRAP` at `#149` for **precisely this reason**, and its comment already states the
+  general rule: *"this window is GMMU-translated … so it cannot be shadowed by a memslot the
+  way a flat reservation can."*
+
+⇒ BAR1 needs the treatment BAR2 got at `#149`: a real address model, translating through the
+BAR1 root the guest publishes, writing into the one `SparseFb`. ⚠ And `Bar0Window::target()` —
+decoded and never consulted — is the standing warning about doing half of this.
+
+### ★ The instruments, and what each one was worth
+
+- **first-writer census**: `PRAMIN 21 / BAR1 0 / BAR2 68 / EXEC 1 / UNATTRIBUTED 0`. ★
+  `UNATTRIBUTED 0` is the line that makes the rest readable — full instrumentation coverage, so
+  the other four are a census of the guest rather than of our own gaps. ⊘ At tree `e394b69` this
+  same census would have read `UNATTRIBUTED 90`, because nothing called `write_tagged`.
+- **GPFIFO forward search**: 29 of 90 resident pages carry entry-shaped qwords; best
+  `0x2efa81000`, 256 shaped entries, `byBAR2`. ⚠ **Not yet a finding** — a page of PTEs scores
+  on this sieve too, and the sieve was built to exclude noise, not to identify rings. It is
+  reported as a score and must not be read as "the ring is at `0x2efa81000`".
+- **trap-status table**: the one instrument that asked something other than ourselves, and the
+  one that closed the owner's hypothesis.
+- **BAR1 access log**: the decisive one, and it exists only because the *count* was consistent
+  with two opposite readings. ★ A number that cannot discriminate is not evidence; the
+  addresses and values were.
