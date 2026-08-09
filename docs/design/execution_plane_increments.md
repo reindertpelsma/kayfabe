@@ -8590,3 +8590,23 @@ clean.
 
 ⚠ ⊘ **This does not touch s26.** The failing assertion is a test-side expectation; the shipped
 decoder is unchanged by the fix, so the binary that booted is the binary this describes.
+
+### 16.28.15 ★ One interaction worth recording before somebody flips `KAYFABE_ISOLATES`
+
+Route 4 sets `CeChannelFacts::vaspace` and leaves `vas_pdb` at `None` (§16.28.4). That means
+`try_ce_submission`'s precondition 2 —
+
+```rust
+if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor { return None; }
+```
+
+— cannot fire for a route-4 channel **whatever plane is installed**, so the CeUtils scrubber
+stays with the shell's CPU copy-engine executor even on a build that selects a real isolate
+plane.
+
+★ That is the standing rule's own content, now held by construction rather than by a warning:
+*"⊘ do not flip `KAYFABE_ISOLATES=real` — it takes the CE scrubber from the only executor that
+serves it."* §14.24 measured the cost of the opposite (`pub1_3e43e9a`: an accurate `vas_pdb`
+handed the scrubber to a `Stillborn` plane and cost the adapter). ⊘ It is recorded here as an
+*observed consequence*, not as a designed one — nothing was arranged for it, and a later change
+that gives route-4 channels a `Pdb` would silently undo it.
