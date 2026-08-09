@@ -10517,3 +10517,64 @@ so nothing here can move the wall. ★★ And `cup2` gates on `cuCtxCreate` alon
 **no kernel at all** (`cuMemAlloc` + a 4-byte CE round-trip), so even a green `cup2` would be
 a control-plane result, never evidence about compute. The scoreable quantity is
 `joined_global` in the cumulative row, and nothing else.
+
+## §16.53 ★★★★★ BOOTED `s43_b17381c_cumjoin` — **OUTCOME P**, scored from ONE LINE
+
+`[measured 2026-08-09, rev b17381c, boot s43_b17381c_cumjoin]`. Stamped
+`kayfabe-rev:b17381c70416…` on **both** artefacts and checked against `git rev-parse HEAD`
+before the boot — ⚠ and the guard **fired for real this rung**: the first attempt shipped a
+bundle predating the commit, the checkout aborted on untracked `s42` traces, and all three
+stamps still read `21f967b`. The build reported `BUILD_RC=1`; the stamps are what would have
+caught it had it reported `0`. Evidence:
+`traces/guest_boots/run_s43_b17381c_cumjoin_{qemu,dmesg,probe}.log`, tracked, passing
+`assert_boot_evidence.sh`.
+
+### 16.53.1 ★★★★★ THE CUMULATIVE ROW — and it says what `s42` could only be inferred to say
+
+```
+promote-ctx TALLY (cumulative, all promotions): {bid=0x0 …} … 
+  || CUMULATIVE bound=8 joined=4 joined_global=1 already=7 globals_added=1
+```
+
+⇒ **`joined_global=1`.** The cross-address-space join fired **exactly once**, `globals_added=1`
+published **exactly one** `PerGpu` physical, and §16.51.2's inference — drawn from an orphan
+count falling `10 → 9` and an `already` rising `0 → 1` — is now **confirmed directly**.
+⊘ Row `Q` of §16.52 (the row that would have indicted §16.51.2) did not fire.
+
+★★★★ **And the demonstration of §16.51.3 could not be cleaner.** The last-wins row is
+**byte-identical between `s42` and `s43`**:
+
+```
+ACCEPTED (last): bound=0 joined=0 joined_global=0 globals_known=1 globals_added=0
+  already=1 parked=0 half_already=9 half_unusable=0 orphans(awaiting_va=0,awaiting_phys=9)
+```
+
+Two boots, the same visible row, and one of them carries `joined=4 joined_global=1` in a
+number the row cannot show. ⊘ **The last-wins latch was hiding four joins and one global
+join behind a row of zeros** — not because the counters were wrong, on a refusal path, or
+conditional, but purely because of the *aggregation they were read through*. `bound=8` and
+`already=7` were likewise invisible: the deepest promotion binds nothing, so the row that
+survives is the row with the least to report.
+
+### 16.53.2 `R′` REFUTED — a report-side change stayed report-side
+
+Byte-identical to `s42` and therefore to `s41b`: `0x2080012b` accepted **x11** / refused
+**x2**, `NotOnAllowlist` **x10**, `FreeUnknown` **x15**, `UnmappedAllocClass` x3,
+`ReservedClient` x2, doorbells **170 arrived, 170 served, 0 REFUSED**, `CUP2_RC=1`,
+`cuCtxCreate → 801`, `cuDeviceTotalMem` → 11959 MiB. No `HalfConflict`, no `Malformed`.
+
+★ **Predicted and held:** `cup2` still fails at `cuCtxCreate`. Nine of ten context-buffer VA
+halves still cannot bind, so nothing this rung did could move that wall — and `cup2` gates on
+`cuCtxCreate` alone, launching **no kernel**, so it was never the instrument for compute
+anyway.
+
+### 16.53.3 ⇒ WHAT THE NEW NUMBERS OPEN
+
+`joined=4` against `joined_global=1` says **three two-phase joins completed inside a single
+address space** and one across. Those three were invisible at `s41b` too — its row also read
+`joined=0` — so the §16.48 join has been working for two rungs longer than its own report
+could show. ⊘ Recording that rather than re-attributing it: it does not change what `s42`
+proved, and it does change how much of the join was ever unmeasured.
+
+Next, unchanged from §16.51.4: `0x9`/`0xb` are `PerGpu` with `phys=0` — they *can* publish
+and did not; and `0x3`–`0x6` are `Never`, an allocation-time gap no join can close.
