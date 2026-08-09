@@ -1573,10 +1573,27 @@ static void nvkvm_report_registers(NvkvmState *s)
                     "walk and its bytes went nowhere.",
                     a.fb_window_reads, a.fb_window_writes, a.bar1_pde_base);
     } else {
-        info_report("nvkvm:   windows with no address model: 0r/0w — and since §16.18 this "
-                    "zero is NO LONGER VACUOUS: BAR1 traps and is translated, so the arm "
-                    "that increments this is reached only by a chip row stating no "
-                    "bar1PdeBase. Read it beside the BAR1 block's bar1PdeBase.");
+        /*
+         * ⊘⊘ THIS ARM USED TO ASSERT ITS OWN PRECONDITION AND COULD NOT CHECK IT.  It read
+         * "and since §16.18 this zero is NO LONGER VACUOUS: BAR1 traps and is translated",
+         * which is a claim that BAR1 was EXERCISED — unconditional, and false on any boot
+         * that never touches BAR1, where `0r/0w` is exactly as vacuous as it was before
+         * §16.18.  The same shape as the sentence §16.35 removed two blocks below: a claim
+         * frozen into runtime output, read as evidence because it arrives inside a
+         * measurement, with no mechanism to expire.  A section number in a log line is the
+         * tell.
+         *
+         * ⇒ It now PRINTS THE PRECONDITION instead of asserting it.  The reader sees how
+         * much BAR1 traffic crossed the translated path and decides for themselves whether
+         * this zero is a statement; the argument for why it can be one lives in
+         * docs/design/bar1_translation, where staleness is expected and dated.
+         */
+        info_report("nvkvm:   windows with no address model: 0r/0w — read it beside the "
+                    "BAR1 traffic that had to exist for this zero to say anything: %"
+                    PRIu64 " translated read(s) / %" PRIu64 " write(s), bar1PdeBase = 0x%"
+                    PRIx64 ". ⊘ With 0 BAR1 accesses this line reports nothing about the "
+                    "guest.",
+                    a.bar1_reads, a.bar1_writes, a.bar1_pde_base);
     }
     /*
      * ★★★★ §16.13 — WHICH bytes, not how many.  MEASURED 2026-08-09 (boot bar1_03a679f):

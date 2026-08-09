@@ -821,11 +821,10 @@ impl CommandPolicy for GraphPolicy<'_> {
 ///   `kayfabe_device::inittables::InitTablePolicy`, which answers six of them. Controls
 ///   reach the object model through the device chain's own links or not at all until
 ///   somebody measures that they must.
-/// - **`DUP_OBJECT`.** `translate_dup` exists and works; no boot has produced one. Serving
-///   a verb nothing has sent is the *"is it already done / is it actually needed"* trap in
-///   its other direction, and the cost of being wrong is one named refusal on the next
-///   boot — which is exactly how this rung was found. It is [`OBJECT_VERBS`]'s most likely
-///   next member and it is not one today.
+/// ⊘ **`DUP_OBJECT` used to be listed here and is no longer** — see [`OBJECT_VERBS`]'s
+/// `DupObject` row for why, and for the one thing worth keeping from the old text: this
+/// paragraph named its own expiry condition (*"the cost of being wrong is one named refusal
+/// on the next boot"*), the refusal arrived on `s31`, and nobody came back to read it.
 ///
 /// # ★ Ownership
 ///
@@ -870,6 +869,29 @@ pub struct ObjectPolicy {
 pub const OBJECT_VERBS: &[kayfabe_gsp::RpcFunction] = &[
     kayfabe_gsp::RpcFunction::RmAlloc,
     kayfabe_gsp::RpcFunction::Free,
+    // ★★★★ §16.38 — `DUP_OBJECT` (fn 21), added on a MEASUREMENT rather than on a plan.
+    //
+    // The old text here read *"`translate_dup` exists and works; no boot has produced one …
+    // the cost of being wrong is one named refusal on the next boot"*. `[measured
+    // 2026-08-09, boot s31_675af4a_echofix]` the refusal arrived, in both places at once:
+    //
+    //   guest:  NVRM: rpcRmApiDupObject_GSP: GspRmDupObject failed: hClient=0xc1d0000a
+    //           hParent=0xcaf00000 hObject=0xcaf00036 hClientSrc=0xc1d00015
+    //           hObjectSrc=0x5c000007 flags=0x0 paramsStatus=0x0 status=0x00000056
+    //   ours:   nvkvm:   unserviced fn 21            (run_s31_675af4a_echofix_qemu.log:171)
+    //
+    // `0x5c000007` is libcuda's own `FERMI_VASPACE_A`, and UVM wants it in ITS client so
+    // `UVM_REGISTER_GPU_VASPACE` can name the address space libcuda opened
+    // (`ogkm-580: nv_gpu_ops.c:2657-2664`, inside `nvGpuOpsDupAddressSpace`). Refusing it
+    // is what makes that ioctl return `0x56` and `cuCtxCreate` return 801.
+    //
+    // ⊘ **Serving it is not a new data path** — that is the whole reason it is safe under
+    // `gvaspub`'s rule against served-but-inert links. `translate_dup` → `RmEvent::Dup` →
+    // `RmGraph::apply`'s `Dup` arm binds `dst` to the SOURCE'S OWN resource id, so UVM's
+    // handle becomes a second name for the resource whose `pdb` the guest already
+    // published. Nothing is minted, nothing is faked, and a source we have not observed
+    // parks (`pending_dups`) instead of faulting.
+    kayfabe_gsp::RpcFunction::DupObject,
 ];
 
 /// ★★★ **#177** — the `RpcFunction::RmControl` command ids this policy claims, and the

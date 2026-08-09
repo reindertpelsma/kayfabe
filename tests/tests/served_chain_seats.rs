@@ -167,6 +167,12 @@ fn every_command() -> Vec<(String, RpcCommand)> {
             16,
         ),
         (RpcFunction::UnloadingGuestDriver, 47, 16),
+        // ★★★★ §16.38 — `DUP_OBJECT`, `NVOS55_PARAMETERS` = seven words. A zero body makes
+        // this a refusal-by-name (`BridgeRefusal::ReservedClient` — `hClient == 0`), which
+        // is still an ANSWER and therefore still a difference from the `None` the chain
+        // gave before. ⊘ That is all this sweep asks; the accepted path is exercised
+        // against the graph in `tests/tests/gsp_rm_alloc.rs`.
+        (RpcFunction::DupObject, 0x15, 28),
     ] {
         v.push((format!("fn {code}"), func(f, code, len)));
     }
@@ -206,6 +212,12 @@ fn the_object_seat_changes_only_the_verbs_and_controls_it_claims() {
         let code = match f {
             RpcFunction::RmAlloc => kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_GSP_RM_ALLOC,
             RpcFunction::Free => kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_FREE,
+            // ★★★★ §16.38 — `DUP_OBJECT`, fn 21. Named here rather than defaulted, so this
+            // sweep proves the seat's answer for fn 21 CHANGED (it is now in `differed`) —
+            // which is the property `s31`'s `unserviced fn 21` row says was missing.
+            RpcFunction::DupObject => {
+                kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_DUP_OBJECT
+            }
             other => panic!("OBJECT_VERBS grew a member this test cannot name: {other:?}"),
         };
         allowed.push(format!("fn {code}"));

@@ -36,6 +36,7 @@ use kayfabe_arch::{ObjectKind, PteDecode, PushMethod};
 use kayfabe_chips::Ga10xArch;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
+use kayfabe_core::rmgraph::NodeKey;
 use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 use kayfabe_isolate::{IsolateFactory, IsolateId, StillbornIsolates};
 use kayfabe_rmrpc::{BridgeRefusal, OBJECT_VERBS, ObjectPolicy};
@@ -708,7 +709,15 @@ fn the_event_class_params_are_never_read_however_hostile_they_are() {
 fn the_object_link_claims_exactly_its_declared_verbs() {
     assert_eq!(
         OBJECT_VERBS,
-        &[RpcFunction::RmAlloc, RpcFunction::Free],
+        &[
+            RpcFunction::RmAlloc,
+            RpcFunction::Free,
+            // ★★★★ §16.38 — `DupObject` joined on `s31`'s `unserviced fn 21` row, not on a
+            // plan. It was in the "must NOT be claimed" list three lines below until this
+            // commit; moving it is the whole change, and it is spelled out in both places
+            // so a reader cannot see one half.
+            RpcFunction::DupObject,
+        ],
         "the served verb set changed; the tests below and the port's chain-position \
          argument are both about THIS list"
     );
@@ -718,7 +727,6 @@ fn the_object_link_claims_exactly_its_declared_verbs() {
     // A representative of every other family this port sees on the wire.
     for f in [
         RpcFunction::RmControl,
-        RpcFunction::DupObject,
         RpcFunction::UnloadingGuestDriver,
         RpcFunction::GetGspStaticInfo,
         RpcFunction::SetRegistry,
@@ -1431,5 +1439,249 @@ fn the_delivered_run_stops_at_the_guests_element_count_not_the_callers_buffer() 
     assert!(
         !decoded.delivered.contains(&0xa5),
         "not one byte of the caller's tail may appear in the delivered body"
+    );
+}
+
+// =================================================================================
+// ★★★★ §16.38 — `DUP_OBJECT` (fn 21), the wall `s31_675af4a_echofix` measured
+// =================================================================================
+//
+// `[measured 2026-08-09, boot `s31_675af4a_echofix`]` the guest and this port named the
+// same event from opposite ends of the wire:
+//
+// ```text
+// guest:  NVRM: rpcRmApiDupObject_GSP: GspRmDupObject failed: hClient=0xc1d0000a
+//         hParent=0xcaf00000 hObject=0xcaf00036 hClientSrc=0xc1d00015
+//         hObjectSrc=0x5c000007 flags=0x0 paramsStatus=0x0 status=0x00000056
+// ours:   nvkvm:   unserviced fn 21     (run_s31_675af4a_echofix_qemu.log:171)
+// ```
+//
+// ⊘ **The handles below are transcribed from that dmesg line, not from any Rust mirror**
+// — the same discipline `BOOT_HCLIENT` and `BOOT_ROOT_PARAMS_SIZE` are held to at the top
+// of this file.
+
+/// UVM's own RM client — the dup's DESTINATION namespace.
+const S31_DUP_DST_CLIENT: u32 = 0xc1d0_000a;
+/// The destination parent: UVM's `Device` under that client.
+const S31_DUP_DST_PARENT: u32 = 0xcaf0_0000;
+/// The handle UVM's guest-side RM had already assigned for the alias
+/// (`ogkm-580: rs_server.c:1725` runs `serverCopyResource` BEFORE the RPC is issued, so a
+/// conforming guest can never send `0` here).
+const S31_DUP_DST_HANDLE: u32 = 0xcaf0_0036;
+/// libcuda's RM client — the dup's SOURCE namespace.
+const S31_DUP_SRC_CLIENT: u32 = 0xc1d0_0015;
+/// libcuda's own `FERMI_VASPACE_A`, allocated `status=0 rc=0` in the same boot
+/// (`run_s31_675af4a_echofix_probe.log:170`).
+const S31_DUP_SRC_HANDLE: u32 = 0x5c00_0007;
+
+/// The two client roots the dup names, pushed through a chain so `RmGraph`'s central
+/// namespace gate is satisfied.
+///
+/// ★★★ **This is not harness sugar — it is a REQUIREMENT the port imposes and the boot must
+/// meet.** `RmGraph::apply` enumerates BOTH of a dup's clients
+/// (`rmgraph.rs:1390`: `missing(dst.client).or_else(|| missing(src.client))`) and faults an
+/// undeclared one; only the dup's *source object* is allowed to be unobserved (it parks).
+/// ⊘ So a served `DUP_OBJECT` can still be refused `RmGraphError::UndeclaredClient`, and
+/// `s35`'s refusal census is where that would show — see this rung's falsifier.
+fn declare_dup_clients(chain: &mut dyn CommandPolicy) {
+    for (seq, client) in [(101u32, S31_DUP_SRC_CLIENT), (102, S31_DUP_DST_CLIENT)] {
+        let params = w::client_root_params(client, KERNEL_PID);
+        chain.respond(&command(&w::message(
+            fn_id::GSP_RM_ALLOC,
+            seq,
+            &w::alloc_body(
+                client,
+                w::NV01_NULL_OBJECT,
+                w::NV01_NULL_OBJECT,
+                0x0000_0000,
+                params.len() as u32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &params,
+            ),
+        )));
+    }
+}
+
+fn s31_dup(seq: u32) -> RpcCommand {
+    command(&w::message(
+        fn_id::DUP_OBJECT,
+        seq,
+        &w::dup_body(
+            S31_DUP_DST_CLIENT,
+            S31_DUP_DST_PARENT,
+            S31_DUP_DST_HANDLE,
+            S31_DUP_SRC_CLIENT,
+            S31_DUP_SRC_HANDLE,
+            w::NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE,
+        ),
+    ))
+}
+
+/// ★★★★ **The BEFORE/AFTER pair, on the boot's own bytes.** Without the object-model link
+/// the chain declines and the ledger records `fn 21`; with it, the same bytes are answered
+/// `NV_OK`.
+///
+/// ⊘ The negative half is not decoration: it is what says the green below is the LINK's and
+/// not the harness's (`suspect_the_instrument_first`).
+#[test]
+fn the_s31_dup_is_refused_without_the_object_link_and_served_with_it() {
+    let (mut bare, bare_log) = chain_without_objects();
+    declare_dup_clients(bare.as_mut());
+    assert!(
+        bare.respond(&s31_dup(1)).is_none(),
+        "★ master's chain must DECLINE fn 21 — that decline is what `s31` measured as \
+         `unserviced fn 21`, answered `NV_ERR_NOT_SUPPORTED` by `GspFsm::answer`"
+    );
+    // ★★★ And it is RECORDED. This is the assertion that refutes §16.35's reading of the
+    // same boot (*"every one of the 40 is `fn 76`"*): the ledger keys on `(function, cmd)`
+    // and carries `cmd: None` for a non-control, which `nvkvm.c:1984-1988` renders as a row
+    // with **no `cmd` suffix** — present, and invisible to a grep shaped like
+    // `fn 76 cmd 0x…`.
+    assert!(
+        bare_log.sample().contains(&kayfabe_device::unserviced::UnservicedCommand {
+            function: fn_id::DUP_OBJECT,
+            cmd: None,
+        }),
+        "★ the unserviced ledger DOES see fn 21, and records it with no control id; \
+         sample = {:?}",
+        bare_log.sample()
+    );
+
+    let (mut with, with_log) = chain_with_objects();
+    declare_dup_clients(with.as_mut());
+    let before = with_log.total();
+    let reply = with
+        .respond(&s31_dup(1))
+        .expect("★ the object link must ANSWER the dup");
+    assert_eq!(
+        reply.rpc_result, 0,
+        "the dup is accepted — `RmGraph::apply`'s `Dup` arm parks an unobserved SOURCE \
+         OBJECT rather than faulting it"
+    );
+    assert_eq!(
+        with_log.total(),
+        before,
+        "★ non-vacuity in the other direction: a served command must NOT reach the ledger"
+    );
+}
+
+/// ★★★★ **§16.33's defect class, checked on this arm BEFORE it ships.**
+///
+/// `RpcCommand::reply` builds `vec![0u8; payload.len()]` and stamps the body into its
+/// front, so **an empty body is a full-length zero fill, not an absence**
+/// (`kayfabe-gsp/src/rpc.rs:472-475`). That is what destroyed the guest's `numEntries` on
+/// `0x00801813` in `s28`. The reply this arm sends must therefore be the request's own
+/// bytes, byte for byte and at full length.
+///
+/// ⊘ **And the guest would survive an empty one here** — `rpcRmApiDupObject_GSP`
+/// (`ogkm-580: rpc.c:11261-11311`) never copies the reply into `*phObject`; it reads
+/// `rpc_params->status` only inside its failure `NV_PRINTF`. So this assertion is
+/// *precautionary*, not load-bearing, and saying which it is matters: the general rule
+/// this campaign banked is **echo is the default and non-echo is what needs justifying**,
+/// and a rule re-derived per call site gets got wrong per call site.
+#[test]
+fn the_dup_reply_echoes_the_request_at_full_length() {
+    let cmd = s31_dup(1);
+    let (mut with, _) = chain_with_objects();
+    declare_dup_clients(with.as_mut());
+    let reply = with.respond(&cmd).expect("answered");
+    assert_eq!(reply.rpc_result, 0, "accepted");
+    assert_eq!(
+        reply.body, cmd.payload,
+        "★ byte-for-byte: an all-`[IN]` struct's round-trip property is that the caller's \
+         struct SURVIVES, which for this control means identical"
+    );
+    assert_eq!(
+        reply.body.len(),
+        28,
+        "`NVOS55_PARAMETERS_v03_00` is seven words; a shorter body would be zero-padded \
+         by `RpcCommand::reply` and the zeros would be OURS"
+    );
+    // The five handles must still be the ones the guest sent.
+    for (off, want) in [
+        (0usize, S31_DUP_DST_CLIENT),
+        (4, S31_DUP_DST_PARENT),
+        (8, S31_DUP_DST_HANDLE),
+        (12, S31_DUP_SRC_CLIENT),
+        (16, S31_DUP_SRC_HANDLE),
+    ] {
+        assert_eq!(
+            u32::from_le_bytes(reply.body[off..off + 4].try_into().expect("4")),
+            want,
+            "handle at +{off} was rewritten"
+        );
+    }
+}
+
+/// ★★★ **The dup lands in the object model as an ALIAS of the source's own resource** —
+/// i.e. UVM's client ends up NAMING the address space libcuda opened, which is the entire
+/// thing `UVM_REGISTER_GPU_VASPACE` is asking for
+/// (`ogkm-580: nv_gpu_ops.c:2657-2664`).
+///
+/// ⊘ Driven at the policy rather than at `RmGraph` directly, because a green
+/// `RmGraph::apply` says nothing about whether the WIRE reaches it —
+/// `measure_at_the_boundary_not_inside`.
+#[test]
+fn a_served_dup_makes_uvms_handle_a_second_name_for_the_sources_resource() {
+    let mut policy = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
+    // The two namespaces the dup names, and the source's `Device` — the allocs the boot's
+    // own `probe.log` shows before the dup. ⊘ `paramsSize` is `params.len()`, never a
+    // literal: an alloc whose declared size does not match its body is refused
+    // `ParamsSizeExceedsPayload` and the client is never declared, which is how the first
+    // draft of this test got `UndeclaredClient` for a client it thought it had allocated.
+    let mut root = |seq: u32, client: u32| {
+        let params = w::client_root_params(client, KERNEL_PID);
+        let msg = w::message(
+            fn_id::GSP_RM_ALLOC,
+            seq,
+            &w::alloc_body(
+                client,
+                w::NV01_NULL_OBJECT,
+                w::NV01_NULL_OBJECT,
+                0x0000_0000,
+                params.len() as u32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &params,
+            ),
+        );
+        policy
+            .deliver(&command(&msg))
+            .unwrap_or_else(|e| panic!("root alloc for {client:#010x} must land: {e:?}"));
+    };
+    root(1, S31_DUP_SRC_CLIENT);
+    root(2, S31_DUP_DST_CLIENT);
+    {
+        let params = w::device_params(0, w::NV01_NULL_OBJECT, 0);
+        let msg = w::message(
+            fn_id::GSP_RM_ALLOC,
+            3,
+            &w::alloc_body(
+                S31_DUP_SRC_CLIENT,
+                S31_DUP_SRC_CLIENT,
+                0x5c00_0002,
+                0x0000_0080, // NV01_DEVICE_0
+                params.len() as u32,
+                w::RMAPI_RPC_FLAGS_NONE,
+                &params,
+            ),
+        );
+        policy.deliver(&command(&msg)).expect("the device lands");
+    }
+
+    let reply = policy.respond(&s31_dup(4)).expect("the dup is answered");
+    assert_eq!(reply.rpc_result, 0, "accepted");
+
+    let gpu = policy.gpu().expect("a plain Gpu in this composition");
+    let src = NodeKey::new(HClient(S31_DUP_SRC_CLIENT), HObject(S31_DUP_SRC_HANDLE));
+    let dst = NodeKey::new(HClient(S31_DUP_DST_CLIENT), HObject(S31_DUP_DST_HANDLE));
+    assert!(
+        gpu.spine.rmgraph.dups().any(|(d, s)| d == dst && s == src),
+        "★ the graph must carry the edge {dst:?} -> {src:?}; without it UVM's client \
+         names nothing and a later projection would resolve it to a ghost"
     );
 }
