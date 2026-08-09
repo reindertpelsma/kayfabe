@@ -157,7 +157,11 @@ typedef struct {
   uint32_t boardId;
   uint32_t gpuInstance;
   int32_t numaId;
-  uint32_t _pad0;
+  /* ⊘ NO trailing pad. `[measured, s31_675af4a_echofix]` an earlier version declared one
+   * and RM answered `0x1f` (NV_ERR_INVALID_ARGUMENT): the struct's last member is
+   * `NvS32 numaId` at offset 36, so `sizeof` is 40 and the pad made it 48. RM validates
+   * `paramsSize` against the class's own size, so a struct that is merely LARGER is
+   * rejected outright — the padding rules are part of the ABI, not a local detail. */
 } id_info_t;
 
 /* NV_VASPACE_ALLOCATION_PARAMETERS — nvos.h:3154-3164 */
