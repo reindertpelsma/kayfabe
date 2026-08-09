@@ -922,8 +922,10 @@ mod tests {
         }
     }
 
-    /// The four measured words, stated once more against the capture — so the projection is
-    /// anchored to hardware and not only to its neighbour.
+    /// The four words `[measured 2026-08-09, real GA106 `GPU-d0913685`,
+    /// `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt` and
+    /// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:62`]`, stated once more against
+    /// the capture — so the projection is anchored to hardware and not only to its neighbour.
     ///
     /// `0x03e3` on CE0/CE1 (GRCE set), `0x03e2` on CE2/CE3.
     #[test]

@@ -1642,8 +1642,9 @@ pub static GA106: ChipProfile = ChipProfile {
     ce_fault_method_buffer_size: kayfabe_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,
     gsp_model: || Box::new(Ga10xGspModel::new()),
     engines: GA106_ENGINES,
-    // ★ Measured at this exact control on this exact part — see `kayfabe_abi::cepce` and
-    // `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`. ⊘ Four entries for the four
+    // ★ `[measured 2026-08-09, real GA106 `GPU-d0913685`, driver 580.159.04, rmladder R24,
+    // `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` — at this exact control, at
+    // this exact boundary, on this exact part. See `kayfabe_abi::cepce`. ⊘ Four entries for the four
     // engines `GA106_ENGINES` advertises; the fifth LCE the arch mask permits is refused by
     // the real part, so there is no fifth word to state.
     lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
