@@ -8129,3 +8129,57 @@ and reports **green**. Fixed by having the setup do what a real guest does. **3/
 ★ And the wider suite is better than recorded: `KAYFABE_SLOW=1 cargo test --workspace
 --no-fail-fast` at `bc53173` on the bench had **exactly one failing target** — this one. The
 "6 tests red" of §16.22 no longer holds.
+
+### 16.27.1 ★★★★ BOOTED `s25_01d12e6_cup2` — the fork is settled: **there is no VASpace to find**
+
+`[measured 2026-08-09, boot `s25_01d12e6_cup2`, bench `vh`, GA106/RTX 3060, host
+580.159.04 Open, STOCK guest, hook `cup2_hook_deadline.sh`. Rev `01d12e6b078a…` stamped in
+BOTH archive and QEMU binary, matching a clean `HEAD`.]`
+
+```text
+ns[c0xc1e00010 6 objs 1xChannel { engine: GrCompute } 1xEngineObject { engine: Ce }
+   1xEvent 1xDevice 1xSubdevice 1xClient | NO-VASPACE-IN-NAMESPACE]
+```
+
+⇒ **Fork (b).** The walling channel's namespace holds **six objects and not one VASpace**.
+So the Device's default VA space was created implicitly by RM and **was never an `RM_ALLOC`
+on the wire**. The missing fourth route cannot be a lookup — there is nothing to look up.
+It must **MINT** a VA space for the Device.
+
+★ Note this is stated **positively** (`NO-VASPACE-IN-NAMESPACE` is printed by an
+enumeration that ran), not inferred from a report that failed to mention one. That
+distinction is the whole of §16.27.
+
+### 16.27.2 ★★ The observation-only self-check PASSED
+
+`doorbells: 24 arrived, 9 served, 15 REFUSED` — **byte-identical to s23, s24 and s25**, and
+`cup2` is still `FAIL cuInit(0) -> initialization error (3)` (`CUP2_RC=1`). §16.27's commit
+demanded exactly this: *"the next boot's doorbell counts must again be byte-identical …
+if they are not, this 'observation-only' change was not."* They are.
+
+### 16.27.3 ★ What the namespace's SHAPE says, and one candidate it makes concrete
+
+Six objects — `Client → Device → Subdevice → Channel(+ `EngineObject{Ce}`) + Event` — with
+no VASpace and no TSG. That is the **GSP-managed CeUtils / scrubber** shape
+`kayfabe-fwd/src/lib.rs:3357` already names (*"GSP-managed CeUtils channel walls
+`NoVas(ChanId(1))`"*).
+
+⚠ Note also that the channel's declared **class** is `Channel { engine: GrCompute }` while
+the exec-plane census reports it as `Ce`: the `EngineObject { engine: Ce }` allocated on it
+refines it, which is `ChannelFacts::engine`'s documented job. ⊘ Not a contradiction — the
+two fields are the class default and the refinement, and they are behaving as specified.
+
+★ **A CANDIDATE, offered as such and not as a finding.** §14.24 records that
+`try_ce_submission`'s precondition 2 used to read *"`vas_pdb` must be `None` — a channel the
+core can address is the core's"*, and that it was replaced by a build-time decision from
+`selected_isolate_plane`. This channel has `vas_pdb: None` and is exactly the CE-scrubber
+family that the shell's CPU CE executor exists to serve (the standing rule *"⊘ do not flip
+`KAYFABE_ISOLATES=real` — it takes the CE scrubber from the only executor that serves
+it"*). So *"the scrubber's doorbell reaches `plan_doorbell` and takes `NoVas` before the
+shell executor ever gets the chance"* is a **checkable hypothesis** about the dispatch, and
+it is the natural next rung.
+
+⊘ It is NOT established here, and this campaign's last four rung framings were refuted, so
+it is written as a question with a named place to look — `a_queue_item_is_a_hypothesis`, and
+`a_table_does_not_decide_behaviour — the DISPATCH does`. **Read the dispatch before
+believing it.**
