@@ -10682,7 +10682,8 @@ control refusal is precisely the wall shape that is invisible to every instrumen
 inherited. `0xa06c0101` is issued by libcuda.
 
 ⊘ **This is a candidate, not a finding.** It is coherent with six independent facts and that
-is exactly the state in which this campaign has been wrong before. It gets measured.
+is exactly the state in which this campaign has been wrong before. It gets measured — see
+§16.55, `[measured 2026-08-10, boot s44_b17381c_rmtrace]`.
 
 ### 16.54.5 THE INSTRUMENT — and it was ALREADY BUILT (§16.40's class, a third time)
 
@@ -10691,7 +10692,8 @@ No new tracer. `scripts/rpctrace/cuda_ioctl_trace.c` (666 lines) already decodes
 caller reads back**; `scripts/bench/uvm_ioctl_trace.c` covers the UVM plane, whose verdict is
 in `params.rmStatus` and which every `_IOC_TYPE=='F'` filter misses structurally. Both were
 written to run on the **host** against real firmware. Pointing them at the **guest**, against
-our emulated GPU, is the new measurement. `scripts/bench/cup2_hook_rmtrace.sh` is the wiring.
+our emulated GPU, is the new measurement. `scripts/bench/cup2_hook_rmtrace.sh` is the wiring
+(result: §16.55, `[measured 2026-08-10, boot s44_b17381c_rmtrace]`).
 
 ★ **Trace one increment to the character in the log** (the brief's lesson 1, discharged): one
 `write(2)` per ioctl to an `O_APPEND` fd. No latch, no max, no per-key overwrite, no sampling,
@@ -10777,7 +10779,10 @@ objects, all `status=0` — and then asks RM to **schedule the group**. We answe
 payload the C oracle sends to the real host driver** at `nvkvm_gpu_emul.c:8044`. `out=010000`,
 unchanged, because nothing serviced it.
 
-### 16.55.2 ★★★★ THE MECHANISM, END TO END, MEASURED AT BOTH ENDS
+### 16.55.2 ★★★★ THE MECHANISM, END TO END, MEASURED AT BOTH ENDS `[boot s44_b17381c_rmtrace, 2026-08-10]`
+
+`[measured 2026-08-10, boot s44_b17381c_rmtrace]`, cross-read against `cap3` (`traces/mode2_c_reference/`) and
+`ogkm-580.159.04`.
 
 Neither end alone names this. Together they close it:
 
@@ -10795,7 +10800,9 @@ invisible.** An id on the alloc/control allowlist raises no bridge refusal, prod
 is answered `NOT_SUPPORTED`. ⇒ **The allowlist is a statement about what we permit, never about
 what we implement**, and a census built on refusals cannot see the gap between them.
 
-### 16.55.3 ★★★★★ THREE FORGIVEN, ONE FATAL — `not_supported_is_the_forgiven_status`, MEASURED
+### 16.55.3 ★★★★★ THREE FORGIVEN, ONE FATAL — `not_supported_is_the_forgiven_status`, MEASURED `[boot s44_b17381c_rmtrace, 2026-08-10]`
+
+`[measured 2026-08-10, boot s44_b17381c_rmtrace]`, from the same 249-record stream.
 
 The other three `0x56`s are the control: `cuInit`, `cuDeviceGetCount`, `cuDeviceGetName`,
 `cuDeviceGetAttribute` ×2 and `cuDeviceTotalMem` **all succeed after them**.
@@ -10815,7 +10822,8 @@ censuses (set-union, tag-projection, order-free counting map) destroy.
 ### 16.55.4 ⊘ REFUTED — the "ten refusals / zero failures" asymmetry does not exist
 
 The coordinator's reframe rested on `s43` showing **zero** `GspRmAlloc failed … hClass=` against
-our **ten** `NotOnAllowlist`. Measured, and it is refuted twice over:
+our **ten** `NotOnAllowlist`. `[measured 2026-08-10, boot s44_b17381c_rmtrace]` and re-read against
+`run_s43_b17381c_cumjoin_dmesg.log`, it is refuted twice over:
 
 - `s43` and `s44` **each carry four** `GspRmAlloc failed … hClass=` lines, **naming their
   classes**: `0x70` (`NV01_MEMORY_SYSTEM_DYNAMIC`), `0xc36f` (`VOLTA_CHANNEL_GPFIFO_A`, the RC
@@ -10845,7 +10853,8 @@ counts it (x11/x2) precisely because the device sees the kernel's RPC.
 
 ★ The class: **a positive control must be drawn from the population the instrument can see, not
 from the population the question is about.** A control chosen from another plane fails on a
-working instrument and would have scored a good boot as outcome `T`. What actually proved the
+working instrument and would have scored a good boot as outcome `T` `[measured 2026-08-10, boot s44_b17381c_rmtrace]`.
+What actually proved the
 instrument live was the payload — 249 RM records, 316 UVM, `hClass=0xc7c0 ×8`, `0xc56f ×8`,
 `0xa06c ×1`: the entire context-build sequence, which nothing but a loaded interposer could
 produce. ⇒ replace it with `ALLOC hClass=0x0000a06c` next rung.
@@ -10875,7 +10884,8 @@ and separately issues `0xa06c0101` to the real host TSG**, having first issued `
 (`BIND`). ⇒ a bare `NV_OK` would move the wall without scheduling anything, and would be
 `a_flag_is_not_progress` in its purest form.
 
-⊘ **And `0xa06c0102` (`NVA06C_CTRL_CMD_BIND`) is NOT a second wall — measured, same boot.** I
+⊘ **And `0xa06c0102` (`NVA06C_CTRL_CMD_BIND`) is NOT a second wall** — `[measured 2026-08-10, boot s44_b17381c_rmtrace]`,
+the same capture. I
 flagged it as worth checking because the C issues BIND before SCHEDULE (`:4048`, `:9574`); the
 data already answered it. `s44`'s userspace census contains **exactly one `a06c` control**,
 `0xa06c0101`, and `grep -c a06c0102` over both `s43`'s and `s44`'s device logs returns **0** —
