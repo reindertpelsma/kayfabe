@@ -64,12 +64,24 @@ half of it does not force an isolate.** Two corrections, both to my own text abo
 **An address passed as an ARGUMENT is re-addressable. An address the driver takes IMPLICITLY from
 the calling process is not — and `mm` is not a parameter.**
 
-- **UVM is the clean case.** Managed memory's contract *is* CPU VA == GPU VA, and a UVM `va_space`
-  is bound to the caller's `mm` — there is no handle to re-address, and nothing to pass. Two guest
-  processes whose managed allocations overlap in VA cannot both be registered in one host `mm`.
-  Mode 2 forwards guest managed VAs straight to host `cudaMallocManaged`
-  (`mode2_uvm_residency.md`), so this is on our path, not hypothetical. `[inferred]` from the UVM
-  source shape; ⊘ no run behind this sentence.
+- ★★★ **UVM is the clean case, and the C already hit it head-on.** Managed memory's contract *is*
+  CPU VA == GPU VA, and a UVM `va_space` binds to the **caller's `mm`** — there is no handle to
+  re-address and nothing to pass.
+
+  **And this is exactly where sharing was tried and REFUSED.** The C records that
+  `UVM_MM_INITIALIZE` returns `NV_ERR_INVALID_ARGUMENT` *"when the file passed via `uvm_fd` was
+  opened by a different `mm` than the caller"* — QEMU opened `/dev/nvidia-uvm` and passed it by
+  `SCM_RIGHTS`, and the driver rejected the isolate's call because the file's owning `mm` was
+  QEMU's (`C: src/stub/nvkvm_stub.c:246-253`). The remedy was not a wrapper or a check: the stub
+  **opens the device itself, twice, before seccomp, and DROPS the passed fd**.
+
+  ⇒ ★★ **The one object that cannot be shared is the one the whole VA-identity argument rests on**,
+  and the driver enforces it *by error code*, not by convention. Mode 2 forwards guest managed VAs
+  straight to host `cudaMallocManaged` (`mode2_uvm_residency.md`), so this sits on our path.
+
+  ⚠ Stale comment found while citing this: `C: src/qemu/nvkvm_isolate.c:152-153` still says
+  *"/dev/nvidia-uvm is intentionally absent: UVM is opened by QEMU, never by the sandboxed stub"* —
+  which the stub's own workaround contradicts. Believe the stub. Do not port the comment.
 - **§2's RM namespace argument is untouched** by sharing: it is about *handles*, not addresses, and
   no amount of re-mapping makes one process into two clients.
 

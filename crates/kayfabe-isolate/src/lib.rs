@@ -30,6 +30,14 @@
 //! in one host `mm`. ⊘ The GPU-VAS argument does *not* carry this on its own: one RM
 //! client may own many `VASpace` objects.
 //!
+//! ★★ **And UVM is where sharing was tried and REFUSED.** The C passed
+//! `/dev/nvidia-uvm` into the sandbox by `SCM_RIGHTS`, and `UVM_MM_INITIALIZE`
+//! answered `NV_ERR_INVALID_ARGUMENT` *because the file had been opened by a
+//! different `mm` than the caller* (`C: src/stub/nvkvm_stub.c:246-253`). The remedy
+//! was for the stub to open the device **itself** and drop the passed fd. ⇒ The one
+//! object that cannot be shared is the one VA identity rests on, and the driver
+//! enforces it by error code.
+//!
 //! ⇒ **Coarsening this granularity — one isolate shared by two guest processes —
 //! reintroduces `#14` no matter what it does for security.** Blast-radius containment
 //! (a bug forwarding process A cannot touch process B's host handles/mappings —
