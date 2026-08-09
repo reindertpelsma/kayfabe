@@ -7745,3 +7745,66 @@ decoded and never consulted — is the standing warning about doing half of this
 - **BAR1 access log**: the decisive one, and it exists only because the *count* was consistent
   with two opposite readings. ★ A number that cannot discriminate is not evidence; the
   addresses and values were.
+
+---
+
+## 16.23 ⚠ OPEN — the completion interrupt is raised BEFORE the fact that explains it
+
+**Status: measured by audit (`026374c`), NOT yet fixed, and deliberately not folded into
+§16.21.** Recorded here so it is actionable rather than re-derived.
+
+### The two raises, and their order
+
+A served CPU-CE doorbell produces **two** signals, in this order:
+
+1. `kayfabe-rt/src/cpu_ce.rs:336` — `vmm.raise_irq(COMPLETION_VECTOR)`, deep inside
+   `write_resolved_completion`, i.e. **inside** `run_submission`, i.e. **inside**
+   `DoorbellPort::ring`.
+2. `kayfabe-device/src/plane.rs:2845` — `announce_completion(engine)` latches the engine's
+   non-stall vector into the CPU interrupt tree, and its `raise_cpu_intr` is delivered by
+   the C shim. This runs **after** `port.ring(token)` has returned.
+
+⇒ the guest is told *something finished* before we have recorded **what** finished.
+
+### ⊘ What this is NOT
+
+**Not a forged completion.** The payload is written before the raise, and `write_resolved_
+completion` returns before raising on every error path, so no interrupt is ever raised over
+work that did not happen. Q5 is untouched. It is an **unattributable** interrupt, not a false
+one.
+
+### ⚠ Why it is invisible, and why that is the reason to fix it
+
+The guest **polls** (`uvm_gpu_tracking_semaphore_update_completed_value`,
+`channelWaitForFinishPayload`), so today nothing reads the vector's attribution. That is
+precisely the *"works until the guest sleeps"* shape: the first blocking waiter turns a
+latent ordering bug into a wakeup that cannot be attributed to an engine.
+
+### Why it was not fixed alongside §16.21
+
+The raise sits **three frames below** the latch and on the far side of the
+`DoorbellPort::ring` seam, so no reordering inside `ceutils` can reach it. The honest fixes
+all change §14.18's latch/deliver split:
+
+- **(a)** `write_resolved_completion` stops raising and returns "an interrupt is owed";
+  `CeUtilsRun::completions` already carries the count. The shim's `Ok(run)` arm then raises
+  — but that is *still* before the plane's `announce_completion`, so (a) alone does not fix
+  the order.
+- **(b)** the completion MSI-X rides `WriteOutcome` the way `raise_cpu_intr` already does,
+  and the C shim delivers both after `plane.write()` returns, in the plane's chosen order.
+  This is the shape that actually fixes it, and it changes the C header.
+- **(c)** the shim latches the engine itself before the copy runs. ⊘ Rejected on sight:
+  `announce_completion`'s documented precondition is that it is reached **only** from a
+  `ServedLocally`, i.e. only after the bytes moved. Latching first would make the
+  attribution a prediction.
+
+⇒ **(b)**, and it needs its own boot against the `s22_f4f3865_cup2` baseline. ⊘ Landing an
+interrupt-delivery change unbooted, on the path that had just started working, is the
+`an instrument that COMPILES is not one that RUNS` trap with the guest on the other end.
+
+### ★ Related, same audit
+
+`lockwitness::assert_lock_free` masks **ranked** locks only, so the CPU copy runs beneath
+three locks it cannot see. Two of them are now at least *declared*
+(`tests/tests/unranked_locks.rs`, §16.22) — `Mutex<Option<QemuVmm>>` is held across the whole
+submission — but declaring is not witnessing, and the witness still cannot see them.
