@@ -6375,8 +6375,8 @@ unconditional `portMemExCopyToUser` on `status == NV_OK`
 (`ogkm-580: src/nvidia/interface/deprecated/rmapi_gss_legacy_control.c:145-151`), paired with
 an unconditional `portMemExCopyFromUser` on the way in (`:72-75`).
 
-⇒ For **this** id, `in == out` is a **measurement**: physical RM was handed the buffer and gave
-it back byte-unchanged. Preserving the guest's own 332 bytes under `NV_OK` is therefore an
+⇒ For **this** id, `in == out` is a `[measured 2026-08-09, real GA106 on 580.159.04]` fact:
+physical RM was handed the buffer and gave it back byte-unchanged. Preserving the guest's own 332 bytes under `NV_OK` is therefore an
 identity this port can stand behind, not a fabricated body.
 
 ##### 2. ★★★ The doctrine conflict is real, and the resolution is the ID, not the rule
@@ -6414,7 +6414,7 @@ id this port serves is outside that mask today"*. That stopped being true the mo
 lands, so the tripwire has to become the narrower statement it always meant, rather than being
 deleted.
 
-⊘ **Not yet measured, and it is the reason to boot rather than reason further:** whether
-`0x20808159`'s refusal is the *last* wall. Rows 81-88 are unobserved on our side — every one of
+⊘ **Not measured, and it is the reason to boot rather than reason further** (boot `gf1435` at
+`d24ad77` could not see it): whether `0x20808159`'s refusal is the *last* wall. Rows 81-88 are unobserved on our side — every one of
 them is currently our teardown — so the eight calls after it have never been exercised against
 this port at all.

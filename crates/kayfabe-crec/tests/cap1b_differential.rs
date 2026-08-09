@@ -418,6 +418,7 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::CeGetAllPhysicalCaps,
         WantedTable::GrmgrGetGrFsInfo,
         WantedTable::GspGetFeatures,
+        WantedTable::GssLegacy8159,
     ]
     .into_iter()
     .collect();
@@ -467,10 +468,16 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // therefore the real-GA106 trace plus `ogkm`'s own `NV_VERSION_STRING`, which
     // `kayfabe_abi::gspfeatures`'s unit tests assert byte-for-byte, and the honest reading
     // is that a `cuInit` capture shrinks the exception set by SIX, not seven.
-    assert_eq!(universe.len(), 32, "non-vacuity: the universe is not empty");
+    // ⊘ 32 -> 33 at §14.36 (`0x20808159`), the WEAKEST kind an EIGHTH time — and this one
+    // `cap1b` could not carry even in principle: the id is **GSS-legacy**, and §4 of
+    // `kayfabe_device::sticky`'s module docs `[measured]` that not one control word in the
+    // whole of `cap1b` has bit 15 set. So branch (b) traffic is unexercised by the entire
+    // cold-boot prefix, and this row is not waiting on a `cuInit`-driven capture the way the
+    // other six are — it is waiting on a capture of a plane no committed trace contains.
+    assert_eq!(universe.len(), 33, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        13,
+        14,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

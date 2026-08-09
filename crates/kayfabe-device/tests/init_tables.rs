@@ -405,7 +405,17 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // driver's version is another machine's fact, and this policy's own
     // `DriverAbiTable::version()` is `[measured]` `580.65.06` where hardware says
     // `580.159.04` — the reading §14.35's own wording invited. See `kayfabe_abi::gspfeatures`.
-    assert_eq!(WantedTable::ALL.len(), 32, "the served universe's size");
+    // ★★★★ 32 -> 33 at §14.36: `0x20808159`, the FIRST GSS-legacy id this port answers and
+    // the first whose reply is the request VERBATIM. Attributed, not ratcheted:
+    // `[measured 2026-08-09, boot `gf1435` at `d24ad77`]` `cuInit` stops at it as row 80 of
+    // 87 and every row after is this port's teardown, against a real GA106 that answers
+    // `NV_OK` and runs eight further calls
+    // (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:80`).
+    // ⊘ Nothing is tabulated: the reply IS the request. And that is a measurement rather
+    // than an echo only because this path's copy-out is unconditional on `NV_OK` with no
+    // `SKIP_COPYOUT` to hide behind — see `kayfabe_abi::gsslegacy`, which also carries why
+    // this does NOT relax `kayfabe-rmrpc`'s refusal of GSS-legacy commands in general.
+    assert_eq!(WantedTable::ALL.len(), 33, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();
@@ -456,22 +466,56 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
     //
     // ⊘ Quantified over `WantedTable::ALL`, so a served control ADDED tomorrow is checked
     // tomorrow. A list written here would have to be remembered.
-    for w in WantedTable::ALL {
-        assert_eq!(
-            w.cmd_id() & 0x0000_8000,
-            0,
-            "{w:?} (0x{:08x}) is a GSS-legacy call: the guest would cache our answer \
-             permanently, so serving it is a decision that needs its own reasoning",
-            w.cmd_id()
-        );
-    }
+    //
+    // ★★★ §14.36 made this test's original form FALSE, and deliberately. It used to demand
+    // that **no** served id be GSS-legacy, with the reason written into its own failure
+    // message: *"serving it is a decision that needs its own reasoning"*. `0x20808159` is
+    // that decision, and the reasoning is in `kayfabe_abi::gsslegacy`. So the property
+    // narrows from "none" to "exactly the ones that carry an argument", which is the same
+    // shape `gates_quantified_over_a_list` warns about — the list must not be allowed to
+    // grow silently, so it is pinned as a set and not as a count.
+    let gss_legacy_served: std::collections::BTreeSet<u32> = WantedTable::ALL
+        .iter()
+        .map(|w| w.cmd_id())
+        .filter(|id| id & 0x0000_8000 != 0)
+        .collect();
+    assert_eq!(
+        gss_legacy_served,
+        std::collections::BTreeSet::from([kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159]),
+        "the guest caches a GSS-legacy answer from OUR reply's flags \
+         (`rmapiControlCacheSetUnchecked`), so every id here has to carry its own argument. \
+         Adding one means writing that argument, not extending this set"
+    );
+    // ⚠ And the argument for the one, restated as an executable check rather than a
+    // sentence: its answer is the IDENTITY on the guest's own buffer, so even a cache that
+    // did persist it would replay to the guest exactly what the guest sent. That is what
+    // makes this the only kind of GSS-legacy answer that is safe under branch (b).
+    let probe: Vec<u8> = (0..kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE)
+        .map(|i| u8::try_from(i % 251).expect("fits"))
+        .collect();
+    assert_eq!(
+        kayfabe_abi::gsslegacy::answer_gss_legacy(
+            kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
+            &probe
+        ),
+        Ok(probe.clone()),
+        "the served GSS-legacy answer must be the identity, which is what makes caching it \
+         indistinguishable from re-executing it"
+    );
 
     // ★ The predicate the serve-site guard rests on, checked against a REAL GSS-legacy
     // control rather than a synthesised one: `NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2_PHYSICAL`
     // is `0x20808513` (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080thermal.h:137`),
-    // built from a `LEGACY_NON_PRIVILEGED_INTERFACE_ID`. The guard inside `respond` is
-    // unreachable while the assertion above holds — an unreachable branch cannot be bitten,
-    // so the mechanism is exposed and tested here instead of argued for in a comment.
+    // built from a `LEGACY_NON_PRIVILEGED_INTERFACE_ID`.
+    //
+    // ⊘ **The serve-site guard is STILL structurally unreachable, and §14.36 did not change
+    // that** — it is worth saying plainly rather than letting the narrowing read as though a
+    // branch became live. `from_cmd` gates entry to the serve site, so the only GSS-legacy id
+    // that can arrive is the one the guard now exempts; `0x20808513` never reaches it and is
+    // refused one level earlier, as an unserviced command. The guard is defence-in-depth
+    // against a future row, not a check that runs today, and the real closure of branch (b)
+    // is `crate::sticky::StickyAnswerGuard` zeroing the flag words on every accepted reply.
+    // An unreachable branch cannot be bitten, so the predicate is exposed and tested here.
     assert!(kayfabe_device::inittables::is_gss_legacy(0x2080_8513));
     assert!(!kayfabe_device::inittables::is_gss_legacy(
         NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE

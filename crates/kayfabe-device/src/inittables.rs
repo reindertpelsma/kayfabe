@@ -806,6 +806,25 @@ pub enum WantedTable {
     /// [`kayfabe_abi::gspfeatures`]'s docs: the answer is constant for the life of a
     /// driver load, so caching it is correct.
     GspGetFeatures,
+    /// `0x20808159` — ★★★ §14.36's wall, and **the first GSS-legacy id this port answers**.
+    ///
+    /// `[measured 2026-08-09, boot `gf1435` at `d24ad77`]` `cuInit` reaches it as row 80 of
+    /// 87 and gets `0x56`, after which every remaining row is this port's teardown; a real
+    /// GA106 answers `NV_OK` and runs eight further calls
+    /// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:80`).
+    ///
+    /// ⊘ It is in **no** NVOC table and **no** SDK header, so there is no `ROUTE_TO_PHYSICAL`
+    /// flag to read: it is ours because bit 15 makes `_nv04ControlWithSecInfo` bypass resserv
+    /// entirely and hand the raw buffer to physical RM under the same id
+    /// (`ogkm-580: rmapi_deprecated_control.c:97`, `rmapi_gss_legacy_control.c`).
+    ///
+    /// ★★★ The reply is the **request, unchanged** — and that is a measurement rather than
+    /// an echo, because this path's copy-out is unconditional on `NV_OK` and no
+    /// `SKIP_COPYOUT` flag exists on it. [`kayfabe_abi::gsslegacy`] carries the argument, and
+    /// carries why this does **not** relax `kayfabe-rmrpc`'s refusal of GSS-legacy commands
+    /// in general: a rule permits a command to be named, only a measurement permits it to be
+    /// answered.
+    GssLegacy8159,
 }
 
 impl WantedTable {
@@ -836,7 +855,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 32] = [
+    pub const ALL: [WantedTable; 33] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -869,6 +888,7 @@ impl WantedTable {
         Self::CeGetAllPhysicalCaps,
         Self::GrmgrGetGrFsInfo,
         Self::GspGetFeatures,
+        Self::GssLegacy8159,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -940,6 +960,7 @@ impl WantedTable {
             }
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO,
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES,
+            Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
         }
     }
 
@@ -988,6 +1009,7 @@ impl WantedTable {
             Self::CeGetAllPhysicalCaps => kayfabe_abi::cecaps::CE_GET_ALL_CAPS_PARAMS_SIZE,
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE,
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::GSP_GET_FEATURES_PARAMS_SIZE,
+            Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE,
         }
     }
 
@@ -1813,15 +1835,49 @@ impl CommandPolicy for InitTablePolicy {
                     &firmware,
                 )
             }
+            // ★★★ The first GSS-legacy id this port answers, and the first arm whose reply
+            // is the request VERBATIM. See `kayfabe_abi::gsslegacy` for why that is a
+            // `[measured 2026-08-09, real GA106 on 580.159.04]` fact here — the path's
+            // copy-out is unconditional on `NV_OK` and has no `SKIP_COPYOUT` to hide behind
+            // — and an invention everywhere else.
+            //
+            // ⊘ The bytes are copied through this arm rather than left to the tail's
+            // `copy_from_slice` no-op on purpose: the identity is then something the code
+            // SAYS, and `answer_gss_legacy` is where the id and the length are checked.
+            WantedTable::GssLegacy8159 => {
+                let at = req.params_at;
+                match kayfabe_abi::gsslegacy::answer_gss_legacy(
+                    req.cmd,
+                    &cmd.payload[at..at + kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE],
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
         };
 
-        // ★★ The sticky-answer guard, at the serve site rather than in a comment. The reply
-        // keeps the request's `rmctrlFlags`, and for a GSS-legacy control those flags let
-        // the guest cache our answer PERMANENTLY (`rmapiControlCacheSetUnchecked`,
-        // `ogkm-580: rpc.c:11096-11103`). Every id this port serves is outside that mask
-        // today, so this is unreachable — and it is here precisely because nothing else
-        // would notice the day it stops being. A refusal, not a panic: an id is data.
-        if is_gss_legacy(req.cmd) {
+        // ★★ The sticky-answer tripwire, at the serve site rather than in a comment. The
+        // reply keeps the request's `rmctrlFlags`, and for a GSS-legacy control those flags
+        // are what branch (b) reads to cache our answer PERMANENTLY
+        // (`rmapiControlCacheSetUnchecked`, `ogkm-580: rpc.c:11096-11103`).
+        //
+        // ⚠⚠ **§14.36 NARROWED this, and the narrowing is the load-bearing part.** It used to
+        // refuse every GSS-legacy id, on the stated ground that *"every id this port serves is
+        // outside that mask today, so this is unreachable"*. That ceased to be true the moment
+        // `GssLegacy8159` was served, so the tripwire had to become the statement it always
+        // meant: **an id reaches here only by being in [`WantedTable::ALL`]**, i.e. only by a
+        // deliberate, measured decision — so what this guards against is not "a GSS-legacy id"
+        // but "a GSS-legacy id nobody chose", and `from_cmd` already makes that impossible.
+        //
+        // ⊘ Deleting it outright would have been wrong for a different reason than keeping it:
+        // the cache is closed by `crate::sticky::StickyAnswerGuard` zeroing both flag words on
+        // every accepted reply (its `Guarded` row in `POLICY_DISPOSITIONS`, executed by
+        // `tests/tests/sticky_answer.rs`), which is a property of the CHAIN. This policy is
+        // composable and can be seated without that link — `kayfabe-crec`'s replay does
+        // exactly that. So the obligation is named here and discharged there, and the one
+        // served id records that its answer is safe to cache anyway: it is the identity on the
+        // guest's own buffer, so a cache that replayed it would replay what the guest sent.
+        if is_gss_legacy(req.cmd) && want != WantedTable::GssLegacy8159 {
             return refuse();
         }
 

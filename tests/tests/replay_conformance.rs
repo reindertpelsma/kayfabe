@@ -1512,6 +1512,24 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         0x2080_182a,
         0x2080_2a0b,
         0x2080_3801,
+        // ⚠⚠ §14.36 adds a SIXTH, `0x20808159`, and it is the first whose exemption is
+        // **structural rather than circumstantial**. The other five are absent because this
+        // capture is `nvidia-smi`-driven and they are `cuInit`-path controls — a `cuInit`
+        // capture would evidence them. This one is **GSS-legacy**, and
+        // `kayfabe_device::sticky`'s module docs §4 `[measured]` that not one control word in
+        // the whole of `cap1b` has bit 15 set. ⇒ No committed capture this repository owns
+        // contains branch-(b) traffic at all, so no replay differential can judge this size,
+        // and a `cuInit` capture shrinks the exempt set to five rather than to zero.
+        //
+        // ⊘ Its size is evidenced instead by the only two instruments that can reach it:
+        // `[measured 2026-08-09]` a real GA106 declares `size=332` on the wire
+        // (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:80`, TRUNC marker ABSENT) and
+        // our own boot `gf1435` at `d24ad77` declares the same. ⚠ And there can be no third:
+        // the GSS-legacy path bypasses resserv, so `resControlLookup`'s param-size check
+        // never runs and no table anywhere declares this length. That is why
+        // `kayfabe_abi::gsslegacy::answer_gss_legacy` refuses a mismatched buffer instead of
+        // trusting either side.
+        0x2080_8159,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),

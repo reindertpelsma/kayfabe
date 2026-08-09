@@ -566,12 +566,34 @@ fn every_served_control_leaves_the_port_non_cacheable() {
         answered,
         "the counter did not see the flags it rewrote",
     );
-    // ⊘ And `neutralised` is ZERO here, which is not a weaker statement — it is what the
-    // run says. No control this port serves has bit 15 set, so branch (b) was never the
-    // branch these twelve would have taken; what the guard removed from them was a flag the
-    // guest set on a command that could not have used it. The next test drives the branch
-    // that CAN.
-    assert_eq!(port.neutralised(), 0);
+    // ★★★ **§14.36 turned this from 0 into 1, and that is the guard becoming load-bearing
+    // on the REAL served set rather than only on a crafted fixture.**
+    //
+    // ⊘ It used to read *"`neutralised` is ZERO here, which is not a weaker statement — it is
+    // what the run says. No control this port serves has bit 15 set, so branch (b) was never
+    // the branch these would have taken"*. That sentence was true and is now false:
+    // `0x20808159` is served, it **is** bit 15, and this sweep hands it
+    // `RMCTRL_FLAGS_CACHEABLE` exactly as a hostile guest would. The count says branch (b)
+    // was genuinely live for it and was genuinely closed.
+    //
+    // ⚠ Pinned as a SET, not as a count, for `gates_quantified_over_a_list`'s reason: a
+    // second served GSS-legacy id must show up as a test to edit, with its argument, rather
+    // than as a number that quietly went to 2.
+    let neutralisable: BTreeSet<u32> = WantedTable::ALL
+        .iter()
+        .map(|w| w.cmd_id())
+        .filter(|id| id & kayfabe_abi::capability::RM_GSS_LEGACY_MASK != 0)
+        .collect();
+    assert_eq!(
+        neutralisable,
+        BTreeSet::from([kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159]),
+        "exactly one served control can reach branch (b)"
+    );
+    assert_eq!(
+        port.neutralised() as usize,
+        neutralisable.len(),
+        "the guard must have closed branch (b) for every served control that could take it"
+    );
 }
 
 /// ★★★ **Branch (b), end to end** — the one assertion in this file where
