@@ -1887,7 +1887,17 @@ impl CommandPolicy for InitTablePolicy {
             // ★★ The one arm whose value is an ARGUMENT rather than a capture, and the flag
             // is passed rather than assumed: `c2c_absent` refuses for a part that HAS C2C,
             // so a future chip row cannot inherit "no links" by silence. GA106 has none.
-            WantedTable::C2cInfo => match kayfabe_abi::c2cinfo::c2c_absent(!self.chip.has_c2c) {
+            //
+            // ⊘⊘ **This line shipped INVERTED (`!self.chip.has_c2c`) and a boot caught it, not
+            // a test.** `kayfabe_abi::c2cinfo`'s own unit tests were green — both arms of
+            // `c2c_absent` are covered there — because the defect was at the CALL SITE, in
+            // the one place those tests cannot reach. `[measured 2026-08-09, boot `gf1437` at
+            // `e7bb8c6`]` row 86 still answered `0x56` with the control fully "served".
+            // ★ The lesson is `a_signature_is_not_the_dispatch` in its cheapest form: a
+            // correct function reached with a negated argument is indistinguishable from an
+            // unimplemented one at every boundary except the wire. `tests/bus_get_c2c_info.rs`
+            // is the reply-plane test that now bites it.
+            WantedTable::C2cInfo => match kayfabe_abi::c2cinfo::c2c_absent(self.chip.has_c2c) {
                 Ok(p) => p,
                 Err(_) => return refuse(),
             },
