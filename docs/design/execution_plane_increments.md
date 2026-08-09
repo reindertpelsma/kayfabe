@@ -8377,3 +8377,11 @@ explicit assertion separates the two outcomes.** Two were added:
 ★ **Bite-checked by construction**: run against the tree before the recovery commit it
 printed `FAIL … NOT TRACKED` and listed exactly the seven real files. A gate whose first run
 is green over a known defect is not a gate.
+
+★ **And the gate's own first tagged run was WRONG, in the way this project keeps measuring.**
+It failed `s25` on *"no `RmInitAdapter` output"*. The log is fine: `RmInitAdapter failed!`
+prints **only on failure**, and `s25`'s adapter came up — `SMI_RC=0`, 31 `NVRM` lines of real
+driver work. `boot_capture.sh`'s own check is a **disjunction** (`n_adapter == 0` *and* no
+`SMI_RC=0`); the gate was copied from it and **lost the clause that made it correct**, which
+is `a_defect_in_the_argument_is_invisible` reproduced inside the instrument written to
+prevent a different one. Fixed, and now green on s23/s24/s25 and red on a fabricated tag.

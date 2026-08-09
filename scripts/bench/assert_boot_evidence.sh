@@ -76,8 +76,21 @@ if [ -n "$TAG" ]; then
   # adapter was never touched.
   grep -q 'nvkvm: doorbells:' "$BOOTS/$q" 2>/dev/null ||
     fail "$q carries no census line — QEMU never ran its exit notifier for this tag"
-  grep -q 'RmInitAdapter\|rm_init_adapter' "$BOOTS/$d" 2>/dev/null ||
-    fail "$d has no RmInitAdapter output — the adapter was never exercised"
+  # ⊘⊘ A DISJUNCTION, and the second half is not optional — this gate's own first tagged
+  # run failed a perfectly good boot without it. `RmInitAdapter failed!` prints only on
+  # FAILURE; a boot where the adapter came up clean has no such line at all, and says so
+  # instead through `SMI_RC=0` in the probe log. `[measured 2026-08-09]` `s25` is exactly
+  # that boot: zero `RmInitAdapter` lines, `SMI_RC=0`, 31 `NVRM` lines of real driver work.
+  # ★ The check was copied from `boot_capture.sh` phase 3 and lost the clause that made it
+  # correct — `a_defect_in_the_argument_is_invisible`, in a gate, on its first run.
+  if ! grep -q 'RmInitAdapter\|rm_init_adapter' "$BOOTS/$d" 2>/dev/null &&
+     ! grep -q 'SMI_RC=0' "$BOOTS/$p" 2>/dev/null; then
+    fail "$d has no RmInitAdapter output AND $p has no SMI_RC=0 — the adapter was never \
+exercised, so this capture supports no claim about where the boot stops"
+  fi
+  # ★ And the dmesg must carry the driver's voice at all, whichever way the adapter went.
+  grep -q 'NVRM' "$BOOTS/$d" 2>/dev/null ||
+    fail "$d contains no NVRM line — the driver's ring buffer never reached this file"
   # ★★ THE REV STAMP, which is what makes the boot attributable at all. `boot_capture.sh`
   # writes it into the probe log from INSIDE the binary (never from BUILD_REV.txt, which
   # named a different revision once). A boot with no stamp cannot be cited against a commit.
@@ -87,7 +100,11 @@ fi
 
 if [ "$rc" -eq 0 ]; then
   n=$(cd "$REPO" && git ls-files -- traces/guest_boots | wc -l)
-  printf 'ok — %s tracked, non-empty evidence files%s\n' "$n" \
-    "${TAG:+, and run_${TAG}_{qemu,dmesg,probe}.log are complete and stamped}"
+  # ⊘ Two plain statements rather than one clever one: `${TAG:+…${TAG}…}` is a NESTED
+  # expansion, and bash resolves it in a way that printed `.log are complete and stamped}`
+  # on the gate's own first green run. A status line that is itself malformed undermines the
+  # only thing this script produces.
+  printf 'ok — %s tracked, non-empty evidence files\n' "$n"
+  [ -n "$TAG" ] && printf 'ok — run_%s_{qemu,dmesg,probe}.log complete, tracked and stamped\n' "$TAG"
 fi
 exit "$rc"
