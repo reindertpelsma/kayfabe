@@ -582,7 +582,10 @@ static void nvkvm_region_init_io(NvkvmState *s, MemoryRegion *mr,
 static bool nvkvm_bars_realize(NvkvmState *s, Error **errp)
 {
     PCIDevice *pci = PCI_DEVICE(s);
-    unsigned i;
+    /* ⊘ `ri`, not `i`: this function already declares `i` in five inner blocks, and a
+     * function-scope `i` shadowed every one of them (-Wshadow=local x6). A shadowed loop
+     * counter is how an edit to one block silently starts driving another. */
+    unsigned ri;
 
     QEMU_BUILD_BUG_ON(ARRAY_SIZE(nvkvm_regions) != NVKVM_N_REGIONS);
     /* ★★★ The two hand-mirrored halves of the publication census, PINNED AT COMPILE TIME.
@@ -1578,8 +1581,8 @@ static void nvkvm_report_registers(NvkvmState *s)
      * "io" while some row answers "ram" is the finding, and a table that omitted the
      * boring rows could not show it.
      */
-    for (i = 0; i < NVKVM_N_REGIONS; i++) {
-        const NvkvmRegionSpec *row = &nvkvm_regions[i];
+    for (ri = 0; ri < NVKVM_N_REGIONS; ri++) {
+        const NvkvmRegionSpec *row = &nvkvm_regions[ri];
         pcibus_t base = pci->io_regions[row->pci_bar].addr;
         MemoryRegionSection sec;
 
@@ -1599,7 +1602,7 @@ static void nvkvm_report_registers(NvkvmState *s)
         info_report("nvkvm:   trap-status %s: base 0x%" PRIx64 " -> region '%s' %s, %s. %s",
                     row->name, (uint64_t)base,
                     memory_region_name(sec.mr),
-                    sec.mr == &s->mr[i] ? "(OURS)" : "⚠ (NOT OURS — it overlays this BAR)",
+                    sec.mr == &s->mr[ri] ? "(OURS)" : "⚠ (NOT OURS — it overlays this BAR)",
                     memory_region_is_ram(sec.mr) ? "RAM — served DIRECTLY, every guest access "
                                                    "to it is INVISIBLE to this device"
                                                  : "IO — TRAPPED, every guest access reaches "
