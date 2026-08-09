@@ -8451,3 +8451,41 @@ CE plane, and the identical dmesg says the guest's kernel-side story is unchange
 scrubber's refused doorbell is what fails `cuInit`"* — a live hypothesis since §14.24 — is
 **refuted**. The doorbell is served, the copy runs, the semaphore is written, and `cuInit`
 returns the same error at the same place.
+
+### 16.28.10 ⚠ THE NEXT WALL — offered as a HYPOTHESIS with a named place to look
+
+⊘ Written as a question because this campaign's last five rung framings were refuted
+(`a_queue_item_is_a_hypothesis`), and because §16.28.9 has just demonstrated that *"the
+loud refusal nearest the failure"* need not be the cause.
+
+`run_s26_0484a3b_cup2_probe.log`'s `cup2` dmesg delta — ⊘ **identical to s25's**, so none of
+this is new and none of it is caused by route 4 — shows one chain that ends where `cuInit`
+does, all on the RC-watchdog client `0xc1d00013`, inside one second:
+
+```text
+[59.96] GspRmAlloc failed: hParent=0x31415903 hObject=0x3141590f hClass=0x00000070 → 0x56
+[60.20] GspRmAlloc failed: hParent=0x31415903 hObject=0x31415900 hClass=0x0000c36f → 0x56
+[60.34] Check failed: NOT_SUPPORTED from kgrobjPromoteContext @ kernel_graphics_object.c:224
+[60.38] Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+```
+
+The two classes are named, and one of them is a surprise worth checking before anything is
+built on it:
+
+- `0x0070` = `NV01_MEMORY_VIRTUAL` (`ogkm-580: cl0070.h:32`).
+- `0xc36f` = ★ **`VOLTA_CHANNEL_GPFIFO_A`** (`ogkm-580: clc36f.h:43`) — **not**
+  `AMPERE_CHANNEL_GPFIFO_A`, which is `0xc56f` (`clc56f.h:43`) and is the class this port
+  maps. So the RC watchdog is asking for a channel class we do not admit at all.
+- `kernel_rc_watchdog.c:1198` is the `NV_ASSERT(status == NV_OK)` at the function's `error:`
+  label, i.e. the *report* of a failure that happened earlier in `krcWatchdogInit`.
+
+⚠ **And the obvious inference is exactly the one to distrust.** `nvidia-smi` returns
+`SMI_RC=0` in this same boot, so the adapter is up; the RC watchdog is a 1 Hz diagnostic
+channel (`osSchedule1HzCallback`, `:1189-1193`) and its `error:` path frees its own client
+and returns — it is not obviously on `cuInit`'s critical path at all. ⇒ **Loudness is not
+causality** (`scrubber_teardown_is_not_the_wall`, measured once already in this campaign).
+
+★ So the first move is **not** to admit `0xc36f`. It is to establish *which* call `cuInit`
+actually fails on, from the guest side, with `scripts/bench/guest_cuinit_trace.sh` — the
+instrument that answers "where", rather than reasoning from the loudest line in a log that
+also contains a successful `nvidia-smi`.
