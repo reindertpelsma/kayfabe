@@ -31,13 +31,20 @@
 //!
 //! # ⊘ What this file does NOT claim
 //!
-//! - **Not that alloc replies are now correct.** Echoing is a **RESTORE, not a FILL**:
-//!   it puts the guest's own `[IN]` bytes back, and writes none of the `[OUT]` fields a
-//!   real GSP writes (`NV_GR_ALLOCATION_PARAMETERS.caps` at +12; `0xc56f`, `0x83de`,
-//!   `0x0079` carry out-fields too). That is a separate, open work item and is asserted
-//!   about *nowhere* — see [`echo_is_a_restore_and_not_a_fill`], which pins the gap
-//!   rather than the fix.
 //! - **Not a boot.** `only_live_boots_are_proof`.
+//!
+//! # ⊘⊘ And it does NOT claim the `[OUT]` fields are an open gap — that was REFUTED
+//!
+//! This file shipped saying *"echoing is a RESTORE, not a FILL"* and pointing at
+//! `NV_GR_ALLOCATION_PARAMETERS.caps` (+12) as an unwritten `[OUT]` field. The audit that
+//! followed found the opposite in every direction that matters: **nothing in either driver
+//! tree writes `caps`** — `kernel_graphics_object.c` has zero references to `pAllocParams`
+//! at `ogkm-580` and `ogkm-610` alike — and the four host captures under
+//! `traces/real_ga106/` return `pAllocParms + 0x58` there, a **userspace stack pointer**
+//! that tracks ASLR across boxes. ⇒ For `0xc7c0` the echo is the **correct final
+//! behaviour**, and synthesising a value would write over a live stack slot.
+//! [`the_out_window_is_libcudas_own_bytes_and_must_stay_so`] pins that, and is what the
+//! old `echo_is_a_restore_and_not_a_fill` became.
 
 use kayfabe_abi::GuestOs;
 use kayfabe_abi::versions::{BENCH_DRIVER, DriverAbiTable, table_for};
@@ -279,23 +286,34 @@ fn a_body_that_is_not_the_fixed_header_takes_the_general_clamp() {
     );
 }
 
-/// ⚠ **The gap, pinned so it cannot be mistaken for closed.** `NV_GR_ALLOCATION_PARAMETERS`
-/// carries `caps` at +12 as an `[OUT]` field. The echo restores the guest's `[IN]` bytes
-/// there and writes nothing — so this asserts what is still WRONG, and the day a real
-/// `[OUT]` model lands this test is the one that goes red and gets rewritten.
+/// ★★★ **The `0xc7c0` window is libcuda's OWN BYTES, and preserving them is the whole
+/// point — ⊘ this is not a gap to be closed by "filling the OUT fields".**
+///
+/// The refutation, in the order it was established:
+/// 1. `NV_GR_ALLOCATION_PARAMETERS` appears in the whole 580 tree only in
+///    `resource_list.h` and two read-only vGPU-serialisation sites, and
+///    `kernel_graphics_object.c` has **zero** references to `pAllocParams` at either
+///    `ogkm-580` or `ogkm-610`. **Nothing writes `caps`.**
+/// 2. The four host captures under `traces/real_ga106/` return `pAllocParms + 0x58` at
+///    bytes 8..15 — a **userspace stack pointer** that tracks ASLR across boxes and
+///    driver builds. `serverAllocApiCopyIn` copied it in; it came straight back out.
+///
+/// ⇒ Bytes 8..15 must survive the round trip **unaltered**. That is what this asserts,
+/// with a value shaped like the pointer the captures carry, so a future change that
+/// "authors" the window is red here rather than corrupting a live stack slot in a guest.
 #[test]
-fn echo_is_a_restore_and_not_a_fill() {
-    // A guest that left `caps` as the uninitialised-looking sentinel it wrote.
+fn the_out_window_is_libcudas_own_bytes_and_must_stay_so() {
+    // A stack-pointer-shaped value at +8..16, where the captures find `pAllocParms+0x58`.
     let mut params = vec![0u8; 32];
-    params[12..16].copy_from_slice(&0xdead_beefu32.to_le_bytes());
+    params[8..16].copy_from_slice(&0x0000_7ffe_dead_be58u64.to_le_bytes());
     let cmd = alloc_cmd(w::AMPERE_COMPUTE_B, &params, params.len() as u32);
 
     let out = cmd.reply_alloc(0, &cmd.payload.clone(), abi(), payload_max());
     assert_eq!(
-        &out.payload[ALLOC_HEADER + 12..ALLOC_HEADER + 16],
-        &0xdead_beefu32.to_le_bytes(),
-        "★ the [OUT] field comes back as the guest's own [IN] byte — the echo does NOT \
-         author it. This is an OPEN item, not a fixed one.",
+        &out.payload[ALLOC_HEADER + 8..ALLOC_HEADER + 16],
+        &0x0000_7ffe_dead_be58u64.to_le_bytes(),
+        "★ the guest's own stack pointer survives the round trip. ⊘ Do NOT 'fix' this by \
+         synthesising caps/size — that writes over a live userspace stack slot.",
     );
 }
 

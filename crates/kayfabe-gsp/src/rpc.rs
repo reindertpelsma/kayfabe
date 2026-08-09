@@ -516,13 +516,47 @@ impl RpcCommand {
     /// **libcuda's stack**. Its symptom is a SIGSEGV inside libcuda with no status
     /// anywhere, which is why no census, ledger or id-diff can see it.
     ///
-    /// # ⚠ This is a RESTORE, not a FILL — and the difference is an open item
+    /// # ★★★ Echo is the CORRECT FINAL BEHAVIOUR here — ⊘ never "fill the OUT fields"
     ///
-    /// Echoing puts the guest's own `[IN]` bytes back where it left them. It does **not**
-    /// write the `[OUT]` fields a real GSP writes: `NV_GR_ALLOCATION_PARAMETERS.caps`
-    /// (+12) is `[OUT]`, and `0xc56f` / `0x83de` / `0x0079` carry out-fields too. So this
-    /// stops the clobber and leaves *stale `[IN]` values where hardware writes results*.
-    /// ⊘ Do not record it as "alloc replies are correct now".
+    /// This method was landed calling itself *"a RESTORE, not a FILL"*, with the `[OUT]`
+    /// fields recorded as a separate open item. **That framing is REFUTED**, class by
+    /// class, and the refutation matters because the "fix" it invited would corrupt a
+    /// live userspace stack:
+    ///
+    /// - **`0xc7c0 AMPERE_COMPUTE_B` — `NV_GR_ALLOCATION_PARAMETERS.caps` is NOT an
+    ///   `[OUT]` field.** `NV_GR_ALLOCATION_PARAMETERS` appears in the whole 580 tree only
+    ///   in `resource_list.h` and two read-only vGPU-serialisation sites;
+    ///   `kernel_graphics_object.c` contains **zero** references to `pAllocParams` at both
+    ///   `ogkm-580` and `ogkm-610`. **Nothing writes `caps`.** And the four host captures
+    ///   under `../nvkvm-rs/traces/real_ga106/` agree: bytes 8..15 of the returned window
+    ///   are `pAllocParms + 0x58` — a userspace **stack pointer** that tracks ASLR across
+    ///   boxes and driver builds. RM never wrote it; `serverAllocApiCopyIn` copied it in
+    ///   and it came straight back out. ⇒ Synthesising a "plausible" `caps` would write
+    ///   over a live stack slot.
+    /// - **`0xa06c`, `0xc7b5`, `0x83de` have no `[OUT]` fields at all** — an exhaustive
+    ///   grep of each constructor for stores through the params pointer returns nothing.
+    /// - **`0xc56f AMPERE_CHANNEL_GPFIFO_A` never sees this reply.** It lands in
+    ///   `pRpcParams`, a `portMemAllocNonPaged` scratch copy (`ogkm-580:
+    ///   kernel_channel.c:2658`) freed at `:2837`; the user's buffer is untouched.
+    /// - **`0x0079 NV01_EVENT_OS_EVENT` sends no `GSP_RM_ALLOC` at all** (no RPC flag,
+    ///   `resource_list.h:2195`); its `data` @ +16 is overwritten by the **guest's own**
+    ///   kernel (`osUserHandleToKernelPtr`, `event.c:178-181`) and is out of reach.
+    /// - **`0x90f1 FERMI_VASPACE_A`** does have written fields (`vaSize` @ +8, `vaBase` @
+    ///   +40) but they are written at `vaspace_api.c:419-420`, **after** the RPC at
+    ///   `:263`, so the guest's own CPU-side RM recomputes and stomps them either way.
+    ///
+    /// ⚠ **The one residual risk, and it is named rather than fixed:
+    /// `0x9067 FERMI_CONTEXT_SHARE_A`'s `subctxId` @ +8.** RM does write it
+    /// (`kctxshareInitCommon_IMPL:553`, `*pSubctxId = NvU64_LO32(subctxOffset)` — the
+    /// header comment calling the field "intended for verif" is false about *who writes
+    /// it*), and the generic RPC fires **after** the constructor, so on real hardware
+    /// GSP's value is the one that survives while echoing preserves the guest's. All four
+    /// host captures return `0x3f` (top VEID), deterministic across two boxes; the two
+    /// should agree — same eheap, same allocation order — but that is **unverified**. A
+    /// wrong VEID makes the ctxshare and the GR context disagree about the subcontext
+    /// slot. ⇒ If `cuCtxCreate` fails downstream of the TSG/ctxshare, look here first;
+    /// the named experiment is to read `*pSubctxId` in the guest immediately before
+    /// `serverAllocResourceUnderLock` issues the RPC and check it against `0x3f`.
     ///
     /// # The clamps, and which of them is the security-relevant one
     ///
