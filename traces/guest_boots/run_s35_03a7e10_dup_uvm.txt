@@ -1,0 +1,127 @@
+UVM ioctl fd=12 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffea7b0e400
+    IN 
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0e400
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffea7b0e400
+    IN 
+      +00: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 01 00 00 00 00 00 00 00
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000025 nr=37 (UVM_REGISTER_GPU) arg=0x7ffea7b0df80
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 ff ff ff ff ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_GPU rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000046 nr=70 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0dff0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000017 nr=23 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0e440
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000019 nr=25 (UVM_REGISTER_GPU_VASPACE) arg=0x7ffea7b0dad0
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 07 00 00 5c 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 07 00 00 5c 00 00 00 00
+  ★ UVM_REGISTER_GPU_VASPACE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0cc60
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0a850
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0caf0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0a6e0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0caf0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0a6e0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0ccf0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0a8e0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0c490
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0a080
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b0c2b0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffea7b09ea0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000022 nr=34 (UVM_FREE) arg=0x7ffea7b0ce30
+    IN 
+      +00: 00 00 40 00 02 00 00 00 00 00 00 03 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 40 00 02 00 00 00 00 00 00 03 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  ★ UVM_FREE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000022 nr=34 (UVM_FREE) arg=0x7ffea7b0ce30
+    IN 
+      +00: 00 00 20 00 02 00 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 20 00 02 00 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  ★ UVM_FREE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000022 nr=34 (UVM_FREE) arg=0x7ffea7b0d5b0
+    IN 
+      +00: 00 00 00 00 00 01 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 00 01 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  ★ UVM_FREE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000022 nr=34 (UVM_FREE) arg=0x7ffea7b0d5b0
+    IN 
+      +00: 00 00 00 02 00 01 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 02 00 01 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  ★ UVM_FREE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000022 nr=34 (UVM_FREE) arg=0x7ffea7b0d5f0
+    IN 
+      +00: 00 00 00 08 d8 74 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 08 d8 74 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  ★ UVM_FREE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000022 nr=34 (UVM_FREE) arg=0x7ffea7b0d590
+    IN 
+      +00: 00 00 00 00 02 00 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 02 00 00 00 00 00 20 00 00 00 00 00
+      +16: 00 00 00 00 00 00 00 00
+  ★ UVM_FREE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001a nr=26 (UVM_UNREGISTER_GPU_VASPACE) arg=0x7ffea7b0da60
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00
+  ★ UVM_UNREGISTER_GPU_VASPACE rmStatus = 0x00000000 (NV_OK)
