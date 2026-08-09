@@ -154,6 +154,7 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
         &GspStaticInfo {
             fb_regions: &ORACLE_ROWS,
             fb_length: TWELVE_GIB,
+            bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
             gid: a_test_gid(),
             // ⊘ The layout test states a name so the FB assertions below run against a
             // fully-populated body; the shipped device states none. See
@@ -481,6 +482,7 @@ fn a_chip_whose_table_cannot_be_encoded_is_refused_in_the_envelope() {
         lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         fb_regions: BAD_REGIONS,
         fb_length: 0x3_0000_0000,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
         ..copy_of_ga106()
     };
     let driver = *table_for(BENCH_DRIVER).expect("bench ABI");
@@ -560,6 +562,7 @@ const fn copy_of_ga106() -> ChipProfile {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     }
 }
 

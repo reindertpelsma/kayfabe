@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 31u
+#define KAYFABE_SHIM_ABI 32u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -617,6 +617,26 @@ typedef struct KayfabeRegAudit {
     uint64_t bar2_faults;
     uint64_t bar_pde_updates;
     uint64_t bar2_root_entry;
+    /* ★★★★ §16.18 — BAR1, THE FRAMEBUFFER APERTURE, TRANSLATED THE OTHER WAY ROUND.
+     *
+     * ⊘ READ `bar1_pde_base` FIRST — it is the PRECONDITION and it is carried, not implied.
+     * BAR1's root does NOT arrive over UPDATE_BAR_PDE the way BAR2's does; MEASURED against
+     * ogkm-580, NV_RM_RPC_UPDATE_BAR_PDE has exactly two call sites (kern_bus.c:880 and
+     * kern_bus_gm107.c:2137) and BOTH pass NV_RPC_UPDATE_PDE_BAR_2.  What happens instead is
+     * kbusPatchBar1Pdb_GSPCLIENT (kern_bus.c:755-807): the guest takes
+     * GspStaticConfigInfo.bar1PdeBase — a number WE put in our own reply — and re-roots its
+     * own page-table walker onto that framebuffer address.
+     *
+     * So `bar1_pde_base` is what we TOLD the guest, and a zero there means this port has no
+     * framebuffer-aperture address model at all, which makes every other number in this
+     * group a statement about nothing.  `bar1_root_published` is the counter-evidence: 1 iff
+     * the guest ever sent an UPDATE_BAR_PDE naming BAR1 anyway.  It is expected to be 0, and
+     * a 1 would refute the paragraph above rather than confirm it. */
+    uint64_t bar1_reads;
+    uint64_t bar1_writes;
+    uint64_t bar1_faults;
+    uint64_t bar1_pde_base;
+    uint64_t bar1_root_published;
     uint64_t bar0_window_reads;
     uint64_t bar0_window_writes;
     uint64_t fb_resident_bytes;
@@ -978,6 +998,11 @@ void    kayfabe_shim_regs_detach_ram(void *regs);
  * walks the guest's own page tables to turn an offset in it into a framebuffer address,
  * rooted at the entry the guest published over UPDATE_BAR_PDE. */
 #define KAYFABE_BUS_BAR_INST 2u
+/* ★★★★ §16.18 — `BUS_BAR_1`, the framebuffer aperture.  Also GMMU-translated, but rooted
+ * the OTHER WAY ROUND: not at an entry the guest published to us, at the page-directory
+ * ADDRESS we published to the guest in GspStaticConfigInfo.bar1PdeBase.  See
+ * KayfabeRegAudit::bar1_pde_base for why that direction is the whole story. */
+#define KAYFABE_BUS_BAR_FB 1u
 
 /* ★★ THE HOT PATH.  One trapped register access, one value.  `size` is the access width in
  * bytes and the answer is masked to it.  An empty handle reads zero — a device whose plane

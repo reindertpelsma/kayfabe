@@ -577,6 +577,28 @@ pub struct ChipProfile {
     /// and `fb_length` disagree, and `tests/gsp_static_info.rs` pins it against the
     /// register.
     pub fb_length: u64,
+    /// ★★★★ **`GspStaticConfigInfo.bar1PdeBase` — where BAR1's root page directory lives,
+    /// as a framebuffer address, or `0` for a chip row with no framebuffer-aperture address
+    /// model.**
+    ///
+    /// ⊘ **This is a number this port PUBLISHES, not one it receives**, and that asymmetry
+    /// with [`crate::bar2::BarPdes::bar2`] is the whole reason the field is on the chip row
+    /// rather than in a log. `kbusPatchBar1Pdb_GSPCLIENT` (`ogkm-580:
+    /// src/nvidia/src/kernel/gpu/bus/kern_bus.c:755-807`) reads it out of our reply and
+    /// re-roots CPU-RM's own BAR1 page-table walker onto it; there is no
+    /// `UPDATE_BAR_PDE(NV_RPC_UPDATE_PDE_BAR_1)` anywhere in `ogkm-580` to tell us where the
+    /// guest put its tables, because the guest put them where **we** said.
+    ///
+    /// ⚠ It must lie inside a region [`ChipProfile::fb_regions`] marks **reserved**. A root
+    /// inside the usable region is memory the guest's own heap will hand to a client, which
+    /// makes the page directory and somebody's buffer the same bytes. See
+    /// [`ga10x::GA106_BAR1_PDE_BASE`], where the containment is const-asserted.
+    ///
+    /// ★ **Zero is a real answer and it means "no address model"**, not "address 0": a chip
+    /// row that declares a framebuffer aperture but no root gets
+    /// [`plane::WindowRefusal::NoAddressModel`] and its accesses are reported as dropped by
+    /// name, which is what this port did for every chip until 2026-08-09.
+    pub bar1_pde_base: u64,
 }
 
 impl ChipProfile {

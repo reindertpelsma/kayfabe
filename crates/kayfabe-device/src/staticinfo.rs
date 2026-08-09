@@ -168,6 +168,12 @@ impl StaticInfoPolicy {
                 // the model name, so it writes zero and the guest says so.
                 name: self.name,
                 short_name: self.short_name,
+                // ★★★★ The chip's own statement of where BAR1's page directory goes. Taken
+                // from the SAME row `crate::plane::RegPlane::bar1_phys` walks from, so the
+                // address we tell the guest and the address we read back cannot drift —
+                // that drift is unobservable by construction, because a wrong root reads as
+                // an unmapped virtual address rather than as a mismatch.
+                bar1_pde_base: self.chip.bar1_pde_base,
             },
             self.driver.gsp_static_info_wire(),
         )

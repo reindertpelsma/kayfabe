@@ -189,6 +189,56 @@ pub const SHORT_NAME_STRING_OFF: usize = NAME_STRING_OFF + NAME_STRING_LEN;
 /// Byte offset of `gpuNameString_Unicode[64]` — `NvU16`, i.e. UTF-16LE, 128 bytes wide.
 pub const NAME_STRING_UNICODE_OFF: usize = SHORT_NAME_STRING_OFF + NAME_STRING_LEN;
 
+/// ★★★★ Byte offset of `bar1PdeBase` — **the guest's only statement of where BAR1's page
+/// tables go**.
+///
+/// # ⊘ Why a field this port left zero for four months was not a harmless omission
+///
+/// `GspStaticConfigInfo` declares `NvU64 bar1PdeBase; NvU64 bar2PdeBase;` back to back
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:132-133`), and the guest
+/// does not ask for either — it *takes* them. `kbusPatchBar1Pdb_GSPCLIENT`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:755-807`) builds a framebuffer
+/// memory descriptor over `pGSCI->bar1PdeBase` and hands it to
+/// `mmuWalkModifyLevelInstance`, replacing the backing of CPU-RM's own BAR1 root level.
+/// Every BAR1 mapping the guest makes from then on writes its page directory **there**.
+///
+/// There is no reply status in which to say *"not served"* and no second command that
+/// carries the value: unlike BAR2, whose root the guest publishes back to us as an entry
+/// value on `UPDATE_BAR_PDE`, **BAR1's root is only ever stated here, by us**. A zero is
+/// therefore not an absence — it is this port telling the guest to root its framebuffer
+/// aperture at framebuffer address `0`, which on this device's own region table is inside
+/// the **usable** heap.
+///
+/// ★ **1664**, and it is a measured offset, not a struct-walk: the real RTX 3060 reply the
+/// rest of this module is pinned against carries `0x2_F1CA_C000` at exactly this byte and
+/// `0x2_F339_2000` (`bar2PdeBase`) at 1672 — both inside that capture's own reserved
+/// regions 2–4 (`[0x2_EFBE_0000, 0x2_FFFF_FFFF]`). The C artifact reads the same two words
+/// out of the same capture at the same offsets
+/// (`C: src/qemu/mode2_regs_ga10x.h:140`, `NVKVM_GSPSTATIC_BAR2PDEBASE_OFF 1672`, and
+/// `C: src/qemu/nvkvm_gpu_emul.c:3498-3502`, *"bar1PdeBase precedes bar2PdeBase"*).
+pub const BAR1_PDE_BASE_OFF: usize = 1664;
+
+// ★ The field must fit inside the body this port declares, and it must not tread on the
+// name strings that precede it. A build error here means one of the two measured offsets
+// moved without the other.
+const _: () = assert!(BAR1_PDE_BASE_OFF >= NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN);
+const _: () = assert!(BAR1_PDE_BASE_OFF + 8 <= GSP_STATIC_CONFIG_INFO_SIZE);
+
+/// ⊘ `bar2PdeBase`, at 1672 — **named and deliberately NOT written**.
+///
+/// The guest reads it in `kbusPatchBar2Pdb_GSPCLIENT` (`ogkm-580: kern_bus.c:826-878`) to
+/// re-point CPU-RM's *software cache* of the BAR2 page-directory base, and then sends us
+/// the root **entry** it read out of its own old directory. That entry is what
+/// `kayfabe_device::bar2` latches and what the translation actually walks from, so this
+/// port has never needed the address — and `boot s17_e8fde62` served 286 352 BAR2 writes
+/// with 0 refusals while this field read zero.
+///
+/// ★ It is declared here so that *"we left it zero"* is a recorded decision with a reason
+/// rather than a field nobody noticed, and so the next person to need it does not have to
+/// re-derive the offset. ⚠ Writing it would change a plane that is measured working, for
+/// no measured need.
+pub const BAR2_PDE_BASE_OFF: usize = BAR1_PDE_BASE_OFF + 8;
+
 /// ★★★ **A model name this device declares** — `gpuNameString` / `gpuShortNameString`.
 ///
 /// # ★★★ Where the value must come from, and why this type does NOT say
@@ -468,6 +518,10 @@ pub struct GspStaticInfo<'a> {
     pub name: Option<GpuName>,
     /// `gpuShortNameString[]` — the chip-level name, e.g. `"GA106-A"`, or `None`.
     pub short_name: Option<GpuName>,
+    /// ★★★★ `bar1PdeBase` — the framebuffer address at which this device keeps BAR1's root
+    /// page directory. See [`BAR1_PDE_BASE_OFF`] for why writing it is not optional and
+    /// what leaving it zero told the guest.
+    pub bar1_pde_base: u64,
 }
 
 /// A `GspStaticConfigInfo` this port will not put on the wire.
@@ -658,6 +712,11 @@ pub fn encode_gsp_static_info(
     if let Some(short) = info.short_name {
         put_name(&mut body, SHORT_NAME_STRING_OFF, short);
     }
+    // ★★★★ BAR1's root, which the guest will re-root its own page-table walker onto without
+    // asking. Written unconditionally — a zero from the caller is still a statement, and it
+    // is the one [`kayfabe_device::ChipProfile::bar1_pde_base`] spells "no address model".
+    body[BAR1_PDE_BASE_OFF..BAR1_PDE_BASE_OFF + 8]
+        .copy_from_slice(&info.bar1_pde_base.to_le_bytes());
     Ok(body)
 }
 
@@ -730,6 +789,7 @@ mod tests {
                 gid: a_gid(),
                 name: Some(GpuName::declared("AB")),
                 short_name: Some(GpuName::declared("C")),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -819,6 +879,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -881,6 +942,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -910,6 +972,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -935,6 +998,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -978,6 +1042,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1002,6 +1067,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1025,6 +1091,7 @@ mod tests {
                 gid: a_gid(),
                 name: a_name(),
                 short_name: a_short_name(),
+                bar1_pde_base: 0,
             },
             GspStaticInfoWire::From610_43_02,
         )

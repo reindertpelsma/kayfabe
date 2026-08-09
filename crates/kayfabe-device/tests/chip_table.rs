@@ -256,6 +256,7 @@ static OTHER: ChipProfile = ChipProfile {
     pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
     constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
     fb_length: OTHER_FB_LENGTH,
+    bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
 };
 
 fn abi() -> kayfabe_gsp::GspAbi {
@@ -422,6 +423,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     };
     let e = RegPlane::new(&OVERLAPPING, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -478,6 +480,7 @@ fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     };
     let e = RegPlane::new(&PAST_THE_END, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -758,6 +761,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     };
     let e = RegPlane::new(&COLLIDING, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -818,6 +822,7 @@ fn a_counter_outside_the_aperture_is_refused_at_realize() {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     };
     let e = RegPlane::new(&TOO_HIGH, abi(), test_clock()).expect_err("must refuse");
     assert!(
@@ -919,6 +924,7 @@ fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
         &kayfabe_abi::gspstaticinfo::GspStaticInfo {
             fb_regions: OTHER.fb_regions,
             fb_length: OTHER.fb_length,
+            bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
             gid: kayfabe_device::staticinfo::StaticInfoPolicy::gid_for_chip(&OTHER),
             // ⊘ No chip-row name exists — see `StaticInfoPolicy::with_name`.
             name: None,
@@ -949,6 +955,7 @@ fn the_second_chip_serves_its_own_init_tables_through_unchanged_code() {
             &kayfabe_abi::gspstaticinfo::GspStaticInfo {
                 fb_regions: kayfabe_device::ga10x::GA106.fb_regions,
                 fb_length: kayfabe_device::ga10x::GA106.fb_length,
+                bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
                 gid: kayfabe_device::staticinfo::StaticInfoPolicy::gid_for_chip(
                     &kayfabe_device::ga10x::GA106,
                 ),
@@ -1253,6 +1260,7 @@ fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: OTHER_FB_LENGTH,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     };
     let e = RegPlane::new(&PRAMIN_OVER_GSP, abi(), test_clock()).expect_err("must refuse");
     assert!(

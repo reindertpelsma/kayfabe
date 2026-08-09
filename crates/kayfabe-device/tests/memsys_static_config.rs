@@ -532,5 +532,6 @@ const fn copy_of_ga106() -> ChipProfile {
         pcie_max_gen: kayfabe_abi::businfo::PcieGen::Gen4,
         constructed_falcons: kayfabe_abi::falconinfo::FalconInventoryRow::NONE,
         fb_length: 0,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     }
 }

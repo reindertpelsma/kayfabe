@@ -139,7 +139,7 @@ use std::sync::{Mutex, RwLock};
 use kayfabe_arch::gsp::GspModel;
 use kayfabe_arch::{Aperture, GmmuFmt};
 use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
-use kayfabe_mmu::walker::{FbRead, translate_from_entry};
+use kayfabe_mmu::walker::{FbRead, PtPage, translate, translate_from_entry};
 use kayfabe_trace::Faulted;
 
 use crate::bar2::{BarPdeLog, BarPdes};
@@ -341,6 +341,28 @@ pub struct Counters {
     /// zero-with-a-shrug: `kbusVerifyBar2` detects exactly one such drop, ninety lines
     /// and one L2 evict later, as `NV_ERR_MEMORY_ERROR`.
     pub bar2_faults: u64,
+    /// ★★★★ Reads **served through the GMMU** from the translated framebuffer/`BAR1`
+    /// window.
+    ///
+    /// ⊘ Counted apart from [`Counters::bar2_reads`] because the two apertures resolve from
+    /// **different roots by different mechanisms** — BAR2 from an entry the guest published,
+    /// BAR1 from a directory address this port published — so one number covering both could
+    /// be large while either root was never usable at all.
+    pub bar1_reads: u64,
+    /// ★★★★ Writes **served through the GMMU** into the translated framebuffer/`BAR1`
+    /// window.
+    ///
+    /// ★ This is the counter the ring-submission question turns on. `boot s17_e8fde62`
+    /// measured **three** BAR1 writes reaching a discarding fallback — a GPFIFO entry in two
+    /// halves and a `GP_PUT` — so a boot in which this is zero and
+    /// [`Counters::fb_window_writes`] is three means the aperture is still not translating.
+    pub bar1_writes: u64,
+    /// ★★★★ Framebuffer-aperture accesses this port **refused, by name**.
+    ///
+    /// ⊘ Separate from [`Counters::bar2_faults`] for the reason the reads are: a refusal
+    /// here means *our own* `bar1PdeBase` did not resolve, which is a defect in this port's
+    /// reply, while a BAR2 refusal means an entry the guest published did not.
+    pub bar1_faults: u64,
     /// ★★★ Framebuffer accesses the store **refused, by name** — see
     /// [`crate::fbwin::FbRefused`].
     ///
@@ -849,6 +871,38 @@ pub const BAR2_FOREIGN_APERTURE: &str = "the guest's page tables map this addres
 pub const BAR2_READ_ONLY: &str = "the guest's own page tables mark this mapping read-only; letting a write through \
      would give the guest a mapping stronger than the one it published";
 
+// ── BAR1, the framebuffer aperture ─────────────────────────────────────────────────────
+//
+// ★★★★ Separate sentences from BAR2's, and NOT the same constants reused, because the two
+// apertures fail for different reasons and a refusal that names the wrong window sends the
+// reader to the wrong root. BAR2 fails when the guest has not PUBLISHED an entry to us;
+// BAR1 fails when the chip row this port shipped declares no directory address, which is a
+// defect in OUR reply and not in the guest's.
+
+/// The fault tag a refused write through the framebuffer aperture carries out to the shell.
+pub const BAR1_WRITE_REFUSED: &str = "the GMMU would not translate this write through the framebuffer/BAR1 window; the \
+     bytes did NOT land anywhere, and the guest will not be told";
+
+/// This chip row states no BAR1 page-directory address.
+///
+/// ⊘ Distinct from [`BAR2_UNROOTED`] in the direction of blame: BAR2's root is a fact the
+/// guest sends us and may legitimately not have sent yet, whereas BAR1's root is a fact
+/// **we** send the guest, so its absence is this port's own omission.
+pub const BAR1_NO_ROOT_DECLARED: &str = "this chip row declares no bar1PdeBase, so there is no framebuffer address at which \
+     to find BAR1's root page directory; unlike BAR2 the guest never publishes this one \
+     back to us — it takes it from our own GspStaticConfigInfo reply and roots its page \
+     tables there";
+
+/// The walk resolved to an aperture this port cannot serve through BAR1.
+pub const BAR1_FOREIGN_APERTURE: &str = "the guest's page tables map this framebuffer-aperture address into an aperture \
+     this port does not serve through the bus window; answering it out of the framebuffer \
+     store would alias two different memories onto one address";
+
+/// The walk resolved to a leaf the guest marked read-only.
+pub const BAR1_READ_ONLY: &str = "the guest's own page tables mark this framebuffer-aperture mapping read-only; \
+     letting a write through would give the guest a mapping stronger than the one it \
+     published";
+
 /// ★★★ The register plane: the routing stage Q4 adds.
 pub struct RegPlane {
     chip: &'static ChipProfile,
@@ -966,6 +1020,9 @@ struct PlaneCounters {
     bar2_reads: AtomicU64,
     bar2_writes: AtomicU64,
     bar2_faults: AtomicU64,
+    bar1_reads: AtomicU64,
+    bar1_writes: AtomicU64,
+    bar1_faults: AtomicU64,
     bar0_window_reads: AtomicU64,
     bar0_window_writes: AtomicU64,
     commands: AtomicU64,
@@ -1679,6 +1736,9 @@ impl RegPlane {
             bar2_reads,
             bar2_writes,
             bar2_faults,
+            bar1_reads,
+            bar1_writes,
+            bar1_faults,
             bar0_window_reads,
             bar0_window_writes,
             commands,
@@ -1714,6 +1774,9 @@ impl RegPlane {
             bar2_reads: g(bar2_reads),
             bar2_writes: g(bar2_writes),
             bar2_faults: g(bar2_faults),
+            bar1_reads: g(bar1_reads),
+            bar1_writes: g(bar1_writes),
+            bar1_faults: g(bar1_faults),
             bar0_window_reads: g(bar0_window_reads),
             bar0_window_writes: g(bar0_window_writes),
             commands: g(commands),
@@ -2022,14 +2085,25 @@ impl RegPlane {
                 self.c.fb_window_reads.fetch_add(1, Ordering::Relaxed)
             }
             ReadOutcome::Fb { window, .. } => {
-                if window == FbWindow::InstanceWindow {
-                    self.c.bar2_reads.fetch_add(1, Ordering::Relaxed);
+                // ★ Attributed by the window the ADDRESS MODEL resolved, never re-derived
+                // from `bar` — the same discipline the write-tag follows one method down.
+                match window {
+                    FbWindow::InstanceWindow => {
+                        self.c.bar2_reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                    FbWindow::FbAperture => {
+                        self.c.bar1_reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                    FbWindow::Pramin => {}
                 }
                 self.c.fb_reads.fetch_add(1, Ordering::Relaxed)
             }
             ReadOutcome::TranslationRefused { window, .. } => {
                 self.note_fb_window(window, off);
-                self.c.bar2_faults.fetch_add(1, Ordering::Relaxed)
+                match window {
+                    FbWindow::FbAperture => self.c.bar1_faults.fetch_add(1, Ordering::Relaxed),
+                    _ => self.c.bar2_faults.fetch_add(1, Ordering::Relaxed),
+                }
             }
             ReadOutcome::FbRefused { window, .. } => {
                 self.note_fb_window(window, off);
@@ -2120,13 +2194,109 @@ impl RegPlane {
     ) -> Result<u64, WindowRefusal> {
         match w {
             FbWindow::Pramin => Ok(s.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
-            // ⊘ Still no address model. BAR1 is GMMU-translated like BAR2 and its root
-            // arrives through the same command — but nothing in this port serves an
-            // access through it, and building half of it would mean publishing a
-            // translation nobody has ever exercised.
-            FbWindow::FbAperture => Err(WindowRefusal::NoAddressModel),
+            // ★★★★ §16.18. Was `NoAddressModel` unconditionally, and the comment that stood
+            // here said BAR1's root *"arrives through the same command"* as BAR2's. ⊘ **That
+            // was false**, and it is why nobody built this: `NV_RM_RPC_UPDATE_BAR_PDE` has
+            // two call sites in the whole of `ogkm-580` and both pass
+            // `NV_RPC_UPDATE_PDE_BAR_2`. BAR1's root never arrives at all — the guest takes
+            // it from OUR `GspStaticConfigInfo.bar1PdeBase`. See
+            // [`crate::ChipProfile::bar1_pde_base`].
+            //
+            // ★ A chip row that declares no such address still gets `NoAddressModel`, which
+            // keeps that arm live and keeps the honest answer available for a device this
+            // port has no framebuffer-aperture model for.
+            FbWindow::FbAperture if self.chip.bar1_pde_base == 0 => {
+                Err(WindowRefusal::NoAddressModel)
+            }
+            FbWindow::FbAperture => self.bar1_phys(off, write, s),
             FbWindow::InstanceWindow => self.bar2_phys(off, write, s),
         }
+    }
+
+    /// ★★★★ **THE FRAMEBUFFER APERTURE'S TRANSLATION** — one BAR1 offset, one page walk,
+    /// one framebuffer address, **in the same store the GMMU walker reads**.
+    ///
+    /// # ★★★ Why this is not `bar2_phys` with a different root
+    ///
+    /// It shares the store, the format and the walker — deliberately, because that sharing
+    /// is the entire correctness claim of this rung: a value written through BAR1 must be
+    /// readable at the same framebuffer address by the page walk and by PRAMIN, or we have
+    /// rebuilt the self-consistent-wrong-store defect one aperture over, where a
+    /// read-after-write through the same wrong function agrees with itself and detects
+    /// nothing.
+    ///
+    /// What differs is **where the descent starts**, and it differs in kind:
+    ///
+    /// | | BAR2 | BAR1 |
+    /// |---|---|---|
+    /// | root is | an eight-byte **entry value** | a **page-directory address** |
+    /// | it reaches us via | `UPDATE_BAR_PDE(BAR_2)`, from the guest | nothing — we *state* it in `bar1PdeBase` |
+    /// | so the walk starts from | [`translate_from_entry`] | [`translate`], over a real table page |
+    /// | slots we may index | **only slot 0**; the firmware owns the rest | **all of them** — the directory is ours end to end |
+    ///
+    /// The slot restriction has no analogue here and its absence is not an oversight:
+    /// `kbusPatchBar1Pdb_GSPCLIENT` re-roots CPU-RM's *whole* BAR1 walker onto our address
+    /// (`ogkm-580: kern_bus.c:775-792`), so every entry in that directory was written by the
+    /// guest and there is no firmware half to trespass on.
+    ///
+    /// ⊘ Level **0** is not a guess and not a parameter. Unlike BAR2, no `entryLevelShift`
+    /// travels with this root, because no message carries it — what we hold is the base of
+    /// the directory the guest's own `pRootFmt` describes, and a page-directory base *is*
+    /// its format's root level by definition (`walker::PtPage`, *"level 0 is a declared
+    /// fact — a PDB is its own root page"*).
+    ///
+    /// # What each refusal means
+    ///
+    /// Named, never zero, for [`RegPlane::bar2_phys`]'s reason: a zero-filled entry is a
+    /// well-formed *"maps nothing"* and a zero-filled data read is a well-formed *"the guest
+    /// wrote nothing"*, and a guest acts on both.
+    fn bar1_phys(&self, va: u64, write: bool, s: &mut PlaneState) -> Result<u64, WindowRefusal> {
+        let PlaneState { mmu, fb, .. } = s;
+        let Some(fmt) = mmu.as_deref() else {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: NO_MMU_PORT,
+            });
+        };
+        let root = self.chip.bar1_pde_base;
+        if root == 0 {
+            // Unreachable through `window_phys`, which takes the `NoAddressModel` arm first.
+            // Restated rather than assumed away because this method is also a seam a test
+            // drives, and a zero root would otherwise walk address zero as a directory.
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_NO_ROOT_DECLARED,
+            });
+        }
+        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let t = translate(
+            fmt,
+            &mut src,
+            PtPage {
+                phys: root,
+                // ⊘ The directory is in framebuffer memory because that is what
+                // `kbusPatchBar1Pdb_GSPCLIENT` describes it as — `memdescDescribe(pMemDesc,
+                // ADDR_FBMEM, pGSCI->bar1PdeBase, rootSize)` (`ogkm-580: kern_bus.c:773`).
+                aperture: Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
+            va,
+        )
+        .map_err(|f| WindowRefusal::Translated { va, why: f.why() })?;
+        if t.aperture != Aperture::Vidmem {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_FOREIGN_APERTURE,
+            });
+        }
+        if write && t.read_only {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_READ_ONLY,
+            });
+        }
+        Ok(t.phys)
     }
 
     /// ★★★ **THE GMMU TRANSLATION** — one aperture offset, one page walk, one framebuffer
@@ -2265,12 +2435,22 @@ impl RegPlane {
             Err(WindowRefusal::Translated { va, why }) => {
                 drop(s);
                 self.note_fb_window(w, off);
-                self.c.bar2_faults.fetch_add(1, Ordering::Relaxed);
+                // ★★★★ The tag names the window that actually refused. Reusing BAR2's
+                // sentence for a BAR1 refusal would send a reader to `UPDATE_BAR_PDE` for a
+                // root that command never carries — *"refusals by name, and by a name that
+                // is TRUE"*.
+                let tag = if w == FbWindow::FbAperture {
+                    self.c.bar1_faults.fetch_add(1, Ordering::Relaxed);
+                    BAR1_WRITE_REFUSED
+                } else {
+                    self.c.bar2_faults.fetch_add(1, Ordering::Relaxed);
+                    BAR2_WRITE_REFUSED
+                };
                 return WriteOutcome {
                     // ★ A FAULT, so the shell prints it at the instant the write is lost
                     // rather than leaving it to be inferred from an NV_ERR_MEMORY_ERROR
                     // ninety lines of guest code later.
-                    fault: Some(BAR2_WRITE_REFUSED),
+                    fault: Some(tag),
                     bar2_refusal: Some(Bar2Refused {
                         va,
                         len: usize::from(size.clamp(1, 8)),
@@ -2280,8 +2460,14 @@ impl RegPlane {
                 };
             }
         };
-        if w == FbWindow::InstanceWindow {
-            self.c.bar2_writes.fetch_add(1, Ordering::Relaxed);
+        match w {
+            FbWindow::InstanceWindow => {
+                self.c.bar2_writes.fetch_add(1, Ordering::Relaxed);
+            }
+            FbWindow::FbAperture => {
+                self.c.bar1_writes.fetch_add(1, Ordering::Relaxed);
+            }
+            FbWindow::Pramin => {}
         }
         let n = usize::from(size.clamp(1, 8));
         let bytes = val.to_le_bytes();

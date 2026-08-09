@@ -129,9 +129,9 @@ typedef struct NvkvmRegionSpec {
     const MemoryRegionOps *ops;
 } NvkvmRegionSpec;
 
-/* How many BAR1 accesses nvkvm_reservation_{read,write} record in full.  ⊘ Bounded because
- * the guest chooses how many it issues; the TOTAL is `reservation_touches`, and the two are
- * printed together so a truncation is visible rather than silent. */
+/* How many BAR1 accesses nvkvm_bar1_{read,write} record in full.  ⊘ Bounded because the
+ * guest chooses how many it issues; the TOTAL is `bar1_touches`, and the two are printed
+ * together so a truncation is visible rather than silent. */
 #define NVKVM_BAR1_LOG 16u
 
 struct NvkvmState {
@@ -143,11 +143,11 @@ struct NvkvmState {
     uint64_t bar2_size;
     uint64_t msix_size;
     uint64_t window_size;
-    /* ★★★★ Whether the BAR1 shadow reservation was actually INSTALLED — the precondition
-     * `reservation_touches` needs in order to mean anything.  See nvkvm_report_registers'
-     * BAR1 block: with no shadow the counter is a COMPLETE census of BAR1 accesses; with a
-     * shadow it is blind to every access the shadow served, and the same number would then
-     * mean the opposite thing. */
+    /* ★★★★ Whether a shadow memslot was actually INSTALLED.  ⊘ §16.18: BAR1 now TRAPS,
+     * so a shadow over it is REFUSED at realize — a slot there would answer the guest out
+     * of memory the framebuffer store and the page walk cannot see, and a read back through
+     * the same slot would agree with it.  This therefore stays false on every supported
+     * configuration, and it is kept so that the refusal has something to report against. */
     bool window_installed;
     bool     shareable_ram;
     /* 0 = the chip table's default row.  A hex PCI device id selects another. */
@@ -203,14 +203,20 @@ struct NvkvmState {
 
     uint64_t trap_reads;
     uint64_t trap_writes;
-    uint64_t reservation_touches;
+    /* ★ §16.18 — every access that reached nvkvm_bar1_{read,write}, whether or not the
+     * bounded log had room for it.  `bar1_log_used` alone cannot say whether the log is a
+     * sample or the whole of it, and the archive's own bar1_* counters cannot either: they
+     * count what the ADDRESS MODEL did, and an access is recorded here before that runs. */
+    uint64_t bar1_touches;
     /* ★★★★ §16.17 — THE BAR1 ACCESS LOG, not just its count.
      *
      * `[src] ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:984-1015`
      * `internal_channel_submit_work` writes the GPFIFO entry through a **CPU POINTER**
      * (`channel->channel_info.gpFifoEntries + channel->cpu_put`, dereferenced), then
      * `mb()`, then `write_gpu_put`.  For a VIDMEM ring that CPU mapping is a **BAR1**
-     * mapping — and nvkvm_reservation_write DESTROYS the value (`(void)val;`).
+     * mapping — and until §16.18 nvkvm_reservation_write DESTROYED the value
+     * (`(void)val;`).  It now routes to the archive's GMMU translation, and this log is
+     * what says which offsets arrived.
      *
      * ⇒ The count alone cannot test that.  `[measured, boot s16_5fcd259]` it is **3**, and
      * 3 is EXACTLY what the hypothesis predicts (one 8-byte entry store, possibly split,
@@ -219,9 +225,11 @@ struct NvkvmState {
      * ADDRESSES and VALUES decide: an 8-byte store of a plausible GPFIFO entry at a BAR1
      * offset, immediately before the doorbell, is a different fact from three stray probes.
      *
-     * ⚠ Precondition, printed with it: this records only accesses that REACH THE HANDLER.
-     * It is a complete census only while no shadow is installed — the same condition
-     * `reservation_touches` carries. */
+     * ⚠ Precondition, printed with it: this records only accesses that REACH THE HANDLER,
+     * and it is a complete census only while no shadow memslot covers the range.  §16.18
+     * refuses such a shadow outright, so on a supported configuration it is complete — but
+     * the condition is stated rather than assumed, because the day it stops holding this
+     * log would silently become a sample. */
     struct {
         uint64_t addr;
         uint64_t val;
@@ -463,7 +471,7 @@ static const MemoryRegionOps nvkvm_trap_ops = {
  * ═══ ★★★ #149: THE TRANSLATED WINDOW ══════════════════════════════════════════════════
  *
  * The instance/BAR2 window used to be a RESERVATION — a region whose callbacks were not
- * supposed to be reached, backed by nothing, counted as `reservation_touches`.  The
+ * supposed to be reached, backed by nothing, and counted nowhere.  The
  * 2026-08-01 `l2evict1` boot stopped at kbusVerifyBar2_GM107's MMU sub-test, which writes
  * sixteen bytes through this window and reads them back through the BAR0 moving window:
  *
@@ -526,6 +534,7 @@ static const MemoryRegionOps nvkvm_bar2_ops = {
 static void nvkvm_bar1_record(NvkvmState *s, uint64_t addr, uint64_t val,
                               unsigned size, bool is_write)
 {
+    s->bar1_touches++;
     if (s->bar1_log_used >= NVKVM_BAR1_LOG) {
         return;
     }
@@ -536,36 +545,66 @@ static void nvkvm_bar1_record(NvkvmState *s, uint64_t addr, uint64_t val,
     s->bar1_log_used++;
 }
 
-static uint64_t nvkvm_reservation_read(void *opaque, hwaddr addr, unsigned size)
+/*
+ * ★★★★ §16.18: THE FRAMEBUFFER APERTURE, AND WHY IT GETS #149'S TREATMENT
+ *
+ * BAR1 was a RESERVATION whose write callback did `(void)val;`.  MEASURED (boot
+ * `s17_e8fde62`, with no shadow installed, so the census was complete): the guest issued
+ * exactly THREE accesses to it for the whole boot and we destroyed all three —
+ *
+ *     BAR1[0] WRITE off=0x90000 size=4 val=0x20000000
+ *     BAR1[1] WRITE off=0x90004 size=4 val=0x2801
+ *     BAR1[2] WRITE off=0xa008c size=4 val=0x1
+ *
+ * — which is `internal_channel_submit_work` verbatim (`ogkm-580:
+ * kernel-open/nvidia-uvm/uvm_channel.c:984-1015`): a GPFIFO entry written as two dwords
+ * through a dereferenced CPU pointer (`gpu_va=0x120000000`, `len=40`), then `GP_PUT = 1` at
+ * USERD + 0x8c.  ★ Three accesses read as "the guest barely touched BAR1"; three accesses
+ * ARE the entire submission handshake.  A small count is not a small event.
+ *
+ * ⊘ The old comment here said giving those bytes a home "needs the window's own
+ * base/target decoded first".  That framing was wrong in a way worth recording: BAR1 has no
+ * base register to decode.  It is GMMU-translated, and its root is the framebuffer address
+ * this device itself publishes in GspStaticConfigInfo.bar1PdeBase — see
+ * KayfabeRegAudit::bar1_pde_base.  As with BAR0 and BAR2, THERE IS NO LOGIC BELOW THIS
+ * LINE: the walk, the root, the refusals and the counters are all inside the archive.
+ */
+static uint64_t nvkvm_bar1_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
 
-    /* Reached only where the archive's slot does not cover the range — an observe-tier hole,
-     * or a reservation that was never installed.  Counted so "the shadow is missing" is a
-     * number rather than a suspicion. */
-    s->reservation_touches++;
+    s->trap_reads++;
     nvkvm_bar1_record(s, (uint64_t)addr, 0, size, false);
-    return 0;
+    return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size);
 }
 
-static void nvkvm_reservation_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+static void nvkvm_bar1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     NvkvmState *s = opaque;
+    KayfabeRegWrite w;
 
-    /* ⊘ `val` is still DISCARDED — this device does not gain a BAR1 store here, and must
-     * not: BAR1 is an aperture onto framebuffer memory, so a write at BAR1 offset X has to
-     * land in the SAME store at the SAME framebuffer address the GMMU walk reads, or we
-     * recreate the self-consistent-wrong-store defect one aperture over.  Recording the
-     * value is OBSERVATION; giving it a home is a design decision that needs the window's
-     * own base/target decoded first (cf. `Bar0Window::target()`, decoded and never
-     * consulted). */
-    s->reservation_touches++;
+    s->trap_writes++;
     nvkvm_bar1_record(s, (uint64_t)addr, val, size, true);
+    memset(&w, 0, sizeof(w));
+    kayfabe_shim_regs_write(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size, val, &w);
+
+    if (w.fault && w.fault_len) {
+        /*
+         * ★★★ A submission write that did not land has NO other symptom on this device:
+         * the guest rings a doorbell for work whose methods were never stored, and what
+         * comes back is a channel that never advances.  Said here, at the instant it
+         * happens, with the aperture offset — which for this region IS the virtual address
+         * the guest asked the GMMU to translate.
+         */
+        warn_report("nvkvm: a write through the translated BAR1 window at aperture offset "
+                    "+0x%" PRIx64 " DID NOT LAND: %.*s",
+                    (uint64_t)addr, (int)w.fault_len, (const char *)w.fault);
+    }
 }
 
-static const MemoryRegionOps nvkvm_reservation_ops = {
-    .read       = nvkvm_reservation_read,
-    .write      = nvkvm_reservation_write,
+static const MemoryRegionOps nvkvm_bar1_ops = {
+    .read       = nvkvm_bar1_read,
+    .write      = nvkvm_bar1_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
     .valid      = { .min_access_size = 1, .max_access_size = 8 },
 };
@@ -585,8 +624,14 @@ static const MemoryRegionOps nvkvm_reservation_ops = {
 static const NvkvmRegionSpec nvkvm_regions[NVKVM_N_REGIONS] = {
     { "nvkvm-bar0-regs",   0, 0, NVKVM_KIND_TRAP,        false,
       offsetof(NvkvmState, bar0_size), &nvkvm_trap_ops },
-    { "nvkvm-bar1-window", 1, 1, NVKVM_KIND_RESERVATION, true,
-      offsetof(NvkvmState, bar1_size), &nvkvm_reservation_ops },
+    /* ★★★★ §16.18: TRAP, not RESERVATION — for the reason the row below it says, and for
+     * one more.  BAR1 is GMMU-translated, so it cannot be shadowed by a flat memslot; and
+     * the three writes that ARE the guest's whole submission handshake were reaching a
+     * callback that discarded them.  Changing the kind also changes
+     * nvkvm_op_bar_is_unbacked_reservation's answer for this register to "no", which is
+     * load-bearing: the archive must not install a slot over a range it is trapping. */
+    { "nvkvm-bar1-window", 1, 1, NVKVM_KIND_TRAP, true,
+      offsetof(NvkvmState, bar1_size), &nvkvm_bar1_ops },
     /* ★★★ #149: TRAP, not RESERVATION.  This window is GMMU-translated — every access to
      * it is a virtual address the archive must walk the guest's own page tables to
      * resolve — so it cannot be shadowed by a memslot the way a flat reservation can.
@@ -1263,7 +1308,23 @@ static void nvkvm_shim_realize(NvkvmState *s)
         s->listening = true;
     }
 
-    if (s->window_size != 0) {
+    /*
+     * ⊘⊘ §16.18 — AND IT MUST NOT BE INSTALLED OVER A TRAPPING ROW.  A shadow memslot is
+     * plain guest RAM with no connection to the framebuffer store; while BAR1 was a
+     * RESERVATION that was the whole point, but BAR1 now TRAPS and is GMMU-translated, so a
+     * shadow would serve the guest's submission writes out of memory the copy engine and
+     * the page walk can never see — and a read back through the same slot would AGREE.
+     * That is the self-consistent-wrong-store defect exactly, and read-after-write cannot
+     * detect it.  Refused loudly rather than left as a property nobody would think to check.
+     */
+    if (s->window_size != 0 && nvkvm_regions[1].kind == NVKVM_KIND_TRAP) {
+        error_report("nvkvm: the window-size property asks for a shadow memslot over "
+                     "'%s', which is a TRAPPING, GMMU-translated row since §16.18. A slot "
+                     "there would answer the guest out of memory the framebuffer store and "
+                     "the page walk cannot see, and a read back would agree with it. "
+                     "REFUSED; no shadow installed.",
+                     nvkvm_regions[1].name);
+    } else if (s->window_size != 0) {
         uint64_t base = (uint64_t)pci->io_regions[nvkvm_regions[1].pci_bar].addr;
 
         rc = kayfabe_shim_install_window(s->shim, base, s->window_size, &msg, &msg_len);
@@ -1486,36 +1547,36 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.fb_reads, a.fb_writes, a.bar0_window_reads, a.bar0_window_writes,
                 a.fb_refusals, a.fb_resident_bytes);
     /*
-     * ★★★★ THE COUNTER THAT CANNOT MOVE, and it used to be printed as if it could.
+     * ★★★★ THE COUNTER THAT COULD NOT MOVE, AND NOW CAN — read its history before its value.
      *
      * This line used to end "translated-window drops %ur/%uw" and its own comment claimed
      * the pair counted "the two GMMU-TRANSLATED windows".  MEASURED 2026-08-09, and the
-     * sentence was wrong twice over:
-     *   - it counts ONE window, not two — BAR2's refusals go to `bar2_faults`;
-     *   - and that one is UNREACHABLE.  Both increment sites (plane.rs:2005, :2242) sit in
-     *     the `WindowRefusal::NoAddressModel` arm, which is returned only for
-     *     `FbWindow::FbAperture` — i.e. BAR1 — and BAR1 registers with
-     *     nvkvm_reservation_ops and NEVER CROSSES THIS SEAM.  This header has no BAR1
-     *     spelling at all (only KAYFABE_BUS_BAR_REGS 0u and KAYFABE_BUS_BAR_INST 2u).
+     * sentence was wrong twice over: it counts ONE window (BAR2's refusals go to
+     * `bar2_faults`), and that one was UNREACHABLE — both increment sites sat in the
+     * `WindowRefusal::NoAddressModel` arm, returned only for BAR1, and BAR1 registered with
+     * nvkvm_reservation_ops and never crossed this seam.  Its `0r/0w` was VACUOUS: true,
+     * unfalsifiable, and read by three rungs as evidence that no translated window ever
+     * dropped a byte.  Same shape as `pgrep -x qemu-system-x86_64`.
      *
-     * ⊘ So its `0r/0w` was VACUOUS — true, unfalsifiable, and read by three rungs as
-     * evidence that no translated window ever dropped a byte.  Same shape as
-     * `pgrep -x qemu-system-x86_64`, which can never match and therefore always passes.
-     *
-     * ★ A counter must carry its own precondition into the log.  This one's precondition is
-     * FALSE in this build, so the honest thing to print is that, not a zero.
+     * ★★★★ §16.18 CHANGED THE PRECONDITION, so read this zero differently now.  BAR1 traps
+     * (KAYFABE_BUS_BAR_FB) and `window_phys` translates it whenever the chip row states a
+     * `bar1PdeBase`.  The `NoAddressModel` arm survives for a chip row that states NONE, so
+     * a non-zero value here no longer means "BAR1 leaked across the seam" — it means **this
+     * device is running a chip profile with no framebuffer-aperture address model at all**,
+     * and every `bar1_*` number below it is about nothing.  ⊘ That is exactly what
+     * `bar1_pde_base` in the BAR1 block is for; the two must be read together.
      */
     if (a.fb_window_reads || a.fb_window_writes) {
-        warn_report("nvkvm:   ⚠ translated-window drops %" PRIu64 "r/%" PRIu64 "w — and this "
-                    "counter was believed UNREACHABLE in this build. A non-zero value means "
-                    "BAR1 now crosses the shim seam; re-read plane.rs's NoAddressModel arm "
-                    "before trusting any BAR1 conclusion in this boot.",
-                    a.fb_window_reads, a.fb_window_writes);
+        warn_report("nvkvm:   ⚠ windows with NO ADDRESS MODEL: %" PRIu64 "r/%" PRIu64 "w "
+                    "dropped. Since §16.18 the only way to reach this is a chip row whose "
+                    "bar1PdeBase is 0 (this boot's is 0x%" PRIx64 "), so BAR1 has no root to "
+                    "walk and its bytes went nowhere.",
+                    a.fb_window_reads, a.fb_window_writes, a.bar1_pde_base);
     } else {
-        info_report("nvkvm:   translated-window drops: 0r/0w, and ⊘ THIS ZERO IS VACUOUS — "
-                    "the only increment sites are reached solely for BAR1, which registers "
-                    "with nvkvm_reservation_ops and never crosses this seam. It is not "
-                    "evidence that no translated window dropped a byte.");
+        info_report("nvkvm:   windows with no address model: 0r/0w — and since §16.18 this "
+                    "zero is NO LONGER VACUOUS: BAR1 traps and is translated, so the arm "
+                    "that increments this is reached only by a chip row stating no "
+                    "bar1PdeBase. Read it beside the BAR1 block's bar1PdeBase.");
     }
     /*
      * ★★★★ §16.13 — WHICH bytes, not how many.  MEASURED 2026-08-09 (boot bar1_03a679f):
@@ -1670,48 +1731,36 @@ static void nvkvm_report_registers(NvkvmState *s)
     }
 
     /*
-     * ★★★★ BAR1 — THE FLAT APERTURE, AND IT WAS COUNTED AND NEVER PRINTED.
+     * ★★★★ §16.18 — THE DISCARDING RESERVATION IS GONE, AND THIS SAYS SO FROM THE TABLE.
      *
-     * `reservation_touches` has existed since the memory plane did and reached NO report,
-     * so "did the guest use BAR1 at all?" was unanswerable from a boot log.  That became
-     * load-bearing at §15.10: the UVM channel's GPFIFO ring resolves into VIDEO memory
-     * (`rng=V:0x20000`) and every one of its first 64 entries reads back as ZERO with the
-     * walk succeeding (`[measured 2026-08-09, boot scan1_00865a7]`: `scan=64/1024 declared,
-     * unread=0, nonzero=NONE`).  The guest wrote that ring somewhere; a non-zero count here
-     * says BAR1 is a candidate for where, and a ZERO says it is not — which is the whole
-     * difference between two fixes.
+     * What stood here was `reservation_touches`, a counter incremented only by
+     * nvkvm_reservation_read/write.  BAR1 was the last row that selected those callbacks;
+     * with it a TRAP they are unreferenced, so the counter could never move again and
+     * printing it would have been a permanently-true sentence — the same vacuity §16.11
+     * caught in the translated-window-drops line, reintroduced one block later.
      *
-     * ⊘ These bytes land in NEITHER store the address plane reads: this handler discards
-     * the value outright, and the shadow-memslot arm (when a reservation is installed) is a
-     * plain RAM slot with no connection to the framebuffer.  So a non-zero count is not a
-     * statistic — it is bytes the copy engine can never see.
+     * ⊘ A statement that cannot be false is not an instrument.  So this counts the region
+     * TABLE instead, which somebody really can change: a row reintroduced as
+     * NVKVM_KIND_RESERVATION would appear here, and its accesses would be destroyed exactly
+     * the way BAR1's three submission writes were.
      */
-    /*
-     * ★★★★ AND WHETHER THE SHADOW EXISTS, because without it this number means the opposite
-     * thing.  MEASURED 2026-08-09 (§16.11): `reservation_touches` is incremented ONLY in
-     * nvkvm_reservation_read/write, and this enum's own comment says a RESERVATION's
-     * callbacks "are not reached in normal operation; if one fires, the shadow is missing".
-     * So it is a MISS counter.  §16.5 cited "three accesses, therefore BAR1 is innocent" —
-     * which reads it as a HIT counter, and that inference only holds while NO shadow is
-     * installed.  The shadow is installed exactly when the `window-size` property is
-     * non-zero, and it defaults to 0; the bench's command line never sets it.
-     *
-     * ⊘ A number whose meaning depends on a condition must PRINT THAT CONDITION.  Otherwise
-     * the day somebody sets `window-size` this line silently starts saying "the guest barely
-     * touched BAR1" about a boot in which it wrote gigabytes.
-     */
-    if (s->window_installed) {
-        info_report("nvkvm: BAR1 (flat aperture): %" PRIu64 " accesses reached the DISCARDING "
-                    "fallback — ⚠ AND A SHADOW OF 0x%" PRIx64 " BYTES IS INSTALLED, so this "
-                    "number is BLIND to every access the shadow served. It is NOT a census "
-                    "of BAR1 traffic and must not be cited as one.",
-                    s->reservation_touches, s->window_size);
-    } else {
-        info_report("nvkvm: BAR1 (flat aperture): %" PRIu64 " accesses reached the DISCARDING "
-                    "fallback, and NO shadow is installed (window-size=0), so this IS a "
-                    "complete census of BAR1 traffic. ⊘ These bytes are in NEITHER store the "
-                    "address plane reads — not the BAR0-window framebuffer and not guest RAM.",
-                    s->reservation_touches);
+    {
+        unsigned ri, nres = 0;
+
+        for (ri = 0; ri < NVKVM_N_REGIONS; ri++) {
+            if (nvkvm_regions[ri].kind == NVKVM_KIND_RESERVATION) {
+                nres++;
+                warn_report("nvkvm: ⚠ region '%s' is a DISCARDING RESERVATION — accesses to "
+                            "it reach no store. Since §16.18 no row is supposed to be one.",
+                            nvkvm_regions[ri].name);
+            }
+        }
+        if (nres == 0) {
+            info_report("nvkvm: discarding reservations: none — every region this device "
+                        "presents either traps to the archive or is the interrupt table. "
+                        "⊘ This is read off the region table, not off a counter, so it "
+                        "cannot go stale the way an unreachable counter did.");
+        }
     }
     /*
      * ★★★★ §16.17 — AND THE ACCESSES THEMSELVES.  `[src] ogkm-580: uvm_channel.c:984-1015`
@@ -1721,7 +1770,7 @@ static void nvkvm_report_registers(NvkvmState *s)
      * BAR1" predicts.  An 8-byte store whose value decodes as a plausible GPFIFO entry is a
      * different fact from three stray probes, and only the value can say which.
      */
-    if (s->reservation_touches == 0) {
+    if (s->bar1_log_used == 0) {
         info_report("nvkvm:   BAR1 access log: EMPTY — no access reached the handler, so "
                     "there is nothing to attribute. ⊘ Read this beside the trap-status row "
                     "for this BAR: it means 'no access' only while that row says TRAPPED.");
@@ -1730,8 +1779,8 @@ static void nvkvm_report_registers(NvkvmState *s)
 
         info_report("nvkvm:   BAR1 access log: %u of %" PRIu64 " access(es) recorded in full "
                     "(FIRST ones, because the write under test precedes the doorbell)%s",
-                    s->bar1_log_used, s->reservation_touches,
-                    s->bar1_log_used < s->reservation_touches
+                    s->bar1_log_used, s->bar1_touches,
+                    s->bar1_log_used < s->bar1_touches
                         ? " — ⊘ BOUNDED-LOG, later accesses are not shown"
                         : " — complete");
         for (k = 0; k < s->bar1_log_used; k++) {
@@ -1756,6 +1805,35 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.bar2_reads, a.bar2_writes, a.bar2_faults,
                 a.bar_pde_updates >> 32, a.bar_pde_updates & 0xffffffffu,
                 a.bar2_root_entry);
+
+    /*
+     * ★★★★ §16.18 — THE FRAMEBUFFER APERTURE, TRANSLATED.  Printed unconditionally,
+     * all-zeros included, and the PRECONDITION IS PRINTED FIRST.
+     *
+     * ⊘ `bar1PdeBase` is not decoration.  BAR1's root is the one root the guest never sends
+     * us: MEASURED against ogkm-580, NV_RM_RPC_UPDATE_BAR_PDE has two call sites
+     * (kern_bus.c:880, kern_bus_gm107.c:2137) and BOTH pass NV_RPC_UPDATE_PDE_BAR_2, while
+     * kbusPatchBar1Pdb_GSPCLIENT (kern_bus.c:755-807) takes GspStaticConfigInfo.bar1PdeBase
+     * — OUR number — and re-roots CPU-RM's own walker onto it.  So a 0 here means we never
+     * gave the guest anywhere to build its page tables, and `0 reads / 0 writes` beneath it
+     * would be a fact about US.
+     *
+     * ★ `root entry published by the guest` is the standing refutation test for the
+     * paragraph above.  It is expected to read NO on every boot; a YES would mean some
+     * driver version does send an UPDATE_BAR_PDE(BAR_1) after all, and the address model
+     * would then have two candidate roots that could disagree.  Measured every boot rather
+     * than argued once from a grep.
+     */
+    info_report("nvkvm: BAR1 (translated): %" PRIu64 " reads / %" PRIu64 " writes resolved "
+                "through the GMMU, %" PRIu64 " REFUSED by name; bar1PdeBase = 0x%" PRIx64
+                " (%s), root entry published by the guest: %s",
+                a.bar1_reads, a.bar1_writes, a.bar1_faults, a.bar1_pde_base,
+                a.bar1_pde_base
+                    ? "the framebuffer address WE published and the walk starts from"
+                    : "⚠ ZERO — no address model, so every number on this line is about us",
+                a.bar1_root_published
+                    ? "⚠ YES — this REFUTES the ogkm reading that BAR1 has no such command"
+                    : "no, as ogkm-580's two UPDATE_BAR_PDE call sites predict");
 
     /*
      * ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATIONS.  Printed unconditionally, all-zeros

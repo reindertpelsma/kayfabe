@@ -907,5 +907,6 @@ fn bad_chip(
         smc_mode: g.smc_mode,
         pcie_max_gen: g.pcie_max_gen,
         fb_length: g.fb_length,
+        bar1_pde_base: kayfabe_device::ga10x::GA106_BAR1_PDE_BASE,
     }))
 }

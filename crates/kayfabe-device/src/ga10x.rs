@@ -1114,6 +1114,61 @@ const FW_CARVE_OUT_BASE: u64 = GA106_FB_LENGTH - FW_CARVE_OUT_BYTES;
 const _: () = assert!(FW_CARVE_OUT_BASE < frts_offset());
 const _: () = assert!(gsp_fw_wpr_end() < GA106_FB_LENGTH);
 
+/// ★★★★ **Where this device puts BAR1's root page directory — `GspStaticConfigInfo.bar1PdeBase`.**
+///
+/// # ⊘ The BAR1 root is NEVER PUBLISHED TO US. It is a number WE publish to the guest.
+///
+/// `[measured 2026-08-09, ogkm-580]` — this is the fact that decides the whole framebuffer
+/// aperture, and it is the opposite of BAR2's:
+///
+/// * BAR2's root arrives *from* the guest, as an eight-byte **entry value**, on
+///   `UPDATE_BAR_PDE(NV_RPC_UPDATE_PDE_BAR_2)`
+///   (`ogkm-580: src/nvidia/src/kernel/gpu/bus/kern_bus.c:880`).
+/// * BAR1 has **no such command**. `NV_RM_RPC_UPDATE_BAR_PDE` has exactly two call sites in
+///   the whole of `ogkm-580` — `kern_bus.c:880` and
+///   `src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:2137` — and **both pass
+///   `NV_RPC_UPDATE_PDE_BAR_2`**. Nothing anywhere passes `NV_RPC_UPDATE_PDE_BAR_1`.
+///
+/// What happens instead is `kbusPatchBar1Pdb_GSPCLIENT` (`ogkm-580: kern_bus.c:755-807`):
+/// CPU-RM takes **`pGSCI->bar1PdeBase`** — this constant, straight out of the reply this
+/// port writes — describes a framebuffer memory descriptor over it
+/// (`memdescDescribe(pMemDesc, ADDR_FBMEM, pGSCI->bar1PdeBase, rootSize)`, `kern_bus.c:773`)
+/// and calls `mmuWalkModifyLevelInstance` to **re-root its own page-table walker onto that
+/// address**. From that instant CPU-RM writes BAR1's page tables into our framebuffer at
+/// this address, and never mentions it again.
+///
+/// ⇒ A BAR1 aperture offset is a GPU virtual address whose page directory is at
+/// **exactly this framebuffer address**, and the only reason we know that is that we said
+/// so. `crate::plane::RegPlane::bar1_phys` walks from here.
+///
+/// # ⚠ Why it may not be zero, and why zero was the bug
+///
+/// This port left the field zero until 2026-08-09, which told the guest *"BAR1's root
+/// directory is at framebuffer address 0"* — inside [`GA106_FB_REGIONS`]' **usable** region,
+/// which the guest's own heap hands out to clients. That is not a missing value; it is a
+/// positive claim that the page directory shares an address with the first thing the heap
+/// allocates. `boot s17_e8fde62` reports framebuffer residency starting at exactly `0x0`.
+///
+/// # Why this value
+///
+/// `0x2_F1CA_C000` is the byte a **real** RTX 3060's GSP put there
+/// (`C: src/qemu/mode2_gspstaticinfo_ga106.h` offset 1664, the same 1792-byte capture
+/// `crates/kayfabe-device/tests/gsp_static_info.rs` pins the region table against — a
+/// capture row **with a body**, which `CLAUDE.md` records as the half that matched real
+/// hardware byte for byte). It lands inside this device's own reserved carve-out and below
+/// the firmware range, which the assertions below pin rather than assume.
+pub const GA106_BAR1_PDE_BASE: u64 = 0x2_F1CA_C000;
+
+// ★★ The root must be inside the region this device tells the guest is RESERVED, or the
+// guest's heap will allocate over its own BAR1 page directory — the exact defect the zero
+// this constant replaces produced. And it must be below `frts_offset()`, because everything
+// from there up is firmware territory this device writes itself.
+const _: () = assert!(GA106_BAR1_PDE_BASE >= FW_CARVE_OUT_BASE);
+const _: () = assert!(GA106_BAR1_PDE_BASE < frts_offset());
+// A page directory is page-granular; an unaligned root would index entries at a byte offset
+// no format row describes.
+const _: () = assert!(GA106_BAR1_PDE_BASE.is_multiple_of(4096));
+
 /// ★★★ **The FB regions this device serves, and what backs each.**
 ///
 /// Two, both derived from [`FB_SIZE_MB`]:
@@ -1682,6 +1737,10 @@ pub static GA106: ChipProfile = ChipProfile {
     // so the two planes cannot state different generations for one die.
     pcie_max_gen: GA106_PCIE_MAX_GEN,
     fb_length: GA106_FB_LENGTH,
+    // ★★★★ See [`GA106_BAR1_PDE_BASE`]: BAR1's root is not something the guest publishes to
+    // us, it is a number we publish to the guest, and it is the whole address model of the
+    // framebuffer aperture.
+    bar1_pde_base: GA106_BAR1_PDE_BASE,
 };
 
 // ── The MMU fault-code table (Axis B, task #111) ───────────────────────────────────

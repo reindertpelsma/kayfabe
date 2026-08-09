@@ -237,7 +237,12 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// gained the first-writer census (`fb_origin_by_writer`, five words) and the GPFIFO
 /// forward search (`fb_sweep_*`, five words), so an ABI-30 shim would allocate the old
 /// layout and this archive would write **80 bytes** past the end of it.
-pub const ABI_VERSION: u32 = 31;
+///
+/// ★ Bumped to **32** at §16.18, the ABI-3 reason a twentieth time: [`KayfabeRegAudit`]
+/// gained the framebuffer aperture's five words (`bar1_reads`, `bar1_writes`,
+/// `bar1_faults`, `bar1_pde_base`, `bar1_root_published`), so an ABI-31 shim would allocate
+/// the old layout and this archive would write **40 bytes** past the end of it.
+pub const ABI_VERSION: u32 = 32;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1630,6 +1635,32 @@ pub struct KayfabeRegAudit {
     /// the aperture on teardown (`ogkm-580: kern_bus_gm107.c:2137`), so the value alone
     /// cannot say whether one arrived. The count can.
     pub bar2_root_entry: u64,
+    /// ★★★★ `#16.18` — reads served through the GMMU from the translated framebuffer/`BAR1`
+    /// window.
+    pub bar1_reads: u64,
+    /// ★★★★ `#16.18` — writes served through it.
+    pub bar1_writes: u64,
+    /// ★★★★ `#16.18` — framebuffer-aperture accesses refused **by name**.
+    pub bar1_faults: u64,
+    /// ★★★★ `#16.18` — **the precondition every other `bar1_*` number needs**: the
+    /// framebuffer address this port told the guest BAR1's root page directory sits at
+    /// (`GspStaticConfigInfo.bar1PdeBase`), or `0` for a chip row with no
+    /// framebuffer-aperture address model.
+    ///
+    /// ⊘ Carried rather than implied. A boot in which `bar1_writes` and `bar1_faults` are
+    /// both zero says two completely different things depending on this field: with a root,
+    /// the guest never touched the aperture; without one, we never had anywhere to put a
+    /// byte and the zeros are about us.
+    pub bar1_pde_base: u64,
+    /// ★★★★ `#16.18` — `1` iff the guest ever published a BAR1 root over `UPDATE_BAR_PDE`.
+    ///
+    /// ⊘ **Expected to be `0`, and a `1` would be a refutation.** `NV_RM_RPC_UPDATE_BAR_PDE`
+    /// has two call sites in `ogkm-580` and both pass `NV_RPC_UPDATE_PDE_BAR_2`; the whole
+    /// of [`Self::bar1_pde_base`]'s reason for existing is that BAR1's root travels the
+    /// other way. This field is what makes that claim **measured on every boot** instead of
+    /// argued once from a grep — the same reason `bar_pde_updates` carries a count beside a
+    /// value.
+    pub bar1_root_published: u64,
     /// `#146` — reads of `NV_PBUS_BAR0_WINDOW` itself.
     pub bar0_window_reads: u64,
     /// `#146` — writes to `NV_PBUS_BAR0_WINDOW`, i.e. the guest re-pointing its window.
@@ -2026,6 +2057,11 @@ impl Default for KayfabeRegAudit {
             bar2_faults: Default::default(),
             bar_pde_updates: Default::default(),
             bar2_root_entry: Default::default(),
+            bar1_reads: Default::default(),
+            bar1_writes: Default::default(),
+            bar1_faults: Default::default(),
+            bar1_pde_base: Default::default(),
+            bar1_root_published: Default::default(),
             bar0_window_reads: Default::default(),
             bar0_window_writes: Default::default(),
             fb_resident_bytes: Default::default(),
@@ -3450,6 +3486,9 @@ impl Regs {
             bar2_reads,
             bar2_writes,
             bar2_faults,
+            bar1_reads,
+            bar1_writes,
+            bar1_faults,
             bar0_window_reads,
             bar0_window_writes,
             faults,
@@ -3735,6 +3774,14 @@ impl Regs {
             bar2_faults,
             bar_pde_updates: (bar_pde_updates << 32) | (bar_pde_refusals & 0xFFFF_FFFF),
             bar2_root_entry: self.plane.bar_pdes().bar2.map_or(0, |p| p.entry),
+            bar1_reads,
+            bar1_writes,
+            bar1_faults,
+            // ★ Read off the SAME chip row `RegPlane::bar1_phys` walks from and
+            // `StaticInfoPolicy` publishes, so the report cannot say one address while the
+            // walk uses another.
+            bar1_pde_base: self.plane.chip().bar1_pde_base,
+            bar1_root_published: u64::from(self.plane.bar_pdes().bar1.is_some()),
             bar0_window_reads,
             bar0_window_writes,
             // ★ Read from the plane's residue rather than kept as a counter: it is a
