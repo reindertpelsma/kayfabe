@@ -129,6 +129,11 @@ typedef struct NvkvmRegionSpec {
     const MemoryRegionOps *ops;
 } NvkvmRegionSpec;
 
+/* How many BAR1 accesses nvkvm_reservation_{read,write} record in full.  ⊘ Bounded because
+ * the guest chooses how many it issues; the TOTAL is `reservation_touches`, and the two are
+ * printed together so a truncation is visible rather than silent. */
+#define NVKVM_BAR1_LOG 16u
+
 struct NvkvmState {
     PCIDevice parent_obj;
 
@@ -199,6 +204,31 @@ struct NvkvmState {
     uint64_t trap_reads;
     uint64_t trap_writes;
     uint64_t reservation_touches;
+    /* ★★★★ §16.17 — THE BAR1 ACCESS LOG, not just its count.
+     *
+     * `[src] ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:984-1015`
+     * `internal_channel_submit_work` writes the GPFIFO entry through a **CPU POINTER**
+     * (`channel->channel_info.gpFifoEntries + channel->cpu_put`, dereferenced), then
+     * `mb()`, then `write_gpu_put`.  For a VIDMEM ring that CPU mapping is a **BAR1**
+     * mapping — and nvkvm_reservation_write DESTROYS the value (`(void)val;`).
+     *
+     * ⇒ The count alone cannot test that.  `[measured, boot s16_5fcd259]` it is **3**, and
+     * 3 is EXACTLY what the hypothesis predicts (one 8-byte entry store, possibly split,
+     * plus a GP_PUT store) — but it is equally what "the guest barely touched BAR1"
+     * predicts.  ⊘ A number consistent with two opposite readings decides nothing.  The
+     * ADDRESSES and VALUES decide: an 8-byte store of a plausible GPFIFO entry at a BAR1
+     * offset, immediately before the doorbell, is a different fact from three stray probes.
+     *
+     * ⚠ Precondition, printed with it: this records only accesses that REACH THE HANDLER.
+     * It is a complete census only while no shadow is installed — the same condition
+     * `reservation_touches` carries. */
+    struct {
+        uint64_t addr;
+        uint64_t val;
+        unsigned size;
+        bool     is_write;
+    } bar1_log[NVKVM_BAR1_LOG];
+    unsigned bar1_log_used;
     uint64_t irq_requests_dropped;
     /* ★★★ #151.  Message-signalled vectors this device actually delivered, and the ones it
      * could not because the guest had not enabled the table.  TWO numbers, because they are
@@ -487,16 +517,34 @@ static const MemoryRegionOps nvkvm_bar2_ops = {
     .valid      = { .min_access_size = 1, .max_access_size = 8 },
 };
 
+/* ★★★★ §16.17 — record ONE BAR1 access in full.  See NvkvmState::bar1_log for why the
+ * count was not enough and what the addresses are supposed to decide.
+ *
+ * ⊘ FIRST accesses, not last: the hypothesis under test is about the GPFIFO entry the guest
+ * writes BEFORE it rings, so the earliest accesses are the evidence and a ring buffer that
+ * kept the newest would discard exactly them. */
+static void nvkvm_bar1_record(NvkvmState *s, uint64_t addr, uint64_t val,
+                              unsigned size, bool is_write)
+{
+    if (s->bar1_log_used >= NVKVM_BAR1_LOG) {
+        return;
+    }
+    s->bar1_log[s->bar1_log_used].addr     = addr;
+    s->bar1_log[s->bar1_log_used].val      = val;
+    s->bar1_log[s->bar1_log_used].size     = size;
+    s->bar1_log[s->bar1_log_used].is_write = is_write;
+    s->bar1_log_used++;
+}
+
 static uint64_t nvkvm_reservation_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
 
-    (void)addr;
-    (void)size;
     /* Reached only where the archive's slot does not cover the range — an observe-tier hole,
      * or a reservation that was never installed.  Counted so "the shadow is missing" is a
      * number rather than a suspicion. */
     s->reservation_touches++;
+    nvkvm_bar1_record(s, (uint64_t)addr, 0, size, false);
     return 0;
 }
 
@@ -504,10 +552,15 @@ static void nvkvm_reservation_write(void *opaque, hwaddr addr, uint64_t val, uns
 {
     NvkvmState *s = opaque;
 
-    (void)addr;
-    (void)val;
-    (void)size;
+    /* ⊘ `val` is still DISCARDED — this device does not gain a BAR1 store here, and must
+     * not: BAR1 is an aperture onto framebuffer memory, so a write at BAR1 offset X has to
+     * land in the SAME store at the SAME framebuffer address the GMMU walk reads, or we
+     * recreate the self-consistent-wrong-store defect one aperture over.  Recording the
+     * value is OBSERVATION; giving it a home is a design decision that needs the window's
+     * own base/target decoded first (cf. `Bar0Window::target()`, decoded and never
+     * consulted). */
     s->reservation_touches++;
+    nvkvm_bar1_record(s, (uint64_t)addr, val, size, true);
 }
 
 static const MemoryRegionOps nvkvm_reservation_ops = {
@@ -1659,6 +1712,33 @@ static void nvkvm_report_registers(NvkvmState *s)
                     "complete census of BAR1 traffic. ⊘ These bytes are in NEITHER store the "
                     "address plane reads — not the BAR0-window framebuffer and not guest RAM.",
                     s->reservation_touches);
+    }
+    /*
+     * ★★★★ §16.17 — AND THE ACCESSES THEMSELVES.  `[src] ogkm-580: uvm_channel.c:984-1015`
+     * writes the GPFIFO entry through a dereferenced CPU POINTER and then `write_gpu_put`;
+     * for a vidmem ring that CPU mapping is a BAR1 mapping, and this handler discards the
+     * value.  ⊘ The COUNT cannot test that — 3 is equally what "the guest barely touched
+     * BAR1" predicts.  An 8-byte store whose value decodes as a plausible GPFIFO entry is a
+     * different fact from three stray probes, and only the value can say which.
+     */
+    if (s->reservation_touches == 0) {
+        info_report("nvkvm:   BAR1 access log: EMPTY — no access reached the handler, so "
+                    "there is nothing to attribute. ⊘ Read this beside the trap-status row "
+                    "for this BAR: it means 'no access' only while that row says TRAPPED.");
+    } else {
+        uint64_t k;
+
+        info_report("nvkvm:   BAR1 access log: %u of %" PRIu64 " access(es) recorded in full "
+                    "(FIRST ones, because the write under test precedes the doorbell)%s",
+                    s->bar1_log_used, s->reservation_touches,
+                    s->bar1_log_used < s->reservation_touches
+                        ? " — ⊘ BOUNDED-LOG, later accesses are not shown"
+                        : " — complete");
+        for (k = 0; k < s->bar1_log_used; k++) {
+            info_report("nvkvm:     BAR1[%" PRIu64 "] %s off=0x%" PRIx64 " size=%u val=0x%" PRIx64,
+                        k, s->bar1_log[k].is_write ? "WRITE" : "read ",
+                        s->bar1_log[k].addr, s->bar1_log[k].size, s->bar1_log[k].val);
+        }
     }
 
     /*

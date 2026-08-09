@@ -2777,9 +2777,11 @@ impl SharedDoorbell {
         // written there. ⊘ Addressed by the resolution's OWN answer, never by a literal:
         // the leaf is a per-boot address and hard-coding one would read correctly on
         // exactly one boot (§16.9's control-row argument, one level in).
-        let ringpage = ring
-            .vidmem_phys()
-            .map_or_else(String::new, |phys| fb_level_dump(&plane, "fbRING", phys));
+        // ★★★★ §16.17 — EVERY PAGE THE RING SPANS, and the semaphore's page beside them.
+        // §16.16 dumped the leaf page alone and called the result "the ring's frame"; a
+        // 1024-entry ring is 8 KiB and occupies TWO pages, so that sentence was true of
+        // half the ring. See [`RING_PAGE_DUMPS`].
+        let ringpage = self.ring_pages(facts.client, vaspace, ring_va, facts.ring_entries);
         let fin = plane.resolve_published_va(
             facts.client,
             vaspace,
@@ -2862,6 +2864,71 @@ impl SharedDoorbell {
     /// ⚠ Bounded at [`RING_SCAN_ENTRIES`] regardless of what the channel declared — the
     /// entry count is a guest-supplied number and a diagnostic must not become a
     /// guest-sized read.
+    /// ★★★★ **EVERY framebuffer page the ring occupies, plus the semaphore's** — §16.17.
+    ///
+    /// # ⊘⊘ The defect this repairs, and it sat under the campaign's headline claim
+    ///
+    /// `[measured 2026-08-09, boot `res1_fc21926`]` the report read
+    /// `fbRING@0x20000 … nz0/4096 resN-NEVER-WRITTEN` and that line was relayed — by me —
+    /// as *"the ring's frame was never written"*. The channel declares **1024** entries;
+    /// 1024 x 8 = **8192 bytes**, so entries 0-511 live in `0x20000` and entries 512-1023
+    /// live in **`0x21000`, which nothing ever asked about**. The claim was true of half
+    /// the ring and was read as a statement about all of it.
+    ///
+    /// ★ **A third address in the same allocation**, and it discriminates independently:
+    /// the finishPayload semaphore at [`FINISH_PAYLOAD_FROM_RING`] (`ring + 0x8004`) — which
+    /// is itself corroboration that the ring is 1024 entries, since `0x8000` is exactly
+    /// 1024 x 8 and the semaphore sits immediately past the end. If the guest wrote the
+    /// semaphore area, **that** page is resident even when the ring pages are not, which
+    /// separates *"this allocation is entirely unwritten"* from *"we are reading the wrong
+    /// address for the ring specifically"*.
+    ///
+    /// ⊘ Each page is asked for **by the resolver's own answer**, never by adding 0x1000 to
+    /// a previous result: a ring whose pages are not contiguous in the framebuffer is
+    /// exactly the case a literal stride would silently mis-report. ⊘ And the count dumped
+    /// is printed beside the count required, so a truncation at [`RING_PAGE_DUMPS`] is
+    /// visible rather than silent — this whole method exists because a bound went unread.
+    fn ring_pages(&self, client: u32, vaspace: u32, ring_va: u64, entries: u32) -> String {
+        let Some(plane) = self.plane.upgrade() else {
+            return String::new();
+        };
+        let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+        // How many 4 KiB pages the DECLARED ring spans, rounded up. ⊘ Derived from the
+        // guest's own entry count, never from a constant.
+        let span = (u64::from(entries) * PROBE_RING_BYTES as u64)
+            .div_ceil(4096)
+            .max(1);
+        let want = span as usize;
+        let take = want.min(RING_PAGE_DUMPS);
+        let mut out = String::new();
+        for i in 0..take {
+            let va = ring_va.wrapping_add((i as u64) * 4096);
+            let r = plane.resolve_published_va(client, vaspace, va, demand);
+            match r.vidmem_phys() {
+                // ⊘ A page that does not resolve to video memory is reported as itself and
+                // not skipped: "the ring's second page resolves elsewhere" is a finding.
+                None => {
+                    out.push_str(&format!(" fbRING[p{i}]@va0x{va:x}=NOT-VIDMEM({})", r.tag()));
+                }
+                Some(phys) => out.push_str(&fb_level_dump(&plane, &format!("fbRING[p{i}]"), phys)),
+            }
+        }
+        if take < want {
+            out.push_str(&format!(
+                " ⊘ BOUNDED-DUMP: {take} of {want} page(s) the ring spans"
+            ));
+        }
+        // ★ The semaphore's page — the third address, and the one that can be resident
+        // while both ring pages are not.
+        let sem_va = ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING);
+        let sem = plane.resolve_published_va(client, vaspace, sem_va, demand);
+        match sem.vidmem_phys() {
+            None => out.push_str(&format!(" fbFIN@va0x{sem_va:x}=NOT-VIDMEM({})", sem.tag())),
+            Some(phys) => out.push_str(&fb_level_dump(&plane, "fbFIN", phys)),
+        }
+        out
+    }
+
     fn ring_scan(&self, client: u32, vaspace: u32, ring_va: u64, entries: u32) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
@@ -2883,10 +2950,21 @@ impl SharedDoorbell {
                 }
             }
         }
-        // ⊘ The scanned count is stated, so "all zero" can never be read as "we looked at
-        // the whole ring" when the declared entry count exceeded the bound.
+        // ⊘⊘ THE SENTENCE CHANGES WHEN THE READING IS PARTIAL — printing the bound was not
+        // enough. `[measured 2026-08-09]` this line honestly said `scan=64/1024 declared …
+        // nonzero=NONE` and was still read as "the ring is empty", licensing a claim about
+        // a whole ring from one sixteenth of it. A reader must not have to do the division,
+        // so a truncated scan now says so in words and a complete one says THAT in words
+        // too — otherwise the absence of a warning is itself ambiguous.
+        let coverage = if (n as u32) < entries {
+            format!(
+                " ⊘ BOUNDED-READING: {n} of {entries} entries — a write at any entry >= {n} is INVISIBLE here"
+            )
+        } else {
+            " (COMPLETE: every declared entry was read)".to_string()
+        };
         format!(
-            " scan={}/{} declared, unread={}, nonzero={}",
+            " scan={}/{} declared{coverage}, unread={}, nonzero={}",
             n,
             entries,
             unread,
@@ -3019,9 +3097,39 @@ fn fb_ring_sweep(plane: &kayfabe_device::plane::RegPlane) -> Option<FbRingSweep>
     Some(out)
 }
 
-/// How many GPFIFO entries [`SharedDoorbell::ring_scan`] reads. See its docs for why it is
-/// a bound and not the channel's declared count.
-const RING_SCAN_ENTRIES: usize = 64;
+/// How many GPFIFO entries [`SharedDoorbell::ring_scan`] reads.
+///
+/// # ⊘⊘ It was 64 against a channel that declared 1024, and that is 6.25 %
+///
+/// `[measured 2026-08-09, boots `res1_fc21926` and `s16_5fcd259`]` the refusing UVM channel
+/// declares `entries: 1024` and the scan reported `scan=64/1024 declared, unread=0,
+/// nonzero=NONE`. ★ The line was **honest** — it printed its own bound, exactly as the
+/// discipline requires — and it was **still** read, by a careful reader, as *"the ring is
+/// empty"*. It licensed a headline claim about a **whole ring** from **one sixteenth** of
+/// it: a guest write at any entry ≥ 64 was structurally invisible.
+///
+/// ★★★ The transferable rule, and it is stronger than "print your precondition": when the
+/// bound and the declared size **differ**, the sentence itself must change — a reader
+/// should not have to do the division. [`SharedDoorbell::ring_scan`] now says
+/// `BOUNDED-READING` in words when it truncates.
+///
+/// ⚠ Still a bound and not the guest's number, for the original reason: the entry count is
+/// guest-supplied and a diagnostic must not become a guest-sized read. 4096 entries is
+/// 32 KiB of probe reads, covers the 1024 every channel this campaign has seen declares,
+/// and leaves the refusal arm reachable rather than decorative.
+const RING_SCAN_ENTRIES: usize = 4096;
+
+/// How many framebuffer pages [`SharedDoorbell::ring_pages`] will dump for one ring.
+///
+/// ⊘⊘ **The ring SPANS MORE THAN ONE PAGE and we probed exactly one.** 1024 entries x 8
+/// bytes = **8192**, so entries 0-511 live in the leaf page and entries 512-1023 live in
+/// the **next** one. `[measured 2026-08-09, boot `res1_fc21926`]` the report said
+/// `fbRING@0x20000 … resN-NEVER-WRITTEN` and **never asked about `0x21000`** — so
+/// *"the ring's frame was never written"* was a statement about **half the ring**.
+///
+/// ★ 4 pages covers a 2048-entry ring; the count actually dumped is printed beside the
+/// count required, so a truncation is visible rather than silent.
+const RING_PAGE_DUMPS: usize = 4;
 
 /// How many non-zero entries the scan NAMES. The rest are still counted by the scan's own
 /// range, which is printed beside it.
