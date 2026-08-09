@@ -1466,6 +1466,8 @@ pub static GA106_GMMU_STATIC: GmmuStaticRow = GmmuStaticRow {
 /// read from this device id's [`kayfabe_abi::vbios::VbiosProfile`] instead, so the ROM this
 /// device serves and the identity it claims cannot disagree. See [`crate::identity_for`].
 pub static GA106: ChipProfile = ChipProfile {
+    // GA106 is a consumer GeForce die: no chip-to-chip fabric exists on it.
+    has_c2c: false,
     name: "GA106",
     // RTX 3060 LHR — the part the C artifact emulated and the identity the bench's
     // `x-nvidia-identity` experiment claimed (`C: src/qemu/nvkvm_gpu_emul.c:91`).

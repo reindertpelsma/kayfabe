@@ -504,6 +504,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
     // answering anyway is exactly the out-of-bounds construction the encoder exists to
     // prevent.
     static BAD: ChipProfile = ChipProfile {
+        has_c2c: false,
         memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
         device_info: kayfabe_device::ga10x::GA106_DEVICE_INFO,
         conf_compute: kayfabe_device::ga10x::GA106_CONF_COMPUTE,
@@ -591,6 +592,7 @@ fn the_classifier_names_this_control_and_its_size() {
 /// A `ChipProfile` identical to GA106 in everything the test above does not override.
 const fn copy_of_ga106() -> ChipProfile {
     ChipProfile {
+        has_c2c: false,
         name: "TEST-BAD-FALCONS",
         pci_device_id: 0x2504,
         pci_revision: 0xa1,

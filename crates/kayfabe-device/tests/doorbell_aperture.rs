@@ -487,6 +487,7 @@ fn a_chip_whose_advertised_usermode_window_collides_is_refused_at_realize() {
             name: "NV_VIRTUAL_FUNCTION (deliberately mis-placed)",
         }]));
     let bad: &'static ChipProfile = Box::leak(Box::new(ChipProfile {
+        has_c2c: false,
         name: "TEST-COLLIDING-DOORBELL",
         chip_info: kayfabe_abi::chipinfo::ChipInfoRow {
             reg_bases,

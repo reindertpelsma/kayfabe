@@ -398,6 +398,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
     // rows the encoder declines are each a guest-kernel fault of their own, so answering
     // anyway would trade a NULL dereference for a divide-by-zero.
     static BAD: ChipProfile = ChipProfile {
+        has_c2c: false,
         memory_system: MemorySystemRow {
             compr_page_size: 0,
             ..ga10x::GA106_MEMORY_SYSTEM
@@ -476,6 +477,7 @@ fn the_classifier_names_this_control_and_its_size() {
 /// expression and `ChipProfile` cannot be moved out of a `static`.
 const fn copy_of_ga106() -> ChipProfile {
     ChipProfile {
+        has_c2c: false,
         name: "TEST-BAD-MEMSYS",
         pci_device_id: 0x2504,
         pci_revision: 0xa1,

@@ -825,6 +825,30 @@ pub enum WantedTable {
     /// in general: a rule permits a command to be named, only a measurement permits it to be
     /// answered.
     GssLegacy8159,
+    /// `0x20808162` — §14.37, the **second** GSS-legacy id, and ⊘ **not** an identity.
+    ///
+    /// `[measured 2026-08-09, boot `gf1436` at `ec434b8`]` row 85 of 87 gets `0x56`; a real
+    /// GA106 answers `NV_OK` with `in=00 out=01`
+    /// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:85`), and the C artifact records
+    /// the same byte independently.
+    ///
+    /// ⚠⚠ Its branch-(b) argument is **different** from [`Self::GssLegacy8159`]'s and must not
+    /// be copied from it: that one is safe under a cache because its reply is the guest's own
+    /// buffer, while this one writes a byte the guest did not send. Its safety is entirely
+    /// [`crate::sticky::StickyAnswerGuard`]'s — see [`kayfabe_abi::gsslegacy`].
+    GssLegacy8162,
+    /// `NV2080_CTRL_CMD_BUS_GET_C2C_INFO` (`0x2080182b`) — §14.37, and ★★ the one served row
+    /// whose value is right by **argument** rather than by capture.
+    ///
+    /// `[measured 2026-08-09, boot `gf1436` at `ec434b8`]` row 86 of 87 gets `0x56`; a real
+    /// GA106 answers `NV_OK`. Flags `0x50048` carry `ROUTE_TO_PHYSICAL`
+    /// (`ogkm-580: g_subdevice_nvoc.c:6826`), so it is ours.
+    ///
+    /// ⊘ The trace's all-zero reply is corroboration, **not** the source: an all-zero row is
+    /// the shape this repository refuses to decode. `bIsLinkUp = false` is true of a GA106 on
+    /// first principles — C2C is a Grace-Hopper-class fabric and this die has none — so the
+    /// argument survives the capture being deleted. See [`kayfabe_abi::c2cinfo`].
+    C2cInfo,
 }
 
 impl WantedTable {
@@ -855,7 +879,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 33] = [
+    pub const ALL: [WantedTable; 35] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -889,6 +913,8 @@ impl WantedTable {
         Self::GrmgrGetGrFsInfo,
         Self::GspGetFeatures,
         Self::GssLegacy8159,
+        Self::GssLegacy8162,
+        Self::C2cInfo,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -961,6 +987,8 @@ impl WantedTable {
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO,
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
+            Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162,
+            Self::C2cInfo => kayfabe_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
         }
     }
 
@@ -1010,6 +1038,8 @@ impl WantedTable {
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE,
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::GSP_GET_FEATURES_PARAMS_SIZE,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE,
+            Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162_PARAMS_SIZE,
+            Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
         }
     }
 
@@ -1844,16 +1874,23 @@ impl CommandPolicy for InitTablePolicy {
             // ⊘ The bytes are copied through this arm rather than left to the tail's
             // `copy_from_slice` no-op on purpose: the identity is then something the code
             // SAYS, and `answer_gss_legacy` is where the id and the length are checked.
-            WantedTable::GssLegacy8159 => {
+            WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
                 let at = req.params_at;
                 match kayfabe_abi::gsslegacy::answer_gss_legacy(
                     req.cmd,
-                    &cmd.payload[at..at + kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE],
+                    &cmd.payload[at..at + want.params_size()],
                 ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }
             }
+            // ★★ The one arm whose value is an ARGUMENT rather than a capture, and the flag
+            // is passed rather than assumed: `c2c_absent` refuses for a part that HAS C2C,
+            // so a future chip row cannot inherit "no links" by silence. GA106 has none.
+            WantedTable::C2cInfo => match kayfabe_abi::c2cinfo::c2c_absent(!self.chip.has_c2c) {
+                Ok(p) => p,
+                Err(_) => return refuse(),
+            },
         };
 
         // ★★ The sticky-answer tripwire, at the serve site rather than in a comment. The
@@ -1877,7 +1914,12 @@ impl CommandPolicy for InitTablePolicy {
         // exactly that. So the obligation is named here and discharged there, and the one
         // served id records that its answer is safe to cache anyway: it is the identity on the
         // guest's own buffer, so a cache that replayed it would replay what the guest sent.
-        if is_gss_legacy(req.cmd) && want != WantedTable::GssLegacy8159 {
+        if is_gss_legacy(req.cmd)
+            && !matches!(
+                want,
+                WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162
+            )
+        {
             return refuse();
         }
 

@@ -477,6 +477,7 @@ fn a_chip_whose_table_cannot_be_encoded_is_refused_in_the_envelope() {
         protected: false,
     }];
     static BAD: ChipProfile = ChipProfile {
+        has_c2c: false,
         fb_regions: BAD_REGIONS,
         fb_length: 0x3_0000_0000,
         ..copy_of_ga106()
@@ -501,6 +502,7 @@ fn a_chip_whose_table_cannot_be_encoded_is_refused_in_the_envelope() {
 /// A `ChipProfile` identical to GA106 in everything the test above does not override.
 const fn copy_of_ga106() -> ChipProfile {
     ChipProfile {
+        has_c2c: false,
         name: "TEST-BAD-FB",
         pci_device_id: 0x2504,
         pci_revision: 0xa1,

@@ -90,6 +90,38 @@ pub const GSS_LEGACY_0X8159: u32 = 0x2080_8159;
 /// alone.
 pub const GSS_LEGACY_0X8159_PARAMS_SIZE: usize = 332;
 
+/// The second GSS-legacy control this port answers.
+///
+/// ⊘ Unnamed for the same reason as [`GSS_LEGACY_0X8159`]: absent from every NVOC table, SDK
+/// header, `nvproxy` table and C artifact table searched on 2026-08-09.
+pub const GSS_LEGACY_0X8162: u32 = 0x2080_8162;
+
+/// Its `paramsSize` — a single byte.
+///
+/// `[measured 2026-08-09, real GA106 on 580.159.04]`
+/// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:85` declares `size=1`, and our own boot
+/// `gf1436` at `ec434b8` declares the same.
+pub const GSS_LEGACY_0X8162_PARAMS_SIZE: usize = 1;
+
+/// The byte a real GA106 returns for [`GSS_LEGACY_0X8162`].
+///
+/// ★★★ **Double-sourced, and — unlike [`GSS_LEGACY_0X8159`] — NOT an identity.** The request
+/// carries `00` and the reply carries `01`
+/// (`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:85`: `in=00 out=01`), and the C research
+/// artifact independently records *"host returns bool=1"* for the same id.
+///
+/// ⚠⚠ **The consequence is that [`GSS_LEGACY_0X8159`]'s cache argument does NOT extend to this
+/// one, and copying it across would be the mistake.** That id is safe under branch (b) because
+/// its answer is the identity on the guest's own buffer, so a replayed cache entry is
+/// indistinguishable from re-executing. This id **writes a byte the guest did not send**, so a
+/// cached entry is a real answer persisting. Its safety rests entirely on
+/// `kayfabe_device::sticky::StickyAnswerGuard` zeroing the reply's flag words — a property of
+/// the chain, checked by `sticky_answer.rs`, and not a property of the value.
+///
+/// ⊘ What the byte MEANS is unmeasured. It is `1` on hardware and this port reproduces `1`; that
+/// `out != in` proves RM wrote it is all this claims.
+pub const GSS_LEGACY_0X8162_REPLY: u8 = 0x01;
+
 /// Why a GSS-legacy identity answer could not be given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GssLegacyError {
@@ -141,16 +173,38 @@ impl core::error::Error for GssLegacyError {}
 /// [`GssLegacyError::NotServed`] for any id but [`GSS_LEGACY_0X8159`];
 /// [`GssLegacyError::WrongSize`] for a buffer that is not the measured length.
 pub fn answer_gss_legacy(cmd: u32, params: &[u8]) -> Result<Vec<u8>, GssLegacyError> {
-    if cmd != GSS_LEGACY_0X8159 {
-        return Err(GssLegacyError::NotServed { cmd });
-    }
-    if params.len() != GSS_LEGACY_0X8159_PARAMS_SIZE {
+    let want = params_size(cmd).ok_or(GssLegacyError::NotServed { cmd })?;
+    if params.len() != want {
         return Err(GssLegacyError::WrongSize {
-            want: GSS_LEGACY_0X8159_PARAMS_SIZE,
+            want,
             got: params.len(),
         });
     }
-    Ok(params.to_vec())
+    // ⊘ The two served ids are answered by DIFFERENT rules, and the match is written out
+    // rather than generalised because the difference is the whole safety argument: `…8159`
+    // is the identity on the guest's buffer, `…8162` writes a byte the guest did not send.
+    match cmd {
+        GSS_LEGACY_0X8159 => Ok(params.to_vec()),
+        GSS_LEGACY_0X8162 => Ok(vec![GSS_LEGACY_0X8162_REPLY]),
+        _ => Err(GssLegacyError::NotServed { cmd }),
+    }
+}
+
+/// Every GSS-legacy id this port answers, paired with the `paramsSize`
+/// `[measured 2026-08-09, real GA106 on 580.159.04]` for it.
+///
+/// ★ Stated as data so a gate can quantify over it instead of over a sample — the
+/// `gates_quantified_over_a_list` rule applied to the one list whose growth is dangerous.
+pub const SERVED: [(u32, usize); 2] = [
+    (GSS_LEGACY_0X8159, GSS_LEGACY_0X8159_PARAMS_SIZE),
+    (GSS_LEGACY_0X8162, GSS_LEGACY_0X8162_PARAMS_SIZE),
+];
+
+/// The `paramsSize` `[measured 2026-08-09]` for a served GSS-legacy id, or `None` if it is
+/// not served.
+#[must_use]
+pub fn params_size(cmd: u32) -> Option<usize> {
+    SERVED.iter().find(|(c, _)| *c == cmd).map(|(_, n)| *n)
 }
 
 #[cfg(test)]
@@ -198,7 +252,7 @@ mod tests {
         // concrete case — the cudart init gate at `C: src/qemu/nvkvm_gpu_emul.c:3328-3395`,
         // pinned in `kayfabe-rmrpc/tests/gss_legacy_answer.rs` — and this port does NOT
         // serve them.
-        for cmd in [0x2080_9009u32, 0x2080_9001, 0x2080_9064, 0x2080_8162] {
+        for cmd in [0x2080_9009u32, 0x2080_9001, 0x2080_9064, 0x2080_8513] {
             assert_eq!(
                 answer_gss_legacy(cmd, &real_ga106_request()),
                 Err(GssLegacyError::NotServed { cmd }),
@@ -232,6 +286,59 @@ mod tests {
             GSS_LEGACY_0X8159 & 0x0000_C000,
             0x0000_C000,
             "a privileged legacy command would need root and libcuda is unprivileged"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests_8162 {
+    use super::*;
+
+    #[test]
+    fn the_second_id_returns_the_byte_hardware_wrote_and_it_is_not_an_echo() {
+        // ★★★ `in=00 out=01` — so unlike `…8159` this one is NOT the identity, and the test
+        // says so in the strongest available form: feeding it the guest's own `00` must NOT
+        // give `00` back. An echo regression is therefore red here and green there, which is
+        // the whole point of writing the two rules out separately.
+        let out = answer_gss_legacy(GSS_LEGACY_0X8162, &[0x00]).expect("served");
+        assert_eq!(out, vec![0x01]);
+        assert_ne!(out, vec![0x00], "an echo would return the guest's own zero");
+        assert_eq!(out.len(), GSS_LEGACY_0X8162_PARAMS_SIZE);
+    }
+
+    #[test]
+    fn the_second_id_ignores_what_the_guest_sent() {
+        // ⊘ The reply is a stated value, not a function of the request — so a guest cannot
+        // steer it. `[measured 2026-08-09, real GA106 on 580.159.04]` the reply is `01` for
+        // the `00` libcuda sends (`cuinit_ioctl_trace_real_ga106.txt:85`); what a non-zero
+        // request would do has never been observed, and answering `01` regardless is this
+        // port declining to invent a second behaviour.
+        for probe in [0x00u8, 0x01, 0xCD, 0xFF] {
+            assert_eq!(
+                answer_gss_legacy(GSS_LEGACY_0X8162, &[probe]),
+                Ok(vec![0x01])
+            );
+        }
+    }
+
+    #[test]
+    fn the_served_set_is_exactly_two_and_each_has_its_own_rule() {
+        assert_eq!(SERVED.len(), 2);
+        assert_eq!(params_size(GSS_LEGACY_0X8159), Some(332));
+        assert_eq!(params_size(GSS_LEGACY_0X8162), Some(1));
+        assert_eq!(params_size(0x2080_8513), None, "unmeasured stays unserved");
+        // ⚠ Every served id must really be GSS-legacy, or it is in the wrong module.
+        for (cmd, _) in SERVED {
+            assert_ne!(cmd & crate::capability::RM_GSS_LEGACY_MASK, 0);
+        }
+        // ★★ And the two rules genuinely differ, which is the fact that stops `…8159`'s
+        // cache argument from being copied onto `…8162`.
+        let ident = answer_gss_legacy(GSS_LEGACY_0X8159, &vec![0xABu8; 332]).expect("served");
+        assert_eq!(ident, vec![0xABu8; 332], "…8159 is the identity");
+        assert_eq!(
+            answer_gss_legacy(GSS_LEGACY_0X8162, &[0xAB]),
+            Ok(vec![0x01]),
+            "…8162 is not"
         );
     }
 }

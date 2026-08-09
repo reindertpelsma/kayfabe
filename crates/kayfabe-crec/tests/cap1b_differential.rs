@@ -419,6 +419,8 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::GrmgrGetGrFsInfo,
         WantedTable::GspGetFeatures,
         WantedTable::GssLegacy8159,
+        WantedTable::GssLegacy8162,
+        WantedTable::C2cInfo,
     ]
     .into_iter()
     .collect();
@@ -474,10 +476,14 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // whole of `cap1b` has bit 15 set. So branch (b) traffic is unexercised by the entire
     // cold-boot prefix, and this row is not waiting on a `cuInit`-driven capture the way the
     // other six are — it is waiting on a capture of a plane no committed trace contains.
-    assert_eq!(universe.len(), 33, "non-vacuity: the universe is not empty");
+    // ⊘ 33 -> 35 at §14.37 (`0x20808162`, `0x2080182b`), the WEAKEST kind a NINTH and TENTH
+    // time. `0x20808162` joins `0x20808159` in the structural class — GSS-legacy, and no
+    // committed capture contains bit-15 traffic at all. `0x2080182b` is the ordinary
+    // `cuInit`-path class, absent because this capture is `nvidia-smi`-driven.
+    assert_eq!(universe.len(), 35, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        14,
+        16,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

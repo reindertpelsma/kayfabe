@@ -869,6 +869,7 @@ fn bad_chip(
 ) -> &'static ChipProfile {
     let g = chip();
     Box::leak(Box::new(ChipProfile {
+        has_c2c: false,
         name: "TEST-BAD-DEVICE-INFO",
         pci_device_id: g.pci_device_id,
         pci_revision: g.pci_revision,

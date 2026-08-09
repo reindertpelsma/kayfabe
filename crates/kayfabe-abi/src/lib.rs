@@ -97,6 +97,7 @@
 pub mod bifstatic;
 pub mod bringup;
 pub mod businfo;
+pub mod c2cinfo;
 pub mod capability;
 pub mod cecaps;
 pub mod chipinfo;

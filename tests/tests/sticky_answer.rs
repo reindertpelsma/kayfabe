@@ -586,9 +586,19 @@ fn every_served_control_leaves_the_port_non_cacheable() {
         .collect();
     assert_eq!(
         neutralisable,
-        BTreeSet::from([kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159]),
-        "exactly one served control can reach branch (b)"
+        kayfabe_abi::gsslegacy::SERVED
+            .iter()
+            .map(|(c, _)| *c)
+            .collect::<BTreeSet<u32>>(),
+        "the served controls that can reach branch (b) are exactly the GSS-legacy module's"
     );
+    // ⚠⚠ §14.37 took this from one to TWO, and the second is the one that makes the guard
+    // indispensable rather than merely correct. `0x20808159`'s reply is the identity on the
+    // guest's own buffer, so a cache that kept it would replay what the guest sent;
+    // `0x20808162` writes a byte the guest did not send, so a kept entry would be a real
+    // answer persisting. ⊘ The guard is what closes both, and only the second one would
+    // have been WRONG without it.
+    assert_eq!(neutralisable.len(), 2);
     assert_eq!(
         port.neutralised() as usize,
         neutralisable.len(),

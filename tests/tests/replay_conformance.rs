@@ -1530,6 +1530,16 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // `kayfabe_abi::gsslegacy::answer_gss_legacy` refuses a mismatched buffer instead of
         // trusting either side.
         0x2080_8159,
+        // §14.37's two. `0x20808162` is the same STRUCTURAL class as `0x20808159` — bit 15,
+        // and no committed capture carries branch-(b) traffic. `0x2080182b` is the ordinary
+        // circumstantial class: absent because this capture is `nvidia-smi`-driven.
+        // ⊘ Their sizes are evidenced by the real-GA106 trace and by our own boot `gf1436` at
+        // `ec434b8` (rows 85 and 86, TRUNC marker ABSENT), and `0x2080182b`'s 28 bytes are
+        // additionally the struct's own arithmetic — `NvBool + NvBool` then six `NvU32`
+        // (`ogkm-580: ctrl2080bus.h:1385-1394`), which is the second source `0x20808162`
+        // structurally cannot have.
+        0x2080_8162,
+        0x2080_182b,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
@@ -1552,6 +1562,10 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // file's capture is `nvidia-smi`-driven and cannot see this control, while THIS capture
     // is a GSP-level `rpctrace` that does. The two are different instruments, and a rung
     // invisible to one can still be evidenced by the other.
+    // ⊘ 27 -> 26 at §14.37, and DOWN is the honest direction here: `0x20808162` and
+    // `0x2080182b` are both claimed and neither is demanded by this capture, so the set of
+    // sizes it can judge shrinks while the served universe grows. A number that only ever
+    // rises would be measuring the wrong thing.
     assert_eq!(
         size_checked.len(),
         27,

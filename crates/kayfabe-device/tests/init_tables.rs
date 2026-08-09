@@ -415,7 +415,14 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // than an echo only because this path's copy-out is unconditional on `NV_OK` with no
     // `SKIP_COPYOUT` to hide behind — see `kayfabe_abi::gsslegacy`, which also carries why
     // this does NOT relax `kayfabe-rmrpc`'s refusal of GSS-legacy commands in general.
-    assert_eq!(WantedTable::ALL.len(), 33, "the served universe's size");
+    // ★★★★ 33 -> 35 at §14.37: `0x20808162` (the SECOND GSS-legacy id) and `0x2080182b`
+    // BUS_GET_C2C_INFO. `[measured 2026-08-09, boot `gf1436` at `ec434b8`]` `cuInit` stops
+    // at rows 85 and 86 of 87 with `0x56` where a real GA106 answers `NV_OK`.
+    // ⚠ The two are NOT the same kind, and the difference is the point: `0x20808162`'s
+    // value is captured (`in=00 out=01`, double-sourced with the C), while `0x2080182b`'s
+    // is an ARGUMENT — a GA106 has no chip-to-chip fabric, so `bIsLinkUp = false` is true
+    // of the silicon and the all-zero capture is corroboration rather than the source.
+    assert_eq!(WantedTable::ALL.len(), 35, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();
@@ -481,7 +488,10 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
         .collect();
     assert_eq!(
         gss_legacy_served,
-        std::collections::BTreeSet::from([kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159]),
+        kayfabe_abi::gsslegacy::SERVED
+            .iter()
+            .map(|(c, _)| *c)
+            .collect::<std::collections::BTreeSet<u32>>(),
         "the guest caches a GSS-legacy answer from OUR reply's flags \
          (`rmapiControlCacheSetUnchecked`), so every id here has to carry its own argument. \
          Adding one means writing that argument, not extending this set"
@@ -499,8 +509,17 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
             &probe
         ),
         Ok(probe.clone()),
-        "the served GSS-legacy answer must be the identity, which is what makes caching it \
+        "…8159's answer must be the identity, which is what makes caching it \
          indistinguishable from re-executing it"
+    );
+    // ⚠⚠ And the SECOND served GSS-legacy id does NOT have that property — it writes a byte
+    // the guest did not send, so its branch-(b) safety rests entirely on
+    // `crate::sticky::StickyAnswerGuard`. Asserted here so the two arguments cannot be
+    // conflated by a reader who saw only the line above.
+    assert_ne!(
+        kayfabe_abi::gsslegacy::answer_gss_legacy(kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162, &[0]),
+        Ok(vec![0u8]),
+        "…8162 is not an identity, and must not be argued about as if it were"
     );
 
     // ★ The predicate the serve-site guard rests on, checked against a REAL GSS-legacy

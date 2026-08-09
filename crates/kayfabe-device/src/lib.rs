@@ -225,6 +225,17 @@ impl RegSpan {
 pub struct ChipProfile {
     /// Chip name, for diagnostics. Never branched on.
     pub name: &'static str,
+    /// ★★ Does this part have an NVIDIA **chip-to-chip (C2C)** fabric?
+    ///
+    /// A row rather than a constant in the reply plane, and it is the *only* input to
+    /// `NV2080_CTRL_CMD_BUS_GET_C2C_INFO` — see [`kayfabe_abi::c2cinfo`]. C2C is a
+    /// Grace-Hopper-class interconnect; consumer GeForce dies have none.
+    ///
+    /// ⊘ It exists so that a part which DOES have C2C **refuses** rather than inheriting
+    /// "no links" by silence. No populated reply has ever been captured by this project, so
+    /// `true` here yields a named refusal rather than a guess —
+    /// `a_fallback_keyed_on_our_own_ignorance` avoided by making the ignorance explicit.
+    pub has_c2c: bool,
     /// PCI device id. **The key** — into [`CHIPS`] and into
     /// [`kayfabe_abi::vbios::VBIOS_PROFILES`], which is what stops the two disagreeing.
     pub pci_device_id: u16,
