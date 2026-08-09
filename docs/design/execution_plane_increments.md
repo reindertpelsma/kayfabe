@@ -10875,6 +10875,11 @@ and separately issues `0xa06c0101` to the real host TSG**, having first issued `
 (`BIND`). ⇒ a bare `NV_OK` would move the wall without scheduling anything, and would be
 `a_flag_is_not_progress` in its purest form.
 
-⚠ And `0xa06c0102` (`NVA06C_CTRL_CMD_BIND`) exists as a constant in `submit.rs:486` but is **not
-an allowlist row** — the C issues BIND before SCHEDULE at `:4048` and `:9574`. Worth checking
-whether the guest issues it and what we do with it, before anything is built.
+⊘ **And `0xa06c0102` (`NVA06C_CTRL_CMD_BIND`) is NOT a second wall — measured, same boot.** I
+flagged it as worth checking because the C issues BIND before SCHEDULE (`:4048`, `:9574`); the
+data already answered it. `s44`'s userspace census contains **exactly one `a06c` control**,
+`0xa06c0101`, and `grep -c a06c0102` over both `s43`'s and `s44`'s device logs returns **0** —
+so the guest never issues BIND from userspace *or* from the kernel. ⇒ the C's BIND is the C
+**originating** a host-side setup call, not replaying one of the guest's, and there is no
+guest BIND for us to serve. ★ Recorded as closed rather than carried forward: a hypothesis I
+could answer from a capture already in the tree had no business becoming next rung's question.
