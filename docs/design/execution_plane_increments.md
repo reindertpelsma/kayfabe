@@ -6251,3 +6251,66 @@ the `PCIE_GEN_INFO` species of error and the one §14.31 already recorded once.
 answer **permanently** — the first row this port would serve that
 [`kayfabe_device::sticky::BRANCH_A_CACHEABLE`] actually covers, and the guard at the serve
 site stops being unreachable.
+
+#### ★★★ §14.35's rung, RESEARCHED — and the routing question answered before the code, twice
+
+⊘⊘ **Do not take the ranked plan's word for either half of this one.** Both were checked and
+one is wrong.
+
+**1. Routing — it IS ours, but not for the reason the flags first suggest.**
+`0x20803601`'s flags are `0x40549` (`ogkm-580: g_subdevice_nvoc.c:9466`) =
+`NO_GPUS_LOCK(0x1) | NON_PRIVILEGED(0x8) | ROUTE_TO_PHYSICAL(0x40) | API_LOCK_READONLY(0x100)
+| CACHEABLE(0x400) | PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST(0x40000)`.
+
+⚠ Unlike `0x20803801`, that last bit makes `NVOC_EXPORTED_METHOD_DISABLED_BY_FLAG` **false**
+(`control.h:159-161` requires `ROUTE_TO_PHYSICAL && !PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST`), so
+a CPU-RM body **is** compiled in — and reading only that far would conclude the guest answers
+it locally. It does not: `rmresControl_Prologue_IMPL` still RPCs on
+`IS_FW_CLIENT && ROUTE_TO_PHYSICAL` and returns `NV_WARN_NOTHING_TO_DO`, which skips the
+handler (`resource.c:255-291`, `rs_resource.c:191-200`).
+
+★ And the body that exists **proves** it, because it cannot be what a real GA106 does:
+
+```c
+subdeviceCtrlCmdGspGetFeatures_KERNEL(…) { pGspFeaturesParams->bValid = NV_FALSE; return NV_OK; }
+```
+
+— `subdevice_ctrl_gpu_kernel.c:3569-3578`, the whole function. It sets `bValid = FALSE`, and
+hardware answers `bValid = 1`. ⇒ The body is the vGPU-guest arm; on a GSP client the RPC
+wins. `[measured, boot `gt1434_373c145`]` `unserviced fn 76 cmd 0x20803601` confirms it
+arrives. **Serve the same id.**
+
+**2. ⊘ The firmware version is the GUEST driver's, NOT the host's — and this bench cannot
+tell.** The ranked plan says *"route `"580.159.04"` through the host-driver-version pin, not
+a chip row"*. Half right: it is certainly not a chip row. But `firmwareVersion` is the
+**GSP-RM firmware build**, and GSP firmware ships **inside the driver package** — a guest
+running `580.159.04` loads `580.159.04` GSP firmware, and this port *is* that firmware. The
+host's driver version is a different machine's fact, and `kayfabe_abi`'s own doc already says
+so in as many words: *"The host's driver version is a **different** number about a different
+machine, and the product property is that the two need not agree"*.
+
+⚠ **On `vh` both are `580.159.04`**, so no boot on this bench can distinguish the two
+choices. Third time in two rungs that a relation is fitted to a part that cannot falsify it,
+after `FBP_MASK` and `CHIPLET_GPC_MAP`. ⇒ Serve it from the **guest** `DriverVersion` the
+device already detects to select its ABI table, which makes it a projection of a value this
+port already holds rather than a new one, and say plainly that the host/guest question is
+undecided by measurement here.
+
+★ Nothing in RM reads the field: a repo-wide grep for `firmwareVersion` in `src/nvidia/src/`
+finds **one** hit and it is an unrelated HWBC struct (`client_resource.c:3426`). It is
+report-only, consumed by libcuda and `nvidia-smi`. So it gates nothing and a wrong choice
+here is a **fidelity** defect, not a boot failure — which is exactly the kind that survives.
+
+**3. ★★ It is the first served row `sticky::BRANCH_A_CACHEABLE` actually covers.**
+`CACHEABLE (0x400)` is set, so `rmapiControlCacheSetUnchecked` may let the guest cache our
+answer **permanently** and later asks never reach the wire. Every id this port serves today
+is outside that mask, which is why the guard at the serve site has been unreachable. Serving
+`0x20803601` makes it live, and the decision `BRANCH_A_CACHEABLE` exists to force has to be
+made rather than inherited.
+
+⇒ Values: `gspFeatures = 1` (`UVM_ENABLED`, `ctrl2080gsp.h:78-80`), `bValid = 1` (truthful —
+this port *is* a GSP client with the GPU offloaded to firmware, `:45-49`),
+`bDefaultGspRmGpu = 1`, `firmwareVersion = <guest driver version>`. Struct is
+`NvU32 + NvBool + NvBool + NvU8[64]` = 70, padded to **72** (`ctrl2080gsp.h:66, 70-75`), and
+`[measured]` the wire agrees: the reply's only written bytes are offsets 0, 4, 5 and the
+ASCII run at 6.
