@@ -382,8 +382,11 @@ impl PcieLinkCaps {
             | ((self.max_width & MAX_WIDTH_MASK) << MAX_WIDTH_SHIFT)
     }
 
-    /// Unpack a word — the inverse of [`Self::encode`], and how a measured reading is
-    /// checked against the field layout.
+    /// Unpack a word — the inverse of [`Self::encode`], and how the one reading this
+    /// project holds is checked against the field layout: `[measured 2026-08-08, real GA106,
+    /// driver 580.159.04]` `0x00454d03`, committed as
+    /// `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt` index `0x03` and
+    /// asserted by `the_measured_link_caps_word_decodes_to_the_parts_real_link` below.
     ///
     /// `None` when `MAX_SPEED` is not one of the six encodings the header defines, which is
     /// precisely the condition `calculatePCIELinkRateMBps` refuses. ★ So a `None` here and
@@ -762,8 +765,10 @@ mod tests {
     /// `MAX_SPEED` is `Gen3`, the *slot's* ceiling, on a `Gen4` die.
     const MEASURED_GPU_LINK_CAPS: u32 = 0x0045_4d03;
 
-    /// ★★★ The layout, checked against real silicon: the one measured word must decode to
-    /// the two things `nvidia-smi` and the part's own datasheet say — 8 GT/s over 16 lanes.
+    /// ★★★ The layout, checked against real silicon: [`MEASURED_GPU_LINK_CAPS`]
+    /// (`[measured 2026-08-08, real GA106, driver 580.159.04]`, committed as
+    /// `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt`) must decode to the two
+    /// things `nvidia-smi` on that same box reported — 8 GT/s over 16 lanes.
     ///
     /// This is what makes the shifts a fact rather than a transcription. A one-bit error in
     /// `MAX_WIDTH_SHIFT` still decodes *plausibly* (`two_encodings_agreeing_on_the_first_values`

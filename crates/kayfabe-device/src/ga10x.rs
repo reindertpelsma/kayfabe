@@ -534,7 +534,9 @@ const XVE_LINK_CAPABILITIES: u64 = 0x0008_8084;
 const GA106_PCIE_MAX_GEN: kayfabe_abi::businfo::PcieGen = kayfabe_abi::businfo::PcieGen::Gen4;
 
 /// The value served at [`XVE_LINK_CAPABILITIES`], derived from [`GA106_PCIE_MAX_GEN`] —
-/// ⊘ never transcribed from a measured word. See
+/// ⊘ never transcribed from the one word this project has read off a real part
+/// (`[measured 2026-08-08]` `0x00454d03`,
+/// `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt`). See
 /// [`kayfabe_abi::businfo::PcieLinkCaps::fully_trained`] for why the real part's
 /// `0x00454d03` is the wrong thing to copy.
 const XVE_LINK_CAPABILITIES_GA106: u32 =

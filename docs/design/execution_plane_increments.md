@@ -6460,3 +6460,201 @@ produced at a completely different layer (`cudaErrorInitializationError`). ⊘ D
 as the same finding. What is `[measured]` is positional: the trace grew from 89 lines at
 `d24ad77` to 96 at `20126b5`, and rows 81-87 moved from *"our teardown"* to *"matches hardware"*.
 That is the sound progress claim; the error code is not evidence of anything on its own.
+
+### 14.40 ★★★★ THE WALL WAS ONE REGISTER — `BAR0 + 0x88084`, and it is not on any plane this port was watching (`[measured 2026-08-09, boots us1445/lc1446 @ 69f8817, pu1448 @ ef20ccc]`)
+
+#### ⊘⊘ First, the three things REFUTED — including the whole of this rung's brief
+
+The brief said: `cuInit`'s isolated dmesg names three classes we refuse, so serve them and boot.
+**All three refusals are correct and none of them is the wall.**
+
+| class | who allocates it | proof, and it is a HANDLE, not an inference |
+|---|---|---|
+| `0x0070` `NV01_MEMORY_VIRTUAL` | the RC watchdog | `hParent=0x31415903` = `WATCHDOG_DEVICE_ID` (`ogkm-580: kernel_rc_watchdog.c:63,65` — `WATCHDOG_PUSHBUFFER_CHANNEL_ID 0x31415900` + 3); the alloc site is `:669-672` |
+| `0xc36f` `VOLTA_CHANNEL_GPFIFO_A` | the RC watchdog | same `hParent`; alloc site `:1013-1017` |
+| `0x402c` `NV40_I2C` | `RmInitAdapter`'s own client | `hParent=0xcaf00001` is an RM-server unique handle (`rs_client.h:37 RS_UNIQUE_HANDLE_BASE 0xcaf00000`) ⇒ `osinit.c:1767`, whose own comment says *"expected to fail"* |
+
+★★ **`0xc36f` is a FINGERPRINT, not a class choice.** The watchdog's `gpfifoMapping[]` breaks on the
+**first** supported entry in Kepler→Blackwell order (`kernel_rc_watchdog.c:619-651`); GA106's class
+list carries VOLTA, TURING **and** AMPERE GPFIFO (`g_gpu_class_list.c:1108-1171`), so it picks
+**VOLTA**. Every other consumer takes `NV_MAX` (`nv_gpu_ops.c:8679-8690`) and gets `0xc56f`, which
+this port already serves. ⇒ on a GA106 a `0xc36f` alloc can only be the watchdog's.
+
+⊘ **UVM allocates neither.** `NV01_MEMORY_VIRTUAL` has exactly three RM callers
+(`kernel_rc_watchdog.c:673`, `rmapi_deprecated_misc.c:115`, nvkms) and appears **nowhere** in
+`nv_gpu_ops.c`, which uses `NV50_MEMORY_VIRTUAL`. So `uvm_channel_manager_create` being on
+`cuInit`'s path — which §14.39 established and which is true — does **not** implicate these classes.
+
+★★★ **And the refusals are LOAD-BEARING in the forgiven direction.** `krcWatchdogInit` failing
+aborts `RmInitAdapter` (`RM_INIT_WATCHDOG_FAILED`, `goto shutdown`) for every status **except**
+`NV_ERR_NOT_SUPPORTED`, which `osinit.c:2167-2172` logs at `LEVEL_INFO` and forgives. Our `0x56` is
+the only reason the device opens at all. ⇒ the question was never *"serve or refuse"*; it was
+*"refuse with WHICH status"*, and that was already right. `not_supported_is_the_forgiven_status`
+again, from the other side.
+
+#### ★★★ The measurement that relocated everything: `params.rmStatus` (`[measured 2026-08-09, boot us1445, rev 69f8817]`, evidence `docs/reference/bench_evidence/uvm-rmstatus-us1445-69f8817.log`)
+
+`UVM_REGISTER_GPU` returns **0** at the syscall boundary and carries its verdict in
+`params.rmStatus` (`ogkm-580: uvm_ioctl.h:534-543`). `strace` prints `= 0`; UVM prints **nothing**
+to `dmesg` on this path (`grep -ai uvm` ⇒ *no line*). Two instruments, both silent, both by design.
+
+`scripts/bench/uvm_ioctl_trace.c` (new — an `LD_PRELOAD` that reads the struct after the call)
+on boot **`us1445` @ `69f8817`**:
+
+    ★ UVM_REGISTER_GPU rmStatus = 0x00000040   <- NV_ERR_INVALID_STATE
+      IN: rmCtrlFd = -1, hClient = 0, hSmcPartRef = 0   (the non-SMC path)
+
+⚠ Every ioctl instrument this project owns gates on `_IOC_TYPE == 'F'` and UVM's magic is **0**
+(`scripts/rpctrace/cuda_ioctl_trace.c:493`). The plane holding the answer was filtered out of every
+trace on disk. Evidence: `docs/reference/bench_evidence/uvm-rmstatus-us1445-69f8817.log`.
+
+#### The chain, every link from `ogkm-580`, with no branch left in it
+
+    UVM_REGISTER_GPU.rmStatus = 0x40
+      <- nvGpuOpsGetGpuInfo            nv_gpu_ops.c:7220   (returns the first failure)
+      <- getPCIELinkRateMBps           nv_gpu_ops.c:2118   [BOTH its prints are in that dmesg]
+      <- calculatePCIELinkRateMBps     nv_gpu_ops.c:2077-2079  default arm, "Unknown PCIe speed":
+         MAX_SPEED (3:0) was not one of the six legal encodings (ctrl2080bus.h:357-363)
+      <- NV2080_CTRL_BUS_INFO_INDEX_PCIE_GPU_LINK_CAPS (0x03)
+      <- ⊘ NOT an RPC. getBusInfos's bSendRpc switch (kern_bus_ctrl.c:296-330) forwards THIRTEEN
+         indices and 0x03 is not one of them; the guest answers it itself at kernel_bif.c:1072
+      <- kbifGetGpuLinkCapabilities    kernel_bif.c:879-903
+      <- GPU_BUS_CFG_RD32(NV_XVE_LINK_CAPABILITIES)
+      <- GPU_REG_RD32(DEVICE_BASE(NV_PCFG) + 0x84) = **BAR0 + 0x88084**  kern_gpu_gm107.c:176-190
+
+⊘ The early-out `gpuGetBusIntfType != PCI_EXPRESS` cannot fire: on a discrete GA106 that HAL is the
+compile-time constant `3` (`g_gpu_nvoc.h:4633`, dispatch `g_gpu_nvoc.c:1112-1126`).
+
+Boot **`lc1446` @ `69f8817`** read the word from inside the guest through `resource0`
+(`scripts/bench/guest_linkcap_probe.sh`, evidence `linkcap-before-lc1446-69f8817.log`):
+
+    BAR0+0x88084 = 0x00000000   MAX_SPEED(3:0) = 0  ★ ILLEGAL
+    BAR0+0x88000 = 0x00000000   NV_XVE_ID — the WHOLE NV_PCFG window is unclaimed
+    setpci CAP_EXP: "no capabilities with that id"
+
+★ The last line is worth keeping: this device presents **no PCI Express capability at all**, and it
+does not matter — RM never reads configuration space for this. ⊘ A fix applied there would have
+changed nothing and would have looked plausible.
+
+#### ⊘⊘ CORRECTED IN PLACE: `businfo.rs` said "or from its own config space"
+
+That module's own docs described `0x03` as *"answered from the guest's own kernel state **or from
+its own config space**"*. The second half is false, and it is **why nobody looked**: it made `0x03`
+read as a plane QEMU already emulates. ★ A comment naming the plane a value comes from is a
+**claim**, and this one was never checked against the macro it was describing.
+
+#### The fix: one `BootReg`, DERIVED, and the trap it created
+
+`ga10x.rs`: `XVE_LINK_CAPABILITIES = 0x0008_8084`, value
+`PcieLinkCaps::fully_trained(GA106_PCIE_MAX_GEN).encode()`.
+
+⊘ **Not the measured word.** A real GA106 answers `0x00454d03`, whose `MAX_SPEED` is `3` = 8 GT/s —
+one generation *below* the `gen4` die, because an NVIDIA endpoint advertises what it trained to in
+the slot it is in. Transcribing it would be `0x20802a08` again. The committed oracle
+(`traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt`) is used as an oracle **for the
+field layout** and nothing else.
+
+★ `GA106_PCIE_MAX_GEN` is now stated **once** and consumed by both planes — the chip row's
+`pcie_max_gen` and this register — because two independent statements of one die's generation are
+two statements free to disagree.
+
+⚠⚠ **One word, two encodings of "which PCIe generation", off by one.** `GEN`/`CURR_LEVEL`/`GPU_GEN`
+are zero-based (`GEN1 == 0`); `MAX_SPEED` is one-based (`_2500MBPS == 1`). Reaching for
+`PcieGen::field()` when filling `MAX_SPEED` sends `Gen4` out as `3` — a **legal** value, so nothing
+refuses it and the link is understated forever — and sends `Gen1` out as **0**, the exact value that
+stopped `cuInit`. Hence `PcieGen::max_speed_field()` as a separate method, and
+`every_generation_encodes_to_a_speed_calculate_pcie_link_rate_accepts` asserting against the six
+legal encodings **by name**.
+
+#### ★★★★ BOOTED — the wall moved, and its successor is NAMED
+
+Boot **`pu1448` @ `ef20ccc`**, identical harness and hook to `us1445` (evidence
+`uvm-rmstatus-pu1448-ef20ccc.log`):
+
+    BAR0+0x88084 = 0x00000104   MAX_SPEED = 4 (16 GT/s)  MAX_WIDTH = 16   [pc1447]
+    ★ UVM_REGISTER_GPU rmStatus = 0x00000056     (was 0x00000040)
+
+and one line appears in `cuInit`'s dmesg that was **not there before**:
+
+    NVRM: faultbufConstruct_IMPL: Failed to setup Replayable Fault buffer (status=0x00000056).
+
+with exactly one new id in the unserviced ledger: **`0x20800a9b`
+`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`** (`ogkm-580: ctrl2080internal.h:1810`).
+`faultbufConstruct_IMPL` (`mmu_fault_buffer.c:34-70`) calls
+`kgmmuFaultBufferReplayableAllocate`, which is what issues it.
+
+⇒ **The next rung is `0x20800a9b`**, and unlike this one it *is* visible in the ledger. UVM's
+replayable fault buffer is the same machinery `MMU_FAULT_QUEUED (0x1005)` is listed against in the
+alloc/RPC map's §5 — the GSP→guest event direction, which that map already named as the genuinely
+unmapped territory.
+
+#### ⊘ What this does NOT license
+
+- **Not** that `cuInit` is close. `0x56` is one step further than `0x40`, and that is all.
+- **Not** that the completion plane moved. `scrubberDestruct: Timed out` /
+  `ce_utils.c:349 lastCompletedPayload != lastSubmittedPayload` and
+  `first doorbell refusal [FwdFault::NoVas] NoVas(ChanId(3))` are unchanged, on a build whose
+  isolates still report `no-plane`. A different failure, untouched by this.
+
+##### ⊘⊘ CORRECTED — and it removes a whole line of enquiry rather than opening one
+
+`§14.39` filed the `NoVas` doorbell beside the `cuInit` failure and this section first repeated
+that framing as *"the completion plane"*. Both readings are **wrong about whose channel it is**,
+and the correction is decisive:
+
+- **`ChanId(3)` is not UVM's channel.** The discriminator we print is `c=0xc1e00010`, and
+  `0xC1E00000` is `RS_CLIENT_INTERNAL_HANDLE_BASE` (`ogkm-580: resserv.h:135,138`;
+  `serverIsClientInternal`, `rs_server.c:2624`) — an **internal** client, reachable only under
+  `RMAPI_GPU_LOCK_INTERNAL`, which `ceutilsConstruct_IMPL` takes (`ce_utils.c:188`). UVM's module
+  uses `RMAPI_EXTERNAL_KERNEL` and lands on the `0xC1D0…` base. ⇒ it is **RM's own CE-scrubber**.
+- ⚠ **`ChanId` could not have told you that.** It is a per-`Proc` mint counter
+  (`gpu.rs:2386-2391`) — not the chid, not stable across boots. `hClient` is the only
+  discriminator in that line that means anything, and reading `ChanId(3)` as an identity is the
+  `two_encodings_agreeing_on_the_first_values` shape with a counter instead of an enum.
+- **`scrubberDestruct` is TEARDOWN.** It fires ~4 s and ~8 s *after* the last real error, on the
+  unwind path (`memmgrPreSchedulingDisableHandler` → … → `scrubberDestruct`), a destruct handler
+  with no init-path caller — and at the *same relative position* in `us1445` and `pu1448`.
+  ⊘ **Not on `cuInit`'s critical path**, in either boot.
+
+⊘⊘ **And do NOT "fix" `NoVas` by binding a VA space.** `isolate refusal [no-plane]` is
+`StillbornIsolates` — a **deployment** fact (the default when `KAYFABE_ISOLATES` is unset,
+`shim.rs:3111-3114`), meaning nothing was even attempted — and it **dominates**: with a `Vas`
+bound, `plan_doorbell` would reach a zero-width retired isolate and still execute nothing, while
+the doorbell reported **Served**. ★ That is §14.8's measured lesson exactly: granting a channel a
+VAS before an executor exists converts a *correct refusal* into a false success. The fix is the
+executor (E5 + a real isolate plane), which is an increment, not an edit.
+
+##### ★ Two instrument repairs this rung paid for on the way past
+
+1. **`shim.rs`'s doorbell probe collapsed two different facts into one string.** `vas=none
+   ring=none` was printed whenever *either* was absent, so it read as *"the channel declared
+   neither"* — a claim. `[measured 2026-08-09, boots us1445 @ 69f8817 and pu1448 @ ef20ccc,
+   evidence docs/reference/bench_evidence/uvm-rmstatus-{us1445-69f8817,pu1448-ef20ccc}.log]` both
+   boots print the identical `c=0xc1e00010 vas=none ring=none` for the refused doorbell; the
+   **source** then says which half was missing, and that half is the VA space, because
+   `AllocParams::Channel` sets `gp_fifo_ring: Some(..)` unconditionally
+   (`kayfabe-rmrpc/src/lib.rs:1269-1272`) while `h_vaspace` goes through `declared_handle` — so on
+   that path the two cannot be absent together. ⚠ Note the split honestly: the *string* is
+   measured, the *attribution of which half* is a reading, and it is only because the two were
+   conflated in one word that a reading was needed at all. It now names each half separately. ⚠ The old string cost an auditor three
+   source files to disambiguate — a diagnostic that conflates two facts sends its reader elsewhere.
+2. **The CE wall's arming state is one INFO line and nobody was reading it.**
+   `Initializing global CeUtils instance` vs `Skipping global CeUtils creation` decides whether
+   `memmgrTestCeUtils`'s `memmgrMemSet(.. PREFER_CE)` (`ogkm-580: mem_mgr.c:463`) runs at all —
+   and that memset is where boots `stock_c89899a` / `p35_84d857d` died. `guest_uvm_status.sh` now
+   greps for it every boot. ⊘ A boot showing `Skipping` has the CE wall **dormant** and cannot be
+   cited as evidence the CE path works: the absence of the failure is the absence of the attempt.
+
+##### ⚠ Process, recorded because it nearly cost this adjudication
+
+`§14.39`'s commit message pastes RM's `rpcRmApiAlloc_GSP` output with the `hObject=` /
+`paramsSize=` fields **stripped** and `->` annotation lines interleaved. Ordering cannot be read
+off it, and the handles that settle *whose* allocations they are — `hObject=0x3141590f`
+`WATCHDOG_VIRTUAL_CTX_ID`, `hObject=0x31415900` `WATCHDOG_PUSHBUFFER_CHANNEL_ID` — are exactly what
+was removed. ⇒ **paste evidence verbatim or mark the edit.** The raw logs persisted beside it are
+what made the adjudication possible, which is the argument for persisting them.
+- ⚠ **A harness note, measured here**: boot `pc1447` ran a second device-opening probe before
+  `cup2` and `cup2`'s `RmInitAdapter` then died on `WPR2 already up` / `Bad sequence number.
+  Expected 0 got 190`, giving `cuInit → 999`. That is the stale-queue chain, not a regression:
+  the emulated GSP's WPR2 only resets on a full QEMU restart. ⇒ **one device-opening consumer per
+  boot**, and `pu1448` is the A/B that matters because its hook is byte-identical to `us1445`'s.

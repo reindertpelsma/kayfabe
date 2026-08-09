@@ -2182,8 +2182,30 @@ impl SharedDoorbell {
         // ⊘ A channel that named no VA space has no address space to resolve in, and a
         // channel that declared no ring has no address to resolve. Neither is a walk we may
         // invent an argument for.
-        let (Some(vaspace), Some(ring_va)) = (facts.vaspace, facts.ring_va) else {
-            return format!(" | c=0x{:x} vas=none ring=none", facts.client);
+        //
+        // ★★ REPORT THEM SEPARATELY. This used to collapse both misses into the one string
+        // `vas=none ring=none`, which reads as *"the channel declared neither"* — and that
+        // is a claim, not an observation. `[measured 2026-08-09, boots us1445/pu1448]` the
+        // refused doorbell had a ring and no VA space: `AllocParams::Channel` sets
+        // `gp_fifo_ring: Some(..)` unconditionally (`kayfabe-rmrpc/src/lib.rs:1269-1272`)
+        // while `h_vaspace` goes through `declared_handle`, so the two are not even capable
+        // of being absent together on that path. ⇒ an auditor reading the old string had to
+        // open three source files to work out which half was missing. A diagnostic that
+        // conflates two different facts is a diagnostic that sends its reader somewhere else.
+        let (vaspace, ring_va) = match (facts.vaspace, facts.ring_va) {
+            (Some(v), Some(r)) => (v, r),
+            (None, Some(r)) => {
+                return format!(" | c=0x{:x} vas=NONE-DECLARED ring=0x{r:x}", facts.client);
+            }
+            (Some(v), None) => {
+                return format!(" | c=0x{:x} vas=0x{v:x} ring=NONE-DECLARED", facts.client);
+            }
+            (None, None) => {
+                return format!(
+                    " | c=0x{:x} vas=NONE-DECLARED ring=NONE-DECLARED",
+                    facts.client
+                );
+            }
         };
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell;
         let root = plane.published_root(facts.client, vaspace);

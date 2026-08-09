@@ -42,5 +42,16 @@ $G 'sudo dmesg'
 echo "=== anything UVM printed for itself (UVM_ERR_PRINT lands here) ==="
 $G 'sudo dmesg | grep -ai "uvm" || echo "NO UVM LINE IN dmesg"'
 
+# ★★ The cheapest early warning in the whole log, and it is ONE INFO line.
+# `memmgrInitInternalChannels` either creates the global `CeUtils` instance or skips it, and
+# which of the two it did decides whether `memmgrTestCeUtils`'s `memmgrMemSet(.. PREFER_CE)`
+# (`ogkm-580: mem_mgr.c:463`) runs at all. That memset is exactly where boots
+# `stock_c89899a` and `p35_84d857d` died. ⊘ So a boot that shows `Skipping` has the CE wall
+# DORMANT and cannot be cited as evidence that the CE path works — the absence of the failure
+# is the absence of the attempt.
+echo "=== ★★ is the CE wall ARMED or DORMANT? (one line decides it) ==="
+$G 'sudo dmesg | grep -aiE "Initializing global CeUtils instance|Skipping global CeUtils creation" \
+      || echo "NEITHER LINE PRESENT — the CeUtils decision was not printed at this loglevel"'
+
 echo "=== nvidia-uvm module state ==="
 $G 'lsmod | grep -i uvm; ls -la /dev/nvidia-uvm*'
