@@ -1454,8 +1454,18 @@ impl SharedDevice {
                     // handle zero are the same wire byte but different facts, and only the
                     // first is what `Channel::vas_pdb == None` means.
                     vaspace: vas_node.map(|v| v.key.handle.0),
+                    // ★★★★ §16.16 — the DECLARED handle, read straight off this channel's
+                    // own alloc facts. ⊘ Deliberately NOT resolved through the graph and
+                    // NOT reconciled with `vaspace` above: the whole point is that it is
+                    // the other projection, and a value passed through the same resolver
+                    // would be the same projection twice. See
+                    // `CeChannelFacts::vaspace_declared`.
+                    vaspace_declared: node.facts.h_vaspace.map(|h| h.0),
                     ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
                     ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
+                    // ★ Off the SAME node the ring came from, so the two declarations can
+                    // never be attributed to different channels.
+                    userd: node.facts.userd,
                     vas_pdb: chan.vas_pdb,
                     // ★ Off the SAME proc the channel was routed in, so a bind recorded for
                     // another proc's slot of the same index can never be read as this
@@ -2223,6 +2233,31 @@ pub struct CeChannelFacts {
     /// path. It is now the resolved one, so the two cannot disagree: both come from
     /// `Channel::vas_origin`.
     pub vaspace: Option<u32>,
+    /// ★★★★ **§16.16 — the handle the CHANNEL ITSELF DECLARED**, verbatim off its alloc
+    /// params (`AllocFacts::h_vaspace`), printed **beside** the resolved
+    /// [`CeChannelFacts::vaspace`] and never instead of it.
+    ///
+    /// # ⊘ Why both, when the doc above explains that the declared one LOST the UVM channel
+    ///
+    /// Both statements are true and they are about different jobs. On the **load-bearing**
+    /// path the resolved handle is the right one, for exactly the reason that doc gives: a
+    /// UVM channel declares no `hVASpace` of its own and inheriting it is what makes the
+    /// ring readable at all. ⊘ Nothing here changes that — this field feeds **no**
+    /// decision, only the report.
+    ///
+    /// ★ Its job is the **audit**. `vaspace` is *derived* — inherited through CtxShare or
+    /// the parent TSG by `project::resolve_channel_vas` — and a derivation cannot be
+    /// checked by printing its own output. `[measured 2026-08-09, boot `msr2_319d29a`]`
+    /// this very attribution was already wrong once on this very channel, in the other
+    /// direction. So the two projections are printed **side by side** and a reader compares
+    /// them, which is the property that has kept this campaign honest; and the interesting
+    /// case is not disagreement but `dec=NONE-DECLARED` with `vas=Some`, which says in one
+    /// glance that **every byte of the walk rests on an inheritance we chose**, not on
+    /// anything the guest wrote down.
+    ///
+    /// ⊘ `None` (or a declared handle of zero) is carried as `None`, never folded — same
+    /// argument as [`CeChannelFacts::vaspace`]'s.
+    pub vaspace_declared: Option<u32>,
     /// `gpFifoOffset` — a **GPU VIRTUAL** address (`ogkm-580: ctrl2080fifo.h:809`).
     /// `None` = the channel's alloc params declared no ring at all, which is different
     /// from `Some(0)` (a ring the driver deliberately declares at zero for its golden-context
@@ -2230,6 +2265,17 @@ pub struct CeChannelFacts {
     pub ring_va: Option<u64>,
     /// `gpFifoEntries` that came with [`Self::ring_va`], or `0`.
     pub ring_entries: u32,
+    /// ★★★★ **§16.16 — the channel's declared USERD**, `hUserdMemory[0]` and
+    /// `userdOffset[0]`, verbatim off the same alloc params [`Self::ring_va`] comes from.
+    ///
+    /// ⊘ `None` = *this port could not read the field* (an unpinned driver boundary, or
+    /// params that stopped short), **never** *"the channel declared none"* — a declared
+    /// handle of zero arrives as `Some` with `handle == 0`. See
+    /// [`kayfabe_core::rmgraph::DeclaredUserd`] for why zero is a declaration, and
+    /// `kayfabe_abi::notifier::ChannelUserdWire` for why USERD is the canary the ring
+    /// cannot be: it comes from the same params but has **recognisable** content, so its
+    /// null discriminates where the ring's does not.
+    pub userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
     /// The channel's bound page-directory base, if the port has one. `None` is the
     /// `FwdFault::NoVas` state.
     pub vas_pdb: Option<Pdb>,

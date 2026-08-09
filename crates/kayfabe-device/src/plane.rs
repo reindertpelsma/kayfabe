@@ -145,7 +145,7 @@ use kayfabe_trace::Faulted;
 use crate::bar2::{BarPdeLog, BarPdes};
 use crate::cpuintr::CpuIntrTree;
 use crate::doorbell::{DoorbellPort, DoorbellRefused, DoorbellReport, RefusingDoorbell};
-use crate::fbwin::{Bar0Window, FbRefused, FbStore, RefusingFb};
+use crate::fbwin::{Bar0Window, FbRefused, FbStore, FbWriter, RefusingFb};
 use crate::gvaspub::{GvasPubLog, GvasPubSnapshot};
 use crate::{ChipError, ChipProfile, FbWindow};
 
@@ -1537,6 +1537,23 @@ impl RegPlane {
         s.fb.is_resident(phys)
     }
 
+    /// ★★★★ **Every resident framebuffer frame, ascending** — [`None`] when the store
+    /// cannot enumerate. See [`crate::fbwin::FbStore::resident_frames`] for why the
+    /// converse of `is_resident` is now the question, and why it is a **forward** search.
+    #[must_use]
+    pub fn fb_resident_frames(&self) -> Option<Vec<u64>> {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.resident_frames()
+    }
+
+    /// ★★★★ **Who wrote this framebuffer page FIRST, and when** — [`None`] when the store
+    /// cannot say **or** nothing is resident there. See [`crate::fbwin::FbWriter`].
+    #[must_use]
+    pub fn fb_page_origin(&self, phys: u64) -> Option<crate::fbwin::FbPageOrigin> {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.page_origin(phys)
+    }
+
     /// ★★★ **Read RAW framebuffer bytes at a framebuffer-physical address** — no walk, no
     /// translation, no [`crate::ceresolve::Demand`], and **strictly an observation**.
     ///
@@ -2268,7 +2285,22 @@ impl RegPlane {
         }
         let n = usize::from(size.clamp(1, 8));
         let bytes = val.to_le_bytes();
-        let outcome = match s.fb.write(phys, &bytes[..n]) {
+        // ★★★★ §16.16 — THE TAG IS PASSED, and until this line it was not.
+        //
+        // `[measured 2026-08-09, tree `e394b69`]` §16.15 built `write_tagged`, `FbWriter`,
+        // `FbPageOrigin` and `FbResidency::by_writer` and then wired **none** of them: a
+        // repo-wide search for `write_tagged` returned its own definition and its own
+        // default impl, and nothing else — no production caller, no test caller, no report
+        // field. Every framebuffer write in the tree went through `FbStore::write`, whose
+        // default records `FbWriter::Unattributed`. ⊘ Booting that tree would have produced
+        // a census reading **100 % UNATTRIBUTED**, which by the instrument's own definition
+        // means *"we did not instrument that path"* — a non-finding dressed as a
+        // measurement. This is the `a_declared_capability_reachable_from_nowhere` shape.
+        //
+        // ★ `w` is the window the ADDRESS MODEL already resolved for this very access —
+        // taken from the same `match` that produced `phys`, never recomputed. A second
+        // derivation of the window would be a second projection auditing the first.
+        let outcome = match s.fb.write_tagged(phys, &bytes[..n], FbWriter::Window(w)) {
             Ok(()) => {
                 self.c.fb_writes.fetch_add(1, Ordering::Relaxed);
                 WriteOutcome {

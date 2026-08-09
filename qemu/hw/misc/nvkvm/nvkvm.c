@@ -49,6 +49,9 @@
 #include "qemu/range.h"
 #include "qemu/units.h"
 #include "qom/object.h"
+/* ★ §16.16 — `get_system_memory()`, for the trap-status table. QEMU 10.2 moved this header
+ * from `exec/` to `system/`; the bench tree carries only the `system/` spelling. */
+#include "system/address-spaces.h"
 #include "system/system.h"
 
 #include "kayfabe_shim.h"
@@ -1337,6 +1340,11 @@ static void nvkvm_config_write(PCIDevice *pci, uint32_t addr, uint32_t val, int 
 static void nvkvm_report_registers(NvkvmState *s)
 {
     KayfabeRegAudit a;
+    /* ★ §16.16's trap-status table needs this device's own PCI bookkeeping and a loop
+     * index. Declared here because this file is built with QEMU's C dialect settings and
+     * the rest of the function already declares at the top. */
+    PCIDevice *pci = PCI_DEVICE(s);
+    unsigned i;
 
     /*
      * ★★ `unclaimed_reads` is the number to read.
@@ -1482,6 +1490,126 @@ static void nvkvm_report_registers(NvkvmState *s)
                     ((a.fb_resident_hi - a.fb_resident_lo) / 4096u) + 1u,
                     (((a.fb_resident_hi - a.fb_resident_lo) / 4096u) + 1u) == a.fb_resident_pages
                         ? "CONTIGUOUS" : "SPARSE");
+    }
+
+    /*
+     * ★★★★ §16.16 — WHO CREATED THOSE PAGES, and WHETHER A RING IS ANYWHERE AMONG THEM.
+     *
+     * Both blocks hang off the same precondition as the extent above, for the same reason:
+     * an archive that never wrote this struct leaves all zeros, and zero must be the honest
+     * non-claim rather than "no page has an origin" / "no ring-like page exists".
+     */
+    if (a.fb_resident_valid) {
+        /*
+         * ⊘ READ THE UNATTRIBUTED SLOT BEFORE THE OTHER FOUR.  MEASURED at tree e394b69:
+         * the whole tagging mechanism existed and NOTHING CALLED IT — a repo-wide search
+         * for `write_tagged` returned its own definition and its own default impl and
+         * nothing else — so every framebuffer write recorded UNATTRIBUTED.  Booting that
+         * tree would have printed a census reading 100% UNATTRIBUTED, which by the
+         * instrument's own definition means "we did not instrument that path": a
+         * non-finding wearing the shape of a measurement.  The arm below SAYS SO when the
+         * slot dominates, so the next reader cannot mistake it for a fact about the guest.
+         */
+        info_report("nvkvm:   framebuffer FIRST-WRITER census: PRAMIN %" PRIu64
+                    " / BAR1 %" PRIu64 " / BAR2 %" PRIu64 " / EXEC %" PRIu64
+                    " / UNATTRIBUTED %" PRIu64 " page(s) — FIRST writer, not last, so this "
+                    "attributes CREATION and not traffic.",
+                    a.fb_origin_by_writer[0], a.fb_origin_by_writer[1],
+                    a.fb_origin_by_writer[2], a.fb_origin_by_writer[3],
+                    a.fb_origin_by_writer[4]);
+        if (a.fb_resident_pages != 0 &&
+            a.fb_origin_by_writer[4] * 2u >= a.fb_resident_pages) {
+            warn_report("nvkvm:   ⊘ MOST RESIDENT PAGES ARE UNATTRIBUTED — this is a "
+                        "statement about THIS PORT, not about the guest: some framebuffer "
+                        "write path is not passing a writer tag. Do not cite the other four "
+                        "counts as a census of where the guest's bytes came from until it "
+                        "is.");
+        }
+
+        /*
+         * ★★★★ THE FORWARD SEARCH.  ⊘ It concludes nothing; the two arms below are worded
+         * so that neither reads as a verdict about the guest on its own.  Its whole value
+         * is that it is INDEPENDENT of the page-table descent: the descent's answer and
+         * this one were produced by disjoint code over the same bytes, so they can
+         * genuinely disagree — which is exactly what a second projection of one computation
+         * can never do.
+         */
+        if (a.fb_sweep_ringlike == 0) {
+            info_report("nvkvm:   GPFIFO forward search: swept %" PRIu64 " of %" PRIu64
+                        " resident page(s), and NO page carries GPFIFO-entry-shaped bytes. "
+                        "⊘ This says the ring's bytes are not in THIS store — it does not "
+                        "say the guest never wrote them.",
+                        a.fb_sweep_swept, a.fb_resident_pages);
+        } else {
+            static const char *const writers[6] = {
+                "NO-ORIGIN-RECORDED", "PRAMIN", "BAR1", "BAR2", "EXEC", "UNATTRIBUTED"
+            };
+            uint64_t w = a.fb_sweep_best_writer_plus1;
+
+            info_report("nvkvm:   GPFIFO forward search: swept %" PRIu64 " of %" PRIu64
+                        " resident page(s); %" PRIu64 " carry GPFIFO-entry-shaped bytes. "
+                        "★ BEST 0x%" PRIx64 " with %" PRIu64 " shaped entries, created by "
+                        "%s. ⊘ Compare that ADDRESS with the leaf the doorbell probe's walk "
+                        "reported: if they differ, the write was caught and the DESCENT is "
+                        "aimed at the wrong table.",
+                        a.fb_sweep_swept, a.fb_resident_pages, a.fb_sweep_ringlike,
+                        a.fb_sweep_best, a.fb_sweep_best_score,
+                        writers[w < 6 ? w : 0]);
+        }
+    }
+
+    /*
+     * ★★★★ §16.16 — THE TRAP-STATUS TABLE.  The owner's hypothesis, and it is the one
+     * question `docs/design/ring_write_path_map.md` is STRUCTURALLY BLIND TO: that document
+     * enumerated five stores we write INTO and concluded "every reachable write path lands
+     * in the store the walker reads", which quantifies only over paths WE IMPLEMENT.  A
+     * guest write that never reaches this device at all — because the range is served by a
+     * directly-mapped slot rather than trapped — produces EXACTLY the observation we have
+     * (a never-written page) while the guest writes happily at full speed.
+     *
+     * ⊘ So this asks the hypervisor, not ourselves: for each of this device's regions, is
+     * the memory region actually installed at that guest-physical base OUR region, and is
+     * it RAM (served directly, invisible to us) or IO (trapped, so every access is ours)?
+     * memory_region_find walks the live address space, so a foreign region overlaying ours
+     * — the shape that would hide the writes — shows up as a NAME THAT IS NOT OURS.
+     *
+     * ⚠ Printed for every row including the ones we are confident about, because the value
+     * of the table is the DIFFERENTIAL between rows: BAR1 answering "io" and BAR2 answering
+     * "io" while some row answers "ram" is the finding, and a table that omitted the
+     * boring rows could not show it.
+     */
+    for (i = 0; i < NVKVM_N_REGIONS; i++) {
+        const NvkvmRegionSpec *row = &nvkvm_regions[i];
+        pcibus_t base = pci->io_regions[row->pci_bar].addr;
+        MemoryRegionSection sec;
+
+        if (base == PCI_BAR_UNMAPPED) {
+            info_report("nvkvm:   trap-status %s: UNMAPPED — the guest never assigned this "
+                        "base-address register, so nothing can have been written through it.",
+                        row->name);
+            continue;
+        }
+        sec = memory_region_find(get_system_memory(), (hwaddr)base, 1);
+        if (!sec.mr) {
+            info_report("nvkvm:   trap-status %s: base 0x%" PRIx64 " resolves to NO REGION "
+                        "— ⚠ the guest assigned a base this address space does not serve.",
+                        row->name, (uint64_t)base);
+            continue;
+        }
+        info_report("nvkvm:   trap-status %s: base 0x%" PRIx64 " -> region '%s' %s, %s. %s",
+                    row->name, (uint64_t)base,
+                    memory_region_name(sec.mr),
+                    sec.mr == &s->mr[i] ? "(OURS)" : "⚠ (NOT OURS — it overlays this BAR)",
+                    memory_region_is_ram(sec.mr) ? "RAM — served DIRECTLY, every guest access "
+                                                   "to it is INVISIBLE to this device"
+                                                 : "IO — TRAPPED, every guest access reaches "
+                                                   "this device",
+                    memory_region_is_ram(sec.mr)
+                        ? "⊘ A never-written page behind a RAM row proves nothing about the "
+                          "guest: we would not have seen the write."
+                        : "⇒ a never-written page behind this row IS a statement about the "
+                          "guest, because we would have seen the write.");
+        memory_region_unref(sec.mr);
     }
 
     /*

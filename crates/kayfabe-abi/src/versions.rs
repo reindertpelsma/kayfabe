@@ -35,7 +35,7 @@ use crate::capability::{
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::guestsysinfo::VgxVersion;
-use crate::notifier::ChannelNotifierWire;
+use crate::notifier::{ChannelNotifierWire, ChannelUserdWire};
 use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
 use crate::vbios::VbiosWire;
 use crate::view::{
@@ -313,6 +313,13 @@ pub struct DriverAbiTable {
     /// direction, because an RC with no notifier write is the hang task #111 exists to
     /// remove (`docs/design/resume_from_fault.md` §S5(b)).
     channel_notifier: Option<ChannelNotifierWire>,
+    /// ★★★★ §16.16 — where this boundary's `NV_CHANNEL_ALLOC_PARAMS` puts
+    /// `hUserdMemory[0]` and `userdOffset[0]`. Same seam and same rule as
+    /// [`Self::channel_notifier`]: both fields sit past [`CHANNEL_ALLOC_PREFIX`] in the
+    /// region 610 shifts by eight bytes, so reading them is a right a *read* tree buys and
+    /// an unopened boundary carries `None` rather than a guess. See
+    /// [`ChannelUserdWire`] for why USERD is the canary the ring cannot be.
+    channel_userd: Option<ChannelUserdWire>,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -338,6 +345,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         vgx: None,
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
+        channel_userd: None,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
@@ -367,6 +375,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         vgx: None,
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
+        channel_userd: None,
         note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
                _STATE, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:906)",
@@ -386,6 +395,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         vgx: None,
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
+        channel_userd: None,
         note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
                NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:933)",
@@ -405,6 +415,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         vgx: None,
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
+        channel_userd: None,
         note: "capability-only boundary: +8 allocation classes and \
                +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
@@ -424,6 +435,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         vgx: None,
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
+        channel_userd: None,
         note: "capability-only boundary: +6 allocation classes and the two \
                DRAM-encryption controls at their PRE-575 numbers, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
@@ -461,6 +473,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         vgx: None,
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
+        channel_userd: None,
         note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
                here and re-adds them one number lower, and adds \
                THERMAL_SYSTEM_EXECUTE_V2 (version.go:1036-1053). CAPS_575_51_02 says all \
@@ -487,6 +500,7 @@ pub const TABLES: &[DriverAbiTable] = &[
             minor: 0x13,
         }),
         channel_notifier: Some(ChannelNotifierWire::V580),
+        channel_userd: Some(ChannelUserdWire::V580),
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
     },
@@ -509,6 +523,7 @@ pub const TABLES: &[DriverAbiTable] = &[
             minor: 0x0D,
         }),
         channel_notifier: Some(ChannelNotifierWire::V610),
+        channel_userd: Some(ChannelUserdWire::V610),
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
                MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
@@ -986,6 +1001,25 @@ impl DriverAbiTable {
         bytes: &[u8],
     ) -> Result<Option<ErrorNotifier>, AbiError> {
         match self.channel_notifier {
+            Some(wire) => wire.decode(bytes),
+            None => Ok(None),
+        }
+    }
+
+    /// ★★★★ §16.16 — decode the channel's declared **USERD** handle and offset.
+    ///
+    /// Separate from [`Self::decode_channel_alloc_facts`] for
+    /// [`Self::decode_channel_error_notifier`]'s reason, which is the same reason: these
+    /// two fields live past the +32 prefix both vendored trees agree on, in the region 610
+    /// moves. `Ok(None)` means *this port cannot learn a USERD for this channel* — the
+    /// boundary has no pinned layout, or the params stopped short — and is never a claim
+    /// that the channel declared none. See [`ChannelUserdWire`].
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] from the primitive readers, which the wire's own length
+    /// check makes unreachable.
+    pub fn decode_channel_userd(&self, bytes: &[u8]) -> Result<Option<(u32, u64)>, AbiError> {
+        match self.channel_userd {
             Some(wire) => wire.decode(bytes),
             None => Ok(None),
         }

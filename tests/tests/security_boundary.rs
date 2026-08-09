@@ -166,6 +166,9 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                     // A's channels take vChids in a high range disjoint from B's — a
                     // vChid is a global HW id (see the doc above), not forged here.
                     userd_flags: MockArch::userd_flags_for(VChid(0x900 + (flags & 0xff) as u16)),
+                    // §16.16: declared USERD feeds NO decision (report only), so a
+                    // constant here cannot weaken what this test quantifies over.
+                    userd: None,
                     mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                     device_instance: None,
                     // ★ §12.27 — A gets to try ALL THREE client declarations, including

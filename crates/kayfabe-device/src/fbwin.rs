@@ -293,6 +293,32 @@ pub trait FbStore: Send + core::fmt::Debug {
         self.write(phys, bytes)
     }
 
+    /// ★★★★ **Every resident frame, ascending** — [`None`] when the store cannot enumerate.
+    ///
+    /// # ⊘ Why this exists when [`FbResidency`] deliberately refuses to carry a list
+    ///
+    /// [`FbResidency::lo`]'s doc argues, correctly, that a *boot report* is no place for a
+    /// frame list and that the frame which matters is asked for **by name** through
+    /// [`FbStore::is_resident`]. ★ That argument holds for every question of the form *"is
+    /// page X here?"* — and the question that is now open is the **converse**:
+    /// `[measured 2026-08-09, boot `res1_fc21926`]` the frame the guest's own page tables
+    /// name for its ring is **not** resident, while 90 other frames are. *"Then which frame
+    /// holds the ring?"* cannot be asked by name, because the name is exactly what we do
+    /// not have.
+    ///
+    /// ⊘ **This is a search primitive, not a report field.** Its consumer sweeps the
+    /// resident set looking for GPFIFO-entry-shaped bytes — a **forward** search that never
+    /// consults the walker whose answer is under audit. Two projections of one computation
+    /// cannot audit each other; a scan of raw bytes and a page-table descent are genuinely
+    /// independent.
+    ///
+    /// ★ **Ascending, always.** [`SparseFb`] is a [`std::collections::HashMap`], whose
+    /// iteration order varies run to run; an unsorted list would make two boots of one
+    /// binary produce differently-ordered evidence for the same store.
+    fn resident_frames(&self) -> Option<Vec<u64>> {
+        None
+    }
+
     /// Who wrote the page containing `phys` FIRST, and when in sequence — [`None`] when
     /// this store cannot say, **or when no page is resident there**.
     ///
@@ -713,6 +739,14 @@ impl FbStore for SparseFb {
 
     fn page_origin(&self, phys: u64) -> Option<FbPageOrigin> {
         self.origin.get(&(phys / FB_PAGE)).copied()
+    }
+
+    fn resident_frames(&self) -> Option<Vec<u64>> {
+        // ⊘ Sorted, for the reason on the trait method: this is a `HashMap` and its
+        // iteration order is not stable across runs of one binary.
+        let mut v: Vec<u64> = self.pages.keys().map(|f| f * FB_PAGE).collect();
+        v.sort_unstable();
+        Some(v)
     }
 
     /// ⊘ Asked about the **page**, and answered `Some(false)` for an address inside the

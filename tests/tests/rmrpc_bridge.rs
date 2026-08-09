@@ -3370,13 +3370,54 @@ fn nothing_past_the_channel_prefix_is_read_however_hostile_it_is() {
         assert_eq!(
             AllocFacts {
                 error_notifier: None,
+                // ★★★ §16.16 — masked for `error_notifier`'s reason and no other: both are
+                // **version-pinned** past-prefix decoders that a *read* tree bought the
+                // right to run (`ChannelNotifierWire` / `ChannelUserdWire`), so of course
+                // they move with the tail — that is their job. ⊘ The mask would be a
+                // WEAKENING if it stopped there, because a field excluded from an equality
+                // is a field this test can no longer see at all. It does not stop there:
+                // the assertion below requires `userd` to actually TRACK the tail, so the
+                // exclusion here is paid for by a positive check rather than by a hole.
+                userd: None,
                 ..facts_of(&long)
             },
             want,
-            "★ {extra} bytes of tail changed a fact — the decoder is reading past the \
-             region the two vendored trees agree on",
+            "★ {extra} bytes of tail changed a PREFIX fact — the decoder is reading past \
+             the region the two vendored trees agree on",
         );
     }
+
+    // ★★★★ §16.16 — AND THE PAST-PREFIX DECODER MUST ACTUALLY BE REACHABLE.
+    //
+    // ⊘ This half exists because of what §16.15 was caught doing: an instrument built
+    // complete, committed green, and wired to **nothing** — `write_tagged` had no caller
+    // anywhere in the repo, so a boot of it would have measured only its own default. A
+    // decoder that is masked out of the only test that exercises its input is one edit away
+    // from the same state, and the mask above would hide it perfectly.
+    //
+    // So: a tail long enough to contain `userdOffset[0]` must produce the tail's bytes,
+    // and a tail too short must produce `None`. Together they prove the field is read, is
+    // value-dependent, and refuses rather than zero-extends.
+    let mut short = exact.clone();
+    short.extend(std::iter::repeat_n(0xffu8, 4));
+    assert_eq!(
+        facts_of(&short).userd,
+        None,
+        "⊘ params that stop before `userdOffset[0]` must yield None — a decoder that \
+         zero-extended here would report a USERD the guest never declared",
+    );
+    let mut full = exact.clone();
+    full.extend(std::iter::repeat_n(0xffu8, 512));
+    let got = facts_of(&full)
+        .userd
+        .expect("a tail this long carries the fields");
+    assert_eq!(
+        (got.handle, got.offset),
+        (0xffff_ffff, 0xffff_ffff_ffff_ffff),
+        "★ the USERD decoder must read the TAIL's bytes — if this reports zeros it is not \
+         reading the field at all, and every USERD line in a boot log would be an artefact \
+         of the decoder rather than a fact about the guest",
+    );
 }
 
 /// ★★★ The **one** field that is read past the prefix, and the exact terms it is read on.

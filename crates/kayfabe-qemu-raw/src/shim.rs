@@ -232,7 +232,12 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// gained the framebuffer residency census (`fb_resident_valid` / `_lo` / `_hi` / `_pages`),
 /// so an ABI-29 shim would allocate the old layout and this archive would write 32 bytes
 /// past the end of it.
-pub const ABI_VERSION: u32 = 30;
+///
+/// ★ Bumped to **31** at §16.16, the ABI-3 reason a nineteenth time: [`KayfabeRegAudit`]
+/// gained the first-writer census (`fb_origin_by_writer`, five words) and the GPFIFO
+/// forward search (`fb_sweep_*`, five words), so an ABI-30 shim would allocate the old
+/// layout and this archive would write **80 bytes** past the end of it.
+pub const ABI_VERSION: u32 = 31;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1035,7 +1040,17 @@ fn fb_level_dump(plane: &kayfabe_device::plane::RegPlane, label: &str, phys: u64
         Some(true) => "resY",
         Some(false) => "resN-NEVER-WRITTEN",
     };
-    format!(" {label}@0x{phys:x}={head_s} nz{nz}/{FB_DUMP_CENSUS} {res}")
+    // ★★★★ §16.16 — WHO CREATED THIS PAGE, beside whether it exists. `resY` says a write
+    // landed; it does not say through which aperture, and *that* is what names a write
+    // path. ⊘ Absent (`by-` printed as `by?`) is its own answer and must not read as
+    // `UNATTRIBUTED`: the first means the store records no origin for this frame — which
+    // for a non-resident frame is simply the truth — while the second is a positive claim
+    // that some caller wrote it **without naming itself**. See `kayfabe_device::FbWriter`.
+    let by = plane.fb_page_origin(phys).map_or_else(
+        || "by?".to_string(),
+        |o| format!("by{}#{}", o.by.tag(), o.seq),
+    );
+    format!(" {label}@0x{phys:x}={head_s} nz{nz}/{FB_DUMP_CENSUS} {res} {by}")
 }
 
 /// ★★★★ **The §16.8 dump, for the REFUSING row and for a CONTROL row chosen from the
@@ -1647,6 +1662,40 @@ pub struct KayfabeRegAudit {
     /// [`Self::fb_resident_bytes`] / 4096, carried so the C shell need not divide and so a
     /// disagreement between the two is visible.
     pub fb_resident_pages: u64,
+    /// ★★★★ §16.16 — **the first-writer census**: how many resident pages each writer was
+    /// FIRST to touch, indexed by `kayfabe_device::FbWriter::index` (PRAMIN, BAR1, BAR2,
+    /// EXEC, UNATTRIBUTED).
+    ///
+    /// # ⊘ Read the UNATTRIBUTED slot before reading any other
+    ///
+    /// `[measured 2026-08-09, tree `e394b69`]` §16.15 built the whole tagging mechanism and
+    /// wired **none** of it — `write_tagged` had no caller anywhere in the repo, so every
+    /// framebuffer write took `FbStore::write`'s default and recorded `Unattributed`. A
+    /// boot of that tree would have printed `UNATTRIBUTED 90` and nothing else. ★ That is
+    /// why this array is worth reading as a whole and not as four interesting numbers plus
+    /// a remainder: a large `UNATTRIBUTED` slot means *"a write path is not instrumented"*,
+    /// which is a fact about **us**, and it must never be read as a fact about the guest.
+    ///
+    /// ⊘ Precondition: [`Self::fb_resident_valid`]. All-zero from an archive that never
+    /// wrote the struct is the honest non-claim, exactly as for the residency extent.
+    pub fb_origin_by_writer: [u64; 5],
+    /// ★★★★ §16.16 — **the forward search for the ring.** See [`FbRingSweep`] for why the
+    /// converse question had to be asked and why it is independent of the walk.
+    ///
+    /// How many resident frames were swept, out of how many exist. ⊘ The pair is carried so
+    /// *"nothing found"* can never be read as *"we looked everywhere"* under truncation.
+    pub fb_sweep_swept: u64,
+    /// How many swept frames carried at least `RINGLIKE_MIN` GPFIFO-entry-shaped qwords.
+    pub fb_sweep_ringlike: u64,
+    /// The best-scoring frame's framebuffer address. ⊘ Meaningless unless
+    /// [`Self::fb_sweep_ringlike`] is non-zero, and the C shell prints a different sentence
+    /// when it is zero rather than printing `0x0` as an address.
+    pub fb_sweep_best: u64,
+    /// That frame's score.
+    pub fb_sweep_best_score: u64,
+    /// `kayfabe_device::FbWriter::index` of that frame's first writer **plus one**, so zero
+    /// is *"no origin recorded"* and never `PRAMIN`. See [`FbRingSweep::best_writer_plus1`].
+    pub fb_sweep_best_writer_plus1: u64,
     /// Faults the emulated GSP raised.
     pub faults: u64,
     /// Guest-RAM accesses the plane's RAM port refused.
@@ -1984,6 +2033,12 @@ impl Default for KayfabeRegAudit {
             fb_resident_lo: Default::default(),
             fb_resident_hi: Default::default(),
             fb_resident_pages: Default::default(),
+            fb_origin_by_writer: Default::default(),
+            fb_sweep_swept: Default::default(),
+            fb_sweep_ringlike: Default::default(),
+            fb_sweep_best: Default::default(),
+            fb_sweep_best_score: Default::default(),
+            fb_sweep_best_writer_plus1: Default::default(),
             faults: Default::default(),
             ram_refusals: Default::default(),
             irq_requests: Default::default(),
@@ -2654,17 +2709,45 @@ impl SharedDoorbell {
         // of being absent together on that path. ⇒ an auditor reading the old string had to
         // open three source files to work out which half was missing. A diagnostic that
         // conflates two different facts is a diagnostic that sends its reader somewhere else.
+        // ★★★★ §16.16 — THE OTHER PROJECTION OF THE VA SPACE, printed beside the one the
+        // walk uses. `vaspace` is DERIVED (inherited through CtxShare/TSG by
+        // `resolve_channel_vas`); `vaspace_declared` is what the channel's own alloc params
+        // said. ⊘ Ring IDENTITY is closed from source — the VA we walk is the guest's
+        // `gpFifoOffset` verbatim — but the TABLE we walk it in is not, and no refinement of
+        // a descent can audit the choice of tree it descends. `dec=NONE` beside `vas=0x…`
+        // is not an error; it is the statement that the tree is entirely our inference.
+        let declared = facts
+            .vaspace_declared
+            .map_or_else(|| "NONE".to_string(), |v| format!("0x{v:x}"));
+        // ★★★★ §16.16 — THE USERD CANARY, declared. ⊘ Three distinct strings for three
+        // distinct facts, and collapsing any two would destroy the discrimination this
+        // exists for: `UNREADABLE` = the driver boundary has no pinned layout for the
+        // field, `h0` = the guest declared handle **zero** (a real declaration meaning "RM,
+        // allocate USERD for me"), and a handle = an object the guest named. ⚠ `off=` is
+        // printed unconditionally because a NON-ZERO offset that a consumer ignores makes
+        // hardware see `GP_PUT == GP_GET` forever with no error anywhere — a silent stall
+        // indistinguishable from the symptom under investigation.
+        let userd = facts.userd.map_or_else(
+            || " userd=UNREADABLE-AT-THIS-BOUNDARY".to_string(),
+            |u| format!(" userd=h0x{:x}/off0x{:x}", u.handle, u.offset),
+        );
         let (vaspace, ring_va) = match (facts.vaspace, facts.ring_va) {
             (Some(v), Some(r)) => (v, r),
             (None, Some(r)) => {
-                return format!(" | c=0x{:x} vas=NONE-DECLARED ring=0x{r:x}", facts.client);
+                return format!(
+                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=0x{r:x}",
+                    facts.client
+                );
             }
             (Some(v), None) => {
-                return format!(" | c=0x{:x} vas=0x{v:x} ring=NONE-DECLARED", facts.client);
+                return format!(
+                    " | c=0x{:x} vas=0x{v:x} dec={declared}{userd} ring=NONE-DECLARED",
+                    facts.client
+                );
             }
             (None, None) => {
                 return format!(
-                    " | c=0x{:x} vas=NONE-DECLARED ring=NONE-DECLARED",
+                    " | c=0x{:x} vas=NONE-DECLARED dec={declared}{userd} ring=NONE-DECLARED",
                     facts.client
                 );
             }
@@ -2722,7 +2805,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
+            " | c=0x{:x} vas=0x{vaspace:x} dec={declared}{userd} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),
@@ -2814,6 +2897,126 @@ impl SharedDoorbell {
             }
         )
     }
+}
+
+/// ★★★★ **THE FORWARD SEARCH FOR THE RING** — §16.16, and it is the one measurement in
+/// this file that never consults the walker.
+///
+/// # ⊘ Why a forward search, when the walk is already "correct end to end"
+///
+/// Every instrument this campaign has built so far asks the *same* question in the *same*
+/// direction: **take the guest's declared ring VA, descend the guest's page tables, and
+/// look at where we land.** `[measured 2026-08-09, boot `res1_fc21926`]` that lands on
+/// framebuffer offset `0x20000`, and `0x20000` is `resN-NEVER-WRITTEN`.
+///
+/// ★ Every one of those instruments shares a premise — *that the table we descended is the
+/// table the guest wrote the ring through*. `ce_channel_facts` derives the VA space from
+/// `Channel::vas_origin`, not from anything the channel declared, and its own comment
+/// records that **this exact attribution has already been wrong once on this exact
+/// channel**. ⊘ A second projection of a computation cannot audit the first. So no refinement
+/// of the descent can decide whether the descent is aimed at the right table.
+///
+/// This asks the **converse**, and it consults nothing the descent produced: *"is there a
+/// page ANYWHERE in our framebuffer whose bytes look like a GPFIFO ring?"* The two answers
+/// are independent, and together they discriminate:
+///
+/// | ring-like page found | at `0x20000` | reading |
+/// |---|---|---|
+/// | no | — | the ring's bytes are **not in our framebuffer at all** — they went to sysmem, to BAR1's discard, or nowhere. The write path is the defect. |
+/// | yes | yes | impossible while `0x20000` is not resident; would refute the residency census itself. |
+/// | yes | **no** | ★ the guest wrote its ring, we **caught** it, and we are **descending the wrong table** to find it. The address plane is the defect, not the write path. |
+///
+/// # What counts as "ring-like", and why the bar is where it is
+///
+/// A GPFIFO ring is an array of 8-byte entries. [`kayfabe_abi::submit::gp_entry_decode`]
+/// alone is far too weak a sieve — it rejects only a zero length field, so roughly any
+/// non-trivial qword "decodes". ⊘ A sieve that accepts noise would report every page of
+/// page-table entries as a ring. So an entry counts only when it also carries a **non-zero
+/// target** and a length that is **plausible for a pushbuffer** ([`GP_LEN_MAX`]); and a
+/// *page* counts only at [`RINGLIKE_MIN`] such entries, because one qword that happens to
+/// decode is a coincidence and a run of them is a structure.
+///
+/// ⊘ **It concludes nothing and it changes nothing.** It reads resident pages, counts, and
+/// returns numbers for the report. Nothing is emitted the guest did not ask for, no address
+/// is inferred, and a score is not a claim that a page IS a ring — it is a claim about how
+/// many of its qwords have the shape.
+#[derive(Debug, Clone, Copy, Default)]
+struct FbRingSweep {
+    /// How many resident frames were examined. ⊘ Bounded by [`SWEEP_FRAMES_MAX`]; the
+    /// bound is reported beside the total so "none found" can never be read as "we looked
+    /// at all of them" when it was truncated.
+    /// ⊘ The total to compare it against is [`KayfabeRegAudit::fb_resident_pages`], which
+    /// the report already carries — deliberately NOT re-counted here, so a truncation shows
+    /// up as two fields from two different reads disagreeing rather than as one field
+    /// silently agreeing with itself.
+    swept: u64,
+    /// How many swept frames scored at least [`RINGLIKE_MIN`].
+    ringlike: u64,
+    /// The best-scoring frame's framebuffer address. Meaningless unless
+    /// [`Self::ringlike`] is non-zero.
+    best: u64,
+    /// That frame's score — how many of its 512 qwords had the shape.
+    best_score: u64,
+    /// [`kayfabe_device::FbWriter::index`] of that frame's FIRST writer, plus one, so that
+    /// **zero means "no origin was recorded"** rather than naming `PRAMIN`. ⊘ The
+    /// zero-direction is the decision here: an audit struct the archive never wrote is all
+    /// zeros, and zero must be the honest non-claim.
+    best_writer_plus1: u64,
+}
+
+/// The largest pushbuffer length, in bytes, a GPFIFO entry may claim and still count
+/// toward a page's ring-likeness. `GP_ENTRY1_LENGTH` is 21 bits of **dwords**, so the
+/// field can express 8 MiB; a real UVM push is a few hundred bytes. ⊘ A generous bound
+/// (1 MiB) rather than a tight one: this sieve exists to exclude noise, and a tight bound
+/// would start excluding real entries and turn a found ring into a miss.
+const GP_LEN_MAX: u64 = 1 << 20;
+
+/// How many shaped qwords a page needs before it is called ring-like. One is a
+/// coincidence; a run is a structure.
+const RINGLIKE_MIN: u64 = 4;
+
+/// ⊘ A bound on the sweep, for [`SharedDoorbell::ring_scan`]'s reason: the resident set is
+/// guest-sized, and a diagnostic must not become a guest-sized read. `[measured
+/// 2026-08-09, boot `res1_fc21926`]` the real set was **90** frames, so this is ~90x
+/// headroom and the truncation arm should never fire — but it is reported if it does.
+const SWEEP_FRAMES_MAX: usize = 8192;
+
+/// Run [`FbRingSweep`] over the plane's framebuffer. [`None`] when there is no store to
+/// ask — ⊘ NOT `Some(default)`, which would assert an empty framebuffer.
+fn fb_ring_sweep(plane: &kayfabe_device::plane::RegPlane) -> Option<FbRingSweep> {
+    let frames = plane.fb_resident_frames()?;
+    let mut out = FbRingSweep::default();
+    let mut page = vec![0u8; kayfabe_device::fbwin::FB_PAGE as usize];
+    for phys in frames.into_iter().take(SWEEP_FRAMES_MAX) {
+        out.swept += 1;
+        // ⊘ A frame the store will not hand back is skipped and NOT scored zero: "refused"
+        // and "contains nothing ring-shaped" are different facts, and only the second is a
+        // measurement about the guest.
+        if plane.fb_peek(phys, &mut page).is_err() {
+            continue;
+        }
+        let score = page
+            .chunks_exact(8)
+            .filter(|w| {
+                let raw = u64::from_le_bytes(w[..8].try_into().unwrap_or([0; 8]));
+                kayfabe_abi::submit::gp_entry_decode(raw)
+                    .is_some_and(|d| d.gpu_va != 0 && d.len_bytes <= GP_LEN_MAX)
+            })
+            .count() as u64;
+        if score >= RINGLIKE_MIN {
+            out.ringlike += 1;
+            if score > out.best_score {
+                out.best = phys;
+                out.best_score = score;
+                // ★ The origin is read for the frame the sweep CHOSE, from the store's own
+                // map — never re-derived from the address.
+                out.best_writer_plus1 = plane
+                    .fb_page_origin(phys)
+                    .map_or(0, |o| o.by.index() as u64 + 1);
+            }
+        }
+    }
+    Some(out)
 }
 
 /// How many GPFIFO entries [`SharedDoorbell::ring_scan`] reads. See its docs for why it is
@@ -3306,6 +3509,10 @@ impl Regs {
         // ★★★★ §16.13 — read BEFORE the struct is assembled, so it is one lock acquisition
         // rather than four inside a literal. ⊘ `None` is carried as `None`, not flattened.
         let fb_residency = self.plane.fb_residency();
+        // ★ Taken once, here, beside the residency it is reported with — ⊘ not inside the
+        // struct literal, where a second call would sweep a store that had moved on between
+        // the two reads and produce a census and a sweep describing different moments.
+        let fb_sweep = fb_ring_sweep(&self.plane);
         let kayfabe_device::census::CensusSnapshot {
             probe_arm: probe_arm_set,
             served_total,
@@ -3433,6 +3640,16 @@ impl Regs {
             fb_resident_lo: fb_residency.and_then(|r| r.lo).unwrap_or(0),
             fb_resident_hi: fb_residency.and_then(|r| r.hi).unwrap_or(0),
             fb_resident_pages: fb_residency.map_or(0, |r| r.pages),
+            // ★★★★ §16.16 — the first-writer census, taken from the SAME `FbResidency` the
+            // extent above comes from, so the two can never describe different snapshots.
+            fb_origin_by_writer: fb_residency.map_or([0; 5], |r| r.by_writer),
+            // ★★★★ §16.16 — the forward search. ⊘ All zeros when there is no store to ask,
+            // which `fb_resident_valid` already distinguishes from an empty framebuffer.
+            fb_sweep_swept: fb_sweep.map_or(0, |s| s.swept),
+            fb_sweep_ringlike: fb_sweep.map_or(0, |s| s.ringlike),
+            fb_sweep_best: fb_sweep.map_or(0, |s| s.best),
+            fb_sweep_best_score: fb_sweep.map_or(0, |s| s.best_score),
+            fb_sweep_best_writer_plus1: fb_sweep.map_or(0, |s| s.best_writer_plus1),
             faults,
             ram_refusals,
             irq_requests,

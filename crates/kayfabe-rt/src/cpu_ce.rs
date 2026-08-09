@@ -28,7 +28,7 @@
 
 use kayfabe_arch::ids::GpuVa;
 use kayfabe_arch::{Backing, CpuOperand, CpuPlane, PlaneAddr};
-use kayfabe_device::{FbRefused, FbStore};
+use kayfabe_device::{FbRefused, FbStore, FbWriter};
 use kayfabe_fwd::{COMPLETION_VECTOR, CeSpan, FwdFault};
 use kayfabe_isolate::{CeExecutor, CeSource};
 use kayfabe_vmm::{Vmm, VmmError};
@@ -116,7 +116,13 @@ fn write_plane(
     bytes: &[u8],
 ) -> Result<(), FwdFault> {
     match plane {
-        CpuPlane::Fb => fb.write(addr.0, bytes).map_err(fb_fault),
+        // ★ §16.16 — the shell's CPU copy executor NAMES ITSELF. Without this the executor's
+        // pages were indistinguishable from a window's in the first-writer census, and
+        // "which window put the ring's neighbours there" is the whole question the census
+        // is for. See `kayfabe_device::FbWriter`.
+        CpuPlane::Fb => fb
+            .write_tagged(addr.0, bytes, FbWriter::Executor)
+            .map_err(fb_fault),
         CpuPlane::GuestRam => vmm.gpa_write(addr.0, bytes).map_err(ram_fault),
     }
 }

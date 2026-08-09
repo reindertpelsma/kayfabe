@@ -364,6 +364,17 @@ pub struct AllocFacts {
     /// Opaque USERD/flags word from channel alloc params; the arch recovers the
     /// channel's `VChid` from it (`Arch::vchid_from_userd_flags`).
     pub userd_flags: u32,
+    /// ★★★★ §16.16 — the channel's declared **USERD object**, decoded past the
+    /// version-agreement prefix (`kayfabe_abi::notifier::ChannelUserdWire`). `None` =
+    /// *"this port could not read whether the channel declared one"*, ⊘ never *"it declared
+    /// none"* — a declared handle of zero is a real declaration and arrives as
+    /// `Some(DeclaredUserd { handle: 0, .. })`.
+    ///
+    /// ⊘ **Reported, and read by no decision.** Its purpose is the canary described on
+    /// [`kayfabe_abi::notifier::ChannelUserdWire`]: USERD comes out of the same params as
+    /// the ring but has *recognisable* content, so it turns the ring's ambiguous all-zero
+    /// null into a discriminating one.
+    pub userd: Option<DeclaredUserd>,
     /// Physical/backing address a MEMORY object names, if the alloc declared one
     /// (`NV01_MEMORY_*` / `NV_MEMORY_VIRTUAL` backing). The RPC populate source
     /// resolves a `MapMemoryDma`'s `memory` handle to this, so the address table can
@@ -435,6 +446,32 @@ pub struct AllocFacts {
 /// stated the other. `[measured]` at rev `c93930d` — see
 /// `docs/design/execution_plane_increments.md` §8.2.3 for the two boots and the answer.
 ///
+/// ★★★★ **The channel's declared USERD object** — §16.16's canary. See
+/// [`kayfabe_abi::notifier::ChannelUserdWire`] for why USERD discriminates where the ring
+/// does not, and for the version seam both its fields sit past.
+///
+/// ⊘ Nothing in the core reads it; it exists so a boot can **state** what the guest
+/// declared, beside what we resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeclaredUserd {
+    /// `hUserdMemory[0]` — the memory object the channel names for subdevice 0.
+    ///
+    /// ⚠ **`0` is a declaration, not a blank**: RM reads it as *"I allocated no USERD
+    /// object; allocate one for me"*. That is a statement the guest made, and it is a
+    /// different fact from this port being unable to read the field — which is the
+    /// surrounding `Option`.
+    pub handle: u32,
+    /// `userdOffset[0]` — the byte offset of this channel's USERD **inside** that object.
+    ///
+    /// ⚠★ **A non-zero value here is a documented SILENT-STALL mechanism.**
+    /// `kayfabe_abi::submit::ChannelAllocParams::userd_offset_0` records it: a consumer
+    /// that ignores a non-zero offset makes hardware see `GP_PUT == GP_GET` forever, **and
+    /// no error is reported anywhere**. So it is carried and printed rather than assumed
+    /// zero — an assumption that would be invisible in exactly the symptom under
+    /// investigation.
+    pub offset: u64,
+}
+
 /// ⊘ Nothing in the core reads it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpFifoRing {

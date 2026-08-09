@@ -650,9 +650,23 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // positive claim about the first), and `_pages` is carried rather than divided out of
     // the byte total so a disagreement between the two is visible instead of arithmetic.
     // This is the reason the wire ABI moved to 30.
+    //
+    // ★★★★ 81 -> 91, and the wire ABI moved to 31 (§16.16). TEN more words, in two groups:
+    //  - `fb_origin_by_writer[5]` — the FIRST-WRITER census. MEASURED at tree e394b69: the
+    //    whole tagging mechanism existed and NOTHING CALLED IT, so every write recorded
+    //    `Unattributed` and a boot would have measured only the instrument's own default.
+    //    The census crosses the wire so the `UNATTRIBUTED` slot is READABLE — that slot is
+    //    how a reader tells "a write path is not instrumented" (a fact about us) from a
+    //    finding about the guest.
+    //  - `fb_sweep_*` (5) — the GPFIFO FORWARD SEARCH. Every other instrument in this file
+    //    descends the guest's page tables from the guest's declared ring VA; all of them
+    //    share the premise that the table being descended is the right one, and a second
+    //    projection of one computation cannot audit the first. The sweep asks the converse
+    //    over raw bytes and consults no walk, so its answer and the descent's can genuinely
+    //    disagree — which is the entire point.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (81 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (91 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS

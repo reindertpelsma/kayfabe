@@ -266,6 +266,105 @@ impl ChannelNotifierWire {
     }
 }
 
+/// ★★★★ **What a channel declared about its USERD** — §16.16, the canary object.
+///
+/// # ⊘ Why USERD and not the ring, when the ring is what hangs
+///
+/// `[measured 2026-08-09, boot `res1_fc21926`]` the framebuffer page the guest's page
+/// tables name for its GPFIFO ring is `resN-NEVER-WRITTEN`, and all 64 scanned entries read
+/// zero. ★ **An all-zero ring is an AMBIGUOUS null**: empty, unwritten, or read at the
+/// wrong address all produce it, and they need opposite fixes.
+///
+/// USERD converts that into a **discriminating** null. It comes out of the *same* alloc
+/// params as the ring, carries its *own* declared aperture, is small, and — decisively —
+/// has **recognisable content**: a live channel's `GP_GET`/`GP_PUT` are small integers
+/// bounded by the ring's entry count. A live channel whose USERD reads all-zero forever is
+/// almost certainly a **wrong address**, because there is no state in which a running
+/// channel's cursors are both zero and stay that way.
+///
+/// ⇒ USERD sane + ring wrong ⇒ we mis-locate **this one object**. USERD also wrong ⇒ we
+/// mis-locate **channel structures systematically**, which is a larger and better finding.
+///
+/// # ⚠ `userd_offset` is a documented SILENT-STALL mechanism
+///
+/// `crate::submit::ChannelAllocParams::userd_offset_0` records it: a non-zero
+/// `userdOffset[0]` that the consumer ignores makes hardware see `GP_PUT == GP_GET`
+/// **forever, with no error reported anywhere**. So the offset is carried and printed
+/// beside the handle rather than assumed zero.
+///
+/// # The version seam, and it is the SAME one
+///
+/// Both fields sit past [`crate::versions::CHANNEL_ALLOC_PREFIX`], in the region 610 moves
+/// by eight bytes. This type is how a *read* tree buys the right to read them, exactly as
+/// [`ChannelNotifierWire`] does; a boundary whose tree nobody opened carries `None` rather
+/// than a guess. ⊘ Blindly reading `+32` would decode 610's `hHandleVASpace` as a USERD
+/// handle — a plausible non-zero number that is not a USERD at all, which is the worst
+/// possible failure for a canary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelUserdWire {
+    /// Offset of `NvHandle hUserdMemory[NV_MAX_SUBDEVICES]`; subdevice 0 is at this offset.
+    pub h_userd_memory: usize,
+    /// Offset of `NvU64 userdOffset[NV_MAX_SUBDEVICES]`; subdevice 0 is at this offset.
+    pub userd_offset: usize,
+}
+
+impl ChannelUserdWire {
+    /// 580.159.04 — the bench driver. `hUserdMemory[0]` @ +32, `userdOffset[0]` @ +64, from
+    /// `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342` with
+    /// `NV_MAX_SUBDEVICES = 8` (`ogkm-580: src/common/sdk/nvidia/inc/nvlimits.h:42`):
+    /// eight `NvHandle` fill +32..+64, eight 8-aligned `NvU64` fill +64..+128, and
+    /// `engineType` follows at +128 — the offset `crate::view::ChannelAllocFacts`' own map
+    /// records for 580 and which the C artifact independently measured
+    /// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:6760`). ★ Two independent
+    /// derivations landing on +128 is what pins the two offsets above it.
+    pub const V580: Self = Self {
+        h_userd_memory: 32,
+        userd_offset: 64,
+    };
+
+    /// 610.43.02 — eight bytes later, for [`ChannelNotifierWire::V610`]'s reason:
+    /// `hHandleVASpace` @ +32 is four bytes and forces four more of re-alignment onto the
+    /// 8-aligned `userdOffset[]`. `engineType` lands at +136, which is the arithmetic's
+    /// own check.
+    pub const V610: Self = Self {
+        h_userd_memory: 36,
+        userd_offset: 72,
+    };
+
+    /// The bytes a decode needs: through `userdOffset[0]`, the last field it reads.
+    #[must_use]
+    pub const fn needs(&self) -> usize {
+        self.userd_offset + 8
+    }
+
+    /// Decode subdevice 0's declared USERD handle and offset.
+    ///
+    /// `Ok(None)` when the params stop before the fields exist — **additive**, for
+    /// [`ChannelNotifierWire::decode`]'s measured reason: making a past-prefix decode
+    /// mandatory turned legal short channel allocs into `AbiError::Truncated` and failed
+    /// nine unrelated tests. A field added past a version-agreement prefix must be
+    /// additive or it is not an addition.
+    ///
+    /// ⊘ A declared handle of **zero is carried as `Some(0)`**, not folded to `None`: RM
+    /// treats zero as *"no USERD object, RM allocates it for me"*, which is a **statement
+    /// the guest made**, while `None` here means *"we could not read whether it made
+    /// one"*. Collapsing them would turn our ignorance into the guest's declaration — the
+    /// same error class as decoding an empty capture to zeros.
+    ///
+    /// # Errors
+    /// [`AbiError`] only from the primitive readers, which the length check makes
+    /// unreachable; kept as a `Result` so those stay total functions.
+    pub fn decode(&self, bytes: &[u8]) -> Result<Option<(u32, u64)>, AbiError> {
+        if bytes.len() < self.needs() {
+            return Ok(None);
+        }
+        Ok(Some((
+            u32_at(bytes, self.h_userd_memory)?,
+            u64_at(bytes, self.userd_offset)?,
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

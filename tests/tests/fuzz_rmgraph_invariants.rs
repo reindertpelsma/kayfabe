@@ -115,6 +115,8 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                         },
                         h_ctx_share: None,
                         userd_flags: flags,
+                        // §16.16: report-only field; a constant cannot weaken this fuzz.
+                        userd: None,
                         // A memory alloc may or may not declare a backing (both paths).
                         mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                         // Single-GPU fuzz: Devices default to instance 0 (GpuId::ZERO).

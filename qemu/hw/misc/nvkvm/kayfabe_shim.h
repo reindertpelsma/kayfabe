@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 30u
+#define KAYFABE_SHIM_ABI 31u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -633,6 +633,34 @@ typedef struct KayfabeRegAudit {
     uint64_t fb_resident_lo;
     uint64_t fb_resident_hi;
     uint64_t fb_resident_pages;
+    /* ★★★★ §16.16 — THE FIRST-WRITER CENSUS.  Indexed PRAMIN, BAR1, BAR2, EXEC,
+     * UNATTRIBUTED (kayfabe_device::FbWriter::index).  How many resident pages each writer
+     * was FIRST to touch — first and not last, because a page rewritten 6 900 times by a
+     * later path would otherwise report that path and erase who CREATED it.
+     * ⊘ READ THE `UNATTRIBUTED` SLOT FIRST.  MEASURED at tree e394b69: §16.15 built the
+     * whole tagging mechanism and wired NONE of it — `write_tagged` had no caller anywhere
+     * in the repo — so every write took the default and recorded UNATTRIBUTED.  A large
+     * count in that slot is a fact about US ("a write path is not instrumented"), never a
+     * finding about the guest.
+     * ⊘ Precondition: fb_resident_valid, as for the extent above. */
+    uint64_t fb_origin_by_writer[5];
+    /* ★★★★ §16.16 — THE FORWARD SEARCH FOR THE RING, and it consults no page-table walk.
+     * Every other instrument here takes the guest's declared ring VA, descends the guest's
+     * page tables and reports where it lands — all of them sharing the premise that the
+     * table being descended is the table the guest wrote the ring through.  A second
+     * projection of one computation cannot audit the first.  This asks the CONVERSE: is
+     * there a page ANYWHERE in our framebuffer whose bytes look like a GPFIFO ring?
+     *   found nowhere        => the ring's bytes are not in our framebuffer at all
+     *   found, NOT at the walk's leaf => we caught the write and are descending the WRONG
+     *                          TABLE; the address plane is the defect, not the write path
+     * `swept` is carried beside the resident total so "none found" can never be read as
+     * "we looked at all of them" under truncation. */
+    uint64_t fb_sweep_swept;
+    uint64_t fb_sweep_ringlike;
+    uint64_t fb_sweep_best;
+    uint64_t fb_sweep_best_score;
+    /* FbWriter::index PLUS ONE, so zero is "no origin recorded" and never PRAMIN. */
+    uint64_t fb_sweep_best_writer_plus1;
     uint64_t faults;
     uint64_t ram_refusals;
     uint64_t irq_requests;

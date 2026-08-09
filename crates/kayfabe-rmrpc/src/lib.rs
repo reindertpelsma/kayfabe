@@ -1263,9 +1263,23 @@ fn translate_alloc(
                 // will not emit for the channel — the safe direction, since an RC with
                 // no notifier write causes the hang it replaces.
                 error_notifier: abi.decode_channel_error_notifier(params)?,
+                // ★★★★ §16.16 — THE USERD CANARY, decoded past the prefix for the error
+                // notifier's reason and by the same mechanism
+                // (`kayfabe_abi::notifier::ChannelUserdWire`). ⊘ Read by no decision; it
+                // exists so a boot can state the object the guest named, and its
+                // `userdOffset`, beside what we resolved. See `DeclaredUserd`.
+                userd: abi.decode_channel_userd(params)?.map(|(handle, offset)| {
+                    kayfabe_core::rmgraph::DeclaredUserd { handle, offset }
+                }),
                 // ★★★ §8.2.2's measurement, and it is carried for exactly one reason:
                 // so a boot can STATE the address the guest named for its GPFIFO ring.
-                // Nothing on the data path reads it. See `GpFifoRing`.
+                //
+                // ⊘ **THIS COMMENT USED TO END "Nothing on the data path reads it", AND
+                // THAT WAS FALSE** — corrected §16.16. `CeChannelFacts::ring_va` is filled
+                // from this very field (`kayfabe-rt/src/device.rs`, `ce_channel_facts`),
+                // and the doorbell probe walks it; it is the sole source of the ring
+                // address the whole §16 campaign has been resolving. A stale "nothing
+                // reads this" is worse than no comment: it is why nobody looked.
                 gp_fifo_ring: Some(kayfabe_core::rmgraph::GpFifoRing {
                     va: c.gp_fifo_offset,
                     entries: c.gp_fifo_entries,
