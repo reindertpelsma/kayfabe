@@ -294,6 +294,17 @@ pub struct Channel {
     /// binds its VA space through a `DUP_OBJECT` alias, and the alias may resolve to a
     /// dup-kept ghost whose origin handle the guest has since re-allocated.
     pub vas_origin: Option<ResourceKey>,
+    /// ★★★★ **§16.28 — the `hVASpace` that names this channel's parent DEVICE's default
+    /// address space**, graph-synced from
+    /// [`crate::project::ChannelFacts::vas_device_default`] on the same pass as
+    /// [`Self::vas_origin`], because it is the fourth answer of the one resolution that
+    /// produced the other three.
+    ///
+    /// ⚠ A **name**, not a resource: `Some` here with [`Self::vas_origin`] `None` and
+    /// [`Self::vas_pdb`] `None` is the normal, correct shape — RM freed the handle right
+    /// after publishing the address space's root under it. See that projection field for
+    /// what the name is good for and what it deliberately is not.
+    pub vas_device_default: Option<HObject>,
     /// ★★★★ **§16.25 — which route produced [`Self::vas_origin`], and what the routes that
     /// ran actually hit.** Graph-synced from [`crate::project::ChannelFacts::vas_route`],
     /// refreshed on the same pass as [`Self::vas_pdb`] and [`Self::vas_origin`] for the
@@ -2441,6 +2452,7 @@ impl Spine {
                 vchid: facts.vchid,
                 vas_pdb: facts.vas_pdb,
                 vas_origin: facts.vas_origin,
+                vas_device_default: facts.vas_device_default,
                 vas_route: facts.vas_route,
                 engine: facts.engine,
                 host_channel: None,
@@ -2460,6 +2472,9 @@ impl Spine {
             // (`project::resolve_channel_vas` produces both), and letting them refresh on
             // different passes would recreate the disagreement this field exists to end.
             entry.vas_origin = facts.vas_origin;
+            // ★★★★ §16.28 — on the SAME pass, for the same reason as `vas_origin` above:
+            // it is the fourth answer of the one resolution that produced the other three.
+            entry.vas_device_default = facts.vas_device_default;
             // ★★★★ §16.25 — on the SAME pass, for the same reason as `vas_origin` above.
             entry.vas_route = facts.vas_route;
             entry.engine = facts.engine;

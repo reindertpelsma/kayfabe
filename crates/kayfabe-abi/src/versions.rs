@@ -947,6 +947,30 @@ impl DriverAbiTable {
         })
     }
 
+    /// ★★★★ **§16.28 — the `index` field of `NV_VASPACE_ALLOCATION_PARAMETERS`**, the one
+    /// wire fact that separates *"create a new address space"* from *"acquire a reference
+    /// to the Device's existing one"*. See
+    /// [`crate::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`] for the RM chain that
+    /// emits the second kind, publishes its page-directory root, and then frees the handle.
+    ///
+    /// # ⊘ It returns an `Option` and NOT a `Result`, deliberately
+    ///
+    /// `None` means **this port could not read the field** — params shorter than four
+    /// bytes — and never *"the guest declared index 0"*. The distinction matters in one
+    /// direction only, and it is the direction that has bitten this project twice
+    /// (`accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`): `FERMI_VASPACE_A` is a
+    /// class the bridge **accepts today** with no decoder at all, so a fallible decoder
+    /// here would turn a short or absent params block into a refused VA-space alloc — a
+    /// class going from working to refused because somebody wrote a reader for it.
+    ///
+    /// ⊘ Nothing validates the value: an `index` this port does not recognise is carried
+    /// through as itself, and only an exact equality with
+    /// [`crate::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`] means anything downstream.
+    #[must_use]
+    pub fn decode_vaspace_index(&self, bytes: &[u8]) -> Option<u32> {
+        u32_at(bytes, 0).ok()
+    }
+
     /// Decode the channel alloc params under the **prefix contract** — see
     /// [`ChannelAllocFacts`] for the 580-vs-610 divergence that makes it one, and
     /// [`CHANNEL_ALLOC_PREFIX`] for the bound.
@@ -1047,13 +1071,31 @@ impl DriverAbiTable {
             classes::KEPLER_CHANNEL_GROUP_A => Some(AllocParams::Tsg),
             classes::FERMI_CONTEXT_SHARE_A => Some(AllocParams::CtxShare),
             classes::AMPERE_CHANNEL_GPFIFO_A => Some(AllocParams::Channel),
-            // ★ Mapped, and declaring nothing the object model reads. A VASpace's
-            // params are geometry (`index`, `vaSize`, `vaBase`, `pasid`) and an
-            // engine object's are engine-private; the protocol content of all
-            // three is the EDGE — parent, handle, class — which the RPC header
-            // already carries.
-            classes::FERMI_VASPACE_A
-            | classes::AMPERE_COMPUTE_B
+            // ★★★★ §16.28 — **`FERMI_VASPACE_A` MOVED OFF `NoDeclaredFacts`, and the
+            // comment it used to sit under was WRONG in the load-bearing direction.**
+            //
+            // That comment read: *"A VASpace's params are geometry (`index`, `vaSize`,
+            // `vaBase`, `pasid`) … the protocol content is the EDGE"*. `index` is **not**
+            // geometry. `NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE` (`= 0x3`) is documented
+            // in NVIDIA's own header as *"Acquire reference to device vaspace"*
+            // (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:3187`), i.e. it is the field
+            // that says **this alloc creates no address space at all** — it is a
+            // transient NAME for one the Device already owns.
+            //
+            // ⊘ `a_wrong_comment_is_why_nobody_looked`: four rungs of the §16 campaign
+            // searched for the walling channel's VA space while the one wire field that
+            // identifies it sat behind a comment asserting it was geometry.
+            //
+            // ⚠ **Acceptance is unchanged.** [`DriverAbiTable::decode_vaspace_index`]
+            // cannot fail: params shorter than four bytes yield `None` (*"this port could
+            // not read the field"*), never a refusal. A class this port accepts today
+            // must not become one it rejects because a decoder was written for it —
+            // `accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`.
+            classes::FERMI_VASPACE_A => Some(AllocParams::VaSpace),
+            // ★ Mapped, and declaring nothing the object model reads. An engine
+            // object's params are engine-private; the protocol content is the EDGE —
+            // parent, handle, class — which the RPC header already carries.
+            classes::AMPERE_COMPUTE_B
             | classes::AMPERE_DMA_COPY_B
             // ★★★ `AMPERE_B` (`0xc797`), the GA10x **3D** object, joins its compute
             // sibling — and it is here because a boot asked for it, not because the
@@ -1471,6 +1513,14 @@ pub enum AllocParams {
     CtxShare,
     /// `AMPERE_CHANNEL_GPFIFO_A` — [`DriverAbiTable::decode_channel_alloc_facts`].
     Channel,
+    /// ★★★★ §16.28 — `FERMI_VASPACE_A` — [`DriverAbiTable::decode_vaspace_index`].
+    ///
+    /// One field, `index`, and it is read for one reason: `index == 3`
+    /// ([`NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`]) means the alloc **acquires a
+    /// reference to the Device's existing default VA space** rather than creating one.
+    /// See that constant for the RM call chain that makes such an alloc appear, publish a
+    /// page-directory root, and then be freed again.
+    VaSpace,
     /// A mapped class whose params declare nothing the object model reads.
     NoDeclaredFacts,
 }

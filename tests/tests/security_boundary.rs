@@ -171,6 +171,20 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                     userd: None,
                     mem_phys: (flags & 2 == 0).then_some(0x8000_0000 | u64::from(flags)),
                     device_instance: None,
+                    // ★★★★ §16.28 — A also gets to claim that its VA-space allocs are
+                    // **the parent Device's default address space**, which is the one
+                    // declaration that makes the graph keep a handle→address-space name
+                    // past the handle's own free. A is allowed to say it about handles it
+                    // owns; B's isolation must hold regardless, and it must hold in the
+                    // direction that matters here — A naming a Device in its OWN namespace
+                    // can never make B's channels resolve into A's address space, because
+                    // the latch is keyed on `(client, device)` and the client is the RPC
+                    // header's, never a params field.
+                    vaspace_role: match flags & 0xc00 {
+                        0x000 => None,
+                        0x400 => Some(kayfabe_arch::VaSpaceRole::Own),
+                        _ => Some(kayfabe_arch::VaSpaceRole::DeviceDefault),
+                    },
                     // ★ §12.27 — A gets to try ALL THREE client declarations, including
                     // claiming **kernel** privilege (which only a compromised guest
                     // *kernel* could really do — see the access-model split) and

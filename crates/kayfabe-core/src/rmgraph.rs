@@ -58,7 +58,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, GpuId, GpuVa, HClient, HObject, Pdb};
-use kayfabe_arch::{Arch, ClientKind, ObjectKind};
+use kayfabe_arch::{Arch, ClientKind, ObjectKind, VaSpaceRole};
 
 /// Global identity of an RM *handle*: handles are **per-client namespaces** (two
 /// processes routinely present identical `HObject` values — #14 round 1), so a
@@ -422,6 +422,19 @@ pub struct AllocFacts {
     /// See [`GpFifoRing`] for what the number is and why `Some(GpFifoRing { va: 0, .. })`
     /// is a real answer rather than an absence.
     pub gp_fifo_ring: Option<GpFifoRing>,
+    /// ★★★★ **§16.28 — what a VASpace alloc declared itself to be**, decoded at the ABI
+    /// seam into [`VaSpaceRole`] (which carries the whole argument and the RM chain).
+    ///
+    /// [`VaSpaceRole::DeviceDefault`] is the one value this graph acts on, and it acts by
+    /// filing the handle against the **parent Device** in [`RmGraph::device_default_vas`],
+    /// where it outlives the handle's own `Free`.
+    ///
+    /// ⊘ `None` = *this port could not read the declaration* (params stopped short),
+    /// never [`VaSpaceRole::Own`] — folding them would make an unreadable message into a
+    /// positive claim that the guest asked for a fresh address space. On any non-VASpace
+    /// class the field is ignored, exactly as [`Self::client_kind`] is everywhere but a
+    /// client root.
+    pub vaspace_role: Option<VaSpaceRole>,
 }
 
 /// ★★★ **The GPFIFO ring a channel declared, verbatim** — `gpFifoOffset` /
@@ -888,6 +901,35 @@ pub struct RmGraph {
     /// tolerance): declaring-handle → declared PDB. Drained onto the resource as soon
     /// as its handle resolves (see [`Self::resolve_pending_pdbs`]).
     pending_pdbs: BTreeMap<NodeKey, Pdb>,
+    /// ★★★★ **§16.28 — each Device's DEFAULT VA space, by the transient handle RM named
+    /// it with.** Key = the **Device**'s `(client, handle)`; value = the `hVASpace` of the
+    /// `FERMI_VASPACE_A` alloc that declared
+    /// [`kayfabe_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`] under it.
+    ///
+    /// # ⊘ Why this is not the handle table, and why the handle's free must not clear it
+    ///
+    /// The alloc RM issues for a device-default VA space is a **naming** operation: it
+    /// mints a handle so the GSP side has something to call the VA space, publishes the
+    /// reserved PDEs at that handle, and frees it again three RPCs later
+    /// (`gpu_vaspace.c:4101 → 4113 → 4128 → 4135`). The VA space itself — `pDevice->pVASpace`
+    /// — is untouched by that free and dies only with the Device
+    /// (`device_share.c:307-320`). So this map is keyed on the **Device**, which is the
+    /// thing RM says owns the address space, and is cleared when the *Device's* handle is
+    /// freed. The transient VASpace handle's own `Free` prunes nothing here, because it
+    /// is not a key.
+    ///
+    /// ⚠ **This map does not keep anything alive.** The VASpace resource still dies with
+    /// its handle exactly as before, `refs` keeps its "never empty for a live resource"
+    /// invariant, and no lifetime is extended. What survives is one `HObject` — the
+    /// *name* the guest's own publication is filed under
+    /// (`kayfabe_device::gvaspub`'s key is `(hClient, hObject)`), which is why a name is
+    /// all that is needed.
+    ///
+    /// ⚠ Bounded (boundary-1) by [`MAX_PARKED`]: a guest may allocate index-3 VA spaces
+    /// under fabricated Device handles. A re-declaration of an existing key REPLACES and
+    /// is never gated, for [`Self::pending_pdbs`]'s reason: last declaration wins is
+    /// protocol-legal and refusing a replacement costs nothing but hangs a legal guest.
+    device_default_vas: BTreeMap<NodeKey, HObject>,
     /// Live DMA mappings, keyed by `(vaspace resource, va)`. Each holds a reference to
     /// the memory resource it maps (counted in `Resource::map_refs`).
     mappings: BTreeMap<MapKey, Mapping>,
@@ -983,6 +1025,7 @@ impl RmGraph {
             handles: BTreeMap::new(),
             pending_dups: BTreeMap::new(),
             pending_pdbs: BTreeMap::new(),
+            device_default_vas: BTreeMap::new(),
             mappings: BTreeMap::new(),
             map_mem_res: BTreeMap::new(),
             pending_maps: BTreeSet::new(),
@@ -1600,6 +1643,29 @@ impl RmGraph {
                             // Upheld by the one-root check above: never overwrites.
                             self.client_roots.insert(client, id);
                         }
+                        // ★★★★ §16.28 — **THE DEVICE-DEFAULT LATCH.** A `VaSpace` alloc
+                        // declaring `index == NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE` is
+                        // RM saying *"this handle is a name for the VA space my parent
+                        // Device already owns"*, so the fact is filed against the PARENT,
+                        // where it outlives the transient handle's `Free`. See
+                        // [`RmGraph::device_default_vas`] and the constant's own docs for
+                        // the four-RPC sequence this is the memory of.
+                        //
+                        // ⊘ The parent is `node.parent` — the RPC header's own `hParent`,
+                        // not a params field — so nothing here can attribute an address
+                        // space to a Device the guest did not name as the parent.
+                        if matches!(node.kind, ObjectKind::VaSpace)
+                            && node.facts.vaspace_role == Some(VaSpaceRole::DeviceDefault)
+                        {
+                            let dev = NodeKey::new(client, node.parent);
+                            // Replacement is always allowed (last declaration wins); only
+                            // a genuinely NEW key meets the cap — `pending_pdbs`' rule.
+                            if self.device_default_vas.contains_key(&dev)
+                                || self.device_default_vas.len() < MAX_PARKED
+                            {
+                                self.device_default_vas.insert(dev, key.handle);
+                            }
+                        }
                         // A dup / SetPageDir that arrived BEFORE this alloc parked
                         // itself; now that its target exists, promote each parked fact
                         // so the resource is refcounted and PDB-tagged correctly (and so
@@ -1873,6 +1939,22 @@ impl RmGraph {
 
         for k in &doomed {
             self.drop_handle(*k);
+        }
+
+        // ★★★★ §16.28 — a **Device** losing its handle takes its default VA space with
+        // it, and nothing else does. This mirrors RM exactly: `deviceRemoveFromClientShare_IMPL`
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/device_share.c:307-320`) is the only site
+        // that destroys `pDevice->pVASpace`, and it runs on the Device's teardown.
+        //
+        // ⊘ The transient VASpace handle's own `Free` is deliberately NOT a removal here,
+        // and that asymmetry is the whole point of the latch: RM frees that handle three
+        // RPCs after minting it (`gpu_vaspace.c:4135`) while the address space it named
+        // lives on. Keys are Device handles, so that free prunes nothing — it is not a key.
+        //
+        // ⚠ Keyed on the DOOMED HANDLE SET, so a client-root free (which dooms every
+        // handle in the namespace) also clears every Device in it, with no second rule.
+        for k in &doomed {
+            self.device_default_vas.remove(k);
         }
 
         // Any mapping whose VASpace resource no longer exists is gone: drop it (which
@@ -2372,6 +2454,25 @@ impl RmGraph {
         self.pending_pdbs
             .iter()
             .find_map(|(k, p)| self.origin_of(*k).filter(|n| want(n)).map(|_| *p))
+    }
+
+    /// ★★★★ **§16.28 — the handle naming a Device's DEFAULT VA space**, if the guest has
+    /// declared one under `device` ([`VaSpaceRole::DeviceDefault`]).
+    ///
+    /// **MISS ⇒ DEFER**, exactly as [`Self::pdb_of`]: a Device legitimately exists before
+    /// any device-default VA space is named under it (RM names one lazily, the first time
+    /// something needs the GSP side to have a handle for it), so a `None` here is *"not
+    /// yet declared"* and never *"this Device has no address space"*.
+    ///
+    /// ⚠ The handle it returns is **very likely dead** — that is the normal case, not a
+    /// degenerate one. RM frees it immediately after publishing the VA space's
+    /// page-directory root, so this is a *name*, and it is useful precisely because the
+    /// publication is filed under that name (`kayfabe_device::gvaspub` keys on
+    /// `(hClient, hObject)` and never prunes). ⊘ Do not resolve it back through the handle
+    /// table and read a `None` as this answer being wrong: see [`VaSpaceRole`].
+    #[must_use]
+    pub fn device_default_vas(&self, device: NodeKey) -> Option<HObject> {
+        self.device_default_vas.get(&device).copied()
     }
 
     /// All live resource payloads, ascending origin-key order (deterministic).

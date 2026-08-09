@@ -1798,6 +1798,7 @@ fn each_vas_route_reports_itself_and_the_no_route_case_names_its_absence() {
             },
             ctx_share: VasHop::NotAttempted,
             tsg: VasHop::NotAttempted,
+            device_default: VasHop::NotAttempted,
         },
         "★ a channel that declares its own hVASpace resolves on route 1 and stops there",
     );
@@ -1813,6 +1814,7 @@ fn each_vas_route_reports_itself_and_the_no_route_case_names_its_absence() {
                 origin_handle: H_VAS.0,
             },
             tsg: VasHop::NotAttempted,
+            device_default: VasHop::NotAttempted,
         },
         "★★ THE UVM SHAPE: declares no hVASpace of its own and inherits through its \
          CtxShare — the case whose `dec=NONE` used to be the whole report",
@@ -1829,6 +1831,7 @@ fn each_vas_route_reports_itself_and_the_no_route_case_names_its_absence() {
                 origin_client: C.0,
                 origin_handle: H_VAS.0,
             },
+            device_default: VasHop::NotAttempted,
         },
         "★ inherits through the parent TSG, and the report says which parent",
     );
@@ -1843,6 +1846,11 @@ fn each_vas_route_reports_itself_and_the_no_route_case_names_its_absence() {
                 handle: H_DEV.0,
                 miss: HandleMiss::WrongKind(ObjectKind::Device),
             },
+            // ★★★★ §16.28 — route 4 RAN, because route 3 found a Device, and it reports
+            // a DEFER: this Device has not named a default address space. ⊘ That is a
+            // different statement from "there is no fourth route", which is what this
+            // field read before §16.28 and what four rungs were framed on.
+            device_default: VasHop::DeviceDefaultUndeclared { device: H_DEV.0 },
         },
         "★★★ the discriminating null: not 'nothing resolved' but 'route 3 looked up this \
          channel's parent and found a DEVICE, so there was never a TSG to inherit from'",
@@ -1929,6 +1937,9 @@ fn a_committed_route_that_misses_leaves_the_later_routes_not_attempted() {
                 miss: HandleMiss::Absent,
             },
             tsg: VasHop::NotAttempted,
+            // ⊘ §16.28's route 4 is NOT attempted either, and for the same commitment
+            // rule: it runs only when route 3 ran and positively found a Device.
+            device_default: VasHop::NotAttempted,
         },
         "★★★ route 2 was COMMITTED to and missed; route 3 was never attempted even though \
          the parent TSG declares a live, bound VA space",
@@ -1960,5 +1971,179 @@ fn a_committed_route_that_misses_leaves_the_later_routes_not_attempted() {
         other.vas_route, facts.vas_route,
         "★★★★ …and they are DISTINGUISHABLE now. A null that cannot separate its causes \
          is what sent four consecutive rungs to guess.",
+    );
+}
+
+/// ★★★★ **§16.28 — THE FOURTH ROUTE, and the property that makes it necessary: the name
+/// must survive the FREE.**
+///
+/// This reproduces, event for event, what a real guest sends for a Device-parented
+/// channel with no declared address space — the shape `cuInit` walled on for four rungs:
+///
+/// 1. a `VaSpace` alloc under the **Device**, declaring [`VaSpaceRole::DeviceDefault`]
+///    (RM: *"VAS handle is 0 for the device vaspace. Trigger an allocation on server RM so
+///    that the plugin has a valid handle to the device VAS under this client"* —
+///    `ogkm-580: gpu_vaspace.c:4093-4113`);
+/// 2. the page-directory publication for it (`:4128`);
+/// 3. ★★★ the **FREE of that very handle** (`:4135`), three RPCs later;
+/// 4. the channel, declaring neither `hVASpace` nor `hCtxShare`, parented on the Device.
+///
+/// ⊘ Step 3 is the whole test. Every earlier revision of this port read it as *"the guest
+/// destroyed its address space"* and was left with a channel whose namespace contains no
+/// VA space at all — measured, three boots running, as `NO-VASPACE-IN-NAMESPACE`. RM's own
+/// free destroys the **handle**; `pDevice->pVASpace` outlives it and dies only with the
+/// Device (`device_share.c:307-320`).
+///
+/// ★ The assertions are ordered so a failure says *which* half broke: that the resource is
+/// really gone (so the test is not passing because the free silently did nothing), and
+/// that the route resolves the name anyway.
+#[test]
+fn the_device_default_vaspace_name_outlives_the_handle_rm_frees() {
+    let (arch, mut g) = fresh_graph();
+    for ev in [
+        root_of(C),
+        device(C, H_ROOT, H_DEV),
+        // (1) The transient acquire — the ONE wire fact that identifies a device-default
+        // address space. ⊘ Note it is `mc::VASPACE` under the Device, exactly like an
+        // ordinary VA space: only the declared role separates them.
+        RmEvent::Alloc {
+            client: C,
+            parent: H_DEV,
+            handle: H_VAS,
+            class: mc::VASPACE,
+            facts: AllocFacts {
+                vaspace_role: Some(kayfabe_arch::VaSpaceRole::DeviceDefault),
+                ..Default::default()
+            },
+        },
+        // (2) …publishes the address space's page-directory root under that handle…
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_VAS,
+            pdb: PDB0,
+        },
+        // (3) …and RM frees the handle again.
+        RmEvent::Free {
+            client: C,
+            handle: H_VAS,
+        },
+        // (4) The channel that inherits it: declares nothing, parented on the Device.
+        chan_declaring(H_DEV, H_CH_NONE, VChid(0x26), None, None),
+    ] {
+        g.apply(&arch, ev).expect("the bring-up applies");
+    }
+    let b = project(&g, &arch, &NO_CONDEMNED).expect("projects");
+    let facts = chan_facts(&b, H_CH_NONE);
+
+    // ⊘ FIRST: the resource really is gone. Without this the test could pass because the
+    // free did nothing, which would make every claim below vacuous.
+    assert!(
+        g.origin_of(NodeKey::new(C, H_VAS)).is_none(),
+        "★ the freed handle resolves to no live resource — the free was real",
+    );
+
+    assert_eq!(
+        facts.vas_route.device_default,
+        VasHop::DeviceDefault {
+            device: H_DEV.0,
+            vas: H_VAS.0,
+        },
+        "★★★★ route 4 resolves the Device's default address space by the name RM published \
+         it under, AFTER RM freed that name",
+    );
+    assert_eq!(
+        facts.vas_device_default,
+        Some(H_VAS),
+        "★★★ and the projection carries the name, which is the key the guest's own \
+         publication is filed under",
+    );
+
+    // ★★★ THE SCOPE, and it is deliberate: route 4 hands over a NAME and nothing else.
+    assert_eq!(
+        (facts.vas_origin, facts.vas_pdb),
+        (None, None),
+        "⊘ no resource and no PDB — the object really is dead, so the channel enters no \
+         routing map and `plan_doorbell` still refuses it by name. Anything else here \
+         would be a `Vas` minted out of a freed handle",
+    );
+
+    // ★★ THE DEVICE OWNS IT: freeing the Device takes the name with it, which is the only
+    // teardown RM performs on `pDevice->pVASpace` (`device_share.c:307-320`).
+    let mut g2 = g.clone();
+    g2.apply(
+        &arch,
+        RmEvent::Free {
+            client: C,
+            handle: H_DEV,
+        },
+    )
+    .expect("freeing the Device applies");
+    assert_eq!(
+        g2.device_default_vas(NodeKey::new(C, H_DEV)),
+        None,
+        "★★ the latch is keyed on the DEVICE and cleared with it — a name that outlived \
+         its Device would be a handle attributable to nothing",
+    );
+}
+
+/// ★★★ **§16.28 — an `Own` VA space under a Device does NOT become that Device's
+/// default.** The bite on the discriminator itself.
+///
+/// Same events as the test above with one field changed, and the route must go the other
+/// way. Without this, `vaspace_role` could be ignored entirely — every VA space under a
+/// Device would answer route 4 — and the boot would bind a Device-parented channel to
+/// whichever address space happened to be allocated beneath it. That is decision #18C's
+/// confused deputy reached through a new door.
+#[test]
+fn an_own_vaspace_under_the_device_is_not_the_devices_default() {
+    let (arch, mut g) = fresh_graph();
+    for ev in [
+        root_of(C),
+        device(C, H_ROOT, H_DEV),
+        RmEvent::Alloc {
+            client: C,
+            parent: H_DEV,
+            handle: H_VAS,
+            class: mc::VASPACE,
+            facts: AllocFacts {
+                vaspace_role: Some(kayfabe_arch::VaSpaceRole::Own),
+                ..Default::default()
+            },
+        },
+        RmEvent::SetPageDir {
+            client: C,
+            vaspace: H_VAS,
+            pdb: PDB0,
+        },
+        chan_declaring(H_DEV, H_CH_NONE, VChid(0x27), None, None),
+    ] {
+        g.apply(&arch, ev).expect("the bring-up applies");
+    }
+    let b = project(&g, &arch, &NO_CONDEMNED).expect("projects");
+    let facts = chan_facts(&b, H_CH_NONE);
+    assert_eq!(
+        facts.vas_route.device_default,
+        VasHop::DeviceDefaultUndeclared { device: H_DEV.0 },
+        "★★★ route 4 ran and found NOTHING: a VA space the guest allocated for itself is \
+         not the Device's default, even though it sits under the same Device and is bound",
+    );
+    assert_eq!(
+        facts.vas_device_default, None,
+        "★ so no name is handed to the dispatch, and the channel refuses exactly as before",
+    );
+    // ⊘ And an UNREADABLE declaration is not `Own` either — it grants nothing.
+    let mut g2 = fresh_graph().1;
+    for ev in [
+        root_of(C),
+        device(C, H_ROOT, H_DEV),
+        vaspace(C, H_DEV, H_VAS_B),
+    ] {
+        g2.apply(&arch, ev).expect("applies");
+    }
+    assert_eq!(
+        g2.device_default_vas(NodeKey::new(C, H_DEV)),
+        None,
+        "⊘ `vaspace_role: None` means the port could not READ the declaration; it is never \
+         read as a claim, in either direction",
     );
 }

@@ -8183,3 +8183,146 @@ it is the natural next rung.
 it is written as a question with a named place to look — `a_queue_item_is_a_hypothesis`, and
 `a_table_does_not_decide_behaviour — the DISPATCH does`. **Read the dispatch before
 believing it.**
+
+## 16.28 ★★★★ THE FOURTH ROUTE — and §16.27's "it must MINT" is **REFUTED BY SOURCE**
+
+### 16.28.1 ⊘⊘ What this increment refutes, starting with its own brief
+
+§16.27 settled a fork positively — `NO-VASPACE-IN-NAMESPACE`, printed by an enumeration
+that ran — and concluded: *"the Device's default VA space was created implicitly by RM and
+**was never an `RM_ALLOC` on the wire**. The missing fourth route cannot be a lookup —
+there is nothing to look up. It must **MINT** a VA space."*
+
+⊘ **The enumeration is right and the conclusion drawn from it is wrong**, and this
+increment's first job is to say so plainly. The Device's default VA space **is** an
+`RM_ALLOC` on the wire. It is simply an alloc that is **freed again three RPCs later**, so
+by the time any doorbell rings, the namespace census truthfully reports no VASpace in it.
+An enumeration taken at time *T* cannot see an object that lived from *T-3* to *T-1*, and
+nothing in §16.27's capture distinguished *"never existed"* from *"existed and was freed"*.
+
+★ Note the shape, because it is a *new* member of a family this campaign keeps meeting:
+`c_oracle_empty_rows_are_wrong` says an empty capture is evidence of nothing. This is the
+next one along — **a capture that is full, positive, and correct can still be evidence for
+the wrong conclusion, when the question is about a LIFETIME and the instrument samples one
+instant.** §16.27 was careful to state its fork positively and still landed on the wrong
+side of it, because "positively stated" and "quantified over time" are different properties.
+
+⊘ It also refutes §16.25's own generalisation, one clause of it: *"the intermediate is
+unobservable by construction … no better instrument would ever have surfaced it."* That is
+**true of the wrapper TSG** (`kernel_channel.c:350-375` really does decline to mirror it)
+and **false of the VA space**, which announces itself explicitly. Two different objects
+were folded into one sentence.
+
+### 16.28.2 ★★★★ THE MECHANISM, read from RM rather than inferred
+
+`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:4066-4136`,
+`gvaspaceCopyServerRmReservedPdesToServerRm_IMPL`. When the calling resource is not a
+`VaSpaceApi` — i.e. this is the **device default** VA space, which has no client handle
+because RM creates it with the Device (`device_share.c:324-347`, `pDevice->pVASpace`) —
+the local `hVASpace` is **zero** (`:4070-4075`), and on a GSP client RM then:
+
+| step | site | what reaches the wire |
+|---|---|---|
+| 1 | `:4101` `serverutilGenResourceHandle(hClient, &hVASpace)` | nothing — a fresh handle is minted |
+| 2 | `:4103-4113` `NV_RM_RPC_ALLOC_OBJECT(… hDevice, hVASpace, FERMI_VASPACE_A, &vaParams)` with `vaParams.index = NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE` | ★ **a VASpace alloc** |
+| 3 | `:4128` → `:5175` `rmCtrlParams.hObject = hVASpace` | ★ **the page-directory publication**, `0x90f10106` |
+| 4 | `:4135` `NV_RM_RPC_FREE(pGpu, hClient, hDevice, hVASpace)` | ★★★ **the free** |
+
+RM's own comment at step 2: *"VAS handle is 0 for the device vaspace. Trigger an allocation
+on server RM so that the plugin has a valid handle to the device VAS under this client.
+This handle will be required by the plugin when we make the RPC later."*
+
+⇒ ★★★ **The free frees the NAME, not the ADDRESS SPACE.** `pDevice->pVASpace` is untouched
+by step 4; the only site that destroys it is `deviceRemoveFromClientShare_IMPL`
+(`device_share.c:307-320`), which runs when the **Device** goes away. Reading step 4 as
+*"the guest destroyed its address space"* is what discarded the only statement of that
+address space the wire ever carries.
+
+★ And the discriminator is a single wire field: `NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`
+`= 0x03`, *"Acquire reference to device vaspace"* (`ogkm-580: nvos.h:3187`), against
+`…INDEX_GPU_NEW = 0x00`, *"Create new VASpace, by default"* (`:3184`).
+
+### 16.28.3 ⊘ A WRONG COMMENT is why nobody looked — and it was ours
+
+`versions.rs`'s alloc-params table carried `FERMI_VASPACE_A` under `NoDeclaredFacts` with
+this justification:
+
+> *"A VASpace's params are geometry (`index`, `vaSize`, `vaBase`, `pasid`) … the protocol
+> content of all three is the EDGE — parent, handle, class — which the RPC header already
+> carries."*
+
+`index` is **not** geometry; it is the field that says whether the alloc creates anything.
+So the one wire fact that identifies the walling channel's address space was sitting behind
+a comment asserting there was nothing there to read — `a_wrong_comment_is_why_nobody_looked`,
+and it cost four rungs (§16.24 → §16.27).
+
+⚠ **Acceptance is deliberately unchanged.** `decode_vaspace_index` returns an `Option` and
+**cannot fail**: params shorter than four bytes yield `None` (*"unread"*), never a refusal.
+A class this port accepts today must not become one it rejects because somebody wrote a
+reader for it — `accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`, twice measured.
+
+### 16.28.4 What was built
+
+- `kayfabe_arch::VaSpaceRole { Own, DeviceDefault }` — the vocabulary type, because
+  `kayfabe-core` is quarantined from NVIDIA numbers (decision #2). The bridge decides the
+  meaning; the core acts on the meaning.
+- `RmGraph::device_default_vas: BTreeMap<NodeKey /*(client, DEVICE)*/, HObject>` — latched
+  at the index-3 `Alloc`, keyed on the **parent Device**, and cleared **only** when the
+  Device's own handle is freed. ⊘ The transient VASpace handle's `Free` prunes nothing,
+  because it is not a key — which is the whole asymmetry, and it mirrors RM's exactly.
+- ⚠ **No lifetime is extended.** The VASpace resource still dies with its handle, `refs`
+  keeps its *"never empty for a live resource"* invariant, and nothing is kept alive. What
+  survives is one `HObject` — a **name** — and a name is enough because
+  `kayfabe_device::gvaspub` files the guest's own publication under `(hClient, hObject)`
+  and never prunes it.
+- `project::resolve_channel_vas` **route 4**, running only when route 3 positively resolved
+  the parent and found a **`Device`** (`HandleMiss::WrongKind(ObjectKind::Device)`) — the
+  same fork RM branches on. Reported as `VasHop::DeviceDefault{device,vas}` or, when the
+  Device has named none, `VasHop::DeviceDefaultUndeclared{device}` — a **DEFER**, not a
+  verdict.
+- ⊘ Route 4 populates **no** `vas_origin` and **no** `vas_pdb`. The object really is dead;
+  minting a `Vas` out of a freed handle is the forgery this project forbids. `by_pdb`,
+  `plan_doorbell` and the #14 ring gate are untouched.
+- The dispatch reads it at `ce_channel_facts` as an `or` — a channel that resolved a live
+  VASpace keeps that answer, and the two can never disagree because
+  `resolve_channel_vas` returns at most one of them.
+
+### 16.28.5 ★★ Why this is expected to MOVE the wall, stated before the boot
+
+`SharedDoorbell::ring` tries the CPU copy-engine executor **first**, unconditionally. For
+the walling channel it declined itself at `facts.vaspace?` — ⊘ **so the predecessor's
+hypothesis that "the scrubber's doorbell takes `NoVas` before the shell executor gets it"
+is refuted by the dispatch: the executor gets it first and returns `None`, and the `NoVas`
+is downstream of that decline.** The remaining preconditions are already met:
+
+| precondition | walling channel, `[measured, s25]` |
+|---|---|
+| `facts.vaspace` | ⊘ **`None` — the only one missing** |
+| `facts.ring_va` | `Some(0x120064000)` |
+| `vas_pdb.is_some() && !local_ce_is_the_only_executor` | `false` (`isolates: 2 … 2 refusing (2 no-plane)`), so it does not decline here |
+| a publication for `(hClient, hVASpace)` | ★ `gvas cmd 0x90f10106 hClient 0xc1e00010 hObject 0xc` — **already recorded and ACCEPTED** |
+
+⇒ **The prediction is falsifiable and specific.** The doorbell census must stop being
+byte-identical: the one `pdb=N` channel should join the served group, `devdef=0xc` should
+appear in place of `devdef=NONE`, and the split `24/9/15` must move. ⊘ If it is
+byte-identical again, route 4 fired on nothing and this increment changed nothing — and
+that must be said plainly rather than explained.
+
+⊘ **This increment is a BEHAVIOUR change and is deliberately not bundled with anything**
+(§16.23's interrupt-ordering defect stays owed and separate), so whatever moves is
+attributable to it.
+
+### 16.28.6 Bite-checked, not merely written
+
+Three mutations, each verified to have **actually changed the file** (`diff` against a
+pristine copy, not `git diff --stat` — `the_bite_check_that_could_not_bite`):
+
+| mutation | expected | result |
+|---|---|---|
+| route 4 never fires | the outlives test fails | ✔ 1 failed |
+| the latch ignores the declared role (`!= Own` instead of `== DeviceDefault`) | the `Own` test fails | ✔ 2 failed |
+| the free prunes the latch by the **VASpace** handle too (the defect this fixes) | the outlives test fails | ✔ 1 failed |
+
+★ The first test asserts the freed handle really resolves to nothing **before** asserting
+route 4 resolves it anyway — without that, the test could pass because the free did nothing
+and every claim in it would be vacuous.

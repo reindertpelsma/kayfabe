@@ -142,6 +142,25 @@ pub struct ChannelFacts {
     pub vas_origin: Option<ResourceKey>,
     /// The PDB of that VASpace, once declared via `SetPageDir`.
     pub vas_pdb: Option<Pdb>,
+    /// ★★★★ **§16.28 — route 4's answer: the `hVASpace` naming the parent DEVICE's
+    /// default address space**, when the channel declared no VA space of its own, no
+    /// CtxShare, and its parent is a `Device`. `None` on every other shape, including a
+    /// Device that has not named one yet ([`VasHop::DeviceDefaultUndeclared`]).
+    ///
+    /// # ⚠ It is a NAME, and it deliberately does not populate [`Self::vas_origin`]
+    ///
+    /// The resource that handle named is normally **dead**: RM mints it, publishes the
+    /// address space's page-directory root under it, and frees it
+    /// (`kayfabe_arch::VaSpaceRole` carries the sequence). So there is no `ResourceKey` to
+    /// report and no `Pdb` to attach — [`Self::vas_pdb`] stays `None` and the channel
+    /// enters no routing map, exactly as before this route existed.
+    ///
+    /// ★ What the name buys is the only thing it needs to: the guest's publication is
+    /// filed under `(hClient, hObject)` (`kayfabe_device::gvaspub`), so a consumer holding
+    /// this handle can resolve that address space's page directories. ⊘ Which consumer,
+    /// and under whose authorisation, is the *dispatch's* business and not this
+    /// projection's — nothing here rings anything.
+    pub vas_device_default: Option<HObject>,
     /// ★★★★ §16.25 — **which of the three routes produced [`Self::vas_origin`], and what
     /// the ones that ran actually hit.** Report-only; see [`VasRoutes`] for the boot in
     /// which 15 of 24 doorbells refused `NoVas` and the report could say only that the
@@ -554,6 +573,35 @@ pub enum VasHop {
         /// Why it did not resolve to a VASpace.
         miss: HandleMiss,
     },
+    /// ★★★★ **§16.28 — route 4 answered: the parent DEVICE's default VA space.**
+    ///
+    /// The channel declared no `hVASpace` and no `hCtxShare`, and its parent resolved to a
+    /// **Device** rather than a TSG. RM's answer for that exact shape is the Device's
+    /// default address space (`ogkm-580: kernel_channel.c:350-375` →
+    /// `kernel_ctxshare.c:127` → `vaspace.c:231-241` → `device_share.c:324`), and the
+    /// handle here is the transient name RM itself published that address space under —
+    /// see [`crate::rmgraph::RmGraph::device_default_vas`] and
+    /// [`kayfabe_arch::VaSpaceRole`].
+    ///
+    /// ⚠ It carries a **handle and no origin**, and the missing origin is a true
+    /// statement rather than a gap: the resource that handle named was freed by the
+    /// guest's own RM immediately after it published the address space's root. That is
+    /// why this is its own variant and not a [`Self::Resolved`] with a synthetic origin —
+    /// a reader must be able to see that this route resolved a *name*, not a live object.
+    DeviceDefault {
+        /// The Device handle the channel is parented on — the object RM says owns the
+        /// address space.
+        device: u32,
+        /// The `hVASpace` RM minted, published under, and freed.
+        vas: u32,
+    },
+    /// ★ §16.28 — route 4 ran and the Device has declared no default VA space (yet). ⊘ A
+    /// **DEFER**, not a verdict: RM names one lazily, so this is *"nothing has needed the
+    /// GSP side to have a handle for it"* and never *"this Device has no address space"*.
+    DeviceDefaultUndeclared {
+        /// The Device handle that was asked.
+        device: u32,
+    },
     /// Resolved. ★ `handle` differs from `origin_handle` exactly when the guest bound its
     /// VA space through a `DUP_OBJECT` alias (§12.41), so the pair shows the dup being
     /// followed rather than hiding it.
@@ -595,6 +643,12 @@ impl fmt::Display for VasHop {
             Self::IntermediateNoVas { handle } => write!(f, "mid-no-vas(h0x{handle:x})"),
             Self::IntermediateOwnerMiss { handle } => write!(f, "mid-owner-miss(h0x{handle:x})"),
             Self::VasMiss { handle, miss } => write!(f, "vas-miss(h0x{handle:x},{miss})"),
+            Self::DeviceDefault { device, vas } => {
+                write!(f, "dev-default(dev0x{device:x}=>h0x{vas:x})")
+            }
+            Self::DeviceDefaultUndeclared { device } => {
+                write!(f, "dev-default-undeclared(dev0x{device:x})")
+            }
             Self::Resolved {
                 handle,
                 origin_client,
@@ -636,6 +690,11 @@ pub struct VasRoutes {
     pub ctx_share: VasHop,
     /// The channel's parent TSG's `hVASpace`.
     pub tsg: VasHop,
+    /// ★★★★ **§16.28 — route 4: the parent DEVICE's default VA space.** Runs only when
+    /// route 3 found the parent to be a `Device` rather than a TSG, which is the exact
+    /// shape RM answers with `deviceGetDefaultVASpace`. See
+    /// [`VasHop::DeviceDefault`].
+    pub device_default: VasHop,
 }
 
 impl VasRoutes {
@@ -646,12 +705,17 @@ impl VasRoutes {
         own: VasHop::NotAttempted,
         ctx_share: VasHop::NotAttempted,
         tsg: VasHop::NotAttempted,
+        device_default: VasHop::NotAttempted,
     };
 }
 
 impl fmt::Display for VasRoutes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "own={} cs={} tsg={}", self.own, self.ctx_share, self.tsg)
+        write!(
+            f,
+            "own={} cs={} tsg={} dev={}",
+            self.own, self.ctx_share, self.tsg, self.device_default
+        )
     }
 }
 
@@ -687,14 +751,14 @@ fn resolve_channel_vas<'g>(
     live_root: &BTreeMap<HClient, ClientKey>,
     chan: &RmNode,
     owner: ClientKey,
-) -> (Option<&'g RmNode>, VasRoutes) {
+) -> (Option<&'g RmNode>, Option<HObject>, VasRoutes) {
     let mut r = VasRoutes::NOT_ATTEMPTED;
 
     // ── Route 1: the channel's own `hVASpace`. ──────────────────────────────────────────
     if let Some(hv) = chan.facts.h_vaspace {
         let got = resolve_declared_handle(g, live_root, owner, hv, ObjectKind::VaSpace);
         r.own = VasHop::of_vas(hv, got);
-        return (got.ok(), r);
+        return (got.ok(), None, r);
     }
     r.own = VasHop::NotDeclared;
 
@@ -725,7 +789,7 @@ fn resolve_channel_vas<'g>(
                             // ⊘ Returns on a MISS too — the original `&&`-chain returned the
                             // final lookup's result unconditionally once the chain held, so the
                             // TSG route stays `NotAttempted`. Preserved deliberately.
-                            return (got.ok(), r);
+                            return (got.ok(), None, r);
                         }
                     },
                 },
@@ -757,12 +821,63 @@ fn resolve_channel_vas<'g>(
                     let got =
                         resolve_declared_handle(g, live_root, tsg_owner, hv, ObjectKind::VaSpace);
                     r.tsg = VasHop::of_vas(hv, got);
-                    return (got.ok(), r);
+                    return (got.ok(), None, r);
                 }
             },
         },
     }
-    (None, r)
+
+    // ── ★★★★ Route 4 (§16.28): the parent is a DEVICE, so the VA space is the DEVICE'S
+    // DEFAULT. ───────────────────────────────────────────────────────────────────────────
+    //
+    // # The precondition is POSITIVE, and it is the one RM branches on
+    //
+    // This runs only when route 3 resolved the channel's declared parent and found it to
+    // be a **`Device`** — not when the parent was absent, and not for any other kind.
+    // That is exactly RM's own fork: `kernelchannelConstruct` looks the parent up as a
+    // `KernelChannelGroupApi` and, when that fails, allocates a wrapper TSG *under the
+    // same `hParent`* forwarding `hVASpace = NV01_NULL_OBJECT`
+    // (`ogkm-580: kernel_channel.c:350-375`); the CtxShare then resolves that null through
+    // `vaspaceGetByHandleOrDeviceDefault` (`kernel_ctxshare.c:127`), which requires the
+    // handle to be a Device or Subdevice and returns `deviceGetDefaultVASpace`
+    // (`vaspace.c:215-241`). A parent that is neither a TSG nor a Device is a channel RM
+    // would have refused, so there is nothing here to be generous about.
+    //
+    // # ⊘ What this returns, and what it deliberately does NOT return
+    //
+    // A **handle**, and no node — because there is no live object to return and inventing
+    // one would be the fabrication this project forbids. RM minted that handle purely so
+    // the GSP side would have a name for the Device's address space, published the address
+    // space's page-directory root under it, and freed it again
+    // (`gpu_vaspace.c:4101-4135`; the whole sequence is on
+    // [`kayfabe_arch::VaSpaceRole`]). ⊘ The address is **not** invented either: it is the
+    // guest's own publication, filed under this very `(hClient, hObject)` pair, and this
+    // route hands over the key rather than an address.
+    //
+    // ⊘ It does not touch `vas_origin`, so no channel gains a `Pdb`, no `Vas` is minted,
+    // and `by_pdb` is untouched — the routing planes see exactly what they saw before.
+    if let VasHop::IntermediateMiss {
+        miss: HandleMiss::WrongKind(ObjectKind::Device),
+        ..
+    } = r.tsg
+    {
+        let device = NodeKey::new(owner.client, chan.parent);
+        match g.device_default_vas(device) {
+            Some(vas) => {
+                r.device_default = VasHop::DeviceDefault {
+                    device: chan.parent.0,
+                    vas: vas.0,
+                };
+                return (None, Some(vas), r);
+            }
+            None => {
+                r.device_default = VasHop::DeviceDefaultUndeclared {
+                    device: chan.parent.0,
+                };
+            }
+        }
+    }
+    (None, None, r)
 }
 
 /// ★ The condemnation input of an **un-condemned** device — the value every caller that
@@ -1080,12 +1195,14 @@ pub fn project(
                 // ★★★★ §16.25 — `vas_route` is the SECOND return of the SAME call that
                 // decides `vas`. ⊘ Not a re-derivation: a diagnosis computed by a separate
                 // pass is free to disagree with the decision it claims to explain.
-                let (vas, vas_route) = resolve_channel_vas(g, &live_root, node, owner);
+                let (vas, vas_device_default, vas_route) =
+                    resolve_channel_vas(g, &live_root, node, owner);
                 let facts = ChannelFacts {
                     vchid,
                     gpu,
                     vas_origin: vas.map(RmNode::id),
                     vas_pdb: vas.and_then(|v| g.pdb_of_resource(v.id())),
+                    vas_device_default,
                     vas_route,
                     // The engine-object refinement wins over the channel-class default.
                     engine: engine_refine.get(&node.id()).copied().unwrap_or(engine),

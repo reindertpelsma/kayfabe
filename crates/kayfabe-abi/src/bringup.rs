@@ -190,6 +190,55 @@ impl Nv2080AllocParameters {
     }
 }
 
+/// ★★★★ **§16.28 — `NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`**, the `index` value that
+/// makes a `FERMI_VASPACE_A` alloc **not the creation of an address space**.
+///
+/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:3187` —
+/// `#define NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE 0x03 //<! Acquire reference to device
+/// vaspace`. Its sibling `NV_VASPACE_ALLOCATION_INDEX_GPU_NEW` is `0x00` (`:3184`,
+/// *"Create new VASpace, by default"*), so the two readings are one wire field apart and
+/// the default is the one that creates.
+///
+/// # ★★★ Why this single value decides a whole route, and where the alloc comes from
+///
+/// A channel that declares neither `hVASpace` nor `hCtxShare` and is parented on a
+/// **Device** gets that **Device's default VA space** — RM allocates a wrapper TSG for it
+/// (`ogkm-580: kernel_channel.c:350-375`, *"There is no point in mirroring this allocation
+/// in the host"*), whose CtxShare resolves `hVASpace == NV01_NULL_OBJECT` through
+/// `vaspaceGetByHandleOrDeviceDefault` (`kernel_ctxshare.c:127`) to
+/// `deviceGetDefaultVASpace(pDevice, ppVAS)` (`vaspace.c:231-241`), i.e. to
+/// `pDevice->pVASpace` (`device_share.c:324-347`) — an `OBJVASPACE` with **no
+/// `VaSpaceApi` resource and no client handle**.
+///
+/// That address space nevertheless names itself on the wire **exactly once**, and this is
+/// the field that identifies the message. In
+/// `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL`
+/// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:4066-4136`), when the calling
+/// resource is not a `VaSpaceApi` the local `hVASpace` is **zero** (`:4070-4075`), and on
+/// a GSP client RM then:
+///
+/// 1. mints a fresh handle in the same client — `serverutilGenResourceHandle(hClient,
+///    &hVASpace)` (`:4101`);
+/// 2. sets `vaParams.index = NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE` and issues
+///    `NV_RM_RPC_ALLOC_OBJECT(… hDevice, hVASpace, FERMI_VASPACE_A, &vaParams …)`
+///    (`:4103-4113`) — RM's own comment: *"VAS handle is 0 for the device vaspace. Trigger
+///    an allocation on server RM so that the plugin has a valid handle to the device VAS
+///    under this client."*;
+/// 3. publishes the reserved PDEs at `rmCtrlParams.hObject = hVASpace` (`:4128` → `:5175`);
+/// 4. ★★★ **frees the handle again** — `NV_RM_RPC_FREE(pGpu, hClient, hDevice, hVASpace)`
+///    (`:4135`), guarded by the `bFreeNeeded` this branch set.
+///
+/// ⇒ **The free frees the NAME, not the ADDRESS SPACE.** `pDevice->pVASpace` is untouched
+/// by step 4 (`deviceRemoveFromClientShare_IMPL`, `device_share.c:307-320`, is the only
+/// thing that destroys it, and it runs when the *Device* goes away). A port that treats
+/// step 4 as destroying the VA space loses the only statement of it the wire ever carried
+/// — which is precisely what §16.25–§16.27 measured as `NO-VASPACE-IN-NAMESPACE`.
+///
+/// ⊘ It is *not* a fact we could have observed better: §16.25 concluded the intermediate
+/// is unobservable by construction, and it is right about the wrapper TSG. It was wrong
+/// about the VA space, which is on the wire, under this constant.
+pub const NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE: u32 = 0x03;
+
 /// `NV_VASPACE_ALLOCATION_PARAMETERS` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/nvos.h:3154-3164`.
 ///

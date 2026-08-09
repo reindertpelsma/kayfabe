@@ -1532,12 +1532,38 @@ impl SharedDevice {
                     // The namespace the VA SPACE lives in — which is the namespace its
                     // publication was issued in. ⊘ Falls back to the channel's own only
                     // when nothing resolved, so a refusal still names a client.
+                    // ★★★★ §16.28 — route 4's answer lives in the channel's OWN namespace
+                    // by construction: RM mints the device-default name with
+                    // `serverutilGenResourceHandle(hClient, …)` on the client that owns
+                    // the Device (`ogkm-580: gpu_vaspace.c:4101`). So the existing
+                    // fallback — the channel's own client — is already the right one, and
+                    // there is deliberately no third arm here.
                     client: vas_node.map_or(node.key.client.0, |v| v.key.client.0),
                     // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
                     // zero: a GSP-managed channel that named no VA space and one that named
                     // handle zero are the same wire byte but different facts, and only the
                     // first is what `Channel::vas_pdb == None` means.
-                    vaspace: vas_node.map(|v| v.key.handle.0),
+                    // ★★★★ **§16.28 — THE FOURTH ROUTE REACHES THE DISPATCH HERE**, and
+                    // it is an `or_else` rather than a second opinion: a channel that
+                    // resolved a live VASpace resource keeps that answer untouched, and
+                    // only a channel for which every declared route missed *and* whose
+                    // parent Device named a default address space gets this one. The two
+                    // can never disagree because they are never both `Some`
+                    // (`project::resolve_channel_vas` returns at most one of them — route
+                    // 4 runs only after routes 1-3 have all produced no node).
+                    //
+                    // ⊘ Nothing is invented: the value is the handle the guest's own RM
+                    // minted, published its page-directory root under, and freed, and it
+                    // is used as the key it is — `ce_session` looks the guest's own
+                    // publication up under `(hClient, hVASpace)`.
+                    vaspace: vas_node
+                        .map(|v| v.key.handle.0)
+                        .or(chan.vas_device_default.map(|h| h.0)),
+                    // ★ Reported SEPARATELY as well as folded above, so a reader can tell
+                    // which of the two produced `vaspace` without inferring it from
+                    // `vas_route` — the §16.16 rule that two projections of one fact are
+                    // printed side by side rather than reconciled in silence.
+                    vaspace_device_default: chan.vas_device_default.map(|h| h.0),
                     // ★★★★ §16.16 — the DECLARED handle, read straight off this channel's
                     // own alloc facts. ⊘ Deliberately NOT resolved through the graph and
                     // NOT reconciled with `vaspace` above: the whole point is that it is
@@ -2413,6 +2439,12 @@ pub struct CeChannelFacts {
     /// ⊘ `None` (or a declared handle of zero) is carried as `None`, never folded — same
     /// argument as [`CeChannelFacts::vaspace`]'s.
     pub vaspace_declared: Option<u32>,
+    /// ★★★★ **§16.28 — route 4's answer on its own**: the `hVASpace` naming the parent
+    /// **Device's** default address space, or `None` if this channel did not take that
+    /// route. When it is `Some`, [`Self::vaspace`] equals it and [`Self::vas_pdb`] is
+    /// `None` — see [`kayfabe_core::project::ChannelFacts::vas_device_default`] for why
+    /// that combination is the correct shape rather than a half-resolved one.
+    pub vaspace_device_default: Option<u32>,
     /// `gpFifoOffset` — a **GPU VIRTUAL** address (`ogkm-580: ctrl2080fifo.h:809`).
     /// `None` = the channel's alloc params declared no ring at all, which is different
     /// from `Some(0)` (a ring the driver deliberately declares at zero for its golden-context

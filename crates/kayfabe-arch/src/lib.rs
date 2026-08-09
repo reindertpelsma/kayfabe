@@ -98,6 +98,38 @@ pub enum ClientKind {
     Kernel,
 }
 
+/// ★★★★ **§16.28 — what a VA-space allocation DECLARED ITSELF TO BE**: a new address
+/// space, or a transient *name* for one the parent Device already owns.
+///
+/// # Why the distinction is a protocol fact and not a detail
+///
+/// A channel that declares neither `hVASpace` nor `hCtxShare` and whose parent is a
+/// **Device** inherits **that Device's default VA space**. That address space has no
+/// client handle of its own — RM creates it with the Device — so it names itself on the
+/// wire exactly once: RM mints a throwaway handle for it, allocates a VA-space object at
+/// that handle *declaring this role*, publishes the address space's page-directory root
+/// under that handle, and then **frees the handle again**. The free destroys the name;
+/// the address space it named lives on until the Device does.
+///
+/// ⇒ A port that reads such an allocation as *"a VA space was created and then
+/// destroyed"* loses the only statement of that address space the guest ever makes. That
+/// is what §16.25–§16.27 measured as a channel whose namespace contains no VA space at
+/// all, and it is why this role is recorded rather than inferred.
+///
+/// The numeric `index` that carries it is an NVIDIA constant and lives, per the
+/// quarantine rule (decision #2), only in `kayfabe-abi`
+/// (`kayfabe_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE`, which also carries
+/// the full RM call chain). Everything above the ABI seam speaks this abstract type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VaSpaceRole {
+    /// The allocation **creates** an address space of its own. Every index but the
+    /// device-default one, including the default *"create new VASpace"* request.
+    Own,
+    /// The allocation **acquires a reference** to the parent Device's existing default
+    /// address space. ⊘ Nothing is created; the handle is a name, and a short-lived one.
+    DeviceDefault,
+}
+
 /// What kind of RM object a class ID denotes, as far as the *core* needs to know.
 ///
 /// This is the output of [`Arch::classify`] — the graph *shape* is core/invariant

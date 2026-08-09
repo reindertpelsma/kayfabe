@@ -145,6 +145,19 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                         // golden-context channel, and a real address — because the
                         // invariants below must hold whatever a channel names, and
                         // NOTHING in the graph may start reading it.
+                        // ★★★★ §16.28 — all THREE shapes reach the graph, and the third
+                        // one is the interesting one: `DeviceDefault` makes the graph latch
+                        // a `(client, parent) -> hVASpace` entry that the freeing of that
+                        // very handle deliberately does NOT prune. A guest can therefore
+                        // drive that map, so the capacity/determinism invariants below must
+                        // hold while it is being driven — which is the whole reason the
+                        // latch is capped and the cap is exercised here rather than argued
+                        // for in a comment.
+                        vaspace_role: match flags & 0xc00 {
+                            0x000 => None,
+                            0x400 => Some(kayfabe_arch::VaSpaceRole::Own),
+                            _ => Some(kayfabe_arch::VaSpaceRole::DeviceDefault),
+                        },
                         gp_fifo_ring: match flags & 0x300 {
                             0x000 => None,
                             0x100 => Some(GpFifoRing { va: 0, entries: 0 }),

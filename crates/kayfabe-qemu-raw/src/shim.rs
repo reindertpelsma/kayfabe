@@ -2947,7 +2947,19 @@ impl SharedDoorbell {
         // in that same boot were SERVED**. Whatever resolves their VA space is the control:
         // any field that reads the same on a served channel and a refused one is not the
         // field that explains the refusal. ⚠ It is emitted on the REFUSAL path only.
-        let routes = format!(" route[{}]", facts.vas_route);
+        // ★★★★ §16.28 — and WHICH of the two possible producers filled `vas=`. The route
+        // string already carries `dev=dev-default(...)`, but `vas=` alone cannot say
+        // whether it came from a live VASpace resource or from route 4's *name*, and those
+        // two mean different things about what exists — so the discriminator is printed
+        // explicitly rather than left to be inferred from a sibling field.
+        //
+        // ⊘ `devdef=NONE` on a channel that took a declared route is the ordinary case and
+        // says so; it is not an absence of information.
+        let devdef = facts.vaspace_device_default.map_or_else(
+            || " devdef=NONE".to_string(),
+            |h| format!(" devdef=0x{h:x}"),
+        );
+        let routes = format!("{devdef} route[{}]", facts.vas_route);
         let census = self.vas_census_line(facts.chan);
         // ★★★★ §16.27 — and WHAT THE WALLING CHANNEL'S OWN NAMESPACE HOLDS.
         //

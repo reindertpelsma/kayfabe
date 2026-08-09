@@ -1245,6 +1245,21 @@ fn translate_alloc(
             h_vaspace: declared_handle(abi.decode_ctxshare_alloc_facts(params)?.h_vaspace),
             ..Default::default()
         },
+        // ★★★★ §16.28 — one field, and it is a *protocol* fact rather than geometry:
+        // `index == NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE` says this alloc **creates no
+        // address space**, it mints a transient handle for the one the parent Device
+        // already owns. ⊘ `decode_vaspace_index` is infallible by construction, so this
+        // arm cannot refuse an alloc the previous revision accepted — see its docs.
+        AllocParams::VaSpace => AllocFacts {
+            vaspace_role: abi.decode_vaspace_index(params).map(|index| {
+                if index == kayfabe_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE {
+                    kayfabe_arch::VaSpaceRole::DeviceDefault
+                } else {
+                    kayfabe_arch::VaSpaceRole::Own
+                }
+            }),
+            ..Default::default()
+        },
         AllocParams::Channel => {
             let c = abi.decode_channel_alloc_facts(params)?;
             AllocFacts {
