@@ -227,7 +227,12 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// layout and this archive would write 1 024 bytes past the end of each. `[measured, boot
 /// `row1_44b7d69`]` the 502-byte sentence that boot emitted is why the 448 before it was not
 /// a precaution, and §16.8's framebuffer dump can reach ~1 260 bytes on the refusing path.
-pub const ABI_VERSION: u32 = 29;
+///
+/// ★ Bumped to **30** at §16.13, the ABI-3 reason an eighteenth time: [`KayfabeRegAudit`]
+/// gained the framebuffer residency census (`fb_resident_valid` / `_lo` / `_hi` / `_pages`),
+/// so an ABI-29 shim would allocate the old layout and this archive would write 32 bytes
+/// past the end of it.
+pub const ABI_VERSION: u32 = 30;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1019,7 +1024,18 @@ fn fb_level_dump(plane: &kayfabe_device::plane::RegPlane, label: &str, phys: u64
         Err(_) => "?".to_string(),
         Ok(()) => page.iter().filter(|b| **b != 0).count().to_string(),
     };
-    format!(" {label}@0x{phys:x}={head_s} nz{nz}/{FB_DUMP_CENSUS}")
+    // ★★★★ RESIDENCY, beside the byte census — because the byte census ALONE cannot answer
+    // the question it looks like it answers. `[measured 2026-08-09, boot `bar1_03a679f`]`
+    // the ring's page dumped `nz0/4096`, and a sparse store returns zeros for a page nobody
+    // ever wrote, so *"never written"* and *"written with zeros"* produce the identical
+    // line. Residency separates them, and ⊘ `res?` — the store cannot say — is a third
+    // answer that must not read as either.
+    let res = match plane.fb_is_resident(phys) {
+        None => "res?",
+        Some(true) => "resY",
+        Some(false) => "resN-NEVER-WRITTEN",
+    };
+    format!(" {label}@0x{phys:x}={head_s} nz{nz}/{FB_DUMP_CENSUS} {res}")
 }
 
 /// ★★★★ **The §16.8 dump, for the REFUSING row and for a CONTROL row chosen from the
@@ -1605,6 +1621,32 @@ pub struct KayfabeRegAudit {
     pub bar0_window_writes: u64,
     /// `#146` — how many bytes of framebuffer the store is holding for this device life.
     pub fb_resident_bytes: u64,
+    /// ★★★★ **The framebuffer's residency EXTENT** — the lowest and highest resident
+    /// addresses, and the page count, beside the byte total.
+    ///
+    /// # ⊘ Why a total was not enough, and it is a MEASURED gap
+    ///
+    /// `[measured 2026-08-09, boot `bar1_03a679f`]` the report said `resident 368640 bytes`
+    /// — 90 pages — and the boot existed to answer *"is the ring's page one of them?"*,
+    /// which a total cannot. A total is a summary of a set; the **set** is what decides,
+    /// and its shape (clustered or spread) is what says whether the resident pages came
+    /// from one write path or several.
+    ///
+    /// ⊘ **`fb_resident_valid` is the precondition and it is carried, not implied.** A
+    /// store that backs no memory at all has no residency to report, and `lo = hi = 0`
+    /// would be a positive claim about a device with no framebuffer port — the same error
+    /// as decoding an empty capture to zeros. Zero here means *"there was no store to
+    /// ask"*, and the C shell prints a different sentence for it.
+    pub fb_resident_valid: u64,
+    /// The lowest resident framebuffer address. Meaningless unless
+    /// [`Self::fb_resident_valid`] is non-zero **and** [`Self::fb_resident_pages`] is.
+    pub fb_resident_lo: u64,
+    /// The highest resident framebuffer address, same conditions.
+    pub fb_resident_hi: u64,
+    /// How many 4 KiB pages are resident — the same fact as
+    /// [`Self::fb_resident_bytes`] / 4096, carried so the C shell need not divide and so a
+    /// disagreement between the two is visible.
+    pub fb_resident_pages: u64,
     /// Faults the emulated GSP raised.
     pub faults: u64,
     /// Guest-RAM accesses the plane's RAM port refused.
@@ -1938,6 +1980,10 @@ impl Default for KayfabeRegAudit {
             bar0_window_reads: Default::default(),
             bar0_window_writes: Default::default(),
             fb_resident_bytes: Default::default(),
+            fb_resident_valid: Default::default(),
+            fb_resident_lo: Default::default(),
+            fb_resident_hi: Default::default(),
+            fb_resident_pages: Default::default(),
             faults: Default::default(),
             ram_refusals: Default::default(),
             irq_requests: Default::default(),
@@ -3257,6 +3303,9 @@ impl Regs {
         // ★★★ The control census — DESTRUCTURED with no `..` for [`Shim::audit`]'s reason:
         // a field added to `CensusSnapshot` and not wired here is a fact the C shell can
         // never read, and nothing goes red. `rustc` refuses the pattern instead.
+        // ★★★★ §16.13 — read BEFORE the struct is assembled, so it is one lock acquisition
+        // rather than four inside a literal. ⊘ `None` is carried as `None`, not flattened.
+        let fb_residency = self.plane.fb_residency();
         let kayfabe_device::census::CensusSnapshot {
             probe_arm: probe_arm_set,
             served_total,
@@ -3377,6 +3426,13 @@ impl Regs {
             // LEVEL, not a total, so a counter would be wrong the moment a device reset
             // freed the pages.
             fb_resident_bytes: self.plane.residue().fb_resident_bytes,
+            // ★★★★ §16.13 — the residency CENSUS, with its own precondition. `None` from
+            // the store means "there is no framebuffer to ask", which is a different fact
+            // from "nothing is resident" and must not be encoded as zeros.
+            fb_resident_valid: u64::from(fb_residency.is_some()),
+            fb_resident_lo: fb_residency.and_then(|r| r.lo).unwrap_or(0),
+            fb_resident_hi: fb_residency.and_then(|r| r.hi).unwrap_or(0),
+            fb_resident_pages: fb_residency.map_or(0, |r| r.pages),
             faults,
             ram_refusals,
             irq_requests,

@@ -718,3 +718,55 @@ fn vidmem_phys_answers_for_a_framebuffer_leaf_and_declines_for_a_guest_ram_one()
     // ⊘ And a refusal is not an address either.
     assert_eq!(CeResolve::NoPublication.vidmem_phys(), None);
 }
+
+// =====================================================================================
+// §16.13 — RESIDENCY: the census that separates "never written" from "written with zeros"
+// =====================================================================================
+
+/// ★★★★ **A page written with zeros and a page never written read IDENTICALLY, and
+/// residency is the only thing that tells them apart.**
+///
+/// `[measured 2026-08-09, boot `bar1_03a679f`]` the framebuffer page the guest's own page
+/// tables name for its GPFIFO ring dumped `nz0/4096` — not one non-zero byte. ⊘ That has two
+/// causes and they need different fixes, and `FbStore::read` returns *zero and `Ok`* for an
+/// unwritten address inside the aperture, so the byte census **cannot** distinguish them.
+#[test]
+fn residency_separates_a_page_never_written_from_one_written_with_zeros() {
+    use kayfabe_device::fbwin::{FbStore, RefusingFb, SparseFb};
+
+    let mut fb = SparseFb::new(1 << 20);
+    fb.write(0x8000, &[0u8; 64]).expect("inside the aperture");
+
+    // Both pages read as all-zero…
+    let (mut a, mut b) = ([0u8; 32], [0u8; 32]);
+    fb.read(0x8000, &mut a).expect("written with zeros");
+    fb.read(0x4000, &mut b).expect("never written");
+    assert_eq!(a, b, "⊘ the two pages are INDISTINGUISHABLE by their bytes");
+
+    // …and residency tells them apart.
+    assert_eq!(
+        fb.is_resident(0x8000),
+        Some(true),
+        "a page something addressed IS resident, even if every byte it wrote was zero"
+    );
+    assert_eq!(
+        fb.is_resident(0x4000),
+        Some(false),
+        "a page nothing ever addressed is NOT resident — this is the whole instrument"
+    );
+
+    let r = fb.residency().expect("a sparse store can answer");
+    assert_eq!(r.pages, 1);
+    assert_eq!((r.lo, r.hi), (Some(0x8000), Some(0x8000)));
+
+    // ★★★ THE PRECONDITION, carried and not implied. A store that backs no memory has no
+    // residency to report, and `Some(0)` would be a positive claim about a device with no
+    // framebuffer port — the same error as decoding an empty capture to zeros.
+    assert_eq!(
+        RefusingFb.residency(),
+        None,
+        "⊘ NOT Some(0): 'there is no store to ask' and 'nothing is resident' are different \
+         facts, and only one of them is about the guest"
+    );
+    assert_eq!(RefusingFb.is_resident(0x4000), None);
+}

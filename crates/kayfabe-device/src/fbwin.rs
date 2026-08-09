@@ -255,6 +255,34 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// reached.
     fn resident_bytes(&self) -> u64;
 
+    /// ★★★★ **WHICH bytes this store actually holds** — [`None`] from a store that cannot
+    /// answer the question at all.
+    ///
+    /// # ⊘ The asymmetry this exists to break, and it is MEASURED
+    ///
+    /// `[measured 2026-08-09, boot `bar1_03a679f`]` the framebuffer page the guest's own
+    /// page tables name for its GPFIFO ring dumped as `nz0/4096` — not one non-zero byte.
+    /// ⊘ **That single observation has two causes and they need different fixes**: the page
+    /// was **never written** (nothing ever addressed it), or it **was written with zeros**
+    /// (something addressed it and put nothing there). [`FbStore::read`] returns *zero and
+    /// `Ok`* for an unwritten address inside the aperture — deliberately, and documented —
+    /// so the byte census **cannot** tell them apart. Residency can: a page nothing ever
+    /// wrote is not in the map.
+    ///
+    /// ★★ **[`None`] is not "nothing is resident".** A store that backs no memory at all
+    /// ([`RefusingFb`]) has no residency to report, and answering `0` would be a positive
+    /// claim about a device that has no framebuffer port — the same error as decoding an
+    /// empty capture to zeros. A counter must carry its own precondition, and this one's
+    /// precondition is *"there is a store to ask"*.
+    fn residency(&self) -> Option<FbResidency>;
+
+    /// Whether this store holds a page for `phys` — [`None`] when it cannot say.
+    ///
+    /// ⊘ Deliberately **not** derivable from [`FbStore::read`]: a read of an unwritten
+    /// address succeeds and yields zeros, which is exactly the answer this distinguishes
+    /// from. See [`FbStore::residency`].
+    fn is_resident(&self, phys: u64) -> Option<bool>;
+
     /// Power-on: forget every byte.
     ///
     /// ★★ **Not optional, and the reason is not tidiness.** Framebuffer content that
@@ -264,6 +292,28 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// (*"unload → reload must yield a device indistinguishable from first boot"*), which
     /// is quantified over **all** of the device's state.
     fn device_reset(&mut self);
+}
+
+/// ★★★★ **What a framebuffer store holds, as a census rather than a total.**
+///
+/// `[measured 2026-08-09, boot `bar1_03a679f`]` the teardown report said `resident 368640
+/// bytes` — 90 pages — and that number cannot answer *"is the ring's page one of them?"*,
+/// which is the question the boot was run for. A total is a summary of a set; the set is
+/// what decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FbResidency {
+    /// How many 4 KiB pages the store holds.
+    pub pages: u64,
+    /// The lowest resident framebuffer address, or [`None`] when nothing is resident.
+    ///
+    /// ⊘ An extent and not a list: the list is up to a residency cap's worth of frames and
+    /// a boot report is not the place for it. The extent plus [`FbResidency::pages`] is
+    /// what says whether the resident set is *clustered* or *spread*, which is the shape
+    /// question — and the frame that actually matters is asked for by name through
+    /// [`FbStore::is_resident`], never found by scanning this.
+    pub lo: Option<u64>,
+    /// The highest resident framebuffer address, or [`None`] when nothing is resident.
+    pub hi: Option<u64>,
 }
 
 /// An [`FbStore`] that refuses every access, by name. The construction default.
@@ -307,6 +357,16 @@ impl FbStore for RefusingFb {
 
     fn resident_bytes(&self) -> u64 {
         0
+    }
+
+    /// ⊘ [`None`], never `Some(0)`. This store backs no memory, so *"nothing is resident"*
+    /// would be a statement about a framebuffer that does not exist. See the trait method.
+    fn residency(&self) -> Option<FbResidency> {
+        None
+    }
+
+    fn is_resident(&self, _phys: u64) -> Option<bool> {
+        None
     }
 
     fn device_reset(&mut self) {}
@@ -498,6 +558,23 @@ impl FbStore for SparseFb {
 
     fn resident_bytes(&self) -> u64 {
         self.pages.len() as u64 * FB_PAGE
+    }
+
+    fn residency(&self) -> Option<FbResidency> {
+        Some(FbResidency {
+            pages: self.pages.len() as u64,
+            lo: self.pages.keys().min().map(|f| f * FB_PAGE),
+            hi: self.pages.keys().max().map(|f| f * FB_PAGE),
+        })
+    }
+
+    /// ⊘ Asked about the **page**, and answered `Some(false)` for an address inside the
+    /// aperture that no write ever touched — which is the arm that separates *"never
+    /// written"* from *"written with zeros"*. An address **outside** the aperture is also
+    /// `Some(false)`: this store genuinely holds no page for it, and [`FbStore::read`]
+    /// refuses it separately, so the two findings stay apart.
+    fn is_resident(&self, phys: u64) -> Option<bool> {
+        Some(self.pages.contains_key(&(phys / FB_PAGE)))
     }
 
     fn device_reset(&mut self) {

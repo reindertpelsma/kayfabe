@@ -1421,6 +1421,37 @@ static void nvkvm_report_registers(NvkvmState *s)
                 "r/%" PRIu64 "w, resident %" PRIu64 " bytes",
                 a.fb_reads, a.fb_writes, a.bar0_window_reads, a.bar0_window_writes,
                 a.fb_refusals, a.fb_window_reads, a.fb_window_writes, a.fb_resident_bytes);
+    /*
+     * ★★★★ §16.13 — WHICH bytes, not how many.  MEASURED 2026-08-09 (boot bar1_03a679f):
+     * the framebuffer page the guest's own page tables name for its GPFIFO ring dumped as
+     * `nz0/4096` — not one non-zero byte — while the page tables themselves dumped `nz2`.
+     * ⊘ A byte census cannot say WHY: FbStore::read returns zero AND Ok for a page nobody
+     * ever wrote, so "never written" and "written with zeros" print identically.  Residency
+     * separates them, and the extent says whether the resident set is CLUSTERED (one write
+     * path) or SPREAD (several).
+     *
+     * ⊘ `fb_resident_valid` is the precondition, printed as its own sentence: a device with
+     * no framebuffer port has no residency to report, and that is not the same fact as a
+     * framebuffer in which nothing is resident.
+     */
+    if (!a.fb_resident_valid) {
+        info_report("nvkvm:   framebuffer residency: ⊘ NO STORE TO ASK — this device has no "
+                    "framebuffer port installed, which is NOT the same fact as a framebuffer "
+                    "in which nothing is resident.");
+    } else if (a.fb_resident_pages == 0) {
+        info_report("nvkvm:   framebuffer residency: 0 pages — the store exists and the guest "
+                    "has written NOTHING to it.");
+    } else {
+        info_report("nvkvm:   framebuffer residency: %" PRIu64 " page(s) spanning "
+                    "[0x%" PRIx64 "..0x%" PRIx64 "] — %" PRIu64 " page(s) of extent, so the "
+                    "resident set is %s. ⊘ A page NOT in this set was never written; a page "
+                    "in it that reads zero WAS addressed and given zeros. The byte census "
+                    "alone cannot tell those apart.",
+                    a.fb_resident_pages, a.fb_resident_lo, a.fb_resident_hi,
+                    ((a.fb_resident_hi - a.fb_resident_lo) / 4096u) + 1u,
+                    (((a.fb_resident_hi - a.fb_resident_lo) / 4096u) + 1u) == a.fb_resident_pages
+                        ? "CONTIGUOUS" : "SPARSE");
+    }
 
     /*
      * ★★★★ BAR1 — THE FLAT APERTURE, AND IT WAS COUNTED AND NEVER PRINTED.

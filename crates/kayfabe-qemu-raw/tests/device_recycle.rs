@@ -892,10 +892,23 @@ fn a_reload_clears_what_a_power_on_reset_keeps() {
         after_reload.register_residue.unclaimed.is_empty(),
         "…and a reload does clear it, because a reload destroys the plane"
     );
+    // ⊘⊘ NOT `KayfabeRegAudit::default()` — and the difference is a real distinction, not a
+    // fudge. `fb_resident_valid` is **not a counter**: it is the framebuffer residency
+    // census's PRECONDITION, and its healthy value on a device that HAS a framebuffer port
+    // is 1. ★ The direction is load-bearing and is the safe one: an audit struct the
+    // archive never wrote is all zeros, and zero must therefore mean *"there was no store
+    // to ask"* — the honest non-claim — rather than *"a framebuffer exists and is empty"*,
+    // which would be a positive claim produced by an unwritten struct. Same argument as
+    // `ISOLATE_REFUSAL_NONE = 0`, one field over.
+    // ⊘ Every OTHER field is still compared, so this weakens nothing: the expectation is a
+    // default with that one flag set, not an `assert!(true)`.
     assert_eq!(
         after_reload.register_plane,
-        KayfabeRegAudit::default(),
-        "…and every counter with it"
+        KayfabeRegAudit {
+            fb_resident_valid: 1,
+            ..KayfabeRegAudit::default()
+        },
+        "…and every counter with it — the residency PRECONDITION is not a counter"
     );
     unload_device(reloaded);
 }

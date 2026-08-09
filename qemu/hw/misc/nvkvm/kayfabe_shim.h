@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 29u
+#define KAYFABE_SHIM_ABI 30u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -620,6 +620,19 @@ typedef struct KayfabeRegAudit {
     uint64_t bar0_window_reads;
     uint64_t bar0_window_writes;
     uint64_t fb_resident_bytes;
+    /* ★★★★ §16.13 — the residency CENSUS beside the total.  MEASURED (boot bar1_03a679f):
+     * the report said "resident 368640 bytes" and the boot existed to answer "is the RING's
+     * page one of them?", which a total cannot.  A sparse store returns ZEROS for a page
+     * nobody ever wrote, so a byte census cannot tell "never written" from "written with
+     * zeros"; residency can.
+     * ⊘ fb_resident_valid is the PRECONDITION and it is carried, not implied.  A store that
+     * backs no memory has no residency to report, and lo = hi = 0 would be a positive claim
+     * about a device with no framebuffer port.  Zero here means "there was no store to ask",
+     * and the printer says so in different words. */
+    uint64_t fb_resident_valid;
+    uint64_t fb_resident_lo;
+    uint64_t fb_resident_hi;
+    uint64_t fb_resident_pages;
     uint64_t faults;
     uint64_t ram_refusals;
     uint64_t irq_requests;

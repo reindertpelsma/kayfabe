@@ -1519,6 +1519,24 @@ impl RegPlane {
         crate::ceresolve::walk_trace(fmt, &mut src, &root, va)
     }
 
+    /// ★★★★ **The framebuffer's residency census** — [`None`] when no store is installed.
+    ///
+    /// See [`crate::fbwin::FbStore::residency`] for the measured asymmetry it exists to
+    /// break: `nz0/4096` cannot tell *"never written"* from *"written with zeros"*, and a
+    /// sparse store's page map can.
+    #[must_use]
+    pub fn fb_residency(&self) -> Option<crate::fbwin::FbResidency> {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.residency()
+    }
+
+    /// Whether the framebuffer holds a page for `phys` — [`None`] when it cannot say.
+    #[must_use]
+    pub fn fb_is_resident(&self, phys: u64) -> Option<bool> {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.is_resident(phys)
+    }
+
     /// ★★★ **Read RAW framebuffer bytes at a framebuffer-physical address** — no walk, no
     /// translation, no [`crate::ceresolve::Demand`], and **strictly an observation**.
     ///

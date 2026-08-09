@@ -639,9 +639,20 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // invalidates every `NoPublication` refusal in the same boot. ⊘ The TABLE does not cross
     // (up to 256 rows of 184-byte bodies); its COMPLETENESS does, which is the property a
     // reader of a refusal actually needs. This is the reason the wire ABI moved to 27.
+    // ★★★★ 77 -> 81 at §16.13: `fb_resident_valid`, `fb_resident_lo`, `fb_resident_hi`,
+    // `fb_resident_pages` — the framebuffer residency CENSUS beside its total. `[measured
+    // 2026-08-09, boot `bar1_03a679f`]` the ring's page dumped `nz0/4096` and the total
+    // (`resident 368640 bytes`) could not say whether that page was NEVER WRITTEN or
+    // WRITTEN WITH ZEROS — `FbStore::read` returns zero *and* `Ok` for an unwritten address,
+    // so the two print identically. ⊘ FOUR fields and not two: `_valid` is the PRECONDITION
+    // (a device with no framebuffer port has no residency to report, which is not the same
+    // fact as a framebuffer in which nothing is resident, and `lo = hi = 0` would be a
+    // positive claim about the first), and `_pages` is carried rather than divided out of
+    // the byte total so a disagreement between the two is visible instead of arithmetic.
+    // This is the reason the wire ABI moved to 30.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (77 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (81 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
