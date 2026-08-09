@@ -110,6 +110,51 @@
 //! any downstream refusal. A served-but-inert data path is this project's forbidden shape;
 //! granting a channel a VAS it cannot execute against converts a *loud* refusal into a
 //! *silent* timeout. This link's entire output is a record and a status.
+//!
+//! # ★★★★ §16.39 — THE RE-ENABLE CONDITION, and it is now a MEASUREMENT rather than a plan
+//!
+//! ⊘ Written here, in the file whose inertness it is about, because §16.38 was a rung about
+//! a paragraph elsewhere that named its own expiry condition correctly and had **no reader**.
+//! A condition recorded where nobody stands is a condition nobody checks.
+//!
+//! `[measured 2026-08-09, boot `s35_03a7e10_dup` at `03a7e10`]`, the boot that first served
+//! `DUP_OBJECT`. Three facts from ONE capture, none of which existed when the paragraph
+//! above was written:
+//!
+//! 1. `SET_PAGE_DIRECTORY (0x00801813): 2 ACCEPTED … hClient 0xc1d0000a hVASpace
+//!    **0xcaf00036** physAddress 0x201000 numEntries 4` — and `0xcaf00036` is the
+//!    **destination handle of UVM's dup** (`s31`'s `GspRmDupObject failed: … hObject=0xcaf00036`,
+//!    `run_s31_675af4a_echofix_probe.log:307`). UVM published a page-directory root under
+//!    the alias the dup minted.
+//! 2. `bridge refusal PromoteFault::ContextVasUndeclared x1` — **new in this boot**, where
+//!    `s31` had only `PromoteFault::UnknownContextObject x3`. That variant means, verbatim
+//!    (`kayfabe_core::promote::PromoteFault`), *"the channel/TSG exists but names no
+//!    routable address space — its VASpace has not declared a page-directory base"*.
+//! 3. `cuCtxCreate` now allocates its `AMPERE_CHANNEL_GPFIFO_A` successfully and dies on
+//!    `AMPERE_COMPUTE_B` (`0xc7c0`, allowlisted and modelled), with the guest naming
+//!    `kgrobjPromoteContext … @ kernel_graphics_object.c:224`.
+//!
+//! ⇒ ★★★ **The PDB a channel's VA space is refused for not having ARRIVED — on this
+//! transport, in this boot, and we recorded it instead of applying it.** And the object
+//! model can already carry it across the alias without a new mechanism: `RmEvent::SetPageDir`
+//! sets `pdb` on the **RESOURCE** (`rmgraph.rs`'s `SetPageDir` arm), and a `Dup` binds the
+//! destination handle to *the source's own resource id* — so a root published under UVM's
+//! name lands on the same resource libcuda's channel resolves through. That is the
+//! condition this paragraph was waiting for, and `translate_control` already produces the
+//! event (`kayfabe_rmrpc: lib.rs:1461-1471`); what is missing is this link routing to it.
+//!
+//! ⚠ **THREE THINGS THAT ARE NOT MEASURED, and the rung that acts on this owes each one:**
+//! - **WHICH VA space the failing channel names.** libcuda allocates *two*
+//!   `FERMI_VASPACE_A` (`s31`: `0x5c000007`, `0x5c000008`); only the second publishes
+//!   through `0x90f10106`, and only the first is the one UVM registered. That the channel
+//!   uses the first is the *hypothesis* this whole section rests on and it is unread.
+//! - **Which of the three `0x2080012b` refusals belongs to which caller.** The census counts
+//!   variants, not call sites.
+//! - **Whether this is sufficient or merely necessary.** `injection_measures_necessity_never_sufficiency`.
+//!
+//! ⊘ And the standing warning does not lapse: §14.21 measured this exact control being
+//! claimed, killing the adapter, and being reverted. Serving is not the risk; **answering
+//! with a status the guest's error path reads** is (`ObjectPolicy::respond_promote_ctx`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
