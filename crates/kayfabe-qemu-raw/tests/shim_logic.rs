@@ -629,9 +629,19 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // because this buffer has only one. ⊘ A third count for a third buffer, and this one is
     // the sharpest: it is the only buffer whose SIZE this device also invents. This is the
     // reason the wire ABI moved to 26.
+    // ★★★★ 76 -> 77 at §15.8: `gvas_pub_roots_refused`. ⊘ ONE number, and it is the only
+    // thing that says the page-directory ROOT TABLE is still complete. `[measured
+    // 2026-08-09, boot `uvm1_b731e3c`]` `ceresolve::published_root` was looking VA spaces up
+    // in the EIGHT-ROW report sample during a boot that published ELEVEN distinct, so three
+    // address spaces were refused with `CeResolve::NoPublication` — *"the guest published no
+    // page-directory root"* — about a guest that had published one. The lookup now has its
+    // own, far larger table, and this counts what that table had to refuse; a non-zero value
+    // invalidates every `NoPublication` refusal in the same boot. ⊘ The TABLE does not cross
+    // (up to 256 rows of 184-byte bodies); its COMPLETENESS does, which is the property a
+    // reader of a refusal actually needs. This is the reason the wire ABI moved to 27.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (76 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (77 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS

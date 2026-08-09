@@ -1288,9 +1288,14 @@ impl Ga10xPushbuffer {
     fn ce_launch(state: &MethodState, subch: usize, flags: u32) -> Option<PushMethod> {
         // ★★★ `subchannel_speaks`, not `object(subch)?` — see that predicate's docs for
         // UVM's own encoder, which binds the CE class on subchannel 0 and issues every CE
-        // method on subchannel 4. The old form refused all of them, and RM's `channel_utils`
-        // path (bind and fire on one subchannel) is why nothing noticed.
-        if !state.subchannel_speaks(subch, ClassId(nv::AMPERE_DMA_COPY_B)) {
+        // method on subchannel 4 — which `NVA06F_SUBCHANNEL_COPY_ENGINE` names. The old form
+        // refused all of them, and RM's `channel_utils` path (bind and fire on one
+        // subchannel) is why nothing noticed.
+        if !state.subchannel_speaks(
+            subch,
+            ClassId(nv::AMPERE_DMA_COPY_B),
+            submit::ce::FIXED_SUBCHANNEL,
+        ) {
             return None;
         }
         // ★★★ **`DATA_TRANSFER_TYPE == NONE` is a RELEASE, not a nothing** — and reporting

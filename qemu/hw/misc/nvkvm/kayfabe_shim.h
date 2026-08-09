@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 26u
+#define KAYFABE_SHIM_ABI 27u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -756,6 +756,19 @@ typedef struct KayfabeRegAudit {
     uint64_t gvas_pub_total;
     uint64_t gvas_pub_len;
     uint64_t gvas_pub_undecodable;
+    /* ★★★★ IS THE ROOT TABLE STILL COMPLETE?  The healthy value is ZERO.
+     *
+     * The rows above are a bounded REPORT.  The lookup that decides whether a guest channel
+     * can address anything is a separate, much larger table
+     * (`kayfabe_device::gvaspub::GVAS_ROOT_TABLE_MAX`), and this counts publications it had
+     * to refuse.
+     *
+     * ⊘ It exists because of what its absence cost.  `[measured 2026-08-09, boot
+     * uvm1_b731e3c]` the resolver looked VA spaces up in the EIGHT-ROW report sample during
+     * a boot that published ELEVEN distinct, so three address spaces were refused with
+     * "the guest published no page-directory root" — a false statement about the guest.
+     * A non-zero value here invalidates every such refusal in the same boot. */
+    uint64_t gvas_pub_roots_refused;
     /* ★★★ THE SEAT THAT CARRIES A PUBLICATION INTO THE OBJECT MODEL (§14.23), counted by a
      * DIFFERENT link from the three above.  `gvas_pub_total` is the recorder's (decode +
      * log); `gvas_pub_seen` is the observer's (decode + declare), and `gvas_pub_applied` is

@@ -68,9 +68,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-abi"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-arch"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-chips"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-gsp",
+ "kayfabe-mocks",
  "kayfabe-util",
 ]
 
@@ -89,6 +108,32 @@ dependencies = [
  "kayfabe-completion",
  "kayfabe-isolate",
  "kayfabe-mmu",
+ "kayfabe-trace",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-crec"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-device",
+ "kayfabe-gsp",
+ "kayfabe-mocks",
+ "kayfabe-trace",
+ "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-device"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-gsp",
+ "kayfabe-mmu",
+ "kayfabe-trace",
  "kayfabe-util",
 ]
 
@@ -97,11 +142,18 @@ name = "kayfabe-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-core",
  "kayfabe-fwd",
+ "kayfabe-gsp",
+ "kayfabe-isolate",
+ "kayfabe-isolate-host",
+ "kayfabe-mmu",
  "kayfabe-mocks",
+ "kayfabe-rmrpc",
  "kayfabe-tests",
+ "kayfabe-util",
  "kayfabe-vmm",
  "libfuzzer-sys",
 ]
@@ -115,8 +167,19 @@ dependencies = [
  "kayfabe-core",
  "kayfabe-isolate",
  "kayfabe-mmu",
+ "kayfabe-trace",
  "kayfabe-util",
  "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-gsp"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-trace",
+ "kayfabe-util",
 ]
 
 [[package]]
@@ -129,10 +192,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-isolate-host"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-chips",
+ "kayfabe-isolate",
+ "kayfabe-linux-raw",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-linux-raw"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-util",
+ "libc",
+]
+
+[[package]]
 name = "kayfabe-mmu"
 version = "0.1.0"
 dependencies = [
  "kayfabe-arch",
+ "kayfabe-isolate",
  "kayfabe-util",
 ]
 
@@ -140,19 +225,34 @@ dependencies = [
 name = "kayfabe-mocks"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-isolate",
  "kayfabe-util",
  "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-rmrpc"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-core",
+ "kayfabe-gsp",
+ "kayfabe-trace",
+ "kayfabe-util",
 ]
 
 [[package]]
 name = "kayfabe-rt"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-completion",
  "kayfabe-core",
+ "kayfabe-device",
  "kayfabe-fwd",
  "kayfabe-isolate",
  "kayfabe-mmu",
@@ -161,17 +261,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-shell"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-core",
+ "kayfabe-linux-raw",
+ "kayfabe-rt",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-tests"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-chips",
+ "kayfabe-completion",
+ "kayfabe-core",
+ "kayfabe-crec",
+ "kayfabe-device",
+ "kayfabe-fwd",
+ "kayfabe-gsp",
+ "kayfabe-isolate",
+ "kayfabe-linux-raw",
+ "kayfabe-mmu",
+ "kayfabe-mocks",
+ "kayfabe-rmrpc",
+ "kayfabe-rt",
+ "kayfabe-shell",
+ "kayfabe-trace",
+ "kayfabe-util",
+ "kayfabe-vmm",
+ "kayfabe-vmm-kvm",
+ "kayfabe-vmm-qemu",
+]
+
+[[package]]
+name = "kayfabe-trace"
 version = "0.1.0"
 dependencies = [
  "kayfabe-arch",
  "kayfabe-completion",
- "kayfabe-core",
- "kayfabe-fwd",
  "kayfabe-isolate",
  "kayfabe-mmu",
- "kayfabe-mocks",
- "kayfabe-rt",
  "kayfabe-util",
  "kayfabe-vmm",
 ]
@@ -184,7 +317,29 @@ version = "0.1.0"
 name = "kayfabe-vmm"
 version = "0.1.0"
 dependencies = [
+ "kayfabe-arch",
  "kayfabe-util",
+]
+
+[[package]]
+name = "kayfabe-vmm-kvm"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-linux-raw",
+ "kayfabe-util",
+ "kayfabe-vmm",
+]
+
+[[package]]
+name = "kayfabe-vmm-qemu"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-arch",
+ "kayfabe-isolate",
+ "kayfabe-linux-raw",
+ "kayfabe-mmu",
+ "kayfabe-util",
+ "kayfabe-vmm",
 ]
 
 [[package]]

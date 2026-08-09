@@ -385,6 +385,65 @@ fn the_distinct_count_keeps_counting_past_the_sample_cap() {
     assert_eq!(snap.sample[0].object, 0x0000_5c00);
 }
 
+/// ★★★★ **EVERY published VA space is RESOLVABLE, including the ones past the report's
+/// cap** — the property whose absence made `CeResolve::NoPublication` a false statement
+/// about the guest.
+///
+/// `[measured 2026-08-09, boot `uvm1_b731e3c`]`: `ceresolve::published_root` searched
+/// `GvasPubSnapshot::sample`, which holds eight rows, in a boot that published **11
+/// distinct** VA spaces. The three past the cap were unresolvable, and the doorbell of the
+/// UVM channel `cuInit` walls on was refused with *"no page-directory root was published
+/// for (hClient 0xc1d0000a, hVASpace 0xcaf00005)"* — about a guest that had published one.
+///
+/// ⊘ The test that existed asserted the **count** kept counting past the cap
+/// (`the_distinct_count_keeps_counting_past_the_sample_cap`) and stopped exactly there. A
+/// number that stays honest while the lookup beside it goes wrong is the shape
+/// `a_saturated_instrument_looks_exactly_like_absence` names, and this is its fifth
+/// sighting — the first on a DATA PATH rather than in a report.
+///
+/// ★ Non-vacuity is structural: the last publication is asserted resolvable **and** the
+/// first is too, so a fix that merely reversed the clipping order would fail here.
+#[test]
+fn every_published_va_space_resolves_even_past_the_reports_cap() {
+    let log = GvasPubLog::new();
+    let mut rec = recorder(&log);
+    let body = oracle_body();
+    let n = GVAS_PUBLICATION_SAMPLE_MAX as u32 + 5;
+    for i in 0..n {
+        rec.respond(&control_command(
+            0xc1e0_0004,
+            0x0000_5c00 + i,
+            NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+            &body,
+        ));
+    }
+    let snap = log.snapshot();
+    // The report still clips — that half is deliberate and is not what changed.
+    assert_eq!(snap.sample.len(), GVAS_PUBLICATION_SAMPLE_MAX);
+    // ★★★ The LOOKUP does not.
+    for i in 0..n {
+        assert!(
+            kayfabe_device::ceresolve::published_root(&snap, 0xc1e0_0004, 0x0000_5c00 + i)
+                .is_some(),
+            "VA space #{i} (hObject 0x{:x}) published a root and MUST resolve — it is past \
+             the eight-row report sample, which is exactly the case that answered a real \
+             guest's UVM channel with `NoPublication`",
+            0x0000_5c00 + i
+        );
+    }
+    assert_eq!(
+        snap.roots_refused, 0,
+        "nothing near GVAS_ROOT_TABLE_MAX here, so the table is complete and every \
+         `NoPublication` this snapshot could produce is a fact about the guest"
+    );
+    // ⊘ And a pair the guest never published still resolves to NOTHING. A table that
+    // answered everything would pass every assertion above and be worthless.
+    assert!(
+        kayfabe_device::ceresolve::published_root(&snap, 0xc1e0_0004, 0xdead_beef).is_none(),
+        "an unpublished VA space has no root, and that refusal is the whole vocabulary"
+    );
+}
+
 #[test]
 fn a_device_reset_forgets_every_publication() {
     // ★★★ Not tidiness: a root that survived a device life is the PREVIOUS guest's, and the

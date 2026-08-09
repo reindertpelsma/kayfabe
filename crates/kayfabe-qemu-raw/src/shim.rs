@@ -208,7 +208,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// distinct count rather than the sample's clamped length — an ABI-22 reader would have
 /// indexed `unserviced[0..unserviced_len]` out of bounds the first time a boot exceeded the
 /// cap, which is the second reason this could not be a silent widening.
-pub const ABI_VERSION: u32 = 26;
+pub const ABI_VERSION: u32 = 27;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1473,6 +1473,19 @@ pub struct KayfabeRegAudit {
     /// an absent row: *"the guest published something we could not read"* and *"the guest
     /// published nothing"* are different diagnoses and only one of them is our defect.
     pub gvas_pub_undecodable: u64,
+    /// ★★★★ **Publications the AUTHORITATIVE ROOT TABLE refused** — the number whose
+    /// healthy value is zero, and the only thing that says
+    /// `kayfabe_device::gvaspub::GvasPubSnapshot::roots` is still COMPLETE.
+    ///
+    /// ⊘ It crosses because of what its predecessor's absence cost. `[measured 2026-08-09,
+    /// boot `uvm1_b731e3c`]` the resolver looked a VA space up in the eight-row *report*
+    /// sample while the boot published **11 distinct**, so three address spaces were
+    /// answered `CeResolve::NoPublication` — *"the guest published no page-directory
+    /// root"* — about a guest that had published one. The table is now separate and holds
+    /// `GVAS_ROOT_TABLE_MAX`; this is what makes its completeness an OBSERVATION rather
+    /// than an assumption, and a non-zero value invalidates every `NoPublication` refusal
+    /// in the same boot.
+    pub gvas_pub_roots_refused: u64,
     /// ★★★ **§14.23 — publications the FRONT SEAT saw**, i.e. arrived on one of
     /// `kayfabe_rmrpc::PUBLICATION_CONTROLS`.
     ///
@@ -1667,6 +1680,7 @@ impl Default for KayfabeRegAudit {
             gvas_pub_total: Default::default(),
             gvas_pub_len: Default::default(),
             gvas_pub_undecodable: Default::default(),
+            gvas_pub_roots_refused: Default::default(),
             gvas_pub_seen: Default::default(),
             gvas_pub_applied: Default::default(),
             gvas_pub_unexpected: Default::default(),
@@ -2857,6 +2871,11 @@ impl Regs {
             distinct: gvas_pub_len,
             undecodable: gvas_pub_undecodable,
             sample: gvas_pub_rows,
+            // ⊘ The TABLE itself does not cross — it is up to 256 rows of 184-byte bodies
+            // and the report is the sample. What crosses is whether it is still COMPLETE,
+            // which is the only property a reader of a `NoPublication` refusal needs.
+            roots: _gvas_roots,
+            roots_refused: gvas_pub_roots_refused,
         } = self.plane.gvas_publications();
         // ★★★ §14.23 — and the SEAT's own numbers, destructured with no `..` for the same
         // reason: a counter added to `PublicationCensus` and not wired here is a fact the C
@@ -2987,6 +3006,7 @@ impl Regs {
             gvas_pub_total,
             gvas_pub_len,
             gvas_pub_undecodable,
+            gvas_pub_roots_refused,
             gvas_pub_seen,
             gvas_pub_applied,
             gvas_pub_unexpected,

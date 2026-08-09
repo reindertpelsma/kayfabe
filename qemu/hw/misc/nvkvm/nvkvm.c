@@ -1458,6 +1458,16 @@ static void nvkvm_report_registers(NvkvmState *s)
                 "boot-path source of a page-directory root — SET_PAGE_DIRECTORY is never "
                 "sent)",
                 a.gvas_pub_total, a.gvas_pub_len, a.gvas_pub_undecodable);
+    /* ★★★★ THE ROOT TABLE'S COMPLETENESS — printed only when it is NOT complete, because
+     * a line that is always there is a line nobody reads.  A non-zero value means the
+     * lookup that answers "can this channel address anything" stopped seeing publications,
+     * so every `CeResolve::NoPublication` refusal in this boot is unsafe to believe. */
+    if (a.gvas_pub_roots_refused) {
+        warn_report("nvkvm:   ★★★ THE PAGE-DIRECTORY ROOT TABLE IS INCOMPLETE: %" PRIu64
+                    " publication(s) REFUSED by its cap. Every NoPublication refusal in "
+                    "this boot may be a publication we dropped, not one the guest never "
+                    "sent.", a.gvas_pub_roots_refused);
+    }
     /* ★★★ §14.23 — and what the OBJECT MODEL made of them, which is a different link's
      * count.  Until 2026-08-08 the line above was the whole story: the port decoded this
      * control, answered NV_OK and dropped the value, so every promote-ctx could only refuse

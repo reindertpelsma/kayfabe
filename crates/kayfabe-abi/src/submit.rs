@@ -1927,6 +1927,35 @@ pub mod ce {
     /// `LAUNCH_DMA_DST_TYPE_PHYSICAL` — field `13:13`, value 1 (`clc7b5.h:126`).
     pub const LAUNCH_DST_PHYSICAL: u32 = 1 << 13;
 
+    /// ★★★ **The subchannel hardware fixes for the copy engine** — `4`.
+    ///
+    /// `[src] ogkm-580: src/common/sdk/nvidia/inc/class/cla06fsubch.h:30`
+    /// (`NVA06F_SUBCHANNEL_COPY_ENGINE 4`), one of five architecturally assigned
+    /// subchannels in that header — `3D 0`, `COMPUTE 1`, `I2M 2`, `2D 3`, `COPY_ENGINE 4`.
+    ///
+    /// # ⊘ Why a decoder needs it, and why it is NOT a licence to decode anything
+    ///
+    /// A subchannel's methods mean whatever its bound object says. `SET_OBJECT` is the
+    /// in-band way to bind one — but it is not the only way the binding exists, and UVM
+    /// proves it: `uvm_hal_maxwell_ce_init` binds the CE class on subchannel **0** on
+    /// purpose (*"instead of the recommended by HW subchannel 4 … subchannel 4 is required
+    /// to match CE usage on GRCE"*, `kernel-open/nvidia-uvm/uvm_maxwell_ce.c:31-35`) and
+    /// then issues every CE method on subchannel 4, which nothing in the stream ever binds.
+    ///
+    /// ⇒ A codec that decodes an **unbound** subchannel's methods needs one narrow,
+    /// **sourced** reason to believe what they are, and this is it: *this* subchannel, and
+    /// no other. ⚠ It is a necessary condition, never a sufficient one — see
+    /// [`kayfabe_arch::MethodState::subchannel_speaks`], which additionally requires that
+    /// the guest named the class somewhere on the same channel.
+    ///
+    /// ⊘ The wider rule — *"any unbound subchannel, if the channel bound a CE anywhere"* —
+    /// was written first and **a hostile-stream property refuted it in the same hour**
+    /// (`tests/tests/pushbuffer_ga10x_hostile.rs`,
+    /// `a_hostile_method_stream_never_fires_a_copy_it_did_not_write`): it fired a copy from
+    /// **subchannel 6** carrying operands a compute object's method addresses could equally
+    /// have written.
+    pub const FIXED_SUBCHANNEL: usize = 4;
+
     /// `NVC7B5_SET_SRC_PHYS_MODE` method address (`ogkm-580: clc7b5.h:66`, and
     /// **identical** in `clb0b5.h:56`, so it is chip-family-stable across every
     /// `*_DMA_COPY_*` this port targets).

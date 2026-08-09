@@ -1169,9 +1169,8 @@ impl MethodState {
         self.object.get(subch).copied().flatten()
     }
 
-    /// ★★★ **Is `class` bound on `subch`, or is `subch` unbound on a channel that bound
-    /// `class` somewhere?** The predicate a codec should ask before decoding a method
-    /// address as `class`'s.
+    /// ★★★ **May a codec read `subch`'s methods as `class`'s?** The predicate to ask before
+    /// decoding a method address, and it has exactly two ways to answer yes.
     ///
     /// # ⚠ THE MEASUREMENT THAT FORCED THIS, and it is UVM's own encoder
     ///
@@ -1192,25 +1191,48 @@ impl MethodState {
     /// UVM ever emits*. RM's own `channel_utils.c` binds and fires on one subchannel, which
     /// is why the CeUtils path worked and hid this completely.
     ///
-    /// # ⊘ Why the fallback is this shape and not a looser one
+    /// # ⊘⊘ The fallback is TWO conditions, and the second was added because a property
+    /// refuted the first — in the same hour, before any boot
     ///
-    /// The check exists so a method at, say, `0x300` on a **graphics** subchannel is not
-    /// decoded as `LAUNCH_DMA`. That protection is kept exactly: a subchannel bound to some
-    /// *other* class still answers `false`. What is relaxed is only the **unbound** case,
-    /// and only on a channel where the guest itself named `class` in this same method
-    /// state — so nothing is inferred that the guest did not say, and a channel that never
-    /// mentioned a copy engine can never have one decoded on it.
+    /// The wider rule *"any **unbound** subchannel, on a channel that bound `class`
+    /// somewhere"* was written first. `tests/tests/pushbuffer_ga10x_hostile.rs`'s
+    /// `a_hostile_method_stream_never_fires_a_copy_it_did_not_write` refuted it immediately:
     ///
-    /// ⊘ Deliberately **not** "default to the channel's engine kind": that would be a fact
+    /// ```text
+    /// subchannel 6: codec said Some(CeLaunchDma { dst: GpuVa(279548103369567), … }),
+    ///   the stream wrote None — the accumulator and the guest disagree about what was
+    ///   submitted
+    /// ```
+    ///
+    /// A compute or graphics object's method addresses collide with the copy engine's, so
+    /// *"unbound"* alone lets a stream that never described a copy fire one. ⇒ the unbound
+    /// arm is additionally restricted to the **architecturally fixed** subchannel for that
+    /// class (`fixed_subch`; for the copy engine `NVA06F_SUBCHANNEL_COPY_ENGINE = 4`,
+    /// `ogkm-580: cla06fsubch.h:30`) — the one subchannel hardware itself assigns, and the
+    /// one UVM fires on.
+    ///
+    /// Both halves of the protection are therefore intact: a subchannel bound to some
+    /// *other* class answers `false`, and an unbound subchannel that is not the fixed one
+    /// answers `false`. What is inferred is only what the guest already said — it named
+    /// `class` on this channel — plus one sourced hardware convention.
+    ///
+    /// ⊘ Deliberately **not** *"default to the channel's engine kind"*: that would be a fact
     /// from the object model reaching into the arch, and it would fire on a channel whose
     /// engine object was allocated but whose pushbuffer never bound anything — an inference
     /// about hardware we have not measured.
+    ///
+    /// `fixed_subch` is a parameter rather than a constant because *which* subchannel is
+    /// fixed for *which* class is a per-generation encoding, and this type is Axis-B's
+    /// generation-free half.
     #[must_use]
-    pub fn subchannel_speaks(&self, subch: usize, class: ClassId) -> bool {
+    pub fn subchannel_speaks(&self, subch: usize, class: ClassId, fixed_subch: usize) -> bool {
         match self.object(subch) {
             Some(bound) => bound == class,
-            // Unbound: only if the guest bound `class` on some subchannel of THIS channel.
-            None => subch < SUBCHANNELS && self.object.contains(&Some(class)),
+            // Unbound: the fixed subchannel for this class, AND the guest named the class
+            // on this channel. Neither condition alone is enough — see the docs above.
+            None => {
+                subch < SUBCHANNELS && subch == fixed_subch && self.object.contains(&Some(class))
+            }
         }
     }
 

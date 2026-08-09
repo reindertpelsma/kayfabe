@@ -227,26 +227,39 @@ pub struct VasRoot {
 /// (`0xc1e00005` → `hObject 0xc`) while its own channel reports `hVASpaceId=0x0`, so the
 /// wrong-answer case is present in the very boot this exists for.
 ///
-/// ★ The **last** matching row wins. A VA space torn down and re-published at the same
-/// handles differs in nothing but arrival order, and the current tree is the later one;
-/// [`crate::gvaspub::GvasPubLog`] de-duplicates identical bodies, so this only ever chooses
-/// between rows that genuinely disagree.
+/// ★ The **last** publication of a given `(client, vaspace)` wins. A VA space torn down and
+/// re-published at the same handles differs in nothing but arrival order, and the current
+/// tree is the later one; [`crate::gvaspub::GvasPubLog::note`] keys the table on exactly
+/// that pair and overwrites, so this only ever sees the newest.
+///
+/// # ⊘⊘⊘ IT READS [`GvasPubSnapshot::roots`], NOT `sample` — and that WAS the bug
+///
+/// `[measured 2026-08-09, boot `uvm1_b731e3c`]`: this function used to `rfind` over
+/// [`GvasPubSnapshot::sample`], which is **capped at eight rows**, in a boot that published
+/// **11 distinct** VA spaces. Three of them were therefore unresolvable, and the refusal
+/// this function's `None` produces — [`CeResolve::NoPublication`], *"the guest published no
+/// page-directory root"* — was a **false statement about the guest** for every one of them.
+/// The UVM channel `cuInit` walls on is one:
+///
+/// ```text
+/// first doorbell refusal [CeResolve::NoPublication] no page-directory root was published
+///   for (hClient 0xc1d0000a, hVASpace 0xcaf00005)
+/// ```
+///
+/// ⇒ A report may clip. **A lookup may not.** See [`GvasPubSnapshot::roots`].
 #[must_use]
 pub fn published_root(snap: &GvasPubSnapshot, client: u32, vaspace: u32) -> Option<VasRoot> {
-    snap.sample
-        .iter()
-        .rfind(|p| p.client == client && p.object == vaspace)
-        .map(|p| {
-            let l0 = p.pdes.root();
-            VasRoot {
-                phys: l0.phys_address,
-                aperture: decode_aperture(l0.aperture),
-                aperture_raw: l0.aperture,
-                page_shift: l0.page_shift,
-                virt_addr_lo: p.pdes.virt_addr_lo,
-                virt_addr_hi: p.pdes.virt_addr_hi,
-            }
-        })
+    snap.roots.get(&(client, vaspace)).map(|p| {
+        let l0 = p.pdes.root();
+        VasRoot {
+            phys: l0.phys_address,
+            aperture: decode_aperture(l0.aperture),
+            aperture_raw: l0.aperture,
+            page_shift: l0.page_shift,
+            virt_addr_lo: p.pdes.virt_addr_lo,
+            virt_addr_hi: p.pdes.virt_addr_hi,
+        }
+    })
 }
 
 /// What resolving one GPU VA in one published VA space came to.

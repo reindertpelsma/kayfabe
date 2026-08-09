@@ -87,6 +87,7 @@
 //! served-but-inert path is this project's forbidden shape. This link's entire output is a
 //! number in a report.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use kayfabe_abi::gvaspacepdes::{
@@ -104,6 +105,25 @@ use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 /// one thing this log exists to carry — and [`GvasPubSnapshot::distinct`] keeps counting
 /// past the cap, so a full sample is never mistaken for a complete list.
 pub const GVAS_PUBLICATION_SAMPLE_MAX: usize = 8;
+
+/// ★★★★ **How many distinct VA spaces the AUTHORITATIVE table holds** — see
+/// [`GvasPubSnapshot::roots`] for the boot in which the eight-row *sample* was being used
+/// as that table and three real publications were answered as *"the guest published
+/// nothing"*.
+///
+/// ⚠ It is still a cap, because the guest chooses the key `(hClient, hObject)` and an
+/// unbounded map is an unbounded allocation a guest can drive (boundary-1). What changed is
+/// the **order of magnitude and the loudness**: `[measured 2026-08-09, boot `uvm1_b731e3c`,
+/// binary stamped `kayfabe-rev:b731e3c30…`]` a real boot published **11 distinct** VA
+/// spaces (`VA-space page-directory publications: 12 total, 11 distinct, 0 UNDECODABLE`);
+/// this holds 256, and the 257th is counted in [`GvasPubSnapshot::roots_refused`] instead
+/// of vanishing.
+///
+/// ⊘ Sized against that measurement with two orders of headroom rather than to it: VA
+/// spaces scale with *processes*, and the milestone after this one is multi-process. A cap
+/// chosen to fit one boot is a cap that starts lying on the next workload — which is
+/// exactly how the eight came to be load-bearing.
+pub const GVAS_ROOT_TABLE_MAX: usize = 256;
 
 /// One publication, as it arrived: the two header handles, and the decoded body.
 ///
@@ -161,7 +181,45 @@ pub struct GvasPubSnapshot {
     /// absence cannot distinguish them.
     pub undecodable: u64,
     /// The rows, in first-seen order, capped at [`GVAS_PUBLICATION_SAMPLE_MAX`].
+    ///
+    /// ⊘⊘ **A REPORT, never the lookup.** See [`GvasPubSnapshot::roots`].
     pub sample: Vec<GvasPublication>,
+    /// ★★★★ **THE AUTHORITATIVE TABLE** — every published VA space, keyed exactly as
+    /// [`crate::ceresolve::published_root`] looks one up: `(hClient, hObject)`.
+    ///
+    /// # ⊘⊘⊘ THE DEFECT THIS EXISTS TO END — a SATURATED LIST ON THE DATA PATH
+    ///
+    /// `published_root` used to search [`GvasPubSnapshot::sample`], which is **capped at
+    /// eight rows**. `[measured 2026-08-09, boot `uvm1_b731e3c`, binary stamped
+    /// `kayfabe-rev:b731e3c30…`]` that boot published **11 distinct** VA spaces:
+    ///
+    /// ```text
+    /// VA-space page-directory publications: 12 total, 11 distinct, 0 UNDECODABLE
+    /// …
+    /// first doorbell refusal [CeResolve::NoPublication] no page-directory root was
+    ///   published for (hClient 0xc1d0000a, hVASpace 0xcaf00005)
+    /// ```
+    ///
+    /// ⇒ **Three publications were dropped by the cap, and the resolver called their VA
+    /// spaces unpublished.** `CeResolve::NoPublication`'s own sentence — *"the guest
+    /// published no page-directory root"* — is then a **false statement about the guest**,
+    /// not a refusal to answer. ⊘ The type already said so and nobody joined the two
+    /// sentences: `sample` is documented as *"capped"* and `distinct` as *"the truth even
+    /// past the cap"*, while the one consumer that decides whether a guest's channel can
+    /// address anything read `sample`.
+    ///
+    /// ★ Fifth sighting of `a_saturated_instrument_looks_exactly_like_absence`, and the
+    /// first where the saturated list is **not an instrument**. A report that clips is a
+    /// report; a lookup that clips is a wrong answer.
+    ///
+    /// ⚠ Bounded too — the guest drives the key — but at [`GVAS_ROOT_TABLE_MAX`], and an
+    /// insert past the cap is counted in [`GvasPubSnapshot::roots_refused`] rather than
+    /// dropped in silence. A non-zero value there means *this table is no longer complete*,
+    /// which is the one thing its consumer must never assume without checking.
+    pub roots: BTreeMap<(u32, u32), GvasPublication>,
+    /// ★★★ Publications refused by [`GVAS_ROOT_TABLE_MAX`] — the number whose healthy
+    /// value is zero, and the reason [`GvasPubSnapshot::roots`] may be trusted when it is.
+    pub roots_refused: u64,
 }
 
 #[derive(Debug, Default)]
@@ -170,6 +228,8 @@ struct GvasPubInner {
     distinct: u64,
     undecodable: u64,
     sample: Vec<GvasPublication>,
+    roots: BTreeMap<(u32, u32), GvasPublication>,
+    roots_refused: u64,
 }
 
 /// The shared record. Cloneable so the plane and the chain link hold the same one — the
@@ -188,10 +248,39 @@ impl GvasPubLog {
         GvasPubLog::default()
     }
 
-    /// Record one decoded publication.
+    /// Record one decoded publication — into the bounded **report** and into the
+    /// authoritative **table**, which are two different things (see
+    /// [`GvasPubSnapshot::roots`]).
     pub fn note(&self, row: GvasPublication) {
         let mut s = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         s.total += 1;
+        // ★★★★ THE TABLE, first and unconditionally — before any cap that belongs to the
+        // report. ⊘ Last-write-wins on `(client, object)`, which reproduces exactly what
+        // `published_root`'s `rfind` meant ("a VA space re-published at the same handles is
+        // the later one") without depending on a list the report is free to clip.
+        let key = (row.client, row.object);
+        let full = s.roots.len() >= GVAS_ROOT_TABLE_MAX;
+        match s.roots.entry(key) {
+            std::collections::btree_map::Entry::Occupied(mut e) => {
+                let prev = e.get().count;
+                e.insert(GvasPublication {
+                    // ⊘ The count follows the KEY, not the body: a re-publication with
+                    // different levels is still this VA space being published again.
+                    count: prev.saturating_add(1),
+                    ..row
+                });
+            }
+            std::collections::btree_map::Entry::Vacant(v) => {
+                if !full {
+                    v.insert(GvasPublication { count: 1, ..row });
+                } else {
+                    // ⊘ COUNTED, never silent. A consumer of `roots` must be able to learn
+                    // that the table stopped being complete; that is the whole difference
+                    // between this and the eight-row cap it replaces.
+                    s.roots_refused += 1;
+                }
+            }
+        }
         if let Some(seen) = s.sample.iter_mut().find(|r| {
             r.cmd == row.cmd
                 && r.client == row.client
@@ -222,6 +311,8 @@ impl GvasPubLog {
             distinct: s.distinct,
             undecodable: s.undecodable,
             sample: s.sample.clone(),
+            roots: s.roots.clone(),
+            roots_refused: s.roots_refused,
         }
     }
 

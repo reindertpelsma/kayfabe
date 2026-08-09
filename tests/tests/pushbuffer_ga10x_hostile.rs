@@ -701,6 +701,94 @@ fn plain_copy_flags() -> u32 {
         | ce::LAUNCH_DST_PITCH
 }
 
+/// ★★★★ **The UNBOUND-SUBCHANNEL fallback, pinned in all four directions** — the rule
+/// `MethodState::subchannel_speaks` adds, and the three ways it must still say no.
+///
+/// UVM binds the copy engine on subchannel **0** and issues every CE method on subchannel
+/// **4** (`ogkm-580: uvm_maxwell_ce.c:29-37` + `uvm_push_macros.h:85, 109` +
+/// `cla06fsubch.h:30`), so a codec that demands the class on the firing subchannel refuses
+/// every method UVM emits. The fallback exists for exactly that.
+///
+/// ⊘⊘ Its FIRST form was *"any unbound subchannel"*, and
+/// [`a_hostile_method_stream_never_fires_a_copy_it_did_not_write`] refuted it within the
+/// hour by firing a copy from **subchannel 6**. The three negatives below are that
+/// refutation made permanent, and the positive keeps the fix from being reverted into a
+/// refusal again. ⊘ Written as one test over four cases so the positive cannot be deleted
+/// without the negatives going with it — a fallback with only negatives passes by refusing
+/// everything.
+#[test]
+fn an_unbound_subchannel_speaks_the_copy_engine_only_where_hardware_fixes_it() {
+    use kayfabe_abi::submit;
+    let pb = Ga10xPushbuffer;
+    let fixed = submit::ce::FIXED_SUBCHANNEL as u32;
+    assert_eq!(fixed, 4, "NVA06F_SUBCHANNEL_COPY_ENGINE — cla06fsubch.h:30");
+
+    // Bind the CE on subchannel 0, exactly as `uvm_hal_maxwell_ce_init` does, then latch
+    // and fire on `firing`. `bind_elsewhere` selects whether the class is named at all.
+    let fire_on = |firing: u32, bind_elsewhere: bool, prebind_firing: Option<u32>| {
+        let mut st = kayfabe_arch::MethodState::new();
+        if bind_elsewhere {
+            let _ = pb.decode_run(&mut st, &ce_runs(0, 0, 0, 0, 0)[..1]);
+        }
+        if let Some(class) = prebind_firing {
+            let hdr = submit::method_header_inc(firing, submit::SET_OBJECT, 1).expect("enc");
+            let _ = pb.decode_run(&mut st, &[(hdr, vec![class])]);
+        }
+        let runs = ce_runs(
+            firing,
+            0x1_0000_2000,
+            0x2_0000_3000,
+            0x40,
+            plain_copy_flags(),
+        );
+        let _ = pb.decode_run(&mut st, &runs[1..3]);
+        pb.decode_run(&mut st, &runs[3..])
+            .into_iter()
+            .find(|m| matches!(m, PushMethod::CeLaunchDma { .. }))
+    };
+
+    // ★ THE POSITIVE — UVM's shape. Without this the other three are satisfied by a codec
+    // that refuses everything, which is the state this whole rung exists to leave.
+    let uvm = fire_on(fixed, true, None);
+    let Some(PushMethod::CeLaunchDma { dst, src, len, .. }) = uvm else {
+        panic!("UVM's shape must decode — CE bound on subchannel 0, fired on {fixed}: {uvm:?}");
+    };
+    assert_eq!(
+        (src.0, dst.0, len),
+        (0x1_0000_2000, 0x2_0000_3000, 0x40),
+        "and it carries the firing subchannel's OWN latched operands"
+    );
+
+    // ⊘ NEGATIVE 1 — the case that refuted the wide rule. An unbound subchannel that is
+    // NOT the fixed one: a compute object's method addresses collide with the CE's, so
+    // these operands are not evidence of a copy.
+    assert!(
+        fire_on(6, true, None).is_none(),
+        "subchannel 6 is unbound and is not NVA06F_SUBCHANNEL_COPY_ENGINE — the wide rule \
+         fired a copy here and the hostile-stream property caught it"
+    );
+
+    // ⊘ NEGATIVE 2 — the fixed subchannel, but the channel never named the copy engine
+    // ANYWHERE. Nothing the guest said supports decoding this as a copy.
+    assert!(
+        fire_on(fixed, false, None).is_none(),
+        "the fixed subchannel is a necessary condition, never a sufficient one"
+    );
+
+    // ⊘ NEGATIVE 3 — the fixed subchannel EXPLICITLY BOUND to another class. An explicit
+    // bind is the guest telling us what this subchannel is; the fallback must never
+    // override it.
+    assert!(
+        fire_on(
+            fixed,
+            true,
+            Some(kayfabe_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A)
+        )
+        .is_none(),
+        "an explicit bind to another class wins over the fixed-subchannel fallback"
+    );
+}
+
 /// ★★★ **A hostile stream may never fire a copy whose operands it did not write** —
 /// checked against a shadow of what the stream actually latched.
 ///
