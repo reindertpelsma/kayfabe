@@ -7013,3 +7013,54 @@ oracle 1 and fatal to the milestone.
 *executed on the host* under the real plane and only the release is missing, or whether
 nothing ran at all. `served` is a statement about the RING, not about the copy, and no
 `CeEvidence` is printed on this path. Establish that first — the fix differs.
+
+### 15.5 ★★★ CORRECTION to §15.4 — the question it left open is ANSWERED, and the answer changes the increment
+
+§15.4 closed with *"whether the CE work executed on the host under the real plane and only
+the release is missing, or whether nothing ran at all … Establish that first — the fix
+differs."* Established, from the call graph, and **nothing ran at all**. The fix does differ.
+
+Three checks, each read at the site rather than inferred:
+
+1. **The forwarding path is never given the ring.** `SharedDoorbell::ring` calls
+   `self.device.doorbell(DOORBELL_TARGET_GPU, token, &[])`
+   (`crates/kayfabe-qemu-raw/src/shim.rs:2071`) — an **empty** working set. Recovering which
+   VAs a submission touches means parsing the ring, and that was deferred to E4.
+2. **The isolate's doorbell verb is one store.** `HostRmBackend::ring_doorbell`
+   (`crates/kayfabe-isolate-host/src/rm.rs:2315-2318`) is two statements: narrow the token to
+   `u32`, `self.conn.doorbell(token)`. No pushbuffer parse, no method decode, no CE
+   submission, no semaphore, no interrupt.
+3. **The whole parse → execute → complete chain has NO production caller.** Both
+   `submit_ring`s — the free function at `crates/kayfabe-fwd/src/lib.rs:4026` (`parse_pushbuffer`
+   at `:4033`, `exec_ce` at `:4035`) and the method at
+   `crates/kayfabe-rt/src/device.rs:1631` (`parse_pushbuffer` at `:1638`, `forward_ce` at
+   `:1639`) — are called **only** from `tests/tests/e6_join.rs` and
+   `tests/tests/e6_hw_join.rs`. `forward_ce` has exactly one caller and it is `submit_ring`.
+   ⇒ `ce_copy` / `ce_copy_outcome` / `CeEvidence` are transitively unreachable from a
+   doorbell, and `PushbufferOutcome::sem_releases` (`kayfabe-fwd/src/lib.rs:2644`) has no
+   production consumer at all.
+
+⇒ **`SERVED` on the real plane means: we rang a doorbell on a host channel into which the
+guest's methods were never copied.** The host engine had nothing to run. E6's join is real
+and is measured — but only through its tests; it is not wired to the doorbell.
+
+★★★ **So the increment §15.4 named is the WRONG ONE, and dangerously so.** Adding the
+completion tail to the forwarding path would advance the payload for work that never
+happened — a forged completion, precisely what `mode2_forwarding_model.md` forbids and
+exactly what the C did (`C: nvkvm_gpu_emul.c:4295-4340` forges the finishPayload at
+`gpfifo_va + 0x8004`, plus the `0xFFF500/0xFFF508` backdoor at `:3778-3826` where a patched
+guest hands QEMU the GPA and the payload to DMA in). ⊘ We would have re-implemented the
+forgery, passed both of §15.4's oracles, and called it compute.
+
+★ The real order is: **wire the ring first, complete second.** `try_ce_submission` is the
+only doorbell path that reads the guest's ring, and it is also the only one that writes a
+payload — that is not a coincidence, it is the same correctness argument twice. The
+forwarding path needs `parse_pushbuffer` → `forward_ce` on the doorbell before a completion
+tail is even meaningful.
+
+⊘ And this is the **third** sighting of the pattern `a_declared_capability_reachable_from_nowhere`
+records: a capability that is built, tested, and reachable from nothing. The E6 row's
+acceptance (`CeEvidence::copied()`, §10) is satisfied by a test harness calling `submit_ring`
+directly; nothing in that acceptance quantified over *"and a guest doorbell reaches it."*
+⇒ Any future increment row whose acceptance is a predicate on a function must also state the
+**caller** that a guest action reaches it through.
