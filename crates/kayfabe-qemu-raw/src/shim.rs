@@ -2353,7 +2353,18 @@ impl SharedDoorbell {
             facts.client,
             root.map_or_else(
                 || "none".to_string(),
-                |r| format!("0x{:x}/ap{}/sh{}", r.phys, r.aperture_raw, r.page_shift)
+                // ★★★ `virtAddrLo..Hi` PRINTED, and they were carried and dropped. `VasRoot`
+                // has held them since it existed, documented *"carried for the report
+                // only"*, and no report ever showed one. `[measured 2026-08-09, boot
+                // `bar1_6ba1bd5`]` that became the deciding fact: the refusing channel's
+                // root is `0x4000` while every root the census DOES print sits around
+                // `0x2efa_xxxx`, and whether the published levels even COVER the ring's
+                // address is not answerable without this pair. ⊘ A field carried for a
+                // report that never prints it is a field nobody can use.
+                |r| format!(
+                    "0x{:x}/ap{}/sh{}/va[0x{:x}..0x{:x}]",
+                    r.phys, r.aperture_raw, r.page_shift, r.virt_addr_lo, r.virt_addr_hi
+                )
             ),
             ring.tag(),
             fin.tag(),
