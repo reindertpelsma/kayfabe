@@ -6880,3 +6880,36 @@ table is exactly the shape that invites an unchecked reuse.
 All three unbuilt-half sentences appear in this boot's own report, each naming its own gap. ⊘
 None of them has become true; they are louder now precisely because more of the plane is
 served around them.
+
+### ⧗ The next rung, researched to the struct so the next agent starts there
+
+`0x20802a07` `NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS`. ⊘ **It is NOT a pure-`[IN]` echo** like
+the three before it — it has a real `[OUT]` body, so the previous three rungs' argument does
+**not** carry over and the value has to come from somewhere.
+
+```c
+/* ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h:283-287 */
+#define NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS (0x20802a07)
+typedef NV2080_CTRL_CE_GET_CAPS_V2_PARAMS NV2080_CTRL_CE_GET_PHYSICAL_CAPS_PARAMS;
+/* :82-85 */
+typedef struct NV2080_CTRL_CE_GET_CAPS_V2_PARAMS {
+    NvU32 ceEngineType;                              /* [IN]  */
+    NvU8  capsTbl[NV2080_CTRL_CE_CAPS_TBL_SIZE];     /* [OUT], 2 bytes */
+} NV2080_CTRL_CE_GET_CAPS_V2_PARAMS;
+```
+
+Caller: `kceGetDeviceCaps` / `queryCopyEngines` sends it **once per LCE** with
+`ceEngineType = NV2080_ENGINE_TYPE_COPY(pKCe->publicID)` and `portMemCopy`s the 2-byte
+`capsTbl` straight out (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce.c:556-576`). The
+macro is `COPY(i) = (i < 10) ? COPY0 + i : COPY10 + i - 10`, `COPY0 = 0x09`
+(`ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:293-295, 398`) — ⚠ a
+**two-branch** mapping, and the second branch is exactly the sort of off-by-ten that a
+`0x09 + i` shortcut would get right on this part and wrong on a bigger one.
+
+★★ **This is a derivation opportunity, not a fabrication.** [`kayfabe_abi::cecaps`] already
+serves `0x20802a0b` `CE_GET_ALL_PHYSICAL_CAPS`, whose `capsTbl[64][2]` is double-sourced from
+**two independent real-GA106 captures** (`present = 0x0f`, `[measured 2026-08-09]`). The
+per-engine answer is `capsTbl[publicID]` from that same table. ⇒ Project it; do not tabulate a
+second, separate statement of the same silicon fact.
+⚠ And check the boundary the module already documents: only engines with a `present` bit have a
+`capsTbl` slot, so a `ceEngineType` outside it must be a **named refusal**, not a zero row.
