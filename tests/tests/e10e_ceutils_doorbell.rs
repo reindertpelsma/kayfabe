@@ -456,3 +456,124 @@ fn a_channel_with_no_published_root_opens_no_session() {
     );
     assert!(vmm.irqs.is_empty());
 }
+
+// =====================================================================================
+// ★★★★ THE NULL THAT DISCRIMINATES — a submission that decoded and launched NOTHING
+// =====================================================================================
+
+/// A method block that reads, decodes, and contains **no launch and no release** — with an
+/// optional leading `SET_OBJECT` so the two nulls (*"no class was declared"* vs *"this class
+/// was declared"*) can be told apart by the fixture rather than by argument.
+///
+/// The non-launch methods are real GA10x CE register writes (`SET_REMAP_CONST_A`,
+/// `LINE_LENGTH_IN`) — bytes the codec reads and correctly reports as
+/// [`kayfabe_arch::PushMethod::Opaque`], because they latch state and command nothing.
+fn no_launch_block(set_object: Option<u32>) -> Vec<u8> {
+    let sub = 0u32;
+    let hdr = |m, n| submit::method_header_inc(sub, m, n).expect("encodable");
+    let mut runs: Vec<(u32, Vec<u32>)> = Vec::new();
+    if let Some(class) = set_object {
+        runs.push((hdr(submit::SET_OBJECT, 1), vec![class]));
+    }
+    runs.push((hdr(submit::ce::SET_REMAP_CONST_A, 1), vec![0x5A5A_5A5A]));
+    runs.push((hdr(submit::ce::LINE_LENGTH_IN, 1), vec![0x40]));
+    let mut out = Vec::new();
+    for (h, args) in runs {
+        out.extend_from_slice(&h.to_le_bytes());
+        for a in args {
+            out.extend_from_slice(&a.to_le_bytes());
+        }
+    }
+    out
+}
+
+/// ★★★★ **A submission that decoded but launched nothing is named for THAT, and it carries
+/// the class the guest's own `SET_OBJECT` declared.**
+///
+/// `[measured 2026-08-09, boot s19_1dfde1b_cup2]` this refusal was
+/// `FwdFault::NotAnEngine(ClassId(0))`, with the `ClassId(0)` written as a **literal at the
+/// raise site**. No class was looked up on this path — `route_engine_object` is the only
+/// site that resolves one and it is not on the doorbell path — so the boot report named a
+/// lookup that never happened and handed its reader a constant to investigate.
+///
+/// ⊘ **BREAK THE ROUTE, NOT THE ASSERTION.** This test is one half of a pair: here the
+/// guest declares `AMPERE_COMPUTE_B` on a channel the CE driver is serving — the only
+/// reading under which a class was ever the question — and the refusal must say so. Its
+/// sibling declares nothing, and the refusal must say **that** instead. An implementation
+/// that hard-codes either answer fails one of the two; the old literal failed both.
+#[test]
+fn a_submission_that_launches_nothing_reports_the_class_its_set_object_declared() {
+    let plane = plane_with_tree();
+    let block = no_launch_block(Some(kayfabe_abi::generated::classes::AMPERE_COMPUTE_B));
+    let mut vmm = guest_ram(&block);
+    let mut cursor = GpCursor::default();
+
+    let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("nothing in it can run");
+    let FwdFault::SubmissionHasNoLaunch {
+        entries,
+        index,
+        methods,
+        opaque,
+        set_object,
+    } = err.fault
+    else {
+        panic!("named for what happened, not for an engine lookup that never ran: {err:?}");
+    };
+    assert_eq!(entries, 1, "the ring brought exactly the one written entry");
+    assert_eq!(index, 0, "and it is the entry the cursor was pointing at");
+    assert_eq!(
+        methods, 3,
+        "SET_OBJECT + the two latching writes were all READ"
+    );
+    assert_eq!(
+        opaque, 2,
+        "★ two of the three decoded to nothing and ONE did not — so `we decoded nothing` \
+         and `we decoded something, just never a launch` stay different findings"
+    );
+    assert_eq!(
+        set_object,
+        Some(kayfabe_arch::ids::ClassId(
+            kayfabe_abi::generated::classes::AMPERE_COMPUTE_B
+        )),
+        "★★★★ the class comes out of the guest's OWN method words — the one honest answer \
+         on this path to `what engine is this channel driving`"
+    );
+    assert_eq!(cursor.next, 0, "the cursor did not move past a refusal");
+    assert!(
+        vmm.irqs.is_empty(),
+        "⊘ no completion interrupt for a doorbell that ran nothing"
+    );
+}
+
+/// ★★★★ **The sibling: no `SET_OBJECT` at all is `None`, and NOT `Some(ClassId(0))`.**
+///
+/// The two are the same literal under the old refusal and they are different facts: *"the
+/// guest declared no engine object in these bytes"* is a statement about the submission,
+/// while *"the guest wrote `SET_OBJECT 0`"* is a statement about a value it chose. ⊘ A null
+/// that cannot distinguish *never set* from *set to zero* sends every reader to the wrong
+/// question — which is exactly what it did.
+#[test]
+fn a_submission_with_no_set_object_reports_none_and_not_class_zero() {
+    let plane = plane_with_tree();
+    let block = no_launch_block(None);
+    let mut vmm = guest_ram(&block);
+    let mut cursor = GpCursor::default();
+
+    let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("nothing in it can run");
+    let FwdFault::SubmissionHasNoLaunch {
+        methods,
+        opaque,
+        set_object,
+        ..
+    } = err.fault
+    else {
+        panic!("named for what happened: {err:?}");
+    };
+    assert_eq!(methods, 2, "both latching writes were read");
+    assert_eq!(opaque, 2, "and neither decoded to a fact");
+    assert_eq!(
+        set_object, None,
+        "★★★★ ABSENCE, reported as absence. `Some(ClassId(0))` here would be the old \
+         literal wearing a new type"
+    );
+}

@@ -443,6 +443,9 @@ pub fn run_submission(
     } else {
         chan.ring_entries
     };
+    // ★ WHICH submission this doorbell is about, latched before the loop advances the
+    // cursor. Carried into every refusal below so a reader is never left to assume entry 0.
+    let start_index = cursor.next % entries;
 
     // ---- 1. THE RING. Read forward from our cursor while the entries decode. -----------
     let mut ranges: Vec<kayfabe_arch::PushRange> = Vec::new();
@@ -484,7 +487,7 @@ pub fn run_submission(
     if ranges.is_empty() {
         return Err(CeUtilsRefusal::plain(FwdFault::RingBroughtNoEntry {
             ring_va: GpuVa(chan.ring_va),
-            index: run.cursor.next % entries,
+            index: start_index,
             entries,
         }));
     }
@@ -512,6 +515,28 @@ pub fn run_submission(
     // ---- 3. DECODE the run against the chip's own codec. -------------------------------
     let mut state = kayfabe_arch::MethodState::new();
     let decoded = pb.decode_run(&mut state, &methods);
+
+    // ★★★★ THE CENSUS OF WHAT DECODED, taken BEFORE the execute loop consumes `decoded`.
+    //
+    // ⊘ Its only consumer is the `launches == 0` refusal below, and it exists because that
+    // refusal used to throw every one of these facts away and report the literal
+    // `ClassId(0)` instead (`FwdFault::SubmissionHasNoLaunch` carries the full account).
+    // A submission that read no method words, one that read words the codec recognized
+    // nothing in, and one that decoded a `SET_OBJECT` for some other engine are three
+    // different findings that produced one identical line in the boot report.
+    let opaque = u32::try_from(
+        decoded
+            .iter()
+            .filter(|m| matches!(m, PushMethod::Opaque))
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
+    // ⊘ The LAST `SET_OBJECT` in the block, because that is the one in force when the
+    // methods after it are interpreted — the same order the engine applies them in.
+    let set_object = decoded.iter().rev().find_map(|m| match m {
+        PushMethod::SetObject { class } => Some(*class),
+        _ => None,
+    });
 
     // ---- 4. EXECUTE each launch, then release its completion. ---------------------------
     for m in decoded {
@@ -633,10 +658,24 @@ pub fn run_submission(
     }
 
     // ⊘ A submission that decoded no launch moved no byte. It is not served.
+    //
+    // ★★★★ AND IT IS NAMED FOR WHAT HAPPENED. This used to raise
+    // `FwdFault::NotAnEngine(kayfabe_arch::ids::ClassId(0))` — an engine-class-lookup
+    // failure, with the class written **as a literal on this line**, for a path that never
+    // looks a class up. `[measured 2026-08-09, boot s19_1dfde1b_cup2]` the boot report read
+    // `NotAnEngine(ClassId(0))` and sent its reader to find who was supposed to supply the
+    // class. Nobody was: `route_engine_object` is the only site that resolves one, and it
+    // is not on the doorbell path. ⊘ Same defect as the `PushTooFragmented { len: 0 }` that
+    // `RingBroughtNoEntry` replaced, one layer later — a borrowed variant whose argument
+    // then had to be invented, and an invented argument reads exactly like a measurement.
     if run.launches == 0 {
-        return Err(CeUtilsRefusal::plain(FwdFault::NotAnEngine(
-            kayfabe_arch::ids::ClassId(0),
-        )));
+        return Err(CeUtilsRefusal::plain(FwdFault::SubmissionHasNoLaunch {
+            entries: u32::try_from(run.entries).unwrap_or(u32::MAX),
+            index: start_index,
+            methods: u32::try_from(run.methods).unwrap_or(u32::MAX),
+            opaque,
+            set_object,
+        }));
     }
     Ok(run)
 }

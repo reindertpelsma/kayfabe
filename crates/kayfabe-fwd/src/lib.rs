@@ -486,6 +486,58 @@ pub enum FwdFault {
         /// How many entries the channel declared the ring holds.
         entries: u32,
     },
+    /// ★★★★ **The submission was READ and DECODED, and not one method in it was a launch
+    /// or a release** — so the doorbell moved no bytes and released no semaphore.
+    ///
+    /// # ⊘ It replaces `NotAnEngine(ClassId(0))`, which was a FALSE name
+    ///
+    /// `[measured 2026-08-09, boot s19_1dfde1b_cup2]` — `kayfabe-rt/src/ceutils.rs` raised
+    /// `FwdFault::NotAnEngine(ClassId(0))` here, with `ClassId(0)` written as a **literal**
+    /// in the raise site. No class was ever looked up on this path; `route_engine_object`
+    /// — the one place that *does* resolve a class and can honestly report `NotAnEngine` —
+    /// is not on the doorbell path at all. So the boot report named an engine-class lookup
+    /// that never happened, and `ClassId(0)` was an **absence wearing a number's clothes**:
+    /// reading it as *"the channel's class resolved to zero"* is reading a constant.
+    ///
+    /// This is `RingBroughtNoEntry`'s lesson recurring one layer later, and by the same
+    /// mechanism: an existing variant reused for a case it does not describe, whose
+    /// argument then had to be invented. ⊘ *"Refuse by name"* is a claim about the name
+    /// being **true**.
+    ///
+    /// # ★★★★ Every field exists to make a null DISCRIMINATE
+    ///
+    /// *"nothing ran"* has at least four distinct causes and the old refusal could not tell
+    /// them apart: the pushbuffer read as empty; it read bytes that decoded to no methods;
+    /// it decoded methods the chip's codec recognized none of; or it decoded methods that
+    /// are real but belong to a **different engine** — which is the only reading under
+    /// which a class was ever the question.
+    SubmissionHasNoLaunch {
+        /// GPFIFO entries this doorbell consumed before decoding.
+        entries: u32,
+        /// The ring index the cursor started at — **which** submission this is about.
+        /// ⊘ Carried because the addressing probe beside this refusal used to describe
+        /// entry `0` unconditionally, i.e. a submission an *earlier* doorbell had already
+        /// served.
+        index: u32,
+        /// `(header, args)` method pairs read out of those entries' pushbuffers.
+        /// `0` = the ranges carried no method words at all.
+        methods: u32,
+        /// How many of `methods` the chip's codec turned into [`PushMethod::Opaque`] —
+        /// i.e. bytes it read and recognized nothing in. `opaque == methods` with
+        /// `methods > 0` is *"we decoded nothing"*; `opaque < methods` is *"we decoded
+        /// something, just never a launch"*, and those are different bugs.
+        opaque: u32,
+        /// ★★★★ **The class the submission's own `SET_OBJECT` named**, straight out of the
+        /// guest's method words.
+        ///
+        /// ⊘ `None` means **no `SET_OBJECT` was present in these bytes** — which is a
+        /// different fact from `Some(ClassId(0))` (the guest wrote a `SET_OBJECT` of zero),
+        /// and the old refusal collapsed both into the same literal. This is the one honest
+        /// answer on this path to *"what engine is this channel driving"*: it is declared by
+        /// the guest, in the very bytes that failed to produce a launch, and it is not
+        /// recomputed through any resolver.
+        set_object: Option<ClassId>,
+    },
     /// A GPFIFO range cut into more address-table spans than [`MAX_PUSH_SPANS`] — a loud
     /// refusal, never a truncated read. See that constant for why the bound exists.
     ///

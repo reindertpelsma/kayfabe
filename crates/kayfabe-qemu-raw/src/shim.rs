@@ -2824,16 +2824,40 @@ impl SharedDoorbell {
             ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING),
             demand(),
         );
-        // The pushbuffer the ring's first entry points at — read the entry, decode it, walk
+        // The pushbuffer the entry AT THE CURSOR points at — read the entry, decode it, walk
         // its target. ⊘ Every step can fail and every failure is reported as itself: a ring
         // that would not read and a ring that read as a malformed entry are different facts.
+        //
+        // ★★★★ **AT THE CURSOR, not at index 0.** `[measured 2026-08-09, boot
+        // s19_1dfde1b_cup2]` token `0x00010003` was SERVED at `14:15:46.427` and REFUSED at
+        // `14:15:46.624` — the same channel, twice, and the ring held **two** non-zero
+        // entries (`[0]=0x…0120000000 [1]=0x…0120400000`). This probe read index `0`
+        // unconditionally, so the refusal's whole account of the submission —
+        // `gp0=0x120000000+0x28 pb=S:0x41400000` — described the entry the **earlier,
+        // successful** doorbell had already consumed. ⊘ A diagnostic pointed at the wrong
+        // object does not merely fail to help; it corroborates whatever is read into it.
+        // The index is printed so the pairing is on the page rather than assumed.
+        let idx = if facts.ring_entries == 0 {
+            0
+        } else {
+            self.ce
+                .cursors
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&(facts.proc.0, facts.chan.0))
+                .map_or(0, |c| c.next % facts.ring_entries)
+        };
+        let gp_va = ring_va.wrapping_add(u64::from(idx) * PROBE_RING_BYTES as u64);
         let mut gp = [0u8; PROBE_RING_BYTES];
-        let pb = match plane.read_published_va(facts.client, vaspace, ring_va, &mut gp, demand()) {
-            Err(e) => format!("ringread={}", e.describe()),
+        let pb = match plane.read_published_va(facts.client, vaspace, gp_va, &mut gp, demand()) {
+            Err(e) => format!("gp[{idx}]@0x{gp_va:x} ringread={}", e.describe()),
             Ok(_) => match kayfabe_abi::submit::gp_entry_decode(u64::from_le_bytes(gp)) {
-                None => format!("gp0=0x{:016x} NOT-A-GP-ENTRY", u64::from_le_bytes(gp)),
+                None => format!(
+                    "gp[{idx}]@0x{gp_va:x}=0x{:016x} NOT-A-GP-ENTRY",
+                    u64::from_le_bytes(gp)
+                ),
                 Some(d) => format!(
-                    "gp0=0x{:x}+{:#x} pb={}",
+                    "gp[{idx}]@0x{gp_va:x}=0x{:x}+{:#x} pb={}",
                     d.gpu_va,
                     d.len_bytes,
                     plane
