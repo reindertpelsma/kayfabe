@@ -7263,7 +7263,9 @@ it sits on*:
 
 3. **The doorbell sentence buffer was SATURATING SILENTLY.** `DOORBELL_REFUSAL_LEN` was
    **448**; `[measured 2026-08-09, boot `vaspan_994bbdc`, rev `994bbdc10`]` the refusal was
-   **262 bytes**, and the four
+   **292 bytes** (⊘ this said 262; re-measured from the sentence after the refusal kind in
+   `traces/guest_boots/run_vaspan_994bbdc_qemu.log` — the conclusion sharpens, since
+   292 + ~180 is ~472 into a 448-byte array), and the four
    `PdeLevel`s this rung appends are ~180 more — landing the sentence *on* the cap. The copy
    was a bare `s.len().min(LEN)`, so a clipped sentence and a complete one produce **the same
    log line**, and the levels are at the END. Now 1024, and `copy_sentence` stamps a literal
@@ -7297,3 +7299,63 @@ it sits on*:
 executor, no completion. Nothing is emitted that the guest did not ask for. The doorbell is
 still refused, and after §16.7 it is refused **by its own name** with the deciding row
 attached.
+
+### 16.8 ★★★★★ BOOTED `row1_44b7d69` — the row PRINTS, and the eleven publications split into TWO FAMILIES
+
+`[measured 2026-08-09, boot `row1_44b7d69`, binary stamped `kayfabe-rev:44b7d69e3…`]`, default
+plane, probe set EMPTY, one device-opening consumer. §16.7's instrument works: all **11**
+publications print (the refusing pair is row **11 of 11** — it really was past the eight), the
+refusal now carries its own row, and it is named `RingBroughtNoEntry` rather than
+`PushTooFragmented`.
+
+```text
+[FwdFault::RingBroughtNoEntry] { ring_va: GpuVa(0x121010000), index: 0, entries: 1024 }
+  | c=0xc1d0000a vas=0xcaf00005 root=0x4000/ap1/sh47/va[0x100000000..0x11fffffff]
+    ring=0x121010000 rng=V:0x20000 fin=V:0x28004 gp0=0x0…0 NOT-A-GP-ENTRY
+    scan=64/1024 declared, unread=0, nonzero=NONE — every scanned entry is ZERO
+    row=arm0x90f10106 x1 lv4/6 pgsz0x200000 sd0x0/0 va[0x100000000..0x11fffffff]
+        L0=0x4000/sz0x20/ap1/sh47 L1=0x5000/sz0x1000/ap1/sh38
+        L2=0x6000/sz0x1000/ap1/sh29 L3=0x7000/sz0x1000/ap1/sh21
+```
+
+**Two of §16.6's three outcomes are REFUTED by that line alone**: `arm0x90f10106` is the
+client VA-space arm, so it was **not decoded from the wrong arm**; `x1` means the pair was
+published **once**, so it is **not a stale publication last-write-wins picked over a later
+one**. The row is well-formed and singular — `lv4/6`, `pgsz0x200000`, root `sz0x20`, shifts
+47/38/29/21 — **identical in every field to a working VA space's except the addresses**.
+
+#### The split, from the same log
+
+| `(hClient, hObject)` | L1 | L2 | L3 | walk |
+|---|---|---|---|---|
+| `0xc1e00006 / 0xa` (CeUtils) | `0x2efa9b000` | `0x2efa9a000` | `0x2efa99000` | ✅ `S:` guest RAM, bytes moved |
+| `0xc1d00008 / 0xcaf00000` | `0x2efa7b000` | `0x2efa7a000` | `0x2efa79000` | — |
+| `0xc1d0000c / 0x5c000008` | `0x1000` | `0x2000` | `0x3000` | — |
+| **`0xc1d0000a / 0xcaf00005`** | **`0x5000`** | **`0x6000`** | **`0x7000`** | ❌ `V:0x20000`, all zeros |
+
+★★★ **Two families, and the difference is in the KIND of address.** The working rows carry
+real framebuffer physical addresses (`~0x2efa_xxxx` ≈ 11.7 GiB, consistent with this GA106's
+FB) and **descend**. The failing rows carry tiny **ascending** consecutive 4 KiB pages
+starting near zero — and the two of them are **contiguous with each other**: `0x0000–0x3fff`
+then `0x4000–0x7fff`, four pages each. That is the signature of **offsets into one shared
+buffer handed out by a bump allocator**, not of physical pages.
+
+⇒ **Our walk reads them as framebuffer physical addresses.** It therefore descends
+successfully — the numbers are page-aligned and in range — lands at `V:0x20000`, and reads an
+unwritten page, which decodes as *"the ring is empty"* rather than faulting. That is
+`two_encodings_agreeing_on_the_first_values` in its sharpest form yet: these rows agree with
+the working ones on **`levels`, `pageSize`, `aperture`, every `pageShift` and the whole
+`virtAddr` range** — every field except the one that means something different.
+
+⊘ **What the base is, is NOT established, and must not be guessed.** Named candidates, in the
+order they should be checked: offsets into a **reserved page-table pool** RM allocated for
+these VA spaces; offsets relative to a **WPR/heap base** the guest knows and we do not; or
+guest-**physical** addresses of a sysmem pool, in which case `aperture 1` is the field that
+lies. ⚠ Note the aperture is `ap1` (VIDEO) on **all eleven** rows, so it does not separate the
+families and cannot be used as the discriminator.
+
+⧗ **The next rung**, and it needs no new plumbing: dump the 32 bytes our framebuffer
+holds at `0x4000` and the 4 KiB at `0x5000`, and compare them with `0x2efa9b000`. If the low
+addresses hold plausible PDEs, they are a real pool we have the bytes for and only the base is
+missing; if they hold zeros or unrelated data, the walk has been descending noise and every
+address downstream of it — including `V:0x20000` — is a coincidence.
