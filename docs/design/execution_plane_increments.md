@@ -6358,3 +6358,63 @@ there, so it must not be counted as a wall or "fixed". That is the third time on
 Row 40's refusal is now measured non-fatal **twice**, at two different wall positions. ⊘ That is
 still only evidence about *reachability*, never about correctness: `injection_measures_necessity_
 never_sufficiency`. A served-but-wrong answer there would look exactly like this.
+
+#### ★★★ §14.36's rung, RESEARCHED — `0x20808159`, and the wall map's caveat is REFUTED
+
+The new wall is a **GSS-legacy** control (`0x8159 & 0x8000`), 332 bytes, which the real GA106
+answers `NV_OK` with `in == out` (`cuinit_ioctl_trace_real_ga106.txt:80`).
+
+##### 1. ⊘ The "`in == out` might be `SKIP_COPYOUT`" caveat does NOT apply here
+
+The ranked plan flags line 80 as *"`⊘ unmeasured`, not 'the reply is zeros'"*, on the grounds
+that `in == out` is *"also the exact signature of `RMAPI_PARAM_COPY_FLAGS_SKIP_COPYOUT`"*. That
+is a sound worry for lines 84 and 87 and **cannot apply to this one**, by the plan's own other
+finding: a GSS-legacy call **bypasses resserv entirely**, so it never reaches
+`rmapiParamsCopyOut` and no `RMAPI_PARAM_COPY` flag is ever consulted. Its copy-out is a bare,
+unconditional `portMemExCopyToUser` on `status == NV_OK`
+(`ogkm-580: src/nvidia/interface/deprecated/rmapi_gss_legacy_control.c:145-151`), paired with
+an unconditional `portMemExCopyFromUser` on the way in (`:72-75`).
+
+⇒ For **this** id, `in == out` is a **measurement**: physical RM was handed the buffer and gave
+it back byte-unchanged. Preserving the guest's own 332 bytes under `NV_OK` is therefore an
+identity this port can stand behind, not a fabricated body.
+
+##### 2. ★★★ The doctrine conflict is real, and the resolution is the ID, not the rule
+
+⚠ This port **deliberately refuses** rule-permitted GSS-legacy controls
+(`BridgeRefusal::GspRuleControlUnserviced`), and `kayfabe-rmrpc/tests/gss_legacy_answer.rs`
+exists to keep that refusal red-if-removed — because the C's *default* echo of an all-zero
+`[OUT]` body is what made cudart fail with `cudaErrorInitializationError(3)` and **no log line**
+(`C: nvkvm_gpu_emul.c:3335-3360`).
+
+⊘ That doctrine is about the **default**, and it must not be relaxed. What §14.36 needs is one
+**named id** with a measured end-state — the same shape as every rung on this ladder. The
+`GraphPolicy` default stays a refusal; `the_gss_legacy_rule_passes_half_the_command_space` and
+the echo tests stay exactly as they are.
+
+##### 3. ★★ The sticky question is already answered, and by a guard that is not a comment
+
+The branch-(b) cache condition reads **the reply's** `rmctrlFlags`, i.e. a word *we* write
+(`ogkm-580: rpc.c:11098-11103`):
+
+```c
+else if (IsGssLegacyCall(cmd) && !FINN_SERIALIZED &&
+         rmapiControlIsCacheable(rpc_params->rmctrlFlags, rpc_params->rmctrlAccessRight, NV_TRUE) &&
+         !(rpc_params->rmctrlFlags & RMCTRL_FLAGS_CACHEABLE_BY_INPUT))
+    rmapiControlCacheSetUnchecked(…);
+```
+
+and `StickyAnswerGuard::respond` **already zeroes both words unconditionally** on every accepted
+control reply, with `rmapi_control_is_cacheable(0, …)` returning `false` on its first conjunct.
+⇒ A served GSS-legacy id cannot become sticky while that link is in the chain.
+
+⚠ Which makes `InitTablePolicy`'s own `if is_gss_legacy(req.cmd) { return refuse(); }` the thing
+that must change — and its own comment already says what it is: a tripwire written when *"every
+id this port serves is outside that mask today"*. That stopped being true the moment this rung
+lands, so the tripwire has to become the narrower statement it always meant, rather than being
+deleted.
+
+⊘ **Not yet measured, and it is the reason to boot rather than reason further:** whether
+`0x20808159`'s refusal is the *last* wall. Rows 81-88 are unobserved on our side — every one of
+them is currently our teardown — so the eight calls after it have never been exercised against
+this port at all.
