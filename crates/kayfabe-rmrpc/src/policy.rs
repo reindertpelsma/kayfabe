@@ -137,6 +137,62 @@ impl RefusalCensus {
 ///
 /// The bound argument in [`RefusalCensus`]'s docs is unweakened: the key is still a
 /// [`FaultTag`] from a fixed finite set and still nothing the guest supplies.
+/// ★★★★ **§16.40 — the first `GPU_PROMOTE_CTX` refusal, latched WITH the address plane's
+/// state at the moment it was refused.**
+///
+/// # Why a sentence and not a counter
+///
+/// [`SharedRefusalCensus`] counts refusals by [`FaultTag`], which is the right shape for
+/// an invariant ("this never happens") and the wrong shape for *this* question.
+/// `[measured 2026-08-09, boot `s35_03a7e10_dup`]` the census printed
+/// `PromoteFault::ContextVasUndeclared x1` — a true row that names a VA space and
+/// **cannot say which one**, because the variant's payload (`client`, `object`) is
+/// discarded at the tag. Three rungs in a row then reasoned about *which* VA space from
+/// cross-boot correspondence rather than same-boot identity.
+///
+/// # ★★★ And why it is latched HERE rather than printed at teardown
+///
+/// The interesting facts are all **lifetime** facts: which channels existed, what each one
+/// named, and whether that name had a page-directory base **when the promotion was
+/// refused**. The device's exit notifier runs after the CUDA process has exited and its
+/// channels are freed, so the same call there returns `NO-LIVE-CHANNELS` — a true sentence
+/// about an instant nobody asked about (`a_correct_capture_can_answer_the_wrong_question`).
+///
+/// # ⊘ FIRST, and only the first
+///
+/// The same bound as [`crate::KayfabeDoorbellRefusal`]'s: a guest that can drive N
+/// refusals must not be able to drive N allocations. The count of *all* promote refusals
+/// is already in the tag census, so nothing is lost by keeping one sentence — and the
+/// first is the one that matters, because every later one is downstream of it.
+#[derive(Debug, Clone, Default)]
+pub struct SharedPromoteDiag(std::sync::Arc<std::sync::Mutex<Option<String>>>);
+
+impl SharedPromoteDiag {
+    /// A fresh, unlatched diagnosis.
+    #[must_use]
+    pub fn new() -> SharedPromoteDiag {
+        SharedPromoteDiag::default()
+    }
+
+    /// The latched sentence, or `None` if no promotion was ever refused.
+    ///
+    /// ⊘ `None` is a **finding**: it means either that every promotion was served or that
+    /// none arrived, and the tag census discriminates those two. It never means "the
+    /// instrument was off".
+    #[must_use]
+    pub fn get(&self) -> Option<String> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Latch `s`, if nothing is latched yet. Later calls are dropped.
+    fn latch(&self, s: String) {
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            *g = Some(s);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SharedRefusalCensus(std::sync::Arc<std::sync::Mutex<BTreeMap<FaultTag, usize>>>);
 
@@ -306,6 +362,23 @@ pub trait ObjectModel: Send {
         rm_engine_type: u32,
     ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault>;
 
+    /// ★★★★ §16.40 — **the live VA-space census, in the model's own locking discipline.**
+    ///
+    /// ⊘⊘ This is a trait method rather than a call through [`Self::as_gpu`], and the
+    /// difference was measured before it was written: the **shipped** composition root
+    /// installs a sharded shell whose `as_gpu` returns `None` by design, so a diagnosis
+    /// built on `as_gpu` would have printed *"no whole `Gpu`"* on every real boot while
+    /// passing every test that composes a bare [`Gpu`]. That is
+    /// `skipped_oracle_kills_the_guard` — an instrument that is green in the harness and
+    /// blind on the bench.
+    ///
+    /// Implementors format through `kayfabe_core::gpu::format_vas_census` so the two
+    /// sources (a bare `Gpu`'s procs; the shell's lock-ranked walk) cannot drift in shape.
+    ///
+    /// `mark` is the channel the caller's refusal is about, or `None` when it names a
+    /// handle rather than a `ChanId`.
+    fn vas_census(&self, mark: Option<kayfabe_core::ChanId>) -> String;
+
     /// The model as a plain [`Gpu`], **mutably**, if it is one. Same contract and same
     /// `None` as [`Self::as_gpu`].
     fn as_gpu_mut(&mut self) -> Option<&mut Gpu>;
@@ -356,6 +429,10 @@ impl ObjectModel for Gpu {
         Gpu::bind_channel(self, client, object, rm_engine_type)
     }
 
+    fn vas_census(&self, mark: Option<kayfabe_core::ChanId>) -> String {
+        Gpu::vas_census_string(self, mark)
+    }
+
     fn as_gpu(&self) -> Option<&Gpu> {
         Some(self)
     }
@@ -403,6 +480,9 @@ struct Bridge {
     census: SharedRefusalCensus,
     /// ★ §8.2.2 — the GPFIFO ring addresses the guest declared. Recorder-only.
     rings: SharedRingCensus,
+    /// ★★★★ §16.40 — the FIRST `GPU_PROMOTE_CTX` refusal, with its handles and the live
+    /// VA-space census taken **at that instant**. See [`SharedPromoteDiag`].
+    promote_diag: SharedPromoteDiag,
     applied: u64,
     inert: u64,
     held: u64,
@@ -417,6 +497,7 @@ impl Bridge {
             reasm: Reassembler::with_limits(limits),
             census: SharedRefusalCensus::default(),
             rings: SharedRingCensus::default(),
+            promote_diag: SharedPromoteDiag::default(),
             applied: 0,
             inert: 0,
             held: 0,
@@ -495,6 +576,14 @@ impl<'a> GraphPolicy<'a> {
     #[must_use]
     pub fn refusal_census(&self) -> SharedRefusalCensus {
         self.bridge.census.clone()
+    }
+
+    /// ★★★★ §16.40 — the first refused `GPU_PROMOTE_CTX`, with the address plane's state
+    /// as it stood at that instant. See [`SharedPromoteDiag`] for why it is a handle and
+    /// why the sample is taken at the refusal rather than at teardown.
+    #[must_use]
+    pub fn promote_diag(&self) -> SharedPromoteDiag {
+        self.bridge.promote_diag.clone()
     }
 
     /// ★ §8.2.2 — the GPFIFO-ring census as a **handle**, for the same reason
@@ -660,7 +749,29 @@ impl Bridge {
             // graph fact", and a single total would let a regression that stopped
             // promoting anything report the same number.
             Ok(Translation::CtxPromotion(_)) => self.promoted = self.promoted.saturating_add(1),
-            Err(r) => self.census.record(r),
+            Err(r) => {
+                self.census.record(r);
+                // ★★★★ §16.40 — the address plane's state, sampled AT the refusal.
+                //
+                // ⊘ Only for a promote fault, and only the first: this is a diagnosis, not
+                // a second census. `Gpu::vas_census_string`'s own docs carry the reason it
+                // cannot be taken at teardown.
+                //
+                // ⚠ `as_gpu` returns `None` on the E2 shell port, which owns its state in
+                // parts rather than as a `Gpu`. That is recorded rather than papered over:
+                // a missing census must not read as an empty one.
+                if let BridgeRefusal::Promote(f) = r {
+                    // ⊘ Through the PORT, never through `as_gpu()`: the shipped shell
+                    // answers `None` there, so an `as_gpu`-based diagnosis is blind on
+                    // exactly the boots it exists for. See `ObjectModel::vas_census`.
+                    //
+                    // `None` marks no channel — promote-ctx names an `hObject`, and
+                    // resolving it to a `ChanId` here would be a second resolution of the
+                    // question that just failed.
+                    self.promote_diag
+                        .latch(format!("{} {f:?}{}", r.fault_tag().0, gpu.vas_census(None)));
+                }
+            }
         }
         outcome
     }
@@ -1005,6 +1116,14 @@ impl ObjectPolicy {
     #[must_use]
     pub fn refusal_census(&self) -> SharedRefusalCensus {
         self.bridge.census.clone()
+    }
+
+    /// ★★★★ §16.40 — the first refused `GPU_PROMOTE_CTX`, with the address plane's state
+    /// as it stood at that instant. See [`SharedPromoteDiag`] for why it is a handle and
+    /// why the sample is taken at the refusal rather than at teardown.
+    #[must_use]
+    pub fn promote_diag(&self) -> SharedPromoteDiag {
+        self.bridge.promote_diag.clone()
     }
 
     /// ★ §8.2.2 — the GPFIFO-ring census as a **handle**, for the same reason

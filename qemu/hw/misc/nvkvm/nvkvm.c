@@ -2047,6 +2047,43 @@ static void nvkvm_report_registers(NvkvmState *s)
     }
 
     /*
+     * ★★★★ §16.40 — THE FIRST REFUSED GPU_PROMOTE_CTX, WITH THE ADDRESS PLANE'S STATE AS
+     * IT STOOD AT THAT INSTANT.
+     *
+     * Printed UNCONDITIONALLY, including when nothing was latched, for the reason every
+     * block in this function is: an absent line and a line saying "none" are different
+     * observations, and only one of them is evidence.  ⊘ "no promotion was refused" is a
+     * FINDING — read beside `control 0x2080012b result …` in the census below, it
+     * separates "every promotion succeeded" from "none arrived".
+     *
+     * ★★★ WHY IT IS HERE AT ALL.  The per-channel VA-space census this sentence carries
+     * has existed since §15 and could be reached ONLY from inside a doorbell-refusal
+     * sentence.  MEASURED 2026-08-09: `census[` appears in exactly TWO of the seventeen
+     * committed boot logs and in NONE since doorbells began to be served — s35 printed
+     * `doorbells: 124 arrived, 124 served, 0 REFUSED by name`, so the refusal that carried
+     * the census never fired.  A diagnostic for the ADDRESS plane was gated behind the
+     * EXECUTION plane failing; fixing the second silenced the first, and nothing in the
+     * report said so.  Three consecutive rungs then recorded "which VA space the failing
+     * channel names is unread" and one prescribed a shim ABI bump to add an instrument
+     * that was already built and already crossed this ABI.
+     */
+    if (a.promote_diag_len == 0) {
+        info_report("nvkvm: promote-ctx: NO REFUSAL LATCHED — no GPU_PROMOTE_CTX was "
+                    "refused this boot. ⊘ Read this against the 0x2080012b rows in the "
+                    "control census below: absent there too means none arrived.");
+    } else {
+        uint64_t n = a.promote_diag_len;
+
+        if (n > KAYFABE_PROMOTE_DIAG_LEN) {
+            n = KAYFABE_PROMOTE_DIAG_LEN;
+        }
+        /* %.*s, never %s: NUL-PADDED, and a sentence that exactly fills the array carries
+         * no terminator.  The archive stamps its own `[CLIPPED …]` tail. */
+        info_report("nvkvm: promote-ctx FIRST REFUSAL: %.*s", (int)n,
+                    (const char *)a.promote_diag);
+    }
+
+    /*
      * ★★★ THE CONTROL CENSUS — the two POSITIVE states the two lists above cannot express.
      * Printed unconditionally, INCLUDING when empty, for the reason every block here is.
      *

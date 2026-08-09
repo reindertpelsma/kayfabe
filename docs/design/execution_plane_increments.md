@@ -9123,3 +9123,131 @@ of the guest's format.
 `NV_RM_RPC_CONTROL`'s `(status == NV_OK)` guard. The rollback ran (its assert is in the log)
 and the RPC was suppressed. ★ A prediction made from source before the boot and confirmed by
 it.
+
+## §16.40 ★★★★ The instrument was ALREADY BUILT — and gated behind a plane that started succeeding
+
+### 16.40.1 ⊘⊘ WHAT THIS INCREMENT REFUTES, starting with the brief that commissioned it
+
+- ⊘ **"`ContextVasUndeclared` names a VA space and nothing logs WHICH ONE. Bump the shim ABI,
+  log the handles, get a same-boot identity."** — **REFUTED as to the diagnosis.** The
+  per-channel VA-space census that names exactly this (`own=`/`cs=`/`tsg=`/`dev=` route strings
+  plus `pdb=Y|N` per channel) has existed since §15, lives at
+  `crates/kayfabe-qemu-raw/src/shim.rs`'s `vas_census_line`, and **already crossed the ABI**
+  inside the doorbell-refusal sentence. Nothing needed inventing.
+  ★ `[measured 2026-08-09]` `grep -l 'census\[' traces/guest_boots/*.log` returns **two** files —
+  `run_s24_cf18883_cup2_qemu.log` and `run_s25_01d12e6_cup2_qemu.log` — and **none** of the
+  fifteen boots since. The reason is not decay: the census was reachable **only from inside a
+  doorbell refusal**, and `s35_03a7e10_dup` reports `doorbells: 124 arrived, 124 served, 0
+  REFUSED by name`. ⇒ **a diagnostic for the ADDRESS plane was gated on the EXECUTION plane
+  failing.** Fixing the execution plane silenced the address plane's only instrument, and the
+  boot report has no line that says so — there is only an absence.
+  ★★★ The ABI bump in this increment is therefore real but its justification is inverted: it
+  carries an **existing** instrument out from behind a **stale gate**, rather than adding a new
+  measurement.
+
+- ⊘ **"`docs/design/execution_plane_increments.md` §16.38–§16.39b"** — **those sections are not in
+  that file.** The document ends at §16.31; §16.32 onward exist **only as commit messages**. A
+  brief that cites a doc section by number, and a reader who opens the file, disagree silently.
+
+- ⊘ **My own first design, refuted before it was booted.** The latch was written against
+  `ObjectModel::as_gpu()`. `SharedObjectModel::as_gpu` returns **`None` by design**
+  (`shim.rs:2482`) because the shipped composition root is a sharded shell — so the diagnosis
+  would have printed *"no whole `Gpu`"* **on every real boot** while passing every test that
+  composes a bare `Gpu`. That is `skipped_oracle_kills_the_guard`: green in the harness, blind
+  on the bench. The census is a **trait method** now, so `rustc` requires the shell to answer.
+
+- ⊘ **"`fuzz-run`/`fuzz-corpus-replay` were still running and unread."** They were finished and
+  gone. What was **still running** was **two orphaned `cargo-mutants` processes** (1 h 05 m and
+  57 m old) holding **11.8 GB** of `/tmp` and still growing — the same orphan class as the
+  fuzzers, from the same `pkill`ed suite, and not named in any hand-off. They were the reason
+  disk sat at the 6144 MB floor. Killed by exact pid; **free space went 6.4 G → 19 G.**
+  ★ `pgrep -x cargo-mutants` finds them; a sweep that greps only for `qemu` or `fuzz` does not.
+
+### 16.40.2 ★★★★ THE DUAL-SOURCED REFUSAL — one tag stood for two opposite diagnoses
+
+`route_promote_ctx` returned `PromoteFault::ContextVasUndeclared` from **two** places with
+**identical payloads** (`promote.rs`, hops 2 and 3):
+
+| hop | the lookup | a miss means | whose defect |
+|---|---|---|---|
+| 2 | `Spine::ctx_vas` | no `(gpu, pdb)` was ever derived for this channel/TSG — **its VA space declared no page-directory base** | the guest has not published a root, or we did not route the publication |
+| 3 | `Spine::by_pdb` | a `(gpu, pdb)` **was** derived and **no proc owns it** | our own projection disagreeing with itself |
+
+⇒ *"the root never arrived"* versus *"the root arrived and the owner index lost it"* — opposite
+diagnoses, one tag, and a census that counts tags could not tell a reader which had happened.
+`s35` printed `PromoteFault::ContextVasUndeclared x1` and three rungs read it as hop 2 because
+that is the reading the variant's doc comment invited; **nothing in the capture could have
+refuted hop 3.** Hop 3 is now `PromoteFault::ContextVasNoOwner`, carrying the `Pdb` it resolved.
+
+★ It is guest-observationally neutral, checked at the source rather than assumed:
+`BridgeRefusal::rpc_result` is a `const fn` returning `NV_ERR_NOT_SUPPORTED` **for every
+variant** (`lib.rs:861-863`), so the split changes a report and cannot change a boot.
+
+★★ And the split immediately caught a **live disagreement in our own test suite**:
+`tests/tests/promote_ctx.rs:1315` asserted `ContextVasUndeclared` under a comment reading *"a
+promotion naming the **dead proc's** address space"*. The comment named hop 3; the assertion
+took hop 2's name. `a_comment_that_names_an_exception_is_a_bug_report`, and the compiler found
+it the moment the two names existed.
+
+### 16.40.3 ★★★ WHAT `s35`'s OWN CAPTURE ALREADY SETTLES — at zero boot cost
+
+Verified against the raw files rather than inherited (the brief's duty 1):
+
+- **The unserviced ledger is complete and consistent.** `... | grep -o 'fn [0-9]*' | sort -n |
+  uniq -c` over `run_s35_03a7e10_dup_qemu.log` returns exactly **39 × `fn 76`**, matching the
+  summary's own `39 distinct`. `DUP_OBJECT` (fn 21) is absent because §16.38 **served** it.
+- **The dup is fully named, and by the GUEST.** `run_s31_675af4a_echofix_probe.log:307`:
+  `GspRmDupObject failed: hClient=0xc1d0000a; hParent=0xcaf00000; hObject=0xcaf00036;
+  hClientSrc=0xc1d00015; hObjectSrc=0x5c000007`. ⇒ UVM dups **VASPACE #1** into `0xcaf00036`,
+  and `0x00801813` publishes a root for `0xcaf00036`. Meanwhile `0x90f10106` publishes for
+  **`0x5c000008`** — VASPACE #2 (`s35` gvas rows). **Both** libcuda VA spaces get a root, by
+  **different transports**; only the second's transport is routed into the object model
+  (`PUBLICATION_CONTROLS` holds exactly `0x90f10106` and `0x20800a9f`; `0x00801813` is not in it).
+- **`cup2`'s object tree**, from its own `rmtrace`: client `0xc1d0000c`; two `0x90f1` at
+  `0x5c000007`/`0x5c000008` under Device `0x5c000002`; TSG `0xa06c` at `0x5c000012`; channel
+  `0xc56f` at `0x5c000019` **parented to the TSG**; `0xc7c0` at `0x5c00001a` under the channel,
+  `status=0x56`. ⇒ the channel's VAS resolves through **route 3 (the TSG)**, so the handle that
+  decides this rung is the **TSG's** declared `hVASpace`, which no capture reads.
+- ⚠ **Two promotions already SUCCEED** (`control 0x2080012b result 0x00000000 x2`) beside the
+  three refused. So `ctx_vas` resolves for *some* context objects; the wall is not "the index is
+  empty".
+
+### 16.40.4 ★★★ A MEASURED INSTRUMENT DEFECT, recorded and NOT yet fixed
+
+`s35` prints `of those, 12 reached the object model, 10 ACCEPTED (Vas::pdb populated from the
+guest's own publication)`. **That parenthesis is not something the counter can support.**
+`PublicationObserver::observe` increments `applied` on `Ok(())` from `gpu.apply(ev)`, and
+`RmGraph`'s `SetPageDir` arm returns `Ok(())` on **both** arms — the resolved one (`res.pdb =
+Some(pdb)`) and the **parked** one (`pending_pdbs.insert(target, pdb)`, for a VA space whose
+handle does not resolve yet). ⇒ a publication for a VA space that **does not exist** is counted
+as ACCEPTED and printed with the words *"`Vas::pdb` populated"*.
+
+⊘ Not fixed in this increment, deliberately: it needs `apply` to report which arm it took, and
+this boot must change instruments only. It is named here so the next reader does not take
+`10 ACCEPTED` as ten populated PDBs. ★ Same family as §16.40.1's gating accident — a number that
+is true of the code and false of the sentence printed beside it.
+
+### 16.40.5 ⇒ THE FALSIFIER, THREE-VALUED, WRITTEN AND COMMITTED BEFORE THE BOOT
+
+The boot changes **no behaviour** (§16.40.2's neutrality check). It adds one line to the report:
+`nvkvm: promote-ctx FIRST REFUSAL: <tag> <fault Debug>` + ` census[N chans, M outcomes] {...}`.
+Enumerated from source, these are the outcomes and what each **means**, so that a confirmation
+cannot be scored as a refutation:
+
+| # | what the line says | reading | what it makes the NEXT rung |
+|---|---|---|---|
+| **A** | `PromoteFault::ContextVasUndeclared` + a `pdb=N` group whose route is `tsg=ok(h0x5c00000X=>…)` | **hop 2.** The TSG named a VA space, it resolved, and it has **no PDB**. `X` is the answer to leg 1 — read it directly. | route a page-directory base to *that* VA space. If `X=7`, it is the UVM-dup'd one and `0x00801813` is its only transport ⇒ `PUBLICATION_CONTROLS` gains `0x00801813`. If `X=8`, the transport is already routed and the defect is downstream of `translate_published_pdes`. |
+| **B** | `PromoteFault::ContextVasNoOwner` + a `pdb=Y` group | **hop 3.** A `(gpu,pdb)` exists and `by_pdb` names no owner — an internal disagreement, **not** a missing publication. | ⊘ **This outcome refutes the whole `b4f00f3` hypothesis**, which is entirely about getting a PDB onto the wire. Routing `0x00801813` would change nothing. Go to `project.rs`'s `by_pdb` arm: the `if let Some(gpu)` guard at `:1177` drops a VA space whose Device target has not resolved. |
+| **C** | `census[NO-LIVE-CHANNELS]` on either fault | the promotion was refused at a moment when the model held **no channel at all** | the wall is earlier than believed — the promote precedes the channel reaching the graph. Neither A nor B's fix applies; instrument the ordering. |
+| **D** | `promote-ctx: NO REFUSAL LATCHED` | no `GPU_PROMOTE_CTX` was refused. ⊘ Cross-check `control 0x2080012b result 0x00000056` in the same report: **present** ⇒ the refusal bypassed `Bridge::deliver` and the latch is in the wrong seat (an instrument defect, not a finding); **absent** ⇒ the wall genuinely moved. | fix the seat, or climb. |
+
+⚠ **The three-valued discipline, restated for this rung:** outcomes A and B are *both*
+confirmations that the instrument works and the wall is where §16.39 said — they disagree only
+about **which hop**, and that disagreement is the entire point of the boot. Only C and D say the
+instrument or the model is wrong. A two-valued falsifier ("does the promote still fail?") would
+score A, B and C identically and learn nothing.
+
+★ **Prediction, from source, before the boot:** **A**, with `tsg=ok(...)` and `pdb=N`. The
+channel is parented to the TSG (`rmtrace`), so route 1 declines and route 3 commits; and of the
+two libcuda VA spaces only `0x5c000008`'s transport reaches the object model. ⊘ Recorded so the
+boot can refute it — the last five rungs each refuted part of their own brief.

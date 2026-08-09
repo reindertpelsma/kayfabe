@@ -1314,15 +1314,32 @@ fn mean_promote_through_the_shell() {
         .expect("B still promotes after A retires");
 
         // A promotion naming the dead proc's address space is refused by name.
+        //
+        // ★★★★ §16.40 — and the NAME CHANGED HERE, because this assertion and the comment
+        // one line above it disagreed. The comment says *"the dead **proc**'s address
+        // space"* — an OWNER fact — while the assertion named `ContextVasUndeclared`,
+        // whose documented meaning is *"its VASpace has not declared a page-directory
+        // base"*. Both could not be true of one refusal, and the comment was the correct
+        // one: `A`'s channel and VASpace are still in the graph, so `Spine::ctx_vas` still
+        // answers `(gpu, pdb)`; what retiring `A` removed is the `Spine::by_pdb` entry
+        // that names the owner. That is hop 3, and it now refuses under its own name.
+        //
+        // ⊘ This is `a_comment_that_names_an_exception_is_a_bug_report` in its mildest
+        // form: nothing was broken, but the census this test pins fed a boot report where
+        // one tag stood for two opposite diagnoses — *"the root never arrived"* and *"the
+        // root arrived and the owner index lost it"*. Three rungs read `s35`'s single
+        // `ContextVasUndeclared x1` as the first without anything able to refute the
+        // second.
         assert_eq!(
             dev.promote_ctx(&promotion(
                 A_CLIENT,
                 H_GR_CHANNEL,
                 vec![gr_range(GR_VA, 0xA000_0000)]
             )),
-            Err(PromoteFault::ContextVasUndeclared {
+            Err(PromoteFault::ContextVasNoOwner {
                 client: A_CLIENT,
                 object: H_GR_CHANNEL,
+                pdb: A_PDB,
             }),
             "{mode:?}",
         );

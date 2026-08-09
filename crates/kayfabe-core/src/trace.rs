@@ -103,6 +103,7 @@ impl Faulted for crate::promote::PromoteFault {
             F::UnknownContextObject { .. } => FaultTag("PromoteFault::UnknownContextObject"),
             F::NotAContextObject { .. } => FaultTag("PromoteFault::NotAContextObject"),
             F::ContextVasUndeclared { .. } => FaultTag("PromoteFault::ContextVasUndeclared"),
+            F::ContextVasNoOwner { .. } => FaultTag("PromoteFault::ContextVasNoOwner"),
             F::RetiredProc(_) => FaultTag("PromoteFault::RetiredProc"),
             F::UnknownVas { .. } => FaultTag("PromoteFault::UnknownVas"),
             F::ForeignContextObject { .. } => FaultTag("PromoteFault::ForeignContextObject"),

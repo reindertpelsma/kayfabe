@@ -2323,34 +2323,16 @@ impl NamespaceRow {
     }
 }
 
-/// ★★★★ **§16.25 — one live channel's VA-space resolution**, as reported by
-/// [`SharedDevice::channel_vas_census`].
+/// ★★★★ **One live channel's addressing** — re-exported from `kayfabe_core` rather than
+/// declared here.
 ///
-/// ⊘ Report-only. It exists so a `NoVas` refusal can be read **against the channels that
-/// were served**, which is the only way to tell "this channel is the odd one out" from
-/// "this is how every channel here looks".
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ChannelVasRow {
-    /// The proc the channel belongs to.
-    pub proc: ProcId,
-    /// Its core-assigned slot — the `ChanId` a `FwdFault::NoVas` names.
-    pub chan: ChanId,
-    /// Its exec-plane demux identity.
-    pub vchid: VChid,
-    /// Its engine kind, refined by any engine object allocated on it.
-    pub engine: kayfabe_arch::ids::EngineKind,
-    /// The `hClient` of the channel's own origin declaration. ⚠ Not the VA space's
-    /// namespace — this is the channel's, so a row can be compared against the client
-    /// prefix a page-directory publication arrived on.
-    pub client: u32,
-    /// The channel's own origin `hObject`.
-    pub handle: u32,
-    /// Whether the channel resolved a PDB — i.e. whether the doorbell path can address it
-    /// at all. This is the field `FwdFault::NoVas` is thrown on.
-    pub has_pdb: bool,
-    /// ★ The discriminating half: which routes ran and what they hit.
-    pub route: kayfabe_core::project::VasRoutes,
-}
+/// ⊘ It used to be a second struct with the same eight fields, formatted by a second
+/// implementation in `kayfabe_qemu_raw`. Two computations that agree today are not
+/// corroboration; they are a drift waiting for somebody to read a formatting difference as
+/// a fact about the guest (`measure_at_the_boundary_not_inside`). The **sources** stay
+/// separate — this one walks the sharded shell under ranked locks, which a whole-`Gpu`
+/// walk may not — but the row and the format are `kayfabe_core`'s, once.
+pub use kayfabe_core::gpu::VasCensusRow as ChannelVasRow;
 
 /// ★★★ **What a doorbell's channel DECLARED about its own addressing** — the three facts a
 /// published-VA-space walk needs, plus the routing identities that named them.

@@ -247,7 +247,19 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// [`KayfabeRegAudit`] gained the `0x00801813 SET_PAGE_DIRECTORY` install record
 /// (`set_page_dir_*`, nine words), so an ABI-32 shim would allocate the old layout and
 /// this archive would write **72 bytes** past the end of it.
-pub const ABI_VERSION: u32 = 33;
+///
+/// ★★★★ Bumped to **34** at §16.40, the ABI-3 reason a twenty-second time:
+/// [`KayfabeRegAudit`] gained the promote-ctx diagnosis (`promote_diag` —
+/// [`PROMOTE_DIAG_LEN`] bytes — plus `promote_diag_len`), so an ABI-33 shim would allocate
+/// the old layout and this archive would write **2 056 bytes** past the end of it.
+///
+/// ⊘ And this one is an instrument being **un-gated**, not a new measurement: the
+/// VA-space census it carries has existed since §15 and was reachable only from inside a
+/// doorbell refusal. `[measured 2026-08-09]` `census[` appears in exactly two of the
+/// seventeen committed boot logs, and in none since doorbells began to be served — the
+/// address plane's only diagnostic was gated on the execution plane failing. See
+/// [`kayfabe_core::gpu::Gpu::vas_census_string`].
+pub const ABI_VERSION: u32 = 34;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -980,6 +992,15 @@ pub const DOORBELL_REFUSAL_LEN: usize = 2048;
 /// [`DOORBELL_REFUSAL_LEN`] bytes for every other probe too. ⊘ The elision is always
 /// printed, never silent.
 const CENSUS_EXEMPLARS: usize = 3;
+
+/// ★★★★ §16.40 — how many bytes of the promote-ctx diagnosis cross the ABI.
+///
+/// Sized like [`DOORBELL_REFUSAL_LEN`] and for the same measured reason: the sentence
+/// carries a per-channel VA-space census, and `s25_01d12e6_cup2`'s census alone is 512
+/// bytes at six channels. A `cup2` boot that reaches `cuCtxCreate` holds more. ⊘
+/// [`copy_sentence`] stamps a visible `[CLIPPED …]` tail rather than truncating silently,
+/// so a clipped diagnosis can never read as a complete one.
+pub const PROMOTE_DIAG_LEN: usize = 2048;
 /// How many bytes of a doorbell refusal's **kind** the audit carries.
 ///
 /// ★ [`BRIDGE_REFUSAL_TAG_LEN`]'s width and for its reason: a `FaultTag` is a
@@ -1899,6 +1920,20 @@ pub struct KayfabeRegAudit {
     pub bind_len: u64,
     /// The rows, in first-seen order. See [`KayfabeChannelBind`].
     pub binds: [KayfabeChannelBind; CHANNEL_BIND_SLOTS],
+    /// ★★★★ **§16.40 — the FIRST refused `GPU_PROMOTE_CTX`, with the address plane's state
+    /// as it stood at that instant.** NUL-padded; [`Self::promote_diag_len`] is the length.
+    ///
+    /// ⊘ **Empty is a finding, not a blank.** A zero length means no promotion was ever
+    /// refused, which — read beside the `0x2080012b` rows in the served-control census —
+    /// discriminates "every promotion succeeded" from "none arrived". It never means the
+    /// instrument was off.
+    ///
+    /// See `kayfabe_rmrpc::SharedPromoteDiag` for why one sentence rather than a census,
+    /// and `kayfabe_core::gpu::Gpu::vas_census_string` for why it is sampled at the
+    /// refusal instead of here.
+    pub promote_diag: [u8; PROMOTE_DIAG_LEN],
+    /// How many bytes of [`Self::promote_diag`] are the sentence. `0` = nothing latched.
+    pub promote_diag_len: u64,
     /// ★★★ **The VA-space page-directory publications** — every publication that decoded,
     /// including repeats and rows past [`GVAS_PUBLICATION_SLOTS`].
     ///
@@ -2176,6 +2211,8 @@ impl Default for KayfabeRegAudit {
             bind_total: Default::default(),
             bind_len: Default::default(),
             binds: Default::default(),
+            promote_diag: [0; PROMOTE_DIAG_LEN],
+            promote_diag_len: Default::default(),
             gvas_pub_total: Default::default(),
             gvas_pub_len: Default::default(),
             gvas_pub_undecodable: Default::default(),
@@ -2444,6 +2481,16 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
     /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
     /// lives inside a device lock and a proc lock, and a `&Gpu` handed out here would
     /// outlive both guards.
+    /// ★★★★ §16.40 — the census the sharded shell CAN answer, where `as_gpu` cannot.
+    ///
+    /// ⊘ This is the impl that makes the promote diagnosis work on a real boot:
+    /// [`kayfabe_rt::device::SharedDevice::channel_vas_census`] walks the live set one
+    /// rank-1 lock at a time (R3), which is the only legal read here, and the formatting
+    /// is `kayfabe_core`'s so it cannot drift from the doorbell path's.
+    fn vas_census(&self, mark: Option<kayfabe_core::ChanId>) -> String {
+        kayfabe_core::gpu::format_vas_census(&self.0.channel_vas_census(), mark)
+    }
+
     fn as_gpu(&self) -> Option<&kayfabe_core::gpu::Gpu> {
         None
     }
@@ -2908,46 +2955,14 @@ impl SharedDoorbell {
         out
     }
 
+    /// The census for a doorbell refusal — the same instrument the promote path latches,
+    /// over the same formatter (`kayfabe_core::gpu::format_vas_census`).
+    ///
+    /// ⊘ This used to carry its own copy of the grouping and printing. See
+    /// `kayfabe_rt::device::ChannelVasRow` for why the second copy was removed and why the
+    /// two *sources* nonetheless stay separate.
     fn vas_census_line(&self, refused: kayfabe_core::ChanId) -> String {
-        let rows = self.device.channel_vas_census();
-        if rows.is_empty() {
-            // ⊘ A TRUE statement, and a loud one: a refusal naming ChanId(N) while the
-            // device holds no channels at all would mean the refusal and the census
-            // disagree about whether the channel exists.
-            return " census[NO-LIVE-CHANNELS]".to_string();
-        }
-        // Group key: the routes, plus whether a PDB resolved. `String` because
-        // `VasRoutes` is `Display`-shaped and the grouping is exactly "prints the same".
-        let mut groups: Vec<(String, bool, Vec<kayfabe_rt::device::ChannelVasRow>)> = Vec::new();
-        for r in &rows {
-            let key = r.route.to_string();
-            match groups
-                .iter_mut()
-                .find(|(k, p, _)| *k == key && *p == r.has_pdb)
-            {
-                Some((_, _, v)) => v.push(*r),
-                None => groups.push((key, r.has_pdb, vec![*r])),
-            }
-        }
-        let mut out = format!(" census[{} chans, {} outcomes]", rows.len(), groups.len());
-        for (key, has_pdb, v) in &groups {
-            let pdb = if *has_pdb { "pdb=Y" } else { "pdb=N" };
-            out.push_str(&format!(" {{{}x {pdb} {key}", v.len()));
-            for r in v.iter().take(CENSUS_EXEMPLARS) {
-                // ★ `*` marks the channel this refusal is ABOUT, so the reader never has to
-                // hold the ChanId in their head while scanning the groups.
-                let mark = if r.chan == refused { "*" } else { "" };
-                out.push_str(&format!(
-                    " p{}/c{}{mark}:vc{} {:?} c0x{:x}/0x{:x}",
-                    r.proc.0, r.chan.0, r.vchid.0, r.engine, r.client, r.handle
-                ));
-            }
-            if v.len() > CENSUS_EXEMPLARS {
-                out.push_str(&format!(" +{} more", v.len() - CENSUS_EXEMPLARS));
-            }
-            out.push('}');
-        }
-        out
+        kayfabe_core::gpu::format_vas_census(&self.device.channel_vas_census(), Some(refused))
     }
 
     fn addressing_probe(&self, token: u64) -> String {
@@ -3551,6 +3566,9 @@ pub struct Regs {
     /// [`kayfabe_rmrpc::SharedRefusalCensus`] for the boot that had to be diagnosed by the
     /// absence of a line instead.
     refusals: kayfabe_rmrpc::SharedRefusalCensus,
+    /// ★★★★ §16.40 — the first refused `GPU_PROMOTE_CTX`, latched with the address plane's
+    /// state at that instant. See `kayfabe_rmrpc::SharedPromoteDiag`.
+    promote_diag: kayfabe_rmrpc::SharedPromoteDiag,
     /// ★★★ §8.2.2 — the GPFIFO-ring census, kept here for [`Regs::refusals`]'s reason.
     /// Recorder-only: nothing in this device reads it, and the only thing it changes is
     /// that a boot can *state* the address the guest named for a ring.
@@ -3632,7 +3650,7 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (links, refusals, rings, isolates, publications, isolate_plane, device) =
+        let (links, refusals, promote_diag, rings, isolates, publications, isolate_plane, device) =
             object_policy(abi.driver, chip.engines)?;
         let plane = RegPlane::with_objects(
             chip,
@@ -3706,6 +3724,7 @@ impl Regs {
             plane,
             device,
             refusals,
+            promote_diag,
             rings,
             isolates,
             publications,
@@ -3892,6 +3911,15 @@ impl Regs {
         // ⊘ Reported from the census, not from the loop: a set larger than the array must
         // say so, exactly as `unserviced_len` does.
         let bridge_refusal_len = bridge_refusal_len.max(census.tags().count() as u64);
+        // ★★★★ §16.40 — the promote diagnosis, latched at the refusal and only copied out
+        // here. ⊘ Nothing is SAMPLED at this point: by teardown the CUDA process is gone
+        // and its channels with it, so a census taken here would be a true sentence about
+        // the wrong instant. `copy_sentence` stamps its own `[CLIPPED …]` tail.
+        let mut promote_diag = [0u8; PROMOTE_DIAG_LEN];
+        let promote_diag_len = self
+            .promote_diag
+            .get()
+            .map_or(0, |d| copy_sentence(&mut promote_diag, &d));
         // ★★★ E1 — the isolate plane, DESTRUCTURED with no `..` for [`Shim::audit`]'s
         // reason: a census field added and not wired here is a number the C shell can
         // never read, and nothing goes red. `rustc` refuses the pattern instead.
@@ -4182,6 +4210,8 @@ impl Regs {
             bridge_refusals,
             bridge_refusal_len,
             bridge_refusal,
+            promote_diag,
+            promote_diag_len,
             isolates_materialized,
             isolates_live,
             isolates_no_plane,
@@ -4292,6 +4322,10 @@ type ObjectLink = (
     // the one shell below.
     kayfabe_device::ObjectLinks,
     kayfabe_rmrpc::SharedRefusalCensus,
+    // ★★★★ §16.40 — the first refused `GPU_PROMOTE_CTX`, with the address plane's state as
+    // it stood at the refusal. Carried out for the refusal census's reason exactly:
+    // afterwards there is no `ObjectPolicy` left to ask.
+    kayfabe_rmrpc::SharedPromoteDiag,
     // ★ §8.2.2 — the GPFIFO-ring census, recorder-only.
     kayfabe_rmrpc::SharedRingCensus,
     kayfabe_core::gpu::SharedIsolateCensus,
@@ -4356,6 +4390,8 @@ fn object_policy(
     // `ObjectPolicy` left to ask — that is the whole reason the census had to become a
     // shared store rather than a field behind `&self`.
     let refusals = policy.refusal_census();
+    // ★★★★ §16.40 — same taken-before-boxing reason, one increment on.
+    let promote_diag = policy.promote_diag();
     // ★ §8.2.2 — same taken-before-boxing reason, one increment on.
     let rings = policy.ring_census();
     // ★★★ E1 — and the isolate plane's own health, for the same reason and by the same
@@ -4387,6 +4423,7 @@ fn object_policy(
     Ok((
         links,
         refusals,
+        promote_diag,
         rings,
         isolates,
         publication_census,

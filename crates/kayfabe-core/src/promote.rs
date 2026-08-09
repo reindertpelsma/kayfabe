@@ -178,11 +178,50 @@ pub enum PromoteFault {
     /// declared a page-directory base, its `Device` target has not resolved, or the VAS
     /// has since died. **DEFER at derivation, FAULT here**: the guest asked us to write a
     /// table that does not exist.
+    ///
+    /// ★★★ **This variant names hop 2 of [`route_promote_ctx`] ONLY** — the
+    /// [`Spine::ctx_vas`] miss. It used to name hop 3 as well, and that was a refusal
+    /// whose name could not be true of both things it was raised for:
+    ///
+    /// | hop | miss means | who is at fault |
+    /// |---|---|---|
+    /// | 2 — `ctx_vas` | the channel/TSG resolved, but **no `(gpu, pdb)` was ever derived for it** — its VA space declared no page-directory base | the guest has not published a root, or we did not route the publication |
+    /// | 3 — `by_pdb` | a `(gpu, pdb)` WAS derived, and **no proc owns it** | our own projection disagrees with itself |
+    ///
+    /// ⊘ Those are opposite diagnoses — *"the root never arrived"* versus *"the root
+    /// arrived and the owner index lost it"* — and a census counting one tag could not
+    /// tell a reader which had happened. `[measured 2026-08-09, boot `s35_03a7e10_dup`]`
+    /// printed `PromoteFault::ContextVasUndeclared x1` and **three separate rungs read it
+    /// as hop 2** because that is the reading the doc comment invited; nothing in the
+    /// capture could have refuted hop 3. Hop 3 is now
+    /// [`PromoteFault::ContextVasNoOwner`], and the two are counted apart.
+    ///
+    /// ★ This is `refuse_by_name_means_the_name_is_true` applied to a variant that already
+    /// existed: the fix is not a new check, it is one name per thing being refused.
     ContextVasUndeclared {
         /// `hChanClient`.
         client: HClient,
         /// `hObject`.
         object: HObject,
+    },
+    /// ★★★ Hop 3 of [`route_promote_ctx`]: the channel/TSG resolved to a real
+    /// `(GpuId, Pdb)` and **[`Spine::by_pdb`] names no owning proc for it**.
+    ///
+    /// ⊘ Split out of [`PromoteFault::ContextVasUndeclared`] because the two are opposite
+    /// diagnoses — see that variant's table. This one is the **louder** of the pair: both
+    /// indices are derived from the same projection in the same pass
+    /// (`project.rs:1179` populates `by_pdb`, `:1238`/`:1254` populate `ctx_vas`), so a
+    /// `(gpu, pdb)` present in one and absent from the other is an internal disagreement
+    /// rather than a fact about the guest. Its sibling [`PromoteFault::UnknownVas`] makes
+    /// the same argument one level further in.
+    ContextVasNoOwner {
+        /// `hChanClient`.
+        client: HClient,
+        /// `hObject`.
+        object: HObject,
+        /// The address space the context object DID resolve to — the fact that makes this
+        /// different from its sibling, and the key that was looked up and missed.
+        pdb: Pdb,
     },
     /// The address space resolved but its owning proc has retired between the route and
     /// the apply. Skipped rather than re-attached: re-attaching a promotion to whoever
@@ -273,7 +312,8 @@ pub enum PromoteFault {
 /// # Errors
 ///
 /// [`PromoteFault::UnknownContextObject`], [`PromoteFault::NotAContextObject`],
-/// [`PromoteFault::ContextVasUndeclared`].
+/// [`PromoteFault::ContextVasUndeclared`] (hop 2), [`PromoteFault::ContextVasNoOwner`]
+/// (hop 3) — ★ one name per hop, so a census row names which lookup missed.
 pub fn route_promote_ctx(
     spine: &Spine,
     chan_client: HClient,
@@ -302,12 +342,16 @@ pub fn route_promote_ctx(
             client: chan_client,
             object,
         })?;
+    // ★★★ Hop 3, and it refuses under its OWN name. `ctx_vas` answered — a `(gpu, pdb)`
+    // exists for this context object — so a miss here is the owner index disagreeing with
+    // the index that sits beside it, not the guest failing to publish a root.
     let proc = *spine
         .by_pdb
         .get(&(gpu, pdb))
-        .ok_or(PromoteFault::ContextVasUndeclared {
+        .ok_or(PromoteFault::ContextVasNoOwner {
             client: chan_client,
             object,
+            pdb,
         })?;
     Ok(PromoteRoute { proc, gpu, pdb })
 }

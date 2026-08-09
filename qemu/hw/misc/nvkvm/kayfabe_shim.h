@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 33u
+#define KAYFABE_SHIM_ABI 34u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -398,6 +398,10 @@ typedef struct KayfabeBridgeRefusal {
  * sentence and OUTSIDE_FRAMEBUFFER alone is ~190 bytes.  ⊘ Sized against the refusing path:
  * a diagnostic that fits only when nothing went wrong clips exactly when it is read. */
 #define KAYFABE_DOORBELL_REFUSAL_LEN 2048u
+
+/* ★★★★ §16.40 — how many bytes of the promote-ctx diagnosis cross the ABI.  MUST equal
+ * `kayfabe_qemu_raw::shim::PROMOTE_DIAG_LEN`; the pair is what `KAYFABE_SHIM_ABI` guards. */
+#define KAYFABE_PROMOTE_DIAG_LEN 2048u
 
 typedef struct KayfabeDoorbellRefusal {
     uint8_t kind[KAYFABE_DOORBELL_KIND_LEN];  /* NUL-PADDED, not NUL-terminated */
@@ -826,6 +830,26 @@ typedef struct KayfabeRegAudit {
     uint64_t bind_total;
     uint64_t bind_len;
     KayfabeChannelBind binds[KAYFABE_CHANNEL_BIND_SLOTS];
+
+    /* ★★★★ §16.40 — THE FIRST REFUSED GPU_PROMOTE_CTX, WITH THE ADDRESS PLANE'S STATE AS IT
+     * STOOD AT THAT INSTANT.  NUL-PADDED, not NUL-terminated; print with an explicit
+     * precision from `promote_diag_len`.
+     *
+     * ⊘ `promote_diag_len == 0` is a FINDING, not a blank: it means no promotion was ever
+     * refused.  Read beside the `0x2080012b` rows in the served-control census it separates
+     * "every promotion succeeded" from "none arrived".  It never means the instrument was
+     * off — the sentence is latched by the bridge at the moment it refuses.
+     *
+     * ★★★ WHY THIS FIELD EXISTS.  The per-channel VA-space census it carries has existed
+     * since §15 and was reachable ONLY from inside a doorbell-refusal sentence.  MEASURED
+     * 2026-08-09: the string `census[` appears in exactly TWO of the seventeen boot logs in
+     * traces/guest_boots/, and in none since doorbells began to be SERVED — s35 reports
+     * `doorbells: 124 arrived, 124 served, 0 REFUSED`, so the refusal that carried the
+     * census never happened.  A diagnostic for the ADDRESS plane was gated on the EXECUTION
+     * plane failing, and fixing the second silenced the first with no line in the report to
+     * say so.  Three rungs then recorded "which VA space the channel names is unread". */
+    uint8_t  promote_diag[KAYFABE_PROMOTE_DIAG_LEN];
+    uint64_t promote_diag_len;
 
     /* ★★★ THE VA-SPACE PAGE-DIRECTORY PUBLICATIONS — see the block above
      * KayfabeGvasPublication.  `gvas_pub_total` counts every publication that decoded,

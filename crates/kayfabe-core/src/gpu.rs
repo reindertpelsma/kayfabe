@@ -43,6 +43,14 @@ use crate::{ChanId, ProcAnchor, ProcId};
 /// and far below `MAX_LIVE_HANDLES`, so it never trips a benign guest.
 pub const MAX_CONDEMNED_COMPONENTS: usize = 1024;
 
+/// How many channels [`Gpu::vas_census_string`] names per outcome group before it counts
+/// the rest.
+///
+/// ⊘ The overflow is **reported** (`+N more`), never silently dropped: a census that
+/// printed three rows out of forty while looking complete is the shape
+/// `unserviced_len`/`bridge_refusal_len` already refuse.
+pub const VAS_CENSUS_EXEMPLARS: usize = 3;
+
 /// ★ G10 — the largest number of **retired-but-unreaped** procs the device carries before
 /// it refuses to derive new processes. Reaping is the adapter's call (the L10 quiesce
 /// edge), so an adapter that never reaches one, or a guest that keeps a proc non-quiesced,
@@ -4056,6 +4064,55 @@ impl Gpu {
         crate::promote::apply_promote_ctx(proc, &route, p)
     }
 
+    /// ★★★★ **Every live channel's ADDRESSING, grouped — the instrument that says which VA
+    /// space a channel named and whether that VA space has a page-directory base.**
+    ///
+    /// # ⊘⊘ Why this moved here, and it is a fix rather than a new feature
+    ///
+    /// This census already existed, complete, in `kayfabe_qemu_raw`'s
+    /// `SharedDoorbell::vas_census_line` — and it was reachable **only from inside a
+    /// doorbell refusal sentence**. `[measured 2026-08-09]`: the string `census[` appears
+    /// in exactly **two** of the boot logs in `traces/guest_boots/` (`s24_cf18883_cup2`,
+    /// `s25_01d12e6_cup2`), and in none of the fifteen since. The reason is not that the
+    /// instrument broke — it is that **the plane it was gated behind started succeeding**:
+    /// `s35_03a7e10_dup` reports `doorbells: 124 arrived, 124 served, 0 REFUSED by name`,
+    /// so the refusal that carried the census never happened and the census printed
+    /// nothing.
+    ///
+    /// ⇒ ★★★ A diagnostic for the **address** plane was gated on a failure of the
+    /// **execution** plane. Fixing the second silenced the first, and the boot report gave
+    /// no sign of it — there is no "census suppressed" line, only an absence. Three rungs
+    /// then recorded *"which VA space the channel names is unread"* and one prescribed a
+    /// shim ABI bump to add an instrument that **was already built and already crossed the
+    /// ABI**. `a_saturated_instrument_looks_exactly_like_absence`, with the twist that the
+    /// saturation was somebody else's green.
+    ///
+    /// # ★★ Sampled at the EVENT, never at teardown
+    ///
+    /// ⚠ The caller must latch this **when the refusal happens**. By the time the device's
+    /// exit notifier runs, the CUDA process has exited and its channels are freed, so a
+    /// teardown-time call returns `NO-LIVE-CHANNELS` — a true sentence about the wrong
+    /// instant. That is `a_correct_capture_can_answer_the_wrong_question` exactly: the
+    /// question is about a lifetime, and this instrument samples one moment of it.
+    ///
+    /// `mark` is the channel the caller's refusal is *about*; it is flagged `*` in the
+    /// output so a reader never has to hold a `ChanId` in their head while scanning
+    /// groups. Pass `None` when the refusal names no channel (promote-ctx names a handle,
+    /// not a `ChanId`).
+    #[must_use]
+    pub fn vas_census_string(&self, mark: Option<ChanId>) -> String {
+        // ⊘ The system proc is included: RM's own scrubber/CeUtils channels live there,
+        // and a census that showed only user procs would report "no channels" for a boot
+        // whose only channels are the kernel's.
+        let mut rows: Vec<VasCensusRow> = Vec::new();
+        for (pid, p) in std::iter::once((Gpu::SYSTEM_PROC, &self.system))
+            .chain(self.procs.iter().map(|(k, v)| (*k, v)))
+        {
+            rows.extend(p.channels.values().map(|c| VasCensusRow::of(pid, c)));
+        }
+        format_vas_census(&rows, mark)
+    }
+
     /// ★★★ **#177 — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`.**
     ///
     /// Records (or withdraws) the guest's declaration that the channel at
@@ -4172,4 +4229,108 @@ impl Gpu {
         self.spine
             .completions_drained(&mut self.system, &mut self.procs, gpu);
     }
+}
+
+/// ★★★★ **One live channel's addressing, in the shape the census prints** — the row type
+/// [`format_vas_census`] consumes.
+///
+/// # ⊘ Why this type exists rather than two structs that print the same
+///
+/// The census had **two** producers reading two different sources: `Gpu`'s own procs (this
+/// crate) and `kayfabe_rt`'s lock-ranked `live_pids`/`with_proc` walk, which is the only
+/// legal way to read the sharded shell. Both then formatted independently. Two
+/// computations that agree today are not corroboration — they are a drift waiting for a
+/// reader to compare a `s24` census against a later one and conclude something about the
+/// guest from a difference in *our* formatting
+/// (`measure_at_the_boundary_not_inside`).
+///
+/// ⇒ The two **sources** stay separate, because their locking disciplines genuinely
+/// differ and collapsing them would put a whole-`Gpu` walk on a path that may hold a
+/// rank-1 lock. The **format** is here, once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VasCensusRow {
+    /// The proc the channel belongs to.
+    pub proc: ProcId,
+    /// Its core-assigned slot — the `ChanId` a `FwdFault::NoVas` names.
+    pub chan: ChanId,
+    /// Its exec-plane demux identity.
+    pub vchid: VChid,
+    /// Its engine kind, refined by any engine object allocated on it.
+    pub engine: EngineKind,
+    /// The `hClient` of the channel's **own** origin declaration. ⚠ Not the VA space's
+    /// namespace — so a row can be compared against the client a publication arrived on.
+    pub client: u32,
+    /// The channel's own origin `hObject`.
+    pub handle: u32,
+    /// Whether the channel resolved a PDB at all. ★ This is the field the whole census is
+    /// read for: `pdb=N` on a channel whose route says `ok(...)` means the VA space was
+    /// *named and found* and simply has no page-directory base.
+    pub has_pdb: bool,
+    /// ★ The discriminating half: which routes ran and what each one hit.
+    pub route: crate::project::VasRoutes,
+}
+
+impl VasCensusRow {
+    /// Build a row from a live [`Channel`].
+    #[must_use]
+    pub fn of(proc: ProcId, ch: &Channel) -> VasCensusRow {
+        VasCensusRow {
+            proc,
+            chan: ch.id,
+            vchid: ch.vchid,
+            engine: ch.engine,
+            client: ch.key.origin.client.0,
+            handle: ch.key.origin.handle.0,
+            has_pdb: ch.vas_pdb.is_some(),
+            route: ch.vas_route,
+        }
+    }
+}
+
+/// ★★★★ **The VA-space census, formatted — the ONE implementation.**
+///
+/// Groups by `(routes, has_pdb)` and names up to [`VAS_CENSUS_EXEMPLARS`] channels per
+/// group, reporting the overflow rather than dropping it. `mark` is flagged `*`.
+///
+/// See [`Gpu::vas_census_string`] for what this instrument is for, why its absence from
+/// fifteen consecutive boot logs was a gating accident rather than a break, and why the
+/// caller must sample it **at the refusal** rather than at teardown.
+#[must_use]
+pub fn format_vas_census(rows: &[VasCensusRow], mark: Option<ChanId>) -> String {
+    if rows.is_empty() {
+        // ⊘ A TRUE statement, and a loud one. It is also exactly what a caller sees if it
+        // sampled too late (after the CUDA process exited and its channels were freed), so
+        // it must never be read as "the guest declared no channels".
+        return " census[NO-LIVE-CHANNELS]".to_string();
+    }
+    // Group key: the routes, plus whether a PDB resolved. `String` because `VasRoutes` is
+    // `Display`-shaped and the grouping is exactly "prints the same".
+    let mut groups: Vec<(String, bool, Vec<&VasCensusRow>)> = Vec::new();
+    for r in rows {
+        let key = r.route.to_string();
+        match groups
+            .iter_mut()
+            .find(|(k, p, _)| *k == key && *p == r.has_pdb)
+        {
+            Some((_, _, v)) => v.push(r),
+            None => groups.push((key, r.has_pdb, vec![r])),
+        }
+    }
+    let mut out = format!(" census[{} chans, {} outcomes]", rows.len(), groups.len());
+    for (key, has_pdb, v) in &groups {
+        let pdb = if *has_pdb { "pdb=Y" } else { "pdb=N" };
+        out.push_str(&format!(" {{{}x {pdb} {key}", v.len()));
+        for r in v.iter().take(VAS_CENSUS_EXEMPLARS) {
+            let m = if Some(r.chan) == mark { "*" } else { "" };
+            out.push_str(&format!(
+                " p{}/c{}{m}:vc{} {:?} c0x{:x}/0x{:x}",
+                r.proc.0, r.chan.0, r.vchid.0, r.engine, r.client, r.handle
+            ));
+        }
+        if v.len() > VAS_CENSUS_EXEMPLARS {
+            out.push_str(&format!(" +{} more", v.len() - VAS_CENSUS_EXEMPLARS));
+        }
+        out.push('}');
+    }
+    out
 }
