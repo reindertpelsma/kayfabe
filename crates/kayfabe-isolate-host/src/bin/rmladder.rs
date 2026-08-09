@@ -1129,6 +1129,107 @@ fn atomics_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle)
     }
 }
 
+/// ★★★ R24 — **`CE_GET_CE_PCE_MASK` (`0x20802a02`) per copy engine, from the real part.**
+///
+/// §14.42's wall is `queryCopyEngines` (`ogkm-580: nv_gpu_ops.c:8449-8541`), and its per-CE
+/// loop issues **two** controls that reach this port's boundary, back to back:
+/// `0x20802a01 CE_GET_CAPS` — which the guest kernel turns into `0x20802a07
+/// CE_GET_PHYSICAL_CAPS` (`kernel_ce.c:551-556`) — and then, six lines later,
+/// `0x20802a02 CE_GET_CE_PCE_MASK`. Both are checked with a hard `goto done` on any status
+/// but `NV_OK`, so serving only the first moves the wall by six lines.
+///
+/// ## ★★★ Why this rung exists at all, when `0x20802a07`'s answer needed no rung
+///
+/// The two ids are in **opposite** epistemic positions, and that is the whole point:
+///
+/// - `0x20802a07` is `KERNEL_PRIVILEGED` (flags `0x301d0`, `ogkm-580:
+///   g_subdevice_nvoc.c:7645-7658` — neither `PRIVILEGED(0x4)` nor `NON_PRIVILEGED(0x8)`,
+///   which is the default that refuses every usermode client including root,
+///   `control.h:170-247`). ⊘ **Unreachable from here**, exactly like `0x20802a0b`. Its
+///   answer is *derived* instead — projected out of [`kayfabe_abi::cecaps`], which already
+///   states this silicon fact from two independent real-GA106 captures.
+/// - `0x20802a02` carries flags `0x30349` (`g_subdevice_nvoc.c:7585-7598`), which **does**
+///   include `NON_PRIVILEGED(0x8)` — and `ROUTE_TO_PHYSICAL(0x40)`, with no body anywhere in
+///   the vendored tree (only the export row references `subdeviceCtrlCmdCeGetCePceMask_IMPL`;
+///   the implementation is inside GSP-RM firmware). ⇒ It is **reachable and unreadable**: a
+///   real part is the only oracle, and it is one we can actually ask.
+///
+/// ★ So the rung is not "measure because measuring is nice". It is: this is the one of the
+/// two that *can* be measured, and `derive_what_you_cannot_query_then_oracle_it` says the
+/// measurable one gets measured rather than guessed alongside its neighbour.
+///
+/// ## ⊘⊘ Why `--probe-ctrl 0x20802a02:8` would have been WRONG, and silently so
+///
+/// R18 seeds the whole params buffer with `0xCD` so it can tell *written* from *untouched*.
+/// `NV2080_CTRL_CE_GET_CE_PCE_MASK_PARAMS` is `{ NvU32 ceEngineType; NvU32 pceMask; }`
+/// (`ogkm-580: ctrl2080ce.h:167-170`) and **`ceEngineType` is `[IN]`** — the seed would ask
+/// for engine type `0xCDCDCDCD`, which is not a copy engine, and the answer would be a
+/// refusal that says nothing about the control. That is [`seed_only_the_out_region`] and
+/// §14.31's `[IN]`-field trap, third sighting. This rung therefore sets `ceEngineType`
+/// itself and seeds **only** the `pceMask` word.
+///
+/// ## ⚠ The engine-type encoding is TWO-BRANCH
+///
+/// `NV2080_ENGINE_TYPE_COPY(i) = (i < 10) ? COPY0 + i : COPY10 + i - 10`, with
+/// `COPY0 = 0x09` and `COPY10 = 0x34` (`ogkm-580: cl2080_notification.h:291`, `:340`,
+/// `:396`). A `0x09 + i` shortcut is right on every engine this part has and wrong on a
+/// bigger one, so it is spelled out.
+///
+/// ## What is asked, and what each answer means
+///
+/// [`kayfabe_abi::cecaps`] measured `present = 0x0f` on this part — LCE0..LCE3 — against a
+/// `NV_CE_MAX_LCE_MASK = 0x1f` that permits five. This rung asks **0..=4**, i.e. one past
+/// the advertised end, precisely so the boundary is measured rather than assumed: a refusal
+/// at `i = 4` corroborates `present = 0x0f` from a second, independent control.
+fn ce_pce_mask_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle) {
+    const CMD: u32 = 0x2080_2a02;
+    const PARAMS: usize = 8;
+    /// `ogkm-580: cl2080_notification.h:291`.
+    const COPY0: u32 = 0x09;
+    /// `ogkm-580: cl2080_notification.h:340`.
+    const COPY10: u32 = 0x34;
+
+    /// `NV2080_ENGINE_TYPE_COPY(i)` — `ogkm-580: cl2080_notification.h:396`, both branches.
+    fn engine_type_copy(i: u32) -> u32 {
+        if i < 10 { COPY0 + i } else { COPY10 + i - 10 }
+    }
+
+    println!(
+        "info  R24 pce-mask probe  = {CMD:#010x}, {PARAMS}-byte params, one bare Subdevice, \
+         no channel"
+    );
+    println!(
+        "info  R24 ceEngineType is [IN] — seeding ONLY the pceMask word, NOT the R18 blanket"
+    );
+    println!("info  R24 cecaps measured present=0x0f (LCE0..3); asking 0..=4 to MEASURE the edge");
+
+    for i in 0..=4u32 {
+        let et = engine_type_copy(i);
+        let mut p = vec![0xCDu8; PARAMS];
+        p[0..4].copy_from_slice(&et.to_le_bytes());
+        match rm.control(subdevice, ControlCmd(CMD), &mut p) {
+            Err(e) => {
+                println!("info  R24 LCE{i} (type {et:#04x}) = refused {e:?} (no value measured)");
+            }
+            Ok(()) => {
+                let echo = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+                let mask = u32::from_le_bytes([p[4], p[5], p[6], p[7]]);
+                // ★ Reported separately from the value, for R18's reason: `NV_OK` over an
+                // untouched word is a different fact from `NV_OK` over a written zero, and
+                // only the seed can tell them apart. `0xCDCDCDCD` here means RM returned
+                // success without writing the [OUT] field at all.
+                let touched = mask != 0xCDCD_CDCD;
+                println!(
+                    "★     R24 LCE{i} (type {et:#04x}) = NV_OK  echo={echo:#010x} \
+                     pceMask={mask:#010x} popcount={} [{}]",
+                    mask.count_ones(),
+                    if touched { "WRITTEN" } else { "UNTOUCHED" }
+                );
+            }
+        }
+    }
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -1421,6 +1522,7 @@ fn main() -> std::process::ExitCode {
     let mut want_gpu_info = false;
     let mut want_bus_info = false;
     let mut want_atomics = false;
+    let mut want_pce_mask = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -1444,6 +1546,7 @@ fn main() -> std::process::ExitCode {
             "--gpu-info-sweep" => want_gpu_info = true,
             "--bus-info-sweep" => want_bus_info = true,
             "--atomics-probe" => want_atomics = true,
+            "--pce-mask-probe" => want_pce_mask = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1556,6 +1659,19 @@ fn main() -> std::process::ExitCode {
         );
         atomics_probe(&mut rm, subdevice);
         println!("done — atomics probe only");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R24 runs here and RETURNS, for R23's reason: five controls on the bare Subdevice,
+    // nothing allocated, so a refusal is the request's or the object's and cannot be a
+    // channel's from three rungs earlier.
+    if want_pce_mask {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        ce_pce_mask_probe(&mut rm, subdevice);
+        println!("done — pce-mask probe only");
         return std::process::ExitCode::SUCCESS;
     }
 
