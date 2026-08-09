@@ -747,29 +747,41 @@ fn landed_and_refused_are_two_numbers_and_neither_absorbs_the_other() {
     assert!(c.bar0_window_writes >= 2 && c.bar0_window_reads >= 2);
 }
 
-/// ★★★ **UPDATED DELIBERATELY by `#149`, and the two halves went different ways.**
+/// ★★★ **BOTH GMMU-translated windows now refuse BY NAME when no format is installed.**
 ///
-/// This test used to say *"the two GMMU-translated windows are unchanged — they still have
-/// no address model"*. One of them still has none and the other now does, and collapsing
-/// that into one sentence would hide the whole rung:
+/// # ⚠ This test was RED, and it had been red since `014ea07` — a BOOTED commit
 ///
-/// - **The framebuffer aperture (BAR1)** is unchanged. Nothing in this port resolves an
-///   access through it, so [`ReadOutcome::FbWindow`] — *"no address model at all"* — is
-///   still the honest answer and the assertion below is untouched.
-/// - **The instance/BAR2 window** now HAS one. A plane with no page-table format installed
-///   therefore answers a different thing: a **named refusal** carrying the virtual address
-///   ([`ReadOutcome::TranslationRefused`], [`NO_MMU_PORT`]), which is the same shape
-///   `RefusingFb` and `RefusingRam` already use for *"the shell never wired this port"*.
-///   That distinction is worth a test on its own, because *"this port cannot translate"*
-///   and *"this device was built without a format"* are different findings and only the
-///   second one is a wiring bug.
+/// `#149` split the two halves deliberately: BAR2 had an address model and refused by name,
+/// while *"the framebuffer aperture (BAR1) is unchanged — nothing in this port resolves an
+/// access through it"*. §16.18 then **gave BAR1 an address model** — that was its entire
+/// headline (`[measured 2026-08-09, boots s17/s19]`: `BAR1 (translated): 15 writes resolved
+/// through the GMMU, 0 REFUSED`, and the ring page going `NEVER-WRITTEN` → `byBAR1#92`) —
+/// and left this guard asserting the behaviour it had just replaced. ⇒ the workspace suite
+/// has been failing since, and three boots were taken over it.
+///
+/// ⊘ The assertion is **stronger** now, not weaker, and that is the only reason it may be
+/// changed at all: its point was always *"serving this would invent a translation"*, and a
+/// [`ReadOutcome::TranslationRefused`] naming [`NO_MMU_PORT`] is that point enforced rather
+/// than merely respected. A raw `FbWindow` answer was the *fallback* — the shape
+/// `a_fallback_keyed_on_our_own_ignorance` warns about — and it is gone from both windows.
+///
+/// ★ The two windows still say different things and the test still separates them: BAR1
+/// carries no `bar2_refusal` and BAR2 does, so *"this port cannot translate"* and *"this
+/// device was built without a format"* stay distinguishable.
 #[test]
-fn bar1_has_no_address_model_and_bar2_now_refuses_by_name_instead() {
+fn both_translated_windows_refuse_by_name_when_no_page_table_format_is_installed() {
     let p = plane();
-    assert_eq!(
-        p.read(1, 0x0009_008C, 4),
-        ReadOutcome::FbWindow(FbWindow::FbAperture),
-        "⊘ BAR1 is unchanged: no address model, and serving it would invent a translation"
+    assert!(
+        matches!(
+            p.read(1, 0x0009_008C, 4),
+            ReadOutcome::TranslationRefused {
+                window: FbWindow::FbAperture,
+                va: 0x0009_008C,
+                why,
+            } if why == kayfabe_device::plane::NO_MMU_PORT
+        ),
+        "★★ BAR1 now HAS an address model (§16.18), so a plane with no format refuses by \
+         name and carries the VIRTUAL address — serving it would invent a translation"
     );
     assert!(
         matches!(

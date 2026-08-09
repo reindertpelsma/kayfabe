@@ -1070,9 +1070,24 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
     );
     // (2) The framebuffer aperture — RM's BAR1. The offset is the one the C's own cold-boot
     // trace writes (`cap1b_coldboot_hermetic_d6`, the single BAR1 write, offset 0x9008c).
-    assert_eq!(
-        plane.read(1, 0x0009_008C, 4),
-        ReadOutcome::FbWindow(FbWindow::FbAperture)
+    //
+    // ★★ UPDATED by §16.18, which gave BAR1 an address model (`[measured 2026-08-09, boots
+    // s17/s19]`: 15 BAR1 writes resolved through the GMMU, 0 refused). A plane with no
+    // page-table format installed therefore answers the same NAMED REFUSAL BAR2 does, and
+    // this assertion was left behind by that change — one of two sites that had the suite
+    // red across a BOOTED commit. ⊘ It is not a weakening: `FbWindow` was the fallback and
+    // a refusal that carries the virtual address is the stronger statement.
+    assert!(
+        matches!(
+            plane.read(1, 0x0009_008C, 4),
+            ReadOutcome::TranslationRefused {
+                window: FbWindow::FbAperture,
+                va: 0x0009_008C,
+                ..
+            }
+        ),
+        "BAR1 must name the missing format and carry the VIRTUAL address, never read as a \
+         plausible zero"
     );
     // (3) The instance/BAR2 window — the one the traces hammer 177856 / 214552 times.
     //
@@ -1100,10 +1115,16 @@ fn a_framebuffer_window_access_is_not_an_unclaimed_register() {
     // have no address model and are dropped (`fb_window_reads`); `PRAMIN` resolves and is
     // refused by name for want of a store (`fb_refusals`). A port that merged them could
     // not answer "how many framebuffer accesses did this boot drop".
-    // ★★★ 2 → 1 by `#149`: BAR1 is still a dropped window with no address model, and
-    // BAR2 moved into its own counter because it now has one. THREE numbers describing
-    // three findings, which is what the paragraph above asks for.
-    assert_eq!(c.fb_window_reads, 1, "BAR1 alone — still no address model");
+    // ★★★ 2 → 1 by `#149`, then 1 → 0 by §16.18. BOTH translated windows now have an
+    // address model, so neither is a "dropped window" any more and each has its own
+    // resolved-and-refused counter. ⊘ `fb_window_reads` staying a counter that can still
+    // move is the point: it is what a chip row with `bar1_pde_base == 0` would produce, and
+    // a boot that reported one would be telling us the row is unfilled.
+    assert_eq!(
+        c.fb_window_reads, 0,
+        "⊘ NOTHING is a dropped window now — both translated apertures resolve or refuse"
+    );
+    assert_eq!(c.bar1_faults, 1, "BAR1 resolved-and-refused, by name");
     assert_eq!(c.bar2_faults, 1, "BAR2 resolved-and-refused, by name");
     assert_eq!(c.fb_refusals, 1, "PRAMIN resolved and was refused BY NAME");
     assert_eq!(

@@ -618,10 +618,17 @@ fn the_bar1_root_is_recorded_even_though_nothing_translates_that_window() {
     .expect("answered");
     assert_eq!(p.bar_pdes().bar1.map(|r| r.entry), Some(pde_vid(PD2_TBL)));
     assert_eq!(p.bar_pdes().bar2, None, "and it did NOT root BAR2");
+    // ★★ §16.18 gave BAR1 an address model — `ChipProfile::bar1_pde_base` is non-zero on GA106, and `plane.rs:2208` falls back to a raw window only when it is ZERO. `[measured 2026-08-09, boots s17/s19]` 15 BAR1 writes resolved through the GMMU, 0 refused. This assertion was left behind by that change.
+    // ⊘ The test's POINT survives intact and is what it still checks: recording BAR1's root
+    // through `UPDATE_BAR_PDE` is not the same act as serving the window, and this plane has
+    // no page-table format installed, so the read is a named refusal either way.
     assert!(
         matches!(
             p.read(kayfabe_abi::pcibars::bus_bar::FB as u8, 0x9008C, 4),
-            ReadOutcome::FbWindow(FbWindow::FbAperture)
+            ReadOutcome::TranslationRefused {
+                window: FbWindow::FbAperture,
+                ..
+            }
         ),
         "⊘ BAR1 still has no address model; recording its root is not serving it"
     );

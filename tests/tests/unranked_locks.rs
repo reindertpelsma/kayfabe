@@ -70,10 +70,31 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "Mutex<DoorbellLog>",
         "A bounded diagnostic log. Held for a push and released; no call of any kind beneath it.",
     ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<Option<QemuVmm>>",
+        "★★★ THE SECOND HAZARD, and it was invisible until this gate's scope reached the MMIO          handler. The shell's guest-memory port, taken in `try_ce_submission` and held across          the WHOLE copy-engine submission — the ring walk, the pushbuffer read, every CPU          sub-copy and the completion write all run beneath it, and beneath the plane's          `ce_session` as well. ⊘ NOTHING may block beneath it: a wait here stalls the vCPU          that took the trap while the plane's own FSM mutex is also out. It is bounded today          only because every operation beneath it is a memcpy against a resident store — an          executor that ever waits on a host isolate must take this lock after the wait, not          across it.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::GpCursor>>",
+        "Per-channel GPFIFO read cursors. Taken for a single map read, and again for a single          insert on the success arm; no call of any kind beneath it, and it is never held          across the submission it belongs to.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>",
+        "Per-channel method accumulators, keyed and committed exactly like the cursors beside          them. Taken for a single map read, and again for a single insert on the success arm;          no call of any kind beneath it.",
+    ),
 ];
 
 /// Crates a vCPU thread executes through — the scope of the list above.
-const VCPU_PATH_CRATES: &[&str] = &["kayfabe-device", "kayfabe-rt"];
+///
+/// ★★★★ `kayfabe-qemu-raw` **is the MMIO handler**, and it was missing. A vCPU trap enters
+/// this port before it reaches either of the other two, so a gate that stopped at
+/// `kayfabe-device`/`kayfabe-rt` was honest about what it checked and simply did not check
+/// the place the guest arrives. ⊘ Same family as every scoped instrument in this campaign:
+/// the scope, not the assertion, was where the hole was.
+const VCPU_PATH_CRATES: &[&str] = &["kayfabe-device", "kayfabe-rt", "kayfabe-qemu-raw"];
 
 /// The ranked wrappers' own inners. These ARE the rank system, not holes in it.
 const RANKED_WRAPPER_INNERS: &[&str] = &["crates/kayfabe-rt/src/lock.rs"];
@@ -118,35 +139,110 @@ fn walk(dir: &Path, root: &Path, out: &mut BTreeSet<(String, String)>) {
         let Ok(text) = std::fs::read_to_string(&p) else {
             continue;
         };
-        for line in text.lines() {
-            let t = line.trim();
-            if t.starts_with("//") || t.starts_with("///") {
+        collect_locks(&text, &rel, out);
+    }
+}
+
+/// ★★★★ **Whole-FILE, bracket-matched — not line-by-line.**
+///
+/// # ⊘ The line scanner missed a lock I had just added, in this very campaign
+///
+/// `rustfmt` breaks a long field after the colon:
+///
+/// ```text
+///     cursors:
+///         std::sync::Mutex<std::collections::BTreeMap<(u32, u32), …::GpCursor>>,
+/// ```
+///
+/// so the line carrying the name has no type on it and the line carrying the type has no
+/// `": "` on it. `[measured 2026-08-09]` **both** `CeShellState::cursors` and
+/// `CeShellState::states` are declared exactly like that, and the old scan reported the
+/// crate as carrying **one** lock when it carries three. ⊘ That is the second spelling this
+/// scanner has been blind to — the first (`std::sync::Mutex<…>` fully qualified) is recorded
+/// at `executor.rs`'s entry — and it is the same defect both times: *the gate was honest
+/// about what it checked and did not check the shape the code was actually written in.*
+///
+/// ⚠ A `//` inside a string literal would truncate that line. No file in scope has one, and
+/// the failure direction is **toward a false positive** (a lock reported that is really in a
+/// comment), which fails loudly rather than passing quietly.
+fn collect_locks(text: &str, rel: &str, out: &mut BTreeSet<(String, String)>) {
+    // 1. Strip line comments, then flatten to ONE string so a declaration split across lines
+    //    is the same input as one written on a single line.
+    let mut flat = String::new();
+    for line in text.lines() {
+        let code = match line.find("//") {
+            Some(i) => &line[..i],
+            None => line,
+        };
+        flat.push_str(code);
+        flat.push(' ');
+    }
+    // ⊘ BYTES throughout, deliberately. The first draft searched with `str::find` (which
+    // returns a BYTE offset) and indexed a `Vec<char>` with the result. Every `★`, `⊘` and
+    // `⚠` in a string literal in the scanned crates is 3 bytes and 1 char, so the two
+    // indices diverge and the walk lands in the middle of an unrelated declaration —
+    // `plane.rs`'s three locks vanished from the scan while the crate plainly declares them.
+    // The structural characters here (`<`, `>`, `:`) are all ASCII, so every slice boundary
+    // taken below is a char boundary by construction.
+    let b = flat.as_bytes();
+    for kind in ["Mutex", "RwLock"] {
+        let k8 = kind.as_bytes();
+        let mut from = 0usize;
+        while let Some(rel_at) = flat[from..].find(kind) {
+            let at = from + rel_at;
+            from = at + k8.len();
+            // The name must be followed immediately by `<` — `Mutex` alone is a use or a
+            // turbofish, not a field type.
+            if b.get(at + k8.len()) != Some(&b'<') {
                 continue;
             }
-            // `name: Mutex<T>,` — but ALSO `name: std::sync::Mutex<T>,`.
-            //
-            // ⚠ `[measured]` 2026-08-06: the first version of this scan matched only the bare
-            // form, so a bite-check mutation using the fully-qualified path was NOT CAUGHT. A
-            // scanner that misses a spelling of the thing it scans for is a gate that reports
-            // clean while the class walks past it — the instrument-defect shape this whole
-            // file is about, found in this file, by breaking it.
-            let Some(colon) = t.find(": ") else { continue };
-            let rest = t[colon + 2..].trim();
-            // Strip any path qualifier: `std::sync::Mutex<T>` -> `Mutex<T>`.
-            let bare = match rest.find('<') {
-                Some(lt) => match rest[..lt].rfind("::") {
-                    Some(sep) => &rest[sep + 2..],
-                    None => rest,
-                },
-                None => rest,
-            };
-            for kind in ["Mutex<", "RwLock<"] {
-                if !bare.starts_with(kind) {
-                    continue;
-                }
-                let ty = bare.trim_end_matches(',').trim().to_owned();
-                out.insert((rel.clone(), ty));
+            // 2. Walk back over the path qualifier (`std::sync::`) to the start of the type.
+            let mut s0 = at;
+            while s0 > 0
+                && (b[s0 - 1].is_ascii_alphanumeric() || b[s0 - 1] == b'_' || b[s0 - 1] == b':')
+            {
+                s0 -= 1;
             }
+            // 2b. ★★ The last path segment must BE the lock name. ⊘ Without this,
+            //     `RankedMutex<Proc>` matches on its `Mutex` tail and the gate demands the
+            //     classification of the rank system itself — a false positive, and a gate
+            //     that cries wolf gets its list padded rather than read.
+            if flat[s0..at + k8.len()].rsplit("::").next() != Some(kind) {
+                continue;
+            }
+            // 3. It is a FIELD only if a `:` (the field's own colon, not a path's `::`)
+            //    precedes it. Anything else is a `let`, a return type or a bound.
+            let mut k = s0;
+            while k > 0 && b[k - 1].is_ascii_whitespace() {
+                k -= 1;
+            }
+            if k == 0 || b[k - 1] != b':' || (k >= 2 && b[k - 2] == b':') {
+                continue;
+            }
+            // 4. BRACKET-MATCH the generic argument, so a nested `BTreeMap<…>` cannot end
+            //    the type early. An unbalanced tail is skipped rather than guessed.
+            let mut depth = 0i32;
+            let mut end = None;
+            for (i, c) in b.iter().enumerate().skip(at + k8.len()) {
+                match c {
+                    b'<' => depth += 1,
+                    b'>' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = Some(i);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let Some(e) = end else { continue };
+            // 5. Normalise whitespace, so how rustfmt broke the line cannot change the key.
+            let ty = flat[at..=e]
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            out.insert((rel.to_owned(), ty));
         }
     }
 }

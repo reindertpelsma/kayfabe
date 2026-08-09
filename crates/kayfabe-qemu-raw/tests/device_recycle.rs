@@ -902,13 +902,21 @@ fn a_reload_clears_what_a_power_on_reset_keeps() {
     // `ISOLATE_REFUSAL_NONE = 0`, one field over.
     // ⊘ Every OTHER field is still compared, so this weakens nothing: the expectation is a
     // default with that one flag set, not an `assert!(true)`.
+    // ★★ §16.18 adds a SECOND non-counter with the same argument: `bar1_pde_base` is read
+    // straight off the CHIP ROW (`ga10x.rs:1743`, `GA106_BAR1_PDE_BASE`) at realize, so a
+    // freshly reloaded device has it set for the same reason a fresh one does — it is a
+    // property of the silicon we are emulating, not something a boot accumulated. ⊘ Asserted
+    // as the chip's own value rather than "non-zero", so a reload that carried a STALE base
+    // over from the previous device would still fail here.
     assert_eq!(
         after_reload.register_plane,
         KayfabeRegAudit {
             fb_resident_valid: 1,
+            bar1_pde_base: kayfabe_device::ga10x::GA106.bar1_pde_base,
             ..KayfabeRegAudit::default()
         },
-        "…and every counter with it — the residency PRECONDITION is not a counter"
+        "…and every counter with it — neither the residency PRECONDITION nor the chip row's \
+         BAR1 PDE base is a counter"
     );
     unload_device(reloaded);
 }

@@ -664,9 +664,14 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     //    projection of one computation cannot audit the first. The sweep asks the converse
     //    over raw bytes and consults no walk, so its answer and the descent's can genuinely
     //    disagree — which is the entire point.
+    // ★★★★ 91 -> 96, and the bump was MISSED by §16.18 (`bar1_reads`, `bar1_writes`,
+    // `bar1_faults`, `bar1_pde_base`, `bar1_root_published` — five words). ⊘ The C header
+    // WAS updated in the same commit (`kayfabe_shim.h:635-639`, same five names in the same
+    // order), so the wire ABI is consistent and it is this arithmetic that was stale — but
+    // the gate that would have said so was itself red, which is why nobody read it.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (91 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (96 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
@@ -827,11 +832,20 @@ fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
     // ⊘ …and NOT through a different one. The window really moves.
     let _ = regs.write(0, WINDOW_REG, 4, 0x0002_EFBB);
     assert_eq!(regs.read(0, PRAMIN + 0xE000, 4), 0);
-    // A write into the framebuffer aperture is DROPPED and said so — the case that costs a
+    // A write into the framebuffer aperture is REFUSED BY NAME — the case that costs a
     // page-table entry rather than a register value.
+    //
+    // ★★ §16.18 gave BAR1 an address model — `ChipProfile::bar1_pde_base` is non-zero on GA106, and `plane.rs:2208` falls back to a raw window only when it is ZERO. `[measured 2026-08-09, boots s17/s19]` 15 BAR1 writes resolved through the GMMU, 0 refused. This assertion was left behind by that change. ⊘ It is not a weakening:
+    // a dropped window is silent about WHY, and a fault says so at the instant the bytes
+    // are lost.
     let w = regs.write(1, 0x0009_008C, 8, 0xDEAD_BEEF);
     assert!(!w.claimed);
-    assert_eq!(regs.audit().fb_window_writes, 1);
+    assert_eq!(
+        regs.audit().fb_window_writes,
+        0,
+        "⊘ BAR1 is no longer a dropped window — it has an address model"
+    );
+    assert_eq!(regs.audit().bar1_faults, 1, "★ it is a NAMED refusal");
     assert_eq!(
         regs.audit().unclaimed_writes,
         0,
