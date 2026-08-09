@@ -9811,3 +9811,47 @@ the refusal row**, and stop depending on a guest-side tail of unbounded depth.
 3. Emit the VA-space census **unconditionally** (§16.45.5) and **name the class** in the
    `AllocClassNotPermitted` row (§16.45.6), and report `PromoteJoin`'s three counters
    (§16.45.4). All three are report-side; none needs a new measurement.
+
+## §16.46 ★★★★ HANG THE CENSUS OFF THE **SUCCESS** PATH — an instrument that survives its own fix
+
+⊘ **§16.45.7 item 3 was WRONG as written, and the code said so before the boot did.** It
+prescribed *"emit the VA-space census unconditionally at the end-of-run report"*.
+`Gpu::vas_census_string`'s own doc already records why that cannot work: *"by the time the
+device's exit notifier runs, the CUDA process has exited and its channels are freed, so a
+teardown-time call returns `NO-LIVE-CHANNELS` — a true sentence about the wrong instant."*
+★ `a_correct_capture_can_answer_the_wrong_question`, and I re-proposed the exact capture that
+memory names. The prescription is corrected here rather than quietly replaced.
+
+**What lands instead:** the census is latched on the **accepted** promotion, LAST-wins
+(`SharedPromoteDiag::latch_last`). Promotions arrive in the order `cuCtxCreate` builds the
+context, so the last one is taken at the deepest point the guest reached — which is the instant
+§16.45.5 lost. ⇒ the instrument now rides the path that *survives* the fix instead of the path
+the fix deletes.
+
+★ The same latch closes §16.45.4: the row carries `PromoteJoin`'s `bound` / `already` and the
+promotion's `declined.promote_only` / `declined.initialize_only` / `entries`, plus the three
+handles. `s39`'s eleven acceptances were eleven anonymous ticks; `PromoteJoin` has carried those
+numbers all along and only the report threw them away.
+
+⊘ Zero ABI change: it rides `PROMOTE_DIAG_SLOTS` (4, of which `s39` used 1) and prints through
+the same shim path as the refusal rows.
+
+### 16.46.1 THE FALSIFIER FOR `s40`, THREE-VALUED, COMMITTED BEFORE THE BOOT
+
+⚠ This is a **pure instrument** rung: nothing the guest can observe changes, so `cup2` must
+fail exactly as it did in `s39`. A rung whose success criterion is "the numbers move" would be
+scored backwards here.
+
+| | outcome | reading |
+|---|---|---|
+| **P** | the `ACCEPTED` row appears, carries a census with **more than 2 channels**, and every `s39` guest-facing number is **unchanged** (`ForeignContextObject` x0, `0x2080012b` accepted x11 / refused x2, doorbells 170, `NotOnAllowlist` x10, `FreeUnknown` x15, `CUP2_RC=1`) | the instrument works and is observationally neutral. Sub-prediction §16.44.6(a) becomes scoreable. |
+| **Q** | the row appears but its census is still small, or it is `[CLIPPED …]` | ★ partial: the latch fires and the *sampling instant* or the 2048-byte budget is wrong. A real result about the instrument, not about the port. |
+| **R** | the row is absent, **or** any `s39` guest-facing number moved | refuted — either the latch never runs on the accepted path, or a "pure instrument" change was not one. ⚠ The second is the serious one. |
+| **S** | boot does not reach `cup2` / stamp disagrees | not a result. |
+
+★ **And the number this rung exists to read:** `bound=`. §16.44.6(a) predicted **zero** —
+`nvGpuOpsBindChannelResources` writes only `bufferId` and `gpuVirtAddr`, never
+`gpuPhysAddr`/`size`, so every entry should decode as promote-only. If `bound > 0`, §16.44.2's
+attribution of the emitting call site is **wrong**, and §16.45's open disagreement (a failed
+retainer alloc should make that function unreachable, yet its promotion is what we see)
+resolves against it.

@@ -185,6 +185,35 @@ impl SharedPromoteDiag {
         g.iter().map(|(t, s)| (*t, s.clone())).collect()
     }
 
+    /// ★★★★ §16.46 — latch `s` for `tag`, **replacing** whatever was there.
+    ///
+    /// The opposite rule from [`Self::latch`], for a case where the opposite rule is the
+    /// correct one. `latch`'s tags are *refusals*, where the first is the one that matters
+    /// because every later one is downstream of it. This one's tag is an **acceptance**,
+    /// and there the last is the one that matters: promotions arrive in the order
+    /// `cuCtxCreate` builds the context, so the final one is taken at the deepest point
+    /// the guest reached.
+    ///
+    /// ⊘ **This exists because closing a bug BLINDED the instrument that measured it.**
+    /// `[measured 2026-08-09]` — `s38` reported `census[14 chans, 4 outcomes]` and `s39`,
+    /// with the promote guard fixed, reported `census[2 chans, 2 outcomes]`. Nothing
+    /// broke: the 14-channel snapshot rode on the `ForeignContextObject` refusal, and that
+    /// refusal is what the rung deleted. ★★★★★ That is the SECOND time in two rungs — the
+    /// same census was previously reachable only from inside a **doorbell** refusal and
+    /// went dark when the doorbell plane started succeeding. ⇒ the rule is not *"look for
+    /// disabled instruments"*: **an instrument hung off a refusal path has its own
+    /// deletion scheduled by the fix it exists to guide.** Hanging this one off the
+    /// *success* path is what makes it survive its own success.
+    ///
+    /// ⊘ Latching at teardown is not the alternative and never was:
+    /// `Gpu::vas_census_string`'s own doc records that by the time the exit notifier runs
+    /// the CUDA process has exited and its channels are freed, so a teardown census
+    /// returns `NO-LIVE-CHANNELS` — *"a true sentence about the wrong instant"*.
+    fn latch_last(&self, tag: FaultTag, s: String) {
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        g.insert(tag, s);
+    }
+
     /// Latch `s` for `tag`, if that tag has nothing latched yet.
     ///
     /// ★★★★ **Per TAG, and the first version of this was per BOOT — which measured the
@@ -706,6 +735,9 @@ impl Bridge {
         // ★ Cloned out ahead of the chain (it is an `Arc`) so the recorder below borrows
         // this handle and not `self`, which `reasm` already holds mutably.
         let rings = self.rings.clone();
+        // ★★★★ §16.46 — cloned out ahead of the chain for exactly `rings`'s reason (it is
+        // an `Arc`), so the acceptance latch below borrows this handle and not `self`.
+        let diag = self.promote_diag.clone();
         let outcome = self
             .reasm
             .accept(&self.abi, cmd)
@@ -752,10 +784,50 @@ impl Bridge {
                 // The join routes on the ADDRESS SPACE the promotion names, so it is
                 // legal to run against `&mut Gpu` regardless of which proc's RPC this
                 // was; the sharded shell runs the same two functions under its own locks.
-                Translation::CtxPromotion(p) => gpu
-                    .promote_ctx(&p)
-                    .map(|_| Translation::CtxPromotion(p))
-                    .map_err(BridgeRefusal::Promote),
+                Translation::CtxPromotion(p) => match gpu.promote_ctx(&p) {
+                    Ok(join) => {
+                        // ★★★★ §16.46 — THE ACCEPTED promotion's own accounting, plus the
+                        // census, latched LAST-wins. Two gaps closed by one latch:
+                        //
+                        //  (1) §16.45.5 — the census used to ride only on a promote
+                        //      REFUSAL, so fixing the promote plane switched it off. It
+                        //      now rides the success path too and survives its own fix.
+                        //  (2) §16.45.4 — an accepted promotion used to contribute one
+                        //      anonymous `control 0x2080012b result 0` tick and nothing
+                        //      else, so `s39`'s ELEVEN acceptances were eleven opaque
+                        //      successes and the rung's own sub-prediction ("this binds
+                        //      ZERO ranges") could not be scored either way. ⊘ A claim
+                        //      nothing could have contradicted was never a test.
+                        //      `PromoteJoin` has carried all three numbers all along; only
+                        //      the report threw them away.
+                        //
+                        // ★ `declined` is printed beside `bound`, not folded into it: a
+                        // promotion that declares eight VAs and binds none is a completely
+                        // different fact from one that declares none, and a single
+                        // "accepted" tick cannot tell them apart — which is the whole of
+                        // C defect D3 restated one layer up.
+                        diag.latch_last(
+                            FaultTag("promote-ctx ACCEPTED (last, with the census AT it)"),
+                            format!(
+                                "bound={} already={} declined.promote_only={} \
+                                 declined.initialize_only={} entries={} \
+                                 client={:#x} chan_client={:#x} object={:#x} proc={:?}{}",
+                                join.bound,
+                                join.already,
+                                p.declined.promote_only,
+                                p.declined.initialize_only,
+                                p.ranges.len(),
+                                p.client.0,
+                                p.chan_client.0,
+                                p.object.0,
+                                join.route.proc,
+                                gpu.vas_census(None),
+                            ),
+                        );
+                        Ok(Translation::CtxPromotion(p))
+                    }
+                    Err(e) => Err(BridgeRefusal::Promote(e)),
+                },
                 Translation::Inert | Translation::Held => Ok(t),
             });
         match &outcome {
