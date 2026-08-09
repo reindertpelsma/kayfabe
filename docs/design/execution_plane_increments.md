@@ -7106,7 +7106,7 @@ forgery advances a payload for work that did not run; here the guest's own encod
 release **is** the work. The distinction is carried in the type
 (`PushMethod::CeRelease`), not in a comment.
 
-### 16.2 The three walls in front of it, each measured or sourced
+### 16.2 The three walls in front of it — wall 1 from `[measured 2026-08-09, boot `msr2_319d29a`]`, walls 2 and 3 from `[src] ogkm-580`
 
 1. **ROUTING** (`msr2`). `ce_channel_facts` reported the VA space as the channel's *own*
    declared `hVASpace`. A UVM channel declares none — it inherits through CtxShare/TSG — so
