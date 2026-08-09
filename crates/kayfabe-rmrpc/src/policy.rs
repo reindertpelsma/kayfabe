@@ -886,13 +886,26 @@ impl Bridge {
                         diag.latch_last(
                             FaultTag("promote-ctx ACCEPTED (last, with the census AT it)"),
                             format!(
-                                "bound={} joined={} already={} parked={} half_already={} \
+                                "bound={} joined={} joined_global={} \
+                                 globals_known={} globals_added={} \
+                                 already={} parked={} half_already={} \
                                  half_unusable={} orphans(awaiting_va={},awaiting_phys={}) \
                                  declined.promote_only={} declined.initialize_only={} \
                                  entries={} halves={} \
                                  client={:#x} chan_client={:#x} object={:#x} proc={:?}{}",
                                 join.bound,
                                 join.joined,
+                                // ★★★★★ §16.50 — the three numbers this rung is scored on,
+                                // and `globals_known` is the one built for the case where
+                                // the fix does nothing: it rides the SUCCESS path and no
+                                // refusal, so `joined_global=0` is still legible.
+                                // `globals_known=0` beside it says no GPU-scoped physical
+                                // was ever published (the question is then allocation-time,
+                                // not join-time); `globals_known>0` beside it says the map
+                                // filled and nothing drew on it. Those are different rungs.
+                                join.joined_global,
+                                join.globals_known,
+                                join.globals_added,
                                 join.already,
                                 join.parked,
                                 join.half_already,

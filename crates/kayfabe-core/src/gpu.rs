@@ -1617,6 +1617,33 @@ pub struct Spine {
     /// [`Self::by_pdb`], and filtered through it, so a CONDEMNED component's context
     /// objects do not route: its address space must not attract new bindings.
     pub ctx_vas: BTreeMap<ResourceKey, (GpuId, Pdb)>,
+    /// ★★★★★ §16.50 — **the physical halves of GPU-scoped global context buffers**, per
+    /// target: `GpuId` → (`buffer_id` → the buffer RM allocated once for the whole GPU).
+    ///
+    /// # Why this is device-global and not on a [`Vas`]
+    ///
+    /// `s41b` measured a promotion carrying **ten VA halves and zero physical halves** in
+    /// cup2's address space, while the cumulative tally showed the physicals had certainly
+    /// arrived. They arrived **under a different proc**: RM publishes a global context
+    /// buffer's physical address once, from the driver-init path, and then every later
+    /// context maps that one buffer at its own VA and declares only the VA. Parking the
+    /// physical in the emitting proc's `Vas` therefore guaranteed `joined=0` — two correct
+    /// halves, correctly keyed, in two maps that never meet.
+    ///
+    /// ⊘ **Membership is derived from RM's arms, not from that boot's orphans** — see
+    /// [`crate::promote::PhysHalfScope`]. Only ids whose phase-1 emitter reads
+    /// `kgraphicsGetGlobalCtxBuffers` unconditionally are published here; `0x8`
+    /// GFXP_CTRL_BLK is excluded because its arm may publish a *private* per-context
+    /// buffer, and six global ids publish nothing at all.
+    ///
+    /// ★ It sits beside [`Self::ctx_vas`] at rank 0, which is what lets the L1 shell read
+    /// it before taking the owning proc's lock and merge back after releasing it —
+    /// see [`Gpu::promote_ctx`] for the single-owner form and the shell for the sharded
+    /// one. ⊘ **Not `refresh`-derived**: unlike `by_pdb`/`ctx_vas` this is not a
+    /// projection of the resource graph but an accreted record of what RM *declared*, and
+    /// rebuilding it would erase a publication whose emitting client has since been freed
+    /// — which is the normal case, since the driver-init client does not outlive boot.
+    pub global_ctx_phys: BTreeMap<GpuId, crate::promote::GlobalCtxPhys>,
     /// ★ MG-6: per-target device state — one [`GpuTarget`] (its own guest-physical
     /// window + GSP-queue drain gate) per routable GPU. `GpuId::ZERO` is realized at
     /// [`Gpu::new`]; further targets are minted lazily as their Devices are derived.
@@ -1959,6 +1986,47 @@ impl Spine {
     #[must_use]
     pub fn arch(&self) -> &dyn Arch {
         self.arch.as_ref()
+    }
+
+    /// ★★★★★ §16.50 — a **snapshot** of `gpu`'s published global context-buffer physicals,
+    /// taken at rank 0 for [`crate::promote::apply_promote_ctx`] to join against.
+    ///
+    /// ★ A clone, and it costs nothing to be one: the map is bounded by the three
+    /// [`crate::promote::PhysHalfScope::PerGpu`] ids, so it holds **at most three
+    /// entries**. Cloning is what lets the sharded shell read this under the device read
+    /// lock, release it, run the join under the owning proc's lock alone, and merge back —
+    /// preserving R3's rank order instead of nesting rank 0 inside rank 1.
+    #[must_use]
+    pub fn global_ctx_phys_for(&self, gpu: GpuId) -> crate::promote::GlobalCtxPhys {
+        self.global_ctx_phys.get(&gpu).cloned().unwrap_or_default()
+    }
+
+    /// ★★★★★ §16.50 — merge a join's (possibly extended) snapshot back into the
+    /// device-global map. Returns how many publications were **newly** recorded.
+    ///
+    /// ⊘ **First publication wins, and a differing one is DROPPED here rather than
+    /// overwriting.** The refusal for a differing re-publication lives in
+    /// [`crate::promote::apply_promote_ctx`], which sees the promotion and can name it
+    /// ([`crate::promote::PromoteFault::HalfConflict`]); by the time a snapshot reaches
+    /// this function the promotion has already been answered, so silently retargeting
+    /// contexts that already joined against the old value is the only thing left to
+    /// prevent. The window is real but narrow — it needs two promotions racing on one
+    /// `buffer_id` with different physicals — and it resolves to *"the loser's
+    /// publication did not take"*, never to a wrong binding.
+    pub fn merge_global_ctx_phys(
+        &mut self,
+        gpu: GpuId,
+        snapshot: &crate::promote::GlobalCtxPhys,
+    ) -> u32 {
+        let live = self.global_ctx_phys.entry(gpu).or_default();
+        let mut added = 0u32;
+        for (id, half) in snapshot {
+            if let std::collections::btree_map::Entry::Vacant(slot) = live.entry(*id) {
+                slot.insert(*half);
+                added += 1;
+            }
+        }
+        added
     }
 
     /// ★★★ Whose page table is the physical address `phys` part of, on `gpu`?
@@ -3996,6 +4064,7 @@ impl Gpu {
             pt_contested: BTreeSet::new(),
             pt_learned_refused: 0,
             ctx_vas: BTreeMap::new(),
+            global_ctx_phys: BTreeMap::new(),
             targets,
             sources: SourceRegistry::new(),
             pending_cancels: Cancels::new(),
@@ -4128,6 +4197,11 @@ impl Gpu {
     ) -> Result<crate::promote::PromoteJoin, crate::promote::PromoteFault> {
         let route =
             crate::promote::route_promote_ctx(&self.spine, p.client, p.chan_client, p.object)?;
+        // ★★★★★ §16.50 — snapshot the GPU-scoped publications, join against them, merge
+        // back. `&mut Gpu` is an exclusivity proof, so this could touch `self.spine`
+        // in place; it goes through the same snapshot/merge the sharded shell must use so
+        // that the two compositions cannot drift into different behaviour.
+        let mut globals = self.spine.global_ctx_phys_for(route.gpu);
         let proc = if route.proc == Gpu::SYSTEM_PROC {
             &mut self.system
         } else {
@@ -4135,7 +4209,9 @@ impl Gpu {
                 .get_mut(&route.proc)
                 .ok_or(crate::promote::PromoteFault::RetiredProc(route.proc))?
         };
-        crate::promote::apply_promote_ctx(proc, &route, p)
+        let join = crate::promote::apply_promote_ctx(proc, &route, p, &mut globals)?;
+        self.spine.merge_global_ctx_phys(route.gpu, &globals);
+        Ok(join)
     }
 
     /// ★★★★ **Every live channel's ADDRESSING, grouped — the instrument that says which VA

@@ -849,7 +849,7 @@ fn a_foreign_acting_client_cannot_promote_into_another_procs_address_space() {
             object: H_GR_CHANNEL,
             ranges: vec![gr_range(GR_VA, 0xBADD_0000)],
             halves: Vec::new(),
-        declined: PromoteDeclined::default(),
+            declined: PromoteDeclined::default(),
         }),
         Err(PromoteFault::ForeignContextObject {
             client: B_CLIENT,
@@ -928,7 +928,7 @@ fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_m
             object: H_GR_CHANNEL,
             ranges: vec![gr_range(GR_VA, 0x2_ef94_6000)],
             halves: Vec::new(),
-        declined: PromoteDeclined::default(),
+            declined: PromoteDeclined::default(),
         }),
         Err(PromoteFault::ForeignContextObject {
             client: B_CLIENT,
@@ -955,10 +955,13 @@ fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_m
             object: H_GR_CHANNEL,
             ranges: vec![gr_range(GR_VA, 0x2_ef94_6000)],
             halves: Vec::new(),
-        declined: PromoteDeclined::default(),
+            declined: PromoteDeclined::default(),
         })
         .expect("★ a kernel-privileged client may promote on a user client's behalf");
-    assert_eq!(join.route.proc, owner, "★ it routed to the VAS's OWNER, not to the actor");
+    assert_eq!(
+        join.route.proc, owner,
+        "★ it routed to the VAS's OWNER, not to the actor"
+    );
     assert_eq!(join.bound, 1);
     assert!(
         resolve_in(&gpu, A_PDB, GR_VA).is_ok(),
@@ -1098,7 +1101,7 @@ fn unbindable_entries_produce_no_binding_and_no_fault() {
             object: H_GR_CHANNEL,
             ranges: vec![],
             halves: Vec::new(),
-        declined: PromoteDeclined {
+            declined: PromoteDeclined {
                 initialize_only: 1,
                 promote_only: 4,
             },
@@ -1359,7 +1362,7 @@ fn mean_promote_through_the_shell() {
                         },
                     ],
                     halves: Vec::new(),
-        declined: PromoteDeclined {
+                    declined: PromoteDeclined {
                         initialize_only: 1,
                         promote_only: 4,
                     },
@@ -1740,11 +1743,18 @@ fn phase_one_then_phase_two_joins_and_binds() {
             vec![phys_half(1, 0xdead_0000)],
         ))
         .expect("a physical-only phase is accepted, not refused");
-    assert_eq!((j1.bound, j1.joined, j1.parked), (0, 0, 1), "parked, not bound");
+    assert_eq!(
+        (j1.bound, j1.joined, j1.parked),
+        (0, 0, 1),
+        "parked, not bound"
+    );
     assert_eq!(j1.orphans, (1, 0), "one half awaiting its VA");
     assert_eq!(
         resolve_in(&gpu, A_PDB, GR_VA),
-        Err(AddressFault::Miss { pdb: A_PDB, va: GR_VA }),
+        Err(AddressFault::Miss {
+            pdb: A_PDB,
+            va: GR_VA
+        }),
         "⊘ a parked physical half must NOT be resolvable — that would be inventing a VA"
     );
 
@@ -1775,12 +1785,23 @@ fn phase_one_then_phase_two_joins_and_binds() {
 fn phase_two_then_phase_one_joins_the_same_way() {
     let mut gpu = world();
     let j1 = gpu
-        .promote_ctx(&half_promotion(A_CLIENT, H_GR_CHANNEL, vec![va_half(1, GR_VA)]))
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(1, GR_VA)],
+        ))
         .expect("VA-first is accepted");
-    assert_eq!(j1.orphans, (0, 1), "awaiting a PHYSICAL, and counted as that");
+    assert_eq!(
+        j1.orphans,
+        (0, 1),
+        "awaiting a PHYSICAL, and counted as that"
+    );
     assert_eq!(
         resolve_in(&gpu, A_PDB, GR_VA),
-        Err(AddressFault::Miss { pdb: A_PDB, va: GR_VA }),
+        Err(AddressFault::Miss {
+            pdb: A_PDB,
+            va: GR_VA
+        }),
         "⊘ a parked VA must NOT resolve to phys 0 — that is the manufactured address"
     );
     let j2 = gpu
@@ -1814,7 +1835,10 @@ fn halves_do_not_join_across_buffer_ids() {
     assert_eq!(j.orphans, (1, 1), "one of each, and they are told apart");
     assert_eq!(
         resolve_in(&gpu, A_PDB, GR_VA),
-        Err(AddressFault::Miss { pdb: A_PDB, va: GR_VA })
+        Err(AddressFault::Miss {
+            pdb: A_PDB,
+            va: GR_VA
+        })
     );
 }
 
@@ -1885,7 +1909,11 @@ fn a_conflicting_half_redeclaration_refuses_by_name() {
     );
     // ⊘ And the refusal did not half-apply: the original half is untouched.
     let j = gpu
-        .promote_ctx(&half_promotion(A_CLIENT, H_GR_CHANNEL, vec![va_half(1, GR_VA)]))
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(1, GR_VA)],
+        ))
         .expect("the original half is still there to join");
     assert_eq!(j.joined, 1);
     assert_eq!(resolve_in(&gpu, A_PDB, GR_VA), Ok(0xdead_0000));
@@ -1916,9 +1944,22 @@ fn a_zero_length_physical_half_is_counted_and_dropped() {
     assert_eq!((j.parked, j.orphans), (0, (0, 0)), "and NOT parked");
 }
 
-/// ★★ A half never leaks across address spaces: the parking map lives on the `Vas`.
+/// ★★★★ A **per-context** half never leaks across address spaces: its parking map lives
+/// on the `Vas`.
+///
+/// ⚠ **Rewritten at §16.50, and the old wording was the bug report.** This said *"a half
+/// never leaks across address spaces"* — a universal claim that §16.50 deliberately
+/// breaks for [`kayfabe_core::promote::PhysHalfScope::PerGpu`] ids, because RM publishes
+/// a global context buffer's physical once per GPU and every address space then declares
+/// only its own VA. Leaving the sentence would have left a test whose *name* asserted a
+/// rule the code no longer holds, passing only because its fixture used `buffer_id = 1`.
+///
+/// ★ So the fixture is now load-bearing rather than incidental: `1` is PM, which
+/// `phys_half_scope` classifies `PerContext` from `kernel_graphics_context.c:1732-1740`.
+/// This is the **negative control** for the GPU-wide scoping — the proof it did not widen
+/// into buffers that are genuinely private to one context.
 #[test]
-fn a_parked_half_does_not_join_another_procs_promotion() {
+fn a_per_context_parked_half_does_not_join_another_procs_promotion() {
     let mut gpu = world();
     gpu.promote_ctx(&half_promotion(
         A_CLIENT,
@@ -1927,7 +1968,11 @@ fn a_parked_half_does_not_join_another_procs_promotion() {
     ))
     .expect("A parks a physical");
     let j = gpu
-        .promote_ctx(&half_promotion(B_CLIENT, H_GR_CHANNEL, vec![va_half(1, GR_VA)]))
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(1, GR_VA)],
+        ))
         .expect("B's VA phase is accepted");
     assert_eq!(
         (j.joined, j.parked),
@@ -1936,6 +1981,360 @@ fn a_parked_half_does_not_join_another_procs_promotion() {
     );
     assert_eq!(
         resolve_in(&gpu, B_PDB, GR_VA),
-        Err(AddressFault::Miss { pdb: B_PDB, va: GR_VA })
+        Err(AddressFault::Miss {
+            pdb: B_PDB,
+            va: GR_VA
+        })
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// §16.50 — THE PHYSICAL HALF OF A GLOBAL CONTEXT BUFFER IS GPU-SCOPED
+//
+// `s41b` bound nothing with `orphans(awaiting_va=0, awaiting_phys=10)`: cup2's address
+// space held ten VA halves and not one physical, while the cumulative tally proved the
+// physicals had arrived. They arrived under a DIFFERENT PROC. RM publishes a global
+// context buffer's physical address once, from driver init, and every later context maps
+// that one buffer at its own VA and declares only the VA.
+//
+// ⊘ These tests pin the classification against RM'S OWN ARMS, not against the ids that
+// happened to orphan in that boot. A list fitted to one boot is a list that is wrong on
+// the next one, and the enumeration below is the thing that keeps it honest.
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+use kayfabe_core::promote::{PhysHalfScope, is_global_ctx_buffer, phys_half_scope};
+
+/// ★★★★★ THE FULL ID SPACE, CLASSIFIED — enumerate, then filter.
+///
+/// This test exists because a *count* was disputed: a report said "four ids can never
+/// pair" and named three. Enumerating the whole space from the header settles it, and
+/// settles it in code so it cannot drift back into prose.
+///
+/// **Six** ids can never emit a phase-1 entry, not four and not three: the five-way
+/// fall-through at `kernel_graphics_context.c:1748-1758` **plus** `0xc`
+/// GLOBAL_PRIV_ACCESS_MAP at `:1803-1805`, which reaches the same
+/// *"No initialization from kernel RM"* by its own separate arm.
+#[test]
+fn the_phys_half_scope_is_derived_from_rms_arms_and_covers_the_whole_id_space() {
+    // The complete wire enum — `ogkm-580: ctrl2080gpu.h:932-944`. Every id, no gaps.
+    let all: [(u16, &str, PhysHalfScope); 13] = [
+        (0x0, "MAIN", PhysHalfScope::PerContext),
+        (0x1, "PM", PhysHalfScope::PerContext),
+        (0x2, "PATCH", PhysHalfScope::PerContext),
+        (0x3, "BUFFER_BUNDLE_CB", PhysHalfScope::Never),
+        (0x4, "PAGEPOOL", PhysHalfScope::Never),
+        (0x5, "ATTRIBUTE_CB", PhysHalfScope::Never),
+        (0x6, "RTV_CB_GLOBAL", PhysHalfScope::Never),
+        (0x7, "GFXP_POOL", PhysHalfScope::Never),
+        (0x8, "GFXP_CTRL_BLK", PhysHalfScope::PerContext),
+        (0x9, "FECS_EVENT", PhysHalfScope::PerGpu),
+        (0xa, "PRIV_ACCESS_MAP", PhysHalfScope::PerGpu),
+        (0xb, "UNRESTRICTED_PRIV_ACCESS_MAP", PhysHalfScope::PerGpu),
+        (0xc, "GLOBAL_PRIV_ACCESS_MAP", PhysHalfScope::Never),
+    ];
+    for (id, name, want) in all {
+        assert_eq!(
+            phys_half_scope(id),
+            want,
+            "{name} ({id:#x}) is classified by the arm it reaches, not by a boot log",
+        );
+    }
+
+    let never = all
+        .iter()
+        .filter(|(.., s)| *s == PhysHalfScope::Never)
+        .count();
+    assert_eq!(
+        never, 6,
+        "★ SIX ids can never emit a phase-1 entry — the five-way fall-through at \
+         :1748-1758 PLUS 0xc at :1803-1805. Not three, not four, not five.",
+    );
+    assert_eq!(
+        all.iter()
+            .filter(|(.., s)| *s == PhysHalfScope::PerGpu)
+            .count(),
+        3,
+        "only 0x9/0xa/0xb read kgraphicsGetGlobalCtxBuffers UNCONDITIONALLY (:1783-1801)",
+    );
+
+    // ⊘ MISS = FAULT: an id off the end of RM's own enum gets the NARROWEST scope. RM
+    // refuses it outright at `:1806`; we cannot refuse, so nothing gains GPU-wide reach
+    // by being unrecognised.
+    for id in [13u16, 0xff, 0xffff] {
+        assert_eq!(phys_half_scope(id), PhysHalfScope::PerContext);
+    }
+}
+
+/// ★★★ Membership and SCOPE are two different questions, and conflating them is what the
+/// enum alone would have done.
+///
+/// `kgrctxGetGlobalContextBufferInternalId` (`:201-250`) is RM's membership oracle: it
+/// refuses MAIN/PM/PATCH and maps `0x3`–`0xc`. But **seven of those ten global ids are
+/// not GPU-scoped for our purposes** — six publish no physical at all and `0x8` may
+/// publish a private one. Scoping on membership would have silently claimed six ids were
+/// fixed when nothing ever publishes them.
+#[test]
+fn global_membership_is_not_the_same_question_as_physical_scope() {
+    for id in 0..=12u16 {
+        assert_eq!(
+            is_global_ctx_buffer(id),
+            (3..=12).contains(&id),
+            "RM maps 0x3–0xc and refuses 0x0/0x1/0x2 with NV_ERR_INVALID_ARGUMENT",
+        );
+    }
+    let global_but_not_gpu_scoped = (3..=12u16)
+        .filter(|id| phys_half_scope(*id) != PhysHalfScope::PerGpu)
+        .count();
+    assert_eq!(
+        global_but_not_gpu_scoped, 7,
+        "★ 7 of the 10 global ids are NOT GPU-scoped — the enum is not the predicate",
+    );
+    assert_eq!(
+        phys_half_scope(0x8),
+        PhysHalfScope::PerContext,
+        "⚠ 0x8 is global BUT its arm (:1759-1782) reads a per-context localCtxBuffer \
+         first, so publishing it GPU-wide could bind one context's VA to another's \
+         private physical. The conservative answer is taken because the aggressive one \
+         is unrecoverable.",
+    );
+}
+
+/// ★★★★★ THE RUNG: a physical published by one address space completes a VA declared by
+/// **another**. This is the exact shape `[measured 2026-08-09, rev 62e757f, boot
+/// s41b_62e757f_twophase]` recorded and could not join: `orphans(awaiting_va=0,
+/// awaiting_phys=10)` in cup2's address space beside a tally showing `{bid=0xa phys=2}`.
+#[test]
+fn a_gpu_scoped_physical_joins_a_va_from_another_address_space() {
+    let mut gpu = world();
+    // A publishes 0xa PRIV_ACCESS_MAP — the very id whose physical `s41b` saw arrive
+    // under proc 0 while cup2's address space waited on it.
+    let j1 = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(0xa, 0xdead_0000)],
+        ))
+        .expect("the physical phase is accepted");
+    assert_eq!(j1.globals_added, 1, "published GPU-wide");
+    assert_eq!(j1.globals_known, 1);
+
+    // B — a different proc, a different address space — declares only the VA.
+    let j2 = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(0xa, GR_VA)],
+        ))
+        .expect("B's VA phase is accepted");
+    assert_eq!(
+        (j2.joined, j2.joined_global, j2.parked),
+        (1, 1, 0),
+        "★★★★★ the cross-address-space bridge fires, and `joined_global` says it was the \
+         GPU-wide map and not a same-VAS stitch that did it",
+    );
+    assert_eq!(
+        resolve_in(&gpu, B_PDB, GR_VA),
+        Ok(0xdead_0000),
+        "and it resolves to the physical the OTHER address space declared",
+    );
+    assert_eq!(j2.orphans, (0, 0));
+}
+
+/// ★★★★ The reverse order, through the DRAIN. B's VA parks before the physical exists;
+/// a later promotion in B's address space picks it up.
+///
+/// ⊘ This is not a nicety. `s41b`'s ten orphans were parked by promotions that had
+/// already happened, so a fix that only helped halves arriving from now on would report
+/// `joined_global=0` for a reason unrelated to whether the scoping is right.
+#[test]
+fn a_va_parked_before_the_publication_is_drained_by_the_next_promotion() {
+    let mut gpu = world();
+    let j1 = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(0xa, GR_VA)],
+        ))
+        .expect("VA-first is accepted");
+    assert_eq!((j1.parked, j1.orphans), (1, (0, 1)), "awaiting a physical");
+    assert_eq!(
+        j1.globals_known, 0,
+        "⊘ nothing published yet — and it SAYS so"
+    );
+
+    // A publishes, in its own address space.
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(0xa, 0xbeef_0000)],
+    ))
+    .expect("A publishes");
+    assert_eq!(
+        resolve_in(&gpu, B_PDB, GR_VA),
+        Err(AddressFault::Miss {
+            pdb: B_PDB,
+            va: GR_VA
+        }),
+        "⊘ B's table is untouched until B's own next promotion — the window is real and \
+         is named, not hidden",
+    );
+
+    // B's next promotion — about an unrelated id — drains the parked half.
+    let j3 = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0x4444_0000)],
+        ))
+        .expect("accepted");
+    assert_eq!(
+        (j3.joined, j3.joined_global),
+        (1, 1),
+        "★ the drain completed the half parked two promotions ago",
+    );
+    assert_eq!(resolve_in(&gpu, B_PDB, GR_VA), Ok(0xbeef_0000));
+}
+
+/// ★★★★ A publication is **not consumed** by the first address space that joins it.
+///
+/// One global buffer is mapped by every context that needs it. Removing the entry on the
+/// first join would re-orphan every later address space — the exact failure the GPU-wide
+/// map exists to end, reintroduced one layer down.
+#[test]
+fn a_gpu_scoped_publication_is_not_consumed_by_the_first_joiner() {
+    let mut gpu = world();
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(0xa, 0xdead_0000)],
+    ))
+    .expect("published");
+    let ja = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(0xa, GR_VA)],
+        ))
+        .expect("A joins");
+    assert_eq!(ja.joined, 1);
+
+    let jb = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(0xa, GR_VA)],
+        ))
+        .expect("B joins the SAME publication");
+    assert_eq!((jb.joined, jb.joined_global), (1, 1));
+    assert_eq!(jb.globals_known, 1, "still there, not consumed");
+    // Two address spaces, one physical, two independent VA bindings.
+    assert_eq!(resolve_in(&gpu, A_PDB, GR_VA), Ok(0xdead_0000));
+    assert_eq!(resolve_in(&gpu, B_PDB, GR_VA), Ok(0xdead_0000));
+}
+
+/// ★★★★ THE NEGATIVE CONTROL FOR §16.49.4 STEP 2 — and it must stay red-shaped.
+///
+/// `0x5` ATTRIBUTE_CB is [`PhysHalfScope::Never`]: kernel RM emits no phase-1 entry for
+/// it, ever. Its VA half therefore parks and stays parked, and **no join can fix that** —
+/// the backing has to be recovered where RM gets it (`kgraphicsGetGlobalCtxBuffers`), at
+/// allocation time.
+///
+/// ⊘ This test is here so step 1's success cannot hide that step 2 is untouched. The
+/// counters make the two distinguishable with no other evidence: `globals_known` says
+/// whether anything was ever published, and it is `0` here for a *principled* reason.
+#[test]
+fn a_never_published_ids_va_half_stays_orphaned_and_the_counters_say_why() {
+    let mut gpu = world();
+    for id in [0x3u16, 0x4, 0x5, 0x6, 0x7, 0xc] {
+        assert_eq!(phys_half_scope(id), PhysHalfScope::Never);
+    }
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(0x5, GR_VA)],
+        ))
+        .expect("accepted");
+    assert_eq!(
+        (j.joined, j.joined_global, j.parked),
+        (0, 0, 1),
+        "parked, and it will stay parked",
+    );
+    assert_eq!(
+        j.globals_known, 0,
+        "★ and THIS is the number that tells the next rung where to look: not `the join \
+         is broken` but `nothing publishes this id, go to allocation time`",
+    );
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GR_VA),
+        Err(AddressFault::Miss {
+            pdb: A_PDB,
+            va: GR_VA
+        }),
+        "⊘ MISS = FAULT holds; a phase-1 that cannot exist is not synthesised",
+    );
+}
+
+/// ★★★ A differing re-publication of a GPU-scoped id refuses BY NAME.
+///
+/// Overwriting would silently retarget every context that already joined against the old
+/// value — a wrong table, which is the one outcome `HalfConflict` exists to make
+/// impossible to express.
+#[test]
+fn a_conflicting_gpu_scoped_publication_refuses_by_name() {
+    let mut gpu = world();
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(0xa, 0xdead_0000)],
+    ))
+    .expect("first publication");
+    let e = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(0xa, 0x1234_0000)],
+        ))
+        .expect_err("a DIFFERENT physical under the same global id is refused");
+    assert_eq!(
+        e,
+        kayfabe_core::promote::PromoteFault::HalfConflict {
+            buffer_id: 0xa,
+            pdb: B_PDB
+        },
+    );
+    // ⊘ And the refusal did not half-apply — the original publication is intact.
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(0xa, GR_VA)],
+        ))
+        .expect("the original publication is still joinable");
+    assert_eq!(j.joined_global, 1);
+    assert_eq!(resolve_in(&gpu, B_PDB, GR_VA), Ok(0xdead_0000));
+}
+
+/// ★★ An IDENTICAL re-publication is not a conflict and not a new publication.
+#[test]
+fn an_identical_gpu_scoped_republication_is_neither_conflict_nor_growth() {
+    let mut gpu = world();
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(0xa, 0xdead_0000)],
+    ))
+    .expect("first");
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            B_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(0xa, 0xdead_0000)],
+        ))
+        .expect("byte-identical, from another address space, is accepted");
+    assert_eq!(
+        (j.globals_added, j.globals_known),
+        (0, 1),
+        "★ `globals_added` distinguishes `the map is filling` from `it was already full`",
     );
 }

@@ -1947,9 +1947,22 @@ impl SharedDevice {
         p: &kayfabe_core::promote::CtxPromotion,
     ) -> Result<kayfabe_core::promote::PromoteJoin, kayfabe_core::promote::PromoteFault> {
         // ROUTE — rank 0 only. No proc lock is held while this runs.
-        let route = {
+        //
+        // ★★★★★ §16.50 — the GPU-scoped global context-buffer publications are read
+        // HERE, in the same rank-0 section, and carried into the act phase as a value.
+        // ⊘ They are deliberately NOT reached through a lock taken inside the proc-lock
+        // section: that would nest rank 0 inside rank 1 and is exactly what R3 forbids.
+        // The map holds at most three entries, so passing it by value costs nothing.
+        let (route, mut globals) = {
             let route_in = |spine: &kayfabe_core::gpu::Spine| {
-                kayfabe_core::promote::route_promote_ctx(spine, p.client, p.chan_client, p.object)
+                let route = kayfabe_core::promote::route_promote_ctx(
+                    spine,
+                    p.client,
+                    p.chan_client,
+                    p.object,
+                )?;
+                let globals = spine.global_ctx_phys_for(route.gpu);
+                Ok::<_, kayfabe_core::promote::PromoteFault>((route, globals))
             };
             match self.mode {
                 LockMode::Sharded => route_in(&self.state.read().spine),
@@ -1957,12 +1970,39 @@ impl SharedDevice {
             }?
         };
         // ACT — the OWNING proc's rank-1 lock, alone.
-        self.with_proc_mut(route.proc, |proc| {
-            kayfabe_core::promote::apply_promote_ctx(proc, &route, p)
-        })
-        .unwrap_or(Err(kayfabe_core::promote::PromoteFault::RetiredProc(
-            route.proc,
-        )))
+        let out = self
+            .with_proc_mut(route.proc, |proc| {
+                kayfabe_core::promote::apply_promote_ctx(proc, &route, p, &mut globals)
+            })
+            .unwrap_or(Err(kayfabe_core::promote::PromoteFault::RetiredProc(
+                route.proc,
+            )));
+        // MERGE — back at rank 0, with the proc lock RELEASED. The order is 0 → 1 → 0 and
+        // never nested, so this is a re-acquisition rather than a lock-order inversion.
+        //
+        // ★ Only on success. A refused promotion published nothing the device should keep:
+        // `apply_promote_ctx` stages the whole join over a scratch copy and commits
+        // nothing on refusal, and letting its half-built `globals` reach the spine would
+        // make a refusal partially take effect — the one asymmetry between this shell and
+        // `Gpu::promote_ctx` that would matter.
+        //
+        // ⚠ **The visibility window is named, not hidden**: a publication made by
+        // promotion N becomes joinable by promotion N+1, not by a promotion racing it.
+        // That is sound for the shape `[measured 2026-08-09, rev 62e757f, boot
+        // s41b_62e757f_twophase]` recorded — the physical published under `ProcId(0)` at
+        // driver init, the VA halves declared under `ProcId(2)` at `cuCtxCreate`, many
+        // controls later — and its worst case is one extra orphaned round, never a wrong
+        // binding.
+        if out.is_ok() {
+            // ⊘ No `self.mode` branch: the merge is a WRITE in both modes, so the two
+            // arms would be identical. Degenerate mode differs only in that the route
+            // phase already had to take the write lock.
+            self.state
+                .write()
+                .spine
+                .merge_global_ctx_phys(route.gpu, &globals);
+        }
+        out
     }
 
     /// ★★★ **#177** — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`, in the

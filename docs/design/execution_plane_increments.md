@@ -10178,3 +10178,200 @@ would in P, Q **and** R alike. A rung scored on `cup2` would have read this boot
 `s39` and `s40`. The scoreable quantity was `joined`, and it is `joined` plus `orphans` that
 turned "the join does not fire" into "the halves are in two different address spaces, and here is
 the RM arm that puts them there".
+
+## §16.50 ★★★★★ THE GLOBAL PHYSICAL IS GPU-SCOPED — and §16.49.3's OWN count was wrong THREE ways
+
+### 16.50.1 ⊘⊘ REFUTED (MINE, §16.49.3) — "`0x3`/`0x4` are gated by `bInitialized` (`:1777`, `:1796`)"
+
+§16.49.3 excluded `0x3` BUFFER_BUNDLE_CB and `0x4` PAGEPOOL from the never-pair set with a
+stated mechanism: *"`0x3`/`0x4` are gated by `pCtxBuffers->bInitialized[internalId]`
+(`:1777`, `:1796`) — promoted once per GPU, not once per context."* ⊘ **Both citations name
+arms that `0x3`/`0x4` never reach.** Read at `ogkm-580: kernel_graphics_context.c`:
+
+| line | the arm that owns it | the ids that reach it |
+|---|---|---|
+| `:1748-1758` | `// No initialization from kernel RM` → `return NV_OK` | `0x3`, `0x4`, `0x5`, `0x6`, `0x7` |
+| `:1777` | `if (pCtxBuffers->bInitialized[internalId]) return NV_OK;` | **`0x8` GFXP_CTRL_BLK only** (`:1759`) |
+| `:1796` | idem | **`0x9`/`0xa`/`0xb` only** (`:1783-1785`) |
+
+`0x3` and `0x4` are `case` labels at `:1748` and `:1750`, falling straight through to
+`:1757`. They **never reach any `bInitialized` check**. The mechanism §16.49.3 gave them
+belongs to four other ids.
+
+⚠ And the *reason* this matters is not pedantry: §16.49.4 item 1 turned that misreading
+into an implementation instruction — *"park phase-1 physicals for the global ids
+(`0x3`–`0x9`, `0xa`, `0xb`) at the GPU level"* — a list that is **wrong in both
+directions**. It includes six ids that publish no physical at all (a no-op dressed as a
+fix, which would have read as "the scoping did nothing" on the next boot) and it includes
+`0x8`, whose physical **may be a private per-context buffer** (`:1768-1771` reads
+`localCtxBuffer` first when `bAllocated`). Publishing `0x8` GPU-wide would let one
+context's VA bind to another context's private physical — a wrong table, which is worse
+than the orphan it cures.
+
+### 16.50.2 ⊘ THE COUNT, SETTLED — SIX, and the brief's "five" was right as far as it went
+
+The brief asked whether §16.49.3's *"four ids can never pair"* (naming three) was a
+miscount or a scoping choice. It is **both, in different places, and neither survives**:
+
+- the heading's **four** matches nothing — not the source, not its own body's three. A
+  miscount.
+- the body's **three** is a *scoping choice*, and the choice rests on §16.50.1's
+  misattributed citation. It is a decision made from a wrong reading, not a defensible
+  narrowing.
+- the brief's **five** for the fall-through group at `:1748-1758` is **confirmed exactly**
+  — `BUFFER_BUNDLE_CB`, `PAGEPOOL`, `ATTRIBUTE_CB`, `RTV_CB_GLOBAL`, `GFXP_POOL`.
+- ★ but the true never-pair count is **six**: `0xc` GLOBAL_PRIV_ACCESS_MAP reaches the same
+  *"No initialization from kernel RM"* by its **own separate arm** at `:1803-1805`. A grep
+  shaped like the fall-through group cannot match it — *enumerate, then filter*, and this
+  is the minority row that shape misses.
+
+⇒ Three readings of the same fifteen lines produced 3, 4, 5 and 6. **This is exactly why
+membership must come from the enum and be pinned in code**, and it now is:
+`the_phys_half_scope_is_derived_from_rms_arms_and_covers_the_whole_id_space` walks all
+thirteen wire ids and asserts the count is six. Prose cannot drift back.
+
+### 16.50.3 ★★★★★ THE CLASSIFICATION, FROM RM'S ARMS — and membership is NOT the scope
+
+`kgrctxGetGlobalContextBufferInternalId_IMPL` (`:201-250`) is RM's **membership** oracle:
+it refuses `0x0`/`0x1`/`0x2` with `NV_ERR_INVALID_ARGUMENT` (`:214-219`) and maps
+`0x3`–`0xc` onto the ten-entry `GR_GLOBALCTX_BUFFER` enum
+(`kernel_graphics_context_buffers.h:186-196`). So **global = `0x3..=0xc`, exactly.**
+
+⊘ **But "is it global?" is not "where does its physical live?", and using the enum alone
+as the scoping predicate — which is what the brief prescribed — would have been wrong.**
+Seven of the ten global ids are not GPU-scopable: six publish nothing, and `0x8` may
+publish a private buffer. The *scope* has to come from the arms of the only function that
+can ever emit a phase-1 entry, `kgrctxPrepareInitializeCtxBuffer_IMPL` (`:1710-1807`):
+
+| scope | ids | the arm, and what it reads |
+|---|---|---|
+| `PerContext` | `0x0` MAIN, `0x1` PM, `0x2` PATCH | `:1713-1747` — three per-context memory descriptors |
+| `PerContext` ⚠ | `0x8` GFXP_CTRL_BLK | `:1759-1782` — `localCtxBuffer` **if `bAllocated`**, else the GPU pool. Ambiguous ⇒ narrowest scope |
+| **`PerGpu`** | `0x9` FECS_EVENT, `0xa` PRIV_ACCESS_MAP, `0xb` UNRESTRICTED_PRIV_ACCESS_MAP | `:1783-1801` — `kgraphicsGetGlobalCtxBuffers(pGpu, …, gfid)`, **unconditionally** |
+| `Never` | `0x3`–`0x7`, `0xc` | `:1748-1758`, `:1803-1805` — `// No initialization from kernel RM` |
+
+★ `Never` is a **named third value**, not folded into `PerContext`. A `PerContext` id whose
+physical never shows up is a bug in our routing; a `Never` id whose physical never shows up
+is RM behaving exactly as written. A two-valued classifier reports both as "orphaned" and
+sends the next rung hunting a phase 1 that cannot exist —
+`falsifier_blocker_vs_only_blocker`, in the shape that has already cost this campaign.
+
+⊘ An id past `0xc` hits RM's `default:` and is refused (`:1806`). We cannot refuse (the
+entry may be a complete range), so it is classified `PerContext` — the **narrowest** scope.
+Nothing gains reach by being unrecognised.
+
+★ And the tally corroborates the classification without having produced it: `s41b` shows
+`phys=0` for `0x3`, `0x4`, `0x5`, `0x6` — every observed `Never` id — and `phys>0` for
+`0xa`, the one observed `PerGpu` id. `0x7`, `0x8` and `0xc` never appear at all, which is
+why the classification could **not** have been read off the boot.
+
+### 16.50.4 ★★★ THE `RM_ENGINE_TYPE_IS_GR` GATE — READ FROM SOURCE, and its consequence is a REFUSAL we would emit
+
+⊘ **A source reading, said as one.** Everything below is `ogkm-580: nv_gpu_ops.c`, read
+this rung. No boot exercised it, and the consequence it names has **never been observed** —
+no non-GR channel has been reached on this ladder. Recorded as a hazard, not as a finding.
+
+`ogkm-580: nv_gpu_ops.c:10885-10886` reads exactly as §16.48.3 stated:
+
+```c
+10883:  for (i = 0; i < retainedChannel->resourceCount; i++)
+10885:      if (RM_ENGINE_TYPE_IS_GR(rmEngineType))
+10886:          pParams->promoteEntry[i].bufferId = channelResourceBindParams[i].resourceId;
+10888:      pParams->promoteEntry[i].gpuVirtAddr = channelResourceBindParams[i].resourceVa;
+```
+
+⇒ off the GR path every phase-2 entry carries `bufferId = 0` while `gpuVirtAddr` still
+varies per entry.
+
+⚠ **§16.48.3's reassurance does NOT cover this site, and that is the consequence.** It
+said the key *"stays unique by accident"* because the falcon leg sends `entryCount = 1`
+(`kernel_falcon.c:261`). True there — **false here**: `:10872` sets
+`entryCount = retainedChannel->resourceCount`, which `:10708` takes from the caller's
+`bufferCount` and which is `1` only on the `:10648` single-resource path. So a **non-GR
+channel with two or more bound resources emits N entries all keyed `buffer_id = 0` with
+different VAs**, and our per-VAS join answers the second one with
+`PromoteFault::HalfConflict` — refusing the whole control.
+
+⊘ **Not fixed this rung, and deliberately so.** It cannot fire on this ladder (the GR path
+is the only one reached), the fix needs an engine type `CtxPromotion` does not carry, and
+bundling it would make two changes unfalsifiable in one boot. It is **named** so it is not
+later discovered as a mystery refusal on the first non-GR channel — which is precisely how
+§16.48.3's "by accident" would otherwise have read.
+
+### 16.50.5 WHAT LANDED
+
+- `PhysHalfScope::{PerContext, PerGpu, Never}` + `phys_half_scope(u16)` — the classifier,
+  every arm carrying its `ogkm` line. `is_global_ctx_buffer(u16)` exposed **separately**,
+  because membership and scope are different questions and stating them apart is what
+  stops them being conflated again.
+- `Spine::global_ctx_phys: BTreeMap<GpuId, GlobalCtxPhys>` — the GPU-scoped publications,
+  at rank 0. ⊘ **Not `refresh`-derived**: it records what RM *declared*, and rebuilding it
+  from the resource graph would erase a publication whose emitting client has since been
+  freed — the normal case, since the driver-init client does not outlive boot.
+- ⊘ **A publication is never consumed by a join.** One global buffer is mapped by every
+  context that needs it; removing it on first join would re-orphan every later address
+  space — this rung's own failure, reintroduced one layer down.
+- **PASS 1a, the drain**: a VAS's already-parked `AwaitingPhysical` halves for `PerGpu` ids
+  are completed against the map at the start of every promotion. ★ Without it the fix would
+  only help halves arriving *after* it, and `s41b`'s ten orphans were parked before —
+  the boot would have reported `joined_global=0` for a reason unrelated to the scoping.
+- The scope test is repeated **at the point of use**, not trusted from the point of
+  insertion, so a future caller building the map cannot silently gain cross-context joins.
+- A differing re-publication refuses by name (`HalfConflict`); an identical one is free.
+- Lock order preserved as **0 → 1 → 0, never nested**: the shell reads the snapshot at
+  rank 0, joins under the owning proc's lock alone, merges back after releasing it. ⚠ The
+  visibility window (a publication is joinable by the *next* promotion, not by one racing
+  it) is named in the code, and its worst case is one extra orphaned round — never a wrong
+  binding. Merge happens **only on success**, so a refusal cannot half-apply.
+- 8 new tests, including three negative controls: a `PerContext` half still refuses to
+  cross address spaces, a `Never` id stays orphaned, and a publication survives its first
+  joiner. ⚠ The existing cross-VAS test's doc claimed *"a half never leaks across address
+  spaces"* — a universal this rung deliberately breaks — so it was **renamed and rewritten
+  as the negative control it now is**, rather than left passing on an incidental fixture.
+
+### 16.50.6 ★★★★★ THE COUNTERS — built for the case where the fix DOES NOTHING
+
+★ An instrument hung off a refusal path has its deletion scheduled by the fix it guides;
+that has cost two consecutive rungs. All three new counters ride the **success** path and
+are emitted unconditionally in the `ACCEPTED` row.
+
+- `joined_global` — of `joined`, how many drew on the GPU-wide map. ⊘ A **strict subset**,
+  counted at bind time and not where the completion was staged: a completion that turns out
+  to be an identical re-promote is skipped, and counting it at staging would have reported
+  a bind that never happened.
+- `globals_known` — **the one that matters if nothing else moves.** It does not ride any
+  join, so `joined_global=0` stays legible:
+
+| `globals_known` | `joined_global` | reading |
+|---|---|---|
+| `0` | `0` | ⊘ no `PerGpu` physical was **ever** published. The scoping is irrelevant; phase 1 is not arriving for those ids at all, and the next question is `kgraphicsGetGlobalCtxBuffers` at allocation time — **not** the join. |
+| `>0` | `0` | the map filled and nothing drew on it: the VA halves are for `Never` ids, or the drain is not reaching them. |
+| `>0` | `>0` | ★ the cross-address-space bridge fired. |
+
+- `globals_added` — new publications *this* control. Separates "the map is filling" from
+  "the map was already full", which `globals_known` alone cannot, and a steady
+  `globals_known>0` with `globals_added=0` on every row is a fact about **when** phase 1 runs.
+
+### 16.50.7 ★ THE FALSIFIER FOR `s42`, THREE-VALUED, COMMITTED BEFORE THE BOOT
+
+⚠ Every row must print a **distinguishable** line. Checked against the format string in
+`policy.rs`: all three counters are in the `ACCEPTED` row, so each row below is scoreable
+from that one line plus the `TALLY`.
+
+| | outcome | the line it prints | reading |
+|---|---|---|---|
+| **P** | `globals_known>0` **and** `joined_global>0`, and `orphans(awaiting_phys)` falls below 10 | `joined=K joined_global=J globals_known=N` with `J>0` | ★★★★★ the physical and virtual halves bind **across address spaces** for the first time. §16.50.3's classification is confirmed end-to-end. |
+| **Q** | `globals_known>0`, `joined_global=0` | `joined_global=0 globals_known=N` with `N>0` | ★ partial and INFORMATIVE: publication works, the draw does not. Either the ten waiting VA halves are all `Never` ids (check the `TALLY` — `0x3`–`0x6` were four of them), or the drain is not reaching them. ⊘ Not a refutation of the scoping; it names which of the two. |
+| **R** | `globals_known=0` | `globals_known=0 globals_added=0` | ⊘⊘ **no `PerGpu` physical is ever published.** The whole rung is a no-op and the wall is at *allocation* time (`kgraphicsGetGlobalCtxBuffers`), exactly where §16.49.4 item 2 said the untouched work is. ★ This is a REAL possible outcome: `s41b`'s tally shows `0xa phys=2`, but nothing proves those two arrived through a path this port routes to `apply_promote_ctx`. |
+| **R′** | `PromoteFault::HalfConflict` appears in the refusal census | `promote-ctx PromoteFault::HalfConflict` | ★ INFORMATIVE **and** a guest-facing regression, reported as both: two address spaces declared **different** physicals for one global `buffer_id`, which would mean the buffer is not GPU-scoped after all and §16.50.3's `PerGpu` row is wrong. ⊘ Refusing was chosen over first-wins precisely so this cannot express itself as a wrong table. |
+| **R″** | any other `s41b` guest-facing number moves (`0x2080012b` accepted x11 / refused x2, `NotOnAllowlist` x10, `FreeUnknown` x15, doorbells **170**), or `Malformed` appears | a changed refusal census with no `HalfConflict` | ⊘⊘ **the serious one**: a change advertised as a scoping fix changed the guest's stream through a path nothing predicted. |
+| **S** | boot does not reach `cup2`, or the two artefacts' revision stamps disagree | — | not a result. ⚠ `CARGO_TARGET_DIR` makes the QOM shim link a **stale** archive at `rc=0` with only the stamp disagreeing. Verify both stamps before the boot. |
+
+★ **Predicted, and it can lose:** `CUP2_RC=1` still. This fills the GR context-buffer gap
+under MISS = FAULT and nothing more — `promote.rs`'s own module doc calls that *"necessary,
+narrow, and nowhere near sufficient"*, and the compute working set arrives through the CE
+page-table writes. ⇒ `CUP2_RC=1` is expected in **P, Q and R alike**, and a rung scored on
+`cup2` reads all three as one failure. ★★ It is also now known that `cup2` launches **no
+kernel at all** — it is `cuCtxCreate` + a 4-byte CE round-trip — so even a green `cup2`
+would be a control-plane result and not evidence about compute. The scoreable quantities
+are `joined_global` and `globals_known`.

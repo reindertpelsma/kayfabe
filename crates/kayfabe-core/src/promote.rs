@@ -67,7 +67,7 @@
 //! the address space are not required to be the same one, and holding two rank-1 locks is
 //! what R3 forbids.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
@@ -159,6 +159,149 @@ impl PromoteHalf {
             Self::Physical { buffer_id, .. } | Self::Virtual { buffer_id, .. } => buffer_id,
         }
     }
+}
+
+/// ★★★★★ **Where the PHYSICAL half of a context buffer lives** — §16.50.
+///
+/// # The measurement this exists to answer
+///
+/// `s41b` bound nothing with `orphans(awaiting_va=0, awaiting_phys=10)`: cup2's address
+/// space held ten VA halves and not one physical. The physicals arrived — the cumulative
+/// tally shows `phys>0` for four ids — they arrived **in a different address space**.
+///
+/// # ⊘ NOT derived from which ids orphaned in that boot
+///
+/// A list fitted to one boot is a list that will be wrong on the next one. This is read
+/// off the **arms of RM's own phase-1 emitter**, `kgrctxPrepareInitializeCtxBuffer_IMPL`
+/// (`ogkm-580: kernel_graphics_context.c:1710-1807`), which is the only function that can
+/// ever produce a `PromoteHalf::Physical`. Every wire id reaches exactly one arm, and the
+/// arm says where the memory descriptor it publishes came from:
+///
+/// | wire id | arm | descriptor source | scope |
+/// |---|---|---|---|
+/// | `0x0` MAIN | `:1713-1731` | `ppEngCtxDesc[subdev]` of the channel's own group | [`Self::PerContext`] |
+/// | `0x1` PM | `:1732-1740` | `pKernelGraphicsContextUnicast->pmCtxswBuffer` | [`Self::PerContext`] |
+/// | `0x2` PATCH | `:1741-1747` | `pKernelGraphicsContextUnicast->ctxPatchBuffer` | [`Self::PerContext`] |
+/// | `0x3` BUFFER_BUNDLE_CB | `:1748` ↘ | — | [`Self::Never`] |
+/// | `0x4` PAGEPOOL | `:1750` ↘ | — | [`Self::Never`] |
+/// | `0x5` ATTRIBUTE_CB | `:1752` ↘ | — | [`Self::Never`] |
+/// | `0x6` RTV_CB_GLOBAL | `:1754` ↘ | — | [`Self::Never`] |
+/// | `0x7` GFXP_POOL | `:1756-1758` `// No initialization from kernel RM; return NV_OK` | — | [`Self::Never`] |
+/// | `0x8` GFXP_CTRL_BLK | `:1759-1782` | `localCtxBuffer` **if `bAllocated`**, else `kgraphicsGetGlobalCtxBuffers` | [`Self::PerContext`] ⚠ |
+/// | `0x9` FECS_EVENT | `:1783` ↘ | `kgraphicsGetGlobalCtxBuffers(pGpu, pKernelGraphics, gfid)` | [`Self::PerGpu`] |
+/// | `0xa` PRIV_ACCESS_MAP | `:1784` ↘ | idem | [`Self::PerGpu`] |
+/// | `0xb` UNRESTRICTED_PRIV_ACCESS_MAP | `:1785-1801` | idem | [`Self::PerGpu`] |
+/// | `0xc` GLOBAL_PRIV_ACCESS_MAP | `:1803-1805` `// No initialization from kernel RM` | — | [`Self::Never`] |
+///
+/// ⚠ **`0x8` is deliberately [`Self::PerContext`] and that is the one judgement call
+/// here.** Its arm reads a *per-context* `localCtxBuffer` first and only falls back to the
+/// GPU-wide pool, so its physical half **can** be a private per-context buffer. Publishing
+/// that GPU-wide would let one context's VA join against another context's private
+/// physical — a wrong binding, which is worse than an orphaned half. ⊘ The conservative
+/// answer is taken because the aggressive one is unrecoverable, not because `0x8` was
+/// unobserved; it is absent from `s41b`'s tally, and an id we have never seen is the last
+/// one that should get GPU-wide scope on a guess.
+///
+/// # ★ Why the "global vs per-context" enum is NOT the predicate on its own
+///
+/// `kgrctxGetGlobalContextBufferInternalId_IMPL`
+/// (`ogkm-580: kernel_graphics_context.c:201-250`) is RM's own membership oracle: it
+/// refuses `0x0`/`0x1`/`0x2` with `NV_ERR_INVALID_ARGUMENT` (`:214-219`) and maps
+/// `0x3`–`0xc` onto the ten-entry `GR_GLOBALCTX_BUFFER` enum
+/// (`kernel_graphics_context_buffers.h:186-196`). So *global* = `0x3..=0xc`, exactly.
+/// But **global is not the same question as where the physical lives**: six of those ten
+/// ids never emit a physical at all, and `0x8` may emit a private one. Membership comes
+/// from the enum; the *scope* comes from the emitter's arms. Using membership alone would
+/// have GPU-scoped `0x8` and silently claimed six ids were fixed when nothing ever
+/// publishes them.
+///
+/// # ⊘ MISS = FAULT for an id off the end
+///
+/// An id RM does not recognise hits its `default:` arm and is refused
+/// (`:1806-1807`, *"Unrecognized promote ctx enum"*). We cannot refuse — the entry may be
+/// a complete range and complete ranges are none of this classifier's business — so an
+/// unknown id is classified [`Self::PerContext`]: the *narrowest* scope, never GPU-wide.
+/// Nothing gains reach by being unrecognised.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhysHalfScope {
+    /// The physical half describes a buffer private to one context. It parks in the
+    /// [`crate::gpu::Vas`] and joins only VA halves from that same address space.
+    PerContext,
+    /// ★★★★★ The physical half describes a buffer RM allocates **once per GPU** and every
+    /// context maps at its own VA. It is published GPU-wide ([`GlobalCtxPhys`]) and joins
+    /// VA halves from **any** address space — which is the whole of §16.50's fix, because
+    /// `s41b` measured the two halves arriving under two different procs.
+    PerGpu,
+    /// ⊘ Nothing in kernel RM ever emits a phase-1 entry for this id. Its arm returns
+    /// `NV_OK` with `*pbAddEntry` left `NV_FALSE`.
+    ///
+    /// ★ Carried as a *named* third value rather than folded into [`Self::PerContext`],
+    /// because it is the answer to a different question: a `PerContext` id whose physical
+    /// never shows up is a bug in our routing, and a `Never` id whose physical never shows
+    /// up is RM behaving exactly as written. A two-valued classifier would report both as
+    /// "orphaned" and send the next rung looking for a phase 1 that cannot exist
+    /// (`falsifier_blocker_vs_only_blocker`). Its backing has to be recovered at
+    /// **allocation** time from `kgraphicsGetGlobalCtxBuffers`, which this port has not
+    /// done and which no join can substitute for.
+    Never,
+}
+
+/// Where the physical half of `external_id` lives — see [`PhysHalfScope`] for the full
+/// derivation and the `ogkm` line for every arm.
+#[must_use]
+pub const fn phys_half_scope(external_id: u16) -> PhysHalfScope {
+    match external_id {
+        // `:1713-1747` — three per-context memory descriptors.
+        0..=2 => PhysHalfScope::PerContext,
+        // `:1748-1758` — one fall-through arm, five ids, "No initialization from kernel RM".
+        3..=7 => PhysHalfScope::Never,
+        // `:1759-1782` — reads a per-context `localCtxBuffer` when one is allocated. ⚠
+        8 => PhysHalfScope::PerContext,
+        // `:1783-1801` — `kgraphicsGetGlobalCtxBuffers(pGpu, …, gfid)`, unconditionally.
+        9..=11 => PhysHalfScope::PerGpu,
+        // `:1803-1805` — "No initialization from kernel RM".
+        12 => PhysHalfScope::Never,
+        // `:1806-1807` — RM's `default:` refuses. We take the narrowest scope instead.
+        _ => PhysHalfScope::PerContext,
+    }
+}
+
+/// Is `external_id` a **global** context buffer — one RM shares across every context —
+/// rather than a per-context one?
+///
+/// ★ This is RM's own membership rule and nothing else:
+/// `kgrctxGetGlobalContextBufferInternalId_IMPL` maps `0x3`–`0xc` and returns
+/// `NV_ERR_INVALID_ARGUMENT` for MAIN/PM/PATCH
+/// (`ogkm-580: kernel_graphics_context.c:214-219`).
+///
+/// ⊘ **It is NOT the scoping predicate** — see [`PhysHalfScope`] for why six global ids
+/// publish no physical at all and one may publish a private one. Exposed because it is the
+/// answer to *"is this buffer shared?"*, which is a real and different question, and
+/// because stating it separately is what keeps the two from being conflated again.
+#[must_use]
+pub const fn is_global_ctx_buffer(external_id: u16) -> bool {
+    matches!(external_id, 3..=12)
+}
+
+/// A physical half published **GPU-wide**: `buffer_id` → the buffer RM allocated once for
+/// the whole GPU. See [`PhysHalfScope::PerGpu`].
+///
+/// ⊘ **Entries are never consumed by a join.** One global buffer is mapped by every
+/// context that needs it, so removing it when the first VA space joins against it would
+/// re-orphan every later one — the exact failure this map exists to end, reintroduced one
+/// layer down.
+pub type GlobalCtxPhys = BTreeMap<u16, GlobalPhysHalf>;
+
+/// The published physical half of one global context buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GlobalPhysHalf {
+    /// `gpuPhysAddr`, in [`Self::aperture`].
+    pub phys: u64,
+    /// `size`. Never zero — a zero-length half is [`PromoteJoin::half_unusable`] and is
+    /// dropped before it can reach here.
+    pub len: u64,
+    /// Which aperture [`Self::phys`] is in.
+    pub aperture: Aperture,
 }
 
 /// ★★★ A half **parked** in a [`crate::gpu::Vas`], waiting for its partner.
@@ -294,6 +437,44 @@ pub struct PromoteJoin {
     /// `joined=N` beside a large orphan count means the key is wrong, and that is
     /// precisely the reading `bound=N` alone could never give.
     pub orphans: (u32, u32),
+    /// ★★★★★ §16.50 — of [`Self::joined`], how many completed against a **GPU-published**
+    /// physical half ([`PhysHalfScope::PerGpu`]) rather than one parked in this same
+    /// address space.
+    ///
+    /// ⊘ Counted apart from `joined` for the reason `joined` is counted apart from
+    /// `bound`: "the two halves were in one VAS and we stitched them" and "the halves were
+    /// in two different address spaces and the GPU-wide scope bridged them" are different
+    /// mechanisms, and only the second is what this rung changed. A summed number could
+    /// not tell the fix working from the previous rung's join working.
+    pub joined_global: u32,
+    /// ★★★★★ **The counter built for the case where the fix does nothing.**
+    ///
+    /// How many global physical halves the GPU-wide map holds **after** this promotion. It
+    /// is emitted unconditionally on the success path and it does not ride any refusal or
+    /// any join, so it reads the same whether `joined_global` is 10 or 0 — which is
+    /// exactly the case this rung is most likely to get.
+    ///
+    /// ★ It is what makes a `joined_global=0` legible instead of mute, and the three
+    /// readings are distinguishable with no other evidence:
+    ///
+    /// | `globals_known` | `joined_global` | reading |
+    /// |---|---|---|
+    /// | `0` | `0` | ⊘ no [`PhysHalfScope::PerGpu`] physical was **ever** published. The scoping is irrelevant; phase 1 is not arriving for those ids at all, and the next question is `kgraphicsGetGlobalCtxBuffers`, not the join. |
+    /// | `>0` | `0` | the map filled and nothing drew on it — the VA halves are for ids that publish nothing ([`PhysHalfScope::Never`]), or the drain is not reaching them. |
+    /// | `>0` | `>0` | ★ the cross-address-space bridge fired. |
+    ///
+    /// ⊘ An instrument hung off the refusal path has its deletion scheduled by the fix it
+    /// guides; this one is hung off the success path, so it survives its own fix. That has
+    /// now cost two consecutive rungs and it is not paid for a third time.
+    pub globals_known: u32,
+    /// Global physical halves **this** promotion published into the GPU-wide map. New
+    /// publications only — a byte-identical re-publication is not counted here.
+    ///
+    /// ★ Distinguishes *"the map is filling"* from *"the map was already full"*, which
+    /// [`Self::globals_known`] alone cannot: a steady non-zero `globals_known` with
+    /// `globals_added=0` on every row means publication happened before the first row we
+    /// can see, and that is a fact about **when** phase 1 runs.
+    pub globals_added: u32,
 }
 
 /// Every way a promotion is refused, by name. There is no catch-all.
@@ -610,6 +791,7 @@ pub fn apply_promote_ctx(
     proc: &mut Proc,
     route: &PromoteRoute,
     p: &CtxPromotion,
+    globals: &mut GlobalCtxPhys,
 ) -> Result<PromoteJoin, PromoteFault> {
     if proc.id != route.proc {
         return Err(PromoteFault::RetiredProc(route.proc));
@@ -685,7 +867,12 @@ pub fn apply_promote_ctx(
     // other. Handling that by scanning `vas.promote_halves` alone would let the second one
     // park over the first with no name attached to it.
     let mut scratch = vas.promote_halves.clone();
-    let mut completed: Vec<PromotedRange> = Vec::new();
+    // ★ The `bool` is *"this completion drew on the GPU-wide map"*. Carried alongside the
+    // range rather than counted at staging time so that [`PromoteJoin::joined_global`]
+    // stays a strict subset of [`PromoteJoin::joined`]: a completion that turns out to be
+    // an identical re-promote is skipped in PASS 2, and a `joined_global` incremented
+    // where it was staged would have counted a bind that never happened.
+    let mut completed: Vec<(PromotedRange, bool)> = Vec::new();
     // ★★ `parked` is what this promotion LEFT parked, not how many parks it performed.
     // A half that parks and is then completed by its partner LATER IN THE SAME CONTROL
     // parked nothing — counting the gross insert would report `parked=1 joined=1` for a
@@ -694,6 +881,40 @@ pub fn apply_promote_ctx(
     let mut parked_ids: BTreeSet<u16> = BTreeSet::new();
     let mut half_already = 0u32;
     let mut half_unusable = 0u32;
+    let mut joined_global = 0u32;
+    let mut globals_added = 0u32;
+
+    // ── PASS 1a: DRAIN this VAS's already-parked VA halves against the GPU-wide map. ──
+    //
+    // ★★★★★ §16.50, and this pass is the one that makes the fix apply to the state
+    // `s41b` actually measured. Those ten `AwaitingPhysical` halves were parked by
+    // *earlier* promotions; the physicals they wait on were published under a different
+    // proc before cup2 existed. Without a drain the scoping would only ever help halves
+    // that arrive from now on, and the boot would report `joined_global=0` for a reason
+    // that has nothing to do with whether the scoping is right.
+    //
+    // ⊘ Only [`PhysHalfScope::PerGpu`] ids are drained. A `PerContext` half parked here
+    // is waiting on a physical that belongs to THIS address space, and completing it from
+    // a GPU-wide publication would be inventing a binding.
+    for (buffer_id, g) in globals.iter() {
+        if phys_half_scope(*buffer_id) != PhysHalfScope::PerGpu {
+            continue;
+        }
+        if let Some(ParkedHalf::AwaitingPhysical { va }) = scratch.get(buffer_id) {
+            completed.push((
+                PromotedRange {
+                    va: *va,
+                    len: g.len,
+                    phys: g.phys,
+                    aperture: g.aperture,
+                    buffer_id: *buffer_id,
+                },
+                true,
+            ));
+            scratch.remove(buffer_id);
+        }
+    }
+
     for h in &p.halves {
         match *h {
             PromoteHalf::Physical {
@@ -722,15 +943,54 @@ pub fn apply_promote_ctx(
                     half_unusable += 1;
                     continue;
                 }
+                // ★★★★★ §16.50 — a GPU-scoped physical is PUBLISHED, not parked.
+                //
+                // `s41b` measured this half arriving under one proc and its VA halves
+                // under another, so parking it in the emitting proc's `Vas` is what
+                // guaranteed `joined=0`: the two halves were correct, keyed correctly, and
+                // in two different maps.
+                //
+                // ⊘ It is published IN ADDITION to falling through to the ordinary
+                // per-VAS arm below, never instead of it. The emitting address space is
+                // as entitled to join against its own declaration as any other, and
+                // routing it away from the local map would trade one orphan class for
+                // another.
+                if phys_half_scope(buffer_id) == PhysHalfScope::PerGpu {
+                    let publish = GlobalPhysHalf {
+                        phys,
+                        len,
+                        aperture,
+                    };
+                    match globals.get(&buffer_id) {
+                        // ★ A DIFFERING re-publication refuses by name rather than
+                        // overwriting. Overwriting would silently retarget every context
+                        // that already joined against the old value — a wrong table, which
+                        // `HalfConflict` exists precisely to prevent expressing.
+                        Some(prev) if *prev != publish => {
+                            return Err(PromoteFault::HalfConflict {
+                                buffer_id,
+                                pdb: route.pdb,
+                            });
+                        }
+                        Some(_) => {}
+                        None => {
+                            globals.insert(buffer_id, publish);
+                            globals_added += 1;
+                        }
+                    }
+                }
                 match scratch.get(&buffer_id) {
                     Some(ParkedHalf::AwaitingPhysical { va }) => {
-                        completed.push(PromotedRange {
-                            va: *va,
-                            len,
-                            phys,
-                            aperture,
-                            buffer_id,
-                        });
+                        completed.push((
+                            PromotedRange {
+                                va: *va,
+                                len,
+                                phys,
+                                aperture,
+                                buffer_id,
+                            },
+                            false,
+                        ));
                         scratch.remove(&buffer_id);
                         parked_ids.remove(&buffer_id);
                     }
@@ -767,13 +1027,16 @@ pub fn apply_promote_ctx(
                     len,
                     aperture,
                 }) => {
-                    completed.push(PromotedRange {
-                        va,
-                        len: *len,
-                        phys: *phys,
-                        aperture: *aperture,
-                        buffer_id,
-                    });
+                    completed.push((
+                        PromotedRange {
+                            va,
+                            len: *len,
+                            phys: *phys,
+                            aperture: *aperture,
+                            buffer_id,
+                        },
+                        false,
+                    ));
                     scratch.remove(&buffer_id);
                     parked_ids.remove(&buffer_id);
                 }
@@ -787,10 +1050,34 @@ pub fn apply_promote_ctx(
                         });
                     }
                 }
-                None => {
-                    scratch.insert(buffer_id, ParkedHalf::AwaitingPhysical { va });
-                    parked_ids.insert(buffer_id);
-                }
+                // ★★★★★ §16.50 — the local map missed, so ask the GPU-wide one before
+                // parking. This is the arm that binds a VA declared by cup2's address
+                // space against a physical RM published once, long before, under the
+                // driver-init proc.
+                None => match globals.get(&buffer_id) {
+                    Some(g) if phys_half_scope(buffer_id) == PhysHalfScope::PerGpu => {
+                        completed.push((
+                            PromotedRange {
+                                va,
+                                len: g.len,
+                                phys: g.phys,
+                                aperture: g.aperture,
+                                buffer_id,
+                            },
+                            true,
+                        ));
+                    }
+                    // ⊘ Includes the case where a publication EXISTS for an id whose
+                    // scope is not `PerGpu`. It cannot be reached today — nothing
+                    // publishes such an id — but the scope test is repeated at the point
+                    // of USE rather than trusted from the point of insertion, because a
+                    // future caller building the map itself would otherwise silently gain
+                    // cross-context joins for private buffers.
+                    _ => {
+                        scratch.insert(buffer_id, ParkedHalf::AwaitingPhysical { va });
+                        parked_ids.insert(buffer_id);
+                    }
+                },
             },
         }
     }
@@ -800,7 +1087,7 @@ pub fn apply_promote_ctx(
     // ⊘ A range assembled from two controls gets no weaker check than one that arrived
     // whole. It is validated against the same wrap/zero rule, against this promotion's own
     // complete ranges, against the other completions, and against the table.
-    for r in &completed {
+    for (r, _) in &completed {
         if r.len == 0 || r.va.0.checked_add(r.len).is_none() {
             return Err(PromoteFault::Malformed {
                 va: r.va,
@@ -808,8 +1095,13 @@ pub fn apply_promote_ctx(
             });
         }
     }
-    for (i, a) in completed.iter().enumerate() {
-        for b in completed.iter().skip(i + 1).chain(p.ranges.iter()) {
+    for (i, (a, _)) in completed.iter().enumerate() {
+        for b in completed
+            .iter()
+            .skip(i + 1)
+            .map(|(r, _)| r)
+            .chain(p.ranges.iter())
+        {
             let overlap = a.va.0 < b.va.0.saturating_add(b.len) && b.va.0 < a.va.0 + a.len;
             if overlap {
                 return Err(PromoteFault::SelfOverlap { a: a.va, b: b.va });
@@ -819,7 +1111,7 @@ pub fn apply_promote_ctx(
 
     // Which ranges are already there, byte-identically, from a previous promotion.
     let mut already: BTreeSet<u64> = BTreeSet::new();
-    for r in p.ranges.iter().chain(completed.iter()) {
+    for r in p.ranges.iter().chain(completed.iter().map(|(r, _)| r)) {
         let mut covered = false;
         for (start, _len, binding) in vas.table.spans(r.va, r.len) {
             // The span's offset into the binding is unread here: this asks whether an
@@ -855,11 +1147,11 @@ pub fn apply_promote_ctx(
     // ── PASS 2: apply. Nothing below can fail. ───────────────────────────────────────
     let mut bound = 0u32;
     let mut joined = 0u32;
-    for (r, from_join) in p
+    for (r, from_join, from_global) in p
         .ranges
         .iter()
-        .map(|r| (r, false))
-        .chain(completed.iter().map(|r| (r, true)))
+        .map(|r| (r, false, false))
+        .chain(completed.iter().map(|(r, g)| (r, true, *g)))
     {
         if already.contains(&r.va.0) {
             continue;
@@ -889,6 +1181,11 @@ pub fn apply_promote_ctx(
         // then visibly making that choice.
         if from_join {
             joined += 1;
+            // ★ Strict subset of `joined`, counted HERE and not where the completion was
+            // staged — see the `completed` declaration.
+            if from_global {
+                joined_global += 1;
+            }
         } else {
             bound += 1;
         }
@@ -904,5 +1201,8 @@ pub fn apply_promote_ctx(
         half_already,
         half_unusable,
         orphans: vas.promote_orphans(),
+        joined_global,
+        globals_known: u32::try_from(globals.len()).unwrap_or(u32::MAX),
+        globals_added,
     })
 }
