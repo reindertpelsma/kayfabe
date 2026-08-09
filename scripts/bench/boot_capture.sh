@@ -264,12 +264,77 @@ if [ -n "${POST_CAPTURE_HOOK:-}" ]; then
   say "hook finished: $(grep -c '^HOOK_RC=0$' "$PROBE" >/dev/null && echo rc=0 || echo 'rc!=0 — see the probe log')"
 fi
 
-# ---- phase 4: fresh boot next time --------------------------------------------------
+# ---- phase 4: fresh boot next time, AND THE CENSUS --------------------------------------
+#
+# ★★★ `[measured 2026-08-09, boot `msr1_319d29a`]` — THIS PHASE COULD NOT PRODUCE THE ONE
+# THING THE BOOT WAS RUN FOR, and it looked fine while failing.
+#
+# The device's end-of-run census (counters, the unserviced ledger, and — the point of that
+# boot — `first doorbell refusal … | c=… vas=… ring=…`) is printed from `nvkvm_exit_notify`,
+# registered with `qemu_add_exit_notifier` (`qemu/hw/misc/nvkvm/nvkvm.c:1951, 2161-2162`).
+# An exit notifier runs when QEMU's main loop **returns**. ⊘ `kill -9` does not let it.
+#
+# And `sudo poweroff` cannot be relied on to get there: `cuInit` now HANGS in `uvm_spin_loop`
+# — a BUSY spin in the kernel that takes no signal — so systemd's shutdown blocks on it, the
+# 60 s wait below expires, and the old code went straight to `kill -9`. `run_msr1_*_qemu.log`
+# is **10 lines with no census at all**, from a boot whose only purpose was to read one
+# census line. The harness exited 0.
+#
+# ⊘ The hook that made hanging boots survivable (`cup2_hook_deadline.sh`) says in its own
+# header *"QEMU still exits cleanly through the monitor so the census gets printed"* — and
+# **this script never used the monitor**. A claim about a path that does not exist.
+#
+# ⇒ Three attempts, weakest-first, and the census is ASSERTED rather than hoped for:
+#   1. `poweroff` — the clean guest shutdown, still preferred (it flushes the guest's own fs).
+#   2. `quit` on the QEMU **monitor socket** — QMP/HMP `quit` unwinds the main loop, so the
+#      exit notifier runs and the census IS printed. This is the one that works through a
+#      wedged guest.
+#   3. `kill -9` — the census is already lost by here; it is only reported, never silent.
+MON="${LOG}.mon"
 say "powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)"
 "$GSSH" 'sudo poweroff' >/dev/null 2>&1
-for _ in $(seq 1 30); do kill -0 $QPID 2>/dev/null || break; sleep 2; done
-kill -9 $QPID 2>/dev/null
+for _ in $(seq 1 15); do kill -0 $QPID 2>/dev/null || break; sleep 2; done
+if kill -0 $QPID 2>/dev/null; then
+  say "guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on $MON"
+  # ⊘ A deadline on the writer too: a monitor whose peer is gone must not become a SECOND
+  # hang inside the teardown of the first. `[bite-checked 2026-08-09 on vh]` `nc -U` against
+  # a python `AF_UNIX` listener delivered the literal bytes `quit` — the instrument was made
+  # to fire before it was relied on. ⚠ `busybox nc` has no `-U`; this needs openbsd-nc or
+  # socat, and says so rather than silently doing nothing.
+  if [ -S "$MON" ]; then
+    if command -v socat >/dev/null 2>&1; then
+      printf 'quit\n' | timeout 10 socat - "UNIX-CONNECT:$MON" >/dev/null 2>&1
+    elif nc -h 2>&1 | grep -q 'U'; then
+      printf 'quit\n' | timeout 10 nc -U "$MON" >/dev/null 2>&1
+    else
+      say "★ no socat and this nc has no -U (busybox?) — cannot reach $MON, census lost"
+    fi
+  else
+    say "★ no monitor socket at $MON — the census will be lost"
+  fi
+  for _ in $(seq 1 15); do kill -0 $QPID 2>/dev/null || break; sleep 1; done
+fi
+if kill -0 $QPID 2>/dev/null; then
+  say "★ QEMU still alive after poweroff AND monitor quit — SIGKILL. ⊘ NO CENSUS in this run."
+  kill -9 $QPID 2>/dev/null
+fi
 trap - EXIT
 wait $QPID 2>/dev/null
+
+# ---- phase 5: ASSERT the census is on disk ------------------------------------------
+#
+# ⊘ A boot whose census is missing must not read as a boot with nothing to report. The
+# counters line is emitted unconditionally by the exit notifier, so its ABSENCE means the
+# notifier never ran — never that the numbers were zero.
+if grep -q 'nvkvm: doorbells:' "${LOG}_qemu.log" 2>/dev/null; then
+  say "census present:"
+  grep -E 'nvkvm: (doorbells:|  first doorbell|  last local)' "${LOG}_qemu.log" | sed 's/^/    /'
+else
+  say "★★★ NO CENSUS in ${LOG}_qemu.log — QEMU never ran its exit notifier."
+  say "  ⊘ Do NOT read the absence of a census line as the absence of the thing it counts."
+  DIE_RC=4 die census "the end-of-run report was never printed; see phase 4 above for which
+   teardown path was taken. Every counter, the unserviced ledger and the first doorbell
+   refusal are unobservable for this tag."
+fi
 
 say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG probe=$PROBE"
