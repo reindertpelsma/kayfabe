@@ -400,6 +400,56 @@ pub enum WantedTable {
     /// first time — see [`kayfabe_abi::gmmustatic`], which states that boundary rather than
     /// eliding it.
     GmmuStaticInfo,
+    /// `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` (`0x20800a9b`) — ★★★ **the wall
+    /// §14.40 left standing, and the only variant whose reply is the IDENTITY on the guest's
+    /// own bytes.**
+    ///
+    /// `[meas]` boot `pu1448` @ `ef20ccc`: fixing `BAR0+0x88084` moved `UVM_REGISTER_GPU`'s
+    /// `rmStatus` from `0x40` to `0x56` and put one new line in `cuInit`'s own `dmesg` —
+    /// `NVRM: faultbufConstruct_IMPL: Failed to setup Replayable Fault buffer
+    /// (status=0x00000056).` — with exactly one new id in the unserviced ledger: this one.
+    /// The mechanism is not a guess: `kgmmuFaultBufferReplayableAllocate_IMPL` propagates the
+    /// control's status verbatim and **frees the buffer it just allocated** on failure
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1261-1272`), and
+    /// `faultbufConstruct_IMPL` re-returns it (`.../mmu_fault_buffer.c:59-67`), which fails
+    /// the `MmuFaultBuffer` alloc inside `nvGpuOpsInitFaultInfo`
+    /// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:9410`) and so fails
+    /// `UVM_REGISTER_GPU`. ⇒ refusing this control is refusing `cuInit`.
+    ///
+    /// # ★★ Why the reply is the guest's own params, unchanged
+    ///
+    /// Every field is `[IN]` — `hClient`, `hObject`, `faultBufferSize`,
+    /// `faultBufferPteArray[256]` — and the documented status set is `{NV_OK}`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1792-1823`).
+    /// A real GSP writes **nothing** back, so the bytes CPU-RM reads after the call are the
+    /// bytes it sent. Echoing them is therefore not a convenience: it is the only reply that
+    /// is byte-accurate. ⊘ Zeroing a declared-size body — [`Self::MemsysL2InvalidateEvict`]'s
+    /// shape — would have been *harmless here* (CPU-RM `portMemFree`s the params immediately,
+    /// `kern_gmmu.c:1263`) and still wrong, and [`Self::EventSetNotification`] is the
+    /// cautionary record of a zeroed body silently rewriting a caller's struct.
+    ///
+    /// ⇒ **This arm fabricates nothing.** There is no captured row for `0x20800a9b` anywhere
+    /// — not in `traces/c_oracle_census/initctrl_ga106_census.tsv`, not in
+    /// [`kayfabe_abi::oracle`] — and it needs none, because there is no `[OUT]` value to be
+    /// right or wrong about. Contrast the oracle's `dlen = 0` rows, which are *positively
+    /// wrong* precisely because they decode an unmeasured body to zeros.
+    ///
+    /// # ★★★ And is `NV_OK` HONEST, with no fault-delivery plane?
+    ///
+    /// Decided on evidence in [`kayfabe_abi::faultbuffer`]'s module docs — the three-line
+    /// version: the params are pure `[IN]` so nothing is invented; UVM's init reads `GET`
+    /// and `PUT` **once** and checks them against nothing
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_gpu_replayable_faults.c:120-136`); and `[meas]`
+    /// the C artifact answered this control `NV_OK` by fall-through
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:3057`) and reached `bad=0 maxerr=0` with the guest
+    /// polling `PUT` seven times and reading `0` every time. *"Registered, and never a single
+    /// fault"* is a state a real driver has been driven through to a correct matmul.
+    ///
+    /// ⊘ It stops being honest the first time a fault **should** be raised, and the guest
+    /// gets a **hang** rather than an error. That is why serving it is paired with
+    /// [`kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`], which the boot's own end-of-run report
+    /// prints whenever a registration was served.
+    RegisterFaultBuffer,
     /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` — ★★★ the first variant that is **not a
     /// table**, and the only one whose reply is a function of the *request* alone.
     ///
@@ -879,7 +929,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 35] = [
+    pub const ALL: [WantedTable; 36] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -892,6 +942,7 @@ impl WantedTable {
         Self::BifStaticInfo,
         Self::FifoNumChannels,
         Self::GmmuStaticInfo,
+        Self::RegisterFaultBuffer,
         Self::EventSetNotification,
         Self::MemsysL2InvalidateEvict,
         Self::CeFaultMethodBufferSize,
@@ -940,6 +991,9 @@ impl WantedTable {
             Self::BifStaticInfo => NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO,
             Self::FifoNumChannels => NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS,
             Self::GmmuStaticInfo => NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
+            Self::RegisterFaultBuffer => {
+                kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER
+            }
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION
             }
@@ -1008,6 +1062,9 @@ impl WantedTable {
             Self::BifStaticInfo => BIF_STATIC_INFO_PARAMS_SIZE,
             Self::FifoNumChannels => FIFO_NUM_CHANNELS_PARAMS_SIZE,
             Self::GmmuStaticInfo => GMMU_STATIC_INFO_PARAMS_SIZE,
+            Self::RegisterFaultBuffer => {
+                kayfabe_abi::faultbuffer::REGISTER_FAULT_BUFFER_PARAMS_SIZE
+            }
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
             }
@@ -1369,6 +1426,45 @@ impl CommandPolicy for InitTablePolicy {
                 match gmmustatic::encode_gmmu_static_info(&self.chip.gmmu_static) {
                     Ok(p) => p,
                     Err(_) => return refuse(),
+                }
+            }
+            // ★★★ `0x20800a9b` — the IDENTITY arm. See the variant's docs for the whole
+            // argument; what happens *here* is three things and no more.
+            //
+            // (1) **Decode, and let the decode be load-bearing.** An arm that returned the
+            //     bytes untouched would be a fall-through `NV_OK` wearing a variant's name —
+            //     the exact shape §7 step 1 of `resume_from_fault.md` was written to remove.
+            //     The decode is what turns "2064 bytes arrived" into "a page list this port
+            //     can read", and it is the same decode `crate::faultbuffer`'s observer seat
+            //     records from, so the reply and the record can never describe different
+            //     messages.
+            // (2) **Refuse a size CPU-RM itself refuses.** `exceeds_vendor_bound` is
+            //     `kern_gmmu.c:1242-1248`'s own test, applied before it would have to answer
+            //     "registered" about a buffer it recorded only the first 256 pages of. ⊘ No
+            //     stock guest can reach it — CPU-RM checks first — so this can only ever fire
+            //     for a hostile one, which is the guest this port is for.
+            // (3) **Echo.** Pure `[IN]`, so the identity is the byte-accurate reply and the
+            //     common tail below splices it back at `req.params_at` unchanged.
+            //
+            // ⊘ Note what is NOT here: no registration state, no second-register refusal.
+            // The receiver's `NV_ERR_NOT_SUPPORTED`-on-double-register (`kern_gmmu.c:3117`)
+            // is real, and its partner `0x20800a9c` UNREGISTER is **not served** — so
+            // modelling one half would build a latch that can only close. Repeats are counted
+            // instead and reported; see `kayfabe_abi::faultbuffer`.
+            WantedTable::RegisterFaultBuffer => {
+                let raw = match cmd
+                    .payload
+                    .get(req.params_at..req.params_at + want.params_size())
+                {
+                    Some(s) => s,
+                    // Unreachable while the length guard above stands, and written as a
+                    // refusal rather than an `expect` because a panic in a policy is a
+                    // guest-reachable abort.
+                    None => return refuse(),
+                };
+                match kayfabe_abi::faultbuffer::decode_register_fault_buffer(raw) {
+                    Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
+                    Ok(_) | Err(_) => return refuse(),
                 }
             }
             // ★★★ The event-plane arm — the only one that CHANGES this policy's state, and

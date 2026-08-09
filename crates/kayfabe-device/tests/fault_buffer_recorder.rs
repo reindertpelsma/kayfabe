@@ -1,21 +1,30 @@
 //! `kayfabe_device::faultbuffer` — step **5a** and only step 5a: write down where the
 //! guest put its replayable fault buffer, and change nothing else.
 //!
-//! ## ★★★ The property that makes this free, and therefore the one that must be tested
+//! ## ⊘⊘ §14.41 REFUTED this file's old premise
 //!
-//! `the_recorder_answers_nothing` is the load-bearing test in this file. Answering
-//! `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` would change what the guest's UVM
-//! bring-up does — `kgmmuFaultBufferReplayableAllocate_IMPL` frees the buffer and
-//! propagates the status when the control fails
-//! (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1262-1268`) — on a path this port
-//! cannot service. A recorder that answered would be instrumentation that changes what it
-//! observes, which is the failure this project has named most often.
+//! `[measured 2026-08-09, boot `pu1448` at `ef20ccc`]`.
+//!
+//! It used to say that answering `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`
+//! "would change what the guest's UVM bring-up does … on a path this port cannot service",
+//! and treat `the_recorder_answers_nothing` as the load-bearing test. Boot `pu1448` @
+//! `ef20ccc` measured what NOT answering does: `kgmmuFaultBufferReplayableAllocate_IMPL`
+//! propagates the `0x56` (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1261-1272`),
+//! `faultbufConstruct_IMPL` re-returns it, `UVM_REGISTER_GPU` fails, **`cuInit` dies**. The
+//! mechanism was right and the conclusion was backwards.
+//!
+//! `kayfabe_device::inittables` now answers it; this type only records, from an observer
+//! seat whose `observe` returns nothing — so *"it changes no reply byte"* is rustc's
+//! guarantee and no longer a test's. What is left here is the **non-vacuity**: that the
+//! recorder really sees the traffic it claims to record.
 //!
 //! ## ⊘ What is NOT here, deliberately
 //!
 //! No fault buffer. Nothing writes a 32-byte packet, moves `PUT`, or pulses an interrupt
 //! leaf. `docs/design/resume_from_fault.md` §7 step 0 is explicit that steps 5b–5d are
-//! gated on a decision this must not pre-empt.
+//! gated on a decision this must not pre-empt — and serving the *registration* does not
+//! pre-empt it: 5a is the step that says "receive and record", and the guest's own bring-up
+//! is what turned "record" into "record and acknowledge".
 
 use kayfabe_abi::faultbuffer::{
     FaultBufferRegistration, NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
@@ -25,7 +34,7 @@ use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_device::faultbuffer::{
     FAULT_BUFFER_SAMPLE_MAX, FaultBufferLog, FaultBufferNote, FaultBufferRecorder,
 };
-use kayfabe_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kayfabe_gsp::{CommandObserver, RpcCommand, RpcFunction};
 
 /// `RpcControlReq::HEADER` — the control header the params follow.
 const CTRL_HEADER: usize = 40;
@@ -66,32 +75,32 @@ fn recorder() -> (FaultBufferRecorder, FaultBufferLog) {
     (FaultBufferRecorder::new(driver, log.clone()), log)
 }
 
-/// ★★★ It answers **nothing** — not the control it records, and not anything else.
+/// ★★★ It records its own control and ignores everything else — and it CANNOT answer.
+///
+/// ⊘ The name changed at §14.41 with the type. `the_recorder_answers_nothing` asserted a
+/// property that a `CommandObserver` cannot violate; keeping the old name would have left a
+/// test whose title claims a guard it no longer provides.
 #[test]
-fn the_recorder_answers_nothing() {
+fn the_recorder_records_its_own_control_and_ignores_the_rest() {
     let (mut r, log) = recorder();
     let pages = [0x1_0000_0000u64, 0x1_0000_1000, 0x1_0000_2000];
-    assert!(
-        r.respond(&control(
-            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
-            &registration(3 * 4096, &pages)
-        ))
-        .is_none(),
-        "recording is not answering: the FSM must still refuse this by name"
-    );
-    assert!(r.respond(&control(0x2080_1803, &[])).is_none());
-    assert!(
-        r.respond(&RpcCommand {
-            function: RpcFunction::Other(228),
-            code: 228,
-            sequence: 4,
-            payload: Vec::new(),
-            elements: 1,
-            delivered: Vec::new(),
-        })
-        .is_none()
-    );
-    // …and it really did see the first one, so the three `None`s above are not vacuous.
+    r.observe(&control(
+        NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
+        &registration(3 * 4096, &pages),
+    ));
+    r.observe(&control(0x2080_1803, &[]));
+    r.observe(&RpcCommand {
+        function: RpcFunction::Other(228),
+        code: 228,
+        sequence: 4,
+        payload: Vec::new(),
+        elements: 1,
+        delivered: Vec::new(),
+    });
+    // ★ The non-vacuity, which is now the WHOLE of what this test can assert: it really did
+    // see the first command. That it answered none of the three is no longer assertable
+    // here, because `CommandObserver::observe` has no return value to assert about — the
+    // property became rustc's at §14.41 and this test stopped being its guard.
     assert_eq!(log.total(), 1);
 }
 
@@ -100,7 +109,7 @@ fn the_recorder_answers_nothing() {
 fn the_declared_buffer_pages_are_what_is_recorded() {
     let (mut r, log) = recorder();
     let pages = [0x1_0000_0000u64, 0x1_0000_1000, 0x1_0000_2000];
-    r.respond(&control(
+    r.observe(&control(
         NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
         &registration(3 * 4096, &pages),
     ));
@@ -129,7 +138,7 @@ fn no_other_control_reaches_the_log() {
         0x2080_0a9f,
         NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER ^ 1,
     ] {
-        r.respond(&control(cmd, &registration(4096, &[0x2000])));
+        r.observe(&control(cmd, &registration(4096, &[0x2000])));
     }
     assert_eq!(log.total(), 0, "neighbours are not this command");
     assert!(log.sample().is_empty());
@@ -142,7 +151,7 @@ fn no_other_control_reaches_the_log() {
 #[test]
 fn a_short_params_window_is_recorded_as_malformed() {
     let (mut r, log) = recorder();
-    r.respond(&control(
+    r.observe(&control(
         NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
         &[0u8; 64],
     ));
@@ -163,7 +172,7 @@ fn a_short_params_window_is_recorded_as_malformed() {
 fn a_re_registration_is_not_collapsed_into_the_first() {
     let (mut r, log) = recorder();
     for base in [0x1_0000_0000u64, 0x2_0000_0000] {
-        r.respond(&control(
+        r.observe(&control(
             NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
             &registration(4096, &[base]),
         ));
@@ -180,7 +189,7 @@ fn the_list_is_capped_and_the_count_is_not() {
     let (mut r, log) = recorder();
     let n = FAULT_BUFFER_SAMPLE_MAX * 4;
     for i in 0..n {
-        r.respond(&control(
+        r.observe(&control(
             NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
             &registration(4096, &[0x1_0000_0000 + (i as u64) * 0x1000]),
         ));

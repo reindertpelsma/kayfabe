@@ -604,9 +604,21 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // single number could not have said that, and `seen == 0` beside a non-zero `total` is
     // what a front seat that was never filled now looks like. This is the reason the wire
     // ABI moved to 22.
+    // ★★★ 63 -> 67 at `execution_plane_increments.md` §14.41: `fault_buffers_registered`,
+    // `fault_buffer_size`, `fault_buffer_pages` and `fault_buffers_malformed` — the
+    // replayable fault buffer the guest registers and this port now ANSWERS `NV_OK` to.
+    // ⊘ The count is not the point; it is the printer's TRIGGER. Serving `0x20800a9b` buys
+    // registration and nothing else — nothing in this build raises a replayable fault or
+    // advances `MMU_FAULT_BUFFER_PUT(1)` — and a served row in the control census reads as
+    // "handled". So the C shell prints the delivery-unbuilt sentence beside a non-zero count,
+    // which makes "serve the control" and "state what serving it did not buy" one act rather
+    // than two commits. FOUR numbers and not one for the same reason the three above are
+    // three: a re-registration (`> 1`) is a finding this port deliberately does not model,
+    // `size` and `pages` check each other, and a malformed ask is a different finding from no
+    // ask at all. This is the reason the wire ABI moved to 24.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (63 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (67 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS

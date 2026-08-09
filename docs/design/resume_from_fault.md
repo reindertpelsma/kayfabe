@@ -141,12 +141,35 @@ This is the finding that makes the feature reachable at all.
 | step | who does it | where | reaches us as |
 |---|---|---|---|
 | allocate the buffer | guest CPU-RM | `kgmmuFaultBufferReplayableAllocate_IMPL`, `ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1192-1290` | — |
-| tell the GPU where it is | guest CPU-RM → GSP | `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` (`0x20800a9b`), sent at `kern_gmmu.c:1257-1262`; kernel-side receiver is a no-op printf at `kern_gmmu.c:3132-3150` | ★ **a GSP control RPC — we are the GSP, so we are told the PTE list** |
+| tell the GPU where it is | guest CPU-RM → GSP | `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` (`0x20800a9b`), sent at `kern_gmmu.c:1257-1262`; ⊘⊘ **CORRECTED §14.41 — the receiver is NOT a no-op printf**, see below | ★ **a GSP control RPC — we are the GSP, so we are told the PTE list** |
 | map the buffer into UVM | guest RM | `nvGpuOpsInitFaultInfo` → `MapToCpu` on the `0xB069` object, `ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:9229-9237` | — |
 | hand UVM the register pointers | guest RM | `kgmmuGetFaultRegisterMappings_TU102`, `ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/turing/kern_gmmu_tu102.c:186-231` — **raw kernel-mapped BAR0 addresses** | — |
 | read `PUT`, write `GET` | **guest UVM, directly over BAR0** | `ogkm-580: kernel-open/nvidia-uvm/uvm_volta_fault_buffer.c:39-85`; *"Slow path: read the put pointer from the GPU register via BAR0 over PCIe"* at `uvm_gpu_replayable_faults.c:332-333` | ★ **BAR0 MMIO we already trap** |
 | the interrupt | GPU | vector 64 ⇒ `CPU_INTR_LEAF(2)` bit 0 at BAR0 `0xB81008` (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_fb.h:31-32`) | ★ **an MSI-X we already raise** |
 | the replay | guest UVM | §2.1's pushbuffer method | ★ **a channel we already gate and decode** |
+
+⊘⊘ **CORRECTION, 2026-08-09 (§14.41), and it is the load-bearing kind.** The row above read
+*"kernel-side receiver is a no-op printf at `kern_gmmu.c:3132-3150`"*. **False, and it inverts
+the meaning.** That line range straddles the tail of one function and the head of another. The
+receiver is `subdeviceCtrlCmdInternalGmmuRegisterFaultBuffer_IMPL`
+(`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:3145-3161`), whose `NV_PRINTF(LEVEL_INFO,
+…)` is **followed by a `return`** of `kgmmuFaultBufferReplayableSetup` (`:3095-3143`) — which
+rebuilds a memdesc from the PTE array (`_kgmmuFaultBufferDescribe`, `:3120`), calls
+`kgmmuFaultBufferLoad_HAL` (`:3128`) and thereby **programs real hardware**:
+`kgmmuEnableFaultBuffer_GV100`
+(`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:1439-1494`) writes
+`NV_VIRTUAL_FUNCTION_PRIV_MMU_FAULT_BUFFER_HI/LO` and `_SIZE` with `_ENABLE=_TRUE`
+(`ogkm-580: .../arch/turing/kern_gmmu_tu102.c:569-609`). It also sets
+`PDB_PROP_KGMMU_REPLAYABLE_FAULT_BUFFER_IN_USE` (`:3138`) and returns `NV_ERR_NOT_SUPPORTED` on
+a **second** registration while a memdesc is live (`:3117`). `[src@580]`
+
+⇒ On real silicon this control **turns the fault plane on**. The old sentence made *"we do
+nothing"* look like parity with the vendor; it is not. ★ That is exactly why §14.41 pairs
+serving it (`NV_OK`, the identity on the guest's pure-`[IN]` params) with a printed statement
+that **delivery** is unbuilt — `kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`, emitted by the
+device's own end-of-run report whenever a registration was served. ⊘ And note how the error
+survived: the wrong line range was *cited*, so every reader treated it as sourced. **A citation
+is not the source saying what the citation says.**
 
 The CC divergence is explicit: `kgmmuGetFaultRegisterMappings_GH100` falls straight through to the
 Turing HAL unless `gpuIsCCFeatureEnabled && gpuIsGspOwnedFaultBuffersEnabled`
@@ -623,8 +646,20 @@ unavailable.** §2.2 and §4.3 say it need not be. The two halves of this note a
 > | **2** — write the error notifier | ✅ **done**, plus a narrowing the step did not ask for | `kayfabe_abi::notifier`, `kayfabe_core::fault` |
 > | **3** — record the reboot-required blast radius | ✅ **done**, in the rustdoc and in `l1_concurrency.md` in place | `NotAttributable::GuestKernelContext` |
 > | **4** — reachability-on-transition | ✅ **built**, as a content diff rather than as edges — five holes closed, two named as residue | `kayfabe_mmu::reach`, and `reachability_on_transition.md` |
-> | **5a** — receive and record `0x20800a9b` | ✅ **done**, recorder-only | `kayfabe_device::faultbuffer` |
+> | **5a** — receive and record `0x20800a9b` | ✅ **done**; ★ §14.41 it now also **ANSWERS** | `kayfabe_device::{faultbuffer,inittables}` |
 > | **5b–5d** — the fault buffer itself | **not built**, and not half-built | — |
+>
+> ★★★ **§14.41 (2026-08-09) — 5a became "receive, record AND answer", and the reason is a
+> measurement.** `[measured 2026-08-09, boot `pu1448` at `ef20ccc`]` refusing `0x20800a9b`
+> fails `kgmmuFaultBufferReplayableAllocate_IMPL` → `faultbufConstruct_IMPL` →
+> `UVM_REGISTER_GPU` → **`cuInit`**. Declining was not the conservative choice; it was the
+> wall. ⊘ It does **not** pre-empt step 0: nothing raises a fault or moves `PUT`, the
+> registration is answered with the identity on the guest's own pure-`[IN]` params (nothing is
+> fabricated, and there is no captured row anywhere in the tree to fabricate from), and the
+> unbuilt half is *printed by every boot that serves it* rather than implied
+> (`kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`). The honesty argument is decided on evidence
+> in that module's docs; its third leg is that the C artifact answered this control `NV_OK` by
+> fall-through and still reached `bad=0 maxerr=0`.
 >
 > **★ One correction to step 1's premise.** §S4(2) reads the C's generic `NV_OK`
 > fall-through and infers the Rust port has the same false green. It does not:

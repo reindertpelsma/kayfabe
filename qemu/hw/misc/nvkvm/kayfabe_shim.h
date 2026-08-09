@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 23u
+#define KAYFABE_SHIM_ABI 24u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -779,6 +779,34 @@ typedef struct KayfabeRegAudit {
      * than the array holds, so probe_arm_len <= KAYFABE_PROBE_ARM_SLOTS by construction. */
     uint64_t probe_arm_len;
     uint32_t probe_arm[KAYFABE_PROBE_ARM_SLOTS];
+
+    /* ★★★ §14.41 -- replayable fault buffers the guest registered and this port ANSWERED
+     * NV_OK to (0x20800a9b).  Answering it is what lets cuInit past faultbufConstruct_IMPL,
+     * and it buys REGISTRATION ONLY: nothing in this build raises a replayable fault or
+     * advances MMU_FAULT_BUFFER_PUT(1).
+     *
+     * The count is the printer's TRIGGER, not the point.  A served row in the control census
+     * reads as "handled", which is exactly the too-capable-mock reading this project keeps
+     * being bitten by -- so when this is non-zero the printer emits the delivery-unbuilt
+     * sentence beside it.  Every boot that serves the control also reports what the control
+     * did not buy.
+     *
+     * ⚠ A value > 1 is a FINDING: the physical receiver returns NV_ERR_NOT_SUPPORTED on a
+     * second registration while one is live (ogkm-580: kern_gmmu.c:3117) and this port does
+     * not model that, deliberately -- its 0x20800a9c partner is unserved, so the state could
+     * only ever latch shut.  The repeats are counted so the decision is made on a
+     * measurement. */
+    uint64_t fault_buffers_registered;
+    /* faultBufferSize of the FIRST registration, in bytes, or 0 if none decoded. */
+    uint64_t fault_buffer_size;
+    /* PTE entries the guest actually filled for that first registration.  ★ 49 on a stock
+     * GA106 -- 0x20800a59's advertised replayableFaultBufferSize (0x31000) / RM_PAGE_SIZE.
+     * Anything else on a stock boot means the two controls disagree. */
+    uint64_t fault_buffer_pages;
+    /* Registrations whose params did NOT decode.  ⊘ Its own counter rather than a silence:
+     * "the guest never asked" and "the guest asked in a shape we could not read" are
+     * different findings, and the second means this port's layout is wrong. */
+    uint64_t fault_buffers_malformed;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.

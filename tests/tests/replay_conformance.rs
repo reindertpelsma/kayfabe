@@ -1540,6 +1540,21 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // structurally cannot have.
         0x2080_8162,
         0x2080_182b,
+        // §14.41's one, and ★ the exemption with the LEAST cost on this list — because the
+        // check it is exempt from does not apply to it. Every other row here answers a size
+        // this port chose; `0x20800a9b`'s params are pure `[IN]`
+        // (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1792-1823`)
+        // and the reply is the IDENTITY on the guest's own bytes, so the "size we answer"
+        // IS the size the guest sent. There is no unevidenced number to be wrong about; the
+        // only claim is the struct's layout, and that is the vendor's own arithmetic —
+        // three `NvU32` then an 8-aligned `NvU64[256]` = 2064 — asserted in
+        // `kayfabe_abi::faultbuffer`'s `the_layout_is_the_one_the_guest_sends`.
+        // ⊘ Absent from this capture for a MODULE reason, not a circumstantial one: the
+        // control's sole issuer is `nvidia-uvm` on `UVM_REGISTER_GPU`
+        // (`ogkm-580: kernel-open/nvidia-uvm/uvm_gpu_replayable_faults.c:247-253` ->
+        // `nv_gpu_ops.c:9410` -> `mmu_fault_buffer.c:59` -> `kern_gmmu.c:1261`), and an
+        // `nvidia-smi` capture never opens `/dev/nvidia-uvm`.
+        0x2080_0a9b,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),

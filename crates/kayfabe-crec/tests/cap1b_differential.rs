@@ -404,7 +404,27 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // differential against a `nvidia-smi` capture would be a weaker oracle than that, not a
     // stronger one. ⊘ The envelope is still this file's kind of coverage and is still absent;
     // that part of the cost is real and is named.
+    // ⚠⚠⚠ §14.41 adds a TWELFTH, and it is the **cleanest** of the list rather than another
+    // grudging admission: `RegisterFaultBuffer` (`0x20800a9b`) has exactly one issuer in the
+    // whole guest, and it is not a CUDA-vs-smi distinction but a *module* one.
+    // `kgmmuFaultBufferReplayableAllocate_IMPL` sends it (`ogkm-580:
+    // src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1261-1265`) only from `faultbufConstruct_IMPL`
+    // (`.../mmu_fault_buffer.c:59`), whose only caller is the `MmuFaultBuffer` alloc inside
+    // `nvGpuOpsInitFaultInfo` (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:9410`),
+    // reached from `uvm_parent_gpu_fault_buffer_init` (`ogkm-580:
+    // kernel-open/nvidia-uvm/uvm_gpu_replayable_faults.c:247-253`) — i.e. from
+    // **`nvidia-uvm`, on `UVM_REGISTER_GPU`**. `cap1b` is an `RmInitAdapter` capture driven
+    // by `nvidia-smi`, which never opens `/dev/nvidia-uvm`. ⊘ No closure limit reaches a
+    // module that was never asked to register a GPU.
+    //
+    // ★ Its reply plane is covered at the policy boundary by
+    // `kayfabe-device/tests/register_fault_buffer.rs`, written **with** this row — and that
+    // test can be stronger than a differential would be, because the reply is the identity
+    // on the guest's own `[IN]` bytes: the property to check is *"not one byte moved"*, which
+    // is checkable exactly and needs no capture to compare against. ⊘ The envelope is still
+    // this file's kind of coverage and is still absent; that part of the cost is real.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
+        WantedTable::RegisterFaultBuffer,
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
         WantedTable::GrPdbProperties,
@@ -480,19 +500,24 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // time. `0x20808162` joins `0x20808159` in the structural class — GSS-legacy, and no
     // committed capture contains bit-15 traffic at all. `0x2080182b` is the ordinary
     // `cuInit`-path class, absent because this capture is `nvidia-smi`-driven.
-    assert_eq!(universe.len(), 35, "non-vacuity: the universe is not empty");
+    // ⊘ 35 -> 36 at §14.41 (`0x20800a9b`), an ELEVENTH exception and the first of a NEW
+    // structural class: absent from `cap1b` not because `libcuda` never ran but because
+    // **`nvidia-uvm` never ran** — the control's sole issuer is UVM's `UVM_REGISTER_GPU`
+    // path, and an `nvidia-smi` capture never opens `/dev/nvidia-uvm`. ★ A `cuInit`-driven
+    // capture would close this one, unlike the two GSS-legacy rows.
+    assert_eq!(universe.len(), 36, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        16,
+        17,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
-    // ⚠⚠ **The cost of 6 -> 12, stated rather than absorbed.** SIX of twelve exceptions are
-    // now `cuInit`-path controls, and a differential that cannot see them cannot regress
+    // ⚠⚠ **The cost of 6 -> 13, stated rather than absorbed.** SEVEN of thirteen exceptions
+    // are now `cuInit`-path controls, and a differential that cannot see them cannot regress
     // them. What stands in for it is a policy-boundary test per control —
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_info_v2,
     // bus_get_pcie_supported_gpu_atomics,fb_get_info_v2,ce_get_all_physical_caps,
-    // grmgr_get_gr_fs_info}.rs` —
+    // grmgr_get_gr_fs_info,register_fault_buffer}.rs` —
     // which checks the envelope, the inner status and the params offset but NOT that the
     // reply reaches a real guest queue. ⊘ The only instrument that covers that is a boot
     // (`only_live_boots_are_proof`), and the durable fix is a `cuInit`-driven capture: the

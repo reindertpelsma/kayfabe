@@ -208,7 +208,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// distinct count rather than the sample's clamped length — an ABI-22 reader would have
 /// indexed `unserviced[0..unserviced_len]` out of bounds the first time a boot exceeded the
 /// cap, which is the second reason this could not be a silent widening.
-pub const ABI_VERSION: u32 = 23;
+pub const ABI_VERSION: u32 = 24;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1504,6 +1504,44 @@ pub struct KayfabeRegAudit {
     pub probe_arm_len: u64,
     /// The indices, in the order the property named them.
     pub probe_arm: [u32; PROBE_ARM_SLOTS],
+    /// ★★★ **§14.41 — replayable fault buffers the guest registered, and this port
+    /// ANSWERED `NV_OK` to.** Every arrival of `0x20800a9b`, including repeats.
+    ///
+    /// It is in the report for one reason, and it is not the count. Answering this control
+    /// is what lets `cuInit` past `faultbufConstruct_IMPL`, and it buys **registration
+    /// only** — nothing here raises a replayable fault or advances
+    /// `MMU_FAULT_BUFFER_PUT(1)`. A served row in the control census reads as *"handled"*,
+    /// which is exactly the too-capable-mock reading this project keeps being bitten by, so
+    /// the C printer emits [`kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`] beside this number
+    /// whenever it is non-zero. ⇒ **Every boot that serves the control also reports what the
+    /// control did not buy.**
+    ///
+    /// ⚠ A value **> 1** is a finding, not noise: the physical receiver returns
+    /// `NV_ERR_NOT_SUPPORTED` on a second registration while one is live
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:3117`) and this port does not
+    /// model that, deliberately (its `0x20800a9c` partner is unserved, so the state could
+    /// only ever latch shut). The repeats are counted here so the day one arrives the
+    /// decision is made against a boot's own output rather than against this paragraph.
+    pub fault_buffers_registered: u64,
+    /// `faultBufferSize` of the FIRST registration, in bytes, or `0` if none decoded.
+    ///
+    /// ⊘ The first, not the last: a re-registration is the interesting event and
+    /// [`Self::fault_buffers_registered`] is what reveals one. Reported beside
+    /// [`Self::fault_buffer_pages`] so the two can be checked against each other —
+    /// `align_up(size) / 4096` — rather than believed separately.
+    pub fault_buffer_size: u64,
+    /// How many PTE entries the guest actually filled for that first registration.
+    ///
+    /// ★ The stock GA106 value is **49**, which is `0x20800a59`'s own advertised
+    /// `replayableFaultBufferSize` of `0x31000` divided by `RM_PAGE_SIZE`. A number that is
+    /// not 49 on a stock boot means the two controls disagree.
+    pub fault_buffer_pages: u64,
+    /// Registrations whose params did **not** decode.
+    ///
+    /// ⊘ Its own counter rather than a silence: *"the guest never asked"* and *"the guest
+    /// asked in a shape we could not read"* are different findings, and the second means
+    /// this port's layout is wrong.
+    pub fault_buffers_malformed: u64,
 }
 
 impl Default for KayfabeRegAudit {
@@ -1586,6 +1624,10 @@ impl Default for KayfabeRegAudit {
             gvas_pub: Default::default(),
             probe_arm_len: Default::default(),
             probe_arm: Default::default(),
+            fault_buffers_registered: Default::default(),
+            fault_buffer_size: Default::default(),
+            fault_buffer_pages: Default::default(),
+            fault_buffers_malformed: Default::default(),
         }
     }
 }
@@ -2679,6 +2721,34 @@ impl Regs {
             nonzero: gpfifo_ring_nonzero,
             first_nonzero: gpfifo_ring_first,
         } = self.rings.snapshot();
+        // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
+        // TRIGGER: the C printer emits `DELIVERY_UNBUILT` beside it whenever it is non-zero,
+        // so serving `0x20800a9b` and stating what serving it did NOT buy are one act.
+        //
+        // ⊘ The FIRST sample, not the last, and `total()` rather than `sample().len()` — the
+        // sample is capped at `FAULT_BUFFER_SAMPLE_MAX` and a count read off it could never
+        // exceed the cap. That is the exact defect `unserviced_len` shipped with
+        // (`a_saturated_instrument_looks_exactly_like_absence`); it is not repeated here.
+        let fault_buffers_registered_n = self.plane.fault_buffers_registered();
+        let fault_buffer_sample = self.plane.fault_buffer_sample();
+        let (fault_buffer_size, fault_buffer_pages) = fault_buffer_sample
+            .iter()
+            .find_map(|n| match n {
+                kayfabe_device::faultbuffer::FaultBufferNote::Registered(r) => {
+                    Some((u64::from(r.size), r.pages.len() as u64))
+                }
+                kayfabe_device::faultbuffer::FaultBufferNote::Malformed { .. } => None,
+            })
+            .unwrap_or((0, 0));
+        let fault_buffers_malformed = fault_buffer_sample
+            .iter()
+            .filter(|n| {
+                matches!(
+                    n,
+                    kayfabe_device::faultbuffer::FaultBufferNote::Malformed { .. }
+                )
+            })
+            .count() as u64;
         // ★★★ The control census — DESTRUCTURED with no `..` for [`Shim::audit`]'s reason:
         // a field added to `CensusSnapshot` and not wired here is a fact the C shell can
         // never read, and nothing goes red. `rustc` refuses the pattern instead.
@@ -2847,6 +2917,10 @@ impl Regs {
             binds,
             probe_arm_len: probe_arm_set.as_slice().len() as u64,
             probe_arm,
+            fault_buffers_registered: fault_buffers_registered_n,
+            fault_buffer_size,
+            fault_buffer_pages,
+            fault_buffers_malformed,
         }
     }
 }

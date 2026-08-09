@@ -482,7 +482,7 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 14] = [
     PolicyDisposition {
         name: "InitTablePolicy",
         path: "crates/kayfabe-device/src/inittables.rs",
@@ -516,11 +516,12 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
         path: "crates/kayfabe-device/src/inert.rs",
         disposition: StickyDisposition::NotAControl,
     },
-    PolicyDisposition {
-        name: "FaultBufferRecorder",
-        path: "crates/kayfabe-device/src/faultbuffer.rs",
-        disposition: StickyDisposition::NeverAnswers,
-    },
+    // ⊘ **`FaultBufferRecorder` is NOT here, and its absence is the correct kind.** It held a
+    // `NeverAnswers` row until §14.41, when it became a `kayfabe_gsp::CommandObserver` — a
+    // type that cannot answer because `observe` returns nothing. It is therefore outside this
+    // array's universe (`impl CommandPolicy for`), and the derive-from-source test below
+    // fails if it ever implements the trait again without a row. The control it records,
+    // `0x20800a9b`, is now answered by `InitTablePolicy`, whose `Guarded` row covers it.
     // ★★★ The VA-space page-directory recorder (`crate::gvaspub`), and its row is the
     // stronger claim of the two available. It sits **first** in `served_chain` — ahead of
     // every answering link, which is the only seat from which it can see a control

@@ -1797,6 +1797,39 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.gpfifo_ring_nonzero ? "" : "n/a ",
                 a.gpfifo_ring_va, a.gpfifo_ring_entries);
 
+    /*
+     * ★★★ §14.41 — THE REPLAYABLE FAULT BUFFER, and the half we did NOT build.
+     *
+     * Printed only when the guest actually registered one, because absence is already
+     * readable elsewhere: the control census carries 0x20800a9b when it was served and the
+     * unserviced list carries it when nothing answered, so a third "none" line here would
+     * add no fact.  What this line adds is the one thing neither of those can say —
+     * that SERVING it bought registration and nothing else.
+     *
+     * ⊘ The sentence is not decoration.  `control 0x20800a9b result 0x00000000` reads as
+     * "handled"; the failure it hides has no message at all, because a fault that is never
+     * delivered is a HANG inside UVM's replayable-fault service loop, not an error.  A reader who meets only
+     * the census row will look for an error and find none.
+     */
+    if (a.fault_buffers_registered) {
+        info_report("nvkvm: replayable fault buffer: %" PRIu64 " registration(s) SERVED "
+                    "NV_OK; first 0x%" PRIx64 " B = %" PRIu64 " pages, %" PRIu64 " malformed",
+                    a.fault_buffers_registered, a.fault_buffer_size, a.fault_buffer_pages,
+                    a.fault_buffers_malformed);
+        info_report("nvkvm:   ⊘ fault DELIVERY is UNBUILT: this port raises no replayable "
+                    "fault and never advances MMU_FAULT_BUFFER_PUT(1), so a fault the guest "
+                    "should have been told about becomes a HANG inside UVM's replayable-fault "
+                    "service loop, not an "
+                    "error (docs/design/resume_from_fault.md §7 steps 5b-5d)");
+        if (a.fault_buffers_registered > 1) {
+            info_report("nvkvm:   ⚠ MORE THAN ONE registration — real RM refuses the second "
+                        "with NV_ERR_NOT_SUPPORTED while one is live (ogkm-580: "
+                        "kern_gmmu.c:3117) and this port does not model that, because its "
+                        "0x20800a9c UNREGISTER partner is unserved. This is the measurement "
+                        "that decision was deferred to");
+        }
+    }
+
     if (a.isolate_refusal.kind != KAYFABE_ISOLATE_REFUSAL_NONE) {
         const char *kind = a.isolate_refusal.kind == KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED
                            ? "spawn-failed" : "no-plane";

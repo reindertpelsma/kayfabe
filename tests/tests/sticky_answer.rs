@@ -245,11 +245,17 @@ fn every_disposition_row_points_at_the_file_that_implements_it() {
 /// `NeverAnswers` means exactly that, against the sharpest input available: a **bit-15
 /// fn-76 control**, which is the only shape either cache branch can act on.
 ///
-/// ★ `FaultBufferRecorder` and `GvasPubRecorder` are each given the control they actually
-/// decode, with the GSS-legacy bit set — so "it declined" is not "it did not recognise the
-/// command". For `GvasPubRecorder` that is load-bearing beyond the cache question: it is
-/// seated FIRST in `served_chain`, ahead of every answering link, so a `Some` of its own
-/// would short-circuit `find_map` and REPLACE `InitTablePolicy`'s reply.
+/// ★ `GvasPubRecorder` is given the control it actually decodes, with the GSS-legacy bit
+/// set — so "it declined" is not "it did not recognise the command". That is load-bearing
+/// beyond the cache question: it is seated FIRST in `served_chain`, ahead of every answering
+/// link, so a `Some` of its own would short-circuit `find_map` and REPLACE
+/// `InitTablePolicy`'s reply.
+///
+/// ⊘ **`FaultBufferRecorder` left this list at §14.41 and its departure is the point.** It
+/// became a `CommandObserver`, so it has no `respond` to assert about — the property this
+/// test used to *check* is now one the type cannot violate. `0x20800a9b` is answered by
+/// `InitTablePolicy` (`Guarded`), and the recorder's own non-vacuity moved to
+/// `crates/kayfabe-device/tests/fault_buffer_recorder.rs`.
 #[test]
 fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
     let rows: Vec<&str> = POLICY_DISPOSITIONS
@@ -259,18 +265,10 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
         .collect();
     assert_eq!(
         rows,
-        vec![
-            "FaultBufferRecorder",
-            "GvasPubRecorder",
-            "UnservicedLedger",
-            "Observing",
-        ],
+        vec!["GvasPubRecorder", "UnservicedLedger", "Observing",],
         "a NeverAnswers row was added or removed without extending this test",
     );
 
-    let fault_log = kayfabe_device::faultbuffer::FaultBufferLog::new();
-    let mut recorder =
-        kayfabe_device::faultbuffer::FaultBufferRecorder::new(abi(), fault_log.clone());
     let unserviced_log = kayfabe_device::unserviced::UnservicedLog::new();
     let mut ledger =
         kayfabe_device::unserviced::UnservicedLedger::new(abi(), unserviced_log.clone());
@@ -299,10 +297,6 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
     let pub_size = kayfabe_abi::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE;
     for cmd in [gss, its_own, its_own | 0x0000_8000] {
         let c = control(cmd, 32, RMCTRL_FLAGS_CACHEABLE, 0);
-        assert!(
-            recorder.respond(&c).is_none(),
-            "FaultBufferRecorder answered {cmd:#010x}",
-        );
         assert!(
             ledger.respond(&c).is_none(),
             "UnservicedLedger answered {cmd:#010x}",
@@ -354,10 +348,11 @@ fn the_never_answers_rows_answer_nothing_even_for_a_gss_legacy_control() {
         gvas_snap.total, 0,
         "a zeroed body is not a legal publication"
     );
-    // ⊘ ONE, not two. `its_own | 0x8000` is a *different command word*, so the recorder
-    // does not recognise it — which is the correct behaviour and worth pinning: setting bit
-    // 15 does not smuggle a control past a policy's id check, it names another control.
-    assert_eq!(fault_log.total(), 1, "the recorder never saw its control");
+    // ⊘ The fault-buffer recorder's own count moved to
+    // `crates/kayfabe-device/tests/fault_buffer_recorder.rs` when it became an observer at
+    // §14.41. `its_own` is still posted above — it now exercises `InitTablePolicy`'s refusal
+    // of a 32-byte body for a control whose params are 2064, which is the shape this file
+    // cares about (a refusal is never cached).
     // ⊘ FIVE — every command the sweeps above posted reached the wrapped observer. A zero
     // would mean `Observing` short-circuits, and its `None`s would prove nothing.
     assert_eq!(

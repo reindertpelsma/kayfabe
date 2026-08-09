@@ -1078,6 +1078,19 @@ pub fn served_chain(
         // Seating an always-`None` observer ahead of it is what keeps those two facts
         // compatible (`execution_plane_increments.md` §14.8).
         Box::new(gvaspub::GvasPubRecorder::new(driver, gvas_pub)),
+        // ★★★ §14.41 — the fault-buffer recorder, moved here from the tail for EXACTLY the
+        // reason above and typed as an observer so the seat is safe by construction.
+        //
+        // It used to sit with the recorders at the end, which was correct while nothing
+        // answered `0x20800a9b`. `InitTablePolicy::RegisterFaultBuffer` now terminates the
+        // chain for that id, so the old seat would have gone silently blind — the record
+        // would have stopped and no test would have gone red, because "no registrations" and
+        // "the seat cannot see them" are the same observation from there. ⊘ That is the
+        // saturated-instrument shape (`a_saturated_instrument_looks_exactly_like_absence`)
+        // and it is why the seat moved in the SAME commit that made it answer.
+        Box::new(kayfabe_gsp::Observing(Box::new(
+            faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
+        ))),
     ];
     // ★★★ **§14.23 — the FRONT seat, and it is a `CommandObserver` rather than a policy.**
     //
@@ -1148,11 +1161,10 @@ pub fn served_chain(
     // the FRONT seat below is discharged by its type instead of by any test at all.
     links.extend(objects);
     links.extend::<Vec<Box<dyn kayfabe_gsp::CommandPolicy>>>(vec![
-        // ★ Two recorders, both terminal-shaped (`respond` never answers), so precedence
-        // between them is irrelevant and the pair cannot change what the guest sees. The
-        // fault-buffer recorder is FIRST only so a reader meets the specific one before
-        // the catch-all; see `faultbuffer`'s docs for why it declines on purpose.
-        Box::new(faultbuffer::FaultBufferRecorder::new(driver, fault_buffer)),
+        // ★ The catch-all ledger, terminal-shaped (`respond` never answers), so it cannot
+        // change what the guest sees. ⊘ It is alone here since §14.41: the fault-buffer
+        // recorder moved to the FRONT seat as an observer, because the link that now answers
+        // `0x20800a9b` terminates the chain above this point.
         Box::new(unserviced::UnservicedLedger::new(driver, unserviced)),
     ]);
     Box::new(kayfabe_gsp::PolicyChain::new(links))

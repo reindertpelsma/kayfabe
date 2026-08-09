@@ -6,35 +6,44 @@
 //!
 //! ⊘ **There is no fault buffer.** Nothing here writes a 32-byte packet, moves `PUT`, or
 //! pulses an interrupt leaf, and none of that is half-built. Steps 5b–5d are gated on a
-//! decision this does not pre-empt (`resume_from_fault.md` §7 step 0).
+//! decision this does not pre-empt (`resume_from_fault.md` §7 step 0) — and §14.41 does not
+//! pre-empt it either: serving the *registration* is 5a's own sentence, not 5b.
 //!
-//! # ★★ Recording is not answering — the same rule as [`crate::unserviced`]
+//! # ★★ Recording is not answering — and §14.41 changed WHO answers, not that rule
 //!
-//! [`FaultBufferRecorder`] is a [`CommandPolicy`] that **always returns `None`**. It sees
-//! the command, decodes it, writes it down, and declines — so the FSM refuses it by name
-//! exactly as it did before this module existed, and the guest observes **nothing new**.
+//! ⊘⊘ **REFUTED, and the refutation is this module's own** —
+//! `[measured 2026-08-09, boot `pu1448` at `ef20ccc`]`. These docs used
+//! to argue that declining was the *safe* half of the trade: *"answering would change what
+//! the guest's UVM bring-up does, on a path this port cannot yet service."* That boot showed
+//! what declining actually does — `kgmmuFaultBufferReplayableAllocate_IMPL`
+//! propagates the `0x56` verbatim (`ogkm-580: kern_gmmu.c:1261-1272`),
+//! `faultbufConstruct_IMPL` re-returns it, `UVM_REGISTER_GPU` fails and **`cuInit` dies**.
+//! ⇒ Declining is not the conservative choice; it is a wall. The sentence was true about the
+//! mechanism (*answering does change bring-up*) and wrong about its sign.
 //!
-//! That property is the whole reason this is free. `kgmmuFaultBufferReplayableAllocate_IMPL`
-//! frees the buffer and propagates the status when the control fails
-//! (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1262-1268`), so *answering* would
-//! change what the guest's UVM bring-up does, on a path this port cannot yet service. A
-//! link that both recorded and answered would be instrumentation that changes what it
-//! observes.
+//! ★ What survives intact is the **separation**: recording and answering are still different
+//! jobs done by different links. [`crate::inittables`]' `RegisterFaultBuffer` arm answers;
+//! this type records. And it now records from a seat where *"it declines"* is not a promise
+//! at all — [`FaultBufferRecorder`] implements [`CommandObserver`], whose `observe` returns
+//! **nothing**, so `rustc` rather than a reviewer guarantees it changes no reply byte. That
+//! is strictly stronger than the always-`None` [`kayfabe_gsp::CommandPolicy`] it replaced,
+//! and it is why the seat had to move: `InitTablePolicy` *terminates* the chain for this id,
+//! so a recorder at the tail would never see the command again (`crate::gvaspub`'s lesson,
+//! `execution_plane_increments.md` §14.8).
 //!
-//! ★ **And that is also the whole of its sticky-answer argument.** The guest's control
-//! cache is populated only from a reply the RPC layer treats as accepted
+//! ★ **The sticky-answer question moves with the answer, and is discharged where it lands.**
+//! The guest's control cache is populated only from a reply the RPC layer treats as accepted
 //! (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:11093-11104`, `ogkm-610: :10898-10909` — the
-//! `else` arm of `if (rpc_params->status != NV_OK)`). A policy that never returns `Some`
-//! authors no reply at all, so there is nothing for either branch to persist. ⊘ Note the
-//! direction: this is safe because it declines, **not** because the control it decodes is
-//! outside the mask — `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` is a fn-76
-//! control and the day this recorder starts answering it inherits the whole question. See
-//! [`crate::sticky`]; `tests/tests/sticky_answer.rs` executes the claim against this type.
+//! `else` arm of `if (rpc_params->status != NV_OK)`). This type authors no reply, so it has
+//! nothing to persist and no row in [`crate::sticky::POLICY_DISPOSITIONS`] — it is not a
+//! `CommandPolicy`. The answerer is `InitTablePolicy`, whose row is `Guarded`, and
+//! `0x20800a9b & 0x8000 == 0` so branch (b) cannot reach it either way.
 //!
-//! ⚠ **What it therefore does NOT establish.** Seeing this control means the guest asked;
-//! it does not mean the guest went on to use the buffer, because we refuse. The C's
-//! captures show the *registers* being polled on the compute path
-//! (`resume_from_fault.md` §4.3 `[meas]`), which is the independent half of the evidence.
+//! ⚠ **What this still does NOT establish.** Seeing this control means the guest asked and
+//! we said yes. It does not mean a fault will ever be delivered — nothing here writes a
+//! 32-byte packet, moves `PUT`, or pulses an interrupt leaf, and none of that is half-built.
+//! [`kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`] is that gap said out loud, and
+//! [`FaultBufferLog::total`] is what makes the report print it.
 
 use std::sync::{Arc, Mutex};
 
@@ -45,7 +54,7 @@ use kayfabe_abi::faultbuffer::{
     decode_register_fault_buffer,
 };
 use kayfabe_abi::versions::DriverAbiTable;
-use kayfabe_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
+use kayfabe_gsp::{CommandObserver, RpcCommand, RpcFunction};
 
 /// One registration attempt, as recorded.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,7 +124,8 @@ impl FaultBufferLog {
     }
 }
 
-/// The chain link: writes down the fault-buffer registration, and answers nothing.
+/// The front-seat observer: writes down the fault-buffer registration, and **cannot**
+/// answer — `observe` has no return value.
 #[derive(Debug, Clone)]
 pub struct FaultBufferRecorder {
     driver: DriverAbiTable,
@@ -130,14 +140,16 @@ impl FaultBufferRecorder {
     }
 }
 
-impl CommandPolicy for FaultBufferRecorder {
-    fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+impl CommandObserver for FaultBufferRecorder {
+    fn observe(&mut self, cmd: &RpcCommand) {
         if cmd.function != RpcFunction::RmControl {
-            return None;
+            return;
         }
-        let h = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+        let Ok(h) = self.driver.decode_rpc_control(&cmd.payload) else {
+            return;
+        };
         if h.cmd != NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER {
-            return None;
+            return;
         }
         // The declared params window, bounded by what actually arrived — the same
         // `params_at`/`params_size` pair `kayfabe_rmrpc::translate_control` bounds, and
@@ -151,9 +163,8 @@ impl CommandPolicy for FaultBufferRecorder {
             Ok(r) => FaultBufferNote::Registered(r),
             Err(_) => FaultBufferNote::Malformed { len: params.len() },
         });
-        // ⊘ Always `None`. See this module's docs: recording is not answering, and
-        // answering would change a bring-up path this port cannot service.
-        None
+        // ⊘ Nothing is returned, and nothing CAN be: `observe` has no return value, so
+        // "this link changes no reply byte" is rustc's guarantee rather than a comment.
     }
 }
 

@@ -422,7 +422,19 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // value is captured (`in=00 out=01`, double-sourced with the C), while `0x2080182b`'s
     // is an ARGUMENT — a GA106 has no chip-to-chip fabric, so `bIsLinkUp = false` is true
     // of the silicon and the all-zero capture is corroboration rather than the source.
-    assert_eq!(WantedTable::ALL.len(), 35, "the served universe's size");
+    // ★★★★ 35 -> 36 at §14.41: `0x20800a9b` INTERNAL_GMMU_REGISTER_FAULT_BUFFER, and it is
+    // a THIRD kind again. `0x20808159`'s reply is the request verbatim because the copy-out
+    // is unconditional; this one's is the request verbatim because **the params are pure
+    // `[IN]`** (`ogkm-580: ctrl2080internal.h:1792-1823`) — a real GSP writes nothing back,
+    // so the identity is not an echo standing in for an unknown, it is the correct answer.
+    // ⊘ Nothing is tabulated and nothing COULD be: there is no `[OUT]` field to be right or
+    // wrong about, and no captured row for the id exists anywhere in the tree.
+    // `[measured 2026-08-09, boot `pu1448` at `ef20ccc`]` refusing it fails
+    // `faultbufConstruct_IMPL` -> `UVM_REGISTER_GPU` -> `cuInit`. The honesty of answering
+    // `NV_OK` with no fault-delivery plane is decided, with evidence, in
+    // `kayfabe_abi::faultbuffer`'s module docs, and the unbuilt half is printed in every
+    // boot report that serves the control (`DELIVERY_UNBUILT`).
+    assert_eq!(WantedTable::ALL.len(), 36, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();
