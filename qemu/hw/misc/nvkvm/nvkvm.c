@@ -1745,14 +1745,18 @@ static void nvkvm_report_registers(NvkvmState *s)
      * the way BAR1's three submission writes were.
      */
     {
-        unsigned ri, nres = 0;
+        /* ⚠ `rk`, not `ri`: this function already has an `ri` at its top and 418b951 exists
+         * because a loop counter here shadowed five inner declarations.  The compiler says
+         * so under -Wshadow=compatible-local; this bench builds with werror=false, so the
+         * warning is advisory and the name is the whole defence. */
+        unsigned rk, nres = 0;
 
-        for (ri = 0; ri < NVKVM_N_REGIONS; ri++) {
-            if (nvkvm_regions[ri].kind == NVKVM_KIND_RESERVATION) {
+        for (rk = 0; rk < NVKVM_N_REGIONS; rk++) {
+            if (nvkvm_regions[rk].kind == NVKVM_KIND_RESERVATION) {
                 nres++;
                 warn_report("nvkvm: ⚠ region '%s' is a DISCARDING RESERVATION — accesses to "
                             "it reach no store. Since §16.18 no row is supposed to be one.",
-                            nvkvm_regions[ri].name);
+                            nvkvm_regions[rk].name);
             }
         }
         if (nres == 0) {
