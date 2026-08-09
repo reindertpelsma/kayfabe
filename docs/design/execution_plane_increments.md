@@ -7176,6 +7176,56 @@ a **candidate, not a finding**: `reservation_touches` has been counted since the
 existed and reached **no report**, so no boot so far can say whether the guest touched BAR1
 at all. §15.11 prints it; one boot then decides.
 
+### 16.5 ★★★★ BAR1 REFUTED, and the ROOT is the anomaly — `[measured 2026-08-09, boots `bar1_6ba1bd5` / `vaspan_994bbdc`]`
+
+```text
+nvkvm: BAR1 (flat aperture): 3 accesses reached the DISCARDING fallback
+nvkvm: framebuffer: 1040 reads / 337854 writes served through the BAR0 moving window
+nvkvm: BAR2 (translated): 1018 reads / 286352 writes resolved through the GMMU
+```
+
+**Three.** §16.4 named BAR1 as a candidate and said to measure it before acting. It is
+three, against 624 206 accesses through the two paths that *do* reach the framebuffer store.
+⇒ **BAR1 is innocent**; the guest did not write its ring there.
+
+`vaspan_994bbdc` then printed the pair `VasRoot` had carried and never shown:
+
+```text
+root=0x4000/ap1/sh47/va[0x100000000..0x11fffffff] ring=0x121010000
+```
+
+⊘ **The ring is outside the published range** — and that alone proves nothing, because the
+CeUtils ring (`0x420064000`) is outside it too and its walk demonstrably moves real bytes.
+`virtAddrLo..Hi` bounds which PDEs were copied to the server; `levels[0]` is the whole VA
+space's root, so walking a VA beyond the copied range is legitimate.
+
+★ What IS anomalous is the **root itself**:
+
+| VA space | published root | walk lands in | works? |
+|---|---|---|---|
+| CeUtils (`0xc1e00006` / `0xa`) | `0x2efa9c000` | `S:` guest RAM | ✅ bytes moved |
+| the global arm (`0x0` / `0x0`) | `0x2efbae000` | — | — |
+| **UVM (`0xc1d0000a` / `0xcaf00005`)** | **`0x4000`** | `V:0x20000` | ❌ all zeros |
+
+Every root this boot prints sits around `0x2efa_xxxx`; the refusing channel's is **16 KiB**
+into the framebuffer. A root at that address, walked, produces plausible-looking leaves that
+read back as zeros — which decodes as *"the ring is empty"* rather than faulting. That is
+`two_encodings_agreeing_on_the_first_values` in its purest form.
+
+### 16.6 ⧗ THE NEXT RUNG, and the instrument gap §16.3 opened in front of it
+
+**Print the publication row(s) for `(0xc1d0000a, 0xcaf00005)` — the whole 184-byte body, all
+four levels — and compare them with a row that works.** Three outcomes, three different
+fixes: the row is a real root RM had not yet backed; the row is a *stale* publication that
+last-write-wins picked over a later real one; or the body was decoded from the wrong arm.
+
+⊘ **That row prints nowhere today.** §16.3 made the *lookup* complete
+(`GvasPubSnapshot::roots`, 256 entries) and left the *report* clipped at eight
+(`GVAS_PUBLICATION_SAMPLE_MAX`), and this pair is past the cap — so the one row that decides
+the wall is structurally invisible in every boot log. Widening what the census shows, or
+printing the resolved row inside the addressing probe, is owed **before** anything is changed
+about the walk.
+
 ⚠ Do not skip to widening the `Fb` store. If `reservation_touches` is **zero**, BAR1 is
 innocent and the bytes went somewhere else entirely — and a fix aimed at the wrong store
 would be an invented answer that happens to make a refusal disappear.
