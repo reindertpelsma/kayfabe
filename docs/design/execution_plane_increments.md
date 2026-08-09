@@ -7064,3 +7064,118 @@ acceptance (`CeEvidence::copied()`, §10) is satisfied by a test harness calling
 directly; nothing in that acceptance quantified over *"and a guest doorbell reaches it."*
 ⇒ Any future increment row whose acceptance is a predicate on a function must also state the
 **caller** that a guest action reaches it through.
+
+---
+
+## 16. §15.6–§15.10 — THE UVM CHANNEL: three stacked walls removed, four boots, and the wall moved twice
+
+`[measured 2026-08-09]`, five boots on the GA106 bench (`vh`, RTX 3060 `GPU-d0913685`, host
+driver 580.159.04, guest 580.159.04 open and **stock**, probe set EMPTY, one device-opening
+consumer per boot). Every claim below names the boot and the **binary's own** `kayfabe-rev`
+stamp.
+
+| boot | rev (stamped in the binary) | first doorbell refusal |
+|---|---|---|
+| `msr1` | `319d29a3…` | ⊘ **no census at all** — see §15.6 |
+| `msr2` | `319d29a3…` | `[FwdFault::IsolateRetired]` … `vas=NONE-DECLARED ring=0x121010000` |
+| `uvm1` | `b731e3c3…` | `[CeResolve::NoPublication]` `(hClient 0xc1d0000a, hVASpace 0xcaf00005)` |
+| `uvm2` | `d0fbac0e…` | `[FwdFault::PushTooFragmented]` … `rng=V:0x20000 gp0=0x0…0 NOT-A-GP-ENTRY` |
+| `scan1` | `00865a75…` | as `uvm2`, plus `scan=64/1024 declared, unread=0, nonzero=NONE` |
+
+⚠ In all five, the CeUtils channel's **four `SERVED-LOCAL` lines on token 0x00010002 are
+unchanged**. That was §15.4's third oracle and it is the one that must not regress.
+
+### 16.1 ⊘ WHAT THIS REFUTES, INCLUDING THE BRIEF I WAS GIVEN
+
+The rung I was handed was: *"make a guest doorbell reach the code that reads the guest's
+ring … so `ce_copy` / `CeEvidence` become reachable **from a doorbell**"*.
+
+**The submission `cuInit` walls on contains no copy at all.** `[src] ogkm-580`:
+`channel_init` (`uvm_channel.c:2518-2572`) → `uvm_channel_end_push` (`:1492, 1512-1513`) →
+`uvm_channel_tracking_semaphore_release` (`:1053-1063`) → `do_semaphore_release`
+(`:1043-1051`) → `uvm_hal_volta_ce_semaphore_release` (`uvm_volta_ce.c:50-70`), which pushes
+`SET_SEMAPHORE_A/_B/_PAYLOAD` and one `LAUNCH_DMA` carrying
+`DATA_TRANSFER_TYPE_NONE | SEMAPHORE_TYPE_RELEASE_ONE_WORD_SEMAPHORE`.
+
+⇒ There is nothing for a copy engine to copy. Reaching `ce_copy` from that doorbell would
+have meant **manufacturing a transfer the guest never asked for** — the same class of
+fabrication as the forged completion §15.5 stopped, one field over.
+
+★ And the honest execution of a release-only launch is **not** a forged completion. A
+forgery advances a payload for work that did not run; here the guest's own encoding says the
+release **is** the work. The distinction is carried in the type
+(`PushMethod::CeRelease`), not in a comment.
+
+### 16.2 The three walls in front of it, each measured or sourced
+
+1. **ROUTING** (`msr2`). `ce_channel_facts` reported the VA space as the channel's *own*
+   declared `hVASpace`. A UVM channel declares none — it inherits through CtxShare/TSG — so
+   `try_ce_submission` returned `None` **before reading a byte of the ring**, while
+   `Channel::vas_pdb`, derived from the *resolved* node, was `Some`. Two projections of one
+   fact, disagreeing, with the weaker one load-bearing. ⊘ The next line in that very
+   function already said *"two projections of one fact can disagree."*
+2. **SUBCHANNEL** (`[src]`). UVM binds the CE class on subchannel **0** and issues every CE
+   method on subchannel **4** (`uvm_maxwell_ce.c:29-37` + `uvm_push_macros.h:85, 101, 109` +
+   `cla06fsubch.h:30`). Requiring the class on the firing subchannel refused **every method
+   UVM emits**. RM's `channel_utils.c` binds and fires on one subchannel, which is why the
+   CeUtils path worked and hid this completely.
+3. **TRANSFER TYPE** (`[src]`). `DATA_TRANSFER_TYPE == NONE` decoded to `Opaque` under the
+   sentence *"there is no copy to report"* — every clause true, conclusion false. There is
+   no *copy*; there is still a **release**, and it is the entire content of the push.
+
+### 16.3 ★★★★ A SATURATED LIST WAS THE DATA PATH (`uvm1` → `uvm2`)
+
+`uvm1`'s own census refutes `uvm1`'s own refusal:
+
+```text
+VA-space page-directory publications: 12 total, 11 distinct, 0 UNDECODABLE
+first doorbell refusal [CeResolve::NoPublication] no page-directory root was published
+  for (hClient 0xc1d0000a, hVASpace 0xcaf00005)
+```
+
+`ceresolve::published_root` searched `GvasPubSnapshot::sample`, **capped at eight rows**, in
+a boot that published **eleven**. ⇒ three VA spaces were unresolvable and the refusal's own
+sentence — *"the guest published no page-directory root"* — was **false about the guest**.
+`uvm2` proves it: with a separate uncapped-in-practice table the root resolves
+(`0x4000/ap1/sh47`) and so do the ring and the finishPayload.
+
+⊘ The type already said so: `sample` is documented *"capped"*, `distinct` *"the truth even
+past the cap"*, and the one consumer that decides whether a channel can address anything
+read `sample`. ★ Fifth sighting of `a_saturated_instrument_looks_exactly_like_absence` and
+the **first where the saturated list is not an instrument**. A report that clips is a
+report; a lookup that clips is a wrong answer.
+
+### 16.4 ⧗ THE WALL AS IT STANDS, and the two candidates the next rung must separate
+
+```text
+[FwdFault::PushTooFragmented] { va: GpuVa(0x121010000), len: 0 }
+  | c=0xc1d0000a vas=0xcaf00005 root=0x4000/ap1/sh47 ring=0x121010000
+    rng=V:0x20000 fin=V:0x28004 gp0=0x0000000000000000 NOT-A-GP-ENTRY
+    scan=64/1024 declared, unread=0, nonzero=NONE — every scanned entry is ZERO
+```
+
+The whole address chain resolves. Every one of the first 64 GPFIFO entries **reads
+successfully** and every one is **zero**, so `run_submission` finds no work and refuses —
+⊘ correctly: a doorbell that brought no readable entry is not served.
+
+★ `unread=0` **refutes** the first candidate for indices 0..63: the guest did not submit at
+an index we failed to read. UVM's first push is at `cpu_put = 0`.
+
+⇒ **We are reading a store the guest never wrote.** And the shape of it is new: this ring
+resolves to `V:` — **this device's emulated framebuffer** — while the CeUtils ring resolves
+to `S:` (guest RAM, `[measured 2026-08-08, boot run_p35_84d857d]` `rng=S:0x2f2c3000`). UVM's
+is the **first channel whose ring lives in video memory**, and the address plane's `Fb`
+store is fed only by the BAR0 moving window and the GMMU-translated BAR2 window.
+
+⧗ The unresolved question, stated so the next agent starts at it rather than at the top:
+**which path did the guest write that ring through, and does it reach the `Fb` store?**
+BAR1 is a `NVKVM_KIND_RESERVATION` whose fallback handler **discards the value**
+(`nvkvm.c:494-501`) and whose shadow arm is a plain RAM memslot with no connection to the
+framebuffer — so bytes written there are in neither store the address plane reads. ⊘ That is
+a **candidate, not a finding**: `reservation_touches` has been counted since the memory plane
+existed and reached **no report**, so no boot so far can say whether the guest touched BAR1
+at all. §15.11 prints it; one boot then decides.
+
+⚠ Do not skip to widening the `Fb` store. If `reservation_touches` is **zero**, BAR1 is
+innocent and the bytes went somewhere else entirely — and a fix aimed at the wrong store
+would be an invented answer that happens to make a refusal disappear.

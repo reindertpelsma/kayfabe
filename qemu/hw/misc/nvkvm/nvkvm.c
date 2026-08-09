@@ -1416,6 +1416,28 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.fb_refusals, a.fb_window_reads, a.fb_window_writes, a.fb_resident_bytes);
 
     /*
+     * ★★★★ BAR1 — THE FLAT APERTURE, AND IT WAS COUNTED AND NEVER PRINTED.
+     *
+     * `reservation_touches` has existed since the memory plane did and reached NO report,
+     * so "did the guest use BAR1 at all?" was unanswerable from a boot log.  That became
+     * load-bearing at §15.10: the UVM channel's GPFIFO ring resolves into VIDEO memory
+     * (`rng=V:0x20000`) and every one of its first 64 entries reads back as ZERO with the
+     * walk succeeding (`[measured 2026-08-09, boot scan1_00865a7]`: `scan=64/1024 declared,
+     * unread=0, nonzero=NONE`).  The guest wrote that ring somewhere; a non-zero count here
+     * says BAR1 is a candidate for where, and a ZERO says it is not — which is the whole
+     * difference between two fixes.
+     *
+     * ⊘ These bytes land in NEITHER store the address plane reads: this handler discards
+     * the value outright, and the shadow-memslot arm (when a reservation is installed) is a
+     * plain RAM slot with no connection to the framebuffer.  So a non-zero count is not a
+     * statistic — it is bytes the copy engine can never see.
+     */
+    info_report("nvkvm: BAR1 (flat aperture): %" PRIu64 " accesses reached the DISCARDING "
+                "fallback. ⊘ These bytes are in NEITHER store the address plane reads — "
+                "not the BAR0-window framebuffer and not guest RAM.",
+                s->reservation_touches);
+
+    /*
      * ★★★ #149 — THE TRANSLATED WINDOW.  Printed unconditionally, all-zeros included, for
      * the same reason as every other block here.
      *
