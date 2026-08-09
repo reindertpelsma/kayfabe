@@ -337,4 +337,51 @@ else
    refusal are unobservable for this tag."
 fi
 
+# ---- phase 6: ★★★ CARRY THE EVIDENCE INTO THE REPOSITORY --------------------------------
+#
+# ★★★ `[measured 2026-08-09]` — **THIS PHASE DID NOT EXIST, AND FOUR BOOTS' EVIDENCE WAS
+# LOST BECAUSE OF IT.** `s23`'s `_qemu.log`, and the whole of `s24` and `s25`, were never in
+# the tree: `git show --stat 18b75e8 a5ede26` shows each `BOOTED` commit touching exactly ONE
+# file, the design doc. The numbers those commits rest on — the wall being ONE channel,
+# `NO-VASPACE-IN-NAMESPACE`, and the `24/9/15` byte-identical invariance that is the whole
+# proof two instruments were observational — described boots nothing in the repository could
+# re-verify.
+#
+# ⊘ **And every phase above had passed.** This script asserts the dmesg is non-empty, that
+# the adapter was exercised, and that the census is on disk — thoroughly, each check bought
+# by a real failure. It simply asserted all of it about `/workspace/bench/`, a directory on
+# a rented box that is deleted with the instance. Its own last line named four bench paths
+# and the repository was not one of them. ⇒ **The harness was run and it does not cover
+# this**; the gap was its SCOPE, not its rigour.
+#
+# ★ Same family as the two traps this file already encodes — the serial log that is not
+# where the driver's output is, and the empty `dmesg` a `[ -f ]` test is happy with. All
+# three are one shape: **the operation succeeds either way, and only an explicit assertion
+# separates "stored" from "stored where anybody will find it later."**
+#
+# ⊘ `_serial.log` is deliberately NOT carried: it is the guest console, ~70 KB per boot, and
+# `grep -ci nvrm` over every one of them returns 0. Committing it would be volume, not
+# evidence. The three that ARE carried are the three every prior boot in `traces/guest_boots/`
+# carries.
+REPO_ROOT=$(cd "$SELFDIR/../.." && pwd)
+BOOTS="$REPO_ROOT/traces/guest_boots"
+if [ -d "$BOOTS" ]; then
+  mkdir -p "$BOOTS"
+  copied=0
+  for f in "${LOG}_qemu.log" "$DMESG" "$PROBE"; do
+    [ -s "$f" ] || { say "★ refusing to carry an EMPTY $f into the repo"; continue; }
+    cp -f "$f" "$BOOTS/$(basename "$f")" && copied=$(( copied + 1 ))
+  done
+  if [ "$copied" -ne 3 ]; then
+    DIE_RC=5 die persist "only $copied/3 evidence files reached $BOOTS. ⊘ A BOOTED claim
+   whose evidence is not in the tree is prose, not a measurement."
+  fi
+  say "evidence carried into the repo: $BOOTS/run_${TAG}_{qemu,dmesg,probe}.log"
+  say "★ NOW COMMIT THEM. \`git commit -- <path>\` does NOT add untracked files;"
+  say "  run scripts/bench/assert_boot_evidence.sh before claiming BOOTED."
+else
+  say "★ no $BOOTS in this checkout — evidence stays on the box only, and a BOOTED claim"
+  say "  made from this run cannot be re-verified by anyone reading the repository."
+fi
+
 say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG probe=$PROBE"

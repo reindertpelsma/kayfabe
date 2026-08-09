@@ -8326,3 +8326,54 @@ pristine copy, not `git diff --stat` — `the_bite_check_that_could_not_bite`):
 ★ The first test asserts the freed handle really resolves to nothing **before** asserting
 route 4 resolves it anyway — without that, the test could pass because the free did nothing
 and every claim in it would be vacuous.
+
+### 16.28.7 ⊘⊘ THE EVIDENCE OF s23/s24/s25 WAS NEVER IN THE REPOSITORY — recovered, and gated
+
+`[measured 2026-08-09]` `git show --stat 08ef29b 18b75e8 a5ede26` — three consecutive
+`BOOTED` commits, each touching **exactly one file**, `docs/design/execution_plane_increments.md`.
+`s23`'s `_qemu.log` and the whole of `s24` and `s25` were **not in the tree**, and
+`git status --porcelain` showed nothing untracked either: they had never been copied in.
+
+⇒ Every number §16.25 and §16.27 rest on — *"the wall is ONE channel"*, the six-row census,
+`NO-VASPACE-IN-NAMESPACE`, and above all the **`24/9/15` byte-identical invariance that is
+the entire proof those two increments were observational** — described boots that nothing in
+the repository could re-verify.
+
+★ **Recovered.** The raw logs were still on `vh` and are now committed under
+`traces/guest_boots/`, and the claims reproduce from them: all three of s23/s24/s25 grep
+`doorbells: 24 arrived, 9 served, 15 REFUSED`, all three carry 31 `NVRM` dmesg lines, and
+`run_s25_01d12e6_cup2_probe.log` carries
+`kayfabe-rev:01d12e6b078a7bbe34fea1da480b292e5abff8be` — so the boots are attributable to
+their commits. ⊘ Nothing in §16.25/§16.27 needed correcting; what was missing was the
+ability for anybody else to check it.
+
+**Why it happened, which is the valuable half.** `boot_capture.sh` did *not* fail to run,
+and it is not lax — it asserts the dmesg is non-empty, that `RmInitAdapter` actually appears
+(not merely `NVRM`, for a measured reason), and that the exit-notifier census reached disk.
+It asserted all of that about **`/workspace/bench/`**, a directory on a rented box. Its own
+final line names four bench paths and the repository is not one of them.
+⇒ **The gap was the harness's SCOPE, not its rigour.**
+
+★★★ And it is the **third sighting of one shape**, the second in a night:
+
+| | the operation that succeeded anyway |
+|---|---|
+| C-era | the serial log exists, is fresh, is named after the boot — and contains no `NVRM` |
+| earlier tonight | `git commit -- <path>` **does not add untracked files**, and exits 0 |
+| this | `boot_capture.sh` stores the evidence somewhere nobody reading the repo can reach, and exits 0 |
+
+⇒ The common cause is not carelessness: **the operation succeeds either way, so only an
+explicit assertion separates the two outcomes.** Two were added:
+
+- `boot_capture.sh` **phase 6** now carries `_qemu`/`_dmesg`/`_probe` into
+  `traces/guest_boots/` and **dies** if fewer than three arrive. ⊘ `_serial.log` is
+  deliberately not carried — 70 KB per boot, and `grep -ci nvrm` over every one returns 0.
+- `scripts/bench/assert_boot_evidence.sh` — the gate a `BOOTED` commit must pass: the three
+  files exist, are non-empty, are **tracked by git**, and *say what a boot says* (a census
+  line, `RmInitAdapter`, and a `kayfabe-rev:` stamp). Run with no tag it sweeps the whole
+  directory for untracked or empty files, which catches the other half — evidence copied in
+  and then left out of the commit.
+
+★ **Bite-checked by construction**: run against the tree before the recovery commit it
+printed `FAIL … NOT TRACKED` and listed exactly the seven real files. A gate whose first run
+is green over a known defect is not a gate.
