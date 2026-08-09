@@ -242,6 +242,210 @@ pub fn decode_register_fault_buffer(bytes: &[u8]) -> Result<FaultBufferRegistrat
     })
 }
 
+// =====================================================================================
+// ★★★ `0x20800a9d` — the CLIENT SHADOW fault buffer, and a SHARPER honesty question
+// =====================================================================================
+
+/// `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1863`).
+///
+/// ★ The rung after [`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`].
+/// `[measured 2026-08-09, boot `fb1503` at `3afa896`]` serving `0x20800a9b` moved the guest's
+/// failure to `faultbufCtrlCmdMmuFaultBufferRegisterNonReplayBuf_IMPL: Error allocating client
+/// shadow fault buffer for non-replayable faults` and put exactly this id in the unserviced
+/// ledger.
+///
+/// # ⚠⚠ The honesty question is NOT the one `0x20800a9b` answered — re-ask it
+///
+/// For the **replayable** buffer, the guest reads `GET`/`PUT` out of BAR0 registers *we*
+/// serve, and "no faults pending" is a statement we make on a plane we own. For **this** one
+/// the guest allocates a queue in its own sysmem and **we are the declared WRITER**:
+///
+/// > *"the client shadow buffers should be allocated in unprotected sysmem as **GSP will be
+/// > writing the fault packets to these buffers***"
+/// > — `ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1589-1593`
+///
+/// The push is `kgmmuCopyFaultPacketToClientShadowBuffer_GV100`'s `queuePushNonManaged`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:1246-1279`), which
+/// on a GSP system runs on the GSP. ⇒ Answering `NV_OK` here promises *"I will enqueue
+/// non-replayable fault packets into these pages"*, which is a **stronger** claim than
+/// `0x20800a9b`'s.
+///
+/// ★★★ And the guest has **no other route**: on a GSP client the CPU driver never reads the
+/// hardware non-replayable buffer at all (`if (IS_GSP_CLIENT(pGpu)) { status = NV_OK; goto
+/// done; }`, `ogkm-580: src/nvidia/arch/nvalloc/unix/src/unix_intr.c:933-938`), the
+/// `NON_REPLAYABLE_FAULT` interrupt services are registered **only** when `!IS_GSP_CLIENT`
+/// (`ogkm-580: kern_gmmu.c:2267-2288`), and `kgmmuServiceChannelMmuFault` has no open
+/// CPU-side implementation at all. This queue is the whole channel.
+///
+/// # ⇒ The ruling, and why it lands in the SAME place by a DIFFERENT argument
+///
+/// 1. Params are **pure `[IN]`** and the documented status set is `{NV_OK}` (`:1839-1861`);
+///    `kgmmuClientShadowFaultBufferRegister` re-reads **no** field after the call
+///    (`ogkm-580: kern_gmmu.c:1815-1827`), and every `[OUT]` UVM consumes comes from its own
+///    local allocation (`nvGpuOpsInitFaultInfo`, `ogkm-580: nv_gpu_ops.c:9466-9469`), not from
+///    this reply. Nothing is fabricated.
+/// 2. Registration is not delivery, and **an empty queue is the truth**: this port raises no
+///    non-replayable fault, so there is no packet to enqueue and the guest's consumer
+///    correctly finds nothing.
+/// 3. ⊘ **But the promise is real, and this port keeps a DIFFERENT one.** It is not that
+///    faults are unreportable — `docs/design/simulated_gpu_fault.md` §5.2 **deliberately
+///    rejected** writing fault packets and chose the RC + error-notifier path instead
+///    (`kayfabe_abi::notifier`, `kayfabe_core::fault`, `resume_from_fault.md` §7 step 2,
+///    built). So a fault that would have been a queue entry surfaces as an **RC on the
+///    channel**. That is a different observable, and it is what
+///    [`SHADOW_DELIVERY_UNBUILT`] says out loud.
+pub const NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER: u32 = 0x2080_0a9d;
+
+/// `NV2080_CTRL_INTERNAL_GMMU_CLIENT_SHADOW_FAULT_BUFFER_MAX_PAGES`
+/// (`ogkm-580: ctrl2080internal.h:1865`). ★ CPU-RM refuses `NV_ERR_BUFFER_TOO_SMALL` above it
+/// **before sending** (`ogkm-580: kern_gmmu.c:1784-1790`), so a longer list is a message no
+/// stock driver sends.
+pub const SHADOW_FAULT_BUFFER_MAX_PAGES: usize = 3000;
+
+/// `shadowFaultBufferType` — `NV2080_CTRL_FAULT_BUFFER_NON_REPLAYABLE`
+/// (`ogkm-580: ctrl2080internal.h:1836`).
+pub const SHADOW_FAULT_BUFFER_NON_REPLAYABLE: u32 = 0;
+
+/// `shadowFaultBufferType` — `NV2080_CTRL_FAULT_BUFFER_REPLAYABLE`
+/// (`ogkm-580: ctrl2080internal.h:1837`).
+///
+/// ⊘ **Unreachable with Confidential Compute off**, which is this port's target: the
+/// replayable *shadow* buffer is gated by `NV_ASSERT_OR_RETURN(gpuIsCCFeatureEnabled(pGpu),
+/// NV_ERR_NOT_SUPPORTED)` (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/mmu_fault_buffer_ctrl.c:148`).
+/// A registration carrying this value is therefore a **finding**, and it is counted and
+/// reported rather than refused — refusing it would model a path no measurement has reached.
+pub const SHADOW_FAULT_BUFFER_REPLAYABLE: u32 = 1;
+
+/// Offset of `shadowFaultBufferPteArray` — one 8-aligned `NvU64` then two `NvU32`
+/// (`ogkm-580: ctrl2080internal.h:1868-1874`).
+const SHADOW_PTE_ARRAY_OFF: usize = 16;
+
+/// Offset of `shadowFaultBufferType`, immediately after the array.
+const SHADOW_TYPE_OFF: usize = SHADOW_PTE_ARRAY_OFF + SHADOW_FAULT_BUFFER_MAX_PAGES * 8;
+
+/// Offset of `faultBufferSharedMemoryPhysAddr` — 8-aligned, so four bytes of padding follow
+/// `shadowFaultBufferType`.
+const SHADOW_SHARED_MEM_OFF: usize = SHADOW_TYPE_OFF + 8;
+
+/// `sizeof(NV2080_CTRL_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS)` = 24 032.
+pub const REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE: usize = SHADOW_SHARED_MEM_OFF + 8;
+
+/// The C typedef, for a refusal that names what it was reading.
+pub const REGISTER_CLIENT_SHADOW_FAULT_BUFFER_C_NAME: &str =
+    "NV2080_CTRL_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS";
+
+/// ★★★ **The half this port did NOT build for the shadow queue** — the sentence the boot
+/// report prints beside a served registration.
+///
+/// ⊘ It is a **different** sentence from [`DELIVERY_UNBUILT`] on purpose, because the gap is
+/// different: there we decline to move a register the guest polls; here we decline to be the
+/// **writer** the guest is waiting on, and the guest has no other route to a non-replayable
+/// fault. ★ It also names what this port does *instead*, because "unbuilt" alone would be
+/// false — the RC + error notifier is built and is the chosen reporting path
+/// (`simulated_gpu_fault.md` §5.2).
+pub const SHADOW_DELIVERY_UNBUILT: &str = "shadow-queue PUSH is UNBUILT: on a GSP client the \
+     GSP is the WRITER of this queue and this port never enqueues a fault packet, so a \
+     non-replayable fault surfaces as an RC on the channel plus an error notifier \
+     (simulated_gpu_fault.md 5.2, the deliberate choice) and NEVER as a queue entry the \
+     guest is polling for";
+
+/// Where the guest put a client shadow fault buffer, as it told us.
+///
+/// ⊘ Every field is the **guest's own claim**, for [`FaultBufferRegistration`]'s reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShadowFaultBufferRegistration {
+    /// `shadowFaultBufferQueuePhysAddr` — the queue header's page. ⊘ Zero on the
+    /// CC + GSP-owned path, where CPU-RM deliberately does not fill it
+    /// (`ogkm-580: kern_gmmu.c:1797-1802`).
+    pub queue_gpa: u64,
+    /// `shadowFaultBufferSize`, in bytes.
+    pub size: u32,
+    /// `shadowFaultBufferMetadataSize`, in bytes. ⊘ Zero unless Confidential Compute and
+    /// GSP-owned buffers are both on (`ogkm-580: kern_gmmu.c:3023-3029`).
+    pub metadata_size: u32,
+    /// `shadowFaultBufferType` — [`SHADOW_FAULT_BUFFER_NON_REPLAYABLE`] or
+    /// [`SHADOW_FAULT_BUFFER_REPLAYABLE`], kept **raw** so an unknown value is reportable
+    /// rather than silently mapped onto one of the two we know.
+    pub buffer_type: u32,
+    /// `faultBufferSharedMemoryPhysAddr`. ⊘ CC + replayable only.
+    pub shared_memory_gpa: u64,
+    /// The guest-physical page frames, **only as many as the guest filled**.
+    pub pages: Vec<u64>,
+}
+
+impl ShadowFaultBufferRegistration {
+    /// How many PTE entries a buffer of this geometry occupies — CPU-RM's own arithmetic,
+    /// `numBufferPages = memdescGetSize(pBufferMemDesc) >> RM_PAGE_SHIFT` over a memdesc
+    /// created at `RM_PAGE_ALIGN_UP(size) + RM_PAGE_ALIGN_UP(metadataSize)`
+    /// (`ogkm-580: kern_gmmu.c:1601`, `:1783`).
+    ///
+    /// ⚠ **Both terms, and that is not cosmetic.** The metadata term is zero on this port's
+    /// target (CC off), so dropping it would agree with every stock boot and be wrong for the
+    /// one configuration that distinguishes them — the shape of defect that survives because
+    /// it is right on the only case anyone runs.
+    #[must_use]
+    pub fn pages_for(size: u32, metadata_size: u32) -> usize {
+        let n = u64::from(size).div_ceil(FAULT_BUFFER_PAGE_SIZE)
+            + u64::from(metadata_size).div_ceil(FAULT_BUFFER_PAGE_SIZE);
+        usize::try_from(n)
+            .unwrap_or(SHADOW_FAULT_BUFFER_MAX_PAGES)
+            .min(SHADOW_FAULT_BUFFER_MAX_PAGES)
+    }
+
+    /// Whether the declared geometry needs more pages than the PTE array can describe —
+    /// CPU-RM's own bound, checked before it sends (`ogkm-580: kern_gmmu.c:1784-1790`).
+    ///
+    /// ⊘ Same argument as [`FaultBufferRegistration::exceeds_vendor_bound`]: the cap in
+    /// `pages_for` makes the **read** safe, which is a different job from making the
+    /// **answer** honest.
+    #[must_use]
+    pub fn exceeds_vendor_bound(&self) -> bool {
+        let n = u64::from(self.size).div_ceil(FAULT_BUFFER_PAGE_SIZE)
+            + u64::from(self.metadata_size).div_ceil(FAULT_BUFFER_PAGE_SIZE);
+        n > SHADOW_FAULT_BUFFER_MAX_PAGES as u64
+    }
+
+    /// Whether the type field is one of the two the vendor defines.
+    #[must_use]
+    pub fn type_is_known(&self) -> bool {
+        self.buffer_type == SHADOW_FAULT_BUFFER_NON_REPLAYABLE
+            || self.buffer_type == SHADOW_FAULT_BUFFER_REPLAYABLE
+    }
+}
+
+/// Decode `NV2080_CTRL_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS`.
+///
+/// # Errors
+///
+/// [`AbiError::Truncated`] if the params are shorter than the declared struct.
+pub fn decode_register_client_shadow_fault_buffer(
+    bytes: &[u8],
+) -> Result<ShadowFaultBufferRegistration, AbiError> {
+    if bytes.len() < REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE {
+        return Err(AbiError::Truncated {
+            c_name: REGISTER_CLIENT_SHADOW_FAULT_BUFFER_C_NAME,
+            need: REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE,
+            got: bytes.len(),
+        });
+    }
+    let size = u32_at(bytes, 8)?;
+    let metadata_size = u32_at(bytes, 12)?;
+    let n = ShadowFaultBufferRegistration::pages_for(size, metadata_size);
+    let mut pages = Vec::with_capacity(n);
+    for i in 0..n {
+        pages.push(u64_at(bytes, SHADOW_PTE_ARRAY_OFF + i * 8)?);
+    }
+    Ok(ShadowFaultBufferRegistration {
+        queue_gpa: u64_at(bytes, 0)?,
+        size,
+        metadata_size,
+        buffer_type: u32_at(bytes, SHADOW_TYPE_OFF)?,
+        shared_memory_gpa: u64_at(bytes, SHADOW_SHARED_MEM_OFF)?,
+        pages,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,6 +531,153 @@ mod tests {
         assert!(DELIVERY_UNBUILT.contains("HANG"), "{DELIVERY_UNBUILT}");
         assert!(DELIVERY_UNBUILT.contains("MMU_FAULT_BUFFER_PUT"));
         assert!(DELIVERY_UNBUILT.contains("resume_from_fault.md"));
+    }
+
+    // ═════════════════ 0x20800a9d — the client shadow fault buffer ═════════════════
+
+    fn shadow_params(size: u32, meta: u32, ty: u32, pages: &[u64]) -> Vec<u8> {
+        let mut b = vec![0u8; REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE];
+        b[0..8].copy_from_slice(&0x1_2345_0000u64.to_le_bytes());
+        b[8..12].copy_from_slice(&size.to_le_bytes());
+        b[12..16].copy_from_slice(&meta.to_le_bytes());
+        for (i, p) in pages.iter().enumerate() {
+            let o = SHADOW_PTE_ARRAY_OFF + i * 8;
+            b[o..o + 8].copy_from_slice(&p.to_le_bytes());
+        }
+        b[SHADOW_TYPE_OFF..SHADOW_TYPE_OFF + 4].copy_from_slice(&ty.to_le_bytes());
+        b
+    }
+
+    /// The offsets are the vendor's arithmetic, not this test's guess — and the FOUR bytes of
+    /// padding between `shadowFaultBufferType` and the 8-aligned `NvU64` after it are the
+    /// part a hand-count gets wrong.
+    #[test]
+    fn the_shadow_layout_is_the_one_the_guest_sends() {
+        assert_eq!(
+            SHADOW_PTE_ARRAY_OFF, 16,
+            "an 8-aligned NvU64 then two NvU32"
+        );
+        assert_eq!(SHADOW_FAULT_BUFFER_MAX_PAGES, 3000);
+        assert_eq!(SHADOW_TYPE_OFF, 16 + 3000 * 8);
+        assert_eq!(
+            SHADOW_SHARED_MEM_OFF - SHADOW_TYPE_OFF,
+            8,
+            "★ NvU32 then 4 bytes of padding, because the next member is 8-aligned"
+        );
+        assert_eq!(REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE, 24_032);
+    }
+
+    /// ★★ The stock non-replayable registration, at the size this port itself advertises
+    /// through `0x20800a59` — the two controls must agree or we built the wall ourselves.
+    #[test]
+    fn the_stock_non_replayable_registration_decodes() {
+        // `nonReplayableFaultBufferSize` = 0x120c20, from `GA106_GMMU_STATIC`.
+        let pages: Vec<u64> = (0..289u64).map(|i| 0x2_0000_0000 + i * 0x1000).collect();
+        let p = shadow_params(0x0012_0c20, 0, SHADOW_FAULT_BUFFER_NON_REPLAYABLE, &pages);
+        let got = decode_register_client_shadow_fault_buffer(&p).expect("well-formed");
+        assert_eq!(got.size, 0x0012_0c20);
+        assert_eq!(got.metadata_size, 0);
+        assert_eq!(got.buffer_type, SHADOW_FAULT_BUFFER_NON_REPLAYABLE);
+        assert!(got.type_is_known());
+        assert!(!got.exceeds_vendor_bound(), "289 pages is far under 3000");
+        assert_eq!(got.pages.len(), 289, "0x120c20 rounds up to 289 pages");
+        assert_eq!(got.pages, pages, "no forged tail");
+        assert_eq!(got.queue_gpa, 0x1_2345_0000);
+        assert_eq!(got.shared_memory_gpa, 0, "CC off: no shared-memory page");
+    }
+
+    /// ★★ The metadata term is counted, and this is the ONLY test that can catch its
+    /// omission — it is zero in every configuration this port targets, so a `pages_for` that
+    /// dropped it would agree with every stock boot.
+    #[test]
+    fn the_metadata_pages_are_counted_even_though_they_are_always_zero_here() {
+        assert_eq!(ShadowFaultBufferRegistration::pages_for(4096, 0), 1);
+        assert_eq!(
+            ShadowFaultBufferRegistration::pages_for(4096, 1),
+            2,
+            "★ RM_PAGE_ALIGN_UP(size) + RM_PAGE_ALIGN_UP(metadataSize), two terms"
+        );
+        assert_eq!(ShadowFaultBufferRegistration::pages_for(4097, 4097), 4);
+        assert_eq!(ShadowFaultBufferRegistration::pages_for(0, 0), 0);
+    }
+
+    /// ★★ A geometry past CPU-RM's own 3000-page bound is refusable, and the two terms are
+    /// what decide it — a size just under the bound plus metadata can cross it.
+    #[test]
+    fn the_shadow_vendor_bound_counts_both_terms() {
+        let page = FAULT_BUFFER_PAGE_SIZE as u32;
+        let at_bound = decode_register_client_shadow_fault_buffer(&shadow_params(
+            3000 * page,
+            0,
+            SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+            &[0x1000],
+        ))
+        .expect("well-formed");
+        assert!(!at_bound.exceeds_vendor_bound(), "3000 pages is the bound");
+
+        let over = decode_register_client_shadow_fault_buffer(&shadow_params(
+            3000 * page,
+            1,
+            SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+            &[0x1000],
+        ))
+        .expect("well-formed");
+        assert!(
+            over.exceeds_vendor_bound(),
+            "★ one byte of metadata is one more page, and it crosses the bound. A check on \
+             `size` alone would call this legal."
+        );
+    }
+
+    /// ⊘ An unknown `shadowFaultBufferType` is REPORTABLE, not silently mapped onto one of
+    /// the two we know — and the replayable value is itself a finding with CC off.
+    #[test]
+    fn an_unknown_buffer_type_stays_unknown() {
+        let mk = |ty| {
+            decode_register_client_shadow_fault_buffer(&shadow_params(4096, 0, ty, &[0x3000]))
+                .expect("well-formed")
+        };
+        assert!(mk(SHADOW_FAULT_BUFFER_NON_REPLAYABLE).type_is_known());
+        assert!(mk(SHADOW_FAULT_BUFFER_REPLAYABLE).type_is_known());
+        let odd = mk(0xdead_beef);
+        assert!(!odd.type_is_known());
+        assert_eq!(
+            odd.buffer_type, 0xdead_beef,
+            "kept raw, so it can be reported"
+        );
+    }
+
+    /// ⊘ The two unbuilt-half sentences are DIFFERENT, and must stay different: the gaps they
+    /// name are not the same gap.
+    #[test]
+    fn the_two_unbuilt_halves_name_two_different_gaps() {
+        assert_ne!(DELIVERY_UNBUILT, SHADOW_DELIVERY_UNBUILT);
+        assert!(
+            SHADOW_DELIVERY_UNBUILT.contains("WRITER"),
+            "who was promised"
+        );
+        assert!(
+            SHADOW_DELIVERY_UNBUILT.contains("RC"),
+            "what happens instead"
+        );
+        assert!(SHADOW_DELIVERY_UNBUILT.contains("simulated_gpu_fault.md"));
+        // ★ And the replayable one must NOT claim the RC substitute: UVM polls a register
+        // there and an RC is not what it is waiting for.
+        assert!(!DELIVERY_UNBUILT.contains("simulated_gpu_fault.md"));
+    }
+
+    /// Short shadow params refuse by name and record nothing.
+    #[test]
+    fn short_shadow_params_are_a_named_refusal() {
+        let p = vec![0u8; REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE - 1];
+        assert_eq!(
+            decode_register_client_shadow_fault_buffer(&p),
+            Err(AbiError::Truncated {
+                c_name: REGISTER_CLIENT_SHADOW_FAULT_BUFFER_C_NAME,
+                need: REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE,
+                got: REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE - 1,
+            })
+        );
     }
 
     /// Short params refuse by name and record nothing.

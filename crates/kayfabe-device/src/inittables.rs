@@ -450,6 +450,36 @@ pub enum WantedTable {
     /// [`kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`], which the boot's own end-of-run report
     /// prints whenever a registration was served.
     RegisterFaultBuffer,
+    /// `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER` (`0x20800a9d`) —
+    /// ★★★ the rung [`Self::RegisterFaultBuffer`] exposed, and the one whose `NV_OK` is a
+    /// **stronger** claim.
+    ///
+    /// `[measured 2026-08-09, boot `fb1503` at `3afa896`]` serving `0x20800a9b` moved the
+    /// guest's failure to `faultbufCtrlCmdMmuFaultBufferRegisterNonReplayBuf_IMPL: Error
+    /// allocating client shadow fault buffer for non-replayable faults` and put exactly this
+    /// id in the unserviced ledger. The status is failure-transparent all the way up:
+    /// `kgmmuClientShadowFaultBufferRegister` returns it verbatim
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1815-1827`),
+    /// `kgmmuClientShadowFaultBufferAllocate` unwinds, and `nvGpuOpsInitFaultInfo` jumps to
+    /// `cleanup_fault_buffer` (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:9457-9464`)
+    /// — so `UVM_REGISTER_GPU` fails and `cuInit` with it.
+    ///
+    /// # ★★ Same reply shape, DIFFERENT argument for it
+    ///
+    /// All six fields are `[IN]`, the documented status set is `{NV_OK}`, and the caller
+    /// re-reads nothing after the call — every `[OUT]` UVM consumes comes from its own local
+    /// allocation (`ogkm-580: nv_gpu_ops.c:9466-9469`), not from this reply. So the identity
+    /// on the guest's own 24 032 bytes is again the byte-accurate answer and nothing is
+    /// fabricated.
+    ///
+    /// ⊘ But the *promise* is not the same one. For [`Self::RegisterFaultBuffer`] the guest
+    /// polls a BAR0 register we serve; here **we are the declared writer** of a queue in the
+    /// guest's own sysmem (`ogkm-580: kern_gmmu.c:1589-1593`), and on a GSP client the guest
+    /// has no other route to a non-replayable fault at all. The full ruling, and what this
+    /// port does *instead* (an RC plus an error notifier — `simulated_gpu_fault.md` §5.2's
+    /// deliberate choice, and built), is in [`kayfabe_abi::faultbuffer`], and
+    /// [`kayfabe_abi::faultbuffer::SHADOW_DELIVERY_UNBUILT`] is what the boot report prints.
+    RegisterClientShadowFaultBuffer,
     /// `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION` — ★★★ the first variant that is **not a
     /// table**, and the only one whose reply is a function of the *request* alone.
     ///
@@ -929,7 +959,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 36] = [
+    pub const ALL: [WantedTable; 37] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -943,6 +973,7 @@ impl WantedTable {
         Self::FifoNumChannels,
         Self::GmmuStaticInfo,
         Self::RegisterFaultBuffer,
+        Self::RegisterClientShadowFaultBuffer,
         Self::EventSetNotification,
         Self::MemsysL2InvalidateEvict,
         Self::CeFaultMethodBufferSize,
@@ -993,6 +1024,9 @@ impl WantedTable {
             Self::GmmuStaticInfo => NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO,
             Self::RegisterFaultBuffer => {
                 kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER
+            }
+            Self::RegisterClientShadowFaultBuffer => {
+                kayfabe_abi::faultbuffer::NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER
             }
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION
@@ -1064,6 +1098,9 @@ impl WantedTable {
             Self::GmmuStaticInfo => GMMU_STATIC_INFO_PARAMS_SIZE,
             Self::RegisterFaultBuffer => {
                 kayfabe_abi::faultbuffer::REGISTER_FAULT_BUFFER_PARAMS_SIZE
+            }
+            Self::RegisterClientShadowFaultBuffer => {
+                kayfabe_abi::faultbuffer::REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE
             }
             Self::EventSetNotification => {
                 kayfabe_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
@@ -1463,6 +1500,31 @@ impl CommandPolicy for InitTablePolicy {
                     None => return refuse(),
                 };
                 match kayfabe_abi::faultbuffer::decode_register_fault_buffer(raw) {
+                    Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
+                    Ok(_) | Err(_) => return refuse(),
+                }
+            }
+            // ★★★ `0x20800a9d` — the same three steps as the arm above, for the same reasons,
+            // over a 24 032-byte struct. ⊘ The bound check here counts BOTH terms
+            // (`RM_PAGE_ALIGN_UP(size) + RM_PAGE_ALIGN_UP(metadataSize)`,
+            // `ogkm-580: kern_gmmu.c:1601`), because the metadata term is zero in every
+            // configuration this port targets and a check on `size` alone would be right on
+            // the only case anyone runs.
+            //
+            // ⊘ An unknown or replayable `shadowFaultBufferType` is NOT refused. The
+            // replayable *shadow* buffer needs Confidential Compute
+            // (`ogkm-580: mmu_fault_buffer_ctrl.c:148`), which is off, so a registration
+            // carrying it is a finding no measurement has reached — and refusing on it would
+            // model a path from a reading. It is recorded and reported instead.
+            WantedTable::RegisterClientShadowFaultBuffer => {
+                let raw = match cmd
+                    .payload
+                    .get(req.params_at..req.params_at + want.params_size())
+                {
+                    Some(s) => s,
+                    None => return refuse(),
+                };
+                match kayfabe_abi::faultbuffer::decode_register_client_shadow_fault_buffer(raw) {
                     Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
                     Ok(_) | Err(_) => return refuse(),
                 }

@@ -616,9 +616,17 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // three: a re-registration (`> 1`) is a finding this port deliberately does not model,
     // `size` and `pages` check each other, and a malformed ask is a different finding from no
     // ask at all. This is the reason the wire ABI moved to 24.
+    // ★★★ 67 -> 72 at §14.41's SECOND rung: `shadow_fault_buffers_{registered,malformed}`,
+    // `shadow_fault_buffer_{size,pages,type}`. ⊘ Five NEW numbers rather than five reused
+    // ones, and that is the decision: `0x20800a9d` registers a different buffer under a
+    // different promise — there the GSP is the declared WRITER of a queue in the guest's own
+    // sysmem — so a shared counter could not say which promise a boot took on, and the C
+    // printer emits a different sentence for each. `type` is carried RAW because anything but
+    // `0` needs Confidential Compute and is therefore a finding, not a configuration. This is
+    // the reason the wire ABI moved to 25.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (67 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (72 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             + kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_SLOTS
@@ -1122,6 +1130,132 @@ fn the_header_and_the_archive_agree_on_the_wire_abi() {
          are ONE fact written twice, and a build in which they disagree gets as far as the \
          hypervisor's device line before anything notices.",
         kayfabe_qemu_raw::shim::ABI_VERSION,
+    );
+}
+
+/// Pull the text a single `info_report` call actually PRINTS out of the C source — the
+/// literals only, never the file, for the reason in the test's docs.
+fn printed_sentence(text: &str, opens: &str) -> String {
+    let at = text
+        .find(opens)
+        .unwrap_or_else(|| panic!("★ nvkvm.c no longer emits {opens:?} — this test is blind"));
+    let tail = &text[at..];
+    let end = tail
+        .find(");")
+        .expect("the info_report call must terminate");
+    // The literal pieces are the ODD indices of a split on the quote character: index 0 is
+    // `info_report(`, 1 is the first literal, 2 the whitespace between literals, and so on.
+    // ⊘ No escaped quotes appear in these sentences; one carrying `\\"` would need a real
+    // lexer, and the length assertion at each call site is what would surface that.
+    tail[..end].split('"').skip(1).step_by(2).collect()
+}
+
+fn assert_two_descriptions_agree(printed: &str, declared: &str, clauses: &[&str]) {
+    assert!(
+        printed.len() > 120,
+        "★ only {} characters of printed sentence were extracted — the shape of the call \
+         changed and this test is reading the wrong thing: {printed:?}",
+        printed.len(),
+    );
+    for clause in clauses {
+        assert!(
+            printed.contains(clause),
+            "★ the PRINTED sentence does not carry {clause:?}. The device would report a \
+             SERVED control and omit what serving it did not buy, which is the reading the \
+             sentence exists to prevent. Printed: {printed:?}"
+        );
+        assert!(
+            declared.contains(clause),
+            "★ the ABI constant lost {clause:?} — the two descriptions have drifted. \
+             Checked on BOTH sides deliberately: a clause deleted from the constant alone \
+             would otherwise leave this test green while the boot report and the ABI \
+             disagreed about what is unbuilt."
+        );
+    }
+}
+
+/// ★★★ The delivery-unbuilt sentence is ONE fact written twice, and this is where they are
+/// made to agree.
+///
+/// `kayfabe_abi::faultbuffer::DELIVERY_UNBUILT` defines what serving `0x20800a9b` did **not**
+/// buy; `nvkvm.c` is what actually prints it, and it prints its own copy because a `char[]`
+/// carried through `KayfabeRegAudit` for a compile-time constant would be an array the guest
+/// can never influence. ⊘ That is the right trade **only while the two cannot drift** — and
+/// this repository's most-repeated defect is exactly a second description that stops matching
+/// the first while every gate stays green (`the_header_and_the_archive_agree_on_the_wire_abi`
+/// above is the same shape, and it cost a boot).
+///
+/// ⊘⊘ **The first version of this test COULD NOT FAIL, and the bite check is what said so.**
+/// It searched the whole of `nvkvm.c` for each clause. Mutating the printed string from
+/// *"becomes a HANG"* to *"becomes a stall"* left it **green**, because the word `HANG` also
+/// appears in the C comment three lines above the call. A gate that reads a whole file passes
+/// on any mention anywhere — `gate_read_through_grep_cannot_fail` in its substring form. It
+/// now extracts the **printed literal** and searches only that, and the same mutation is red.
+///
+/// ★ It checks load-bearing CLAUSES rather than the whole string, because the C sentence is
+/// wrapped across several string literals and reflowing it must not be a red test, while
+/// dropping *"HANG"* — the clause that tells a reader there is no error to look for — must be.
+///
+/// ⚠ **The clause list is HAND-WRITTEN, and that is this test's remaining weakness, named.**
+/// It is checked against BOTH descriptions, so neither can shorten alone; but a clause added
+/// to the constant and not to this list is unchecked, which is the
+/// `gates_quantified_over_a_list` shape.
+///
+/// ⊘ There are now TWO sentences and two constants, so the doc above sits on the test and the
+/// extraction is a helper: `0x20800a9b` and `0x20800a9d` name different gaps and must keep
+/// naming them differently.
+#[test]
+fn the_c_shell_prints_the_same_unbuilt_half_the_abi_declares() {
+    let printer =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qemu/hw/misc/nvkvm/nvkvm.c");
+    let text = std::fs::read_to_string(&printer)
+        .unwrap_or_else(|e| panic!("the device source must be readable at {printer:?}: {e}"));
+
+    // ⊘ Non-vacuity first: if the printer stops reading the counts, every clause check below
+    // would pass for the wrong reason.
+    for counter in [
+        "fault_buffers_registered",
+        "shadow_fault_buffers_registered",
+    ] {
+        assert!(
+            text.contains(counter),
+            "★ nvkvm.c no longer reads {counter} — this test has gone blind"
+        );
+    }
+
+    assert_two_descriptions_agree(
+        &printed_sentence(&text, "info_report(\"nvkvm:   ⊘ fault DELIVERY is UNBUILT"),
+        kayfabe_abi::faultbuffer::DELIVERY_UNBUILT,
+        &[
+            "fault DELIVERY is UNBUILT",
+            "MMU_FAULT_BUFFER_PUT(1)",
+            "HANG",
+            "resume_from_fault.md",
+        ],
+    );
+
+    // ★★ The SECOND sentence, and it must stay a second one. `0x20800a9d`'s gap is not
+    // `0x20800a9b`'s: there we decline to move a register the guest polls, here we decline to
+    // be the WRITER the guest is waiting on — and "unbuilt" alone would be false, because the
+    // RC + error notifier IS built and is what happens instead.
+    assert_two_descriptions_agree(
+        &printed_sentence(
+            &text,
+            "info_report(\"nvkvm:   ⊘ shadow-queue PUSH is UNBUILT",
+        ),
+        kayfabe_abi::faultbuffer::SHADOW_DELIVERY_UNBUILT,
+        &[
+            "shadow-queue PUSH is UNBUILT",
+            "WRITER",
+            "RC on the channel",
+            "simulated_gpu_fault.md",
+        ],
+    );
+
+    assert_ne!(
+        kayfabe_abi::faultbuffer::DELIVERY_UNBUILT,
+        kayfabe_abi::faultbuffer::SHADOW_DELIVERY_UNBUILT,
+        "★ two different gaps must not collapse into one sentence"
     );
 }
 

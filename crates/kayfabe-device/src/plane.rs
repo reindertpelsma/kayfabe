@@ -480,6 +480,11 @@ pub struct PlaneResidue {
     /// the sample bound. A count and a sample fail differently: a sample that saturates
     /// stops moving, and the count does not.
     pub fault_buffers_registered: u64,
+    /// How many **client shadow** fault-buffer registrations (`0x20800a9d`) arrived.
+    ///
+    /// ⊘ Separate from [`Self::fault_buffers_registered`] because the two controls carry
+    /// different promises — see `crate::faultbuffer`.
+    pub shadow_fault_buffers_registered: u64,
     /// ★★★ The BAR0 moving window's register, as the guest last wrote it.
     ///
     /// Device state, so it is in the residue: a reloaded device whose window still pointed
@@ -1739,6 +1744,7 @@ impl RegPlane {
             census: census.snapshot(),
             fault_buffers: fault_buffer.sample(),
             fault_buffers_registered: fault_buffer.total(),
+            shadow_fault_buffers_registered: fault_buffer.shadow_total(),
             bar0_window: *bar0_window,
             bar_pdes: bar_pdes.pdes(),
             gvas_pub: gvas_pub.snapshot(),
@@ -1775,14 +1781,24 @@ impl RegPlane {
         self.census.snapshot()
     }
 
-    /// How many times the guest registered a replayable fault buffer
-    /// (`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`).
+    /// How many times the guest registered a **replayable hardware** fault buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`, `0x20800a9b`).
     ///
-    /// ⊘ A count of *asks*, not of anything served: the recorder declines the command, so
-    /// this number rising means the guest's UVM reached the registration and was refused.
+    /// ⊘⊘ **The old doc said "the recorder declines the command, so this number rising means
+    /// the guest's UVM reached the registration and was REFUSED."** That stopped being true
+    /// at §14.41: `crate::inittables` now answers the control and the recorder is an observer.
+    /// The number still counts *asks*, but a rising count now means **served**, which is the
+    /// opposite reading — and a stale sentence like that is how a report gets misread.
     #[must_use]
     pub fn fault_buffers_registered(&self) -> u64 {
         self.fault_buffer.total()
+    }
+
+    /// How many times the guest registered a **client shadow** fault buffer
+    /// (`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER`, `0x20800a9d`).
+    #[must_use]
+    pub fn shadow_fault_buffers_registered(&self) -> u64 {
+        self.fault_buffer.shadow_total()
     }
 
     /// The fault-buffer registrations remembered, capped at

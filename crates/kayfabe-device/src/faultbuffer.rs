@@ -50,8 +50,9 @@ use std::sync::{Arc, Mutex};
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use kayfabe_abi::faultbuffer::{
-    FaultBufferRegistration, NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
-    decode_register_fault_buffer,
+    FaultBufferRegistration, NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER, ShadowFaultBufferRegistration,
+    decode_register_client_shadow_fault_buffer, decode_register_fault_buffer,
 };
 use kayfabe_abi::versions::DriverAbiTable;
 use kayfabe_gsp::{CommandObserver, RpcCommand, RpcFunction};
@@ -71,6 +72,20 @@ pub enum FaultBufferNote {
         /// Bytes the params carried.
         len: usize,
     },
+    /// ★ `0x20800a9d` — a **client shadow** fault buffer registration decoded.
+    ///
+    /// ⊘ Its own variant rather than a field on [`Self::Registered`]: the two controls
+    /// register different buffers, with different geometry bounds, and — the part that
+    /// matters — different promises. Answering `0x20800a9b` says a register we serve will
+    /// stay empty; answering this one says **we** will write packets into the guest's own
+    /// sysmem. Collapsing them into one record would make the report unable to say which
+    /// promise a boot took on.
+    ShadowRegistered(ShadowFaultBufferRegistration),
+    /// `0x20800a9d` arrived and its params did **not** decode.
+    ShadowMalformed {
+        /// Bytes the params carried.
+        len: usize,
+    },
 }
 
 /// The shared record. Cloneable so the plane and the chain link hold the same one.
@@ -78,6 +93,7 @@ pub enum FaultBufferNote {
 pub struct FaultBufferLog {
     seen: Arc<Mutex<Vec<FaultBufferNote>>>,
     total: Arc<AtomicU64>,
+    shadow_total: Arc<AtomicU64>,
 }
 
 /// How many registrations are remembered.
@@ -95,11 +111,25 @@ impl FaultBufferLog {
         FaultBufferLog::default()
     }
 
-    /// How many times the control arrived, including repeats and anything past
-    /// [`FAULT_BUFFER_SAMPLE_MAX`].
+    /// How many times `0x20800a9b` — the **replayable hardware** buffer — arrived, including
+    /// repeats and anything past [`FAULT_BUFFER_SAMPLE_MAX`].
+    ///
+    /// ⊘ This counter and [`Self::shadow_total`] are kept apart at the *source* rather than
+    /// derived from [`Self::sample`], because the sample is capped and a count read off it
+    /// could never exceed the cap — the defect `unserviced_len` shipped with
+    /// (`a_saturated_instrument_looks_exactly_like_absence`).
     #[must_use]
     pub fn total(&self) -> u64 {
         self.total.load(Ordering::Relaxed)
+    }
+
+    /// How many times `0x20800a9d` — the **client shadow** buffer — arrived.
+    ///
+    /// ★ Separate from [`Self::total`] because the two controls carry different promises, and
+    /// a boot's report has to be able to say which one it took on.
+    #[must_use]
+    pub fn shadow_total(&self) -> u64 {
+        self.shadow_total.load(Ordering::Relaxed)
     }
 
     /// The registrations remembered, in arrival order.
@@ -116,7 +146,18 @@ impl FaultBufferLog {
     /// the two would hide a re-registration — which is exactly what an unregister/register
     /// cycle looks like from here.
     pub fn note(&self, note: FaultBufferNote) {
-        self.total.fetch_add(1, Ordering::Relaxed);
+        // ⊘ `match` rather than a boolean parameter: the counter a note lands on is a
+        // property OF THE NOTE, so the two cannot be given to each other by a caller that
+        // passes the wrong flag. `a_caller_side_inversion_is_invisible_to_every_test_of_the
+        // _callee` is why this is not an argument.
+        match note {
+            FaultBufferNote::Registered(_) | FaultBufferNote::Malformed { .. } => {
+                self.total.fetch_add(1, Ordering::Relaxed);
+            }
+            FaultBufferNote::ShadowRegistered(_) | FaultBufferNote::ShadowMalformed { .. } => {
+                self.shadow_total.fetch_add(1, Ordering::Relaxed);
+            }
+        }
         let mut s = self.seen.lock().unwrap_or_else(|e| e.into_inner());
         if s.len() < FAULT_BUFFER_SAMPLE_MAX {
             s.push(note);
@@ -148,9 +189,11 @@ impl CommandObserver for FaultBufferRecorder {
         let Ok(h) = self.driver.decode_rpc_control(&cmd.payload) else {
             return;
         };
-        if h.cmd != NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER {
-            return;
-        }
+        let shadow = match h.cmd {
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER => false,
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER => true,
+            _ => return,
+        };
         // The declared params window, bounded by what actually arrived — the same
         // `params_at`/`params_size` pair `kayfabe_rmrpc::translate_control` bounds, and
         // bounded here too because `paramsSize` is the guest's assertion and never a fact.
@@ -159,9 +202,16 @@ impl CommandObserver for FaultBufferRecorder {
             .get(h.params_at..)
             .and_then(|tail| tail.get(..h.params_size as usize))
             .unwrap_or(&[]);
-        self.log.note(match decode_register_fault_buffer(params) {
-            Ok(r) => FaultBufferNote::Registered(r),
-            Err(_) => FaultBufferNote::Malformed { len: params.len() },
+        self.log.note(if shadow {
+            match decode_register_client_shadow_fault_buffer(params) {
+                Ok(r) => FaultBufferNote::ShadowRegistered(r),
+                Err(_) => FaultBufferNote::ShadowMalformed { len: params.len() },
+            }
+        } else {
+            match decode_register_fault_buffer(params) {
+                Ok(r) => FaultBufferNote::Registered(r),
+                Err(_) => FaultBufferNote::Malformed { len: params.len() },
+            }
         });
         // ⊘ Nothing is returned, and nothing CAN be: `observe` has no return value, so
         // "this link changes no reply byte" is rustc's guarantee rather than a comment.

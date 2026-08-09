@@ -208,7 +208,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// distinct count rather than the sample's clamped length — an ABI-22 reader would have
 /// indexed `unserviced[0..unserviced_len]` out of bounds the first time a boot exceeded the
 /// cap, which is the second reason this could not be a silent widening.
-pub const ABI_VERSION: u32 = 24;
+pub const ABI_VERSION: u32 = 25;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1542,6 +1542,35 @@ pub struct KayfabeRegAudit {
     /// asked in a shape we could not read"* are different findings, and the second means
     /// this port's layout is wrong.
     pub fault_buffers_malformed: u64,
+    /// ★★★ **CLIENT SHADOW fault buffers the guest registered** (`0x20800a9d`), and this port
+    /// answered `NV_OK` to.
+    ///
+    /// ⊘ Counted **separately** from [`Self::fault_buffers_registered`], and the separation is
+    /// the point rather than tidiness. The two controls carry different promises: answering
+    /// `0x20800a9b` says a register *we* serve will keep reading empty; answering this one says
+    /// **we** will write fault packets into pages of the guest's own sysmem
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1589-1593` — *"GSP will be writing
+    /// the fault packets to these buffers"*). One number could not say which promise a boot
+    /// took on, and the printer emits a different sentence for each.
+    pub shadow_fault_buffers_registered: u64,
+    /// `shadowFaultBufferSize` of the FIRST shadow registration, in bytes, or `0`.
+    ///
+    /// ★ The stock GA106 value is `0x120c20`, which is `0x20800a59`'s own advertised
+    /// `nonReplayableFaultBufferSize`. Anything else on a stock boot means the two controls
+    /// disagree about a buffer the guest has already allocated.
+    pub shadow_fault_buffer_size: u64,
+    /// Pages the guest filled for it — `align_up(size)/4096 + align_up(metadataSize)/4096`
+    /// (`ogkm-580: kern_gmmu.c:1601`), **289** for the stock size.
+    pub shadow_fault_buffer_pages: u64,
+    /// `shadowFaultBufferType` of that first registration, **raw**.
+    ///
+    /// ⚠ `0` is non-replayable and is the only value reachable with Confidential Compute off;
+    /// `1` (replayable shadow) needs CC (`ogkm-580: mmu_fault_buffer_ctrl.c:148`), so seeing it
+    /// — or anything else — is a **finding** this port deliberately does not refuse on, because
+    /// refusing would model a path no measurement has reached.
+    pub shadow_fault_buffer_type: u64,
+    /// Shadow registrations whose params did **not** decode.
+    pub shadow_fault_buffers_malformed: u64,
 }
 
 impl Default for KayfabeRegAudit {
@@ -1628,6 +1657,11 @@ impl Default for KayfabeRegAudit {
             fault_buffer_size: Default::default(),
             fault_buffer_pages: Default::default(),
             fault_buffers_malformed: Default::default(),
+            shadow_fault_buffers_registered: Default::default(),
+            shadow_fault_buffer_size: Default::default(),
+            shadow_fault_buffer_pages: Default::default(),
+            shadow_fault_buffer_type: Default::default(),
+            shadow_fault_buffers_malformed: Default::default(),
         }
     }
 }
@@ -2729,25 +2763,40 @@ impl Regs {
         // sample is capped at `FAULT_BUFFER_SAMPLE_MAX` and a count read off it could never
         // exceed the cap. That is the exact defect `unserviced_len` shipped with
         // (`a_saturated_instrument_looks_exactly_like_absence`); it is not repeated here.
+        use kayfabe_device::faultbuffer::FaultBufferNote as Fbn;
         let fault_buffers_registered_n = self.plane.fault_buffers_registered();
+        let shadow_fault_buffers_registered = self.plane.shadow_fault_buffers_registered();
         let fault_buffer_sample = self.plane.fault_buffer_sample();
         let (fault_buffer_size, fault_buffer_pages) = fault_buffer_sample
             .iter()
             .find_map(|n| match n {
-                kayfabe_device::faultbuffer::FaultBufferNote::Registered(r) => {
-                    Some((u64::from(r.size), r.pages.len() as u64))
-                }
-                kayfabe_device::faultbuffer::FaultBufferNote::Malformed { .. } => None,
+                Fbn::Registered(r) => Some((u64::from(r.size), r.pages.len() as u64)),
+                _ => None,
             })
             .unwrap_or((0, 0));
         let fault_buffers_malformed = fault_buffer_sample
             .iter()
-            .filter(|n| {
-                matches!(
-                    n,
-                    kayfabe_device::faultbuffer::FaultBufferNote::Malformed { .. }
-                )
-            })
+            .filter(|n| matches!(n, Fbn::Malformed { .. }))
+            .count() as u64;
+        // ★★★ §14.41's second rung. Same shape, and the geometry is reported so the two
+        // controls can be checked against each other: `shadow_fault_buffer_size` must be the
+        // `nonReplayableFaultBufferSize` this port answers to `0x20800a59`, and the page count
+        // must be its own `align_up(size)/4096 + align_up(metadataSize)/4096`.
+        let (shadow_fault_buffer_size, shadow_fault_buffer_pages, shadow_fault_buffer_type) =
+            fault_buffer_sample
+                .iter()
+                .find_map(|n| match n {
+                    Fbn::ShadowRegistered(r) => Some((
+                        u64::from(r.size),
+                        r.pages.len() as u64,
+                        u64::from(r.buffer_type),
+                    )),
+                    _ => None,
+                })
+                .unwrap_or((0, 0, 0));
+        let shadow_fault_buffers_malformed = fault_buffer_sample
+            .iter()
+            .filter(|n| matches!(n, Fbn::ShadowMalformed { .. }))
             .count() as u64;
         // ★★★ The control census — DESTRUCTURED with no `..` for [`Shim::audit`]'s reason:
         // a field added to `CensusSnapshot` and not wired here is a fact the C shell can
@@ -2921,6 +2970,11 @@ impl Regs {
             fault_buffer_size,
             fault_buffer_pages,
             fault_buffers_malformed,
+            shadow_fault_buffers_registered,
+            shadow_fault_buffer_size,
+            shadow_fault_buffer_pages,
+            shadow_fault_buffer_type,
+            shadow_fault_buffers_malformed,
         }
     }
 }

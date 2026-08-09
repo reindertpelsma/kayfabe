@@ -1830,6 +1830,41 @@ static void nvkvm_report_registers(NvkvmState *s)
         }
     }
 
+    /*
+     * ★★★ §14.41 rung 2 — THE CLIENT SHADOW QUEUE, and why its sentence is a DIFFERENT one.
+     *
+     * For the replayable buffer above, the guest polls a BAR0 register this device serves, and
+     * "empty" is a statement made on a plane we own.  Here the guest allocates a queue in its
+     * OWN sysmem and the GSP — us — is the declared WRITER of it.  Answering NV_OK therefore
+     * promises to enqueue fault packets, and on a GSP client this queue is the guest's ONLY
+     * route to a non-replayable fault.
+     *
+     * ⊘ "Unbuilt" alone would be FALSE, which is why the sentence names the substitute: this
+     * port reports such a fault as an RC on the channel plus an error notifier, which is
+     * simulated_gpu_fault.md 5.2's deliberate choice and IS built.  A reader who is told only
+     * that the push is missing would go looking for a silence that is not there.
+     */
+    if (a.shadow_fault_buffers_registered) {
+        info_report("nvkvm: client shadow fault buffer: %" PRIu64 " registration(s) SERVED "
+                    "NV_OK; first 0x%" PRIx64 " B = %" PRIu64 " pages, type %" PRIu64
+                    " (0=non-replayable), %" PRIu64 " malformed",
+                    a.shadow_fault_buffers_registered, a.shadow_fault_buffer_size,
+                    a.shadow_fault_buffer_pages, a.shadow_fault_buffer_type,
+                    a.shadow_fault_buffers_malformed);
+        info_report("nvkvm:   ⊘ shadow-queue PUSH is UNBUILT: on a GSP client the GSP is the "
+                    "WRITER of this queue and this port never enqueues a fault packet, so a "
+                    "non-replayable fault surfaces as an RC on the channel plus an error "
+                    "notifier (simulated_gpu_fault.md 5.2, the deliberate choice) and NEVER "
+                    "as a queue entry the guest is polling for");
+        if (a.shadow_fault_buffer_type != 0) {
+            info_report("nvkvm:   ⚠ shadowFaultBufferType %" PRIu64 " is NOT non-replayable. "
+                        "The replayable SHADOW buffer requires Confidential Compute "
+                        "(ogkm-580: mmu_fault_buffer_ctrl.c:148), which is off — so this is a "
+                        "measurement no boot has produced before, not a configuration",
+                        a.shadow_fault_buffer_type);
+        }
+    }
+
     if (a.isolate_refusal.kind != KAYFABE_ISOLATE_REFUSAL_NONE) {
         const char *kind = a.isolate_refusal.kind == KAYFABE_ISOLATE_REFUSAL_SPAWN_FAILED
                            ? "spawn-failed" : "no-plane";

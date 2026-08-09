@@ -6683,7 +6683,9 @@ EMPTY, evidence verbatim under `docs/reference/bench_evidence/run_fb1503_3afa896
 `UVM_REGISTER_GPU rmStatus` is **still `0x56`** and `cup2` still returns 1. ⊘ The rung moved;
 `cuInit` did not pass. Stated first so no line below can read as more than it is.
 
-### ★★★ Three predictions this boot CONFIRMED, and one of them was a design decision
+### ★★★ Three predictions CONFIRMED — `[measured 2026-08-09, boot `fb1503` at `3afa896`]`
+
+…and one of the three was a design decision, not an observation waiting to happen.
 
 1. **The two controls agree on the geometry, measured.** The device's own report:
    `replayable fault buffer: 1 registration(s) SERVED NV_OK; first 0x31000 B = 49 pages, 0

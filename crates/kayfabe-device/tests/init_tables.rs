@@ -434,7 +434,16 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `NV_OK` with no fault-delivery plane is decided, with evidence, in
     // `kayfabe_abi::faultbuffer`'s module docs, and the unbuilt half is printed in every
     // boot report that serves the control (`DELIVERY_UNBUILT`).
-    assert_eq!(WantedTable::ALL.len(), 36, "the served universe's size");
+    // ★★★★ 36 -> 37 at §14.41's second rung: `0x20800a9d`
+    // INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER, exposed by serving the first. Same
+    // reply shape (identity on 24 032 pure-`[IN]` bytes, nothing tabulated) and a DIFFERENT
+    // argument for it: here the GSP is the declared WRITER of a queue in the guest's own
+    // sysmem (`ogkm-580: kern_gmmu.c:1589-1593`), so `NV_OK` promises more than it does for
+    // `0x20800a9b`. ⊘ Which is why its unbuilt-half sentence is a different string and names
+    // the substitute this port DOES build — an RC plus an error notifier
+    // (`simulated_gpu_fault.md` §5.2). `[measured 2026-08-09, boot `fb1503` at `3afa896`]`
+    // this is the id the guest asked for next.
+    assert_eq!(WantedTable::ALL.len(), 37, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

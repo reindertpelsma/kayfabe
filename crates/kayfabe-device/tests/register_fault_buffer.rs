@@ -26,7 +26,10 @@
 
 use kayfabe_abi::faultbuffer::{
     FAULT_BUFFER_MAX_PAGES, FAULT_BUFFER_PAGE_SIZE,
-    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER, REGISTER_FAULT_BUFFER_PARAMS_SIZE,
+    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+    NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
+    REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE, REGISTER_FAULT_BUFFER_PARAMS_SIZE,
+    SHADOW_FAULT_BUFFER_MAX_PAGES, SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
 };
 use kayfabe_abi::versions::{BENCH_DRIVER, table_for};
 use kayfabe_device::faultbuffer::{FaultBufferLog, FaultBufferNote};
@@ -220,6 +223,159 @@ fn a_short_params_window_is_refused() {
     assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED);
 }
 
+// =====================================================================================
+// 2b. ★★★ `0x20800a9d` — the client shadow buffer, the rung serving the first EXPOSED
+// =====================================================================================
+
+/// The params `kgmmuClientShadowFaultBufferRegister` builds (`ogkm-580: kern_gmmu.c:1782-1813`).
+fn shadow_params(size: u32, meta: u32, ty: u32, pages: &[u64]) -> Vec<u8> {
+    let mut b = vec![0u8; REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE];
+    b[0..8].copy_from_slice(&0x3_0000_0000u64.to_le_bytes());
+    b[8..12].copy_from_slice(&size.to_le_bytes());
+    b[12..16].copy_from_slice(&meta.to_le_bytes());
+    for (i, p) in pages.iter().enumerate() {
+        let o = 16 + i * 8;
+        b[o..o + 8].copy_from_slice(&p.to_le_bytes());
+    }
+    let ty_off = 16 + SHADOW_FAULT_BUFFER_MAX_PAGES * 8;
+    b[ty_off..ty_off + 4].copy_from_slice(&ty.to_le_bytes());
+    b
+}
+
+/// The stock non-replayable shadow registration: `0x120c20` bytes = 289 pages.
+fn stock_shadow_pages() -> Vec<u64> {
+    (0..289u64).map(|i| 0x3_4000_0000 + i * 0x1000).collect()
+}
+
+/// Not one byte of the 24 032-byte `[IN]` window moves, and the envelope says `NV_OK`.
+#[test]
+fn the_shadow_reply_is_the_guests_own_params_byte_for_byte() {
+    let mut p = policy();
+    let sent = shadow_params(
+        0x0012_0c20,
+        0,
+        SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+        &stock_shadow_pages(),
+    );
+    let cmd = control(
+        NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+        &sent,
+    );
+    let reply = p.respond(&cmd).expect("the control is served");
+    assert_eq!(reply.rpc_result, 0);
+    assert_eq!(status_of(&reply.body), 0);
+    assert_eq!(
+        &reply.body[PARAMS_AT..PARAMS_AT + REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE],
+        &sent[..],
+        "★ pure [IN] over 24 032 bytes: any difference here is invention"
+    );
+}
+
+/// ★★ The shadow size the guest registers is the `nonReplayableFaultBufferSize` this port
+/// advertises through `0x20800a59` — again a claim about **two controls agreeing**.
+#[test]
+fn the_shadow_size_the_guest_registers_is_the_size_this_port_advertised() {
+    let mut p = policy();
+    let advertised = p
+        .respond(&control(
+            WantedTable::GmmuStaticInfo.cmd_id(),
+            &vec![0u8; WantedTable::GmmuStaticInfo.params_size()],
+        ))
+        .expect("0x20800a59 is served");
+    // `nonReplayableFaultBufferSize` is the third `NvU32` of the static-info body.
+    let non_replayable = u32::from_le_bytes([
+        advertised.body[PARAMS_AT + 8],
+        advertised.body[PARAMS_AT + 9],
+        advertised.body[PARAMS_AT + 10],
+        advertised.body[PARAMS_AT + 11],
+    ]);
+    assert_eq!(
+        non_replayable, 0x0012_0c20,
+        "the advertised non-replayable size"
+    );
+    let pages = u64::from(non_replayable).div_ceil(FAULT_BUFFER_PAGE_SIZE) as usize;
+    assert_eq!(pages, 289);
+    assert!(
+        pages <= SHADOW_FAULT_BUFFER_MAX_PAGES,
+        "★ the size this port advertises must fit the 3000-entry PTE array the guest sends \
+         back, or we would have built the wall ourselves"
+    );
+    let r = p
+        .respond(&control(
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+            &shadow_params(
+                non_replayable,
+                0,
+                SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+                &stock_shadow_pages(),
+            ),
+        ))
+        .expect("served");
+    assert_eq!(status_of(&r.body), 0);
+}
+
+/// ★★ A shadow geometry past CPU-RM's own 3000-page bound is refused — and the METADATA term
+/// is what decides the boundary case, which is the half a `size`-only check would miss.
+#[test]
+fn a_shadow_geometry_past_the_vendors_bound_is_refused() {
+    let mut p = policy();
+    let page = FAULT_BUFFER_PAGE_SIZE as u32;
+    let at_bound = p
+        .respond(&control(
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+            &shadow_params(
+                3000 * page,
+                0,
+                SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+                &[0x1000],
+            ),
+        ))
+        .expect("answered");
+    assert_eq!(at_bound.rpc_result, 0, "3000 pages is exactly the bound");
+
+    let over = p
+        .respond(&control(
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+            &shadow_params(
+                3000 * page,
+                1,
+                SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+                &[0x1000],
+            ),
+        ))
+        .expect("answered");
+    assert_eq!(
+        over.rpc_result, NV_ERR_NOT_SUPPORTED,
+        "★ one byte of metadata is one more page and it crosses the bound. This assertion is \
+         the only thing standing between a `size`-only check and shipping — the metadata term \
+         is zero in every configuration this port targets."
+    );
+}
+
+/// ⊘ The shadow buffer's own UNREGISTER is `0x20800a9e`, **not** `0x20800a9c`, and neither is
+/// served. Pinned because confusing the two is the obvious mistake: they are adjacent ids for
+/// adjacent buffers, and `0x20800a9c` unregisters the *replayable hardware* buffer.
+#[test]
+fn the_shadow_unregister_is_a9e_and_neither_unregister_is_served() {
+    assert!(
+        WantedTable::from_cmd(0x2080_0a9e).is_none(),
+        "shadow unregister"
+    );
+    assert!(
+        WantedTable::from_cmd(0x2080_0a9c).is_none(),
+        "hw unregister"
+    );
+    assert_eq!(
+        WantedTable::from_cmd(0x2080_0a9d),
+        Some(WantedTable::RegisterClientShadowFaultBuffer),
+        "and the two REGISTERs are distinct ids for distinct buffers"
+    );
+    assert_eq!(
+        WantedTable::from_cmd(0x2080_0a9b),
+        Some(WantedTable::RegisterFaultBuffer)
+    );
+}
+
 /// ⊘ The UNREGISTER neighbour is one command away and is **not** served — deliberately, and
 /// it is asserted so that serving it later is a decision rather than a drift.
 ///
@@ -289,5 +445,68 @@ fn the_full_chain_answers_and_still_records() {
             assert_eq!(r.pages[0], 0x1_4000_0000);
         }
         other => panic!("expected one decoded registration, got {other:?}"),
+    }
+}
+
+/// ★★ The shadow registration is recorded through the same seat, into its **own** counter and
+/// its **own** note variant.
+///
+/// ⊘ The separation is the assertion. One combined count could not say which of the two
+/// promises a boot took on — `0x20800a9b` says a register we serve stays empty; `0x20800a9d`
+/// says we will write packets into the guest's sysmem — and the report prints a different
+/// sentence for each.
+#[test]
+fn the_two_registrations_are_counted_and_recorded_apart() {
+    let log = FaultBufferLog::new();
+    let mut chain = kayfabe_device::served_policy(
+        chip(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+        kayfabe_device::ChainLogs {
+            fault_buffer: log.clone(),
+            ..Default::default()
+        },
+        kayfabe_device::census::ControlCensusLog::new(),
+        kayfabe_device::ObjectLinks::default(),
+    );
+    chain
+        .respond(&control(
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER,
+            &params(0x0003_1000, &stock_pages()),
+        ))
+        .expect("served");
+    let sent = shadow_params(
+        0x0012_0c20,
+        0,
+        SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
+        &stock_shadow_pages(),
+    );
+    let reply = chain
+        .respond(&control(
+            NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER,
+            &sent,
+        ))
+        .expect("served");
+    assert_eq!(reply.rpc_result, 0);
+    assert_eq!(
+        &reply.body[PARAMS_AT..PARAMS_AT + REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE],
+        &sent[..],
+        "the guard and the census changed no shadow params byte either"
+    );
+
+    assert_eq!(log.total(), 1, "★ one HARDWARE registration, not two");
+    assert_eq!(log.shadow_total(), 1, "★ one SHADOW registration, not two");
+    let s = log.sample();
+    assert_eq!(s.len(), 2, "both are remembered, in arrival order");
+    assert!(matches!(s[0], FaultBufferNote::Registered(_)));
+    match &s[1] {
+        FaultBufferNote::ShadowRegistered(r) => {
+            assert_eq!(r.size, 0x0012_0c20);
+            assert_eq!(r.metadata_size, 0);
+            assert_eq!(r.buffer_type, SHADOW_FAULT_BUFFER_NON_REPLAYABLE);
+            assert!(r.type_is_known());
+            assert_eq!(r.pages.len(), 289);
+            assert_eq!(r.queue_gpa, 0x3_0000_0000);
+        }
+        other => panic!("expected a decoded SHADOW registration, got {other:?}"),
     }
 }

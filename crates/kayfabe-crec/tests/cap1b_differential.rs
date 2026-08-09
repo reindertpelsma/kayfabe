@@ -425,6 +425,16 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // this file's kind of coverage and is still absent; that part of the cost is real.
     let outside_the_closure_limit: BTreeSet<WantedTable> = [
         WantedTable::RegisterFaultBuffer,
+        // ⚠ §14.41's second, and it is the SAME structural class as the first: the sole
+        // issuer of `0x20800a9d` is `kgmmuClientShadowFaultBufferRegister`
+        // (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/kern_gmmu.c:1815-1820`), reached only
+        // through `faultbufCtrlCmdMmuFaultBufferRegisterNonReplayBuf_IMPL` — a **`C369`
+        // control UVM issues**. `cap1b` is `nvidia-smi`-driven and never opens
+        // `/dev/nvidia-uvm`. ★ Covered at the policy boundary by
+        // `kayfabe-device/tests/register_fault_buffer.rs`, which is again able to be the
+        // *stronger* oracle: the reply is the identity on 24 032 pure-`[IN]` bytes, so
+        // "not one byte moved" is exactly checkable and needs no capture.
+        WantedTable::RegisterClientShadowFaultBuffer,
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
         WantedTable::GrPdbProperties,
@@ -505,14 +515,15 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // **`nvidia-uvm` never ran** — the control's sole issuer is UVM's `UVM_REGISTER_GPU`
     // path, and an `nvidia-smi` capture never opens `/dev/nvidia-uvm`. ★ A `cuInit`-driven
     // capture would close this one, unlike the two GSS-legacy rows.
-    assert_eq!(universe.len(), 36, "non-vacuity: the universe is not empty");
+    // ⊘ 36 -> 37 at §14.41's second rung (`0x20800a9d`), same class as the first.
+    assert_eq!(universe.len(), 37, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        17,
+        18,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
-    // ⚠⚠ **The cost of 6 -> 13, stated rather than absorbed.** SEVEN of thirteen exceptions
+    // ⚠⚠ **The cost of 6 -> 14, stated rather than absorbed.** EIGHT of fourteen exceptions
     // are now `cuInit`-path controls, and a differential that cannot see them cannot regress
     // them. What stands in for it is a policy-boundary test per control —
     // `kayfabe-device/tests/{internal_gpu_get_smc_mode,bus_get_info_v2,

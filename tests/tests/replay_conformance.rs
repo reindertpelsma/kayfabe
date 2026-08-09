@@ -1555,6 +1555,18 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // `nv_gpu_ops.c:9410` -> `mmu_fault_buffer.c:59` -> `kern_gmmu.c:1261`), and an
         // `nvidia-smi` capture never opens `/dev/nvidia-uvm`.
         0x2080_0a9b,
+        // §14.41's second, and the exemption is the same shape and the same size — nil.
+        // `0x20800a9d`'s params are pure `[IN]` too, so the "size we answer" IS the size the
+        // guest sent and there is no unevidenced number. The only claim is the layout, and it
+        // is the vendor's arithmetic — an 8-aligned `NvU64`, two `NvU32`, an 8-aligned
+        // `NvU64[3000]`, an `NvU32`, four bytes of padding and an 8-aligned `NvU64` = 24 032
+        // (`ogkm-580: ctrl2080internal.h:1868-1874`) — asserted by
+        // `kayfabe_abi::faultbuffer::the_shadow_layout_is_the_one_the_guest_sends`, which pins
+        // the padding explicitly because that is the part a hand-count gets wrong.
+        // ⊘ Absent from this capture for the same MODULE reason: the sole issuer is
+        // `nvidia-uvm` through a `C369` control, and an `nvidia-smi` capture never opens
+        // `/dev/nvidia-uvm`.
+        0x2080_0a9d,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),

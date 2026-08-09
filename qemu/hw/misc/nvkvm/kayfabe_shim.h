@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 24u
+#define KAYFABE_SHIM_ABI 25u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -807,6 +807,34 @@ typedef struct KayfabeRegAudit {
      * "the guest never asked" and "the guest asked in a shape we could not read" are
      * different findings, and the second means this port's layout is wrong. */
     uint64_t fault_buffers_malformed;
+
+    /* ★★★ §14.41 rung 2 -- CLIENT SHADOW fault buffers the guest registered (0x20800a9d).
+     *
+     * ⊘ Counted SEPARATELY from fault_buffers_registered, and the separation is the point.
+     * The two controls carry different promises: answering 0x20800a9b says a register WE
+     * serve will keep reading empty; answering this one says WE will write fault packets
+     * into pages of the guest's own sysmem (ogkm-580: kern_gmmu.c:1589-1593, "GSP will be
+     * writing the fault packets to these buffers").  On a GSP client the guest has NO other
+     * route to a non-replayable fault -- the CPU driver never reads the hardware buffer
+     * (unix_intr.c:933-938) and the interrupt services are registered only when
+     * !IS_GSP_CLIENT (kern_gmmu.c:2267-2288).  One number could not say which promise a boot
+     * took on, and the printer emits a different sentence for each. */
+    uint64_t shadow_fault_buffers_registered;
+    /* shadowFaultBufferSize of the FIRST shadow registration.  ★ 0x120c20 on a stock GA106 --
+     * 0x20800a59's own advertised nonReplayableFaultBufferSize.  Anything else means the two
+     * controls disagree about a buffer the guest has already allocated. */
+    uint64_t shadow_fault_buffer_size;
+    /* Pages the guest filled: align_up(size)/4096 + align_up(metadataSize)/4096
+     * (ogkm-580: kern_gmmu.c:1601).  289 for the stock size. */
+    uint64_t shadow_fault_buffer_pages;
+    /* shadowFaultBufferType, RAW.  0 = non-replayable, the only value reachable with
+     * Confidential Compute off; 1 = replayable shadow, which NEEDS CC
+     * (ogkm-580: mmu_fault_buffer_ctrl.c:148).  ⚠ Anything but 0 is a FINDING this port
+     * deliberately does not refuse on -- refusing would model a path no measurement has
+     * reached. */
+    uint64_t shadow_fault_buffer_type;
+    /* Shadow registrations whose params did NOT decode. */
+    uint64_t shadow_fault_buffers_malformed;
 } KayfabeRegAudit;
 
 /* The identity a chip claims.  `device_id` of 0 selects the chip table's default row.
