@@ -9,6 +9,18 @@
 > rests on somebody else's run, the run is named. The VMM axis and the Cloud-Hypervisor / QEMU
 > adapter seam are **out of scope** — another agent owns them.
 >
+> ⚠⚠ **OPERATIONAL TRAP, found by this audit falling into it — `rg` is a SHELL FUNCTION here,
+> not a binary.** `which rg` resolves nothing; `command -v rg` prints `rg`. So a bare `rg …`
+> works, but **`timeout N rg …` execs a nonexistent binary** and dies with
+> `timeout: failed to execute process: No such file or directory`. Paired with `2>/dev/null` —
+> which is how one naturally writes a grep whose misses are uninteresting — the failure is
+> **indistinguishable from a clean zero-hit result**: empty stdout, no error, and the pipeline's
+> exit status comes from the `head` at the end. One claim in §0.4 of this note was committed on
+> exactly that void evidence; re-run with `grep -rn`, the conclusion happened to hold, but it was
+> not earned when it was written. ⇒ **never `timeout … rg`; and an empty result from a search
+> whose stderr was discarded is evidence of NOTHING.** State the instrument check, do not assert
+> it — this note asserted one it had not run.
+>
 > ⚠ **The tree moved during this audit** (`6f0077a` → `f760a4b`, two other agents pushing).
 > Every `file:line` below was re-verified at `f760a4b`. Re-grep before quoting at a later
 > revision; `shim.rs` in particular shifted ~29 lines mid-audit and two subagent reports
@@ -57,8 +69,9 @@ and no event number changed.** 610 only *appends* — one function
 unchanged at both tags. The enum is append-only across the band, so hardcoding is **safe here**.
 
 ⊘ And the two bounds that *did* move (`NUM_FUNCTIONS`, `NUM_EVENTS`) are hardcoded **nowhere** in
-`crates/`. `[read]` (Instrument check: the same grep style returns hits for other tokens on the
-same paths, so the zero is real.)
+`crates/`. `[read]` — `grep -rn 'NUM_FUNCTIONS\|NUM_EVENTS' crates/ --include='*.rs'`, exit 1;
+instrument check, same command shape, `ENCODED_FOR_MAJOR` → 3 hits, exit 0. See the ⚠ below for
+why that instrument check is spelled out rather than assumed.
 
 ### 0.5 ★ The one place the brief was too GENEROUS
 
@@ -400,7 +413,7 @@ encoders plus one crate's call sites, both enumerable.
 ### 3.6 What I checked and found stable — the negative results
 
 RPC envelope 32 B (`g_rpc-message-header.h` **byte-identical** 580↔610);
-alloc/control body headers 32/40 (`g_rpc-structures.h` verified member-by-member);
+alloc/control body headers 32/40 (`g_rpc-structures.h`, compared member-by-member) `[read]`;
 `RPC_HEADER_VERSION 0x0300_0000` (`rpc_headers.h:58-59` identical at both — I read both);
 msgq library (`msgq_priv.h` **byte-identical**, only the path moved);
 LibOS init args (`libos_init_args.h` **byte-identical**);
