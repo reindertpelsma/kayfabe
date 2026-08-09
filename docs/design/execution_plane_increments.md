@@ -10265,13 +10265,12 @@ Nothing gains reach by being unrecognised.
 `0xa`, the one observed `PerGpu` id. `0x7`, `0x8` and `0xc` never appear at all, which is
 why the classification could **not** have been read off the boot.
 
-### 16.50.4 ★★★ THE `RM_ENGINE_TYPE_IS_GR` GATE — READ FROM SOURCE, and its consequence is a REFUSAL we would emit
+### 16.50.4 ★★★ THE `RM_ENGINE_TYPE_IS_GR` GATE, READ AT `ogkm-580: nv_gpu_ops.c:10885` — and ⊘ MY OWN ESCALATION OF IT REFUTED
 
-⊘ **A source reading, said as one.** Everything below is `ogkm-580: nv_gpu_ops.c`, read
-this rung. No boot exercised it, and the consequence it names has **never been observed** —
-no non-GR channel has been reached on this ladder. Recorded as a hazard, not as a finding.
+⊘ **A source reading, said as one.** Everything here is `ogkm-580: nv_gpu_ops.c`, read this
+rung. No boot exercised it.
 
-`ogkm-580: nv_gpu_ops.c:10885-10886` reads exactly as §16.48.3 stated:
+The gate itself reads exactly as §16.48.3 stated:
 
 ```c
 10883:  for (i = 0; i < retainedChannel->resourceCount; i++)
@@ -10283,20 +10282,42 @@ no non-GR channel has been reached on this ladder. Recorded as a hazard, not as 
 ⇒ off the GR path every phase-2 entry carries `bufferId = 0` while `gpuVirtAddr` still
 varies per entry.
 
-⚠ **§16.48.3's reassurance does NOT cover this site, and that is the consequence.** It
-said the key *"stays unique by accident"* because the falcon leg sends `entryCount = 1`
-(`kernel_falcon.c:261`). True there — **false here**: `:10872` sets
-`entryCount = retainedChannel->resourceCount`, which `:10708` takes from the caller's
-`bufferCount` and which is `1` only on the `:10648` single-resource path. So a **non-GR
-channel with two or more bound resources emits N entries all keyed `buffer_id = 0` with
-different VAs**, and our per-VAS join answers the second one with
-`PromoteFault::HalfConflict` — refusing the whole control.
+★★★★ ⊘⊘ **AND THE HAZARD I DERIVED FROM THAT IS REFUTED — BY MY OWN NEXT READ.** The first
+draft of this section escalated §16.48.3's *"the key stays unique by accident"* into a named
+defect: `:10872` sets `entryCount = retainedChannel->resourceCount`, not `1`, so — I argued —
+a non-GR channel with two or more bound resources would emit N entries all keyed
+`buffer_id = 0` with different VAs, and our per-VAS join would answer the second with
+`HalfConflict` and refuse the control. **It cannot happen.** `resourceCount` is set on
+exactly three mutually exclusive paths, and `nvGpuOpsGetChannelInstanceInfo` asserts there
+are no others (`:10578-10580`):
 
-⊘ **Not fixed this rung, and deliberately so.** It cannot fire on this ladder (the GR path
-is the only one reached), the fix needs an engine type `CtxPromotion` does not carry, and
-bundling it would make two changes unfalsifiable in one boot. It is **named** so it is not
-later discovered as a mystery refusal on the first non-GR channel — which is precisely how
-§16.48.3's "by accident" would otherwise have read.
+| engine type | where `resourceCount` comes from | value |
+|---|---|---|
+| `UVM_GPU_CHANNEL_ENGINE_TYPE_CE` | `:10582-10586` — *"CE channels have 0 resources, so they skip this step"*, `goto done` before any assignment | **0** ⇒ `:10855`'s `if (resourceCount != 0)` is false and **no promote control is emitted at all** |
+| `UVM_GPU_CHANNEL_ENGINE_TYPE_SEC2` | `:10596-10650`, the falcon arm, commented *"single buffer"* | **exactly 1** |
+| `UVM_GPU_CHANNEL_ENGINE_TYPE_GR` | `:10708`, `pParams->bufferCount` from `NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_INFO` | **may exceed 1** — and this is the GR path, where `RM_ENGINE_TYPE_IS_GR` is **true** and `bufferId` **is** written |
+
+⇒ the only arm that can produce a multi-entry promotion is the **GR** arm, which is the only
+arm that writes `bufferId`. The two conditions coincide, so `entryCount > 1` and
+`bufferId = 0` are **mutually exclusive at this site**. §16.48.3's reassurance holds; my
+escalation of it does not.
+
+★ **The consequence of the gate is therefore nil today**, and that is the honest statement:
+`RM_ENGINE_TYPE_IS_GR` is a *tautology* at `:10885` — every promotion that reaches it with
+more than one entry already satisfies it. The one real residue is that SEC2's single entry
+carries `bufferId = 0`, colliding in key space with GR's MAIN; that is `entryCount = 1` so
+it cannot self-conflict inside a control, but a SEC2 and a GR channel **sharing a VA space**
+would collide across controls. ⊘ Recorded as **unmeasured**, not as a hazard: no SEC2
+channel has been reached on this ladder, and nothing establishes that they share a VAS.
+
+⚠ **Why this correction is in the log rather than silently edited out.** The brief asked me
+to *"verify [the gate] and state its consequence"*, and the first consequence I derived was
+wrong in the specific way this campaign keeps paying for: I read one line (`:10872`), found
+it disagreed with a reassurance, and wrote the disagreement up as a finding **without
+reading what feeds it**. Two screens up the same file, `:10578-10586` closes it. This is
+`measure_before_reasoning_is_the_order` at source-reading scale — and it is the fourth
+consecutive rung on which the *central claim of a briefing* was refuted by checking. The
+difference is that this one was **mine**, and it was caught before the boot rather than by it.
 
 ### 16.50.5 WHAT LANDED
 
