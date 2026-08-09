@@ -622,6 +622,29 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
               re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \
               bytes of a 28-byte reply and only 16 were kept",
     },
+    // ★★ §16.56 — two rows that exist because a NEW KIND of site began naming truncated
+    // ids: `tests/tests/admitted_is_served.rs` enumerates the control ids our own
+    // unserviced ledger recorded across the committed boot logs, and two of them happen to
+    // be truncated rows. ⊘ The gate fired on them, correctly and usefully: it cannot tell
+    // "names the id" from "reads the row", and it is right to demand the distinction be
+    // written down rather than assumed. These two are the "names it" kind.
+    CaptureReliance {
+        cmd: 0x2080_0a34,
+        read_end: 0,
+        sites: &["tests/tests/admitted_is_served.rs"],
+        why: "NOT A READ. The site is a MEMBERSHIP list: this id reached our own unserviced \
+              ledger in a committed boot and this port answers it with nothing at all, so \
+              no byte of the capture is decoded anywhere. ⊘ The day it is served, this row \
+              must be re-decided against what the recorder actually kept",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0b03,
+        read_end: 0,
+        sites: &["tests/tests/admitted_is_served.rs"],
+        why: "NOT A READ, same as `0x20800a34`. ★ This id was previously in the referenced \
+              universe only through a MISCITED line number (see this list's own doc); it is \
+              now referenced for a real reason, and the reason is still not a read",
+    },
 ];
 
 /// The reliance statement for `cmd`, if this tree has one.

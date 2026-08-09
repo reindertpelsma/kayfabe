@@ -495,6 +495,24 @@ pub const BIND_PARAMS_SIZE: usize = 4;
 /// channel that lives in a TSG is scheduled by scheduling its group — which is what the
 /// C's proven host channel does (`C: src/qemu/nvkvm_gpu_emul.c:9577`), and what this
 /// port does. Both take [`GpfifoScheduleParams`].
+///
+/// ★★★★ **§16.56 — and the GUEST sends it too.** `[measured 2026-08-10, boot
+/// s44_b17381c_rmtrace]`, record 196 of `cup2`'s 249: libcuda builds a TSG
+/// (`hClass=0xa06c`), eight `0xc56f` channels under it, eight `0xc7c0` compute and eight
+/// `0xc7b5` copy objects — **all `status=0`** — then issues
+/// `CTRL cmd=0xa06c0101 hObject=0x5c000012 size=3 in=010000`, reads back `0x56`, and the
+/// very next record is a `FREE`. This id was on the capability allowlist and in **no**
+/// policy's claim list, so nothing in the chain answered it
+/// (`execution_plane_increments.md` §16.55).
+///
+/// ★★ "Both take [`GpfifoScheduleParams`]" is a **typedef**, not a resemblance:
+/// `typedef NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06c.h:101`), and the guest's own vGPU
+/// RPC dispatcher sends both ids down one arm
+/// (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:4557-4559`). ⊘ Worth the citation
+/// because the alternative reading is cheap and wrong: `size=3` on the wire is equally
+/// consistent with three unrelated bytes, and the C's own captured row for the `a06f`
+/// form is one of the eleven `dlen=0` rows the FIFTH LIMIT contradicts.
 pub const NVA06C_CTRL_CMD_GPFIFO_SCHEDULE: u32 = 0xa06c_0101;
 
 /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` —

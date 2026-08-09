@@ -500,12 +500,44 @@ fn a_handle_that_is_not_a_live_channel_is_refused_by_its_own_name() {
 /// ⚠ One id → two at E9/§13.6: the channel-side bind (`0xa06f0104`) joined the claim.
 /// The membership is pinned in full so growing the list is a **visible** diff here, not a
 /// silent widening of what the ledger can no longer see.
+///
+/// # ⊘⊘⊘ THIS TEST HELD THE WALL IN PLACE, and it was GREEN the whole time — §16.56
+///
+/// Until 2026-08-10 this function asserted, in as many words:
+///
+/// ```text
+/// assert!(!OBJECT_CONTROLS.contains(&NVA06C_CTRL_CMD_GPFIFO_SCHEDULE),
+///     "★ the TSG form is what we send the HOST, never what the guest asks us");
+/// ```
+///
+/// `[measured 2026-08-10, boot s44_b17381c_rmtrace]` **the guest asks us**: record 196 of
+/// `cup2`'s 249 is `CTRL cmd=0xa06c0101 hObject=0x5c000012 size=3`, on the TSG that
+/// parents every channel `cuCtxCreate` just built, and the next record is a `FREE`. The
+/// assertion was not stale, not unexecuted and not vague — it was **wrong**, it named its
+/// source, and it ran green on every CI run while the port stopped at the id it forbade.
+///
+/// ★★★★ How a correct citation produced a false universal: `mem_utils.c:1973-1989` really
+/// does issue the `a06f` form, and really is TSG-less. Its scope is
+/// **`RmInitAdapter`'s scrubber** — one channel, allocated by kernel RM. The assertion
+/// generalised it to *"never what the guest asks us"*, which quantifies over **libcuda**
+/// too, and nothing in the cited line speaks about libcuda at all. ⇒ A citation
+/// establishes what it says about the path it is on; the quantifier is the reader's, and
+/// it is the reader's to get wrong (`a_correct_citation_narrowed_by_the_reading`).
+///
+/// ⇒ The membership is still pinned in full — that part earned its keep — but the negative
+/// half is replaced by `tests/tests/admitted_is_served.rs`, which asks the **capability
+/// table** which ids the guest may send us and refuses to let one be admitted-and-unserved
+/// without an explicit, dated waiver. A hand-written "and not these" list can only ever
+/// forbid what its author already thought of.
 #[test]
 fn the_control_claim_is_exactly_these_ids() {
     assert_eq!(
         OBJECT_CONTROLS,
         &[
             NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+            // ★★★★ §16.56 — the TSG form. See this function's docs for the assertion it
+            // replaced and why that assertion was green and false.
+            NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
             // ★★★ §14.25 — the address-plane control, RE-claimed. It was claimed in §14.21,
             // measured to kill the adapter with a "better" refusal status, and reverted;
@@ -516,13 +548,13 @@ fn the_control_claim_is_exactly_these_ids() {
         ]
     );
     assert!(
-        !OBJECT_CONTROLS.contains(&NVA06C_CTRL_CMD_GPFIFO_SCHEDULE),
-        "★ the TSG form is what we send the HOST, never what the guest asks us — \
-         ogkm-580: mem_utils.c:1973-1989 issues the a06f form on a TSG-less channel"
-    );
-    assert!(
         !OBJECT_CONTROLS.contains(&kayfabe_abi::submit::NVA06C_CTRL_CMD_BIND),
-        "★ likewise the TSG-side bind (0xa06c0102): host-facing, never guest-claimed"
+        "★ the TSG-side BIND (0xa06c0102) is host-facing. ⊘ And this one is MEASURED \
+         rather than reasoned, which is the difference from the claim that used to sit \
+         beside it: [measured 2026-08-10, boot s44_b17381c_rmtrace] s44's userspace census \
+         holds exactly ONE a06c control and it is 0xa06c0101, and `grep -c a06c0102` over \
+         s43's and s44's device logs returns 0 — so the guest issues it from neither \
+         userspace nor kernel (execution_plane_increments.md 16.55.7)"
     );
 }
 
@@ -540,9 +572,10 @@ fn every_other_control_is_still_declined_so_the_ledger_lives() {
     // A spread of ids this port refuses, decides elsewhere, or has never seen — including
     // the TSG form, which is the one a careless claim would swallow.
     for cmd in [
-        NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
-        // ⚠ 0xa06f_0104 (the channel-side bind) left this list at E9/§13.6 — it is now
-        // CLAIMED, and its own suite (`bind_channel.rs`) asserts it is always decided.
+        // ⚠ 0xa06f_0104 (the channel-side bind) left this list at E9/§13.6, and
+        // 0xa06c_0101 (the TSG-side schedule) left it at §16.56 — both are now CLAIMED.
+        // ⊘ A list of "controls we decline" is a list that shrinks as the port grows, and
+        // every member that leaves it left because a BOOT said so.
         kayfabe_abi::submit::NVA06C_CTRL_CMD_BIND,
         0xc36f_0108,
         0x2080_0a6c,
@@ -593,5 +626,233 @@ fn the_triage_row_survives_and_records_the_correction() {
         row.why.contains("hVASpace = NV01_NULL_OBJECT"),
         "★ and must keep naming what is STILL false — the scrubber has no VAS, so its \
          first doorbell refuses NoVas"
+    );
+}
+
+// =================================================================================
+// ★★★★ §16.56 — THE TSG FORM (`0xa06c0101`), the wall `cuCtxCreate` stopped at
+// =================================================================================
+
+/// ★★★★★ **The load-bearing test for the TSG form: ONE control, and EVERY member of the
+/// group crosses the doorbell gate.**
+///
+/// `[measured 2026-08-10, boot s44_b17381c_rmtrace]` libcuda builds a TSG and **eight**
+/// channels under it, then issues exactly one `0xa06c0101` on the group. Nothing else
+/// declares those eight channels runnable — so a port that recorded the intent against the
+/// group handle, or against one member, would ack the guest and then refuse the guest's
+/// very next doorbell. This asserts the fan-out is real, and it asserts it the only way
+/// that cannot be faked: through `plan_doorbell`, on each member, before and after.
+///
+/// ⊘ As with the channel form, it does **not** assert the doorbell *succeeds* afterwards.
+/// The claim is that the refusal CHANGES — from "you never asked" to the next honest
+/// obstacle — which is the whole difference between a gate and a wall
+/// (`docs/design/gpfifo_schedule.md` §3).
+#[test]
+fn one_tsg_control_lets_every_member_channel_past_the_doorbell_gate() {
+    let (factory, _rec) = MockIsolateFactory::new();
+    let mut gpu = Gpu::new(
+        Box::new(MockArch::new()),
+        Box::new(factory),
+        GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
+    )
+    .expect("device realizes");
+
+    let client = HClient(0xAA);
+    let pdb = Pdb(0x11_0000);
+    let h = identical_handles(0x10, 0x11);
+    let mut s = Scenario::new();
+    s.compute_process(client, pdb, h);
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+    // ---- BEFORE: BOTH members are refused BY NAME -----------------------------
+    for vchid in [h.gr_vchid, h.ce_vchid] {
+        let before = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[])
+            .expect_err("an unscheduled member must not be rung");
+        assert_eq!(
+            before.fault_tag(),
+            FaultTag("FwdFault::NotScheduled"),
+            "★ non-vacuity: member {vchid:?} must start OUTSIDE the gate, or the transition \
+             below proves nothing"
+        );
+    }
+
+    // ---- THE CONTROL, on the GROUP handle --------------------------------------
+    let ack = gpu
+        .schedule_group(client, h.tsg, true)
+        .expect("the group resolves and every member is placed");
+    assert_eq!(
+        ack.members, 2,
+        "★ the fan-out must reach EVERY member. One member is what a port that routed the \
+         group handle to a single channel would report, and it would ack the guest while \
+         leaving the rest off the runlist — the #12 shape ({ack:?})"
+    );
+    assert_eq!(ack.changed, 2, "both members moved: {ack:?}");
+    assert_eq!(ack.unmaterialized, 0, "no member was silently dropped: {ack:?}");
+
+    // ---- AFTER: BOTH members are past the gate ---------------------------------
+    for vchid in [h.gr_vchid, h.ce_vchid] {
+        let after = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[]);
+        let tag = match &after {
+            Ok(_) => FaultTag("ok"),
+            Err(f) => f.fault_tag(),
+        };
+        assert_ne!(
+            tag,
+            FaultTag("FwdFault::NotScheduled"),
+            "★★★ the SAME doorbell on member {vchid:?}, and the ONLY thing that changed is \
+             the guest's one control on the GROUP. If this is still NotScheduled the \
+             control performed nothing for this member."
+        );
+    }
+
+    // ---- AND THE WITHDRAWAL --------------------------------------------------
+    let off = gpu
+        .schedule_group(client, h.tsg, false)
+        .expect("the group still resolves");
+    assert_eq!(off.changed, 2, "bEnable=0 must withdraw every member: {off:?}");
+    for vchid in [h.gr_vchid, h.ce_vchid] {
+        let again = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[])
+            .expect_err("a withdrawn member must not be rung");
+        assert_eq!(
+            again.fault_tag(),
+            FaultTag("FwdFault::NotScheduled"),
+            "★ a port that recorded the enable and ignored the disable would be telling the \
+             guest a group is stopped while continuing to run it"
+        );
+    }
+}
+
+/// ⊘ **The group route refuses by NAME, and never with `0x56`.**
+///
+/// `NV_ERR_NOT_SUPPORTED` is the FSM's signature for *"nobody claimed this command"* — it
+/// is precisely the value this port answered `0xa06c0101` with for six committed boots. A
+/// decided refusal that reused it would be indistinguishable, in the guest's own dmesg,
+/// from the wall §16.56 removed.
+#[test]
+fn the_group_route_refuses_by_name_and_never_with_not_supported() {
+    let (factory, _rec) = MockIsolateFactory::new();
+    let mut gpu = Gpu::new(
+        Box::new(MockArch::new()),
+        Box::new(factory),
+        GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
+    )
+    .expect("device realizes");
+    let client = HClient(0xAA);
+    let h = identical_handles(0x10, 0x11);
+    let mut s = Scenario::new();
+    s.compute_process(client, Pdb(0x11_0000), h);
+    for ev in s.events {
+        gpu.apply(ev).expect("scenario applies");
+    }
+
+    use kayfabe_core::gpu::ScheduleGroupFault as F;
+    // A handle nothing was ever allocated at.
+    assert!(matches!(
+        gpu.schedule_group(client, HObject(0xdead_beef), true),
+        Err(F::UnknownGroup { .. })
+    ));
+    // A live handle that is not a group — the guest's own CHANNEL, which is the confusion
+    // this whole increment turns on (`0xa06c0101` takes a group, `0xa06f0103` a channel).
+    assert!(
+        matches!(
+            gpu.schedule_group(client, h.gr_channel, true),
+            Err(F::NotAGroup { .. })
+        ),
+        "★ routing a channel into the group form must refuse by name rather than silently \
+         doing the channel form's job"
+    );
+    // And the mirror: the group handle in the CHANNEL form.
+    assert!(
+        matches!(
+            gpu.schedule_channel(client, h.tsg, true),
+            Err(ScheduleFault::NotAChannel { .. })
+        ),
+        "★ and the reverse confusion is refused too — the two commands are not aliases"
+    );
+    assert_ne!(
+        kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS, 0x56,
+        "★★★ the refusal status must never be NV_ERR_NOT_SUPPORTED: that is what the port \
+         answered 0xa06c0101 with for six boots, and a decided refusal must be readable as \
+         a decision in the one place anyone sees it — the guest's dmesg"
+    );
+    assert!(
+        GPFIFO_SCHEDULE_DOCUMENTED_STATUSES
+            .contains(&kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS),
+        "and it must be in the control's OWN documented set (ogkm-580: ctrla06fgpfifo.h:59-64)"
+    );
+}
+
+/// ★★ **The whole RPC, end to end through the policy** — the shape `s44` measured, byte for
+/// byte: `hObject` = the TSG, `paramsSize` = 3, `in = 01 00 00`.
+///
+/// ⊘ The reply body matters and is asserted: `paramsSize != 0`, so the GSP transport copies
+/// the reply's params over the caller's struct (`ogkm-580: rpc.c:11085-11090`). A
+/// zero-filled body would clear the caller's `bEnable` behind its back.
+#[test]
+fn the_policy_answers_the_tsg_control_with_the_guests_own_bytes() {
+    const TSG: u32 = 0xcafe_0020;
+    const CH_A: u32 = 0xcafe_0021;
+    const CH_B: u32 = 0xcafe_0022;
+
+    let mut p = ObjectPolicy::new(
+        abi(),
+        GuestOs::Linux,
+        port_gpu(),
+        kayfabe_device::ga10x::GA106_ENGINES,
+    );
+    let mut s = w::RpcScript::new();
+    s.client_root(w::NV01_ROOT, CLIENT, w::KERNEL_PID)
+        .device(CLIENT, CLIENT, DEVICE, 0)
+        .tsg(CLIENT, DEVICE, TSG, w::NV01_NULL_OBJECT)
+        .channel(
+            CLIENT,
+            TSG,
+            CH_A,
+            userd::flags_for(CHID),
+            w::NV01_NULL_OBJECT,
+            w::NV01_NULL_OBJECT,
+        )
+        .channel(
+            CLIENT,
+            TSG,
+            CH_B,
+            userd::flags_for(CHID + 1),
+            w::NV01_NULL_OBJECT,
+            w::NV01_NULL_OBJECT,
+        );
+    for msg in s.messages() {
+        p.respond(&command(&msg));
+    }
+
+    // ★ The exact three bytes s44 captured: `in=010000`.
+    let mut c = w::RpcScript::new();
+    c.control(CLIENT, TSG, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &[1, 0, 0]);
+    let m = c.messages().into_iter().next().expect("one message");
+    let cmd = command(&m);
+    let reply = p
+        .respond(&cmd)
+        .expect("★★★ the policy must CLAIM 0xa06c0101 — a None here is the s44 wall");
+    assert_eq!(
+        reply.rpc_result, 0,
+        "the group resolves and every member is placed, so the answer is NV_OK"
+    );
+    let req = abi()
+        .decode_rpc_control(&cmd.payload)
+        .expect("the request decodes");
+    assert_eq!(
+        &reply.body[req.params_at..req.params_at + GpfifoScheduleParams::SIZE],
+        &[1u8, 0, 0],
+        "★ the guest's own bytes come back — a zero body would clear its bEnable"
+    );
+
+    // ⊘ Non-vacuity of the CLAIM: the same policy still declines a control it does not own,
+    // so this arm did not widen the claim to the RmControl function.
+    let mut o = w::RpcScript::new();
+    o.control(CLIENT, TSG, 0x2080_0a4b, &[0u8; 4]);
+    let om = o.messages().into_iter().next().expect("one message");
+    assert!(
+        p.respond(&command(&om)).is_none(),
+        "the ledger must still see every control this policy does not claim"
     );
 }

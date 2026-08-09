@@ -2507,6 +2507,16 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         self.0.schedule_channel(client, object, enable)
     }
 
+    fn schedule_group(
+        &mut self,
+        client: kayfabe_rt::HClient,
+        object: kayfabe_rt::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>
+    {
+        self.0.schedule_group(client, object, enable)
+    }
+
     fn bind_channel(
         &mut self,
         client: kayfabe_rt::HClient,

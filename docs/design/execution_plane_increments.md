@@ -10893,3 +10893,174 @@ so the guest never issues BIND from userspace *or* from the kernel. ⇒ the C's 
 **originating** a host-side setup call, not replaying one of the guest's, and there is no
 guest BIND for us to serve. ★ Recorded as closed rather than carried forward: a hypothesis I
 could answer from a capture already in the tree had no business becoming next rung's question.
+
+---
+
+## §16.56 ★★★★★ SERVE THE TSG SCHEDULE — and the refutation that came with it: the wall was never invisible
+
+`0xa06c0101` (`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`) is now claimed by `ObjectPolicy` and
+**performed** rather than acked. This section carries the code, the argument, three
+refutations, and the falsifier for the boot — committed before it.
+
+### 16.56.1 ⊘⊘⊘ REFUTED — "why nothing saw it". THE LEDGER SAW IT, SIX TIMES, ON DISK
+
+The brief for this rung said:
+
+> **Why nothing saw it:** `0xa06c0101` is allowlisted but absent from `OBJECT_CONTROLS`.
+> Clearing the first gate means **no `FaultTag` is ever built**, so no refusal-census row,
+> no counter, **silent** fall to the unserviced ledger.
+
+Every clause of the mechanism holds. The conclusion does not.
+`[measured 2026-08-10, over traces/guest_boots/*_qemu.log]`:
+
+```
+run_s44_b17381c_rmtrace_qemu.log:149
+  nvkvm:   unserviced fn 76 cmd 0xa06c0101
+```
+
+**Six committed boot logs carry that line** — `s39_fd92017_kernelarm`,
+`s40_4733730_acceptcensus`, `s41b_62e757f_twophase`, `s42_21f967b_gpuscope`,
+`s43_b17381c_cumjoin`, `s44_b17381c_rmtrace` — by command id, in full, from the first boot
+that reached the point. §16.55.2's own evidence table cites that very line. ⇒ The datum was
+recorded correctly by a working instrument and committed to this repository for six rungs.
+
+★★★★ **The defect is RANK, not visibility.** `s44`'s ledger prints **42 distinct**
+unserviced ids in one undifferentiated block. One ended `cuCtxCreate`; forty-one were
+survivable. The ledger records membership and deliberately nothing else — so nothing in it
+said which, and nobody was ever *required* to say. ⇒ A gate that made the id **more
+visible** would have closed nothing. What was missing is an **argument attached to each
+entry**, and that is what `tests/tests/admitted_is_served.rs` now demands.
+
+⚠ Note the shape of my own near-miss: the brief's mechanism is correct and its conclusion is
+not, and the difference is one `grep` over files the brief itself pointed at. *"No counter
+was incremented"* and *"no record exists"* are different facts, and the first does not imply
+the second when a terminal-shaped recorder sits at the end of the chain — which is exactly
+what `unserviced::UnservicedLedger` is, by design, documented in `served_chain`.
+
+### 16.56.2 ⊘⊘ REFUTED — a GREEN, EXECUTING TEST held the wall in place
+
+`tests/tests/gpfifo_schedule.rs::the_control_claim_is_exactly_these_ids` asserted, and had
+asserted since #177:
+
+```rust
+assert!(!OBJECT_CONTROLS.contains(&NVA06C_CTRL_CMD_GPFIFO_SCHEDULE),
+    "★ the TSG form is what we send the HOST, never what the guest asks us —
+     ogkm-580: mem_utils.c:1973-1989 issues the a06f form on a TSG-less channel");
+```
+
+It ran on every CI run. It was green. It was **wrong**, and it named its source.
+
+★★★★ **A correct citation, a false universal.** `mem_utils.c:1973-1989` really does issue
+the `a06f` form on a TSG-less channel. Its scope is `RmInitAdapter`'s **scrubber** — one
+channel, allocated by kernel RM. The assertion generalised it to *"never what the guest asks
+us"*, a quantifier that ranges over **libcuda**, about which the cited line says nothing.
+`docs/design/gpfifo_schedule.md` §1's table carries the same narrowing (`0xa06c0101` → *"on
+this path? no"*), and the table is right: on **that** path, it is no.
+
+⇒ A citation establishes what it says about the path it is on. The quantifier is the
+reader's, and it is the reader's to get wrong. (`a_correct_citation_narrowed_by_the_reading`
+— and this is the second instance in this campaign.)
+
+### 16.56.3 ⊘ REFUTED — `admitted ⊆ served` is not the invariant: 142 of 163
+
+`[measured 2026-08-10, rev 1f38160, tests/tests/admitted_is_served.rs]`
+
+The brief prescribed a compile- or test-time assertion that *every command the allowlist
+admits must have an implementation*. `[measured 2026-08-10, rev 1f38160]`:
+
+| | |
+|---|---|
+| controls the bench boundary admits **by name** (`CapabilityTable::all_controls`) | **163** |
+| of those, ids the production chain has an arm for | **21** |
+| **admitted and served by nothing** | **142** |
+
+★ That is not 142 bugs. The two sets are about **different planes**: `capability::CONTROLS_*`
+is ported from gVisor `nvproxy` and gates the guest's **userspace ioctl** surface; the served
+chain answers the **GSP RPC** surface. Most of the 142 never reach our GSP at all — the
+guest's own kernel RM answers them locally out of state it already has. Building answers for
+them would be building answers for traffic that does not exist, and a gate demanding it would
+be 142 rows of noise that every future reader learns to skip.
+
+⇒ The universe with force is not the allowlist. It is **what a boot recorded the guest
+actually sending us**, which is what the gate quantifies over. `[measured 2026-08-10]` that
+universe is **43** ids across every committed boot log; `0xa06c0101` has left it (served),
+`0x00801813` left it at §16.30, and the remaining **41** are now listed with the two
+directions machine-checked.
+
+⊘ And the gate is **scoped in its own docs**: `ControlPermit` has two *rule-based*
+admissions (`GssLegacyRule`, bit 15; `BinApiRule`, class `0x2081`) that admit an unbounded id
+space no table enumerates. They cannot be swept. A reader who takes the gate for the whole
+admission surface has inherited the same false universal §16.56.2 is about.
+
+### 16.56.4 THE CODE — and why the `NV_OK` is not forged
+
+The C's standing warning is `nvkvm_gpu_emul.c:8038` — *"The guest's GPFIFO_SCHEDULE is a
+control (not forwarded by shadow_fwd), so the host TSG is idle until we schedule it."* An ack
+alone would move the wall and schedule nothing.
+
+| layer | what landed |
+|---|---|
+| `kayfabe-core/src/gpu.rs` | `route_schedule_group` / `apply_schedule_group` / `Gpu::schedule_group`, `ScheduleGroupRoute` / `Ack` / `Fault` |
+| `kayfabe-rmrpc/src/policy.rs` | `OBJECT_CONTROLS` += `0xa06c0101`; `respond_gpfifo_schedule_group`; `ObjectModel::schedule_group` |
+| `kayfabe-rt/src/device.rs` | `SharedDevice::schedule_group` — ROUTE at rank 0, ACT under one proc lock |
+| `kayfabe-qemu-raw/src/shim.rs` | the shell's seat |
+| `tests/tests/gpfifo_schedule.rs` | the doorbell transition, per member; the refusal vocabulary; the whole RPC |
+| `tests/tests/admitted_is_served.rs` | the ledger ratchet (§16.56.3) |
+
+★★ **The fan-out is the driver's own semantics, not our invention.**
+`kchangrpapiCtrlCmdGpFifoSchedule_IMPL` walks `pKernelChannelGroup->pChanList` **twice**
+before it RPCs — once asserting every member is schedulable (`NV_ERR_INVALID_STATE` if not),
+once forcing every member onto one runlist (`ogkm-580:
+src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c:1102-1170`). The params are a
+**typedef**, not a look-alike: `typedef NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS
+NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS` (`ogkm-580: ctrl/ctrla06c.h:101`), and the guest's vGPU
+dispatcher sends both ids down one arm (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:4557-4559`).
+
+★★★ **What makes the ack falsifiable** is identical to #177's and inherits its argument
+(`docs/design/gpfifo_schedule.md` §2): the members land in `ExecPlane::requested`, which
+`kayfabe_fwd::plan_doorbell` **gates** on (`FwdFault::NotScheduled`), and the host-side
+`0xa06c0101` is issued by `kayfabe_isolate::RmBackend::schedule` against the **host** group at
+the member's first doorbell. `one_tsg_control_lets_every_member_channel_past_the_doorbell_gate`
+runs the transition on **every** member, before and after — a port that recorded the intent
+against the group handle, or against one member, acks the guest and then refuses its very next
+doorbell, which is the #12 shape.
+
+⊘ **Refusals are by name and never `0x56`.** `ScheduleGroupFault` has five variants
+(`UnknownGroup`, `NotAGroup`, `GroupHasNoChannels`, `NoMemberMaterialized`,
+`GroupSpansProcs`) answered `NV_ERR_INVALID_STATE` (`0x40`) — which is in the command's own
+vocabulary (`kernel_channel_group_api.c:1106-1109`), and is *not* `NV_ERR_NOT_SUPPORTED`,
+because `0x56` is the signature this port wore on this exact id for six boots.
+
+⊘ **What is still false** is unchanged and is not re-argued here: `gpfifo_schedule.md` §3.
+`GroupHasNoChannels` and `NoMemberMaterialized` are split deliberately — one means the guest
+scheduled an empty group, the other means **our** projection lost channels the guest built,
+and only the second is our defect.
+
+### 16.56.5 ★★★ THE FALSIFIER FOR `s45`, committed BEFORE the boot
+
+Instrument: `scripts/bench/boot_capture.sh s45_<rev>_tsgsched` with
+`POST_CAPTURE_HOOK=scripts/bench/cup2_hook_rmtrace.sh` — the same LD_PRELOAD RM/UVM
+interposer that produced `s44`'s 249 ordered records, read **in guest order**.
+
+⚠ **Positive control, chosen from the population the instrument can see.** §16.55.5's own
+correction: `0x2080012b` was structurally invisible to this instrument (kernel-originated,
+never crosses the userspace boundary) and would have scored a good boot as a failure. The
+control here is **`ALLOC hClass=0x0000a06c` ×1** — measured present in `s44`, on the
+userspace path, immediately before the record under test. ⊘ If it is **absent**, nothing
+below is scored: the capture did not reach the context build.
+
+| # | outcome | the distinguishable line | verdict |
+|---|---|---|---|
+| **A** | `CTRL cmd=0xa06c0101 … status=0x00000000`, **and** records appear after it that are not `FREE`/`ESC nr=0x4f` | `196: CTRL cmd=0xa06c0101 … status=0x00000000` followed by a non-teardown record | ★★★★★ the wall moved. **Report the id and status of the next non-zero record** — that is the next wall, and §16.55.7 says to expect one |
+| **B** | `CTRL cmd=0xa06c0101 … status=0x00000040` | the same record with `0x40`, and `nvkvm: control 0xa06c0101 result 0x00000040` in the qemu log | ★★★★ **a win of a different kind**: the control is CLAIMED and the group route DECIDED against it. The device log names which `ScheduleGroupFault`. Almost certainly `NoMemberMaterialized` — the projection did not place libcuda's eight channels — which is a defect of ours the port could not previously express |
+| **C** | `CTRL cmd=0xa06c0101 … status=0x00000056` still | unchanged from `s44` | ⊘⊘ **instrument/plumbing failure, not a port result.** `0x56` is *"nobody claimed it"*, and this rung claimed it. Check the binary's `kayfabe-rev` on BOTH `qemu-build/qemu-system-x86_64` and the linked `libkayfabe_qemu_raw.a` before reading anything else — the bench served a stale binary for weeks once |
+| **D** | no `0xa06c0101` record at all, control present | `ALLOC hClass=0x0000a06c` present, no `a06c0101` | the guest changed behaviour between boots. Report; do not score A/B/C |
+
+⊘ The reply-status alone does not decide **A vs B** by itself in one direction: `A` requires
+*both* `0x00000000` **and** a following non-teardown record, because an `NV_OK` followed by
+nothing but `FREE` would mean the ack was accepted and the next thing failed silently — which
+is a fourth state, and it reads as `A` to anyone who only checks the status.
+
+Also captured every boot, and asserted non-empty: `run_s45_*_dmesg.log` containing
+`RmInitAdapter`, `CUP2_RC`, the qemu log's `commands:` / `unserviced` / `controls:` census
+lines, and `nvkvm: control 0xa06c0101 result …`.

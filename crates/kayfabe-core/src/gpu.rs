@@ -624,6 +624,266 @@ impl core::fmt::Display for ScheduleFault {
 
 impl core::error::Error for ScheduleFault {}
 
+/// Where a `0xa06c0101` is going — [`route_schedule_group`]'s answer. §16.56.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduleGroupRoute {
+    /// The proc that owns every channel of the group.
+    pub proc: ProcId,
+    /// The group's member channels, in the projection's own order.
+    pub chans: Vec<ChanId>,
+    /// ★ Members that resolved as live channel **resources** but have no slot in any
+    /// proc. Reported rather than discarded: a group that is *partly* placed is a
+    /// different finding from one that is wholly placed, and answering `NV_OK` while
+    /// silently dropping members is the shape [`ExecPlane::requested`]'s doc forbids.
+    pub unmaterialized: usize,
+}
+
+/// ★★★★ **§16.56 — ROUTE (rank 0) for the TSG form of GPFIFO_SCHEDULE (`0xa06c0101`).**
+///
+/// Resolve `(client, object)` to the proc and the **set** of channel slots the guest's
+/// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` names.
+///
+/// # Why a set, and why that is the driver's own semantics rather than our guess
+///
+/// The TSG form is not a different operation from the channel form — it is the same
+/// operation quantified over the group's member list, and RM's own kernel half says so by
+/// doing exactly that before it RPCs to us: `kchangrpapiCtrlCmdGpFifoSchedule_IMPL` walks
+/// `pKernelChannelGroup->pChanList` twice — once asserting every member is schedulable
+/// (`NV_ERR_INVALID_STATE` if not) and once forcing every member onto one runlist — and
+/// only then hands the command to the GSP
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c:1102-1170`). Its
+/// params are a **typedef** of the channel form's, not a look-alike:
+/// `typedef NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS`
+/// (`ogkm-580: ctrl/ctrla06c.h:101`), and the guest's vGPU RPC dispatcher sends both ids
+/// down one arm (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:4557-4559`).
+///
+/// ⇒ Fanning the guest's one control out over the group's members is a **translation of
+/// the guest's intent**, in the sense `mode2_forwarding_model.md` requires, not an
+/// invention.
+///
+/// # The hops
+///
+/// 1. `(client, object)` → the live resource, which must be an [`ObjectKind::Tsg`].
+/// 2. the group's **members**: every live channel resource whose declared parent is this
+///    group's origin handle, in this group's origin namespace. ⊘ Read from the *graph*,
+///    never from a list we accrete — the graph is where a `FREE` of a member is already
+///    reflected, and a cached member list is the stale-set bug class this port has paid
+///    for twice (`ExecPlane`'s "nothing scalar, nothing one-shot").
+/// 3. each member's identity → `(ProcId, ChanId)` via [`Spine::by_chan`], exactly the hop
+///    [`route_schedule_channel`] uses and for its reasons.
+///
+/// ⚠ It does **not** route through [`Spine::ctx_vas`], for the same reason
+/// [`route_schedule_channel`] does not — read that function's docs.
+///
+/// # Errors
+/// [`ScheduleGroupFault`], by variant.
+pub fn route_schedule_group(
+    spine: &Spine,
+    client: HClient,
+    object: HObject,
+) -> Result<ScheduleGroupRoute, ScheduleGroupFault> {
+    let group = spine
+        .rmgraph
+        .node(NodeKey::new(client, object))
+        .ok_or(ScheduleGroupFault::UnknownGroup { client, object })?;
+    if group.kind != kayfabe_arch::ObjectKind::Tsg {
+        return Err(ScheduleGroupFault::NotAGroup { client, object });
+    }
+    // ★ Members are matched against the group's ORIGIN key, not against the `(client,
+    // object)` the guest asked in. A dup alias resolves to the same resource, and the
+    // members' declared `parent` handle lives in the allocating namespace — pairing the
+    // asked-in client with a member's parent handle would silently find nothing for a
+    // group named through an alias, which reads as "the group is empty".
+    let mut chans: Vec<ChanId> = Vec::new();
+    let mut procs: BTreeSet<ProcId> = BTreeSet::new();
+    let mut unmaterialized = 0usize;
+    let mut members = 0usize;
+    for n in spine.rmgraph.nodes() {
+        if !matches!(n.kind, kayfabe_arch::ObjectKind::Channel { .. })
+            || n.key.client != group.key.client
+            || n.parent != group.key.handle
+        {
+            continue;
+        }
+        members += 1;
+        match spine.by_chan.get(&n.id()) {
+            Some(&(pid, cid)) => {
+                procs.insert(pid);
+                chans.push(cid);
+            }
+            None => unmaterialized += 1,
+        }
+    }
+    if members == 0 {
+        return Err(ScheduleGroupFault::GroupHasNoChannels { client, object });
+    }
+    if chans.is_empty() {
+        return Err(ScheduleGroupFault::NoMemberMaterialized {
+            client,
+            object,
+            members,
+        });
+    }
+    if procs.len() != 1 {
+        return Err(ScheduleGroupFault::GroupSpansProcs {
+            client,
+            object,
+            procs: procs.len(),
+        });
+    }
+    let proc = *procs.iter().next().expect("exactly one proc");
+    Ok(ScheduleGroupRoute {
+        proc,
+        chans,
+        unmaterialized,
+    })
+}
+
+/// ★ **ACT (rank 1, one proc).** Record or withdraw the guest's scheduling declaration
+/// for every member of the group. §16.56.
+#[must_use]
+pub fn apply_schedule_group(
+    proc: &mut Proc,
+    route: &ScheduleGroupRoute,
+    enable: bool,
+) -> ScheduleGroupAck {
+    let mut changed = 0usize;
+    for &cid in &route.chans {
+        let moved = if enable {
+            proc.exec.requested.insert(cid)
+        } else {
+            proc.exec.requested.remove(&cid)
+        };
+        if moved {
+            changed += 1;
+        }
+    }
+    ScheduleGroupAck {
+        proc: route.proc,
+        members: route.chans.len(),
+        changed,
+        unmaterialized: route.unmaterialized,
+        enabled: enable,
+    }
+}
+
+/// What [`Gpu::schedule_group`] performed — §16.56.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScheduleGroupAck {
+    /// The proc that owns the group.
+    pub proc: ProcId,
+    /// How many member channels the intent was recorded against.
+    pub members: usize,
+    /// How many of them actually moved. ★ `0` is legitimate and still `NV_OK` — this
+    /// control is idempotent and RM re-issues it — but it is reported rather than
+    /// discarded so a boot's census can tell "the guest asked twice" from "the guest
+    /// asked once", exactly as [`ScheduleAck::changed`] does for the channel form.
+    pub changed: usize,
+    /// Members that had no slot ([`ScheduleGroupRoute::unmaterialized`]).
+    pub unmaterialized: usize,
+    /// The `bEnable` that was asked for.
+    pub enabled: bool,
+}
+
+/// Why [`Gpu::schedule_group`] refused — §16.56.
+///
+/// ⊘ Every variant means *"this port examined the request and declined"*, answered with
+/// `kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS` (`NV_ERR_INVALID_STATE`) and
+/// never with `NV_ERR_NOT_SUPPORTED` — see [`ScheduleFault`] for the argument, which
+/// applies here **doubly**: `0x56` on this exact command is the signature the port wore
+/// for the whole of `s43`/`s44`, so reusing it would make a decided refusal
+/// indistinguishable from the wall this increment exists to remove.
+///
+/// ★ `NV_ERR_INVALID_STATE` is in the command's own vocabulary rather than borrowed:
+/// `kchangrpapiCtrlCmdGpFifoSchedule_IMPL` returns exactly it when a member is not
+/// schedulable (`ogkm-580: kernel_channel_group_api.c:1106-1109`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleGroupFault {
+    /// No live resource at `(client, object)`.
+    UnknownGroup {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// The handle resolves, but not to a channel group.
+    NotAGroup {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// A live TSG with **no channel members at all**. ⊘ Answered as a refusal rather
+    /// than as a vacuous `NV_OK`: an `NV_OK` here would be a promise about an empty set,
+    /// which is the unfalsifiable-ack shape this port refuses by policy.
+    GroupHasNoChannels {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+    },
+    /// The group has members, and **we** cannot place any of them in a proc. ★ Distinct
+    /// from [`Self::GroupHasNoChannels`] on purpose, and the distinction is the whole
+    /// diagnostic: one means the guest scheduled an empty group, the other means our
+    /// projection lost every channel the guest built — only the second is our defect.
+    NoMemberMaterialized {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+        /// How many live channel resources declared this group as their parent.
+        members: usize,
+    },
+    /// The group's members resolved into **more than one proc**. Not reachable by a
+    /// well-formed guest — a TSG's channels are allocated in one namespace under one
+    /// anchor — and refused rather than partially applied, because "schedule some of the
+    /// group" is not a state RM has and not one this port will invent.
+    GroupSpansProcs {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The handle asked about.
+        object: HObject,
+        /// How many distinct procs the members landed in.
+        procs: usize,
+    },
+}
+
+impl core::fmt::Display for ScheduleGroupFault {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ScheduleGroupFault::UnknownGroup { client, object } => {
+                write!(f, "no live resource at ({client:?}, {object:?})")
+            }
+            ScheduleGroupFault::NotAGroup { client, object } => {
+                write!(f, "({client:?}, {object:?}) is not a channel group")
+            }
+            ScheduleGroupFault::GroupHasNoChannels { client, object } => write!(
+                f,
+                "channel group ({client:?}, {object:?}) has no member channels"
+            ),
+            ScheduleGroupFault::NoMemberMaterialized {
+                client,
+                object,
+                members,
+            } => write!(
+                f,
+                "channel group ({client:?}, {object:?}) has {members} member(s), none with a \
+                 slot in any proc"
+            ),
+            ScheduleGroupFault::GroupSpansProcs {
+                client,
+                object,
+                procs,
+            } => write!(
+                f,
+                "channel group ({client:?}, {object:?}) spans {procs} procs"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for ScheduleGroupFault {}
+
 /// Where a `0xa06f0104` is going — [`route_bind_channel`]'s answer. E9/§13.6.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BindRoute {
@@ -4307,6 +4567,59 @@ impl Gpu {
                 .ok_or(ScheduleFault::ChannelNotMaterialized { client, object })?
         };
         Ok(apply_schedule_channel(proc, &route, enable))
+    }
+
+    /// ★★★★ **§16.56 — perform the guest's `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`** (the TSG
+    /// form, `0xa06c0101`).
+    ///
+    /// `[measured 2026-08-10, boot s44_b17381c_rmtrace]` this is the **first** thing
+    /// `cuCtxCreate` cannot get past: libcuda builds a TSG, eight channels, eight compute
+    /// objects and eight copy objects — all `status=0` — then asks RM to schedule the
+    /// group, reads back `NV_ERR_NOT_SUPPORTED`, and every record after it is a `FREE`
+    /// (`execution_plane_increments.md` §16.55.1).
+    ///
+    /// # ⊘⊘ What this is NOT: a bare `NV_OK`
+    ///
+    /// The scope is identical to [`Self::schedule_channel`]'s and is honest for the same
+    /// reason — the *eligibility* transition is performed here and it is **enforced**
+    /// (`kayfabe_fwd::plan_doorbell` refuses `FwdFault::NotScheduled` for a channel not in
+    /// [`ExecPlane::requested`]), while the host-side runlist submit happens at the
+    /// channel's first doorbell, where `kayfabe_isolate::RmBackend::schedule` issues
+    /// `0xa06c0101` against the **host** group. So the ack is falsifiable: break the gate
+    /// and a test goes red (`scripts/bite_gpfifo_schedule.py`).
+    ///
+    /// ★ That deferral is the C artifact's own architecture, which is the only one a real
+    /// driver has accepted end to end: the C answers the guest's schedule from a table and
+    /// schedules the *host* TSG at the first doorbell
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:8038-8048`, `:4176-4194`) — read
+    /// `docs/design/gpfifo_schedule.md` §2 for why the two are observationally
+    /// indistinguishable to the guest, and §3 for what is still false.
+    ///
+    /// ⊘ It is the same deferral, not a weaker one: `plan_doorbell` gates on the member
+    /// channel, so a group whose members we could not place refuses **here**
+    /// ([`ScheduleGroupFault::NoMemberMaterialized`]) rather than acking and hanging.
+    ///
+    /// # Errors
+    /// [`ScheduleGroupFault`], by variant.
+    pub fn schedule_group(
+        &mut self,
+        client: HClient,
+        object: HObject,
+        enable: bool,
+    ) -> Result<ScheduleGroupAck, ScheduleGroupFault> {
+        let route = route_schedule_group(&self.spine, client, object)?;
+        let proc = if route.proc == Gpu::SYSTEM_PROC {
+            &mut self.system
+        } else {
+            self.procs
+                .get_mut(&route.proc)
+                .ok_or(ScheduleGroupFault::NoMemberMaterialized {
+                    client,
+                    object,
+                    members: route.chans.len() + route.unmaterialized,
+                })?
+        };
+        Ok(apply_schedule_group(proc, &route, enable))
     }
 
     /// ★★★ **E9/§13.6 — perform the guest's `NVA06F_CTRL_CMD_BIND`.**

@@ -511,6 +511,24 @@ pub trait ObjectModel: Send {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault>;
 
+    /// ★★★★ **§16.56** — perform the guest's `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` (the
+    /// **TSG** form, `0xa06c0101`) — the wall `s44` named.
+    ///
+    /// ⊘ A separate method rather than a flag on [`Self::schedule_channel`]: the two take
+    /// different objects (a channel group vs one channel), fan out differently, and refuse
+    /// with different vocabularies. Conflating them is the mistake
+    /// `kayfabe_abi::submit`'s own doc calls out — *"same requirement, three different
+    /// objects"*.
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::ScheduleGroupFault`], by variant.
+    fn schedule_group(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>;
+
     /// ★★★ **E9/§13.6** — perform the guest's `NVA06F_CTRL_CMD_BIND`.
     ///
     /// `rm_engine_type` is in **RM engine space**: the policy converts the wire ordinal
@@ -582,6 +600,16 @@ impl ObjectModel for Gpu {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleAck, kayfabe_core::gpu::ScheduleFault> {
         Gpu::schedule_channel(self, client, object, enable)
+    }
+
+    fn schedule_group(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>
+    {
+        Gpu::schedule_group(self, client, object, enable)
     }
 
     fn bind_channel(
@@ -1282,6 +1310,17 @@ pub const OBJECT_VERBS: &[kayfabe_gsp::RpcFunction] = &[
 /// so a test asks the type rather than restating it (`gates_quantified_over_a_list`).
 pub const OBJECT_CONTROLS: &[u32] = &[
     kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+    // ★★★★ **§16.56 — the TSG form, `0xa06c0101`, and it is the wall `s44` measured.**
+    //
+    // `[measured 2026-08-10, boot s44_b17381c_rmtrace]` record 196 of 249: libcuda builds
+    // the whole context — TSG, 8 channels, 8 compute objects, 8 copy objects, every one
+    // `status=0` — asks RM to schedule the **group**, gets `0x56`, and the next record is a
+    // `FREE`. ⊘ This id was on the capability allowlist (`capability.rs`) the whole time,
+    // which is exactly why nothing saw it: **`admitted` and `served` are different gates**,
+    // and clearing the first raises no bridge refusal, builds no `FaultTag` and appears in
+    // no refusal census — it falls silently to the `UnservicedLedger`. The gate that now
+    // makes that gap impossible to reopen is `tests/tests/admitted_is_served.rs`.
+    kayfabe_abi::submit::NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
     // ★★★ E9/§13.6 — the channel-side bind. Same claim discipline: by id, never by the
     // whole `RmControl` function.
     kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
@@ -1487,6 +1526,9 @@ impl ObjectPolicy {
             kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE => {
                 self.respond_gpfifo_schedule(cmd, &req)
             }
+            kayfabe_abi::submit::NVA06C_CTRL_CMD_GPFIFO_SCHEDULE => {
+                self.respond_gpfifo_schedule_group(cmd, &req)
+            }
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND => self.respond_bind(cmd, &req),
             kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX => {
                 self.respond_promote_ctx(cmd)
@@ -1611,6 +1653,87 @@ impl ObjectPolicy {
         // the reply's params over the caller's own struct whenever `paramsSize != 0`
         // (`ogkm-580: rpc.c:11085-11090`). A zero-filled body would clear the caller's
         // `bEnable` behind its back.
+        let mut body = cmd.payload.clone();
+        let params_out = kayfabe_abi::submit::encode_gpfifo_schedule(&params);
+        body[req.params_at..req.params_at + want].copy_from_slice(&params_out);
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body,
+        })
+    }
+
+    /// ★★★★ **§16.56 — the `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` arm** (the TSG form,
+    /// `0xa06c0101`): the wall `cuCtxCreate` stopped at, and the one control on this list
+    /// that a real `cup2` is measured to issue on its way to first compute.
+    ///
+    /// # ⊘⊘ Why this is not [`Self::respond_gpfifo_schedule`] with a wider id check
+    ///
+    /// The decode is shared and **sourced as shared** — the params are a typedef of the
+    /// channel form's (`ogkm-580: ctrla06c.h:101`), so `decode_gpfifo_schedule` is the
+    /// right decoder rather than a convenient one. Everything after the decode differs:
+    /// the object is a channel **group**, the act fans out over the group's members, and
+    /// the refusals are about a set rather than about one channel
+    /// ([`kayfabe_core::gpu::ScheduleGroupFault`]). Routing a group handle into
+    /// `route_schedule_channel` would refuse it `NotAChannel` — correctly, and for a
+    /// reason that has nothing to do with what the guest asked.
+    ///
+    /// # ⊘⊘ Why the `NV_OK` is not a forged one
+    ///
+    /// The C's comment at `nvkvm_gpu_emul.c:8038` is the standing warning —
+    /// *"the host TSG is idle until we schedule it"* — so an ack alone would move the wall
+    /// without scheduling anything. It is not an ack alone: the members land in
+    /// [`kayfabe_core::gpu::ExecPlane::requested`], which `kayfabe_fwd::plan_doorbell`
+    /// **gates** on (`FwdFault::NotScheduled`), and the host-side
+    /// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` is issued by
+    /// `kayfabe_isolate::RmBackend::schedule` at the member's first doorbell. Same
+    /// deferral, same argument and same falsifier as the channel form —
+    /// `docs/design/gpfifo_schedule.md` §2, and §3 for what is still false.
+    ///
+    /// The reply is the request's own params bytes, for
+    /// [`Self::respond_gpfifo_schedule`]'s reason: `paramsSize != 0`, so the GSP transport
+    /// copies the reply's params over the caller's struct
+    /// (`ogkm-580: rpc.c:11085-11090`) and a zero body would clear the caller's `bEnable`
+    /// behind its back.
+    fn respond_gpfifo_schedule_group(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let refuse = || {
+            Some(Reply {
+                rpc_result: kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS,
+                body: Vec::new(),
+            })
+        };
+        // The guest's own two assertions about its params — the same pair the channel arm
+        // checks, because it is the same params struct.
+        let want = kayfabe_abi::submit::GpfifoScheduleParams::SIZE;
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != want
+            || cmd.payload.len() < req.params_at + want
+        {
+            return refuse();
+        }
+        let Ok(params) = kayfabe_abi::submit::decode_gpfifo_schedule(
+            &cmd.payload[req.params_at..req.params_at + want],
+        ) else {
+            return refuse();
+        };
+        let ack = self.gpu.schedule_group(
+            kayfabe_arch::ids::HClient(req.client),
+            kayfabe_arch::ids::HObject(req.object),
+            params.b_enable != 0,
+        );
+        self.gpu.publish_isolate_census(&self.isolates);
+        let Ok(ack) = ack else {
+            return refuse();
+        };
+        // ⊘ No private counter here, deliberately. `kayfabe_device::census::ControlCensus`
+        // wraps the WHOLE chain and records `(cmd, rpc_result)` for every answered control,
+        // so this arm's success prints itself in the boot report as
+        // `control 0xa06c0101 result 0x00000000 xN` with no new plumbing — and a second
+        // count kept here would be a number that can disagree with the report's.
+        let _ = ack;
         let mut body = cmd.payload.clone();
         let params_out = kayfabe_abi::submit::encode_gpfifo_schedule(&params);
         body[req.params_at..req.params_at + want].copy_from_slice(&params_out);

@@ -2035,6 +2035,44 @@ impl SharedDevice {
         .ok_or(kayfabe_core::gpu::ScheduleFault::ChannelNotMaterialized { client, object })
     }
 
+    /// ★★★★ **§16.56** — perform the guest's `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` (the TSG
+    /// form), in the shell's two ranks: ROUTE under the device read lock, ACT under the
+    /// owning proc's lock alone. Identical in shape to [`Self::schedule_channel`], and a
+    /// composition of the core's two halves rather than a second implementation.
+    ///
+    /// ⊘ One proc lock, not one per member: [`kayfabe_core::gpu::route_schedule_group`]
+    /// refuses a group whose members span procs, so the whole fan-out is inside a single
+    /// rank-1 lock and there is no lock-order question to get wrong.
+    ///
+    /// # Errors
+    ///
+    /// [`kayfabe_core::gpu::ScheduleGroupFault`], by variant.
+    pub fn schedule_group(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        enable: bool,
+    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault> {
+        let route = {
+            let route_in = |spine: &kayfabe_core::gpu::Spine| {
+                kayfabe_core::gpu::route_schedule_group(spine, client, object)
+            };
+            match self.mode {
+                LockMode::Sharded => route_in(&self.state.read().spine),
+                LockMode::Degenerate => route_in(&self.state.write().spine),
+            }?
+        };
+        let members = route.chans.len() + route.unmaterialized;
+        self.with_proc_mut(route.proc, |proc| {
+            kayfabe_core::gpu::apply_schedule_group(proc, &route, enable)
+        })
+        .ok_or(kayfabe_core::gpu::ScheduleGroupFault::NoMemberMaterialized {
+            client,
+            object,
+            members,
+        })
+    }
+
     /// ★★★ **E9/§13.6 — perform the guest's `NVA06F_CTRL_CMD_BIND`** — the sharded form
     /// of [`kayfabe_core::gpu::Gpu::bind_channel`], under the same two-lock split as
     /// [`Self::schedule_channel`]: route under the device lock (rank 0), record under the
