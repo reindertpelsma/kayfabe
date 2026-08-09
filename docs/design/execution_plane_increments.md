@@ -6742,3 +6742,77 @@ rather than inherited from this rung.
 - The end-of-run census is emitted by `nvkvm_exit_notify`, i.e. **only on QEMU exit**. A boot left
   running has no census, and grepping its `qemu.log` for a control id finds nothing whether or not
   the control arrived. ⇒ quit the monitor before citing any census line.
+
+---
+
+## §14.41 rung 2 — `0x20800a9d` SERVED: the wall leaves the fault plane entirely
+
+`[measured 2026-08-09, boot `sh1605` at `075395f`]`, one device-opening consumer, probe set
+EMPTY, evidence verbatim under `docs/reference/bench_evidence/run_sh1605_075395f_*.log`.
+
+### The A/B, one control apart — and the status CHANGED CLASS
+
+```
+  fb1503 @ 3afa896 :  NVRM: faultbufCtrlCmdMmuFaultBufferRegisterNonReplayBuf_IMPL: Error
+                            allocating client shadow fault buffer for non-replayable faults
+                      UVM_REGISTER_GPU rmStatus = 0x00000056   NV_ERR_NOT_SUPPORTED
+  sh1605 @ 075395f :  ⊘ that line is GONE. Both fault buffers register.
+                      NVRM: uvmInitializeAccessCntrBuffer(pGpu, pUvm, pAccessCounterBuffer)
+                            @ access_cntr_buffer.c:72  →  NV_ERR_INVALID_ARGUMENT
+                      UVM_REGISTER_GPU rmStatus = 0x0000001f   NV_ERR_INVALID_ARGUMENT
+```
+
+`cup2` still returns 1 and `cuInit` still fails. ⊘ Stated first.
+
+### ★★★ The rung changed CLASS, and that is the finding
+
+`0x56` → `0x1f` is not "one more control down". **No new id entered the unserviced ledger** —
+the ledger's 24 distinct entries are the same set as `fb1503`'s plus `0x20800a9e`, the shadow
+buffer's own unregister. ⇒ Nothing is missing. Something we **already answer** carries a value
+UVM rejects, which is the same shape as §14.40's `BAR0+0x88084` and **not** the shape of the
+two rungs before it. ⚠ A rung of this class cannot be found by reading the unserviced list, and
+an agent that only greps that list will report "nothing to do".
+
+★ Note also where the assertion is: `access_cntr_buffer.c:72` is **UVM's access counter
+notification buffer**, which is a third fault-adjacent object after the replayable HW buffer
+and the non-replayable client shadow queue. `resume_from_fault.md` §4.3 `[meas]` already
+recorded the C's guest reading `ACCESS_COUNTER_NOTIFY_BUFFER_SIZE` at BAR0 `0xB83110` → `0x100`,
+and §7 step 1 already flags that value as *"keep it (it is load-bearing for `cuInit`) but write
+it down as a deliberate lie with its reason"*. That is the first place to look.
+
+### ★★★ Both markers printed, and the geometry matched on BOTH controls
+
+```
+nvkvm: replayable fault buffer: 1 registration(s) SERVED NV_OK; first 0x31000 B = 49 pages, 0 malformed
+nvkvm:   ⊘ fault DELIVERY is UNBUILT: … a HANG inside UVM's replayable-fault service loop, not an error
+nvkvm: client shadow fault buffer: 1 registration(s) SERVED NV_OK; first 0x120c20 B = 289 pages, type 0 (0=non-replayable), 0 malformed
+nvkvm:   ⊘ shadow-queue PUSH is UNBUILT: on a GSP client the GSP is the WRITER of this queue …
+```
+
+`0x120c20` is exactly the `nonReplayableFaultBufferSize` this port answers to `0x20800a59`, and
+289 = `align_up(0x120c20)/4096`. **Both** controls now round-trip their own advertised geometry
+`[measured 2026-08-09, boot `sh1605` at `075395f`]`, and `type 0` confirms only the non-replayable shadow buffer is registered with
+Confidential Compute off — the CC-gated replayable shadow never arrived, exactly as
+`mmu_fault_buffer_ctrl.c:148` says it cannot.
+
+### ★★★ The unserved-UNREGISTER decision confirmed TWICE — `[measured 2026-08-09, boot `sh1605` at `075395f`]`
+
+```
+NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer
+      failed (status=0x00000056), proceeding...
+NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer
+      failed (status=0x00000056), proceeding...
+```
+
+Both `0x20800a9c` and `0x20800a9e` are refused, both are logged-and-proceeded, and neither
+costs anything. ⇒ Refusing to model half of a register/unregister pair is safe on **both**
+pairs `[measured 2026-08-09, boots `fb1503` at `3afa896` and `sh1605` at `075395f`]`, not
+extrapolated from one.
+
+### ⊘ What this boot still does not say
+
+- `is the CE wall ARMED or DORMANT?` → **`NEITHER LINE PRESENT`** again. Two boots in a row have
+  said nothing about the CE wall; the probe's grep is not finding the line at this loglevel and
+  that is an instrument gap, not a result.
+- `scrubberDestruct` / `ce_utils.c:349` fire ~4 s and ~8 s after the last real error, on the
+  unwind path, at the same relative position as in every previous boot. ⊘ Teardown, not cause.
