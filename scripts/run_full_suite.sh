@@ -115,7 +115,20 @@ HANDLED_WORKSPACES=". fuzz crates/kayfabe-abi/gen"
 # defect; it was misread as one on 2026-07-30. `DISK_REFUSE_MB` is where this script would
 # rather say nothing than say something misattributable; `DISK_WARN_MB` is where it says so
 # and continues. Literals, for the same reason every floor here is a literal.
-DISK_REFUSE_MB=2048
+#
+# ★★★ 2048 -> 6144, and the 2048 is MEASURED to have been unable to protect anything.
+# `[measured 2026-08-09]` a `--all` run started with **6 144 MB free** — comfortably above
+# the 2 048 floor, so this script warned and ran — and the box filled to **16 MB** during
+# the workspace build. `fuzz-corpus-replay` then died with
+# `the nested build of the isolate image failed`, which is a compiler error, which reads as
+# a code defect. That is the exact misattribution this pair of numbers exists to prevent,
+# reproduced with both numbers in force.
+# ⊘ **A refuse floor below what the workload itself consumes cannot refuse anything.** The
+# floor is now the largest free-space value at which a run has been OBSERVED to die, so it
+# is a measurement rather than an estimate. ⚠ It is a LOWER bound and is honest about that:
+# the true requirement is somewhere between 6 144 and `DISK_WARN_MB`, and nothing has
+# measured it — raise this floor the next time a run dies above it rather than guessing now.
+DISK_REFUSE_MB=6144
 DISK_WARN_MB=15360
 
 # =====================================================================================

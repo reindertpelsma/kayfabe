@@ -2633,6 +2633,15 @@ impl SharedDoorbell {
         // ★★★★ §16.8's rung: what does OUR framebuffer actually hold at the addresses this
         // row published, and at a WORKING row's? See [`fb_level_dump`].
         let fbdump = fb_dump_pair(&plane, &pubs, facts.client, vaspace);
+        // ★★★★ §16.10's rung: which SLOT the descent consumes at every level, and what that
+        // slot says. §16.9 dumped entry 0 of each level, and entry 0 is not the entry this
+        // walk looks at. See `kayfabe_device::ceresolve::walk_trace` — the same decoder,
+        // deliberately not a second one.
+        //
+        // ⊘ Printed BESIDE `rng=`, which is `resolve`'s own answer for the same address, so
+        // the two projections are compared by a reader rather than trusted apart. A trace
+        // whose terminal leaf disagrees with `rng=` is itself the finding.
+        let walk = plane.published_walk_trace(facts.client, vaspace, ring_va);
         let ring = plane.resolve_published_va(facts.client, vaspace, ring_va, demand());
         let fin = plane.resolve_published_va(
             facts.client,
@@ -2659,7 +2668,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}",
+            " | c=0x{:x} vas=0x{vaspace:x} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump} walk:{walk}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),

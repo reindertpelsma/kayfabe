@@ -537,3 +537,134 @@ fn a_publication_carries_its_root_aperture_and_page_shift_through_unchanged() {
     assert_eq!(r.aperture_raw, GMMU_APERTURE_SYS_COH);
     assert_eq!(r.page_shift, 47);
 }
+
+// =====================================================================================
+// §16.10 — THE PER-LEVEL TRACE: which SLOT the descent consumes, and what it says
+// =====================================================================================
+
+/// A tree in which **entry 0 is populated and is NOT the entry the walk consumes** — the
+/// real boot's shape, and the only shape in which this test can fail.
+///
+/// ⊘⊘ **Written because the first version could not fail.** The bite-check for §16.10's
+/// selection rule — replace *"the covering slot"* with `children.first()`, i.e. exactly what
+/// §16.9's dump read — left the test **GREEN**, because `tree()` puts one child on the root
+/// and one leaf on the L1 page, so entry 0 *was* the covering slot. A fixture with one
+/// candidate cannot distinguish a selector from a constant. `[measured 2026-08-09, boot
+/// `fbd1_f760a4b`]` the guest's real tree is the opposite: entry 0 is written at every level
+/// **and** the ring's level-2 index is 9. So both levels here carry a **decoy at slot 0**
+/// and the real edge further along.
+const DECOY_L1: u64 = 0x3000;
+const DECOY_LEAF: u64 = 0x6000;
+
+fn tree_with_decoys() -> Fb {
+    let mut fb = Fb::new();
+    fb.put(ROOT, pde(DECOY_L1)); // slot 0 — populated, and NOT on the path.
+    fb.put(ROOT + 8, pde(L1)); // slot 1 — `VA >> 30`.
+    fb.put(L1, leaf(DECOY_LEAF)); // slot 0 — populated, and NOT on the path.
+    fb.put(L1 + 16, leaf(LEAF_PHYS)); // slot 2 — `(VA >> 21) & 511`.
+    fb
+}
+
+/// ★★★★ **The trace names the slot the walk actually uses at every level, and its terminal
+/// answer AGREES with `resolve`'s.**
+///
+/// `[measured 2026-08-09, boot `fbd1_f760a4b`]` §16.9 dumped **entry 0** of each published
+/// level of the refusing VA space and found real, well-formed PDEs — and entry 0 is not the
+/// entry that walk consumes (`(0x121010000 >> 29) & 0x1ff = 9`). ⇒ every byte that dump read
+/// was a byte the failing walk never looks at.
+///
+/// ⊘ The load-bearing property is **agreement**: the trace selects its slot from
+/// `decode_page`'s own `vabase` stamps, and if that selection ever disagreed with
+/// `walker::translate`'s descent the trace would be a second projection of one fact — §16.2
+/// wall 1, which cost a boot. Asserted here rather than hoped for.
+#[test]
+fn the_walk_trace_names_the_consumed_slot_at_each_level_and_ends_where_resolve_does() {
+    let t = kayfabe_device::ceresolve::walk_trace(
+        &TinyFmt,
+        &mut tree_with_decoys(),
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+    );
+    // Two children on the root, and the walk must take the SECOND — slot 1, `VA >> 30`.
+    assert!(
+        t.contains(&format!("L0@0x{ROOT:x}[ch2 lf0 sp0 inv510]")),
+        "the level's whole census, so 'how many entries are written' is visible: {t}"
+    );
+    // ⊘ The decoy must appear NOWHERE as a consumed slot. This is the assertion the
+    // bite-check made necessary: without it, `children.first()` passes.
+    assert!(
+        !t.contains(&format!("->0x{DECOY_L1:x}/")),
+        "⊘ entry 0 is populated and is NOT on the path — a selector that took it would be \
+         reading the bytes §16.9 read: {t}"
+    );
+    assert!(
+        !t.contains(&format!("->0x{DECOY_LEAF:x}/")),
+        "⊘ and the same one level down: {t}"
+    );
+    assert!(
+        t.contains(&format!("=PDE@0x{:x}->0x{L1:x}/Vidmem", 1u64 << 30)),
+        "the CONSUMED slot, by its own vabase, not entry 0: {t}"
+    );
+    assert!(
+        t.contains(&format!(
+            "=LEAF@0x{:x}->0x{LEAF_PHYS:x}/Vidmem",
+            VA & !0x1f_ffff
+        )),
+        "and the leaf the descent lands on: {t}"
+    );
+    // ★★★ The agreement property. `resolve` adds the page offset; the trace reports the
+    // leaf's base. They must name the same page or one of them is wrong about this device.
+    let CeResolve::Resolved { phys, .. } = resolve(
+        &TinyFmt,
+        &mut tree_with_decoys(),
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+        LIMITS,
+        Demand::from_doorbell(),
+    ) else {
+        panic!("the fixture resolves");
+    };
+    // ⊘ The relation is `resolve = leaf_base + (va & (page_size - 1))`, NOT a mask of
+    // `resolve`: this fixture's `LEAF_PHYS` is deliberately **not** 2 MiB-aligned, so
+    // masking the resolved address would produce `0` and the assertion would be testing
+    // arithmetic instead of agreement. `suspect_the_instrument_first` — the first draft of
+    // this line masked, went red, and the code was right.
+    let leaf_base = phys - (VA & ((2 << 20) - 1));
+    assert!(
+        t.contains(&format!("->0x{leaf_base:x}/Vidmem")),
+        "⊘ the trace and the resolver must land on the SAME page — two projections of one \
+         fact disagreeing is what §16.2 wall 1 cost a boot: trace={t} resolve=0x{phys:x}"
+    );
+}
+
+/// ⊘ **A slot the guest never wrote is `INVALID-SLOT`, not a leaf and not an error.**
+///
+/// `PageDecode::invalid` is a **count** with no addresses, so an invalid slot cannot be
+/// reported positively — it is reported by the covering slot appearing in none of
+/// `children`/`leaves`/`sparse`. That is the observation §16.10 exists to make, and it must
+/// be distinguishable from `SPARSE` (the guest declared the range absent) and from
+/// `UNREADABLE` (we could not read the page at all).
+#[test]
+fn a_level_whose_covering_slot_was_never_written_reports_invalid_slot() {
+    let mut fb = Fb::new();
+    fb.put(ROOT + 8, pde(L1)); // slot 1 only; the L1 page is left entirely blank.
+    let t = kayfabe_device::ceresolve::walk_trace(
+        &TinyFmt,
+        &mut fb,
+        &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        VA,
+    );
+    assert!(
+        t.contains("=INVALID-SLOT"),
+        "an empty table maps nothing, and that is a finding: {t}"
+    );
+    assert!(
+        !t.contains("=LEAF"),
+        "⊘ an unwritten slot must never read as a mapping: {t}"
+    );
+    // And the level census says it from the other side: every slot invalid.
+    assert!(
+        t.contains(&format!("L1@0x{L1:x}[ch0 lf0 sp0 inv512]")),
+        "the census must show the page is wholly unwritten: {t}"
+    );
+}

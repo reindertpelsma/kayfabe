@@ -1495,6 +1495,30 @@ impl RegPlane {
         }
     }
 
+    /// ★★★★ **The PER-LEVEL descent trace for one published VA space and one address** —
+    /// [`crate::ceresolve::walk_trace`], over this plane's own format and framebuffer.
+    ///
+    /// ⊘ The byte source and the format are **this plane's**, exactly as
+    /// [`RegPlane::resolve_published_va`] argues: a trace read through a second store would
+    /// describe a different device. No [`crate::ceresolve::Demand`] — this reads page-table
+    /// pages the guest already published and it produces no address any caller may act on;
+    /// it produces a **sentence**.
+    #[must_use]
+    pub fn published_walk_trace(&self, client: u32, vaspace: u32, va: u64) -> String {
+        let Some(root) =
+            crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
+        else {
+            return " walk=NO-PUBLICATION".to_string();
+        };
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let PlaneState { mmu, fb, .. } = &mut *s;
+        let Some(fmt) = mmu.as_deref() else {
+            return " walk=NO-MMU-PORT".to_string();
+        };
+        let mut src = FbStoreReader { fb: fb.as_mut() };
+        crate::ceresolve::walk_trace(fmt, &mut src, &root, va)
+    }
+
     /// ★★★ **Read RAW framebuffer bytes at a framebuffer-physical address** — no walk, no
     /// translation, no [`crate::ceresolve::Demand`], and **strictly an observation**.
     ///

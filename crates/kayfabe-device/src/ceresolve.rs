@@ -456,27 +456,9 @@ pub fn resolve(
             raw: root.aperture_raw,
         };
     }
-    // ★★ The level is DERIVED from the shift the guest published beside the root, exactly
-    // as `bar2_phys` derives BAR2's: the address alone does not say which format row it
-    // belongs to, and level 0 is an assumption this port has no licence to make.
-    let Some(level) = (0..crate::plane::MAX_FORMAT_LEVELS).find(|l| {
-        fmt.level_shift(*l)
-            .is_some_and(|g| g.shift == root.page_shift)
-    }) else {
-        return CeResolve::NoRootLevel {
-            page_shift: root.page_shift,
-        };
-    };
-    let page = PtPage {
-        phys: root.phys,
-        aperture: Aperture::Vidmem,
-        level,
-        // The root's entry 0 describes VA 0 by construction — a root covers its whole
-        // address space (§14.12's arithmetic: `size 0x20 / 8 = 4` entries at bit 47 =
-        // 512 TiB). ⊘ NOT `virt_addr_lo`: that scopes which sub-range's LOWER levels RM
-        // reserved, and reading it as the root's base is exactly the set-membership
-        // mistake §14.12 adjudicated against.
-        vabase: 0,
+    let page = match root_page(fmt, root) {
+        Ok(p) => p,
+        Err(r) => return r,
     };
     match kayfabe_mmu::walker::translate(fmt, fb, page, va) {
         Ok(Translation {
@@ -506,6 +488,146 @@ pub fn resolve(
         }
         Err(f) => fault(f),
     }
+}
+
+/// ★★★ **The page the descent starts from** — factored so [`resolve`] and [`walk_trace`]
+/// cannot derive it differently.
+///
+/// ★★ The level is DERIVED from the shift the guest published beside the root, exactly as
+/// `bar2_phys` derives BAR2's: the address alone does not say which format row it belongs
+/// to, and level 0 is an assumption this port has no licence to make.
+///
+/// The root's entry 0 describes VA 0 by construction — a root covers its whole address
+/// space (§14.12's arithmetic: `size 0x20 / 8 = 4` entries at bit 47 = 512 TiB). ⊘ NOT
+/// `virt_addr_lo`: that scopes which sub-range's LOWER levels RM reserved, and reading it
+/// as the root's base is exactly the set-membership mistake §14.12 adjudicated against.
+///
+/// # Errors
+/// [`CeResolve::NoRootLevel`], the only refusal this derivation can produce.
+fn root_page(fmt: &dyn GmmuFmt, root: &VasRoot) -> Result<PtPage, CeResolve> {
+    let Some(level) = (0..crate::plane::MAX_FORMAT_LEVELS).find(|l| {
+        fmt.level_shift(*l)
+            .is_some_and(|g| g.shift == root.page_shift)
+    }) else {
+        return Err(CeResolve::NoRootLevel {
+            page_shift: root.page_shift,
+        });
+    };
+    Ok(PtPage {
+        phys: root.phys,
+        aperture: Aperture::Vidmem,
+        level,
+        vabase: 0,
+    })
+}
+
+/// ★★★★ **THE PER-LEVEL TRACE — what slot the descent consumes at every level, and what
+/// that slot says.** `execution_plane_increments.md` §16.10's rung.
+///
+/// # ⊘ Why this exists, and the trap it is written around
+///
+/// `[measured 2026-08-09, boot `fbd1_f760a4b`]` §16.9 dumped **entry 0** of each published
+/// level and found real, well-formed page-directory entries in both address families,
+/// chaining to exactly the next level each publication declares. But entry 0 is **not the
+/// entry the ring's walk consumes** — and the same dump's census (`nz2/4096`) says the
+/// level-1 page has exactly *one* non-zero entry, which is entry 0. ⇒ Every byte §16.9 read
+/// was a byte the failing walk never looks at.
+///
+/// ★★★ **It uses [`kayfabe_mmu::walker::decode_page`] — the SAME decoder, deliberately not
+/// a second one.** §16.2's first wall was two projections of one fact disagreeing, with the
+/// weaker one load-bearing; a probe that re-derived slot indices from `level_shift` would
+/// manufacture exactly that again. The only logic here is a **selection over
+/// [`kayfabe_mmu::walker::PtPage::vabase`]**, which `decode_page` itself stamps on every
+/// child: the covering slot is the one with the greatest `vabase` that does not exceed
+/// `va`, because a table's slots tile its parent's range in ascending order. No shift, no
+/// mask, no index arithmetic.
+///
+/// ★ And the root page comes from [`root_page`], which [`resolve`] uses too — so the trace
+/// and the answer start at the same place or neither does.
+///
+/// ⊘ **The absence of a covering slot IS the observation.** [`PageDecode::invalid`] is a
+/// count with no addresses, so an invalid slot cannot be reported positively; a level whose
+/// covering slot appears in none of `children`/`leaves`/`sparse` is reported
+/// `INVALID-SLOT`, which is *"this table maps nothing there"* — a different finding from
+/// `SPARSE` (the guest declared it absent) and from `UNREADABLE` (we could not read the
+/// page at all).
+///
+/// ⚠ It is an **observer**: it reads and formats and changes nothing. It runs on a refusal.
+/// ⊘ It states its own terminal result so a reader can compare it against [`resolve`]'s in
+/// the same sentence — two projections **printed side by side on purpose**, so that a
+/// disagreement is visible rather than load-bearing.
+pub fn walk_trace(fmt: &dyn GmmuFmt, fb: &mut dyn FbRead, root: &VasRoot, va: u64) -> String {
+    let mut page = match root_page(fmt, root) {
+        Ok(p) => p,
+        Err(_) => return " walk=NO-ROOT-LEVEL".to_string(),
+    };
+    let mut out = String::new();
+    // ⊘ Bounded by the walker's own depth limit rather than by a number of this module's
+    // own: a guest-written page may point at its parent, and two different bounds on one
+    // descent is two descriptions of one rule.
+    for _ in 0..kayfabe_mmu::walker::MAX_WALK_DEPTH {
+        let d = match kayfabe_mmu::walker::decode_page(fmt, fb, page) {
+            Err(f) => {
+                out.push_str(&format!(
+                    " L{}@0x{:x}=UNREADABLE({f:?})",
+                    page.level, page.phys
+                ));
+                return out;
+            }
+            Ok(d) => d,
+        };
+        out.push_str(&format!(
+            " L{}@0x{:x}[ch{} lf{} sp{} inv{}]",
+            page.level,
+            page.phys,
+            d.children.len(),
+            d.leaves.len(),
+            d.sparse.len(),
+            d.invalid
+        ));
+        let child = d
+            .children
+            .iter()
+            .filter(|c| c.vabase <= va)
+            .max_by_key(|c| c.vabase);
+        let leaf = d
+            .leaves
+            .iter()
+            .filter(|l| l.va.0 <= va)
+            .max_by_key(|l| l.va.0);
+        let sparse = d.sparse.iter().copied().filter(|s| *s <= va).max();
+        // The covering slot is whichever of the three has the greatest base — a slot is
+        // exactly one of PDE / leaf / sparse / invalid, so at most one of these can be it.
+        let best = [child.map(|c| c.vabase), leaf.map(|l| l.va.0), sparse]
+            .into_iter()
+            .flatten()
+            .max();
+        match best {
+            None => {
+                out.push_str("=INVALID-SLOT");
+                return out;
+            }
+            Some(b) if Some(b) == sparse => {
+                out.push_str(&format!("=SPARSE@0x{b:x}"));
+                return out;
+            }
+            Some(b) if leaf.is_some_and(|l| l.va.0 == b) => {
+                let l = leaf.expect("just matched");
+                out.push_str(&format!(
+                    "=LEAF@0x{b:x}->0x{:x}/{:?}/sz0x{:x}",
+                    l.phys, l.aperture, l.size.0
+                ));
+                return out;
+            }
+            Some(b) => {
+                let c = child.expect("the maximum came from a child");
+                out.push_str(&format!("=PDE@0x{b:x}->0x{:x}/{:?}", c.phys, c.aperture));
+                page = *c;
+            }
+        }
+    }
+    out.push_str("=DEPTH-EXHAUSTED");
+    out
 }
 
 /// The §7 rule-5 limit for a leaf in `aperture`, or `None` where this port has none.
