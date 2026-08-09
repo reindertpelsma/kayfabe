@@ -6095,3 +6095,159 @@ at all; (3) only then, what does the reply have to contain.
 queries, so the `[IN]`-field trap §14.31 was bitten by **does** apply here, unlike on
 `0x20802a0b`. A `0xCD`-seeded probe of it would ask an undeclared query type. ⊘ Read the
 declared query tags before seeding anything.
+
+### 14.34 ★★★★ `GR_FS_INFO` + the three FB indices §14.32 deferred — and the deferred one's answer was inside the sentence that deferred it
+
+`[measured 2026-08-09, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-d0913685`, host
+driver 580.159.04 Open), rev `373c145`, shipping config, STOCK guest module]`.
+
+#### ⊘⊘ First, the refutation of my own framing — and it is §14.32's sentence, read properly
+
+§14.32 refused `0x1a`/`0x22`/`0x23` **by name** on a stated ground:
+
+> *"`0x23` has exactly one supporting reading and a plausible-looking derivation that
+> contradicts it, which is the configuration that has produced this project's silent wrong
+> answers. It is the next rung, with the evidence written down."*
+
+★★★ The evidence written down **contains the answer**, four lines above, in the same module
+header: *"`18 × 128 KiB = 2304 KiB`, which is `l2_cache_size`"*. That is not a coincidence
+worth noting. It is a **derivation**:
+
+```text
+LTS_COUNT = l2_cache_size / GA10X_L2_SLICE_BYTES = 0x0024_0000 / 131 072 = 18
+```
+
+⇒ `0x23` is a projection of the row this port **already serves** to `0x1b` and to
+`0x20800a1c`, so the FB half of this rung states **no new number at all** — the same shape
+§14.32 was proud of for its own four indices, available for its next three the whole time.
+
+⊘ And the alternative was worse than "one new number": a literal `18` in the GA106 chip row
+is precisely the **per-chip table** the owner's `derive_what_you_cannot_query_then_oracle_it`
+directive forbids. The derivation cannot drift from what `0x1b` answers; a literal could.
+
+★ `a_flag_is_not_progress`, in its sharpest form yet. The flag was **well written** — it
+named the index, the contradiction, the trace line and the file — and that is exactly why it
+survived two rungs unread. A repeat flag is evidence the answer is nearby; this one had the
+answer *inside it*.
+
+⚠ **What the derivation rests on, stated rather than assumed.** `GA10X_L2_SLICE_BYTES` has
+**two** supporting points and **no source line anywhere**: this part (`18 × 128 KiB =
+2304 KiB = l2_cache_size`, both sides measured on real hardware) and GA102
+(`kmemsysIsPagePLCable_GA102`'s `== 48` arm, on a part whose L2 is 6 MiB). A Hopper profile
+must re-establish it rather than inherit it, which is what the `GA10X_` in the name is for,
+and an L2 that is not a whole number of slices **refuses rather than rounding**.
+
+⚠ And `0x1a` `FBP_MASK` carries an assumption this part **cannot settle**:
+`(1 << fbp_count) − 1` is right only for FBPs contiguous from zero, and GA106's `0x07` is
+consistent with that *and* with a captured literal. Named, not resolved.
+
+#### ★★★ `0x20803801` — the first control whose errors are PER-ITEM, not per-call
+
+`ogkm-580: ctrl2080grmgr.h:42-50`, in as many words:
+
+> *"If there is any error in `NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS`, we will immediately
+> fail the call. However, if there is an error in the query-specific calls, we will **log the
+> error and march on**."*
+
+⊘ [`fbinfo`]'s rule — *"one refused index fails all of them"*, correct there and stated in
+bold — is **exactly wrong here**, and carrying it across would have refused a call a real
+GA106 answers `NV_OK`.
+
+⚠⚠ **And the inverse is the trap.** A per-query `NV_ERR_NOT_SUPPORTED` rides inside an
+`NV_OK` reply, so it reaches **neither ledger this port keeps**: the command was served, and
+the served list's result column says `0`. A query type we merely had not modelled would
+become a **silent wrong answer** — `refusal_invisible_in_the_ledger` with a new carrier, and
+the ledger is still the primary rung-picking instrument.
+
+⇒ `kayfabe_abi::grfsinfo` has **three** outcomes, not two:
+
+| outcome | when | why |
+|---|---|---|
+| answer | `GPC_COUNT`, `CHIPLET_GPC_MAP`, `CHIPLET_SYSPIPE_MASK`, `CHIPLET_GRAPHICS_SYSPIPE_MASK` | derivable from rows already served |
+| **per-query** `0x56` | types 5, 7, 8, 9, 12 | ★ RM itself refuses these on a non-MIG part — each carries its own *"does not support … legacy case"* contract, and type 5 is refused on **every** part |
+| **whole-call** refusal | `TPC_MASK`, `PPC_MASK`, `ROP_MASK`, unknown | ⊘ real hardware answers these and we do not; a per-query refusal would be invisible, a call refusal costs one boot and cannot be missed |
+
+#### ⊘ NO id translation — and the reachability question was asked FIRST this time
+
+§14.33's whole opening lesson. `0x20803801`'s flags are `0x10248`
+(`ogkm-580: g_subdevice_nvoc.c:9520-9534`) = `NON_PRIVILEGED(0x8) | ROUTE_TO_PHYSICAL(0x40) |
+ROUTE_TO_VGPU_HOST(0x200) | GSP_PLUGIN_FOR_VGPU_GSP(0x10000)`. `ROUTE_TO_PHYSICAL` makes
+`NVOC_EXPORTED_METHOD_DISABLED_BY_FLAG` true (`control.h:159-161`), so
+`subdeviceCtrlCmdGrmgrGetGrFsInfo_IMPL`'s pointer compiles to `NULL` and **its body is not in
+the open tree at all**; `rmresControl_Prologue_IMPL` RPCs `pParams->cmd` **unmodified**
+(`resource.c:255-291`). ⇒ The id that fails **is** the id to serve, unlike §14.33's.
+
+★ It *does* carry `NON_PRIVILEGED`, so unlike `0x20802a0b` it is probeable from usermode —
+but it is a query list with `[IN]` fields, so a `0xCD`-seeded `--probe-ctrl` would ask query
+type `0xCDCD`. §14.31's trap applies here with full force. Any sweep must **set**
+`numQueries`, `queryType` and the per-type input words.
+
+#### ★ The stride, established from the wire BEFORE the header was opened — and they agree
+
+`traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:64` is a **complete** 1928-byte record
+(the interposer's `TRUNC` marker is absent), and byte-diffing its `in=` against its `out=`
+gives **exactly two changed bytes in the whole struct**, at offsets **40** and **60**.
+
+⊘ Size arithmetic does **not** discriminate: `1920` divides evenly by 16, 20 *and* 24, and
+picking the divisor that "works" is `two_encodings_agreeing_on_the_first_values` in its
+purest form. What discriminates is **coherence of the repeated record** — only a 20-byte
+stride based at 8 reads `queryType` at the same slot in all three elements, with a monotone
+index at `+8` and the single changed word at `+12`. The header then confirms
+`8 + 96 × 20 = 1928`.
+
+⚠ `NV2080_CTRL_GRMGR_GR_FS_INFO_QUERY_MAX_SIZE = 32` (`ctrl2080grmgr.h:66`) is a **bound**,
+not the element size. A reader who takes the named constant gets `8 + 96 × 32 = 3080` and a
+struct that does not exist — the one offset most likely to bite.
+
+#### ⚠ `CHIPLET_GPC_MAP` is NOT implemented as the identity the capture shows
+
+The capture shows `gpc 0→0, 1→1, 2→2`. This module implements *"the `n`-th set bit of
+`gpcMask`"*, which is what the query means, and on GA106's contiguous `0b111` the two are
+**indistinguishable**. Third sighting this session of a relation fitted to a part that cannot
+falsify it (after `FBP_MASK` above and `LTS_COUNT`'s slice constant), and the only one where
+the two readings separate on hardware that exists — a floorswept part.
+
+⊘ Sourced from `ChipProfile::gr_static.gpc_mask()`, which derives from the same `gpcs` slice
+`GrFloorsweepingMasks` encodes — **not** from `GA106_GPC_MASK`, which would be a second
+statement of one silicon.
+
+#### `[measured 2026-08-09, boot `gt1434_373c145`, artifact stamped `kayfabe-rev:373c1454476dc9fb2f5d2ae0373959038e56d703`, STOCK module]` BOTH WALLS DOWN
+
+```text
+nvkvm: control 0x20801303 result 0x00000000 x2     ← now TWO calls, not one
+nvkvm: control 0x20803801 result 0x00000000 x1
+```
+
+★★★★ **`cuInit` went NINE calls further** — `traces/real_ga106/cuinit_trace_guest_gt1434_373c145.txt`,
+69 → 82 lines. Compared id-by-id, **size**-by-size and status-by-status against
+`cuinit_ioctl_trace_real_ga106.txt`, our trace is now **identical for the first 71 calls with
+exactly one exception** and diverges at call **72**.
+
+⊘ The exception is still call 39, `0x20810108` — the `NV2081_BINAPI` control §14.26 measured
+as having **no oracle in any instrument**. It is answered `NV_OK` by hardware and `0x56` here,
+and `cuInit` has now run **thirty-two further calls** past it. §14.33 established its refusal
+was not fatal over twenty-three calls; this run doubles the evidence.
+
+★★ And nine of the eleven calls this rung unlocked are ones this port **must not touch**:
+`TURING_USERMODE_A`'s alloc, two `CLIENT_GET_ADDR_SPACE_TYPE`s, two `NV_ESC_RM_MAP_MEMORY`
+escapes and `RM_USER_SHARED_DATA` all passed with **no new code at all** — they are the guest
+kernel's own, and the correct action on them was nothing. Two controls were served; nine
+calls came free.
+
+The new wall is call 72: `0x20803601` `NV2080_CTRL_CMD_GSP_GET_FEATURES`, 72 bytes,
+`NV_OK` on a real GA106 and `0x56` here.
+
+#### The next rung — and its value is NOT a chip fact
+
+`GSP_GET_FEATURES` answers `{gspFeatures = 1 (UVM_ENABLED), bValid = 1, bDefaultGspRmGpu = 1,
+firmwareVersion = "580.159.04"}`. ⚠ **That string is the HOST driver's version, not the
+guest's and not the chip's** — it must be routed through
+[`kayfabe_abi::host_driver::HostDriverVersion`], which exists for exactly this reason and
+which nothing in `kayfabe-device` reads yet. ⊘ Putting `"580.159.04"` in a GA106 chip row
+would make a fact about *this machine's installed driver* into a fact about *a die*, which is
+the `PCIE_GEN_INFO` species of error and the one §14.31 already recorded once.
+
+⚠ It also carries `RMCTRL_FLAGS_CACHEABLE` (flags `0x40549`), so the guest may cache the
+answer **permanently** — the first row this port would serve that
+[`kayfabe_device::sticky::BRANCH_A_CACHEABLE`] actually covers, and the guard at the serve
+site stops being unreachable.
