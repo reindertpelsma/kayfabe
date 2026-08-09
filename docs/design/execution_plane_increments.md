@@ -6913,3 +6913,103 @@ per-engine answer is `capsTbl[publicID]` from that same table. ⇒ Project it; d
 second, separate statement of the same silicon fact.
 ⚠ And check the boundary the module already documents: only engines with a `present` bit have a
 `capsTbl` slot, so a `ceEngineType` outside it must be a **named refusal**, not a zero row.
+
+---
+
+## 15. §14.43 — `KAYFABE_ISOLATES=real` ROUTES THE SCRUBBER AWAY FROM THE ONLY EXECUTOR THAT COMPLETES
+
+`[measured 2026-08-09]`, two boots, **one revision** (`319d29a`), **one environment
+variable** apart. Both artifacts stamped
+`kayfabe-rev:319d29a3cb0f988dc2c85f92c1b2676bae4c17bd`; host GPU `GPU-d0913685` (RTX 3060),
+host driver 580.159.04; guest 580.159.04 open, **stock**; probe-arm set EMPTY.
+Evidence: `traces/guest_boots/fmb1_319d29a_*` and `traces/guest_boots/iso1_319d29a_real_*`.
+
+### 15.1 The two arms, and they invert
+
+| arm | `KAYFABE_ISOLATES` | doorbell lines (verbatim, from the committed QEMU logs) | `RmInitAdapter` | `nvidia-smi` | `cuInit` |
+|---|---|---|---|---|---|
+| `fmb1` | *unset* | `SERVED-LOCAL [CpuCe::ServedLocally]` ×4, `REFUSED [FwdFault::IsolateRetired]` ×1 | never fails | `SMI_RC=0` | **hangs** in `uvm_push_end_and_wait` |
+| `iso1` | `real` | `SERVED` ×3 | **`failed! (0x25:0x65:1249)`** | `SMI_RC=6` | `999` |
+
+`iso1`'s census is everything the increments promised: `isolates: 1 materialized, 1 live, 0
+refusing`, `doorbells: 3 arrived, 3 served, 0 REFUSED by name`, `bind engineType 11 (COPY2)`
+×3 all `result 0`. **The plane works.** And the boot is strictly worse.
+
+### 15.2 ★★★ The cause, and the code already predicted it in writing
+
+`SharedDoorbell::local_ce_is_the_only_executor` is set at realize from
+`isolate_plane == IsolatePlane::Stillborn` (`crates/kayfabe-qemu-raw/src/shim.rs:2523`), and
+`try_ce_submission` gates on it (`:2156-2159`):
+
+```rust
+if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor {
+    return None; // the core can address AND serve this channel; it is not ours.
+}
+```
+
+With the real plane installed the flag is `false`, so the CeUtils scrubber's channel — whose
+`vas_pdb` **is** `Some` since §14.23 — is declined by the shell's CPU executor and falls
+through to the forwarding plane.
+
+★★★ **And only the declined path writes the completion.** The finishPayload release lives in
+`kayfabe_rt::ceutils::run_submission`, which calls `cpu_ce::resolve_releases` and
+`cpu_ce::write_resolved_completion` (`crates/kayfabe-rt/src/ceutils.rs:567,577`).
+`try_ce_submission` is its **only** caller (`shim.rs:2193`). The forwarding path answers the
+doorbell and advances no payload — which is why `iso1`'s line reads `SERVED` and never
+`SERVED-LOCAL`. The guest then polls a word that never moves:
+
+```text
+memmgrMemSet(…, TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463   -> NV_ERR_TIMEOUT (0x65)
+Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+memmgrInitCeUtils(…) @ mem_mgr.c:526                        -> NV_ERR_TIMEOUT (0x65)
+RmInitNvDevice: *** Cannot load state into the device
+```
+
+⊘ **This is §14.24's defect, reached by a second route.** §14.24 records the identical
+sequence at boot `pub1_3e43e9a`, caused by `vas_pdb` becoming `Some`; the fix widened the
+gate from *"can the core address it?"* to *"is there another executor?"*. `iso1` shows the
+widened gate has the same hole through the **other** conjunct: turning the real plane on
+makes the answer *"yes, another executor"* — and that other executor does not complete.
+★ §14.24's own closing sentence is where it hides: *"A build that selects a real isolate
+plane keeps the old routing exactly — a channel the core can address goes to the core."*
+True, and **measured to be the wrong thing to want**: the core's route does not advance the
+payload, so "keeps the old routing exactly" preserves a route that had never been exercised.
+
+### 15.3 ⊘ What this refutes, in the project's own words
+
+`execution_plane_increments.md` §14.8's rule was *"granting a VAS before an executor exists
+converts a correct refusal into a doorbell reporting **Served** over work that never
+happened."* With the executor now present, one word has to change: it is not the VAS and not
+the executor, it is the **completion**. `iso1` is a doorbell reporting `Served`, with an
+isolate live and a channel bound, over work whose result the guest never sees.
+⇒ **Serving is worse than refusing until the payload advances**, and the refusal that
+`fmb1` prints (`FwdFault::IsolateRetired`) was load-bearing without anyone having said so.
+
+★ It also converges the two arms on one cause. `fmb1` hangs in `uvm_push_end_and_wait` →
+`uvm_tracker_wait_for_entry` → `uvm_spin_loop` (sampled on
+`uvm_gpu_tracking_semaphore_update_completed_value`, five samples in
+`fmb1_319d29a_uvm_stack.log`); `iso1` times out on `pCeUtils->lastCompletedPayload`. Two
+consumers, two failure shapes — an unkillable busy spin and a 4000 ms timeout — **one
+missing thing**. And it is the plane `c_rust_trace_differential.md` already flagged as
+having **no C oracle**, because the C *forges* completions: the forgery is why the C got past
+this and this port does not.
+
+### 15.4 The next increment, with its acceptance already written
+
+Give the forwarding/isolate path the same completion tail the local path has — resolve the
+`sem_releases` in the channel's own table and write them where the guest polls, then and only
+then signal (`cpu_ce::write_completion`'s ordering discipline, which exists precisely to
+avoid the C's `#12`).
+
+Two oracles, both live boots, neither satisfiable by a test:
+1. `KAYFABE_ISOLATES=real` reaches `nvidia-smi SMI_RC=0` — i.e. `RmInitAdapter` stops failing;
+2. with the default plane, `cup2` **returns** instead of spinning in `uvm_spin_loop`.
+
+⚠ And a third that must not regress: `fmb1`'s arm must keep its four `SERVED-LOCAL` lines.
+A change that makes both paths complete but stops the local one running would be invisible to
+oracle 1 and fatal to the milestone.
+
+⊘ **One thing neither boot shows, stated rather than glossed:** whether the CE work
+*executed on the host* under the real plane and only the release is missing, or whether
+nothing ran at all. `served` is a statement about the RING, not about the copy, and no
+`CeEvidence` is printed on this path. Establish that first — the fix differs.
