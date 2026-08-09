@@ -481,7 +481,7 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
     );
 
     device
-        .doorbell(GpuId::ZERO, MockArch::token_for(gr_vchid(0)), &[])
+        .doorbell(None, GpuId::ZERO, MockArch::token_for(gr_vchid(0)), &[])
         .expect("the doorbell resolves the deferral rather than refusing it");
 
     assert_eq!(
@@ -540,7 +540,7 @@ fn two_threads_racing_one_deferral_spawn_twice_and_install_once() {
     let hands: Vec<_> = (0..2)
         .map(|_| {
             let d = Arc::clone(&device);
-            thread::spawn(move || d.doorbell(GpuId::ZERO, token, &[]))
+            thread::spawn(move || d.doorbell(None, GpuId::ZERO, token, &[]))
         })
         .collect();
     for h in hands {

@@ -1596,13 +1596,21 @@ impl SharedDevice {
     /// from, before any host op exists. **Execute** (no locks): materialize /
     /// schedule / ring on a checked-out worker. **Commit** (re-locked): re-resolve
     /// the route and the channel, adopt the host handles, record the submission.
+    /// ★★ `vmm` is the caller's **guest-memory port**, and `None` means *"this caller has
+    /// none"* — the shell between `realize` and `attach_ram` genuinely has none, and a
+    /// doorbell then cannot read a ring out of memory that is not mapped yet. ⊘ It is **not**
+    /// a "skip the ring" switch: a caller that holds a port and passes `None` silently
+    /// forwards nothing, which is `a_fallback_keyed_on_our_own_ignorance` waiting to happen.
+    /// The one production caller (`kayfabe-qemu-raw`'s `SharedDoorbell::ring`) passes its
+    /// attached port whenever it has one.
     pub fn doorbell(
         &self,
+        vmm: Option<&mut dyn kayfabe_vmm::Vmm>,
         target_gpu: GpuId,
         token: u64,
         working_set: &[GpuVa],
     ) -> Result<DoorbellOutcome, FwdFault> {
-        self.verb_op(
+        let out = self.verb_op(
             || {
                 self.route_act(
                     |spine| {
@@ -1616,7 +1624,124 @@ impl SharedDevice {
                 )?
             },
             kayfabe_fwd::commit_doorbell,
-        )
+        )?;
+        if let Some(vmm) = vmm {
+            self.forward_ring(vmm, out.proc, out.chan)?;
+        }
+        Ok(out)
+    }
+
+    /// ★★★ **The guest's ring, forwarded — the doorbell half that was missing.**
+    ///
+    /// Until this existed, `SERVED` on a forwarding plane meant, in
+    /// `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell on a host
+    /// channel into which the guest's methods were never copied"*: the whole
+    /// parse → plan → execute chain that ends at the only function in this tree which
+    /// observes a real host completion — `HostRmBackend::await_semaphore`
+    /// (`kayfabe-isolate-host/src/rm.rs:2897`, reached through `ce_copy_outcome` and
+    /// `RmBackend::ce_copy`) — had **zero** production callers, so a guest action could not
+    /// reach it in any build. `tests/tests/doorbell_reaches_the_completion_observer.rs` is
+    /// that statement as a test, and it was RED at the commit before this one.
+    ///
+    /// # ⚠ AFTER the ring, deliberately, and this is not a stylistic order
+    ///
+    /// `plan_doorbell` is what materializes the channel's host VAS and host channel on
+    /// first submission, and `plan_ce` needs `Vas::host_vas` to point an engine at
+    /// anything. Forwarding first would refuse the guest's *first* copy on every channel,
+    /// on a plane where that copy is the whole point.
+    ///
+    /// ⊘ **The host doorbell this follows is not a completion.** It rings the isolate's
+    /// host channel, which the guest's methods are never copied into
+    /// (`SharedDevice::submit_ring`'s own note); the copy is executed by the isolate on its
+    /// own channel and waited for there. So nothing here signals the guest before its work
+    /// ran, and nothing here signals the guest at all — see the ⊘ below.
+    ///
+    /// # ⊘ What this does NOT do — the completion tail
+    ///
+    /// It does not write the guest's finishPayload and raises no interrupt. That is the
+    /// order §15.5 argues for and gives the reason for: *"Adding the completion tail to the
+    /// forwarding path would advance the payload for work that never happened — a forged
+    /// completion … exactly what the C did."* Wire the ring first, complete second. Arm (a)
+    /// — the ops we emulate ourselves — already completes honestly in
+    /// `kayfabe_rt::ceutils`; this is arm **(b)** only.
+    ///
+    /// # ⚠ The #14 ring-gate still sees an EMPTY working set, and that is stated on purpose
+    ///
+    /// `plan_doorbell` runs `VerbPlan::gated_doorbell` over the `working_set` the caller
+    /// passed, and the shell passes `&[]` — `execution_plane_increments.md` §15.5 check 1
+    /// names that as the reason the forwarding path was never given the ring
+    /// (*"recovering which VAs a submission touches means parsing the ring"*). This wiring
+    /// parses the ring **after** that gate, so it does **not** close it. What gates the
+    /// operands instead is the plan below: `partition_ce` classifies every span by
+    /// representability and `plan_ce` refuses by name (`NoHostVas`, and an unpublished
+    /// operand forwards as `Untracked` rather than as a guessed binding). ⊘ Feeding the
+    /// recovered VAs *back* into the gate would mean gating on addresses recovered after
+    /// the gate ran, which is a different increment and a different argument.
+    ///
+    /// # The phases, and why the cursor is committed last
+    ///
+    /// **Read** (rank 0 + the proc's rank 1): the ring, the resume point, and the arch's
+    /// entry stride, in one locked look so the three cannot come from different instants.
+    /// **Parse** and **forward**: each takes and releases its own locks (see
+    /// [`SharedDevice::submit_ring`] — the execute phase runs a host verb and R1 forbids
+    /// any ranked lock across it). **Commit**: advance
+    /// [`kayfabe_core::gpu::ExecPlane::forwarded`] **only** on success, so a refused
+    /// submission leaves the ring exactly where it was and the guest's own retry re-reads
+    /// the entry it could not run.
+    fn forward_ring(
+        &self,
+        vmm: &mut dyn kayfabe_vmm::Vmm,
+        pid: ProcId,
+        cid: ChanId,
+    ) -> Result<(), FwdFault> {
+        // ---- READ. One locked look: the ring, where we stopped, and the stride.
+        let read = self.route_act(
+            |_spine| Ok((pid, ())),
+            |spine, proc, ()| -> Result<Option<(Vec<u8>, u32, u32)>, FwdFault> {
+                let Some(ring) = kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm)? else {
+                    return Ok(None);
+                };
+                let done = proc.exec.forwarded.get(&cid).copied().unwrap_or(0);
+                let pb = spine.arch().pushbuffer();
+                let at = (done as usize).saturating_mul(pb.gpfifo_entry_stride());
+                if at >= ring.len() {
+                    return Ok(None);
+                }
+                let fresh = &ring[at..];
+                // ⊘ Only the entries the guest has WRITTEN. The tail of a ring is zeros,
+                // and a zero entry is the ring saying "no more work" — not a malformed one.
+                let n = kayfabe_fwd::gpfifo_live_entries(pb, fresh);
+                if n == 0 {
+                    return Ok(None);
+                }
+                let take = n * pb.gpfifo_entry_stride();
+                Ok(Some((
+                    fresh[..take].to_vec(),
+                    done,
+                    u32::try_from(n).unwrap_or(u32::MAX),
+                )))
+            },
+        )??;
+        let Some((fresh, done, n)) = read else {
+            return Ok(());
+        };
+
+        // ---- PARSE, then FORWARD. Each half takes and releases its own locks.
+        let parsed = self.parse_pushbuffer(vmm, pid, cid, &fresh)?;
+        if !parsed.ce_spans.is_empty() {
+            // ★★★ THE OBSERVER. `forward_ce` → `plan_ce` → `Worker::execute`'s `CeSplit`
+            // arm → `RmBackend::ce_copy`, whose host implementation waits on the engine's
+            // own release semaphore and answers `CE_NEVER_RETIRED` if it never came. The
+            // `?` is what makes that verdict the guest's: a doorbell whose copy did not
+            // retire must not report `Served` (§14.8).
+            self.forward_ce(pid, cid, &parsed.ce_spans)?;
+        }
+
+        // ---- COMMIT the cursor, on the success arm and nowhere else.
+        self.with_proc_mut(pid, |p| {
+            p.exec.forwarded.insert(cid, done.saturating_add(n));
+        });
+        Ok(())
     }
 
     /// ★★ Parse the pushbuffer `ring` submitted on channel `cid` of proc `pid`, in the

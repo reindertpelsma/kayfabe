@@ -272,7 +272,7 @@ fn progress_under_pending_verb_intra_proc() {
                 .publish_backing(GPU, PDB, GpuVa(VA.0 + 0x10_0000), 0x1000)
                 .expect("B publishes while A's verb is pending");
             let rung = b_device
-                .doorbell(GPU, MockArch::token_for(CE), &[])
+                .doorbell(None, GPU, MockArch::token_for(CE), &[])
                 .expect("B rings while A's verb is pending");
             // The poll path needs no worker at all (§3.5 guarantee 3).
             b_device.completion_poll(GPU, pid, Instant(1));
@@ -463,7 +463,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     let held = hold(&rec, pid, 0, VerbKind::AllocChannel);
 
     let d = Arc::clone(&device);
-    let t = thread::spawn(move || d.doorbell(GPU, MockArch::token_for(GR), &[]));
+    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[]));
     held.wait_until_pending();
 
     // ← the guest tears the channel down while the alloc is in flight
@@ -486,7 +486,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     );
     // Mutation-free: the channel is gone, and its vChid routes nowhere.
     assert_eq!(
-        device.doorbell(GPU, MockArch::token_for(GR), &[]),
+        device.doorbell(None, GPU, MockArch::token_for(GR), &[]),
         Err(FwdFault::UnknownVchid {
             gpu: GPU,
             vchid: GR
@@ -550,7 +550,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
     let held = hold(&rec, pid, 0, VerbKind::AllocChannel);
 
     let d = Arc::clone(&device);
-    let t = thread::spawn(move || d.doorbell(GPU, MockArch::token_for(GR), &[]));
+    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[]));
     held.wait_until_pending();
 
     // ← free + re-alloc at the SAME vChid: routing resolves, to a new identity.
@@ -591,7 +591,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
     );
     // The NEW channel is untouched — no host channel was written into it.
     let fresh = device
-        .doorbell(GPU, MockArch::token_for(GR), &[])
+        .doorbell(None, GPU, MockArch::token_for(GR), &[])
         .expect("the re-allocated channel routes and materializes cleanly");
     assert_eq!(fresh.proc, pid);
     assert!(
@@ -853,7 +853,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
         // of later refreshes, which is what `out_of_band_retire_must_not_resurrect_the
         // _isolate` (l1_mean.rs) pins from the other end.
         assert_eq!(
-            device.doorbell(GPU, MockArch::token_for(GR), &[]),
+            device.doorbell(None, GPU, MockArch::token_for(GR), &[]),
             Err(condemned),
             "({mode:?}) and its channels are condemned with it"
         );
@@ -892,7 +892,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
             .expect("({mode:?}) the other proc is unaffected");
         assert_eq!(
             device
-                .doorbell(GPU, MockArch::token_for(GR2), &[])
+                .doorbell(None, GPU, MockArch::token_for(GR2), &[])
                 .expect("bystander rings")
                 .proc,
             bystander

@@ -2963,6 +2963,136 @@ pub fn read_pushbuffer(
     Ok(methods)
 }
 
+/// How many **leading** entries of `ring` the guest has actually written, decoded by
+/// `pb`'s own codec one entry at a time.
+///
+/// ★ The stop rule is the guest's, not ours: *"an unwritten entry is zero and decodes to
+/// nothing — that is the ring saying 'no more work', not a malformed entry, because RM
+/// zero-initialises this buffer (`TRANSFER_FLAGS_SHADOW_INIT_MEM`)"*
+/// (`kayfabe_rt::ceutils::run_submission`). So the walk stops at the first entry the codec
+/// yields nothing for, or yields a zero-length range for.
+///
+/// ⊘ Decoded **per entry** rather than by calling `gpfifo_entries` on the whole ring and
+/// counting: a codec that filters undecodable entries (`Ga10xPushbuffer` does — it is a
+/// `filter_map`) returns a count that is no longer a position, and a cursor built on it
+/// would drift past exactly the entries it could not read.
+#[must_use]
+pub fn gpfifo_live_entries(pb: &dyn kayfabe_arch::PushbufferAbi, ring: &[u8]) -> usize {
+    let stride = pb.gpfifo_entry_stride();
+    if stride == 0 {
+        return 0;
+    }
+    let mut n = 0usize;
+    while (n + 1) * stride <= ring.len() {
+        let entry = &ring[n * stride..(n + 1) * stride];
+        match pb.gpfifo_entries(entry).first() {
+            Some(r) if r.len > 0 => n += 1,
+            _ => break,
+        }
+    }
+    n
+}
+
+/// The most of one channel's GPFIFO ring this port will read for a single doorbell.
+///
+/// ★ A bound of **ours**, on a length the guest chooses: `gpFifoEntries` is a guest-declared
+/// `u32` and the mapping behind `gpFifoOffset` is a guest-chosen extent, so both are
+/// hostile inputs (boundary-1). 64 KiB is comfortably above the shapes measured on this
+/// project — RM's own CeUtils ring is `GPFIFO_SIZE = 0x8000` (`ogkm-580:
+/// channel_utils.c:243-250`, and `tests/tests/e10e_ceutils_doorbell.rs` encodes it) — and
+/// small enough that a ring declared at 4 GiB is a bounded read rather than an allocation.
+pub const MAX_GPFIFO_RING_BYTES: usize = 64 * 1024;
+
+/// ★★★ **Read channel `cid`'s own GPFIFO ring out of guest memory**, through that
+/// channel's own address table.
+///
+/// This is the half of the join that had no production caller and therefore no production
+/// *source*: [`read_pushbuffer`] translates the ranges a ring names, but nothing fetched
+/// the ring. `docs/design/execution_plane_increments.md` §15.5 states the consequence —
+/// *"`SERVED` on the real plane means: we rang a doorbell on a host channel into which the
+/// guest's methods were never copied"* — and prescribes the order this closes:
+/// **wire the ring first, complete second.**
+///
+/// # ⊘ `Ok(None)` is a real answer, and it is the common one
+///
+/// Three shapes answer `None` rather than faulting, each because the *guest* said
+/// something rather than because we could not:
+///
+/// 1. **The channel declares no ring at all** (`AllocFacts::gp_fifo_ring == None`), or
+///    declares `gpFifoOffset = 0` with zero entries — which a real driver does on purpose
+///    for a channel it only uses to build a golden context (`ogkm-580:
+///    kernel_graphics.c:2420-2424`, *"Set the gpFifoOffset to zero intentionally"*, and
+///    `kayfabe_core::rmgraph::GpFifoRing::va`'s own warning that **0 is a value, not a
+///    blank**).
+/// 2. **The channel has no address space** (`vas_pdb == None`). A GSP-managed channel's
+///    ring is served by the shell's CPU copy-engine path (`kayfabe_rt::ceutils`), which
+///    descends the guest's published page tables instead; it is not this table's to read.
+/// 3. ⚠ **The ring's own VA is not bound in that table.** Stated as a limit rather than
+///    claimed as a design: a declared-but-unmapped ring *is* a fact worth a name, and this
+///    rung answers `None` so that a doorbell which is served today keeps being served
+///    today. ⊘ `[NOT MEASURED]` — no boot has been run against this, and turning it into a
+///    refusal without one would be refusing live traffic on a reading.
+///
+/// # Errors
+/// [`FwdFault::RetiredProc`]; [`FwdFault::UnknownPdb`] if the channel's declared VAS is
+/// gone; and every translation refusal [`read_pushbuffer`] documents — MISS, wrong
+/// aperture, over-fragmented, and the read itself.
+pub fn read_gpfifo_ring(
+    spine: &Spine,
+    proc: &Proc,
+    cid: ChanId,
+    vmm: &mut dyn Vmm,
+) -> Result<Option<Vec<u8>>, FwdFault> {
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
+    let cgpu = chan.gpu;
+    // (1) Nothing declared, or declared empty — see the doc's shape 1.
+    let Some(node) = spine.rmgraph.node_of_resource(chan.key) else {
+        return Ok(None);
+    };
+    let Some(ring) = node.facts.gp_fifo_ring else {
+        return Ok(None);
+    };
+    if ring.va == 0 || ring.entries == 0 {
+        return Ok(None);
+    }
+    // (2) No table to read it in. ⊘ Not a fault: `ceutils` owns this channel's ring.
+    let Some(pdb) = chan.vas_pdb else {
+        return Ok(None);
+    };
+    let table = &proc
+        .vases
+        .get(&(cgpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
+        .table;
+    // (3) How much of it the guest actually mapped, bounded by our own ceiling. ⊘ The
+    // extent comes from `binding_at` rather than from `entries × stride`: the declared
+    // count is the guest's and the mapping is the guest's, and reading past what was
+    // mapped would fault on a range the guest never claimed held entries.
+    let base = GpuVa(ring.va);
+    let Some((start, b_len, _)) = table.binding_at(base) else {
+        return Ok(None);
+    };
+    let mapped = b_len.saturating_sub(base.0 - start);
+    let len = usize::try_from(mapped)
+        .unwrap_or(MAX_GPFIFO_RING_BYTES)
+        .min(MAX_GPFIFO_RING_BYTES);
+    if len == 0 {
+        return Ok(None);
+    }
+    let r = PushRange {
+        va: base,
+        len: len as u64,
+    };
+    let mut buf = vec![0u8; len];
+    for (gpa, at, take) in push_range_gpas(table, pdb, &r, len)? {
+        guest_read(vmm, gpa, &mut buf[at..at + take])?;
+    }
+    Ok(Some(buf))
+}
+
 /// Translate one [`PushRange`]'s first `len` bytes into the guest-physical runs they
 /// occupy, through `table` — `(gpa, offset within the range, length)`, in ascending order
 /// and covering `[0, len)` exactly.

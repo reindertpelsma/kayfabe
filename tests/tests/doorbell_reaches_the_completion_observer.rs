@@ -60,12 +60,13 @@
 
 use std::sync::Arc;
 
+use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
-use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_core::rmgraph::{AllocFacts, GpFifoRing, RmEvent};
 use kayfabe_core::{ChanId, ProcId};
+use kayfabe_fwd::FwdFault;
 use kayfabe_isolate::{CeExecutor, CeSource, RmError};
 use kayfabe_isolate_host::rm::CE_NEVER_RETIRED;
 use kayfabe_mocks::{
@@ -269,7 +270,7 @@ fn copies(rec: &SharedRecorder) -> Vec<kayfabe_isolate::CeSubCopy> {
 /// no copy at all, so the count below is this doorbell's doing and not the fixture's.
 #[test]
 fn a_guest_doorbell_reaches_the_host_completion_observer() {
-    let (gpu, _vmm, rec, _pid, _cid) = guest();
+    let (gpu, mut vmm, rec, _pid, _cid) = guest();
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
     assert!(
@@ -278,7 +279,7 @@ fn a_guest_doorbell_reaches_the_host_completion_observer() {
     );
 
     let out = dev
-        .doorbell(GPU, MockArch::token_for(CE_VCHID), &[])
+        .doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
         .expect("the doorbell routes and is served");
     assert_eq!(out.chan, _cid);
 
@@ -306,6 +307,43 @@ fn a_guest_doorbell_reaches_the_host_completion_observer() {
     );
 }
 
+/// ★★★ **A second doorbell over an UNCHANGED ring forwards NOTHING.**
+///
+/// A GPFIFO ring is append-and-ring: every entry the guest ever wrote is still in it after
+/// the doorbell that ran it. A path that forwarded what it could read would re-issue the
+/// same copy on every later doorbell — bytes moved twice, on a real engine, with no error
+/// anywhere. ⊘ That is not a hypothetical: it is what this wiring does without
+/// `ExecPlane::forwarded`, and it is `#13`'s `CE-DROP` inverted and equally silent.
+///
+/// ★ The **second** doorbell is asserted to be a `Served` that moved nothing, not a
+/// refusal. A ring with no new entries is the guest saying "no more work", which is a
+/// legitimate doorbell — refusing it would be a different bug.
+#[test]
+fn a_second_doorbell_over_an_unchanged_ring_forwards_nothing() {
+    let (gpu, mut vmm, rec, _pid, _cid) = guest();
+    let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
+
+    dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
+        .expect("the first doorbell is served");
+    assert_eq!(
+        copies(&rec).len(),
+        1,
+        "★ non-vacuity: the first one forwarded"
+    );
+
+    dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
+        .expect("a doorbell over a ring with no new entries is still served");
+
+    let seen = copies(&rec);
+    assert_eq!(
+        seen.len(),
+        1,
+        "★★★ THE COPY RAN TWICE. The guest wrote one `LAUNCH_DMA` and rang twice; the \
+         entries it already ran are still sitting in its ring, and a doorbell path with no \
+         cursor re-issues every one of them on a REAL engine. {seen:?}"
+    );
+}
+
 /// ★★★ **The observer's NEGATIVE verdict refuses the guest's doorbell.**
 ///
 /// `await_semaphore` returns three facts and `ce_copy` turns exactly one of them into a
@@ -319,14 +357,14 @@ fn a_guest_doorbell_reaches_the_host_completion_observer() {
 /// landed on an engine that never released the semaphore.
 #[test]
 fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
-    let (gpu, _vmm, rec, _pid, _cid) = guest();
+    let (gpu, mut vmm, rec, _pid, _cid) = guest();
     rec.lock()
         .expect("recorder")
         .fail_kinds
         .insert(VerbKind::CeCopy, RmError::Other(CE_NEVER_RETIRED));
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
-    let got = dev.doorbell(GPU, MockArch::token_for(CE_VCHID), &[]);
+    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
 
     assert!(
         got.is_err(),
@@ -335,10 +373,16 @@ fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
          woken' with 'it never landed' — a caller that discards the verdict throws that \
          away and forges the completion. Got {got:?}"
     );
+    // ★ NON-VACUITY, and it cannot be the recorder's log: `MockRmBackend::ce_copy` runs
+    // its injected-failure gate *before* it records, so an armed `CeCopy` leaves no
+    // `RmVerb::CeCopy` behind at all. Reading the log here would assert 0 and prove
+    // nothing about which refusal fired. The error itself is the witness — it must be
+    // THIS verb's error, carried out unchanged, and not some earlier gate's.
     assert_eq!(
-        copies(&rec).len(),
-        1,
-        "★ non-vacuity for the refusal: it must be THIS copy failing, not the copy never \
-         having been attempted"
+        got.map(|o| o.chan),
+        Err(FwdFault::Rm(RmError::Other(CE_NEVER_RETIRED))),
+        "★ the refusal must be the OBSERVER's, by name — an upstream refusal (an unrouted \
+         token, the #177 schedule gate, a dead isolate) would also make `is_err()` true \
+         while the copy was never issued at all"
     );
 }

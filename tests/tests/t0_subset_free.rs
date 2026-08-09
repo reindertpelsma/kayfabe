@@ -349,7 +349,7 @@ fn freeing_a_channel_frees_its_engine_objects_before_the_channel() {
         let (device, pid, rec) = device_with(2, mode);
         declare_channel(&device, SCRATCH_CHAN, SCRATCH_VCHID);
         let rung = device
-            .doorbell(GPU, MockArch::token_for(SCRATCH_VCHID), &[])
+            .doorbell(None, GPU, MockArch::token_for(SCRATCH_VCHID), &[])
             .expect("the guest rings the channel it is about to free");
         let forwarded = device
             .forward_engine_object(GPU, SCRATCH_VCHID, kayfabe_tests::COMPUTE_CLASS, &[])
@@ -364,7 +364,7 @@ fn freeing_a_channel_frees_its_engine_objects_before_the_channel() {
             "({mode:?}) the subset free issues no host verb"
         );
         assert_eq!(
-            device.doorbell(GPU, MockArch::token_for(SCRATCH_VCHID), &[]),
+            device.doorbell(None, GPU, MockArch::token_for(SCRATCH_VCHID), &[]),
             Err(FwdFault::UnknownVchid {
                 gpu: GPU,
                 vchid: SCRATCH_VCHID
@@ -513,7 +513,7 @@ fn a_quiet_proc_is_drained_by_the_backstop_sweep() {
             .publish_backing(GPU, SCRATCH_PDB, VA_SCRATCH, 0x1000)
             .expect("publish");
         device
-            .doorbell(GPU, MockArch::token_for(SCRATCH_VCHID), &[])
+            .doorbell(None, GPU, MockArch::token_for(SCRATCH_VCHID), &[])
             .expect("ring");
         device
             .forward_engine_object(GPU, SCRATCH_VCHID, kayfabe_tests::COMPUTE_CLASS, &[])

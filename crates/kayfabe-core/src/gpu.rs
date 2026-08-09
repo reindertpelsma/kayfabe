@@ -485,6 +485,33 @@ pub struct ExecPlane {
     /// [`Self::requested`] vs [`Self::scheduled`], for the same
     /// `refusal_invisible_in_the_ledger` reason.
     pub bound: BTreeMap<ChanId, u32>,
+    /// ★★★ How many GPFIFO entries of each channel's ring have already been **forwarded**
+    /// — the doorbell path's resume point (`kayfabe_fwd::read_gpfifo_ring`).
+    ///
+    /// # ⊘ Why a cursor is not optional here
+    ///
+    /// A GPFIFO ring is *append-and-ring*: the guest writes entries and rings once per
+    /// batch, and every entry it ever wrote is still sitting in the ring afterwards. A
+    /// doorbell path that forwarded everything it could read would re-issue every earlier
+    /// copy on every later doorbell — bytes moved twice, on a real engine, with no error
+    /// anywhere. That is `#13`'s `CE-DROP` inverted, and it is silent in exactly the same
+    /// way.
+    ///
+    /// # ⚠ Advanced on SUCCESS only, and the reason is measured
+    ///
+    /// `kayfabe_rt::ceutils::run_submission` takes its cursor **by value** and hands the
+    /// advanced one back only in its success value, because *"a cursor advanced through a
+    /// refusal would turn one loud failure into a silently dropped copy"* — and
+    /// `[measured 2026-08-08, boot run_p2_c89899a]` the guest's own
+    /// `channelWaitForFinishPayload` retries once before failing, so the entry it could not
+    /// run is re-read rather than skipped. This cursor obeys the same rule for the same
+    /// reason.
+    ///
+    /// ⊘ **`[NOT MEASURED]` — wrap-around.** The count is monotonic and the ring is
+    /// circular; nothing here handles a guest that fills its ring and wraps to index 0.
+    /// No boot has reached a second batch on this path, so the shape a wrap takes is
+    /// unobserved, and inventing one would be a guess with a cursor attached to it.
+    pub forwarded: BTreeMap<ChanId, u32>,
 }
 
 /// Where a `0xa06f0103` is going — [`route_schedule_channel`]'s answer.
@@ -3055,6 +3082,12 @@ impl Spine {
         // mintable again, and an intent that outlived its channel would schedule a
         // *different* channel that never asked.
         p.exec.requested.retain(|cid| live_cids.contains(cid));
+        // ★★★ The ring cursor's half, and it is the same rule for a *sharper* reason. A
+        // stale `requested` schedules a channel that never asked; a stale `forwarded`
+        // makes the re-minted channel's first N entries look **already run**, so its first
+        // submission is skipped in silence. Dropped work, no refusal, no name — `#13`'s
+        // `CE-DROP` by handle reuse.
+        p.exec.forwarded.retain(|cid, _| live_cids.contains(cid));
     }
 
     /// ★★ **T0/G2, the address plane** (`l1_os_shell.md` §7.6 T0): move the host
@@ -3512,6 +3545,7 @@ impl Spine {
         p.chan_ids.clear();
         p.exec.scheduled.clear();
         p.exec.requested.clear();
+        p.exec.forwarded.clear();
         // ★ VACATE, not RETIRE: the isolates stay live so the queue just filled can
         // actually be disposed of. See `Proc::vacate` for the clean-vs-violent split.
         // ★★ §7.6 T2 — and it CANCELS: a guest process that exits (normally, killed, or

@@ -676,7 +676,7 @@ fn ring_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
             lane.ce
         };
         let out = device
-            .doorbell(gpu, MockArch::token_for(vchid), &[])
+            .doorbell(None, gpu, MockArch::token_for(vchid), &[])
             .expect("the submission thread rings while a sibling's verb is parked");
         assert_eq!(
             out.proc, pid,
@@ -692,7 +692,7 @@ fn ring_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
             // ★ The #14 ring-gate BITES: an unpublished VA in the working set is a loud
             // address fault, decided before any host op exists.
             assert_eq!(
-                device.doorbell(gpu, MockArch::token_for(lane.ce), &[VA_NEVER]),
+                device.doorbell(None, gpu, MockArch::token_for(lane.ce), &[VA_NEVER]),
                 Err(FwdFault::Address(AddressFault::Miss {
                     pdb: lane.pdb,
                     va: VA_NEVER
@@ -707,7 +707,7 @@ fn ring_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
                 .expect("the submission thread publishes its own working set");
             published += 1;
             let gated = device
-                .doorbell(gpu, MockArch::token_for(lane.gr), &[va])
+                .doorbell(None, gpu, MockArch::token_for(lane.gr), &[va])
                 .expect("a published working set passes the gate");
             assert_eq!(gated.proc, pid);
             match chan {
@@ -821,7 +821,7 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
         .schedule_channel(client, chan, true)
         .expect("T0: the guest schedules the channel it just declared (#177)");
     let rung = device
-        .doorbell(gpu, MockArch::token_for(T0_VCHID), &[])
+        .doorbell(None, gpu, MockArch::token_for(T0_VCHID), &[])
         .expect("T0: the guest rings it, materializing a host channel + token");
     assert_eq!(
         token_lane(rung.host_token),
@@ -895,7 +895,7 @@ fn generation_recycle(
     dev.schedule_channel(GEN_CLIENT, handles.gr_channel, true)
         .expect("({mode:?}) generation 1 schedules its channel");
     let gen1 = dev
-        .doorbell(GPU0, MockArch::token_for(GEN1_GR), &[GpuVa(VA_GEN)])
+        .doorbell(None, GPU0, MockArch::token_for(GEN1_GR), &[GpuVa(VA_GEN)])
         .expect("({mode:?}) generation 1 rings")
         .proc;
 
@@ -934,7 +934,7 @@ fn generation_recycle(
     dev.schedule_channel(GEN_CLIENT, handles.gr_channel, true)
         .expect("({mode:?}) generation 2 schedules its channel");
     let gen2 = dev
-        .doorbell(GPU1, MockArch::token_for(GEN2_GR), &[GpuVa(VA_GEN)])
+        .doorbell(None, GPU1, MockArch::token_for(GEN2_GR), &[GpuVa(VA_GEN)])
         .expect("({mode:?}) generation 2 rings")
         .proc;
 
@@ -1017,7 +1017,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
     for i in 0..N_PROCS {
         dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
             .expect("warm-up publish");
-        dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+        dev.doorbell(None, gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
             .expect("warm-up CE ring");
     }
 
@@ -1087,10 +1087,11 @@ fn mean_run(mode: LockMode) -> MeanReport {
                 dev.publish_backing(GPU0, lane_of(P_TEARDOWN).pdb, GpuVa(VA_HELD), 0x1000)
             });
             let t_chanfree = sc.spawn(move || {
-                dev.doorbell(GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
+                dev.doorbell(None, GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
             });
-            let t_reroute = sc
-                .spawn(move || dev.doorbell(GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[]));
+            let t_reroute = sc.spawn(move || {
+                dev.doorbell(None, GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[])
+            });
             let t_wedge = sc.spawn(move || {
                 dev.publish_backing(GPU1, lane_of(P_HUP).pdb, GpuVa(VA_HELD), 0x1000)
             });
@@ -2333,7 +2334,7 @@ fn out_of_band_retire_must_not_resurrect_the_isolate() {
          — §7.3 promises no resurrect and WorkerDied promises never a respawn"
     );
     assert_eq!(
-        device.doorbell(GPU1, MockArch::token_for(lane_of(P_HUP).gr), &[]),
+        device.doorbell(None, GPU1, MockArch::token_for(lane_of(P_HUP).gr), &[]),
         Err(condemned),
         "★★ §12.13: and its channels serve the guest again"
     );
@@ -5759,7 +5760,7 @@ fn dma_workload(dev: &SharedDevice, vmm: &SharedVmm, pids: &[ProcId], i: usize) 
     let (lane, gpu, pid) = (lane_of(i), gpu_of(i), pids[i]);
     let mut vmm = vmm.clone();
     let cid = dev
-        .doorbell(gpu, MockArch::token_for(lane.ce), &[])
+        .doorbell(None, gpu, MockArch::token_for(lane.ce), &[])
         .expect("the DMA thread's CE channel rings")
         .chan;
     let scratch = GPA_PB_BASE + (i as u64) * 0x10_0000;
@@ -6096,7 +6097,7 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
     for i in 0..N_PROCS {
         dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
             .expect("warm-up publish");
-        dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+        dev.doorbell(None, gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
             .expect("warm-up CE ring");
     }
 
@@ -6121,10 +6122,11 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
                 dev.publish_backing(GPU0, lane_of(P_TEARDOWN).pdb, GpuVa(VA_HELD), 0x1000)
             });
             let t_chanfree = sc.spawn(move || {
-                dev.doorbell(GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
+                dev.doorbell(None, GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
             });
-            let t_reroute = sc
-                .spawn(move || dev.doorbell(GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[]));
+            let t_reroute = sc.spawn(move || {
+                dev.doorbell(None, GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[])
+            });
             latches.wait_all_pending(); // progress EDGES, never sleeps
 
             // ---- the mixed concurrent workloads: DMA on both GPUs + the real peers.
@@ -6145,7 +6147,7 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
                 let _gate = OpenOnDrop(started_ref);
                 let mut vmm = vw.clone();
                 let cid = dev
-                    .doorbell(GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
+                    .doorbell(None, GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
                     .expect("the prober's CE channel rings")
                     .chan;
                 // The ring bytes are OURS (never guest memory), so the only thing the
@@ -6787,10 +6789,11 @@ fn gpa_mean_run(mode: LockMode) -> GpaMeanReport {
             latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
             latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
             let t_hold1 = sc.spawn(move || {
-                dev.doorbell(GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
+                dev.doorbell(None, GPU1, MockArch::token_for(lane_of(P_CHANFREE).gr), &[])
             });
-            let t_hold2 = sc
-                .spawn(move || dev.doorbell(GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[]));
+            let t_hold2 = sc.spawn(move || {
+                dev.doorbell(None, GPU0, MockArch::token_for(lane_of(P_REROUTE).gr), &[])
+            });
             latches.wait_all_pending(); // a progress EDGE, never a sleep
 
             // ---- FOUR address-churn threads: two per proc (one arena, two threads) on
@@ -7097,7 +7100,7 @@ fn real_dma_workload(
     let mut vmm = vmm.clone();
     let page = host_page();
     let cid = dev
-        .doorbell(gpu, MockArch::token_for(lane.ce), &[])
+        .doorbell(None, gpu, MockArch::token_for(lane.ce), &[])
         .expect("the DMA thread's CE channel rings")
         .chan;
     let mut t = RealDmaTally::default();
@@ -7481,7 +7484,7 @@ fn real_mean_run(mode: LockMode) -> RealMeanReport {
     for i in 0..N_PROCS {
         dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
             .expect("warm-up publish");
-        dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+        dev.doorbell(None, gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
             .expect("warm-up CE ring");
     }
 
@@ -7497,8 +7500,9 @@ fn real_mean_run(mode: LockMode) -> RealMeanReport {
                 dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD), 0x1000)
             });
             latches.arm(&rec, pids[P_PEER], GPU1, 0, VerbKind::AllocChannel);
-            let t_held2 =
-                sc.spawn(move || dev.doorbell(GPU1, MockArch::token_for(lane_of(P_PEER).gr), &[]));
+            let t_held2 = sc.spawn(move || {
+                dev.doorbell(None, GPU1, MockArch::token_for(lane_of(P_PEER).gr), &[])
+            });
             latches.wait_all_pending();
 
             // ---- the DMA workloads: one per GPU, through the real backend.
@@ -7563,7 +7567,7 @@ fn real_mean_run(mode: LockMode) -> RealMeanReport {
                 let _gate = OpenOnDrop(started_ref);
                 let mut vmm = vw.clone();
                 let cid = dev
-                    .doorbell(GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
+                    .doorbell(None, GPU0, MockArch::token_for(lane_of(P_WITNESS).ce), &[])
                     .expect("the prober's CE channel rings")
                     .chan;
                 let ring = bound_ring(dev, pid_ref[P_WITNESS], cid, RGPA_REVOKE, 0x40);
@@ -9253,7 +9257,7 @@ mod trace_arm {
             let (b, off) = dev
                 .resolve(gpu, lane.pdb, GpuVa(va.0 + 0x40))
                 .expect("resolves");
-            let out = dev.doorbell(gpu, MockArch::token_for(lane.gr), &[va]);
+            let out = dev.doorbell(None, gpu, MockArch::token_for(lane.gr), &[va]);
             let batch = dev.completion_poll(gpu, pid, Instant(k as u64));
             let posted = batch.as_ref().map(|x| x.batch);
             let outstanding = batch.as_ref().map_or(0, |x| x.events.len());
@@ -9322,7 +9326,7 @@ mod trace_arm {
         for i in 0..N_PROCS {
             dev.publish_backing(gpu_of(i), lane_of(i).pdb, GpuVa(VA_WARM), 0x1000)
                 .expect("warm-up publish");
-            dev.doorbell(gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
+            dev.doorbell(None, gpu_of(i), MockArch::token_for(lane_of(i).ce), &[])
                 .expect("warm-up CE ring");
         }
 
@@ -10077,7 +10081,7 @@ fn n3_b_the_two_isolates_of_one_proc_are_separately_accounted() {
                 .expect("the straddler publishes on both of its targets");
         }
         device
-            .doorbell(gpu, MockArch::token_for(N3_GR), &[])
+            .doorbell(None, gpu, MockArch::token_for(N3_GR), &[])
             .expect("the straddler rings on both of its targets");
         device
             .forward_engine_object(gpu, N3_GR, kayfabe_tests::COMPUTE_CLASS, &[])
@@ -10230,7 +10234,7 @@ fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolate
                     let mut n = 0u64;
                     for k in 0..N3_OPS {
                         let out = ring_dev
-                            .doorbell(gpu, MockArch::token_for(N3_GR), &[])
+                            .doorbell(None, gpu, MockArch::token_for(N3_GR), &[])
                             .expect("the straddler rings while BOTH isolates park");
                         assert_eq!(
                             token_lane(out.host_token),
@@ -10263,7 +10267,7 @@ fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolate
                             .publish_backing(gpu, N3_BY_PDB, GpuVa(VA_N3_BY + k * 0x1000), 0x1000)
                             .expect("a bystander proc publishes while the straddler parks");
                         let out = by_dev
-                            .doorbell(gpu, MockArch::token_for(N3_BY_GR), &[])
+                            .doorbell(None, gpu, MockArch::token_for(N3_BY_GR), &[])
                             .expect("a bystander proc rings while the straddler parks");
                         assert_eq!(out.proc, pid, "the bystander's doorbell mis-demuxed");
                         n += 1;
@@ -11109,7 +11113,7 @@ fn a_verb_wedged_on_one_rm_client_blocks_its_sibling_and_no_other_client() {
                         .unwrap_or_else(|e| {
                             panic!("({who}) proc{j} publish stalled behind another client: {e:?}")
                         });
-                    dev.doorbell(g, MockArch::token_for(l.ce), &[])
+                    dev.doorbell(None, g, MockArch::token_for(l.ce), &[])
                         .unwrap_or_else(|e| panic!("({who}) proc{j} doorbell stalled: {e:?}"));
                     dev.forward_engine_object(g, l.gr, mock_classes::COMPUTE, &[])
                         .unwrap_or_else(|e| panic!("({who}) proc{j} engine object stalled: {e:?}"));

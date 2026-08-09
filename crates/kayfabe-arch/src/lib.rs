@@ -1339,6 +1339,25 @@ pub trait PushbufferAbi: Send + Sync {
     /// each pointing at a [`PushRange`] of method words to walk.
     fn gpfifo_entries(&self, ring: &[u8]) -> Vec<PushRange>;
 
+    /// ★ How many bytes one GPFIFO entry occupies in this arch's ring.
+    ///
+    /// [`PushbufferAbi::gpfifo_entries`] decodes a slice and hands back *ranges*; it
+    /// deliberately says nothing about where in the ring each one came from. That is right
+    /// for a decoder and wrong for a **cursor**: a caller that must resume where the last
+    /// doorbell stopped needs a byte offset, and until this method existed there was none.
+    /// `kayfabe_rt::ceutils` states the wart in its own words — *"Only the entry's stride
+    /// comes from `kayfabe_abi`, because indexing the ring needs a byte offset and no
+    /// `PushbufferAbi` method hands one out"* — and reached around the trait to
+    /// `kayfabe_abi::submit::GP_ENTRY_SIZE` to get it, which is a GA10x constant used as if
+    /// it were universal.
+    ///
+    /// ⊘ **Required, not provided.** A default would have to pick a number, and a codec
+    /// whose stride is not that number would silently mis-index every ring it is shown —
+    /// the failure would be *wrong bytes*, not *no bytes*, which is the class this trait's
+    /// `Opaque`-everything posture exists to avoid. An arch that decodes no entries still
+    /// has to state a stride; it just never indexes with it.
+    fn gpfifo_entry_stride(&self) -> usize;
+
     /// ★★★ **Decode a RUN of methods — the protocol's own unit** (`E5`, the owner's
     /// ruling at `execution_plane_increments.md` §8.2.1).
     ///

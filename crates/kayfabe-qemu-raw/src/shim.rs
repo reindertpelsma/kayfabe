@@ -2739,7 +2739,43 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         if let Some(report) = self.try_ce_submission(token) {
             return report;
         }
-        match self.device.doorbell(DOORBELL_TARGET_GPU, token, &[]) {
+        // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
+        // meant, in `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell
+        // on a host channel into which the guest's methods were never copied"* — and the
+        // only function in the tree that observes a real host completion
+        // (`HostRmBackend::await_semaphore`) was reachable from no guest action in any
+        // build. `SharedDevice::doorbell` reads this channel's own GPFIFO ring through the
+        // port below and forwards the copy-engine work it carries.
+        //
+        // ⚠⚠ **THE LOCK THIS WIDENS, stated rather than left to be found.** The *direction*
+        // is the established one — `try_ce_submission` above already holds this same
+        // unranked mutex across `ce_session` and the rank-0 device read. What is new is
+        // what may happen beneath it: `SharedDevice::doorbell` checks a worker out of the
+        // isolate pool, and a saturated pool **parks** the caller in
+        // `PoolGate::wait_for_return`. `CeShellState::vmm` is a bare `std::sync::Mutex`
+        // that nobody ranked, so `assert_lock_free`'s witness cannot see it and passes
+        // **vacuously** while it is held (`kayfabe-util/src/lockwitness.rs:9-21`), and
+        // `tests/tests/unranked_locks.rs:76` scopes its scanner to
+        // `["kayfabe-device", "kayfabe-rt"]` — this crate is on the vCPU path and is not in
+        // that list, so no gate will say so either
+        // (`docs/design/completion_wait_architecture.md` §2.2).
+        //
+        // ⊘ `[NOT MEASURED]` — it is bounded in practice today for reasons outside this
+        // file: every MMIO write arrives with the BQL held, so a second doorbell cannot
+        // begin anyway, and this path is only reachable with `KAYFABE_ISOLATES` set. That
+        // is an argument for why it has not bitten, **not** an argument that it cannot.
+        // The fix, when the wait plane is built, is to read the ring under this mutex and
+        // release it before any host verb — the same plan/execute/commit split R1 forces
+        // one layer down.
+        //
+        // ⊘ `None` when the memory plane is not attached — between realize and
+        // `attach_ram` there is no guest memory to read a ring out of, and refusing the
+        // doorbell for that would refuse traffic that is served today.
+        let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+        let port = held.as_mut().map(|v| v as &mut dyn kayfabe_vmm::Vmm);
+        let rung = self.device.doorbell(port, DOORBELL_TARGET_GPU, token, &[]);
+        drop(held);
+        match rung {
             Ok(o) => kayfabe_device::DoorbellReport::Served {
                 token,
                 proc: o.proc.0,

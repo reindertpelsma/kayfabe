@@ -190,7 +190,7 @@ impl Device for DoorbellDevice {
         off
     }
 
-    fn mmio_write(&self, _vmm: &mut dyn Vmm, bar: BarId, off: u64, _size: u8, val: u64) {
+    fn mmio_write(&self, vmm: &mut dyn Vmm, bar: BarId, off: u64, _size: u8, val: u64) {
         let lane = off
             .checked_sub(DOORBELL_OFF)
             .filter(|d| d % DOORBELL_STRIDE == 0)
@@ -217,7 +217,7 @@ impl Device for DoorbellDevice {
             return;
         }
         // ★ The whole point: a guest store, arriving at the core's own gated ring path.
-        match self.dev.doorbell(l.gpu, l.token, &[]) {
+        match self.dev.doorbell(Some(vmm), l.gpu, l.token, &[]) {
             Ok(_) => self.rang.fetch_add(1, Ordering::SeqCst),
             // A token that names nothing is the core's MISS = FAULT answer, not an error
             // to surface into the guest: a real doorbell write has no return value.

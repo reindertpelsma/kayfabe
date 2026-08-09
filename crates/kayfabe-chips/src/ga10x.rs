@@ -1513,6 +1513,13 @@ impl PushbufferAbi for Ga10xPushbuffer {
             .collect()
     }
 
+    /// One `GP_ENTRY0`/`GP_ENTRY1` pair — 8 bytes (`ogkm-580: clc56f.h:270, 272`), the
+    /// same constant [`Self::gpfifo_entries`] chunks by, read from one place so the
+    /// decoder and any cursor over it can never disagree about the stride.
+    fn gpfifo_entry_stride(&self) -> usize {
+        submit::GP_ENTRY_SIZE as usize
+    }
+
     /// ★★★ **E5 — the run-aware decode, and the CE `LAUNCH_DMA` operands with it.**
     ///
     /// This is the entry point the owner's 2026-08-02 ruling
@@ -1646,6 +1653,13 @@ impl PushbufferAbi for UnbuiltPushbuffer {
     /// downstream ever receives a `PushRange` derived from a format nobody validated.
     fn gpfifo_entries(&self, _ring: &[u8]) -> Vec<PushRange> {
         Vec::new()
+    }
+
+    /// The NVIDIA stride, stated rather than defaulted — ⊘ and never *used*, because
+    /// [`Self::gpfifo_entries`] decodes nothing, so no cursor built on it can index this
+    /// codec's ring at all.
+    fn gpfifo_entry_stride(&self) -> usize {
+        submit::GP_ENTRY_SIZE as usize
     }
 }
 

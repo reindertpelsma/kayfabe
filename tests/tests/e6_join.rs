@@ -407,7 +407,7 @@ fn a_permanently_dead_isolate_is_REFUSED_and_does_not_park_forever() {
     let (tx, rx) = mpsc::channel();
     let d = Arc::clone(&dev);
     std::thread::spawn(move || {
-        let _ = tx.send(d.doorbell(GPU, MockArch::token_for(vchid), &[]));
+        let _ = tx.send(d.doorbell(None, GPU, MockArch::token_for(vchid), &[]));
     });
     let got = rx.recv_timeout(Duration::from_secs(10)).expect(
         "★★★ IT PARKED. `Isolate::checkout` answers `None` for a saturated pool AND for \

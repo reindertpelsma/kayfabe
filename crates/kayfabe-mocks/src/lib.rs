@@ -680,6 +680,15 @@ impl PushbufferAbi for MockPushbuffer {
             })
             .collect()
     }
+
+    /// 16, and it is deliberately **not** the real 8: a cursor that indexed this ring with
+    /// `kayfabe_abi::submit::GP_ENTRY_SIZE` would read half an entry per step and still
+    /// find plausible-looking numbers, so a fixture built on the real stride could not tell
+    /// a codec-driven cursor from a hardcoded one. See [`Self::gpfifo_entries`]'s own
+    /// convention and `mock_fidelity_both_directions`.
+    fn gpfifo_entry_stride(&self) -> usize {
+        16
+    }
 }
 
 /// Fake MMU format: **real VER2 geometry, fake entry encoding**
