@@ -8385,3 +8385,69 @@ driver work. `boot_capture.sh`'s own check is a **disjunction** (`n_adapter == 0
 `SMI_RC=0`); the gate was copied from it and **lost the clause that made it correct**, which
 is `a_defect_in_the_argument_is_invisible` reproduced inside the instrument written to
 prevent a different one. Fixed, and now green on s23/s24/s25 and red on a fabricated tag.
+
+### 16.28.8 ★★★★ BOOTED `s26_0484a3b_cup2` — **the doorbell wall is GONE: `24/9/15` → `24/24/0`**
+
+`[measured 2026-08-09, boot `s26_0484a3b_cup2`, bench `vh`, GA106/RTX 3060, host
+580.159.04 Open, STOCK guest, hook `cup2_hook_deadline.sh` — the same hook s20–s25 carried.
+Rev `0484a3b9987ab476b6026e4260f533c511fcbbb0` stamped in the archive AND in the QEMU binary
+AND equal to the bench's `HEAD`, all three checked before booting.]`
+
+```text
+doorbells: 24 arrived, 24 served, 0 REFUSED by name          (s23/s24/s25: 24 / 9 / 15)
+  last CPU-CE serving: cpu-ce: 1 gp, 9 methods, 1 launch (0 release-only), 1 span,
+                       65536 B, 1 sem fin va=0x12006c004 -> S:0x4d09004
+```
+
+★★★ **The prediction §16.28.5 wrote down before the boot is met exactly.** Token
+`0x00010001` — the one refused fifteen times in three consecutive boots — is now
+`SERVED-LOCAL [CpuCe::ServedLocally]`, seven times in this log. The refused channel joined
+the served group; `9 + 15 = 24`.
+
+★★★★ **And the attribution is airtight, by INVARIANCE.** Every other census line is
+**byte-identical** to s25:
+
+| line | s25 | s26 |
+|---|---|---|
+| `commands:` | 454 decoded, 84 UNSERVICED, 38 distinct | **identical** |
+| `bridge refusals:` | 18 total, 6 distinct | **identical** |
+| `controls:` | 130 answered, 45 distinct | **identical** |
+| `isolates:` | 2 materialized, 2 live, 2 refusing | **identical** |
+| `gpfifo rings:` | 10 declared, 8 non-zero, first `0x120064000` | **identical** |
+| `doorbells:` | 24 / **9** / **15** | 24 / **24** / **0** |
+
+⇒ One line moved, and it is the one line this increment aims at. That is the same
+invariance argument s24/s25 used to prove they were observational, run in the other
+direction to prove this one is not.
+
+★★ **Positive evidence that it is ROUTE 4 that fired**, rather than merely that the wall
+went away: `va=0x12006c004 -> S:0x4d09004` is a **resolved** address on the walling
+channel's own ring (`0x120064000 + FINISH_PAYLOAD_FROM_RING 0x8004` — the CeUtils
+finishPayload semaphore, `ce_utils.c:349`'s subject). Resolving it requires
+`ce_session(hClient, hVASpace)` to have found a publication, which requires
+`facts.vaspace == Some(0xc)`, and route 4 is the only thing in the tree that can produce
+that value for a channel whose three declared routes all miss. ⇒ **The name route 4 handed
+over is demonstrably the name the walk resolved through**, and the guest's own
+publication `(hClient 0xc1e00010, hObject 0xc)` is what it resolved *to*.
+
+★ The channel is now doing real work: **65536 B** in one span, where s25's last serving was
+the 32 B UVM push. ⊘ No completion was forged — the semaphore write is the one the guest's
+own pushbuffer asked for, at the address its own methods named.
+
+### 16.28.9 ⊘ WHAT DID NOT MOVE — and it must be said as plainly as what did
+
+- **`cup2` is still `FAIL cuInit(0) -> initialization error (3)` (`CUP2_RC=1`)**, exactly as
+  in s20–s25.
+- ⊘⊘ **The guest's dmesg is BYTE-IDENTICAL to s25.** `diff` of the two, timestamps
+  stripped, is **empty**. Not "similar" — empty.
+
+⇒ **The doorbell plane's last refusal is gone and the guest cannot yet tell.** That is a
+real result and a bounded one, and the two halves must not be blurred: this increment
+removed a wall in *our* port and made a previously unaddressable channel execute; it did
+**not** advance `cuInit`. Whatever `cuInit` is failing on is upstream or downstream of the
+CE plane, and the identical dmesg says the guest's kernel-side story is unchanged.
+
+★ Note what this rules out, which is worth more than the disappointment: *"the CeUtils
+scrubber's refused doorbell is what fails `cuInit`"* — a live hypothesis since §14.24 — is
+**refuted**. The doorbell is served, the copy runs, the semaphore is written, and `cuInit`
+returns the same error at the same place.
