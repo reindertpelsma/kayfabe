@@ -10064,8 +10064,15 @@ what discriminate them:
 | **P** | the join fires: `TALLY` shows at least one `bid` with **both** `phys>0` and `va>0`, and the `ACCEPTED` row carries `joined>0` | `{bid=0x… phys=N va=M …}` + `joined=K` | ★★★★★ the address plane binds for the first time. §16.48.4's account is confirmed end-to-end. |
 | **Q** | halves park but never pair: `TALLY` shows `va>0` on ids whose `phys` is **0**, `joined=0`, `orphans(awaiting_phys>0)` | `joined=0 parked=N orphans(awaiting_va=0,awaiting_phys=N)` | ★ partial and INFORMATIVE — the join is correct and **phase 1 never arrives**. That is a fact about the guest, not the port, and it names the next rung precisely (why does `kgrobjPromoteContext` not run?). ⊘ Not a refutation of the join. |
 | **R** | `joined=0` **and** `TALLY` shows some `bid` with both `phys>0` and `va>0` | a paired id beside `joined=0` | ⊘⊘ refuted — the key is wrong (§16.48.3's cross-VAS limit is real and load-bearing), or the parking map is being reset between promotions. `orphans` says which. |
-| **R′** | any `s40` guest-facing number moves **backwards** (`0x2080012b` accepted x11, `NotOnAllowlist` x10, `FreeUnknown` x15, doorbells 170) or a **new** `PromoteFault` appears | a changed refusal census | ⊘⊘ the serious one: a change advertised as a join changed the guest's stream. `HalfConflict` or `Malformed` appearing would be this. |
+| **R′** | `PromoteFault::HalfConflict` appears | `promote-ctx PromoteFault::HalfConflict` in the refusal census | ★ **INFORMATIVE, not merely bad** — it is `R` stated as a refusal instead of as a silence: the same `buffer_id` in the same VAS was declared with two different values, which is exactly the cross-VAS limit §16.48.3 named. ⚠ It is also a **guest-facing regression** (a control answered `NV_OK` at `s40` is now refused), so it must be reported as both. ⊘ Refusing was chosen over keeping-the-first precisely so this cannot express itself as a *wrong table*. |
+| **R″** | any OTHER `s40` guest-facing number moves (`0x2080012b` accepted x11 / refused x2, `NotOnAllowlist` x10, `FreeUnknown` x15, doorbells 170), or `Malformed` appears | a changed refusal census with no `HalfConflict` | ⊘⊘ **the serious one**: a change advertised as a pure join changed the guest's stream through a path nothing predicted. `Malformed` in particular would mean the zero-length arm is not doing what §16.48.5 says. |
 | **S** | boot does not reach `cup2`, or the two artefacts' revision stamps disagree | — | not a result. |
+
+⚠ **Amended once, BEFORE the boot and after re-reading the join**: `R′` originally bundled
+`HalfConflict` together with "any number moved backwards" under one reading. They are not one
+reading — `HalfConflict` is a *diagnosis of the join key* and the other is *an unexplained
+regression* — and a single row could not have told the two apart in the report. Recorded as an
+amendment rather than silently rewritten.
 
 ★ **Predicted, and it is a prediction that can lose:** `cup2` still fails. This rung fills the
 GR context-buffer gap under MISS = FAULT; `promote.rs`'s own module doc says that is
