@@ -10492,3 +10492,28 @@ a row of zeros must not look the same.
    (`kgraphicsGetGlobalCtxBuffers`) this port has not recovered. ⊘ Step 1's success does not
    touch it, and `globals_known` is what keeps that visible.
 3. ⊘ `0xc574` stays where §16.48.1 put it: not the wall.
+
+## §16.52 ★ THE FALSIFIER FOR `s43`, COMMITTED BEFORE THE BOOT — a pure INSTRUMENT boot
+
+⊘ **This rung changes no behaviour.** §16.51.3's cumulative accumulator is report-side
+only; the join, the scoping and the classifier are byte-for-byte what `s42` ran. So the
+question is exactly one: **does the instrument now show what `s42` had to be inferred from?**
+
+★ It is worth a boot precisely because of what §16.51.3 says. Shipping a fix *for an
+instrument that could not be read* without reading it would repeat the same pattern one
+level up — `a_flag_is_not_progress`, applied to my own correction.
+
+| | outcome | the line it prints | reading |
+|---|---|---|---|
+| **P** | the `TALLY` row carries `\|\| CUMULATIVE …` with **`joined_global` ≥ 1**, and every `s42` number is unchanged (`orphans(0,9)`, `already=1`, `half_already=9`, `globals_known=1`, doorbells **170**, `CUP2_RC=1`) | `\|\| CUMULATIVE bound=B joined=J joined_global=1 already=A globals_added=1` | ★★★★★ §16.51.2's inference is confirmed **directly** instead of through `orphans` and `already`, and outcome P is scoreable from one line for the first time. |
+| **Q** | the `CUMULATIVE` row appears and `joined_global` is **0** | `joined_global=0` beside `already=1` | ⊘⊘ **the serious one, and it indicts ME**: §16.51.2 inferred the join from a `10 → 9` orphan drop and an `already` of 1. If no promotion ever recorded a global join, something *else* put that range in the table and the §16.50 account is wrong. ★ Note this row exists only because the accumulator can contradict the inference it was built to confirm — an instrument that could only agree would be worthless. |
+| **R** | no `\|\| CUMULATIVE` substring in the log at all | — | the render never ran, or the `PROMOTE_DIAG_SLOTS` sentence clipped it. Not a result about the join; a result about the transport. ⚠ The row is emitted even for an empty tally precisely so this is distinguishable from "nothing to report". |
+| **R′** | any `s42` guest-facing number moves | a changed refusal census | ⊘⊘ a **report-side** change altered the guest's stream — which would mean the accumulator is not report-side. |
+| **S** | boot does not reach `cup2`, or the stamps disagree | — | not a result. |
+
+★ **Predicted:** `CUP2_RC=1`, unchanged, and `cuCtxCreate → 801`. ⊘ Nine of cup2's ten
+context-buffer VA halves still cannot bind and §16.51.4's items 1 and 2 are both untouched,
+so nothing here can move the wall. ★★ And `cup2` gates on `cuCtxCreate` alone — it launches
+**no kernel at all** (`cuMemAlloc` + a 4-byte CE round-trip), so even a green `cup2` would be
+a control-plane result, never evidence about compute. The scoreable quantity is
+`joined_global` in the cumulative row, and nothing else.
