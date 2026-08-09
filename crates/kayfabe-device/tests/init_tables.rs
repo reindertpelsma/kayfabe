@@ -447,7 +447,16 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER. ⊘ The only one of the three that was
     // UNREACHABLE until this port stopped serving zero at BAR0 `0xB83110` — its absence from
     // every prior unserviced ledger was evidence of nothing.
-    assert_eq!(WantedTable::ALL.len(), 38, "the served universe\'s size");
+    // ★★★★ 38 -> 40 at §14.42, and the pair is one rung on purpose: `0x20802a07`
+    // CE_GET_PHYSICAL_CAPS and `0x20802a02` CE_GET_CE_PCE_MASK are issued by ONE loop in
+    // `queryCopyEngines` six lines apart, each under a hard `goto done`, so serving either
+    // alone moves the wall and buys nothing.
+    // ⊘ They are in OPPOSITE epistemic positions and the difference is one flag bit:
+    // `0x20802a07` is `KERNEL_PRIVILEGED` and had to be DERIVED — it is a projection of the
+    // very `CeGeometry` `0x20802a0b` already serves, stating no new number — while
+    // `0x20802a02` carries `NON_PRIVILEGED`, so a real GA106 was simply asked (`R24`), and
+    // its LCE4 refusal corroborates `present = 0x0f` from a third independent control.
+    assert_eq!(WantedTable::ALL.len(), 40, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

@@ -505,6 +505,7 @@ fn the_serve_site_refuses_when_the_encoder_declines() {
     // prevent.
     static BAD: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         memory_system: kayfabe_device::ga10x::GA106_MEMORY_SYSTEM,
         device_info: kayfabe_device::ga10x::GA106_DEVICE_INFO,
         conf_compute: kayfabe_device::ga10x::GA106_CONF_COMPUTE,
@@ -593,6 +594,7 @@ fn the_classifier_names_this_control_and_its_size() {
 const fn copy_of_ga106() -> ChipProfile {
     ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "TEST-BAD-FALCONS",
         pci_device_id: 0x2504,
         pci_revision: 0xa1,

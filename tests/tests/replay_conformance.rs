@@ -1573,6 +1573,29 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // `the_access_cntr_layout_and_its_own_bound`. Absent from an `nvidia-smi` capture for
         // the same module reason as the other two.
         0x2080_0a1d,
+        // ★★★ §14.42's first. Absent from `cap1b` for §14.41's module reason, not a
+        // CUDA-vs-smi one: `queryCopyEngines`' caller chain ends at
+        // `nvUvmInterfaceQueryCopyEnginesCaps`, called only from `nvidia-uvm`
+        // (`ogkm-580: kernel-open/nvidia-uvm/uvm_gpu.c:489`, `uvm_channel.c:3172`), and an
+        // `nvidia-smi` capture never opens `/dev/nvidia-uvm`.
+        //
+        // ⊘ The size claim is 8 — `NvU32 ceEngineType` then `NvU8 capsTbl[2]`, tail-padded
+        // to the struct's `NvU32` alignment (`ogkm-580: ctrl2080ce.h:82-85`, typedef'd for
+        // this id at `:279`) — and it is the `paramSize` the export row itself advertises
+        // (`ogkm-580: g_subdevice_nvoc.c:7654`). ⚠ Unevidenced **by a capture**; evidenced by
+        // the generated dispatch table, which is the same class of source `0x20802a0b`'s 136
+        // rests on and is checked by `the_caps_v2_struct_layout_is_the_headers`.
+        0x2080_2a07,
+        // ★★★ §14.42's second, and it is the one entry on this list with **direct hardware
+        // evidence for its size**. `[measured 2026-08-09, real GA106 `GPU-d0913685`, R24,
+        // `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` a real part was issued
+        // this control with an **8-byte** buffer and answered `NV_OK`, writing the second
+        // word (the `0xCD` seed came back changed for LCE0..3 and the buffer was not
+        // rejected as malformed). ⇒ The exemption here is only from *this capture's* demand
+        // sequence; the size is not unevidenced in the way the rows above it are.
+        //
+        // ⊘ Same `nvidia-uvm`-never-ran reason for its absence from `cap1b`.
+        0x2080_2a02,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),

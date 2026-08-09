@@ -100,6 +100,7 @@ pub mod businfo;
 pub mod c2cinfo;
 pub mod capability;
 pub mod cecaps;
+pub mod cepce;
 pub mod chipinfo;
 pub mod confcompute;
 pub mod deviceinfo;

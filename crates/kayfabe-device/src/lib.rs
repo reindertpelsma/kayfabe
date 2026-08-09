@@ -313,6 +313,20 @@ pub struct ChipProfile {
     /// to look complete moves the failure later and deeper — see [`ga10x::GA106_ENGINES`],
     /// which names the four it leaves out.
     pub engines: &'static [FifoDeviceEntry],
+    /// ★★ **Which physical copy engines back each logical one**, indexed by LCE instance —
+    /// the `[OUT]` word of `NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK` (`0x20802a02`).
+    ///
+    /// On the chip row, and **not** a `GA10X_` constant beside its caps neighbours, because a
+    /// PCE→LCE map is a per-*part* fact rather than an architecture's: it is a function of how
+    /// many PCEs a die has and of the floorsweeping applied to the individual part. A GA102
+    /// answers different words to this same control. See [`kayfabe_abi::cepce`].
+    ///
+    /// ⊘ **Indexed by LCE instance and expected to cover every engine [`Self::engines`]
+    /// advertises.** The two are checked against each other at the serve site, and a chip
+    /// that advertises a copy engine this table does not state gets a **named refusal** —
+    /// never a zero, which on this control positively claims an LCE backed by no physical
+    /// engine at all.
+    pub lce_pce_masks: &'static [u32],
     /// This chip's kernel interrupt table — the `MC_ENGINE_IDX` → vector map.
     pub intr_table: &'static [IntrTableEntry],
     /// `subtreeMap[]`, which travels with [`ChipProfile::intr_table`] because RM copies it

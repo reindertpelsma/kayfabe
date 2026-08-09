@@ -432,6 +432,192 @@ pub fn encode_ce_get_all_physical_caps(geometry: &CeGeometry) -> Vec<u8> {
     out
 }
 
+/// `NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS` — `ogkm-580: ctrl2080ce.h:275`. ★ The **per-engine**
+/// door onto the same silicon fact [`NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS`] serves whole.
+pub const NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS: u32 = 0x2080_2a07;
+
+/// `NV2080_CTRL_CMD_CE_GET_CAPS` — `ogkm-580: ctrl2080ce.h:62`. The id `queryCopyEngines`
+/// calls and the one whose failure `cuInit` reports; it is **never served here**, because
+/// `subdeviceCtrlCmdCeGetCaps_IMPL` is the guest kernel's own
+/// (`ogkm-580: kernel_ce_ctrl.c:46-87`) and reaches us only as its forward of
+/// [`NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS`]. Present so a claim can name the caller without
+/// spelling a bare number — the same service [`NV2080_CTRL_CMD_CE_GET_ALL_CAPS`] does one
+/// boundary up.
+pub const NV2080_CTRL_CMD_CE_GET_CAPS: u32 = 0x2080_2a01;
+
+/// `sizeof(NV2080_CTRL_CE_GET_CAPS_V2_PARAMS)` — `NvU32 ceEngineType` then
+/// `NvU8 capsTbl[2]`, tail-padded to the `NvU32` alignment, = 8. This is the `paramSize`
+/// `0x20802a07`'s export row advertises (`ogkm-580: g_subdevice_nvoc.c:7654`).
+pub const CE_GET_CAPS_V2_PARAMS_SIZE: usize = 8;
+
+/// Byte offset of `capsTbl` inside [`CE_GET_CAPS_V2_PARAMS_SIZE`] — straight after the
+/// `NvU32 ceEngineType`.
+pub const CAPS_V2_TBL_OFF: usize = 4;
+
+/// Answer `NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS` (`0x20802a07`) for **one** engine.
+///
+/// ## ⊘⊘ Re-asked, not inherited: this is NOT the identity echo three rungs used
+///
+/// `0x20800a9b` and `0x20800a9d` had **no `[OUT]` field at all**, so returning the guest's
+/// own bytes was the *whole* correct reply. That argument does not reach here.
+/// `NV2080_CTRL_CE_GET_CAPS_V2_PARAMS` is `{ NvU32 ceEngineType /*[IN]*/; NvU8 capsTbl[2]
+/// /*[OUT]*/; }` (`ogkm-580: ctrl2080ce.h:82-85`, typedef'd for this id at `:279`), and the
+/// caller **reads the `[OUT]` half**:
+///
+/// ```text
+/// physicalCaps.ceEngineType = NV2080_ENGINE_TYPE_COPY(pKCe->publicID);
+/// … Control(…, NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS, &physicalCaps, …)
+/// portMemCopy(pKCeCaps, 2, physicalCaps.capsTbl, 2);      // ← verbatim, into the caller's
+/// kceAssignCeCaps_HAL(pGpu, pKCe, pKCeCaps);              //   own caps, then an OR-only pass
+/// ```
+///
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce.c:521-566`, one function,
+/// `kceGetDeviceCaps_IMPL`.) ⇒ **Two bytes we return become the guest's per-CE capabilities
+/// verbatim.** There is nothing to echo our way out of.
+///
+/// ## ★★★ Where the two bytes come from — a PROJECTION, not a second table
+///
+/// They are `geometry.caps_for(publicID)`: the identical [`CeGeometry`] row
+/// [`encode_ce_get_all_physical_caps`] serves under `0x20802a0b`, indexed instead of
+/// emitted whole. ⊘ **Deliberately not a second measured table.** One silicon fact stated
+/// twice is exactly the drift [`crate::deviceinfo`] exists to forbid, and here it would be
+/// visible to the guest as a device whose CE2 is a graphics copy engine under one control
+/// id and is not under another.
+///
+/// ★ And the projection is *provably* the right shape rather than assumed: the guest kernel
+/// reaches this id only from `kceGetDeviceCaps_IMPL`, whose post-pass `kceAssignCeCaps_HAL`
+/// is OR-only on every Turing/Ampere/Ada part (`kernel_ce_gp100.c:311-323`, guarded by a
+/// `pKernelNvlink != NULL` that is `NULL` on a GeForce GA106) — the same argument, and the
+/// same idempotence under the guest's own post-processing, that the module header
+/// establishes for `0x20802a0b`.
+///
+/// ## ⊘ The out-of-range arms REFUSE BY NAME, and both refusals are RM's own
+///
+/// A `dlen`-style zero row is not available here and would not be honest if it were: on
+/// this control, `capsTbl = {0,0}` is a *positive* claim that a copy engine exists and can
+/// do nothing — not a blank. RM itself refuses instead, twice, and this function mirrors
+/// both:
+///
+/// - **not a copy engine** → `NV_ERR_NOT_SUPPORTED`. `subdeviceCtrlCmdCeGetCapsV2_IMPL`
+///   returns exactly that for `!RM_ENGINE_TYPE_IS_COPY` (`kernel_ce_shared.c:257-260`).
+/// - **a copy engine this part does not advertise** → `NV_ERR_NOT_SUPPORTED`, which is what
+///   RM returns for a stubbed or absent `KernelCE` (`kernel_ce_shared.c:268-273`, and again
+///   in `kceGetDeviceCaps_IMPL` at `kernel_ce.c:523-527`).
+///
+/// ★★ The second arm is **corroborated at the boundary by an independent control**:
+/// `[measured 2026-08-09, real GA106 `GPU-d0913685`,
+/// `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` `0x20802a02` answers `NV_OK`
+/// for LCE0..LCE3 and refuses **`0x56`** for LCE4 — the same edge, from a control that
+/// shares no code with this one, against a `NV_CE_MAX_LCE_MASK = 0x1f` that permits five.
+/// See [`GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE`].
+///
+/// ## ⚠ What serving this does NOT buy
+///
+/// It buys the guest a *description* of four copy engines. It does not build them. The bits
+/// this returns say `SYSMEM | P2P | BL_SIZE_GT_64K | pipelined and non-pipelined BL`, and
+/// each is a promise redeemed on a plane elsewhere in this port — a promise that becomes a
+/// lie the first time a caller acts on one this port cannot honour. The serve site prints
+/// that, per gap, rather than implying it.
+///
+/// # Errors
+///
+/// [`CePhysicalCapsError::ShortParams`] if the request is under
+/// [`CE_GET_CAPS_V2_PARAMS_SIZE`]; [`CePhysicalCapsError::NotACopyEngine`] and
+/// [`CePhysicalCapsError::EngineNotPresent`] for the two arms above. ⊘ Every variant refuses
+/// the **whole** control, because the caller wraps it in `NV_ASSERT_OK_OR_RETURN`
+/// (`kernel_ce.c:551`) and there is no partial answer to a two-byte `[OUT]`.
+pub fn answer_ce_get_physical_caps(
+    request: &[u8],
+    geometry: &CeGeometry,
+) -> Result<Vec<u8>, CePhysicalCapsError> {
+    let Some(body) = request.get(..CE_GET_CAPS_V2_PARAMS_SIZE) else {
+        return Err(CePhysicalCapsError::ShortParams {
+            len: request.len(),
+            need: CE_GET_CAPS_V2_PARAMS_SIZE,
+        });
+    };
+    let engine_type = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
+    // ⊘ `copy_index_of_engine_type`, never `engine_type - 0x09`: the encoding is
+    // two-branch (`COPY0..COPY9` then `COPY10..COPY19` at `0x34`), and the shortcut is
+    // right on every engine THIS part has and wrong on a bigger one. The inverse is
+    // exercised over `0..=0x60` by `kayfabe-abi/tests/mean_wire.rs`.
+    let Some(index) = crate::submit::copy_index_of_engine_type(engine_type) else {
+        return Err(CePhysicalCapsError::NotACopyEngine { engine_type });
+    };
+    let index = index as usize;
+    if index >= MAX_CES || geometry.present & (1u64 << index) == 0 {
+        return Err(CePhysicalCapsError::EngineNotPresent {
+            engine_type,
+            index,
+            present: geometry.present,
+        });
+    }
+    // The request edited, not a fresh struct: `ceEngineType` is `[IN]` and the caller's own
+    // value is the only right thing there. Only `capsTbl` is ours to write.
+    let mut out = body.to_vec();
+    out[CAPS_V2_TBL_OFF..CAPS_V2_TBL_OFF + CAPS_TBL_SIZE]
+        .copy_from_slice(&geometry.caps_for(index).0);
+    Ok(out)
+}
+
+/// Why a per-engine caps reply could not be built — the three arms
+/// [`answer_ce_get_physical_caps`] refuses by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CePhysicalCapsError {
+    /// The request is shorter than the struct.
+    ShortParams {
+        /// What arrived.
+        len: usize,
+        /// [`CE_GET_CAPS_V2_PARAMS_SIZE`].
+        need: usize,
+    },
+    /// `ceEngineType` is not any `NV2080_ENGINE_TYPE_COPY(i)`. RM's own
+    /// `NV_ERR_NOT_SUPPORTED` arm (`ogkm-580: kernel_ce_shared.c:257-260`).
+    NotACopyEngine {
+        /// The `[IN]` value that arrived.
+        engine_type: u32,
+    },
+    /// A copy engine this part does not advertise. RM's stubbed/absent-`KernelCE` arm
+    /// (`ogkm-580: kernel_ce_shared.c:268-273`), and the edge `0x20802a02` corroborates
+    /// independently at LCE4.
+    EngineNotPresent {
+        /// The `[IN]` value that arrived.
+        engine_type: u32,
+        /// Its decoded LCE index.
+        index: usize,
+        /// [`CeGeometry::present`], for the message to name what IS advertised.
+        present: u64,
+    },
+}
+
+impl core::fmt::Display for CePhysicalCapsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::ShortParams { len, need } => {
+                write!(f, "{len}-byte params, {need} needed for the struct")
+            }
+            Self::NotACopyEngine { engine_type } => write!(
+                f,
+                "ceEngineType {engine_type:#x} is not an NV2080_ENGINE_TYPE_COPY(i): not a \
+                 copy engine, which RM itself answers NV_ERR_NOT_SUPPORTED"
+            ),
+            Self::EngineNotPresent {
+                engine_type,
+                index,
+                present,
+            } => write!(
+                f,
+                "ceEngineType {engine_type:#x} decodes to LCE{index}, which this device does \
+                 not advertise (present={present:#x}): NV_ERR_NOT_SUPPORTED, never a zero \
+                 caps row — {{0,0}} here would positively claim a CE that can do nothing"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for CePhysicalCapsError {}
+
 /// Read a 136-byte reply back into `(present, capsTbl)` — for tests and the trace
 /// differential, so a comparison against a captured reply is done on decoded values rather
 /// than on a hex string somebody regrouped by hand.
@@ -698,5 +884,126 @@ mod tests {
         assert_eq!(CAPS_TBL_SIZE, 2);
         assert_eq!(PRESENT_OFF, 128);
         assert_eq!(CE_GET_ALL_CAPS_PARAMS_SIZE, 136);
+    }
+
+    // ── `0x20802a07` — the per-engine door onto the same table ────────────────────────
+
+    fn caps_v2_request(engine_type: u32) -> Vec<u8> {
+        // ⚠ `0xCD` in the `[OUT]` half only. `ceEngineType` is `[IN]`, and seeding it is the
+        // trap R18 fell into on this struct's sibling.
+        let mut p = vec![0xCDu8; CE_GET_CAPS_V2_PARAMS_SIZE];
+        p[0..4].copy_from_slice(&engine_type.to_le_bytes());
+        p
+    }
+
+    /// ★★★ **The property that makes this a projection and not a second table.**
+    ///
+    /// For every advertised engine, the two bytes `0x20802a07` returns are byte-identical to
+    /// that engine's slot in the 136-byte `0x20802a0b` reply — which is itself pinned to the
+    /// real GA106 capture by [`real_ga106_reply`]. ⊘ This is the test that would go red if
+    /// somebody ever answered the per-engine control out of a freshly typed constant, which
+    /// is precisely the drift the module forbids: a device whose CE2 is a graphics copy
+    /// engine under one control id and is not under another.
+    #[test]
+    fn the_per_engine_reply_is_the_whole_tables_own_row() {
+        let g = ga106();
+        let whole = encode_ce_get_all_physical_caps(&g);
+        for index in 0..4usize {
+            let engine_type = crate::submit::engine_type_copy(index as u32).expect("first block");
+            let out = answer_ce_get_physical_caps(&caps_v2_request(engine_type), &g)
+                .expect("an advertised engine is answered");
+            assert_eq!(out.len(), CE_GET_CAPS_V2_PARAMS_SIZE);
+            assert_eq!(
+                &out[CAPS_V2_TBL_OFF..CAPS_V2_TBL_OFF + CAPS_TBL_SIZE],
+                &whole[index * CAPS_TBL_SIZE..(index + 1) * CAPS_TBL_SIZE],
+                "LCE{index}: the per-engine reply must BE the whole table's row, not a \
+                 second statement of it"
+            );
+        }
+    }
+
+    /// The four measured words, stated once more against the capture — so the projection is
+    /// anchored to hardware and not only to its neighbour.
+    ///
+    /// `0x03e3` on CE0/CE1 (GRCE set), `0x03e2` on CE2/CE3.
+    #[test]
+    fn the_per_engine_replies_are_the_measured_words() {
+        let g = ga106();
+        for (index, want) in [(0usize, 0x03e3u16), (1, 0x03e3), (2, 0x03e2), (3, 0x03e2)] {
+            let engine_type = crate::submit::engine_type_copy(index as u32).expect("first block");
+            let out = answer_ce_get_physical_caps(&caps_v2_request(engine_type), &g)
+                .expect("advertised");
+            let caps = CeCaps([out[CAPS_V2_TBL_OFF], out[CAPS_V2_TBL_OFF + 1]]);
+            assert_eq!(caps.as_u16(), want, "LCE{index}");
+            assert_eq!(
+                caps.has(cap::GRCE),
+                index < 2,
+                "LCE{index}: GRCE is NV_CE_GRCE_ALLOWED_LCE_MASK ∩ present"
+            );
+        }
+    }
+
+    /// `ceEngineType` is `[IN]`: it comes back exactly as sent, and the `0xCD` seed proves
+    /// the `[OUT]` half was actually written rather than left alone.
+    #[test]
+    fn the_in_word_is_echoed_and_the_out_half_is_written() {
+        let out = answer_ce_get_physical_caps(&caps_v2_request(0x0b), &ga106()).expect("CE2");
+        assert_eq!(u32::from_le_bytes([out[0], out[1], out[2], out[3]]), 0x0b);
+        assert_ne!(
+            &out[CAPS_V2_TBL_OFF..CAPS_V2_TBL_OFF + CAPS_TBL_SIZE],
+            &[0xCD, 0xCD],
+            "the [OUT] half must be written, not left at the seed"
+        );
+    }
+
+    /// ★★ The edge, refused the way RM refuses it — and the way a real GA106 was measured to
+    /// refuse the *same engine* at the neighbouring control `0x20802a02`.
+    ///
+    /// ⊘ Never a zero caps row: `{0,0}` here positively claims a copy engine that can do
+    /// nothing, which is a different and worse statement than "no such engine".
+    #[test]
+    fn an_unadvertised_engine_is_refused_not_zeroed() {
+        let err = answer_ce_get_physical_caps(&caps_v2_request(0x0d), &ga106())
+            .expect_err("LCE4 is not advertised by this part");
+        assert!(
+            matches!(err, CePhysicalCapsError::EngineNotPresent { index: 4, present: 0x0f, .. }),
+            "{err}"
+        );
+    }
+
+    /// A non-copy engine type — RM's own `!RM_ENGINE_TYPE_IS_COPY` arm. `0x01` is GRAPHICS.
+    #[test]
+    fn a_non_copy_engine_type_is_refused() {
+        let err = answer_ce_get_physical_caps(&caps_v2_request(0x01), &ga106())
+            .expect_err("graphics is not a copy engine");
+        assert!(matches!(err, CePhysicalCapsError::NotACopyEngine { .. }), "{err}");
+    }
+
+    /// ★★★ The two-branch encoding at its discontinuity: `0x13` is one past `COPY9` and is
+    /// **not** a copy engine. A `- 0x09` shortcut would read it as LCE10.
+    #[test]
+    fn the_copy9_to_copy10_gap_is_refused() {
+        let err = answer_ce_get_physical_caps(&caps_v2_request(0x13), &ga106())
+            .expect_err("0x13 is in the gap");
+        assert!(matches!(err, CePhysicalCapsError::NotACopyEngine { .. }), "{err}");
+    }
+
+    /// A short request is refused rather than read past its end.
+    #[test]
+    fn a_short_caps_v2_request_is_refused() {
+        let err = answer_ce_get_physical_caps(&[0u8; 7], &ga106()).expect_err("7 < 8");
+        assert!(
+            matches!(err, CePhysicalCapsError::ShortParams { len: 7, need: 8 }),
+            "{err}"
+        );
+    }
+
+    /// The `V2` layout, against the header rather than against itself.
+    #[test]
+    fn the_caps_v2_struct_layout_is_the_headers() {
+        assert_eq!(CE_GET_CAPS_V2_PARAMS_SIZE, 8);
+        assert_eq!(CAPS_V2_TBL_OFF, 4);
+        assert_eq!(NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS, 0x2080_2a07);
+        assert_eq!(NV2080_CTRL_CMD_CE_GET_CAPS, 0x2080_2a01);
     }
 }

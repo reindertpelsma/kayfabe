@@ -680,6 +680,7 @@ fn ga106_copy() -> kayfabe_device::ChipProfile {
     let g = &kayfabe_device::ga10x::GA106;
     kayfabe_device::ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: g.name,
         pci_device_id: g.pci_device_id,
         pci_revision: g.pci_revision,

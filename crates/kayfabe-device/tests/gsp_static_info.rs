@@ -478,6 +478,7 @@ fn a_chip_whose_table_cannot_be_encoded_is_refused_in_the_envelope() {
     }];
     static BAD: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         fb_regions: BAD_REGIONS,
         fb_length: 0x3_0000_0000,
         ..copy_of_ga106()
@@ -503,6 +504,7 @@ fn a_chip_whose_table_cannot_be_encoded_is_refused_in_the_envelope() {
 const fn copy_of_ga106() -> ChipProfile {
     ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "TEST-BAD-FB",
         pci_device_id: 0x2504,
         pci_revision: 0xa1,

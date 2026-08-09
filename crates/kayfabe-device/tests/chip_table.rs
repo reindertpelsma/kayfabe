@@ -207,6 +207,7 @@ static OTHER_REG_BASES: &[kayfabe_abi::chipinfo::RegBaseRow] =
 /// ★ **The row.** This is the whole cost of the second chip, and it is data.
 static OTHER: ChipProfile = ChipProfile {
     has_c2c: false,
+    lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
     name: "OTHER (test-only)",
     // A real VBIOS row's device id: identity and ROM are keyed together on purpose.
     pci_device_id: 0x2504,
@@ -378,6 +379,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
     // simply never be consulted — a failure with no symptom on this side.
     static OVERLAPPING: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "OVERLAPPING (test-only)",
         pci_device_id: 0x2504,
         pci_revision: 0,
@@ -433,6 +435,7 @@ fn a_chip_whose_rom_window_swallows_a_gsp_register_is_refused_at_realize() {
 fn a_chip_declaring_a_register_outside_its_own_aperture_is_refused() {
     static PAST_THE_END: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "PAST_THE_END (test-only)",
         pci_device_id: 0x2504,
         pci_revision: 0,
@@ -709,6 +712,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
     // a value nobody can explain.
     static COLLIDING: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "COLLIDING (test-only)",
         pci_device_id: 0x2504,
         pci_revision: 0,
@@ -769,6 +773,7 @@ fn a_chip_whose_counter_collides_with_another_source_is_refused_at_realize() {
 fn a_counter_outside_the_aperture_is_refused_at_realize() {
     static TOO_HIGH: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "TOO_HIGH (test-only)",
         pci_device_id: 0x2504,
         pci_revision: 0,
@@ -1204,6 +1209,7 @@ fn a_chip_that_declares_no_framebuffer_aperture_attributes_nothing_to_one() {
 fn a_chip_whose_pramin_window_swallows_a_gsp_register_is_refused_at_realize() {
     static PRAMIN_OVER_GSP: ChipProfile = ChipProfile {
         has_c2c: false,
+        lce_pce_masks: kayfabe_abi::cepce::GA106_LCE_PCE_MASKS,
         name: "PRAMIN_OVER_GSP (test-only)",
         pci_device_id: 0x2504,
         pci_revision: 0,

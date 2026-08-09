@@ -452,6 +452,27 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::BusGetPcieSupportedGpuAtomics,
         WantedTable::FbGetInfoV2,
         WantedTable::CeGetAllPhysicalCaps,
+        // ⚠ §14.42's pair, and they are the **same structural class as §14.41's three**: a
+        // module boundary, not a CUDA-vs-smi distinction. Both `0x20802a07` (as the guest
+        // kernel's forward of `0x20802a01`) and `0x20802a02` are issued only from
+        // `queryCopyEngines` (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8449-8541`),
+        // whose only caller is `nvGpuOpsQueryCesCaps` (`:6706-6733`) → `rm_gpu_ops_query_ces_caps`
+        // (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/rm-gpu-ops.c:345-355`) →
+        // `nvUvmInterfaceQueryCopyEnginesCaps` (`kernel-open/nvidia/nv_uvm_interface.c:637-653`),
+        // whose only callers in the whole tree are **inside `nvidia-uvm`**
+        // (`kernel-open/nvidia-uvm/uvm_gpu.c:489` and `uvm_channel.c:3172`). `cap1b` is an
+        // `RmInitAdapter` capture driven by `nvidia-smi`, which never opens
+        // `/dev/nvidia-uvm`. ⊘ No closure limit reaches a module that was never asked.
+        //
+        // ★ Both reply planes are covered at the policy boundary instead, and the caps one
+        // by an oracle a differential could not match: `kayfabe_abi::cecaps`'s own tests
+        // assert the per-engine reply **is the whole table's own row**, and that table is
+        // pinned byte-for-byte to two independent real-GA106 captures. The PCE-mask one is
+        // pinned to `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`, a capture of
+        // *this control at this boundary*. ⊘ The envelope is still this file's kind of
+        // coverage and is still absent; that part of the cost is real and is named.
+        WantedTable::CeGetPhysicalCaps,
+        WantedTable::CeGetCePceMask,
         WantedTable::GrmgrGetGrFsInfo,
         WantedTable::GspGetFeatures,
         WantedTable::GssLegacy8159,
@@ -522,10 +543,17 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // path, and an `nvidia-smi` capture never opens `/dev/nvidia-uvm`. ★ A `cuInit`-driven
     // capture would close this one, unlike the two GSS-legacy rows.
     // ⊘ 36 -> 37 at §14.41's second rung (`0x20800a9d`), same class as the first.
-    assert_eq!(universe.len(), 38, "non-vacuity: the universe is not empty");
+    // ⊘ 38 -> 40 at §14.42 (`0x20802a07`, `0x20802a02`), a TWELFTH and THIRTEENTH exception
+    // and both in §14.41's `nvidia-uvm`-never-ran class rather than the CUDA-vs-smi one:
+    // `queryCopyEngines`' only caller chain ends at `nvUvmInterfaceQueryCopyEnginesCaps`,
+    // exported to and called only from `nvidia-uvm`. ★ A `cuInit`-driven capture would close
+    // both, unlike the two GSS-legacy rows — and unusually for this list, `0x20802a02`'s
+    // reply plane already has a capture of **its own boundary** (`R24`), which no other
+    // entry here can say.
+    assert_eq!(universe.len(), 40, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        19,
+        21,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

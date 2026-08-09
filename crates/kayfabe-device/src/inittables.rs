@@ -853,6 +853,62 @@ pub enum WantedTable {
     /// (`0x400`) nor `_CACHEABLE_BY_INPUT` (`0x20000`) — so it is not a
     /// [`crate::sticky::BRANCH_A_CACHEABLE`] row either.
     CeGetAllPhysicalCaps,
+    /// `NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS` (`0x20802a07`) — ★★★ §14.42's wall, **half of
+    /// it**, and the id that fails is again not this one.
+    ///
+    /// `[measured 2026-08-09, boot `ac1710` at `1ea422f`]` `cuInit` dies in
+    /// `queryCopyEngines` (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8449-8541`).
+    /// Its per-CE loop calls `NV2080_CTRL_CMD_CE_GET_CAPS` (`0x20802a01`), which this port
+    /// must **not** serve: `subdeviceCtrlCmdCeGetCaps_IMPL` is the guest kernel's own
+    /// (`kernel_ce_ctrl.c:46-87`) and reaches an emulated GSP only as `kceGetDeviceCaps_IMPL`'s
+    /// forward of the **physical** id, under `NV_ASSERT_OK_OR_RETURN` (`kernel_ce.c:551-556`).
+    /// [`Self::CeGetAllPhysicalCaps`]'s situation exactly, one control along.
+    ///
+    /// ⊘⊘ **Re-asked, not inherited.** The three rungs before this one served *pure-`[IN]`*
+    /// controls where the identity echo was the whole correct reply. That argument does
+    /// **not** reach here: `NV2080_CTRL_CE_GET_CAPS_V2_PARAMS` is `{ NvU32 ceEngineType
+    /// /*[IN]*/; NvU8 capsTbl[2] /*[OUT]*/; }` (`ogkm-580: ctrl2080ce.h:82-85`, typedef'd for
+    /// this id at `:279`) and the caller `portMemCopy`s our two `[OUT]` bytes **verbatim**
+    /// into the guest's per-CE capabilities. Echoing would hand it the `0xCD`-equivalent of
+    /// whatever the guest's buffer held.
+    ///
+    /// ★★★ And the two bytes state **no new number**: they are `geometry.caps_for(publicID)`,
+    /// the identical [`kayfabe_abi::cecaps::CeGeometry`] row [`Self::CeGetAllPhysicalCaps`]
+    /// emits whole. One silicon, two doors, one description — a device whose CE2 is a
+    /// graphics copy engine under one control id and is not under another is precisely the
+    /// drift [`kayfabe_abi::deviceinfo`] exists to forbid.
+    ///
+    /// ⚠ Its flags are `0x301d0` (`ogkm-580: g_subdevice_nvoc.c:7645-7658`) — carrying
+    /// `ROUTE_TO_PHYSICAL` and `INTERNAL` and **neither** `PRIVILEGED(0x4)` nor
+    /// `NON_PRIVILEGED(0x8)`, i.e. `KERNEL_PRIVILEGED`, which is why it could not be probed
+    /// on a real part and had to be derived. Neither `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor
+    /// `_CACHEABLE_BY_INPUT` (`0x20000`), so not a [`crate::sticky::BRANCH_A_CACHEABLE`] row.
+    CeGetPhysicalCaps,
+    /// `NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK` (`0x20802a02`) — ★★★ the **other half** of
+    /// §14.42's wall, six lines below the first, and the one control in this rung whose value
+    /// was **measured at its own boundary** instead of derived.
+    ///
+    /// `queryCopyEngines` issues it immediately after `CE_GET_CAPS` for the same engine and
+    /// `goto done`s on any status but `NV_OK` (`nv_gpu_ops.c:8519-8531`), so serving only
+    /// [`Self::CeGetPhysicalCaps`] would have moved the wall by six lines. ⇒ Both land in one
+    /// rung, deliberately.
+    ///
+    /// ★ Unlike its neighbour this id carries `NON_PRIVILEGED(0x8)` (flags `0x30349`,
+    /// `ogkm-580: g_subdevice_nvoc.c:7585-7598`) **and** `ROUTE_TO_PHYSICAL` with no body in
+    /// the vendored tree — reachable and unreadable. So a real part was asked:
+    /// `[measured 2026-08-09, real GA106 `GPU-d0913685`, R24,
+    /// `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` LCE0..3 answer
+    /// `0x20, 0x10, 0x10, 0x20` and **LCE4 refuses `0x56`** — the same engine count
+    /// [`kayfabe_abi::cecaps`] measured through two other callers, corroborated here by a
+    /// third control that shares no code with them.
+    ///
+    /// ⊘ The value is the chip row's ([`crate::ChipProfile::lce_pce_masks`]), not a constant
+    /// here, because a PCE→LCE map is a per-part fact. An engine this device advertises with
+    /// no mask stated is refused **by name** rather than answered zero.
+    ///
+    /// ⚠ Flags `0x30349` carry neither `RMCTRL_FLAGS_CACHEABLE` (`0x400`) nor
+    /// `_CACHEABLE_BY_INPUT` (`0x20000`), so not a [`crate::sticky::BRANCH_A_CACHEABLE`] row.
+    CeGetCePceMask,
     /// `NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO` (`0x20803801`) — ★★★ §14.33's wall, and the
     /// first control this port serves whose errors are **per-item, not per-call**.
     ///
@@ -977,7 +1033,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 38] = [
+    pub const ALL: [WantedTable; 40] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1011,6 +1067,8 @@ impl WantedTable {
         Self::BusGetPcieSupportedGpuAtomics,
         Self::FbGetInfoV2,
         Self::CeGetAllPhysicalCaps,
+        Self::CeGetPhysicalCaps,
+        Self::CeGetCePceMask,
         Self::GrmgrGetGrFsInfo,
         Self::GspGetFeatures,
         Self::GssLegacy8159,
@@ -1094,6 +1152,8 @@ impl WantedTable {
             Self::CeGetAllPhysicalCaps => {
                 kayfabe_abi::cecaps::NV2080_CTRL_CMD_CE_GET_ALL_PHYSICAL_CAPS
             }
+            Self::CeGetPhysicalCaps => kayfabe_abi::cecaps::NV2080_CTRL_CMD_CE_GET_PHYSICAL_CAPS,
+            Self::CeGetCePceMask => kayfabe_abi::cepce::NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK,
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO,
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
@@ -1154,6 +1214,8 @@ impl WantedTable {
             }
             Self::FbGetInfoV2 => kayfabe_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE,
             Self::CeGetAllPhysicalCaps => kayfabe_abi::cecaps::CE_GET_ALL_CAPS_PARAMS_SIZE,
+            Self::CeGetPhysicalCaps => kayfabe_abi::cecaps::CE_GET_CAPS_V2_PARAMS_SIZE,
+            Self::CeGetCePceMask => kayfabe_abi::cepce::CE_GET_CE_PCE_MASK_PARAMS_SIZE,
             Self::GrmgrGetGrFsInfo => kayfabe_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE,
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::GSP_GET_FEATURES_PARAMS_SIZE,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE,
@@ -1983,6 +2045,65 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 };
                 kayfabe_abi::cecaps::encode_ce_get_all_physical_caps(&geometry)
+            }
+            // ★★★ §14.42, first of two. The PER-ENGINE door onto the table the arm above
+            // emits whole — `geometry.caps_for(publicID)`, out of the SAME `CeGeometry`, so
+            // this states no number the device does not already state. ⊘ The alternative
+            // (a fresh per-engine table) is exactly how a device comes to say its CE2 is a
+            // graphics copy engine under one control id and is not under another.
+            //
+            // ⊘⊘ And it is NOT the identity echo the three rungs before it used: `capsTbl`
+            // is `[OUT]` and `kceGetDeviceCaps_IMPL` `portMemCopy`s our two bytes verbatim
+            // into the guest's own caps (`ogkm-580: kernel_ce.c:557-560`). Echoing would
+            // hand the guest back its own uninitialised buffer.
+            //
+            // ⚠ The error arm is load-bearing: the caller wraps this in
+            // `NV_ASSERT_OK_OR_RETURN`, so a refusal fails the whole of `CE_GET_CAPS`. It is
+            // still right — both refusals are RM's own `NV_ERR_NOT_SUPPORTED` arms
+            // (`kernel_ce_shared.c:257-260` for a non-copy type, `:268-273` for an engine the
+            // part does not advertise), and the second is corroborated at the boundary by
+            // `0x20802a02` refusing LCE4 on a real GA106. ⊘ A zero caps row would NOT be the
+            // safe fallback: `{0,0}` positively claims a copy engine that can do nothing.
+            WantedTable::CeGetPhysicalCaps => {
+                let Ok(geometry) = kayfabe_abi::cecaps::CeGeometry::from_engines(self.chip.engines)
+                else {
+                    return refuse();
+                };
+                let at = req.params_at;
+                match kayfabe_abi::cecaps::answer_ce_get_physical_caps(
+                    &cmd.payload[at..at + kayfabe_abi::cecaps::CE_GET_CAPS_V2_PARAMS_SIZE],
+                    &geometry,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ §14.42, second of two — and the only arm in this rung whose value was
+            // measured AT ITS OWN BOUNDARY rather than derived. `0x20802a02` carries
+            // `NON_PRIVILEGED`, so unlike every other control on this plane a real GA106
+            // could simply be asked; R24 did (`traces/real_ga106/rmladder_r24_pcemask_...`).
+            //
+            // ⊘ `present` is passed in from the SAME `CeGeometry` the caps arm uses, so the
+            // engine list and the PCE table are checked against each other here rather than
+            // allowed to drift into two answers about how many copy engines exist.
+            //
+            // ⚠ It is served in the same rung as its neighbour on purpose:
+            // `queryCopyEngines` issues both per engine, six lines apart, each with a hard
+            // `goto done`. Serving one alone moves the wall and buys nothing.
+            WantedTable::CeGetCePceMask => {
+                let Ok(geometry) = kayfabe_abi::cecaps::CeGeometry::from_engines(self.chip.engines)
+                else {
+                    return refuse();
+                };
+                let at = req.params_at;
+                match kayfabe_abi::cepce::answer_ce_get_ce_pce_mask(
+                    &cmd.payload[at..at + kayfabe_abi::cepce::CE_GET_CE_PCE_MASK_PARAMS_SIZE],
+                    geometry.present,
+                    self.chip.lce_pce_masks,
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
             }
             // ★★★ The first arm whose reply carries PER-ITEM statuses. Every other control
             // here is served or refused as a whole; this one answers `NV_OK` with a status
