@@ -89,10 +89,11 @@ pub const MAX_PROMOTED_RANGES: usize = 16;
 
 /// One **complete** VA → physical declaration recovered from a context promotion.
 ///
-/// Only the both-preparers-ran state reaches here. A promote-only entry (VA declared,
-/// `gpuPhysAddr`/`size` never written) and an initialize-only entry (physical buffer, no
-/// VA) are counted in [`PromoteDeclined`] and never become a `PromotedRange` — binding
-/// either would mean manufacturing an address out of a field the producer did not write.
+/// Reached two ways, and ⊘ **never from zero**: either one wire entry carried both halves
+/// (the both-preparers-ran state), or [`apply_promote_ctx`]'s §16.48 join completed a
+/// [`PromoteHalf`] from its parked partner. Binding a half against a field its producer
+/// never wrote would be manufacturing an address; binding it against the *other control's*
+/// measured value is the join this type exists to receive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PromotedRange {
     /// The GPU virtual address the context buffer is mapped at.
@@ -110,6 +111,79 @@ pub struct PromotedRange {
     /// Carried rather than dropped. The C artifact never stored it, so its table could
     /// not tell one context buffer from another.
     pub buffer_id: u16,
+}
+
+/// ★★★★★ **One HALF of a two-phase promotion** — §16.48.
+///
+/// An entry that declares a physical buffer with no VA, or a VA with no physical, is not
+/// a malformed entry and not a declined one: it is **one phase of a promotion RM
+/// deliberately splits in two** for an externally-owned (UVM) VA space. See
+/// [`crate::gpu::Vas::promote_halves`] for the two emitters and the `ogkm` citations.
+///
+/// ⊘ These were previously *counted and dropped* ([`PromoteDeclined`]). Counting them was
+/// right — it is what made `bound=0` legible at `s40` — but dropping them is why eleven
+/// `NV_OK`s bound nothing. They are now carried so the join can complete them, and
+/// [`PromoteDeclined`] keeps its original meaning: **what the wire declared**, unchanged,
+/// so the two numbers can be compared rather than one silently replacing the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromoteHalf {
+    /// **Phase 1** — `gpuPhysAddr`/`size`/`physAttr` set, `bNonmapped = 1`, no VA.
+    Physical {
+        /// `gpuPhysAddr`, in [`Self::Physical::aperture`].
+        phys: u64,
+        /// `size`. ⊘ **May be zero, and a zero is neither refused nor parked** — it is
+        /// counted into [`PromoteJoin::half_unusable`] and dropped. See the arm in
+        /// [`apply_promote_ctx`]: the ABI classifier's last rule sends any all-zero entry
+        /// here, such entries already reach us today, and refusing them would make a pure
+        /// join change refuse traffic the guest sends now.
+        len: u64,
+        /// Which aperture `phys` is in.
+        aperture: Aperture,
+        /// The join key.
+        buffer_id: u16,
+    },
+    /// **Phase 2** — `gpuVirtAddr` set, `gpuPhysAddr`/`size` never written.
+    Virtual {
+        /// `gpuVirtAddr`.
+        va: GpuVa,
+        /// The join key.
+        buffer_id: u16,
+    },
+}
+
+impl PromoteHalf {
+    /// The `buffer_id` this half joins on, whichever phase it is.
+    #[must_use]
+    pub const fn buffer_id(self) -> u16 {
+        match self {
+            Self::Physical { buffer_id, .. } | Self::Virtual { buffer_id, .. } => buffer_id,
+        }
+    }
+}
+
+/// ★★★ A half **parked** in a [`crate::gpu::Vas`], waiting for its partner.
+///
+/// ★ The variant names state what is MISSING, not what is held, because that is the
+/// question a census row is read to answer: `AwaitingVa` is a physical buffer with no
+/// address yet, `AwaitingPhysical` is an address with nothing behind it. Naming them after
+/// what they hold would make [`crate::gpu::Vas::promote_orphans`]'s two numbers
+/// indistinguishable at the call site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParkedHalf {
+    /// Phase 1 arrived; phase 2 has not. **Parked-awaiting-VA.**
+    AwaitingVa {
+        /// `gpuPhysAddr`.
+        phys: u64,
+        /// `size`, never zero.
+        len: u64,
+        /// Which aperture `phys` is in.
+        aperture: Aperture,
+    },
+    /// Phase 2 arrived; phase 1 has not. **Parked-awaiting-physical.**
+    AwaitingPhysical {
+        /// `gpuVirtAddr`.
+        va: GpuVa,
+    },
 }
 
 /// The non-bindable entries a promotion carried — **named and counted, never silent**.
@@ -138,7 +212,17 @@ pub struct CtxPromotion {
     pub object: HObject,
     /// The complete mappings, in wire order.
     pub ranges: Vec<PromotedRange>,
-    /// What was dropped, and in which state.
+    /// ★★★★★ §16.48 — the **half**-declarations, in wire order: one phase of a two-phase
+    /// promotion each, joined on `buffer_id` by [`apply_promote_ctx`].
+    ///
+    /// ⊘ Not a second copy of [`Self::ranges`] and never overlapping it: the ABI
+    /// classifier assigns each wire entry exactly one of three states, so an entry is a
+    /// complete range **or** a half, never both.
+    pub halves: Vec<PromoteHalf>,
+    /// What the wire declared in each incomplete state — ★ **unchanged in meaning by the
+    /// join**. These count what arrived; [`PromoteJoin`]'s counters say what became of it.
+    /// Keeping both is what lets "ten VA halves arrived" and "ten VA halves joined" be
+    /// distinguished, which a single number could not.
     pub declined: PromoteDeclined,
 }
 
@@ -184,6 +268,32 @@ pub struct PromoteJoin {
     pub already: u32,
     /// What the control declared and this join did not bind.
     pub declined: PromoteDeclined,
+    /// ★★★★★ §16.48 — halves that **completed a parked partner and bound**. This is the
+    /// number the whole rung exists to move off zero.
+    ///
+    /// ⊘ Counted separately from [`Self::bound`] on purpose: `bound` is "a single entry
+    /// carried both halves", `joined` is "two controls were stitched together". They are
+    /// different mechanisms and a rung that confused them could not tell a two-phase join
+    /// working from the guest simply having sent a complete entry.
+    pub joined: u32,
+    /// Halves **parked** by this promotion, awaiting a partner. Newly parked only.
+    pub parked: u32,
+    /// Halves that re-declared an **identical** already-parked half — the idempotent
+    /// re-promote, at half granularity. Not an error, not progress.
+    pub half_already: u32,
+    /// ★★ Physical halves declaring **zero length** — counted and dropped, never parked
+    /// and never refused. See the arm in [`apply_promote_ctx`] for why all three of those
+    /// choices are deliberate and which one would have broken the boot.
+    pub half_unusable: u32,
+    /// ★★★ **Orphan reading, taken AFTER this promotion applied**, as
+    /// `(awaiting_va, awaiting_physical)` over the whole target VAS — see
+    /// [`crate::gpu::Vas::promote_orphans`].
+    ///
+    /// ⚠ This is a **residual**, not an event: it counts halves not joined *yet*. At the
+    /// deepest promotion the guest reaches it is the join's own falsifier — a healthy
+    /// `joined=N` beside a large orphan count means the key is wrong, and that is
+    /// precisely the reading `bound=N` alone could never give.
+    pub orphans: (u32, u32),
 }
 
 /// Every way a promotion is refused, by name. There is no catch-all.
@@ -373,6 +483,25 @@ pub enum PromoteFault {
         /// Its length.
         len: u64,
     },
+    /// ★★★ §16.48 — a half **re-declares a `buffer_id` that is already parked, with
+    /// DIFFERENT contents**.
+    ///
+    /// The idempotent case (byte-identical re-declaration) is [`PromoteJoin::half_already`]
+    /// and is not an error — the same context buffer is promoted again when a second
+    /// channel of a TSG comes up. This variant is the other case: the same `buffer_id` in
+    /// the same address space now names a different physical buffer, or a different VA.
+    ///
+    /// ⊘ Refused rather than overwritten, mirroring [`PromoteFault::Collides`] one level
+    /// down. Silently replacing a parked half would let the *second* declaration join
+    /// against the *first*'s partner and bind a mapping neither control ever described —
+    /// which is manufacturing an address by a slower route than the one MISS = FAULT
+    /// already forbids.
+    HalfConflict {
+        /// The join key that disagreed.
+        buffer_id: u16,
+        /// The address space it disagreed in.
+        pdb: Pdb,
+    },
 }
 
 /// ★ **ROUTE (rank 0).** Resolve `hObject` in `hChanClient`'s namespace to the address
@@ -543,9 +672,154 @@ pub fn apply_promote_ctx(
             }
         }
     }
+    // ── PASS 1b: STAGE THE TWO-PHASE JOIN. Mutates nothing. ──────────────────────────
+    //
+    // ★★★★★ §16.48. Halves are folded into a SCRATCH copy of the parking map and the
+    // completions they produce are collected; only if every half validates does any of it
+    // reach the `Vas`. The scratch copy is what keeps this all-or-nothing without a second
+    // rollback path — and it is affordable for exactly the reason the module doc gives for
+    // the linear `client_kinds` scan: a promotion is a handful of controls per process
+    // lifetime, not a data-plane verb.
+    //
+    // ⊘ Sequential, so two halves sharing a `buffer_id` INSIDE one promotion see each
+    // other. Handling that by scanning `vas.promote_halves` alone would let the second one
+    // park over the first with no name attached to it.
+    let mut scratch = vas.promote_halves.clone();
+    let mut completed: Vec<PromotedRange> = Vec::new();
+    // ★★ `parked` is what this promotion LEFT parked, not how many parks it performed.
+    // A half that parks and is then completed by its partner LATER IN THE SAME CONTROL
+    // parked nothing — counting the gross insert would report `parked=1 joined=1` for a
+    // control that ended with an empty map, and a reader would go looking for an orphan
+    // that does not exist.
+    let mut parked_ids: BTreeSet<u16> = BTreeSet::new();
+    let mut half_already = 0u32;
+    let mut half_unusable = 0u32;
+    for h in &p.halves {
+        match *h {
+            PromoteHalf::Physical {
+                phys,
+                len,
+                aperture,
+                buffer_id,
+            } => {
+                // ★★★★ A zero-length physical half is COUNTED AND DROPPED, never refused
+                // and never parked.
+                //
+                // ⊘ Refusing it was this rung's first draft and it would have been a
+                // silent behaviour change: the ABI classifier's last arm sends *any*
+                // all-zero entry here (`view.rs`, rule 4 — "otherwise ⇒ InitializeOnly"),
+                // and such entries already reach us today, where they are counted into
+                // `declined.initialize_only` and harmlessly ignored. Turning them into a
+                // whole-control refusal would make a change advertised as a pure join
+                // refuse traffic the guest sends now — the one outcome that scores this
+                // rung as broken rather than as measured.
+                //
+                // ★ Parking it would be worse than either: it can never produce a bindable
+                // range, so it would sit in the map forever and inflate the orphan count
+                // with an orphan WE created. `injection_measures_necessity_never_sufficiency`
+                // has a sibling here — an instrument must not manufacture its own readings.
+                if len == 0 {
+                    half_unusable += 1;
+                    continue;
+                }
+                match scratch.get(&buffer_id) {
+                    Some(ParkedHalf::AwaitingPhysical { va }) => {
+                        completed.push(PromotedRange {
+                            va: *va,
+                            len,
+                            phys,
+                            aperture,
+                            buffer_id,
+                        });
+                        scratch.remove(&buffer_id);
+                        parked_ids.remove(&buffer_id);
+                    }
+                    Some(ParkedHalf::AwaitingVa {
+                        phys: p0,
+                        len: l0,
+                        aperture: a0,
+                    }) => {
+                        if (*p0, *l0, *a0) == (phys, len, aperture) {
+                            half_already += 1;
+                        } else {
+                            return Err(PromoteFault::HalfConflict {
+                                buffer_id,
+                                pdb: route.pdb,
+                            });
+                        }
+                    }
+                    None => {
+                        scratch.insert(
+                            buffer_id,
+                            ParkedHalf::AwaitingVa {
+                                phys,
+                                len,
+                                aperture,
+                            },
+                        );
+                        parked_ids.insert(buffer_id);
+                    }
+                }
+            }
+            PromoteHalf::Virtual { va, buffer_id } => match scratch.get(&buffer_id) {
+                Some(ParkedHalf::AwaitingVa {
+                    phys,
+                    len,
+                    aperture,
+                }) => {
+                    completed.push(PromotedRange {
+                        va,
+                        len: *len,
+                        phys: *phys,
+                        aperture: *aperture,
+                        buffer_id,
+                    });
+                    scratch.remove(&buffer_id);
+                    parked_ids.remove(&buffer_id);
+                }
+                Some(ParkedHalf::AwaitingPhysical { va: v0 }) => {
+                    if *v0 == va {
+                        half_already += 1;
+                    } else {
+                        return Err(PromoteFault::HalfConflict {
+                            buffer_id,
+                            pdb: route.pdb,
+                        });
+                    }
+                }
+                None => {
+                    scratch.insert(buffer_id, ParkedHalf::AwaitingPhysical { va });
+                    parked_ids.insert(buffer_id);
+                }
+            },
+        }
+    }
+
+    // ── PASS 1c: the completions are ordinary ranges and face the ORDINARY laws. ──────
+    //
+    // ⊘ A range assembled from two controls gets no weaker check than one that arrived
+    // whole. It is validated against the same wrap/zero rule, against this promotion's own
+    // complete ranges, against the other completions, and against the table.
+    for r in &completed {
+        if r.len == 0 || r.va.0.checked_add(r.len).is_none() {
+            return Err(PromoteFault::Malformed {
+                va: r.va,
+                len: r.len,
+            });
+        }
+    }
+    for (i, a) in completed.iter().enumerate() {
+        for b in completed.iter().skip(i + 1).chain(p.ranges.iter()) {
+            let overlap = a.va.0 < b.va.0.saturating_add(b.len) && b.va.0 < a.va.0 + a.len;
+            if overlap {
+                return Err(PromoteFault::SelfOverlap { a: a.va, b: b.va });
+            }
+        }
+    }
+
     // Which ranges are already there, byte-identically, from a previous promotion.
     let mut already: BTreeSet<u64> = BTreeSet::new();
-    for r in &p.ranges {
+    for r in p.ranges.iter().chain(completed.iter()) {
         let mut covered = false;
         for (start, _len, binding) in vas.table.spans(r.va, r.len) {
             // The span's offset into the binding is unread here: this asks whether an
@@ -580,7 +854,13 @@ pub fn apply_promote_ctx(
 
     // ── PASS 2: apply. Nothing below can fail. ───────────────────────────────────────
     let mut bound = 0u32;
-    for r in &p.ranges {
+    let mut joined = 0u32;
+    for (r, from_join) in p
+        .ranges
+        .iter()
+        .map(|r| (r, false))
+        .chain(completed.iter().map(|r| (r, true)))
+    {
         if already.contains(&r.va.0) {
             continue;
         }
@@ -604,12 +884,25 @@ pub fn apply_promote_ctx(
                 len: r.len,
             })?;
         vas.promote_bound.insert(r.va.0);
-        bound += 1;
+        // ★ `bound` and `joined` are counted apart, never summed here: see
+        // [`PromoteJoin::joined`]. A caller wanting the total adds them itself and is
+        // then visibly making that choice.
+        if from_join {
+            joined += 1;
+        } else {
+            bound += 1;
+        }
     }
+    vas.promote_halves = scratch;
     Ok(PromoteJoin {
         route: *route,
         bound,
         already: u32::try_from(already.len()).unwrap_or(u32::MAX),
         declined: p.declined,
+        joined,
+        parked: u32::try_from(parked_ids.len()).unwrap_or(u32::MAX),
+        half_already,
+        half_unusable,
+        orphans: vas.promote_orphans(),
     })
 }

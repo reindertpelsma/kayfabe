@@ -659,6 +659,7 @@ fn promotion(client: HClient, object: HObject, ranges: Vec<PromotedRange>) -> Ct
         chan_client: client,
         object,
         ranges,
+        halves: Vec::new(),
         declined: PromoteDeclined::default(),
     }
 }
@@ -847,7 +848,8 @@ fn a_foreign_acting_client_cannot_promote_into_another_procs_address_space() {
             chan_client: A_CLIENT, // params: the victim's namespace
             object: H_GR_CHANNEL,
             ranges: vec![gr_range(GR_VA, 0xBADD_0000)],
-            declined: PromoteDeclined::default(),
+            halves: Vec::new(),
+        declined: PromoteDeclined::default(),
         }),
         Err(PromoteFault::ForeignContextObject {
             client: B_CLIENT,
@@ -925,7 +927,8 @@ fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_m
             chan_client: A_CLIENT,
             object: H_GR_CHANNEL,
             ranges: vec![gr_range(GR_VA, 0x2_ef94_6000)],
-            declined: PromoteDeclined::default(),
+            halves: Vec::new(),
+        declined: PromoteDeclined::default(),
         }),
         Err(PromoteFault::ForeignContextObject {
             client: B_CLIENT,
@@ -951,7 +954,8 @@ fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_m
             chan_client: A_CLIENT, // params: the user's namespace, per ogkm nv_gpu_ops.c:10870
             object: H_GR_CHANNEL,
             ranges: vec![gr_range(GR_VA, 0x2_ef94_6000)],
-            declined: PromoteDeclined::default(),
+            halves: Vec::new(),
+        declined: PromoteDeclined::default(),
         })
         .expect("★ a kernel-privileged client may promote on a user client's behalf");
     assert_eq!(join.route.proc, owner, "★ it routed to the VAS's OWNER, not to the actor");
@@ -1093,7 +1097,8 @@ fn unbindable_entries_produce_no_binding_and_no_fault() {
             chan_client: A_CLIENT,
             object: H_GR_CHANNEL,
             ranges: vec![],
-            declined: PromoteDeclined {
+            halves: Vec::new(),
+        declined: PromoteDeclined {
                 initialize_only: 1,
                 promote_only: 4,
             },
@@ -1353,7 +1358,8 @@ fn mean_promote_through_the_shell() {
                             buffer_id: 2,
                         },
                     ],
-                    declined: PromoteDeclined {
+                    halves: Vec::new(),
+        declined: PromoteDeclined {
                         initialize_only: 1,
                         promote_only: 4,
                     },
@@ -1677,5 +1683,259 @@ fn a_case2_ack_writes_nothing_back() {
         ControlCmd(0x2080_012b),
         mock_ctrl::PROMOTE_CTX,
         "the Case-2 command really is the one under test",
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// §16.48 — THE TWO-PHASE JOIN
+//
+// ★★★★★ `[measured 2026-08-09, boot s40_4733730_acceptcensus]` eleven promotions were
+// answered `NV_OK` and bound **zero** ranges, because for an externally-owned (UVM) VA
+// space RM splits one promotion across two controls and `PromotedRange` demanded both
+// halves in one entry. These tests pin the join that fixes it — and, just as hard, pin
+// the three things it must NOT do: invent a VA, invent a physical, or drop a half
+// silently.
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+/// Build a promotion carrying only halves.
+fn half_promotion(
+    client: HClient,
+    object: HObject,
+    halves: Vec<kayfabe_core::promote::PromoteHalf>,
+) -> CtxPromotion {
+    CtxPromotion {
+        client,
+        chan_client: client,
+        object,
+        ranges: Vec::new(),
+        halves,
+        declined: PromoteDeclined::default(),
+    }
+}
+
+fn phys_half(buffer_id: u16, phys: u64) -> kayfabe_core::promote::PromoteHalf {
+    kayfabe_core::promote::PromoteHalf::Physical {
+        phys,
+        len: GR_LEN,
+        aperture: Aperture::Vidmem,
+        buffer_id,
+    }
+}
+
+fn va_half(buffer_id: u16, va: GpuVa) -> kayfabe_core::promote::PromoteHalf {
+    kayfabe_core::promote::PromoteHalf::Virtual { va, buffer_id }
+}
+
+/// ★★★★★ THE RUNG. Phase 1 then phase 2, and the binding appears only when BOTH have
+/// arrived — never before.
+#[test]
+fn phase_one_then_phase_two_joins_and_binds() {
+    let mut gpu = world();
+
+    // Phase 1 — physical only. NOTHING may bind: there is no address yet.
+    let j1 = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0xdead_0000)],
+        ))
+        .expect("a physical-only phase is accepted, not refused");
+    assert_eq!((j1.bound, j1.joined, j1.parked), (0, 0, 1), "parked, not bound");
+    assert_eq!(j1.orphans, (1, 0), "one half awaiting its VA");
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GR_VA),
+        Err(AddressFault::Miss { pdb: A_PDB, va: GR_VA }),
+        "⊘ a parked physical half must NOT be resolvable — that would be inventing a VA"
+    );
+
+    // Phase 2 — the VA. Now, and only now, the range exists.
+    let j2 = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(1, GR_VA)],
+        ))
+        .expect("the VA phase is accepted");
+    assert_eq!(
+        (j2.bound, j2.joined, j2.parked),
+        (0, 1, 0),
+        "★ `joined`, not `bound`: two controls were stitched, one entry was not"
+    );
+    assert_eq!(j2.orphans, (0, 0), "the join consumed the parked half");
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GR_VA),
+        Ok(0xdead_0000),
+        "the joined range resolves to the physical PHASE ONE declared"
+    );
+}
+
+/// The reverse order joins identically. RM emits phase 1 first, but nothing in the join
+/// may DEPEND on that — an ordering assumption is a fallback keyed on our own ignorance.
+#[test]
+fn phase_two_then_phase_one_joins_the_same_way() {
+    let mut gpu = world();
+    let j1 = gpu
+        .promote_ctx(&half_promotion(A_CLIENT, H_GR_CHANNEL, vec![va_half(1, GR_VA)]))
+        .expect("VA-first is accepted");
+    assert_eq!(j1.orphans, (0, 1), "awaiting a PHYSICAL, and counted as that");
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GR_VA),
+        Err(AddressFault::Miss { pdb: A_PDB, va: GR_VA }),
+        "⊘ a parked VA must NOT resolve to phys 0 — that is the manufactured address"
+    );
+    let j2 = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0xbeef_0000)],
+        ))
+        .expect("the physical phase completes it");
+    assert_eq!((j2.joined, j2.orphans), (1, (0, 0)));
+    assert_eq!(resolve_in(&gpu, A_PDB, GR_VA), Ok(0xbeef_0000));
+}
+
+/// ★★★ The join key DISCRIMINATES. Two buffer ids must not cross-join, or the table would
+/// hold a mapping neither control described.
+#[test]
+fn halves_do_not_join_across_buffer_ids() {
+    let mut gpu = world();
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0xdead_0000), va_half(2, GR_VA)],
+        ))
+        .expect("accepted");
+    assert_eq!(
+        (j.joined, j.parked),
+        (0, 2),
+        "different ids park separately; nothing joins"
+    );
+    assert_eq!(j.orphans, (1, 1), "one of each, and they are told apart");
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GR_VA),
+        Err(AddressFault::Miss { pdb: A_PDB, va: GR_VA })
+    );
+}
+
+/// Both halves inside ONE control join, because the stage is sequential over a scratch
+/// map rather than a scan of the committed one.
+#[test]
+fn two_halves_in_one_control_join_each_other() {
+    let mut gpu = world();
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0xdead_0000), va_half(1, GR_VA)],
+        ))
+        .expect("accepted");
+    assert_eq!((j.joined, j.parked, j.orphans), (1, 0, (0, 0)));
+    assert_eq!(resolve_in(&gpu, A_PDB, GR_VA), Ok(0xdead_0000));
+}
+
+/// An identical re-declaration is idempotent and NAMED as such — not a second park, not
+/// a conflict, not progress.
+#[test]
+fn an_identical_half_redeclaration_is_half_already() {
+    let mut gpu = world();
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(1, 0xdead_0000)],
+    ))
+    .expect("first");
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0xdead_0000)],
+        ))
+        .expect("the re-promote is accepted");
+    assert_eq!((j.half_already, j.parked, j.joined), (1, 0, 0));
+    assert_eq!(j.orphans, (1, 0), "still exactly ONE parked half, not two");
+}
+
+/// ★★★ A DIFFERING re-declaration refuses BY NAME, and refuses the control whole.
+///
+/// ⊘ Overwriting would let the second declaration join against the first's partner and
+/// bind a range neither control ever described.
+#[test]
+fn a_conflicting_half_redeclaration_refuses_by_name() {
+    let mut gpu = world();
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(1, 0xdead_0000)],
+    ))
+    .expect("first");
+    let e = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![phys_half(1, 0x1234_0000)],
+        ))
+        .expect_err("a different physical under the same id is refused");
+    assert_eq!(
+        e,
+        kayfabe_core::promote::PromoteFault::HalfConflict {
+            buffer_id: 1,
+            pdb: A_PDB
+        }
+    );
+    // ⊘ And the refusal did not half-apply: the original half is untouched.
+    let j = gpu
+        .promote_ctx(&half_promotion(A_CLIENT, H_GR_CHANNEL, vec![va_half(1, GR_VA)]))
+        .expect("the original half is still there to join");
+    assert_eq!(j.joined, 1);
+    assert_eq!(resolve_in(&gpu, A_PDB, GR_VA), Ok(0xdead_0000));
+}
+
+/// ★★★★ A zero-length physical half is COUNTED AND DROPPED — never parked, never refused.
+///
+/// The ABI classifier's last arm sends any all-zero entry through as `InitializeOnly`, and
+/// such entries reach us today and are harmlessly ignored. Refusing them would make a
+/// change advertised as a pure join refuse traffic the guest already sends; parking them
+/// would inflate the orphan count with an orphan WE created.
+#[test]
+fn a_zero_length_physical_half_is_counted_and_dropped() {
+    let mut gpu = world();
+    let j = gpu
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![kayfabe_core::promote::PromoteHalf::Physical {
+                phys: 0,
+                len: 0,
+                aperture: Aperture::Vidmem,
+                buffer_id: 1,
+            }],
+        ))
+        .expect("⊘ accepted, NOT refused");
+    assert_eq!(j.half_unusable, 1, "counted");
+    assert_eq!((j.parked, j.orphans), (0, (0, 0)), "and NOT parked");
+}
+
+/// ★★ A half never leaks across address spaces: the parking map lives on the `Vas`.
+#[test]
+fn a_parked_half_does_not_join_another_procs_promotion() {
+    let mut gpu = world();
+    gpu.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(1, 0xdead_0000)],
+    ))
+    .expect("A parks a physical");
+    let j = gpu
+        .promote_ctx(&half_promotion(B_CLIENT, H_GR_CHANNEL, vec![va_half(1, GR_VA)]))
+        .expect("B's VA phase is accepted");
+    assert_eq!(
+        (j.joined, j.parked),
+        (0, 1),
+        "⊘ B's VA must NOT join A's physical — different address space"
+    );
+    assert_eq!(
+        resolve_in(&gpu, B_PDB, GR_VA),
+        Err(AddressFault::Miss { pdb: B_PDB, va: GR_VA })
     );
 }

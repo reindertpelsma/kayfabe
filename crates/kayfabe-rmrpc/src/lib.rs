@@ -1596,32 +1596,52 @@ fn translate_promote_ctx(
     params: &[u8],
 ) -> Result<Translation, BridgeRefusal> {
     use kayfabe_abi::view::PromoteEntry;
-    use kayfabe_core::promote::{CtxPromotion, PromoteDeclined, PromotedRange};
+    use kayfabe_core::promote::{CtxPromotion, PromoteDeclined, PromoteHalf, PromotedRange};
 
     let p = abi.decode_promote_ctx(params)?;
     let census = p.census();
     let mut ranges = Vec::new();
+    let mut halves = Vec::new();
     for e in p.entries() {
-        // ★ ONLY the complete state becomes a range. The other two are counted and
-        // dropped — named, never silent (C defect D3): a promote-only entry's
-        // `gpuPhysAddr == 0 && size == 0` is the *absence* of a fact, and binding
-        // `va → phys 0` would be manufacturing an address, which is what MISS = FAULT
-        // forbids.
-        if let PromoteEntry::Promotable {
-            va,
-            len,
-            phys,
-            aperture,
-            buffer_id,
-        } = e
-        {
-            ranges.push(PromotedRange {
+        // ★★★★★ §16.48 — all THREE states are carried now, and the reason the other two
+        // used to be dropped still holds for what it actually forbade: binding
+        // `va → phys 0` out of a promote-only entry would manufacture an address.
+        //
+        // ⊘ What was wrong was the *inference from that* — that an incomplete entry is
+        // therefore inert. For an externally-owned (UVM) VA space RM **splits one
+        // promotion across two controls by design**, so an incomplete entry is one PHASE,
+        // and dropping it is what made eleven `NV_OK`s bind nothing
+        // (`[measured 2026-08-09, boot s40_4733730_acceptcensus]`). The join in
+        // `apply_promote_ctx` completes them from each other and never from zero.
+        match e {
+            PromoteEntry::Promotable {
+                va,
+                len,
+                phys,
+                aperture,
+                buffer_id,
+            } => ranges.push(PromotedRange {
                 va: kayfabe_arch::ids::GpuVa(va),
                 len,
                 phys,
                 aperture,
                 buffer_id,
-            });
+            }),
+            PromoteEntry::InitializeOnly {
+                phys,
+                len,
+                aperture,
+                buffer_id,
+            } => halves.push(PromoteHalf::Physical {
+                phys,
+                len,
+                aperture,
+                buffer_id,
+            }),
+            PromoteEntry::PromoteOnly { va, buffer_id } => halves.push(PromoteHalf::Virtual {
+                va: kayfabe_arch::ids::GpuVa(va),
+                buffer_id,
+            }),
         }
     }
     Ok(Translation::CtxPromotion(CtxPromotion {
@@ -1629,6 +1649,7 @@ fn translate_promote_ctx(
         chan_client: HClient(p.h_chan_client),
         object: HObject(p.h_object),
         ranges,
+        halves,
         declined: PromoteDeclined {
             initialize_only: census.initialize_only,
             promote_only: census.promote_only,

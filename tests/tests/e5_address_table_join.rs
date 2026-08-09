@@ -294,7 +294,8 @@ fn promote_ctx_buffer(gpu: &mut Gpu) {
                 aperture: Aperture::Vidmem,
                 buffer_id: 0,
             }],
-            declined: PromoteDeclined::default(),
+            halves: Vec::new(),
+        declined: PromoteDeclined::default(),
         })
         .expect("the promotion resolves to this proc's address space");
     assert_eq!(

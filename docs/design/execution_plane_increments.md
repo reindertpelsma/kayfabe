@@ -9940,3 +9940,136 @@ prettier single row.
 2. Instrument it first (§16.47.4): a per-`buffer_id` accumulation census, so the join can be
    scored rather than asserted.
 3. Then `0xc574`, with the retention edge (§16.45.7 item 1 unchanged in content, only in order).
+
+## §16.48 ★★★★★ THE TWO-PHASE PROMOTE JOIN — and THREE claims refuted before a line was written
+
+### 16.48.1 ⊘⊘ REFUTED — `:10328` IS NOT `nvGpuOpsRetainChannel`'S FAILURE RETURN
+
+§16.45.2 read the six `Assertion failed: status == NV_OK @ nv_gpu_ops.c:10328` as
+*"`:10328` is `nvGpuOpsRetainChannel`'s failure return"* and concluded *"every retain dies on
+the `UVM_CHANNEL_RETAINER` (`0xc574`) alloc we refuse"*. ⊘ **Both halves are wrong, and the
+file says so.** `nvGpuOpsRetainChannel` ends at `:10309`; `:10325-10329` is inside
+`_nvGpuOpsReleaseChannel`:
+
+```c
+10325:     if (retainedChannel->hChannelRetainer)
+10326:     {
+10327:         status = pRmApi->Free(pRmApi, session->handle, retainedChannel->hChannelRetainer);
+10328:         NV_ASSERT(status == NV_OK);
+```
+
+⇒ it is the **Free** of the retainer, on the **teardown** leg — the `FreeUnknown` half of
+§16.45.3's one-event pair, not a retain failing.
+
+★★★★ **And the same probe log proves the retain SUCCEEDED.** Every assert at `:10328` is
+followed within 2 ms by `:10957` and `:10977`, and both of those are inside
+`void nvGpuOpsStopChannel(gpuRetainedChannel *retainedChannel, …)` (`ogkm-580: nv_gpu_ops.c:10916-10988`)
+— a **separate exported function** whose only caller is `uvm_user_channel_stop`, which
+returns early unless **both**
+
+```c
+769:     if (!user_channel->rm_retained_channel) return;
+776:     if (!atomic_read(&user_channel->is_bound))  return;
+```
+
+hold (`ogkm-580: kernel-open/nvidia-uvm/uvm_user_channel.c:765-793`). `is_bound` is set only
+after `bind_channel_resources()` succeeds (`:686`, `:467`). ⇒ **UVM retained the channel AND
+`nvGpuOpsBindChannelResources` returned `NV_OK`.** Phase 2 is not merely reachable — it ran.
+
+⊘ **So `0xc574` is not the wall the last two rungs promoted it to.** It is a teardown-only
+symptom. The brief's instruction to spend this rung on the join rather than on `0xc574`
+survives — for a *stronger* reason than the brief gave, and the "unless the join proves
+blocked by it" escape hatch is **not** taken.
+
+⚠ One thing this does NOT explain and this rung does not claim to: `run_s38_411d280_route_probe.log:97`
+shows that alloc answered `status=0x00000056`, yet the retain that depends on it succeeded.
+That is a real open disagreement, it is **recorded rather than resolved**, and it is not on
+this rung's path.
+
+### 16.48.2 ⊘ REFUTED (MINE) — "phase 2 cannot arrive while `0xc574` is refused"
+
+I derived exactly that from `nv_gpu_ops.c:10231`'s `goto error` before reading the probe log,
+and it is **wrong** — §16.48.1 is the measurement that refutes it. Recording it because the
+derivation was sound, cited, and beaten by evidence that already existed on disk:
+`measure_before_reasoning_is_the_order`.
+
+### 16.48.3 ★★★ CORRECTED — the join key is NOT `(chan_client, object, buffer_id)`
+
+§16.47.5 item 1 prescribed joining on `(chan_client, object, buffer_id)`. ⊘ Handles are
+recyclable and `route_promote_ctx` already resolves them to a stable identity at rank 0
+before anything keys on them. Both emitters name the **same channel in the same namespace**
+— phase 1 sends `RES_GET_PARENT_HANDLE(pChannelDescendant)`
+(`ogkm-580: kernel_graphics_object.c:131-133`), phase 2 sends `RES_GET_HANDLE(pKernelChannel)`
+(`:10869-10870`) — so both route to the same `(gpu, pdb)`, and the key that lands is
+**`buffer_id` within the `Vas`**. ⚠ Where two channels do *not* share a VA space this
+orphans the halves instead of joining them; that limit is deliberately **visible**
+(`Vas::promote_orphans`) rather than pre-empted by a guess.
+
+★ And `bufferId` is the join field only because RM writes it on **both** legs — but note
+`nvGpuOpsBindChannelResources` writes it **only for GR**:
+`if (RM_ENGINE_TYPE_IS_GR(rmEngineType)) pParams->promoteEntry[i].bufferId = …` (`:10885-10886`).
+Off the GR path every phase-2 entry carries `bufferId = 0`; the falcon leg sets
+`bufferId = 0; // unused for flcn` (`kernel_falcon.c:261`) but sends `entryCount = 1`, so the
+key stays unique there by accident rather than by design. ⊘ Not a problem today, and named
+so it is not discovered as one.
+
+### 16.48.4 ★★★★★ THE MECHANISM, STATED — RM SPLITS ONE PROMOTION ACROSS TWO CONTROLS
+
+| phase | emitter | writes | our decode |
+|---|---|---|---|
+| 1 — physical | `kgrctxPrepareInitializeCtxBuffer` (`kernel_graphics_context.c:1843-1849`) | `gpuPhysAddr`, `size`, `physAttr`, `bufferId`, `bInitialize=1`, `bNonmapped=1` | `InitializeOnly` |
+| 2 — virtual | `nvGpuOpsBindChannelResources` (`nv_gpu_ops.c:10869`, `:10885-10888`) | `bufferId`, `gpuVirtAddr` — the struct is `portMemSet` to 0 and **nothing else is written** | `PromoteOnly` |
+
+The GR path states the split as code: `kgrctxPreparePromoteCtxBuffer_IMPL` opens with
+*"RM is not responsible for promoting the buffers when UVM is enabled"* and returns
+`*pbAddEntry = NV_FALSE` for an externally-owned VAS (`kernel_graphics_context.c:1883-1885`).
+The falcon path states it as prose, in the comment the brief cited and which checks out
+(`kernel_falcon.c:217`). ⇒ for a UVM-owned VA space phase 1 **cannot** carry a VA and phase 2
+**cannot** carry a physical, so a `PromotedRange` demanding both in one entry could never be
+built — eleven `NV_OK`s, zero bindings.
+
+### 16.48.5 WHAT LANDED
+
+- `PromoteHalf::{Physical,Virtual}` — the two phases, carried instead of counted-and-dropped.
+- `Vas::promote_halves: BTreeMap<u16, ParkedHalf>` — `ParkedHalf::{AwaitingVa, AwaitingPhysical}`,
+  ★ named for what is **missing**, so the two orphan numbers are distinguishable at the call site.
+- `apply_promote_ctx` stages the join over a **scratch** copy and commits only if every half
+  validates, so it stays all-or-nothing and so two halves inside one control can join each other.
+- A completion faces the **ordinary** laws — wrap/zero, self-overlap, table collision — no
+  weaker check for having arrived in two pieces.
+- `PromoteFault::HalfConflict` — a differing re-declaration of a parked `buffer_id` refuses
+  by name; an identical one is `half_already`.
+- ⊘ **A zero-length physical half is counted (`half_unusable`) and dropped, never refused.**
+  Refusing it was the first draft and would have made a "pure join" change refuse traffic the
+  guest already sends (the ABI classifier's last rule routes any all-zero entry here). Parking
+  it would have inflated the orphan count with an orphan *we* created.
+- `PromoteJoin` gains `joined`, `parked`, `half_already`, `half_unusable`, `orphans`.
+  ★ `joined` is counted **apart** from `bound`: "two controls were stitched" and "one entry
+  carried both" are different mechanisms, and a rung that summed them could not tell the join
+  working from the guest simply having sent a complete entry.
+- `SharedPromoteTally` — the **cumulative per-`buffer_id`** row (§16.47.4), on the SUCCESS
+  path, riding the existing `PROMOTE_DIAG_SLOTS` (⊘ no ABI change).
+- 8 new tests (`tests/tests/promote_ctx.rs`), including both orders, non-joining across ids,
+  non-joining across address spaces, and the two negative controls that pin *"a parked half
+  must not resolve"*.
+
+### 16.48.6 ★ THE FALSIFIER FOR `s41`, THREE-VALUED, COMMITTED BEFORE THE BOOT
+
+⚠ **Each row must produce a DISTINGUISHABLE line** — §16.45.4's lesson. Enumerated from the
+source between the fix and the symptom, the new `ACCEPTED` row and the new `TALLY` row are
+what discriminate them:
+
+| | outcome | the line it prints | reading |
+|---|---|---|---|
+| **P** | the join fires: `TALLY` shows at least one `bid` with **both** `phys>0` and `va>0`, and the `ACCEPTED` row carries `joined>0` | `{bid=0x… phys=N va=M …}` + `joined=K` | ★★★★★ the address plane binds for the first time. §16.48.4's account is confirmed end-to-end. |
+| **Q** | halves park but never pair: `TALLY` shows `va>0` on ids whose `phys` is **0**, `joined=0`, `orphans(awaiting_phys>0)` | `joined=0 parked=N orphans(awaiting_va=0,awaiting_phys=N)` | ★ partial and INFORMATIVE — the join is correct and **phase 1 never arrives**. That is a fact about the guest, not the port, and it names the next rung precisely (why does `kgrobjPromoteContext` not run?). ⊘ Not a refutation of the join. |
+| **R** | `joined=0` **and** `TALLY` shows some `bid` with both `phys>0` and `va>0` | a paired id beside `joined=0` | ⊘⊘ refuted — the key is wrong (§16.48.3's cross-VAS limit is real and load-bearing), or the parking map is being reset between promotions. `orphans` says which. |
+| **R′** | any `s40` guest-facing number moves **backwards** (`0x2080012b` accepted x11, `NotOnAllowlist` x10, `FreeUnknown` x15, doorbells 170) or a **new** `PromoteFault` appears | a changed refusal census | ⊘⊘ the serious one: a change advertised as a join changed the guest's stream. `HalfConflict` or `Malformed` appearing would be this. |
+| **S** | boot does not reach `cup2`, or the two artefacts' revision stamps disagree | — | not a result. |
+
+★ **Predicted, and it is a prediction that can lose:** `cup2` still fails. This rung fills the
+GR context-buffer gap under MISS = FAULT; `promote.rs`'s own module doc says that is
+*"necessary, narrow, and nowhere near sufficient"*, and the compute working set arrives through
+the CE page-table writes, not here. ⇒ **`CUP2_RC=1` is expected in P, Q and R alike**, and a
+rung scored on `cup2` alone would read all three as the same failure. The scoreable quantity is
+`joined`.

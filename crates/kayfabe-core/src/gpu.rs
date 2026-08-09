@@ -232,6 +232,78 @@ pub struct Vas {
     /// failure mode is a table that is correct immediately after the control and empty a
     /// moment later, which reads as a race and is not one.
     pub promote_bound: BTreeSet<u64>,
+    /// ★★★★★ §16.48 — **the two-phase promote join's parked halves**, keyed by
+    /// `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_*`.
+    ///
+    /// For an **externally-owned (UVM) VA space** RM promotes one context buffer in two
+    /// separate controls, and neither carries a bindable range on its own:
+    ///
+    /// | phase | emitter | writes | our decode |
+    /// |---|---|---|---|
+    /// | 1 — physical | `kgrctxPrepareInitializeCtxBuffer` (`ogkm-580: kernel_graphics_context.c:1843-1849`) | `gpuPhysAddr`, `size`, `physAttr`, `bufferId`, `bNonmapped=1` | [`crate::promote::PromoteHalf::Physical`] |
+    /// | 2 — virtual | `nvGpuOpsBindChannelResources` (`ogkm-580: nv_gpu_ops.c:10886-10888`) | `bufferId`, `gpuVirtAddr` — and **nothing else**, the params struct is `portMemSet` to 0 at `:10869` | [`crate::promote::PromoteHalf::Virtual`] |
+    ///
+    /// RM states the split in a comment on the sibling falcon path
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/falcon/kernel_falcon.c:217`, inside the
+    /// `gvaspaceIsExternallyOwned(pGVAS)` branch): *"Promote physical address only. VA
+    /// will be promoted later as part of nvgpuBindChannelResources"*. The GR path states
+    /// it as code rather than prose — `kgrctxPreparePromoteCtxBuffer_IMPL` opens with
+    /// *"RM is not responsible for promoting the buffers when UVM is enabled"* and
+    /// returns `*pbAddEntry = NV_FALSE` for an externally-owned VAS
+    /// (`ogkm-580: kernel_graphics_context.c:1883-1885`), so phase 1 **cannot** carry a VA
+    /// and phase 2 **cannot** carry a physical.
+    ///
+    /// ⊘ `[measured 2026-08-09, boot s40_4733730_acceptcensus]` **eleven promotions were
+    /// answered `NV_OK` and bound zero ranges**, because a `PromotedRange` required both
+    /// halves in one entry. This map is the join that fixes it — and ⊘ it joins, it never
+    /// **invents**: a half with no partner stays parked and is *countable*
+    /// ([`Vas::promote_orphans`]), because a join that silently dropped halves would show
+    /// a healthy `bound=N` over a table that is still wrong.
+    ///
+    /// # ★★ Keyed per-VAS, and that is a claim this rung MEASURES rather than assumes
+    ///
+    /// The key is `buffer_id` **within this `Vas`**, i.e. `(GpuId, Pdb, buffer_id)`
+    /// globally — not `(chan_client, hObject, buffer_id)` as `§16.47.5` proposed. Handles
+    /// are recyclable and this port resolves them to stable identities at rank 0 before
+    /// anything is keyed on them; both emitters name the **same channel** in the **same**
+    /// client namespace (phase 1 uses `RES_GET_PARENT_HANDLE(pChannelDescendant)`, phase 2
+    /// `RES_GET_HANDLE(pKernelChannel)`), so both route to the same `(gpu, pdb)` whenever
+    /// the channels share a VA space.
+    ///
+    /// ⚠ **When they do NOT share one, this key orphans the halves rather than joining
+    /// them** — phase 1 runs once per GR context (`bKGrMainCtxBufferInitialized`), so a
+    /// second VA space's phase 2 finds no physical parked. That is a real limit, it is
+    /// deliberately *visible* instead of papered over, and [`Vas::promote_orphans`] is the
+    /// number that will say whether it happens. ⊘ Widening the key on a guess is exactly
+    /// the `measure_before_reasoning_is_the_order` mistake.
+    pub promote_halves: BTreeMap<u16, crate::promote::ParkedHalf>,
+}
+
+impl Vas {
+    /// ★★★ **The orphan count** — parked halves that never found their partner, split by
+    /// which half is missing.
+    ///
+    /// Returns `(awaiting_va, awaiting_physical)`: how many `buffer_id`s hold a phase-1
+    /// physical with no phase-2 VA, and how many hold a phase-2 VA with no phase-1
+    /// physical.
+    ///
+    /// ⊘ **An orphan is only knowable as a residual**, never at the moment a half arrives:
+    /// "this half's partner is never coming" is a statement about the future. So this is a
+    /// *current-state* reading, and it means "not joined **yet**" at the instant it is
+    /// taken. Read at the deepest point the guest reached, a non-zero count is the join's
+    /// own falsifier — see [`crate::promote::PromoteJoin`].
+    #[must_use]
+    pub fn promote_orphans(&self) -> (u32, u32) {
+        let mut awaiting_va = 0u32;
+        let mut awaiting_phys = 0u32;
+        for h in self.promote_halves.values() {
+            match h {
+                crate::promote::ParkedHalf::AwaitingVa { .. } => awaiting_va += 1,
+                crate::promote::ParkedHalf::AwaitingPhysical { .. } => awaiting_phys += 1,
+            }
+        }
+        (awaiting_va, awaiting_phys)
+    }
 }
 
 impl Vas {
@@ -251,6 +323,7 @@ impl Vas {
             blocks: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),
+            promote_halves: BTreeMap::new(),
         }
     }
 }

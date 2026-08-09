@@ -240,6 +240,74 @@ impl SharedPromoteDiag {
     }
 }
 
+/// ★★★★★ §16.48 — **the CUMULATIVE per-`buffer_id` promotion tally**, across every
+/// promotion of the run.
+///
+/// ⊘ **This exists because `latch_last` answers a question about ONE promotion and the
+/// two-phase join is a question about ALL of them.** `[measured 2026-08-09, boot
+/// `s40_4733730_acceptcensus`]` the accepted row read `declined.promote_only=10
+/// declined.initialize_only=0` — and §16.47.4 had to warn, in the same commit that
+/// produced it, that the second number describes **the last promotion only** and *"must
+/// not be read as 'no promotion ever declared a physical buffer'"*. Eleven promotions were
+/// accepted and ten of them left no trace at all.
+///
+/// ★ So the join cannot be scored from a last-wins row no matter how many fields that row
+/// grows: *"does phase 1 ever arrive?"* is a statement about the whole run, and no single
+/// promotion can answer it. This accumulates one row per `buffer_id` — how many
+/// **physical** halves, how many **virtual** halves, and how many already-**complete**
+/// entries that id was ever declared with — so the two phases can be counted against each
+/// other instead of assumed to pair up.
+///
+/// ⊘ It rides the existing [`SharedPromoteDiag`] slots as one more rendered row, so it
+/// costs **no ABI change**: `PROMOTE_DIAG_SLOTS` is 4 and `s40` used 2.
+#[derive(Clone, Default)]
+pub struct SharedPromoteTally(std::sync::Arc<std::sync::Mutex<BTreeMap<u16, [u32; 3]>>>);
+
+impl SharedPromoteTally {
+    /// Fold one promotion's declarations in, keyed by `buffer_id`.
+    fn record(&self, p: &kayfabe_core::promote::CtxPromotion) {
+        use kayfabe_core::promote::PromoteHalf;
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        for h in &p.halves {
+            let slot = g.entry(h.buffer_id()).or_default();
+            match h {
+                PromoteHalf::Physical { .. } => slot[0] += 1,
+                PromoteHalf::Virtual { .. } => slot[1] += 1,
+            }
+        }
+        for r in &p.ranges {
+            g.entry(r.buffer_id).or_default()[2] += 1;
+        }
+    }
+
+    /// Render as `{bid=0x1 phys=1 va=1 complete=0}` per id, space-joined.
+    ///
+    /// ★ `buffer_id` is printed in hex and never as a decoded name: the ids are
+    /// `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_*`, and a wrong name on a right number is
+    /// much harder to disbelieve than a bare number.
+    ///
+    /// ★ Bounded and guest-independent for [`RefusalCensus`]'s reason: `buffer_id` is a
+    /// 16-bit wire field, but the ids RM emits come from a fixed enum and the row count is
+    /// bounded by how many distinct ones ever appear — the guest drives the *counts*, and
+    /// the shim's own `[CLIPPED …]` stamp bounds the sentence.
+    fn render(&self) -> String {
+        let g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_empty() {
+            return "no buffer_id ever declared".to_owned();
+        }
+        let mut out = String::new();
+        for (bid, [phys, va, complete]) in g.iter() {
+            if !out.is_empty() {
+                out.push(' ');
+            }
+            out.push_str(&format!(
+                "{{bid={bid:#x} phys={phys} va={va} complete={complete}}}"
+            ));
+        }
+        out
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SharedRefusalCensus(std::sync::Arc<std::sync::Mutex<BTreeMap<FaultTag, usize>>>);
 
@@ -530,6 +598,9 @@ struct Bridge {
     /// ★★★★ §16.40 — the FIRST `GPU_PROMOTE_CTX` refusal, with its handles and the live
     /// VA-space census taken **at that instant**. See [`SharedPromoteDiag`].
     promote_diag: SharedPromoteDiag,
+    /// ★★★★★ §16.48 — the cumulative per-`buffer_id` tally. See [`SharedPromoteTally`]
+    /// for why a last-wins row cannot score a two-phase join.
+    promote_tally: SharedPromoteTally,
     applied: u64,
     inert: u64,
     held: u64,
@@ -545,6 +616,7 @@ impl Bridge {
             census: SharedRefusalCensus::default(),
             rings: SharedRingCensus::default(),
             promote_diag: SharedPromoteDiag::default(),
+            promote_tally: SharedPromoteTally::default(),
             applied: 0,
             inert: 0,
             held: 0,
@@ -738,6 +810,11 @@ impl Bridge {
         // ★★★★ §16.46 — cloned out ahead of the chain for exactly `rings`'s reason (it is
         // an `Arc`), so the acceptance latch below borrows this handle and not `self`.
         let diag = self.promote_diag.clone();
+        // ★★★★★ §16.48 — cloned out for `diag`'s reason (it is an `Arc`). Unlike the
+        // acceptance row, the tally is CUMULATIVE, so being overwritten costs nothing:
+        // each promotion folds itself in and re-renders, and the surviving render is
+        // therefore the whole run rather than the last event.
+        let tally = self.promote_tally.clone();
         let outcome = self
             .reasm
             .accept(&self.abi, cmd)
@@ -809,20 +886,43 @@ impl Bridge {
                         diag.latch_last(
                             FaultTag("promote-ctx ACCEPTED (last, with the census AT it)"),
                             format!(
-                                "bound={} already={} declined.promote_only={} \
-                                 declined.initialize_only={} entries={} \
+                                "bound={} joined={} already={} parked={} half_already={} \
+                                 half_unusable={} orphans(awaiting_va={},awaiting_phys={}) \
+                                 declined.promote_only={} declined.initialize_only={} \
+                                 entries={} halves={} \
                                  client={:#x} chan_client={:#x} object={:#x} proc={:?}{}",
                                 join.bound,
+                                join.joined,
                                 join.already,
+                                join.parked,
+                                join.half_already,
+                                join.half_unusable,
+                                join.orphans.0,
+                                join.orphans.1,
                                 p.declined.promote_only,
                                 p.declined.initialize_only,
                                 p.ranges.len(),
+                                p.halves.len(),
                                 p.client.0,
                                 p.chan_client.0,
                                 p.object.0,
                                 join.route.proc,
                                 gpu.vas_census(None),
                             ),
+                        );
+                        // ★★★★★ §16.48 — the CUMULATIVE row, emitted unconditionally on
+                        // the SUCCESS path beside the last-wins one.
+                        //
+                        // ⊘ Not a prettier version of the row above; it answers a
+                        // different question. That row says what the LAST promotion did.
+                        // This says what ALL of them declared, per `buffer_id` — the only
+                        // shape in which *"did phase 1 ever arrive?"* is answerable at all
+                        // (§16.47.4), and the reason `s40` could not score its own
+                        // two-phase account.
+                        tally.record(&p);
+                        diag.latch_last(
+                            FaultTag("promote-ctx TALLY (cumulative, all promotions)"),
+                            tally.render(),
                         );
                         Ok(Translation::CtxPromotion(p))
                     }

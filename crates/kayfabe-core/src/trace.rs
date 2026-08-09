@@ -111,6 +111,7 @@ impl Faulted for crate::promote::PromoteFault {
             F::Malformed { .. } => FaultTag("PromoteFault::Malformed"),
             F::SelfOverlap { .. } => FaultTag("PromoteFault::SelfOverlap"),
             F::Collides { .. } => FaultTag("PromoteFault::Collides"),
+            F::HalfConflict { .. } => FaultTag("PromoteFault::HalfConflict"),
         }
     }
 }
