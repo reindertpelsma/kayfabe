@@ -11307,3 +11307,57 @@ not a one-off — the whole of §16.57 replays.
 ⊘ **`G` was excluded before any of this was read**: the guest reached a login prompt and
 `RmInitAdapter` ran, which a size disagreement between `kayfabe_shim.h` and the archive would
 have prevented at realize. That is the ABI design being its own positive control.
+
+### 16.58.3 ⊘ TWO CORRECTIONS FROM THE COORDINATOR, CHECKED AGAINST THIS TREE — one confirmed with a number, one already closed `[measured 2026-08-10, rev 2fa5d84 + boots s45/s46]`
+
+`[measured 2026-08-10, rev 2fa5d84 + boots s45/s46]`
+
+Both arrived after §16.58 landed. Each was **measured against this tree's own evidence**
+rather than adopted.
+
+**(1) `admitted ⊆ served` is also INVERTED — CONFIRMED, and quantified.**
+`[measured 2026-08-10, rev 2fa5d84]` there are **29** controls the chain **serves** that
+`capability.rs` does **not admit**, including both ids named to me (`0x20802a08`,
+`0xa06c010a`). The other 27 are the `NV2080_CTRL_CMD_INTERNAL_*` family — kernel RM's own
+GSP traffic, which by definition never crosses a userspace ioctl boundary and therefore has
+no business on an `nvproxy`-derived allowlist.
+
+⇒ The two surfaces are **not nested in either direction**: 142 admitted-and-unserved, 29
+served-and-unadmitted. A gate built over `capability.rs` alone would report that this port
+refuses commands it answers. `tests/tests/admitted_is_served.rs::the_chain_serves_controls_the_allowlist_does_not_admit`
+pins the 29 as **membership**, so the inversion cannot drift silently in either direction.
+
+**(2) "The class id is dropped into the tag; no grep can name what was refused" — ALREADY
+CLOSED, and boot-measured, in §16.57.5 / §16.58.1.** `[measured 2026-08-10, boot
+s46_1a9e93c_abi35]`:
+
+```
+nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist x18 id=0x0000c36f,0x0000c574
+```
+
+★ `0xc574` — the exact id described to me as *"invisible behind that aggregation"* — is one
+of the two the line now names. It is `UVM_CHANNEL_RETAINER`
+(`ogkm-580: class/clc574.h:33`), sourced rather than recalled.
+
+⚠ **But only its MEMBERSHIP, not its count.** The row reports `x18` for the whole *tag*, and
+`ids` is a **set**. So *"refused 8× per TSG"* is not something this instrument can confirm
+or deny — 3 TSGs × 8 would be 24 and the tag's total is 18, but the tag also covers
+`0xc36f`, so the arithmetic settles nothing. ⇒ Per-id **counts** remain unmeasured; the gap
+narrowed from *"which ids"* to *"how many of each"*, and pretending otherwise would be the
+saturated-instrument reading of my own new instrument.
+
+**⊘ `0x20801702` is not a wall — agreed, and it was never claimed to be here.** §16.57.3
+lists it under *"forgiven"* and the `LEDGER` row says *"×20+ and forgiven every time"*.
+`[measured 2026-08-10, boots s45/s46]` it occurs **41** times in each boot's RM stream and
+the guest continues past every one of them, reaching record 331. ★ The `cap3` datum offered
+alongside — zero occurrences in 1122 elements, 28× only during a hang — is **cited, not
+measured here**: this rung has not decoded `cap3`.
+
+**★ Wall 1's proposed fix (an echo for `0x20801210`, `0x83de0309`, `0xa06c0103`) is NEXT
+rung's, and it carries a hazard that must be named in advance.** All three params structs
+have no `[OUT]` field, so an echo is *structurally* honest. Whether it is *semantically*
+honest is the standing `NV_OK`-to-an-unperformed-action question — this port does not program
+a preemption mode — and the only evidence either way is that the C echoed and reached
+`bad=0 maxerr=0`. ⇒ Whoever lands it must state which of the two they are claiming, and
+must give it a falsifier that is not the reply (there is nothing in the reply to get right),
+exactly as `gpfifo_schedule.md` §2 had to for `0xa06f0103`.

@@ -481,6 +481,85 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
     );
 }
 
+/// ⊘⊘ **THE INVERSION — and it is the half a gate over `capability.rs` alone gets exactly
+/// backwards.** `[measured 2026-08-10]`
+///
+/// The brief's `admitted ⊆ served` is refuted numerically (see this file's module doc: 142
+/// of 163). It is also **inverted** for part of the surface: there are controls the chain
+/// **serves** and the allowlist does **not admit**. `capability.rs` is ported from gVisor
+/// `nvproxy` and gates the guest's *userspace ioctl* boundary; `kayfabe_device::inittables`
+/// answers the *GSP RPC* boundary. The two sets are not nested in either direction.
+///
+/// ⇒ A gate built over `capability.rs` alone would report that this port refuses things it
+/// answers. **Any gate here must name which surface it quantifies over** — and this one
+/// does, in both directions, by pinning the difference as membership.
+#[test]
+fn the_chain_serves_controls_the_allowlist_does_not_admit() {
+    let admitted: BTreeSet<u32> = abi().capabilities().all_controls().map(|e| e.cmd).collect();
+    let served_unadmitted: Vec<String> = kayfabe_device::inittables::WantedTable::ALL
+        .iter()
+        .map(|w| w.cmd_id())
+        .filter(|cmd| !admitted.contains(cmd) && is_served(*cmd))
+        .map(|cmd| format!("{cmd:#010x}"))
+        .collect::<BTreeSet<String>>()
+        .into_iter()
+        .collect();
+    assert!(
+        !served_unadmitted.is_empty(),
+        "★ the inversion vanished — either the two surfaces converged (a real event worth \
+         recording) or this test stopped reaching one of them",
+    );
+    // ⊘ Pinned as MEMBERSHIP. A count would let one id leave as another arrived.
+    assert_eq!(
+        served_unadmitted,
+        SERVED_BUT_NOT_ADMITTED,
+        "the set of controls this port ANSWERS but its userspace-ioctl allowlist does not \
+         ADMIT has changed. Neither direction is automatically wrong — but each one is a \
+         statement about which boundary a command crosses, and it must be a deliberate one",
+    );
+}
+
+/// ★★★★ **The measured inversion, pinned: 29 controls this port ANSWERS that its
+/// userspace-ioctl allowlist does not ADMIT.** `[measured 2026-08-10, rev 2fa5d84]`
+///
+/// ⊘ Two of these were named to me as the counter-examples and both check out:
+/// `0x20802a08` (`CE_GET_FAULT_METHOD_BUFFER_SIZE`) and `0xa06c010a`. The rest are the
+/// `NV2080_CTRL_CMD_INTERNAL_*` family — kernel RM's own GSP traffic, which by definition
+/// never crosses a userspace ioctl boundary and so has no business on an `nvproxy`-derived
+/// allowlist. ⇒ The two surfaces are **not nested in either direction**, and that is a fact
+/// about the planes rather than a defect in either table.
+static SERVED_BUT_NOT_ADMITTED: &[&str] = &[
+    "0x208001b0",
+    "0x20800a1c",
+    "0x20800a1d",
+    "0x20800a1f",
+    "0x20800a22",
+    "0x20800a26",
+    "0x20800a2a",
+    "0x20800a32",
+    "0x20800a36",
+    "0x20800a3d",
+    "0x20800a40",
+    "0x20800a41",
+    "0x20800a48",
+    "0x20800a4c",
+    "0x20800a59",
+    "0x20800a5c",
+    "0x20800a61",
+    "0x20800a6c",
+    "0x20800a9b",
+    "0x20800a9d",
+    "0x20800aac",
+    "0x20800af3",
+    "0x20801112",
+    "0x20802a07",
+    "0x20802a08",
+    "0x20802a0b",
+    "0x20808159",
+    "0x20808162",
+    "0xa06c010a",
+];
+
 /// ⊘ **Non-vacuity of the probe.** A sweep whose instrument can only ever say one thing
 /// passes every assertion above while checking nothing.
 #[test]
