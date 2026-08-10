@@ -1487,7 +1487,14 @@ impl RmConnection {
     /// [`RmBackend::map_gpu_va`](kayfabe_isolate::RmBackend::map_gpu_va) can then place in
     /// a host VAS. Everything after it is machinery that already exists.
     ///
-    /// ## The four things that are easy to get wrong, all measured or sourced
+    /// ## The four things that are easy to get wrong
+    ///
+    /// **INFERRED** unless a row says otherwise — three are readings of the C artifact and
+    /// of `ogkm`, and the fourth is a property of this crate's own type. What has been
+    /// **MEASURED** is that the assembled call works:
+    /// `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt` (RTX 3060 GA106,
+    /// 580.159.04, `REV_UNDER_TEST=40d44db84`). ⊘ That run does not isolate any individual
+    /// row below — it says the four together are sufficient, never that each is necessary.
     ///
     /// 1. **The address never crosses a crate boundary.** `pMemory` is filled in by
     ///    [`Indirect::describing`] inside `kayfabe-linux-raw` and scrubbed back to zero
@@ -2029,19 +2036,24 @@ impl OsDescEvidence {
 /// negative control, as a parameter rather than a comment.
 ///
 /// ★★★ This exists because a rung that has only ever been seen to pass is an instrument
-/// with no demonstrated failure mode, and this campaign's single most repeated finding is
-/// that the instrument was the defect. `Never` runs the identical chain over a memfd nobody
-/// wrote, so the copy engine reads the kernel's zero pages: a mismatch at word 0 is then
-/// the **expected** result, and a *match* would mean the comparison is not looking at what
-/// it claims to.
+/// with no demonstrated failure mode. `Never` runs the identical chain over a memfd nobody
+/// wrote, so the copy engine reads the kernel's zero pages: a mismatch at word 0 is the
+/// **expected** result, and a *match* would mean the comparison is not looking at what it
+/// claims to.
+///
+/// **MEASURED** — `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`, arms A and
+/// C, RTX 3060 GA106 / 580.159.04, binary stamped `REV_UNDER_TEST=40d44db84`: the engine
+/// delivered `0x00000000` at word 0 where the pattern would have been `0x5eed0001`, at both
+/// euid 0 and euid 65534. ⇒ this arm is not hypothetical; the comparison has been watched
+/// to fail on the same hardware that produced the green.
 ///
 /// ⚠ It is not a "disable the check" flag. Both arms compare every word; they differ only
 /// in what the correct answer is, and [`HostRmBackend::prove_os_descriptor`]'s caller must
 /// invert its verdict accordingly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsDescSeed {
-    /// Write the per-word pattern into the memfd **before** describing it to RM. The real
-    /// measurement.
+    /// Write the per-word pattern into the memfd **before** describing it to RM — the arm
+    /// whose agreement is the rung's result.
     BeforeDescribe,
     /// Write nothing. The memfd is a fresh `memfd_create` + `ftruncate`, so its pages read
     /// as zero — and the pattern's first word is deliberately non-zero, so word 0 must

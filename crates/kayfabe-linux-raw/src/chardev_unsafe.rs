@@ -770,7 +770,6 @@ mod tests {
         assert_eq!(p.at(), 0);
         assert_eq!(p.len() as u64, page.bytes());
         assert!(!p.is_empty());
-        drop(p);
 
         let d = dev_null();
         let mut arg = [0u8; 32];

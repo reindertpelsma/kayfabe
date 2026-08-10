@@ -1,0 +1,54 @@
+# R25 — OS_DESCRIPTOR: guest-RAM-shaped memory reaches the host GPU MMU
+# host: ubuntu  2026-08-10T04:19:07Z
+# gpu: NVIDIA GeForce RTX 3060, 580.159.04, GPU-d0913685-1ec0-805a-e319-43a901a0e1ff, 00000000:00:07.0
+# kernel: 6.8.0-136-generic
+# binary: 40d44db84b5d45363cc091f42c88dad3feb57a50  (REV_UNDER_TEST is stamped INTO the binary, below)
+
+### A. NEGATIVE CONTROL, euid 0  (an unwritten memfd MUST mismatch at word 0)
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d007a0
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=40d44db84
+info  R25 osdesc probe   = GPU 0, euid 0 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE  [NEGATIVE CONTROL: the memfd is deliberately NOT written, so a MISMATCH AT WORD 0 is the PASS]
+ok    R25 neg control    = the memfd was never written and the CE delivered 0x00000000 at word 0 where the pattern would have been 0x5eed0001 — the comparison CAN fail, so the positive run's agreement is a measurement
+done — osdesc probe only
+RC=0
+
+### B. POSITIVE, euid 0
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d007a1
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=40d44db84
+info  R25 osdesc probe   = GPU 0, euid 0 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE
+★     R25 osdesc         = placed at 0x0000000300400000 AS ASKED, CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL — guest-RAM-shaped memory reaches the host GPU's MMU
+done — osdesc probe only
+RC=0
+
+### C. NEGATIVE CONTROL, euid 65534, CapEff=0, NoNewPrivs=1
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d007a2
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=40d44db84
+info  R25 osdesc probe   = GPU 0, euid 65534 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE  [NEGATIVE CONTROL: the memfd is deliberately NOT written, so a MISMATCH AT WORD 0 is the PASS]
+ok    R25 neg control    = the memfd was never written and the CE delivered 0x00000000 at word 0 where the pattern would have been 0x5eed0001 — the comparison CAN fail, so the positive run's agreement is a measurement
+done — osdesc probe only
+RC=0
+
+### D. POSITIVE, euid 65534, CapEff=0, NoNewPrivs=1
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d007a3
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=40d44db84
+info  R25 osdesc probe   = GPU 0, euid 65534 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE
+★     R25 osdesc         = placed at 0x0000000300400000 AS ASKED, CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL — guest-RAM-shaped memory reaches the host GPU's MMU
+done — osdesc probe only
+RC=0
+
+### the privilege state arms C and D actually ran under
+Uid:	65534	65534	65534	65534
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	1

@@ -12460,3 +12460,155 @@ as one.
 ★ Both `s52` and `s54` are carried into `traces/guest_boots/` **including the failure**. A
 boot that refuted my own reading is evidence, and dropping it would leave the tree saying this
 rung went straight from a hypothesis to a green.
+
+---
+
+## §16.67 ★★★★★ `R25` — OS_DESCRIPTOR is a **PORT**, measured at both privilege levels, with a negative control
+
+`[measured 2026-08-10, RTX 3060 GA106 / 580.159.04, binary stamped REV_UNDER_TEST=40d44db84,`
+`traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt]`
+
+### 16.67.1 ⊘ WHAT I REFUTED FIRST — four citations of the brief, and its central premise
+
+**(1) ⊘ `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` is NOT "in the allowlist with no alloc path".**
+The brief cited `crates/kayfabe-abi/src/capability.rs:1435` for that. Line 1435 is inside
+**`DENIED_CLASSES`**. The class is refused **by name**, with
+`DeniedBecause::CallerMemoryDescriptor`, whose own text reads: *"Pins a descriptor over the
+**caller's own** address range. In Mode 2 the caller is the guest kernel and the range is
+guest RAM, so honouring it would hand the host driver a guest-chosen pointer."*
+
+★ That refusal is **correct and stays**. It governs the **guest → us** direction. R25 is
+**us → host RM**, over a range the isolate itself owns and wrote. Two directions, one class
+id. ⚠ The available mistake is exactly the one the shape invites: a future edit that
+"unblocks the class" because the host path needs it would **delete the boundary rather than
+cross it**. `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`'s new doc says so where a reader will be.
+
+**(2) ⊘ The `NV_ESC_REGISTER_FD` prerequisite is ALREADY HELD, and porting it would be a
+regression.** The brief said *"⚠ including the `NV_ESC_REGISTER_FD` prerequisite at
+`C:7503-7509` … That is a trap; port the comment with it."* The C carries it as a lazy
+`m2_gpu_registered` flag checked on every descriptor alloc. **This port already binds the GPU
+node to the control session in `RmConnection::open`'s R3** — for the connection's whole life,
+with the C's own `0x23 INVALID_CLIENT` in the comment. So by the time any caller reaches
+`alloc_os_descriptor` the prerequisite is a **structural property of the type**, not a step.
+★ Porting the flag would have added a second, weaker copy of an invariant we already hold —
+and the second copy is the one that later drifts.
+
+**(3) ⊘ The brief's flag citation named the wrong site AND omitted the required flag.**
+`C:6110-6113` is a **comment** inside the M5.19 pushbuffer-forwarding path, not the
+descriptor call. The flags are at `C:7519-7524`, they are `0x40001010`, and they carry
+**`MAPPING_NO_MAP`** — which the C's own comment says is **required**: *"without it the
+driver returns EINVAL (it tried to auto-map a describe-only allocation)."* The brief named
+only the coherency bit. The word is now reassembled from four named constants and pinned by
+`nvos02_flags_encode_a_value_into_their_field`, so a constant that drifts into the wrong
+field breaks a unit test rather than surfacing as `NV_ERR_INVALID_FLAGS` on a bench.
+
+**(4) ⊘ `GuestWindow::place` is not at `kayfabe-isolate/src/lib.rs:348`.** That line is a
+doc-comment on `RmError::NotExportableAsMemory` *mentioning* it. It lives in
+`kayfabe-linux-raw::window_unsafe`. Minor, and it belongs in the list because the whole
+paragraph it anchored — *"and already rejects `Backing::DeviceFile`"* — was read off the
+mention rather than the code.
+
+**(5) ⊘ AND THE CENTRAL PREMISE: the increment's real obstacle was not the fd crossing.**
+The brief's "★★★ NEW — and this is the real size of the increment" was an fd-carrying
+`Request::ImportBacking`. It is not what stood in the way. The load-bearing obstacle is that
+**`OS_DESCRIPTOR` requires handing a host CPU address to a driver, and `kayfabe-linux-raw`
+forbids one from crossing its boundary in any representation** — §4.2.1 refusal 3, held by a
+compile-fail test (`tests/ui/no_base_address.rs`) that names `region.base()` and
+`reservation.base()` as errors.
+
+★ The architecture had **already written the answer down**, in the field's own docs:
+`Nvos02ParametersWithFd::p_memory` says *"a backend that needs to must route the address
+through `kayfabe_linux_raw::Indirect`, which is the only place one may exist."* The rung was
+built to that sentence.
+
+### 16.67.2 THE INCREMENT — `Indirect` gains a second target
+
+`Indirect::describing(at, region, offset, len)` names a **bounded region** where
+`Indirect::new` names a `&mut [u8]`. The address is minted inside `chardev_unsafe.rs`,
+patched for the duration of one `ioctl`, and **scrubbed** by the same unconditional loop as
+every other. `MappedRegion::addr_at` is `pub(crate)`, by the precedent
+`GuestWindow::userspace_addr_at` set for KVM memslots.
+
+⚠ **It is the one indirect whose effect outlives the syscall.** RM `pin_user_pages`-walks the
+range and holds those pages until the object is freed; unmapping our view does **not** un-pin
+them. The bounds check is load-bearing in a way the others are not — a `len` past the end of
+the mapping is not a bad read of our heap, it is **the driver pinning whatever this process
+mapped next**. The bound is therefore established at construction **and** re-established in
+`ioctl`'s pre-pass — the pass that runs before any byte of `arg` is touched, so a patch loop
+cannot fail partway and leave a live address in a caller's buffer with no scrub behind it.
+
+### 16.67.3 ★★★★★ THE RESULT — all four falsifier cells, and the fourth did not fire
+
+| arm | predicted reading | outcome on the GA106 run |
+|---|---|---|
+| **A** | it is a **port** | ★ **THIS ONE.** `placed at 0x300400000 AS ASKED, CE retired (sem 0x1), dst[0] 0xa112fffe -> 0x5eed0001, 65536 of 65536 bytes compared EQUAL` |
+| **B** | refused to a cap-dropped child ⇒ redirects everything | ⊘ **did not fire** — see below, and the test is stronger than "root worked" |
+| **C** | `map_gpu_va` returns a different VA ⇒ shadow-forwarding cannot work as designed | ⊘ did not fire; `got_va == asked_va` exactly |
+| **⊘** | coherency: placed and retired but the GPU saw other pages | ⊘ did not fire; **every** word of 65536 matched |
+
+★★★ **Arm B was tested, not assumed away.** The rung was run a second time under
+`setpriv --reuid=65534 --regid=65534 --clear-groups --no-new-privs`, and the privilege state
+was captured **in the same log**: `Uid: 65534 65534 65534 65534`, `CapPrm/CapEff/CapAmb = 0`,
+`NoNewPrivs: 1`. The identical green came out. ⇒ **RM does not require privilege to let a
+process describe its own pages.** `euid` is printed on the `info` line of every run for
+exactly this reason — a rung whose answer depends on privilege must say which privilege it
+had.
+
+⚠ **Scope, stated rather than implied:** `setpriv` is not the isolate's sandbox. It removes
+capabilities, which is the variable `osIsAdministrator()` reads, and that is arm B's
+substance. It does **not** exercise the user namespace, the mount namespace or seccomp — a
+filter that blocked `memfd_create` would be **our** refusal, not RM's, and would look nothing
+like this.
+
+### 16.67.4 ⊘ AN INSTRUMENT DEFECT I SHIPPED AND THEN FOUND IN MY OWN OUTPUT
+
+The first passing run printed `65536 of 65536 bytes match`. Both numbers came from **the same
+variable** (`e.bytes`, formatted twice). The *gate* was correct — `mismatch.is_none()` — but
+the number a human reads was a **tautology**, and would have printed `65536 of 65536` over a
+comparison loop that examined nothing.
+
+⇒ `bytes_compared` is now incremented **inside** the loop, and `compared_everything()` joined
+the `reached()` conjunction: a `None` mismatch over an empty loop is not agreement and can no
+longer be printed as one. A partial loop with a clean verdict prints `FAIL … VOID`, and it is
+checked **before** the coherency arm so it can never be reported as one — "the loop did not
+run" and "the pages disagree" are different subjects.
+
+★ This is `measure_at_the_boundary_not_inside` in miniature: **a reported count must come
+from the thing that did the counting.**
+
+### 16.67.5 ★★★ AND A NEGATIVE CONTROL, because a green with no reachable red proves nothing
+
+`--osdesc-negative` (`OsDescSeed::Never`) runs the **identical** chain over a memfd nobody
+wrote. **MEASURED** 2026-08-10 on the RTX 3060 GA106 at driver 580.159.04, binary
+stamped `rev 40d44db84` — `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`,
+arms A and C, at both privilege levels:
+
+```
+ok    R25 neg control    = the memfd was never written and the CE delivered 0x00000000 at
+                           word 0 where the pattern would have been 0x5eed0001
+```
+
+⇒ the comparison **has been watched to fail on the same hardware that produced the green**.
+⚠ It is not a "skip the check" flag: both arms compare every word and differ only in what the
+correct answer is.
+
+### 16.67.6 ⊘ WHAT R25 CANNOT SEE — stated now rather than discovered later
+
+- **Not a guest VA.** The address is one *we* chose (`0x3_0040_0000`, deliberately not R9's
+  constant, so a pass cannot be a remembered address). Whether a host GPU walking a host VAS
+  built from **guest** VAs would miss is invisible from here — and with fault delivery
+  unbuilt, such a miss is a **hang** inside UVM's replayable-fault loop, not an error.
+- **Not the fd crossing.** Nothing here carries a descriptor from a VMM to an isolate. The
+  memory is minted, mapped, written and described **inside one process**. `Request::ImportBacking`
+  remains unbuilt, and is the next increment — but it is now a *transport* question with no RM
+  answer left in it, which is a much smaller thing than the brief thought.
+- **Not the sandbox.** See 16.67.3's scope note.
+- **Not any individual flag.** The run says the four flags together are sufficient; it never
+  says each is necessary. `injection_measures_necessity_never_sufficiency`, read the other way.
+
+### 16.67.7 The rung number
+
+⊘ **This is R25, not the R20 the brief asked for.** R20 is taken — the `NV2081_BINAPI` probe
+— and so are R21 (gpu-info sweep), R22 (bus-info sweep), R23 (atomics) and R24 (PCE mask). A
+rung number is how a bench result is attributed months later; two rungs sharing one is how a
+green line gets read as evidence for the wrong thing.
