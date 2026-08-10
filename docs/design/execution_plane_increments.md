@@ -13283,3 +13283,91 @@ shown as a refused doorbell, and `p2` had none ⇒ the spans never got that far.
 ⊘ **Printed either way, whatever the arm**: the `FWD-RING` line for every doorbell; every
 `CE-SUBMIT` line; the `SERVED-LOCAL` count on both boots; `by engine` on both boots; the isolate
 line verbatim; `xid_before`/`xid_after` with the watcher's line count.
+
+### 16.70.4 ★★★★★ THE OUTCOME — **C**, scored against §16.70.3 as committed, with the arm named and PREDICTED
+
+`[measured 2026-08-10, boots `w205_227194f_ctl` and `w205_227194f_real`, ONE binary stamped
+`kayfabe-rev:227194f3b9d52bb00f988148dc20da7053afa766` read off the **hypervisor**
+(`strings /workspace/bench/qemu-build/qemu-system-x86_64`) and equal to `git rev-parse HEAD`,
+differing only in `KAYFABE_ISOLATES`. Both wrapped in `scripts/bench/host_xid_watch.sh`, both
+`xid_before=0 xid_after=0` from a ring buffer proved readable at **997 lines**. Both ran
+`POST_CAPTURE_HOOK=scripts/bench/guest_cuinit_wall.sh`, the hook read off `p1b`'s own probe log
+rather than remembered.]`
+
+**ARM CTL PASSES — bit-identical to `p1b_29e7c25_planectl` on every committed number:**
+
+```
+isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)
+doorbells: 448 arrived, 362 served, 86 REFUSED by name; last token 0x00010001 (16 logged)
+  of the served: 362 local (CPU CE, end witnessed), 0 forwarded (host channel rung)
+  by engine: GrCompute=86 GrGraphics=0 Ce=362 NvEnc=0 NvDec=0 Other=0 unrouted=0
+SERVED-LOCAL lines: 16      FWD-RING lines: 0      CE-SUBMIT lines: 0
+```
+
+★ **And the instrument is observationally neutral on the control**: `0` `FWD-RING` and `0`
+`CE-SUBMIT` lines. That is correct rather than a failure to print — on the `Stillborn` plane
+`try_ce_submission` claims every doorbell *terminally*, so `SharedDevice::doorbell` is never
+called and `forward_ring` never runs. ⇒ Every difference below is the environment variable.
+
+#### ★★★★★ THE RESULT — arm **C**, and the arm has a name
+
+```
+kayfabe: FWD-RING proc=0 chan=1 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+kayfabe: FWD-RING proc=0 chan=3 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+kayfabe: FWD-RING proc=0 chan=5 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+```
+
+**`CE-SUBMIT` lines: ZERO.** Census unchanged from `p2`: `3 arrived, 3 served, 0 REFUSED`,
+`0 local, 3 forwarded`, `Ce=3`, `isolates: 1 materialized, 1 live, 0 refusing`, guest
+`RmInitAdapter failed! (0x25:0x65:1249)`, host Xid 0 → 0.
+
+⇒ **The channel was rung EMPTY. `3 forwarded` was counting our own intent.** Not one byte was
+ever handed to an engine, no host `GP_GET` was ever asked to move, and no semaphore was ever
+armed. §16.69's *"the GPU ran the work and we lost the completion"* is **refuted**: there was no
+work to lose.
+
+★ **And it is the arm §16.70.3 predicted, by name, before the boot** — `RING-VA-UNBOUND`. ⊘ The
+prediction's *reasoning* was still partly wrong and is scored as such: I argued from
+`CeSource::Constant` (a fill the isolate refuses pre-submission). That refusal was never reached
+either, because the parse never happened at all. The right answer for the wrong-but-adjacent
+reason is a hit on the cell and a miss on the mechanism, and both are recorded.
+
+#### ★★★★★ THE FINDING — TWO RESOLVERS FOR ONE ADDRESS, and only one of them can find it
+
+The two arms serve **the same token** `0x00010002` — `RmInitAdapter`'s CeUtils scrubber — and they
+resolve its ring through **different machinery**:
+
+| | control (`Stillborn`) | real plane |
+|---|---|---|
+| path | `SharedDoorbell::try_ce_submission` → `plane.ce_session_with_root(...)` → a **descent of the guest's own published page tables** | `SharedDevice::forward_ring` → `kayfabe_fwd::read_gpfifo_ring` → **`AddressTable::binding_at`** |
+| result | `cpu-ce: 1 gp, 9 methods, 1 launch, 1 span, 65536 B, 1 sem fin va=0x12006c004` — the ring **found**, `ring_va = 0x120064000` (`+0x8004` is the finishPayload, `FINISH_PAYLOAD_FROM_RING`) | `RING-VA-UNBOUND va=0x420064000` — the ring **not found** |
+
+⇒ ★★★★ **This is `§14.15`'s "operand-resolver seam" measured on a real plane for the first
+time.** The forward-populated address table is populated by bind-time RPC/ioctl bindings and by
+observed CE page-table writes (`mode2_address_table.md` §5's ★ CORRECTION). RM's CeUtils channel
+is built inside `RmInitAdapter` and its ring is mapped on a transport that table never sees, so
+the table is *correct and empty* about it — MISS = FAULT, exactly as designed — while the shell's
+own walker, which descends what the guest published, finds it every time.
+
+⊘ **So the wall is not the completion tail, and it is not `await_semaphore`.** It is one layer
+earlier than either: the forwarding path cannot read the ring of the very first channel a guest
+driver submits on. The next rung's question is therefore *which resolver the forwarding path
+should use*, and the two candidates are already both built.
+
+### 16.70.5 ⊘ WHAT THIS BOOT DID NOT ESTABLISH
+
+- ⊘ **Nothing about `GP_GET` or any host semaphore.** They were never read, because nothing was
+  ever submitted. The `CE-SUBMIT` instrument is **wired and silent**, and this boot cannot
+  distinguish "wired and correctly silent" from "wired wrong". ★ Its non-vacuity is owed to the
+  first boot in which a span survives to `ce_copy`, and until then no claim rests on it.
+- ⊘ **Nothing about the completion tail.** `forward_ring` still writes no finishPayload and
+  raises no interrupt; this boot never got far enough for that to be the reason for anything.
+- ⊘ **Nothing about GR.** `GrCompute=0` on the real arm again, and again because `cup2` never
+  ran — the driver never initialised. The check §16.69.3 asked for (`GrCompute=86` unchanged) is
+  still owed to a boot in which the guest survives the plane.
+- ⊘ **One boot per arm.** The control reproduced `p1b` exactly, which is evidence the *baseline*
+  is stable; the real arm reproduced `p2`'s census exactly, which is evidence the *wall* is.
+- ⊘ **The three `FWD-RING` lines are three DIFFERENT channels** (`chan=1, 3, 5`) declaring the
+  **same** ring VA. That is the driver tearing the CeUtils channel down and rebuilding it on each
+  ~25 s retry, not one channel rung three times — a fact no cell predicted and which nothing here
+  depends on, recorded because a reader will otherwise assume the former.
