@@ -201,6 +201,40 @@ one worker.
   `SEMAPHORE_OFFSET` matters only for the isolate's own copy-engine work. This separates a
   smaller set than `rm.rs` makes it look.
 
+## 6.5 ★★★ THE BOOT — and TWO harness omissions of mine before it meant anything
+
+Three boots at `b66bd44`, archive and QEMU both stamped `kayfabe-rev:b66bd441a6…`:
+
+| tag | plane | FB backing | doorbell census | GR-FB-BACKING |
+|---|---|---|---|---|
+| `w229a_b66bd44_execvas` | ⊘ **stillborn** | off | 191 / 183 / 8 | 0 |
+| `w229b_b66bd44_execvas_real` | real | ⊘ off | 191 / 183 / 8 | 0 |
+| **`w229c_b66bd44_execvas_fbback`** | **real** | **on** | **191 / 183 / 8** | **32** |
+
+⚠ **The first two boots could not have shown a regression in this rung, and both looked
+completely healthy.** `boot_capture.sh` alone leaves `KAYFABE_ISOLATES` unset, so `w229a` ran
+`isolate_plane=stillborn` — no isolate child, no `RmBackend`, none of the changed code. `w229b`
+fixed that and still left `KAYFABE_FB_BACKING` unset, so nothing reached `map_gpu_va` and the
+census rows read `Framebuffer { .. }` with no backing. Both produced a full `dmesg`, a full
+serial log, a printed census and `CAPTURE_RC=0`.
+⇒ ★ **Ask which LINE you expect the boot to execute, and grep the log for it.** `w229a`/`w229b`
+are kept as the arming controls they accidentally are — the three rows differ by exactly the two
+flags.
+
+**`w229c` is the regression test.** The production publish verb, dual-mapping through
+`map_dma_both`, on a real GA106:
+
+```
+GR-FB-BACKING proc=2 chan=0 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 len=0x200000
+    fb_phys=0x400000 → BACKED memory=0xcafe005e host_va=0x200000000 placed_as_asked=true
+… ×3 leaves, `isolates: 2 materialized, 2 live, 0 refusing`, 0 PlacementRefused
+doorbells: 191 arrived, 183 served, 8 REFUSED by name; last token 0x00010001
+```
+
+⇒ **`placed_as_asked=true` at the guest's own VA, and the census is byte-identical to `w228`'s.**
+The guest's addresses did not move and the guest's behaviour did not change — which is exactly
+what this rung claims and the whole of what it claims.
+
 ## 7. How to re-run it
 
 ```sh

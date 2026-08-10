@@ -1,0 +1,17 @@
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00b50
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=254cf383e57aeadc4074e715d0cc8085a7b724ec-dirty
+info  R30 executor VAS    = GPU 0, euid 0 — build the isolate's OWN copy-engine channel over a `Vas`, then ask whether its semaphore VA is nameable from that same `Vas` (the space a GUEST channel is bound to)
+info  R30 the bar is THREE arms: A the guest space must be FREE at sem_va, B the SAME call against the control space must REFUSE, C an engine bound to the guest space must NOT resolve sem_va. ⊘ A alone is vacuous
+ok    R30 CE round-trip   = 4096 bytes moved, dst[0] 0x3f0011cf -> 0xc0ffee30 — the isolate's own copy-engine channel now EXISTS, which is what the rest of this rung is about
+ok     R30 spaces          = guest range 0xcafe0005, control range 0xcafe0009, ring 0x0000000120020000, sem 0x0000000120022000, our last payload 0x00000001 — two different address spaces
+ok    R30 arm A guest     = the isolate's 65536-byte ring object at 0x0000000120020000 (semaphore 0x0000000120022000) is UNCLAIMED in the guest-bound space — a fresh object took the address and RM reported it back
+ok    R30 arm B control   = the SAME call REFUSES at 0x0000000120020000 in the control space (NoMemory) — the probe can detect occupancy, so arm A's `Free` is a measurement and not a constant
+★     R30 arm C REFUSED   = the guest-bound engine did NOT retire a read of 0x0000000120022000 (sem 0x00000000, GP_GET 2 GP_PUT 2) — the address does not resolve in the space a guest channel is bound to. ⚠ Expect one `Xid 31 FAULT_PDE` in the host dmesg for this channel; that is the boundary, not a bug
+★     R30 executor VAS    = the isolate's CE semaphore is NOT nameable from the address space a guest channel is bound to
+done — executor-VAS probe only
+LADDER_RC=0
+--- host dmesg ---
+[194355.953568] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[194355.967657] NVRM: Xid (PCI:0000:00:07): 31, pid=1268926, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x1_20022000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
