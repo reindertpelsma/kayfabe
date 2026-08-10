@@ -551,6 +551,14 @@ fn the_control_claim_is_exactly_these_ids() {
             // is machine-checked, and the load-bearing test there is the one that moves
             // `cilpPreemptMode` and demands the answer change.
             kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE,
+            // ★★★★★ §16.75 — `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`, the 1 Hz train `w209`
+            // measured (13 arrivals, intervals 1.002-1.056 s, every one `0x56`). ⊘ Claimed
+            // for a reason no other id here has: its `0x56` did not merely decline, it made
+            // the guest `return` before `intrServiceStallList_HAL`
+            // (`ogkm-580: intr.c:219-225` vs `:278`), so the guest's own stall-interrupt
+            // servicing never ran. `tests/tests/mc_service_interrupts.rs` carries the
+            // argument, including why the dmesg train collapsing is NOT the falsifier.
+            kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
         ]
     );
     assert!(

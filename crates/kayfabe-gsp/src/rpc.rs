@@ -538,9 +538,41 @@ impl RpcCommand {
     /// - **`0xc56f AMPERE_CHANNEL_GPFIFO_A` never sees this reply.** It lands in
     ///   `pRpcParams`, a `portMemAllocNonPaged` scratch copy (`ogkm-580:
     ///   kernel_channel.c:2658`) freed at `:2837`; the user's buffer is untouched.
-    /// - **`0x0079 NV01_EVENT_OS_EVENT` sends no `GSP_RM_ALLOC` at all** (no RPC flag,
-    ///   `resource_list.h:2195`); its `data` @ +16 is overwritten by the **guest's own**
-    ///   kernel (`osUserHandleToKernelPtr`, `event.c:178-181`) and is out of reach.
+    /// - **`0x0079 NV01_EVENT_OS_EVENT`** — ⊘⊘⊘ **CORRECTED §16.75. This row used to read
+    ///   *"sends no `GSP_RM_ALLOC` at all (no RPC flag, `resource_list.h:2195`)"*. The
+    ///   CITATION IS ACCURATE AND THE CONCLUSION WAS FALSE**, and it has now misled two
+    ///   independent readers into treating the id as unreachable from this method.
+    ///
+    ///   `[measured 2026-08-10, boot w209_ffc80f8_ctl, rev ffc80f8]`
+    ///   `traces/guest_boots/run_w209_ffc80f8_ctl_probe.log` carries **seven**
+    ///   `NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x00000079;
+    ///   paramsSize=0x00000018; status=0x00000056` lines — the guest's own driver naming the
+    ///   function this row said it never calls.
+    ///
+    ///   ★ **A flag table is not the gate — it is *a* gate.** `resource_list.h:2188-2199`
+    ///   governs the **generic** alloc RPC at `ogkm-580: rmapi/alloc_free.c:871`, which
+    ///   demands `RS_FLAGS_ALLOC_RPC_TO_VGPU_HOST | RS_FLAGS_ALLOC_RPC_TO_PHYS_RM`; this
+    ///   class carries neither, so that path is correctly excluded. The RPC comes from the
+    ///   **class's own constructor** instead: `eventConstruct_IMPL` reaches
+    ///   `NV_RM_RPC_ALLOC_EVENT` (`ogkm-580: rmapi/event.c:161-171`), whose `IS_FW_CLIENT`
+    ///   branch calls `GPU_GET_PHYSICAL_RMAPI(pGpu)->AllocWithHandle(...)`
+    ///   (`ogkm-580: inc/kernel/vgpu/rpc.h:345-357`) — and `IS_FW_CLIENT` **is**
+    ///   `IS_GSP_CLIENT || IS_DCE_CLIENT` (`ogkm-580: generated/g_gpu_nvoc.h:5686`), so a
+    ///   plain GSP guest takes it. The physical RM API's `Alloc` is `rpcRmApiAlloc_GSP`.
+    ///
+    ///   ⇒ **The lesson generalises beyond this class**: a `resource_list.h` row answers
+    ///   *"does the generic path RPC this?"* and never *"is this RPC'd?"*. Any class whose
+    ///   constructor calls an `NV_RM_RPC_*` macro is reachable regardless of its flags.
+    ///
+    ///   ★ **What is still true, and it is why echo remains right here.** The params that
+    ///   cross the wire are **not** libcuda's: the macro builds a fresh, stack-local
+    ///   `NV0005_ALLOC_PARAMETERS` (`hParentClient`, `hClass`, `notifyIndex |
+    ///   NV01_EVENT_CLIENT_RM`, `data = 0` — 24 bytes, matching the measured
+    ///   `paramsSize=0x18`) and discards it after the call, and the *userspace* buffer's
+    ///   `data` @ +16 is separately overwritten by the guest's own kernel
+    ///   (`osUserHandleToKernelPtr`, `event.c:178-181`). So no user memory is at stake in
+    ///   this reply — but the **status** is: a `0x56` here is the port refusing to register
+    ///   an os-event the guest will later wait on.
     /// - **`0x90f1 FERMI_VASPACE_A`** does have written fields (`vaSize` @ +8, `vaBase` @
     ///   +40) but they are written at `vaspace_api.c:419-420`, **after** the RPC at
     ///   `:263`, so the guest's own CPU-side RM recomputes and stomps them either way.

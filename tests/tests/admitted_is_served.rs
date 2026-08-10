@@ -213,6 +213,24 @@ static GRADUATED: &[u32] = &[
     // `ogkm-580: ctrl2080gr.h:791-795`) for a request that asks this port to preempt a
     // context. Both are decisions and both leave the ledger.
     0x2080_1210,
+    // ★★★★★ `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` — answered by
+    // `kayfabe_rmrpc::ObjectPolicy` since §16.75.
+    //
+    // ⊘ **Its row in [`LEDGER`] was WRONG about the id, not merely incomplete**, and the
+    // correction is the rung. That row read *"forgiven every time: the guest asks, we
+    // refuse, and it keeps going for another 50 records"* — true of the *stream* and false
+    // of the *guest*: `subdeviceCtrlCmdMcServiceInterrupts_IMPL`
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/intr/intr.c:219-225`) **returns on the spot**
+    // for any non-`NV_OK`, so `intrServiceStallList_HAL` at `:278` — the guest servicing its
+    // own stall interrupts for the engines it named — never ran once in thirteen attempts.
+    // "The process continued" is not "the request was forgiven": every other id on this list
+    // is forgiven by a caller that maps `0x56` to `NV_OK`, and this one was *obeyed*.
+    //
+    // ⚠ "Served" here means `NV_OK` with the request's `engines` word **echoed**. A zero
+    // body would hand the guest `engines = 0` and make its step 2 service the empty set —
+    // `ogkm-580: rpc.c:11085-11090` copies the reply's params over the caller's struct
+    // whenever `paramsSize != 0`, and it is 4 here.
+    0x2080_1702,
 ];
 
 static LEDGER: &[u32] = &[
@@ -253,15 +271,10 @@ static LEDGER: &[u32] = &[
     // the moment `s45`'s log entered the tree and named exactly these five — none of which
     // any earlier boot had reached, because `cup2` had never got this far.
     //
-    // ⊘ `0x20801210` LEFT this list at §16.59 — it is in [`GRADUATED`] now. Its row here
-    // lasted exactly one rung, which is the shortest any id has sat in this position and is
-    // what the gate was built to produce.
+    // ⊘ `0x20801210` LEFT this list at §16.59, and `0x20801702` at §16.75 — both are in
+    // [`GRADUATED`] now. Each sat here for exactly one rung, which is the shortest any id has
+    // sat in this position and is what the gate was built to produce.
     //
-    // `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`, ×20+ in `s45` and **forgiven every time**:
-    // the guest asks, we refuse, and it keeps going for another 50 records. ⚠ Worth a
-    // second look beside `cap1`'s `IrqRaise == 1` with zero `IRQSCLR` writes — event
-    // delivery is gated off after `INIT_DONE`, and this is the guest noticing.
-    0x2080_1702,
     // `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK` on a `GT200_DEBUGGER`
     // (`ogkm-580: ctrl/ctrl83de/ctrl83dedebug.h:225`, `class/cl83de.h:33`) — libcuda arming
     // SM exception reporting on `0x5c000072`. Forgiven: the object is freed 18 records
@@ -518,6 +531,10 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         // The wall `s45`/`s46` measured at record 331.
         "0x20801210",
         "0x20801303", // InitTablePolicy
+        // ★★★★★ §16.75 — `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`, `ObjectPolicy`. The 1 Hz
+        // train `w209` measured, and the one id whose `0x56` CANCELLED guest work
+        // (`ogkm-580: intr.c:219-225` returns before `intrServiceStallList_HAL` at `:278`).
+        "0x20801702",
         "0x20801803", // InitTablePolicy
         "0x20801823", // InitTablePolicy
         "0x2080182a", // InitTablePolicy

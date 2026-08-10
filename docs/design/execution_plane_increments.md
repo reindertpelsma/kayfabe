@@ -14296,3 +14296,109 @@ fall-through.
    half of the same refusal and it is a separate build.
 3. **Per-round `PT-DECODE` numbers**, so `bound` and `unwitnessed` can never again be summed
    into an accidental equality.
+
+---
+
+## §16.75 ★★★★★ `MC_SERVICE_INTERRUPTS` (`0x20801702`) — SERVED, and the brief's falsifier is DEGENERATE
+
+> **Status: BUILT, boot below.** Half 3 of task #229, and only half 3. What landed
+> is the *serve*; the *delivery drive* is deliberately not wired and §16.75.3 is why.
+
+### 16.75.1 The signature, re-read from the committed log
+
+`[measured 2026-08-10, boot `w209_ffc80f8_ctl`, rev `ffc80f8`, files
+`traces/guest_boots/run_w209_ffc80f8_ctl_{probe,qemu}.log`]`
+
+| | brief #229 | the file |
+|---|---|---|
+| dmesg lines | 12, `56.134` → `67.321` | **13**, `56.134` → **`68.377`** |
+| `cmd=0x20801702` records | 26 | **13** — the probe log prints each control **twice**, once in a numbered census block (lines 1026-1041) and once in the live stream (1349-1416). 26 is 13 counted twice |
+| intervals | 1.002-1.046 s | 1.002-**1.056** s |
+| arrives as | (unstated) | ★ `nvkvm: unserviced fn 76 cmd 0x20801702` — the **generic** `GSP_RM_CONTROL`, not the specialised `NV_VGPU_MSG_FUNCTION_CTRL_MC_SERVICE_INTERRUPTS` that `rpcCtrlMcServiceInterrupts_v1A_0E` (`ogkm-580: rpc.c:6270-6296`) builds |
+
+⊘ **The stall is BOUNDED and it already ends.** The brief reads as an indefinite park; the
+file shows the 1 Hz train running ~12 s, four os-events allocated mid-train at `65.31`, the
+same four freed at `67.32`, and then a full teardown — `FAIL cuCtxCreate(&ctx,0,d) ->
+operation not supported (801)`. And the train is **not a busy-poll**: between consecutive
+`0x20801702` records the guest allocates `0x40`, `0x3e`, `0x83de` and `0x79` objects and
+issues `0xd01` controls. It is a **timed retry**, not a spin.
+
+### 16.75.2 ★★★★★ Why it is worth serving anyway — the `0x56` CANCELS GUEST WORK
+
+`subdeviceCtrlCmdMcServiceInterrupts_IMPL` (`ogkm-580:
+src/nvidia/src/kernel/gpu/intr/intr.c:186-280`) is two halves, in order:
+
+1. `:216` RPC to us; `:219-225` prints and **`return status;`** on any non-`NV_OK`;
+2. `:262-278` converts `pServiceInterruptParams->engines` into an `MC_ENGINE_BITVECTOR` and
+   calls `intrServiceStallList_HAL(pGpu, pIntr, &engines, NV_TRUE)`.
+
+⇒ half 2 never ran, thirteen times. ★ **This retires the `LEDGER` row's own reading.** That
+row said the id was *"forgiven every time — the guest asks, we refuse, and it keeps going for
+another 50 records"*. **"The process continued" is not "the request was forgiven"**: every
+other id in that census is forgiven by a caller that maps `0x56` to `NV_OK`
+(`gpu.c:3437-3439` and friends); this one is not forgiven, it is **obeyed**.
+
+⊘ And the reply body is load-bearing in the same breath. `paramsSize` is 4, so
+`rpcRmApiControl_GSP` copies our params over the caller's struct (`ogkm-580:
+rpc.c:11085-11090`) and half 2 then reads *its own* struct back. A zero body hands it
+`engines = 0` and services the **empty set** — an `NV_OK` that silently un-does itself. The
+FINN header marks no field `[OUT]`; that is not a transport fact.
+
+### 16.75.3 ⊘⊘⊘ REFUTED — "drive delivery from it". It is not one missing call, and wiring it would WEDGE
+
+The brief: *"Our port of that trigger, `DeliveryPlane::on_poll`, exists with no caller on this
+path."* `[src, verified 2026-08-10 at `7dfec24`]` **the whole chain above it has no production
+caller either**, and there is no poster at all:
+
+| site | production callers |
+|---|---|
+| `kayfabe_completion::DeliveryPlane::on_poll` | 0 |
+| `kayfabe_core::gpu::Spine::completion_poll` | 0 |
+| `kayfabe_rt::device::SharedDevice::completion_poll` | 0 |
+| `kayfabe_fwd::poll_completions` (`lib.rs:2074`) | **0** — `tests/sim_14_two_process.rs`, `tests/soak_llm_like.rs` only |
+| `kayfabe_fwd::deliver_completions` (`:2061`) | **0** — same two files |
+| `kayfabe_rt::Executor::new` | **0** — `tests/` only; the composition root never constructs one |
+| a `POST_EVENT` encoder anywhere in `kayfabe-qemu-raw` | **0** |
+
+⊘⊘ **And calling `on_poll` from the policy seat would have been a wedge shipped as a fix.**
+`DeliveryPlane::try_post` sets `self.outstanding = Some(batch)` and refuses every later post
+while it is set; the gate reopens only through `completions_drained`, on an observed
+`IRQSCLR`. The policy seat holds no `Vmm` and no GSP status-queue encoder, so all it could do
+with the returned `PostBatch` is drop it — closing the delivery gate **permanently** on the
+first poll. ⇒ half 3's second clause is **not landable before half 2**, and the seat is left
+named instead.
+
+★ Corollary, and it also answers the brief's arm C in advance: **there was nothing to
+deliver.** Completions only enter a `CompletionQueue` through `kayfabe_fwd`'s fence/completion
+paths downstream of a successful CE forward, and `w209` measured
+`CE-SUBMIT … → REFUSED BEFORE SUBMISSION Other(19270)`. Zero completions were ever observed,
+so half 2 alone could not have moved this signature either.
+
+### 16.75.4 ⊘ THE FALSIFIER IN #229 IS DEGENERATE, and a replacement
+
+#229's falsifier is *"the 12-line 1 Hz `MC_SERVICE_INTERRUPTS` train"*, arms A/B *"it
+collapses"*, C *"it persists"*. ⊘ **Those dmesg lines are printed on the failure branch and
+nowhere else** (`intr.c:221-224`). Answering `NV_OK` deletes them **by construction**,
+whether or not delivery happens and whether or not `cuCtxCreate` moves. A/B are therefore
+guaranteed and C is impossible: the instrument measures the change rather than its effect.
+
+**Replacement, and both halves are logged regardless of the status we return:**
+
+- **F1 — the REQUEST cadence.** Our own `CTRL cmd=0x20801702 … status=` records. Baseline 13
+  at ~1 Hz. *Fewer / gone* ⇒ the retry loop was satisfied. *Still 13 at 1 Hz with
+  `status=0x00000000`* ⇒ served and it changed nothing, which is arm C and is a real result.
+- **F2 — what `cuCtxCreate` does next.** Baseline `FAIL cuCtxCreate -> 801` after the four
+  os-events at `65.31` are freed at `67.32`. A different status, a different record where
+  teardown begins, or no teardown, are all movement. ★ A **different** failure is a win and
+  is reported as one.
+
+### 16.75.5 ⊘ WHAT THIS RUNG DOES NOT CLAIM
+
+- ⊘ Not the C's **M8.108**, which the C itself says not to port (`post_cuinit_wall_map.md`
+  §D2). M8.108 fabricated *service-zero credits* so the poll would terminate. There is no
+  credit here and nothing is completed; the reply states that the GSP had nothing pending,
+  which is a fact about this device.
+- ⊘ Nothing about half 1 (the `0x79` os-event registry) or half 2 (`POST_EVENT` + the edge).
+  Both are unbuilt.
+- ⊘ Nothing about the interrupt plane from `cap1` — F-1 stands: that capture constrains it
+  not at all.

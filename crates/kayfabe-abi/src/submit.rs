@@ -2607,6 +2607,158 @@ impl core::fmt::Display for CtxswPreemptionError {
 
 impl core::error::Error for CtxswPreemptionError {}
 
+// =====================================================================================
+// ★★★★★ §16.75 — `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` (`0x20801702`), the 1 Hz train
+// =====================================================================================
+
+/// `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` = `0x20801702` — *"instructs the RM to service
+/// interrupts for the specified engine(s)"* (`ogkm-580:
+/// src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080mc.h:161-176`), issued **on the
+/// subdevice**.
+///
+/// # ★★★★★ Why a `0x56` here is not a forgiven status — it SKIPS the guest's own work
+///
+/// `subdeviceCtrlCmdMcServiceInterrupts_IMPL` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/intr/intr.c:186-280`) has two halves, in this order:
+///
+/// 1. under `IS_GSP_CLIENT(pGpu)`, `NV_RM_RPC_CONTROL(...)` to us — **and on a non-`NV_OK`
+///    status it prints and `return status;` at `:219-225`**;
+/// 2. only if that returned `NV_OK`, it converts `pServiceInterruptParams->engines` into an
+///    `MC_ENGINE_BITVECTOR` and calls `intrServiceStallList_HAL(pGpu, pIntr, &engines,
+///    NV_TRUE)` at `:278`.
+///
+/// ⇒ Our `NV_ERR_NOT_SUPPORTED` did not merely decline a request; it **cancelled the
+/// guest's own stall-interrupt servicing** every time. That is what makes this different in
+/// kind from the ids beside it in the unserviced ledger, which the guest's own error paths
+/// forgive by mapping `0x56` to `NV_OK`.
+///
+/// `[measured 2026-08-10, boot w209_ffc80f8_ctl, rev ffc80f8]` `nvkvm: unserviced fn 76 cmd
+/// 0x20801702` — it arrives as a **generic `GSP_RM_CONTROL` (fn 76)**, not as the
+/// specialised `NV_VGPU_MSG_FUNCTION_CTRL_MC_SERVICE_INTERRUPTS` that
+/// `rpcCtrlMcServiceInterrupts_v1A_0E` (`ogkm-580: rpc.c:6270-6296`) builds. ⚠ Worth the
+/// note because that specialised path exists in the same tree and reading it first would
+/// have sent this arm to a function number the guest never uses here.
+pub const NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS: u32 = 0x2080_1702;
+
+/// `NV2080_CTRL_MC_ENGINE_ID_GRAPHICS` — `ogkm-580: ctrl2080mc.h:178`.
+pub const MC_ENGINE_ID_GRAPHICS: u32 = 0x0000_0001;
+
+/// `NV2080_CTRL_MC_ENGINE_ID_ALL` — `ogkm-580: ctrl2080mc.h:179`. `[measured 2026-08-10,
+/// boot w209_ffc80f8_ctl]` this is the value libcuda sends: `size=4 in=ffffffff`, ×13.
+pub const MC_ENGINE_ID_ALL: u32 = 0xFFFF_FFFF;
+
+/// The status this port answers when the `MC_SERVICE_INTERRUPTS` params image is not the
+/// struct the header describes.
+///
+/// ★ `NV_ERR_INVALID_PARAM_STRUCT` (`0x3A`, `ogkm-580: nvstatuscodes.h:87`) is in **this
+/// command's own documented set** (`ctrl2080mc.h:171-174` lists `NV_OK`,
+/// `NV_ERR_INVALID_PARAM_STRUCT`, `NV_ERR_INVALID_ARGUMENT`), so this is not the standing
+/// rule being bent: `NV_ERR_NOT_SUPPORTED` is *not* in that set, which is precisely why its
+/// appearance was diagnosable as *"nobody claimed this"* rather than as an answer.
+pub const MC_SERVICE_INTERRUPTS_REFUSED_STATUS: u32 = 0x0000_003A;
+
+/// `NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS` — `ogkm-580: ctrl2080mc.h:183-185`.
+///
+/// ```c
+/// typedef struct NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS {
+///     NvU32 engines;
+/// } NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS;
+/// ```
+///
+/// # ⊘⊘⊘ `engines` is `[IN]` — and echoing it is therefore MANDATORY, not cosmetic
+///
+/// The FINN header marks nothing `[OUT]`, and the naive reading (*"a pure `[IN]` struct, so
+/// a zero body is harmless"*) is the one this repo has already paid for
+/// (`mem: an_in_annotation_is_not_a_transport_fact`). The transport does not read
+/// annotations: `rpcRmApiControl_GSP` copies the reply's params over the caller's own
+/// struct whenever `paramsSize != 0` (`ogkm-580: rpc.c:11085-11090`), and `paramsSize` is 4
+/// here. Zero-filling would hand the guest `engines = 0`, and step 2 above would then run
+/// `bitVectorClrAll` → `intrServiceStallList_HAL` over the **empty** set — i.e. the reply
+/// would silently un-do the very servicing the `NV_OK` enabled, while looking green on
+/// both sides.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct McServiceInterruptsRequest {
+    /// `NvU32 engines` @ +0 — [`MC_ENGINE_ID_ALL`] or a mask including
+    /// [`MC_ENGINE_ID_GRAPHICS`].
+    pub engines: u32,
+}
+
+impl McServiceInterruptsRequest {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS";
+    /// `sizeof` — one `NvU32`. `[measured 2026-08-10, boot w209_ffc80f8_ctl]` the wire says
+    /// `size=4`.
+    pub const SIZE: usize = 4;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            0,
+            &self.engines.to_le_bytes(),
+        )
+    }
+}
+
+/// Decode an `NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS` image.
+///
+/// # Errors
+/// [`McServiceInterruptsError`], by variant.
+pub fn decode_mc_service_interrupts(
+    params: &[u8],
+) -> Result<McServiceInterruptsRequest, McServiceInterruptsError> {
+    if params.len() < McServiceInterruptsRequest::SIZE {
+        return Err(McServiceInterruptsError::ShortParams { got: params.len() });
+    }
+    Ok(McServiceInterruptsRequest {
+        engines: u32::from_le_bytes(
+            params[0..4]
+                .try_into()
+                .expect("4 bytes inside a SIZE-checked image"),
+        ),
+    })
+}
+
+/// Encode an `NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS` image.
+#[must_use]
+pub fn encode_mc_service_interrupts(req: &McServiceInterruptsRequest) -> Vec<u8> {
+    let mut out = vec![0u8; McServiceInterruptsRequest::SIZE];
+    req.encode_into(&mut out)
+        .expect("SIZE bytes is exactly what encode_into needs");
+    out
+}
+
+/// Why a [`McServiceInterruptsRequest`] image was refused at **decode**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McServiceInterruptsError {
+    /// Fewer than [`McServiceInterruptsRequest::SIZE`] bytes of params.
+    ShortParams {
+        /// What arrived.
+        got: usize,
+    },
+}
+
+impl core::fmt::Display for McServiceInterruptsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            McServiceInterruptsError::ShortParams { got } => write!(
+                f,
+                "{} needs {} bytes of params, got {got}",
+                McServiceInterruptsRequest::C_NAME,
+                McServiceInterruptsRequest::SIZE
+            ),
+        }
+    }
+}
+
+impl core::error::Error for McServiceInterruptsError {}
+
 /// Bounds-checked field write. Same helper as [`crate::bringup`]'s, private to each
 /// module on purpose: a shared one would have to pick a home, and neither module is the
 /// other's dependency.
@@ -2638,6 +2790,10 @@ const _: () = {
     assert!(core::mem::offset_of!(CtxswPreemptionRequest, cilp_preempt_mode) == 12);
     assert!(core::mem::offset_of!(CtxswPreemptionRequest, route_flags) == 16);
     assert!(core::mem::offset_of!(CtxswPreemptionRequest, route) == 24);
+    // ★ §16.75 — one `NvU32`, and the wire's `size=4` is what pins it.
+    assert!(core::mem::size_of::<McServiceInterruptsRequest>() == McServiceInterruptsRequest::SIZE);
+    assert!(core::mem::align_of::<McServiceInterruptsRequest>() == 4);
+    assert!(core::mem::offset_of!(McServiceInterruptsRequest, engines) == 0);
     assert!(core::mem::size_of::<CeAllocParams>() == CeAllocParams::SIZE);
     assert!(core::mem::align_of::<CeAllocParams>() == CeAllocParams::ALIGN);
     assert!(core::mem::offset_of!(CeAllocParams, version) == 0);

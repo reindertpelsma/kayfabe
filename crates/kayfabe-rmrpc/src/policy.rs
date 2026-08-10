@@ -1484,6 +1484,20 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // asked for `COMPUTE_CILP` on this id and the C echoed `NV_OK`; ours asks for
     // `COMPUTE_WFI`. Copying the C would have been honest on our payload by accident.
     kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE,
+    // ★★★★★ **§16.75 — `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`, `0x20801702`: the 1 Hz
+    // train, and the one id on this list the guest issues in its OWN voice about a wakeup.**
+    //
+    // `[measured 2026-08-10, boot w209_ffc80f8_ctl, rev ffc80f8]` 13 arrivals
+    // (`traces/guest_boots/run_w209_ffc80f8_ctl_probe.log`, `hClient=0xc1d0000c
+    // hObject=0x5c000003 size=4 in=ffffffff`, every one `status=0x00000056`), each producing
+    // one `subdeviceCtrlCmdMcServiceInterrupts_IMPL: NVRM_RPC: … failed with error 0x56` in
+    // the same file's `dmesg` at 56.134 … 68.377, intervals 1.002-1.056 s.
+    //
+    // ⊘ It is claimed for a reason no other id on this list has: the `0x56` **cancels work
+    // in the guest**. See `kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` for
+    // the two-half structure of `intr.c:186-280` — the early `return status` at `:225` skips
+    // `intrServiceStallList_HAL` at `:278` entirely.
+    kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
 ];
 
 impl ObjectPolicy {
@@ -1688,8 +1702,122 @@ impl ObjectPolicy {
             kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE => {
                 self.respond_ctxsw_preemption_mode(cmd, &req)
             }
+            kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS => {
+                self.respond_mc_service_interrupts(cmd, &req)
+            }
             _ => None,
         }
+    }
+
+    /// ★★★★★ **§16.75 — the `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` arm** (`0x20801702`):
+    /// the 1 Hz train `w209` measured, in the guest's own voice.
+    ///
+    /// # What is being claimed
+    ///
+    /// *"There were no GSP-side engine interrupts outstanding, so servicing them is
+    /// complete."* On this port that is not a convenient reading — it is the **only** true
+    /// one. This device's GSP is not running firmware; it raises no engine interrupt and
+    /// queues no deferred GSP-side interrupt work, so the set of things the guest asked us
+    /// to service is empty on every call, and `NV_OK` reports exactly that. ⊘ It is the
+    /// same eligibility rule `kayfabe_device::inert` states for whole functions —
+    /// *"the observable consequence of our doing nothing is a TRUE statement about this
+    /// device"* — applied to one control.
+    ///
+    /// # ★★★ Why it is worth a rung at all, when the id was on the "forgiven" list
+    ///
+    /// Because the guest's error path here does **not** forgive it, and that is measurable
+    /// in `ogkm` rather than inferred: `subdeviceCtrlCmdMcServiceInterrupts_IMPL`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/intr/intr.c:186-280`) issues the RPC to us at
+    /// `:216` and, on any non-`NV_OK`, **prints and returns at `:219-225`** — so
+    /// `intrServiceStallList_HAL` at `:278`, the guest servicing its *own* stall interrupts
+    /// for the engines it named, never ran once in thirteen attempts. Every other id in that
+    /// census is forgiven by a caller that maps `0x56` to `NV_OK`; this one is not forgiven,
+    /// it is *obeyed*.
+    ///
+    /// ⊘ **And this arm is NOT the C's M8.108, which the C itself says not to port**
+    /// (`docs/design/post_cuinit_wall_map.md` §D2, `C: docs/design/mode2_execfwd_keystone_plan.md:295-299`).
+    /// M8.108 was a *service-zero credit* — a fabricated completion accounting so the poll
+    /// would terminate. There is no credit here and nothing is completed: the reply says the
+    /// GSP had nothing pending, which is a fact about this device, and any actual completion
+    /// still has to come from the execution plane.
+    ///
+    /// # ⊘⊘ What this arm deliberately does NOT do — and it is half the rung
+    ///
+    /// It does **not** drive [`kayfabe_completion::DeliveryPlane::on_poll`], although that
+    /// is exactly the trigger the C hangs off this control (`C: nvkvm_gpu_emul.c:3041-3053`,
+    /// `m2_poll_kick`). Two measured reasons, in order of severity:
+    ///
+    /// 1. ⊘ **`on_poll` latches a gate that nothing in this port can open.** It returns a
+    ///    [`kayfabe_completion::PostBatch`] *and* sets `DeliveryPlane::outstanding`; the gate
+    ///    reopens only via `completions_drained` on an observed `IRQSCLR`. Calling it from
+    ///    here and dropping the batch — which is all this seat could do, having no `Vmm` and
+    ///    no GSP status-queue encoder — would close the delivery gate **permanently** on the
+    ///    first poll. A wedge shipped as a fix.
+    /// 2. ⊘ **There is nothing to deliver, and that is structural rather than incidental.**
+    ///    The whole chain `kayfabe_fwd::poll_completions` → `SharedDevice::completion_poll`
+    ///    → `Spine::completion_poll` → `DeliveryPlane::on_poll` has **no production caller**
+    ///    — every call site is in `tests/` — and neither does `deliver_completions`, nor
+    ///    `kayfabe_rt::Executor`, which the composition root never constructs. Nothing
+    ///    encodes `POST_EVENT` on the wire either. So the missing piece is not one call: it
+    ///    is a transport. The seat for it is here, and it is one line, on the day there is a
+    ///    poster to hand the batch to.
+    ///
+    /// # The reply, and why it is the request's own bytes
+    ///
+    /// `paramsSize` is 4 — non-zero — so `rpcRmApiControl_GSP` copies the reply's params
+    /// over the caller's struct (`ogkm-580: rpc.c:11085-11090`). The guest then **reads its
+    /// own struct back**: `:262-278` turns `pServiceInterruptParams->engines` into the
+    /// `MC_ENGINE_BITVECTOR` it services. A zero-filled body would therefore hand it
+    /// `engines = 0` and make step 2 service the **empty** set — an `NV_OK` that silently
+    /// un-does itself. ⊘ That the FINN header marks no field `[OUT]` is not a transport
+    /// fact (`mem: an_in_annotation_is_not_a_transport_fact`).
+    ///
+    /// # The refusal
+    ///
+    /// Malformed params only, with
+    /// [`kayfabe_abi::submit::MC_SERVICE_INTERRUPTS_REFUSED_STATUS`] =
+    /// `NV_ERR_INVALID_PARAM_STRUCT` (`0x3A`) — in this command's own documented set
+    /// (`ogkm-580: ctrl2080mc.h:171-174`), and deliberately **not** `0x56`, which is the
+    /// FSM's *"nobody claimed this"* signature and the value this rung exists to remove from
+    /// this id.
+    ///
+    /// ⊘ There is no classifier over `engines`, and the absence is a decision: no value of
+    /// that mask names something this port has pending, so a per-engine refusal would be an
+    /// invented distinction rather than a checked one. ⚠ **The re-check condition is
+    /// therefore named instead**: the day this port queues any GSP-side interrupt state, an
+    /// unconditional `NV_OK` here stops being true and this arm must consult it.
+    fn respond_mc_service_interrupts(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let refuse = || {
+            Some(Reply {
+                rpc_result: kayfabe_abi::submit::MC_SERVICE_INTERRUPTS_REFUSED_STATUS,
+                body: Vec::new(),
+            })
+        };
+        // The guest's own two assertions about its params — the same pair every other arm
+        // on this list checks, for the same reason.
+        let want = kayfabe_abi::submit::McServiceInterruptsRequest::SIZE;
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != want
+            || cmd.payload.len() < req.params_at + want
+        {
+            return refuse();
+        }
+        let Ok(params) = kayfabe_abi::submit::decode_mc_service_interrupts(
+            &cmd.payload[req.params_at..req.params_at + want],
+        ) else {
+            return refuse();
+        };
+        let mut body = cmd.payload.clone();
+        let params_out = kayfabe_abi::submit::encode_mc_service_interrupts(&params);
+        body[req.params_at..req.params_at + want].copy_from_slice(&params_out);
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body,
+        })
     }
 
     /// ★★★★ **§16.59 — the `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` arm** (`0x20801210`):
