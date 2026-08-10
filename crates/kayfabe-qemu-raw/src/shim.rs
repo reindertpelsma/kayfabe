@@ -4116,6 +4116,34 @@ impl SharedDoorbell {
                 p.host_va,
                 p.host_va == ring_va,
             )),
+            // ★★★★★ **THE WALL, and it is NAMED rather than left to be decoded.**
+            //
+            // `SystemDataPlane` is not a defect and must not be read as one. Every doorbell
+            // that reaches this fall-through on this bench belongs to the **system proc** —
+            // RmInitAdapter's CE scrubber, client `0xc1e0…`, a KERNEL client — and
+            // `l1_concurrency.md` §12.26 forbids the system proc a data plane: its work is
+            // FORGED to its own completion queue, never forwarded, precisely so it can
+            // never hold host state whose reclaim has no defined point. That rule's own
+            // docs say the day it must be re-opened, it is re-opened **deliberately**,
+            // "with a refcount or a global quiesce point — not discovered afterwards".
+            //
+            // ⊘ So this line is where a rung stops, not where a fix goes. Relaxing the
+            // guard here to make a pin happen would be deleting a lifetime boundary to
+            // enable an internal capability, which is `same_class_id_opposite_directions`
+            // exactly.
+            Err(kayfabe_rt::FwdFault::SystemDataPlane) => Some(format!(
+                "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → ⊘ REFUSED \
+                 `SystemDataPlane` — THE WALL, and it is a STANDING DESIGN RULE, not a \
+                 defect. This channel belongs to the SYSTEM proc (the guest kernel's own \
+                 client), and `l1_concurrency.md` §12.26 gives the system proc no data \
+                 plane: its work is FORGED, never forwarded, so it can hold no host state \
+                 whose reclaim has no defined point. ★ Everything BEFORE this line \
+                 succeeded — the ring's VA resolved, its GPA came out of the guest's own \
+                 page tables, and the hypervisor's stated layout answered with a file \
+                 offset. ⇒ What is unbuilt is a LIFETIME for system-proc host state, and \
+                 re-opening §12.26 is an owner decision{control}",
+                run.file_offset
+            )),
             Err(e) => Some(format!(
                 "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → REFUSED {e:?}. \
                  ⚠ If this names `PlacementRefused`, the fixed map landed somewhere else \
