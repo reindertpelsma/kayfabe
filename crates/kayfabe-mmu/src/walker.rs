@@ -61,6 +61,29 @@ pub trait FbRead {
     /// decodes as a full page of invalid entries, which is a page that legitimately maps
     /// nothing, and the two are opposite facts.
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool;
+
+    /// ★★★★ **WHO first wrote the page at `phys`, if this source can say at all** — a short
+    /// tag and a monotonic sequence number, exactly `kayfabe_device::FbPageOrigin`'s pair.
+    ///
+    /// # ⊘ Why a *walker* trait carries a provenance question
+    ///
+    /// The address plane's populate discipline names **two co-equal sources** and
+    /// `reachability_on_transition.md` §7.2 names, as standing residue, a **third transport
+    /// it does not witness**: *"CPU-written entries through the instance/BAR2 window and
+    /// through PRAMIN … reach no witness here. Anything they publish stays a miss."* A walk
+    /// that succeeds where the address table misses is therefore either evidence the table
+    /// is incomplete or evidence it is the wrong mechanism — and **the two are told apart
+    /// by which transport created the page-table pages the walk just read.** That fact is
+    /// held by the byte source and by nothing else on the path.
+    ///
+    /// ⊘ [`None`] is *"this source cannot answer"*, never *"nobody wrote it"* — the same
+    /// distinction [`FbRead::read`]'s `false` carries, and the reason the default is `None`
+    /// rather than a fabricated tag. A source that does not track origins must not be made
+    /// to invent one.
+    fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
+        let _ = phys;
+        None
+    }
 }
 
 /// Result of a (future) walk. Placeholder shape for the milestone.

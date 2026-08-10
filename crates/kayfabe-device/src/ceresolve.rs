@@ -654,86 +654,170 @@ fn root_page(fmt: &dyn GmmuFmt, root: &VasRoot) -> Result<PtPage, CeResolve> {
 /// ⊘ **The absence of a covering slot IS the observation.** [`PageDecode::invalid`] is a
 /// count with no addresses, so an invalid slot cannot be reported positively; a level whose
 /// covering slot appears in none of `children`/`leaves`/`sparse` is reported
-/// `INVALID-SLOT`, which is *"this table maps nothing there"* — a different finding from
+/// `NO-COVERING-SLOT`, which is *"this table maps nothing there"* — a different finding from
 /// `SPARSE` (the guest declared it absent) and from `UNREADABLE` (we could not read the
 /// page at all).
+///
+/// # ★★★★ It BACKTRACKS, because the resolver does — §16.73, and the defect it repairs
+///
+/// `[measured 2026-08-10, boot `w207_4395ebd_real`]` this trace printed `INVALID-SLOT` at
+/// `L4` for a VA that [`resolve`] resolved **on the same call, in the same string**
+/// (`rng=S:0x22e86000`). Neither projection was lying: a **dual** page-directory slot
+/// contributes **two** children with an *equal* `vabase` ([`kayfabe_mmu::walker::PtPage`]),
+/// [`kayfabe_mmu::walker::translate`] tries **both**
+/// (`kayfabe_mmu::walker`'s `follow`: *"Both halves of a dual slot are tried … the first
+/// that answers wins"*), and this trace's `max_by_key` followed exactly **one** — the last
+/// maximum, which was the **big-page** sibling (32 slots = 2 MiB ÷ 64 KiB) while the ring
+/// is mapped by the **small-page** one.
+///
+/// ⇒ ★★★★ **A tracer whose job is to explain a resolver is defective by construction when
+/// it disagrees with it.** So the selection is no longer a pick: every child at the covering
+/// base is tried, in the order [`kayfabe_mmu::walker::decode_page`] returned them, and the
+/// **first that reaches a leaf wins** — `follow`'s rule, restated in the observer instead of
+/// re-invented. A branch that fails contributes its trace only if no branch succeeded.
+///
+/// ⊘ **And the old name is gone deliberately.** `INVALID-SLOT` was read as *"the VA is
+/// unmapped"* by six prior sections when what it could ever mean was *"not on the branch I
+/// chose"*. `NO-COVERING-SLOT` is a statement about **one table**, and the whole walk's
+/// verdict is stated separately as ` walkend=…` so a mid-trace terminal can never be
+/// mistaken for the answer.
 ///
 /// ⚠ It is an **observer**: it reads and formats and changes nothing. It runs on a refusal.
 /// ⊘ It states its own terminal result so a reader can compare it against [`resolve`]'s in
 /// the same sentence — two projections **printed side by side on purpose**, so that a
 /// disagreement is visible rather than load-bearing.
 pub fn walk_trace(fmt: &dyn GmmuFmt, fb: &mut dyn FbRead, root: &VasRoot, va: u64) -> String {
-    let mut page = match root_page(fmt, root) {
+    let page = match root_page(fmt, root) {
         Ok(p) => p,
         Err(_) => return " walk=NO-ROOT-LEVEL".to_string(),
     };
-    let mut out = String::new();
+    let (body, resolved) = trace_from(fmt, fb, page, va, 0);
+    // ★★★ THE VERDICT, stated once and apart from the per-level terminals. A reader who
+    // takes `NO-COVERING-SLOT` on an inner branch for the walk's answer is making exactly
+    // §16.72.6's mistake; this line is the only sentence in the trace that answers
+    // *"did the walk find a leaf?"*, and it is always present.
+    let end = if resolved {
+        " walkend=LEAF"
+    } else {
+        " walkend=NO-LEAF-ON-ANY-BRANCH"
+    };
+    format!("{body}{end}")
+}
+
+/// One level of [`walk_trace`]'s descent — `(the trace, did it reach a leaf?)`.
+///
+/// ★ Recursive rather than a loop precisely because it **backtracks**: a dual slot's two
+/// sub-tables are two descents from one level, and a loop can only carry one.
+fn trace_from(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    page: PtPage,
+    va: u64,
+    depth: u8,
+) -> (String, bool) {
     // ⊘ Bounded by the walker's own depth limit rather than by a number of this module's
     // own: a guest-written page may point at its parent, and two different bounds on one
     // descent is two descriptions of one rule.
-    for _ in 0..kayfabe_mmu::walker::MAX_WALK_DEPTH {
-        let d = match kayfabe_mmu::walker::decode_page(fmt, fb, page) {
-            Err(f) => {
-                out.push_str(&format!(
-                    " L{}@0x{:x}=UNREADABLE({f:?})",
-                    page.level, page.phys
-                ));
-                return out;
-            }
-            Ok(d) => d,
-        };
-        out.push_str(&format!(
-            " L{}@0x{:x}[ch{} lf{} sp{} inv{}]",
-            page.level,
-            page.phys,
-            d.children.len(),
-            d.leaves.len(),
-            d.sparse.len(),
-            d.invalid
-        ));
-        let child = d
-            .children
-            .iter()
-            .filter(|c| c.vabase <= va)
-            .max_by_key(|c| c.vabase);
-        let leaf = d
-            .leaves
-            .iter()
-            .filter(|l| l.va.0 <= va)
-            .max_by_key(|l| l.va.0);
-        let sparse = d.sparse.iter().copied().filter(|s| *s <= va).max();
-        // The covering slot is whichever of the three has the greatest base — a slot is
-        // exactly one of PDE / leaf / sparse / invalid, so at most one of these can be it.
-        let best = [child.map(|c| c.vabase), leaf.map(|l| l.va.0), sparse]
-            .into_iter()
-            .flatten()
-            .max();
-        match best {
-            None => {
-                out.push_str("=INVALID-SLOT");
-                return out;
-            }
-            Some(b) if Some(b) == sparse => {
-                out.push_str(&format!("=SPARSE@0x{b:x}"));
-                return out;
-            }
-            Some(b) if leaf.is_some_and(|l| l.va.0 == b) => {
-                let l = leaf.expect("just matched");
-                out.push_str(&format!(
-                    "=LEAF@0x{b:x}->0x{:x}/{:?}/sz0x{:x}",
+    if depth >= kayfabe_mmu::walker::MAX_WALK_DEPTH {
+        return ("=DEPTH-EXHAUSTED".to_string(), false);
+    }
+    let d = match kayfabe_mmu::walker::decode_page(fmt, fb, page) {
+        Err(f) => {
+            return (
+                format!(" L{}@0x{:x}=UNREADABLE({f:?})", page.level, page.phys),
+                false,
+            );
+        }
+        Ok(d) => d,
+    };
+    // ★★★★ **WHO CREATED THIS PAGE-TABLE PAGE** — §16.73's deciding measurement, and it is
+    // one token wide. The descent resolving a VA the address table misses is *either* the
+    // table being incomplete *or* the table being the wrong mechanism; which of those it is
+    // depends entirely on the transport that wrote these pages, and only the byte source
+    // knows. ⊘ `?` (not a guess, not `UNATTRIBUTED`) when the source cannot answer.
+    let by = fb
+        .page_writer(page.phys)
+        .map_or_else(|| "/by?".to_string(), |(t, s)| format!("/by{t}#{s}"));
+    let census = format!(
+        " L{}@0x{:x}{by}[ch{} lf{} sp{} inv{}]",
+        page.level,
+        page.phys,
+        d.children.len(),
+        d.leaves.len(),
+        d.sparse.len(),
+        d.invalid
+    );
+    let child_base = d
+        .children
+        .iter()
+        .filter(|c| c.vabase <= va)
+        .map(|c| c.vabase)
+        .max();
+    let leaf = d
+        .leaves
+        .iter()
+        .filter(|l| l.va.0 <= va)
+        .max_by_key(|l| l.va.0);
+    let sparse = d.sparse.iter().copied().filter(|s| *s <= va).max();
+    // The covering slot is whichever of the three has the greatest base — a slot is
+    // exactly one of PDE / leaf / sparse / invalid, so at most one of these can be it.
+    let best = [child_base, leaf.map(|l| l.va.0), sparse]
+        .into_iter()
+        .flatten()
+        .max();
+    match best {
+        None => (format!("{census}=NO-COVERING-SLOT"), false),
+        // ⊘ SPARSE is a definite answer and NOT a leaf — `follow` returns
+        // `TranslateFault::Sparse` for it — so it terminates this branch *without*
+        // resolving, and a sibling half may still answer.
+        Some(b) if Some(b) == sparse => (format!("{census}=SPARSE@0x{b:x}"), false),
+        Some(b) if leaf.is_some_and(|l| l.va.0 == b) => {
+            let l = leaf.expect("just matched");
+            (
+                format!(
+                    "{census}=LEAF@0x{b:x}->0x{:x}/{:?}/sz0x{:x}",
                     l.phys, l.aperture, l.size.0
+                ),
+                true,
+            )
+        }
+        Some(b) => {
+            // ★★★ EVERY child at the covering base, not the `max_by_key` pick. Two
+            // children share a `vabase` exactly when the slot is DUAL, and which of the
+            // two carries `va` is a fact only the sub-tables hold.
+            let sibs: Vec<PtPage> = d.children.iter().copied().filter(|c| c.vabase == b).collect();
+            let n = sibs.len();
+            let mut out = census;
+            for (i, c) in sibs.iter().enumerate() {
+                // ⊘ A single-child slot prints EXACTLY what it always printed — the dual
+                // annotation and the `|` separator appear only where there is a fork, so a
+                // reader of an ordinary line sees no new vocabulary.
+                if i > 0 {
+                    out.push_str(" |");
+                }
+                let dual = if n > 1 {
+                    format!("/dual{}of{}", i + 1, n)
+                } else {
+                    String::new()
+                };
+                out.push_str(&format!(
+                    "=PDE@0x{b:x}->0x{:x}/{:?}{dual}",
+                    c.phys, c.aperture
                 ));
-                return out;
+                let (tail, ok) = trace_from(fmt, fb, *c, va, depth + 1);
+                out.push_str(&tail);
+                // ★★★ EVERY tried half is printed, not only the winner. The rejected half is
+                // the fact §16.72.6 was missing: shown one branch's `INVALID-SLOT` and no
+                // sign a second existed, six sections read it as *"the VA is unmapped"*.
+                // Terminals are self-identifying — only a branch ending `=LEAF@…` answered —
+                // so concatenation is unambiguous.
+                if ok {
+                    return (out, true);
+                }
             }
-            Some(b) => {
-                let c = child.expect("the maximum came from a child");
-                out.push_str(&format!("=PDE@0x{b:x}->0x{:x}/{:?}", c.phys, c.aperture));
-                page = *c;
-            }
+            (out, false)
         }
     }
-    out.push_str("=DEPTH-EXHAUSTED");
-    out
 }
 
 /// The §7 rule-5 limit for a leaf in `aperture`, or `None` where this port has none.

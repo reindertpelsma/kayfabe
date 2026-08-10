@@ -13795,3 +13795,103 @@ what "the control held" is allowed to mean.
   on the real arm again.
 - ⊘ **The wall did not move and was not meant to**: `RmInitAdapter failed! (0x25:0x65:1249)`,
   host Xid 0 → 0.
+
+---
+
+## §16.73 ★★★★★ `w208` — **THE RULING: (a), the table is INCOMPLETE** — and the transport is named, with two further links found broken behind it
+
+### 16.73.1 ⊘ WHAT I REFUTED BEFORE BOOTING — five, and three are the brief's
+
+**(1) ⊘ "2519 tests" — MEASURED 2518.** `KAYFABE_SLOW=1 cargo test --workspace` at `52d418f`
+sums `passed=2518 failed=0` over 40 `test result:` lines. ⚠ And the *plain* run (no
+`KAYFABE_SLOW`) is **751** — a third of the suite is behind one environment variable, so a
+count quoted without the variable is meaningless. Gates re-measured at **3 red**
+(`kayfabe-device`, `ogkm-version-tag`, `CLAIM LEDGER`), `scripts/ci_gates.sh` real rc **1** —
+⚠ read off `$?` of the script, not of a `tail` in a pipeline, which is the trap the brief named
+and which my first invocation walked into (`GATES_RC=0` from `tail`).
+
+**(2) ⊘ The brief's arm (a) — "witness that transport" — is TRUE as a diagnosis and
+UNDERSTATES the fix by two whole links.** It reads as one missing feed. It is three:
+
+| # | link | state at `52d418f` | citation |
+|---|---|---|---|
+| **G1** | a **witness** for the transport that publishes this ring | ⊘ **absent** — `Vas::pt_pages`' only writers are `device.rs:2014` and `fwd/lib.rs:4446`, both fed exclusively by `PtWrite`, whose sole producer is the `CeOperands::PhysOperand` arm of a **CE pushbuffer parse** (`fwd/lib.rs:4298`) | already recorded as standing residue: `reachability_on_transition.md` §7.2 — *"CPU-written entries through the instance/BAR2 window and through PRAMIN … reach no witness here. **Anything they publish stays a miss.**"* |
+| **G2** | a **consumer** for that witness | ⊘ **`SharedDevice::decode_pt_writes` has NO PRODUCTION CALLER.** `grep -rn "decode_pt_writes(" --include=*.rs .` returns its own definition (`rt/device.rs:2115`) and **two test call sites** (`tests/tests/pt_decode.rs:1631`, `:1685`) and nothing else | ★ the `a_declared_capability_reachable_from_nowhere` shape, again — the same class §16.16 found when `write_tagged` had no production caller |
+| **G3** | a **byte source** that shape could read | ⊘ **the production one REFUSES.** `run_pt_decode` reads through `IsolateFb` → `Worker::fb_read` → `RmBackend::fb_read`, and the real host backend is `Err(RmError::Other(NOT_ON_THIS_RUNG))` (`isolate-host/rm.rs:2681`), whose own doc says the aperture's extent *"is **not written down anywhere in this tree**"* | meanwhile the guest's page tables are demonstrably in the **device's own `FbStore`** — `ceresolve`'s module doc: *"The guest builds these page tables through the **BAR2 translated window**, which `RegPlane` serves out of the very same `FbStore`"*; `plane.rs`: *"ONE STORE, TWO APERTURES"* |
+
+⇒ ★★★★ **"Witness the transport" is necessary and nowhere near sufficient.** A rung that
+built only G1 would have latched pages into a set nothing drains (G2), and a rung that also
+called the drain would have had it fail on its first byte (G3). ⊘ I did not build any of the
+three this rung, and §16.73.5 says why in the same breath as what it would take.
+
+**(3) ⊘ §16.72's own reading — *"the table is correct and empty"* — is REFUTED as a
+description, though its verdict survives.** *Correct and empty* describes a working mechanism
+with nothing to say. What G1–G3 describe is a populate pass that is **unfed, uncalled and
+unreadable** on this path. Both sentences license the same next step; only one of them is true
+about the tree, and the difference is exactly how many links the next rung has to build.
+
+**(4) ⊘ My own near-miss, caught by a BITE and not by a reading.** The first draft of the
+dual-PDE regression test put the answering sub-table in the `also` half. `decode_page` pushes
+`edge` then `also` and `max_by_key` returns the **last** maximum — so **the defect resolves
+that fixture correctly** and the test passed against the bug it was named for. It is the
+`injection_measures_necessity_never_sufficiency` shape, in a test I wrote to catch a defect I
+had already diagnosed. Fixed by running the fixture **both ways**: answer in `edge` (kills
+`max_by_key`) and answer in `also` (kills `children.first()`). ★ Only the bite found it —
+re-reading the test would not have, because the test was *correct*, it just could not fail.
+
+**(5) ⊘ The brief's `INVALID-SLOT` rename suggestion, `NO-MATCH-ON-CHOSEN-BRANCH`, encodes the
+defect in the name.** Once the tracer tries what the resolver tries there is no *chosen*
+branch, so a name that says "the branch I chose" would be false the moment it printed.
+The terminal is `NO-COVERING-SLOT` — a statement about **one table** — and the walk's verdict
+is a separate, always-present ` walkend=LEAF` / ` walkend=NO-LEAF-ON-ANY-BRANCH`.
+
+### 16.73.2 THE INCREMENT
+
+1. **`walk_trace` BACKTRACKS** (`ceresolve.rs`). Was a loop with
+   `children.iter().filter(|c| c.vabase <= va).max_by_key(|c| c.vabase)` — one child of a
+   **dual** slot's two, which carry an *equal* `vabase`. Now recursive: every child at the
+   covering base is tried in `decode_page`'s order and the first that reaches a leaf wins —
+   `kayfabe_mmu::walker`'s `follow` rule, restated in the observer rather than re-invented.
+   ★ **Every tried half is printed**, marked `/dualNofM` and separated by ` | `; the rejected
+   half is precisely the fact §16.72.6 was missing. ⊘ A single-child slot's line is
+   byte-identical to before — the new vocabulary appears only where there is a fork.
+2. **The trace NAMES THE TRANSPORT** — a new `FbRead::page_writer(phys)` (default `None`,
+   overridden only by `FbStoreReader`) puts `/by<WRITER>#<seq>` on **every page-table page the
+   walk visits**. ⊘ `/by?` where the source cannot answer, never `UNATTRIBUTED`. This is
+   §16.15's first-writer census asked **by address** instead of as a total: the total already
+   says `BAR2 50 / EXEC 0`, and a total cannot say *"and the page holding this ring's leaf PTE
+   is one of the 50"*, which is the sentence the ruling turns on.
+3. ⊘ **NO resolver changed, no populate source added.** Both changes are observers.
+
+### 16.73.3 ★★★ THE FALSIFIER, committed BEFORE the boot
+
+Read the real arm's `RING-PROJ … DESCENT … walk:` for `key=0xc1e00006:0x2`,
+`ring=0x420064000`. The deciding token is the `/by…` on the **deepest** level the walk reaches.
+
+| arm | distinguishing line | pre-boot status | what it forces |
+|---|---|---|---|
+| **A — `/byBAR2#…` (or `/byPRAMIN#…`) on the leaf level** | the walk reaches an `=LEAF@…` and every level carries a CPU-window tag | **live, and favoured** — `EXEC 0` on the real arm's own committed census means the CE transport created **no** framebuffer page that boot, so it cannot have written these | ★★★★ **RULING (a) CONFIRMED BY MEASUREMENT**: the table is incomplete because G1's transport is real, is CPU-side, and is unwitnessed. G1–G3 become the next rung's spec |
+| **B — `/byEXEC#…` on the leaf level** | any visited page tagged `EXEC` | ⊘ **excluded pre-boot on the REAL arm and live on the CONTROL** — `FIRST-WRITER census … EXEC 0` (real) vs `EXEC 11706` (ctl2). ⚠ Stated as excluded-by-*measurement*, not by reading | the CE source *can* reach these pages after all ⇒ G1 is not the gap and the diagnosis is wrong |
+| **C — `/by?` everywhere** | the source could not answer | ⊘ **excluded pre-boot**: this print site is `walk_trace_from_root` (`plane.rs`), whose source is `FbStoreReader` over `SparseFb`, which implements `page_origin` (`fbwin.rs:740`). ★ If it fires anyway the finding is that the *print site* is not the one I read | say so and **stop** — the instrument, not the guest |
+| **D — the walk now reaches a LEAF where §16.72 reported `INVALID-SLOT`** | ` walkend=LEAF` and a `/dual1of2 … | …/dual2of2` fork at L3 | **live, and PREDICTED** — §16.72.6's arithmetic (`L3[ch2 … inv255]` = 256 dual slots; `L4[… inv32]` = 2 MiB ÷ 64 KiB = the big-page half) says the small-page sibling holds it | the tracer/resolver disagreement is **closed**, and `rng=` gains a corroborator instead of a dissenter |
+| ⊘ **none of the above** | `walkend=NO-LEAF-ON-ANY-BRANCH` while `rng=` still resolves, or a fork that is not 2-wide, or `/by` tags that disagree between levels of one tree | live | report the disagreement as the finding; ⊘ do NOT rule from a tracer that still contradicts its resolver |
+
+⊘ **The falsifier is NOT "the trace changed".** That is what the change produces. It is
+**which transport tag the deepest level carries** — a fact about the guest, read through an
+instrument whose agreement with the resolver is now asserted by a bitten test.
+
+### 16.73.4 ⊘ WHAT THIS BOOT CANNOT ESTABLISH — stated before it runs
+
+- ⊘ **`CE-SUBMIT` will be 0 again, for the FOURTH rung, and I am predicting it rather than
+  discovering it.** It needs `read_gpfifo_ring` to return `Ring(bytes)`, which needs
+  `binding_at` to hit, which needs G1+G2+G3. None is built. ★ The debt is named, predicted and
+  unpaid, and this is the rung that finally says *what it would take* rather than only that it
+  is owed.
+- ⊘ **The two-fact bar (`GP_GET` moving + a release semaphore) cannot be attempted.** Nothing
+  is forwarded, so there is nothing to fetch. ⚠ A rung that reported "the table now has an
+  entry" as success would be verifying by the thing its change produced; there is no such
+  claim available here because the change adds no entry.
+- ⊘ Nothing about the wall, GR, the completion tail, or why RM builds the ring pair.
+- ⚠ **`Ce` doorbell counts are ±2** (§16.72.7). Structural rows only are treated as exact:
+  `86/86` refusals by route, `16 SERVED-LOCAL`, `26` rings, the `801` wall, and `0` on every
+  forwarding instrument when the plane is unselected.

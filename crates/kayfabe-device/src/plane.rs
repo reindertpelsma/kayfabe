@@ -1130,6 +1130,17 @@ impl FbRead for FbStoreReader<'_> {
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.fb.read(phys, buf).is_ok()
     }
+
+    /// ★★★★ **This store CAN answer, and it is the only byte source on any walk path that
+    /// can** — §16.15's first-writer census, asked one page at a time instead of as a total.
+    ///
+    /// A total (`PRAMIN 21 / BAR1 0 / BAR2 50 / EXEC 0`) says which windows created the
+    /// framebuffer; it cannot say *"and the page holding this ring's leaf PTE is one of the
+    /// 50"*. That is the question the address-table-vs-descent disagreement turns on, so it
+    /// is asked by address.
+    fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
+        self.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
+    }
 }
 
 /// Why a [`RegPlane::read_published_va`] produced no bytes.

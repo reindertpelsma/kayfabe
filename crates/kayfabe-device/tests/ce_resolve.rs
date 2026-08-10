@@ -587,8 +587,10 @@ fn the_walk_trace_names_the_consumed_slot_at_each_level_and_ends_where_resolve_d
     );
     // Two children on the root, and the walk must take the SECOND — slot 1, `VA >> 30`.
     assert!(
-        t.contains(&format!("L0@0x{ROOT:x}[ch2 lf0 sp0 inv510]")),
-        "the level's whole census, so 'how many entries are written' is visible: {t}"
+        t.contains(&format!("L0@0x{ROOT:x}/by?[ch2 lf0 sp0 inv510]")),
+        "the level's whole census, so 'how many entries are written' is visible — and `/by?` \
+         because this fixture's store cannot answer who wrote a page, which is ⊘ NOT the \
+         same as saying nobody did: {t}"
     );
     // ⊘ The decoy must appear NOWHERE as a consumed slot. This is the assertion the
     // bite-check made necessary: without it, `children.first()` passes.
@@ -637,15 +639,20 @@ fn the_walk_trace_names_the_consumed_slot_at_each_level_and_ends_where_resolve_d
     );
 }
 
-/// ⊘ **A slot the guest never wrote is `INVALID-SLOT`, not a leaf and not an error.**
+/// ⊘ **A slot the guest never wrote is `NO-COVERING-SLOT`, not a leaf and not an error.**
 ///
 /// `PageDecode::invalid` is a **count** with no addresses, so an invalid slot cannot be
 /// reported positively — it is reported by the covering slot appearing in none of
 /// `children`/`leaves`/`sparse`. That is the observation §16.10 exists to make, and it must
 /// be distinguishable from `SPARSE` (the guest declared the range absent) and from
 /// `UNREADABLE` (we could not read the page at all).
+///
+/// ⊘ **The terminal used to be spelled `INVALID-SLOT` and the rename is the point** (§16.73):
+/// six sections read that word as *"the VA is unmapped"* when a dual slot made it mean
+/// *"not on the branch I chose"*. `NO-COVERING-SLOT` is a statement about **one table**, and
+/// the walk's own verdict is `walkend=`.
 #[test]
-fn a_level_whose_covering_slot_was_never_written_reports_invalid_slot() {
+fn a_level_whose_covering_slot_was_never_written_reports_no_covering_slot() {
     let mut fb = Fb::new();
     fb.put(ROOT + 8, pde(L1)); // slot 1 only; the L1 page is left entirely blank.
     let t = kayfabe_device::ceresolve::walk_trace(
@@ -655,18 +662,145 @@ fn a_level_whose_covering_slot_was_never_written_reports_invalid_slot() {
         VA,
     );
     assert!(
-        t.contains("=INVALID-SLOT"),
+        t.contains("=NO-COVERING-SLOT"),
         "an empty table maps nothing, and that is a finding: {t}"
     );
     assert!(
         !t.contains("=LEAF"),
         "⊘ an unwritten slot must never read as a mapping: {t}"
     );
+    // ★ And the WALK's verdict, stated once and apart from the per-level terminal — the
+    // sentence a reader is entitled to take as the answer.
+    assert!(
+        t.ends_with(" walkend=NO-LEAF-ON-ANY-BRANCH"),
+        "the verdict must be present and must be the last word: {t}"
+    );
     // And the level census says it from the other side: every slot invalid.
     assert!(
-        t.contains(&format!("L1@0x{L1:x}[ch0 lf0 sp0 inv512]")),
+        t.contains(&format!("L1@0x{L1:x}/by?[ch0 lf0 sp0 inv512]")),
         "the census must show the page is wholly unwritten: {t}"
     );
+}
+
+/// ★★★★ **THE DUAL PDE — the trace must follow BOTH halves, because the resolver does.**
+///
+/// # ⊘ The defect this is the regression test for, measured before it was written
+///
+/// `[measured 2026-08-10, boot `w207_4395ebd_real`]` one `RING-PROJ … DESCENT` line carried
+/// `rng=S:0x22e86000` — resolved — and, in the same string, `walk: … L4@0x2efa7ef00[ch0 lf0
+/// sp0 inv32]=INVALID-SLOT`. Both were honest. GA10x's `L_PD0` slot is **dual**: it names a
+/// small-page sub-table *and* a big-page one, `decode_page` stamps **both children with the
+/// same `vabase`**, `walker::translate` tries both, and the trace's `max_by_key` followed
+/// exactly one (the last maximum — the 32-slot big-page table, 2 MiB ÷ 64 KiB). The ring is
+/// mapped by the small-page sibling.
+///
+/// ⇒ **A tracer whose job is to explain a resolver is defective by construction when it
+/// disagrees with it.** The fixture below is the shape the tree could not previously
+/// express — `TinyFmt::decode_entry` hard-coded `also: None`, so no test in the workspace
+/// ran `walk_trace` over a dual slot at all.
+///
+/// ★★★★ **It runs the fixture BOTH WAYS, and that is not thoroughness — it is the only
+/// arrangement that can fail.** `decode_page` pushes `edge` then `also`, so `max_by_key`
+/// returns the **last** maximum: a fixture whose answer sits in `also` is resolved *by the
+/// bug*, and a fixture whose answer sits in `edge` is resolved by `children.first()`. ⊘ Either
+/// single placement is a test that passes against the defect it names — the shape
+/// `injection_measures_necessity_never_sufficiency` warns about, and my first draft of this
+/// test had exactly it (answer in `also`; the pre-fix code passed).
+#[test]
+fn a_dual_slot_is_traced_through_both_halves_and_the_trace_agrees_with_resolve() {
+    // `DualFmt` is `TinyFmt` with one difference: level 0's PDE names a second sub-table,
+    // derived from the first so the fixture writes ONE entry and gets two children.
+    #[derive(Debug)]
+    struct DualFmt;
+    /// Where the sibling of a level-0 PDE lives, relative to the edge it names.
+    const SIB: u64 = 0x1000;
+    impl GmmuFmt for DualFmt {
+        fn version(&self) -> GmmuVersion {
+            TinyFmt.version()
+        }
+        fn page_sizes(&self) -> &[PageSize] {
+            TinyFmt.page_sizes()
+        }
+        fn entry_size(&self, level: u8) -> u8 {
+            TinyFmt.entry_size(level)
+        }
+        fn levels(&self) -> u8 {
+            TinyFmt.levels()
+        }
+        fn level_shift(&self, level: u8) -> Option<LevelShift> {
+            TinyFmt.level_shift(level)
+        }
+        fn decode_entry(&self, level: u8, raw: u128) -> PteDecode {
+            match TinyFmt.decode_entry(level, raw) {
+                PteDecode::Pde { edge, also: None } => PteDecode::Pde {
+                    // ⊘ The DECOY is `edge` — the half returned FIRST — and the answering
+                    // table is `also`. A tracer that takes either "the first" or "the last"
+                    // child without descending both fails one of the two.
+                    edge: PdeEdge {
+                        next: edge.next,
+                        ..edge
+                    },
+                    also: Some(PdeEdge {
+                        next: edge.next + SIB,
+                        ..edge
+                    }),
+                },
+                other => other,
+            }
+        }
+    }
+
+    // (which half holds the mapping, a name for the failure message)
+    for (answering_table, which) in [(L1, "edge (the FIRST half)"), (L1 + SIB, "also (the SECOND half)")] {
+        let mut fb = Fb::new();
+        fb.put(ROOT + 8, pde(L1)); // slot 1 = `VA >> 30`; names L1 and, dually, L1 + SIB.
+        // The other half is left ENTIRELY BLANK — the measured shape of the big-page
+        // sibling: present, reachable, and holding nothing for this VA.
+        fb.put(answering_table + 16, leaf(LEAF_PHYS));
+
+        let t = kayfabe_device::ceresolve::walk_trace(
+            &DualFmt,
+            &mut fb,
+            &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+            VA,
+        );
+        assert!(
+            t.contains("/dual1of2"),
+            "★ a fork must be NAMED as a fork, so a reader is never shown one branch and \
+             told it was the tree — answer in {which}: {t}"
+        );
+        assert!(
+            t.contains(&format!("=LEAF@0x{:x}->0x{LEAF_PHYS:x}/Vidmem", VA & !0x1f_ffff)),
+            "★★★ the trace must reach the leaf, whichever half holds it — this is the \
+             assertion that goes red if the selection becomes a pick again. Answer in \
+             {which}: {t}"
+        );
+        assert!(
+            t.ends_with(" walkend=LEAF"),
+            "and the verdict must say the walk answered — answer in {which}: {t}"
+        );
+        // ★★★ THE AGREEMENT PROPERTY, which is the whole reason this test exists: the
+        // tracer and the resolver must not be able to disagree on a dual slot.
+        let CeResolve::Resolved { phys, .. } = resolve(
+            &DualFmt,
+            &mut fb,
+            &root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+            VA,
+            LIMITS,
+            Demand::from_doorbell(),
+        ) else {
+            panic!(
+                "⊘ the RESOLVER must answer here too — if it does not, this fixture is not \
+                 the measured shape and the test is about nothing. Answer in {which}"
+            );
+        };
+        let leaf_base = phys - (VA & ((2 << 20) - 1));
+        assert!(
+            t.contains(&format!("->0x{leaf_base:x}/Vidmem")),
+            "⊘ trace and resolver on the SAME page — answer in {which}: trace={t} \
+             resolve=0x{phys:x}"
+        );
+    }
 }
 
 /// ⊘⊘ **`vidmem_phys` refuses a SYSMEM leaf, and that refusal is the whole point.**
