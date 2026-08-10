@@ -11,8 +11,28 @@ Q=/workspace/bench/qemu-build/qemu-system-x86_64
 LOG=/workspace/bench/run_${TAG}
 rm -f "${LOG}_serial.log" "${LOG}_qemu.log" "${LOG}.mon"
 
+# ★★★ NVKVM_RAM_BACKEND=memfd — the launch-time half of the guest-RAM crossing (#233).
+# Guest RAM must be a SHARED, fd-backed block before any of it can be handed to an
+# isolate; `-m 2048` alone gives an anonymous MAP_PRIVATE block that no other process can
+# ever map. Default is EMPTY, so a boot that does not ask for it is byte-for-byte the
+# boot every earlier capture took -- this must not silently become a property of the bench.
+# ⊘ It is deliberately NOT `memory-backend-file`: a file backing puts guest RAM at a
+# filesystem path, and the isolate boundary is supposed to be that the VMM hands DOWN a
+# descriptor, not that guest RAM is openable by anything with the path.
+RAMARGS=()
+case "${NVKVM_RAM_BACKEND:-}" in
+  memfd)
+    # ⚠ `-m` is still required and must MATCH the backend size exactly, or QEMU refuses
+    # with "Machine memory size does not match memory backend size".
+    RAMARGS=(-object "memory-backend-memfd,id=ram0,size=2048M,share=on"
+             -machine "q35,accel=kvm,memory-backend=ram0" -m 2048)
+    ;;
+  ""|none) RAMARGS=(-machine "q35,accel=kvm" -m 2048) ;;
+  *) echo "★ NVKVM_RAM_BACKEND=${NVKVM_RAM_BACKEND} is not a backend I know" >&2; exit 2 ;;
+esac
+
 exec "$Q" \
-  -machine q35,accel=kvm -cpu host -smp 3 -m 2048 \
+  "${RAMARGS[@]}" -cpu host -smp 3 \
   -drive if=virtio,file=/workspace/bench/guest.qcow2,format=qcow2 \
   -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no \
   -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56 \
