@@ -14146,3 +14146,146 @@ and `CE-SUBMIT`.
 - ⚠ **The control must print `PT-DECODE` 0 times.** The call site is on the forwarding
   fall-through, which the `Stillborn` plane never reaches — that is an argument about a code
   path, and the control boot is what tests it.
+
+### 16.74.5 ★★★★★ THE OUTCOME — ⊘ **NONE OF THE ABOVE**, and it is one arm PAST the one I wrote down
+
+`[measured 2026-08-10, boots `w209_ffc80f8_real` / `w209_ffc80f8_ctl`, ONE binary stamped
+`kayfabe-rev:ffc80f8ff330cd0890736af924dea75acf6e6781` read off the **hypervisor**
+(`strings /workspace/bench/qemu-build/qemu-system-x86_64`), 40 hex and equal to
+`git rev-parse HEAD`, differing only in `KAYFABE_ISOLATES`. Both wrapped in
+`host_xid_watch.sh`, both `xid_before=0 xid_after=0` off a ring buffer proved readable at
+**997 lines**. Both ran `POST_CAPTURE_HOOK=scripts/bench/guest_cuinit_wall.sh`. Evidence
+committed: `traces/guest_boots/run_w209_ffc80f8_{real,ctl}_{qemu,dmesg,probe}.log`,
+`xid_w209{real,ctl}.log`.]`
+
+⚠ **The rev-stamp trap did NOT fire this time, and the reason is that it was designed around**:
+`CARGO_TARGET_DIR` was explicitly `unset` in the build command, so `cargo` wrote
+`$REPO/target/release/libkayfabe_qemu_raw.a` — the path `build_qom_shim.sh` copies from.
+The stamp was still read off the hypervisor and compared, because a trap that did not fire is
+not a trap that cannot.
+
+**The differential, same three tokens, same three channels, same `pdb=0x2efa9c000`, same
+`ring=0x420064000`:**
+
+| | `w208` (`797a6bc`) | `w209` (`ffc80f8`) |
+|---|---|---|
+| `FWD-RING` | **3** × `RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED (the doorbell still reports SERVED)` | **0 lines** |
+| `CE-SUBMIT` | **0** — the fourth consecutive rung | **3** |
+| doorbells | 3 arrived, **3 served**, 0 refused | 3 arrived, 0 served, **3 REFUSED `[RmError::Other] Rm(Other(19270))`** |
+| `PT-DECODE` | (did not exist) | 3, each `drained=71 latched=31 requeued=40 rounds=2 → bound=6254 learned=30 published=30/0` |
+| FIRST-WRITER census | `PRAMIN 21 / BAR1 0 / BAR2 50 / EXEC 0` | **identical** |
+| resident frames | `swept 71 of 71` | **identical** |
+| wall | `RmInitAdapter failed! (0x25:0x65:1249)`, `cuInit → 999` | **identical** |
+
+★★★★★ **`RING-VA-UNBOUND` IS GONE, AND THE RING WAS READ.** ⊘ Read that off the **absence**
+of a line, which needs the argument spelled out because an absence is exactly what this
+project has been burned by: `forward_ring` prints `FWD-RING … <tag> → NOTHING FORWARDED` on
+**every** arm where the ring is not read, and `FWD-RING … spans=0` when it is read and decodes
+to nothing. Neither printed. The only remaining path out of that function is
+`let fwd = self.forward_ce(...)?` — **and the `?` is before the success print**. So the chain
+`read_gpfifo_ring → Ring(bytes)` → `parse_pushbuffer` → non-empty `ce_spans` → `forward_ce`
+→ `plan_ce` → `Worker::execute` → `RmBackend::ce_copy` **ran, for the first time in five
+rungs**, and returned `Err`.
+
+★★★★ **AND THE FOUR-RUNG DEBT IS PAID — `CE-SUBMIT` PRINTED.** Its line:
+
+```
+kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0)
+  → REFUSED BEFORE SUBMISSION Other(19270) (no ring store, no doorbell, no semaphore)
+```
+
+⊘ **And it refuses for a reason that has nothing to do with the address table.** `ce_copy`'s
+own doc names both halves in advance: `CeExecutor::Ours` needs the isolate's mapping of the
+**fabricated** aperture, which does not exist; and `CeSource::Constant` is a `LAUNCH_DMA` with
+`REMAP_ENABLE` plus a `SET_REMAP_*` block that `kayfabe_abi::submit::ce` does not transcribe —
+*"a scrubber's fill is a `CeSource::Constant`"*. The guest's first submission on this channel
+is `memmgrMemSet`, a **4-byte constant fill**. So the operand is refused **before** any ring
+store, doorbell or semaphore.
+
+⇒ ★★★★ **R26's two-fact bar is NOT met and cannot have been**: `gp_get` was never read and no
+semaphore was ever armed, because nothing was submitted. ⊘ **This rung does not claim it.**
+The falsifier's arm A required `gp_get` advanced; arm B required `spans=0`. Neither happened.
+**The result is the ⊘ none-of-the-above cell, and it sits one arm past A's precondition and
+short of A's bar** — which is a better outcome than B and a worse one than A, and the reason
+the cell exists is that I could not enumerate it.
+
+★★★ **`3 served → 3 REFUSED` is PROGRESS, and saying so requires the repo's own rule rather
+than a preference.** `w208`'s `Served` is §15.5's own sentence — *"we rang a doorbell on a host
+channel into which the guest's methods were never copied"* — a doorbell reported served with
+zero bytes handed to any engine. The guest's methods are now **read out of its own ring** and
+carried to an executor that says, by name, which operand it cannot represent.
+`try_ce_submission`'s own comment settles the direction: *"A true refusal outranks a forwarded
+no-op."*
+
+**G1 corroborated by two numbers that were not designed to agree.**
+`[measured 2026-08-10, boot `w209_ffc80f8_real`, rev `ffc80f8`]` `drained=71` equals the
+same boot's `framebuffer residency: 71 page(s)` and equals its `PRAMIN 21 + BAR2 50 = 71`
+first-writer census. ⇒ **every resident framebuffer page of that boot, and only those, was
+CPU-written and witnessed.** Arm E is excluded **by measurement**, not only by construction.
+`latched=31 / requeued=40` is the honest split: 31 pages belong to a live address space's page
+tables, 40 (GSP/WPR/instance blocks) belong to none and were carried, not discarded.
+
+⚠ **`bound=6254` and `unwitnessed=6254` are EQUAL, and it is an artefact of my own
+accumulator, not a coincidence.** The line sums across `rounds=2`: round 1 latches the root,
+decodes the subtree, and reports every leaf whose page it has not yet witnessed as
+`unwitnessed`; round 2 latches those pages and binds **the same leaves**. So the accumulated
+line counts one population twice under two names. ⊘ It is a defect of the *instrument*, not of
+the pass, and it is recorded here rather than patched, because patching it after the boot
+would change the line the boot produced. The per-round breakdown is the next instrument.
+
+### 16.74.6 ⊘ THE CONTROL — and it IS a control
+
+`w209_ffc80f8_ctl`, plane unselected, against the committed baseline:
+
+| | committed baseline | `w209 ctl` | |
+|---|---|---|---|
+| arrived / served / REFUSED | 448 / 362 / 86 | **448 / 362 / 86** | ✅ exact |
+| refusals by route (`GrCompute`) / `Ce` | 86 / 362 | **86 / 362** | ✅ — ⚠ 362 is the third reading of 362/364/362; ⊘ do NOT read it as the drift having gone away |
+| doorbells logged (`SERVED-LOCAL`) | 16 | **16** | ✅ |
+| rings declared | 26 | **26** | ✅ |
+| wall | `cuCtxCreate → 801` | **`ok cuInit(0)`, `FAIL cuCtxCreate(&ctx,0,d) -> operation not supported (801)`** | ✅ ★ and `cuInit` **succeeded** — the fact that makes this a control and not a flake |
+| FIRST-WRITER census | `PRAMIN 21 / BAR1 41 / BAR2 88 / EXEC 11706` | **identical** | ✅ |
+| `PT-DECODE` / `RING-PROJ` / `FWD-RING` / `walk:` / `rng=` / `CE-SUBMIT` | 0 | **0 / 0 / 0 / 0 / 0 / 0** | ✅ ★ the neutrality claim, now covering the new instrument |
+
+★★ **Stated as a diff rather than as a table of agreements**: normalising timestamps, the
+control's whole QEMU log differs from `w208`'s control in **two lines** — a register *read*
+count (`11467` → `11657`, poll jitter) and the guest's own semaphore GPA
+(`S:0x2ef9c004` → `S:0x2280d004`, a per-boot allocation). Its `dmesg` is **byte-identical**
+modulo kernel timestamps. ⊘ G1's witness insert is on the framebuffer-window write path, which
+the control exercises 88 + 41 + 21 pages' worth of — so the control is not neutral because the
+code is unreachable there; it is neutral because the *drain* is only called on the forwarding
+fall-through.
+
+### 16.74.7 ⊘ WHAT THIS BOOT DID NOT ESTABLISH
+
+- ⊘ **`GP_GET` never moved and no semaphore was armed.** R26's bar is untouched. The next
+  rung's subject is `CeSource::Constant` — the `SET_REMAP_*` method block
+  `kayfabe_abi::submit::ce` does not transcribe — and `CeExecutor::Ours`' missing fabricated
+  aperture. Both are named by `ce_copy`'s own doc and neither is an address-plane question.
+- ⊘ **Nothing about whether `bound=6254` is CORRECT.** The pass bound 6254 leaves and the boot
+  has no oracle for them. What it establishes is that the *ring's* VA resolves, which is
+  `read_gpfifo_ring` succeeding — one binding, evidenced by a consequence rather than by
+  reading the table back.
+- ⊘ **Nothing about the wall.** `RmInitAdapter failed! (0x25:0x65:1249)`, `cuInit → 999`, host
+  Xid 0 → 0, `GrCompute=0` on the real arm — every one identical to `w208`.
+- ⊘ **Nothing about GR, multi-process, or the completion tail.**
+- ⚠ **`Spine::refresh` clears `pt_learned`**, so the discovered index is rebuilt from scratch
+  on every graph change; all three `PT-DECODE` lines re-learn the same 30 pages. Attribution
+  is **not monotone across doorbells**, and the requeue is what makes that survivable. Noted,
+  not changed.
+- ⊘ **`w208`'s own cited evidence was UNTRACKED** — `traces/guest_boots/run_w208_797a6bc_*`
+  existed only in the bench's working tree and is in no commit. It is committed here beside
+  `w209`'s. ★ `boot_evidence_must_be_asserted_into_the_repo`, one rung after the rung that
+  wrote the rule.
+
+### 16.74.8 ★ THE NEXT INCREMENT, named
+
+1. **The operand, not the address.** `CeSource::Constant` is the guest's `memmgrMemSet` and it
+   is refused before submission. Either transcribe `SET_REMAP_*` (`kayfabe_abi::submit::ce`),
+   or execute a constant fill locally and say so — ⊘ **never** as a copy from VA 0, which
+   `ce_copy`'s doc already names as *"a plausible success that scrubs the destination with
+   whatever is at VA 0"*.
+2. **`CeExecutor::Ours` has no fabricated aperture in the isolate** (§12.3). That is the second
+   half of the same refusal and it is a separate build.
+3. **Per-round `PT-DECODE` numbers**, so `bound` and `unwitnessed` can never again be summed
+   into an accidental equality.
