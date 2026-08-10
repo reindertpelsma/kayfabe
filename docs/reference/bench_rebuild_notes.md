@@ -575,6 +575,157 @@ used for hardware measurement and for bench boots, in parallel with it.
 
 ---
 
+## 2026-08-10 — REBUILD #4, a FOURTH machine ("box3"/`vh2`). ★ The recipe held; ONE new trap, and it is in the recipe's own verification step
+
+**Why it happened.** A second bench was needed so the guest-RAM-crossing work (#233) could
+proceed without serialising against the agent holding `vh`. ⊘ `vh` (instance 47029542) was not
+touched: not sshed to, not built on, not booted on.
+
+### A. Provenance, stated first
+
+| | |
+|---|---|
+| box | vast.ai instance **47373001**, `ssh -p 61503 root@184.144.255.144` (alias **`vh2`**), machine 46449, **RTX 3060 (GA106, `10de:2504`) at `00:07.0`**, **5 cores / 49 GB / 186 GB free**, Ubuntu 22.04, kernel **6.8.0-59-generic**, `/dev/kvm` present |
+| host driver, as rented | **575.51.03 CLOSED**, apt/dpkg-managed, apt-`hold`ed |
+| host driver, after §B | **580.159.04 Open Kernel Module**, `Dual MIT/GPL`, `nvidia-smi` healthy |
+| source revision | **`954f926`** (branch `guest-ram-crossing`, forked from `master` at `954f926`) |
+| hypervisor | QEMU **10.2.4** + `scripts/build_qom_shim.sh`, stamped `kayfabe-rev:954f926513f2…` — ⚠ **only after §C** |
+| guest | Ubuntu 24.04 noble cloudimg, kernel **6.8.0-136-generic**, **stock unpatched** 580.159.04 open module, zero instrumented symbols in all four `.ko` |
+| wall time, blank → first captured bench boot | **~35 min** on 5 cores |
+
+### B. ★★ The apt-hold trap reproduced a THIRD time — it is a template property, settled
+
+`apt-mark showhold` before touching anything returned **the same nine packages** REBUILD #3
+recorded, in the same order (`libnvidia-{cfg1,common,compute,decode,encode,extra,fbc1,gl}-575`
++ `nvidia-driver-575`). Because §2's `apt-mark unhold` line was run first, the purge exited 0
+and the `.run` installed with **no "alternate driver installation" error at all**. Verified on
+content, not exit codes: `NVRM version: … Open Kernel Module … 580.159.04`, `modinfo` →
+`Dual MIT/GPL`, `dkms status` → `nvidia/580.159.04, 6.8.0-59-generic: installed`. The `open()`
+probe passed on all three nodes — **no `EIO`**, so this GA106 completes GFW boot.
+
+⇒ Three instances on three rentals of `--template_hash b7942f6bbc4374893ff66eb78145bbac`. Stop
+treating §2 as a maybe.
+
+### C. ★★★ NEW TRAP — the revision check CANNOT DISPLAY ITS OWN FAILURE
+
+`[measured 2026-08-10, box3]`. §0's prescribed verification is
+
+```
+strings … | grep -o 'kayfabe-rev:[0-9a-f-]*'
+```
+
+and on the first build of this box it printed, for both artifacts:
+
+```
+kayfabe-rev:
+```
+
+which reads as *"the stamp is present and the display clipped it"*. It is not. The build had
+**no provenance at all**. `crates/kayfabe-qemu-raw/build.rs:44` falls back to the literal string
+`unknown` when `git rev-parse` fails — and **none of `u`, `n`, `k`, `o`, `w` is in `[0-9a-f-]`**,
+so the character class matches zero trailing characters. ⊘ **A build stamped `unknown` and a
+build whose sha the grep merely clipped are indistinguishable in that output.** Re-run with
+`grep -o 'kayfabe-rev:[[:graph:]]*'` and it says `kayfabe-rev:unknown` outright.
+
+**The cause, and it is the C artifact's trap one repo over.** The bench tree was `rsync`ed with
+`--exclude=.git/`, so `/workspace/kayfabe` is not a git checkout, so `build.rs`'s `git rev-parse`
+fails and `git status --porcelain` reports clean — ⚠ **a tree with no `.git` is stamped
+`unknown` with NO `-dirty` suffix**, i.e. it looks *cleaner* than a real dirty checkout.
+`BUILD_REV.txt` was written by `git rev-parse HEAD` in the same tree and came out **zero bytes**,
+which is the same failure the C file records for `emulator-src-commit`.
+
+**Two fixes, both applied here:**
+1. `build.rs` already accepts **`KAYFABE_GIT_SHA`** (`crates/kayfabe-qemu-raw/build.rs:31`).
+   Export it from the *dev-box* checkout when the bench tree is a plain rsync. The rebuild took
+   ~3 min and both artifacts then stamped `kayfabe-rev:954f926513f2…`.
+2. **Verify with `[[:graph:]]`, never `[0-9a-f-]`.** A character class that excludes the failure
+   token turns a red result into a cosmetic one. This is the same shape as the C artifact's
+   *"an empty capture is evidence of NOTHING, not evidence of emptiness"*, relocated into a
+   `grep` pattern.
+
+⚠ CLAUDE.md's standing rule — *"any bench claim must carry the SOURCE REVISION it was measured
+at"* — is satisfied by a stamp only if the stamp can be read. This one could not.
+
+### D. ★★★ `kayfabe-rm-ladder` on a THIRD GA106 — still ONE line, still the handle
+
+`[measured]` `--gpu 0 --engines`, rev `954f926`, host 580.159.04 open, **exit 0**, transcript
+`bench_evidence/rm-ladder-box3-954f926.out`. Diffed against the committed box2 run:
+
+```
+diff bench_evidence/rm-ladder-box2-6e4f66f.out bench_evidence/rm-ladder-box3-954f926.out
+2c2
+< ok    R4 hClient         = 0xc1d00034      (box 2, rev 6e4f66f)
+> ok    R4 hClient         = 0xc1d00053      (box 3, rev 954f926)
+```
+
+★ **One line of 33**, and it is the RM-allocated handle §C of REBUILD #3 already identified as
+the one legitimately non-deterministic field. This is a **stronger** result than REBUILD #3's:
+that comparison spanned two boxes and two adjacent revisions, this one spans **three boxes and a
+revision gap of the whole L1 campaign** (`6e4f66f` → `954f926`). Every semaphore value, both
+CE-copy words, both channel tokens, all eight `R13b` engineType rows, the runlist set `{0,1,2,8}`
+and the three `Other(87)` refusals are **byte-identical**.
+
+⊘ **And what that scopes.** The ladder's default `--engines` run does **not** exercise R25
+(`OS_DESCRIPTOR`) or R26 (`alloc_channel_at`) — a byte-identical transcript across that revision
+gap is evidence those rungs are *not on this path*, not that they are unchanged.
+
+### E. The first bench boot on this box — `vh2a`
+
+`[measured]` `scripts/bench/boot_capture.sh vh2a`, rev `954f926`, evidence committed at
+`traces/guest_boots/run_vh2a_{qemu,dmesg,probe}.log` (34 dmesg lines, **31 NVRM**, gate
+`scripts/bench/assert_boot_evidence.sh` green).
+
+```
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x0000402c … status=0x00000056
+NVRM: nvCheckOkFailedNoLog: … NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA … @ gpu_user_shared_data.c:213
+nvkvm: doorbells: 2 arrived, 2 served, 0 REFUSED by name; last token 0x00010002
+nvkvm:   of the served: 2 local (CPU CE, end witnessed), 0 forwarded (host channel rung)
+nvkvm: isolates: 1 materialized, 1 live, 1 refusing (1 no-plane, 0 spawn-failed)
+```
+
+⇒ The box lands where HEAD is expected to land: past REBUILD #2/#3's `RmInitAdapter` walls, at
+**two locally-served CE doorbells and zero forwarded**. `0 forwarded` is correct and not a
+defect — `KAYFABE_SHIM_FEATURES` was empty, so the archive is the one master ships and the
+factory is `no-plane` by construction (`build_qom_shim.sh:29-33`).
+
+### F. Two gaps the 2026-08-08 survey left open, both CLOSED IN THE SEED
+
+`[measured]` on this box, folded into the cloud-init `user-data` rather than applied afterwards:
+
+1. **The guest's missing default route.** The 2026-08-08 section records *"The guest has NO
+   default route … nothing that needs a package can be installed in the guest until it is."*
+   The §6 netplan block now also carries `routes: [{to: default, via: 192.168.77.1, metric: 500}]`
+   and `nameservers`. ★ **metric 500 is the load-bearing detail**: during provisioning the guest
+   is on slirp, whose DHCP default route has a lower metric and must keep winning; on the tap the
+   static route is the only one. One config, both networks, no post-hoc edit.
+2. **`cuda.h`.** Fetched on the host from the CUDA 12.6 `cuda_cudart` redist and `scp`ed to
+   `/usr/include/cuda.h` during provisioning (601 `CUresult` occurrences — ⚠ that grep, not an
+   existence test: the guest has three *other* `cuda.h` files and all three are the PowerMac ADB
+   header). No toolkit, no guest network dependency at bench time.
+
+### G. ⚠ The vast offer's `driver_version` does NOT describe the VM you get
+
+`[measured 2026-08-10]`. Offer 46777986 and `vastai show instance 47373001 --raw` both report
+`driver_version = 580.95.05`. The VM booted on **575.51.03**. The same disagreement holds for the
+existing bench (`vh`/47029542 reports `580.95.05`). ⇒ that field describes the **host machine**;
+the "Ubuntu 22.04 VM" template ships its own driver. ⊘ **Never select a box on it, and never skip
+§B because it looks like the right version already.** Read `nvidia-smi` inside the instance.
+
+### H. Box state left as found
+
+`/workspace/kayfabe` — the tree at `954f926` (branch `guest-ram-crossing`), rsynced **without
+`.git`** (see §C), `target/release/{kayfabe-rm-ladder,libkayfabe_qemu_raw.a}` built.
+`/workspace/bench` — `guest.qcow2` (provisioned, stock 580 open module, powered down cleanly),
+`qemu-build/qemu-system-x86_64` stamped `kayfabe-rev:954f926513f2…`, `BUILD_REV.txt`,
+`guest_key{,.pub}`, `gssh`/`gscp` (slirp 2222, provisioning), `gssh_nv` (tap), `seed.iso`,
+`user-data`, `evidence/`, `run_vh2a_*`. `nvktap0` up at `192.168.77.1/24` with NAT (⚠ **not
+persistent — re-run §6's five lines after any host reboot**). `/root`: `dl/` (the 580 `.run`,
+`cuda.h`, the QEMU tarball, the cloudimg — **keep them**), and `dl.sh`, `rustup.sh`, `drvswap.sh`,
+`buildA.sh`, `buildB.sh`, `restamp.sh`, `tap.sh`, `openprobe.c` each with its log beside it.
+**No QEMU running** (`pgrep -x qemu-system-x86` empty, `ss -tln` shows no 2222/2223).
+
+---
+
 ## 2026-08-02 — the §8.2.2 measurement: a pushbuffer ring address is a GPU VA, not a GPA
 
 **[measured]** rev `c93930d`, vast instance **46529600** (RTX 3060 / GA106 `10de:2504`,
