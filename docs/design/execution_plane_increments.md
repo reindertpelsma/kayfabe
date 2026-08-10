@@ -11716,3 +11716,107 @@ wiring propagates the fault instead of swallowing it is so that `O` is *legible*
 silent. ⇒ Do not read `O` as a regression to be reverted without reading the tag first — a
 doorbell that reports `Served` on a copy that never retired is the defect §14.8 names, and
 refusing it is the correction.
+
+## §16.62 ★★★★★ BOOTED `s48_4f5b357_cwait` — **OUTCOME N**, and N is WEAKER than §16.61 wrote it. My own premise is refuted
+
+`[measured 2026-08-10, boot s48_4f5b357_cwait]`. Stamp `kayfabe-rev:4f5b357d0594…` read off
+**both** artefacts before the boot; bench liveness checked with `pgrep -x qemu-system-x86`
+**and** `ss -tln | grep 2223` rather than inherited. Evidence:
+`traces/guest_boots/run_s48_4f5b357_cwait_{qemu,dmesg,probe}.log`.
+
+### 16.62.1 THE RESULT — every plane identical, and the device logs are identical *as logs*
+
+| | `s47` | `s48` |
+|---|---|---|
+| ★ **doorbells** | 448 / 261 / 187 | **448 / 261 / 187** |
+| commands decoded / unserviced / distinct | 717 / 134 / 45 | **717 / 134 / 45** |
+| controls answered / distinct | 151 / 48 | **151 / 48** |
+| bridge refusals | 66 total, 6 distinct | **66 total, 6 distinct** |
+| isolates | 2 / 2 / 2 (2 no-plane) | **2 / 2 / 2 (2 no-plane)** |
+| RM records / record 331 / record 332 | 456 / `status=0` / `FREE` | **456 / `status=0` / `FREE`** |
+| `0xa06c0101` at `status=0` | ×3 | **×3** (`TSG_ALLOC_SEEN=3`, `TSG_SCHED_SEEN=3`) |
+| `CUP2_RC` | 1 | **1** |
+
+★ Stronger than a table: normalise both device logs (strip timestamps, fold every hex and
+decimal literal) and `diff` the sorted line-kind census — **they are identical, exit 0**. Not
+one line kind appeared, disappeared, or changed count. `O`, `P`, `Q` and `R` are all excluded.
+
+⊘ `Q` deserves a word because it looked live for ~20 s: the guest reached
+`ubuntu login:` and then the device log went quiet while `cup2` ran. That is not a hang and
+CLAUDE.md says so — *a slow boot is not a crash*. `CUP2_RC=1` arrived, same as every boot
+since `s45`.
+
+### 16.62.2 ⊘⊘⊘ AND HERE IS THE REFUTATION, AND IT IS OF §16.61.1 — MINE, WRITTEN HOURS EARLIER
+
+§16.61.1 opened *"WHAT MAKES THIS A LIVE-PATH RUNG AND NOT A DARK ONE"* and asserted:
+
+> on a **default** boot, every doorbell that `plan_doorbell` accepted now attempts a ring
+> read where it previously did nothing at all. […] that is **261** doorbells.
+
+**That is wrong, and the identical logs are what sent me back to check it.** `SharedDoorbell::ring`
+tries `try_ce_submission` **first** and returns its report if it is `Some`
+(`shim.rs:2732-2739`). That function declines — falls through to `SharedDevice::doorbell`,
+which is the only caller of `forward_ring` — under exactly one condition:
+
+```rust
+if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor {
+    return None; // the core can address AND serve this channel; it is not ours.
+}
+```
+
+and `local_ce_is_the_only_executor` is set to `isolate_plane == IsolatePlane::Stillborn`
+(`shim.rs:3849`). `[measured 2026-08-10, boot s48]` the isolate census reads
+`2 refusing (2 no-plane)` — **Stillborn**. ⇒ On a shipping-default boot that flag is `true`,
+`!true` is `false`, and the guard **never** declines on those grounds.
+
+★★★★ **So the only way to reach `forward_ring` on a default boot is through
+`try_ce_submission`'s three earlier `?`s** — `facts.vaspace?`, `facts.ring_va?`,
+`self.plane.upgrade()?`. Two of those three are *"this channel has no VA space"* and *"this
+channel declared no ring"*, which are precisely the shapes `read_gpfifo_ring` answers
+`Ok(None)` for. ⇒ **On the shipping build the wiring can only be reached by a channel that
+has no ring to read.** It is inert by construction, not by accident, and `s48` could not have
+shown it working whatever the guest did. ⊘ This paragraph is a **source reading**
+(`shim.rs:2732-2739, 2874-2877, 3849`) with one boot fact in it (the Stillborn census line);
+it is not itself a measurement, and §16.62.3 says what it would take to make it one.
+
+⊘ This is the brief's own horizon note arriving one layer lower than expected: *"the isolate
+plane is `Stillborn` unless a non-default feature is on, and flipping it regresses the CE
+path that works today"* (§14.24). The completion observer is behind the **same** gate as GR
+compute, and `w201` does not move that gate — correctly, because moving it is the three-way
+client-kind routing key, which is design and is not this rung.
+
+### 16.62.3 ⚠ AND THE INSTRUMENT CANNOT SETTLE IT EITHER — a bounded log read as a census
+
+I reached for the doorbell log to check how many of the 261 served doorbells were local:
+
+```
+doorbells: 448 arrived, 261 served, 187 REFUSED by name; last token 0x00010001 (16 logged)
+```
+
+All **16** logged are `SERVED-LOCAL [CpuCe::ServedLocally]`, in `s47` and in `s48`. ⊘ **16 of
+448 is a bounded sample, not a census** (`a_small_count_is_not_a_small_event`, and the
+coordinator's own warning about membership-versus-distribution this same night). The census
+line counts `served` **without splitting it by `DoorbellReport` kind**, so *"how many of the
+261 reached `SharedDevice::doorbell`"* is `[NOT MEASURED]` and cannot be recovered from any
+committed log.
+
+⇒ **The next step here is an instrument, not a conclusion**: split the `served` counter by
+report kind (`Served` vs `ServedLocally`). That is a census change, it costs nothing, and it
+converts *"is the forwarding path reached at all on a default boot?"* from a source reading
+into a number a boot prints. ⊘ Until then, §16.62.2's answer stands on `ogkm`-style code
+reading alone, and is tagged as such.
+
+### 16.62.4 WHAT `s48` DID ESTABLISH, stated at its real strength
+
+- ★★★ **The wiring is SAFE to carry on the shipping path**: byte-identical device report,
+  identical guest plane, `cup2` unchanged. Residual **(4)** — *"a doorbell whose ring now
+  faults refuses where it previously reported `Served`"* — **did not bite**, and residual
+  **(5)** — `CeShellState::vmm` held across a possible `PoolGate::wait_for_return` park — did
+  not deadlock. Both remain `[NOT MEASURED]` **in the sense that matters**, because §16.62.2
+  says the code they describe was almost certainly not executed.
+- ★★★ **The severance is closed in the tree**, which is what it was for:
+  `doorbell_reaches_the_completion_observer.rs` is **0/2 at `a12456e`, 3/3 at `e7bed44`**,
+  re-verified on this base rather than inherited. `HostRmBackend::await_semaphore` now has a
+  production caller; whether a *default* build can reach it is §16.62.2's separate answer.
+- ⊘ **It did NOT establish that a guest doorbell reaches a real host completion on the bench.**
+  Saying otherwise would be the five-rung-old claim this boot was run to test, restated.
