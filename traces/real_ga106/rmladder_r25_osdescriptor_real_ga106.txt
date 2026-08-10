@@ -52,3 +52,31 @@ CapEff:	0000000000000000
 CapBnd:	000001ffffffffff
 CapAmb:	0000000000000000
 NoNewPrivs:	1
+
+################################################################################
+# RE-RUN AT THE SHIPPED HEAD, 2026-08-10.
+#
+# ⚠ The four arms above were measured at `REV_UNDER_TEST=40d44db84`, and the tree
+# then moved to `8dac2705d` for docs, claim-ledger attributions and one clippy fix
+# in a test. That delta LOOKS inert — which is exactly the reading CLAUDE.md's
+# rev-stamp trap punishes, twice. So it was re-run rather than assumed, and the
+# stamp below is read off the binary, not off the checkout.
+################################################################################
+
+--- NEGATIVE CONTROL, euid 0
+REV_UNDER_TEST=8dac2705d
+info  R25 osdesc probe   = GPU 0, euid 0 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE  [NEGATIVE CONTROL: the memfd is deliberately NOT written, so a MISMATCH AT WORD 0 is the PASS]
+ok    R25 neg control    = the memfd was never written and the CE delivered 0x00000000 at word 0 where the pattern would have been 0x5eed0001 — the comparison CAN fail, so the positive run's agreement is a measurement
+RC=0
+
+--- POSITIVE, euid 0
+REV_UNDER_TEST=8dac2705d
+info  R25 osdesc probe   = GPU 0, euid 0 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE
+★     R25 osdesc         = placed at 0x0000000300400000 AS ASKED, CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL — guest-RAM-shaped memory reaches the host GPU's MMU
+RC=0
+
+--- POSITIVE, euid 65534, CapEff=0, NoNewPrivs=1
+REV_UNDER_TEST=8dac2705d
+info  R25 osdesc probe   = GPU 0, euid 65534 — a sealed memfd, described to RM, mapped at 0x0000000300400000, read by a real CE
+★     R25 osdesc         = placed at 0x0000000300400000 AS ASKED, CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL — guest-RAM-shaped memory reaches the host GPU's MMU
+RC=0
