@@ -777,46 +777,32 @@ kayfabe_util::assert_send_sync!(GpCursor, CeUtilsChannel, CeUtilsRun, CeUtilsRef
 // ★★★★★ §16.79 — THE METHOD STREAM, READ AND NOT INTERPRETED
 // =====================================================================================
 
-/// ★★★★★ **Dump the raw method headers of the submission this doorbell is about, WITHOUT
-/// deciding what any of them mean.**
+/// What one bounded look at a submission's ring produced. ⊘ Numbers and words only — this
+/// struct carries no interpretation of any of them.
+struct ReadMethods {
+    ranges: Vec<kayfabe_arch::PushRange>,
+    methods: Vec<(u32, Vec<u32>)>,
+    total: usize,
+    entries: u32,
+    start_index: u32,
+    /// The walk's last refusing resolution, kept so a caller that resolves a further address
+    /// out of these methods reuses **the same** resolver state rather than opening a second.
+    last: Option<(GpuVa, CeResolve)>,
+}
+
+/// ★★ **The one ring read + method decode both readers share.**
 ///
-/// # Why this exists, and why it is not [`run_submission`]
-///
-/// `[measured 2026-08-10, boots `w215_79ed443_ctl` / `w216_f5f55ad_mcbudget`]` `cuCtxCreate`
-/// waits on GrCompute channel token `0x00000007` and rings it 86 times, while `cup2`
-/// performs **zero kernel launches** — no `cuModuleLoad`, no PTX, nothing to execute. Two
-/// readings fit: the traffic is user compute, or it is **golden-context initialisation**
-/// (context-buffer setup and a report semaphore). They ask for completely different rungs,
-/// and ⊘ **the channel's class cannot tell them apart** — `AMPERE_COMPUTE_B` is allocated
-/// during context creation whether or not anything is ever launched.
-///
-/// Only the method stream can. [`run_submission`] cannot be asked: it is the CE executor's
-/// reader, it decodes against the CE codec, and on a GR ring every method comes back
-/// [`kayfabe_arch::PushMethod::Opaque`] by class gating — *"no launch found"* out of a
-/// decoder that could not have found one is not evidence.
-///
-/// # ⊘ What this function refuses to do
-///
-/// It does **not** decode, classify, or name a single method. It reports the header word,
-/// the method address the header carries, and the argument words — as numbers. A reader
-/// joins them to `clc7c0.h` offline. ⊘ That is the whole discipline: a dump that said
-/// "SET_OBJECT" would be this port's opinion about a GR class it has no codec for, and the
-/// question being asked is precisely whether our opinion of this stream is right.
-///
-/// It advances nothing: `cursor` is taken by value and no state is written back, so calling
-/// this on a doorbell the port then refuses leaves the channel exactly as it was.
-///
-/// # Errors
-/// [`CeUtilsRefusal`] when the ring or a pushbuffer range will not resolve — the same walk,
-/// the same names, as [`run_submission`]'s.
-pub fn dump_submission_methods(
+/// ⊘ Extracted rather than copied. [`dump_submission_methods`] and
+/// [`observe_declared_completion`] look at the same bytes for different reasons, and two
+/// copies of this loop would be two descriptions of the wire that agree until they do not —
+/// which is the failure this campaign has paid for more than any other.
+fn read_submission_methods(
     ce: &mut CePlane<'_>,
     pb: &dyn PushbufferAbi,
     vmm: &mut dyn Vmm,
     chan: CeUtilsChannel,
     cursor: GpCursor,
-    max_methods: usize,
-) -> Result<String, CeUtilsRefusal> {
+) -> Result<ReadMethods, CeUtilsRefusal> {
     let mut last: Option<(GpuVa, CeResolve)> = None;
     let entries = if chan.ring_entries == 0 {
         RING_ENTRIES_FALLBACK
@@ -870,6 +856,121 @@ pub fn dump_submission_methods(
         methods.extend(decode_methods(pb, &buf));
         total += len;
     }
+    Ok(ReadMethods {
+        ranges,
+        methods,
+        total,
+        entries,
+        start_index,
+        last,
+    })
+}
+
+/// ★★★★★ **THE DECLARE HALF OF THE COMPLETION OBSERVER** — decode the completion this
+/// submission declares, and resolve its address **once**, here, on the thread that already
+/// holds the locks a resolution needs.
+///
+/// Returns `Ok(None)` when the submission declares no report semaphore at all — which is a
+/// fact about the guest's bytes, not a failure, and is what every CE-only push answers.
+///
+/// # ⊘ What this function may NOT do, by construction
+///
+/// It performs **reads only**. It writes no memory, raises no interrupt, advances no cursor
+/// and moves no engine. The `Site` it hands back is a *statement about where the address
+/// went*, and [`crate::completion_watch::Site::Unresolved`] is a first-class answer carrying
+/// the walk's own name for the refusal — never a zero, never a retry against a second
+/// resolver.
+///
+/// # ⚠ The dependency this function makes visible rather than fakes
+///
+/// A declared VA that the address table cannot bind resolves to
+/// [`crate::completion_watch::Site::Unresolved`] and the observer then reads **nothing**.
+/// That is the correct outcome and it names the missing plane; a completion observer that
+/// papered over it with a fabricated page would be observing its own fabrication.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] if the ring or the pushbuffer itself could not be read — i.e. the
+/// same refusals [`dump_submission_methods`] reports, from the same read.
+pub fn observe_declared_completion(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+) -> Result<
+    Option<(
+        crate::completion_watch::DeclaredCompletion,
+        crate::completion_watch::Site,
+    )>,
+    CeUtilsRefusal,
+> {
+    let mut look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    let Some(decl) = crate::completion_watch::decode_report_semaphore(&look.methods) else {
+        return Ok(None);
+    };
+    // ★ The SAME resolver state the ring read used — `last` carries forward — so the site
+    // and the ring cannot come from two different walks of two different instants.
+    let site = match WalkOperands::new(ce, &mut look.last).resolve_one(decl.va.0) {
+        Ok((op, _left)) => match op.residency.plane {
+            CpuPlane::GuestRam => crate::completion_watch::Site::GuestRam { gpa: op.addr.0 },
+            CpuPlane::Fb => crate::completion_watch::Site::Framebuffer { phys: op.addr.0 },
+        },
+        Err(fault) => crate::completion_watch::Site::Unresolved(match &look.last {
+            Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
+            None => format!("{fault:?}"),
+        }),
+    };
+    Ok(Some((decl, site)))
+}
+
+/// ★★★★★ **Dump the raw method headers of the submission this doorbell is about, WITHOUT
+/// deciding what any of them mean.**
+///
+/// # Why this exists, and why it is not [`run_submission`]
+///
+/// `[measured 2026-08-10, boots `w215_79ed443_ctl` / `w216_f5f55ad_mcbudget`]` `cuCtxCreate`
+/// waits on GrCompute channel token `0x00000007` and rings it 86 times, while `cup2`
+/// performs **zero kernel launches** — no `cuModuleLoad`, no PTX, nothing to execute. Two
+/// readings fit: the traffic is user compute, or it is **golden-context initialisation**
+/// (context-buffer setup and a report semaphore). They ask for completely different rungs,
+/// and ⊘ **the channel's class cannot tell them apart** — `AMPERE_COMPUTE_B` is allocated
+/// during context creation whether or not anything is ever launched.
+///
+/// Only the method stream can. [`run_submission`] cannot be asked: it is the CE executor's
+/// reader, it decodes against the CE codec, and on a GR ring every method comes back
+/// [`kayfabe_arch::PushMethod::Opaque`] by class gating — *"no launch found"* out of a
+/// decoder that could not have found one is not evidence.
+///
+/// # ⊘ What this function refuses to do
+///
+/// It does **not** decode, classify, or name a single method. It reports the header word,
+/// the method address the header carries, and the argument words — as numbers. A reader
+/// joins them to `clc7c0.h` offline. ⊘ That is the whole discipline: a dump that said
+/// "SET_OBJECT" would be this port's opinion about a GR class it has no codec for, and the
+/// question being asked is precisely whether our opinion of this stream is right.
+///
+/// It advances nothing: `cursor` is taken by value and no state is written back, so calling
+/// this on a doorbell the port then refuses leaves the channel exactly as it was.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] when the ring or a pushbuffer range will not resolve — the same walk,
+/// the same names, as [`run_submission`]'s.
+pub fn dump_submission_methods(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    max_methods: usize,
+) -> Result<String, CeUtilsRefusal> {
+    let ReadMethods {
+        ranges,
+        methods,
+        total,
+        entries,
+        start_index,
+        ..
+    } = read_submission_methods(ce, pb, vmm, chan, cursor)?;
 
     // ---- 3. THE REPORT — numbers only. -------------------------------------------------
     let mut out = format!(

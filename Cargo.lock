@@ -278,6 +278,7 @@ dependencies = [
  "kayfabe-mocks",
  "kayfabe-rmrpc",
  "kayfabe-rt",
+ "kayfabe-shell",
  "kayfabe-vmm",
  "kayfabe-vmm-qemu",
 ]

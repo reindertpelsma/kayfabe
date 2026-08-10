@@ -2936,6 +2936,128 @@ struct CeShellState {
     /// life. Bounded by [`GR_PUSHBUFFER_DUMPS_MAX`]: `cuCtxCreate` rings one GR channel 86
     /// times and the first submissions are the ones that decide the question.
     gr_dumps: std::sync::Mutex<u32>,
+    /// ★★★★★ **THE COMPLETION OBSERVER'S WATCH LIST** — the completions the guest DECLARED,
+    /// and what has been read at their addresses.
+    ///
+    /// Written by the vCPU thread (declare, a map insert) and read by the reactor thread
+    /// (observe). ⊘ It is an `Arc` because those are two threads, and a leaf mutex because
+    /// nothing beneath it may block — see `kayfabe_rt::completion_watch`'s module docs for
+    /// the split and for the three things the observer is structurally unable to do.
+    watch: std::sync::Arc<kayfabe_rt::completion_watch::WatchList>,
+    /// ★★★★★ The observer's reactor thread, once started. See [`Regs::attach_ram`].
+    #[cfg(feature = "host-isolates")]
+    observer: std::sync::Mutex<Option<ObserverThread>>,
+}
+
+/// ★★★★★ **THE FIRST PRODUCTION `Reactor` IN THIS TREE** — the completion observer's loop.
+///
+/// `docs/design/completion_wait_architecture.md` §0.1 measured `Reactor::new`,
+/// `Executor::new`, `register_source`, `arm_counter`, `arm_channel`, `deliver_completions`
+/// and `poll_completions` at **zero production call sites**, and §7 R3 states the
+/// consequence: *"the owner's suspected shape (one thread, N per-op registrations) is the
+/// right one **and it already exists**. The work is a composition root, not a design."*
+/// This is that composition root, built for the one job that needs it.
+///
+/// # ⊘ What runs on which thread, and why that is the whole point
+///
+/// The vCPU thread **declares** (a decode, one address resolution, a map insert — see
+/// `SharedDoorbell::declare_gr_completion`) and returns. This thread **observes**: it blocks
+/// in a real `epoll_wait` on the reactor's own control descriptor, and between waits it
+/// reads the declared addresses out of guest RAM through its own `QemuVmm` handle.
+///
+/// ⚠ **Nine blocking sites on the guest-facing path stay nine.** Nothing here is ever
+/// entered from a vCPU, and nothing a vCPU calls waits on it.
+///
+/// # ⚠ Reading guest RAM off the vCPU thread — the argument, stated rather than assumed
+///
+/// `QemuVmm` is `Clone + Send + Sync` (`kayfabe_vmm_qemu`'s own `assert_send_sync!`), holds
+/// only an `Arc<Plane>` with leaf mutexes, contains no raw pointer, and calls no `bql_lock`
+/// — the adapter's crate docs state there is not one call to it in the whole crate. The C
+/// side is a `memcpy` off `memory_region_get_ram_ptr` guarded by `memory_region_is_ram`
+/// (`qemu/hw/misc/nvkvm/nvkvm.c:1159`), chosen over `address_space_rw` precisely so it takes
+/// no global lock. The copy itself runs **inside** the plane's `view` mutex.
+///
+/// ⊘ What that argument does NOT cover, and what the shutdown ordering exists for: the
+/// foreign region's liveness rests on a `memory_region_ref` taken in topology callbacks that
+/// do arrive under the BQL. So this thread is stopped **and joined** in
+/// [`Regs::detach_ram`], before the handle is dropped — a reader still running against a
+/// machine that has released its slots is the one hazard here, and it is closed by ordering
+/// rather than by hope.
+/// How long the reactor blocks in one `epoll_wait` before sweeping the watch list anyway.
+///
+/// ⊘ **Not a busy-poll and not a spin.** The loop is woken by a real descriptor whenever a
+/// completion is declared; this bound exists only so a DEADLINE can be reported by a thread
+/// nobody is going to poke again. `kayfabe-linux-raw` has no `timerfd` — deliberately, and
+/// its own module docs say the day it becomes real is *"when something outside a test has to
+/// be woken by a deadline nobody is waiting on"*. ⚠ That day is this loop; a `timerfd` source
+/// is the correct successor and this constant is the stand-in, named as one.
+#[cfg(feature = "host-isolates")]
+const OBSERVER_TICK_MS: u32 = 250;
+
+/// ★★★★★ **THE OBSERVE HALF.** One thread: block in `epoll_wait`, then read every declared
+/// address out of guest RAM and say what is there.
+///
+/// # ⊘ It is handed a READER and nothing else
+///
+/// The closure below is `(gpa, &mut [u8; 4]) -> Result<(), String>`. `WatchList::sweep`
+/// cannot write, cannot raise, and cannot resolve — those capabilities are not in the type
+/// it is given. That is the structural guarantee behind *"the VMM owes the notification, not
+/// the write"*: this code is unable to forge a completion even if a later edit wanted it to.
+///
+/// # ⚠ The one refusal it must never swallow
+///
+/// A `gpa_read` that fails becomes `Verdict::ReadRefused`, which is a statement about the
+/// **instrument**. It is never folded into `NotObserved`, because *"we could not look"* and
+/// *"we looked and it was not there"* are the two answers this whole rung exists to keep
+/// apart.
+#[cfg(feature = "host-isolates")]
+fn observer_loop(
+    reactor: &mut kayfabe_shell::Reactor,
+    watch: &std::sync::Arc<kayfabe_rt::completion_watch::WatchList>,
+    stop: &std::sync::atomic::AtomicBool,
+    mut vmm: kayfabe_vmm_qemu::QemuVmm,
+) {
+    use kayfabe_vmm::Vmm as _;
+    while !stop.load(std::sync::atomic::Ordering::Acquire) {
+        // ⊘ ONE wait per iteration, so the sweep below runs between every pair of waits.
+        // `run_with` returns `Ok(())` when the budget is spent OR when shutdown was
+        // requested; the two are told apart by asking the reactor, not by the return value.
+        let outcome = reactor.run_with(kayfabe_linux_raw::PollTimeout::Millis(OBSERVER_TICK_MS), 1);
+        let verdicts = watch.sweep(std::time::Instant::now(), &mut |gpa, buf| {
+            vmm.gpa_read(gpa, buf).map_err(|e| format!("{e:?}"))
+        });
+        for v in &verdicts {
+            eprintln!("kayfabe: {}", v.line());
+        }
+        match outcome {
+            Ok(()) => {}
+            // ★ The F1 refusal is LOUD and stops the loop rather than spinning. It cannot
+            // fire vacuously: it means a ready token produced no work 16 waits running.
+            Err(fault) => {
+                eprintln!(
+                    "kayfabe: COMPLETION-OBSERVER ⊘ REACTOR FAULT {fault:?} — the loop \
+                     STOPPED. Every later COMPLETION-WATCH line is absent by construction."
+                );
+                return;
+            }
+        }
+    }
+}
+
+#[cfg(feature = "host-isolates")]
+#[derive(Debug)]
+struct ObserverThread {
+    handle: kayfabe_shell::ReactorHandle,
+    /// The counter source the vCPU pokes when it declares something new. ⊘ A real armed
+    /// registration, so the loop is a reactor and not a sleep: `arm_counter` had zero
+    /// production callers before this.
+    poke: std::sync::Arc<kayfabe_linux_raw::Notifier>,
+    /// ⊘ OURS, not the reactor's. `Reactor::run_with` answers `Ok(())` both for *"the wait
+    /// budget is spent"* and for *"shutdown was requested"*, and this loop must tell those
+    /// apart to know whether to sweep again. Reading the reactor's own flag is not offered,
+    /// and inventing a second meaning for its return value would be a guess.
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    join: Option<std::thread::JoinHandle<()>>,
 }
 
 /// ★★★★ **§16.65 — how the arriving doorbells PARTITION by the engine of the channel they
@@ -3469,6 +3591,165 @@ impl SharedDoorbell {
         }
     }
 
+    /// ★★★★★ **DECLARE the completion this route-refused submission asks for.**
+    ///
+    /// The whole of what the vCPU thread does for the observer: one bounded ring read (the
+    /// same one [`SharedDoorbell::dump_gr_pushbuffer_once`] performs, through the same
+    /// helper), a decode of the guest's own `SET_REPORT_SEMAPHORE` operand, **one**
+    /// resolution of its address, and a map insert. No host verb, no pool checkout, no
+    /// blocking call, nothing that can park. The nine blocking sites on this path stay nine.
+    ///
+    /// ⊘ **Every arm that cannot declare SAYS SO with its reason, once.** An absent line
+    /// would read as *"the guest declared no completion"*, which is the one thing it must
+    /// never be mistaken for.
+    fn declare_gr_completion(&self, token: u64, facts: &kayfabe_rt::device::CeChannelFacts) {
+        // ★★★ FIRST, above every gate: "the observer was reached" is a different fact from
+        // "the observer declared something", and a single counter cannot separate them.
+        self.ce.watch.attempt();
+        let head = format!("kayfabe: COMPLETION-DECLARE token={token:#010x} ");
+        let say_once = |why: String| {
+            let mut n = self.ce.gr_dumps.lock().unwrap_or_else(|e| e.into_inner());
+            if *n <= GR_PUSHBUFFER_DUMPS_MAX {
+                *n += 1;
+                eprintln!("{head}⊘ NOT DECLARED: {why}");
+            }
+        };
+        let (Some(vaspace), Some(ring_va)) = (facts.vaspace, facts.ring_va) else {
+            say_once(format!(
+                "the channel declared vaspace={:?} ring_va={:?}",
+                facts.vaspace, facts.ring_va
+            ));
+            return;
+        };
+        let Some(plane) = self.plane.upgrade() else {
+            say_once("the register plane is gone".into());
+            return;
+        };
+        let root = match SharedDoorbell::doorbell_root(
+            &plane,
+            facts.client,
+            vaspace,
+            facts.vas_pdb.map(|p| p.0),
+        ) {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+            DoorbellRoot::Absent => {
+                say_once("this channel has no VA space root at all".into());
+                return;
+            }
+            DoorbellRoot::Underivable(pdb, why) => {
+                say_once(format!(
+                    "root underivable from pdb 0x{pdb:x}: {}",
+                    why.kind()
+                ));
+                return;
+            }
+        };
+        let chan = kayfabe_rt::ceutils::CeUtilsChannel {
+            client: facts.client,
+            vaspace,
+            ring_va,
+            ring_entries: facts.ring_entries,
+        };
+        // ⊘ The channel's OWN cursor, read and NOT written — this must not move a submission
+        // the port is about to refuse.
+        let cursor = *self
+            .ce
+            .cursors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(facts.proc.0, facts.chan.0))
+            .unwrap_or(&kayfabe_rt::ceutils::GpCursor::default());
+        let out = {
+            let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(vmm) = held.as_mut() else {
+                drop(held);
+                say_once("the memory plane is not attached".into());
+                return;
+            };
+            let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+            plane.ce_session_with_root(&root, demand, |ce| {
+                self.device.with_pushbuffer(|pb| {
+                    kayfabe_rt::ceutils::observe_declared_completion(ce, pb, vmm, chan, cursor)
+                })
+            })
+            // ⚠ Every lock this arm took — the memory-plane mutex, the plane session and
+            // the rank-0 device read — is released HERE, before anything is declared and
+            // before anything is printed. The declare below runs lock-free by construction.
+        };
+        let (decl, site) = match out {
+            Ok(Some(pair)) => pair,
+            // ⊘ A submission that declares no report semaphore. A FACT about the guest's
+            // bytes, not a failure — every CE-only push answers exactly this.
+            Ok(None) => return,
+            Err(refusal) => {
+                say_once(format!(
+                    "the submission could not be read: {}",
+                    refusal.describe()
+                ));
+                return;
+            }
+        };
+        let key = kayfabe_rt::completion_watch::WatchKey {
+            proc: facts.proc,
+            chan: facts.chan,
+            va: decl.va.0,
+        };
+        let before = self.ce.watch.stats().declared;
+        self.ce
+            .watch
+            .declare(key, decl, site.clone(), std::time::Instant::now());
+        if self.ce.watch.stats().declared > before {
+            // ★ Printed on the FIRST declaration of each completion only — 86 doorbells on
+            // one channel are one completion, and 86 identical lines would bury it.
+            // ★★★ POKE THE OBSERVER — a real write to a real armed eventfd, from the vCPU
+            // thread, with **no ranked lock held**: the session, the memory-plane mutex and
+            // the rank-0 device read were all released above, before the declare. `signal`
+            // asserts exactly that (R1), so a future edit that moves this under a lock
+            // panics loudly instead of deadlocking quietly.
+            self.poke_observer();
+            eprintln!(
+                "{head}proc={} chan={} engine={} → DECLARED va=0x{:x} payload=0x{:08x} \
+                 awaken={} four_words={} op={} subch={} class=0x{:04x} site={site:?} \
+                 (⊘ the observer WATCHES this address; it will never write it)",
+                facts.proc.0,
+                facts.chan.0,
+                facts.engine_name(),
+                decl.va.0,
+                decl.payload,
+                u8::from(decl.awaken),
+                u8::from(decl.four_words),
+                decl.operation,
+                decl.subch,
+                decl.class_id,
+            );
+        }
+    }
+
+    /// ★ Tell the observer's reactor there is something new to look at.
+    ///
+    /// ⊘ Fire-and-forget by design: a saturated counter (`EAGAIN`) means nobody has drained
+    /// this source in 2^64 signals, which is the observer being gone — and the observer
+    /// being gone must not turn a doorbell into a failure. The declaration is already in the
+    /// watch list either way; the poke only decides whether it is looked at now or at the
+    /// next tick.
+    #[cfg(feature = "host-isolates")]
+    fn poke_observer(&self) {
+        if let Some(o) = self
+            .ce
+            .observer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            let _ = o.poke.signal();
+        }
+    }
+
+    /// No observer in this archive; see [`Regs::start_completion_observer`].
+    #[cfg(not(feature = "host-isolates"))]
+    #[allow(clippy::unused_self)]
+    fn poke_observer(&self) {}
+
     fn try_ce_submission(
         &self,
         token: u64,
@@ -3557,6 +3838,27 @@ impl SharedDoorbell {
             // writes no state, and takes the memory-plane lock only here, before the CE path
             // below takes it. A refusal that returns above this point is unaffected.
             self.dump_gr_pushbuffer_once(token, &facts);
+            // ★★★★★ **THE COMPLETION OBSERVER — DECLARE.**
+            //
+            // The refusal below is right and stays: this executor cannot serve a GR
+            // submission and a true refusal outranks a forwarded no-op (§16.80.1). But
+            // refusing is not the same as being blind. `[measured 2026-08-10, boot
+            // `w218_cb6adcc_grfull`]` the pushbuffer this doorbell carries ends in
+            // `SET_REPORT_SEMAPHORE` naming GPU VA `0x2_0440fff0`, payload `1`,
+            // `AWAKEN_ENABLE = 0` — so what `cuCtxCreate` is waiting for is **a value
+            // appearing at an address**, and that is a thing a VMM can WATCH without
+            // serving anything.
+            //
+            // ⊘ **This declares; it never completes.** The observer has no writer and
+            // raises no vector — the payload is a literal immediate in the guest's own
+            // bytes, so writing it here without running the work is precisely the
+            // credit-shortcut the C artifact named and refused. The verdict is emitted on
+            // the reactor thread; see `Regs::spawn_completion_observer`.
+            //
+            // ⚠ Runs on EVERY route-refused doorbell, unlike the bounded dump above: a
+            // declaration is idempotent (first one wins) and a watch that was declared only
+            // for the first two doorbells would be a watch on a sample, not on the channel.
+            self.declare_gr_completion(token, &facts);
             return Some(refused(
                 token,
                 kayfabe_device::FaultTag("Route::NotACopyEngineChannel"),
@@ -4993,6 +5295,19 @@ impl Regs {
         Arc::clone(&self.device)
     }
 
+    /// ★★★ **The completion observer's instruments** — an observability seam, in the same
+    /// sense [`Regs::audit`] is, and the only way a test can ask whether a guest doorbell
+    /// REACHED the observer.
+    ///
+    /// ⊘ Hands out the list itself rather than a snapshot, because the two numbers that
+    /// matter (`attempts` and `declared`) must be read from one instant: a test that read
+    /// them from two calls could see a doorbell between them and attribute the gap to the
+    /// wiring.
+    #[must_use]
+    pub fn completion_watch(&self) -> Arc<kayfabe_rt::completion_watch::WatchList> {
+        Arc::clone(&self.ce.watch)
+    }
+
     /// ★★★ **Stage Q5.** Give the register plane the realized machine's guest memory.
     ///
     /// # Why it is a separate call and not a constructor argument
@@ -5020,7 +5335,123 @@ impl Regs {
         // memory plane does not exist at device realize.
         *self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner()) = Some(shim.machine().vmm());
         self.report_stated_guest_ram_at(shim, Self::ATTACH);
+        // ★★★★★ The completion observer's reactor thread. Started HERE and not at realize,
+        // for the same reason the memory plane is attached here: before this instant there
+        // is no guest memory to observe an address in.
+        self.start_completion_observer(shim.machine().vmm());
     }
+
+    /// ★★★★★ **Start the completion observer's reactor loop.** See [`ObserverThread`].
+    ///
+    /// ⊘ Idempotent and quiet: a second attach finds a live thread and returns. Every
+    /// refusal SAYS SO — an observer that failed to start and printed nothing would be
+    /// indistinguishable from one that started and saw nothing, which is the exact defect
+    /// class this file's §16.79 dump was written against.
+    #[cfg(feature = "host-isolates")]
+    fn start_completion_observer(&self, vmm: kayfabe_vmm_qemu::QemuVmm) {
+        let mut slot = self.ce.observer.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return;
+        }
+        let build = || -> Result<ObserverThread, String> {
+            let poller = std::sync::Arc::new(
+                kayfabe_linux_raw::Poller::create().map_err(|e| format!("{e:?}"))?,
+            );
+            let registrar = std::sync::Arc::new(
+                kayfabe_shell::Registrar::new(poller).map_err(|e| format!("{e:?}"))?,
+            );
+            // ★ A REAL armed registration, not a bare timeout loop: `arm_counter` had zero
+            // production callers until this line. The vCPU signals it on every NEW
+            // declaration, so a completion is looked at promptly rather than at the next
+            // tick.
+            let src = self
+                .device
+                .register_source(kayfabe_core::reactor::SourceKind::Notify);
+            let poke = registrar.arm_counter(src).map_err(|e| format!("{e:?}"))?;
+            let (tx, _rx) = kayfabe_rt::inbox::inbox();
+            let parker = std::sync::Arc::new(kayfabe_rt::executor::Parker::new());
+            let (mut reactor, handle) = kayfabe_shell::Reactor::new(
+                registrar,
+                tx,
+                parker as std::sync::Arc<dyn kayfabe_rt::executor::ExecutorWaker>,
+            )
+            .map_err(|e| format!("{e:?}"))?;
+            let watch = std::sync::Arc::clone(&self.ce.watch);
+            let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let stop_thread = std::sync::Arc::clone(&stop);
+            let join = std::thread::Builder::new()
+                .name("kayfabe-completion-observer".into())
+                .spawn(move || observer_loop(&mut reactor, &watch, &stop_thread, vmm))
+                .map_err(|e| format!("{e}"))?;
+            Ok(ObserverThread {
+                handle,
+                poke,
+                stop,
+                join: Some(join),
+            })
+        };
+        match build() {
+            Ok(o) => {
+                eprintln!(
+                    "kayfabe: COMPLETION-OBSERVER started — one thread, one epoll, one armed \
+                     counter source. ⊘ It READS the addresses the guest declared and can \
+                     write none of them."
+                );
+                *slot = Some(o);
+            }
+            Err(why) => eprintln!(
+                "kayfabe: COMPLETION-OBSERVER ⊘ NOT STARTED: {why}. Every COMPLETION-WATCH \
+                 line below this point is therefore ABSENT BY CONSTRUCTION and must not be \
+                 read as 'nothing was declared'."
+            ),
+        }
+    }
+
+    /// Without the host-isolate feature there is no `kayfabe-shell` in this archive's
+    /// dependency graph, so there is no reactor to start. ⊘ Stated as a no-op with a name
+    /// rather than an `#[cfg]` around the call site, so the shipping build's behaviour is
+    /// visible where the observer is started.
+    #[cfg(not(feature = "host-isolates"))]
+    #[allow(clippy::unused_self, clippy::needless_pass_by_value)]
+    fn start_completion_observer(&self, _vmm: kayfabe_vmm_qemu::QemuVmm) {}
+
+    /// Stop the observer and **join** it. See [`ObserverThread`] for why the join is not
+    /// optional: the thread reads guest RAM, and the region it reads is released by the
+    /// hypervisor after this returns.
+    #[cfg(feature = "host-isolates")]
+    fn stop_completion_observer(&self) {
+        let taken = self
+            .ce
+            .observer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut o) = taken {
+            // ⊘ The flag FIRST, then the wake: a loop woken before the flag is set would go
+            // round once more and read guest RAM we are about to release.
+            o.stop.store(true, std::sync::atomic::Ordering::Release);
+            let _ = o.handle.shutdown();
+            if let Some(j) = o.join.take() {
+                let _ = j.join();
+            }
+            let s = self.ce.watch.stats();
+            eprintln!(
+                "kayfabe: COMPLETION-OBSERVER stopped — declared={} redeclared={} reads={} \
+                 verdicts={} still_watching={} (reads=0 with declared>0 means the loop never \
+                 ran, NOT that nothing appeared)",
+                s.declared,
+                s.redeclared,
+                s.reads,
+                s.verdicts,
+                self.ce.watch.live(),
+            );
+        }
+    }
+
+    /// No thread was ever started, so there is none to stop.
+    #[cfg(not(feature = "host-isolates"))]
+    #[allow(clippy::unused_self)]
+    fn stop_completion_observer(&self) {}
 
     /// ★ The instant the memory plane came up. Named rather than spelled twice, because the
     /// zero-case diagnosis branches on it and a typo would silently pick the wrong reading.
@@ -5131,7 +5562,11 @@ impl Regs {
                     "kayfabe:   stated by dev={} ino={}: {n} section(s), {bytes} bytes{}",
                     b.dev,
                     b.ino,
-                    if *b == backing { "  <= THE BLOCK WE ADOPTED" } else { "" }
+                    if *b == backing {
+                        "  <= THE BLOCK WE ADOPTED"
+                    } else {
+                        ""
+                    }
                 );
             }
         }
@@ -5178,6 +5613,10 @@ impl Regs {
     /// guest pointer into a machine that has released its slots. Refusing is the honest
     /// answer at that point and it is the one this restores.
     pub fn detach_ram(&self) {
+        // ★★★ FIRST, and the order is load-bearing: the observer thread reads guest RAM
+        // through its own handle, and the hypervisor releases the regions behind that
+        // handle once this returns. Stop and JOIN before anything else is torn down.
+        self.stop_completion_observer();
         self.plane.set_ram(Box::new(kayfabe_device::RefusingRam));
         // The teardown half, and not optional for the same reason: a copy-engine
         // submission arriving after the machine released its slots must be refused by
@@ -6484,8 +6923,7 @@ fn with_guest_ram(
             // selected, and travels with the descriptor. `into_descriptor` consumes the
             // candidate, so this is also the last moment it can be taken without asking the
             // question a second time.
-            let backing =
-                kayfabe_vmm_qemu::layout::BackingId::new(found.dev(), found.inode());
+            let backing = kayfabe_vmm_qemu::layout::BackingId::new(found.dev(), found.inode());
             eprintln!(
                 "kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's {QEMU_MACHINE_RAM_MEMFD} \
                  block, {} bytes, dev={} ino={}. Every isolate this factory spawns is granted \

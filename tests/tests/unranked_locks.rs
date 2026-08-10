@@ -91,6 +91,34 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "Per-channel method accumulators, keyed and committed exactly like the cursors beside          them. Taken for a single map read, and again for a single insert on the success arm;          no call of any kind beneath it.",
     ),
     (
+        "crates/kayfabe-rt/src/completion_watch.rs",
+        "Mutex<Inner>",
+        "★★★★★ THE COMPLETION OBSERVER'S WATCH LIST, and it is held by TWO threads — the only \
+         entry in this table of which that is true. The vCPU takes it for one map insert \
+         (`WatchList::declare`) and for one `+= 1` (`attempt`); the observer's reactor thread \
+         takes it across a whole `sweep`, which runs the caller-supplied READER over every \
+         live watch. ⊘ NOTHING may block beneath it, and the reader is what makes that a real \
+         constraint rather than a note: today it is `QemuVmm::gpa_read`, a memcpy off a \
+         resident host pointer that takes no BQL and no ranked lock. ⚠ A future reader that \
+         waits — a host-isolate round trip, an eventfd read — must be moved OUT of the sweep \
+         and its result merged in, because a vCPU declaring a completion would otherwise queue \
+         behind it on the MMIO trap. The sweep is deliberately inside the guard so the read \
+         and the verdict cannot come from two instants; that choice is what pins the reader's \
+         cost.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<Option<ObserverThread>>",
+        "★★★ The observer thread's handle. Taken for a `Some`/`None` check plus an eventfd \
+         `signal` (`poke_observer`), and once at teardown to `take()` the thread out before it \
+         is joined. ⊘ NOTHING may block beneath it. The JOIN happens AFTER the guard is dropped — deliberately, and it is \
+         the one thing that would be wrong here: joining a thread beneath this lock while that \
+         thread's sweep can be woken by a vCPU holding it is a deadlock, not a stall. ⚠ Every \
+         vCPU entry is `poke_observer`, which is entered with no ranked lock held (the CE \
+         session, the memory-plane port and the rank-0 device read are all released before \
+         the declare), and `Notifier::signal` asserts exactly that.",
+    ),
+    (
         "crates/kayfabe-qemu-raw/src/shim.rs",
         "Mutex<DoorbellCensus>",
         "★★★★ §16.65 — the per-engine doorbell census. Taken for a single `+= 1` on a fixed \

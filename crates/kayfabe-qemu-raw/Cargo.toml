@@ -63,6 +63,16 @@ kayfabe-isolate-host = { workspace = true, optional = true }
 # hypervisor-specific half — that QEMU names the block after the backend TYPE — stays
 # here, in `QEMU_MACHINE_RAM_MEMFD`.
 kayfabe-linux-raw = { workspace = true, optional = true }
+# ★★★★★ The L1 OS shell — `Reactor`, `Registrar`, `Poller`. OPTIONAL and gated by the SAME
+# feature, so the default archive's dependency graph is byte-for-byte master's.
+#
+# ⊘ It is here for the **completion observer's** loop and nothing else. `Reactor::new` had
+# ZERO production call sites in this tree until this edge existed
+# (`docs/design/completion_wait_architecture.md` §0.1 measured it, and §7 R3's whole
+# recommendation is *"the work is a composition root, not a design"*). The gate is the same
+# one the forwarding plane needs because the observation is only interesting when there is
+# a host that could satisfy it; a default archive gains no thread and no descriptor.
+kayfabe-shell = { workspace = true, optional = true }
 
 # =====================================================================================
 # ★★★ `host-isolates` — the first join between the device path and a real host GPU
@@ -94,7 +104,7 @@ kayfabe-linux-raw = { workspace = true, optional = true }
 # binary run both arms of a negative control, so an evidence run and its control cannot
 # differ in anything but the variable.
 [features]
-host-isolates = ["dep:kayfabe-isolate-host", "dep:kayfabe-linux-raw"]
+host-isolates = ["dep:kayfabe-isolate-host", "dep:kayfabe-linux-raw", "dep:kayfabe-shell"]
 
 # ★ `kayfabe-arch` is not a dependency of this crate and must not become one — the shim
 # names no architecture. `tests/shim_logic.rs` needs `GpuId` only to build the
