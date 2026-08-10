@@ -1481,107 +1481,6 @@ fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bool {
 ///   the **host** `dmesg`, and `scripts/bench/host_xid_watch.sh` is what reads it — this
 ///   rung is meant to be run inside that watcher, which is why it prints nothing about
 ///   faults itself rather than printing a guess.
-/// ★★★ The negative control for R26 — **occupy the address first**, then ask for it.
-///
-/// ⊘ A green whose red is unreachable proves nothing, and R26's green has a specific way of
-/// being vacuous: if `channel_ring_va` merely echoed the address we asked for, every run
-/// would pass at every address and the rung would be measuring its own argument. R25 was
-/// bitten by precisely this shape one plane over (`§16.67.4`: `65536 of 65536` printed from
-/// one variable twice), so the check has to be *watched to fail*.
-///
-/// This maps a device-local object at `RING_AT` **first**, in the same `Vas`, and then asks
-/// for a channel ring there. The address is now taken, so one of two things must happen and
-/// **either one is the control firing**:
-///
-/// - RM refuses the fixed map outright — the address is enforced by the driver;
-/// - RM relocates and `alloc_channel_at` converts that into `PlacementRefused` — the
-///   placement check is enforced by us.
-///
-/// ⊘ **A third outcome would be a finding, not a pass.** If the channel is built at
-/// `RING_AT` while another object is mapped there, then two objects share one GPU VA, the
-/// "address identity" the whole data plane rests on does not hold, and R26's green means
-/// something much weaker than it says. That arm is printed as `FAIL`, loudly, and it is the
-/// reason this control is worth its lines.
-fn dictated_ring_negative(rm: &mut HostRmBackend, gpu: u32) -> bool {
-    const RING_AT: u64 = 0x0000_0004_1100_0000;
-    println!(
-        "info  R26n neg control    = GPU {gpu}, euid {} — OCCUPY {RING_AT:#018x} first, then \
-         ask for a channel ring at the same address. The control fires if the ask is REFUSED",
-        kayfabe_linux_raw::geteuid()
-    );
-    let Ok(vas) = rm.alloc_vaspace() else {
-        println!("FAIL  R26n vaspace        = the rung needs its own address space");
-        return false;
-    };
-    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
-        println!("FAIL  R26n engine         = COPY0 is not expressible");
-        let _ = rm.free(vas);
-        return false;
-    };
-    // ★ The squatter is the same size as a ring object, so the collision is total rather
-    // than a partial overlap RM might legitimately place around.
-    let squatter = match rm.alloc_probe_local(0x1_0000) {
-        Ok(h) => h,
-        Err(e) => {
-            println!("FAIL  R26n squatter       = could not allocate the occupying object: {e:?}");
-            let _ = rm.free(vas);
-            return false;
-        }
-    };
-    let verdict = match rm.map_gpu_va(vas, squatter, 0x1_0000, GpuVa(RING_AT)) {
-        Ok(va) if va == RING_AT => {
-            println!("ok    R26n occupied       = {RING_AT:#018x} is now taken by another object");
-            match rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) {
-                Err(RmError::PlacementRefused { want, got }) => {
-                    println!(
-                        "★     R26n CONTROL FIRED  = the channel ring was RELOCATED to \
-                         {got:#018x} from {want:#018x} and `alloc_channel_at` REFUSED it — \
-                         the placement check is not an echo of our own argument"
-                    );
-                    true
-                }
-                Err(e) => {
-                    println!(
-                        "★     R26n CONTROL FIRED  = RM refused the channel at an occupied \
-                         {RING_AT:#018x} with {e:?} — the address is enforced by the driver, \
-                         so R26's green is a fact about RM and not about our formatting"
-                    );
-                    true
-                }
-                Ok((chan, _)) => {
-                    println!(
-                        "FAIL  R26n TWO OBJECTS    = a channel ring was built at \
-                         {RING_AT:#018x} while another object is mapped there. ⊘ This is not \
-                         a control failure, it is a FINDING: one GPU VA now names two \
-                         objects, and address identity does not hold the way #102 assumes"
-                    );
-                    let _ = rm.free(chan);
-                    false
-                }
-            }
-        }
-        Ok(va) => {
-            println!(
-                "FAIL  R26n occupied       = the squatter asked {RING_AT:#018x} and landed at \
-                 {va:#018x}; the control never got to run"
-            );
-            false
-        }
-        Err(e) => {
-            println!("FAIL  R26n occupied       = could not place the squatter: {e:?}");
-            false
-        }
-    };
-    // ★ The squatter is NOT freed by freeing the `Vas`: `free` takes a channel down with its
-    // address space, and an occupying memory object is neither. A diagnostic that is only
-    // ever run once still has to free it — the next person to put this in a loop inherits
-    // whatever it left behind, and a VA that is still occupied would make the control
-    // "fire" for the wrong reason on iteration two.
-    let _ = rm.free(squatter);
-    let _ = rm.free(vas);
-    verdict
-}
-
 fn dictated_ring_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // ★ Neither R25's `0x3_0040_0000` nor R9's constant: a rung that passes at an address
     // some earlier rung already proved is a rung that may be reading a remembered answer.
@@ -1699,6 +1598,107 @@ fn dictated_ring_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             false
         }
     };
+    let _ = rm.free(vas);
+    verdict
+}
+
+/// ★★★ The negative control for R26 — **occupy the address first**, then ask for it.
+///
+/// ⊘ A green whose red is unreachable proves nothing, and R26's green has a specific way of
+/// being vacuous: if `channel_ring_va` merely echoed the address we asked for, every run
+/// would pass at every address and the rung would be measuring its own argument. R25 was
+/// bitten by precisely this shape one plane over (`§16.67.4`: `65536 of 65536` printed from
+/// one variable twice), so the check has to be *watched to fail*.
+///
+/// This maps a device-local object at `RING_AT` **first**, in the same `Vas`, and then asks
+/// for a channel ring there. The address is now taken, so one of two things must happen and
+/// **either one is the control firing**:
+///
+/// - RM refuses the fixed map outright — the address is enforced by the driver;
+/// - RM relocates and `alloc_channel_at` converts that into `PlacementRefused` — the
+///   placement check is enforced by us.
+///
+/// ⊘ **A third outcome would be a finding, not a pass.** If the channel is built at
+/// `RING_AT` while another object is mapped there, then two objects share one GPU VA, the
+/// "address identity" the whole data plane rests on does not hold, and R26's green means
+/// something much weaker than it says. That arm is printed as `FAIL`, loudly, and it is the
+/// reason this control is worth its lines.
+fn dictated_ring_negative(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    const RING_AT: u64 = 0x0000_0004_1100_0000;
+    println!(
+        "info  R26n neg control    = GPU {gpu}, euid {} — OCCUPY {RING_AT:#018x} first, then \
+         ask for a channel ring at the same address. The control fires if the ask is REFUSED",
+        kayfabe_linux_raw::geteuid()
+    );
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R26n vaspace        = the rung needs its own address space");
+        return false;
+    };
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R26n engine         = COPY0 is not expressible");
+        let _ = rm.free(vas);
+        return false;
+    };
+    // ★ The squatter is the same size as a ring object, so the collision is total rather
+    // than a partial overlap RM might legitimately place around.
+    let squatter = match rm.alloc_probe_local(0x1_0000) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R26n squatter       = could not allocate the occupying object: {e:?}");
+            let _ = rm.free(vas);
+            return false;
+        }
+    };
+    let verdict = match rm.map_gpu_va(vas, squatter, 0x1_0000, GpuVa(RING_AT)) {
+        Ok(va) if va == RING_AT => {
+            println!("ok    R26n occupied       = {RING_AT:#018x} is now taken by another object");
+            match rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) {
+                Err(RmError::PlacementRefused { want, got }) => {
+                    println!(
+                        "★     R26n CONTROL FIRED  = the channel ring was RELOCATED to \
+                         {got:#018x} from {want:#018x} and `alloc_channel_at` REFUSED it — \
+                         the placement check is not an echo of our own argument"
+                    );
+                    true
+                }
+                Err(e) => {
+                    println!(
+                        "★     R26n CONTROL FIRED  = RM refused the channel at an occupied \
+                         {RING_AT:#018x} with {e:?} — the address is enforced by the driver, \
+                         so R26's green is a fact about RM and not about our formatting"
+                    );
+                    true
+                }
+                Ok((chan, _)) => {
+                    println!(
+                        "FAIL  R26n TWO OBJECTS    = a channel ring was built at \
+                         {RING_AT:#018x} while another object is mapped there. ⊘ This is not \
+                         a control failure, it is a FINDING: one GPU VA now names two \
+                         objects, and address identity does not hold the way #102 assumes"
+                    );
+                    let _ = rm.free(chan);
+                    false
+                }
+            }
+        }
+        Ok(va) => {
+            println!(
+                "FAIL  R26n occupied       = the squatter asked {RING_AT:#018x} and landed at \
+                 {va:#018x}; the control never got to run"
+            );
+            false
+        }
+        Err(e) => {
+            println!("FAIL  R26n occupied       = could not place the squatter: {e:?}");
+            false
+        }
+    };
+    // ★ The squatter is NOT freed by freeing the `Vas`: `free` takes a channel down with its
+    // address space, and an occupying memory object is neither. A diagnostic that is only
+    // ever run once still has to free it — the next person to put this in a loop inherits
+    // whatever it left behind, and a VA that is still occupied would make the control
+    // "fire" for the wrong reason on iteration two.
+    let _ = rm.free(squatter);
     let _ = rm.free(vas);
     verdict
 }

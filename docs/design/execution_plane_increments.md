@@ -12679,12 +12679,16 @@ values fall into three populations:
 
 | value | length | what it can only have come from |
 |---|---|---|
-| `4e79a140f35eb2741bd620bba2bf129db5abb551` (R22) | **40** | a derivation — `git rev-parse HEAD`, shape-checked |
+| `4e79a140f35eb2741bd620bba2bf129db5abb551` (R22) | **40** | `git rev-parse HEAD`'s own output — a real commit in this repo. ⚠ Machine-*generated*, but still operator-*run*: before this rung the ladder had no derivation, so it reached the binary as an exported variable |
 | `40d44db84` (R25), `8dac2705d` (R25 re-run), `6f8239835` (R18), `1d5704dd9`, `6c9e3d2bb` | **9** | ⊘ **a HUMAN.** The derivation shape-checks for *exactly 40* hex and falls back to `unknown`; it is structurally incapable of emitting an abbreviated sha |
 | `unstamped` (R21, R24) | — | nothing was exported at all |
 
 ⇒ **Every 9-character stamp in this repository is an operator's assertion wearing a
-derivation's clothes.** ⚠ In particular `fd4ffe7`'s commit message — *"§16.67 R25 re-run at the
+derivation's clothes**, and the certain half of that is the converse rather than the
+forward direction: a 9-character value **cannot** have come from the shape-checked
+derivation, whereas a 40-character one merely *might* have. ⊘ Stated that way round on
+purpose — the strong reading ("40 chars ⇒ derived") is the one the evidence does not carry,
+and R22's row is exactly the counter-example. ⚠ In particular `fd4ffe7`'s commit message — *"§16.67 R25 re-run at the
 SHIPPED head — the stamp read off the binary, not the checkout"* — is describing a stamp that
 was inside the binary **because a person put it there**. The re-run was still the right call
 and its four arms still measured green; what it did **not** do is what its title claims, and
