@@ -87,12 +87,12 @@ fn body_of(rel: &str) -> String {
 const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
-        "ExecutorVas { range }",
-        1,
-        "★ THE one. `HostRmBackend::executor_vas`, which allocates a fresh \
-         `FERMI_VASPACE_A` + `NV01_MEMORY_VIRTUAL` pair through `alloc_vaspace_raw` and \
-         never hands the handle to the port. Any second expression here is a second claim \
-         about provenance.",
+        "ExecutorVas { range",
+        2,
+        "★ THE one FUNCTION, `HostRmBackend::executor_vas` — two expressions because it \
+         has two exits (the table hit and the fresh mint), and both read the CONNECTION's \
+         table. It allocates through `alloc_vaspace_raw` and never hands the handle to the \
+         port. Any expression outside that function is a second claim about provenance.",
     ),
     (
         "src/rm.rs",

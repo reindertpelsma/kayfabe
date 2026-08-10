@@ -458,6 +458,22 @@ struct Objects {
     /// (the control is on the group, not the channel), and the ring verbs need the ring's
     /// GPU VA.
     channels: BTreeMap<u32, ChannelParts>,
+    /// ★★★★★ **W229** — `guest range -> the isolate's own address space over it`
+    /// ([`ExecutorVas`]).
+    ///
+    /// ⊘⊘ **On the CONNECTION, never on a worker, and that was measured rather than
+    /// designed.** It lived in `HostRmBackend` for one revision and `tests/e6_hw_join.rs`
+    /// caught it on a real GA106: an isolate is a **bounded POOL** of workers, a publish
+    /// and the copy that reads it are two requests that need not land on the same slot, and
+    /// a per-worker table gave the second worker a **fresh, empty** shadow. The operands
+    /// were mapped in worker A's shadow and the engine walked worker B's — arm 1 retired
+    /// and arm 2 reported `NEVER-RETIRED` with `sem = 0`.
+    ///
+    /// ★ The rule it teaches: this table is keyed by an object that belongs to the
+    /// **isolate** (a `Vas`), so it belongs where the isolate's other object state is. A
+    /// pool slot may own a *channel*; it may not own an *address space* that other slots'
+    /// mappings are placed into.
+    exec_vases: BTreeMap<u32, u32>,
 }
 
 /// One channel's **CPU mappings** — the ring and USERD, as this process sees them.
@@ -760,6 +776,7 @@ impl RmConnection {
                 parents: BTreeMap::new(),
                 companions: BTreeMap::new(),
                 channels: BTreeMap::new(),
+                exec_vases: BTreeMap::new(),
             }),
             rings: Mutex::new(BTreeMap::new()),
             // Filled in below, once there is a subdevice to parent it to.
@@ -1166,6 +1183,46 @@ impl RmConnection {
             .companions
             .get(&range)
             .copied()
+    }
+
+    /// The isolate's own address space over `guest_range`, if one has been built.
+    fn exec_vas_of(&self, guest_range: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .exec_vases
+            .get(&guest_range)
+            .copied()
+    }
+
+    /// Publish `exec` as the executor space for `guest_range`, and report **the winner**.
+    ///
+    /// ★ It returns whatever is in the table afterwards rather than `()`, because two pool
+    /// workers can mint concurrently: the loser must be told so it can free the space it
+    /// just allocated instead of leaking one that nothing will ever name. The check and the
+    /// insert are one critical section — doing them as two calls is the race with extra
+    /// steps.
+    fn remember_exec_vas(&self, guest_range: u32, exec: u32) -> u32 {
+        let _leaf = leafwitness::Held::enter();
+        *self
+            .objects
+            .lock()
+            .expect("objects")
+            .exec_vases
+            .entry(guest_range)
+            .or_insert(exec)
+    }
+
+    /// Take the executor space out of the table — `free`'s accessor, which is why it
+    /// removes.
+    fn forget_exec_vas(&self, guest_range: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .exec_vases
+            .remove(&guest_range)
     }
 
     fn remember_channel(&self, chan: u32, parts: ChannelParts) {
@@ -1834,14 +1891,6 @@ pub struct HostRmBackend {
     /// [`RmBackend::ce_copy`]. Built on first use and reused, because a channel is six RM
     /// objects and a copy is one pushbuffer.
     ce_channels: BTreeMap<u32, CeChannel>,
-    /// ★★★ **W229** — `guest range -> the isolate's OWN address space over the same
-    /// `Vas``, built on first use.
-    ///
-    /// Per guest `Vas` rather than one per backend, and that is `#14`, not tidiness: two
-    /// procs publish at **identical** guest VAs by construction (`#102`), so a single
-    /// shared executor space would have them collide on the first fixed map. One shadow
-    /// per space keeps the separation the guest-facing side already has.
-    executor_vases: BTreeMap<u32, ExecutorVas>,
     /// ★ The isolate's table of backings minted for the VMM (`crate::export`). Shared with
     /// every sibling worker: a backing belongs to the isolate, not to the pool slot that
     /// happened to mint it.
@@ -2302,7 +2351,6 @@ impl HostRmBackend {
             conn,
             slots: BTreeMap::new(),
             ce_channels: BTreeMap::new(),
-            executor_vases: BTreeMap::new(),
             exports,
             guest_ram: None,
             ce_witness: None,
@@ -2498,13 +2546,19 @@ impl HostRmBackend {
     /// # Errors
     /// Whatever RM refused the address space or its range with.
     fn executor_vas(&mut self, guest_range: u32) -> Result<ExecutorVas, RmError> {
-        if let Some(e) = self.executor_vases.get(&guest_range) {
-            return Ok(*e);
+        if let Some(range) = self.conn.exec_vas_of(guest_range) {
+            return Ok(ExecutorVas { range });
         }
-        let range = self.alloc_vaspace_raw()?;
-        let e = ExecutorVas { range };
-        self.executor_vases.insert(guest_range, e);
-        Ok(e)
+        // ⊘ The mint is OUTSIDE the lock — it is three ioctls — so two pool workers can
+        // reach here for the same `Vas`. `remember_exec_vas` reports the winner and the
+        // loser disposes of what it built: an address space nothing can name is exactly the
+        // orphan `alloc_vaspace`'s error arm exists to avoid.
+        let mine = self.alloc_vaspace_raw()?;
+        let winner = self.conn.remember_exec_vas(guest_range, mine);
+        if winner != mine {
+            let _ = self.free(self.stamp(mine));
+        }
+        Ok(ExecutorVas { range: winner })
     }
 
     /// ★★★ **Map `memory` into BOTH the guest-facing space and the isolate's own — at the
@@ -2563,8 +2617,8 @@ impl HostRmBackend {
     /// cannot leave the guest side free for reuse while the isolate's engine still
     /// resolves the address.
     fn unmap_dma_both(&mut self, guest_range: u32, va: u64) -> Result<(), RmError> {
-        if let Some(exec) = self.executor_vases.get(&guest_range).copied() {
-            let _ = self.conn.raw_unmap_dma(exec.range, va);
+        if let Some(exec) = self.conn.exec_vas_of(guest_range) {
+            let _ = self.conn.raw_unmap_dma(exec, va);
         }
         self.conn.raw_unmap_dma(guest_range, va)
     }
@@ -2802,8 +2856,8 @@ impl RmBackend for HostRmBackend {
         // of the channel unmaps `ChannelParts::ring_va` through `ChannelParts::range`,
         // which for an isolate channel IS this space, and unmapping through a freed range
         // handle names an object RM has destroyed.
-        if let Some(exec) = self.executor_vases.remove(&raw) {
-            let _ = self.free_one(exec.range);
+        if let Some(exec) = self.conn.forget_exec_vas(raw) {
+            let _ = self.free_one(exec);
         }
         // The slot counter is per-channel state with nothing to free; dropping it keeps a
         // recycled handle from inheriting a stale cursor.
