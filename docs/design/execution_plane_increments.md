@@ -14809,3 +14809,96 @@ Lock **order** is `Mutex<PlaneState>` → `OsEventLog`, in both directions of us
 takes the registry while the plane lock is held (it runs inside the policy chain), and
 `deliver_os_events` takes it while the same plane lock is held. There is no path that takes them
 the other way round, and neither can block.
+
+### 16.76.8 ★★★★★ `w211` BOOTED — **the plane RUNS, and the wall moved to a place nobody predicted: the wakeup was raised into a MASKED LEAF**
+
+`[measured 2026-08-10, boot w211_eaf025f_ctl, rev eaf025fa]` — evidence committed at
+`traces/guest_boots/run_w211_eaf025f_ctl_{qemu,dmesg,probe}.log` + `xid_w211ctl.log`. Built
+binary's stamp verified as `kayfabe-rev:eaf025fa…` against `git rev-parse HEAD`, not from the
+build's exit code. Host Xid clean, 0 → 0, off a ring buffer proved readable (997 lines).
+
+**The device's own two lines, verbatim:**
+
+```text
+os-events: 3 registered / 3 retired / 0 live (0 malformed, 0 refused-full);
+           1 POST_EVENT posted in 1 batch(es);
+           gate: 347 gated, 0 not-running, 0 failed, 0 IRQSCLR cleared
+os-event announce: 1 GSP stall vector(s) raised, 0 UNVECTORED, 1 would be masked;
+           0 batch(es) WOKE WITH NOTHING
+           (last join: 82 doorbells served, 0 of them forwarded, 82 new since the previous batch)
+```
+
+**Scoring the falsifier.**
+
+| arm | verdict | evidence |
+|---|---|---|
+| **F1** `cuCtxCreate` terminates | ⊘ **NO** | `cup2 DID NOT RETURN within 150s … CUP2_RC=TIMEOUT, pid=1814 state=Rl` |
+| **F2** its outcome | n/a | it did not return |
+| **F3** no `"Bad sequence number"` | ★ **PASS** | `0 / 0 / 0` across probe, dmesg and qemu logs. **The gate did its job** — 347 refusals are 347 batches that did not overflow the shared ring |
+| **F4** registered / posted / drained | ★ **three of four** | registry ✓ (3, `status=0x00000000 rc=0`, **zero** `0x56`, **zero** `GspRmAlloc failed … 0x79`); post ✓ (1); raise ✓ (1); ⊘ **drain ✗ — `0 IRQSCLR cleared`** |
+| **F5** posted+drained, nothing behind it | ⊘ **NOT what happened** | `woke_with_nothing = 0`; the join records **82 doorbells served, 82 of them new**. There WAS work behind the wakeup |
+
+★ **Half 1 landed cleanly and is not in doubt.** `w209` carried seven
+`hClass=0x00000079 … status=0x00000056` and the guest's own `rpcRmApiAlloc_GSP: GspRmAlloc
+failed` beside them; `w211` carries three `status=0x00000000 rc=0` and **zero** of either
+failure line. The class is served, the registry is populated, and the FREE path retired all
+three at process teardown (`3 retired / 0 live`) exactly as designed.
+
+### 16.76.9 ⊘ **F6 — THE NEW ARM, and it is one step EARLIER than the coordinator predicted**
+
+The mid-rung prescription (§16.76.5) predicted *"we woke it with nothing behind it"*. **That is
+refuted by our own instrument**: `woke_with_nothing = 0`, and the join says 82 doorbells had been
+served — all of them locally — since the previous batch. The wakeup was not empty.
+
+**What actually happened, and the two numbers are consistent to the point of being one fact:**
+
+1. `1 would be masked` — at the instant the GSP stall vector (155) was latched, the guest's
+   `LEAF_EN` bit for it read **clear**. `crate::cpuintr` raises anyway *by standing decision* and
+   records the disagreement; the guest's ISR does not, and
+   `intrIsVectorPending_TU102` → `LEAF & LEAF_EN` is what it consults.
+2. `0 IRQSCLR cleared` — so the ISR **never attributed the interrupt**, never cleared the edge,
+   and `events_outstanding` stayed set.
+3. `347 gated` — every subsequent delivery attempt was correctly refused by the gate, **including
+   the two os-events registered after the first batch**. Only 1 of 3 was ever posted.
+
+⇒ **F6: the notification plane RUNS and its announcement is INVISIBLE TO THE GUEST'S ISR.** That
+is a strictly better-posed wall than either §16.75's or F5's: it is one measured bit, on a path
+this repository now has counters all the way through.
+
+★★ **AND THE NEXT MEASUREMENT IS NAMED, because the reading is ambiguous in exactly one way.**
+`nonstall_masked` is **4 of 4** in the same boot — *every* vector this device has ever latched,
+on both planes, reads as masked. Two hypotheses, and they demand opposite fixes:
+
+- **(a)** the guest genuinely never enables these leaves for a GSP-offload adapter, in which case
+  latching is the wrong announcement mechanism and the GSP falcon's own interrupt path is;
+- **(b)** ⊘ **our `leaf_en` bookkeeping never sees the guest's enable writes** — the instrument,
+  not the guest. `crate::cpuintr` tracks `leaf_en` only from `LEAF_EN_SET`/`_CLEAR` writes that
+  reach `RegPlane`, and `registers:` reports **2464 UNCLAIMED writes** in this very boot.
+
+⚠ `suspect_the_instrument_first`. **The discriminator is one line**: `Counters::cpu_intr_masked`
+already exists and is **not printed** — if the driver's own `_osVerifyInterrupts` loopback
+(vector 129, which passed: no `NV_ERR_IRQ_NOT_FIRING`, and 190 vectors were delivered) also reads
+masked, the bookkeeping is blind and (b) is the answer. ⊘ Do not conclude (a) from
+`gsp_event_masked = 1` alone: a 1-of-1 that agrees with a 4-of-4 on a plane whose enables were
+never separately verified is one instrument reporting itself.
+
+### 16.76.10 ⚠ THE LIVENESS QUESTION, ANSWERED PLAINLY
+
+`master` at `eaf025f` **still carries the unbounded hang**: `cuCtxCreate` does not return in
+150 s, where before half 3 it returned `801` at ~13 s. Half 2 landed, works, and did not close
+it. The guest is parked calling `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` — **191 times** in this
+boot, every one answered `NV_OK`.
+
+**Recommendation: KEEP half 3, and treat F6 as the immediate successor rung.** The reasoning,
+falsifiably:
+
+- Backing out half 3 restores boundedness **by re-introducing an answer we have measured to be
+  false**. The guest is explicitly asking us to service interrupts; `0x56` made it unwind at
+  `intr.c:219-225`. That is buying a bounded failure with a lie, and it would also re-hide the
+  registrations half 1 depends on.
+- The hang is **not** caused by half 3 being wrong. It is caused by one bit — a masked leaf —
+  which is now measured, named, and has a one-line discriminator between its two causes.
+- ⊘ **But the cost is real and is the owner's to weigh**: every bench boot from here costs the
+  hook's full 150 s deadline instead of 13 s, and a hung `cup2` is what makes the QEMU monitor
+  teardown path load-bearing. If F6's next rung does not close it, back half 3 out rather than
+  carry a hang indefinitely.
