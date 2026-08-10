@@ -14494,3 +14494,128 @@ reported as one.
    `completions_drained`, and only then a `poll_completions` call from this arm. ⚠ Trap (a)
    from #229 is live at that point: `NVKVM_STALL_VECTOR` is an MSI-X **table index** and the
    C's 155 is an interrupt-tree **leaf bit**; the C does both, in order.
+
+### 16.75.10 ⊘⊘⊘ THREE RETRACTIONS AND ONE REFUTATION, all from the boot's own bytes
+
+★★★★★ **RETRACTED, MINE — "a 1 Hz timed retry became a TIGHT BUSY-POLL". THE CADENCE IS
+UNCHANGED.** `[measured 2026-08-10, boot `w210_8574466_ctl`]` the guest reaches the poll at
+guest time **55.64** (the last line of the `cup2` dmesg window; `w209`'s equivalent window ran
+45.82 → 70.97) and `cup2` is cut off by the hook's 150 s deadline. That is ~140 s of polling
+for **167** userspace records ⇒ **≈ 1.19 calls/s — the same ~1 Hz it always was.** ⊘ `state=Rl`
+is one instantaneous sample and does not make a loop tight.
+
+★★ **RETRACTED, MINE — the counts "13 → 192".** Both are inflated by the probe's own layout:
+`guest_cuinit_wall.sh` prints the RM plane **twice**, once as *"LAST 25 calls"* and once as
+*"THE FULL RM PLANE — verbatim"*. Counting only the verbatim block: **13 → 167**. ★ And that
+number corroborates against an instrument that was not designed to agree with it — the device
+census says `control 0x20801702 result 0x00000000 **x171**`, i.e. 167 from userspace plus 4
+from the guest's own kernel RM (`nvGpuOpsServiceDeviceInterruptsRM`, `ogkm-580:
+nv_gpu_ops.c:7840-7867`). ⚠ `w209`'s LAST-25 block held 13 and `w210`'s held 25, which is why
+the naive totals (26, 192) are wrong by *different* factors and a ratio taken from them is
+meaningless.
+
+⇒ ★★★★★ **THE VERDICT, RESTATED ON THE AXIS THAT DISCRIMINATES.** Of the three non-log
+observables:
+
+| observable | `w209` | `w210` | moved? |
+|---|---|---|---|
+| inter-poll **gap** | ~1.0 s | ~0.84 s | ⊘ **no** — same order, same shape |
+| the **give-up** (4 os-events `0x5c000079/7a/7b/7c` at 65.31, freed at 67.32; the `FREE` burst) | present | ★ **absent** — `0x79` allocs 7 → 3, `FREE` records 2 | **yes** |
+| `cuCtxCreate`'s **outcome** | `801` at ~13 s | ★ **no return in 150 s** | **yes** |
+
+⇒ **The refusal was load-bearing for the GIVE-UP, and not for the WAIT.** Serving `0x20801702`
+removed libcuda's error exit; it did not supply the wakeup, and nothing here claims it did.
+⊘ **This is not the silenced-instrument arm** — that arm requires *all* the non-log observables
+to be unchanged, and two of three moved. But the gap axis alone would have scored it as one,
+which is exactly why the gap axis had to be measured.
+
+★★★ **RETRACTED, MINE — "that is `c_cuda_ladder.md`'s Wall C *word for word*".** It is Wall C
+**in kind** — a poll on `0x20801702`, `psize=4`, `IN=OUT=0xffffffff`, that does not terminate —
+and the C's description says *"a **tight** poll"*, which ours is not. The shared facts are the
+id, the params and the non-termination; the rate is not one of them.
+
+★★★★★ **REFUTED — the RM comment is about a branch our guest NEVER TAKES.** The comment
+
+> *"Force kernel-RM to service interrupts from GSP-RM. This will allow kernel-RM to write
+> notifiers and send an ack back to GSP. GSP waits for this ack before clearing fast path
+> POSSIBLE_ERR interrupt."*
+
+sits immediately above `if (pGpu->getProperty(pGpu, PDB_PROP_GPU_FASTPATH_SEQ_ENABLED))`
+(`ogkm-580: intr.c:206-214`) and describes **`intrServiceStallSingle_HAL(pGpu, pIntr,
+MC_ENGINE_IDX_GSP, NV_TRUE)`** — not the RPC, which is the next statement and carries no
+comment at all. And that property has exactly **one writer in the whole tree**,
+`conf_compute.c:179`, inside `if (PDB_PROP_GPU_CC_FEATURE_CAPABLE)`; NVOC sets that capability
+`NV_TRUE` only for `GH100 | GB100 | GB102 | GB10B | GB110 | GB112 | GB202 | GB203 | GB205 |
+GB206 | GB207 | GB20B | GB20C` and takes the `else` → **`NV_FALSE` for GA106**
+(`ogkm-580: generated/g_gpu_nvoc.c:427-437`).
+
+⇒ On this bench's GeForce GA106, `PDB_PROP_GPU_FASTPATH_SEQ_ENABLED` is **false**, the
+fastpath servicing never runs, and **no GSP ack is expected from us on that path**. ⊘ Citing
+that comment as *"the strongest possible corroboration that `0x20801702` is the request half
+of the delivery handshake"* would have sourced this rung's central claim to Confidential
+Compute on Hopper/Blackwell. ★ The corroboration that *does* hold is the **unconditional**
+second half at `:262-278` — every chip, every configuration, and the thing our `0x56` skipped.
+★★ Same family as `a_comment_that_names_an_exception_is_a_bug_report` inverted: **a comment's
+scope is the block it sits above**, and the block above the RPC was a `#ifdef` in disguise.
+
+### 16.75.11 ★★★ WHAT THE C'S GREEN `cup2` DOES AND DOES NOT LICENSE — Q4, answered from the C
+
+`nvkvm_gsp_deliver_events` has two reachable triggers: `C: nvkvm_gpu_emul.c:4363`
+(`if (any_completed)`, inside the doorbell handler) and `C::3584` (the `m2_poll_kick` replay).
+The kick is `nvkvm_m2_multiproc()`-gated at `C::3053`, and that predicate is
+`m2_gr_clients_n > 1 || m2_user_clients_n > 1` (`C::5146-5152`). The 2026-07-29 green ladder
+ran **one** CUDA process (`mem: mode2_bench_lifecycle_findings`), so **the kick never fired in
+any green run.**
+
+⊘ ⇒ **The C's green `cup2` is NOT evidence that half 3 works**, and nothing in this section
+cites it as such. What the C licenses is only the *serve* — `nvkvm_ctrl_allowlist.h:124` plus
+the `fn == 76` default `body.status = NV_OK` — which is the half that landed.
+
+★ And it explains rather than weakens the rung: the C had a **working doorbell trigger** and
+leaned on it; ours are refused or forwarded, so the trigger the C used is the one we do not
+have. The C's own comment states the fallback's reason exactly — *"a process busy-polling
+`cuCtxCreate` submits nothing, so … the deferred work never retried and the poller starved
+forever"* (`C::3041-3053`).
+
+⚠ **And note what the kick actually is**, because it is not a second delivery path:
+`C::3584-3592` **fabricates a doorbell**, replaying `m2_last_db_token` through
+`nvkvm_bar0_write_inner(..., from_guest=false)`, i.e. it **re-enters the doorbell service**.
+Whether our half 2 re-enters our doorbell service or calls `completion_poll` directly is a
+choice to make deliberately; the C's shape is the former.
+
+### 16.75.12 ★★★★★ THE FLOW-CONTROL GATE HALF 2 MUST PORT — same flag, OPPOSITE polarity
+
+`C::1849-1860` is explicit and calls itself **CRITICAL**: the GSP status queue is **shared with
+RPC responses** and carries strictly monotonic per-message seqNums in a small ring, so posting
+an event batch on every doorbell overflows the ring before the guest drains it, the guest's
+`rpcRecvPoll` sees a seqNum gap (**"Bad sequence number"**) and **the whole RPC path breaks**.
+Its shape:
+
+```c
+if (s->osevent_n <= 0)      return;   /* nothing registered            */
+if (s->gsp_swgen0_pending)  return;   /* previous batch NOT drained    */
+for (i…) nvkvm_m3_post_event(…);      /* post ALL                      */
+nvkvm_gsp_raise_swgen0(s);            /* raise ONCE                    */
+```
+
+⊘⊘ **We hold the same flag and use it the other way round.** `cap1_differential.rs` F-3:
+*"`GspFsm::post` latches `swgen0_pending` and `service_command_queue` **re-raises** while it is
+set."* Porting delivery without inverting that into a **gate** reproduces the overflow the C
+calls CRITICAL, and it surfaces as an **RPC** symptom, not a delivery one.
+
+⇒ Three obligations on half 2, recorded now so they are not discovered later:
+
+1. **The gate is part of the port, not an optimisation**: post only when the previous batch is
+   drained; **post all, raise once.**
+2. **An `IRQSCLR` write handler must CLEAR the flag**, or the gate latches shut after the first
+   batch and delivery stops forever. ⊘ `cap1` contains **zero `IRQSCLR` writes**, so the oracle
+   gives this path **no coverage at all** — build it from RM's `kgspService` and expect the
+   first boot to be where it is first exercised.
+3. **The registry needs the FREE path, not only the alloc path** (`C::1877`): `deliver_events`
+   will happily post to dead `(hClient, hEvent)` pairs, and `w209` measured the guest freeing
+   four os-events at 67.32.
+
+★ **Baseline for obligation 1, taken now so it can be compared later**: `[measured 2026-08-10,
+boot w210_8574466_ctl]` `grep -icE "bad sequence|seqnum|sequence number"` over both the probe
+and the dmesg returns **0 / 0**. Nothing in this rung posts anything, so that is the expected
+clean baseline and the value half 2 must not change.
