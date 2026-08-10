@@ -570,7 +570,7 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
 
     // ⊘ One fixture, parameterised by the single event under study, so the two outcomes
     // cannot differ by anything else. A second hand-written fixture could drift.
-    let ring = |with_engine_object: bool| -> String {
+    let ring = |with_engine_object: bool| -> (String, kayfabe_rt::completion_watch::WatchStats) {
         let r = regs();
         let dev = r.object_model();
         const CLIENT: HClient = HClient(0x5c00_0000);
@@ -647,23 +647,56 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
         dev.schedule_channel(CLIENT, chan, true)
             .expect("the guest schedules the channel it just declared");
         let after = r.write(BAR_REGS, DOORBELL, 4, 0);
-        kind_of(after.doorbell.as_ref().expect("a doorbell")).to_string()
+        (
+            kind_of(after.doorbell.as_ref().expect("a doorbell")).to_string(),
+            r.completion_watch().stats(),
+        )
     };
 
     assert_eq!(
-        ring(false),
+        ring(false).0,
         "Route::NotACopyEngineChannel",
         "★ a GR-labelled channel's doorbell must be refused by the ROUTING fact — not \
          handed to the copy-engine codec to decline by the shape of bytes it was never \
          meant to read",
     );
     assert_eq!(
-        ring(true),
+        ring(true).0,
         "FwdFault::IsolateRetired",
         "★ and a CE channel is untouched by the gate: it falls through to exactly the \
          refusal it received before this rung, which is what 'additive' has to MEAN",
     );
     // ⊘ Non-vacuity: the two names really are different, so the fixture's single varied
     // event is what decides — and the gate is not answering the same thing to everything.
-    assert_ne!(ring(false), ring(true));
+    assert_ne!(ring(false).0, ring(true).0);
+
+    // ★★★★★ **THE COMPLETION OBSERVER IS REACHED — and only on the arm that walls.**
+    //
+    // `docs/design/completion_wait_architecture.md` §4(b) is about a correct observer that
+    // no guest action could reach. This is the reachability half of that, asserted at the
+    // CALLER: a `GrCompute` doorbell — the one `cuCtxCreate` rings 86 times while it spins
+    // on `SET_REPORT_SEMAPHORE` — must ENTER the declare path, and a `Ce` doorbell (which
+    // is served by the shell's own executor and completes there) must not.
+    //
+    // ⊘ `attempts`, not `declared`, and the distinction is the whole point: this fixture
+    // attaches no guest memory, so nothing CAN be declared. *"The observer was never
+    // reached"* and *"the observer was reached and had nothing to read"* are the two
+    // readings a `declared` count cannot separate, and only the first is a severance.
+    let gr = ring(false).1;
+    let ce = ring(true).1;
+    assert_eq!(
+        gr.attempts, 1,
+        "★★★ THE SEVERANCE: a GR doorbell must reach the completion observer's declare \
+         path. Saw {gr:?}",
+    );
+    assert_eq!(
+        gr.declared, 0,
+        "⊘ and it must declare NOTHING here — this fixture has no memory plane, so a \
+         declaration would mean the observer invented one. Saw {gr:?}",
+    );
+    assert_eq!(
+        ce.attempts, 0,
+        "⊘ the CE arm is untouched: it is served by the shell's own executor above the \
+         routing gate and never reaches this path. Saw {ce:?}",
+    );
 }
