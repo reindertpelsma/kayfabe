@@ -1651,7 +1651,12 @@ fn a_served_dup_makes_uvms_handle_a_second_name_for_the_sources_resource() {
                 &params,
             ),
         );
-        policy
+        // ★ The `Translation` is deliberately dropped: this closure is SETUP, and what the
+        // test asserts is the graph state `policy.gpu()` reports afterwards, not what this
+        // particular root alloc translated to. `deliver` is `#[must_use]` because losing a
+        // translation is how namespace attribution goes missing — so the discard is spelled
+        // out rather than left to an implicit drop.
+        let _: kayfabe_rmrpc::Translation = policy
             .deliver(&command(&msg))
             .unwrap_or_else(|e| panic!("root alloc for {client:#010x} must land: {e:?}"));
     };
@@ -1672,7 +1677,9 @@ fn a_served_dup_makes_uvms_handle_a_second_name_for_the_sources_resource() {
                 &params,
             ),
         );
-        policy.deliver(&command(&msg)).expect("the device lands");
+        // Setup, as above — the assertion is on the graph, not on this translation.
+        let _: kayfabe_rmrpc::Translation =
+            policy.deliver(&command(&msg)).expect("the device lands");
     }
 
     let reply = policy.respond(&s31_dup(4)).expect("the dup is answered");

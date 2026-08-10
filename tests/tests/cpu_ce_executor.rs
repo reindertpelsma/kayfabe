@@ -966,7 +966,7 @@ fn a_four_word_release_writes_the_payload_then_the_timestamp_at_byte_eight() {
 #[test]
 fn a_four_word_release_that_straddles_an_unbound_page_writes_nothing_at_all() {
     let mut fb = SparseFb::new(FB_LIMIT);
-    let mut vmm = MockVmm::new();
+    let vmm = MockVmm::new();
     // Bind ONE page, and put the semaphore 8 bytes below its end: words 0 and 1 are inside,
     // words 2 and 3 (the timestamp) are past it.
     const SEM_VA: u64 = 0x310_0000 + 0x1000 - 8;
