@@ -269,7 +269,23 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// committed device log returns **0** — this port had never once named a class it refused.
 /// `NotOnAllowlist x10` was the whole report, and answering *which ten* meant reading the
 /// **guest's** dmesg (§16.55.4), a plane we neither own nor always capture.
-pub const ABI_VERSION: u32 = 35;
+/// ★★★★ Bumped to **36** at §16.65, the ABI-3 reason a twenty-fourth time:
+/// [`KayfabeRegAudit`] gained the per-engine doorbell census
+/// ([`KayfabeRegAudit::doorbells_by_engine`], `doorbells_engine_unrouted`) and the
+/// served split ([`KayfabeRegAudit::doorbells_served_locally`] / `_forwarded`), so an ABI-35
+/// shim would allocate the old layout and this archive would write past the end of it.
+///
+/// ⊘ And this one exists because a **count could not answer the question it was being
+/// asked**: `[measured 2026-08-10, boots s49/s50]` `448 arrived / 354 served / 94 refused`,
+/// with a **16-line** bounded sample beside it as the only per-channel evidence. Two
+/// different refutations of §16.65's routing hypothesis — *"`EngineKind` does not partition
+/// doorbell traffic"* and *"the engine refinement never reached UVM's channels"* — produce
+/// the **same** three numbers. A census that cannot separate them is not an instrument.
+pub const ABI_VERSION: u32 = 36;
+
+/// ★★★★ §16.65 — how many engine buckets the doorbell census has. Must equal
+/// `KAYFABE_ENGINE_KINDS` and `kayfabe_rt::ENGINE_KIND_COUNT`.
+pub const ENGINE_KINDS: usize = kayfabe_rt::ENGINE_KIND_COUNT;
 
 /// ★★★★ §16.56 — how many refused ids each `FaultTag` row carries across the ABI. Must
 /// equal `KAYFABE_REFUSAL_IDS_PER_TAG` and `kayfabe_rmrpc::REFUSAL_DETAIL_CAP`.
@@ -1915,6 +1931,24 @@ pub struct KayfabeRegAudit {
     pub doorbells_served: u64,
     /// Of those, the ones the core **refused, by name**.
     ///
+    /// ★★★★ **§16.62.3 — of the served, the ones the SHELL's own CPU executor ran.** See
+    /// `kayfabe_device::Counters::doorbells_served_locally` for why *"354 served"* was a
+    /// number nobody could read.
+    pub doorbells_served_locally: u64,
+    /// ★★ Of the served, the ones handed to a **host** channel.
+    /// `locally + forwarded == served`, always.
+    pub doorbells_served_forwarded: u64,
+    /// ★★★★ **§16.65 — THE PER-ENGINE DOORBELL CENSUS**, bucketed by
+    /// `kayfabe_rt::EngineKind::index` in [`ENGINE_KINDS`] order. See [`DoorbellCensus`].
+    ///
+    /// ⊘ A fixed array with a name-table beside it in C, never a list of pairs: an empty
+    /// bucket is a **measurement** (*"no NVENC channel rang"*), and a sparse encoding would
+    /// make it indistinguishable from *"we did not look"* — the oracle's fifth-limit
+    /// mistake, one plane over.
+    pub doorbells_by_engine: [u64; ENGINE_KINDS],
+    /// ★ Doorbells whose channel did not resolve at all, so no engine could be named.
+    /// `sum(doorbells_by_engine) + doorbells_engine_unrouted == doorbells`, always.
+    pub doorbells_engine_unrouted: u64,
     /// ★ `doorbells == doorbells_served + doorbells_refused`, always. Neither can absorb
     /// the other, so *"the transport works and the routing does not"* is a readable state
     /// rather than a silence — which is exactly what E2 expects to see before E5.
@@ -2264,6 +2298,10 @@ impl Default for KayfabeRegAudit {
             isolate_refusal: Default::default(),
             doorbells: Default::default(),
             doorbells_served: Default::default(),
+            doorbells_served_locally: Default::default(),
+            doorbells_served_forwarded: Default::default(),
+            doorbells_by_engine: Default::default(),
+            doorbells_engine_unrouted: Default::default(),
             doorbells_refused: Default::default(),
             doorbell_last_token: Default::default(),
             doorbell_last_token_valid: Default::default(),
@@ -2701,6 +2739,39 @@ struct CeShellState {
     /// decode to `Opaque` — UVM binds its CE class once and fires forever after.
     states:
         std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>,
+    /// ★★★★ **§16.65 — THE PER-ENGINE DOORBELL CENSUS.** See [`DoorbellCensus`].
+    census: std::sync::Mutex<DoorbellCensus>,
+}
+
+/// ★★★★ **§16.65 — how the arriving doorbells PARTITION by the engine of the channel they
+/// routed to.** The instrument this rung's routing change is read against.
+///
+/// # ⊘ Why a census and not the sixteen logged lines
+///
+/// `[measured 2026-08-10, boots s49/s50]` the doorbell population was `448 arrived / 354
+/// served / 94 refused`, and the only per-channel evidence beside it was **16 logged
+/// lines** — a bounded sample, capped by the log's own slot count. A sample can say *"a GR
+/// channel was refused"*; it cannot say *"the refused population **is** the GR population"*,
+/// and those are the two outcomes this rung has to tell apart. Without the partition, the
+/// refutation *"`EngineKind` does not partition doorbell traffic"* and the refutation *"the
+/// engine refinement never reached UVM's channels"* produce the **same** count and are
+/// indistinguishable.
+///
+/// ⊘ Tallied where the routing decision is made, from the **same** `CeChannelFacts` the
+/// decision reads — never re-resolved. §16.64's own named failure was a probe that
+/// re-derived what the serving path had already decided and printed the disagreement as
+/// fact.
+#[derive(Debug, Clone, Copy, Default)]
+struct DoorbellCensus {
+    /// Doorbells whose channel resolved, bucketed by `kayfabe_rt::EngineKind::index`.
+    by_engine: [u64; kayfabe_rt::ENGINE_KIND_COUNT],
+    /// ★ Doorbells whose channel **did not resolve at all** — `ce_channel_facts` refused,
+    /// so there is no engine to bucket them under.
+    ///
+    /// ⊘ A bucket of its own and never folded into `Other`: `Other` is *"an engine the core
+    /// routes but does not interpret"*, a fact about a channel we found; this is *"we found
+    /// no channel"*. Folding them would let a routing failure read as an exotic engine.
+    unrouted: u64,
 }
 
 impl core::fmt::Debug for SharedDoorbell {
@@ -2946,10 +3017,73 @@ impl SharedDoorbell {
     }
 
     fn try_ce_submission(&self, token: u64) -> Option<kayfabe_device::DoorbellReport> {
-        let facts = self
-            .device
-            .ce_channel_facts(DOORBELL_TARGET_GPU, token)
-            .ok()?;
+        // ★★★★ §16.65 — **the census is taken HERE**, at the top of the one function every
+        // doorbell passes through (`ring` calls it unconditionally, first), and from the
+        // same `CeChannelFacts` the routing decision below reads. ⊘ Not from a second
+        // `ce_channel_facts` call in `ring`: two resolutions of one fact can disagree, and
+        // §16.64's boot is this campaign's own instance of a probe printing the
+        // disagreement as the only thing a reader sees.
+        let facts = match self.device.ce_channel_facts(DOORBELL_TARGET_GPU, token) {
+            Ok(facts) => facts,
+            Err(_) => {
+                // ⊘ Counted, then handed on unchanged: a doorbell whose channel did not
+                // resolve is not this executor's, and it never was. The tally exists so
+                // that `arrived` minus the buckets is zero by construction and a
+                // disappearing doorbell cannot hide in the gap.
+                self.ce
+                    .census
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .unrouted += 1;
+                return None;
+            }
+        };
+        self.ce
+            .census
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .by_engine[facts.engine_index()] += 1;
+        // ★★★★ **§16.65 — THE ROUTING STATEMENT, and it comes BEFORE every other gate.**
+        //
+        // `[measured 2026-08-10, boots s49/s50]` this executor's first refusal was
+        // `FwdFault::SubmissionHasNoLaunch { entries: 1, index: 0, methods: 3, opaque: 2 }`
+        // — a **GR** pushbuffer decoded by the **CE** codec, correctly declining to find a
+        // CE launch in it. The gate below asks about the isolate *plane*, never about the
+        // *engine*, and on the shipping (`Stillborn`) configuration it never fires at all,
+        // so this arm claimed every doorbell with a VA space and a ring regardless of which
+        // engine the channel belongs to.
+        //
+        // ⊘ **Nothing was ever forged** — the pushbuffer codec is class-gated
+        // (`kayfabe-chips/src/ga10x.rs`, `kayfabe-arch/src/lib.rs`), so a GR ring decodes to
+        // `Opaque` and no CE launch can be synthesised out of it. The defect is *routing*:
+        // the doorbell reached an executor that can never serve it, and the name it was
+        // refused by described the **pushbuffer's shape** instead of the **routing
+        // mistake** — a refusal that is true of the bytes and silent about the cause.
+        //
+        // ⚠ **What this changes outside the measured configuration, stated rather than
+        // discovered later.** With a real forwarding plane (`KAYFABE_ISOLATES` set) a
+        // `GrCompute` channel with a `vas_pdb` used to return `None` here and fall through
+        // to `SharedDevice::doorbell`. It is now refused by name instead. That is
+        // deliberate: §15.5's own words for what that fall-through achieved are *"we rang a
+        // doorbell on a host channel into which the guest's methods were never copied"*,
+        // and GR forwarding needs a host channel that SHADOWS the guest's plus the
+        // `OS_DESCRIPTOR` primitive, neither of which is built
+        // (`ce_executor_tree.md:107-126`). A true refusal outranks a forwarded no-op.
+        // ⊘ `Ce` is unaffected on both planes — it falls through to exactly today's gate.
+        let route = facts.route();
+        if route != kayfabe_rt::DoorbellRoute::CpuCe {
+            return Some(refused(
+                token,
+                kayfabe_device::FaultTag("Route::NotACopyEngineChannel"),
+                format!(
+                    "this channel's engine is {} (route {route:?}), so its pushbuffer is \
+                     not copy-engine work and the shell's CPU copy-engine executor is the \
+                     wrong executor for it; refused by the ROUTING fact rather than \
+                     decoded by a codec that can only decline",
+                    facts.engine_name(),
+                ),
+            ));
+        }
         // ★★★ §14.24 — see `SharedDoorbell::local_ce_is_the_only_executor` for the boot
         // that turned this from `vas_pdb.is_none()` into a question about EXECUTORS.
         if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor {
@@ -4271,8 +4405,16 @@ impl Regs {
             commands_unserviced,
             doorbells,
             doorbells_served,
+            doorbells_served_locally,
+            doorbells_served_forwarded,
             doorbells_refused,
         } = self.plane.counters();
+        // ★★★★ §16.65 — the per-engine census, read from the SAME shared shell state the
+        // routing decision tallies into (`SharedDoorbell::try_ce_submission`). ⊘ Not
+        // re-derived from the object model here: a second walk of the channel table could
+        // disagree with what the doorbell path actually decided, which is §16.64's own
+        // named failure.
+        let db_census = *self.ce.census.lock().unwrap_or_else(|e| e.into_inner());
         let (bar_pde_updates, bar_pde_refusals) = self.plane.bar_pde_counts();
         // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
         // ⊘⊘ which it did NOT before 2026-08-09: it was `sample.len()`, clamped by the
@@ -4626,6 +4768,10 @@ impl Regs {
             isolate_refusal,
             doorbells,
             doorbells_served,
+            doorbells_served_locally,
+            doorbells_served_forwarded,
+            doorbells_by_engine: db_census.by_engine,
+            doorbells_engine_unrouted: db_census.unrouted,
             doorbells_refused,
             doorbell_last_token: last_token.unwrap_or(0),
             doorbell_last_token_valid: u64::from(last_token.is_some()),

@@ -62,7 +62,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex};
 
-use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa, Pdb, VChid};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Gpu, GpuError, PendingSpawn, PendingSpawns, Proc, ProcSet, Spine};
 use kayfabe_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind};
@@ -1583,6 +1583,11 @@ impl SharedDevice {
                     // it. ⊘ Read here rather than joined later for `ce_channel_facts`' own
                     // stated reason: two projections of one fact can disagree.
                     bound_engine: proc.exec.bound.get(&route.chan).copied(),
+                    // ★★★★ §16.65 — off the SAME resolved `Channel` as `vas_pdb` two lines
+                    // up, so the engine and the address space can never be attributed to
+                    // different channels. ⊘ Deliberately NOT derived from `bound_engine`
+                    // above: see this field's doc for the measurement that rules that out.
+                    engine: chan.engine,
                 })
             },
         )?
@@ -2696,4 +2701,124 @@ pub struct CeChannelFacts {
     /// ⚠ It is a *declared* fact like every other field here — the guest said it, we
     /// recorded it. It is not a claim that any engine ran.
     pub bound_engine: Option<u32>,
+    /// ★★★★ **§16.65 — the channel's own [`EngineKind`]**, carried off the same resolved
+    /// [`kayfabe_core::gpu::Channel`] that produced [`Self::vas_pdb`], so the doorbell path
+    /// can finally name the engine a ringing channel belongs to.
+    ///
+    /// # ⊘ THE ROUTING KEY IS THIS FIELD AND NOT [`Self::bound_engine`]
+    ///
+    /// The two look interchangeable and are not, and picking the wrong one is a silent
+    /// misroute rather than a build error. `bound_engine` is a **sparse projection of one
+    /// wire message**: `NVA06F_CTRL_CMD_BIND` (`0xa06f0104`) occurs `[measured 2026-08-10,
+    /// boot s48 census]` **2× per boot, both with `result 0xffffffff`** — nothing answered
+    /// — against **14 live channels**. Routing on it would leave twelve channels with
+    /// `None` and route them by a default, which is the shape this campaign names *"a
+    /// fallback keyed on our own ignorance"*.
+    ///
+    /// ★ This field, by contrast, is **total**: it is the channel class's declared kind
+    /// (`kayfabe_core::project`), refined by the engine object the guest allocated on the
+    /// channel. Every channel has one because every channel was allocated with a class.
+    ///
+    /// ⊘ Both are still carried, side by side and never reconciled — the §16.16 rule. A
+    /// boot in which `engine == Ce` and `bound_engine == None` is the *normal* shape here,
+    /// and reading it as a disagreement would be reading a sparse instrument as a census.
+    pub engine: EngineKind,
+}
+
+/// ★★★★ **§16.65 — WHICH EXECUTOR OWNS A RUNG DOORBELL**, decided from the channel's own
+/// [`EngineKind`] and from nothing else.
+///
+/// # ⊘ Why this exists as a value rather than an `if` at the one call site
+///
+/// `[measured 2026-08-10, boots s49/s50]` the shim's CPU copy-engine executor claimed
+/// **every** doorbell that had a VA space and a ring, `Ce` and `GrCompute` alike, because
+/// the only gate in front of it asked about the *isolate plane* and not about the *engine*.
+/// The visible symptom was `FwdFault::SubmissionHasNoLaunch { methods: 3, opaque: 2 }` —
+/// a **GR** pushbuffer being decoded by the **CE** codec, correctly declining to find a CE
+/// launch in it. ⊘ Nothing was forged (the codec is class-gated, so a GR ring decodes to
+/// `Opaque`), but those doorbells reached the wrong executor and could never reach a right
+/// one, and the refusal they got named the *pushbuffer's* shape rather than the *routing*
+/// mistake that put them there.
+///
+/// ★ So the statement is *"this channel's work belongs to executor X"*, made once, keyed on
+/// the one total field ([`CeChannelFacts::engine`]) — never on the sparse
+/// [`CeChannelFacts::bound_engine`], whose own doc carries the measurement that rules it
+/// out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoorbellRoute {
+    /// The shell's own CPU copy-engine executor (`kayfabe_rt::ceutils`). The copy IS the
+    /// workload and its operands are in memory this process holds, so it can run here.
+    CpuCe,
+    /// ★ A GR context — compute or graphics. **Nothing serves this yet**, and it is a
+    /// distinct variant rather than folded into [`DoorbellRoute::Unserved`] because the two
+    /// are different states of knowledge: GR is the *destination the ladder is walking
+    /// toward* (`ce_executor_tree.md`; it still needs a host channel that SHADOWS the
+    /// guest's and the `OS_DESCRIPTOR` primitive), while `Unserved` is an engine nobody has
+    /// designed a path for. Collapsing them would make the census unable to say how much
+    /// traffic is waiting on work that is planned.
+    HostGr,
+    /// NVENC, NVDEC, or an engine the core routes but does not interpret. No executor.
+    Unserved,
+}
+
+/// How many buckets a per-engine doorbell census has — [`EngineKind::ALL`]'s length.
+pub const ENGINE_KIND_COUNT: usize = EngineKind::ALL.len();
+
+/// The census's bucket labels, in [`EngineKind::ALL`] order.
+///
+/// ⊘ Surfaced here so the shim can *label* its histogram without taking a normal dependency
+/// on `kayfabe-arch` — see [`CeChannelFacts::engine_index`].
+#[must_use]
+pub fn engine_kind_names() -> [&'static str; ENGINE_KIND_COUNT] {
+    EngineKind::ALL.map(EngineKind::name)
+}
+
+/// ★★★★ **§16.65 — THE ROUTING STATEMENT ITSELF**, over an [`EngineKind`] and nothing else.
+///
+/// # ⊘ Why it is a free function and not only a method on [`CeChannelFacts`]
+///
+/// The decision depends on exactly one field, and `CeChannelFacts` is a twenty-field
+/// structure that can only be built by resolving a live channel out of a realized device.
+/// A decision reachable only through its own preconditions is a decision **nothing tests**
+/// — `[audited 2026-08-10]` `SharedDoorbell::try_ce_submission`, which is where this
+/// decision is acted on, had **no test coverage of any kind**. Splitting the pure half out
+/// is the same move `shim_logic.rs` makes for `isolate_plane_from`, and for the same
+/// reason: the half that can be quantified over should be.
+///
+/// ⊘ The `match` is exhaustive with no `_` arm, so a new [`EngineKind`] variant fails this
+/// build until somebody says which executor owns it. A default arm would hand it to
+/// whichever executor answered first, which is the §16.65 defect restated.
+#[must_use]
+pub fn route_of_engine(engine: EngineKind) -> DoorbellRoute {
+    match engine {
+        EngineKind::Ce => DoorbellRoute::CpuCe,
+        EngineKind::GrCompute | EngineKind::GrGraphics => DoorbellRoute::HostGr,
+        EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => DoorbellRoute::Unserved,
+    }
+}
+
+impl CeChannelFacts {
+    /// The executor this channel's doorbells belong to — [`route_of_engine`] of
+    /// [`CeChannelFacts::engine`]. ⊘ Delegates rather than re-deciding: two copies of one
+    /// rule is how the §16.64 probe came to contradict the serving path beside it.
+    #[must_use]
+    pub fn route(&self) -> DoorbellRoute {
+        route_of_engine(self.engine)
+    }
+
+    /// This channel's histogram bucket — [`EngineKind::index`], surfaced so the shim can
+    /// tally a per-engine doorbell census **without naming an architecture crate**
+    /// (`crates/kayfabe-qemu-raw/Cargo.toml`: `kayfabe-arch` is deliberately not a normal
+    /// dependency of the shim, and this rung does not make it one).
+    #[must_use]
+    pub fn engine_index(&self) -> usize {
+        self.engine.index()
+    }
+
+    /// This channel's engine name, for the same reason and under the same constraint as
+    /// [`CeChannelFacts::engine_index`].
+    #[must_use]
+    pub fn engine_name(&self) -> &'static str {
+        self.engine.name()
+    }
 }

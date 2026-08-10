@@ -156,3 +156,50 @@ pub enum EngineKind {
     /// An engine the core routes but does not interpret.
     Other,
 }
+
+impl EngineKind {
+    /// ★★★ **Every variant, in a fixed order** — the census's bucket order.
+    ///
+    /// ⊘ A `const` array rather than a derive or a crate: the exhaustiveness obligation is
+    /// carried by [`EngineKind::index`]'s `match` below, which fails the build when a
+    /// variant is added, and this array is what that index points into. Adding a variant
+    /// without extending both is a compile error, not a silently missing bucket — which is
+    /// this campaign's own standard for an instrument that partitions a population.
+    pub const ALL: [EngineKind; 6] = [
+        EngineKind::GrCompute,
+        EngineKind::GrGraphics,
+        EngineKind::Ce,
+        EngineKind::NvEnc,
+        EngineKind::NvDec,
+        EngineKind::Other,
+    ];
+
+    /// This kind's position in [`EngineKind::ALL`] — a histogram bucket index.
+    #[must_use]
+    pub fn index(self) -> usize {
+        match self {
+            EngineKind::GrCompute => 0,
+            EngineKind::GrGraphics => 1,
+            EngineKind::Ce => 2,
+            EngineKind::NvEnc => 3,
+            EngineKind::NvDec => 4,
+            EngineKind::Other => 5,
+        }
+    }
+
+    /// The kind's short, stable name — what a census line prints.
+    ///
+    /// ⊘ Short deliberately: it labels a column in a one-line histogram, and a reader
+    /// comparing two boots compares the numbers under names that did not move.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            EngineKind::GrCompute => "GrCompute",
+            EngineKind::GrGraphics => "GrGraphics",
+            EngineKind::Ce => "Ce",
+            EngineKind::NvEnc => "NvEnc",
+            EngineKind::NvDec => "NvDec",
+            EngineKind::Other => "Other",
+        }
+    }
+}

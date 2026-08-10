@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 35u
+#define KAYFABE_SHIM_ABI 36u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -161,6 +161,18 @@ typedef struct KayfabeAudit {
 /* The wire ABI the archive speaks.  The one call that takes no address, so it is safe to make
  * first, before anything has been validated. */
 uint32_t kayfabe_shim_abi_version(void);
+
+/* ★★★★ §16.65 — the LABEL for bucket `idx` of KayfabeRegAudit::doorbells_by_engine.
+ *
+ * ⊘ The names cross the seam rather than being written down here, because a C-side table
+ * would be a SECOND declaration of one ordering: it would keep printing every bucket, with
+ * a plausible number under the wrong name, and nothing would catch it.  The order is
+ * `kayfabe_rt::EngineKind::ALL`'s, once, and this asks for it.
+ *
+ * Returns a static, NUL-terminated string the caller must not free; an out-of-range index
+ * yields "?" and never NULL, because a NULL handed to %s is undefined behaviour in the
+ * caller and a refusal must not be worse than what it refuses. */
+const char *kayfabe_shim_engine_kind_name(uint32_t idx);
 
 /* Realize the memory plane.  On KAYFABE_OK, *out_handle is the handle every other entry point
  * takes.  On any other return *out_handle is untouched and (*out_msg, *out_msg_len) describe
@@ -365,6 +377,10 @@ typedef struct KayfabeRegWrite {
  * traces/guest_boots/*_qemu.log] `grep -c hClass` over every committed device log returns
  * ZERO: this port had never once named a class it refused, and answering "which ones?"
  * meant reading the GUEST's dmesg, a plane we neither own nor always capture. */
+/* ★★★★ §16.65 — how many engine buckets the doorbell census has.  Must equal
+ * `kayfabe_qemu_raw::ENGINE_KINDS` and `kayfabe_rt::ENGINE_KIND_COUNT`. */
+#define KAYFABE_ENGINE_KINDS 6u
+
 #define KAYFABE_REFUSAL_IDS_PER_TAG 8u
 
 typedef struct KayfabeBridgeRefusal {
@@ -809,6 +825,32 @@ typedef struct KayfabeRegAudit {
      * rang" — the same two-fields-for-one-fact argument fb_landed_valid already carries. */
     uint64_t doorbells;
     uint64_t doorbells_served;
+    /* ★★★★ §16.62.3 — the SPLIT of `doorbells_served`, because that number was being read
+     * as progress without saying WHOSE progress.  `_locally` is a copy THIS PROCESS ran and
+     * whose end it witnessed; `_forwarded` is a host channel rung at an instant this device
+     * was not standing at.  They are different events with different evidence, and
+     * `_locally + _forwarded == doorbells_served` always. */
+    uint64_t doorbells_served_locally;
+    uint64_t doorbells_served_forwarded;
+    /* ★★★★ §16.65 — THE PER-ENGINE DOORBELL CENSUS, bucketed in kayfabe_engine_kind_name()
+     * order.
+     *
+     * ⊘ Why a whole array and not a headline: the three numbers above cannot tell
+     * "EngineKind does not partition doorbell traffic" from "the engine refinement never
+     * reached UVM's channels" — both refutations produce the SAME arrived/served/refused
+     * triple, and the only other per-channel evidence in a boot log is the 16-line bounded
+     * doorbell sample.  A bounded sample is not a census.
+     *
+     * ⊘ Fixed-width with every bucket printed, zeros included: an empty bucket is a
+     * MEASUREMENT ("no NVENC channel rang"), and a sparse encoding would make it
+     * indistinguishable from "we did not look".
+     *
+     * `sum(doorbells_by_engine) + doorbells_engine_unrouted == doorbells`, always;
+     * `_unrouted` is a doorbell whose channel did not resolve, so no engine could be named.
+     * ⊘ It is its own bucket and is never folded into "Other" — "Other" is an engine we
+     * found and do not interpret, this is a channel we did not find. */
+    uint64_t doorbells_by_engine[KAYFABE_ENGINE_KINDS];
+    uint64_t doorbells_engine_unrouted;
     uint64_t doorbells_refused;
     uint64_t doorbell_last_token;
     uint64_t doorbell_last_token_valid;

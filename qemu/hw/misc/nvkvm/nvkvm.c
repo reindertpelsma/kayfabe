@@ -2361,6 +2361,52 @@ static void nvkvm_report_registers(NvkvmState *s)
                 a.doorbells, a.doorbells_served, a.doorbells_refused,
                 a.doorbell_last_token_valid ? "" : "n/a ",
                 a.doorbell_last_token, s->doorbells_logged);
+    /*
+     * ★★★★ §16.62.3 — WHOSE progress the `served` number is.  Printed on its own line and
+     * unconditionally, zeros included, because the two servings are different events with
+     * different evidence: `local` means this process moved the bytes and witnessed the end;
+     * `forwarded` means a host channel was rung at an instant this device was not standing
+     * at.  A boot whose split moved from one to the other would be a change in what
+     * `served` MEANS with the number unchanged.
+     */
+    info_report("nvkvm:   of the served: %" PRIu64 " local (CPU CE, end witnessed), %"
+                PRIu64 " forwarded (host channel rung)",
+                a.doorbells_served_locally, a.doorbells_served_forwarded);
+    /*
+     * ★★★★ §16.65 — THE PER-ENGINE DOORBELL CENSUS.
+     *
+     * ⊘ EVERY bucket, zeros included, on one line.  An empty bucket is a measurement — "no
+     * NVENC channel rang" — and a printer that skipped it would make that indistinguishable
+     * from "we did not look", which is this campaign's own fifth-limit mistake one plane
+     * over.  `unrouted` is last and separate: a channel we did not find, never an engine we
+     * do not interpret.
+     *
+     * ⊘ This is a CENSUS and not a sample.  The 16 per-write doorbell lines above are
+     * capped by their own slot count, so they can say "a GR channel was refused" and can
+     * never say "the refused population IS the GR population" — which is the only question
+     * the routing statement can be falsified by.
+     */
+    {
+        /* KAYFABE_ENGINE_KINDS names of <= 16 chars plus a 20-digit count and a separator,
+         * then the unrouted tail.  Sized with room to spare and TRUNCATED rather than
+         * overrun — and the truncation is not silent: `n` is checked below. */
+        char hist[512];
+        int n = snprintf(hist, sizeof(hist), "nvkvm:   by engine:");
+        for (unsigned i = 0; i < KAYFABE_ENGINE_KINDS && n > 0 &&
+                             (size_t)n < sizeof(hist); i++) {
+            n += snprintf(hist + n, sizeof(hist) - (size_t)n, " %s=%" PRIu64,
+                          kayfabe_shim_engine_kind_name(i),
+                          a.doorbells_by_engine[i]);
+        }
+        if (n > 0 && (size_t)n < sizeof(hist)) {
+            n += snprintf(hist + n, sizeof(hist) - (size_t)n,
+                          " unrouted=%" PRIu64, a.doorbells_engine_unrouted);
+        }
+        /* ⊘ A census that silently lost a bucket would be worse than none — it would read
+         * as a complete partition.  So say so, in the line itself. */
+        info_report("%s%s", hist,
+                    (n < 0 || (size_t)n >= sizeof(hist)) ? " [TRUNCATED]" : "");
+    }
     if (a.doorbell_local_serving.present) {
         int len = (int)(a.doorbell_local_serving.len > KAYFABE_DOORBELL_REFUSAL_LEN
                         ? KAYFABE_DOORBELL_REFUSAL_LEN : a.doorbell_local_serving.len);

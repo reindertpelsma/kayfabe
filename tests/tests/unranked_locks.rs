@@ -85,6 +85,17 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>",
         "Per-channel method accumulators, keyed and committed exactly like the cursors beside          them. Taken for a single map read, and again for a single insert on the success arm;          no call of any kind beneath it.",
     ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<DoorbellCensus>",
+        "★★★★ §16.65 — the per-engine doorbell census. Taken for a single `+= 1` on a fixed \
+         array and released before the routing decision it counts; taken again, alone, to copy \
+         the whole (`Copy`) struct out at audit time. ⊘ NO call of any kind runs beneath it, and \
+         it is deliberately NOT held across `try_ce_submission`'s body — the tally must not \
+         become a second lock nested inside the guest-memory port two entries up, which is \
+         already this file's second named hazard. It is a fixed-size array of counters with no \
+         guest-supplied key, so it can neither grow nor allocate while held.",
+    ),
 ];
 
 /// Crates a vCPU thread executes through — the scope of the list above.

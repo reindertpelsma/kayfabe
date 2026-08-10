@@ -57,7 +57,7 @@
 //! device, the region table and the lifecycle. A refusal that names itself is a smaller lie
 //! than a function that returns success without raising anything.
 
-use core::ffi::c_void;
+use core::ffi::{c_char, c_void};
 use std::sync::Arc;
 
 use kayfabe_vmm::BarId;
@@ -716,6 +716,47 @@ fn borrow<'a>(handle: *mut c_void) -> Option<&'a Shim> {
 pub extern "C" fn kayfabe_shim_abi_version() -> u32 {
     ABI_VERSION
 }
+
+/// ★★★★ **§16.65 — the LABEL for bucket `idx` of `KayfabeRegAudit::doorbells_by_engine`.**
+///
+/// # ⊘ Why the names cross the seam instead of being written down in C
+///
+/// The census is an array of counts whose meaning is entirely positional, so a C-side name
+/// table would be a **second declaration of one ordering** — and this campaign's own record
+/// on two projections of one fact is that they eventually disagree and the weaker one is
+/// what a reader sees (§16.64). Here the disagreement would be silent and total: every
+/// bucket would still print, with a plausible number under the wrong name, and no gate
+/// anywhere could tell. So the order is `kayfabe_rt::EngineKind::ALL`'s, once, and C asks.
+///
+/// ⊘ An out-of-range index returns `"?"` rather than a null: this is a *printer's* label,
+/// and a `NULL` handed to `%s` is undefined behaviour in the caller — the refusal must not
+/// be more dangerous than the thing it refuses. It also cannot be reached, because the C
+/// loop is bounded by `KAYFABE_ENGINE_KINDS`, which a test pins to the Rust count.
+///
+/// The returned pointer is `'static` and NUL-terminated; the caller must not free it.
+#[unsafe(no_mangle)]
+pub extern "C" fn kayfabe_shim_engine_kind_name(idx: u32) -> *const c_char {
+    ENGINE_KIND_C_NAMES
+        .get(idx as usize)
+        .copied()
+        .unwrap_or(c"?")
+        .as_ptr()
+}
+
+/// The bucket labels as NUL-terminated C strings, in `kayfabe_rt::EngineKind::ALL` order.
+///
+/// ⊘ `tests/shim_logic.rs` asserts, element by element, that this equals
+/// `kayfabe_rt::engine_kind_names()` — so the literals below cannot drift from the enum
+/// they label, and a variant added to `EngineKind` fails that test rather than shifting
+/// every name in a boot log by one.
+const ENGINE_KIND_C_NAMES: [&core::ffi::CStr; crate::shim::ENGINE_KINDS] = [
+    c"GrCompute",
+    c"GrGraphics",
+    c"Ce",
+    c"NvEnc",
+    c"NvDec",
+    c"Other",
+];
 
 /// Realize the memory plane. On success `*out_handle` is a handle to be passed to every
 /// other entry point and finally to [`kayfabe_shim_unrealize`].

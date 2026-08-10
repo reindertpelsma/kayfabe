@@ -456,6 +456,24 @@ pub struct Counters {
     /// Of those, the ones the installed [`crate::DoorbellPort`] **served** — a
     /// `DoorbellOutcome` came back from the core.
     pub doorbells_served: u64,
+    /// ★★★★ **§16.62.3 — of the served, the ones the SHELL's own CPU executor ran**
+    /// ([`crate::DoorbellReport::ServedLocally`]).
+    ///
+    /// ⊘ Split out because [`Counters::doorbells_served`] answers a question nobody is
+    /// actually asking at this wall. *"354 served"* is read as progress, but the two
+    /// servings are different events with different evidence: `ServedLocally` means **this
+    /// process moved the bytes and witnessed the end**, while `Served` means a host channel
+    /// was rung at an instant this device was not standing at. A boot in which the split
+    /// moved from one to the other would be a change in what the number means, with the
+    /// number unchanged — which is the shape [`crate::DoorbellReport::ServedLocally`]'s own
+    /// doc refuses one field over.
+    ///
+    /// ★ `doorbells_served_locally + doorbells_served_forwarded == doorbells_served`,
+    /// always, for the same reason `served + refused == doorbells` does.
+    pub doorbells_served_locally: u64,
+    /// ★★ Of the served, the ones handed to a **host** channel
+    /// ([`crate::DoorbellReport::Served`]). See [`Counters::doorbells_served_locally`].
+    pub doorbells_served_forwarded: u64,
     /// Of those, the ones the port **refused, by name**. Includes the refusal of the
     /// default [`crate::RefusingDoorbell`], which is what a build with no forwarding plane
     /// answers every ring with.
@@ -1049,6 +1067,9 @@ struct PlaneCounters {
     nonstall_masked: AtomicU64,
     doorbells: AtomicU64,
     doorbells_served: AtomicU64,
+    /// ★★★★ §16.62.3 — the SPLIT of `doorbells_served`. See `Counters::doorbells_served_locally`.
+    doorbells_served_locally: AtomicU64,
+    doorbells_served_forwarded: AtomicU64,
     doorbells_refused: AtomicU64,
 }
 
@@ -1912,6 +1933,8 @@ impl RegPlane {
             nonstall_masked,
             doorbells,
             doorbells_served,
+            doorbells_served_locally,
+            doorbells_served_forwarded,
             doorbells_refused,
         } = &self.c;
         Counters {
@@ -1951,6 +1974,8 @@ impl RegPlane {
             nonstall_masked: g(nonstall_masked),
             doorbells: g(doorbells),
             doorbells_served: g(doorbells_served),
+            doorbells_served_locally: g(doorbells_served_locally),
+            doorbells_served_forwarded: g(doorbells_served_forwarded),
             doorbells_refused: g(doorbells_refused),
         }
     }
@@ -2917,6 +2942,23 @@ impl RegPlane {
             // neither would break it silently. Which serving it was is in the report.
             DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. } => {
                 self.c.doorbells_served.fetch_add(1, Ordering::Relaxed);
+                // ★★★★ §16.62.3 — and WHICH serving it was, in its own counter. The arm
+                // above deliberately keeps both together so `served + refused == doorbells`
+                // cannot be broken; this one says what `served` is made of, so a boot can
+                // never report progress without saying whose progress it was.
+                match &report {
+                    DoorbellReport::ServedLocally { .. } => {
+                        self.c.doorbells_served_locally.fetch_add(1, Ordering::Relaxed);
+                    }
+                    DoorbellReport::Served { .. } => {
+                        self.c
+                            .doorbells_served_forwarded
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    // ⊘ Unreachable under the outer arm; named rather than `_` so a new
+                    // report variant fails this build instead of vanishing from the split.
+                    DoorbellReport::Refused { .. } => {}
+                }
             }
             DoorbellReport::Refused { .. } => {
                 self.c.doorbells_refused.fetch_add(1, Ordering::Relaxed);

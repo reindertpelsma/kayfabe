@@ -695,9 +695,22 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // ★ This gate BIT when the fields landed (16800 vs 16728, a 72-byte delta that is
     // 9 x 8 exactly), which is what makes the arithmetic below a check rather than a
     // restatement — cf. §16.18, whose bump was missed because the gate was already red.
+    //
+    // ★★★★ 106 -> 115 at §16.65: the doorbell census's nine words — the `served` SPLIT
+    // (`doorbells_served_locally`, `_forwarded`) and the per-engine partition
+    // (`doorbells_by_engine[ENGINE_KINDS]` plus `doorbells_engine_unrouted`). This is the
+    // reason the wire ABI moved to 36.
+    //
+    // ⊘ The array is written as `ENGINE_KINDS` and not as `6`, so a variant added to
+    // `kayfabe_rt::EngineKind` moves BOTH sides of this equation and the gate keeps
+    // checking rather than quietly agreeing with itself — the same reason `PROBE_ARM_SLOTS`
+    // is named above. ★ This gate BIT when the fields landed (26672 vs 26600, a 72-byte
+    // delta that is 9 x 8 exactly).
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (106 + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
+        (106 + 3
+            + kayfabe_qemu_raw::shim::ENGINE_KINDS
+            + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
             * size_of::<u64>()
             // ★★★★ §16.40 — the promote-ctx diagnosis: one row per refusal KIND, plus the
@@ -1811,4 +1824,53 @@ fn the_framebuffer_dump_separates_refused_from_empty_from_written() {
         "⊘ an address the store does not back must REFUSE, never read as zeros — otherwise \
          the dump's 'empty' outcome absorbs a wiring fault"
     );
+}
+
+/// ★★★★ **§16.65 — the per-engine census's LABELS cannot drift from its BUCKETS.**
+///
+/// # ⊘ What this catches that nothing else can
+///
+/// `KayfabeRegAudit::doorbells_by_engine` is an array whose meaning is entirely
+/// **positional**: bucket `i` means whatever `kayfabe_rt::EngineKind::ALL[i]` is. The C
+/// printer asks `kayfabe_shim_engine_kind_name` for the label, so there is one ordering —
+/// but the C strings themselves are literals in `shim_unsafe.rs`, and a variant inserted
+/// into `EngineKind` would shift every bucket **without breaking any build**. The census
+/// would keep printing all six columns, with plausible numbers under the wrong names, and
+/// a reader comparing two boots would compare two different questions.
+///
+/// ⊘ That failure mode is this campaign's own, twice over: a correct instrument answering
+/// the wrong question, and two projections of one fact that disagree with the weaker one
+/// being the only thing anybody reads. So the literals are pinned to the enum here.
+///
+/// ★ Non-vacuity is structural: the loop below is over the enum's own `ALL`, so an added
+/// variant lengthens it and the length assertion fails before the names are ever compared.
+#[test]
+fn the_engine_census_labels_match_the_enum_they_bucket() {
+    let rust = kayfabe_rt::engine_kind_names();
+    assert_eq!(
+        rust.len(),
+        kayfabe_qemu_raw::shim::ENGINE_KINDS,
+        "★ the census's width and the enum's variant count are the same number, and the C \
+         loop is bounded by the first while the buckets are filled by the second",
+    );
+    for (idx, want) in rust.iter().enumerate() {
+        let got = kayfabe_qemu_raw::shim_unsafe::kayfabe_shim_engine_kind_name(idx as u32);
+        // SAFETY: the entry point's contract is a static, NUL-terminated string; an
+        // out-of-range index yields `c"?"` rather than null, and this index is in range.
+        let got = unsafe { core::ffi::CStr::from_ptr(got) };
+        assert_eq!(
+            got.to_str().expect("the labels are ASCII"),
+            *want,
+            "★ bucket {idx} is labelled '{}' but holds {want} doorbells — a census whose \
+             columns are mislabelled reads as a complete partition of the wrong thing",
+            got.to_string_lossy(),
+        );
+    }
+    // ⊘ And the out-of-range answer is a printable label, never a null: the C hands this
+    // straight to `%s`, so a null here would be undefined behaviour in the caller.
+    let oob =
+        kayfabe_qemu_raw::shim_unsafe::kayfabe_shim_engine_kind_name(rust.len() as u32);
+    assert!(!oob.is_null(), "⊘ an out-of-range label must not be NULL");
+    // SAFETY: as above — the contract guarantees a static NUL-terminated string.
+    assert_eq!(unsafe { core::ffi::CStr::from_ptr(oob) }, c"?");
 }

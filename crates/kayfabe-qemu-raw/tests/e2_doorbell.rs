@@ -398,6 +398,29 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
                 ..Default::default()
             },
         },
+        // ★★★★ **§16.65 — THE ENGINE OBJECT, and it is load-bearing as of this rung.**
+        //
+        // Without it this channel is `EngineKind::GrCompute`, because there is exactly ONE
+        // GPFIFO class per architecture and `Ga10xArch::classify` must default
+        // (`kayfabe-chips/src/ga10x.rs:161`: *"a CE channel becomes one only when its
+        // `AMPERE_DMA_COPY_B` engine object arrives and the core's refinement pass rewrites
+        // it"*). `SharedDoorbell::try_ce_submission` now routes on that field, so a
+        // GR-labelled channel is refused `Route::NotACopyEngineChannel` **before** it can
+        // reach the isolate plane — and this test's whole subject is the refusal that is
+        // *downstream of routing*.
+        //
+        // ⊘⊘ It is spelled out here rather than quietly fixed because the fixture's
+        // previous shape was itself the discovery: **a channel's `EngineKind` is a fact
+        // with a LIFETIME**, `GrCompute` until its engine object lands. An end-of-boot
+        // census that reports a channel as `Ce` says nothing about what it was when its
+        // first doorbell rang. See this rung's report.
+        RmEvent::Alloc {
+            client: CLIENT,
+            parent: chan,
+            handle: h(0x1A),
+            class: ClassId(nv::AMPERE_DMA_COPY_B),
+            facts: AllocFacts::default(),
+        },
     ] {
         dev.apply(ev).expect("the bridge's object model accepts it");
     }
@@ -505,4 +528,138 @@ fn the_archive_realizes_exactly_one_object_model() {
         code.contains("plane: Arc::downgrade(&plane),"),
         "the doorbell port's back-reference to its own plane must be weak"
     );
+}
+
+/// ★★★★ **§16.65 — a GR channel's doorbell is refused BY THE ROUTING FACT, and a CE
+/// channel's is not.** The first test of any kind over `SharedDoorbell::try_ce_submission`.
+///
+/// # ⊘ What was wrong
+///
+/// `[measured 2026-08-10, boots s49/s50]` the shell's CPU **copy-engine** executor claimed
+/// every doorbell whose channel had a VA space and a ring — `Ce` and `GrCompute` alike —
+/// because the only gate in front of it asked about the isolate *plane*, never the
+/// *engine*, and on the shipping `Stillborn` configuration that gate never fires. The
+/// symptom was `FwdFault::SubmissionHasNoLaunch { methods: 3, opaque: 2 }`: a **GR**
+/// pushbuffer handed to the **CE** codec, which is class-gated and so decoded it to
+/// `Opaque` and correctly declined to find a CE launch in it.
+///
+/// ⊘ Nothing was forged, and that is exactly why nothing caught it — the refusal was *true
+/// of the bytes* and *silent about the cause*, so a boot reported a pushbuffer problem
+/// where it had a routing problem. A test asserting "it refuses" would have passed
+/// throughout. This one asserts **which name**, because the name is the whole increment.
+///
+/// # ★★★★ The non-vacuity, and it is the finding this rung actually turned up
+///
+/// The two halves differ by **one event**: the `AMPERE_DMA_COPY_B` engine object. There is
+/// one GPFIFO class per architecture, so `Ga10xArch::classify` labels every channel
+/// `GrCompute` and only the engine-object refinement rewrites it
+/// (`kayfabe-chips/src/ga10x.rs:161`). ⇒ **A channel's `EngineKind` is a fact with a
+/// LIFETIME.** A CE channel is `GrCompute` from its alloc until its engine object lands,
+/// and an end-of-boot census reporting it as `Ce` cannot say what it was when its first
+/// doorbell rang. That is the difference this test makes visible, on purpose.
+#[test]
+fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
+    use kayfabe_arch::ClientKind;
+    use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb, VChid};
+    use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
+    use kayfabe_abi::generated::classes as nv;
+
+    // ⊘ One fixture, parameterised by the single event under study, so the two outcomes
+    // cannot differ by anything else. A second hand-written fixture could drift.
+    let ring = |with_engine_object: bool| -> String {
+        let r = regs();
+        let dev = r.object_model();
+        const CLIENT: HClient = HClient(0x5c00_0000);
+        const PDB: Pdb = Pdb(0x4E60_0000);
+        let h = |off: u32| HObject(0x5c00_0000 + off);
+        let (root, device, vas, tsg, chan) = (h(0), h(1), h(0x10), h(0x12), h(0x19));
+        let mut events = vec![
+            RmEvent::Alloc {
+                client: CLIENT,
+                parent: root,
+                handle: root,
+                class: ClassId(nv::NV01_ROOT),
+                facts: AllocFacts {
+                    client_kind: Some(ClientKind::User { pid: CLIENT.0 }),
+                    ..Default::default()
+                },
+            },
+            RmEvent::Alloc {
+                client: CLIENT,
+                parent: root,
+                handle: device,
+                class: ClassId(nv::NV01_DEVICE_0),
+                facts: AllocFacts {
+                    device_instance: Some(0),
+                    ..Default::default()
+                },
+            },
+            RmEvent::Alloc {
+                client: CLIENT,
+                parent: device,
+                handle: vas,
+                class: ClassId(nv::FERMI_VASPACE_A),
+                facts: AllocFacts::default(),
+            },
+            RmEvent::SetPageDir {
+                client: CLIENT,
+                vaspace: vas,
+                pdb: PDB,
+            },
+            RmEvent::Alloc {
+                client: CLIENT,
+                parent: device,
+                handle: tsg,
+                class: ClassId(nv::KEPLER_CHANNEL_GROUP_A),
+                facts: AllocFacts {
+                    h_vaspace: Some(vas),
+                    ..Default::default()
+                },
+            },
+            RmEvent::Alloc {
+                client: CLIENT,
+                parent: tsg,
+                handle: chan,
+                class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
+                facts: AllocFacts {
+                    h_vaspace: Some(vas),
+                    userd_flags: kayfabe_mocks::MockArch::userd_flags_for(VChid(0)),
+                    ..Default::default()
+                },
+            },
+        ];
+        if with_engine_object {
+            events.push(RmEvent::Alloc {
+                client: CLIENT,
+                parent: chan,
+                handle: h(0x1A),
+                class: ClassId(nv::AMPERE_DMA_COPY_B),
+                facts: AllocFacts::default(),
+            });
+        }
+        for ev in events {
+            dev.apply(ev).expect("the bridge's object model accepts it");
+        }
+        dev.schedule_channel(CLIENT, chan, true)
+            .expect("the guest schedules the channel it just declared");
+        let after = r.write(BAR_REGS, DOORBELL, 4, 0);
+        kind_of(after.doorbell.as_ref().expect("a doorbell")).to_string()
+    };
+
+    assert_eq!(
+        ring(false),
+        "Route::NotACopyEngineChannel",
+        "★ a GR-labelled channel's doorbell must be refused by the ROUTING fact — not \
+         handed to the copy-engine codec to decline by the shape of bytes it was never \
+         meant to read",
+    );
+    assert_eq!(
+        ring(true),
+        "FwdFault::IsolateRetired",
+        "★ and a CE channel is untouched by the gate: it falls through to exactly the \
+         refusal it received before this rung, which is what 'additive' has to MEAN",
+    );
+    // ⊘ Non-vacuity: the two names really are different, so the fixture's single varied
+    // event is what decides — and the gate is not answering the same thing to everything.
+    assert_ne!(ring(false), ring(true));
 }

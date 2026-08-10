@@ -71,6 +71,15 @@ pub use kayfabe_arch::ids::GpuId;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};
+/// ★★★★ §16.65 — the doorbell **routing verdict** and the per-engine census's shape,
+/// re-exported for the same reason [`GpuId`] is.
+///
+/// ⊘ [`device::DoorbellRoute`] rather than `EngineKind` itself: the shim must be able to
+/// act on *which executor owns this doorbell* without naming an engine vocabulary, and
+/// re-exporting the verdict keeps `kayfabe-arch` out of its manifest exactly as that
+/// manifest demands. The count and the labels come with it because a census that could not
+/// print an empty bucket would report a partition it had not measured.
+pub use device::{ENGINE_KIND_COUNT, DoorbellRoute, engine_kind_names};
 
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
 // public types. `BlockingSection` is deliberately ABSENT: it is `!Send` by

@@ -616,3 +616,108 @@ fn fence_arm_selection_is_exact_at_the_channel() {
         Err(FwdFault::Address(_))
     ));
 }
+
+/// ★★★★ **§16.65 — the DOORBELL ROUTING STATEMENT, as a value, over every engine.**
+///
+/// # ⊘ What was wrong, and why a partition is the fix rather than a check
+///
+/// `[measured 2026-08-10, boots s49/s50]` the shim's CPU copy-engine executor claimed
+/// **every** doorbell that had a VA space and a ring — `Ce` and `GrCompute` alike — because
+/// the only gate in front of it asked about the *isolate plane* and never about the
+/// *engine*. The visible symptom was `FwdFault::SubmissionHasNoLaunch { methods: 3,
+/// opaque: 2 }`: a **GR** pushbuffer handed to the **CE** codec, which is class-gated and
+/// so correctly decoded it to `Opaque` and declined. ⊘ Nothing was forged — and that is
+/// precisely why nothing caught it. The refusal was *true of the bytes* and *silent about
+/// the cause*, so the boot reported a pushbuffer problem where it had a routing problem.
+///
+/// ★ So the statement is *"which executor owns this channel's work"*, and it is
+/// **exhaustive over `EngineKind`**: a variant added without a route fails to compile in
+/// `CeChannelFacts::route`, rather than falling into a default arm and being served by
+/// whoever happens to answer first.
+///
+/// ⊘ This test is over the **pure** decision, which is what `shim_logic.rs`'s own header
+/// calls the honest half of a seam: `try_ce_submission` needs a realized `SharedDevice`
+/// and a memory plane, and `[audited 2026-08-10]` had **no test coverage at all** before
+/// this rung. Pinning the decision is not pinning the gate; it is pinning the thing the
+/// gate reads.
+#[test]
+fn every_engine_kind_names_the_executor_that_owns_its_doorbells() {
+    use kayfabe_rt::DoorbellRoute;
+
+    // ★ The whole enum, from the enum's own list — so a new variant lands here rather than
+    // being silently absent from the table below.
+    for kind in EngineKind::ALL {
+        let want = match kind {
+            // The copy IS the workload and its operands are in memory this process holds.
+            EngineKind::Ce => DoorbellRoute::CpuCe,
+            // ⊘ Not served yet, and DISTINCT from `Unserved`: GR is the destination the
+            // ladder is walking toward, and a census must be able to say how much traffic
+            // is waiting on work that is planned.
+            EngineKind::GrCompute | EngineKind::GrGraphics => DoorbellRoute::HostGr,
+            EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => {
+                DoorbellRoute::Unserved
+            }
+        };
+        assert_eq!(
+            kayfabe_rt::device::route_of_engine(kind),
+            want,
+            "★ {} routes to the wrong executor — a doorbell sent to an executor that \
+             cannot serve it is refused by a name that describes the BYTES and says \
+             nothing about the routing",
+            kind.name(),
+        );
+    }
+
+    // ⊘ Non-vacuity: the mapping is not constant. A `route_of_engine` that returned one
+    // value for everything would satisfy every equality above if the table were wrong in
+    // the same direction, so assert the partition really has three cells.
+    assert_ne!(
+        kayfabe_rt::device::route_of_engine(EngineKind::Ce),
+        kayfabe_rt::device::route_of_engine(EngineKind::GrCompute),
+        "⊘ CE and GR must not share an executor — that identity IS the §16.65 defect",
+    );
+    assert_ne!(
+        kayfabe_rt::device::route_of_engine(EngineKind::GrCompute),
+        kayfabe_rt::device::route_of_engine(EngineKind::NvEnc),
+        "⊘ 'planned but not built' and 'nobody designed a path' are different states",
+    );
+}
+
+/// ★★★ **§16.65 — the census's buckets are a BIJECTION with the engines they count.**
+///
+/// `KayfabeRegAudit::doorbells_by_engine` is positional, so [`EngineKind::index`] is the
+/// only thing that says what bucket `i` holds. ⊘ Two variants sharing an index would merge
+/// two populations into one number that still looked like a partition — the failure this
+/// campaign names *"a wall that can carry no name"*, in a histogram.
+#[test]
+fn the_engine_census_buckets_are_distinct_and_cover_the_enum() {
+    let mut seen = vec![false; EngineKind::ALL.len()];
+    for kind in EngineKind::ALL {
+        let i = kind.index();
+        assert!(
+            i < seen.len(),
+            "★ {} indexes bucket {i}, past the end of a census of {} — the count and the \
+             enum have drifted",
+            kind.name(),
+            seen.len(),
+        );
+        assert!(
+            !seen[i],
+            "★ bucket {i} is claimed twice; two engines' doorbells would merge into one \
+             number that still reads as a partition",
+        );
+        seen[i] = true;
+        assert_eq!(
+            EngineKind::ALL[i],
+            kind,
+            "★ `index` and `ALL` disagree, so every label in a boot log is off by one",
+        );
+    }
+    assert!(seen.into_iter().all(|b| b), "⊘ a bucket nothing counts into");
+
+    // ⊘ And the names are distinct, or the census prints two columns a reader cannot tell
+    // apart — the same argument `rmrpc_bridge.rs`'s refusal-tag sweep makes one plane over.
+    let names: std::collections::BTreeSet<&str> =
+        EngineKind::ALL.iter().map(|k| k.name()).collect();
+    assert_eq!(names.len(), EngineKind::ALL.len(), "★ two engines share a label");
+}
