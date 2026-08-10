@@ -124,7 +124,24 @@ $GSSH 'for f in /tmp/nvtrace.txt /tmp/uvmtrace.txt; do
          printf "%s bytes=%s lines=%s\n" "$f" "$(stat -c%s $f 2>/dev/null || echo MISSING)" "$(wc -l < $f 2>/dev/null || echo 0)"
        done
        echo "INJECT_LINES=$(grep -c INJECT /tmp/nvtrace.txt 2>/dev/null || echo 0)"
+       echo "TSG_ALLOC_SEEN=$(grep -c "hClass=0x0000a06c" /tmp/nvtrace.txt 2>/dev/null || echo 0)"
+       echo "TSG_SCHED_SEEN=$(grep -c "cmd=0xa06c0101" /tmp/nvtrace.txt 2>/dev/null || echo 0)"
        echo "PROMOTE_CTX_SEEN=$(grep -c "cmd=0x2080012b" /tmp/nvtrace.txt 2>/dev/null || echo 0)"'
+# ⚠ ★★★ §16.55.5, CORRECTED HERE — the POSITIVE CONTROL was drawn from the wrong population.
+#
+# `PROMOTE_CTX_SEEN` (`0x2080012b`) is **structurally invisible** to this instrument:
+# `kgrobjPromoteContext` is called by KERNEL RM, so it never crosses the userspace ioctl
+# boundary an `LD_PRELOAD` on `ioctl(2)` can see. It read **0** on `s44` — on a working
+# instrument that captured 249 RM records — so a good boot would have scored as a capture
+# failure. It is kept BELOW, unpromoted, because its zero is itself a fact worth printing.
+#
+# ⇒ `TSG_ALLOC_SEEN` is the control: `ALLOC hClass=0x0000a06c` (`KEPLER_CHANNEL_GROUP_A`),
+# `[measured 2026-08-10, boot s44_b17381c_rmtrace]` present exactly once, issued by libcuda
+# on the userspace path, immediately before the record under test. A control must come from
+# the population the instrument can see, not from the population the question is about.
+#
+# `TSG_SCHED_SEEN` is the SUBJECT, printed beside its control so "the capture missed it" and
+# "the guest did not issue it" are distinguishable without reading the stream.
 
 # ── the readout, unreduced ──────────────────────────────────────────────────────────────
 #

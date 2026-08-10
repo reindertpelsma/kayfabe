@@ -727,8 +727,14 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               (a) WHICH CONTROL: established from the driver rather than assumed. The \
               CeUtils path issues THIS id (0xa06f0103) on a bare, TSG-less channel \
               (ogkm-580: mem_utils.c:1973-1989); NVA06C_CTRL_CMD_GPFIFO_SCHEDULE \
-              (0xa06c0101) is NOT on this path, and the a06c form is only what the ISOLATE \
-              sends the HOST, on its own channel's group. \
+              (0xa06c0101) is NOT on this path. \
+              ⊘⊘ ★ NARROWED 2026-08-10 (16.56): 'not on this path' is TRUE and was read as \
+              'the a06c form is only what the ISOLATE sends the HOST' — a universal over \
+              libcuda drawn from a citation about RmInitAdapter's scrubber. [measured \
+              2026-08-10, boot s44_b17381c_rmtrace] cuCtxCreate issues 0xa06c0101 on the TSG \
+              parenting its eight channels, record 196 of 249, and dies on it. Both forms \
+              are served now; the a06c arm is 16.56. A row whose scope is a PATH must not be \
+              cited as a fact about a CLASS. \
               (b) THE CORRECTED INFERENCE: 'the runlist write is on our side of the line' \
               is true and does NOT entail 'it must happen at this control'. Between this \
               control returning and the first doorbell on the channel, NO work can execute \

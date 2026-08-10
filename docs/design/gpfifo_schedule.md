@@ -19,13 +19,36 @@ determined by reading, not by assuming:
 | id | class | object | on this path? |
 |---|---|---|---|
 | `0xa06f0103` `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` | `KEPLER_CHANNEL_GPFIFO_A` | a **single channel** | ★ **yes** |
-| `0xa06c0101` `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` | `KEPLER_CHANNEL_GROUP_A` | a **TSG** | no |
+| `0xa06c0101` `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` | `KEPLER_CHANNEL_GROUP_A` | a **TSG** | no *(on THIS path — read the correction below before citing this cell)* |
 
 `_memmgrMemUtilsScrubInitScheduleChannel` issues `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` on
 `pChannel->channelId` (`ogkm-580.159.04:
 src/nvidia/src/kernel/gpu/mem_mgr/mem_utils.c:1973-1989`). The TSG form appears nowhere on
 it. The scrubber channel has no TSG: `channelSetupIDs` allocates no group and no VASpace for
 a physical CE channel.
+
+### ⊘⊘ ★ CORRECTION 2026-08-10 (§16.56) — "this path" is `RmInitAdapter`'s SCRUBBER, and the row was cited as a universal
+
+The table above is **right**, and its scope is **one channel**: the global CeUtils scrubber,
+allocated by kernel RM during `RmInitAdapter`. `[measured 2026-08-10, boot
+s44_b17381c_rmtrace]` on a **different** path — libcuda's `cuCtxCreate` — the guest issues
+the **TSG** form, `0xa06c0101`, on the group parenting the eight channels it just built, and
+`cup2` dies on it: record 196 of 249, `size=3 in=010000 status=0x00000056`, and the very next
+record is a `FREE`.
+
+★★★★ The failure was not in this table. It was in what a **test** made of it:
+`tests/tests/gpfifo_schedule.rs` asserted `!OBJECT_CONTROLS.contains(&0xa06c0101)` justified
+as *"the TSG form is what we send the HOST, **never** what the guest asks us"* — a universal
+over libcuda drawn from a citation that speaks only about the scrubber. It was green on every
+CI run for the whole of #177's life, and it is the first thing a later reader asking *"should
+we serve this?"* would have hit.
+
+⇒ Both forms are served now: `0xa06f0103` here, `0xa06c0101` at
+`execution_plane_increments.md` §16.56 — same deferral to the first doorbell, same gate, same
+argument, and RM's own kernel half already treats the group form as the channel form
+quantified over `pKernelChannelGroup->pChanList`
+(`ogkm-580: kernel_channel_group_api.c:1102-1170`). ⊘ A row whose scope is a **path** must
+never be cited as a fact about a **class**.
 
 The `a06c` form *is* what this port sends the **host** — the isolate's own channel does live
 in a group (`kayfabe-isolate-host/src/rm.rs`, `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` on
