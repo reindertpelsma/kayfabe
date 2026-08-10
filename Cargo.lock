@@ -230,6 +230,7 @@ dependencies = [
  "kayfabe-linux-raw",
  "kayfabe-util",
  "kayfabe-vmm",
+ "trybuild",
 ]
 
 [[package]]
