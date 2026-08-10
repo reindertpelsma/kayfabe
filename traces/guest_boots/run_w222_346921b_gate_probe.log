@@ -1,0 +1,1036 @@
+=== boot_capture tag=w222_346921b_gate at 2026-08-10T14:25:26+00:00 ===
+=== source revision: 346921b21 ===
+=== qemu binary: -rwxr-xr-x 1 root root 86835160 Aug 10 14:24 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:346921b2162965cca404de913265107590c9eeb0 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/bench/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=92551d70f36ddbef
+    used: /workspace/bench/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Mon Aug 10 14:25:37 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 10 14:25 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 10 14:25 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 10 14:25 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 10 14:25 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 10 14:25 .
+drwxr-xr-x 18 root root   4000 Aug 10 14:25 ..
+cr--------  1 root root 240, 1 Aug 10 14:25 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 10 14:25 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/bench/kayfabe/scripts/bench/guest_cuinit_wall.sh at 2026-08-10T14:25:42+00:00 ===
+=== sources that will run (md5, so a run cannot silently be the other copy) ===
+    /workspace/bench/cup2.c                                       27 lines  md5 d9f82375ebd54de500aeb7f85ef71efc
+    /workspace/bench/kayfabe/scripts/rpctrace/cuda_ioctl_trace.c   666 lines  md5 4445b1aa81d299eac3863d16862fd887
+    /workspace/bench/kayfabe/scripts/bench/uvm_ioctl_trace.c     173 lines  md5 7be763eeecfbacc92dfa47dcd6e63e7a
+    /workspace/bench/kayfabe/scripts/bench/guest_userstack.c     290 lines  md5 9ccb305fb1a23107b462141459d21e06
+=== push + build inside the guest ===
+GCC_CUP2_RC=0
+GCC_RM_RC=0
+GCC_UVM_RC=0
+GCC_USTACK_RC=0
+=== clear dmesg, then run cup2 under BOTH interposers (detached, deadline 150s) ===
+CLEARED
+LAUNCHED pid=1964
+★★★ cup2 DID NOT RETURN within 150s — this is a HANG, not a failure.
+CUP2_RC=TIMEOUT
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+pid=1964 state=Rl
+--- per-thread state (⊘ R = spinning in USERSPACE; D/S = blocked in the kernel) ---
+    TID STAT %CPU WCHAN                    COMMAND
+   1964 Rl   99.9 -                        cup2
+   1965 Sl    0.0 do_poll.constprop.0      cuda00001400006
+   2084 Sl    0.1 do_poll.constprop.0      cup2
+--- /proc/<tid>/syscall per thread (nr arg0..arg5 sp pc; "running" = userspace) ---
+    1964: running
+    1965: 7 0x5a56951d1950 0x3 0xffffffff 0x5a5695213a70 0x0 0x7 0x722a9cbfed40 0x722a9cd1b5fd
+    2084: 7 0x5a5695348740 0x5 0x64 0x0 0x0 0x0 0x722a90dddd40 0x722a9cd1b5fd
+--- kernel stack sample 1 (⊘ EXPECTED TO BE EMPTY OR clock_gettime — see this hook's header) ---
+[<0>] ktime_get_raw_ts64+0x41/0xd0
+--- kernel stack sample 2 (⊘ EXPECTED TO BE EMPTY OR clock_gettime — see this hook's header) ---
+--- kernel stack sample 3 (⊘ EXPECTED TO BE EMPTY OR clock_gettime — see this hook's header) ---
+=== ★★★★★ USERSPACE STACK — where in libcuda is cuCtxCreate actually spinning? ===
+=== guest_userstack pid=1964 maps=101 samples=4 gap=400ms ===
+--- executable mappings ---
+    0x5a56807c1000-0x5a56807c2000  /tmp/cup2
+    0x722a9cc28000-0x722a9cdb0000  /usr/lib/x86_64-linux-gnu/libc.so.6
+    0x722a9cf27000-0x722a9cfa6000  /usr/lib/x86_64-linux-gnu/libm.so.6
+    0x722a9d166000-0x722a9e0ea000  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+    0x722aa2c6a000-0x722aa2c6b000  /usr/lib/x86_64-linux-gnu/librt.so.1
+    0x722aa2c6f000-0x722aa2c70000  /usr/lib/x86_64-linux-gnu/libpthread.so.0
+    0x722aa2c74000-0x722aa2c75000  /usr/lib/x86_64-linux-gnu/libdl.so.2
+    0x722aa2c82000-0x722aa2c83000  /tmp/uvm_ioctl_trace.so
+    0x722aa2c87000-0x722aa2c89000  /tmp/cuda_ioctl_trace.so
+    0x722aa2d4f000-0x722aa2d7a000  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+    0x7ffc4a36d000-0x7ffc4a36f000  [vdso]
+    0xffffffffff600000-0xffffffffff601000  [vsyscall]
+--- 3 thread(s) ---
+--- sample 1/4 ---
+    tid 1964  RIP=0x7ffc4a36dbb2 [vdso]+0xbb2
+    tid 1964  RSP=0x7ffc4a2f7d90  orig_rax=228  rax=0
+      CANDIDATE [rsp+0x008] 0x722a9cceca6d  /usr/lib/x86_64-linux-gnu/libc.so.6+0xc4a6d
+      CANDIDATE [rsp+0x018] 0x722a9d3185c4  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1b25c4
+      CANDIDATE [rsp+0x048] 0x722a9d22c0fc  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xc60fc
+      CANDIDATE [rsp+0x0b8] 0x722a9d21ed40  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xb8d40
+      CANDIDATE [rsp+0x118] 0x722a9d21f551  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xb9551
+      CANDIDATE [rsp+0x168] 0x722a9ccad7f4  /usr/lib/x86_64-linux-gnu/libc.so.6+0x857f4
+      CANDIDATE [rsp+0x1b8] 0x722a9d20cb70  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xa6b70
+      CANDIDATE [rsp+0x208] 0x722a9d22a897  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xc4897
+      CANDIDATE [rsp+0x2b8] 0x722a9df5ca43  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xdf6a43
+      CANDIDATE [rsp+0x318] 0x722a9d26cd32  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x106d32
+      CANDIDATE [rsp+0x3b8] 0x722a9cc66406  /usr/lib/x86_64-linux-gnu/libc.so.6+0x3e406
+      CANDIDATE [rsp+0x3e8] 0x722a9cc607d5  /usr/lib/x86_64-linux-gnu/libc.so.6+0x387d5
+      CANDIDATE [rsp+0x408] 0x722a9cc60d88  /usr/lib/x86_64-linux-gnu/libc.so.6+0x38d88
+      CANDIDATE [rsp+0x438] 0x722a9cc69484  /usr/lib/x86_64-linux-gnu/libc.so.6+0x41484
+      CANDIDATE [rsp+0x4a8] 0x722a9cc607d5  /usr/lib/x86_64-linux-gnu/libc.so.6+0x387d5
+      CANDIDATE [rsp+0x4c8] 0x722a9cc60d88  /usr/lib/x86_64-linux-gnu/libc.so.6+0x38d88
+      CANDIDATE [rsp+0x4f8] 0x722a9cc69484  /usr/lib/x86_64-linux-gnu/libc.so.6+0x41484
+      CANDIDATE [rsp+0x548] 0x722a9cc60d88  /usr/lib/x86_64-linux-gnu/libc.so.6+0x38d88
+      CANDIDATE [rsp+0x578] 0x722a9cc69484  /usr/lib/x86_64-linux-gnu/libc.so.6+0x41484
+      CANDIDATE [rsp+0x598] 0x722aa2d584c3  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2+0x94c3
+      CANDIDATE [rsp+0x5d8] 0x722aa2d588c9  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2+0x98c9
+      CANDIDATE [rsp+0x618] 0x722aa2d588c9  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2+0x98c9
+      CANDIDATE [rsp+0x6c8] 0x722aa2d591fc  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2+0xa1fc
+      CANDIDATE [rsp+0x7c8] 0x722aa2d60bfc  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2+0x11bfc
+    tid 1965  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 1965  RSP=0x722a9cbfed40  orig_rax=7  rax=-516
+      CANDIDATE [rsp+0x028] 0x722a9d319f27  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1b3f27
+      CANDIDATE [rsp+0x0d8] 0x722a9d406967  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x2a0967
+      CANDIDATE [rsp+0x158] 0x722a9d306d73  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1a0d73
+      CANDIDATE [rsp+0x188] 0x722a9cc9cb84  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74b84
+      CANDIDATE [rsp+0x218] 0x722a9cc9c800  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74800
+      CANDIDATE [rsp+0x238] 0x722a9cd29d6c  /usr/lib/x86_64-linux-gnu/libc.so.6+0x101d6c
+    tid 2084  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 2084  RSP=0x722a90dddd40  orig_rax=7  rax=-516
+      CANDIDATE [rsp+0x028] 0x722a9d319f27  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1b3f27
+      CANDIDATE [rsp+0x0d8] 0x722a9d406967  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x2a0967
+      CANDIDATE [rsp+0x158] 0x722a9d306d73  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1a0d73
+      CANDIDATE [rsp+0x188] 0x722a9cc9cb84  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74b84
+      CANDIDATE [rsp+0x218] 0x722a9cc9c800  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74800
+      CANDIDATE [rsp+0x238] 0x722a9cd29d6c  /usr/lib/x86_64-linux-gnu/libc.so.6+0x101d6c
+--- sample 2/4 ---
+    tid 1964  RIP=0x7ffc4a36dbb2 [vdso]+0xbb2
+    tid 1964  RSP=0x7ffc4a2f7d90  orig_rax=228  rax=0
+    tid 1965  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 1965  RSP=0x722a9cbfed40  orig_rax=219  rax=-516
+    tid 2084  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 2084  RSP=0x722a90dddd40  orig_rax=7  rax=-516
+--- sample 3/4 ---
+    tid 1964  RIP=0x7ffc4a36dbb2 [vdso]+0xbb2
+    tid 1964  RSP=0x7ffc4a2f7d90  orig_rax=228  rax=0
+    tid 1965  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 1965  RSP=0x722a9cbfed40  orig_rax=219  rax=-516
+    tid 2084  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 2084  RSP=0x722a90dddd40  orig_rax=7  rax=-516
+--- sample 4/4 ---
+    tid 1964  RIP=0x7ffc4a36dbb2 [vdso]+0xbb2
+    tid 1964  RSP=0x7ffc4a2f7d90  orig_rax=228  rax=0
+    tid 1965  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 1965  RSP=0x722a9cbfed40  orig_rax=219  rax=-516
+    tid 2084  RIP=0x722a9cd1b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
+    tid 2084  RSP=0x722a90dddd40  orig_rax=7  rax=-516
+=== libcuda identity + exported symbol table (the join for the offsets above) ===
+libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.1
+10e2dd6c89409898ba8c68533cde1432  /usr/lib/x86_64-linux-gnu/libcuda.so.1
+lrwxrwxrwx 1 root root 21 Aug  7 00:42 /usr/lib/x86_64-linux-gnu/libcuda.so.1 -> libcuda.so.580.159.04
+=== instrument liveness (⊘ an empty trace is evidence of NOTHING, not of no traffic) ===
+OK   /tmp/rmtrace.txt  441 lines
+OK   /tmp/uvm.txt  280 lines
+--- cup2 stderr (where an interposer reports its own failure) ---
+=== ★★★ THE UVM PLANE — rmStatus is the verdict; rc=0 only means DISPATCHED ===
+UVM ioctl fd=12 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffc4a2f8950
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f8950
+UVM ioctl fd=12 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffc4a2f8950
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000025 nr=37 (UVM_REGISTER_GPU) arg=0x7ffc4a2f84d0
+  ★ UVM_REGISTER_GPU rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000046 nr=70 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f8540
+UVM ioctl fd=12 cmd=0x00000017 nr=23 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f8990
+UVM ioctl fd=12 cmd=0x00000019 nr=25 (UVM_REGISTER_GPU_VASPACE) arg=0x7ffc4a2f8020
+  ★ UVM_REGISTER_GPU_VASPACE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f71b0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4da0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f7040
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4c30
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f7040
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4c30
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f7240
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4e30
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f69e0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f45d0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f6800
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f43f0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f6dc0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f49b0
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f6ec0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4ab0
+=== ★★★ THE UVM PLANE, in full (struct bytes IN and OUT) ===
+UVM ioctl fd=12 cmd=0x30000001 nr=1 (UVM_INITIALIZE) arg=0x7ffc4a2f8950
+    IN 
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  ★ UVM_INITIALIZE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=13 cmd=0x0000004b nr=75 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f8950
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000027 nr=39 (UVM_PAGEABLE_MEM_ACCESS) arg=0x7ffc4a2f8950
+    IN 
+      +00: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 01 00 00 00 00 00 00 00
+  ★ UVM_PAGEABLE_MEM_ACCESS rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000025 nr=37 (UVM_REGISTER_GPU) arg=0x7ffc4a2f84d0
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 00 00 00 00 ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 00 00 00 00 ff ff ff ff ff ff ff ff 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_GPU rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000046 nr=70 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f8540
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000017 nr=23 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f8990
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000019 nr=25 (UVM_REGISTER_GPU_VASPACE) arg=0x7ffc4a2f8020
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 07 00 00 5c 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 07 00 00 5c 00 00 00 00
+  ★ UVM_REGISTER_GPU_VASPACE rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f71b0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4da0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f7040
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4c30
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f7040
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4c30
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f7240
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4e30
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f69e0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f45d0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f6800
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f43f0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f6dc0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f49b0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 19 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 19 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 1f 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 1f 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 23 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 23 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 27 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 27 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 2b 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 2b 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 2f 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 2f 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 33 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 33 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 37 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 37 00 00 5c 00 00 00 00
+      +32: 00 00 40 03 02 00 00 00 00 b0 eb 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 3d 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 3d 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 40 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 40 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 43 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 43 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 46 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 46 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 4b 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 4b 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 4e 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 4e 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 51 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 51 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x0000001b nr=27 (UVM_REGISTER_CHANNEL) arg=0x7ffc4a2f7e40
+    IN 
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 54 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  -> rc=0 errno=0
+    OUT
+      +00: 78 b3 52 c7 1c cd 7a 86 d2 82 49 48 4c 82 7f 27
+      +16: 08 00 00 00 0c 00 d0 c1 54 00 00 5c 00 00 00 00
+      +32: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+      +48: 00 00 00 00 00 00 00 00
+  ★ UVM_REGISTER_CHANNEL rmStatus = 0x00000000 (NV_OK)
+UVM ioctl fd=12 cmd=0x00000049 nr=73 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f6ec0
+  -> rc=0 errno=0
+UVM ioctl fd=12 cmd=0x00000021 nr=33 (UNKNOWN — not in the table, size unknown) arg=0x7ffc4a2f4ab0
+  -> rc=0 errno=0
+=== ★★★ THE RM PLANE — every call carrying a NON-ZERO status, in order ===
+39:CTRL cmd=0x20810108 hClient=0xc1d0000c hObject=0x5c000004 size=992 status=0x00000056 rc=0 in=0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+48:CTRL cmd=0x2080012f hClient=0xc1d0000c hObject=0x5c000003 size=1464 status=0x00000056 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+90:CTRL cmd=0x2080200a hClient=0xc1d0000c hObject=0x5c000003 size=8 status=0x00000056 rc=0 in=12000000ffffffff out=12000000ffffffff
+=== the RM plane: LAST 25 calls before cuInit gave up ===
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+=== RM plane line count + the MARK lines ===
+443 /tmp/rmtrace.txt
+(no MARK lines)
+=== ★ THE FULL RM PLANE — verbatim, because this file dies with the guest ===
+ESC nr=0xd6 len=8 rc=0
+ESC nr=0xc8 len=2304 rc=0
+ALLOC hClass=0x00000000 hRoot=0x00000000 hParent=0x00000000 hObject=0xc1d0000b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000101 hClient=0xc1d0000b hObject=0xc1d0000b size=40 status=0x00000000 rc=0 in=5000000000000000d0832f4afc7f000080832f4afc7f000030832f4afc7f00000000000000000000 out=5000000000000000d0832f4afc7f000080832f4afc7f000030832f4afc7f0000000000006f244202
+FREE hRoot=0xc1d0000b hParent=0xc1d0000b hObject=0xc1d0000b status=0x00000000 rc=0
+ESC nr=0xd6 len=8 rc=0
+ESC nr=0xc8 len=2304 rc=0
+ALLOC hClass=0x00000000 hRoot=0x00000000 hParent=0x00000000 hObject=0xc1d0000c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d04 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0c00d0c10100000004000000 out=0c00d0c10100000004000000
+CTRL cmd=0x00000d04 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0c00d0c10400000004000400 out=0c00d0c10400000004000400
+ALLOC hClass=0x0000cb33 hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000001 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x000001f0 hClient=0xc1d0000c hObject=0xc1d0000c size=4 status=0x00000000 rc=0 in=00000000 out=08000000
+CTRL cmd=0x00000214 hClient=0xc1d0000c hObject=0xc1d0000c size=384 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=03000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff..TRUNC
+CTRL cmd=0x00000a04 hClient=0xc1d0000c hObject=0xc1d0000c size=2244 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x00000215 hClient=0xc1d0000c hObject=0xc1d0000c size=132 status=0x00000000 rc=0 in=03000000ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=03000000ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0xcb330101 hClient=0xc1d0000c hObject=0x5c000001 size=6 status=0x00000000 rc=0 in=000000000000 out=000000000000
+CTRL cmd=0x00000288 hClient=0xc1d0000c hObject=0xc1d0000c size=3076 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=0100000003000000ffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x00000205 hClient=0xc1d0000c hObject=0xc1d0000c size=32 status=0x00000000 rc=0 in=0300000000000000000000000000000000000000000000000000000000000000 out=03000000000000000000000000000000410000000300000000000000ffffffff
+FREE hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000002 status=0x00000000 rc=0
+CTRL cmd=0x00000201 hClient=0xc1d0000c hObject=0xc1d0000c size=128 status=0x00000000 rc=0 in=0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=03000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+CTRL cmd=0x00000202 hClient=0xc1d0000c hObject=0xc1d0000c size=40 status=0x00000000 rc=0 in=03000000000000000000000000000000000000000000000000000000000000000000000000000000 out=030000000000000000000000000000000000000000000000410000000300000000000000ffffffff
+ESC nr=0xc9 len=4 rc=0
+ESC nr=0xd7 len=560 rc=0
+CTRL cmd=0x00000205 hClient=0xc1d0000c hObject=0xc1d0000c size=32 status=0x00000000 rc=0 in=0300000000000000000000000000000000000000000000000000000000000000 out=03000000000000000000000000000000410000000300000000000000ffffffff
+ALLOC hClass=0x00000080 hRoot=0xc1d0000c hParent=0xc1d0000c hObject=0x5c000002 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00801402 hClient=0xc1d0000c hObject=0x5c000002 size=3 status=0x00000000 rc=0 in=000000 out=000000
+CTRL cmd=0x00800292 hClient=0xc1d0000c hObject=0x5c000002 size=804 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=5e0000000001000001010000020000008000000005000000780000007e00000079000000810000003e000000710000000000000041000000010000008020000039c6000038c6000040c6000037c600000f0000006f900000cc900000de83000090000000ccb10000ccb2000063c700000e9000002000000092000000ce900000f300000076000000b10000008200000083000000c20000003f0000000400000081200000822000008f200000f1300000db0000002c40000010900000bca00000bda0000050000000cd900000f1000000e0000000f8000000fb000000f9000000fe000000da00000074c5000065c3000097c700006fc50000c0c70000b5c70000..TRUNC
+CTRL cmd=0x00800280 hClient=0xc1d0000c hObject=0x5c000002 size=4 status=0x00000000 rc=0 in=00000000 out=01000000
+CTRL cmd=0x00000202 hClient=0xc1d0000c hObject=0xc1d0000c size=40 status=0x00000000 rc=0 in=03000000000000000000000000000000000000000000000000000000000000000000000000000000 out=030000000100000000000000000000000000000000000000410000000300000000000000ffffffff
+CTRL cmd=0x00000201 hClient=0xc1d0000c hObject=0xc1d0000c size=128 status=0x00000000 rc=0 in=0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=03000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+CTRL cmd=0x00000202 hClient=0xc1d0000c hObject=0xc1d0000c size=40 status=0x00000000 rc=0 in=03000000000000000000000000000000000000000000000000000000000000000000000000000000 out=030000000100000000000000000000000000000000000000410000000300000000000000ffffffff
+ESC nr=0xc9 len=4 rc=0
+ALLOC hClass=0x00002080 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000003 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x00002081 hRoot=0xc1d0000c hParent=0x5c000003 hObject=0x5c000004 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x20801303 hClient=0xc1d0000c hObject=0x5c000003 size=1028 status=0x00000000 rc=0 in=01000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=01000000080000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20801303 hClient=0xc1d0000c hObject=0x5c000003 size=1028 status=0x00000000 rc=0 in=010000003b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=010000003b000000ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x2080014a hClient=0xc1d0000c hObject=0x5c000003 size=268 status=0x00000000 rc=0 in=00000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000020000001000000078b352c71ccd7a86d28249484c827f27000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x00800289 hClient=0xc1d0000c hObject=0x5c000002 size=8 status=0x00000000 rc=0 in=0000000000000000 out=0100000000000000
+CTRL cmd=0x20810108 hClient=0xc1d0000c hObject=0x5c000004 size=992 status=0x00000056 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20801303 hClient=0xc1d0000c hObject=0x5c000003 size=1028 status=0x00000000 rc=0 in=03000000160000000000000009000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=030000001600000000ddba000900000000ddba001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20800102 hClient=0xc1d0000c hObject=0x5c000003 size=564 status=0x00000000 rc=0 in=0b0000001100000000000000220000000000000027000000000000002a0000000000000037000000000000003b000000000000003c000000000000003d000000000000002d000000000000003a0000000000000044000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=0b0000001100000000000000220000000000000027000000000000002a0000000000000037000000010000003b000000000000003c000000000000003d000000010000002d000000000000003a0000000000000044000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20801701 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=00000000000000000000000000000000 out=7001000006000000a100000000000000
+CTRL cmd=0x20801823 hClient=0xc1d0000c hObject=0x5c000003 size=420 status=0x00000000 rc=0 in=03000000000000000000000002000000000000000b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=03000000000000000300000002000000000000000b00000005000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20801801 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=00000000000000000000000000000000 out=de10042562147d39a100000004250000
+CTRL cmd=0x20801823 hClient=0xc1d0000c hObject=0x5c000003 size=420 status=0x00000000 rc=0 in=060000000f0000000300000010000000000000002c000000050000002d0000000000000003000000000000000600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=060000000f0000000000000010000000030000002c000000000000002d0000000030330003000000040100000600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20801803 hClient=0xc1d0000c hObject=0x5c000003 size=200 status=0x00000000 rc=0 in=0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=0400000000000000000000001000000000000001000000000000000000000000000000000001000000000010000000000000000000000000000000002000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x2080182a hClient=0xc1d0000c hObject=0x5c000003 size=112 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x2080012f hClient=0xc1d0000c hObject=0x5c000003 size=1464 status=0x00000056 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20801303 hClient=0xc1d0000c hObject=0x5c000003 size=1028 status=0x00000000 rc=0 in=070000000b0000000000000019000000000000001b0000000000000018000000000000000d000000000000001700000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=070000000b000000c000000019000000030000001b0000000000240018000000000000000d000000110000001700000000000000080000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20800170 hClient=0xc1d0000c hObject=0x5c000003 size=340 status=0x00000000 rc=0 in=54000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=0600000001000000090000000a0000000b0000000c00000022000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20800119 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=00000000 out=00000000
+CTRL cmd=0x0000027b hClient=0xc1d0000c hObject=0xc1d0000c size=4 status=0x00000000 rc=0 in=00000000 out=00000000
+ESC nr=0xc9 len=4 rc=0
+ESC nr=0xce len=16 rc=0
+CTRL cmd=0x20801201 hClient=0xc1d0000c hObject=0x5c000003 size=32 status=0x00000000 rc=0 in=3a0000000000000020672f4afc7f000000000000000000000000000000000000 out=3a0000000000000020672f4afc7f000000000000000000000000000000000000
+CTRL cmd=0x2080122a hClient=0xc1d0000c hObject=0x5c000003 size=24 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000 out=000000000000000000000000000000000700000000000000
+CTRL cmd=0x2080122b hClient=0xc1d0000c hObject=0x5c000003 size=24 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000 out=00000000000000000000000000000000000000001e000000
+CTRL cmd=0x2080122b hClient=0xc1d0000c hObject=0x5c000003 size=24 status=0x00000000 rc=0 in=000000000000000000000000000000000100000000000000 out=00000000000000000000000000000000010000001f000000
+CTRL cmd=0x2080122b hClient=0xc1d0000c hObject=0x5c000003 size=24 status=0x00000000 rc=0 in=000000000000000000000000000000000200000000000000 out=00000000000000000000000000000000020000001f000000
+CTRL cmd=0x20801227 hClient=0xc1d0000c hObject=0x5c000003 size=48 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=b06200000000000100000010010800101000000004c00500000000000000000000000000000000000100000000000000
+CTRL cmd=0x20802a0a hClient=0xc1d0000c hObject=0x5c000003 size=136 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=e303e303e203e2030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f00000000000000
+CTRL cmd=0x2080121b hClient=0xc1d0000c hObject=0x5c000003 size=9240 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=01000000000000000000000000000000000001000000010000000000000000000000000002000000000001000000000000000000000002000000010001000000000000000000000000000100000002000000000000000000010000000100010002000000000000000000010001000200000003000000000000000000010001000200010003000000000000000000010002000200000004000000000000000000010002000200010004000000000000000000010000000000000005000000000000000000000000000000010005000000000000000000000001000400000006000000000000000000020001000400010006000000000000000000020002000400..TRUNC
+CTRL cmd=0x20803801 hClient=0xc1d0000c hObject=0x5c000003 size=1928 status=0x00000000 rc=0 in=03000000000000000200000000000000000000000000000000000000020000000000000001000000000000000000000002000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=03000000000000000200000000000000000000000000000000000000020000000000000001000000010000000000000002000000000000000200000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x00801307 hClient=0xc1d0000c hObject=0x5c000002 size=3 status=0x00000000 rc=0 in=000000 out=0b8112
+CTRL cmd=0x20801303 hClient=0xc1d0000c hObject=0x5c000003 size=1028 status=0x00000000 rc=0 in=030000001a0000000000000022000000000000002300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=030000001a0000000700000022000000060000002300000012000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+ALLOC hClass=0x0000c461 hRoot=0xc1d0000c hParent=0x5c000003 hObject=0x5c000005 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0500005c0200080000000000 out=0500005c0200080003000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x000000de hRoot=0xc1d0000c hParent=0x5c000003 hObject=0x5c000006 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=0600005c0100080000000000 out=0600005c0100080001000000
+ESC nr=0x4e len=56 rc=0
+CTRL cmd=0x20803601 hClient=0xc1d0000c hObject=0x5c000003 size=72 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=0100000001013538302e3135392e30340000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ALLOC hClass=0x000090f1 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000007 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x000090f1 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000008 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x20800111 hClient=0xc1d0000c hObject=0x5c000003 size=64 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x20800110 hClient=0xc1d0000c hObject=0x5c000003 size=132 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x2080014a hClient=0xc1d0000c hObject=0x5c000003 size=268 status=0x00000000 rc=0 in=00000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000020000001000000078b352c71ccd7a86d28249484c827f27000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20800131 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=00000000 out=00000000
+CTRL cmd=0x20808159 hClient=0xc1d0000c hObject=0x5c000003 size=332 status=0x00000000 rc=0 in=020000000c0000000000000025000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=020000000c0000000000000025000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x00000136 hClient=0xc1d0000c hObject=0xc1d0000c size=4 status=0x00000000 rc=0 in=01000000 out=01000000
+CTRL cmd=0x2080220c hClient=0xc1d0000c hObject=0x5c000003 size=0 status=0x00000000 rc=0 in=- out=-
+CTRL cmd=0x20802210 hClient=0xc1d0000c hObject=0x5c000003 size=0 status=0x00000000 rc=0 in=- out=-
+CTRL cmd=0x0000013a hClient=0xc1d0000c hObject=0xc1d0000c size=1352 status=0x00000000 rc=0 in=01000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=01000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+CTRL cmd=0x20808162 hClient=0xc1d0000c hObject=0x5c000003 size=1 status=0x00000000 rc=0 in=00 out=01
+CTRL cmd=0x2080182b hClient=0xc1d0000c hObject=0x5c000003 size=28 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000 out=00000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x20803002 hClient=0xc1d0000c hObject=0x5c000003 size=13344 status=0x00000000 rc=0 in=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC out=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..TRUNC
+ALLOC hClass=0x000050a0 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00000a size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x20800110 hClient=0xc1d0000c hObject=0x5c000003 size=132 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x20803601 hClient=0xc1d0000c hObject=0x5c000003 size=72 status=0x00000000 rc=0 in=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 out=0100000001013538302e3135392e30340000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+CTRL cmd=0x2080200a hClient=0xc1d0000c hObject=0x5c000003 size=8 status=0x00000056 rc=0 in=12000000ffffffff out=12000000ffffffff
+CTRL cmd=0x20800145 hClient=0xc1d0000c hObject=0x5c000003 size=0 status=0x00000000 rc=0 in=- out=-
+ALLOC hClass=0x00000040 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00000b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x00000040 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00000e size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x00000040 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00000f size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x00000040 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000010 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x0000a06c hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000012 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x00009067 hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000013 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x00000040 hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000014 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=1400005c00000c0000000000 out=1400005c00000c0002000000
+ESC nr=0x4e len=56 rc=0
+ESC nr=0x5e len=40 rc=0
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000016 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=1600005c00000c0000000000 out=1600005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000018 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=1800005c00000c0000000000 out=1800005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000019 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000981051902a720000 out=01000000000000004c782f4afc7f0000981051902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c000019 hObject=0x5c00001a size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000019 size=16 status=0x00000000 rc=0 in=1a00005c000000000000000000000000 out=1a00005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000019 hObject=0x5c00001b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000019 size=16 status=0x00000000 rc=0 in=1b00005c000000000000000000000000 out=1b00005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000019 size=4 status=0x00000000 rc=0 in=00000000 out=07000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=1900005c000000000000000000000000 out=1900005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00001c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=1c00005c00800c0000000000 out=1c00005c00800c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00001e size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=1e00005c00000c0000000000 out=1e00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c00001f size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000b0a651902a720000 out=01000000000000004c782f4afc7f0000b0a651902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c00001f hObject=0x5c000020 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00001f size=16 status=0x00000000 rc=0 in=2000005c000000000000000000000000 out=2000005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c00001f hObject=0x5c000021 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00001f size=16 status=0x00000000 rc=0 in=2100005c000000000000000000000000 out=2100005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c00001f size=4 status=0x00000000 rc=0 in=00000000 out=08000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=1f00005c000000000000000000000000 out=1f00005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000022 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=2200005c00000c0000000000 out=2200005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000023 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000c83c52902a720000 out=01000000000000004c782f4afc7f0000c83c52902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c000023 hObject=0x5c000024 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000023 size=16 status=0x00000000 rc=0 in=2400005c000000000000000000000000 out=2400005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000023 hObject=0x5c000025 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000023 size=16 status=0x00000000 rc=0 in=2500005c000000000000000000000000 out=2500005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000023 size=4 status=0x00000000 rc=0 in=00000000 out=09000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=2300005c000000000000000000000000 out=2300005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000026 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=2600005c00000c0000000000 out=2600005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000027 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000e0d252902a720000 out=01000000000000004c782f4afc7f0000e0d252902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c000027 hObject=0x5c000028 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000027 size=16 status=0x00000000 rc=0 in=2800005c000000000000000000000000 out=2800005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000027 hObject=0x5c000029 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000027 size=16 status=0x00000000 rc=0 in=2900005c000000000000000000000000 out=2900005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000027 size=4 status=0x00000000 rc=0 in=00000000 out=0a000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=2700005c000000000000000000000000 out=2700005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00002a size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=2a00005c00000c0000000000 out=2a00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c00002b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000f86853902a720000 out=01000000000000004c782f4afc7f0000f86853902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c00002b hObject=0x5c00002c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00002b size=16 status=0x00000000 rc=0 in=2c00005c000000000000000000000000 out=2c00005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c00002b hObject=0x5c00002d size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00002b size=16 status=0x00000000 rc=0 in=2d00005c000000000000000000000000 out=2d00005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c00002b size=4 status=0x00000000 rc=0 in=00000000 out=0b000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=2b00005c000000000000000000000000 out=2b00005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00002e size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=2e00005c00000c0000000000 out=2e00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c00002f size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f000010ff53902a720000 out=01000000000000004c782f4afc7f000010ff53902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c00002f hObject=0x5c000030 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00002f size=16 status=0x00000000 rc=0 in=3000005c000000000000000000000000 out=3000005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c00002f hObject=0x5c000031 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00002f size=16 status=0x00000000 rc=0 in=3100005c000000000000000000000000 out=3100005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c00002f size=4 status=0x00000000 rc=0 in=00000000 out=0c000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=2f00005c000000000000000000000000 out=2f00005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000032 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=3200005c00000c0000000000 out=3200005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000033 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000289554902a720000 out=01000000000000004c782f4afc7f0000289554902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c000033 hObject=0x5c000034 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000033 size=16 status=0x00000000 rc=0 in=3400005c000000000000000000000000 out=3400005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000033 hObject=0x5c000035 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000033 size=16 status=0x00000000 rc=0 in=3500005c000000000000000000000000 out=3500005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000033 size=4 status=0x00000000 rc=0 in=00000000 out=0d000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=3300005c000000000000000000000000 out=3300005c0000000000b0eb0000000000
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000036 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=3600005c00000c0000000000 out=3600005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000012 hObject=0x5c000037 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000402b55902a720000 out=01000000000000004c782f4afc7f0000402b55902a720000
+ALLOC hClass=0x0000c7c0 hRoot=0xc1d0000c hParent=0x5c000037 hObject=0x5c000038 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000037 size=16 status=0x00000000 rc=0 in=3800005c000000000000000000000000 out=3800005cc0c70000c0c7000001000000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000037 hObject=0x5c000039 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000037 size=16 status=0x00000000 rc=0 in=3900005c000000000000000000000000 out=3900005cb5c70000b5c700000a000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000037 size=4 status=0x00000000 rc=0 in=00000000 out=0e000000
+CTRL cmd=0x20801218 hClient=0xc1d0000c hObject=0x5c000003 size=16 status=0x00000000 rc=0 in=3700005c000000000000000000000000 out=3700005c0000000000b0eb0000000000
+CTRL cmd=0xa06c0101 hClient=0xc1d0000c hObject=0x5c000012 size=3 status=0x00000000 rc=0 in=010000 out=010000
+ESC nr=0xc9 len=4 rc=0
+ESC nr=0xce len=16 rc=0
+ALLOC hClass=0x00000079 hRoot=0xc1d0000c hParent=0x5c000003 hObject=0x5c00003a size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x0000a06c hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00003b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00003c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=3c00005c00000c0000000000 out=3c00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c00003b hObject=0x5c00003d size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f00009820029c2a720000 out=01000000000000004c782f4afc7f00009820029c2a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c00003d hObject=0x5c00003e size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00003d size=16 status=0x00000000 rc=0 in=3e00005c000000000000000000000000 out=3e00005cb5c70000b5c700000b000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c00003d size=4 status=0x00000000 rc=0 in=00000000 out=0f000100
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00003f size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=3f00005c00000c0000000000 out=3f00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c00003b hObject=0x5c000040 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000b0b6029c2a720000 out=01000000000000004c782f4afc7f0000b0b6029c2a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000040 hObject=0x5c000041 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000040 size=16 status=0x00000000 rc=0 in=4100005c000000000000000000000000 out=4100005cb5c70000b5c700000b000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000040 size=4 status=0x00000000 rc=0 in=00000000 out=10000100
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000042 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=4200005c00000c0000000000 out=4200005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c00003b hObject=0x5c000043 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000c84c039c2a720000 out=01000000000000004c782f4afc7f0000c84c039c2a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000043 hObject=0x5c000044 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000043 size=16 status=0x00000000 rc=0 in=4400005c000000000000000000000000 out=4400005cb5c70000b5c700000b000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000043 size=4 status=0x00000000 rc=0 in=00000000 out=11000100
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000045 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=4500005c00000c0000000000 out=4500005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c00003b hObject=0x5c000046 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000e0e2039c2a720000 out=01000000000000004c782f4afc7f0000e0e2039c2a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000046 hObject=0x5c000047 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000046 size=16 status=0x00000000 rc=0 in=4700005c000000000000000000000000 out=4700005cb5c70000b5c700000b000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000046 size=4 status=0x00000000 rc=0 in=00000000 out=12000100
+CTRL cmd=0xa06c0101 hClient=0xc1d0000c hObject=0x5c00003b size=3 status=0x00000000 rc=0 in=010000 out=010000
+ESC nr=0xc9 len=4 rc=0
+ESC nr=0xce len=16 rc=0
+ALLOC hClass=0x00000079 hRoot=0xc1d0000c hParent=0x5c000003 hObject=0x5c000048 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x0000a06c hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000049 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00004a size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=4a00005c00000c0000000000 out=4a00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000049 hObject=0x5c00004b size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f000098b04e902a720000 out=01000000000000004c782f4afc7f000098b04e902a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c00004b hObject=0x5c00004c size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00004b size=16 status=0x00000000 rc=0 in=4c00005c000000000000000000000000 out=4c00005cb5c70000b5c700000c000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c00004b size=4 status=0x00000000 rc=0 in=00000000 out=13000200
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c00004d size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=4d00005c00000c0000000000 out=4d00005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000049 hObject=0x5c00004e size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000b0464f902a720000 out=01000000000000004c782f4afc7f0000b0464f902a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c00004e hObject=0x5c00004f size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c00004e size=16 status=0x00000000 rc=0 in=4f00005c000000000000000000000000 out=4f00005cb5c70000b5c700000c000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c00004e size=4 status=0x00000000 rc=0 in=00000000 out=14000200
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000050 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=5000005c00000c0000000000 out=5000005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000049 hObject=0x5c000051 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000c8dc4f902a720000 out=01000000000000004c782f4afc7f0000c8dc4f902a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000051 hObject=0x5c000052 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000051 size=16 status=0x00000000 rc=0 in=5200005c000000000000000000000000 out=5200005cb5c70000b5c700000c000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000051 size=4 status=0x00000000 rc=0 in=00000000 out=15000200
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000053 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=5300005c00000c0000000000 out=5300005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+ALLOC hClass=0x0000c56f hRoot=0xc1d0000c hParent=0x5c000049 hObject=0x5c000054 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x0080170d hClient=0xc1d0000c hObject=0x5c000002 size=24 status=0x00000000 rc=0 in=01000000000000004c782f4afc7f0000e07250902a720000 out=01000000000000004c782f4afc7f0000e07250902a720000
+ALLOC hClass=0x0000c7b5 hRoot=0xc1d0000c hParent=0x5c000054 hObject=0x5c000055 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x906f0101 hClient=0xc1d0000c hObject=0x5c000054 size=16 status=0x00000000 rc=0 in=5500005c000000000000000000000000 out=5500005cb5c70000b5c700000c000000
+CTRL cmd=0xc36f0108 hClient=0xc1d0000c hObject=0x5c000054 size=4 status=0x00000000 rc=0 in=00000000 out=16000200
+CTRL cmd=0xa06c0101 hClient=0xc1d0000c hObject=0x5c000049 size=3 status=0x00000000 rc=0 in=010000 out=010000
+ESC nr=0xc9 len=4 rc=0
+ESC nr=0xce len=16 rc=0
+ALLOC hClass=0x00000079 hRoot=0xc1d0000c hParent=0x5c000003 hObject=0x5c000056 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+ALLOC hClass=0x0000003e hRoot=0xc1d0000c hParent=0x5c000002 hObject=0x5c000057 size=0 shape=NVOS64 status=0x00000000 rc=0 params=-
+CTRL cmd=0x00000d01 hClient=0xc1d0000c hObject=0xc1d0000c size=12 status=0x00000000 rc=0 in=5700005c00000c0000000000 out=5700005c00000c0001000000
+ESC nr=0x4e len=56 rc=0
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+CTRL cmd=0x20801702 hClient=0xc1d0000c hObject=0x5c000003 size=4 status=0x00000000 rc=0 in=ffffffff out=ffffffff
+kept: /workspace/bench/run_w222_346921b_gate_rmtrace.txt (445 lines)
+kept: /workspace/bench/run_w222_346921b_gate_uvm.txt (280 lines)
+=== dmesg produced by cup2 ALONE (ring cleared immediately before it) ===
+[   48.742343] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   48.743062] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   49.982023] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   50.039284] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   50.039543] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   50.039632] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   55.270747] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+[   55.604175] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; status=0x00000056
+[   55.689384] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   55.731472] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   55.731989] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   55.762249] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   55.762258] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   55.762263] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   55.762266] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   55.767418] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+[   55.767428] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+[   55.789914] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00014; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+[   57.891499] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0003e; hObject=0xcaf00041; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.919112] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00042; hObject=0xcaf00045; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.923957] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00046; hObject=0xcaf00049; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.928333] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0004a; hObject=0xcaf0004d; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.932660] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0004e; hObject=0xcaf00051; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.937087] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00052; hObject=0xcaf00055; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.941359] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00056; hObject=0xcaf00059; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   57.945675] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0005a; hObject=0xcaf0005d; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.188721] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0005e; hObject=0xcaf00062; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.192439] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00063; hObject=0xcaf00067; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.196127] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00068; hObject=0xcaf0006c; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.199874] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0006d; hObject=0xcaf00071; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.439105] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00072; hObject=0xcaf00076; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.442857] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00077; hObject=0xcaf0007b; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.446519] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf0007c; hObject=0xcaf00080; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+[   58.450321] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00081; hObject=0xcaf00085; hClass=0x0000c574; paramsSize=0x00000008; paramsStatus=0x00000000; status=0x00000056
+=== ★★ is the CE wall ARMED or DORMANT? (one line decides it) ===
+NEITHER LINE PRESENT at this loglevel
+HOOK_RC=0

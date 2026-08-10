@@ -1116,3 +1116,42 @@ refusal**. A claim written in a comment and asserted nowhere is prose.
 **host** status carried back verbatim, not one of ours — `NOT_ON_THIS_RUNG` is `0x4B46` and
 `ioctl_error` tags errnos with `0x8000_0000`. So the CE engine-object forward reached NVIDIA's own
 code and NVIDIA refused it; the number is a lead, not a wall of ours.
+
+### ★★★★★ §16.80.2 — ALL EIGHT `0xc7c0` FORWARDED, and the census did not move a byte
+
+`[boot `w222_346921b_gate`, rev `346921b`, `KAYFABE_ISOLATES=real`, CE executor `local`]`
+
+```
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c000019 params=16B
+  → FORWARDED engine=GrCompute host_object=0xcafe000a materialized_channel=true reused=false
+  … ×8, parents 0x5c000019 / 1f / 23 / 27 / 2b / 2f / 33 / 37, each its own host channel
+```
+
+**Every one of `cuCtxCreate`'s eight `AMPERE_COMPUTE_B` allocs reached a real GA106**, carrying the
+guest's own **16-byte** params, each materializing its own host GrCompute channel. `forwarded=18`
+over the boot (8 × `0xc7c0`, 2 × `0xc797`, 8 × the CE objects that routed).
+
+The 14 refusals are **all `0xc7b5`**: 2 × `NoVas` (ours, correct — the CeUtils scrubber channel is
+`hVASpace = NV01_NULL_OBJECT` by design) and 12 × `Rm(Other(64))` = `NV_ERR_INVALID_STATE`, the
+**host's own** status. ⇒ The next question on the CE half is NVIDIA's, not ours.
+
+★ The class-gate fix is visible in the instrument itself: `w221` printed 19 non-engine refusals and
+hit its bound before `0xc7c0` arrived; `w222` prints **only** `0xc797`/`0xc7b5`/`0xc7c0`.
+
+#### ⊘ AND NOTHING DOWNSTREAM MOVED — asserted, not hoped
+
+| | `w218` ctl | `w220` plane | `w221` fwd | `w222` gate |
+|---|---|---|---|---|
+| doorbells | 191/183/8 | 191/183/8 | 191/183/8 | **191/183/8** |
+| by engine | — | `GrCompute=8 Ce=183` | `GrCompute=8 Ce=183` | **`GrCompute=8 Ce=183`** |
+| forwarded doorbells | 0 | 0 | 0 | **0** |
+| `SMI_RC` / `CUP2_RC` | 0 / TIMEOUT | 0 / TIMEOUT | 0 / TIMEOUT | **0 / TIMEOUT** |
+
+⇒ **F1 NO, F2 NO, F3 NO.** The host now holds eight real GR compute contexts and **not one guest
+doorbell reaches any of them**, for the reason §16.80.1 gives: `Route::NotACopyEngineChannel`
+refuses every `GrCompute` doorbell *above* the forwarding plane, deliberately, and GR forwarding
+needs the host channel to shadow the guest's ring (`OS_DESCRIPTOR`) before that gate may open.
+
+★ That is the honest shape of this rung: it moved the **context** plane and it was never going to
+move the **submission** plane. The next rung is the one the doorbell refusal names, and it starts
+from a host GR context that now demonstrably exists.
