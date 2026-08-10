@@ -2083,6 +2083,224 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
     verdict
 }
 
+/// ★★★★★ R31 — **will host RM build a channel whose command queue is memory we did NOT
+/// allocate, at the guest's own address and the guest's own entry count?**
+///
+/// The blocker, stated exactly: we allocate a host channel with **its own** queue, which
+/// stays empty, so the engine consumes nothing forever while the guest pushes into **its**
+/// queue, which our channel does not read. The fix is not a copier — it is to name the
+/// guest's queue in the channel alloc. This rung is the one fact that stands between here
+/// and that, asked with no guest in the picture.
+///
+/// # ★★ Two predictions, made from SOURCE before the run, so the result can refute them
+///
+/// - **Arm B** (`NV_ESC_RM_MAP_MEMORY` on the guest-backed ring) — expected **refused**.
+///   Expected line: `status_check(out.status)` inside `RmConnection::map_cpu_windowed`,
+///   i.e. the driver answering the escape.
+/// - **Arm C** (the same channel alloc with `gpFifoOffset` at an address nothing was ever
+///   mapped at) — ⚠ expected **ACCEPTED**, and that is a refutation of the brief this rung
+///   was written from, not of the rung. The open driver forwards `gpFifoOffset` straight to
+///   GSP without resolving it (`ogkm-580:
+///   src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2664`), and RM *itself* allocates a
+///   channel with `gpFifoOffset = 0` and says why: *"Set the gpFifoOffset to zero
+///   intentionally since we only need this channel to be created, but will not submit any
+///   work to it. So it's fine not to provide a valid offset here."* (`ogkm-580:
+///   src/nvidia/src/kernel/gpu/gr/kernel_graphics.c:2420-2424`). ⇒ If it is accepted, the
+///   binding is needed when hardware **fetches**, not when the channel is **born** — and
+///   the host channel's birth does not have to move to the doorbell.
+///
+/// ⊘ **What a green arm A does not establish.** Nothing here schedules the channel, rings
+/// it, or writes `GP_PUT`; the engine has nothing to fetch and none of this runs the
+/// guest's work. It establishes exactly that host RM accepts a channel over a queue it did
+/// not allocate, at numbers its caller states.
+fn guest_ring_channel_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    println!(
+        "info  R31 guest ring      = GPU {gpu}, euid {} — a sealed memfd → OS_DESCRIPTOR → \
+         FIXED map → a channel whose gpFifoOffset and gpFifoEntries are the CALLER'S, with \
+         no ring allocated and no CPU map of it",
+        kayfabe_linux_raw::geteuid(),
+    );
+    let vas = match rm.alloc_vaspace() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R31 vaspace         = {e:?} (the rung needs its own address space)");
+            return false;
+        }
+    };
+    // ★ The in-process control, run FIRST and against the same entry point: a zero entry
+    // count is the one number in the guest's declaration this port refuses, because it is
+    // the modulus of the wrap arithmetic. Expected line: the `RING_ENTRIES_REFUSED` return
+    // in `alloc_channel_in`, **before** any host object exists — which is why the CPU-map
+    // counter is read across it and must not move.
+    let before = rm.cpu_map_calls();
+    let zero = rm.alloc_channel_over_guest_ring(
+        vas,
+        kayfabe_abi::submit::ENGINE_TYPE_COPY0,
+        kayfabe_isolate_host::rm::GuestRing {
+            memory: kayfabe_isolate::HostHandle::NULL,
+            ring_va: 0,
+            gp_fifo_va: 0,
+            gp_fifo_entries: 0,
+        },
+    );
+    let arm_d = match zero {
+        Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::RING_ENTRIES_REFUSED => {
+            let moved = rm.cpu_map_calls() - before;
+            if moved == 0 {
+                println!(
+                    "★     R31 arm D entries   = a zero `gpFifoEntries` was REFUSED BY NAME \
+                     (`RING_ENTRIES_REFUSED`) and NOTHING was allocated on the way — the CPU-map \
+                     counter did not move. The refusal is reachable, so the arms below are not \
+                     vacuous"
+                );
+                true
+            } else {
+                println!(
+                    "??    R31 arm D entries   = refused by name, but {moved} CPU mapping(s) were \
+                     attempted first — the refusal is not where it claims to be"
+                );
+                false
+            }
+        }
+        other => {
+            println!(
+                "FAIL  R31 arm D entries   = a zero `gpFifoEntries` was answered {other:?}, not \
+                 `RING_ENTRIES_REFUSED`. A count of zero is the divisor of `submit_entry`'s wrap"
+            );
+            false
+        }
+    };
+
+    let e = match rm.prove_guest_ring_channel(vas) {
+        Ok(e) => e,
+        Err(err) => {
+            println!(
+                "FAIL  R31 setup           = {err:?} (the memfd, the reservation, the \
+                 OS_DESCRIPTOR or its FIXED map — none of which is the thing under test)"
+            );
+            let _ = rm.free(vas);
+            return false;
+        }
+    };
+    println!(
+        "info  R31 what was asked  = ring object at {:#018x}, gpFifoOffset {:#018x} (= ring \
+         + 0x3000, deliberately NOT our 0x1000), gpFifoEntries {} (the guest's measured \
+         count; ours is 64)",
+        e.ring_asked_va, e.gp_fifo_va, e.gp_fifo_entries
+    );
+
+    // Arm A, in the order that keeps each answer about its own subject.
+    let arm_a = if !e.placed_as_asked() {
+        println!(
+            "FAIL  R31 place           = asked {:#018x}, RM chose {:#018x} — every number \
+             below would be about a different address",
+            e.ring_asked_va, e.ring_got_va
+        );
+        false
+    } else {
+        match &e.channel {
+            Err(err) => {
+                println!(
+                    "FAIL  R31 adopt           = the channel alloc REFUSED {err:?} for a ring it \
+                     did not allocate. ⇒ THE RUNG'S PREMISE IS REFUTED: host RM will not name a \
+                     caller-supplied queue, and the shadow channel cannot be built this way"
+                );
+                false
+            }
+            Ok(token) => {
+                let ok_numbers = e.adopted_the_guests_numbers();
+                let ok_maps = e.mapped_only_userd();
+                let ok_store = matches!(
+                    e.ring_store,
+                    Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::RING_NOT_OURS
+                );
+                if !ok_numbers {
+                    println!(
+                        "FAIL  R31 numbers         = the channel recorded {:?}, not \
+                         ({:#018x}, {}) — something between the caller and RM substituted a \
+                         constant",
+                        e.declared, e.gp_fifo_va, e.gp_fifo_entries
+                    );
+                }
+                if !ok_maps {
+                    println!(
+                        "FAIL  R31 no-cpu-map      = building the channel asked RM for {} CPU \
+                         mappings, not 1. ⊘ Exactly one is correct — USERD, which is ours; a \
+                         second one is a mapping of the GUEST'S ring",
+                        e.cpu_maps.1 - e.cpu_maps.0
+                    );
+                }
+                if !ok_store {
+                    println!(
+                        "FAIL  R31 ring store      = a store into the guest-backed ring answered \
+                         {:?}, not `RING_NOT_OURS`. An `Ok` means a CPU view of the guest's ring \
+                         exists after all",
+                        e.ring_store
+                    );
+                }
+                if ok_numbers && ok_maps && ok_store {
+                    println!(
+                        "★     R31 adopt           = HOST RM BUILT THE CHANNEL (token {token:#x}) \
+                         over an object it did not allocate, placed AS ASKED at {:#018x}, told \
+                         gpFifoOffset {:#018x} and gpFifoEntries {} — and building it asked RM \
+                         for exactly ONE CPU mapping (USERD). A store into the ring is refused by \
+                         name (`RING_NOT_OURS`)",
+                        e.ring_got_va, e.gp_fifo_va, e.gp_fifo_entries
+                    );
+                }
+                ok_numbers && ok_maps && ok_store
+            }
+        }
+    };
+
+    // Arm B — the mapping control. Reported either way; an `Ok` refutes G4's *"it
+    // measurably fails"* without touching *"we do not need it"*.
+    match &e.cpu_map_of_guest_ring {
+        Err(err) => println!(
+            "★     R31 arm B nomap     = the CPU map of the guest-backed ring was ATTEMPTED and \
+             REFUSED {err:?} — so `no CPU map` is not a policy we chose, it is the only \
+             available answer"
+        ),
+        Ok(()) => println!(
+            "??    R31 arm B nomap     = the CPU map of the guest-backed ring SUCCEEDED (it was \
+             dropped immediately). ⇒ `it measurably fails` is REFUTED; what still stands is that \
+             we do not NEED it — the isolate already holds these pages through `GuestRamPlane`"
+        ),
+    }
+
+    // Arm C — the binding control, and the prediction is that it does NOT fire.
+    match &e.unbound {
+        Err(err) => println!(
+            "★     R31 arm C unbound   = the SAME call with gpFifoOffset {:#018x} — an address \
+             nothing was ever mapped at — was REFUSED {err:?}. ⇒ RM validates the ring's binding \
+             AT ALLOC, so a host channel cannot be born before its ring is bound",
+            e.unbound_va
+        ),
+        Ok(token) => println!(
+            "⚠⚠    R31 arm C unbound   = the SAME call with gpFifoOffset {:#018x} — an address \
+             nothing was ever mapped at — was ACCEPTED (token {token:#x}, freed). ⇒ RM does NOT \
+             resolve gpFifoOffset at alloc time, exactly as `ogkm-580: kernel_channel.c:2664` \
+             and `kernel_graphics.c:2420-2424` say. TWO consequences: (1) arm A's acceptance is \
+             about the ioctl and the NUMBERS, not about the binding; (2) the host channel's \
+             birth does NOT have to move to the doorbell — the binding is needed when hardware \
+             FETCHES, which is after it",
+            e.unbound_va
+        ),
+    }
+
+    let _ = rm.free(vas);
+    let verdict = arm_a && arm_d;
+    if verdict {
+        println!(
+            "★     R31 guest ring      = a host channel over the GUEST'S queue, at the GUEST'S \
+             address and the GUEST'S entry count, on real hardware. ⊘ It is NOT runnable: \
+             nothing writes `GP_PUT`, so the engine has nothing to fetch. cup2 does not pass \
+             and the completion watcher stays NOT-OBSERVED"
+        );
+    }
+    verdict
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -2380,6 +2598,7 @@ fn main() -> std::process::ExitCode {
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
     let mut want_guest_pin = false;
+    let mut want_guest_ring = false;
     let mut want_executor_vas = false;
     let mut want_executor_alias = false;
     let mut args = std::env::args().skip(1);
@@ -2413,6 +2632,7 @@ fn main() -> std::process::ExitCode {
             // ⊘ The negative control. Same address, occupied first, inverted verdict.
             "--dictated-ring-negative" => want_dictated_neg = true,
             "--guest-ram-pin" => want_guest_pin = true,
+            "--guest-ring-channel" => want_guest_ring = true,
             "--executor-vas" => want_executor_vas = true,
             // ★ Arm C, opt-in: it provokes a real host fault when the boundary HOLDS.
             "--executor-vas-alias" => {
@@ -2608,6 +2828,24 @@ fn main() -> std::process::ExitCode {
         );
         let ok = guest_ram_pin_probe(&mut rm, gpu);
         println!("done — guest-RAM pin probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★ R31 runs here and RETURNS, for R25's reason exactly: it allocates its own `Vas`,
+    // its own memfd, its own descriptor and its own channels, and every address it names is
+    // a constant no other rung uses — so nothing it observes can be an earlier rung's
+    // leftover. ⊘ It schedules nothing and rings nothing, so unlike R30 it cannot fault.
+    if want_guest_ring {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = guest_ring_channel_probe(&mut rm, gpu);
+        println!("done — guest-ring channel probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {

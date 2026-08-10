@@ -358,6 +358,17 @@ pub struct RmConnection {
     /// table, and the handle table must not be held across it. Two locks, each held for one
     /// kind of thing, is the R3 lock-rank discipline rather than a convenience.
     rings: Mutex<BTreeMap<u32, ChannelRings>>,
+    /// ★★★ How many times [`RmConnection::map_cpu_windowed`] has been entered — the
+    /// instrument for [`HostRmBackend::cpu_map_calls`].
+    ///
+    /// ⊘ Counted at the **entry** of the one function that issues `NV_ESC_RM_MAP_MEMORY`,
+    /// not at its successful exit, and the difference is the whole point: the claim being
+    /// measured is *"no CPU map was ATTEMPTED"*, and a counter that only recorded successes
+    /// would read zero for a mapping that was tried and refused.
+    ///
+    /// An `AtomicU64` rather than a `Cell` because a connection is shared by every worker
+    /// of the isolate; `Relaxed` because nothing is ordered against it.
+    cpu_maps: std::sync::atomic::AtomicU64,
     /// ★★★ The **doorbell window** — a [`HostClasses::usermode`] object and its CPU mapping,
     /// established once at [`RmConnection::open`] and immutable afterwards.
     ///
@@ -487,13 +498,63 @@ struct ChannelRings {
     /// The node the ring's mmap context was registered against. Held rather than used:
     /// Linux keeps the mapping alive without it, but `NV_ESC_RM_UNMAP_MEMORY` names it, and
     /// a descriptor closed early makes teardown unexpressible.
-    _ring_node: CharDevice,
-    /// The pushbuffer / GPFIFO / semaphore object.
-    ring: VolatileRegion,
+    ///
+    /// ★★★ `None` for a channel over a [`GuestRing`], together with
+    /// [`ChannelRings::ring`], and that is the whole of G4: the guest's ring is **never
+    /// CPU-mapped by this process**. See [`RING_NOT_OURS`].
+    _ring_node: Option<CharDevice>,
+    /// The pushbuffer / GPFIFO / semaphore object — `None` when the ring is the guest's.
+    ring: Option<VolatileRegion>,
     /// The node USERD's mmap context was registered against.
     _userd_node: CharDevice,
     /// USERD — where `GP_GET` (hardware writes) and `GP_PUT` (we write) live.
+    ///
+    /// ⊘ Always present, on both kinds of channel, and the asymmetry with the ring is the
+    /// design rather than an oversight: USERD is **ours** on every channel we allocate (we
+    /// hand RM `hUserdMemory[0]`), and `GP_PUT` is the one 32-bit cursor a shadow channel
+    /// exists to advance.
     userd: VolatileRegion,
+}
+
+/// Who allocated the object a channel's GPFIFO lives in, and therefore who must free it.
+///
+/// ★★★ It is recorded per channel rather than inferred, because the two arms differ in
+/// **three** places that are nowhere near each other: the alloc (we allocate, or we do
+/// not), the CPU map (we map, or we must not), and the teardown (we unmap-and-free, or we
+/// must not touch it). A `bool` at any one of those sites would be a fact re-derived at
+/// the other two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RingOwner {
+    /// The isolate's own 64 KiB device-local ring object, allocated by
+    /// [`HostRmBackend::alloc_channel_in`] and mapped through [`ChannelParts::range`].
+    Ours,
+    /// A handle **handed in** — on the shadow path, an
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the guest's own pages, already placed in
+    /// the channel's address space by whoever pinned it.
+    ///
+    /// ⚠ Freeing the channel must not free it and must not unmap it. The pin has its own
+    /// lifetime, held by the party that made the grant, and a channel teardown that
+    /// unmapped the guest's ring would leave a *live* guest channel pointing at nothing.
+    HandedIn,
+}
+
+/// The three numbers a channel's GPFIFO is described by, kept **per channel** because on a
+/// shadow channel they are the **guest's** and not this file's constants.
+///
+/// ★★★ `entries` is the load-bearing one. `GP_PUT` is an **index**, so the ring's entry
+/// count is the modulus of the wrap arithmetic in [`HostRmBackend::submit_entry`]; a
+/// channel created with the guest's ring and our [`GPFIFO_ENTRIES`] would have two parties
+/// disagreeing about which entry a number names, and they would wrap in different places.
+/// [measured, `run_w229b_b66bd44_execvas_real_qemu.log`] this guest declares **4096**,
+/// **1024** and **32**-entry rings — never 64, and never the fixture's 512.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RingLayout {
+    /// `gpFifoOffset` as declared to RM: an **absolute VA** in the channel's address
+    /// space. For an [`RingOwner::Ours`] channel it is `ring_va + GPFIFO_OFFSET`; for a
+    /// [`GuestRing`] it is the guest's own `gpFifoOffset`, passed through untouched.
+    gp_fifo_va: u64,
+    /// `gpFifoEntries` as declared to RM.
+    entries: u32,
 }
 
 /// Everything [`RmBackend::alloc_channel`] built, kept because the port hands back one
@@ -504,16 +565,21 @@ struct ChannelParts {
     /// controls are issued **here**, not on the channel — see
     /// `kayfabe_abi::submit::NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`.
     tsg: u32,
-    /// The device-local object holding the pushbuffer, the GPFIFO ring and the
-    /// semaphore.
+    /// The object holding the GPFIFO — and, for an [`RingOwner::Ours`] channel, the
+    /// pushbuffer and the semaphore too.
     ring: u32,
+    /// Whether [`ChannelParts::ring`] is this connection's to unmap and free.
+    owner: RingOwner,
     /// The device-local object holding USERD.
     userd: u32,
     /// The `NV01_MEMORY_VIRTUAL` range [`ChannelParts::ring`] is mapped through — the
     /// handle `NV_ESC_RM_UNMAP_MEMORY_DMA` needs, which is NOT the address space.
     range: u32,
-    /// Where RM put the ring in the channel's address space.
+    /// Where the ring object is in the channel's address space. RM's **[OUT]** `dmaOffset`
+    /// for an [`RingOwner::Ours`] ring; the address the caller states for a handed-in one.
     ring_va: u64,
+    /// The GPFIFO as **declared to RM**, never re-derived from a constant afterwards.
+    layout: RingLayout,
 }
 
 /// Size of the device-local object holding a channel's pushbuffer, GPFIFO ring and
@@ -552,6 +618,73 @@ const PUSHBUFFER_SLOT_BYTES: u64 = 64;
 /// other — with the failure appearing as "the semaphore never landed", which is also what
 /// a broken doorbell looks like.
 const SEMAPHORE_OFFSET: u64 = 0x2000;
+
+/// ★★★★★ **The guest's own ring, as the guest declared it** — the argument that turns
+/// [`HostRmBackend::alloc_channel_at`] from *"a channel with a ring of ours"* into *"a
+/// channel over the ring the guest is already pushing into"*.
+///
+/// # The blocker this exists to remove, stated exactly
+///
+/// A host channel allocated the old way has **its own** command queue, which stays empty,
+/// so the engine consumes nothing forever while the guest pushes into a queue our channel
+/// does not read. The owner's ruling is not to copy the methods across: it is to **map the
+/// guest's queue into the GPU's view at identical addresses and let hardware read them
+/// directly**. Under that shape the only verb left is advancing one 32-bit cursor — and
+/// this struct is what makes the channel name the guest's bytes in the first place.
+///
+/// # ⊘ Every field is HANDED IN. Nothing here is derived, and that is the invariant
+///
+/// | field | whose number it is | ⊘ what it must never be |
+/// |---|---|---|
+/// | [`Self::memory`] | the pinning party's — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the guest's pages | an object this file allocated (`alloc_device_local`), which is the old behaviour |
+/// | [`Self::gp_fifo_va`] | the **guest's** `gpFifoOffset`, as its own channel alloc declared it | `ring_va + `[`GPFIFO_OFFSET`] — our layout, applied to memory that is not laid out that way |
+/// | [`Self::gp_fifo_entries`] | the **guest's** `gpFifoEntries` | [`GPFIFO_ENTRIES`] — see [`RingLayout::entries`] for why a wrong modulus is not cosmetic |
+///
+/// # ⚠ What this type does NOT do
+///
+/// It does not map anything. [`Self::memory`] must **already be placed** at an address
+/// covering `[gp_fifo_va, gp_fifo_va + 8 * gp_fifo_entries)` in the same address space the
+/// channel is created in — on the production path by the guest-RAM pin
+/// (`kayfabe_rt::device::SharedDevice::pin_guest_ram`), which is committed at the doorbell.
+/// That ordering is the whole reason the host channel's birth has to move; see
+/// `docs/design/guest_ring_adoption.md` §3.
+///
+/// ⊘ And it does not make the channel *runnable*. Nothing in this rung writes the guest's
+/// `GP_PUT` into our USERD, so the engine still has nothing to fetch. Adopting the ring and
+/// advancing the cursor are two rungs, and this is the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRing {
+    /// The memory object carrying the guest's GPFIFO. Neither allocated nor freed here.
+    pub memory: HostHandle,
+    /// Where the object is placed in the channel's address space — the base the caller
+    /// asked for and RM honoured, kept so a diagnostic can say which mapping the
+    /// `gpFifoOffset` below lives inside.
+    pub ring_va: u64,
+    /// The guest's `gpFifoOffset`: an **absolute VA**, not an offset into anything.
+    ///
+    /// ⚠ `0` is a value and not a blank — the driver deliberately declares
+    /// `gpFifoOffset = 0` for its golden-context channel
+    /// (`kayfabe_core::rmgraph::GpFifoRing`). A caller with no ring to name must not
+    /// synthesise one; it has no [`GuestRing`] to pass.
+    pub gp_fifo_va: u64,
+    /// The guest's `gpFifoEntries`.
+    pub gp_fifo_entries: u32,
+}
+
+/// Where a channel's GPFIFO comes from — the one degree of freedom
+/// [`HostRmBackend::alloc_channel_in`] gained on this rung.
+///
+/// ⊘ Deliberately not `Option<GuestRing>`. The `Ours` arm carries its own parameter
+/// (R26's dictated placement), and collapsing the two into an `Option` would make
+/// *"no guest ring"* and *"no dictated address"* the same word.
+#[derive(Debug, Clone, Copy)]
+enum RingSource {
+    /// Allocate the isolate's own [`RING_OBJECT_BYTES`] device-local ring, optionally at
+    /// an address we dictate (R26).
+    Ours(Option<GpuVa>),
+    /// Adopt the guest's, already placed. See [`GuestRing`].
+    Guest(GuestRing),
+}
 
 /// Everything that can go wrong bringing an RM connection up, with the rung it failed on.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -664,6 +797,34 @@ pub const BAD_ENCODE: u32 = 0x4B4A;
 /// survived, and the only symptom would be work executing on hardware nobody asked. That
 /// is the whole reason this is a named status rather than an `as u32`. `0x4B49` is `"KI"`.
 pub const NOT_A_WORK_TOKEN: u32 = 0x4B49;
+
+/// The opaque status **a ring access on a channel whose ring this process does not hold a
+/// CPU mapping of** reports — i.e. every channel built over a [`GuestRing`].
+///
+/// ★★★ It is the *positive* form of "we do not CPU-map the guest's ring". Omitting the
+/// mapping would leave `ring_store_u32` reading a `None` and answering
+/// [`RmError::BadHandle`], which says *"that is not a channel"* about a channel that
+/// certainly exists — the symptom-not-truth failure. This status says the true thing: the
+/// channel is real, the ring is real, and **the bytes are not ours to write from the CPU**.
+///
+/// ⊘ It is also the shape of the next rung's boundary. A guest-backed ring is advanced by
+/// copying the guest's own cursor, not by this process composing methods into it; a caller
+/// that reaches for `ring_store_u32` here is reaching for the wrong verb, and gets told so
+/// by name rather than by a bounds error somewhere inside a mapping that was never opened.
+/// `0x4B4C` is `"KL"`.
+pub const RING_NOT_OURS: u32 = 0x4B4C;
+
+/// The opaque status a **GPFIFO entry count that cannot be an index modulus** reports.
+///
+/// ★★ Only zero is refused here, and the narrowness is the point. RM requires a power of
+/// two and refuses anything else itself — pre-empting it would be this file re-deriving a
+/// rule the driver already enforces, and would turn *"the host refused the guest's ring"*
+/// into *"we refused it first"*, which is a different fact about a boot. Zero is different
+/// in kind: it is the divisor of the wrap arithmetic (`slot % entries`), so it is a
+/// **panic** rather than a refusal, and a guest that declares it is not hypothetical —
+/// `kayfabe_core::rmgraph::GpFifoRing`'s own docs record the driver declaring
+/// `gpFifoOffset = 0` for its golden-context channel. `0x4B4D` is `"KM"`.
+pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
 
 /// Classify a failure from a mapped region: a bounds refusal, or a syscall.
 ///
@@ -779,6 +940,7 @@ impl RmConnection {
                 exec_vases: BTreeMap::new(),
             }),
             rings: Mutex::new(BTreeMap::new()),
+            cpu_maps: std::sync::atomic::AtomicU64::new(0),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
         };
@@ -1485,6 +1647,10 @@ impl RmConnection {
         mmap_len: u64,
         cache: CachePolicy,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        // ★ Before anything can fail. See `RmConnection::cpu_maps`: the measurement is of
+        // attempts, so an early `?` must not be able to hide one.
+        self.cpu_maps
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let len = register_len;
         let name = CString::new(format!("nvidia{}", self.gpu_index))
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
@@ -2314,6 +2480,70 @@ pub enum OsDescSeed {
     Never,
 }
 
+/// ★★★★★ **R31's evidence** — what happened when a host channel was created over memory
+/// shaped exactly like the guest's ring, with the guest's own numbers.
+///
+/// Five separable facts, and they are separate fields for [`OsDescEvidence`]'s stated
+/// reason: a single verdict over all of them would score *"RM refused the ring"* and
+/// *"RM accepted a ring it should have refused"* as the same colour, and those send the
+/// next reader to opposite places.
+#[derive(Debug)]
+pub struct GuestRingEvidence {
+    /// **Arm A** — the fixed placement of the `OS_DESCRIPTOR` the channel's GPFIFO lives
+    /// in. Asked, and RM's **[OUT]** `dmaOffset`.
+    pub ring_asked_va: u64,
+    /// What RM wrote back.
+    pub ring_got_va: u64,
+    /// The `gpFifoOffset` handed to the channel alloc — an absolute VA inside the mapping
+    /// above, and deliberately **not** `ring_va + `[`GPFIFO_OFFSET`].
+    pub gp_fifo_va: u64,
+    /// The `gpFifoEntries` handed to the channel alloc — the count this bench's guest
+    /// actually declares, and 64× ours.
+    pub gp_fifo_entries: u32,
+    /// What the channel alloc answered: the work-submit token, or RM's refusal.
+    pub channel: Result<u64, RmError>,
+    /// The layout the connection recorded for the channel it built, if it built one.
+    pub declared: Option<(u64, u32)>,
+    /// [`RmConnection::map_cpu_windowed`] entries before and after the channel alloc.
+    /// ★ The measurement behind *"no CPU map is attempted on a guest-backed ring"*: the
+    /// difference must be exactly **1** — USERD, which is ours.
+    pub cpu_maps: (u64, u64),
+    /// What [`HostRmBackend::ring_store_u32`] answered on the resulting channel. Must be
+    /// [`RING_NOT_OURS`]; an `Ok` would mean a CPU view of the guest's ring exists.
+    pub ring_store: Result<(), RmError>,
+    /// **Arm B, the negative control on the mapping**: `NV_ESC_RM_MAP_MEMORY` issued
+    /// deliberately against the guest-backed ring object. Expected to be refused; an `Ok`
+    /// is a finding, not a pass, and the mapping is dropped immediately either way.
+    pub cpu_map_of_guest_ring: Result<(), RmError>,
+    /// **Arm C, the negative control on the binding**: the same channel alloc with a
+    /// `gpFifoOffset` at an address **nothing was ever mapped at**. Expected to be refused
+    /// — that refusal is what makes arm A's success a statement about the *binding* rather
+    /// than about the ioctl being well-formed.
+    pub unbound: Result<u64, RmError>,
+    /// The address arm C named.
+    pub unbound_va: u64,
+}
+
+impl GuestRingEvidence {
+    /// The fixed map landed where it was asked to.
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.ring_got_va == self.ring_asked_va
+    }
+
+    /// RM was told the caller's two numbers, unchanged.
+    #[must_use]
+    pub fn adopted_the_guests_numbers(&self) -> bool {
+        self.declared == Some((self.gp_fifo_va, self.gp_fifo_entries))
+    }
+
+    /// Exactly one CPU mapping was asked for while the channel was built — USERD's.
+    #[must_use]
+    pub fn mapped_only_userd(&self) -> bool {
+        self.cpu_maps.1 == self.cpu_maps.0 + 1
+    }
+}
+
 impl CeEvidence {
     /// Did the destination change **from the sentinel to the source's bytes**, first word
     /// and last, *and* did the engine say it had retired?
@@ -2885,9 +3115,26 @@ impl RmBackend for HostRmBackend {
                 }
             };
             keep(self.free_one(raw));
-            keep(self.conn.raw_unmap_dma(parts.range, parts.ring_va));
-            keep(self.free_one(parts.tsg));
-            keep(self.free_one(parts.ring));
+            // ★★★★★ **W230 — a channel over a [`GuestRing`] takes NOTHING of the ring with
+            // it.** The mapping was made by the guest-RAM pin, at the guest's own VA, and
+            // the `OS_DESCRIPTOR` is the pin's object; both outlive this channel by
+            // construction, because the guest is still pushing into those pages. Unmapping
+            // here would leave a live guest channel whose ring resolves to nothing, and
+            // freeing here would un-pin pages RM is still DMAing into — with the second
+            // symptom appearing anywhere but at this call.
+            //
+            // ⊘ It is also not a leak: `ChannelParts::owner` says whose it is, and the
+            // owner frees it. What would be a leak is the opposite default.
+            match parts.owner {
+                RingOwner::Ours => {
+                    keep(self.conn.raw_unmap_dma(parts.range, parts.ring_va));
+                    keep(self.free_one(parts.tsg));
+                    keep(self.free_one(parts.ring));
+                }
+                RingOwner::HandedIn => {
+                    keep(self.free_one(parts.tsg));
+                }
+            }
             keep(self.free_one(parts.userd));
             return first;
         }
@@ -3316,7 +3563,38 @@ impl HostRmBackend {
         ring_at: Option<GpuVa>,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, ring_at)
+        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at))
+    }
+
+    /// ★★★★★ **W230 — a host channel over the GUEST'S ring**: the same body, with the
+    /// object hardware fetches from handed in instead of allocated.
+    ///
+    /// This is the verb the blocker asks for. See [`GuestRing`] for what each number is and
+    /// whose it is; everything this method adds on top of that type is the refusal for a
+    /// count that cannot be an index modulus, and the promise that **no CPU mapping of the
+    /// guest's ring is attempted** ([`RING_NOT_OURS`], [`HostRmBackend::cpu_map_calls`]).
+    ///
+    /// # ⊘ What comes back is a channel that is NOT runnable, and saying so is the point
+    ///
+    /// RM will have accepted it, [`RmBackend::schedule`] will make it eligible, and it will
+    /// still execute **nothing**, because the engine reads `GP_PUT` out of the USERD *we*
+    /// gave it and nothing on this rung writes the guest's cursor into that word. A green
+    /// return here is *"the host driver accepted the guest's ring"* and is not
+    /// *"the guest's work runs"*.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] carrying [`RING_ENTRIES_REFUSED`] for a zero entry count,
+    /// [`RmError::BadHandle`] for a `vas` or a ring handle this connection did not mint,
+    /// and otherwise whatever RM refused — after unwinding everything already built, and
+    /// **without** touching the handed-in ring.
+    pub fn alloc_channel_over_guest_ring(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring: GuestRing,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring))
     }
 
     /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
@@ -3335,15 +3613,15 @@ impl HostRmBackend {
         vas: ExecutorVas,
         engine_type: u32,
     ) -> Result<(HostHandle, u64), RmError> {
-        self.alloc_channel_in(vas.range, engine_type, None)
+        self.alloc_channel_in(vas.range, engine_type, RingSource::Ours(None))
     }
 
-    /// The body both of the above share, over a raw `NV01_MEMORY_VIRTUAL` range.
+    /// The body all of the above share, over a raw `NV01_MEMORY_VIRTUAL` range.
     fn alloc_channel_in(
         &mut self,
         range: u32,
         engine_type: u32,
-        ring_at: Option<GpuVa>,
+        ring: RingSource,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
@@ -3352,55 +3630,114 @@ impl HostRmBackend {
             .space_of(range)
             .ok_or_else(|| RmError::BadHandle(self.stamp(range)))?;
 
-        let ring = self.conn.alloc_device_local(RING_OBJECT_BYTES)?;
         let unwind = |me: &mut Self, objs: &[u32]| {
             for h in objs.iter().rev() {
                 let _ = me.free(me.stamp(*h));
             }
         };
 
+        // ★★★★★ **G1 — WHERE THE RING COMES FROM, and it is now a question rather than a
+        // line.** `Ours` allocates 64 KiB of device-local memory exactly as before.
+        // `Guest` allocates **nothing**: the object is a handle handed in, over the guest's
+        // own pages, and this connection neither made it nor may unmake it.
+        let (ring_obj, owner) = match ring {
+            RingSource::Ours(_) => (
+                self.conn.alloc_device_local(RING_OBJECT_BYTES)?,
+                RingOwner::Ours,
+            ),
+            RingSource::Guest(g) => {
+                // ⊘ Refused HERE, before any host object exists, because it is the ONE
+                // number in the guest's declaration this file cannot pass through: it is
+                // the modulus of `submit_entry`'s wrap. See `RING_ENTRIES_REFUSED` for why
+                // nothing else in the declaration is second-guessed.
+                if g.gp_fifo_entries == 0 {
+                    return Err(RmError::Other(RING_ENTRIES_REFUSED));
+                }
+                (self.narrow(g.memory)?, RingOwner::HandedIn)
+            }
+        };
+        // What a later failure must give back. ⊘ The guest's ring is not in it on any arm,
+        // and that is the invariant, not an optimisation: unwinding a channel must never
+        // free memory the guest is still pushing into.
+        let owned_ring = [ring_obj];
+        let ours: &[u32] = match owner {
+            RingOwner::Ours => &owned_ring,
+            RingOwner::HandedIn => &[],
+        };
+
         let userd = match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
             Ok(h) => h,
             Err(e) => {
-                unwind(self, &[ring]);
+                unwind(self, ours);
                 return Err(e);
             }
         };
 
-        // The ring must be resolvable by hardware before a channel may name it. With
-        // `ring_at = None` RM picks the address — see `raw_map_dma` for why that does not
-        // weaken `#102`. With `Some`, `DMA_OFFSET_FIXED_TRUE` makes `dmaOffset` an [IN]
-        // parameter and the address is ours.
-        let ring_va =
-            match self
-                .conn
-                .raw_map_dma(range, ring, RING_OBJECT_BYTES, ring_at.map(|a| a.0))
-            {
-                Ok(va) => va,
-                Err(e) => {
-                    unwind(self, &[ring, userd]);
-                    return Err(e);
-                }
-            };
-        // ★★★ The placement check, and it reads RM's **[OUT]** `dmaOffset` rather than the
-        // value we asked for. `raw_map_dma` returns what RM wrote back, so this is a
-        // comparison between two different parties' numbers and not our argument echoed.
+        // The ring must be resolvable by hardware before a channel may name it.
         //
-        // ⊘ A downgraded placement must never be adopted. A channel whose ring RM quietly
-        // relocated is created, schedulable, and rings a doorbell — and the *guest's*
-        // pushbuffer, which names the address we asked for, then walks the host MMU into
-        // nothing. `RmError::PlacementRefused`'s own docs name that end state: `Xid 31
-        // FAULT_PDE`, a host-side fault with no guest-visible cause.
-        if let Some(want) = ring_at
-            && ring_va != want.0
-        {
-            let _ = self.conn.raw_unmap_dma(range, ring_va);
-            unwind(self, &[ring, userd]);
-            return Err(RmError::PlacementRefused {
-                want: want.0,
-                got: ring_va,
-            });
-        }
+        // - `Ours` maps it here. With `None` RM picks the address — see `raw_map_dma` for
+        //   why that does not weaken `#102`. With `Some`, `DMA_OFFSET_FIXED_TRUE` makes
+        //   `dmaOffset` an [IN] parameter and the address is ours.
+        // - ★★★ `Guest` maps **nothing**, and that is not a shortcut: the binding is the
+        //   guest-RAM pin's, made at the guest's own VA and committed on the doorbell path,
+        //   and re-mapping an already-placed object here would either fail or double-bind
+        //   the guest's pages. ⇒ The channel alloc below is therefore the FIRST thing to
+        //   test whether that binding exists, which is exactly why the host channel's birth
+        //   has to move to the doorbell (`docs/design/guest_ring_adoption.md` §3).
+        let (ring_va, layout) = match ring {
+            RingSource::Ours(ring_at) => {
+                let va = match self.conn.raw_map_dma(
+                    range,
+                    ring_obj,
+                    RING_OBJECT_BYTES,
+                    ring_at.map(|a| a.0),
+                ) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        unwind(self, &[ours, &[userd]].concat());
+                        return Err(e);
+                    }
+                };
+                // ★★★ The placement check, and it reads RM's **[OUT]** `dmaOffset` rather
+                // than the value we asked for. `raw_map_dma` returns what RM wrote back, so
+                // this is a comparison between two different parties' numbers and not our
+                // argument echoed.
+                //
+                // ⊘ A downgraded placement must never be adopted. A channel whose ring RM
+                // quietly relocated is created, schedulable, and rings a doorbell — and the
+                // *guest's* pushbuffer, which names the address we asked for, then walks
+                // the host MMU into nothing. `RmError::PlacementRefused`'s own docs name
+                // that end state: `Xid 31 FAULT_PDE`, a host-side fault with no
+                // guest-visible cause.
+                if let Some(want) = ring_at
+                    && va != want.0
+                {
+                    let _ = self.conn.raw_unmap_dma(range, va);
+                    unwind(self, &[ours, &[userd]].concat());
+                    return Err(RmError::PlacementRefused {
+                        want: want.0,
+                        got: va,
+                    });
+                }
+                (
+                    va,
+                    RingLayout {
+                        gp_fifo_va: va + GPFIFO_OFFSET,
+                        entries: GPFIFO_ENTRIES,
+                    },
+                )
+            }
+            // ★★ G2 + G3: the two numbers RM is about to be told are the GUEST'S, passed
+            // through untouched. Neither is derived from `ring_va`, and neither is one of
+            // this file's constants.
+            RingSource::Guest(g) => (
+                g.ring_va,
+                RingLayout {
+                    gp_fifo_va: g.gp_fifo_va,
+                    entries: g.gp_fifo_entries,
+                },
+            ),
+        };
 
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         let encoded = NvChannelGroupAllocationParameters {
@@ -3425,7 +3762,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut tsg_params);
         if encoded.is_err() {
-            unwind(self, &[ring, userd]);
+            unwind(self, &[ours, &[userd]].concat());
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
@@ -3438,7 +3775,7 @@ impl HostRmBackend {
                 h
             }
             Err(e) => {
-                unwind(self, &[ring, userd]);
+                unwind(self, &[ours, &[userd]].concat());
                 return Err(e);
             }
         };
@@ -3446,8 +3783,13 @@ impl HostRmBackend {
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = ChannelAllocParams {
             h_object_error: 0,
-            gp_fifo_offset: ring_va + GPFIFO_OFFSET,
-            gp_fifo_entries: GPFIFO_ENTRIES,
+            // ★★★ **G2 + G3 — the two numbers that used to be constants.** For an
+            // `Ours` ring `layout` still computes exactly `ring_va + GPFIFO_OFFSET` and
+            // `GPFIFO_ENTRIES`, bit for bit; for a `Guest` ring they are the guest's own
+            // declaration. ⊘ Neither is spelled here any more, because a constant at this
+            // site is invisible to the one caller that must not use it.
+            gp_fifo_offset: layout.gp_fifo_va,
+            gp_fifo_entries: layout.entries,
             flags: 0,
             // Both zero: a channel in a group inherits the group's subcontext and address
             // space, and naming either again is refused. See `ChannelAllocParams`.
@@ -3468,7 +3810,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut chan_params);
         if encoded.is_err() {
-            unwind(self, &[ring, userd, tsg]);
+            unwind(self, &[ours, &[userd, tsg]].concat());
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
@@ -3483,7 +3825,7 @@ impl HostRmBackend {
                 h
             }
             Err(e) => {
-                unwind(self, &[ring, userd, tsg]);
+                unwind(self, &[ours, &[userd, tsg]].concat());
                 return Err(e);
             }
         };
@@ -3492,7 +3834,7 @@ impl HostRmBackend {
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
         if let Err(e) = self.conn.raw_control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
-            unwind(self, &[ring, userd, tsg, chan]);
+            unwind(self, &[ours, &[userd, tsg, chan]].concat());
             return Err(e);
         }
 
@@ -3502,7 +3844,7 @@ impl HostRmBackend {
             NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
             &mut token,
         ) {
-            unwind(self, &[ring, userd, tsg, chan]);
+            unwind(self, &[ours, &[userd, tsg, chan]].concat());
             return Err(e);
         }
         let token = u32::from_le_bytes(token);
@@ -3511,36 +3853,62 @@ impl HostRmBackend {
         // fact about hardware that no byte of ours has touched, and everything below is
         // this process getting its hands on the channel. Keeping the order means a failure
         // here cannot be confused for a channel that never existed.
+        // ★★★★★ **G4 — THE CPU MAP OF THE RING IS CONDITIONAL, AND THE CONDITION IS
+        // PROVENANCE.**
+        //
+        // ⊘ On a guest-backed ring this is not an omission we can get away with; it is a
+        // call that **cannot succeed**. `map_cpu` issues `NV_ESC_RM_MAP_MEMORY` against the
+        // memory object, and the object here is an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over
+        // pages RM pinned out of another process's address space. R31 arm B attempts it
+        // deliberately and prints what the driver answered, so the claim in this comment is
+        // a measurement rather than a plausible sentence.
+        //
+        // ★ And we do not need it. The isolate already holds those pages mapped — the same
+        // `GuestRamPlane` grant that the `OS_DESCRIPTOR` was built from — so a second view
+        // through RM would be a second name for memory this process can already read.
+        // Every access this file would have made through the ring view is refused by name
+        // instead (`RING_NOT_OURS`).
+        let ring_view = match owner {
+            // ★ Write-combining, and that is a claim about what this OBJECT is, not about
+            // what it is used for: it is an `NV01_MEMORY_LOCAL_USER` allocation in the
+            // framebuffer, so RM's mmap handler takes the write-combining branch
+            // (`ogkm-580: nv-mmap.c:575-597`). The *uncached* sub-case two lines below it
+            // is RM's own USERD window for a channel whose USERD the driver allocated —
+            // not this one, which is our own vidmem object handed to the channel via
+            // `hUserdMemory[0]`. Claiming uncached here because the word "USERD" appears
+            // would be a comfortable guess, and the fence discipline is what makes
+            // write-combining survivable.
+            RingOwner::Ours => Some(self.conn.map_cpu(
+                ring_obj,
+                RING_OBJECT_BYTES,
+                CachePolicy::WriteCombining,
+            )),
+            RingOwner::HandedIn => None,
+        };
         let rings = match (
-            // ★ Both write-combining, and that is a claim about what these OBJECTS are,
-            // not about what they are used for: they are `NV01_MEMORY_LOCAL_USER`
-            // allocations in the framebuffer, so RM's mmap handler takes the
-            // write-combining branch for both (`ogkm-580: nv-mmap.c:575-597`). The
-            // *uncached* sub-case two lines below it is RM's own USERD window for a
-            // channel whose USERD the driver allocated — not this one, which is our own
-            // vidmem object handed to the channel via `hUserdMemory[0]`. Claiming
-            // uncached here because the word "USERD" appears would be a comfortable
-            // guess, and the fence discipline is what makes write-combining survivable.
-            self.conn
-                .map_cpu(ring, RING_OBJECT_BYTES, CachePolicy::WriteCombining),
+            ring_view,
             self.conn
                 .map_cpu(userd, RING_OBJECT_BYTES, CachePolicy::WriteCombining),
         ) {
-            (Ok((ring_node, ring_map)), Ok((userd_node, userd_map))) => ChannelRings {
-                _ring_node: ring_node,
-                ring: ring_map,
+            (Some(Ok((ring_node, ring_map))), Ok((userd_node, userd_map))) => ChannelRings {
+                _ring_node: Some(ring_node),
+                ring: Some(ring_map),
+                _userd_node: userd_node,
+                userd: userd_map,
+            },
+            (None, Ok((userd_node, userd_map))) => ChannelRings {
+                _ring_node: None,
+                ring: None,
                 _userd_node: userd_node,
                 userd: userd_map,
             },
             (a, b) => {
+                let a = a.and_then(Result::err);
                 // Either half failing means the channel cannot be submitted to, so it is
                 // torn down here rather than handed back as a channel that silently is not
                 // one. The first error is the one reported.
-                let e = a
-                    .err()
-                    .or(b.err())
-                    .unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
-                unwind(self, &[ring, userd, tsg, chan]);
+                let e = a.or(b.err()).unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
+                unwind(self, &[ours, &[userd, tsg, chan]].concat());
                 return Err(e);
             }
         };
@@ -3550,10 +3918,12 @@ impl HostRmBackend {
             chan,
             ChannelParts {
                 tsg,
-                ring,
+                ring: ring_obj,
+                owner,
                 userd,
                 range,
                 ring_va,
+                layout,
             },
         );
         Ok((self.stamp(chan), u64::from(token)))
@@ -3593,13 +3963,21 @@ impl HostRmBackend {
     /// the next rung's `ring_doorbell` will; nothing in the core can reach it, and nothing
     /// should — the ring is the adapter's own object, not an address the guest names.
     ///
+    /// ★★★ **W230** — and on a channel over a [`GuestRing`] it is
+    /// [`RmError::Other`]`(`[`RING_NOT_OURS`]`)`, always. That refusal *is* G4's assertion:
+    /// the absence of the mapping is expressed as a named answer to the call that would
+    /// have used it, not as a comment saying we did not make one.
+    ///
     /// # Errors
-    /// [`RmError::BadHandle`], or the bounds refusal if `offset` leaves the object.
+    /// [`RmError::BadHandle`], [`RING_NOT_OURS`] if the ring is the guest's, or the bounds
+    /// refusal if `offset` leaves the object.
     pub fn ring_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
         let raw = self.narrow(chan)?;
         self.conn
             .with_rings(raw, |r| {
                 r.ring
+                    .as_ref()
+                    .ok_or(RmError::Other(RING_NOT_OURS))?
                     .store_u32(HostOffset::new(offset), value)
                     .map_err(|e| region_error(&e))
             })
@@ -3615,10 +3993,44 @@ impl HostRmBackend {
         self.conn
             .with_rings(raw, |r| {
                 r.ring
+                    .as_ref()
+                    .ok_or(RmError::Other(RING_NOT_OURS))?
                     .load_u32(HostOffset::new(offset))
                     .map_err(|e| region_error(&e))
             })
             .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// ★★★ **How many CPU mappings this connection has asked RM for, since it opened.**
+    ///
+    /// ⊘ It exists for one reason and it is not curiosity: *"we do not CPU-map the guest's
+    /// ring"* is a claim about a call that **did not happen**, and the only way to measure
+    /// an absence is to count the occurrences. A diagnostic that merely observed
+    /// `ring_load_u32` refusing would be reading this file's own bookkeeping; this counts
+    /// at the door every `NV_ESC_RM_MAP_MEMORY` in this process goes through.
+    ///
+    /// ★ [`HostRmBackend::alloc_channel_over_guest_ring`] must move it by exactly **one**
+    /// — USERD, which is ours on every channel — where [`Self::alloc_channel_at`] moves it
+    /// by two.
+    #[must_use]
+    pub fn cpu_map_calls(&self) -> u64 {
+        self.conn
+            .cpu_maps
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The GPFIFO layout `chan` was **created with**: `(gp_fifo_va, entries)`.
+    ///
+    /// ⊘ Read from [`ChannelParts`], which was written from the values handed to the
+    /// channel alloc — so a caller comparing this against what it asked for is checking
+    /// that the numbers reached RM, and **not** that RM agreed with them. Nothing but a
+    /// submission hardware fetches says that.
+    #[must_use]
+    pub fn channel_ring_layout(&self, chan: HostHandle) -> Option<(u64, u32)> {
+        let raw = self.narrow(chan).ok()?;
+        self.conn
+            .channel_parts(raw)
+            .map(|p| (p.layout.gp_fifo_va, p.layout.entries))
     }
 
     /// ★★★ R15 — **submit one host-FIFO semaphore release and watch hardware answer.**
@@ -3672,7 +4084,7 @@ impl HostRmBackend {
             .conn
             .channel_parts(raw)
             .ok_or(RmError::BadHandle(chan))?;
-        let slot = self.next_slot(raw);
+        let slot = self.next_slot(raw)?;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
         let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
@@ -3722,6 +4134,12 @@ impl HostRmBackend {
         slot: u64,
         token: u64,
     ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let layout = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?
+            .layout;
         let entry = gp_entry(pb_va, pb_len).ok_or(RmError::Other(BAD_ENCODE))?;
         let at = GPFIFO_OFFSET + slot * GP_ENTRY_SIZE;
         self.ring_store_u32(chan, at, entry as u32)?;
@@ -3729,11 +4147,18 @@ impl HostRmBackend {
 
         release_fence();
         // ★ `GP_PUT` is an INDEX INTO THE RING, so it wraps with the ring: after the last
-        // entry it is 0, not `GPFIFO_ENTRIES`. Writing 64 into a 64-entry ring names an
+        // entry it is 0, not the entry count. Writing 64 into a 64-entry ring names an
         // entry that does not exist. Latent rather than live at this rung — nothing here
         // submits 64 times — which is exactly the kind of arithmetic that is wrong for a
         // year and then wrong at scale.
-        let put = u32::try_from((slot + 1) % u64::from(GPFIFO_ENTRIES))
+        //
+        // ★★★ **W230 — the modulus is the CHANNEL'S**, for [`Self::next_slot`]'s reason:
+        // the two are the same number for every ring this file allocates and differ by 64×
+        // the moment the ring is the guest's.
+        if layout.entries == 0 {
+            return Err(RmError::Other(RING_ENTRIES_REFUSED));
+        }
+        let put = u32::try_from((slot + 1) % u64::from(layout.entries))
             .map_err(|_| RmError::Other(BAD_ENCODE))?;
         self.userd_store_u32(chan, USERD_GP_PUT, put)?;
         release_fence();
@@ -3814,7 +4239,7 @@ impl HostRmBackend {
             .channel_parts(raw)
             .ok_or(RmError::BadHandle(chan))?;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
-        let slot = self.next_slot(raw);
+        let slot = self.next_slot(raw)?;
         let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
 
@@ -3892,17 +4317,38 @@ impl HostRmBackend {
         Ok(c)
     }
 
-    /// The next GPFIFO slot for `chan`, wrapping at [`GPFIFO_ENTRIES`].
+    /// The next GPFIFO slot for `chan`, wrapping at **that channel's own entry count**.
     ///
     /// ★ Kept per **backend**, not per connection: `submit_entry` is the only writer and
     /// it runs under `&mut self`, so the counter needs no lock. A second worker submitting
     /// to the same channel would need one — and would need much more than a counter, which
     /// is why nothing here pretends to support it.
-    fn next_slot(&mut self, chan: u32) -> u64 {
+    ///
+    /// ★★★ **W230 — the modulus is READ FROM THE CHANNEL, not from [`GPFIFO_ENTRIES`].**
+    /// For every channel this file allocates its own ring for the two are the same number,
+    /// so nothing about the isolate's submissions changes. They stop being the same the
+    /// moment a channel is created over a [`GuestRing`], and the failure a constant would
+    /// produce there is silent: a slot index taken modulo 64 in a 4096-entry ring is a
+    /// legal entry, just not the one either party meant.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] if `chan` is not a channel of this connection —
+    /// deliberately, rather than falling back to the constant, because the fallback would
+    /// be a guess about a ring whose geometry we did not find.
+    fn next_slot(&mut self, chan: u32) -> Result<u64, RmError> {
+        let entries = self
+            .conn
+            .channel_parts(chan)
+            .ok_or_else(|| RmError::BadHandle(self.stamp(chan)))?
+            .layout
+            .entries;
+        if entries == 0 {
+            return Err(RmError::Other(RING_ENTRIES_REFUSED));
+        }
         let n = self.slots.entry(chan).or_insert(0);
-        let slot = *n % u64::from(GPFIFO_ENTRIES);
+        let slot = *n % u64::from(entries);
         *n += 1;
-        slot
+        Ok(slot)
     }
 
     /// Store one 32-bit word into the channel's USERD.
@@ -4101,7 +4547,9 @@ impl HostRmBackend {
             // ★ FIXED, and refused rather than adopted if RM disagrees — see
             // `PROBE_RING_AT`. An operand RM placed next to `sem_va` is an operand the
             // probe would then read instead of the thing it is asking about.
-            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, Some(CTRL_SRC_AT.0))?;
+            let ctrl_src_va = self
+                .conn
+                .raw_map_dma(range, ctrl_src, BYTES, Some(CTRL_SRC_AT.0))?;
             mapped.push(ctrl_src_va);
             if ctrl_src_va != CTRL_SRC_AT.0 {
                 return Err(RmError::PlacementRefused {
@@ -4121,7 +4569,9 @@ impl HostRmBackend {
             // Seed both buffers through CPU mappings that are dropped before any engine
             // runs — the read-back below opens its own.
             {
-                let (n, m) = self.conn.map_cpu(ctrl_src, BYTES, CachePolicy::WriteCombining)?;
+                let (n, m) = self
+                    .conn
+                    .map_cpu(ctrl_src, BYTES, CachePolicy::WriteCombining)?;
                 m.store_u32(HostOffset::new(0), CONTROL_WORD)
                     .map_err(|e| region_error(&e))?;
                 drop(m);
@@ -4154,7 +4604,9 @@ impl HostRmBackend {
 
             let control = self.probe_copy(c, token, ctrl_src_va, dst_va, 1)?;
             let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
-            let control_read = view.load_u32(HostOffset::new(0)).map_err(|e| region_error(&e))?;
+            let control_read = view
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
             drop(view);
             drop(node);
 
@@ -4172,7 +4624,9 @@ impl HostRmBackend {
 
             let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
             let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
-            let probe_read = view.load_u32(HostOffset::new(4)).map_err(|e| region_error(&e))?;
+            let probe_read = view
+                .load_u32(HostOffset::new(4))
+                .map_err(|e| region_error(&e))?;
             drop(view);
             drop(node);
 
@@ -4228,7 +4682,7 @@ impl HostRmBackend {
             .channel_parts(raw)
             .ok_or(RmError::BadHandle(chan))?;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
-        let slot = self.next_slot(raw);
+        let slot = self.next_slot(raw)?;
         let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
         let words = ce_pushbuffer(CePush {
@@ -4582,6 +5036,200 @@ impl HostRmBackend {
     /// is a hang inside UVM's replayable-fault loop rather than an error. That is a limit of
     /// this rung, not a gap in it.
     ///
+    /// ★★★★★ **R31 — will host RM build a channel whose command queue is memory we did
+    /// not allocate, at the guest's own numbers?**
+    ///
+    /// The blocker this rung exists for, asked of hardware with no guest in the picture: we
+    /// allocate a host channel with **its own** queue, which stays empty, while the guest
+    /// pushes into **its** queue, which our channel does not read. The fix is not a copier —
+    /// it is to name the guest's queue in the channel alloc and let the engine fetch from
+    /// it. Everything before that is unmeasurable without this answer.
+    ///
+    /// ## The three arms, and the second and third are the ones that make the first mean
+    /// something
+    ///
+    /// - **A** — a sealed `memfd` (what a VMM backs guest RAM with) → `OS_DESCRIPTOR` →
+    ///   **fixed** map at an address we dictate → a channel whose `gpFifoOffset` is an
+    ///   absolute VA *inside that mapping* and whose `gpFifoEntries` is **4096**, the count
+    ///   this bench's guest actually declares (`run_w229b_…_qemu.log`), not our 64 and not
+    ///   the fixture's 512. The channel is never scheduled and never rung.
+    /// - **B, the mapping control** — `NV_ESC_RM_MAP_MEMORY` issued *deliberately* against
+    ///   that same descriptor. G4 claims a CPU view of a guest-backed ring cannot be had;
+    ///   this is the line that tests it instead of asserting it. ⊘ It is expected to be
+    ///   **refused**, and an `Ok` is reported as a finding rather than quietly dropped.
+    /// - **C, the binding control** — the same channel alloc with `gpFifoOffset` at
+    ///   [`Self::prove_guest_ring_channel`]'s `UNBOUND_AT`, an address **nothing has ever
+    ///   been mapped at** in this freshly allocated address space. If RM refuses it, arm A's
+    ///   acceptance is a statement about the *binding*; if RM accepts it, arm A proved only
+    ///   that the ioctl was well-formed — and this rung says so out loud.
+    ///
+    /// ## ★★ Every address this prover owns is DICTATED, and it does not share an allocator
+    /// with what it observes
+    ///
+    /// W229's probe was handed the address its own ring had just been freed from and scored
+    /// a correct boundary as a violation. So: the descriptor's VA, the `gpFifoOffset` inside
+    /// it and arm C's unbound VA are three constants, 4 GiB apart, in an address space this
+    /// call allocates and frees itself; and the `gpFifoOffset` is deliberately **not**
+    /// `ring_va + `[`GPFIFO_OFFSET`], so a regression that fell back to our constant would
+    /// change the number RM was told rather than reproduce it.
+    ///
+    /// ## ⊘ What a green arm A does NOT establish
+    ///
+    /// Not that the guest's work runs — nothing writes `GP_PUT`, so the engine has nothing
+    /// to fetch, and this rung does not schedule or ring the channel at all. Not that the
+    /// pages are coherent (that is R25). Not that a *guest*-declared VA resolves in a host
+    /// VAS built from guest page tables. It establishes exactly one thing: **host RM will
+    /// build a channel over a queue it did not allocate, at an address and an entry count
+    /// its caller states.**
+    ///
+    /// # Errors
+    /// Only the setup can fail this way — the memfd, the reservation, the descriptor and
+    /// its fixed map. Every arm's own outcome is carried inside [`GuestRingEvidence`],
+    /// because a refusal from RM is this rung's *result* and not its failure.
+    pub fn prove_guest_ring_channel(
+        &mut self,
+        vas: HostHandle,
+    ) -> Result<GuestRingEvidence, RmError> {
+        /// 64 KiB, the R25 shape: large enough to hold a 4096-entry GPFIFO (32 KiB) at a
+        /// non-zero offset inside it.
+        const BYTES: u64 = 0x1_0000;
+        /// Where the descriptor is fixed-mapped. ⊘ Used by no other rung: R25 uses
+        /// `0x3_0040_0000`, `probe_guest_reachability` uses `0x7_…`, R30 its own.
+        const RING_AT: GpuVa = GpuVa(0x0000_0009_0000_0000);
+        /// The guest's `gpFifoOffset` **inside** that mapping. ★ `0x3000`, deliberately not
+        /// [`GPFIFO_OFFSET`]: the whole claim is that the layout is the caller's.
+        const GP_FIFO_IN_RING: u64 = 0x3000;
+        /// [measured 2026-08-10, `run_w229b_b66bd44_execvas_real_qemu.log`] the entry counts
+        /// this guest declares are **32**, **1024** and **4096** — the ring that carries the
+        /// doorbells we forward is the 4096 one. Never 64 (ours) and never 512 (the ABI
+        /// fixture's).
+        const GUEST_ENTRIES: u32 = 4096;
+        /// Arm C's `gpFifoOffset`: 4 GiB above the descriptor's mapping, in an address space
+        /// this call allocated, and never mapped by anything.
+        const UNBOUND_AT: u64 = 0x0000_000B_0000_0000;
+
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+
+        // 1 — the backing a VMM gives guest RAM, exactly as R25 builds it.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        let mut reservation =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed = reservation
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let region = reservation
+            .placement(placed)
+            .map_err(|e| region_error(&e))?;
+
+        // 2 — RM's own object over those pages. This is the handle the channel will be
+        // handed; nothing below allocates a ring.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(region, HostOffset::new(0), BYTES)?;
+
+        // 3 — the binding. ⊘ `raw_map_dma`, not `map_dma_both`: this rung's channel lives in
+        // the guest-facing space only and submits nothing, so publishing a shadow copy would
+        // add a second mapping the measurement would then have to account for.
+        let ring_got_va = match self.conn.raw_map_dma(range, desc, BYTES, Some(RING_AT.0)) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        let gp_fifo_va = ring_got_va + GP_FIFO_IN_RING;
+
+        // 4 — arm A. The counter is read on both sides of the ALLOC and of nothing else.
+        let cpu_before = self.cpu_map_calls();
+        let built = self.alloc_channel_over_guest_ring(
+            vas,
+            ENGINE_TYPE_COPY0,
+            GuestRing {
+                memory: self.stamp(desc),
+                ring_va: ring_got_va,
+                gp_fifo_va,
+                gp_fifo_entries: GUEST_ENTRIES,
+            },
+        );
+        let cpu_after = self.cpu_map_calls();
+
+        let (channel, declared, ring_store) = match built {
+            Ok((chan, token)) => {
+                let declared = self.channel_ring_layout(chan);
+                // ⊘ A store of a value that could not be mistaken for a GPFIFO entry, at
+                // offset 0, and it must be REFUSED. This is G4 asserted rather than omitted.
+                let store = self.ring_store_u32(chan, 0, 0xBAD0_BAD0);
+                let _ = self.free(chan);
+                (Ok(token), declared, store)
+            }
+            Err(e) => (Err(e), None, Err(RmError::Other(NOT_ON_THIS_RUNG))),
+        };
+
+        // 5 — arm B, the mapping control. ★ Which line this is expected to execute:
+        // `RmConnection::map_cpu_windowed`'s `status_check(out.status)` — i.e. the driver
+        // answering the escape, not a bounds check of ours. An `Ok` here is dropped
+        // immediately and reported as a finding.
+        let cpu_map_of_guest_ring =
+            match self.conn.map_cpu(desc, BYTES, CachePolicy::WriteCombining) {
+                Ok((node, map)) => {
+                    drop(map);
+                    drop(node);
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            };
+
+        // 6 — arm C, the binding control. Same call, same descriptor, same entry count; the
+        // ONLY thing that changes is that `gpFifoOffset` names an address nothing was mapped
+        // at. ★ Which line this is expected to execute: `RmConnection::alloc_gpfifo_channel`
+        // returning a non-zero RM status, i.e. the `Err(e)` arm of the channel alloc inside
+        // `alloc_channel_in` — after the group was built and before any CPU mapping.
+        let unbound = self
+            .alloc_channel_over_guest_ring(
+                vas,
+                ENGINE_TYPE_COPY0,
+                GuestRing {
+                    memory: self.stamp(desc),
+                    ring_va: UNBOUND_AT,
+                    gp_fifo_va: UNBOUND_AT,
+                    gp_fifo_entries: GUEST_ENTRIES,
+                },
+            )
+            .map(|(chan, token)| {
+                let _ = self.free(chan);
+                token
+            });
+
+        let _ = self.conn.raw_unmap_dma(range, ring_got_va);
+        let _ = self.free(self.stamp(desc));
+        drop(reservation);
+        drop(ram);
+
+        Ok(GuestRingEvidence {
+            ring_asked_va: RING_AT.0,
+            ring_got_va,
+            gp_fifo_va,
+            gp_fifo_entries: GUEST_ENTRIES,
+            channel,
+            declared,
+            cpu_maps: (cpu_before, cpu_after),
+            ring_store,
+            cpu_map_of_guest_ring,
+            unbound,
+            unbound_va: UNBOUND_AT,
+        })
+    }
+
     /// # Errors
     /// Whatever the memfd, the mapping, the descriptor alloc, the DMA map or the copy
     /// refuses with. An `Err` from the descriptor alloc is the falsifier's **arm B** and is
