@@ -151,8 +151,7 @@ fn every_command() -> Vec<(String, RpcCommand)> {
         // pins `paramsSize` to the struct's EXACT size and refuses a mismatch by name, so
         // posting `0x00801813` at the wrong size would exercise the size refusal instead of
         // the seat — a sweep that runs, goes green, and tests something else.
-        let size = if cmd == kayfabe_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
-        {
+        let size = if cmd == kayfabe_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY {
             kayfabe_abi::generated::ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE
         } else {
             kayfabe_abi::gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
@@ -221,9 +220,7 @@ fn the_object_seat_changes_only_the_verbs_and_controls_it_claims() {
             // ★★★★ §16.38 — `DUP_OBJECT`, fn 21. Named here rather than defaulted, so this
             // sweep proves the seat's answer for fn 21 CHANGED (it is now in `differed`) —
             // which is the property `s31`'s `unserviced fn 21` row says was missing.
-            RpcFunction::DupObject => {
-                kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_DUP_OBJECT
-            }
+            RpcFunction::DupObject => kayfabe_abi::generated::rpc::NV_VGPU_MSG_FUNCTION_DUP_OBJECT,
             other => panic!("OBJECT_VERBS grew a member this test cannot name: {other:?}"),
         };
         allowed.push(format!("fn {code}"));

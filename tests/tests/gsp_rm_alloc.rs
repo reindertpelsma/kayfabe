@@ -1538,10 +1538,12 @@ fn the_s31_dup_is_refused_without_the_object_link_and_served_with_it() {
     // with **no `cmd` suffix** — present, and invisible to a grep shaped like
     // `fn 76 cmd 0x…`.
     assert!(
-        bare_log.sample().contains(&kayfabe_device::unserviced::UnservicedCommand {
-            function: fn_id::DUP_OBJECT,
-            cmd: None,
-        }),
+        bare_log
+            .sample()
+            .contains(&kayfabe_device::unserviced::UnservicedCommand {
+                function: fn_id::DUP_OBJECT,
+                cmd: None,
+            }),
         "★ the unserviced ledger DOES see fn 21, and records it with no control id; \
          sample = {:?}",
         bare_log.sample()

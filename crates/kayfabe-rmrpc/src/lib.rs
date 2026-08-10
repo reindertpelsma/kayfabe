@@ -197,8 +197,8 @@ mod reasm;
 pub use fault::{FaultEmitRefusal, rc_triggered_for};
 pub use policy::{
     GraphPolicy, OBJECT_CONTROLS, OBJECT_VERBS, ObjectModel, ObjectPolicy, PUBLICATION_CONTROLS,
-    PublicationCensus, PublicationObserver, RefusalCensus, RingCensus, SharedPublicationCensus,
-    SharedPromoteDiag, SharedRefusalCensus, SharedRingCensus,
+    PublicationCensus, PublicationObserver, RefusalCensus, RingCensus, SharedPromoteDiag,
+    SharedPublicationCensus, SharedRefusalCensus, SharedRingCensus,
 };
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
@@ -893,7 +893,6 @@ impl BridgeRefusal {
             _ => None,
         }
     }
-
 }
 
 impl Faulted for BridgeRefusal {

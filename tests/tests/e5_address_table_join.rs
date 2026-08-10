@@ -295,7 +295,7 @@ fn promote_ctx_buffer(gpu: &mut Gpu) {
                 buffer_id: 0,
             }],
             halves: Vec::new(),
-        declined: PromoteDeclined::default(),
+            declined: PromoteDeclined::default(),
         })
         .expect("the promotion resolves to this proc's address space");
     assert_eq!(
