@@ -500,6 +500,31 @@ fn every_claimed_control_is_decided_even_when_malformed() {
                 "{cmd_id:#010x}: this control's refusal reaches gpuStatePostLoad, where 0x56 \
                  is the ONLY status that keeps the adapter alive",
             );
+        } else if cmd_id == kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE {
+            // ★★★★ **§16.59 — the second id in the split, and it is there for a DIFFERENT
+            // reason from `GPU_PROMOTE_CTX`'s, which is why the arm is separate.**
+            //
+            // `PROMOTE_CTX` uses `0x56` because any other status kills the adapter — the
+            // status is chosen for its *effect*. Here the status is chosen because it is
+            // **true and documented**: `ctrl2080gr.h:791-795` says, of this exact command,
+            // *"A value of `NV_ERR_NOT_SUPPORTED` is returned if the target channel does not
+            // support preemption context switch mode changes."* This port supports none.
+            //
+            // ⊘ So the standing "never reuse the unclaimed signature" rule is not being bent
+            // here, it is being *satisfied by the header*: the rule forbids borrowing a
+            // status whose meaning is "absent" for a decision, and this control's own
+            // vocabulary supplies `0x56` for the meaning we intend
+            // (`refuse_by_name_means_the_NAME_IS_TRUE`). What the collision does cost —
+            // wire-indistinguishability from an unserviced id — is paid in the same coin
+            // §14.25 pays it: the difference is legible in this port's own control census,
+            // and a *claimed* id leaves the unserviced ledger, which is a one-line diff on
+            // any boot log.
+            assert_eq!(
+                reply.rpc_result,
+                kayfabe_abi::submit::CTXSW_PREEMPTION_REFUSED_STATUS,
+                "{cmd_id:#010x}: this control's own header documents NV_ERR_NOT_SUPPORTED \
+                 for a target that does not support preemption mode changes",
+            );
         } else {
             assert_ne!(
                 reply.rpc_result,

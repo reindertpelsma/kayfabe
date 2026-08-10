@@ -2240,6 +2240,332 @@ impl CeAllocParams {
     }
 }
 
+// =====================================================================================
+// ★★★★ §16.59 — `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`, the wall `s45`/`s46`
+// measured at record 331, and the ONE control of the three named to this rung that is
+// actually on the guest's critical path
+// =====================================================================================
+
+/// `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` = `0x20801210`, issued **on the
+/// subdevice** — `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h:830`.
+///
+/// ★★★ **The whole answer to this control is ours, by the driver's own routing.** Its
+/// dispatch row carries `flags=0x10348`
+/// (`ogkm-580: src/nvidia/generated/g_subdevice_nvoc.c:9361-9374`), which is
+/// `NON_PRIVILEGED | ROUTE_TO_PHYSICAL | API_LOCK_READONLY | ROUTE_TO_VGPU_HOST |
+/// GSP_PLUGIN_FOR_VGPU_GSP` (`ogkm-580: src/nvidia/inc/kernel/rmapi/control.h:205,230,244,250,287`)
+/// — and `subdeviceCtrlCmdKGrSetCtxswPreemptionMode` has **no `_IMPL` body anywhere in the
+/// open tree**, only the generated dispatch row
+/// (`docs/design/compute_limiting_and_priority.md` §3.3, re-checked 2026-08-10). ⇒ On a GSP
+/// client the CPU half does nothing at all with it; the mode is programmed inside signed
+/// firmware. We *are* that firmware, so there is no upstream semantics to be faithful to —
+/// only our own execution plane to tell the truth about.
+///
+/// `[measured 2026-08-10, boots s45_748a207_tsgsched and s46_1a9e93c_abi35]` record **331**
+/// of 456 is this id, `status=0x56`, and record **332 begins the `FREE` burst**. Its
+/// `hChannel` is `0x5c000012` — the very TSG record 196 had just scheduled.
+pub const NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE: u32 = 0x2080_1210;
+
+/// `NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_FLAGS_CILP` — bit `0:0`. When set, the
+/// request's `cilpPreemptMode` is meaningful; when clear, RM is told to ignore it.
+/// `ogkm-580: ctrl2080gr.h:844-846`.
+pub const CTXSW_PREEMPTION_FLAGS_CILP_SET: u32 = 1 << 0;
+/// `NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_FLAGS_GFXP` — bit `1:1`.
+/// `ogkm-580: ctrl2080gr.h:847-849`.
+pub const CTXSW_PREEMPTION_FLAGS_GFXP_SET: u32 = 1 << 1;
+
+/// `NV2080_CTRL_SET_CTXSW_PREEMPTION_MODE_GFX_WFI` = 0 — *"the normal wait-for-idle
+/// context switch mode"*. `ogkm-580: ctrl2080gr.h:852`.
+pub const CTXSW_PREEMPTION_GFX_WFI: u32 = 0;
+/// `NV2080_CTRL_SET_CTXSW_PREEMPTION_MODE_COMPUTE_WFI` = 0 — same mode on the compute
+/// side, and the same number. `ogkm-580: ctrl2080gr.h:857`.
+pub const CTXSW_PREEMPTION_COMPUTE_WFI: u32 = 0;
+/// `NV2080_CTRL_SET_CTXSW_PREEMPTION_MODE_COMPUTE_CILP` = 2 — preempt a compute channel
+/// **at the instruction level**. `ogkm-580: ctrl2080gr.h:859`. Named here because it is
+/// the value the **C artifact's** guest asked for and answered `NV_OK` to; see
+/// [`decode_ctxsw_preemption_mode`].
+pub const CTXSW_PREEMPTION_COMPUTE_CILP: u32 = 2;
+
+/// ★★★ The refusal status, and it is **the header's own sentence** rather than a borrowed
+/// or a reused one.
+///
+/// `ctrl2080gr.h:791-795`: *"A value of `NV_ERR_NOT_SUPPORTED` is returned if the target
+/// channel does not support preemption context switch mode changes."*
+///
+/// ⚠ This is the one control on [`crate::submit`]'s served list where `0x56` is **not** a
+/// rule being bent. The standing rule — `0x56` is `GspFsm::answer`'s signature for *"nobody
+/// claimed this command"* and must not be reused for a decision
+/// (`docs/design/gpfifo_schedule.md` §1) — is about **borrowing** a status whose meaning is
+/// "absent". Here the meaning is not borrowed: RM documents exactly this status for exactly
+/// this condition, so `refuse_by_name_means_the_NAME_IS_TRUE` is satisfied at the wire as
+/// well as in the census.
+///
+/// ⊘ And the cost of the collision is bounded and named: a refusal here is
+/// wire-indistinguishable from an unserviced one, exactly as
+/// `ObjectPolicy::respond_promote_ctx` is (§14.25), and the difference is visible in this
+/// port's own report — a *claimed* id prints `control 0x20801210 result 0x00000056` in the
+/// control census and **leaves** the unserviced ledger, which is a one-line diff on any
+/// boot log.
+pub const CTXSW_PREEMPTION_REFUSED_STATUS: u32 = crate::NV_ERR_NOT_SUPPORTED;
+
+/// `NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h:836-842`.
+///
+/// ```c
+/// typedef struct NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS {
+///     NvU32    flags;
+///     NvHandle hChannel;
+///     NvU32    gfxpPreemptMode;
+///     NvU32    cilpPreemptMode;
+///     NV_DECLARE_ALIGNED(NV2080_CTRL_GR_ROUTE_INFO grRouteInfo, 8);
+/// } NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS;
+/// ```
+///
+/// `NV2080_CTRL_GR_ROUTE_INFO` is `{ NvU32 flags; NvU64 route; }` at 8-byte alignment, so it
+/// starts at +16 and the whole struct is **32** bytes — which is the `size=32` on the wire
+/// `[measured 2026-08-10, boots s45_748a207_tsgsched and s46_1a9e93c_abi35, record 331]`.
+/// ⊘ **Every field is `[IN]`.** There is no output to get right, which
+/// is why this type carries a classifier ([`CtxswPreemptionRequest::asks_for`]) rather than
+/// an encoder that could be judged by its result.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CtxswPreemptionRequest {
+    /// `NvU32 flags` @ +0 — [`CTXSW_PREEMPTION_FLAGS_CILP_SET`] /
+    /// [`CTXSW_PREEMPTION_FLAGS_GFXP_SET`].
+    pub flags: u32,
+    /// `NvHandle hChannel` @ +4. ⚠ Named `hChannel`, and
+    /// `[measured 2026-08-10, boot s46_1a9e93c_abi35 record 331]` it carries a **TSG**
+    /// handle on the `cuCtxCreate` path (`0x5c000012`, the group record 196 scheduled).
+    /// The field name is not the field's type.
+    pub h_channel: u32,
+    /// `NvU32 gfxpPreemptMode` @ +8 — meaningful only under
+    /// [`CTXSW_PREEMPTION_FLAGS_GFXP_SET`].
+    pub gfxp_preempt_mode: u32,
+    /// `NvU32 cilpPreemptMode` @ +12 — meaningful only under
+    /// [`CTXSW_PREEMPTION_FLAGS_CILP_SET`].
+    pub cilp_preempt_mode: u32,
+    /// `NV2080_CTRL_GR_ROUTE_INFO.flags` @ +16.
+    pub route_flags: u32,
+    /// `NV2080_CTRL_GR_ROUTE_INFO.route` @ +24 (the u64 is 8-aligned, so +20 is padding).
+    pub route: u64,
+}
+
+/// What a [`CtxswPreemptionRequest`] is actually asking for, once the `flags` mask has been
+/// applied to the two mode words.
+///
+/// ★★★ **This classifier is the rung.** The reply to this control is the request's own bytes
+/// and can therefore never discriminate anything (`gpfifo_schedule.md`'s opening rule). What
+/// *can* be judged is whether the request names a postcondition this port already satisfies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CtxswPreemptionAsk {
+    /// Every mode the `flags` mask makes meaningful is **WFI** (or no mode is meaningful at
+    /// all). ★ This is the state this port's execution plane is unconditionally in: it
+    /// never preempts a context, mid-triangle or mid-instruction, so *"wait for idle"* is
+    /// not a mode we fail to program — it is the only mode we have.
+    WaitForIdle,
+    /// `flags` makes `gfxpPreemptMode` meaningful and it is not `GFX_WFI`: GfxP or
+    /// GfxP-pool, i.e. preempting the graphics engine mid-triangle.
+    GraphicsPreemption {
+        /// `gfxpPreemptMode` as it arrived.
+        mode: u32,
+    },
+    /// `flags` makes `cilpPreemptMode` meaningful and it is not `COMPUTE_WFI`: CTA- or
+    /// instruction-level compute preemption.
+    ///
+    /// ⚠ **This is the value the C artifact's guest asked for** —
+    /// `[measured 2026-08-10, cap3_matmul_forwarding #453716]` `cilpPreemptMode = 2`
+    /// (`COMPUTE_CILP`) — and the C answered `NV_OK` to it.
+    ComputePreemption {
+        /// `cilpPreemptMode` as it arrived.
+        mode: u32,
+    },
+}
+
+impl CtxswPreemptionRequest {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS";
+    /// `sizeof` — four `NvU32`s then an 8-aligned `NV2080_CTRL_GR_ROUTE_INFO`.
+    pub const SIZE: usize = 32;
+
+    /// Classify the request. ⊘ Graphics is checked **before** compute, so a request that
+    /// asks for both reports the graphics one; the order is arbitrary and only the
+    /// `WaitForIdle` arm is load-bearing.
+    #[must_use]
+    pub fn asks_for(&self) -> CtxswPreemptionAsk {
+        if self.flags & CTXSW_PREEMPTION_FLAGS_GFXP_SET != 0
+            && self.gfxp_preempt_mode != CTXSW_PREEMPTION_GFX_WFI
+        {
+            return CtxswPreemptionAsk::GraphicsPreemption {
+                mode: self.gfxp_preempt_mode,
+            };
+        }
+        if self.flags & CTXSW_PREEMPTION_FLAGS_CILP_SET != 0
+            && self.cilp_preempt_mode != CTXSW_PREEMPTION_COMPUTE_WFI
+        {
+            return CtxswPreemptionAsk::ComputePreemption {
+                mode: self.cilp_preempt_mode,
+            };
+        }
+        CtxswPreemptionAsk::WaitForIdle
+    }
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            0,
+            &self.flags.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            4,
+            &self.h_channel.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            8,
+            &self.gfxp_preempt_mode.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            12,
+            &self.cilp_preempt_mode.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            16,
+            &self.route_flags.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            24,
+            &self.route.to_le_bytes(),
+        )
+    }
+}
+
+/// Decode an `NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS` image.
+///
+/// ## ⊘⊘⊘ THE C IS NOT AN ORACLE FOR THIS CONTROL — it answered a DIFFERENT REQUEST
+///
+/// `[measured 2026-08-10, cap3_matmul_forwarding #453716/#453717 and boot s46_1a9e93c_abi35
+/// record 331]`. This rung was briefed as *"our request bytes match the C's byte-for-byte:
+/// `01 00 00 00 | 12 00 00 5c | 00 00 00 00 | 02 00 00 00`"*. They do not:
+///
+/// | | `flags` | `hChannel` | `gfxpPreemptMode` | `cilpPreemptMode` |
+/// |---|---|---|---|---|
+/// | C, `cap3` #453716 | `1` | `0x5c000012` | `0` | ★ **`2`** = `COMPUTE_CILP` |
+/// | ours, `s46` record 331 | `1` | `0x5c000012` | `0` | ★ **`0`** = `COMPUTE_WFI` |
+///
+/// Three of the four words match and the fourth is the **only** word that decides whether
+/// an `NV_OK` is true. ⇒ The C's `NV_OK` was a promise of instruction-level compute
+/// preemption it had no machinery for; ours would be a statement that the context switches
+/// at idle, which is what this port unconditionally does. **Same reply, opposite honesty**,
+/// and copying the C's behaviour without diffing the *request* would have shipped the lie
+/// (`citing the oracle is not the oracle being right` — extended: the oracle can be answering
+/// a different question).
+///
+/// ⊘ **Why the two guests differ is `[not measured]`.** Both are `cup2`, both name the same
+/// TSG handle, and the C's `hClient` is `0xc1d00003` against our `0xc1d0000c`. It is stated
+/// as an open question, not inferred.
+///
+/// # Errors
+/// [`CtxswPreemptionError`], by variant.
+pub fn decode_ctxsw_preemption_mode(
+    params: &[u8],
+) -> Result<CtxswPreemptionRequest, CtxswPreemptionError> {
+    if params.len() < CtxswPreemptionRequest::SIZE {
+        return Err(CtxswPreemptionError::ShortParams { got: params.len() });
+    }
+    let u32_at = |off: usize| {
+        u32::from_le_bytes(
+            params[off..off + 4]
+                .try_into()
+                .expect("4 bytes inside a SIZE-checked image"),
+        )
+    };
+    let flags = u32_at(0);
+    // ⊘ Bits above the two documented ones are refused rather than masked away. An unknown
+    // flag bit means the image is not the struct we think it is, or names a mode change we
+    // cannot classify — and `asks_for` would silently report `WaitForIdle` for it, which is
+    // the exact shape of a served lie.
+    let known = CTXSW_PREEMPTION_FLAGS_CILP_SET | CTXSW_PREEMPTION_FLAGS_GFXP_SET;
+    if flags & !known != 0 {
+        return Err(CtxswPreemptionError::UnknownFlags { flags });
+    }
+    Ok(CtxswPreemptionRequest {
+        flags,
+        h_channel: u32_at(4),
+        gfxp_preempt_mode: u32_at(8),
+        cilp_preempt_mode: u32_at(12),
+        route_flags: u32_at(16),
+        route: u64::from_le_bytes(
+            params[24..32]
+                .try_into()
+                .expect("8 bytes inside a SIZE-checked image"),
+        ),
+    })
+}
+
+/// Encode an `NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS` image.
+#[must_use]
+pub fn encode_ctxsw_preemption_mode(req: &CtxswPreemptionRequest) -> Vec<u8> {
+    let mut out = vec![0u8; CtxswPreemptionRequest::SIZE];
+    req.encode_into(&mut out)
+        .expect("SIZE bytes is exactly what encode_into needs");
+    out
+}
+
+/// Why a [`CtxswPreemptionRequest`] image was refused at **decode**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CtxswPreemptionError {
+    /// Fewer than [`CtxswPreemptionRequest::SIZE`] bytes of params.
+    ShortParams {
+        /// What arrived.
+        got: usize,
+    },
+    /// `flags` carries a bit outside `FLAGS_CILP` and `FLAGS_GFXP`.
+    UnknownFlags {
+        /// The word as it arrived.
+        flags: u32,
+    },
+}
+
+impl core::fmt::Display for CtxswPreemptionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            CtxswPreemptionError::ShortParams { got } => write!(
+                f,
+                "{} needs {} bytes of params, got {got}",
+                CtxswPreemptionRequest::C_NAME,
+                CtxswPreemptionRequest::SIZE
+            ),
+            CtxswPreemptionError::UnknownFlags { flags } => write!(
+                f,
+                "flags={flags:#010x} carries a bit outside FLAGS_CILP|FLAGS_GFXP, so the mode \
+                 words cannot be classified"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for CtxswPreemptionError {}
+
 /// Bounds-checked field write. Same helper as [`crate::bringup`]'s, private to each
 /// module on purpose: a shared one would have to pick a home, and neither module is the
 /// other's dependency.
@@ -2260,6 +2586,17 @@ fn put(
 
 // The transcriptions vs rustc, at COMPILE time — the same gate the generated structs get.
 const _: () = {
+    // ★ §16.59 — the 8-aligned `NV2080_CTRL_GR_ROUTE_INFO` tail is the whole reason this
+    // struct is 32 and not 28, and 32 is the `size=` both boots measured on the wire. A
+    // hand-written offset table would have put `route` at +20.
+    assert!(core::mem::size_of::<CtxswPreemptionRequest>() == CtxswPreemptionRequest::SIZE);
+    assert!(core::mem::align_of::<CtxswPreemptionRequest>() == 8);
+    assert!(core::mem::offset_of!(CtxswPreemptionRequest, flags) == 0);
+    assert!(core::mem::offset_of!(CtxswPreemptionRequest, h_channel) == 4);
+    assert!(core::mem::offset_of!(CtxswPreemptionRequest, gfxp_preempt_mode) == 8);
+    assert!(core::mem::offset_of!(CtxswPreemptionRequest, cilp_preempt_mode) == 12);
+    assert!(core::mem::offset_of!(CtxswPreemptionRequest, route_flags) == 16);
+    assert!(core::mem::offset_of!(CtxswPreemptionRequest, route) == 24);
     assert!(core::mem::size_of::<CeAllocParams>() == CeAllocParams::SIZE);
     assert!(core::mem::align_of::<CeAllocParams>() == CeAllocParams::ALIGN);
     assert!(core::mem::offset_of!(CeAllocParams, version) == 0);

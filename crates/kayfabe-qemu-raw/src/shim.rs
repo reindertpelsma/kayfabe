@@ -2545,9 +2545,20 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         client: kayfabe_rt::HClient,
         object: kayfabe_rt::HObject,
         enable: bool,
-    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>
-    {
+    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault> {
         self.0.schedule_group(client, object, enable)
+    }
+
+    /// ★★★★ §16.59 — the shell's seat for `0x20801210`. ⚠ It exists **because**
+    /// `SharedObjectModel::as_gpu` is `None` by design: an arm written against `as_gpu`
+    /// would refuse on every real boot and pass every bare-`Gpu` test.
+    fn set_ctxsw_preemption_mode(
+        &self,
+        client: kayfabe_rt::HClient,
+        h_channel: kayfabe_rt::HObject,
+    ) -> Result<kayfabe_core::gpu::CtxswPreemptionAck, kayfabe_core::gpu::CtxswPreemptionFault>
+    {
+        self.0.set_ctxsw_preemption_mode(client, h_channel)
     }
 
     fn bind_channel(

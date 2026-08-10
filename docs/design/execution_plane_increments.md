@@ -11361,3 +11361,194 @@ a preemption mode — and the only evidence either way is that the C echoed and 
 `bad=0 maxerr=0`. ⇒ Whoever lands it must state which of the two they are claiming, and
 must give it a falsifier that is not the reply (there is nothing in the reply to get right),
 exactly as `gpfifo_schedule.md` §2 had to for `0xa06f0103`.
+
+---
+
+## §16.59 ★★★★★ SERVE `0x20801210` — and the brief's central premise REFUTED: our request is not the C's
+
+`NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` is now claimed by `ObjectPolicy` and
+**classified** rather than echoed. This section carries the refutations, the argument, and
+the falsifier for `s47` — committed before the boot.
+
+### 16.59.1 ⊘⊘⊘ REFUTED — "our request bytes match the C's byte-for-byte". THEY DIFFER IN THE ONE WORD THAT MATTERS
+
+The brief for this rung said, of record 331:
+
+> ★ The C's replies to all three are **byte-identical echoes with `NV_OK`** (`cap3`
+> #453701/2, #453716/7, #453731/2), and **our request bytes match the C's byte-for-byte**:
+> `01 00 00 00 | 12 00 00 5c | 00 00 00 00 | 02 00 00 00`.
+
+The first clause is true and now independently verified. The second is **false**, and the
+quoted bytes are **the C's, not ours**. `[measured 2026-08-10, cap3_matmul_forwarding
+#453716 decoded from the committed capture, against boot s46_1a9e93c_abi35 record 331]`:
+
+| | `flags` | `hChannel` | `gfxpPreemptMode` | `cilpPreemptMode` |
+|---|---|---|---|---|
+| C, `cap3` #453716 | `1` | `0x5c000012` | `0` | ★ **`2`** = `COMPUTE_CILP` |
+| ours, `s46` record 331 | `1` | `0x5c000012` | `0` | ★ **`0`** = `COMPUTE_WFI` |
+
+One byte, at offset 12. And it is the **only** word in the struct that decides whether an
+`NV_OK` is a true sentence:
+
+- `COMPUTE_CILP` = *"preempt the compute engine at the instruction level"*
+  (`ogkm-580: ctrl2080gr.h:859`). The C answered `NV_OK` and had no such machinery — a
+  promise, not an answer. It still reached `bad=0 maxerr=0`, because a short matmul never
+  preempts and **nothing ever read the promise**.
+- `COMPUTE_WFI` = *"the normal wait-for-idle context switch mode"* (`:857`). That is the
+  state this port's execution plane is unconditionally in.
+
+★★★★★ **A green oracle is evidence about the ORACLE'S payload, never about ours.** The
+`c_oracle_empty_rows_are_wrong` lesson was *"an empty capture is evidence of nothing"*; this
+is its live sibling and it is worse, because the capture here is **full, dense, correct and
+verified** `[measured 2026-08-10, cap3_matmul_forwarding: n_errors=0, decompressed md5
+`6cadc8e3cb2b5ce04c3059235b88e1e6` matching `MD5SUMS`, record index == seq]`. Diffing the **reply** shows a
+perfect match and teaches you to ship the unconditional echo. Only diffing the **request**
+catches it. ⇒ Before porting a C behaviour, diff the C's *input*, not its output.
+
+⊘ **Why the two guests ask differently is `[not measured]`.** Both are `cup2`; both name the
+same TSG handle `0x5c000012`; the C's `hClient` is `0xc1d00003` against our `0xc1d0000c`.
+Stated as an open question, not inferred. (Cross-capture: the same trio appears in `cap2`
+byte-identically and in **zero** of `cap1`, `cap1b`, `cap2b` — consistent with `cuCtxCreate`
+emitting it, not driver load.)
+
+⚠ Two smaller corrections from the same verification: the brief's index→id mapping is
+**swapped** for the first two (`0x20801210` is #453716/7, `0x83de0309` is #453701/2), and
+"byte-identical echo" is true of the **control body** only — the C rewrites `checkSum`,
+`seqNum`, `rpc_result` and `rpc_result_private`, which is the only place `NV_OK` is actually
+asserted. The `status` field *inside* `rpc_gsp_rm_control` is `0` in the **request** too, so
+a checker reading `status` would score a green on a reply the C never touched.
+
+### 16.59.2 ⊘⊘ REFUTED — "three controls, and the fix is an ECHO". There is ONE, and the other two are already decided AGAINST in this tree
+
+The brief grouped `0x20801210`, `0x83de0309` and `0xa06c0103` as *"the same shape and the
+same fix"*. `[measured 2026-08-10, boots s45/s46 + this tree]` they are three different
+things, and two of the three were already answered **in this repository**:
+
+| id | what it actually is | source |
+|---|---|---|
+| `0x20801210` | ★ the wall: record **331**, last non-teardown record | `s45`/`s46` probe logs |
+| `0x83de0309` | **refused by name, deliberately**, in `capability.rs`'s `DENIED_CONTROLS` under `DeniedBecause::SmDebuggerTrapping` — *moved off the allowlist* by an earlier rung because this port does not implement SM debugger trapping at all | `crates/kayfabe-abi/src/capability.rs:1338-1348` |
+| `0xa06c0103` | record **344**, i.e. **inside the `FREE` burst that begins at 332** — RM tearing the group down | `run_s46_*_probe.log:111` |
+
+⊘ `0x83de0309` is not an unserved gap; it is a **kept decision**. Echoing `NV_OK` to
+`SET_EXCEPTION_MASK` (`exceptionMask = 0x3a` = TRAP|INT|CILP|PREEMPTION_STARTED) would claim
+we armed SM exception trapping we have not armed, and would reverse a narrowing this repo
+made on purpose and wrote down. ⊘ `0xa06c0103` is in teardown: serving it cannot move any
+wall, and `tests/tests/admitted_is_served.rs:256` already said so in the commit *before* the
+brief was written.
+
+★ And by the brief's **own** discriminator — *"the discriminator is what the caller does
+next"* — `0x83de0309` is not a wall either: records 330 and 331 follow it. That is the same
+argument the brief used, correctly, to retract `0x20801702`.
+
+### 16.59.3 ⊘ REFUTED — "we would be answering `NV_OK` to an action we did not perform"
+
+The brief offered *"structurally honest, semantically unverified"* as an acceptable position.
+It is available, and this rung does not take it, because a stronger one is.
+
+The whole answer to this control is **ours by the driver's own routing**: its dispatch row is
+`flags=0x10348` = `NON_PRIVILEGED | ROUTE_TO_PHYSICAL | API_LOCK_READONLY |
+ROUTE_TO_VGPU_HOST | GSP_PLUGIN_FOR_VGPU_GSP`
+(`ogkm-580: g_subdevice_nvoc.c:9361-9374`, bits at `control.h:205,230,244,250,287`), and
+`subdeviceCtrlCmdKGrSetCtxswPreemptionMode` has **no `_IMPL` body anywhere in the open tree**
+— only the generated dispatch row (`compute_limiting_and_priority.md` §3.3). On a GSP client
+the CPU half does nothing at all; the mode is programmed inside signed firmware. **We are
+that firmware.** There is no upstream semantics to be faithful to — only our own execution
+plane to tell the truth about.
+
+So decompose it the way `gpfifo_schedule.md` §2 decomposes its control:
+
+| | claim | ours? |
+|---|---|---|
+| **P1** the context switches at **wait-for-idle** after this call | ★ **yes, and verifiable** — this port has no preemption machinery of any kind, so WFI is not a mode it fails to program, it is the only mode it has |
+| **P2** the context switches at CTA / CILP / GfxP | ⊘ **no**, and `[unknown]` even for the silicon: no `_IMPL`, no `bCilpSupported` symbol in the tree |
+| **P3** the mode is written to a hardware register | ⊘ not modelled, and not observable to the guest through any path this port serves |
+
+⇒ The arm **classifies the request** and answers `NV_OK` only for P1. The claim in the commit
+is **"classified, then answered"** `[verified by mutation 2026-08-10: deleting the classifier
+turns 3 of the 8 tests in tests/tests/ctxsw_preemption_mode.rs red]` — a request for CILP,
+CTA or GfxP is refused by name
+(`CtxswPreemptionFault::PreemptionNotImplemented`). ⊘ Note what that costs: on the C's own
+payload this port would **refuse** where the C said `NV_OK`. That is deliberate, and it is
+the difference between the two implementations, not an oversight.
+
+★ **The refusal status is `NV_ERR_NOT_SUPPORTED`, and for once that is not a bent rule.**
+`ctrl2080gr.h:791-795`, of this exact command: *"A value of `NV_ERR_NOT_SUPPORTED` is
+returned if the target channel does not support preemption context switch mode changes."*
+The standing rule forbids **borrowing** a status whose meaning is *absent*; here the header
+supplies it for the meaning we intend. `bind_channel.rs`'s per-id split now carries three
+arms, and the third's reason is different in kind from `GPU_PROMOTE_CTX`'s: that one uses
+`0x56` for its *effect* (any other status kills the adapter), this one uses it because it is
+*true*.
+
+### 16.59.4 THE CODE
+
+| layer | what landed |
+|---|---|
+| `kayfabe-abi/src/submit.rs` | `CtxswPreemptionRequest` (32 B, compile-time offsets), `CtxswPreemptionAsk` + `asks_for`, `decode/encode_ctxsw_preemption_mode`, `CTXSW_PREEMPTION_REFUSED_STATUS`, the mode/flag constants |
+| `kayfabe-core/src/gpu.rs` | `route_ctxsw_preemption`, `CtxswPreemptionAck` / `CtxswPreemptionFault`, `Gpu::set_ctxsw_preemption_mode` (`&self` — nothing is recorded, because there is nothing to record) |
+| `kayfabe-rmrpc/src/policy.rs` | `OBJECT_CONTROLS` += `0x20801210`; `respond_ctxsw_preemption_mode`; `ObjectModel::set_ctxsw_preemption_mode` |
+| `kayfabe-rt/src/device.rs` | `SharedDevice::set_ctxsw_preemption_mode` — rank 0 only, no proc lock |
+| `kayfabe-qemu-raw/src/shim.rs` | the shell's seat |
+| `tests/tests/ctxsw_preemption_mode.rs` | the classifier, both measured payloads as fixtures, the non-vacuity |
+
+⚠ **The `as_gpu` trap was live and was avoided by having been written down.** The first
+draft of the policy arm read `self.gpu.as_gpu()`. The shipped composition root installs a
+sharded shell whose `as_gpu` returns `None` **by design**, so that arm would have refused
+`0x20801210` on **every real boot** while passing every test in `ctxsw_preemption_mode.rs`
+(which composes a bare `Gpu`). `ObjectModel::vas_census` was made a trait method for this
+exact reason and its own doc carries the case (`skipped_oracle_kills_the_guard`); the trap
+is therefore not a new finding, only a re-encounter. It is a trait method now.
+
+★ **The mode classification is in `kayfabe-abi`, not `kayfabe-core`** — `kayfabe-core` does
+not depend on `kayfabe-abi`, and which modes a request names is a pure question about a wire
+struct. Same split as `respond_bind`'s engine-space conversion.
+
+### 16.59.5 ★★★ THE FALSIFIER FOR `s47`, committed BEFORE the boot
+
+⊘ **The reply is not the falsifier and cannot be.** Every field of the params struct is
+`[IN]`; the reply is the request's own bytes by construction, so checking it tests a
+`copy_from_slice`. Two things discriminate, and both are named here in advance:
+
+- **at unit level** — hold all 32 bytes fixed and move `cilpPreemptMode` from `0` to `2`; the
+  answer must change. `[verified by mutation]` deleting the classifier from
+  `respond_ctxsw_preemption_mode` turns **3 of the 8** tests in
+  `tests/tests/ctxsw_preemption_mode.rs` red;
+- **at boot level** — **what the guest does next.** Record 332 currently begins the `FREE`
+  burst. Whether it still does, with record 331 at `status=0`, is the whole result.
+
+Instrument: `scripts/bench/boot_capture.sh s47_<rev>_ctxsw` with
+`POST_CAPTURE_HOOK=scripts/bench/cup2_hook_rmtrace.sh`, read **in guest order**.
+
+⚠ **Positive control, chosen from the population the instrument can see**, and measured
+present in *both* prior boots: `CTRL cmd=0xa06c0101 … status=0x00000000` **×3**
+(`TSG_ALLOC_SEEN=3`, `TSG_SCHED_SEEN=3`). ⊘ If it is absent, nothing below is scored — the
+capture did not reach the context build. ⚠ And read `kayfabe-rev` off the **hypervisor**
+before anything else (§16.57.4).
+
+| # | outcome | the distinguishable line | verdict |
+|---|---|---|---|
+| **I** | record 331 `status=0x00000000` **and** records after 332 that are not `FREE`/`ESC nr=0x4f` | `331: CTRL cmd=0x20801210 … status=0x00000000` followed by a non-teardown record | ★★★★★ the wall moved. **Report the id and status of the next non-zero record** |
+| **J** | record 331 `status=0x00000000` **and** record 332 still begins the `FREE` burst | `331 … status=0x00000000` / `332 FREE` | ★★★★★ **the most valuable outcome, and the one I predict.** The control was *served* and the guest still gives up ⇒ record 331 was **never** the blocker, and the "last non-zero record before the `FREE` burst" reading method — which named the walls at §16.55, §16.57 and this one — has produced a **false positive**. Wall 2 becomes the only live candidate and the two walls are **not** one wall |
+| **K** | record 331 still `0x56` **and** `unserviced fn 76 cmd 0x20801210` still in the qemu log | the ledger line survives | ⊘⊘ **instrument/plumbing failure, not a port result.** `0x56` here is *"nobody claimed it"* and this rung claimed it. Check the stamp on the **hypervisor** |
+| **L** | record 331 `0x56`, **and** the ledger line is GONE, **and** `control 0x20801210 result 0x00000056` appears in the control census | ledger absent + census present | ★★★★ **we claimed it and refused it** — either the classifier refused (⇒ **report the `in=` bytes**: this boot's guest asked for something other than WFI, which would itself refute §16.59.1's stability) or `hChannel` did not resolve in our graph. A real result, not a failure |
+| **M** | `s45`/`s46`'s numbers do **not** reproduce | doorbells ≠ `448/261/187`; RM records ≠ 456; record 196 not `status=0` | ★★★★ a claim added to the GSP-RPC plane perturbed the rest. **Report the delta before anything else** |
+
+★ **The prediction, stated so it can be wrong: `J`.** Three grounds, two
+`[measured 2026-08-10, boots s45_748a207_tsgsched and s46_1a9e93c_abi35]` and one sourced:
+(1) `0x56` is this control's **own documented** answer for a target that does not support
+mode changes, so a guest treating it as fatal would be treating a legitimate status as fatal;
+(2) the guest in this very window tolerates `0x56` **41 times** from `0x20801702` and once
+from `0x83de0309` and keeps going; (3) `s45` measured **187 refused doorbells** with
+`CeResolve::NoPublication` — the guest's work never ran — and `cuCtxCreate` returning 801 is
+a statement about the execution plane, not about a preemption knob.
+
+⊘ Against the prediction, and it is not weak: record 331 **is** the last non-zero record
+before teardown, which is the strongest signal the guest plane offers, and it is the signal
+that named the last two walls correctly. If `I` lands, the prediction is simply wrong and the
+reading method is vindicated a third time.
+
+⊘ **`I` and `J` are both wins and `J` is the bigger one**, because it retires a *method*
+rather than a control. Do not read `J` as "the rung failed": the control is served either
+way, honestly, and one of this campaign's most-used instruments would be shown to have a
+false-positive mode.

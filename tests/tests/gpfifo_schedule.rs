@@ -545,6 +545,12 @@ fn the_control_claim_is_exactly_these_ids() {
             // is `0x56` and that is not an oversight — `bind_channel.rs`'s
             // `every_claimed_control_is_decided_even_when_malformed` carries the scope.
             kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
+            // ★★★★ §16.59 — `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`, the wall `s45`
+            // and `s46` both measured at record 331. ⊘ Claimed on a **classifier**, not
+            // unconditionally: `tests/tests/ctxsw_preemption_mode.rs` is where the argument
+            // is machine-checked, and the load-bearing test there is the one that moves
+            // `cilpPreemptMode` and demands the answer change.
+            kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE,
         ]
     );
     assert!(
@@ -688,7 +694,10 @@ fn one_tsg_control_lets_every_member_channel_past_the_doorbell_gate() {
          leaving the rest off the runlist — the #12 shape ({ack:?})"
     );
     assert_eq!(ack.changed, 2, "both members moved: {ack:?}");
-    assert_eq!(ack.unmaterialized, 0, "no member was silently dropped: {ack:?}");
+    assert_eq!(
+        ack.unmaterialized, 0,
+        "no member was silently dropped: {ack:?}"
+    );
 
     // ---- AFTER: BOTH members are past the gate ---------------------------------
     for vchid in [h.gr_vchid, h.ce_vchid] {
@@ -710,7 +719,10 @@ fn one_tsg_control_lets_every_member_channel_past_the_doorbell_gate() {
     let off = gpu
         .schedule_group(client, h.tsg, false)
         .expect("the group still resolves");
-    assert_eq!(off.changed, 2, "bEnable=0 must withdraw every member: {off:?}");
+    assert_eq!(
+        off.changed, 2,
+        "bEnable=0 must withdraw every member: {off:?}"
+    );
     for vchid in [h.gr_vchid, h.ce_vchid] {
         let again = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[])
             .expect_err("a withdrawn member must not be rung");
@@ -771,7 +783,8 @@ fn the_group_route_refuses_by_name_and_never_with_not_supported() {
         "★ and the reverse confusion is refused too — the two commands are not aliases"
     );
     assert_ne!(
-        kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS, 0x56,
+        kayfabe_abi::submit::GPFIFO_SCHEDULE_REFUSED_STATUS,
+        0x56,
         "★★★ the refusal status must never be NV_ERR_NOT_SUPPORTED: that is what the port \
          answered 0xa06c0101 with for six boots, and a decided refusal must be readable as \
          a decision in the one place anyone sees it — the guest's dmesg"

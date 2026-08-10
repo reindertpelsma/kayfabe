@@ -785,6 +785,161 @@ pub struct ScheduleGroupAck {
     pub enabled: bool,
 }
 
+/// What [`Gpu::set_ctxsw_preemption_mode`] verified — §16.59.
+///
+/// ⊘ **Nothing was programmed, and that is the claim, not a caveat.** This control asks for
+/// a postcondition (*"this context switches at X"*). Wait-for-idle is the postcondition this
+/// port's execution plane is unconditionally in — it has no preemption machinery of any
+/// kind, so *"switch at idle"* is not a mode it fails to program but the only mode it has.
+/// ⇒ The honest service of the request is to **verify** it and say so, which is strictly
+/// more than the C artifact did (it echoed `NV_OK` to a `COMPUTE_CILP` request —
+/// `docs/design/execution_plane_increments.md` §16.59).
+///
+/// ⚠ **The mode words are NOT classified here**, and the crate boundary is why: which modes
+/// a request asks for is a pure ABI question over a wire struct, and `kayfabe-core` does not
+/// depend on `kayfabe-abi` (deliberately). The classifier is
+/// `kayfabe_abi::submit::CtxswPreemptionRequest::asks_for`, and refusing a preemption mode
+/// this port does not implement is `ObjectPolicy::respond_ctxsw_preemption_mode`'s job —
+/// exactly as the `NV2080_ENGINE_TYPE` → `RM_ENGINE_TYPE` check for `NVA06F_CTRL_CMD_BIND`
+/// is the policy's and not [`Gpu::bind_channel`]'s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CtxswPreemptionAck {
+    /// The proc that owns the context named by `hChannel`.
+    pub proc: ProcId,
+    /// Whether `hChannel` named a TSG (`true`) or a bare channel (`false`). Reported
+    /// because the field's **name** says channel and
+    /// `[measured 2026-08-10, boot s46_1a9e93c_abi35 record 331]` the `cuCtxCreate` path
+    /// puts a group handle in it.
+    pub was_group: bool,
+}
+
+/// Why [`Gpu::set_ctxsw_preemption_mode`] refused — §16.59.
+///
+/// ★★★ Answered with `kayfabe_abi::submit::CTXSW_PREEMPTION_REFUSED_STATUS`
+/// (`NV_ERR_NOT_SUPPORTED`), and this is the one control on the served list where that is
+/// **the header's own status for this exact condition** rather than a borrowed one:
+/// *"A value of `NV_ERR_NOT_SUPPORTED` is returned if the target channel does not support
+/// preemption context switch mode changes"* (`ogkm-580: ctrl2080gr.h:791-795`). Read the
+/// constant's docs for why the standing "never reuse `0x56`" rule is not being bent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CtxswPreemptionFault {
+    /// No live resource at `(client, h_channel)`. ⊘ Resolved in the **asked-in client**,
+    /// not in the subdevice's namespace: the guest names the context by a handle of its
+    /// own, and a port that answered `NV_OK` without finding it would be promising
+    /// something about an object it cannot see.
+    UnknownContext {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The `hChannel` field's value.
+        h_channel: HObject,
+    },
+    /// `(client, h_channel)` resolves to something that is neither a TSG nor a channel.
+    NotAContext {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The `hChannel` field's value.
+        h_channel: HObject,
+    },
+    /// The context resolved but **we** have placed no channel of it in any proc, so there
+    /// is no execution plane whose behaviour the answer would be about.
+    NoMemberMaterialized {
+        /// The client namespace asked in.
+        client: HClient,
+        /// The `hChannel` field's value.
+        h_channel: HObject,
+    },
+    /// ★★★★ The request asks for a preemption mode that is **not wait-for-idle** — GfxP or
+    /// GfxP-pool on the graphics side, CTA or CILP on the compute side.
+    ///
+    /// ⊘⊘ This is the variant the C artifact does not have, and the reason this arm is
+    /// classified at all. `[measured 2026-08-10, cap3 #453716]` the C's guest asked for
+    /// `cilpPreemptMode = 2` (`COMPUTE_CILP`) and the C answered `NV_OK` with the bytes
+    /// echoed; `[measured 2026-08-10, boot s46 record 331]` **our** guest asks for `0`
+    /// (`COMPUTE_WFI`). The two differ in exactly the word that decides whether the ack is
+    /// true, so an unconditional echo — the C's behaviour, and what this rung was briefed to
+    /// port — is honest on our measured payload and a lie on the C's.
+    ///
+    /// ⚠ Whether a spinning compute kernel can be preempted **at all** on GA10x consumer is
+    /// `[unknown]` from the open tree (`compute_limiting_and_priority.md` §3.3: no `_IMPL`
+    /// body, no `bCilpSupported` symbol anywhere). ⇒ We cannot even inherit an answer here;
+    /// refusing is the only position that is not a guess.
+    PreemptionNotImplemented {
+        /// Which engine's mode word asked for it — `"gfxpPreemptMode"` or
+        /// `"cilpPreemptMode"`, the C field name.
+        field: &'static str,
+        /// The mode value as it arrived.
+        mode: u32,
+    },
+}
+
+impl core::fmt::Display for CtxswPreemptionFault {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            CtxswPreemptionFault::UnknownContext { client, h_channel } => {
+                write!(
+                    f,
+                    "no live resource at ({client:?}, hChannel {h_channel:?})"
+                )
+            }
+            CtxswPreemptionFault::NotAContext { client, h_channel } => write!(
+                f,
+                "({client:?}, hChannel {h_channel:?}) is neither a channel group nor a channel"
+            ),
+            CtxswPreemptionFault::NoMemberMaterialized { client, h_channel } => write!(
+                f,
+                "({client:?}, hChannel {h_channel:?}) has no channel with a slot in any proc"
+            ),
+            CtxswPreemptionFault::PreemptionNotImplemented { field, mode } => write!(
+                f,
+                "{field}={mode} asks for a preemption mode other than wait-for-idle; this \
+                 port never preempts a context"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for CtxswPreemptionFault {}
+
+/// ★★★★ **§16.59 — ROUTE (rank 0) for `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`.**
+///
+/// Resolve the request's `hChannel` — which `[measured]` carries a **TSG** handle on the
+/// `cuCtxCreate` path — to the proc whose execution plane the answer will be about.
+///
+/// ⊘ The caller must already have established that the request asks for wait-for-idle;
+/// see [`CtxswPreemptionAck`] for why that half is not here.
+///
+/// # Errors
+/// [`CtxswPreemptionFault`], by variant.
+pub fn route_ctxsw_preemption(
+    spine: &Spine,
+    client: HClient,
+    h_channel: HObject,
+) -> Result<CtxswPreemptionAck, CtxswPreemptionFault> {
+    let node = spine
+        .rmgraph
+        .node(NodeKey::new(client, h_channel))
+        .ok_or(CtxswPreemptionFault::UnknownContext { client, h_channel })?;
+    // ⊘ Both kinds are accepted because RM's own field is polymorphic in practice, not
+    // because we could not tell them apart: the group form is what `cuCtxCreate` sends and
+    // the channel form is what the header's prose describes.
+    let (proc, was_group) = match node.kind {
+        kayfabe_arch::ObjectKind::Tsg => {
+            let route = route_schedule_group(spine, client, h_channel)
+                .map_err(|_| CtxswPreemptionFault::NoMemberMaterialized { client, h_channel })?;
+            (route.proc, true)
+        }
+        kayfabe_arch::ObjectKind::Channel { .. } => {
+            let (pid, _cid) = *spine
+                .by_chan
+                .get(&node.id())
+                .ok_or(CtxswPreemptionFault::NoMemberMaterialized { client, h_channel })?;
+            (pid, false)
+        }
+        _ => return Err(CtxswPreemptionFault::NotAContext { client, h_channel }),
+    };
+    Ok(CtxswPreemptionAck { proc, was_group })
+}
+
 /// Why [`Gpu::schedule_group`] refused — §16.56.
 ///
 /// ⊘ Every variant means *"this port examined the request and declined"*, answered with
@@ -4620,6 +4775,25 @@ impl Gpu {
                 })?
         };
         Ok(apply_schedule_group(proc, &route, enable))
+    }
+
+    /// ★★★★ **§16.59 — VERIFY the guest's `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`.**
+    ///
+    /// ⊘ **Deliberately `&self`.** Every other arm on this list is `&mut self` because it
+    /// records something; this one records nothing, because there is nothing to record —
+    /// the postcondition the guest asks for either already holds unconditionally
+    /// (wait-for-idle) or names machinery this port does not have. A `&mut self` here would
+    /// invite a future reader to add a field, and a field whose only reader is the writer is
+    /// the unfalsifiable-ack shape in a different costume.
+    ///
+    /// # Errors
+    /// [`CtxswPreemptionFault`], by variant.
+    pub fn set_ctxsw_preemption_mode(
+        &self,
+        client: HClient,
+        h_channel: HObject,
+    ) -> Result<CtxswPreemptionAck, CtxswPreemptionFault> {
+        route_ctxsw_preemption(&self.spine, client, h_channel)
     }
 
     /// ★★★ **E9/§13.6 — perform the guest's `NVA06F_CTRL_CMD_BIND`.**

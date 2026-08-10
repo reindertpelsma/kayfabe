@@ -568,6 +568,28 @@ pub trait ObjectModel: Send {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>;
 
+    /// ★★★★ **§16.59** — verify the guest's
+    /// `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` (`0x20801210`) — the wall `s45` and
+    /// `s46` both measured at record 331.
+    ///
+    /// `h_channel` is the request's own `hChannel` **field**, not the control's `hObject`
+    /// (which is the subdevice). `[measured]` it carries a **TSG** handle on the
+    /// `cuCtxCreate` path.
+    ///
+    /// ⚠ **A trait method rather than a call through [`Self::as_gpu`]**, for
+    /// [`Self::vas_census`]'s measured reason: the shipped composition root installs a
+    /// sharded shell whose `as_gpu` returns `None` **by design**, so an arm built on
+    /// `as_gpu` refuses on every real boot while passing every test that composes a bare
+    /// [`Gpu`] (`skipped_oracle_kills_the_guard`). This arm was written that way first.
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::CtxswPreemptionFault`], by variant.
+    fn set_ctxsw_preemption_mode(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        h_channel: kayfabe_arch::ids::HObject,
+    ) -> Result<kayfabe_core::gpu::CtxswPreemptionAck, kayfabe_core::gpu::CtxswPreemptionFault>;
+
     /// ★★★ **E9/§13.6** — perform the guest's `NVA06F_CTRL_CMD_BIND`.
     ///
     /// `rm_engine_type` is in **RM engine space**: the policy converts the wire ordinal
@@ -646,9 +668,17 @@ impl ObjectModel for Gpu {
         client: kayfabe_arch::ids::HClient,
         object: kayfabe_arch::ids::HObject,
         enable: bool,
-    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>
-    {
+    ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault> {
         Gpu::schedule_group(self, client, object, enable)
+    }
+
+    fn set_ctxsw_preemption_mode(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        h_channel: kayfabe_arch::ids::HObject,
+    ) -> Result<kayfabe_core::gpu::CtxswPreemptionAck, kayfabe_core::gpu::CtxswPreemptionFault>
+    {
+        Gpu::set_ctxsw_preemption_mode(self, client, h_channel)
     }
 
     fn bind_channel(
@@ -1371,6 +1401,16 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     //
     // ⚠ The status question does NOT disappear with it — see `Self::respond_promote_ctx`.
     kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX,
+    // ★★★★ **§16.59 — `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`, `0x20801210`: the
+    // wall `s45` and `s46` both measured at record 331 of 456**, `status=0x56`, with record
+    // 332 beginning the `FREE` burst and its `hChannel` naming the very TSG record 196 had
+    // just scheduled.
+    //
+    // ⊘ It is claimed on a **classifier**, not unconditionally, and that distinction is the
+    // rung: see `Self::respond_ctxsw_preemption_mode`. `[measured]` the C artifact's guest
+    // asked for `COMPUTE_CILP` on this id and the C echoed `NV_OK`; ours asks for
+    // `COMPUTE_WFI`. Copying the C would have been honest on our payload by accident.
+    kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE,
 ];
 
 impl ObjectPolicy {
@@ -1572,8 +1612,137 @@ impl ObjectPolicy {
             kayfabe_abi::generated::ctrl::NV2080_CTRL_CMD_GPU_PROMOTE_CTX => {
                 self.respond_promote_ctx(cmd)
             }
+            kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE => {
+                self.respond_ctxsw_preemption_mode(cmd, &req)
+            }
             _ => None,
         }
+    }
+
+    /// ★★★★ **§16.59 — the `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` arm** (`0x20801210`):
+    /// the wall `s45` and `s46` both measured at record **331** of 456, two records before
+    /// `cuCtxCreate` gives up and one record before the `FREE` burst.
+    ///
+    /// # ★★★ What is being claimed, in the two words the brief asked for
+    ///
+    /// **Structurally honest** — every field of
+    /// [`kayfabe_abi::submit::CtxswPreemptionRequest`] is `[IN]`
+    /// (`ogkm-580: ctrl2080gr.h:836-842`), so there is no `[OUT]` field an echo could get
+    /// wrong. **And semantically honest, conditionally** — which is more than the brief
+    /// asked for and less than an unconditional echo would claim:
+    ///
+    /// - the request asks for a **postcondition** (*"this context switches at mode X"*);
+    /// - the only `X` this port can be truthful about is wait-for-idle, because it has no
+    ///   preemption machinery at all — WFI is not a mode it fails to program, it is the mode
+    ///   it is unconditionally in;
+    /// - so the arm **classifies the request** ([`kayfabe_abi::submit::CtxswPreemptionRequest::asks_for`]),
+    ///   answers `NV_OK` only for wait-for-idle, and refuses everything else **by name**.
+    ///
+    /// ⇒ The claim in the commit is *"verified, not merely echoed"*. A request for CILP, CTA
+    /// or GfxP gets [`kayfabe_core::gpu::CtxswPreemptionFault::PreemptionNotImplemented`],
+    /// which is a sentence this port can defend.
+    ///
+    /// # ⊘⊘⊘ Why the C artifact is NOT the oracle here — it answered a different request
+    ///
+    /// `[measured 2026-08-10, cap3_matmul_forwarding #453716/#453717 vs boot s46 record 331]`.
+    /// This rung was briefed as *"our request bytes match the C's byte-for-byte"*. Three of
+    /// the four words do; the fourth is `cilpPreemptMode`, and it is **`2` (`COMPUTE_CILP`)
+    /// in the C** against **`0` (`COMPUTE_WFI`) in ours**. That is the only word that decides
+    /// whether an `NV_OK` is a true sentence. The C's ack promised instruction-level compute
+    /// preemption it had no machinery for and still reached `bad=0 maxerr=0` — because a
+    /// short matmul never preempts, so nothing ever read the promise.
+    ///
+    /// ⇒ A green C oracle is evidence about the C's payload, never about ours. Diffing the
+    /// **reply** would have shown a perfect match and taught us to ship the unconditional
+    /// echo; only diffing the **request** caught it.
+    ///
+    /// # ⊘ Why the reply is the request's own bytes
+    ///
+    /// [`Self::respond_promote_ctx`]'s reason exactly: `paramsSize` is 32, non-zero, so the
+    /// GSP transport copies the reply's params over the caller's struct
+    /// (`ogkm-580: rpc.c:11085-11090`), and a zero body would clear the caller's `flags` and
+    /// `hChannel` behind its back. `[measured]` the C does the same — `cap3` #453702/17/32
+    /// are the request element verbatim with only `checkSum`, `seqNum`, `rpc_result` and
+    /// `rpc_result_private` rewritten.
+    ///
+    /// ⊘ **And the echo is therefore NOT the falsifier.** Checking that the reply is the
+    /// echo tests this function's `copy_from_slice`. What discriminates is (a) at unit
+    /// level, mutating `cilpPreemptMode` and demanding the answer *change*
+    /// (`tests/tests/ctxsw_preemption_mode.rs`), and (b) at boot level, **what the guest
+    /// does next** — record 332 currently begins the `FREE` burst, and whether it still does
+    /// with record 331 at `status=0` is the whole result (§16.59's falsifier).
+    ///
+    /// # The refusal status
+    ///
+    /// [`kayfabe_abi::submit::CTXSW_PREEMPTION_REFUSED_STATUS`] = `NV_ERR_NOT_SUPPORTED`,
+    /// which is **this control's own documented status for this exact condition** —
+    /// *"A value of `NV_ERR_NOT_SUPPORTED` is returned if the target channel does not support
+    /// preemption context switch mode changes"* (`ogkm-580: ctrl2080gr.h:791-795`). ⚠ Read
+    /// that constant's docs before citing this as a breach of the standing "never reuse
+    /// `0x56`" rule: the rule forbids **borrowing** a status that means *absent*, and here
+    /// the header supplies it for the meaning we intend.
+    fn respond_ctxsw_preemption_mode(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let refuse = || {
+            Some(Reply {
+                rpc_result: kayfabe_abi::submit::CTXSW_PREEMPTION_REFUSED_STATUS,
+                body: Vec::new(),
+            })
+        };
+        // The guest's own two assertions about its params — the same pair every other arm
+        // on this list checks, for the same reason.
+        let want = kayfabe_abi::submit::CtxswPreemptionRequest::SIZE;
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != want
+            || cmd.payload.len() < req.params_at + want
+        {
+            return refuse();
+        }
+        let Ok(params) = kayfabe_abi::submit::decode_ctxsw_preemption_mode(
+            &cmd.payload[req.params_at..req.params_at + want],
+        ) else {
+            return refuse();
+        };
+        // THE MODE, first — it is an ABI question over a wire struct and it is answered
+        // here rather than in `kayfabe-core`, exactly as `respond_bind`'s engine-space
+        // conversion is (`kayfabe-core` does not depend on `kayfabe-abi`).
+        match params.asks_for() {
+            kayfabe_abi::submit::CtxswPreemptionAsk::WaitForIdle => {}
+            kayfabe_abi::submit::CtxswPreemptionAsk::GraphicsPreemption { .. }
+            | kayfabe_abi::submit::CtxswPreemptionAsk::ComputePreemption { .. } => {
+                return refuse();
+            }
+        }
+        // THE CONTEXT. ⊘ Resolved in the client the request was asked in, against the
+        // `hChannel` FIELD and not `req.object` — `req.object` is the subdevice
+        // (`[measured 2026-08-10, boot s46_1a9e93c_abi35 record 331]` `hObject=0x5c000003`),
+        // and answering about the subdevice would be answering a question nobody asked.
+        //
+        // ⊘ No private counter and no census call here, deliberately — the same choice
+        // `Self::respond_gpfifo_schedule_group` documents. `kayfabe_device::census::ControlCensus`
+        // wraps the whole chain and records `(cmd, rpc_result)`, so both outcomes print
+        // themselves in the boot report as `control 0x20801210 result 0x00000000|0x00000056`,
+        // and a second count kept here would be a number that can disagree with the report's.
+        if self
+            .gpu
+            .set_ctxsw_preemption_mode(
+                kayfabe_arch::ids::HClient(req.client),
+                kayfabe_arch::ids::HObject(params.h_channel),
+            )
+            .is_err()
+        {
+            return refuse();
+        }
+        let mut body = cmd.payload.clone();
+        let params_out = kayfabe_abi::submit::encode_ctxsw_preemption_mode(&params);
+        body[req.params_at..req.params_at + want].copy_from_slice(&params_out);
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body,
+        })
     }
 
     /// ★★★ **§14.25 — the `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` arm, re-claimed after §14.21

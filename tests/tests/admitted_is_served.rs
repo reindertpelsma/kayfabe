@@ -81,7 +81,9 @@ fn chain() -> Box<dyn CommandPolicy> {
                 kayfabe_abi::GuestOs::Linux,
                 kayfabe_core::gpu::Gpu::new(
                     Box::new(kayfabe_chips::Ga10xArch::new()),
-                    Box::new(kayfabe_isolate::StillbornIsolates::new("admitted_is_served")),
+                    Box::new(kayfabe_isolate::StillbornIsolates::new(
+                        "admitted_is_served",
+                    )),
                     kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
                 )
                 .expect("the port's object model realizes"),
@@ -112,7 +114,9 @@ fn control(cmd: u32, params_size: usize) -> RpcCommand {
 /// what separates *"nothing claims this id"* from *"nothing claims it at THIS size"*. A
 /// link that claims by id and then refuses a wrong `paramsSize` is **served** for this
 /// file's purposes: it has an opinion, which is the whole property under test.
-const PROBE_SIZES: &[usize] = &[0, 3, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 128, 256, 560, 1024];
+const PROBE_SIZES: &[usize] = &[
+    0, 3, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 128, 256, 560, 1024,
+];
 
 /// Is any link in the chain willing to decide `cmd`?
 ///
@@ -198,6 +202,17 @@ static GRADUATED: &[u32] = &[
     // by `kayfabe_rmrpc::ObjectPolicy` since §16.56. It sat in [`LEDGER`]'s position for
     // SIX committed boots (`s39`…`s44`) with nobody required to say anything about it.
     0xa06c_0101,
+    // ★★★★ `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` — the wall at record **331** of
+    // 456 `[measured 2026-08-10, boots s45_748a207_tsgsched and s46_1a9e93c_abi35]`,
+    // answered by `kayfabe_rmrpc::ObjectPolicy` since §16.59. ⊘ It entered [`LEDGER`] one rung ago, on this gate's very first outing, and
+    // leaves it the next: that is the shortest a row has ever sat there, and it is what the
+    // gate was built for.
+    //
+    // ⚠ "Served" here means **classified, then answered** — `NV_OK` for a wait-for-idle
+    // request, `NV_ERR_NOT_SUPPORTED` (this control's own documented status,
+    // `ogkm-580: ctrl2080gr.h:791-795`) for a request that asks this port to preempt a
+    // context. Both are decisions and both leave the ledger.
+    0x2080_1210,
 ];
 
 static LEDGER: &[u32] = &[
@@ -238,11 +253,10 @@ static LEDGER: &[u32] = &[
     // the moment `s45`'s log entered the tree and named exactly these five — none of which
     // any earlier boot had reached, because `cup2` had never got this far.
     //
-    // `0x20801210` `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`: record **331** of 456,
-    // `status=0x56`, and record 332 begins the `FREE` burst. Its params name the TSG that
-    // record 196 had just scheduled (`in=01000000 1200005c …`). ⊘ Listing it is NOT a
-    // decision to leave it unserved — it is the statement that we know it is the wall.
-    0x2080_1210,
+    // ⊘ `0x20801210` LEFT this list at §16.59 — it is in [`GRADUATED`] now. Its row here
+    // lasted exactly one rung, which is the shortest any id has sat in this position and is
+    // what the gate was built to produce.
+    //
     // `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`, ×20+ in `s45` and **forgiven every time**:
     // the guest asks, we refuse, and it keeps going for another 50 records. ⚠ Worth a
     // second look beside `cap1`'s `IrqRaise == 1` with zero `IRQSCLR` writes — event
@@ -460,6 +474,9 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         "0x2080012b", // NV2080_CTRL_CMD_GPU_PROMOTE_CTX — ObjectPolicy, §14.25
         "0x20800301", // NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION — InitTablePolicy
         "0x20800a9f", // a publication control — InitTablePolicy
+        // ★★★★ §16.59 — `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`, `ObjectPolicy`.
+        // The wall `s45`/`s46` measured at record 331.
+        "0x20801210",
         "0x20801303", // InitTablePolicy
         "0x20801803", // InitTablePolicy
         "0x20801823", // InitTablePolicy
@@ -474,8 +491,7 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         "0xa06f0104", // NVA06F_CTRL_CMD_BIND — ObjectPolicy, E9/§13.6
     ];
     assert_eq!(
-        served,
-        expected,
+        served, expected,
         "the set of ADMITTED controls the chain answers changed. Adding one is progress and \
          belongs in this list; LOSING one is a control this port stopped deciding",
     );
@@ -511,8 +527,7 @@ fn the_chain_serves_controls_the_allowlist_does_not_admit() {
     );
     // ⊘ Pinned as MEMBERSHIP. A count would let one id leave as another arrived.
     assert_eq!(
-        served_unadmitted,
-        SERVED_BUT_NOT_ADMITTED,
+        served_unadmitted, SERVED_BUT_NOT_ADMITTED,
         "the set of controls this port ANSWERS but its userspace-ioctl allowlist does not \
          ADMIT has changed. Neither direction is automatically wrong — but each one is a \
          statement about which boundary a command crosses, and it must be a deliberate one",

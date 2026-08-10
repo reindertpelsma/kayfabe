@@ -2066,11 +2066,39 @@ impl SharedDevice {
         self.with_proc_mut(route.proc, |proc| {
             kayfabe_core::gpu::apply_schedule_group(proc, &route, enable)
         })
-        .ok_or(kayfabe_core::gpu::ScheduleGroupFault::NoMemberMaterialized {
-            client,
-            object,
-            members,
-        })
+        .ok_or(
+            kayfabe_core::gpu::ScheduleGroupFault::NoMemberMaterialized {
+                client,
+                object,
+                members,
+            },
+        )
+    }
+
+    /// ★★★★ **§16.59 — verify the guest's `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`**
+    /// (`0x20801210`) — the sharded form of
+    /// [`kayfabe_core::gpu::Gpu::set_ctxsw_preemption_mode`].
+    ///
+    /// ⊘ **Rank 0 only, and no proc lock is taken**, because nothing is recorded: this
+    /// control asks about a postcondition the execution plane is unconditionally in, so
+    /// the whole answer is a route. See [`kayfabe_core::gpu::CtxswPreemptionAck`].
+    ///
+    /// # Errors
+    ///
+    /// [`kayfabe_core::gpu::CtxswPreemptionFault`], by variant.
+    pub fn set_ctxsw_preemption_mode(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        h_channel: kayfabe_arch::ids::HObject,
+    ) -> Result<kayfabe_core::gpu::CtxswPreemptionAck, kayfabe_core::gpu::CtxswPreemptionFault>
+    {
+        let route_in = |spine: &kayfabe_core::gpu::Spine| {
+            kayfabe_core::gpu::route_ctxsw_preemption(spine, client, h_channel)
+        };
+        match self.mode {
+            LockMode::Sharded => route_in(&self.state.read().spine),
+            LockMode::Degenerate => route_in(&self.state.write().spine),
+        }
     }
 
     /// ★★★ **E9/§13.6 — perform the guest's `NVA06F_CTRL_CMD_BIND`** — the sharded form
