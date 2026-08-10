@@ -1958,6 +1958,122 @@ pub struct WordMismatch {
     pub want: u32,
 }
 
+/// ★★★ Which shape the two views of one backing are joined in — [`FbViewJoin::Private`] is
+/// the **negative control**, and it is a control over the property actually under test.
+///
+/// ⊘ Not "a second memfd", which would be a tautology: two different files obviously hold
+/// different bytes, and a differential that fails over them has tested nothing. The one
+/// thing that makes two mappings **one memory** is `MAP_SHARED` over one descriptor
+/// (`kayfabe_linux_raw::Backing::SharedFile`), so the control changes exactly that and
+/// nothing else. ★ The line it is expected to execute is
+/// [`kayfabe_linux_raw::Backing::PrivateAnonymous`]'s arm of `Backing::mmap_args`
+/// (`mapping_unsafe.rs:344-347`), which yields `MAP_PRIVATE | MAP_ANONYMOUS` — different
+/// pages, same code either side of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbViewJoin {
+    /// Both views are `MAP_SHARED` mappings of **one** `memfd`: the joined shape.
+    Shared,
+    /// ⊘ The guest-side view is private anonymous memory. Everything else is identical and
+    /// the differential must **FAIL** — in both directions.
+    Private,
+}
+
+/// ★★★ What [`HostRmBackend::export_backing`] did when handed a **host vidmem object**.
+///
+/// ⊘ Three outcomes and not a `bool`, because *"it refused"* and *"it refused by the name
+/// that means the bytes are on the card"* are different facts, and the whole value of
+/// [`kayfabe_isolate::RmError::NotExportableAsMemory`] is lost if a caller cannot tell a
+/// named boundary from an opaque host failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceExportOutcome {
+    /// [`kayfabe_isolate::RmError::NotExportableAsMemory`] — the control fired.
+    RefusedByName,
+    /// It refused, but with something else. The control did **not** fire.
+    RefusedOtherwise,
+    /// ⊘ It **succeeded**. The boundary this project's decision (b) rests on is not there.
+    Succeeded,
+}
+
+/// One direction of the two-view differential: what was written through one mapping and
+/// what came back through the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ViewCompare {
+    /// The first word written.
+    pub wrote: u32,
+    /// The first word read back through the **other** mapping.
+    pub read_back: u32,
+    /// ★★ How many words the compare loop actually looked at — [`OsDescEvidence`]'s own
+    /// lesson, carried rather than re-derived: a reported count must come from the thing
+    /// that did the counting, or `None` for `mismatch` means "compared nothing".
+    pub words_compared: u64,
+    /// The first word that disagreed, or [`None`] when every compared word matched.
+    pub mismatch: Option<WordMismatch>,
+}
+
+impl ViewCompare {
+    /// Did every word of a **non-empty** compare agree?
+    ///
+    /// ⊘ The `words_compared > 0` clause is not defensive: a loop that ran zero times
+    /// leaves `mismatch` at [`None`], and without this the vacuous case reads as the pass.
+    #[must_use]
+    pub fn agrees(&self) -> bool {
+        self.words_compared > 0 && self.mismatch.is_none()
+    }
+}
+
+/// ★★★★★ What [`HostRmBackend::prove_fb_view`] observed — the CPU-view question, split
+/// into the four facts that have different causes.
+///
+/// Read `docs/design/fb_cpu_view.md` before interpreting any field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbViewEvidence {
+    /// ★ **The premise, measured.** Did `NV_ESC_RM_MAP_MEMORY` succeed on the object
+    /// [`RmBackend::alloc_vidmem`] mints? [`None`] means it refused, carrying the status.
+    pub vidmem_cpu_view: Option<ViewCompare>,
+    /// The status `map_cpu` refused with, when it did.
+    pub vidmem_cpu_refusal: Option<u32>,
+    /// ★★★ **THE NEGATIVE CONTROL.** What happened when that same object was offered to
+    /// [`RmBackend::export_backing`] as [`ExportSource::HostDeviceMemory`].
+    pub device_export: DeviceExportOutcome,
+    /// Which join shape the fabricated backing's two views were built in.
+    pub join: FbViewJoin,
+    /// How many bytes the fabricated backing carries.
+    pub bytes: u64,
+    /// **Direction 1** — written through the *guest-side* mapping, read through the
+    /// *isolate-side* one.
+    pub guest_to_host: ViewCompare,
+    /// **Direction 2** — written through the *isolate-side* mapping, read through the
+    /// *guest-side* one.
+    pub host_to_guest: ViewCompare,
+    /// The GPU VA `DMA_OFFSET_FIXED_TRUE` was asked for.
+    pub asked_va: u64,
+    /// The GPU VA RM reported for the isolate-side mapping's descriptor.
+    pub got_va: u64,
+}
+
+impl FbViewEvidence {
+    /// Was the descriptor placed **exactly** where it was asked for?
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// ★★★ The rung's verdict for [`FbViewJoin::Shared`]: **both** directions agree, the
+    /// GPU view landed at the guest's number, and the device-memory crossing was refused
+    /// by name.
+    ///
+    /// ⊘ All four, conjoined here rather than left to a caller. Three of them passing is
+    /// not a partial success: a join that carries bytes one way only is a memory the guest
+    /// and the engine disagree about, which is the defect this rung exists to remove.
+    #[must_use]
+    pub fn joined(&self) -> bool {
+        self.guest_to_host.agrees()
+            && self.host_to_guest.agrees()
+            && self.placed_as_asked()
+            && self.device_export == DeviceExportOutcome::RefusedByName
+    }
+}
+
 /// ★★★ What [`HostRmBackend::prove_guest_ram_pin`] observed, as separable facts.
 ///
 /// ⊘ Separable on purpose, and it is [`OsDescEvidence`]'s own lesson: `placed_as_asked` and
@@ -4058,6 +4174,251 @@ impl HostRmBackend {
         drop(reservation);
         drop(ram);
         out
+    }
+
+    /// ★★★★★ **R30 — THE CPU VIEW, and which object can actually have one.**
+    ///
+    /// `docs/design/fb_cpu_view.md`. `w228` (`fb_leaf_crossing.md` §3) left the framebuffer
+    /// leaves it backed with **no CPU view, so two memories**: the host GPU reads the real
+    /// object and the guest reads the shell's `kayfabe_device::SparseFb`. This probe
+    /// measures, on real hardware, the four facts the successor rung needs and that no
+    /// amount of source-reading settles.
+    ///
+    /// ## What it establishes, in order
+    ///
+    /// 1. **The premise.** `NV_ESC_RM_MAP_MEMORY` on the object
+    ///    [`RmBackend::alloc_vidmem`] mints — the same `alloc_device_local` body, no
+    ///    `MAPPING_NO_MAP` — either succeeds or does not. ★ It is *not* enough that the
+    ///    flag is absent: absence of a refusal in the flags is not the presence of a
+    ///    mapping, and only the host can say.
+    /// 2. ★★★ **The negative control**, and it is a control over the proposition this rung
+    ///    turns on rather than over one its target cannot evaluate — `w228`'s own §0.1
+    ///    lesson. That same object is offered to [`RmBackend::export_backing`] as
+    ///    [`ExportSource::HostDeviceMemory`], which **must** answer
+    ///    [`RmError::NotExportableAsMemory`]. ⊘ **The line this is expected to execute is
+    ///    named**: the `let ... else` arm of [`RmBackend::export_backing`] in this file,
+    ///    which destructures the source and returns that error before any host call. If it
+    ///    ever returns `Ok`, decision (b)'s boundary is not where three cited driver facts
+    ///    say it is, and *that* is the finding.
+    /// 3. **The corrected join**, both directions. A [`ExportSource::Fabricated`] backing —
+    ///    the arm that is *designed* to succeed — mapped **twice**: once standing for the
+    ///    isolate's view and once for the shell's. A per-word pattern is written through
+    ///    one and read through the other, then the reverse, and the second direction runs
+    ///    **after** the descriptor exists so the answer is about pinned pages.
+    /// 4. **The GPU view**, `DMA_OFFSET_FIXED_TRUE` at `at`, compared against `at` by the
+    ///    caller because `Ok` is not placement.
+    ///
+    /// ⊘ **What it does NOT establish.** Nothing here executes on an engine, so the
+    /// guest-side mapping stands for the shell's install and is not the shell's install;
+    /// and step 1's round trip is through the *same* mapping, so it says the mapping takes
+    /// stores and loads, **not** that the card holds them. Both are named in the doc.
+    ///
+    /// # Errors
+    /// Whatever the allocation, the memfd, either mapping, the descriptor or the DMA map
+    /// refused with. ⊘ A refusal at step 1 is **not** an error — it is the measurement, and
+    /// it is reported in [`FbViewEvidence::vidmem_cpu_refusal`].
+    pub fn prove_fb_view(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        pattern: u32,
+        join: FbViewJoin,
+    ) -> Result<FbViewEvidence, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        const WORDS: usize = (BYTES / 4) as usize;
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+
+        // A per-word image, so a read that returned a zero fill, a truncated length or a
+        // different buffer's bytes cannot match. ⊘ Never a constant repeated: a whole-buffer
+        // compare against one repeated word passes on any single correct word.
+        let image = |base: u32| -> Vec<u8> {
+            let mut v = vec![0u8; BYTES as usize];
+            for i in 0..WORDS {
+                v[4 * i..4 * i + 4].copy_from_slice(&base.wrapping_add(i as u32).to_le_bytes());
+            }
+            v
+        };
+        let compare = |want: &[u8], got: &[u8]| -> ViewCompare {
+            let mut mismatch = None;
+            let mut words_compared = 0u64;
+            for i in 0..WORDS {
+                let w = u32::from_le_bytes(want[4 * i..4 * i + 4].try_into().unwrap_or_default());
+                let g = u32::from_le_bytes(got[4 * i..4 * i + 4].try_into().unwrap_or_default());
+                words_compared += 1;
+                if w != g && mismatch.is_none() {
+                    mismatch = Some(WordMismatch {
+                        word: i as u64,
+                        got: g,
+                        want: w,
+                    });
+                }
+            }
+            ViewCompare {
+                wrote: u32::from_le_bytes(want[0..4].try_into().unwrap_or_default()),
+                read_back: u32::from_le_bytes(got[0..4].try_into().unwrap_or_default()),
+                words_compared,
+                mismatch,
+            }
+        };
+
+        // ---- 1. THE PREMISE: is the vidmem object CPU-mappable as `alloc_vidmem` makes it?
+        let vid = self.conn.alloc_device_local(BYTES)?;
+        let mut vidmem_cpu_view = None;
+        let mut vidmem_cpu_refusal = None;
+        // ★ `WriteCombining` because this is a framebuffer object, which is the policy
+        // `map_cpu`'s own docs say the call site owes — the parameter exists precisely
+        // because one NVIDIA descriptor yields three different attributes by range.
+        match self.conn.map_cpu(vid, BYTES, CachePolicy::WriteCombining) {
+            Ok((node, region)) => {
+                let want = image(pattern);
+                for i in 0..WORDS {
+                    region
+                        .store_u32(
+                            HostOffset::new((i * 4) as u64),
+                            pattern.wrapping_add(i as u32),
+                        )
+                        .map_err(|e| region_error(&e))?;
+                }
+                let mut got = vec![0u8; BYTES as usize];
+                for i in 0..WORDS {
+                    let v = region
+                        .load_u32(HostOffset::new((i * 4) as u64))
+                        .map_err(|e| region_error(&e))?;
+                    got[4 * i..4 * i + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                vidmem_cpu_view = Some(compare(&want, &got));
+                drop(region);
+                drop(node);
+            }
+            Err(e) => {
+                // ⊘ Recorded, not propagated. A refusal here is the measurement the brief
+                // asked for and the rung's most interesting outcome; turning it into an
+                // `Err` would make it indistinguishable from a broken probe.
+                vidmem_cpu_refusal = Some(match e {
+                    RmError::Other(s) => s,
+                    _ => u32::MAX,
+                });
+            }
+        }
+
+        // ---- 2. THE NEGATIVE CONTROL, on that same live object.
+        let device_export = match RmBackend::export_backing(
+            self,
+            ExportRequest {
+                source: ExportSource::HostDeviceMemory {
+                    memory: self.stamp(vid),
+                },
+                len: BYTES,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        ) {
+            Ok(_) => DeviceExportOutcome::Succeeded,
+            Err(RmError::NotExportableAsMemory { .. }) => DeviceExportOutcome::RefusedByName,
+            Err(_) => DeviceExportOutcome::RefusedOtherwise,
+        };
+        let _ = self.free(self.stamp(vid));
+
+        // ---- 3. THE CORRECTED JOIN: one fabricated backing, two mappings.
+        let backing = mint_fabricated(
+            &self.exports,
+            ExportRequest {
+                source: ExportSource::Fabricated,
+                len: BYTES,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        )?;
+        let fd = self
+            .exports
+            .lend(backing.token)
+            .map_err(|e| region_error(&e))?;
+        // The isolate's own view — the one `alloc_os_descriptor` will describe to RM.
+        let iso = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            BYTES,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| region_error(&e))?;
+        // The view standing for the shell's install of the same descriptor — or, in the
+        // control arm, private pages that are deliberately NOT the same memory.
+        let guest = kayfabe_linux_raw::MappedRegion::map(
+            match join {
+                FbViewJoin::Shared => Backing::SharedFile {
+                    fd: std::os::fd::AsFd::as_fd(&fd),
+                    offset: 0,
+                },
+                FbViewJoin::Private => Backing::PrivateAnonymous,
+            },
+            BYTES,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| region_error(&e))?;
+
+        // Direction 1 — the ESTABLISHMENT direction: bytes the guest already wrote must be
+        // visible to what RM is about to describe. Run BEFORE the descriptor exists,
+        // because that is when the real establishment copy runs.
+        let want_g2h = image(pattern ^ 0x5a5a_5a5a);
+        guest
+            .write_from(HostOffset::new(0), &want_g2h)
+            .map_err(|e| region_error(&e))?;
+        let mut got_g2h = vec![0u8; BYTES as usize];
+        iso.read_into(HostOffset::new(0), &mut got_g2h)
+            .map_err(|e| region_error(&e))?;
+        let guest_to_host = compare(&want_g2h, &got_g2h);
+
+        // ---- 4. THE GPU VIEW.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(&iso, HostOffset::new(0), BYTES)?;
+        let mut got_va = 0u64;
+        let mut mapped = false;
+        let out = (|| -> Result<(), RmError> {
+            got_va = self.conn.raw_map_dma(range, desc, BYTES, Some(at.0))?;
+            mapped = true;
+            Ok(())
+        })();
+
+        // Direction 2 — the ENGINE direction, run AFTER the pages are pinned and mapped
+        // into the GPU VAS, so the answer is about the memory RM is now holding.
+        let want_h2g = image(!pattern);
+        let host_to_guest = match iso.write_from(HostOffset::new(0), &want_h2g) {
+            Ok(()) => {
+                let mut got = vec![0u8; BYTES as usize];
+                match guest.read_into(HostOffset::new(0), &mut got) {
+                    Ok(()) => compare(&want_h2g, &got),
+                    Err(e) => return Err(region_error(&e)),
+                }
+            }
+            Err(e) => return Err(region_error(&e)),
+        };
+
+        if mapped {
+            let _ = self.conn.raw_unmap_dma(range, got_va);
+        }
+        let _ = self.free(self.stamp(desc));
+        drop(guest);
+        drop(iso);
+        drop(fd);
+        out?;
+
+        Ok(FbViewEvidence {
+            vidmem_cpu_view,
+            vidmem_cpu_refusal,
+            device_export,
+            join,
+            bytes: BYTES,
+            guest_to_host,
+            host_to_guest,
+            asked_va: at.0,
+            got_va,
+        })
     }
 
     /// Free exactly one RM object — the body [`RmBackend::free`] had before a channel
