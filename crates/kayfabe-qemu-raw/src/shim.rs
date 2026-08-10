@@ -2795,11 +2795,11 @@ struct SharedDoorbell {
 /// user compute?") is decided by the FIRST submissions on the channel, and 86 rings of one
 /// channel would otherwise bury them. ⊘ A guest that rings a refused channel in a loop moves
 /// a counter and cannot fill a disk.
-const GR_PUSHBUFFER_DUMPS_MAX: u32 = 4;
+const GR_PUSHBUFFER_DUMPS_MAX: u32 = 2;
 
 /// How many method words each dump prints. Enough to carry a `SET_OBJECT`, a context-buffer
 /// setup run and a report semaphore; the dump says how many it did not show.
-const GR_PUSHBUFFER_METHODS_MAX: usize = 48;
+const GR_PUSHBUFFER_METHODS_MAX: usize = 256;
 
 #[derive(Debug, Default)]
 struct CeShellState {
