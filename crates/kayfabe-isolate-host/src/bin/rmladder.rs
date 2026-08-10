@@ -1918,22 +1918,32 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
         }
     );
 
-    // --- arm A: the guest-bound space must have nothing of ours at sem_va ---------------
-    let arm_a = match rm.probe_va(p.guest_space, p.sem_va) {
+    // --- arm A: the guest-bound space must have nothing of ours where our RING is -------
+    //
+    // ★★ The probe is at the ring OBJECT's base and the ring object's size, not at
+    // `sem_va`. [measured 2026-08-10, `vh`] RM maps device-local memory with 64 KiB big
+    // pages: a fixed ask at `ring_va + 0x2000` is placed at `ring_va` whether the probe
+    // object is 64 KiB or 4 KiB, so the allocator cannot be asked a finer question than
+    // "is this 64 KiB region taken". ⊘ The semaphore lives at `+0x2000` INSIDE that object,
+    // so "the object is not mapped here" is strictly stronger than "the word is not mapped
+    // here" — the arm is not weakened by asking it this way, it is made answerable.
+    let arm_a = match rm.probe_va(p.guest_space, p.ring_va, p.ring_bytes) {
         Ok(VaProbe::Free) => {
             println!(
-                "ok    R30 arm A guest     = {:#018x} is UNCLAIMED in the guest-bound space \
-                 (a fresh object took it, RM reported that address back)",
-                p.sem_va
+                "ok    R30 arm A guest     = the isolate's {}-byte ring object at {:#018x} \
+                 (semaphore {:#018x}) is UNCLAIMED in the guest-bound space — a fresh object \
+                 took the address and RM reported it back",
+                p.ring_bytes, p.ring_va, p.sem_va
             );
             true
         }
         Ok(VaProbe::Occupied(e)) => {
             println!(
-                "FAIL  R30 arm A guest     = {:#018x} is ALREADY MAPPED in the space a guest \
-                 channel is bound to ({e:?}) — VMM state is placed where a guest VA can name \
-                 it, which is the invariant, violated",
-                p.sem_va
+                "FAIL  R30 arm A guest     = the isolate's ring at {:#018x} (semaphore \
+                 {:#018x}) is ALREADY MAPPED in the space a guest channel is bound to \
+                 ({e:?}) — VMM state is placed where a guest VA can name it, which is the \
+                 invariant, violated",
+                p.ring_va, p.sem_va
             );
             false
         }
@@ -1941,7 +1951,7 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
             println!(
                 "FAIL  R30 arm A guest     = asked {:#018x}, RM placed {got:#018x} — occupied, \
                  AND the fixed ask was a hint. ⊘ Two findings, not one",
-                p.sem_va
+                p.ring_va
             );
             false
         }
@@ -1952,13 +1962,13 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
     };
 
     // --- arm B: THE CALIBRATION. The same call, against the space our ring IS in --------
-    let arm_b = match rm.probe_va(p.control_space, p.sem_va) {
+    let arm_b = match rm.probe_va(p.control_space, p.ring_va, p.ring_bytes) {
         Ok(VaProbe::Occupied(e)) => {
             println!(
                 "ok    R30 arm B control   = the SAME call REFUSES at {:#018x} in the control \
                  space ({e:?}) — the probe can detect occupancy, so arm A's `Free` is a \
                  measurement and not a constant",
-                p.sem_va
+                p.ring_va
             );
             true
         }
@@ -1967,7 +1977,7 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
                 "ok    R30 arm B control   = the SAME call was RELOCATED to {got:#018x} rather \
                  than granted {:#018x} — occupancy detected, by the other of the two legal \
                  shapes",
-                p.sem_va
+                p.ring_va
             );
             true
         }
@@ -1976,7 +1986,7 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
                 "FAIL  R30 arm B control   = {:#018x} reads as FREE in the very space our ring \
                  is mapped in. ⊘ This does NOT say the placement is fine — it says the \
                  INSTRUMENT is broken, and arm A's answer is worth nothing this run",
-                p.sem_va
+                p.ring_va
             );
             false
         }

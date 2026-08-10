@@ -1915,6 +1915,13 @@ pub struct CeControlPlacement {
     pub ring_va: u64,
     /// The completion semaphore word hardware writes.
     pub sem_va: u64,
+    /// The ring object's size. ★★ It is here because it is the **granularity the question
+    /// has to be asked at**: RM maps device-local memory with 64 KiB big pages, so a VA
+    /// 8 KiB above a mapped object still resolves and a 4 KiB probe cannot buy finer
+    /// resolution. [measured 2026-08-10, `vh`] — a 4 KiB fixed ask at `ring_va + 0x2000`
+    /// was placed at `ring_va`. ⇒ *"is our semaphore nameable"* is answered by asking about
+    /// the object that contains it.
+    pub ring_bytes: u64,
     /// The payload the isolate's last copy over this `Vas` released — the value an engine
     /// that reads [`CeControlPlacement::sem_va`] would find, and one nothing else has.
     pub last_payload: u32,
@@ -3680,6 +3687,7 @@ impl HostRmBackend {
             control_space: parts.range,
             ring_va: parts.ring_va,
             sem_va: parts.ring_va + SEMAPHORE_OFFSET,
+            ring_bytes: RING_OBJECT_BYTES,
             last_payload: ce.next_payload.wrapping_sub(1),
         })
     }
@@ -3706,19 +3714,21 @@ impl HostRmBackend {
     /// # Errors
     /// Only if the *allocation* failed — a refused placement is [`VaProbe::Occupied`],
     /// which is an answer rather than an error.
-    pub fn probe_va(&mut self, space: u32, va: u64) -> Result<VaProbe, RmError> {
-        // ★★ ONE PAGE, and the size is the instrument. `alloc_device_local` passes
-        // `alignment = len`, so a 64 KiB probe object cannot be placed at a VA that is only
-        // 4 KiB-aligned — RM rounds the mapping DOWN to the object's alignment and reports
-        // a different address. [measured 2026-08-10, `vh`]: probing a semaphore at
-        // `…120022000` with a 64 KiB object returned `…120020000`, which reads exactly like
-        // `Relocated`-because-occupied and was in fact `Relocated`-because-of-the-probe.
+    pub fn probe_va(&mut self, space: u32, va: u64, len: u64) -> Result<VaProbe, RmError> {
+        // ★★ THE LENGTH IS THE INSTRUMENT, and it is the caller's because only the caller
+        // knows what it is asking about. `alloc_device_local` passes `alignment = len`, and
+        // RM maps device-local memory with 64 KiB big pages regardless, so:
+        //
+        //   [measured 2026-08-10, `vh`] a 64 KiB probe object at `ring_va + 0x2000` was
+        //   placed at `ring_va`  — the probe's own alignment, read as `Relocated`;
+        //   [measured 2026-08-10, `vh`] a 4 KiB probe object at the same address was ALSO
+        //   placed at `ring_va`  — so a smaller probe buys no resolution at all.
+        //
         // ⊘ An instrument whose own geometry produces the answer it is looking for is not
-        // an instrument. A page is the smallest thing this allocator maps, so it can be
-        // placed at any address a semaphore can live at.
-        const PROBE_BYTES: u64 = 0x1000;
-        let obj = self.conn.alloc_device_local(PROBE_BYTES)?;
-        let out = match self.conn.raw_map_dma(space, obj, PROBE_BYTES, Some(va)) {
+        // an instrument, and a finer one that cannot be finer is worse: it looks like it
+        // resolved something. ⇒ Ask about the OBJECT, at its own base and its own size.
+        let obj = self.conn.alloc_device_local(len)?;
+        let out = match self.conn.raw_map_dma(space, obj, len, Some(va)) {
             Ok(got) if got == va => {
                 let _ = self.conn.raw_unmap_dma(space, got);
                 VaProbe::Free
@@ -3767,13 +3777,29 @@ impl HostRmBackend {
         vas: HostHandle,
         sem_va: u64,
     ) -> Result<GuestReachProbe, RmError> {
-        const BYTES: u64 = 4096;
+        const BYTES: u64 = 0x1_0000;
         /// Neither zero nor a plausible semaphore payload: the control's word must not be
         /// confusable with what the probe is looking for.
         const CONTROL_WORD: u32 = 0x5EA1_C071;
         /// What the destination holds before either copy. A word that survives is a copy
         /// that did not happen.
         const SENTINEL: u32 = 0xDEAD_0000;
+        /// ★★★★★ **EVERY address this probe owns is DICTATED, and far away.**
+        ///
+        /// [measured 2026-08-10, `vh`, and it inverted the verdict] letting RM choose put
+        /// the probe's OWN channel ring at `0x1_2002_0000` — the address the isolate's ring
+        /// had just been freed from — so `sem_va = ring_va + 0x2000` landed **inside the
+        /// probe's own ring**. The copy retired, moved `0x00000000`, and the rung read it as
+        /// *"the address still resolves in the guest's space"*. It did: in the instrument's
+        /// memory, not the isolate's.
+        ///
+        /// ⊘ A probe that allocates from the same allocator, in the same space, at the same
+        /// moment, is not an independent observer. R26 established that a channel ring can
+        /// be placed where its caller says, so there is no reason to let RM choose here.
+        /// 64 KiB-aligned and three objects apart, well clear of RM's own base.
+        const PROBE_RING_AT: u64 = 0x0000_0007_0000_0000;
+        const CTRL_SRC_AT: GpuVa = GpuVa(0x0000_0007_0010_0000);
+        const DST_AT: GpuVa = GpuVa(0x0000_0007_0020_0000);
 
         let range = self.narrow(vas)?;
         let ctrl_src = self.conn.alloc_device_local(BYTES)?;
@@ -3788,10 +3814,25 @@ impl HostRmBackend {
         let mut mapped: Vec<u64> = Vec::new();
         let mut chan: Option<HostHandle> = None;
         let mut go = || -> Result<GuestReachProbe, RmError> {
-            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, None)?;
+            // ★ FIXED, and refused rather than adopted if RM disagrees — see
+            // `PROBE_RING_AT`. An operand RM placed next to `sem_va` is an operand the
+            // probe would then read instead of the thing it is asking about.
+            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, Some(CTRL_SRC_AT.0))?;
             mapped.push(ctrl_src_va);
-            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, None)?;
+            if ctrl_src_va != CTRL_SRC_AT.0 {
+                return Err(RmError::PlacementRefused {
+                    want: CTRL_SRC_AT.0,
+                    got: ctrl_src_va,
+                });
+            }
+            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, Some(DST_AT.0))?;
             mapped.push(dst_va);
+            if dst_va != DST_AT.0 {
+                return Err(RmError::PlacementRefused {
+                    want: DST_AT.0,
+                    got: dst_va,
+                });
+            }
 
             // Seed both buffers through CPU mappings that are dropped before any engine
             // runs — the read-back below opens its own.
@@ -3814,7 +3855,8 @@ impl HostRmBackend {
             // ★ THE STAND-IN FOR A GUEST CHANNEL. `alloc_channel_on` over the `Vas`'s own
             // range is exactly what `plan_doorbell` reaches for a guest submission, engine
             // and all — the point of the rung is that this channel is ORDINARY.
-            let (c, token) = self.alloc_channel_on(vas, ENGINE_TYPE_COPY0)?;
+            let (c, token) =
+                self.alloc_channel_at(vas, ENGINE_TYPE_COPY0, Some(GpuVa(PROBE_RING_AT)))?;
             chan = Some(c);
             let mut params = [0u8; CeAllocParams::SIZE];
             CeAllocParams {
