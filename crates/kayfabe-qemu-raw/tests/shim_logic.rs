@@ -1900,13 +1900,13 @@ fn the_engine_census_labels_match_the_enum_they_bucket() {
 // scrubber's submissions BEFORE submission (`by=Ours src=Constant(0)`) and the guest died
 // at `RmInitAdapter failed! (0x25:0x65:1249)` — 40 s before `cuCtxCreate` exists.
 
-use kayfabe_qemu_raw::shim::{CeExecutor, ce_executor_from};
+use kayfabe_qemu_raw::shim::{CeExecutorChoice, ce_executor_from};
 
 /// The composition, stated as a function so the test and the shim cannot drift: the
 /// shell's CPU executor is the only executor when **either** no plane can issue a host
 /// verb **or** the operator did not ask for the host CE arm.
-fn only_local(plane: IsolatePlane, ce: CeExecutor) -> bool {
-    plane == IsolatePlane::Stillborn || ce == CeExecutor::Local
+fn only_local(plane: IsolatePlane, ce: CeExecutorChoice) -> bool {
+    plane == IsolatePlane::Stillborn || ce == CeExecutorChoice::Local
 }
 
 /// ⊘ **The default must not change the plane's default arm at all.** The shipped
@@ -1915,16 +1915,16 @@ fn only_local(plane: IsolatePlane, ce: CeExecutor) -> bool {
 /// ctl boot in `traces/guest_boots/` stops being comparable to the next one.
 #[test]
 fn the_default_ce_executor_leaves_the_shipped_arm_byte_identical() {
-    assert_eq!(ce_executor_from(None), Ok(CeExecutor::Local));
+    assert_eq!(ce_executor_from(None), Ok(CeExecutorChoice::Local));
     assert!(
-        only_local(IsolatePlane::Stillborn, CeExecutor::Local),
+        only_local(IsolatePlane::Stillborn, CeExecutorChoice::Local),
         "★ the shipped arm lost its CPU copy-engine executor"
     );
     // ★ And it is unchanged even if somebody asks for the host arm on a plane that
     // provably cannot serve it — the first term still holds, so a `Stillborn` build
     // cannot be configured into having no executor at all.
     assert!(
-        only_local(IsolatePlane::Stillborn, CeExecutor::Host),
+        only_local(IsolatePlane::Stillborn, CeExecutorChoice::Host),
         "★ `KAYFABE_CE_EXECUTOR=host` on a stillborn plane took the only executor away \
          and put nothing in its place — which is exactly the w219 failure, reproduced by \
          configuration instead of by inference"
@@ -1938,13 +1938,13 @@ fn the_default_ce_executor_leaves_the_shipped_arm_byte_identical() {
 fn a_live_plane_keeps_the_local_ce_executor_unless_asked_otherwise() {
     for plane in [IsolatePlane::Loopback, IsolatePlane::Real] {
         assert!(
-            only_local(plane, CeExecutor::Local),
+            only_local(plane, CeExecutorChoice::Local),
             "★ {plane:?} + the default took the CPU copy-engine executor away. \
              `w219_fe65678_realbase` is what that costs: three `CE-SUBMIT … REFUSED \
              BEFORE SUBMISSION` lines and `RmInitAdapter failed! (0x25:0x65:1249)`."
         );
         assert!(
-            !only_local(plane, CeExecutor::Host),
+            !only_local(plane, CeExecutorChoice::Host),
             "★ {plane:?} + `host` no longer reaches the forwarding plane — the \
              previously-measured arm (`p2_29e7c25_planereal`, `w209_ffc80f8_real`, \
              `w219_fe65678_realbase`) has been deleted rather than made optional, and a \
@@ -1957,19 +1957,19 @@ fn a_live_plane_keeps_the_local_ce_executor_unless_asked_otherwise() {
 /// same non-vacuity check the plane block uses.
 #[test]
 fn every_ce_executor_round_trips_through_its_own_spelling() {
-    for ce in CeExecutor::ALL {
+    for ce in CeExecutorChoice::ALL {
         assert_eq!(
             ce_executor_from(Some(ce.as_str())),
             Ok(ce),
             "★ {ce:?} does not parse from the name it prints"
         );
     }
-    let mut names: Vec<&str> = CeExecutor::ALL.iter().map(|c| c.as_str()).collect();
+    let mut names: Vec<&str> = CeExecutorChoice::ALL.iter().map(|c| c.as_str()).collect();
     names.sort_unstable();
     names.dedup();
     assert_eq!(
         names.len(),
-        CeExecutor::ALL.len(),
+        CeExecutorChoice::ALL.len(),
         "two executors share a name"
     );
 }
@@ -1997,7 +1997,7 @@ fn a_value_that_is_not_a_ce_executor_name_refuses_rather_than_defaulting() {
             status.code(),
             kayfabe_qemu_raw::shim::Status::Unsupported.code()
         );
-        for ce in CeExecutor::ALL {
+        for ce in CeExecutorChoice::ALL {
             assert!(
                 why.contains(ce.as_str()),
                 "★ the refusal for {bad:?} does not name `{}`; message was: {why}",

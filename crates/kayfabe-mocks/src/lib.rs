@@ -1285,6 +1285,15 @@ pub enum RmVerb {
         chan: HostHandle,
         /// The engine-object class.
         class: ClassId,
+        /// ★★★★★ §16.80 — the params the caller handed the host, RECORDED.
+        ///
+        /// ⊘ This field did not exist and the implementation bound the argument as
+        /// `_params`, so **no test in the tree could observe what the host was given** —
+        /// every one of them would have passed against a forward that dropped the guest's
+        /// bytes and sent an empty slice. That is precisely the difference between the
+        /// host running the guest's own alloc and this port re-encoding it, which is the
+        /// property the whole Case-1 design rests on.
+        params: Vec<u8>,
         /// Returned handle.
         handle: HostHandle,
     },
@@ -2859,7 +2868,7 @@ impl RmBackend for MockRmBackend {
         &mut self,
         chan: HostHandle,
         class: ClassId,
-        _params: &[u8],
+        params: &[u8],
     ) -> Result<HostHandle, RmError> {
         let _client = self.gate(VerbKind::AllocEngineObject)?;
         self.check(chan)?;
@@ -2867,6 +2876,7 @@ impl RmBackend for MockRmBackend {
         self.record(RmVerb::AllocEngineObject {
             chan,
             class,
+            params: params.to_vec(),
             handle,
         });
         Ok(handle)

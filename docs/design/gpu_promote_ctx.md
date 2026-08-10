@@ -942,3 +942,122 @@ The guest **kernel** has no wait attached to this pushbuffer at all: zero occurr
 (`kernel_graphics.c:2136-2543`) allocates a channel and a GR object and frees the tree — it never
 writes a GPFIFO entry or rings a doorbell. ⇒ **The wait is `libcuda`'s, in userspace**, which is what
 the sampler measured, and the only thing the kernel blocks on is the synchronous GSP RPC reply.
+
+## ★★★★★ §16.80 — THE PRECONDITION WAS SELF-DEFEATING, and the rung it blocked is now wired
+
+`[measured 2026-08-10, boots `w219_fe65678_realbase` and `w220_da1fe2d_realce`]`, both committed
+under `traces/guest_boots/`, both on the GA106 bench with `KAYFABE_ISOLATES=real`.
+
+### ⊘ REFUTED — "wire `forward_engine_object`; it needs a live isolate plane"
+
+§16.79 ends with that sentence and it names two things that, in the shipped shape, **could not
+both be true**. `w219` is the plain measurement, at HEAD, with nothing changed:
+
+```
+kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0)
+  → REFUSED BEFORE SUBMISSION Other(19270) (no ring store, no doorbell, no semaphore)   ×3
+NVRM: RmInitNvDevice: *** Cannot load state into the device
+NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x65:1249)
+```
+
+`19270` is `0x4B46` = `"KF"` = `kayfabe_isolate_host::rm::NOT_ON_THIS_RUNG`. ⚠ Identical signature
+at `w209_ffc80f8_real` — nine commits and an entire interrupt plane earlier — so this is not a
+regression of §16.76-§16.79. **With the plane live the guest dies ~40 s before `cuCtxCreate`
+exists, and never allocates `0xc7c0` at all.**
+
+⇒ Every rung phrased *"wire X; it needs a live isolate plane"* was **unreachable**: selecting the
+plane is the operation that removes the executor that gets the guest to the rung.
+
+### Why, to the definition — and it is the SAME inference twice
+
+`SharedDoorbell::local_ce_is_the_only_executor` was `isolate_plane == IsolatePlane::Stillborn`.
+Its own doc states the question correctly — *"is there any other executor?"* — and then answers it
+from *"is a plane installed?"*. But `HostRmBackend::ce_copy` refuses **two** things
+unconditionally, at its own definition:
+
+- `CeExecutor::Ours` — *"needs the isolate's mapping of the fabricated aperture, which does not
+  exist"*;
+- `CeSource::Constant` — *"a fill is `LAUNCH_DMA` with `REMAP_ENABLE` plus the `SET_REMAP_*` method
+  block, which `kayfabe_abi::submit::ce` does not transcribe."*
+
+`RmInitAdapter`'s CeUtils scrubber is **both at once** (`by=Ours src=Constant(0)`), so the host
+plane can serve **zero** of the CE work the guest issues. ★ This is exactly the shape of the
+`vas_pdb.is_none()` test that flag *replaced* — *"the core can ADDRESS it, therefore the core can
+SERVE it"* — one level up, and against the plane instead of against the core.
+
+### The fix: ask the second question separately
+
+`KAYFABE_CE_EXECUTOR` (`local` default / `host`), read once at the composition root beside the
+plane selector, printed into the boot's own `run_<tag>_qemu.log`:
+
+```
+kayfabe: EXECUTORS isolate_plane=real ce_executor=local ⇒ local_ce_is_the_only_executor=true
+```
+
+⊘ The default leaves the shipped `Stillborn` arm **byte-identical** (it was already `true`), and
+`host` keeps the previously-measured arm exactly reachable — a deleted configuration cannot be a
+control.
+
+`w220` is the result, and its discipline is that **one variable moved and nothing else did**:
+
+| | `w218` ctl (`cb6adcc`) | `w220` real+local (`da1fe2d`) |
+|---|---|---|
+| isolates | 2 live, **2 refusing (2 no-plane)** | 2 live, **0 refusing** |
+| doorbells | 191 arrived / 183 served / 8 refused | **191 / 183 / 8** |
+| of the served | 183 local, 0 forwarded | **183 local, 0 forwarded** |
+| last token | `0x00010001` | **`0x00010001`** |
+| first refusal | `Route::NotACopyEngineChannel` (GrCompute) | **same** |
+| guest | `SMI_RC=0`, `CUP2_RC=TIMEOUT` | **same** |
+
+⇒ A live plane and a guest that reaches the GR wall now coexist. ⊘ `w220` buys **reachability,
+not progress**: nothing was forwarded and `cup2` still times out.
+
+### The rung, wired — and why it had no caller
+
+`forward_engine_object` is keyed on `(GpuId, VChid)`, which is what a **doorbell** has. A
+`GSP_RM_ALLOC` carries `(hClient, hParent)`. **That mismatch is the whole reason it had zero
+production callers** — not an oversight about calling it, a missing hop.
+
+- `kayfabe_fwd::route_engine_object_by_parent` is that hop. Both keys are **forward-derived** from
+  the channel's own alloc facts by the *same* computations `kayfabe_core::project` used to build
+  `Spine::by_vchid` (`RmGraph::gpu_of_resource`, `Arch::vchid_from_userd_flags`), and the answer is
+  then put **back through** `route_engine_object`, so `by_vchid` stays the single authority. Four
+  named misses (`EngineParentMiss::{NoNode, NotAChannel, NoTarget, UnnamedVchid}`), never guessed
+  past — ⊘ in particular a parent that is a **TSG** is refused rather than walked up from, because
+  a TSG has members and picking one is a guess about which.
+- `ObjectModel::forward_engine_object` is the trait seat, called from `Bridge::deliver` **after**
+  `gpu.apply(ev)` succeeds (before it, an object on a channel the same message declared would route
+  to nothing). ⚠ A trait method and not `as_gpu()`, for the third time in this trait: the shipped
+  root's `as_gpu` is `None` by design.
+- The gate is `Arch::engine_of_object`, asked **once**, inside the route — so the call is made on
+  every alloc and every non-engine class exits before the graph is touched. **No second class list.**
+- `kayfabe_rmrpc::alloc_params_window` carries the guest's **own params bytes** through. Every
+  engine class decodes to `AllocParams::NoDeclaredFacts`, whose arm is `AllocFacts::default()`, so
+  `RmEvent::Alloc` has no bytes and a forward written off the event alone can only send `&[]`.
+
+⚠ **The guest's answer does not change.** The local model has already replied `NV_OK` + echo, and
+turning a host refusal into an alloc failure would fail `cuCtxCreate` outright
+(`kernel_graphics_object.c:224-225`) — a different experiment. The outcome is *reported*:
+`kayfabe: ENGINE-OBJECT class=… → FORWARDED …/REFUSED <FwdFault> [seen=N forwarded=M]`.
+
+### ★★★ THREE INSTRUMENTS THAT COULD NOT HAVE SEEN THIS, found by wiring it
+
+1. **`RmVerb::AllocEngineObject` did not record `params`** — the mock bound the argument as
+   `_params`. So **no test in the tree could observe what the host was handed**, and every one of
+   them would have passed against a forward that dropped the guest's bytes.
+2. **`kayfabe_tests::reachable_objects` had two structurally-empty terms.** `Channel::host_channel`
+   and `host_engine_objects` are written only by `commit_engine_object`/`commit_doorbell`, so with
+   no production caller every assertion over that helper was silently an assertion about host
+   *memory*. Wiring the forward turned `the_rpc_bridge_survives_two_interleaved_guest_streams…`
+   red on a message reading *"host **memory** … must not be taken away"* — while what had gone was
+   a **channel**, whose client root the guest itself freed and which no kernel alias holds. Split
+   into `reachable_memory` / `reachable_channel_objects`; the channel half is now asserted **with
+   the opposite expected value**, which is the only way round that can be right.
+3. **`cargo test --workspace` was RED at `fe65678`.** `CeShellState::gr_dumps: Mutex<u32>` arrived
+   at `2f616e2` and was never added to `UNRANKED_VCPU_PATH_LOCKS`; two `BOOTED` commits were made
+   on top of it. ⊘ The mask is cargo's own — **without `--no-fail-fast` the run stops at the first
+   failing target**, so one unrelated red hides every gate behind it. The lock is safe (dropped
+   before the dump does anything) and is now classified.
+
+★ All three are the same shape as this section's headline: **a mechanism with no caller cannot be
+wrong, and every instrument aimed at it is green for that reason.**

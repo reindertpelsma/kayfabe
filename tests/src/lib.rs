@@ -151,6 +151,55 @@ pub fn reachable_objects(
     live
 }
 
+/// ★★★★★ **§16.80** — the **memory-shaped** half of [`reachable_objects`]: host VASes and
+/// the host memory bound into them, and nothing channel-shaped.
+///
+/// # ⊘ Why this split had to exist, and why nothing needed it until now
+///
+/// [`reachable_objects`] has always had a channel arm, and until the Case-1 engine-object
+/// forward acquired a production caller **nothing could populate it**:
+/// `Channel::host_channel` and `Channel::host_engine_objects` are written only by
+/// `kayfabe_fwd::commit_engine_object` and `commit_doorbell`. So every assertion written
+/// over `reachable_objects` was, in fact, an assertion over host *memory* — two of its four
+/// terms were structurally empty.
+///
+/// ⚠ `[measured 2026-08-10]` wiring the forward made them live and turned
+/// `the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load` red, on a
+/// message whose own words are *"host **memory** RM says is live must not be taken away"* —
+/// while what had actually gone was a **channel**, whose client root the guest itself freed
+/// and which no kernel alias held. The code was right; the instrument quantified over more
+/// than its sentence did. `a_correct_capture_can_answer_the_wrong_question`.
+///
+/// ⇒ Assert over the half the sentence names, and assert the other half **separately** —
+/// the channel objects going away is a real property that used to be unobservable.
+#[must_use]
+pub fn reachable_memory(
+    proc: &kayfabe_core::gpu::Proc,
+) -> std::collections::BTreeSet<kayfabe_isolate::HostHandle> {
+    let mut live = std::collections::BTreeSet::new();
+    for vas in proc.vases.values() {
+        live.extend(vas.host_vas);
+        for (_va, _len, binding) in vas.table.iter() {
+            live.extend(binding.host_memory());
+        }
+    }
+    live
+}
+
+/// The **channel-shaped** half of [`reachable_objects`] — see [`reachable_memory`] for the
+/// split and for the measurement that forced it.
+#[must_use]
+pub fn reachable_channel_objects(
+    proc: &kayfabe_core::gpu::Proc,
+) -> std::collections::BTreeSet<kayfabe_isolate::HostHandle> {
+    let mut live = std::collections::BTreeSet::new();
+    for chan in proc.channels.values() {
+        live.extend(chan.host_channel);
+        live.extend(chan.host_engine_objects.values().copied());
+    }
+    live
+}
+
 /// Every host GPU mapping reachable from one [`kayfabe_core::gpu::Proc`]'s state, as
 /// the ledger keys them: `(host VAS, host GPU VA)`. A published binding is mapped in
 /// its OWN `Vas`'s host VAS (the per-`Vas` #14 fix), so the pair is derivable without

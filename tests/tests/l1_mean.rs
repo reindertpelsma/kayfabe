@@ -5303,6 +5303,23 @@ fn reachable_of(gpu: &Gpu, pid: ProcId) -> BTreeSet<HostHandle> {
         .unwrap_or_default()
 }
 
+/// ★★★★★ §16.80 — [`reachable_of`]'s **memory-shaped** half. See
+/// `kayfabe_tests::reachable_memory`.
+fn memory_of(gpu: &Gpu, pid: ProcId) -> BTreeSet<HostHandle> {
+    gpu.procs
+        .get(&pid)
+        .map(kayfabe_tests::reachable_memory)
+        .unwrap_or_default()
+}
+
+/// ★★★★★ §16.80 — [`reachable_of`]'s **channel-shaped** half.
+fn channels_of(gpu: &Gpu, pid: ProcId) -> BTreeSet<HostHandle> {
+    gpu.procs
+        .get(&pid)
+        .map(kayfabe_tests::reachable_channel_objects)
+        .unwrap_or_default()
+}
+
 /// Assert the three corruption classes are empty — never a disposition, never
 /// declarable (`tests/src/teardown.rs`).
 fn assert_no_corruption(rec: &SharedRecorder, when: &str) {
@@ -10854,10 +10871,24 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
             // ---- Phase C: ★ the recycle, from wire bytes. The UVM session dups process
             //      1's VASpace, process 1 exits, and a LATER process is handed the same
             //      `hClient` value.
-            let named1 = reachable_of(&bridge, p1);
+            let named1 = memory_of(&bridge, p1);
             assert!(
                 named1.len() >= 2,
                 "{mode:?}/{profile:?}: the baseline is real host state: {named1:?}",
+            );
+            // ★★★★★ §16.80 — the CHANNEL-shaped half, captured separately. Until the
+            // Case-1 engine-object forward acquired a production caller this set was
+            // structurally empty on every path, so the two assertions below could not be
+            // written. See `kayfabe_tests::reachable_memory` for the split and why the
+            // combined set made the sentence *"host MEMORY … must not be taken away"*
+            // quantify over a channel the guest itself freed.
+            let chan1 = channels_of(&bridge, p1);
+            assert!(
+                !chan1.is_empty(),
+                "{mode:?}/{profile:?}: ★ NON-VACUITY — process 1 has no host channel \
+                 objects at all, so the two assertions about losing them prove nothing. \
+                 Either the forward stopped running or this script stopped declaring an \
+                 engine object.",
             );
             let mut recycle = RpcScript::new();
             recycle
@@ -10899,10 +10930,24 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
                 "{mode:?}/{profile:?}: the recycled hClient is a NEW proc",
             );
             assert_eq!(
-                reachable_of(&bridge, p1),
+                memory_of(&bridge, p1),
                 named1,
                 "{mode:?}/{profile:?}: ★★ host memory RM says is live must not be taken \
                  away from its owner by a successor holding the same hClient VALUE",
+            );
+            // ★★★★★ §16.80 — and the other half, which is a DIFFERENT statement and used
+            // to be unobservable: process 1's host CHANNEL objects are gone, because the
+            // client root that allocated them was freed by the guest and no kernel alias
+            // holds a channel. ⊘ Not a weakening of the line above — it is the property
+            // that line used to assert by accident, now asserted on purpose and with the
+            // opposite expected value, which is the only way round that can be right.
+            assert!(
+                channels_of(&bridge, p1).is_empty(),
+                "{mode:?}/{profile:?}: ★★ process 1's host channel objects OUTLIVED the \
+                 client root that allocated them ({:?} → {:?}). A kernel alias on a \
+                 VASpace keeps memory alive; it holds no channel.",
+                chan1,
+                channels_of(&bridge, p1),
             );
             let keys1 = bridge.procs[&p1].clients.clone();
             let keys3 = bridge.procs[&p3].clients.clone();
@@ -10927,7 +10972,7 @@ fn the_rpc_bridge_survives_two_interleaved_guest_streams_under_mean_device_load(
             );
             let _ = bridge.reap_retired();
             assert_eq!(
-                reachable_of(&bridge, p1),
+                memory_of(&bridge, p1),
                 named1,
                 "{mode:?}/{profile:?}: …and the reclamation the core SCHEDULED frees none \
                  of it either",

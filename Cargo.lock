@@ -288,6 +288,7 @@ dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-core",
+ "kayfabe-fwd",
  "kayfabe-gsp",
  "kayfabe-mocks",
  "kayfabe-trace",

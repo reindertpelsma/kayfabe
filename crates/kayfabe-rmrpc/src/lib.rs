@@ -1198,6 +1198,34 @@ fn declared_handle(handle: u32) -> Option<HObject> {
 /// It applies to the client root **and to nothing else**: every other class's `hParent`
 /// and `hObject` are copied verbatim, which is why the normalisation cannot leak into a
 /// class that did not ask for it.
+/// ★★★★★ **§16.80** — the alloc's declared **params window**, for a caller that needs the
+/// guest's own bytes rather than the facts translated out of them.
+///
+/// [`translate_alloc`] computes exactly this slice and then, for
+/// [`AllocParams::NoDeclaredFacts`] — which is what every engine-object class decodes to —
+/// **throws it away**: its arm is `AllocFacts::default()`, and `RmEvent::Alloc` carries no
+/// bytes. So a Case-1 engine-object forward, whose whole point is that the HOST runs the
+/// guest's own alloc, has nowhere to get them from.
+///
+/// ⊘ **Same decoder, same bound, deliberately.** It re-runs `decode_rpc_alloc` rather than
+/// being handed a slice, so there is exactly one expression of "where the params are and
+/// how long they may be" and this cannot become a second, more generous copy of it —
+/// `paramsSize` is the guest's assertion about its own message and is never trusted past
+/// what arrived. A serialized-params message yields `None`, matching the refusal
+/// `translate_alloc` makes rather than reading the window anyway.
+///
+/// Returns `None` for anything that is not a decodable, non-serialized alloc.
+#[must_use]
+pub fn alloc_params_window<'a>(abi: &DriverAbiTable, payload: &'a [u8]) -> Option<&'a [u8]> {
+    let h = abi.decode_rpc_alloc(payload).ok()?;
+    if rpc_params_are_serialized(h.params_flags) {
+        return None;
+    }
+    payload
+        .get(h.params_at..)
+        .and_then(|tail| tail.get(..h.params_size as usize))
+}
+
 fn translate_alloc(
     abi: &DriverAbiTable,
     guest_os: GuestOs,

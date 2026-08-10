@@ -62,7 +62,9 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex};
 
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, VChid};
+use kayfabe_arch::ids::{
+    ClassId, ControlCmd, EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, VChid,
+};
 use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Gpu, GpuError, PendingSpawn, PendingSpawns, Proc, ProcSet, Spine};
 use kayfabe_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind};
@@ -2368,6 +2370,42 @@ impl SharedDevice {
                 self.route_act(
                     |spine| {
                         let r = kayfabe_fwd::route_engine_object(spine, target_gpu, vchid, class)?;
+                        Ok((r.proc, r))
+                    },
+                    |_spine, proc, route| {
+                        let planned = kayfabe_fwd::plan_engine_object(proc, &route, class, params)?;
+                        Staged::check_out(proc, planned.plan.cgpu, planned)
+                    },
+                )?
+            },
+            kayfabe_fwd::commit_engine_object,
+        )
+    }
+
+    /// ★★★★★ **§16.80** — [`Self::forward_engine_object`] keyed on the handles a
+    /// `GSP_RM_ALLOC` carries (`hClient` / `hParent`) instead of on `(GpuId, VChid)`,
+    /// which is what a *doorbell* has. Same three phases; only the rank-0 route differs.
+    ///
+    /// This is the entry point the RPC path uses, and its absence is the whole reason
+    /// `forward_engine_object` had no production caller: the Case-1 forward was built
+    /// against the doorbell's key and the wire never speaks that key.
+    ///
+    /// # Errors
+    /// [`FwdFault`], by variant.
+    pub fn forward_engine_object_by_parent(
+        &self,
+        client: HClient,
+        parent: HObject,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<EngineObjectForwarded, FwdFault> {
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| {
+                        let r = kayfabe_fwd::route_engine_object_by_parent(
+                            spine, client, parent, class,
+                        )?;
                         Ok((r.proc, r))
                     },
                     |_spine, proc, route| {

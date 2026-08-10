@@ -656,6 +656,38 @@ pub trait ObjectModel: Send {
         h_channel: kayfabe_arch::ids::HObject,
     ) -> Result<kayfabe_core::gpu::CtxswPreemptionAck, kayfabe_core::gpu::CtxswPreemptionFault>;
 
+    /// ★★★★★ **§16.80** — forward a Case-1 **engine-object alloc** to the host, so the
+    /// host kernel-RM builds and self-promotes its OWN context for it.
+    ///
+    /// `parent` is the alloc's `hParent` — the channel the object is created on — in
+    /// `client`'s namespace. `params` is the guest's own declared params window, bounded
+    /// by the same decode `translate_alloc` bounds it with.
+    ///
+    /// # ⊘ Why this is a trait method and not a call through [`Self::as_gpu`]
+    ///
+    /// The shipped composition root's `as_gpu` returns `None` **by design**, so an arm
+    /// built on it refuses on every real boot and passes every test that composes a bare
+    /// [`Gpu`] — `skipped_oracle_kills_the_guard`, which this trait already carries twice
+    /// ([`Self::set_ctxsw_preemption_mode`], [`Self::vas_census`]).
+    ///
+    /// # ⚠ What the caller must NOT do with the answer
+    ///
+    /// The guest's alloc has **already been answered by the local object model** by the
+    /// time this runs, and an `Err` here must not be turned into a guest-visible failure
+    /// without a separate decision: `AMPERE_COMPUTE_B` failing outright is a different
+    /// experiment from the host context not existing, and the boot that measures one must
+    /// not silently be measuring the other. It is a **census** fact, named and counted.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::FwdFault`], by variant.
+    fn forward_engine_object(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        parent: kayfabe_arch::ids::HObject,
+        class: kayfabe_arch::ids::ClassId,
+        params: &[u8],
+    ) -> Result<kayfabe_fwd::EngineObjectForwarded, kayfabe_fwd::FwdFault>;
+
     /// ★★★ **E9/§13.6** — perform the guest's `NVA06F_CTRL_CMD_BIND`.
     ///
     /// `rm_engine_type` is in **RM engine space**: the policy converts the wire ordinal
@@ -754,6 +786,16 @@ impl ObjectModel for Gpu {
         rm_engine_type: u32,
     ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault> {
         Gpu::bind_channel(self, client, object, rm_engine_type)
+    }
+
+    fn forward_engine_object(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        parent: kayfabe_arch::ids::HObject,
+        class: kayfabe_arch::ids::ClassId,
+        params: &[u8],
+    ) -> Result<kayfabe_fwd::EngineObjectForwarded, kayfabe_fwd::FwdFault> {
+        kayfabe_fwd::forward_engine_object_by_parent(self, client, parent, class, params)
     }
 
     fn vas_census(&self, mark: Option<kayfabe_core::ChanId>) -> String {
@@ -1027,146 +1069,211 @@ impl Bridge {
         // each promotion folds itself in and re-renders, and the surviving render is
         // therefore the whole run rather than the last event.
         let tally = self.promote_tally.clone();
-        let outcome = self
-            .reasm
-            .accept(&self.abi, cmd)
-            .and_then(|r| match r {
-                Reassembled::Whole => translate(&self.abi, self.guest_os, cmd),
-                Reassembled::Held => Ok(Translation::Held),
-                Reassembled::Complete(full) => translate(&self.abi, self.guest_os, &full),
-            })
-            .and_then(|t| match t {
-                // ★ The bridge does not pre-empt the graph's MISS/DEFER/FAULT taxonomy — it
-                // resolves nothing and asks nothing — and it must not swallow the answer
-                // either. `Gpu::apply`'s refusal becomes a named `BridgeRefusal` here, which
-                // is what turns it into a non-zero `rpc_result` on the wire. The C's
-                // behaviour is the opposite: it accepted everything and answered `NV_OK`
-                // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
-                Translation::Event(ev) => {
-                    // ★★★ §8.2.2 — recorded on the TRANSLATION, before the graph is
-                    // asked, and that ordering is the whole of the instrument's honesty.
-                    // The channel alloc at this port's wall is one the projection has
-                    // been observed to refuse (`boot_measured_2026_08_01.md`: hClass
-                    // 0xc56f with a `GpuError::Projection`), so a census taken on the
-                    // `Ok` arm below would report *"no ring was ever declared"* about a
-                    // boot in which the guest declared one and we said no. The question
-                    // is what the GUEST named, not what we accepted.
-                    if let kayfabe_core::rmgraph::RmEvent::Alloc {
-                        client,
-                        handle,
-                        facts:
-                            kayfabe_core::rmgraph::AllocFacts {
-                                gp_fifo_ring: Some(r),
-                                ..
-                            },
-                        ..
-                    } = ev
-                    {
-                        // ★★★★ §16.71 — the OWNER, recorded with the address. Both were
-                        // right here and only the address was kept; see [`RingRow`] for
-                        // the boot that then could not say whether two ring addresses
-                        // belonged to two channels or one.
-                        rings.record(client.0, handle.0, r);
-                    }
-                    gpu.apply(ev)
-                        .map(|()| Translation::Event(ev))
-                        .map_err(BridgeRefusal::Graph)
+        // ★★★★★ §16.80 — the alloc's OWN params, carried out of the translate step
+        // because nothing downstream can recover them.
+        //
+        // `RmEvent::Alloc` has no bytes on it, and every engine-object class decodes to
+        // `AllocParams::NoDeclaredFacts`, whose arm in `translate_alloc` is literally
+        // `AllocFacts::default()`. So by the time the `Translation::Event` arm below runs,
+        // the guest's params are gone. They are captured here, from the SAME message
+        // `translate` was given — which is the reassembled `full` when one exists, not
+        // `cmd`; a fragment's window would be a different slice of a shorter buffer.
+        //
+        // ⊘ Unconditional and cheap (a bounded `&[u8]` copied only for allocs; `None` for
+        // everything else) rather than gated on the class: a capture that only ran for
+        // classes we already decided to forward would make the gate its own oracle.
+        let mut engine_params: Option<Vec<u8>> = None;
+        let abi = &self.abi;
+        let guest_os = self.guest_os;
+        // ⊘ Evaluated into a binding rather than chained, so this closure's mutable
+        // borrow of `engine_params` ENDS before the next one reads it. A single
+        // `a.and_then(f).and_then(g)` would keep both closures alive at once.
+        let translated = self.reasm.accept(abi, cmd).and_then(|r| {
+            let whole: &RpcCommand = match &r {
+                Reassembled::Whole => cmd,
+                Reassembled::Held => return Ok(Translation::Held),
+                Reassembled::Complete(full) => full,
+            };
+            let t = translate(abi, guest_os, whole)?;
+            if matches!(
+                t,
+                Translation::Event(kayfabe_core::rmgraph::RmEvent::Alloc { .. })
+            ) {
+                engine_params =
+                    crate::alloc_params_window(abi, whole.wire_body()).map(<[u8]>::to_vec);
+            }
+            Ok(t)
+        });
+        let outcome = translated.and_then(|t| match t {
+            // ★ The bridge does not pre-empt the graph's MISS/DEFER/FAULT taxonomy — it
+            // resolves nothing and asks nothing — and it must not swallow the answer
+            // either. `Gpu::apply`'s refusal becomes a named `BridgeRefusal` here, which
+            // is what turns it into a non-zero `rpc_result` on the wire. The C's
+            // behaviour is the opposite: it accepted everything and answered `NV_OK`
+            // (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:3326`).
+            Translation::Event(ev) => {
+                // ★★★ §8.2.2 — recorded on the TRANSLATION, before the graph is
+                // asked, and that ordering is the whole of the instrument's honesty.
+                // The channel alloc at this port's wall is one the projection has
+                // been observed to refuse (`boot_measured_2026_08_01.md`: hClass
+                // 0xc56f with a `GpuError::Projection`), so a census taken on the
+                // `Ok` arm below would report *"no ring was ever declared"* about a
+                // boot in which the guest declared one and we said no. The question
+                // is what the GUEST named, not what we accepted.
+                if let kayfabe_core::rmgraph::RmEvent::Alloc {
+                    client,
+                    handle,
+                    facts:
+                        kayfabe_core::rmgraph::AllocFacts {
+                            gp_fifo_ring: Some(r),
+                            ..
+                        },
+                    ..
+                } = ev
+                {
+                    // ★★★★ §16.71 — the OWNER, recorded with the address. Both were
+                    // right here and only the address was kept; see [`RingRow`] for
+                    // the boot that then could not say whether two ring addresses
+                    // belonged to two channels or one.
+                    rings.record(client.0, handle.0, r);
                 }
-                // ★★ The ADDRESS-plane apply, and it is deliberately here rather than
-                // left to the caller. A `Translation` variant nothing consumes is the
-                // C's `NV_OK` echo with a Rust type on it — the same argument
-                // `BridgeRefusal::UnknownControl` already makes about a `Forward` arm.
-                // The join routes on the ADDRESS SPACE the promotion names, so it is
-                // legal to run against `&mut Gpu` regardless of which proc's RPC this
-                // was; the sharded shell runs the same two functions under its own locks.
-                Translation::CtxPromotion(p) => match gpu.promote_ctx(&p) {
-                    Ok(join) => {
-                        // ★★★★ §16.46 — THE ACCEPTED promotion's own accounting, plus the
-                        // census, latched LAST-wins. Two gaps closed by one latch:
-                        //
-                        //  (1) §16.45.5 — the census used to ride only on a promote
-                        //      REFUSAL, so fixing the promote plane switched it off. It
-                        //      now rides the success path too and survives its own fix.
-                        //  (2) §16.45.4 — an accepted promotion used to contribute one
-                        //      anonymous `control 0x2080012b result 0` tick and nothing
-                        //      else, so `s39`'s ELEVEN acceptances were eleven opaque
-                        //      successes and the rung's own sub-prediction ("this binds
-                        //      ZERO ranges") could not be scored either way. ⊘ A claim
-                        //      nothing could have contradicted was never a test.
-                        //      `PromoteJoin` has carried all three numbers all along; only
-                        //      the report threw them away.
-                        //
-                        // ★ `declined` is printed beside `bound`, not folded into it: a
-                        // promotion that declares eight VAs and binds none is a completely
-                        // different fact from one that declares none, and a single
-                        // "accepted" tick cannot tell them apart — which is the whole of
-                        // C defect D3 restated one layer up.
-                        diag.latch_last(
-                            FaultTag("promote-ctx ACCEPTED (last, with the census AT it)"),
-                            format!(
-                                "bound={} joined={} joined_global={} \
+                gpu.apply(ev).map_err(BridgeRefusal::Graph)?;
+                // ★★★★★ §16.80 — THE CASE-1 ENGINE-OBJECT FORWARD, wired.
+                //
+                // `kayfabe_fwd::forward_engine_object` has existed, tested, with ZERO
+                // production callers since it was written, because it is keyed on
+                // `(GpuId, VChid)` — what a DOORBELL has — and the wire speaks
+                // `(hClient, hParent)`. `forward_engine_object_by_parent` is that
+                // missing hop; this is its only caller.
+                //
+                // ⊘ **AFTER the local apply, never before.** The forward routes through
+                // the channel the alloc names, and `Spine::by_vchid` is rebuilt by the
+                // projection that `apply` runs — so before it, an object allocated on a
+                // channel this same message declared would route to nothing. And a
+                // forward that ran on an event the graph then REFUSED would be host
+                // state with no protocol fact behind it.
+                //
+                // ★ **The gate is the arch's own `engine_of_object`, asked once**, inside
+                // the route. Every non-engine alloc — client, device, memory, VASpace,
+                // channel — exits on `FwdFault::NotAnEngine` before the graph is
+                // touched, so this costs one table lookup and there is no second class
+                // list here to drift from `Arch`'s.
+                //
+                // ⚠ **The guest's answer does NOT change**, and that is a decision, not
+                // an oversight. The local model has already answered `NV_OK` + echo;
+                // turning a host-side refusal into an alloc failure would fail
+                // `cuCtxCreate` outright (`kernel_graphics_object.c:224-225` →
+                // `kgrobjConstruct_IMPL:353-360`, no retry, no degradation) and a boot
+                // measuring the forward would silently be measuring that instead. The
+                // outcome is reported by the model's own implementation — see
+                // `ObjectModel::forward_engine_object`.
+                if let kayfabe_core::rmgraph::RmEvent::Alloc {
+                    client,
+                    parent,
+                    class,
+                    ..
+                } = ev
+                {
+                    let params = engine_params.as_deref().unwrap_or(&[]);
+                    let _ = gpu.forward_engine_object(client, parent, class, params);
+                }
+                Ok(Translation::Event(ev))
+            }
+            // ★★ The ADDRESS-plane apply, and it is deliberately here rather than
+            // left to the caller. A `Translation` variant nothing consumes is the
+            // C's `NV_OK` echo with a Rust type on it — the same argument
+            // `BridgeRefusal::UnknownControl` already makes about a `Forward` arm.
+            // The join routes on the ADDRESS SPACE the promotion names, so it is
+            // legal to run against `&mut Gpu` regardless of which proc's RPC this
+            // was; the sharded shell runs the same two functions under its own locks.
+            Translation::CtxPromotion(p) => match gpu.promote_ctx(&p) {
+                Ok(join) => {
+                    // ★★★★ §16.46 — THE ACCEPTED promotion's own accounting, plus the
+                    // census, latched LAST-wins. Two gaps closed by one latch:
+                    //
+                    //  (1) §16.45.5 — the census used to ride only on a promote
+                    //      REFUSAL, so fixing the promote plane switched it off. It
+                    //      now rides the success path too and survives its own fix.
+                    //  (2) §16.45.4 — an accepted promotion used to contribute one
+                    //      anonymous `control 0x2080012b result 0` tick and nothing
+                    //      else, so `s39`'s ELEVEN acceptances were eleven opaque
+                    //      successes and the rung's own sub-prediction ("this binds
+                    //      ZERO ranges") could not be scored either way. ⊘ A claim
+                    //      nothing could have contradicted was never a test.
+                    //      `PromoteJoin` has carried all three numbers all along; only
+                    //      the report threw them away.
+                    //
+                    // ★ `declined` is printed beside `bound`, not folded into it: a
+                    // promotion that declares eight VAs and binds none is a completely
+                    // different fact from one that declares none, and a single
+                    // "accepted" tick cannot tell them apart — which is the whole of
+                    // C defect D3 restated one layer up.
+                    diag.latch_last(
+                        FaultTag("promote-ctx ACCEPTED (last, with the census AT it)"),
+                        format!(
+                            "bound={} joined={} joined_global={} \
                                  globals_known={} globals_added={} \
                                  already={} parked={} half_already={} \
                                  half_unusable={} orphans(awaiting_va={},awaiting_phys={}) \
                                  declined.promote_only={} declined.initialize_only={} \
                                  entries={} halves={} \
                                  client={:#x} chan_client={:#x} object={:#x} proc={:?}{}",
-                                join.bound,
-                                join.joined,
-                                // ★★★★★ §16.50 — the three numbers this rung is scored on,
-                                // and `globals_known` is the one built for the case where
-                                // the fix does nothing: it rides the SUCCESS path and no
-                                // refusal, so `joined_global=0` is still legible.
-                                // `globals_known=0` beside it says no GPU-scoped physical
-                                // was ever published (the question is then allocation-time,
-                                // not join-time); `globals_known>0` beside it says the map
-                                // filled and nothing drew on it. Those are different rungs.
-                                join.joined_global,
-                                join.globals_known,
-                                join.globals_added,
-                                join.already,
-                                join.parked,
-                                join.half_already,
-                                join.half_unusable,
-                                join.orphans.0,
-                                join.orphans.1,
-                                p.declined.promote_only,
-                                p.declined.initialize_only,
-                                p.ranges.len(),
-                                p.halves.len(),
-                                p.client.0,
-                                p.chan_client.0,
-                                p.object.0,
-                                join.route.proc,
-                                gpu.vas_census(None),
-                            ),
-                        );
-                        // ★★★★★ §16.48 — the CUMULATIVE row, emitted unconditionally on
-                        // the SUCCESS path beside the last-wins one.
-                        //
-                        // ⊘ Not a prettier version of the row above; it answers a
-                        // different question. That row says what the LAST promotion did.
-                        // This says what ALL of them declared, per `buffer_id` — the only
-                        // shape in which *"did phase 1 ever arrive?"* is answerable at all
-                        // (§16.47.4), and the reason `s40` could not score its own
-                        // two-phase account.
-                        tally.record(&p);
-                        // ★★★★★ §16.51 — and the JOIN outcome, cumulatively. See
-                        // `SharedPromoteTally::totals`: the `ACCEPTED` row above is
-                        // last-wins, and the cross-address-space join is a one-shot event
-                        // that happens early, so `joined_global` reads 0 there even on the
-                        // boot where it fired.
-                        tally.record_join(&join);
-                        diag.latch_last(
-                            FaultTag("promote-ctx TALLY (cumulative, all promotions)"),
-                            tally.render(),
-                        );
-                        Ok(Translation::CtxPromotion(p))
-                    }
-                    Err(e) => Err(BridgeRefusal::Promote(e)),
-                },
-                Translation::Inert | Translation::Held => Ok(t),
-            });
+                            join.bound,
+                            join.joined,
+                            // ★★★★★ §16.50 — the three numbers this rung is scored on,
+                            // and `globals_known` is the one built for the case where
+                            // the fix does nothing: it rides the SUCCESS path and no
+                            // refusal, so `joined_global=0` is still legible.
+                            // `globals_known=0` beside it says no GPU-scoped physical
+                            // was ever published (the question is then allocation-time,
+                            // not join-time); `globals_known>0` beside it says the map
+                            // filled and nothing drew on it. Those are different rungs.
+                            join.joined_global,
+                            join.globals_known,
+                            join.globals_added,
+                            join.already,
+                            join.parked,
+                            join.half_already,
+                            join.half_unusable,
+                            join.orphans.0,
+                            join.orphans.1,
+                            p.declined.promote_only,
+                            p.declined.initialize_only,
+                            p.ranges.len(),
+                            p.halves.len(),
+                            p.client.0,
+                            p.chan_client.0,
+                            p.object.0,
+                            join.route.proc,
+                            gpu.vas_census(None),
+                        ),
+                    );
+                    // ★★★★★ §16.48 — the CUMULATIVE row, emitted unconditionally on
+                    // the SUCCESS path beside the last-wins one.
+                    //
+                    // ⊘ Not a prettier version of the row above; it answers a
+                    // different question. That row says what the LAST promotion did.
+                    // This says what ALL of them declared, per `buffer_id` — the only
+                    // shape in which *"did phase 1 ever arrive?"* is answerable at all
+                    // (§16.47.4), and the reason `s40` could not score its own
+                    // two-phase account.
+                    tally.record(&p);
+                    // ★★★★★ §16.51 — and the JOIN outcome, cumulatively. See
+                    // `SharedPromoteTally::totals`: the `ACCEPTED` row above is
+                    // last-wins, and the cross-address-space join is a one-shot event
+                    // that happens early, so `joined_global` reads 0 there even on the
+                    // boot where it fired.
+                    tally.record_join(&join);
+                    diag.latch_last(
+                        FaultTag("promote-ctx TALLY (cumulative, all promotions)"),
+                        tally.render(),
+                    );
+                    Ok(Translation::CtxPromotion(p))
+                }
+                Err(e) => Err(BridgeRefusal::Promote(e)),
+            },
+            Translation::Inert | Translation::Held => Ok(t),
+        });
         match &outcome {
             Ok(Translation::Event(_)) => self.applied = self.applied.saturating_add(1),
             Ok(Translation::Inert) => self.inert = self.inert.saturating_add(1),

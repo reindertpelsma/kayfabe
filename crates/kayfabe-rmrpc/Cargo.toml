@@ -19,6 +19,11 @@ kayfabe-abi.workspace = true
 kayfabe-gsp.workspace = true
 # The destination vocabulary: `RmEvent`. This crate is the ONLY one permitted to name both
 # `RpcCommand` and `RmEvent`, and CI greps for it.
+# ★★★★★ §16.80 — the Case-1 engine-object forward. `Bridge::deliver` is the only place
+# that holds a translated engine-object alloc AND a live object model, so it is where the
+# forward has to be issued from; see `ObjectModel::forward_engine_object`. ⊘ One-directional:
+# `kayfabe-fwd` has no `kayfabe-rmrpc` dependency and must not gain one.
+kayfabe-fwd.workspace = true
 kayfabe-core.workspace = true
 # `impl Faulted for BridgeRefusal` — the compiler-checked bridge that makes every refusal
 # countable in the trace (`gsp_core_bridge.md` §4.2 item 2).

@@ -74,6 +74,20 @@ impl Faulted for FwdFault {
             FwdFault::PushTooFragmented { .. } => FaultTag("FwdFault::PushTooFragmented"),
             FwdFault::Rm(e) => e.fault_tag(),
             FwdFault::NotAnEngine(_) => FaultTag("FwdFault::NotAnEngine"),
+            // ★ The HOP is in the tag, not only in the variant: "the parent was not a
+            // channel" and "the parent's Device has not resolved yet" are a permanent
+            // refusal and a deferral, and a census that could not tell them apart would
+            // report a design error and a race as one number.
+            FwdFault::EngineObjectParent { why, .. } => match why {
+                crate::EngineParentMiss::NoNode => FaultTag("FwdFault::EngineParent::NoNode"),
+                crate::EngineParentMiss::NotAChannel => {
+                    FaultTag("FwdFault::EngineParent::NotAChannel")
+                }
+                crate::EngineParentMiss::NoTarget => FaultTag("FwdFault::EngineParent::NoTarget"),
+                crate::EngineParentMiss::UnnamedVchid => {
+                    FaultTag("FwdFault::EngineParent::UnnamedVchid")
+                }
+            },
             FwdFault::WrongArm { .. } => FaultTag("FwdFault::WrongArm"),
             FwdFault::Present(_) => FaultTag("FwdFault::Present"),
             FwdFault::Completion(_) => FaultTag("FwdFault::Completion"),

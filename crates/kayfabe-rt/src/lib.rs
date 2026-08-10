@@ -68,6 +68,14 @@ pub mod lock;
 /// manifest demands. The count and the labels come with it because a census that could not
 /// print an empty bucket would report a partition it had not measured.
 pub use device::{DoorbellRoute, ENGINE_KIND_COUNT, engine_kind_names};
+/// ★★★★★ §16.80 — the class id and the two Case-1 engine-object types, re-exported for
+/// the same reason and under the same rule: `SharedDevice::forward_engine_object_by_parent`
+/// takes and returns them, and the QEMU shim implements `ObjectModel` over it. A
+/// [`ClassId`] is a newtype over a `u32` and carries no architecture; `FwdFault` is the
+/// forwarding plane's own refusal vocabulary, which the shim must be able to PRINT — a
+/// refusal the composition root can only report as "an error" is the shape
+/// `a_wall_that_can_carry_no_name` records.
+pub use kayfabe_arch::ids::ClassId;
 /// ★ The id this shell's own entry points **require** a caller to name, re-exported.
 ///
 /// `SharedDevice::doorbell` takes a [`GpuId`], so a composition root cannot call it without
@@ -80,6 +88,7 @@ pub use kayfabe_arch::ids::GpuId;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};
+pub use kayfabe_fwd::{EngineObjectForwarded, FwdFault};
 
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
 // public types. `BlockingSection` is deliberately ABSENT: it is `!Send` by

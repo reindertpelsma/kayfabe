@@ -40,6 +40,11 @@ use std::path::{Path, PathBuf};
 /// other vCPU's register access too.
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<u32>",
+        "★★ FOUND BY THIS GATE, 2026-08-10, and it had ALREADY SHIPPED: `CeShellState::gr_dumps`,          §16.79's bounded GR-pushbuffer dump counter, arrived at `2f616e2` and was never          classified — so `cargo test --workspace` was RED at `fe65678` and two `BOOTED` commits          were made on top of it. ⊘ The mask is cargo's own: without `--no-fail-fast` the run          stops at the first failing target, so ONE unrelated red hides every gate behind it.          The lock itself is SAFE and deliberately so: `dump_gr_pushbuffer_once` (shim.rs:3371-3377)          takes it inside its own block and DROPS it before the dump does anything — every          `eprintln!`, the `plane.upgrade()`, the root resolution and the memory-plane lock are          outside that scope. Nothing blocks beneath it.",
+    ),
+    (
         "crates/kayfabe-rt/src/device.rs",
         "Mutex<GateState>",
         "PoolGate backpressure. BLOCKING IS ITS PURPOSE — a caller waits here for a worker to \

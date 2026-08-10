@@ -72,7 +72,9 @@
 //! `&mut Proc` ones ([`publish_backing`], the act phases) parallelize per-proc
 //! (disjoint borrows, no shared lock).
 
-use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa, Pdb, RunlistId, VChid};
+use kayfabe_arch::ids::{
+    ClassId, ControlCmd, EngineKind, GpuId, GpuVa, HClient, HObject, Pdb, RunlistId, VChid,
+};
 use kayfabe_arch::{
     Aperture, CpuOperand, CpuPlane, PhysTarget, PlaneAddr, PushRange, Residency, ResidencyOracle,
 };
@@ -614,6 +616,20 @@ pub enum FwdFault {
     /// A class the guest tried to alloc as an engine object is not one this arch
     /// recognizes as an engine — MISS=FAULT (never guessed into a GR/CE object).
     NotAnEngine(ClassId),
+    /// ★★★★★ **§16.80** — an engine-object alloc's `hParent` did not resolve to a channel
+    /// this port can name a forwarding target for.
+    ///
+    /// ⊘ Four distinguishable misses under one variant, because they are four different
+    /// facts and a single "unroutable" would make them one. [`EngineParentMiss`] names
+    /// which hop declined; none of them is ever guessed past.
+    EngineObjectParent {
+        /// The client namespace the alloc arrived in.
+        client: HClient,
+        /// The `hParent` handle the alloc named.
+        object: HObject,
+        /// Which hop refused.
+        why: EngineParentMiss,
+    },
     /// A completion-arm operation was issued on a channel whose [`EngineKind`]
     /// signals through a *different* arm (e.g. arming a mapped fence on a
     /// GR-compute channel, whose completion is the shared-sema arm). The channel's
@@ -2139,6 +2155,75 @@ pub struct EngineObjectRoute {
     pub engine: EngineKind,
 }
 
+/// Which hop of [`route_engine_object_by_parent`] declined — the four are different
+/// facts, and collapsing them into one "unroutable" would hide which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EngineParentMiss {
+    /// No object at `(client, hParent)` in the RM graph at all. The guest named a handle
+    /// this port never saw allocated.
+    NoNode,
+    /// The parent exists and is **not** a channel — e.g. a TSG (channel *group*) or a
+    /// subdevice. ⊘ Never walked through: an engine object's context is the channel's,
+    /// and picking one member of a group would be a guess about which.
+    NotAChannel,
+    /// The channel's `Device` ancestor has not resolved, so the alloc names no **target
+    /// GPU**. Deferred by construction (the same `gpu: None` scope `project` uses), never
+    /// defaulted to GPU 0 — `deviceInstance` failing open to GPU 0 is a *driver* bug this
+    /// port declines to reproduce.
+    NoTarget,
+    /// The channel's `userd_flags` name no vChid for this arch — the same refusal
+    /// `ProjectionError::UnnamedVchid` makes, asked here so the forward cannot substitute
+    /// a vChid the projection would have refused.
+    UnnamedVchid,
+}
+
+/// ★★★★★ **§16.80** — ROUTE an engine-object alloc from the handles the **RPC** carries.
+///
+/// [`route_engine_object`] is keyed on `(GpuId, VChid)`, which is what a *doorbell* has.
+/// A `GSP_RM_ALLOC` has `(hClient, hParent)` instead, so this is the missing hop that
+/// makes the Case-1 forward reachable from the wire at all — the reason
+/// [`forward_engine_object`] has had zero production callers since it was built.
+///
+/// ⊘ **Forward-derived, never reverse-resolved.** Both keys come out of the channel's own
+/// alloc facts by the *same* computations `kayfabe_core::project` used to build
+/// `Spine::by_vchid` — `RmGraph::gpu_of_resource` and `Arch::vchid_from_userd_flags` — and
+/// the answer is then put back through [`route_engine_object`], so `by_vchid` stays the
+/// single authority. A disagreement surfaces as [`FwdFault::UnknownVchid`], loudly, rather
+/// than as a second competing resolution of a question the projection already answered
+/// (`two_projections_of_one_fact_disagreeing`, four prior instances).
+///
+/// # Errors
+/// [`FwdFault::EngineObjectParent`] naming the hop, then whatever
+/// [`route_engine_object`] refuses with.
+pub fn route_engine_object_by_parent(
+    spine: &Spine,
+    client: HClient,
+    parent: HObject,
+    class: ClassId,
+) -> Result<EngineObjectRoute, FwdFault> {
+    let miss = |why| FwdFault::EngineObjectParent {
+        client,
+        object: parent,
+        why,
+    };
+    let node = spine
+        .rmgraph
+        .node(kayfabe_core::rmgraph::NodeKey::new(client, parent))
+        .ok_or_else(|| miss(EngineParentMiss::NoNode))?;
+    if !matches!(node.kind, kayfabe_arch::ObjectKind::Channel { .. }) {
+        return Err(miss(EngineParentMiss::NotAChannel));
+    }
+    let gpu = spine
+        .rmgraph
+        .gpu_of_resource(node.id())
+        .ok_or_else(|| miss(EngineParentMiss::NoTarget))?;
+    let vchid = spine
+        .arch()
+        .vchid_from_userd_flags(node.facts.userd_flags)
+        .ok_or_else(|| miss(EngineParentMiss::UnnamedVchid))?;
+    route_engine_object(spine, gpu, vchid, class)
+}
+
 /// ROUTE: resolve a Case-1 engine-object alloc to its owning `(Proc, Channel)` —
 /// a pure spine read (`Arch::engine_of_object` + `by_vchid`). A class the arch
 /// does not recognize as an engine object is a loud `NotAnEngine` (MISS=FAULT).
@@ -2404,6 +2489,27 @@ pub fn forward_engine_object(
 ) -> Result<EngineObjectForwarded, FwdFault> {
     let Gpu { spine, procs, .. } = gpu;
     let route = route_engine_object(spine, target_gpu, vchid, class)?;
+    let proc = procs
+        .get_mut(&route.proc)
+        .ok_or(FwdFault::RetiredProc(route.proc))?;
+    exec_engine_object(spine, proc, &route, class, params)
+}
+
+/// ★★★★★ **§16.80** — [`forward_engine_object`] keyed on the handles a `GSP_RM_ALLOC`
+/// actually carries. The composition of [`route_engine_object_by_parent`] and
+/// [`exec_engine_object`]; see the route for why the vChid is forward-derived.
+///
+/// # Errors
+/// [`FwdFault`], by variant.
+pub fn forward_engine_object_by_parent(
+    gpu: &mut Gpu,
+    client: HClient,
+    parent: HObject,
+    class: ClassId,
+    params: &[u8],
+) -> Result<EngineObjectForwarded, FwdFault> {
+    let Gpu { spine, procs, .. } = gpu;
+    let route = route_engine_object_by_parent(spine, client, parent, class)?;
     let proc = procs
         .get_mut(&route.proc)
         .ok_or(FwdFault::RetiredProc(route.proc))?;

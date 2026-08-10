@@ -2617,6 +2617,69 @@ impl core::fmt::Debug for SharedObjectModel {
     }
 }
 
+/// ★★★★★ §16.80 — how many engine-object forward outcomes get printed per process life.
+///
+/// ⊘ Bounded, because a hostile guest can issue allocs in a loop and a diagnostic that a
+/// guest can turn into unbounded host output is a denial-of-service with a log format.
+/// 32 is effectively unbounded for the real workload — `cuCtxCreate` allocs **one**
+/// `AMPERE_COMPUTE_B` and one `AMPERE_DMA_COPY_B` — and the running totals on every line
+/// mean the bound costs detail, never the count.
+const ENGINE_FWD_REPORT_MAX: u64 = 32;
+
+/// Outcomes seen / of those, forwarded / of those, reported. Process-global for
+/// [`ISOLATE_PLANE_ENV`]'s stated reason: this is bench instrumentation on a
+/// one-device-per-process bench, and a per-device home costs a shim-ABI change.
+static ENGINE_FWD_SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static ENGINE_FWD_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Print one engine-object forward outcome into the boot's own `run_<tag>_qemu.log`.
+///
+/// ★ It prints the **whole** outcome — reused/materialized/host handle on success, the
+/// exact `FwdFault` variant on refusal — because "how many were forwarded" is the number
+/// that has already been over-read once on this project: `forwarded_counts_intent_not_work`
+/// is a count that meant nothing was forwarded. A variant name cannot be read that way.
+fn report_engine_forward(
+    client: kayfabe_rt::HClient,
+    parent: kayfabe_rt::HObject,
+    class: kayfabe_rt::ClassId,
+    params_len: usize,
+    out: &Result<kayfabe_rt::EngineObjectForwarded, kayfabe_rt::FwdFault>,
+) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let seen = ENGINE_FWD_SEEN.fetch_add(1, Relaxed) + 1;
+    let ok = if out.is_ok() {
+        ENGINE_FWD_OK.fetch_add(1, Relaxed) + 1
+    } else {
+        ENGINE_FWD_OK.load(Relaxed)
+    };
+    if seen > ENGINE_FWD_REPORT_MAX {
+        return;
+    }
+    let verdict = match out {
+        Ok(f) => format!(
+            "FORWARDED engine={:?} host_object={:#x} materialized_channel={} reused={}",
+            f.engine,
+            f.host_object.raw(),
+            f.materialized_channel,
+            f.reused,
+        ),
+        Err(e) => format!("REFUSED {e:?}"),
+    };
+    eprintln!(
+        "kayfabe: ENGINE-OBJECT class={:#06x} client={:#x} parent={:#x} params={}B \
+         → {verdict} [seen={seen} forwarded={ok}]{}",
+        class.0,
+        client.0,
+        parent.0,
+        params_len,
+        if seen == ENGINE_FWD_REPORT_MAX {
+            " ⊘ REPORT BOUND REACHED — later outcomes are counted, not printed"
+        } else {
+            ""
+        },
+    );
+}
+
 impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
     fn apply(
         &mut self,
@@ -2673,6 +2736,33 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         rm_engine_type: u32,
     ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault> {
         self.0.bind_channel(client, object, rm_engine_type)
+    }
+
+    /// ★★★★★ §16.80 — the shell's seat for the Case-1 engine-object forward, and **the
+    /// place its outcome is named**.
+    ///
+    /// `Bridge::deliver` discards the `Result` on purpose (the guest's alloc has already
+    /// been answered, and turning a host refusal into an alloc failure would be a
+    /// different experiment). So if this implementation does not report, the forward is
+    /// unobservable — `a_diagnostic_gated_on_the_failure` in advance rather than after.
+    ///
+    /// ⊘ `NotAnEngine` is silent by design: it is the gate, not an event. Every alloc the
+    /// guest makes passes through here and all but a handful are clients, devices, memory
+    /// and VA spaces.
+    fn forward_engine_object(
+        &mut self,
+        client: kayfabe_rt::HClient,
+        parent: kayfabe_rt::HObject,
+        class: kayfabe_rt::ClassId,
+        params: &[u8],
+    ) -> Result<kayfabe_rt::EngineObjectForwarded, kayfabe_rt::FwdFault> {
+        let out = self
+            .0
+            .forward_engine_object_by_parent(client, parent, class, params);
+        if !matches!(out, Err(kayfabe_rt::FwdFault::NotAnEngine(_))) {
+            report_engine_forward(client, parent, class, params.len(), &out);
+        }
+        out
     }
 
     /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
@@ -4806,7 +4896,7 @@ impl Regs {
              local_ce_is_the_only_executor={}",
             isolate_plane.as_str(),
             ce_executor.as_str(),
-            isolate_plane == IsolatePlane::Stillborn || ce_executor == CeExecutor::Local,
+            isolate_plane == IsolatePlane::Stillborn || ce_executor == CeExecutorChoice::Local,
         );
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
@@ -4817,7 +4907,7 @@ impl Regs {
             // measured refutation of the first standing alone; see
             // [`CE_EXECUTOR_ENV`] and [`ce_executor_from`].
             local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn
-                || ce_executor == CeExecutor::Local,
+                || ce_executor == CeExecutorChoice::Local,
         }));
         Ok(Regs {
             plane,
@@ -5825,13 +5915,13 @@ fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
 ///
 /// ⊘ **This is not a fallback-after-refusal and does not degrade anything.** It is a second
 /// composition-root choice, made before any doorbell arrives, defaulting to the executor
-/// that is measured to work. [`CeExecutor::Host`] keeps the previously-measured arm exactly
+/// that is measured to work. [`CeExecutorChoice::Host`] keeps the previously-measured arm exactly
 /// reachable — a deleted configuration cannot be a control.
 pub const CE_EXECUTOR_ENV: &str = "KAYFABE_CE_EXECUTOR";
 
 /// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CeExecutor {
+pub enum CeExecutorChoice {
     /// The shell's own CPU copy-engine executor, on **every** plane. **The default**, and
     /// the only value under which a guest has ever reached `cuCtxCreate` with a live
     /// isolate plane installed.
@@ -5843,17 +5933,17 @@ pub enum CeExecutor {
     Host,
 }
 
-impl CeExecutor {
+impl CeExecutorChoice {
     /// Every executor, so a gate can quantify over the enum rather than over a
     /// hand-written list that shrinks in one place with nothing going red.
-    pub const ALL: [CeExecutor; 2] = [CeExecutor::Local, CeExecutor::Host];
+    pub const ALL: [CeExecutorChoice; 2] = [CeExecutorChoice::Local, CeExecutorChoice::Host];
 
     /// The name [`CE_EXECUTOR_ENV`] uses.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            CeExecutor::Local => "local",
-            CeExecutor::Host => "host",
+            CeExecutorChoice::Local => "local",
+            CeExecutorChoice::Host => "host",
         }
     }
 
@@ -5861,10 +5951,10 @@ impl CeExecutor {
     /// [`isolate_plane_from`] for why a selector that is generous about spelling makes an
     /// evidence run and its own negative control indistinguishable.
     #[must_use]
-    pub fn parse(s: &str) -> Option<CeExecutor> {
+    pub fn parse(s: &str) -> Option<CeExecutorChoice> {
         match s {
-            "local" => Some(CeExecutor::Local),
-            "host" => Some(CeExecutor::Host),
+            "local" => Some(CeExecutorChoice::Local),
+            "host" => Some(CeExecutorChoice::Host),
             _ => None,
         }
     }
@@ -5874,11 +5964,11 @@ impl CeExecutor {
 ///
 /// # Errors
 /// [`Status::Unsupported`] if `value` names no executor. **Absent is not an error**; it is
-/// [`CeExecutor::Local`].
-pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutor, (Status, &'static str)> {
+/// [`CeExecutorChoice::Local`].
+pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutorChoice, (Status, &'static str)> {
     match value {
-        None => Ok(CeExecutor::Local),
-        Some(v) => CeExecutor::parse(v).ok_or((
+        None => Ok(CeExecutorChoice::Local),
+        Some(v) => CeExecutorChoice::parse(v).ok_or((
             Status::Unsupported,
             "KAYFABE_CE_EXECUTOR does not name an executor: the only values are `local` \
              (the default) and `host`. It is not defaulted, because a typo that silently \
@@ -5888,14 +5978,14 @@ pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutor, (Status, &'st
     }
 }
 
-/// The executor [`CE_EXECUTOR_ENV`] names, or [`CeExecutor::Local`] if it is unset.
+/// The executor [`CE_EXECUTOR_ENV`] names, or [`CeExecutorChoice::Local`] if it is unset.
 ///
 /// # Errors
 /// [`Status::Unsupported`] for a value that names no executor, **including a non-UTF-8
 /// one** — which takes the `Some` arm, because it was SET and must not read as unset.
-fn selected_ce_executor() -> Result<CeExecutor, (Status, &'static str)> {
+fn selected_ce_executor() -> Result<CeExecutorChoice, (Status, &'static str)> {
     match std::env::var_os(CE_EXECUTOR_ENV) {
-        None => Ok(CeExecutor::Local),
+        None => Ok(CeExecutorChoice::Local),
         Some(v) => ce_executor_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
