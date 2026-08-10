@@ -407,6 +407,9 @@ impl kayfabe_isolate::RmBackend for Relocating {
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
         self.0.alloc_sysmem(len)
     }
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        self.0.alloc_vidmem(len)
+    }
     fn alloc_channel(
         &mut self,
         vas: HostHandle,

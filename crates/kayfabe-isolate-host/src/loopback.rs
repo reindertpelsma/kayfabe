@@ -249,6 +249,19 @@ impl RmBackend for LoopbackRm {
         Ok(self.stamp(h))
     }
 
+    // ⊘ `self.verb(false)` — this loopback does NOT park on a vidmem alloc, and that is a
+    // decision rather than an omission. [`ParkVerb`] names `Sysmem` as the parking verb
+    // because it is the one verb with no argument built from a previous reply; vidmem has
+    // the same property, so adding a second parking verb would give the wedge tests two
+    // ways to express one scenario and no reason to prefer either.
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let h = self.verb(false)?;
+        Ok(self.stamp(h))
+    }
+
     fn alloc_channel(
         &mut self,
         vas: HostHandle,

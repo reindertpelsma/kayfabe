@@ -231,7 +231,9 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
             own(chan);
             own(handle);
         }
-        RmVerb::AllocVaSpace { handle } | RmVerb::AllocSysmem { handle, .. } => own(handle),
+        RmVerb::AllocVaSpace { handle }
+        | RmVerb::AllocSysmem { handle, .. }
+        | RmVerb::AllocVidmem { handle, .. } => own(handle),
         RmVerb::AllocChannel {
             vas,
             handle,

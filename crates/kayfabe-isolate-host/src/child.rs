@@ -527,6 +527,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         } => handle(rm.alloc(raw(parent), ClassId(class), &params)),
         Request::AllocVaSpace => handle(rm.alloc_vaspace()),
         Request::AllocSysmem { len } => handle(rm.alloc_sysmem(len)),
+        Request::AllocVidmem { len } => handle(rm.alloc_vidmem(len)),
         Request::AllocChannel { vas, engine } => match engine_from_code(engine) {
             // An engine code we do not recognise is a refusal, never a default — the GR-1
             // wrong-runlist class.

@@ -389,6 +389,31 @@ pub fn decode_address_operands(methods: &[(u32, Vec<u32>)]) -> (Vec<AddressOpera
     (live, mme_dwords)
 }
 
+/// ★★★ **The page-table leaf an address falls in**, as the walk that resolved the address
+/// reported it — the unit the second crossing backs.
+///
+/// # ⊘ Why the leaf and not the buffer
+///
+/// Nothing in a pushbuffer says how long a `SET_TEX_SAMPLER_POOL` is. The guest names a
+/// base address and the engine reads as far as its own state says; the only extent anything
+/// in this port can state from evidence is the one the guest's own page tables bind. So the
+/// leaf is what gets backed, and a buffer longer than its first leaf is backed only as far
+/// as that leaf goes. ⚠ **That is a real limit, not a rounding**, and it is carried in the
+/// type so a reader of a census row can see the granularity rather than infer it.
+///
+/// The C reaches the same unit from the other direction: it coalesces adjacent leaves into
+/// runs and then re-cuts the runs into 2 MiB-aligned chunks (`C: nvkvm_gpu_emul.c:8472-8477`),
+/// one host object per chunk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeaf {
+    /// The leaf's base guest VA.
+    pub va: u64,
+    /// The leaf's length — the walk's own page size for this entry, never an assumed one.
+    pub len: u64,
+    /// The framebuffer-physical address the leaf's base maps to.
+    pub phys: u64,
+}
+
 /// Where the declared VA landed when the declaring thread resolved it — **once**, under the
 /// locks it already held.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -406,6 +431,39 @@ pub enum Site {
     Framebuffer {
         /// The resolved physical address inside the emulated FB.
         phys: u64,
+        /// ★★★ The **leaf** this address falls in, as the SAME walk reported it. ⊘ Not a
+        /// second lookup and not a rounding of `phys` by an assumed page size: the walk
+        /// knows the leaf's granularity and this carries it rather than making a consumer
+        /// guess one. See [`FbLeaf`].
+        leaf: FbLeaf,
+    },
+    /// ★★★★★ **THE SECOND CROSSING, LANDED** — the framebuffer leaf carrying this
+    /// address has a **real host vidmem object** mapped at the guest's own VA in the host
+    /// VA space this proc's channels run in.
+    ///
+    /// ⊘ Read this variant for exactly what it says and nothing more:
+    ///
+    /// - **`Framebuffer` means NOT backed.** That is the whole informational content of
+    ///   the split, and it is why the backed case is a distinct variant rather than a
+    ///   field: an unarmed boot's rows must be visibly different from an armed boot's.
+    /// - **The object is BLANK.** Nothing seeded it. The host GR engine could write it;
+    ///   nothing has.
+    /// - ⊘ **The guest's own CPU accesses at `phys` do NOT reach this object.** They
+    ///   still go to the shell's fabricated aperture. Two memories, and closing that is
+    ///   the CPU-view half this rung did not build.
+    /// - ⊘ **Nothing executed.** A host object existing at an address is not the host
+    ///   engine dereferencing it.
+    HostBackedFb {
+        /// The resolved physical address inside the emulated FB — unchanged, and still
+        /// where the *guest's* accesses go.
+        phys: u64,
+        /// The leaf that was backed.
+        leaf: FbLeaf,
+        /// The host GPU VA the object was placed at. Equal to `leaf.va` by address
+        /// identity, or it would not have been adopted.
+        host_va: u64,
+        /// The host memory object's raw handle, for the boot log.
+        memory: u64,
     },
     /// The VA did not resolve. ⊘ **Named, never zeroed** — an unresolvable address is
     /// evidence about the address table, and decoding it to `0` would send the observer to
@@ -691,7 +749,7 @@ impl WatchList {
                 // ⊘ Nothing is read on either of these, and the verdict says so in its own
                 // name. An `Unobservable` row must never be counted as evidence that the
                 // completion did not land.
-                Site::Framebuffer { phys } => {
+                Site::Framebuffer { phys, .. } => {
                     if now >= w.deadline {
                         w.reported = true;
                         out.push(Verdict::Unobservable {
@@ -701,6 +759,28 @@ impl WatchList {
                                 "the VA resolves into the emulated framebuffer at \
                                  0x{phys:x}; the observer thread has no sanctioned path to \
                                  that plane"
+                            ),
+                        });
+                    }
+                }
+                // ★★ **A BACKED leaf is no more observable from here than an unbacked
+                // one**, and saying so is the point. The host object lives in the
+                // isolate's handle namespace behind the worker pool; this thread has a
+                // guest-RAM *reader* and nothing else. ⊘ Reporting `Observed` here
+                // because a real host object exists would be the observer reporting on a
+                // plane it never read — the exact substitution `Unobservable` exists to
+                // refuse.
+                Site::HostBackedFb { phys, host_va, .. } => {
+                    if now >= w.deadline {
+                        w.reported = true;
+                        out.push(Verdict::Unobservable {
+                            key: *key,
+                            decl: w.decl,
+                            why: format!(
+                                "the VA resolves into the emulated framebuffer at \
+                                 0x{phys:x}, whose leaf IS host-backed at host_va \
+                                 0x{host_va:x} — but the observer thread has a guest-RAM \
+                                 reader and no path to either plane, so nothing was read"
                             ),
                         });
                     }

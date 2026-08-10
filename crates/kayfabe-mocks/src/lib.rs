@@ -1345,6 +1345,15 @@ pub enum RmVerb {
         /// Requested length.
         len: u64,
     },
+    /// ★ Intent: host **vidmem** allocated — the second crossing's blank framebuffer
+    /// object. A distinct verb from [`RmVerb::AllocSysmem`] for the same reason the
+    /// wire tag is distinct: they name different stores.
+    AllocVidmem {
+        /// Returned handle.
+        handle: HostHandle,
+        /// Requested length.
+        len: u64,
+    },
     /// Intent: host channel allocated on a host VAS, on a declared engine/runlist.
     AllocChannel {
         /// The host VAS.
@@ -1452,6 +1461,8 @@ pub enum VerbKind {
     AllocVaSpace,
     /// [`RmBackend::alloc_sysmem`].
     AllocSysmem,
+    /// [`RmBackend::alloc_vidmem`].
+    AllocVidmem,
     /// [`RmBackend::alloc_channel`].
     AllocChannel,
     /// [`RmBackend::alloc_engine_object`].
@@ -2492,6 +2503,11 @@ impl RmRecorder {
                 | RmVerb::AllocEngineObject { handle, .. }
                 | RmVerb::AllocVaSpace { handle }
                 | RmVerb::AllocSysmem { handle, .. }
+                // ★★ Listed HERE and deliberately not left to the `_` arm below, for the
+                // reason the paragraph under this match records: a minting verb that falls
+                // through is reported as never minted, so the ledger calls a LIVE object
+                // dangling. That trap reached production once already.
+                | RmVerb::AllocVidmem { handle, .. }
                 | RmVerb::AllocChannel { handle, .. } => Some(*handle),
                 // ★★★ An `OS_DESCRIPTOR` over guest RAM is an **acquisition** like any
                 // other: RM built an object, it pins pages, and only a `free` releases it.
@@ -2924,6 +2940,13 @@ impl RmBackend for MockRmBackend {
         let _client = self.gate(VerbKind::AllocSysmem)?;
         let handle = self.mint();
         self.record(RmVerb::AllocSysmem { handle, len });
+        Ok(handle)
+    }
+
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        let _client = self.gate(VerbKind::AllocVidmem)?;
+        let handle = self.mint();
+        self.record(RmVerb::AllocVidmem { handle, len });
         Ok(handle)
     }
 

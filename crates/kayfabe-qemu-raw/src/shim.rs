@@ -2894,6 +2894,17 @@ struct SharedDoorbell {
     /// not print one guest-RAM line, which is what keeps the negative control
     /// byte-comparable to the armed run.
     guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+    /// ★★★★★ §5.9 — whether the SECOND CROSSING is armed, from the composition root's own
+    /// reading of [`FB_BACKING_ENV`].
+    ///
+    /// ★ Like `guest_ram_backing` above, it is the arming flag for the whole path: `false`
+    /// ⇒ this port allocates no host vidmem and prints not one `GR-FB-BACKING` line, which
+    /// is what keeps the negative control comparable to the armed run line for line.
+    /// ⊘ Read only by the `host-isolates` arm — there is no second crossing to arm in an
+    /// archive with no isolate plane, and the flag is still CARRIED so the two builds
+    /// differ in what they can do rather than in what they can say.
+    #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
+    fb_backing: bool,
 }
 
 /// ★★★ **E10e — what the shell owns on behalf of the CPU copy-engine executor.**
@@ -3787,7 +3798,231 @@ impl SharedDoorbell {
                     op.name, op.method, op.subch, op.va.0
                 );
             }
+            // ★★★★★ **THE SECOND CROSSING, driven off the census that measured it.**
+            self.back_census_framebuffer_leaves(facts, &observed.census);
         }
+    }
+
+    /// ★★★★★ **§5.9 — back every FRAMEBUFFER leaf this census named with real host
+    /// vidmem, then RE-STATE the census so the rows that moved can be read as moving.**
+    ///
+    /// `C: docs/design/mode2_fb_crossing_question.md` §5 (GEN-2), settled 2026-06-04.
+    ///
+    /// # ★★★ Why it is driven off the census and does not re-derive anything
+    ///
+    /// `[measured 2026-08-10, boot `w227c_537894e_census2`]` **3 of the 4 bound operands of
+    /// `cuCtxCreate`'s GR submission are in the emulated framebuffer** — the majority, not
+    /// the remainder. The census already resolved each of them, through the guest's own
+    /// page tables, on one walk, and carries the **leaf** each fell in
+    /// ([`kayfabe_rt::completion_watch::FbLeaf`]). ⊘ So this function performs **no second
+    /// walk and no second read of the ring**: two reads of one ring at two instants are two
+    /// descriptions of the wire that agree until they do not, which is the failure this
+    /// campaign has paid for more than any other. Every number below came off the same
+    /// `read_submission_methods` the line above printed.
+    ///
+    /// # ★★ The re-statement is a JOIN, not a second resolution
+    ///
+    /// The row's `phys` is the walk's. The row's host backing is the **publish's own
+    /// reply**. Two different facts from two different sources, each stated once — as
+    /// against re-resolving the VA, which would be a second projection of the *same* fact
+    /// and is exactly what `Site::Unresolved`'s doc forbids one screen away.
+    ///
+    /// # ⊘ What a green line here does NOT mean
+    ///
+    /// - **Nothing executed.** No doorbell was routed, no engine was pointed at anything.
+    ///   A host object existing at an address is not the host engine dereferencing it, and
+    ///   `Route::NotACopyEngineChannel` still refuses every `GrCompute` doorbell one
+    ///   function below.
+    /// - **The object is blank**, and the guest's own CPU accesses at that framebuffer
+    ///   address still go to the shell's fabricated aperture, not to it. **Two memories.**
+    /// - **`GuestRam` and `Unresolved` rows are untouched by construction** — the `match`
+    ///   below has one arm. They are the standing negative controls of this pass: a
+    ///   framebuffer crossing that moved the semaphore row would be backing the *first*
+    ///   crossing's business, and a crossing that resolved an ASLR'd unresolvable address
+    ///   would be inventing one.
+    #[cfg(feature = "host-isolates")]
+    fn back_census_framebuffer_leaves(
+        &self,
+        facts: &kayfabe_rt::device::CeChannelFacts,
+        census: &[(
+            kayfabe_rt::completion_watch::AddressOperand,
+            kayfabe_rt::completion_watch::Site,
+        )],
+    ) {
+        use kayfabe_rt::completion_watch::Site;
+        let head = format!(
+            "kayfabe: GR-FB-BACKING proc={} chan={}",
+            facts.proc.0, facts.chan.0
+        );
+        if !self.fb_backing {
+            // ⊘ Silent. The negative control's log must not contain a line the armed run's
+            // does not, or the two stop being comparable — which is the whole use of a
+            // control. The absence IS the statement, and `KAYFABE_FB_BACKING` is reported
+            // in the startup census either way.
+            return;
+        }
+        let Some(pdb) = facts.vas_pdb else {
+            eprintln!(
+                "{head} → NO PDB (the channel's VA space did not resolve, so there is no \
+                 address space to back INTO; ⊘ not a miss — nothing was asked of the host)"
+            );
+            return;
+        };
+        // ★ The join table: leaf VA → what the publish answered. Keyed by the leaf and not
+        // by the operand, because two operands can fall in ONE leaf and the second must
+        // replay rather than ask for a second fixed map at an occupied address — which RM
+        // answers `0x51`, a status that ⊘ cannot be told apart from real exhaustion.
+        // ⊘ `(host_va, memory)` rather than the reply struct: `kayfabe-qemu-raw` links
+        // `kayfabe-rt`, not `kayfabe-fwd`, and naming a type across a crate boundary this
+        // shim does not depend on is a dependency edge added by accident. The two scalars
+        // are all the re-statement needs.
+        let mut backed: std::collections::BTreeMap<u64, (u64, u64)> =
+            std::collections::BTreeMap::new();
+        for (op, site) in census {
+            let Site::Framebuffer { leaf, .. } = site else {
+                continue;
+            };
+            if backed.contains_key(&leaf.va) {
+                continue;
+            }
+            match self.device.back_fb_leaf(
+                DOORBELL_TARGET_GPU,
+                pdb,
+                kayfabe_rt::GpuVa(leaf.va),
+                leaf.len,
+                leaf.phys,
+            ) {
+                Ok(b) => {
+                    eprintln!(
+                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → {} \
+                         memory={:#x} host_va=0x{:x} placed_as_asked={} — ★ a REAL host \
+                         `NV01_MEMORY_LOCAL_USER` vidmem object now exists and is mapped \
+                         FIXED at the guest's own VA in this proc's own host VAS. ⊘ It is \
+                         BLANK, nothing consumes it, and the guest's own CPU accesses at \
+                         fb_phys still go to the fabricated aperture",
+                        op.name,
+                        leaf.va,
+                        leaf.len,
+                        leaf.phys,
+                        if b.already {
+                            "ALREADY BACKED (idempotent replay; no second object, no second fixed map)"
+                        } else {
+                            "BACKED"
+                        },
+                        b.memory.raw(),
+                        b.host_va,
+                        b.host_va == leaf.va,
+                    );
+                    backed.insert(leaf.va, (b.host_va, b.memory.raw()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ⊘ REFUSED \
+                         BY NAME `{:?}` — ⊘ NOT retried, NOT downgraded, and nothing was \
+                         adopted. ⚠ If this is `Rm(NoMemory)` it is status 0x51, which is \
+                         collision-or-exhaustion and CANNOT be told apart: the C's own R2 \
+                         refuted reading it as ALREADY-MAPPED",
+                        op.name, leaf.va, leaf.len, leaf.phys, e
+                    );
+                }
+            }
+        }
+        // ★★★★★ **THE NEGATIVE CONTROL — and the FIRST version of it tested nothing.**
+        //
+        // ⊘ It probed one leaf past the highest leaf this census named, expecting a
+        // refusal. That address is simply **unbound**, and an unbound leaf is the chain's
+        // ordinary fresh-publish path: the control would have ALLOCATED A HOST OBJECT and
+        // reported success as though the guard had fired. `back_fb_leaf` does not walk the
+        // guest's page tables — it is *given* the walk's answer — so "an address the guest
+        // does not bind" is not a thing it can refuse. Caught before the boot, and recorded
+        // because the shape is `a_diagnostic_gated_on_the_failure`'s cousin: a control that
+        // exercises a guard the code does not have.
+        //
+        // ★★★ What it probes instead is the guard this whole rung is ABOUT. Take a leaf
+        // that was just backed — so the address table demonstrably binds it at the walk's
+        // own physical address — and re-ask for it naming a **different** physical address.
+        // The two sources now disagree, and `FbLeafDisagrees` must fire with BOTH numbers
+        // and allocate nothing.
+        //
+        // ⊘ Every input is derived from what this boot produced: the leaf is one the census
+        // named, and the wrong address is that leaf's own `phys` displaced by its own `len`.
+        // Nothing is hardcoded, so the control is as valid on another machine as on this one.
+        if let Some((&va, _)) = backed.iter().next() {
+            let leaf = census.iter().find_map(|(_, s)| match s {
+                Site::Framebuffer { leaf, .. } if leaf.va == va => Some(*leaf),
+                _ => None,
+            });
+            if let Some(leaf) = leaf {
+                let wrong = leaf.phys.wrapping_add(leaf.len);
+                match self.device.back_fb_leaf(
+                    DOORBELL_TARGET_GPU,
+                    pdb,
+                    kayfabe_rt::GpuVa(leaf.va),
+                    leaf.len,
+                    wrong,
+                ) {
+                    Err(kayfabe_rt::FwdFault::FbLeafDisagrees { walked, tabled, .. }) => {
+                        eprintln!(
+                            "{head} ✅ NEGATIVE CONTROL: leaf va=0x{:x} re-asked with the \
+                             WRONG framebuffer address 0x{wrong:x} → REFUSED BY NAME as \
+                             `FbLeafDisagrees` walked={walked:?} tabled={tabled:?} — both \
+                             numbers printed, neither used, and no second object allocated",
+                            leaf.va
+                        );
+                    }
+                    other => eprintln!(
+                        "{head} ⚠⚠ NEGATIVE CONTROL DID NOT FIRE: leaf va=0x{:x} re-asked \
+                         with the WRONG framebuffer address 0x{wrong:x} answered {other:?} \
+                         instead of `FbLeafDisagrees`. The two-source check is the property \
+                         this rung exists for. ⊘ Read every line above with that in mind",
+                        leaf.va
+                    ),
+                }
+            }
+        }
+        // ★★★ THE RE-STATEMENT. Same operands, same order, same walk — only the backing
+        // column can have changed, and it changed because of the replies printed above.
+        eprintln!(
+            "kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER BACKING) proc={} chan={} \
+             backed_leaves={} ⊘ still nothing executed and still nothing is permission",
+            facts.proc.0,
+            facts.chan.0,
+            backed.len()
+        );
+        for (op, site) in census {
+            let restated = match site {
+                Site::Framebuffer { phys, leaf } => match backed.get(&leaf.va) {
+                    Some(&(host_va, memory)) => Site::HostBackedFb {
+                        phys: *phys,
+                        leaf: *leaf,
+                        host_va,
+                        memory,
+                    },
+                    // ⊘ Unchanged, and it MUST be: a leaf whose publish refused is not
+                    // backed, and rendering it as anything else would make the refusal
+                    // above unreadable.
+                    None => site.clone(),
+                },
+                other => other.clone(),
+            };
+            eprintln!(
+                "      {:<40} m=0x{:04x} sub={} va=0x{:x} → {restated:?}",
+                op.name, op.method, op.subch, op.va.0
+            );
+        }
+    }
+
+    /// No isolate plane in this archive, so no second crossing to arm.
+    #[cfg(not(feature = "host-isolates"))]
+    #[allow(clippy::unused_self)]
+    fn back_census_framebuffer_leaves(
+        &self,
+        _facts: &kayfabe_rt::device::CeChannelFacts,
+        _census: &[(
+            kayfabe_rt::completion_watch::AddressOperand,
+            kayfabe_rt::completion_watch::Site,
+        )],
+    ) {
     }
 
     /// ★ Tell the observer's reactor there is something new to look at.
@@ -5531,6 +5766,10 @@ impl Regs {
         // ⊘ A different variable from `KAYFABE_ISOLATES`, so this is not the "two readings
         // of one selector" the field's doc forbids; it is one reading of each.
         let ce_executor = selected_ce_executor()?;
+        // ★ §5.9 — read HERE, at the composition root, beside every other plane decision,
+        // and carried into the doorbell port. ⊘ Never re-read at a doorbell: an arming
+        // flag consulted twice is a run that can change its mind halfway through a boot.
+        let fb_backing = selected_fb_backing()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -5554,6 +5793,7 @@ impl Regs {
             local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn
                 || ce_executor == CeExecutorChoice::Local,
             guest_ram_backing,
+            fb_backing,
         }));
         Ok(Regs {
             plane,
@@ -7083,6 +7323,51 @@ fn selected_ce_executor() -> Result<CeExecutorChoice, (Status, &'static str)> {
     match std::env::var_os(CE_EXECUTOR_ENV) {
         None => Ok(CeExecutorChoice::Local),
         Some(v) => ce_executor_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// ★★★★★ **§5.9 — the environment variable that arms THE SECOND CROSSING** (the
+/// framebuffer-leaf backing). `off` is the default and `on` is the operator asking.
+///
+/// ⊘ **Not defaulted on, and not `Auto`.** It is the arming flag the negative control turns
+/// off: with it unset this port allocates no host vidmem, prints no `GR-FB-BACKING` line
+/// and leaves every census row reading `Framebuffer { .. }` — so an armed boot and its
+/// control differ in the log by exactly the thing under test.
+///
+/// ⚠ A value that names nothing is **refused**, not defaulted, for [`CE_EXECUTOR_ENV`]'s
+/// reason: a typo that silently selected `off` would make an evidence run and its own
+/// control indistinguishable.
+pub const FB_BACKING_ENV: &str = "KAYFABE_FB_BACKING";
+
+/// Whether `value` arms the second crossing — the pure half of [`selected_fb_backing`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it
+/// is `false`.
+pub fn fb_backing_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_FB_BACKING does not name a state: the only values are `off` (the \
+             default) and `on`. It is not defaulted, because a typo that silently \
+             disarmed the crossing would make an evidence run and its own negative \
+             control indistinguishable — and the symptom would appear at the first GR \
+             doorbell, not here.",
+        )),
+    }
+}
+
+/// Whether [`FB_BACKING_ENV`] arms the second crossing.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names neither state, **including a non-UTF-8
+/// one** — which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_fb_backing() -> Result<bool, (Status, &'static str)> {
+    match std::env::var_os(FB_BACKING_ENV) {
+        None => Ok(false),
+        Some(v) => fb_backing_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 

@@ -605,6 +605,31 @@ pub trait RmBackend: Send + Sync {
     /// Intent verb: allocate `len` bytes of host-visible system memory.
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError>;
 
+    /// ★★★ Intent verb: allocate `len` bytes of **device-local (vidmem)** memory —
+    /// a blank host framebuffer object, for the SECOND crossing.
+    ///
+    /// # ⊘ Why this is a separate verb and not `alloc_sysmem` with a flag
+    ///
+    /// The two are not the same allocation with a preference attached. `alloc_sysmem`
+    /// asks for `MAPPING_NO_MAP`, which makes its object deliberately **un-CPU-mappable**
+    /// — correct for a describe-only range, and fatal for this one, because the whole
+    /// point of the second crossing's mature form is a *double* mapping (one for the host
+    /// GPU, one for the CPU view the guest's own framebuffer accesses land in;
+    /// `C: docs/design/mode2_fb_crossing_question.md` §5, GEN-2). A caller that reached
+    /// for sysmem here would get an object that maps into the host VAS, satisfies every
+    /// check, and can never be the shared object.
+    ///
+    /// ⚠ And the aperture is not cosmetic: the guest's own PTE for these ranges declares
+    /// `_TARGET_LOCAL_FB`. Backing a vidmem-declared range with host sysmem produces a
+    /// host mapping that **works** and is in the wrong aperture — a silent disagreement
+    /// between what the guest's page tables say and what the host engine walks, which is
+    /// the class of wrongness this port refuses to make representable by a `bool`.
+    ///
+    /// ⊘ This verb allocates. It does **not** map, does not seed and does not copy: a
+    /// freshly allocated vidmem object's contents are not specified, and nothing here
+    /// pretends otherwise.
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError>;
+
     /// Intent verb: allocate a host GPU channel bound to host VAS `vas`, on the
     /// runlist/engine named by `engine` — the channel's graph-derived [`EngineKind`],
     /// which the adapter lowers to the host `NV_CHANNEL_ALLOC_PARAMS` engine type.
@@ -1347,6 +1372,41 @@ pub enum VerbPlan {
         /// mapping is placed HERE, not wherever the host driver would have chosen.
         at: GpuVa,
     },
+    /// ★★★ **THE SECOND CROSSING** — a blank **host vidmem** object, mapped FIXED at the
+    /// guest's own VA. `C: docs/design/mode2_fb_crossing_question.md` §5 (GEN-2), settled
+    /// 2026-06-04 and built twice in the C artifact.
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::alloc_vidmem`] →
+    /// [`RmBackend::map_gpu_va`] **at `at`**, with [`VerbPlan::Publish`]'s own placement
+    /// check applied unchanged. It answers with [`VerbReply::Published`], because what it
+    /// produces *is* a published backing — the difference is entirely in which store the
+    /// bytes came out of.
+    ///
+    /// ## ⊘ Why it is a third variant and not an aperture field on [`VerbPlan::Publish`]
+    ///
+    /// The same argument [`VerbPlan::PinGuestRam`] makes one screen down, and it lands the
+    /// same way: the two chains differ in what a **wrong** answer costs. `Publish` mints
+    /// host sysmem with `MAPPING_NO_MAP`; a range published that way can never become the
+    /// CPU-side half of GEN-2's double mapping, and it declares an aperture the guest's own
+    /// leaf does not. Both failures are silent — the object allocates, the fixed map
+    /// succeeds, every check passes — which is exactly the shape a `bool` erases.
+    ///
+    /// ## ⚠ What this variant does NOT carry, deliberately
+    ///
+    /// No seed, no copy, no content of any kind. GEN-2's `copy_content` is a **one-time
+    /// establishment bridge** and is not part of the allocate-and-place chain; a plan that
+    /// carried bytes would be a plan that could silently overwrite a buffer the guest had
+    /// already written.
+    PublishVidmem {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// Bytes of host vidmem to allocate and map — the guest leaf's own length, so
+        /// that the mapping covers exactly the range the guest's page tables bind.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, or the verb fails.
+        at: GpuVa,
+    },
     /// ★★★★★ **THE GUEST'S OWN PAGES, published at the guest's own VA** — the chain
     /// [`VerbPlan::Publish`] is the *fabricated* counterpart of
     /// (`guest_ram_crossing.md` §5.8).
@@ -1618,9 +1678,9 @@ impl VerbPlan {
     #[must_use]
     pub fn handles(&self) -> Vec<HostHandle> {
         match self {
-            VerbPlan::Publish { host_vas, .. } | VerbPlan::PinGuestRam { host_vas, .. } => {
-                host_vas.iter().copied().collect()
-            }
+            VerbPlan::Publish { host_vas, .. }
+            | VerbPlan::PublishVidmem { host_vas, .. }
+            | VerbPlan::PinGuestRam { host_vas, .. } => host_vas.iter().copied().collect(),
             VerbPlan::Doorbell {
                 host_vas, channel, ..
             }
@@ -2114,6 +2174,55 @@ impl Worker {
                 // and everything under it rather than adopting a binding whose host VA is
                 // a lie. This is the ONE place a placement can be downgraded silently, so
                 // it is the one place the check belongs.
+                if host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, host_va);
+                    let mut orphans = vec![memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::Published {
+                    host_vas: fresh_vas,
+                    memory,
+                    host_va,
+                })
+            }
+            // ★★★ **THE SECOND CROSSING.** Structurally `Publish`'s twin, and the single
+            // difference is `alloc_vidmem` where that arm calls `alloc_sysmem` — which is
+            // the whole of GEN-2's allocate-and-place chain
+            // (`C: mode2_fb_crossing_question.md` §5). ⊘ The unwind, the placement check
+            // and the orphan sets are IDENTICAL on purpose: a second, subtly different
+            // copy of an unwind is how an orphan gets dropped on the floor.
+            VerbPlan::PublishVidmem { host_vas, len, at } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let memory = match rm.alloc_vidmem(*len) {
+                    Ok(m) => m,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                let host_va = match rm.map_gpu_va(vas, memory, *len, *at) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        let mut orphans = vec![memory];
+                        orphans.extend(fresh_vas);
+                        return Err(unwind(rm, orphans, e));
+                    }
+                };
+                // ★★★ #102 — the same address-identity check, for the same reason. A
+                // vidmem object placed anywhere other than `at` is published and
+                // unaddressable: the guest's methods name `at` and the host MMU walks for
+                // `at`.
                 if host_va != at.0 {
                     let _ = rm.unmap_gpu_va(vas, host_va);
                     let mut orphans = vec![memory];

@@ -487,6 +487,10 @@ impl RmBackend for ProxyRmBackend {
         self.handle(Request::AllocSysmem { len })
     }
 
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        self.handle(Request::AllocVidmem { len })
+    }
+
     fn alloc_channel(
         &mut self,
         vas: HostHandle,

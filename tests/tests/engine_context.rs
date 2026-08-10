@@ -327,6 +327,7 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::AllocVaSpace { .. } => "AllocVaSpace",
             RmVerb::AllocEngineObject { .. } => "AllocEngineObject",
             RmVerb::AllocSysmem { .. } => "AllocSysmem",
+            RmVerb::AllocVidmem { .. } => "AllocVidmem",
             RmVerb::Alloc { .. } => "Alloc",
             RmVerb::Schedule { .. } => "Schedule",
             RmVerb::MapGpuVa { .. } => "MapGpuVa",

@@ -2388,6 +2388,43 @@ impl SharedDevice {
         )
     }
 
+    /// ★★★★★ **THE SECOND CROSSING — back one framebuffer leaf with real host vidmem.**
+    /// Same three phases as [`SharedDevice::publish_backing`], and a sibling of it for the
+    /// reason [`kayfabe_isolate::VerbPlan::PublishVidmem`] gives.
+    ///
+    /// `(va, len, phys)` are the guest's OWN page-table walk's answer for this leaf, and
+    /// they are carried whole rather than re-derived: `phys` exists here so the commit can
+    /// check the walk against the address table and refuse the disagreement by name
+    /// ([`kayfabe_fwd::FwdFault::FbLeafDisagrees`]).
+    ///
+    /// # Errors
+    /// Whatever [`kayfabe_fwd::plan_back_fb_leaf`] refuses with, or the host's own refusal
+    /// — including [`kayfabe_isolate::RmError::PlacementRefused`] when the fixed map did
+    /// not land where it was asked to, and `Rm(NoMemory)` (`0x51`), which ⊘ **is
+    /// collision-or-exhaustion and cannot be told apart** — see the C's R2.
+    pub fn back_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        va: GpuVa,
+        len: u64,
+        phys: u64,
+    ) -> Result<kayfabe_fwd::FbLeafBacked, FwdFault> {
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+                    |_spine, proc, ()| {
+                        let planned =
+                            kayfabe_fwd::plan_back_fb_leaf(proc, gpu, pdb, va, len, phys)?;
+                        Staged::check_out(proc, gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| kayfabe_fwd::commit_back_fb_leaf(proc, plan, reply),
+        )
+    }
+
     /// **Case 1**: forward an engine-object alloc on the channel identified by
     /// `vchid`, same three phases. An idempotent re-send resolves entirely in the
     /// plan phase and issues **no verbs and no checkout at all**.

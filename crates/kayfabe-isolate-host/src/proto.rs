@@ -69,6 +69,14 @@ pub enum Request {
         /// Bytes requested.
         len: u64,
     },
+    /// ★★★ [`kayfabe_isolate::RmBackend::alloc_vidmem`] — the second crossing's blank
+    /// host framebuffer object. Same wire shape as [`Request::AllocSysmem`] and a
+    /// **different tag**, because the two name different stores and a shared tag would
+    /// make the aperture depend on which side decoded it.
+    AllocVidmem {
+        /// Bytes requested.
+        len: u64,
+    },
     /// [`kayfabe_isolate::RmBackend::alloc_channel`].
     AllocChannel {
         /// Host VAS handle, raw.
@@ -549,6 +557,10 @@ impl Envelope {
                 out.push(3);
                 out.extend_from_slice(&len.to_le_bytes());
             }
+            Request::AllocVidmem { len } => {
+                out.push(19);
+                out.extend_from_slice(&len.to_le_bytes());
+            }
             Request::AllocChannel { vas, engine } => {
                 out.push(4);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -672,6 +684,9 @@ impl Envelope {
             2 => Request::AllocVaSpace,
             3 => Request::AllocSysmem {
                 len: c.u64("sysmem len")?,
+            },
+            19 => Request::AllocVidmem {
+                len: c.u64("vidmem len")?,
             },
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
@@ -979,6 +994,7 @@ mod tests {
             },
             Request::AllocVaSpace,
             Request::AllocSysmem { len: 0x4000 },
+            Request::AllocVidmem { len: 0x20_0000 },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -1080,6 +1096,7 @@ mod tests {
             Request::Alloc { .. } => "Alloc",
             Request::AllocVaSpace => "AllocVaSpace",
             Request::AllocSysmem { .. } => "AllocSysmem",
+            Request::AllocVidmem { .. } => "AllocVidmem",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
             Request::Schedule { .. } => "Schedule",
@@ -1110,6 +1127,7 @@ mod tests {
                 "AllocEngineObject",
                 "AllocSysmem",
                 "AllocVaSpace",
+                "AllocVidmem",
                 "CeCopy",
                 "Control",
                 "DescribeGuestRam",

@@ -295,9 +295,17 @@ impl<'a, 'p> WalkOperands<'a, 'p> {
         WalkOperands { ce, last }
     }
 
-    /// Resolve one VA to `(plane address, residency, bytes left in its leaf page)`, or
-    /// refuse by name having recorded the finding.
-    fn resolve_one(&mut self, va: u64) -> Result<(CpuOperand, u64), FwdFault> {
+    /// Resolve one VA to `(plane address, residency, bytes left in its leaf page, the
+    /// LEAF itself)`, or refuse by name having recorded the finding.
+    ///
+    /// ★ The leaf rides out of the SAME walk that produced the address. ⊘ It is not
+    /// recoverable afterwards: a consumer holding only `phys` would have to assume a page
+    /// size to find the leaf's base, and assuming one is how a 4 KiB entry gets treated as
+    /// a 2 MiB one and a neighbour's memory joins the range.
+    fn resolve_one(
+        &mut self,
+        va: u64,
+    ) -> Result<(CpuOperand, u64, crate::completion_watch::FbLeaf), FwdFault> {
         let r = self.ce.resolve(va);
         let CeResolve::Resolved {
             phys,
@@ -321,12 +329,22 @@ impl<'a, 'p> WalkOperands<'a, 'p> {
         // How much of this leaf remains. A page's low bits are shared by the VA and its
         // backing (a mapping is page-granular), so the offset within the page is the VA's.
         let left = page_size - (va & (page_size - 1));
+        // The leaf, from the same three numbers. A mapping is page-granular, so the VA's
+        // offset within its page IS the backing's — which is what makes both bases
+        // recoverable without a second walk.
+        let within = va & (page_size - 1);
+        let leaf = crate::completion_watch::FbLeaf {
+            va: va - within,
+            len: page_size,
+            phys: phys - within,
+        };
         Ok((
             CpuOperand {
                 residency,
                 addr: PlaneAddr(phys),
             },
             left,
+            leaf,
         ))
     }
 }
@@ -341,7 +359,7 @@ impl OperandResolver for WalkOperands<'_, '_> {
         let mut off = 0u64;
         while off < eff {
             let va = addr.0 + off;
-            let (op, left) = self.resolve_one(va)?;
+            let (op, left, _leaf) = self.resolve_one(va)?;
             let take = left.min(eff - off);
             debug_assert!(take > 0, "a walk step must consume bytes");
             // Merge with the previous run when the backing is genuinely contiguous — same
@@ -368,7 +386,7 @@ impl OperandResolver for WalkOperands<'_, '_> {
         // ⊘ A four-byte release must not straddle a page: if it did, one half would land in
         // a different backing and the guest would poll a torn word forever. The leaf's
         // remaining length is checked rather than assumed.
-        let (op, left) = self.resolve_one(addr.0)?;
+        let (op, left, _leaf) = self.resolve_one(addr.0)?;
         if left < 4 {
             return Err(FwdFault::CeWalk {
                 va: addr,
@@ -397,7 +415,7 @@ fn read_va(
     let mut at = 0usize;
     while at < buf.len() {
         let here = va + at as u64;
-        let (op, left) = WalkOperands::new(ce, last).resolve_one(here)?;
+        let (op, left, _leaf) = WalkOperands::new(ce, last).resolve_one(here)?;
         let take = (left as usize).min(buf.len() - at);
         match op.residency.plane {
             CpuPlane::Fb => ce
@@ -926,9 +944,12 @@ pub fn observe_declared_completion(
     // ★ The SAME resolver state the ring read used — `last` carries forward — so the site
     // and the ring cannot come from two different walks of two different instants.
     let site = match WalkOperands::new(ce, &mut look.last).resolve_one(decl.va.0) {
-        Ok((op, _left)) => match op.residency.plane {
+        Ok((op, _left, leaf)) => match op.residency.plane {
             CpuPlane::GuestRam => crate::completion_watch::Site::GuestRam { gpa: op.addr.0 },
-            CpuPlane::Fb => crate::completion_watch::Site::Framebuffer { phys: op.addr.0 },
+            CpuPlane::Fb => crate::completion_watch::Site::Framebuffer {
+                phys: op.addr.0,
+                leaf,
+            },
         },
         Err(fault) => crate::completion_watch::Site::Unresolved(match &look.last {
             Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
@@ -960,9 +981,12 @@ fn resolve_operands(
     let mut out = Vec::with_capacity(operands.len());
     for op in operands {
         let site = match WalkOperands::new(ce, last).resolve_one(op.va.0) {
-            Ok((r, _left)) => match r.residency.plane {
+            Ok((r, _left, leaf)) => match r.residency.plane {
                 CpuPlane::GuestRam => crate::completion_watch::Site::GuestRam { gpa: r.addr.0 },
-                CpuPlane::Fb => crate::completion_watch::Site::Framebuffer { phys: r.addr.0 },
+                CpuPlane::Fb => crate::completion_watch::Site::Framebuffer {
+                    phys: r.addr.0,
+                    leaf,
+                },
             },
             // ⊘ `Unresolved` is a first-class answer ABOUT THE ADDRESS TABLE and must never
             // be read as "the guest named nothing there".

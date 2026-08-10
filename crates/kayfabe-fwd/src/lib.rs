@@ -300,6 +300,53 @@ pub enum FwdFault {
         /// The host GPU VA the existing publication occupies.
         host_va: u64,
     },
+    /// ★★★ **The address table and the page-table WALK disagree about this leaf.**
+    ///
+    /// The second crossing has two sources for one fact: the guest's own page tables,
+    /// read by the CE walker, and this proc's [`kayfabe_mmu::AddressTable`]. When both
+    /// answer, they must answer the same — and when they do not, **neither may be used**.
+    ///
+    /// ⊘ This refusal exists because picking one is the campaign's most expensive
+    /// recurring mistake (`two_projections_of_one_fact_disagreeing`, three prior
+    /// instances). Backing a leaf at the walk's physical address while the table names a
+    /// different one puts a real host GPU object under an address the guest reaches
+    /// through the other reading. ⇒ **Refuse, and print both numbers**, so the boot log
+    /// carries the disagreement rather than a resolution of it.
+    FbLeafDisagrees {
+        /// The leaf VA.
+        va: GpuVa,
+        /// What the guest's own page-table walk said.
+        walked: (u64, Aperture),
+        /// What this proc's address table said.
+        tabled: (u64, Aperture),
+    },
+    /// ⊘ A framebuffer leaf whose length RM cannot place, refused **by name** rather
+    /// than rounded.
+    ///
+    /// The C rounds the allocation up to 64 KiB and registers the rounded range
+    /// (`C: nvkvm_gpu_emul.c:8242-8243`, `asize` vs `tsize`), which makes the object
+    /// claim up to 60 KiB of guest framebuffer address space **past the end of the leaf**
+    /// — an overhang the establishment copy never fills and the local shadow can no
+    /// longer answer for. ⚠ That is the C's, not a defect this port inherits: here a leaf
+    /// that is not a whole number of 64 KiB granules is refused, so the overhang is
+    /// unrepresentable instead of silent.
+    FbLeafGranularity {
+        /// The leaf VA.
+        va: GpuVa,
+        /// Its length, as the walk reported it.
+        len: u64,
+    },
+    /// ⊘ The address table binds this VA, but over a **different range** than the leaf
+    /// the walk found. Backing it would either overhang a neighbour or leave a hole, and
+    /// which of the two is not something this site can decide.
+    FbLeafExtent {
+        /// The leaf VA the walk found.
+        va: GpuVa,
+        /// The length the walk found.
+        len: u64,
+        /// The `(start, len)` the address table holds instead.
+        tabled: (u64, u64),
+    },
     /// ★ A copy-engine request partitioned into more sub-copies than [`MAX_CE_SPANS`]
     /// (`#102` stage C2). Guest-influenced on both axes — the request's length and the
     /// address table's fragmentation — so it is bounded, and the bound is a LOUD refusal
@@ -1799,6 +1846,369 @@ pub fn commit_publish(
         gpa: gpa.0,
         host_va,
         memory,
+    })
+}
+
+/// ★★★★★ **What backing ONE framebuffer leaf produced** — [`back_fb_leaf`]'s answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeafBacked {
+    /// The host GPU VA the blank vidmem object was placed at. Equal to the leaf's own
+    /// guest VA, or the verb refused with [`kayfabe_isolate::RmError::PlacementRefused`]
+    /// and this value never existed.
+    pub host_va: u64,
+    /// The `NV01_MEMORY_LOCAL_USER` object RM built.
+    pub memory: HostHandle,
+    /// ★ Whether this call did the work or found it already done. Reported for the same
+    /// reason [`GuestRamPinned::already`] is: a caller on a doorbell repeats, and one
+    /// that could not tell "backed now" from "was already backed" would report a
+    /// first-time event on every ring.
+    pub already: bool,
+}
+
+/// The ID-shaped hints [`commit_back_fb_leaf`] re-validates against. Identities and the
+/// two numbers the walk produced — never a held reference into core state (R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackFbLeafPlan {
+    /// The owning proc.
+    pub proc: ProcId,
+    /// The target GPU (isolate key).
+    pub gpu: GpuId,
+    /// The `Vas`'s PDB.
+    pub pdb: Pdb,
+    /// The leaf's base VA — where the host object must be placed.
+    pub va: GpuVa,
+    /// The leaf's length.
+    pub len: u64,
+    /// ★★★ The framebuffer-physical address the **guest's own page-table walk** produced
+    /// for this leaf. Carried so the commit can re-check it against the address table
+    /// rather than re-deriving it from a second walk at a second instant.
+    pub phys: u64,
+    /// The `Vas`'s host VAS as observed at plan time.
+    pub host_vas: Option<HostHandle>,
+    /// ★ The backing this plan found already live, if any — the idempotent replay.
+    pub existing: Option<(u64, HostHandle)>,
+}
+
+/// ★ RM places a fixed mapping in 64 KiB granules; a leaf that is not a whole number of
+/// them cannot be covered exactly. See [`FwdFault::FbLeafGranularity`] for why this port
+/// refuses rather than rounds.
+const FB_LEAF_GRANULE: u64 = 0x1_0000;
+
+/// ★★★★★ **THE SECOND CROSSING — back ONE framebuffer leaf with real host vidmem.**
+///
+/// `C: docs/design/mode2_fb_crossing_question.md` §5 (GEN-2), settled 2026-06-04 and built
+/// twice in the C artifact. The difference from [`publish_backing`] is the whole point and
+/// it is two words: the object comes out of **device-local** memory, and the range it
+/// covers is one the guest's **own page tables already bind** — so this call does not carve
+/// a GPA, it attaches a host materialization to a leaf that already exists.
+///
+/// # ★★★ The two sources, and why this function holds both
+///
+/// The leaf's `(va, len, phys)` comes from a walk of the guest's own page tables. The
+/// address table may *also* hold a binding for that VA. This function refuses on any
+/// disagreement ([`FwdFault::FbLeafDisagrees`]) instead of preferring either reading —
+/// see that variant for the three prior times preferring one cost a campaign week.
+///
+/// # ⊘ What this does NOT do, stated before a green line is read as more
+///
+/// - **It does not seed, copy or blank the object.** The C's `copy_content` is a separate
+///   one-time establishment bridge (`C: :8281-8290`) and needs a CPU view this port does
+///   not have on this path.
+/// - **It builds no CPU view**, so the guest's own framebuffer accesses at `phys` still go
+///   to the shell's fabricated aperture and **not** to this object. That is the C's
+///   `gpu_only` shape (`C: :7354-7368`), chosen there because a CPU view consumes the
+///   host's 256 MiB BAR1, and chosen here because the descriptor that would join the
+///   isolate's mapping to the shell's framebuffer is not wired to this path.
+///   ⇒ **Two memories, and until that is closed they diverge.**
+/// - **It does not make anything execute.** Nothing is submitted, no doorbell is routed
+///   and the host GR engine is not pointed at the result.
+///
+/// # ⚠ The gap this INHERITS knowingly
+///
+/// The C's re-back for VA→GPA re-binding is **sysmem only** (`C: :8396-8445`); its
+/// framebuffer path has drop-on-free (`C: :2003-2021`) and no re-seed. This port inherits
+/// that: if the guest unbinds and re-creates at the same VA with a different frame, the
+/// host object stays where it was. ⊘ Named rather than silently reproduced.
+///
+/// # Errors
+/// [`FwdFault`] — every refusal by name; nothing here falls back.
+pub fn back_fb_leaf(
+    proc: &mut Proc,
+    gpu: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+    len: u64,
+    phys: u64,
+) -> Result<FbLeafBacked, FwdFault> {
+    let planned = plan_back_fb_leaf(proc, gpu, pdb, va, len, phys)?;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_back_fb_leaf(proc, &planned.plan, reply)
+    })
+}
+
+/// PLAN (R1): decide [`back_fb_leaf`]'s host work from core state. A pure `&Proc` read.
+///
+/// # Errors
+/// [`FwdFault`] if the proc, the `Vas`, the isolate or the leaf itself is unusable.
+pub fn plan_back_fb_leaf(
+    proc: &Proc,
+    gpu: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+    len: u64,
+    phys: u64,
+) -> Result<Planned<BackFbLeafPlan>, FwdFault> {
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    // ★ §12.26 — the system-plane rule, at the site that mints host memory and BEFORE any
+    // host verb exists. ⊘ Not relaxed here: the system proc's work is forged precisely so
+    // it can hold no host state whose reclaim has no defined point, and a framebuffer
+    // object is host state.
+    if proc.id == Gpu::SYSTEM_PROC {
+        return Err(FwdFault::SystemDataPlane);
+    }
+    // ★ The granularity gate runs FIRST, before any core state is consulted: a leaf RM
+    // cannot place exactly is refused on its own terms, not as a consequence of some
+    // other lookup.
+    if len < FB_LEAF_GRANULE
+        || !len.is_multiple_of(FB_LEAF_GRANULE)
+        || !va.0.is_multiple_of(FB_LEAF_GRANULE)
+    {
+        return Err(FwdFault::FbLeafGranularity { va, len });
+    }
+    let pid = proc.id;
+    let vas = proc
+        .vases
+        .get(&(gpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
+    if !proc.arenas.contains_key(&gpu) {
+        return Err(FwdFault::NoTarget { proc: pid, gpu });
+    }
+    if !proc.isolates.contains_key(&gpu) {
+        return Err(missing_isolate(proc, gpu));
+    }
+    // ★★★ THE TWO-SOURCE CHECK. `binding_at` and not `resolve`, deliberately: this asks
+    // *"is what is already here the same shape as what I am about to attach"*, which is
+    // the extent question `resolve` hides on purpose.
+    let existing = match vas.table.binding_at(va) {
+        None => None,
+        Some((start, tlen, b)) => {
+            if start != va.0 || tlen != len {
+                return Err(FwdFault::FbLeafExtent {
+                    va,
+                    len,
+                    tabled: (start, tlen),
+                });
+            }
+            if b.aperture != Aperture::Vidmem || b.phys != phys {
+                return Err(FwdFault::FbLeafDisagrees {
+                    va,
+                    walked: (phys, Aperture::Vidmem),
+                    tabled: (b.phys, b.aperture),
+                });
+            }
+            // ★ Already backed — the idempotent replay. No host verb at all, so there is
+            // nothing to orphan and no second fixed map to collide with the first (which
+            // RM would answer `0x51`, a status that cannot be told apart from real
+            // exhaustion).
+            b.host.map(|h| (h.host_va(), h.memory()))
+        }
+    };
+    let host_vas = vas.host_vas;
+    Ok(Planned {
+        plan: BackFbLeafPlan {
+            proc: pid,
+            gpu,
+            pdb,
+            va,
+            len,
+            phys,
+            host_vas,
+            existing,
+        },
+        verbs: if existing.is_some() {
+            None
+        } else {
+            Some(VerbPlan::PublishVidmem {
+                host_vas,
+                len,
+                at: va,
+            })
+        },
+    })
+}
+
+/// COMMIT (R5): adopt [`plan_back_fb_leaf`]'s host work into core state, or refuse and
+/// hand back everything the execute phase allocated.
+///
+/// # Errors
+/// [`Refusal`] — carrying the [`Orphans`] the caller must release on the same worker.
+#[allow(clippy::too_many_lines)]
+pub fn commit_back_fb_leaf(
+    proc: &mut Proc,
+    plan: &BackFbLeafPlan,
+    reply: Option<VerbReply>,
+) -> Result<FbLeafBacked, Refusal> {
+    // ★ The replay arm: the plan found a live backing and emitted no verbs, so there is
+    // no reply to adopt and nothing to unwind. ⊘ Checked against `reply` being absent —
+    // a reply here would mean the chain ran when the plan said it would not.
+    if let Some((host_va, memory)) = plan.existing {
+        if reply.is_some() {
+            return wrong_reply("back_fb_leaf replay");
+        }
+        return Ok(FbLeafBacked {
+            host_va,
+            memory,
+            already: true,
+        });
+    }
+    let Some(VerbReply::Published {
+        host_vas: fresh_vas,
+        memory,
+        host_va,
+    }) = reply
+    else {
+        return wrong_reply("back_fb_leaf");
+    };
+    let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
+        unmap: vec![(vas_used, host_va)],
+        free: with_vas.into_iter().chain([memory]).collect(),
+    };
+    let vas_used = fresh_vas
+        .or(plan.host_vas)
+        .expect("chain produced a host VAS");
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Proc(plan.proc)),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    }
+    let pid = proc.id;
+    // ★★ §9.3 — owner scope, checked where a host object ENTERS core state, and ordered
+    // after the identity guard for the reason `commit_publish` records.
+    let isolate = IsolateId::new(pid.0, plan.gpu);
+    if !memory.belongs_to(isolate) {
+        return Err(Refusal {
+            fault: FwdFault::ForeignBacking { isolate, memory },
+            orphans: Orphans {
+                unmap: vec![(vas_used, host_va)],
+                free: fresh_vas.into_iter().collect(),
+            },
+            retry: false,
+        });
+    }
+    let Some(vas) = proc.vases.get_mut(&(plan.gpu, plan.pdb)) else {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Vas {
+                gpu: plan.gpu,
+                pdb: plan.pdb,
+            }),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    };
+    match (plan.host_vas, fresh_vas) {
+        (None, Some(fresh)) => {
+            if vas.host_vas.is_some() {
+                return Err(Refusal {
+                    fault: FwdFault::Stale(Stale::Rebound),
+                    orphans: orphans(fresh, Some(fresh)),
+                    retry: true,
+                });
+            }
+            vas.host_vas = Some(fresh);
+        }
+        (Some(known), None) => {
+            if vas.host_vas != Some(known) {
+                return Err(Refusal {
+                    fault: FwdFault::Stale(Stale::Rebound),
+                    orphans: orphans(known, None),
+                    retry: true,
+                });
+            }
+        }
+        _ => unreachable!("the vidmem publish chain allocates a host VAS iff the plan had none"),
+    }
+    // ★★★ R5 ON THE LEAF ITSELF. The plan read the table; a sibling thread may have bound,
+    // re-bound or backed this range in the gap. Every disagreement is refused with the
+    // orphans attached — ⊘ never resolved by overwriting, because the map entry is the
+    // only record of the host object and replacing one silently leaks it.
+    let previous = match vas.table.binding_at(plan.va) {
+        None => None,
+        Some((start, tlen, b)) => {
+            if start != plan.va.0 || tlen != plan.len {
+                return Err(Refusal {
+                    fault: FwdFault::FbLeafExtent {
+                        va: plan.va,
+                        len: plan.len,
+                        tabled: (start, tlen),
+                    },
+                    orphans: orphans(vas_used, None),
+                    retry: false,
+                });
+            }
+            if b.aperture != Aperture::Vidmem || b.phys != plan.phys {
+                return Err(Refusal {
+                    fault: FwdFault::FbLeafDisagrees {
+                        va: plan.va,
+                        walked: (plan.phys, Aperture::Vidmem),
+                        tabled: (b.phys, b.aperture),
+                    },
+                    orphans: orphans(vas_used, None),
+                    retry: false,
+                });
+            }
+            if let Some(h) = b.host {
+                // A sibling won the race. Ours is an orphan; theirs is the answer, and it
+                // is a *retry* rather than a failure because re-planning finds it and
+                // replays.
+                return Err(Refusal {
+                    fault: FwdFault::GuestRamAddressTaken {
+                        va: plan.va,
+                        host_va: h.host_va(),
+                    },
+                    orphans: orphans(vas_used, None),
+                    retry: true,
+                });
+            }
+            Some(b)
+        }
+    };
+    // ★ Drop the un-backed binding and re-insert it WITH its materialization. `bind`
+    // refuses an overlap, so the unbind is not optional — and it is done only after every
+    // refusal above, so the table is never left with a hole by a path that then declines.
+    if previous.is_some() {
+        vas.table.unbind(plan.va);
+    }
+    let binding = Binding {
+        phys: plan.phys,
+        aperture: Aperture::Vidmem,
+        // ★ `whole`: this chain allocates a fresh host object per leaf, so the binding IS
+        // the object and its release frees it.
+        host: Some(kayfabe_mmu::HostBacking::whole(memory, host_va)),
+    };
+    if let Err(e) = vas.table.bind(plan.pdb, plan.va, plan.len, binding) {
+        // ⊘ Put back exactly what was there. A refusal that left the range unbound would
+        // turn a failed *addition* into a removal of something that was working.
+        if let Some(b) = previous {
+            let _restored = vas.table.bind(plan.pdb, plan.va, plan.len, b);
+            debug_assert!(
+                _restored.is_ok(),
+                "re-binding what was just unbound cannot overlap"
+            );
+        }
+        return Err(Refusal {
+            fault: FwdFault::Address(e),
+            orphans: orphans(vas_used, None),
+            retry: false,
+        });
+    }
+    Ok(FbLeafBacked {
+        host_va,
+        memory,
+        already: false,
     })
 }
 

@@ -2397,6 +2397,35 @@ impl RmBackend for HostRmBackend {
         Ok(self.stamp(out.h_object_new))
     }
 
+    /// ★★★ **THE SECOND CROSSING'S OBJECT** — a blank host vidmem allocation.
+    ///
+    /// ⊘ **Not a port of a new primitive.** [`RmConnection::alloc_device_local`] has
+    /// existed since the channel work (it is what a ring, a USERD block and a semaphore
+    /// are built from) and issues exactly what the C issues here:
+    /// `NV01_MEMORY_LOCAL_USER` (class `0x0040`) with `CONTIGUOUS | LOCATION_VIDMEM`
+    /// (`C: nvkvm_gpu_emul.c:7286-7294`). This method only gives that allocation an
+    /// **intent name** so the plan layer can ask for it without knowing the class — the
+    /// same anti-bolt-on rule [`kayfabe_isolate::RmBackend::alloc_engine_object`] states.
+    ///
+    /// ⚠ The C aligns to `0x10000` and we align to `len`; `len` is the guest leaf's own
+    /// size, so for every leaf this port will meet it is the stricter of the two. The
+    /// difference is only ever more alignment, never less.
+    ///
+    /// ⊘ **The object is BLANK and this method does not pretend otherwise.** It is the C's
+    /// `nvkvm_m2_host_alloc_vidmem_gpu_only` shape (`C: :7354-7368`): allocate, do not
+    /// build a CPU view. The C chose that arm for a measured reason — the CPU mapping is
+    /// what consumes the host's 256 MiB BAR1, its *"proven D2 wall"* (`C: :7340-7344`) —
+    /// and this port has no CPU view for a different one: the isolate holds the mapping
+    /// and the shell holds the framebuffer, and the descriptor that would join them
+    /// ([`crate::proto::Request::ExportBacking`]) is not wired to this path.
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let h = self.conn.alloc_device_local(len)?;
+        Ok(self.stamp(h))
+    }
+
     /// ★★★ R13 — a real host channel. Six RM objects, one GPU mapping and two controls,
     /// in an order where every step's failure has a different status.
     ///
