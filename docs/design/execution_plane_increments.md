@@ -11220,3 +11220,32 @@ set of them is an unbounded allocation a hostile guest drives directly (the
 
 ⚠ This is **not yet measured on a boot**: `s45` ran at `748a207`, ABI **34**, before this
 landed. The next boot is where the first refused class id appears in a device log.
+
+### 16.57.6 ★★★ THE FALSIFIER FOR `s46`, committed BEFORE the boot
+
+§16.57.5 landed an **ABI bump** (34 → 35) and a claim that goes with it: *the change is
+report-only and observationally neutral on the guest-facing plane.* ⊘ An ABI bump that has
+never booted is a landmine — the C header and the Rust struct were edited in one sitting and
+have never been linked into a running hypervisor together — and *"it is only a report"* is
+exactly the sentence that precedes a perturbation.
+
+`s45` is the reference, and it is a **strong** one: 456 RM records, record 196 `status=0`,
+`0xa06c0101 ×3` all `NV_OK`, `448/261/187` doorbells, `717` commands decoded, `0` of `96`
+allocations failed, wall at record 331.
+
+⚠ **The positive control is the realize itself.** If the header and the archive disagree on
+`sizeof(KayfabeBridgeRefusal)`, the shim's version handshake refuses and the device never
+realizes — so a boot that reaches a login prompt with `/dev/nvidia0` open has already proved
+the handshake. ⊘ That is not a control I chose; it is one the ABI design provides, which is
+why `ABI_VERSION` exists at all.
+
+| # | outcome | the distinguishable line | verdict |
+|---|---|---|---|
+| **E** | `s45`'s numbers reproduce **and** `grep -c "id=0x" run_s46_*_qemu.log` **> 0** | `nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist x10 id=0x…,0x…` | ★★★★ the reporting gap is closed and the first refused class ids appear in **our own** log — the thing `grep -c hClass` returned 0 for across every prior boot |
+| **F** | `s45`'s numbers reproduce, `bridge refusal` lines present, **no `id=`** | `grep -c "bridge refusal" > 0` **and** `grep -c "id=0x" == 0` | ⊘ the ids are collected and not reported — a wiring gap, and `a_flag_is_not_progress` if it were shipped unread |
+| **G** | the device does not realize | an ABI/`struct_size` message, or QEMU exiting before the guest boots | ⊘⊘ the header and the archive disagree. **Not** a port result; fix the two constants and re-boot |
+| **H** | the boot runs and `s45`'s numbers do **NOT** reproduce | any of: record 196 back to `0x56`; RM records ≠ ~456; doorbells back near `170/170/0` | ★★★★ **the important one.** A report-only change that moves the guest-facing plane is a perturbation, and the claim in §16.57.5 is refuted. Report the delta before anything else |
+
+⊘ **E requires BOTH halves.** `id=` lines with `s45`'s numbers not reproducing is `H`, not `E` —
+a new instrument that also changed what it measures has answered a different question
+(`a_correct_capture_can_answer_the_wrong_question`).
