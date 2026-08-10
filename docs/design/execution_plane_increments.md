@@ -12379,3 +12379,82 @@ brief demanded: the **aperture** the four-word release resolves to. `completion_
 `(va, plane, plane_addr)` and the report prints it as `sem fin va=… -> S:…` / `V:…`. A release
 written to `V:` while the guest polls a sysmem `pbCpuVA` is `#12` rebuilt, and it would be
 invisible in every count in the table above.
+
+### 16.66.4 ★★★★★ THE OUTCOME — **B**, scored against §16.66.3 as committed, and confirmed twice
+
+`[measured 2026-08-10, boots `s53_af255fa_fourword2` and `s54_af255fa_wallrepeat`, both
+artifacts stamped `kayfabe-rev:af255fa089259c5dcb367296b7f3a4d46cb481af` read off the
+hypervisor binary]`
+
+★ **`s54` is the exact comparison** — it arrived at the *same* 448 doorbells as `s51`, so
+every number is directly subtractable. (`arrived` is not constant across boots: `s53` saw
+450. A comparison that does not pin it is comparing two different guests.)
+
+| | `s51` (`d502ac6`) | `s54` (`af255fa`) | `s53` (`af255fa`) |
+|---|---|---|---|
+| arrived | 448 | **448** | 450 |
+| served | 354 | **362** | 364 |
+| REFUSED | 94 | **86** | 86 |
+| by engine | `GrCompute=86 Ce=362` | **`GrCompute=86 Ce=362`** | `GrCompute=86 Ce=364` |
+| first refusal | `SubmissionHasNoLaunch` | **`Route::NotACopyEngineChannel`** | same |
+| `CUP2_RC` | 1, `cuCtxCreate → 801` | **1, `cuCtxCreate → 801`** | same |
+
+**`Ce=362` and `served=362`: every copy-engine doorbell the guest rang is now served.** The
+94 was `86 GrCompute + 8 Ce`; the 8 were the four-word releases, and all 8 moved. Nothing
+else moved at all — `GrCompute=86` is bit-identical, `unrouted=0`, `0 forwarded`.
+
+⇒ **Row B**: *"the release is served and the guest does NOT move."* The wall was real, the
+fix is right, and it was **not the last wall**. `cuCtxCreate` returns `801` for a reason this
+rung did not touch and did not claim to.
+
+### 16.66.5 ⊘ WHAT THE BOOT DID **NOT** ESTABLISH — and the instrument gap it found
+
+⊘ **The `#12` aperture question is UNANSWERED for the four-word release, and §16.66.3
+promised to print it either way, so here is the absence.** The only per-serving aperture line
+the report carries is `last CPU-CE serving: … 1 sem fin va=… -> S:…`, and on all three boots
+the *last* serving was a 65 536-byte copy (`0 release-only`). A **last** cannot answer a
+question about a **class** of events — the same shape as §16.65's *"the counts alone read as
+nothing happened"*, and the same fix: a per-kind census, not a last-one exemplar.
+
+What IS guaranteed is structural rather than witnessed, and the difference matters: the
+executor resolves the guest's own semaphore VA **through the guest's own page tables** and
+refuses the whole record on any miss (`FwdFault::Address`), so it cannot have written to a
+scratch framebuffer page the guest never reads — which is exactly `#12`'s failure. But *which
+plane* those eight releases landed in is not in the log, and I am not going to infer it from
+the `S:` of a different serving.
+★ **Owed**: split `doorbell_local_serving` into a cumulative per-kind census (copies,
+one-word releases, four-word releases, each with the plane) — an ABI bump this rung
+deliberately did not take, because the counters it already had were enough to *score the
+falsifier* and adding one would have meant shipping an instrument in the same boot as the
+change it measures.
+
+⊘ **And the timestamp is written but UNREAD-BY-ANYONE-WE-CAN-SEE.** §16.66.1(2) established
+the emitter is `libcuda`, which is closed. So *"the guest gets a consistent answer if it
+correlates against `PTIMER`"* is an argument from the clock being the same object, **not** a
+measurement of a guest reading the field. The eight doorbells moving from refused to served
+is the measurement; the timestamp's *value* has no oracle here.
+
+### 16.66.6 ★★★★ TWO INSTRUMENT FAILURES, one of them mine, both measured
+
+**(1) ⊘ I CHANGED THE INSTRUMENT BETWEEN THE BASELINE AND THE MEASUREMENT.** The first boot
+at `af255fa` (`s52_af255fa_fourword`) ran `POST_CAPTURE_HOOK=guest_cuinit_wall.sh`, while the
+`s51` baseline it was being compared against had run `cup2_hook_rmtrace.sh`. `s52` reported
+`cuInit(0) → unknown error (999)` and `2 arrived, 2 served`, and for several minutes I read
+that as **falsifier row D, a regression**. It was not a comparison at all: the two boots
+differ in the code *and* in the thing doing the looking. ★ The guest's `dmesg` was
+**byte-identical to `s51`** across that whole scare, which is what said the driver path was
+untouched and the difference was above it.
+
+**(2) ⊘ `s52` IS STILL UNEXPLAINED, AND IS RECORDED AS OPEN RATHER THAN RESOLVED.** The
+obvious story — *"that hook is not observationally neutral"* — is **not supported**:
+`s35_03a7e10_dup` ran the same hook and got `ok cuInit(0)`, and so did `s54`, at this very
+revision, with this very hook. So `s52` is a **flake**, and by
+`deterministic_failure_indicts_the_test` a flake indicts the *system*, not the test. Its
+signature is on disk (`run_s52_af255fa_fourword_probe.log`): `cuInit` gives up after **19** RM
+calls at `CTRL cmd=0xcb330101 hClient=0xc1d0000c hObject=0x5c000001 status=0x0000002f`,
+against **456** trace lines on a good run. ⚠ One boot each way is not a rate; do not quote it
+as one.
+
+★ Both `s52` and `s54` are carried into `traces/guest_boots/` **including the failure**. A
+boot that refuted my own reading is evidence, and dropping it would leave the tree saying this
+rung went straight from a hypothesis to a green.
