@@ -143,7 +143,7 @@ const BOOT_LOGS: &str = "traces/guest_boots";
 
 /// The newest boot this file is calibrated against. Named, not inferred: a gate whose
 /// universe depends on lexical filename order changes meaning when a tag is added.
-const NEWEST_BOOT: &str = "s45_748a207_tsgsched";
+const NEWEST_BOOT: &str = "s47_81582e3_ctxsw";
 
 /// Every `unserviced fn 76 cmd 0x…` id in every committed boot log, mapped to the set of
 /// boot tags that recorded it.
@@ -391,6 +391,46 @@ fn every_graduated_id_was_once_in_the_ledger_and_is_still_answered() {
     assert!(
         !GRADUATED.is_empty(),
         "the graduated list is empty — this gate can no longer show its own direction",
+    );
+}
+
+/// ★★★★★ **§16.59/§16.60 — `0x20801210` is served, and the boot that proves it also proves
+/// serving it was not enough.** `[measured 2026-08-10, boot s47_81582e3_ctxsw]`
+///
+/// The transition, in the same shape as [`the_s44_wall_is_recorded_by_the_boots_and_answered_by_the_port`]:
+/// the earlier boot logs record the id as unserviced, the newest one does not, and the chain
+/// answers it. Record 331 went `status=0x56` → `status=0x00000000`.
+///
+/// ⊘⊘ **And record 332 still begins the `FREE` burst.** That is the finding this test exists
+/// to keep attached to the id: `0x20801210` was named "the wall" because it was the last
+/// non-zero record before teardown, it is now zero, and teardown starts in the same place.
+/// A future reader who finds this control served must not infer that it ever blocked
+/// anything — see §16.60.
+#[test]
+fn the_s45_wall_is_served_and_the_newest_boot_no_longer_records_it() {
+    let cmd = kayfabe_abi::submit::NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE;
+    let seen = ledger_ids();
+    let boots = seen
+        .get(&cmd)
+        .expect("0x20801210 is recorded as unserviced by the s45/s46 boot logs");
+    assert!(
+        boots
+            .iter()
+            .any(|t| t.starts_with("s45_") || t.starts_with("s46_")),
+        "★ the evidence that this id WAS a wall has left the tree: {boots:?}",
+    );
+    assert!(
+        !boots.iter().any(|t| t == NEWEST_BOOT),
+        "★★★ {NEWEST_BOOT} still records 0x20801210 as unserviced — the control is claimed \
+         in this tree, so either the boot ran an older binary or the seat is not reached",
+    );
+    assert!(
+        is_served(cmd),
+        "★★★ 0x20801210 is unserved — §16.59 claimed it",
+    );
+    assert!(
+        GRADUATED.contains(&cmd) && !LEDGER.contains(&cmd),
+        "0x20801210 is served: it belongs in GRADUATED and not in LEDGER",
     );
 }
 

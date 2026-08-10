@@ -11552,3 +11552,103 @@ reading method is vindicated a third time.
 rather than a control. Do not read `J` as "the rung failed": the control is served either
 way, honestly, and one of this campaign's most-used instruments would be shown to have a
 false-positive mode.
+
+## §16.60 ★★★★★ BOOTED `s47_81582e3_ctxsw` — **OUTCOME J**, the predicted one. The control serves, and record 331 was NEVER the wall
+
+`[measured 2026-08-10, boot s47_81582e3_ctxsw]`. Stamp `kayfabe-rev:81582e3f76cc…` read off
+**both** the hypervisor and the archive **before** the boot. Evidence:
+`traces/guest_boots/run_s47_81582e3_ctxsw_{qemu,dmesg,probe}.log`, tracked, passing
+`assert_boot_evidence.sh` (148 files).
+
+### 16.60.1 THE ONE-LINE RESULT
+
+```
+s46:   331  CTRL cmd=0x20801210 … size=32 status=0x00000056   in=01000000 1200005c 00000000 00000000 …
+s47:   331  CTRL cmd=0x20801210 … size=32 status=0x00000000   in=… out=… (echoed)
+       332  FREE hRoot=0xc1d0000c hParent=0x5c00001a hObject=0x5c00007a status=0x00000000
+```
+
+The control is **served** — `nvkvm: control 0x20801210 result 0x00000000 x1`, and
+`grep -c "unserviced fn 76 cmd 0x20801210"` on this boot's device log returns **0**, where
+`s45` and `s46` both carried the line. And **record 332 still begins the `FREE` burst**, from
+the same object, at the same index, as it did when 331 answered `0x56`.
+
+⊘ Note the request bytes: `cilpPreemptMode = 0`, exactly as `s46`. §16.59.1's divergence from
+the C is **stable across boots**, not a one-off — which also excludes the `L` reading (the
+classifier did not refuse; it served, because the guest asked for wait-for-idle again).
+
+### 16.60.2 ★★★★★ THE FINDING — a reading METHOD produced a false positive, and it named three walls
+
+`0x20801210` was identified as the wall by one rule, applied in §16.55.1 and §16.57.3 and
+inherited by this rung's brief: **"the last non-zero record before the `FREE` burst."** The
+rule is what named `0xa06c0101` at `s44` (correctly — record 196 went `0x56` → `0` and the
+guest built **two more** channel groups and issued 207 more ioctls). Applied to `s45` it named
+`0x20801210`. `[measured]` that one is **wrong**: the record is now `status=0` and nothing
+about the guest's behaviour changed.
+
+★★★★ **And the method has now run out of candidates entirely**, which is the cleanest possible
+demonstration that it was the wrong instrument. The non-zero records still standing before 332
+are records 328/330 (`0x20801702`, `0x56`) and record 329 (`0x83de0309`, `0x56`) — **both
+already retracted as walls**, by the coordinator and by §16.59.2 respectively, on the grounds
+that the guest continues past them. The rule's next answer is an id its own users have already
+ruled out.
+
+⇒ **"Last thing before teardown" is a statement about ORDER, and a blocker is a statement about
+CAUSE.** They coincide when the failing call is the one the caller checks; they come apart the
+moment a caller batches its checks, or gives up for a reason decided earlier and surfaced at
+the next syncpoint. The discriminator that survives is the coordinator's — *what does the
+caller do next* — and its honest reading here is that the caller does **the same thing either
+way**, i.e. record 331 carries no information about why `cuCtxCreate` fails.
+
+⊘ **This does not retract §16.56/§16.57.** `0xa06c0101` was a real wall and the evidence is
+independent of the rule that found it: serving it took RM records 249 → 456, TSGs 1 → 3,
+channels 8 → 16, and doorbells 170 → 448. A method that is right once and wrong once is not
+discredited, it is **scoped** — and its scope is *"generates candidates"*, never *"identifies
+blockers"*.
+
+### 16.60.3 EVERY OTHER NUMBER IS `s46`'s, TO THE COMMAND — `M` EXCLUDED
+
+| | `s46` | `s47` | |
+|---|---|---|---|
+| RM records captured | 456 | **456** | ✓ |
+| `0xa06c0101` at `status=0` | ×3 | **×3** | ✓ positive control (`TSG_ALLOC_SEEN=3`, `TSG_SCHED_SEEN=3`) |
+| commands decoded | 717 | **717** | ✓ |
+| unserviced / distinct | 135 / 46 | **134 / 45** | ★ **exactly one fewer, and it is `0x20801210`** |
+| controls answered / distinct | 150 / 47 | **151 / 48** | ★ **exactly one more, and it is `0x20801210`** |
+| bridge refusals | 66 total, 6 distinct | **66 total, 6 distinct** | ✓ |
+| doorbells | 448 / 261 / 187 | **448 / 261 / 187** | ✓ |
+| isolates | 2 / 2 / 2 (2 no-plane) | **2 / 2 / 2 (2 no-plane)** | ✓ |
+| `CUP2_RC` | 1 | **1** | ✓ |
+
+★ The two rows that moved moved by **exactly one, in opposite directions, on the same id**.
+That is the arithmetic signature of a command changing seats and nothing else happening, and
+it is a stronger exclusion of `M` than any single equality in the table.
+
+⚠ **A miscount of my own, recorded because it nearly became a reported perturbation.** My first
+pass grepped record lines over the **whole** probe log and got **538**, an apparent +82. The
+probe log prints the complete stream *and then reprints* `the LAST 80 RM records`; the
+duplicated region is the difference.
+`[measured 2026-08-10, boot s47_81582e3_ctxsw]` the stream between its own delimiters is
+**456**. ⇒ Count within the section delimiters, not over the file — an instrument that prints
+one region twice makes a count over the file a count of the instrument.
+
+### 16.60.4 ⇒ WALL 2 IS THE ONLY LIVE CANDIDATE, AND IT IS BYTE-IDENTICAL
+
+```
+nvkvm: first doorbell refusal [CeResolve::NoPublication] no page-directory root was published
+  for (hClient 0xc1d0000c, hVASpace 0x5c000007) … scan=1024/1024 declared (COMPLETE: every
+  declared entry was read), unread=1024, nonzero=NONE … walk=NO-PUBLICATION
+```
+
+Unchanged from `s45` and `s46`, down to the handle. **187 of 448 doorbells refused**, and
+`0x5c000007` is libcuda's own `FERMI_VASPACE_A`.
+
+⊘ **And the question the brief posed is now answered.** *"Nothing has measured whether Wall 1
+and Wall 2 are one wall"* — `[measured 2026-08-10, boot s47]` they are **not**: Wall 1 was
+removed and Wall 2 did not move by a single count. More than that, Wall 1 was not a wall at
+all, so there was never a pair. The next rung's question is `CeResolve::NoPublication` and
+nothing else on the control plane.
+
+★ The control stays served. It is honest, it is classified rather than echoed, it costs
+nothing, and it removes an id from the unserviced ledger that would otherwise have been
+re-nominated as the wall by the next reader applying the same rule.
