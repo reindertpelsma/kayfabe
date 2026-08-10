@@ -1,0 +1,114 @@
+# w231 — WHICH BOOTS REACH THE FORWARDING FALL-THROUGH, over EVERY committed qemu boot log
+# generated 2026-08-11 at ad4ed3c + w231a, by:
+#   for q in traces/guest_boots/*_qemu.log; do grep -c RING-PROJ / PT-DECODE / 'GUEST-RAM PIN' + the EXECUTORS line; done
+# ⊘ RING-PROJ and PT-DECODE print UNCONDITIONALLY on the fall-through (both the routed and the
+#   UNROUTED branch), so 0 means the fall-through was NOT ENTERED — it is not a statement about vas_pdb.
+# ⊘ 'ceexec -' = the boot predates the EXECUTORS line (da1fe2d, 2026-08-10 15:54); read its plane from the tag.
+
+TAG                                        CEEXEC LOCALONLY RPROJ PTDEC   PIN  CENSUS
+fmb1_319d29a                               -      -             0     0     0  -
+iso1_319d29a_real                          -      -             0     0     0  3 arrived, 3 served, 0 REFUSED
+run_bar1_03a679f                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_bar1_6ba1bd5                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_fbd1_f760a4b                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_msr2_319d29a                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_p1b_29e7c25_planectl                   -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_p2_29e7c25_planereal                   -      -             0     0     0  3 arrived, 3 served, 0 REFUSED
+run_res1_fc21926                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_row1_44b7d69                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_s16_5fcd259                            -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_s17_e8fde62                            -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_s18_1dfde1b                            -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_s19_1dfde1b_cup2                       -      -             0     0     0  9 arrived, 8 served, 1 REFUSED
+run_s20_25295aa_cup2                       -      -             0     0     0  9 arrived, 8 served, 1 REFUSED
+run_s21_dbf853a_cup2                       -      -             0     0     0  9 arrived, 8 served, 1 REFUSED
+run_s22_f4f3865_cup2                       -      -             0     0     0  24 arrived, 9 served, 15 REFUSED
+run_s23_10a769c_cup2                       -      -             0     0     0  24 arrived, 9 served, 15 REFUSED
+run_s24_cf18883_cup2                       -      -             0     0     0  24 arrived, 9 served, 15 REFUSED
+run_s25_01d12e6_cup2                       -      -             0     0     0  24 arrived, 9 served, 15 REFUSED
+run_s26_0484a3b_cup2                       -      -             0     0     0  24 arrived, 24 served, 0 REFUSED
+run_s27_c73d3ab_uvm                        -      -             0     0     0  24 arrived, 24 served, 0 REFUSED
+run_s28_933a709_spd                        -      -             0     0     0  24 arrived, 24 served, 0 REFUSED
+run_s29_933a709_vafmt                      -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_s30_933a709_vafmt2                     -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_s31_675af4a_echofix                    -      -             0     0     0  27 arrived, 27 served, 0 REFUSED
+run_s32_675af4a_vafmt3                     -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_s33_675af4a_vafmt4                     -      -             0     0     0  6 arrived, 6 served, 0 REFUSED
+run_s34_675af4a_vafmt5                     -      -             0     0     0  6 arrived, 6 served, 0 REFUSED
+run_s35_03a7e10_dup                        -      -             0     0     0  124 arrived, 124 served, 0 REFUSED
+run_s36_3a0146c_vascensus                  -      -             0     0     0  124 arrived, 124 served, 0 REFUSED
+run_s37_0dfe7f7_pertag                     -      -             0     0     0  124 arrived, 124 served, 0 REFUSED
+run_s38_411d280_route                      -      -             0     0     0  163 arrived, 163 served, 0 REFUSED
+run_s39_fd92017_kernelarm                  -      -             0     0     0  170 arrived, 170 served, 0 REFUSED
+run_s40_4733730_acceptcensus               -      -             0     0     0  170 arrived, 170 served, 0 REFUSED
+run_s41_62e757f_twophase                   -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_s41b_62e757f_twophase                  -      -             0     0     0  170 arrived, 170 served, 0 REFUSED
+run_s42_21f967b_gpuscope                   -      -             0     0     0  170 arrived, 170 served, 0 REFUSED
+run_s43_b17381c_cumjoin                    -      -             0     0     0  170 arrived, 170 served, 0 REFUSED
+run_s44_b17381c_rmtrace                    -      -             0     0     0  170 arrived, 170 served, 0 REFUSED
+run_s45_748a207_tsgsched                   -      -             0     0     0  448 arrived, 261 served, 187 REFUSED
+run_s46_1a9e93c_abi35                      -      -             0     0     0  448 arrived, 261 served, 187 REFUSED
+run_s47_81582e3_ctxsw                      -      -             0     0     0  448 arrived, 261 served, 187 REFUSED
+run_s48_4f5b357_cwait                      -      -             0     0     0  448 arrived, 261 served, 187 REFUSED
+run_s49_57bd756_declroot2                  -      -             0     0     0  448 arrived, 354 served, 94 REFUSED
+run_s50_9a446e9_probefix                   -      -             0     0     0  448 arrived, 354 served, 94 REFUSED
+run_s51_d502ac6_engroute                   -      -             0     0     0  448 arrived, 354 served, 94 REFUSED
+run_s52_af255fa_fourword                   -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_s53_af255fa_fourword2                  -      -             0     0     0  450 arrived, 364 served, 86 REFUSED
+run_s54_af255fa_wallrepeat                 -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_scan1_00865a7                          -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_uvm1_b731e3c                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_uvm2_d0fbac0                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_vaspan_994bbdc                         -      -             0     0     0  5 arrived, 4 served, 1 REFUSED
+run_vh2a                                   -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_vhctrl                                 local  true          0     0     0  0 arrived, 0 served, 0 REFUSED
+run_vhmemfd                                local  true          0     0     0  0 arrived, 0 served, 0 REFUSED
+run_w205_227194f_ctl                       -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_w205_227194f_real                      -      -             0     0     0  3 arrived, 3 served, 0 REFUSED
+run_w206_8a2280b_ctl                       -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_w206_8a2280b_real                      -      -             3     0     0  3 arrived, 3 served, 0 REFUSED
+run_w207_4395ebd_ctl2                      -      -             0     0     0  450 arrived, 364 served, 86 REFUSED
+run_w207_4395ebd_ctl                       -      -             0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w207_4395ebd_real                      -      -             3     0     0  3 arrived, 3 served, 0 REFUSED
+run_w208_797a6bc_ctl                       -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_w208_797a6bc_real                      -      -             3     0     0  3 arrived, 3 served, 0 REFUSED
+run_w209_ffc80f8_ctl                       -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_w209_ffc80f8_real                      -      -             3     3     0  3 arrived, 0 served, 3 REFUSED
+run_w210_8574466_ctl                       -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w211_eaf025f_ctl                       -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w212_e309a85_ctl                       -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w213_b0df550_ctl                       -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w214_9b65664_ctl                       -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w215_79ed443_ctl                       -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w216_f5f55ad_mcbudget                  -      -             0     0     0  448 arrived, 362 served, 86 REFUSED
+run_w217_2f616e2_grpush                    -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w218_cb6adcc_grfull                    -      -             0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w219_fe65678_realbase                  -      -             3     3     0  3 arrived, 0 served, 3 REFUSED
+run_w220_da1fe2d_realce                    local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w221_49dc3ec_grfwd                     local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w222_346921b_gate                      local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w224a                                  local  true          0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w224b                                  -      -             0     0     0  -
+run_w224c                                  local  true          0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w225a                                  local  true          0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w225f                                  local  true          0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w225g                                  local  true          0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w226_534e1b3_cobs                      local  true          0     0     0  2 arrived, 2 served, 0 REFUSED
+run_w226a                                  host   false         1     1     1  1 arrived, 0 served, 1 REFUSED
+run_w226b_534e1b3_cup2                     local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w226c                                  host   false         1     1     1  1 arrived, 0 served, 1 REFUSED
+run_w226d                                  host   false         1     1     0  1 arrived, 0 served, 1 REFUSED
+run_w227a_c5f251d_control                  local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w227b_184df5f_census                   local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w227c_537894e_census2                  local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w228a_82f9aa5_fbback                   local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w228b_82f9aa5_control                  local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w229a_b66bd44_execvas                  local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w229b_b66bd44_execvas_real             local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w229c_b66bd44_execvas_fbback           local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w230a_0aea0f2_guestring                local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w230b_65d7532_guestring                local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w230c_65d7532_guestring_memfd          local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w230d_65d7532_guestring_gram           local  true          0     0     0  191 arrived, 183 served, 8 REFUSED
+run_w231a_ad4ed3c_ceexec_host              host   false         1     1     2  1 arrived, 0 served, 1 REFUSED
+run_wlk1_dcd096c                           -      -             0     0     0  5 arrived, 4 served, 1 REFUSED

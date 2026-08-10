@@ -915,3 +915,136 @@ successor to this rung.
 every run is real; with one they are **not** the same space, and this map would describe what
 the device may DMA to rather than the guest's physical map. Undecided, and not decided by these
 boots.
+
+---
+
+## 5.9 ★★★★★ w231 — WHY THE PIN HAD RUN TWICE, and it is **not** `vas_pdb`
+
+`[measured 2026-08-11, `vh` (vast, RTX 3060 GA106, host 580.159.04 open), source rev
+`ad4ed3c`, boot `w231a_ad4ed3c_ceexec_host`]`
+
+### 5.9.1 ⊘ LEAD WITH THE REFUTATIONS — three of them, and two are of §5.11's own brief
+
+**R16. ⊘⊘ `vas_pdb` IS NOT `None`, and no boot ever measured that it was.** §5.11's closing
+sentence — *"the 183 served have no `vas_pdb`… the next rung's first question is why `vas_pdb`
+is None here when `w226` printed `pdb=0x2efa9c000`"* — is **refuted twice**:
+
+- **Directly.** `w231a`, at `ad4ed3c`, prints `pdb=0x2efa9c000` — byte-for-byte the value
+  `w226c` printed. The field resolves today exactly as it did then.
+- **Against the census.** The last `promote-ctx` census of `w230b`/`w230d`/`w229c`/`w226b` is
+  **13 of 14 channels `pdb=Y`** (`1x pdb=N`, `1x pdb=Y`, `4x pdb=Y` — all `Ce` — and `8x
+  pdb=Y`, the `GrCompute` eight). `pdb=Y` there is literally `Channel::vas_pdb.is_some()`
+  (`crates/kayfabe-core/src/gpu.rs:4992`, `crates/kayfabe-rt/src/device.rs:901`). Even the
+  **8 refused** doorbells have a PDB; they are refused by **route**, not by PDB.
+
+**R17. ⊘⊘ AND THE QUESTION WAS UNMEASURABLE AS POSED.** `RING-PROJ` and `PT-DECODE` print
+**unconditionally** on the forwarding fall-through — `RING-PROJ` has an explicit `UNROUTED`
+else-arm written for exactly this reason (`crates/kayfabe-qemu-raw/src/shim.rs:3302-3312`).
+Both read **0** on all four `w230` boots. ⇒ The fall-through **was never entered**, so nothing
+on those boots inspected `vas_pdb` at the pin site at all. *"The served ones have no
+`vas_pdb`"* was an inference from an instrument that did not run — ★ the very trap §5.11's own
+brief warned about, one paragraph after stating it.
+
+**R18. ⊘ It is not a REGRESSION.** The gate that decides reachability
+(`shim.rs:4176`) last changed at **`72b0640` (2026-08-08 19:43)** — *two days before* `w226`.
+`git log -S 'local_ce_is_the_only_executor' -- crates/kayfabe-qemu-raw/src/shim.rs` returns
+`da1fe2d`, `9a446e9`, `72b0640` and **nothing after**; `git log -S '|| ce_executor ==
+CeExecutorChoice::Local'` returns `49dc3ec` (08-10 16:17) alone. No commit between `w226` and
+`ad4ed3c` touched it.
+
+### 5.9.2 ★★★ THE VERDICT — **(b) CONFIGURATION**, one variable, and it is `KAYFABE_CE_EXECUTOR`
+
+```text
+w226a / w226c :  EXECUTORS isolate_plane=real ce_executor=host  ⇒ local_ce_is_the_only_executor=false
+w229* / w230* :  EXECUTORS isolate_plane=real ce_executor=local ⇒ local_ce_is_the_only_executor=true
+```
+
+`try_ce_submission`'s second gate is `facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor`
+(`shim.rs:4176`). With `local_ce_is_the_only_executor = true` the second conjunct is `false`,
+the early `return None` **can never fire**, and every routed `CpuCe` doorbell is claimed
+**terminally** by the shell's local executor — `183 × SERVED-LOCAL [CpuCe::ServedLocally]`.
+⊘ `vas_pdb` is read but its value cannot change the outcome. The fall-through that holds
+`RING-PROJ`, `PT-DECODE` and `GUEST-RAM PIN` is **dead code on the default configuration**,
+for every value of every other variable.
+
+★ `local` is the **default** since `da1fe2d` (`ce_executor_from`: `None => Ok(Local)`), and it
+is the default for a measured reason recorded at `CE_EXECUTOR_ENV`'s own definition
+(`shim.rs:7353-7387`): `ce_executor=host` hands the guest's CE work to a plane that refuses
+`CeExecutor::Ours` and `CeSource::Constant`, which is what `RmInitAdapter`'s scrubber is.
+
+### 5.9.3 ★★★★ THE POSITIVE CONTROL — `w231a`, and G6's FIRST EXECUTION
+
+One boot at `ad4ed3c`, **only** `KAYFABE_CE_EXECUTOR` flipped from `w230d`'s configuration
+(`KAYFABE_ISOLATES=real NVKVM_RAM_BACKEND=memfd KAYFABE_GUEST_RAM=memfd` all unchanged):
+
+```text
+kayfabe: EXECUTORS isolate_plane=real ce_executor=host ⇒ local_ce_is_the_only_executor=false
+kayfabe: GUEST-RAM PIN token=0x00010002 dev=1 ino=499308 proc=0 chan=1 pdb=0x2efa9c000
+  ring=0x420064000 gpa=0x2267e000
+  | ★ GEOMETRY: 4096 entries x 8 = 32768 bytes = 8 pages in 1 contiguous run(s)
+  | ⊘ 0 of 1 run(s) pinned — REFUSED `SystemDataPlane`
+    GUEST-RAM PIN … run 1/1 va=0x420064000 gpa=0x2267e000 len=32768 → file offset 0x2267e000
+  | ✅ NEGATIVE CONTROL: gpa=0x80008000 REFUSED BY NAME as `NoStatedRun`
+doorbells: 1 arrived, 0 served, 1 REFUSED by name
+```
+
+⇒ **`G6 IS WRITTEN AND UNEXECUTED` is retired.** §5.11 said no environment variable changes
+it; one does. This is the **whole ring** — `4096 × 8 = 32768` bytes, 8 pages — where `w226`
+pinned 4096. ★ And a scoping of **R15**: this ring resolved to **one contiguous run**, so the
+split-at-discontinuity walk is right to exist but was not exercised here; R15's scatter was
+measured on a different channel and must not be restated as a property of every ring.
+
+⚠ **Binary/source stamp, stated rather than assumed** (the trap that served `862c7c2` for
+weeks): `source revision: ad4ed3ced2`, `archive rev STAMPED IN THE BINARY: 65d75322e3`. They
+differ **and that is asserted, not excused** — `git diff --stat 65d7532..ad4ed3c -- crates/
+Cargo.toml Cargo.lock` is **empty**; `ad4ed3c` is docs and `traces/` only. No rebuild was done
+and none was needed.
+
+### 5.9.4 ★★★ THE CENSUS OVER ALL 106 COMMITTED BOOTS — the correlation is total
+
+`docs/reference/bench_evidence/w231_pin_reachability_census.out`, generated from the committed
+logs:
+
+| `local_ce_is_the_only_executor` | boots | `RING-PROJ > 0` |
+|---|---|---|
+| `true` | 24 | **0** |
+| `false` | 4 | **4** |
+
+⊘ Zero violations in either direction. The **three** boots in the whole repository that ever
+printed `GUEST-RAM PIN` are `w226a`, `w226c` and `w231a` — **every one of them
+`ce_executor=host`**. `w226d` is the same configuration with `KAYFABE_GUEST_RAM` unset: it
+reaches the fall-through (`RING-PROJ 1`, `PT-DECODE 1`) and prints **no** pin. ⇒ The two axes
+are separable and both are needed — **executor** decides whether the site is *reached*,
+**arming** decides whether it *prints*.
+
+### 5.9.5 ⊘⊘ AND (c) — the population — IS A CONSEQUENCE, NOT A CAUSE
+
+The prior under test was *"a different client/proc produces the doorbells now, so `vas_pdb` is
+`None` is a true statement about a different set."* The populations **do** differ —
+`w226a/c/d`: **1** doorbell, kernel client `0xc1e00006`, `proc=0`, 2 `RING-ROSTER` rows;
+`w229/w230`: **191** doorbells, 26 rows, 6 clients, user `proc=2` — but that is **downstream of
+the same single cause**, not a second one:
+
+```text
+w226a/c/d (ce_executor=host):  nvidia-smi "No devices were found", SMI_RC=6,
+                               NVRM: RmInitAdapter failed! (0x25:0x65:1249)
+w229/w230 (ce_executor=local): SMI_RC=0, cup2 runs, 191 doorbells
+```
+
+★★★ **Both `GUEST-RAM PIN` lines in this project's history were printed on a boot whose guest
+driver had FAILED TO INITIALISE**, and `w231a` reproduces that exactly. The configuration that
+makes the pin *reachable* is the configuration that kills the guest ~40 s before `cuCtxCreate`
+exists. ⇒ There is no population in which the pin runs *and* CUDA runs; asking "which
+population" treats as independent two things with one cause.
+
+⇒ ★ **Retire the regression framing.** Nothing regressed, nothing is `None`, and no boot is
+owed to establish it. What §5.8.3 already said in the tree — *"neither executor configuration
+reaches a user-proc doorbell today"* — was **correct and was not stale**; §5.11 re-derived a
+different, wrong answer over it.
+
+### 5.9.6 ⊘ What this does NOT decide
+
+The wall is **unmoved**: `SystemDataPlane`, §12.26, an owner decision. `w231a` served **zero**
+doorbells and `cup2` cannot run in that configuration. ⊘ Nothing here is progress toward a
+running guest, and the shipping census stays `191 arrived, 183 served, 8 REFUSED` — `w231a`
+is a **separate boot in a non-shipping arm**, not a change to it.
