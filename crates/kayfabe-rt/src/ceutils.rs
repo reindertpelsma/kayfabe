@@ -888,10 +888,22 @@ pub fn dump_submission_methods(
         // that this arch packs the address in those bits, which `PushbufferAbi::method_len`
         // already relies on to walk the stream at all.
         let addr = (header & 0x1fff) << 2;
+        // ★★★★★ §16.79.2 — THE SUBCHANNEL, and omitting it was a real defect in this
+        // dump's first run. A method address means nothing on its own: the address space is
+        // **per subchannel**, and the subchannel is bound by whichever `SET_OBJECT` came
+        // before. `[measured 2026-08-10, boot w218_cb6adcc_grfull]` this very pushbuffer
+        // binds `AMPERE_COMPUTE_B` to subchannel 1 and `AMPERE_DMA_COPY_B` to subchannel 4
+        // in one stream, and the two class headers COLLIDE on the addresses it uses most:
+        // `NVC7C0_SET_CWD_REF_COUNTER = 0x0248` is `NVC7B5_SET_SEMAPHORE_PAYLOAD`, and
+        // `NVC7C0_INVALIDATE_TEXTURE_HEADER_CACHE_NO_WFI = 0x0244` is
+        // `NVC7B5_SET_SEMAPHORE_B`. ⊘ A reader handed `addr=0x0248` and no subchannel cannot
+        // tell a compute counter from a copy-engine semaphore payload — which is the single
+        // most dangerous confusion available on this wire.
+        let subch = (header >> 13) & 0x7;
         let count = (header >> 16) & 0x1fff;
         let secop = header >> 29;
         out.push_str(&format!(
-            "\n      m[{n:03}] hdr=0x{header:08x} addr=0x{addr:04x} count={count} secop={secop} args=["
+            "\n      m[{n:03}] hdr=0x{header:08x} sub={subch} addr=0x{addr:04x} count={count} secop={secop} args=["
         ));
         for (i, a) in args.iter().take(8).enumerate() {
             out.push_str(&format!("{}0x{a:08x}", if i == 0 { "" } else { "," }));
