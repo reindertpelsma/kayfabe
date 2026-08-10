@@ -736,11 +736,20 @@ pub extern "C" fn kayfabe_shim_abi_version() -> u32 {
 /// The returned pointer is `'static` and NUL-terminated; the caller must not free it.
 #[unsafe(no_mangle)]
 pub extern "C" fn kayfabe_shim_engine_kind_name(idx: u32) -> *const c_char {
-    ENGINE_KIND_C_NAMES
-        .get(idx as usize)
-        .copied()
-        .unwrap_or(c"?")
-        .as_ptr()
+    engine_kind_c_name(idx).as_ptr()
+}
+
+/// [`kayfabe_shim_engine_kind_name`]'s whole decision, as a **safe** function.
+///
+/// ⊘ The entry point above is then a pointer conversion and nothing else, which is this
+/// file's own stated shape: *"each of which decodes its arguments and immediately hands off
+/// to [`crate::shim`], which is safe and is where every decision lives."* ★ It also means the
+/// label table is testable **without a raw pointer** — the drift test in
+/// `tests/shim_logic.rs` calls this, so checking the FFI surface does not require the test
+/// tree to name the relaxation keyword and breach the `*_unsafe.rs` naming audit.
+#[must_use]
+pub fn engine_kind_c_name(idx: u32) -> &'static core::ffi::CStr {
+    ENGINE_KIND_C_NAMES.get(idx as usize).copied().unwrap_or(c"?")
 }
 
 /// The bucket labels as NUL-terminated C strings, in `kayfabe_rt::EngineKind::ALL` order.

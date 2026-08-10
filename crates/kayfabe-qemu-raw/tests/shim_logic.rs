@@ -1854,10 +1854,11 @@ fn the_engine_census_labels_match_the_enum_they_bucket() {
          loop is bounded by the first while the buckets are filled by the second",
     );
     for (idx, want) in rust.iter().enumerate() {
-        let got = kayfabe_qemu_raw::shim_unsafe::kayfabe_shim_engine_kind_name(idx as u32);
-        // SAFETY: the entry point's contract is a static, NUL-terminated string; an
-        // out-of-range index yields `c"?"` rather than null, and this index is in range.
-        let got = unsafe { core::ffi::CStr::from_ptr(got) };
+        // ⊘ The SAFE half of the entry point, deliberately: `kayfabe_shim_engine_kind_name`
+        // is `engine_kind_c_name(..).as_ptr()` and nothing else, so this checks the whole of
+        // its decision — and the test tree does not have to name the relaxation keyword and
+        // breach the `*_unsafe.rs` naming audit to reach an FFI table.
+        let got = kayfabe_qemu_raw::shim_unsafe::engine_kind_c_name(idx as u32);
         assert_eq!(
             got.to_str().expect("the labels are ASCII"),
             *want,
@@ -1866,11 +1867,11 @@ fn the_engine_census_labels_match_the_enum_they_bucket() {
             got.to_string_lossy(),
         );
     }
-    // ⊘ And the out-of-range answer is a printable label, never a null: the C hands this
-    // straight to `%s`, so a null here would be undefined behaviour in the caller.
-    let oob =
-        kayfabe_qemu_raw::shim_unsafe::kayfabe_shim_engine_kind_name(rust.len() as u32);
-    assert!(!oob.is_null(), "⊘ an out-of-range label must not be NULL");
-    // SAFETY: as above — the contract guarantees a static NUL-terminated string.
-    assert_eq!(unsafe { core::ffi::CStr::from_ptr(oob) }, c"?");
+    // ⊘ And the out-of-range answer is a printable label, never empty and never absent: the
+    // C hands this straight to `%s`, so anything but a real static string is undefined
+    // behaviour in the caller.
+    assert_eq!(
+        kayfabe_qemu_raw::shim_unsafe::engine_kind_c_name(rust.len() as u32),
+        c"?",
+    );
 }

@@ -12144,7 +12144,7 @@ The instrument shipped with it and is the half that mattered: ABI 35 → 36, `Ka
 gaining `doorbells_by_engine[6]` + `doorbells_engine_unrouted` and the served split
 `_locally` / `_forwarded`. §16.64.6 deferred exactly this and named `w202` as its home.
 
-### 16.65.2 The measurement
+### 16.65.2 The measurement, `[measured 2026-08-10, boot `s51_d502ac6_engroute`]`
 
 ```
 doorbells: 448 arrived, 354 served, 94 REFUSED by name
@@ -12169,7 +12169,7 @@ before the change those 86 were *already* refused, under a name that described b
 The brief's motivating sentence was: *"the `methods: 3, opaque: 2` above is a GR pushbuffer
 being decoded by the CE codec and correctly declining to find a CE launch."*
 
-⊘ **Measured false.** The first refusal is **unchanged** across `s49`/`s50`/`s51` —
+⊘ **Measured false**, `[measured 2026-08-10, boots `s49_57bd756_declroot2`, `s50_9a446e9_probefix`, `s51_d502ac6_engroute`]`. The first refusal is **unchanged** across all three —
 `FwdFault::SubmissionHasNoLaunch` — and its own printed pushbuffer is:
 
 ```
