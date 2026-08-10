@@ -1228,6 +1228,95 @@ fn ce_pce_mask_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHan
     }
 }
 
+/// ★★★★★ R29 — **the SAME question as R25, asked of the code that SHIPS.**
+///
+/// ⊘ **Lead with what R25 already settled**, because this rung is easy to mis-sell: a
+/// sealed `memfd` described to RM and placed at a dictated VA is a **PORT**, measured on a
+/// real GA106 (`traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`). This rung
+/// does not re-open that.
+///
+/// What it adds is that R25's route is a **parallel implementation** — it maps the block
+/// itself, into its own `Reservation`, and calls `alloc_os_descriptor` directly. The
+/// production route is `GuestRamPlane::honour` → `RmBackend::describe_guest_ram` →
+/// `RmBackend::map_gpu_va`, driven by a VMM-minted `GuestRamGrant`, and **none of it is on
+/// R25's path**. A defect anywhere in those three would leave R25 green.
+///
+/// ```text
+///   ★     R29 guestpin     = placed at 0x… AS ASKED, window word matches   -> the ROUTE works
+///   FAIL  R29 plane        = the grant was refused <RmError>               -> the plane
+///   FAIL  R29 describe     = OS_DESCRIPTOR refused <RmError>               -> the verb
+///   FAIL  R29 place        = asked 0x…, RM chose 0x…                       -> the fixed map
+///   ??    R29 window       = placed as asked, but the isolate reads word … -> the OFFSET
+/// ```
+///
+/// ★ The last cell is why the evidence has two predicates rather than one: a plane that
+/// ignored the grant's offset would place correctly and read the **wrong bytes**, and
+/// scoring that as a placement failure sends the next reader to the wrong file.
+fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // ⊘ Neither R25's `0x3_0040_0000` nor R9's constant: two rungs sharing an address
+    // cannot show that the address was honoured rather than remembered.
+    const AT: GpuVa = GpuVa(0x3_0140_0000);
+    const PATTERN: u32 = 0x9A11_0001;
+
+    println!(
+        "info  R29 guestpin probe = GPU {gpu}, euid {} — a shared memfd behind a real \
+         GuestRamPlane, granted at a NON-ZERO offset, described through the port's own \
+         `describe_guest_ram`, mapped at {:#018x}",
+        kayfabe_linux_raw::geteuid(),
+        AT.0,
+    );
+
+    let vas = match rm.alloc_vaspace() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R29 vaspace        = {e:?} (the rung needs its own address space)");
+            return false;
+        }
+    };
+    match rm.prove_guest_ram_pin(vas, AT, PATTERN) {
+        Ok(e) if e.placed_as_asked() && e.window_is_the_granted_one() => {
+            println!(
+                "★     R29 guestpin       = placed at {:#018x} AS ASKED, {} bytes at grant \
+                 offset {:#x}, and the isolate's mapping reads {:#010x} — the word the VMM \
+                 wrote at that offset. ⊘ This is the PRODUCTION route (GuestRamPlane -> \
+                 describe_guest_ram -> map_gpu_va), not R25's parallel one. ⊘ It is a memfd \
+                 THIS process made: it is SHAPED like guest RAM and it is not the guest's.",
+                e.got_va, e.bytes, e.offset, e.first_word
+            );
+            true
+        }
+        Ok(e) if !e.placed_as_asked() => {
+            println!(
+                "FAIL  R29 place          = asked {:#018x}, RM chose {:#018x} \
+                 (DMA_OFFSET_FIXED_TRUE not honoured for guest-RAM-shaped memory through \
+                 the production route) — address identity does not hold and a shadow \
+                 channel cannot work",
+                e.asked_va, e.got_va
+            );
+            false
+        }
+        Ok(e) => {
+            println!(
+                "??    R29 window         = placed at {:#018x} as asked, but the isolate's \
+                 mapping reads {:#010x} where the VMM wrote {:#010x} at grant offset \
+                 {:#x}. ⊘ NOT a placement failure: the address plane is fine and the \
+                 GRANT'S OFFSET is not being honoured, which is a different file",
+                e.got_va, e.first_word, e.expected_word, e.offset
+            );
+            false
+        }
+        Err(e) => {
+            println!(
+                "FAIL  R29 route          = refused {e:?}. `GuestRamUnavailable` is the \
+                 plane, `NoMemory` on the describe is the `OS_DESCRIPTOR`, and anything \
+                 else came from the placement — the three are separable and this line says \
+                 which by its payload.",
+            );
+            false
+        }
+    }
+}
+
 /// ★★★ R25 — **does memory shaped like GUEST RAM reach the host GPU's MMU?**
 ///
 /// The rung that decides whether `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` is a **port** or a
@@ -2013,6 +2102,7 @@ fn main() -> std::process::ExitCode {
     let mut want_osdesc: Option<OsDescSeed> = None;
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
+    let mut want_guest_pin = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -2043,6 +2133,7 @@ fn main() -> std::process::ExitCode {
             "--dictated-ring" => want_dictated_ring = true,
             // ⊘ The negative control. Same address, occupied first, inverted verdict.
             "--dictated-ring-negative" => want_dictated_neg = true,
+            "--guest-ram-pin" => want_guest_pin = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -2215,6 +2306,23 @@ fn main() -> std::process::ExitCode {
         );
         let ok = dictated_ring_probe(&mut rm, gpu);
         println!("done — dictated-ring probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★ R29 runs here and RETURNS, for R25's reason exactly: it builds its own plane, its
+    // own descriptor and its own `Vas`, so a refusal attributes to the guest-RAM route and
+    // cannot be an earlier rung's channel or mapping.
+    if want_guest_pin {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = guest_ram_pin_probe(&mut rm, gpu);
+        println!("done — guest-RAM pin probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {

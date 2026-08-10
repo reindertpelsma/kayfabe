@@ -1958,6 +1958,42 @@ pub struct WordMismatch {
     pub want: u32,
 }
 
+/// ★★★ What [`HostRmBackend::prove_guest_ram_pin`] observed, as separable facts.
+///
+/// ⊘ Separable on purpose, and it is [`OsDescEvidence`]'s own lesson: `placed_as_asked` and
+/// *"the isolate is looking at the window the grant named"* are different questions, and a
+/// single boolean over both would score a plane that mapped the wrong window as a placement
+/// failure — sending the next reader to re-check `DMA_OFFSET_FIXED`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamPinEvidence {
+    /// The host GPU VA the caller dictated.
+    pub asked_va: u64,
+    /// The host GPU VA RM wrote back — its **[OUT]** `dmaOffset`, not our argument echoed.
+    pub got_va: u64,
+    /// How many bytes the grant named.
+    pub bytes: u64,
+    /// The grant's offset into the block. Non-zero by construction; see the prover.
+    pub offset: u64,
+    /// The first word the ISOLATE's mapping reads.
+    pub first_word: u32,
+    /// The word the VMM wrote at that offset.
+    pub expected_word: u32,
+}
+
+impl GuestRamPinEvidence {
+    /// The **fixed** map landed where it was asked to.
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// The isolate is looking at the **window the grant named**, not at the block's start.
+    #[must_use]
+    pub fn window_is_the_granted_one(&self) -> bool {
+        self.first_word == self.expected_word
+    }
+}
+
 /// ★★★ What [`HostRmBackend::prove_os_descriptor`] observed — **shaped so the four
 /// falsifier arms cannot be collapsed into one boolean.**
 ///
@@ -3665,6 +3701,142 @@ impl HostRmBackend {
             }
             let _ = self.free(self.stamp(h));
         }
+        out
+    }
+
+    /// ★★★★★ **R29 — the SAME proof as [`Self::prove_os_descriptor`], but through the
+    /// PRODUCTION verbs**: the guest-RAM plane, the port's `describe_guest_ram`, and a
+    /// fixed `map_dma` at an address the caller dictates.
+    ///
+    /// # ⊘ Why R25 does not already answer this, stated because it nearly does
+    ///
+    /// R25 settled the *ioctl*: a sealed `memfd`, described to RM, placed as asked, read by
+    /// a real engine, byte-identical —
+    /// `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`. ★ That is a real result
+    /// and this rung does not re-open it. What R25 exercises is a **parallel
+    /// implementation**: it maps the block itself, into its own `Reservation`, and hands the
+    /// region straight to `alloc_os_descriptor`. Not one line of the code the VMM path runs
+    /// is on that route.
+    ///
+    /// ⇒ This rung runs the route that ships: [`crate::guestram::GuestRamPlane::honour`]
+    /// mints the mapping from a **grant**, [`kayfabe_isolate::RmBackend::describe_guest_ram`]
+    /// borrows it through `with_region` and describes it, and
+    /// [`kayfabe_isolate::RmBackend::map_gpu_va`] places it and refuses a placement it did
+    /// not get. A defect in any of the three would leave R25 green.
+    ///
+    /// ## ★★ The grant's offset is NON-ZERO, deliberately
+    ///
+    /// `offset` selects a window *inside* the block. At zero, a plane that ignored the
+    /// grant's offset entirely would map the same pages and every assertion would still
+    /// hold. Here the window is the **second** half and the first half carries a decoy word,
+    /// so a plane that mapped from zero shows up as a value mismatch rather than as nothing.
+    ///
+    /// ## ⊘ What a pass does NOT establish
+    ///
+    /// - **Not that any guest byte was pinned.** The block is a `memfd` this process made;
+    ///   it is *shaped* like guest RAM and it is not the guest's.
+    /// - **Not the cap-dropped case**, for R25's reason exactly — `euid` is printed.
+    /// - **Nothing about a guest VA.** The address is one we chose.
+    ///
+    /// # Errors
+    /// Whatever the plane, the descriptor or the placement refused — each by its own name,
+    /// so a failure attributes to one of the three.
+    pub fn prove_guest_ram_pin(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        pattern: u32,
+    ) -> Result<GuestRamPinEvidence, RmError> {
+        use kayfabe_isolate::{GuestRamGrant, RmBackend};
+        const HALF: u64 = 0x1_0000;
+        const BYTES: u64 = 2 * HALF;
+        let page = HostPageSize::query();
+
+        // 1 — the block, and the plane over it. ★ The SAME types the isolate is spawned
+        // with: `SharedRam` is what a VMM's shareable backing is, and `GuestRamPlane` is the
+        // one door guest memory comes through in the child.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        // The VMM's own view, for writing the pattern. Two mappings of one block is exactly
+        // the shape the crossing is: the VMM writes, the isolate reads the same pages.
+        let ours = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            BYTES,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| region_error(&e))?;
+        let mut image = vec![0u8; BYTES as usize];
+        for i in 0..(BYTES as usize) / 4 {
+            // ⊘ The two halves carry DIFFERENT words. A plane that ignored the grant's
+            // offset would describe the first half, and the read below would find the decoy
+            // rather than find nothing.
+            let w = if (i as u64) * 4 < HALF {
+                !pattern
+            } else {
+                pattern.wrapping_add(i as u32)
+            };
+            image[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
+        }
+        ours.write_from(HostOffset::new(0), &image)
+            .map_err(|e| region_error(&e))?;
+
+        let fd = ram.dup_for_export().map_err(|e| region_error(&e))?;
+        let plane = Arc::new(crate::guestram::GuestRamPlane::new(fd, BYTES, page));
+        let restore = self.guest_ram.replace(Arc::clone(&plane));
+
+        // 2 — the PRODUCTION chain, verb for verb, in the order `VerbPlan::PinGuestRam`
+        // runs it.
+        let mut go = || -> Result<GuestRamPinEvidence, RmError> {
+            let mapped = self.map_guest_ram(GuestRamGrant::originated_by_the_vmm(
+                HALF,
+                HALF,
+                kayfabe_vmm::Prot::ReadWrite,
+            ))?;
+            let memory = match self.describe_guest_ram(mapped) {
+                Ok(m) => m,
+                Err(e) => {
+                    let _ = self.unmap_guest_ram(mapped);
+                    return Err(e);
+                }
+            };
+            let got_va = match self.map_gpu_va(vas, memory, HALF, at) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = self.free(memory);
+                    let _ = self.unmap_guest_ram(mapped);
+                    return Err(e);
+                }
+            };
+            // 3 — ★ read the described pages back through the ISOLATE's own mapping, which
+            // is the only thing that can say the plane mapped the window the grant named.
+            // ⊘ Not the GPU's view, and it does not claim to be: R25 already proved a real
+            // engine reads these pages, and a second CE round trip here would give a rung
+            // whose subject is the ROUTE a second subject.
+            let first = plane.with_region(mapped.region.raw(), |r| {
+                let mut buf = [0u8; 4];
+                r.read_into(HostOffset::new(0), &mut buf).map(|()| buf)
+            })?;
+            let first = first.map_err(|e| region_error(&e))?;
+            let evidence = GuestRamPinEvidence {
+                asked_va: at.0,
+                got_va,
+                bytes: HALF,
+                offset: HALF,
+                first_word: u32::from_le_bytes(first),
+                expected_word: pattern.wrapping_add((HALF as u32) / 4),
+            };
+            // Undo everything. A ladder rung that leaked would poison the next one.
+            let _ = self.unmap_gpu_va(vas, got_va);
+            let _ = self.free(memory);
+            let _ = self.unmap_guest_ram(mapped);
+            Ok(evidence)
+        };
+        let out = go();
+        self.guest_ram = restore;
         out
     }
 
