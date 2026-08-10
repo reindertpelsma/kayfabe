@@ -1,0 +1,16 @@
+# R30 fb-cpu-view — POSITIVE
+# [measured 2026-08-10T22:30:10+00:00, bench vh2, RTX 3060 GA106, host driver 580.159.04]
+# tree/binary stamp: 3437903bb422566f28d2228ba5c4b8e15c5746f0
+
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0112f
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=3437903bb422566f28d2228ba5c4b8e15c5746f0
+==    R30 fb-cpu-view    = gpu 0, euid 0, join Shared, FIXED at 0x00007f0000000000
+★     R30 premise        = the vidmem object `alloc_vidmem` mints IS CPU-MAPPABLE: NV_ESC_RM_MAP_MEMORY succeeded and 16384 words round-tripped through that mapping. ⊘ Through the SAME mapping, so this says the view takes stores and loads — NOT that the card holds them.
+ok    R30 neg control    = export_backing(HostDeviceMemory) on that SAME live object → NotExportableAsMemory, BY NAME. ⇒ the CPU view exists and CANNOT cross to the VMM as memory, which is the whole of why `w228`'s objects have no guest-reachable view.
+      R30 guest→host    = all 16384 words AGREE (0xa19a5a5b → 0xa19a5a5b)
+      R30 host→guest    = all 16384 words AGREE (0x043ffffe → 0x043ffffe)
+★     R30 JOINED         = ONE fabricated backing, TWO independent mappings, 65536 bytes agreeing in BOTH directions, described to RM as an OS_DESCRIPTOR and placed at 0x00007f0000000000 AS ASKED. ⇒ this is the shape the framebuffer join must take; the vidmem object's view cannot cross and this one needs no crossing at all.
+done — fb-cpu-view probe only
+PROBE_RC=0
