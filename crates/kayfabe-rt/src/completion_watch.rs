@@ -155,6 +155,9 @@ pub fn decode_report_semaphore(methods: &[(u32, Vec<u32>)]) -> Option<DeclaredCo
                 }
                 let [a, b, c, d] = *args.first_chunk::<4>()?;
                 found = Some(DeclaredCompletion {
+                    // `SET_REPORT_SEMAPHORE_A_OFFSET_UPPER` is `7:0`. ⚠ That width is THIS
+                    // method's, not the class's — see [`COMPUTE_ADDRESS_OPERANDS`] for the
+                    // boot a single constant mask would have mis-reported.
                     va: GpuVa((u64::from(a & 0xff) << 32) | u64::from(b)),
                     payload: c,
                     four_words: (d >> 28) & 1 == 0,
@@ -168,6 +171,162 @@ pub fn decode_report_semaphore(methods: &[(u32, Vec<u32>)]) -> Option<DeclaredCo
         }
     }
     found
+}
+
+// =========================================================================================
+// ★★★★★ THE ADDRESS CENSUS — every 64-bit operand the GR pushbuffer names, not just the one
+// the guest polls
+// =========================================================================================
+
+/// ★★★ **Every `_A`/`_B` 64-bit address operand `AMPERE_COMPUTE_B` defines**, derived from
+/// the class header rather than hand-listed: an `_A` method at offset `o` whose `_B` sits at
+/// `o + 4`. `[derived 2026-08-10 from ogkm-580: clc7c0.h]` — seventeen of them, and the
+/// derivation is the point, because a hand-written list is a list of the ones somebody
+/// happened to see.
+///
+/// ⚠⚠ **`_A` is the HIGH word, `_B` the LOW word, and the WIDTH OF `_A` IS NOT CONSTANT.**
+/// The third column is the top bit of `_A`'s address field, read off the header per row:
+/// `SET_REPORT_SEMAPHORE_A` and `SET_VALID_SPAN_OVERFLOW_AREA_A` are `7:0`, but
+/// `SET_TEX_HEADER_POOL_A`, `SET_TEX_SAMPLER_POOL_A` and `SET_SHADER_SHARED_MEMORY_WINDOW_A`
+/// are `16:0`, and `SEND_PCAS_A` / `SET_INLINE_QMD_ADDRESS_A` are `31:0`.
+///
+/// ★ `[measured, and it bit me before the boot did]` this decoder was first written with the
+/// single `0xff` mask [`decode_report_semaphore`] uses — correct for the one method that
+/// decoder answers for — and `the_census_names_every_address_the_measured_pushbuffer_dereferences`
+/// went red on the `cuCtxCreate` stream: `SET_TEX_HEADER_POOL`'s measured `A = 0x00000100`
+/// masked to **zero**, reporting VA `0x0` for an operand actually at `0x100_00000000`.
+/// ⊘ Three of the five operands the guest names would have been reported at the wrong
+/// address — and the wrong address here is `0`, which reads as *"the guest named nothing"*.
+/// **The generalisation of a correct decoder is not a correct decoder**, which is why the
+/// width is a column and not a constant.
+pub const COMPUTE_ADDRESS_OPERANDS: &[(u32, &str, u32)] = &[
+    (0x0104, "SET_NOTIFY", 7),
+    (0x0130, "SET_GLOBAL_RENDER_ENABLE", 7),
+    (0x01dc, "SET_I2M_SEMAPHORE", 7),
+    (0x0200, "SET_VALID_SPAN_OVERFLOW_AREA", 7),
+    (0x0214, "SET_QMD_VIRTUALIZATION_BASE", 7),
+    (0x02a0, "SET_SHADER_SHARED_MEMORY_WINDOW", 16),
+    (0x02b4, "SEND_PCAS", 31),
+    (0x02e4, "SET_SHADER_LOCAL_MEMORY_NON_THROTTLED", 7),
+    (0x0318, "SET_INLINE_QMD_ADDRESS", 31),
+    (0x0550, "SET_MME_MEM_ADDRESS", 16),
+    (0x0790, "SET_SHADER_LOCAL_MEMORY", 16),
+    (0x07b0, "SET_SHADER_LOCAL_MEMORY_WINDOW", 16),
+    (0x1550, "SET_RENDER_ENABLE", 7),
+    (0x155c, "SET_TEX_SAMPLER_POOL", 16),
+    (0x1574, "SET_TEX_HEADER_POOL", 16),
+    (0x1b00, "SET_REPORT_SEMAPHORE", 7),
+    (0x25f8, "SET_TRAP_HANDLER", 16),
+];
+
+/// `NVC7C0_LOAD_MME_INSTRUCTION_RAM` — `0x0118`. `[src] ogkm-580: clc7c0.h:58`.
+///
+/// ★★★★★ **This is not an address and it is the most important method in the stream.** The
+/// MME is the Macro Method Expander: a small programmable unit in the GR front end whose
+/// **output is methods**. Guest-authored microcode loaded here can emit method words that
+/// were never in the pushbuffer anybody inspected. ⇒ **No allowlist over decoded methods can
+/// be sound while this method is admitted**, so the containment argument for executing a
+/// guest GR pushbuffer cannot rest on method inspection at all. See
+/// `docs/design/gr_execution_boundary.md` §2.
+pub const LOAD_MME_INSTRUCTION_RAM: u32 = 0x0118;
+
+/// The inclusive low-`hi_bit` mask for an `_A` word's address field.
+const fn mask_to(hi_bit: u32) -> u32 {
+    if hi_bit >= 31 {
+        u32::MAX
+    } else {
+        (1u32 << (hi_bit + 1)) - 1
+    }
+}
+
+/// One 64-bit address operand the guest's compute pushbuffer named.
+///
+/// ⊘ No public constructor and `#[non_exhaustive]`, for the same reason as
+/// [`DeclaredCompletion`]: an address claiming to be one the guest named, that did not come
+/// from the guest's bytes, must not be expressible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AddressOperand {
+    /// The `_A` method offset, i.e. the row of [`COMPUTE_ADDRESS_OPERANDS`].
+    pub method: u32,
+    /// That row's name.
+    pub name: &'static str,
+    /// The 64-bit GPU VA, `(A[7:0] << 32) | B[31:0]`.
+    pub va: GpuVa,
+    /// The subchannel it was written on.
+    pub subch: u32,
+}
+
+/// ★★★★★ **What a guest GR pushbuffer would make the host engine TOUCH.**
+///
+/// Every distinct address operand in the stream, plus the count of guest-authored MME
+/// instruction dwords. Class-gated per subchannel exactly as
+/// [`decode_report_semaphore`] is, and for the same measured reason: this very pushbuffer
+/// binds `0xc7c0` to subchannel 1 and `0xc7b5` to subchannel 4, and `SET_TEX_HEADER_POOL`'s
+/// `0x1574` is a different method entirely on the copy engine.
+///
+/// # ⊘ What this is FOR, stated so it is not mistaken for a step toward execution
+///
+/// It answers one question and refuses the neighbouring one. The question is *"if the host
+/// GR engine executed these bytes, what set of addresses would it dereference, and how many
+/// of them can our address table bind?"* — i.e. **how large is the gap between where we are
+/// and a VA space in which running guest GR work is containable**. It is print-only: it
+/// decodes, it resolves, it reports. ⊘ It does not lower anything to a host verb, it
+/// produces no plan, and it makes nothing executable.
+///
+/// Returns the **last** value seen for each operand — a pushbuffer may re-arm a register,
+/// and the binding the engine would reach is the one written last. Deduplicated by method,
+/// so the answer is a set of live registers rather than a transcript.
+#[must_use]
+pub fn decode_address_operands(methods: &[(u32, Vec<u32>)]) -> (Vec<AddressOperand>, usize) {
+    let mut bound: [Option<u32>; 8] = [None; 8];
+    let mut live: BTreeMap<u32, AddressOperand> = BTreeMap::new();
+    let mut mme_dwords = 0usize;
+    for (header, args) in methods {
+        let addr = (header & 0x1fff) << 2;
+        let subch = ((header >> 13) & 0x7) as usize;
+        if addr == SET_OBJECT {
+            if let Some(class) = args.first() {
+                bound[subch] = Some(*class & 0xffff);
+            }
+            continue;
+        }
+        // ⊘ The class gate, on EVERY row. An unbound subchannel is not assumed to be
+        // compute — "we did not see the SET_OBJECT" and "it is AMPERE_COMPUTE_B" are
+        // different facts and only the second licenses a decode.
+        if bound[subch] != Some(AMPERE_COMPUTE_B) {
+            continue;
+        }
+        if addr == LOAD_MME_INSTRUCTION_RAM {
+            mme_dwords += args.len();
+            continue;
+        }
+        let Some((method, name, hi_bit)) = COMPUTE_ADDRESS_OPERANDS
+            .iter()
+            .copied()
+            .find(|(m, _, _)| *m == addr)
+        else {
+            continue;
+        };
+        // ⚠ A/B must BOTH be present. A run that carried only the high word named no
+        // address, and inventing a zero for the low word would fabricate an operand at a
+        // VA the guest never wrote — the `an_in_annotation_is_not_a_transport_fact` shape.
+        let Some([a, b]) = args.first_chunk::<2>().copied() else {
+            continue;
+        };
+        live.insert(
+            method,
+            AddressOperand {
+                method,
+                name,
+                // ⚠ THE PER-ROW MASK. See [`COMPUTE_ADDRESS_OPERANDS`] for the boot this
+                // would have mis-reported with one constant mask.
+                va: GpuVa((u64::from(a & mask_to(hi_bit)) << 32) | u64::from(b)),
+                subch: subch as u32,
+            },
+        );
+    }
+    (live.into_values().collect(), mme_dwords)
 }
 
 /// Where the declared VA landed when the declaring thread resolved it — **once**, under the
@@ -548,6 +707,143 @@ mod tests {
         assert!(d.four_words, "STRUCTURE_SIZE=FOUR_WORDS");
         assert_eq!(d.operation, 0, "OPERATION=RELEASE");
         assert_eq!(d.report_bytes(), 16);
+    }
+
+    /// ★★★ THE MEASURED `cuCtxCreate` GR PUSHBUFFER, in the shape the address census must
+    /// answer for. `[measured 2026-08-10, boot `w226b_534e1b3_cup2`, `run_w226b_*_qemu.log`
+    /// lines 58-145 — 86 methods, 864 bytes, token 0x00000007]`. Only the rows that name an
+    /// address or load MME microcode are reproduced; the 64 `SET_CWD_REF_COUNTER` writes and
+    /// the cache invalidates are not, because the census says nothing about them.
+    fn measured_ctxinit_full() -> Vec<(u32, Vec<u32>)> {
+        vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            // SET_SHADER_SHARED_MEMORY_WINDOW_A/B
+            (hdr(0x02a0, 1, 2), vec![0x0000_7d1e, 0xe900_0000]),
+            // SET_VALID_SPAN_OVERFLOW_AREA_A/B/C — the third word is a SIZE, not address.
+            (
+                hdr(0x0200, 1, 3),
+                vec![0x0000_0002, 0x0000_0000, 0x000a_8000],
+            ),
+            // LOAD_MME_INSTRUCTION_RAM — 15 then 24 dwords of GUEST-AUTHORED MICROCODE.
+            (hdr(0x0114, 1, 1), vec![0x0000_0000]),
+            (hdr(LOAD_MME_INSTRUCTION_RAM, 1, 15), vec![0x0014_0003; 15]),
+            (hdr(0x0114, 1, 1), vec![0x0000_000f]),
+            (hdr(LOAD_MME_INSTRUCTION_RAM, 1, 24), vec![0x0000_0003; 24]),
+            // ⊘ The copy engine binds subchannel 4 in the SAME stream — the collision the
+            // class gate exists for, reproduced here so the census is asked about it too.
+            (hdr(SET_OBJECT, 4, 1), vec![0xc7b5]),
+            // SET_TEX_HEADER_POOL_A/B/C and SET_TEX_SAMPLER_POOL_A/B/C
+            (
+                hdr(0x1574, 1, 3),
+                vec![0x0000_0100, 0x0000_0000, 0x000f_ffff],
+            ),
+            (
+                hdr(0x155c, 1, 3),
+                vec![0x0000_0100, 0x0200_0000, 0x0000_0000],
+            ),
+            (
+                hdr(SET_REPORT_SEMAPHORE_A, 1, 4),
+                vec![0x0000_0002, 0x0440_fff0, 0x0000_0001, 0x0000_0000],
+            ),
+        ]
+    }
+
+    #[test]
+    fn the_census_names_every_address_the_measured_pushbuffer_dereferences() {
+        let (ops, mme) = decode_address_operands(&measured_ctxinit_full());
+        let by_name: std::collections::BTreeMap<_, _> =
+            ops.iter().map(|o| (o.name, o.va.0)).collect();
+        // ★★★★★ FIVE distinct 64-bit VAs, across THREE unrelated aperture bases. The
+        // completion observer measured exactly ONE of them.
+        assert_eq!(
+            by_name.get("SET_REPORT_SEMAPHORE"),
+            Some(&0x2_0440_fff0),
+            "the one address `w226b` proved binds"
+        );
+        assert_eq!(
+            by_name.get("SET_TEX_HEADER_POOL"),
+            Some(&0x100_0000_0000),
+            "★ a DIFFERENT aperture base — and with max index 0xfffff the engine reads 32 MiB \
+             of whatever is mapped there"
+        );
+        assert_eq!(by_name.get("SET_TEX_SAMPLER_POOL"), Some(&0x100_0200_0000));
+        assert_eq!(
+            by_name.get("SET_VALID_SPAN_OVERFLOW_AREA"),
+            Some(&0x2_0000_0000)
+        );
+        assert_eq!(
+            by_name.get("SET_SHADER_SHARED_MEMORY_WINDOW"),
+            Some(&0x7d1e_e900_0000),
+            "★ ~137 TB — a base the guest chose, and nothing in this port has an opinion on it"
+        );
+        assert_eq!(ops.len(), 5, "five live address registers: {by_name:#?}");
+        // ★★★★★ THE ROW THAT DECIDES THE SHAPE OF ANY ANSWER.
+        assert_eq!(
+            mme, 39,
+            "★★★ 39 dwords of GUEST-AUTHORED MME microcode. The Macro Method Expander's \
+             OUTPUT IS METHODS, so a method-level allowlist over this stream cannot be \
+             sound — the VA space is the only boundary left. gr_execution_boundary.md §2."
+        );
+    }
+
+    #[test]
+    fn a_census_row_on_a_subchannel_bound_to_the_copy_engine_is_not_decoded() {
+        // ⊘ The same collision the semaphore decoder is gated for, asked of the census:
+        // `0x1574` is SET_TEX_HEADER_POOL on 0xc7c0 and something else entirely on 0xc7b5.
+        let stream = vec![
+            (hdr(SET_OBJECT, 4, 1), vec![0xc7b5]),
+            (
+                hdr(0x1574, 4, 3),
+                vec![0x0000_0100, 0x0000_0000, 0x000f_ffff],
+            ),
+        ];
+        let (ops, mme) = decode_address_operands(&stream);
+        assert!(
+            ops.is_empty(),
+            "a copy-engine subchannel named no compute address: {ops:#?}"
+        );
+        assert_eq!(mme, 0);
+    }
+
+    #[test]
+    fn an_unbound_subchannel_names_no_address_and_loads_no_microcode() {
+        // ⊘ "we did not see the SET_OBJECT" and "it is AMPERE_COMPUTE_B" are different
+        // facts, and only the second licenses the decode. An address census that guessed
+        // would put a VA in the report that the guest may never have written.
+        let stream = vec![
+            (
+                hdr(0x1574, 2, 3),
+                vec![0x0000_0100, 0x0000_0000, 0x000f_ffff],
+            ),
+            (hdr(LOAD_MME_INSTRUCTION_RAM, 2, 15), vec![0x1; 15]),
+        ];
+        assert_eq!(decode_address_operands(&stream), (vec![], 0));
+    }
+
+    #[test]
+    fn a_half_written_address_pair_names_no_address_at_all() {
+        // ⚠ `an_in_annotation_is_not_a_transport_fact`, one plane over: a run carrying only
+        // the HIGH word named no address, and inventing a zero for the low word would put
+        // an operand in the census at a VA the guest never wrote.
+        let stream = vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            (hdr(0x1574, 1, 1), vec![0x0000_0100]),
+        ];
+        assert_eq!(decode_address_operands(&stream).0, vec![]);
+    }
+
+    #[test]
+    fn a_re_armed_address_register_reports_the_LAST_value() {
+        // A pushbuffer may rewrite a register; the binding the engine would reach is the one
+        // written last, and a census that reported both would be a transcript, not a state.
+        let stream = vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            (hdr(0x1574, 1, 2), vec![0x0000_0100, 0x0000_0000]),
+            (hdr(0x1574, 1, 2), vec![0x0000_0007, 0xdead_0000]),
+        ];
+        let (ops, _) = decode_address_operands(&stream);
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].va, GpuVa(0x7_dead_0000));
     }
 
     #[test]

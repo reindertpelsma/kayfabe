@@ -275,7 +275,41 @@ pub fn execute_ours_spans(
 /// ★ The ordering the split must not lose is *resolve → write → signal*, and it does not:
 /// [`write_resolved_completion`] still writes every payload before raising anything, and
 /// raises nothing at all on a refusal.
+///
+/// # ★★★★★ `#[non_exhaustive]`, and it is the SINGLE-WRITER RULE made a type fact
+///
+/// `[measured 2026-08-10, boot `w226b_534e1b3_cup2`, and the static census in
+/// `completion_observer.md` §8]` there is exactly **one** function in this tree that writes
+/// a completion semaphore ([`write_resolved_completion`]) and **zero** writers to the page
+/// `cuCtxCreate` polls. §8.4 then stated the honest limit of that finding: the property
+/// *"the release is a `ResolvedRelease` and never becomes a [`kayfabe_fwd::CeSpan`]"* was
+/// **accidental — asserted nowhere, and one refactor from untrue.**
+///
+/// ⊘ **This is not a hypothetical.** The C artifact's `MC_SERVICE_INTERRUPTS` spin — 118
+/// occurrences, two months of it read as a *missing* completion — was a **corrupted** one: a
+/// lagging second writer DMA-ing stale payloads `1,2` over a live `0x1e`, which UVM's
+/// 32→64-bit wrap detector read as a backwards jump (`uvm_gpu_semaphore.c:776`), wedging the
+/// channel (`uvm_channel.c:205`). **The C's entire fix (M5.38, `ceb13f5`) was to DELETE THE
+/// SECOND WRITER.** A backwards write is fatal on FIRST occurrence — `UVM_ASSERT_MSG_RELEASE`
+/// is compiled into release builds — so this is not a property that degrades gracefully.
+///
+/// ⇒ `#[non_exhaustive]` means a `ResolvedRelease` **cannot be struct-expression-constructed
+/// outside this crate**, so the only way to obtain one is [`resolve_releases`], which is the
+/// only code that asks the guest's own page tables where the guest's own semaphore VA lands.
+/// *"This address came from the guest's page tables"* stops being a convention about who
+/// calls what and becomes a fact the compiler enforces. Same idiom, and for the same reason,
+/// as `kayfabe_isolate::VerbPlan::Doorbell` and `DeclaredCompletion` in
+/// [`crate::completion_watch`] — the payload is the **guest's** literal, so a value claiming
+/// to be one that did not come from guest bytes must not be expressible.
+///
+/// ⚠ The fields stay `pub` **for reading**: [`crate::ceutils::CeUtilsRun::completion_at`]
+/// and the boot report need them, and hiding them would buy nothing — the danger was never
+/// reading a release, it was minting one. The compile-fail row that pins this is
+/// `crates/kayfabe-rt/tests/ui/mint_a_release.rs`; the *census* half — that no SECOND writer
+/// appears anywhere in the workspace — is `tests/tests/single_writer_census.rs`, because a
+/// type cannot see a caller that never touches the type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ResolvedRelease {
     /// The virtual address the guest's pushbuffer named, kept for the report.
     pub va: GpuVa,

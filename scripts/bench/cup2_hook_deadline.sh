@@ -19,7 +19,28 @@
 # cannot: the ledger only sees commands nobody claimed, and a hang is a command that WAS
 # claimed and never completed.
 set -uo pipefail
-GSSH=/workspace/bench/kayfabe/scripts/bench/gssh_nv
+# ★★★ SELF-LOCATING, and this is not tidiness. `[measured 2026-08-10, boot `w226`]` these two
+# paths were hardcoded to `/workspace/bench/kayfabe/...` and `/workspace/bench/cup2.c`. A rung
+# run from a tree checked out at `/workspace/kayfabe_w226` — which is the *correct* thing to do
+# when the campaign must not overwrite a tree another boot is using — got `HOOK_RC=127`, so
+# `cuCtxCreate` never ran, so **2 doorbells arrived and `GrCompute=0`**. The observer started,
+# declared nothing, and the boot was evidence of nothing. ⊘ A hook that silently cannot run is
+# the same defect class `boot_capture.sh`'s own header is about, one level out.
+#
+# So: the sibling copy beside THIS file wins (it is the one that came with the tree that built
+# the binary), and the box copy is the named fallback. `CUP2_SRC` overrides the workload.
+SELFDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+GSSH=${KAYFABE_GSSH:-$SELFDIR/gssh_nv}
+[ -x "$GSSH" ] || GSSH=/workspace/bench/kayfabe/scripts/bench/gssh_nv
+CUP2_SRC=${CUP2_SRC:-/workspace/bench/cup2.c}
+if [ ! -x "$GSSH" ] || [ ! -f "$CUP2_SRC" ]; then
+  echo "★ cup2_hook_deadline: CANNOT RUN — gssh=$GSSH (exec=$([ -x "$GSSH" ] && echo y || echo n))"
+  echo "  cup2 source=$CUP2_SRC (exists=$([ -f "$CUP2_SRC" ] && echo y || echo n))."
+  echo "  ⊘ Reporting this loudly rather than emitting 127 into a probe log: a boot whose hook"
+  echo "  did not run measures the CONTROL PLANE ONLY and no completion claim may cite it."
+  echo "CUP2_RC=HOOK_UNRUNNABLE"
+  exit 127
+fi
 DEADLINE=${CUP2_DEADLINE:-150}
 
 echo "=== cup2: locating a REAL cuda.h (3 of 5 hits in this guest are the PowerMac ADB"
@@ -28,7 +49,7 @@ $GSSH 'for h in $(find / -name cuda.h 2>/dev/null); do
          if grep -q CUDA_VERSION "$h"; then echo "REAL: $h"; fi
        done | head'
 echo "=== cup2: build ==="
-$GSSH 'cat > /tmp/cup2.c' < /workspace/bench/cup2.c
+$GSSH 'cat > /tmp/cup2.c' < "$CUP2_SRC"
 $GSSH 'gcc -O0 -o /tmp/cup2 /tmp/cup2.c -lcuda 2>&1; echo GCC_RC=$?'
 
 echo "=== cup2: run (detached, deadline ${DEADLINE}s on the HOST's clock) ==="

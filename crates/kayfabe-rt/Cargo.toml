@@ -22,6 +22,10 @@ kayfabe-device.workspace = true
 
 [dev-dependencies]
 kayfabe-mocks.workspace = true
+# ★★★ The single-writer rule's type half — `tests/compile_fail.rs`. Same idiom, and for the
+# same reason, as `kayfabe-isolate`'s ring-gate row: an impossibility asserted only in a doc
+# comment is an unexercised green instrument, and nobody notices when it stops being true.
+trybuild = "1.0"
 
 [lints]
 workspace = true

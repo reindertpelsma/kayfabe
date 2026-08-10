@@ -891,19 +891,34 @@ fn read_submission_methods(
 /// # Errors
 /// [`CeUtilsRefusal`] if the ring or the pushbuffer itself could not be read — i.e. the
 /// same refusals [`dump_submission_methods`] reports, from the same read.
+/// ★★★ What ONE read of a GR submission established. Returned whole rather than as a tuple
+/// so the census and the completion can never be attributed to two different reads.
+#[derive(Debug, Clone)]
+pub struct ObservedSubmission {
+    /// The completion the guest declared, and where its address landed.
+    pub declared: (
+        crate::completion_watch::DeclaredCompletion,
+        crate::completion_watch::Site,
+    ),
+    /// ★★★★★ **Every OTHER 64-bit address these bytes name, and where each one landed** —
+    /// see [`census_gr_addresses`] for what the number is for and what it is not.
+    pub census: Vec<(
+        crate::completion_watch::AddressOperand,
+        crate::completion_watch::Site,
+    )>,
+    /// Guest-authored MME instruction dwords in this submission. See
+    /// [`crate::completion_watch::LOAD_MME_INSTRUCTION_RAM`] for why this number, and not
+    /// any list of decoded methods, is what bounds a method allowlist.
+    pub mme_dwords: usize,
+}
+
 pub fn observe_declared_completion(
     ce: &mut CePlane<'_>,
     pb: &dyn PushbufferAbi,
     vmm: &mut dyn Vmm,
     chan: CeUtilsChannel,
     cursor: GpCursor,
-) -> Result<
-    Option<(
-        crate::completion_watch::DeclaredCompletion,
-        crate::completion_watch::Site,
-    )>,
-    CeUtilsRefusal,
-> {
+) -> Result<Option<ObservedSubmission>, CeUtilsRefusal> {
     let mut look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
     let Some(decl) = crate::completion_watch::decode_report_semaphore(&look.methods) else {
         return Ok(None);
@@ -920,7 +935,100 @@ pub fn observe_declared_completion(
             None => format!("{fault:?}"),
         }),
     };
-    Ok(Some((decl, site)))
+    // ★★★★★ THE ADDRESS CENSUS, on the SAME read and the SAME walk. ⊘ Deliberately not a
+    // second `read_submission_methods`: two reads of one ring at two instants are two
+    // descriptions of the wire that agree until they do not, which is the failure this
+    // campaign has paid for more than any other.
+    let (operands, mme_dwords) = crate::completion_watch::decode_address_operands(&look.methods);
+    let census = resolve_operands(ce, &mut look.last, operands);
+    Ok(Some(ObservedSubmission {
+        declared: (decl, site),
+        census,
+        mme_dwords,
+    }))
+}
+
+/// Resolve each named operand through the walk that is already in flight.
+fn resolve_operands(
+    ce: &mut CePlane<'_>,
+    last: &mut Option<(GpuVa, CeResolve)>,
+    operands: Vec<crate::completion_watch::AddressOperand>,
+) -> Vec<(
+    crate::completion_watch::AddressOperand,
+    crate::completion_watch::Site,
+)> {
+    let mut out = Vec::with_capacity(operands.len());
+    for op in operands {
+        let site = match WalkOperands::new(ce, last).resolve_one(op.va.0) {
+            Ok((r, _left)) => match r.residency.plane {
+                CpuPlane::GuestRam => crate::completion_watch::Site::GuestRam { gpa: r.addr.0 },
+                CpuPlane::Fb => crate::completion_watch::Site::Framebuffer { phys: r.addr.0 },
+            },
+            // ⊘ `Unresolved` is a first-class answer ABOUT THE ADDRESS TABLE and must never
+            // be read as "the guest named nothing there".
+            Err(fault) => crate::completion_watch::Site::Unresolved(match &*last {
+                Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
+                None => format!("{fault:?}"),
+            }),
+        };
+        out.push((op, site));
+    }
+    out
+}
+
+/// ★★★★★ **THE ADDRESS CENSUS — resolve EVERY address this GR submission names, not just
+/// the one the guest polls.**
+///
+/// # ⊘ Why this exists, and it is a scoping instrument rather than a step toward execution
+///
+/// `[measured 2026-08-10, boots `w226b_534e1b3_cup2` and `w227a_c5f251d_control`]` the
+/// completion observer proved **one** thing about the address plane: guest VA
+/// `0x2_0440fff0` binds, `site=GuestRam`. That refuted four rungs of `RING-VA-UNBOUND` for
+/// that address — and it is one address out of the seventeen the class can name.
+///
+/// The open question is `S1`: may the host GR engine execute the guest's pushbuffer? The
+/// honest form of that question is **not** *"can we route the doorbell"*; it is *"is there a
+/// host VA space in which every address these bytes can dereference lands in this guest's
+/// own memory, and nothing else does"*. `docs/design/gr_execution_boundary.md` argues that
+/// the VA space is the **only** boundary available (§2: `LOAD_MME_INSTRUCTION_RAM` defeats
+/// any method-level allowlist, because the MME's output is *methods*). ⇒ The size of that
+/// gap is a **measurable number**, and this function measures it: how many of the operands
+/// the guest actually names does our table bind today?
+///
+/// ★ An argument about a wall, replaced by a count at the guest's own addresses. Same move
+/// the observer made for the completion, one register file wider.
+///
+/// # ⊘ What it may NOT do, by construction
+///
+/// Reads only. It resolves addresses and reports where they went; it advances no cursor,
+/// writes no memory, produces no plan and lowers nothing to a host verb. Knowing where an
+/// address lands is not permission to let an engine dereference it.
+///
+/// Returns `(operands, mme_instruction_dwords)`; the operand list is empty when the
+/// submission binds no compute class at all, which is a fact about the guest's bytes.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] when the ring or a pushbuffer range will not resolve — the same walk
+/// and the same names as [`run_submission`]'s.
+pub fn census_gr_addresses(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+) -> Result<
+    (
+        Vec<(
+            crate::completion_watch::AddressOperand,
+            crate::completion_watch::Site,
+        )>,
+        usize,
+    ),
+    CeUtilsRefusal,
+> {
+    let mut look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    let (operands, mme_dwords) = crate::completion_watch::decode_address_operands(&look.methods);
+    Ok((resolve_operands(ce, &mut look.last, operands), mme_dwords))
 }
 
 /// ★★★★★ **Dump the raw method headers of the submission this doorbell is about, WITHOUT

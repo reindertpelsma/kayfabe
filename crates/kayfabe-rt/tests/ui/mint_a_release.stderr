@@ -1,0 +1,12 @@
+error[E0639]: cannot create non-exhaustive struct using struct expression
+  --> tests/ui/mint_a_release.rs:30:19
+   |
+30 |       let _forged = ResolvedRelease {
+   |  ___________________^
+31 | |         va: GpuVa(0x2_0440_fff0),
+32 | |         op,
+33 | |         payload: 1,
+...  |
+36 | |         words: [Some(op), None, None, None],
+37 | |     };
+   | |_____^

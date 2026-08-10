@@ -3699,8 +3699,8 @@ impl SharedDoorbell {
             // the rank-0 device read — is released HERE, before anything is declared and
             // before anything is printed. The declare below runs lock-free by construction.
         };
-        let (decl, site) = match out {
-            Ok(Some(pair)) => pair,
+        let observed = match out {
+            Ok(Some(o)) => o,
             // ⊘ A submission that declares no report semaphore. A FACT about the guest's
             // bytes, not a failure — every CE-only push answers exactly this.
             Ok(None) => return,
@@ -3712,6 +3712,7 @@ impl SharedDoorbell {
                 return;
             }
         };
+        let (decl, site) = observed.declared;
         let key = kayfabe_rt::completion_watch::WatchKey {
             proc: facts.proc,
             chan: facts.chan,
@@ -3745,6 +3746,47 @@ impl SharedDoorbell {
                 decl.subch,
                 decl.class_id,
             );
+            // ★★★★★ **THE ADDRESS CENSUS — S1's boundary, as a number instead of an
+            // argument.** `docs/design/gr_execution_boundary.md`.
+            //
+            // The completion observer proved ONE address binds. Opening `S1` means letting
+            // the host GR engine dereference **every** address these bytes name, in whatever
+            // VA space the host channel is bound to — so the containable question is not
+            // *"can we route the doorbell"* but *"does a host VA space exist in which all of
+            // these land in THIS guest's memory and nothing else does"*.
+            //
+            // ⊘ Printed on the same first-declaration branch as the line above, so it is
+            // ONE line per GrCompute channel and not one per doorbell, and it costs no
+            // second read: the census came off the same `read_submission_methods` and the
+            // same walk (`ceutils::ObservedSubmission`).
+            //
+            // ★ `mme=` is the row that decides the shape of any answer. Guest-authored MME
+            // microcode makes the method stream unbounded by inspection — the expander's
+            // output IS methods — so a method-level allowlist cannot be sound and the VA
+            // space is the only boundary left. §2 of the design doc.
+            let bound = observed
+                .census
+                .iter()
+                .filter(|(_, s)| !matches!(s, kayfabe_rt::completion_watch::Site::Unresolved(_)))
+                .count();
+            eprintln!(
+                "kayfabe: GR-ADDRESS-CENSUS proc={} chan={} class=0x{:04x} operands={} \
+                 bound={} unbound={} mme_dwords={} ⊘ a census of what the host GR engine \
+                 WOULD dereference; nothing here is executed and nothing here is permission",
+                facts.proc.0,
+                facts.chan.0,
+                decl.class_id,
+                observed.census.len(),
+                bound,
+                observed.census.len() - bound,
+                observed.mme_dwords,
+            );
+            for (op, s) in &observed.census {
+                eprintln!(
+                    "      {:<40} m=0x{:04x} sub={} va=0x{:x} → {s:?}",
+                    op.name, op.method, op.subch, op.va.0
+                );
+            }
         }
     }
 
