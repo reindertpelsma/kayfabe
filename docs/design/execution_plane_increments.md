@@ -12319,8 +12319,8 @@ part holds. But *"`mean_wire.rs:1448` carries a stale comment your own boot cont
 not: those bytes are a **hand-built decoder fixture**, and the boot neither corroborates nor
 contradicts them. What the boot actually says is stronger and different — `SET_PAGE_DIRECTORY
 … flags 0x8 (aperture 0)`, i.e. **every root this port has ever seen is vidmem**, so the
-sysmem arm of *both* layers is unexercised by any measured traffic and the disagreement cannot
-fire. The comment is corrected to say that, which is a smaller claim than the brief's and the
+sysmem arm of *both* layers is unexercised by every boot in `traces/guest_boots/` and the
+disagreement cannot fire. The comment is corrected to say that, which is a smaller claim than the brief's and the
 true one. ⚠ Naming a fixture after a guest behaviour is how a fixture becomes a citation.
 
 ### 16.66.2 The change
@@ -12434,7 +12434,9 @@ correlates against `PTIMER`"* is an argument from the clock being the same objec
 measurement of a guest reading the field. The eight doorbells moving from refused to served
 is the measurement; the timestamp's *value* has no oracle here.
 
-### 16.66.6 ★★★★ TWO INSTRUMENT FAILURES, one of them mine, both measured
+### 16.66.6 ★★★★ TWO INSTRUMENT FAILURES, one of them mine
+
+`[measured 2026-08-10, boots `s52_af255fa_fourword` and `s54_af255fa_wallrepeat`]`
 
 **(1) ⊘ I CHANGED THE INSTRUMENT BETWEEN THE BASELINE AND THE MEASUREMENT.** The first boot
 at `af255fa` (`s52_af255fa_fourword`) ran `POST_CAPTURE_HOOK=guest_cuinit_wall.sh`, while the
