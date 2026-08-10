@@ -13371,3 +13371,39 @@ should use*, and the two candidates are already both built.
   **same** ring VA. That is the driver tearing the CeUtils channel down and rebuilding it on each
   ~25 s retry, not one channel rung three times — a fact no cell predicted and which nothing here
   depends on, recorded because a reader will otherwise assume the former.
+
+### 16.70.6 ⚠ A FACT THE NEXT RUNG MUST RESOLVE FIRST — two ring addresses for one token
+
+⊘ Recorded rather than explained, because explaining it from one boot is exactly the move this
+campaign keeps paying for.
+
+| | ring VA for token `0x00010002` |
+|---|---|
+| control (`w205_..._ctl`) | `0x120064000` — served, `sem fin va=0x12006c004` (`= +0x8004`) |
+| real plane (`w205_..._real`) | **`0x420064000`** — `RING-VA-UNBOUND`, all three doorbells |
+| device's own `gpfifo rings:` census, **both** arms | `first 0x0000000120064000 (4096 entries) — GPU VIRTUAL, untranslated` |
+
+Both arms' ring census names `0x120064000` as the first declared ring; the real arm's forwarded
+doorbells declare `0x420064000`. Two readings are open and this boot separates neither:
+
+1. **RM placed it differently.** The two boots diverge within `RmInitAdapter` (the control reaches
+   `cuInit`, 26 declared rings; the real arm dies, 6), so RM's VA allocator having handed out a
+   different address for a channel built after the divergence is entirely ordinary. The shared low
+   bits `0x…064000` are consistent with this.
+2. ⚠ **The two paths are looking at different channels.** `try_ce_submission` reads `ring_va` off
+   `ce_channel_facts`; `forward_ring` reads `gp_fifo_ring` off `spine.rmgraph.node_of_resource`.
+   §16.16's rule is that two projections of one fact are printed side by side rather than
+   reconciled in silence — and here they have never been printed side by side at all, because no
+   boot has ever run both paths on one doorbell.
+
+⇒ ★ **The instrument owed before the resolver question is answered**: print the ring VA from
+*both* projections on the same doorbell, on one plane. If they agree, reading 1 holds and the
+seam is purely resolver choice; if they disagree, the forwarding path is reading a different
+channel's ring and the resolver question was the wrong question.
+
+⊘ **And this is why no resolver was changed in this rung.** The obvious fix — point
+`read_gpfifo_ring` at the same published-root descent the CPU executor uses — is a ruling about
+which of two resolvers owns the forwarding path (`mode2_address_table.md`'s *"ONE address table of
+truth, forward-populated, never reverse-resolved"* is on one side of it, and the walker that
+demonstrably finds the ring is on the other). Making that ruling from one boot, with the table
+above unresolved, would be picking a mechanism before measuring which one is even being asked.
