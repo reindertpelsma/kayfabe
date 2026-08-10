@@ -13895,3 +13895,120 @@ instrument whose agreement with the resolver is now asserted by a bitten test.
 - ⚠ **`Ce` doorbell counts are ±2** (§16.72.7). Structural rows only are treated as exact:
   `86/86` refusals by route, `16 SERVED-LOCAL`, `26` rings, the `801` wall, and `0` on every
   forwarding instrument when the plane is unselected.
+
+### 16.73.5 ★★★★★ THE OUTCOME — **ARM A *and* ARM D**, and the tracer/resolver disagreement is CLOSED
+
+`[measured 2026-08-10, boots `w208_797a6bc_real`, `w208_797a6bc_ctl`, ONE binary stamped
+`kayfabe-rev:797a6bc8ab3788a75a4c03d3f893aa010a857bad` read off the **hypervisor**
+(`strings /workspace/bench/qemu-build/qemu-system-x86_64`), 40 hex and equal to
+`git rev-parse HEAD`, differing only in `KAYFABE_ISOLATES`. Both wrapped in
+`host_xid_watch.sh`, both `xid_before=0 xid_after=0` off a ring buffer proved readable at
+**997 lines**. Both ran `POST_CAPTURE_HOOK=scripts/bench/guest_cuinit_wall.sh`. Evidence:
+`traces/guest_boots/run_w208_797a6bc_{real,ctl}_{qemu,dmesg,probe}.log`, `xid_w208{real,ctl}.log`.]`
+
+⚠ **AND THE REV STAMP EARNED ITS KEEP ON THIS RUNG.** The **first** bench build reported
+`== built:` and `BUILD_RC=0` and produced a hypervisor stamped **`4395ebd`** — the previous
+rung's revision. Cause: I passed `CARGO_TARGET_DIR=/workspace/bench/cargo-target`, so `cargo`
+wrote the archive there while `scripts/build_qom_shim.sh` copies from
+`$REPO/target/release/libkayfabe_qemu_raw.a` — a **stale** file from an earlier build, which
+linked cleanly. ⇒ ★★★ This is `862c7c2`'s class reproduced exactly, by me, in one command, and
+**every signal except the stamp said the build was current**. Read the stamp off the
+hypervisor, always, and never off the build's exit code.
+
+The deciding line, from the real arm's `key=0xc1e00006:0x2 ring=0x420064000`:
+
+```
+walk: L0@0x2efa9c000/byBAR2#39[ch1 lf0 sp0 inv3]  =PDE@0x0->0x2efa9b000/Vidmem
+      L1@0x2efa9b000/byBAR2#40[ch1 lf0 sp0 inv511]=PDE@0x0->0x2efa9a000/Vidmem
+      L2@0x2efa9a000/byBAR2#41[ch26 lf0 sp0 inv486]=PDE@0x420000000->0x2efa80000/Vidmem
+      L3@0x2efa80000/byBAR2#67[ch2 lf0 sp0 inv255]=PDE@0x420000000->0x2efa7f000/Vidmem/dual1of2
+      L5@0x2efa7f000/byBAR2#68[ch0 lf110 sp0 inv402]=LEAF@0x420064000->0x237fe000/SysmemCoherent/sz0x1000
+      walkend=LEAF
+```
+
+beside, in the same string, `rng=S:0x237fe000`.
+
+**ARM A — the transport is named, and it is the same one at EVERY level.** All five
+page-table pages of this ring's tree carry `/byBAR2` — `#39, #40, #41, #67, #68`. The guest's
+CPU wrote every one of them through the emulated **instance/BAR2 window**. ⊘ Not one is
+`EXEC`, which the same boot's total already implied (`FIRST-WRITER census: PRAMIN 21 / BAR1 0
+/ BAR2 50 / **EXEC 0**`) and which the per-address tag now says of *these* pages rather than
+of the aperture in aggregate. ⇒ ★★★★ **RULING: (a). The address table is INCOMPLETE, not the
+wrong mechanism.** The standing invariant — *one authoritative per-VAS VA→GPGA table,
+forward-populated, never reverse-resolved; miss = fault* — is **untouched**, and needs no
+argument, no owner decision and no amendment. What it needs is G1–G3 built.
+
+**ARM D — the walk now REACHES THE LEAF, and it agrees with `rng=` byte for byte.**
+`LEAF@0x420064000->0x237fe000/SysmemCoherent/sz0x1000` against `rng=S:0x237fe000`. §16.72.6's
+`⊘ none-of-the-above` cell does not fire on this boot. ★ And the fork is visible and *named*:
+`L3 … /dual1of2` descends to `0x2efa7f000` at **level 5** (`ch0 lf110 sp0 inv402` — 512 slots,
+the **small-page** table), where §16.72's `max_by_key` followed `0x2efa7ef00` at level 4
+(`inv32` — 32 slots, the **big-page** table). The arithmetic §16.72.6 derived from a log is
+now read directly off the instrument. ⊘ `dual2of2` does not appear because the **first** half
+answered and `follow`'s rule is *first-that-answers-wins*; the second half is printed only when
+the first fails, which is exactly when a reader needs it.
+
+⇒ ★★★★ **`INVALID-SLOT` is gone from the tree, and with it the sentence six sections
+misread.** The instrument that produced §16.72.6's contradiction produced, on the same
+channel, the same VA and the same binary-modulo-two-observers, a **corroboration**.
+
+### 16.73.6 ⊘ THE CONTROL — and this one IS a control, unlike `w207`'s
+
+`w208_797a6bc_ctl`, plane unselected, against the committed baseline:
+
+| | committed baseline | `w208 ctl` | |
+|---|---|---|---|
+| arrived / served / REFUSED | 448 / 362 / 86 | **448 / 362 / 86** | ✅ **exact**, not ±2 |
+| refusals by route (`GrCompute`) | 86 | **86** | ✅ |
+| `Ce` doorbells | 362 | **362** | ✅ — ⚠ `w207 ctl2` drifted to 364; this one did not, so ±2 remains the *declared tolerance* and not a trend |
+| doorbells logged (`SERVED-LOCAL`) | 16 | **16** | ✅ |
+| rings declared | 26 | **26** | ✅ |
+| wall | `cuCtxCreate → 801` | **`cuCtxCreate(&ctx,0,d) -> operation not supported (801)`** | ✅ ★ and `cuInit` **succeeded** — this is the fact `w207 ctl` did not have |
+| `RING-PROJ`/`FWD-RING`/`walk:`/`rng=`/`CE-SUBMIT` | 0 | **0** | ✅ the neutrality claim, and it now covers the new instruments too |
+| FIRST-WRITER census | `PRAMIN 21 / BAR1 41 / BAR2 88 / EXEC 11706` | **identical** | ✅ |
+
+★★ **Proof that it is a control and not a flake, stated positively**: `w207 ctl` failed at
+`cuInit(0) → 999`; this one reaches `cuCtxCreate` and walls at `801`, which is the baseline's
+own wall. ⊘ The §16.72.7 lesson stands — a flaked control is not a control — and the way it
+was discharged is by re-running, not by scoring against the flake.
+
+★ And the ±2 non-determinism claim is **narrowed, not confirmed**: three control boots now
+read 362, 364, 362. So the drift is real and it is not monotone; ⊘ do not read 362 on a future
+boot as "the drift went away".
+
+### 16.73.7 ⊘ WHAT THIS BOOT DID NOT ESTABLISH — including the debt, PREDICTED unpaid a fourth time
+
+- ⊘ **`CE-SUBMIT` = 0**, exactly as §16.73.4 predicted, and `FWD-RING … RING-VA-UNBOUND
+  va=0x420064000 → NOTHING FORWARDED` is unchanged on all three doorbells. ★ Fourth rung. The
+  difference this time is that the debt now has a **price list** (G1, G2, G3) instead of only a
+  name. ⚠ `grep -c` returned `0` and **exited 1** — the count is the evidence, not the rc.
+- ⊘ **The two-fact bar (`GP_GET` moving + release semaphore) was not attempted and could not
+  be.** Nothing was forwarded. ⊘ No claim here is verified by the thing this change produced:
+  the change adds no table entry, and the ruling rests on `/byBAR2`, a fact about the guest.
+- ⊘ **Nothing about which of G1–G3 is sufficient.** All three are necessary by the citations in
+  §16.73.1(2); necessity is not sufficiency, and no boot here tested any of them.
+- ⊘ **Nothing about the byte-source question G3 raises**, which is the one genuinely open
+  design point: `run_pt_decode` reads through the **isolate**, and on this path the guest's
+  page tables are in the **device's own `FbStore`** — the store `ceresolve` already reads and
+  the store `/byBAR2` was answered out of. ⚠ That is a *seam* decision (which store is
+  authoritative for a page-table decode on the Mode-2 plane), not an invariant decision, and it
+  is flagged here rather than taken.
+- ⊘ The wall did not move and was not meant to: `RmInitAdapter failed! (0x25:0x65:1249)`, host
+  Xid 0 → 0, `GrCompute=0` on the real arm again.
+
+### 16.73.8 ★ THE NEXT INCREMENT, named — and it is three wirings, not one
+
+1. **G1 — witness the CPU transport.** A `PtWitnessPort` on `RegPlane` (the `set_doorbell`
+   precedent exactly: installed by the composition root, invoked **after** `drop(s)` because
+   `plane→core` is the established order and R1 forbids a blocking call under the plane mutex),
+   fed from `fb_write`'s landed `phys`. ⊘ It must **dedupe by page in the device** and route at
+   the doorbell: 384 807 BAR2 writes in one boot must not become 384 807 rank-0 acquisitions.
+2. **G2 — call the consumer.** `SharedDevice::decode_pt_writes` at the doorbell, which is
+   already the sanctioned `Demand` (`ceresolve`'s module doc: the doorbell is the guest's own
+   submit fence and the only commit point on this path).
+3. **G3 — give it a byte source that answers.** The device's `FbStore`, not `IsolateFb`, for
+   the emulated plane. ⚠ Owner-visible, per §16.73.7.
+
+⊘ **And a falsifier for that rung must not be "the table has an entry"**: it is `FWD-RING`
+ceasing to say `RING-VA-UNBOUND`, `CE-SUBMIT` printing a span, and `GP_GET` moving — R26's
+two-fact bar, unchanged.
