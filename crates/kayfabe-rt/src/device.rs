@@ -2402,6 +2402,8 @@ impl SharedDevice {
     /// — including [`kayfabe_isolate::RmError::PlacementRefused`] when the fixed map did
     /// not land where it was asked to, and `Rm(NoMemory)` (`0x51`), which ⊘ **is
     /// collision-or-exhaustion and cannot be told apart** — see the C's R2.
+    /// ★★★★★ §5.12 — `how` selects the chain, and the two are **alternatives**: see
+    /// [`kayfabe_fwd::FbLeafBacking`]. ⊘ Nothing here retries one as the other.
     pub fn back_fb_leaf(
         &self,
         gpu: GpuId,
@@ -2409,6 +2411,7 @@ impl SharedDevice {
         va: GpuVa,
         len: u64,
         phys: u64,
+        how: kayfabe_fwd::FbLeafBacking,
     ) -> Result<kayfabe_fwd::FbLeafBacked, FwdFault> {
         self.verb_op(
             || {
@@ -2416,13 +2419,53 @@ impl SharedDevice {
                     |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
                     |_spine, proc, ()| {
                         let planned =
-                            kayfabe_fwd::plan_back_fb_leaf(proc, gpu, pdb, va, len, phys)?;
+                            kayfabe_fwd::plan_back_fb_leaf(proc, gpu, pdb, va, len, phys, how)?;
                         Staged::check_out(proc, gpu, planned)
                     },
                 )?
             },
             |_spine, proc, plan, reply| kayfabe_fwd::commit_back_fb_leaf(proc, plan, reply),
         )
+    }
+
+    /// ★★★ **The joined-leaf instrument, through the core** — [`kayfabe_isolate::Worker`]'s
+    /// `fb_join_peek`, routed to the isolate that owns `(pid, gpu)`.
+    ///
+    /// ⊘ Not a `VerbPlan`, and it does not go through [`SharedDevice::verb_op`]: it acquires
+    /// nothing and names no [`kayfabe_isolate::HostHandle`], so there is no plan to commit,
+    /// no orphan set to unwind and no R5 re-validation to do — which is exactly why
+    /// [`kayfabe_isolate::Worker::fb_join_peek`] sits beside `execute` rather than inside it.
+    /// What it *does* keep is the checkout: a worker of the right isolate, borrowed under the
+    /// proc lock and used with **every lock released**, so R1's assertion inside the worker
+    /// has something true to assert.
+    ///
+    /// ⚠ **Pool-full is a refusal here, not a park.** A verb that cannot get a worker must
+    /// wait, because dropping it would drop guest work. An instrument that cannot get one has
+    /// nothing to lose by saying so, and a diagnostic that blocked the caller on pool
+    /// availability would change the timing of the thing it is measuring.
+    ///
+    /// # Errors
+    /// [`FwdFault`] when there is no live isolate to ask or the pool has no idle worker;
+    /// otherwise the isolate's own refusal. ⊘ `Ok(false)` — *"no joined leaf covers that
+    /// range"* — is **not** an error.
+    pub fn fb_join_peek(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, FwdFault> {
+        let mut worker = self
+            .route_act(
+                |_| Ok((pid, ())),
+                |_, proc, ()| kayfabe_fwd::checkout_and_drain(proc, gpu).map(|(w, _)| w),
+            )??
+            .ok_or(FwdFault::NoTarget { proc: pid, gpu })?;
+        // ---- No lock held. `Worker::fb_join_peek` asserts exactly that. ----
+        let out = worker.fb_join_peek(phys, buf, poke);
+        self.return_worker(pid, gpu, worker);
+        out.map_err(FwdFault::Rm)
     }
 
     /// **Case 1**: forward an engine-object alloc on the channel identified by

@@ -519,6 +519,39 @@ pub enum ExportSource {
     },
 }
 
+/// ★★★★★ **What joining ONE framebuffer leaf produced** — [`RmBackend::join_fb_leaf`]'s
+/// answer, and the shape `fb_cpu_view.md` §4 measured on a real GA106 before it was built.
+///
+/// Three facts from one chain, reported separately because each has a different owner and
+/// a different reclaim point:
+///
+/// - `backing` — the **memory**, minted in the isolate and handed up to the VMM. This is
+///   the half that closes *"two memories"*: the VMM `mmap`s the same pages the isolate
+///   described to RM, so a byte the guest writes through the emulated framebuffer and a
+///   byte the engine reads through the GPU MMU are the **same byte**.
+/// - `memory` — the `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` RM built over the isolate's mapping.
+///   Owned by RM; freed through [`VerbPlan::Release`] like any other host object.
+/// - `host_va` — where it landed. Equal to the plan's `at`, or the verb refused with
+///   [`RmError::PlacementRefused`] and this value never existed.
+///
+/// ⚠ **The leaf is host SYSTEM memory, not card memory, and that is a named divergence**
+/// from the C artifact and from [`VerbPlan::PublishVidmem`], not an oversight. The engine
+/// reaches it over PCIe rather than out of local framebuffer. It is **not optional**: card
+/// memory is exactly the memory that cannot carry a guest-reachable CPU view, which is the
+/// whole of [`ExportSource::HostDeviceMemory`]'s refusal. Stated here so the cost is read
+/// off the type rather than discovered in a profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeafJoined {
+    /// ★★★ The shareable backing, for the VMM to `mmap` as the guest's own view of this
+    /// framebuffer range. Its token is the **adapter's**, minted when the adapter adopted
+    /// the descriptor — never the child's index and never a value off the wire.
+    pub backing: ExportedBacking,
+    /// The RM object describing the isolate's mapping of those same pages.
+    pub memory: HostHandle,
+    /// The host GPU VA it was mapped at.
+    pub host_va: u64,
+}
+
 /// One request to [`RmBackend::export_backing`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExportRequest {
@@ -833,6 +866,87 @@ pub trait RmBackend: Send + Sync {
     /// [`RmError::NotExportableAsMemory`] for the device class; [`RmError::NoMemory`] if
     /// the host would not mint the backing; whatever the transport refuses with.
     fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError>;
+
+    /// ★★★★★ **ONE memory for a framebuffer leaf** — mint a fabricated backing, map it
+    /// here, describe it to RM, place it at `at`, and hand the **same pages** up to the VMM
+    /// (`fb_cpu_view.md` §4).
+    ///
+    /// # ⊘ Why this is a verb of its own and not `export_backing` plus `map_gpu_va`
+    ///
+    /// Because the VMM cannot name the isolate's backing. [`ExportedBacking`] carries the
+    /// **adapter's** token, minted when the adapter adopts the descriptor; the child's index
+    /// into its own table deliberately does not travel (`kayfabe_isolate_host::export`'s
+    /// module docs — *"a value the peer supplies must never name a slot in our registry"*).
+    /// So a VMM holding an exported backing has no way to say *"describe **that** one to RM
+    /// at **this** VA"*. The two halves have to be one verb, issued by the party that owns
+    /// the memfd.
+    ///
+    /// ⊘ **It is not [`RmBackend::export_backing`] with extra steps in the other direction
+    /// either.** `export_backing` acquires no RM object and therefore sits beside
+    /// [`Worker::execute`]; this acquires two (a descriptor and a fixed GPU mapping) and
+    /// belongs inside a chain that can unwind them.
+    ///
+    /// # ★★ What the implementation owes, in order
+    ///
+    /// 1. mint a shareable backing of `len` bytes — the [`ExportSource::Fabricated`] arm,
+    ///    the one that is *designed* to succeed;
+    /// 2. `mmap` it **in the isolate**, and keep that mapping alive for as long as the
+    ///    descriptor: RM pins the pages behind an `OS_DESCRIPTOR` and a mapping torn out
+    ///    from under it is a live GPU mapping of memory this process no longer describes;
+    /// 3. `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over that mapping;
+    /// 4. map it into `vas` at `at`, `DMA_OFFSET_FIXED`, and **refuse** rather than adopt a
+    ///    placement that is not `at`;
+    /// 5. `phys` is carried so the isolate can answer for this range **by framebuffer
+    ///    address** afterwards. ⊘ It is the VMM's number and nothing here derives it.
+    ///
+    /// ★ **Per-isolate state, never per-worker.** The mapping table this builds is a
+    /// property of the isolate: an isolate is a **pool**, and the worker that joins a leaf
+    /// need not be the worker later asked to read it. A table on the backend is the bug that
+    /// one-worker tests cannot see.
+    ///
+    /// # Errors
+    /// [`RmError::NoMemory`] if the backing cannot be minted; [`RmError::PlacementRefused`]
+    /// when the fixed map did not land at `at`; otherwise whatever RM or the transport
+    /// refused with. ⊘ A backend with nowhere to keep the mapping must refuse **by name**
+    /// rather than mint a per-worker table.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError>;
+
+    /// ★★★ **The both-directions instrument for a joined leaf** — read what the isolate's
+    /// own mapping holds at `phys`, and (when `poke` is `Some`) leave a per-word pattern
+    /// behind in it.
+    ///
+    /// # ⊘ This is an instrument, and it is written as one
+    ///
+    /// It is the only thing in this trait that *writes* fabricated content, and it exists
+    /// because the property [`RmBackend::join_fb_leaf`] claims — *"the VMM's view and the
+    /// isolate's view are one memory"* — is not observable from either side alone. A VMM
+    /// that wrote through its own mapping and read back through its own mapping would be
+    /// comparing a buffer with itself.
+    ///
+    /// ★ **One round trip carries both directions**: the read happens **before** the poke,
+    /// so the reply is the guest→isolate answer and the poke is the isolate→guest stimulus
+    /// the caller then reads through its own view. Two verbs would have made the ordering a
+    /// convention; one makes it the type.
+    ///
+    /// `Ok(false)` means **no joined range covers `[phys, phys+len)`** — the same
+    /// *"MISS = FAULT"* fact [`RmBackend::fb_read`] carries, and deliberately not zeros: an
+    /// unjoined range answering with a page of zeros is indistinguishable from a joined one
+    /// holding zeros, and those are opposite findings.
+    ///
+    /// # Errors
+    /// Whatever the transport refused with. ⊘ `Ok(false)` is not an error.
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError>;
 
     /// ★★★★★ **Map a slice of GUEST RAM into this isolate — because the VMM said to.**
     ///
@@ -1407,6 +1521,39 @@ pub enum VerbPlan {
         /// mapping is placed HERE, or the verb fails.
         at: GpuVa,
     },
+    /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — the chain that **replaces**
+    /// [`VerbPlan::PublishVidmem`] at every leaf (`fb_cpu_view.md` §4).
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::join_fb_leaf`], with
+    /// [`VerbPlan::Publish`]'s own placement check applied unchanged on the way back.
+    ///
+    /// ## ⊘ It is a REPLACEMENT, not an addition
+    ///
+    /// `PublishVidmem` gives the leaf **real card memory with no CPU view**, which is two
+    /// memories: the engine reads the card object and the guest reads the emulator's
+    /// fabricated one, silently, in both directions and with no fault anywhere. That is not
+    /// a shortfall of the variant — it is what a vidmem object **is**, and the measurement
+    /// that settles it is [`ExportSource::HostDeviceMemory`]'s refusal. ⇒ A leaf served by
+    /// both chains would have two backings at one VA, so a shell arms exactly one.
+    ///
+    /// ## ⚠ The cost, named here rather than found later
+    ///
+    /// The leaf becomes host **sysmem**. See [`FbLeafJoined`].
+    JoinFbLeaf {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// The guest leaf's own length, so the mapping covers exactly the range the guest's
+        /// page tables bind.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, or the verb fails.
+        at: GpuVa,
+        /// ★★ The **framebuffer-physical** address this leaf occupies in the emulated
+        /// device, as the guest's own page-table walk produced it. Carried so the isolate
+        /// can answer for the range by framebuffer address afterwards
+        /// ([`RmBackend::fb_join_peek`]); ⊘ nothing below the VMM derives it.
+        phys: u64,
+    },
     /// ★★★★★ **THE GUEST'S OWN PAGES, published at the guest's own VA** — the chain
     /// [`VerbPlan::Publish`] is the *fabricated* counterpart of
     /// (`guest_ram_crossing.md` §5.8).
@@ -1680,6 +1827,7 @@ impl VerbPlan {
         match self {
             VerbPlan::Publish { host_vas, .. }
             | VerbPlan::PublishVidmem { host_vas, .. }
+            | VerbPlan::JoinFbLeaf { host_vas, .. }
             | VerbPlan::PinGuestRam { host_vas, .. } => host_vas.iter().copied().collect(),
             VerbPlan::Doorbell {
                 host_vas, channel, ..
@@ -1717,6 +1865,19 @@ pub enum VerbReply {
         memory: HostHandle,
         /// The host GPU VA it was mapped at.
         host_va: u64,
+    },
+    /// ★★★★★ [`VerbPlan::JoinFbLeaf`]'s reply — **and it carries the backing as well as
+    /// the RM object**, because the whole point is that a second party can map it.
+    ///
+    /// ⊘ A separate variant rather than a field on [`VerbReply::Published`]: a commit that
+    /// adopted a `Published` and silently found no backing would record a leaf as *joined*
+    /// when it was merely *placed*, which is the exact two-memories state this chain
+    /// exists to end.
+    FbLeafJoined {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// The three facts the chain produced. See [`FbLeafJoined`].
+        joined: FbLeafJoined,
     },
     /// ★★★ [`VerbPlan::PinGuestRam`]'s reply — **and it carries the guest-RAM mapping
     /// as well as the RM object**, because releasing one does not release the other.
@@ -2031,6 +2192,28 @@ impl Worker {
         self.backend.fb_read(phys, buf)
     }
 
+    /// ★★★ **The joined-leaf instrument** ([`RmBackend::fb_join_peek`]) — beside
+    /// [`Worker::execute`] for [`Worker::fb_read`]'s reasons exactly: it names no
+    /// [`HostHandle`] and acquires nothing, so there is neither a foreign-handle gate to run
+    /// nor an unwind to build. What it keeps is R1, because it is a round trip to another
+    /// process.
+    ///
+    /// # Errors
+    /// Whatever the backend refuses with. `Ok(false)` is **not** an error — see
+    /// [`RmBackend::fb_join_peek`].
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("peeking a joined framebuffer leaf");
+        self.backend.fb_join_peek(phys, buf, poke)
+    }
+
     /// ★★★ **Ask the isolate to perform a mapping and hand back memory the VMM can
     /// install** ([`RmBackend::export_backing`], `isolate_vmm_fd_crossing.md` §12).
     ///
@@ -2240,6 +2423,55 @@ impl Worker {
                     host_vas: fresh_vas,
                     memory,
                     host_va,
+                })
+            }
+            // ★★★★★ **ONE MEMORY.** Structurally `Publish`'s twin, and the difference is
+            // that the chain hands back a descriptor as well as a handle — the pages the
+            // engine will read are pages the VMM can map, which is the whole increment.
+            //
+            // ⊘ The unwind is deliberately IDENTICAL in shape to the two arms above. The
+            // backing itself is NOT in the orphan set and that is not an omission: it is a
+            // `memfd` the child owns, released when the child's own table drops it, and
+            // `Orphans` frees RM objects and unmaps GPU VAs — a descriptor is neither. The
+            // same asymmetry `PinGuestRam` records one arm down for its guest-RAM mapping.
+            VerbPlan::JoinFbLeaf {
+                host_vas,
+                len,
+                at,
+                phys,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let joined = match rm.join_fb_leaf(vas, *len, *at, *phys) {
+                    Ok(j) => j,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                // ★★★ #102 — the SAME address-identity check, at the seam that crosses
+                // into the untrusted-by-construction backend. The backend is asked to
+                // refuse a wrong placement itself and does; this is the second, independent
+                // check, and it is here for the reason the `Publish` arm gives: this is the
+                // one place a placement can be downgraded silently.
+                if joined.host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, joined.host_va);
+                    let mut orphans = vec![joined.memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: joined.host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::FbLeafJoined {
+                    host_vas: fresh_vas,
+                    joined,
                 })
             }
             // ★★★★★ **THE FIRST GUEST BYTE.** Structurally `Publish`'s twin, and every

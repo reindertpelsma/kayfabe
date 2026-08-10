@@ -1849,6 +1849,31 @@ pub fn commit_publish(
     })
 }
 
+/// ★★★★★ **Which chain a framebuffer leaf is materialized by** — and they are
+/// alternatives, never layers.
+///
+/// `fb_cpu_view.md` §4. A leaf served by both would have two host objects at one VA, so a
+/// shell arms exactly one and the type is what says so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbLeafBacking {
+    /// ⊘ **SUPERSEDED — `w228`'s chain.** Real host **vidmem** at the guest's own VA, with
+    /// **no CPU view**: the engine reads the card object and the guest reads the emulator's
+    /// fabricated one. Two memories, silent in both directions, no fault and no status.
+    ///
+    /// It is kept expressible because it is what a leaf *was* and because the difference
+    /// between the two chains is the finding — ⊘ but it has no production caller: the shell
+    /// arms [`FbLeafBacking::Joined`]. See `fb_cpu_view.md` §0.1 for the measurement that
+    /// settles why the card object cannot grow the missing view.
+    Vidmem,
+    /// ★★★★★ **ONE memory.** A fabricated backing, mapped in the isolate, described to RM as
+    /// an `OS_DESCRIPTOR` and placed at the leaf's VA — and handed up to the VMM, which maps
+    /// the same pages as the guest's view of the leaf's framebuffer range.
+    ///
+    /// ⚠ The leaf becomes host **sysmem**; see [`kayfabe_isolate::FbLeafJoined`] for why that
+    /// divergence is named rather than silent, and why it is not optional.
+    Joined,
+}
+
 /// ★★★★★ **What backing ONE framebuffer leaf produced** — [`back_fb_leaf`]'s answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FbLeafBacked {
@@ -1863,6 +1888,15 @@ pub struct FbLeafBacked {
     /// that could not tell "backed now" from "was already backed" would report a
     /// first-time event on every ring.
     pub already: bool,
+    /// ★★★★★ The backing the VMM may `mmap` as the guest's own view of this leaf — `None`
+    /// for [`FbLeafBacking::Vidmem`], which has no view to hand over, and `None` on an
+    /// idempotent replay.
+    ///
+    /// ⊘ **`None` on a replay is a statement, not a gap.** The backing crossed once, on the
+    /// call that did the work; a second descriptor for the same pages would be a second
+    /// lifetime for one file, and a caller that installed it twice would map the same memory
+    /// at the same framebuffer address twice. A replay's caller already has its view.
+    pub backing: Option<kayfabe_isolate::ExportedBacking>,
 }
 
 /// The ID-shaped hints [`commit_back_fb_leaf`] re-validates against. Identities and the
@@ -1887,6 +1921,10 @@ pub struct BackFbLeafPlan {
     pub host_vas: Option<HostHandle>,
     /// ★ The backing this plan found already live, if any — the idempotent replay.
     pub existing: Option<(u64, HostHandle)>,
+    /// ★★★★★ Which chain materializes this leaf. Carried on the PLAN so the commit can check
+    /// it against the reply's shape: a `Published` arriving for a `Joined` plan is a chain
+    /// that ran something other than what was decided, and `wrong_reply` names it.
+    pub how: FbLeafBacking,
 }
 
 /// ★ RM places a fixed mapping in 64 KiB granules; a leaf that is not a whole number of
@@ -1939,8 +1977,9 @@ pub fn back_fb_leaf(
     va: GpuVa,
     len: u64,
     phys: u64,
+    how: FbLeafBacking,
 ) -> Result<FbLeafBacked, FwdFault> {
-    let planned = plan_back_fb_leaf(proc, gpu, pdb, va, len, phys)?;
+    let planned = plan_back_fb_leaf(proc, gpu, pdb, va, len, phys, how)?;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_back_fb_leaf(proc, &planned.plan, reply)
     })
@@ -1957,6 +1996,7 @@ pub fn plan_back_fb_leaf(
     va: GpuVa,
     len: u64,
     phys: u64,
+    how: FbLeafBacking,
 ) -> Result<Planned<BackFbLeafPlan>, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
@@ -2026,14 +2066,27 @@ pub fn plan_back_fb_leaf(
             phys,
             host_vas,
             existing,
+            how,
         },
         verbs: if existing.is_some() {
             None
         } else {
-            Some(VerbPlan::PublishVidmem {
-                host_vas,
-                len,
-                at: va,
+            // ★★★ ONE decision, made here, from the shell's own arming. ⊘ The two arms are
+            // not a fallback for each other: nothing below retries a refused join as a
+            // vidmem publish, because a leaf that could not be joined is a leaf whose two
+            // memories would then be re-created deliberately.
+            Some(match how {
+                FbLeafBacking::Vidmem => VerbPlan::PublishVidmem {
+                    host_vas,
+                    len,
+                    at: va,
+                },
+                FbLeafBacking::Joined => VerbPlan::JoinFbLeaf {
+                    host_vas,
+                    len,
+                    at: va,
+                    phys,
+                },
             })
         },
     })
@@ -2061,15 +2114,36 @@ pub fn commit_back_fb_leaf(
             host_va,
             memory,
             already: true,
+            // ⊘ `None`, and it is the replay's whole point — see the field's docs.
+            backing: None,
         });
     }
-    let Some(VerbReply::Published {
-        host_vas: fresh_vas,
-        memory,
-        host_va,
-    }) = reply
-    else {
-        return wrong_reply("back_fb_leaf");
+    // ★★★ The reply's shape is checked against the PLAN's chain, not merely against one
+    // expected variant. A `Published` arriving for a `Joined` plan means the chain executed
+    // something other than what was decided, and adopting it would record a leaf as joined
+    // when it holds card memory with no view — the exact state this rung ends.
+    let (fresh_vas, memory, host_va, backing) = match (plan.how, reply) {
+        (
+            FbLeafBacking::Vidmem,
+            Some(VerbReply::Published {
+                host_vas,
+                memory,
+                host_va,
+            }),
+        ) => (host_vas, memory, host_va, None),
+        (
+            FbLeafBacking::Joined,
+            Some(VerbReply::FbLeafJoined {
+                host_vas,
+                joined:
+                    kayfabe_isolate::FbLeafJoined {
+                        backing,
+                        memory,
+                        host_va,
+                    },
+            }),
+        ) => (host_vas, memory, host_va, Some(backing)),
+        _ => return wrong_reply("back_fb_leaf"),
     };
     let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
         unmap: vec![(vas_used, host_va)],
@@ -2209,6 +2283,7 @@ pub fn commit_back_fb_leaf(
         host_va,
         memory,
         already: false,
+        backing,
     })
 }
 

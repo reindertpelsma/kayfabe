@@ -245,6 +245,43 @@ pub enum Request {
         /// only — the child re-reads the mapping's own extent and does not trust this.
         len: u64,
     },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::join_fb_leaf`] — *"one memory for a framebuffer
+    /// leaf"* (`fb_cpu_view.md` §4).
+    ///
+    /// ★ **The SECOND request whose reply may carry a descriptor**, and the allowance is
+    /// granted per call exactly as [`Request::ExportBacking`]'s is
+    /// ([`crate::fdcross::read_frame_with_fds`]). ⊘ Growing that set from one to two is a
+    /// protocol-policy change and is written down as one: every other reply is still read
+    /// with an allowance of **zero**, so the kernel — not a `case` — is what stops a child
+    /// attaching a descriptor to an `Alloc`.
+    JoinFbLeaf {
+        /// The host VAS to place the mapping in, raw.
+        vas: u64,
+        /// Bytes — the guest leaf's own length.
+        len: u64,
+        /// The guest VA the mapping must land at. Address identity.
+        at: u64,
+        /// The emulated device's framebuffer-physical address for this leaf, so the child
+        /// can answer for the range by framebuffer address afterwards.
+        phys: u64,
+        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        prot: u8,
+    },
+    /// ★★★ [`kayfabe_isolate::RmBackend::fb_join_peek`] — the both-directions instrument.
+    ///
+    /// ⊘ `poke` is an `Option` on the port and two fields here, because a wire form cannot
+    /// carry `None` in a `u32` without reserving a value — and a reserved value is a pattern
+    /// a caller can ask for and silently not get.
+    FbJoinPeek {
+        /// Framebuffer-physical address to read.
+        phys: u64,
+        /// How many bytes. Bounded by the child before a buffer is allocated.
+        len: u64,
+        /// `0` = read only, `1` = also write the per-word pattern below afterwards.
+        poke: u8,
+        /// The pattern base, when `poke == 1`; ignored otherwise.
+        pattern: u32,
+    },
 }
 
 /// A request plus the checkout transaction it belongs to.
@@ -300,6 +337,27 @@ pub enum Reply {
         len: u64,
         /// What the isolate actually granted: `0` = read-write, `1` = read-only.
         prot: u8,
+    },
+    /// ★★★★★ The answer to a [`Request::JoinFbLeaf`] — [`Reply::Backing`]'s geometry
+    /// **plus the two RM facts**, and its descriptor rides this frame's ancillary data.
+    ///
+    /// ⊘ Not `Reply::Backing`, and not a token: a joined leaf is memory *and* a placed RM
+    /// object, and a parent that received only the geometry would have adopted a backing
+    /// with nothing to free and no way to know whether the mapping landed where it asked.
+    /// Same no-token rule as [`Reply::Backing`] — the parent mints its own on adoption.
+    JoinedBacking {
+        /// Byte offset into the backing at which the range begins.
+        offset: u64,
+        /// How many bytes are there.
+        len: u64,
+        /// What the isolate actually granted: `0` = read-write, `1` = read-only.
+        prot: u8,
+        /// The `OS_DESCRIPTOR` object, raw. Stamped with **this connection's** isolate by
+        /// the parent, never taken from the wire.
+        memory: u64,
+        /// Where RM actually placed it. ⊘ Carried rather than assumed equal to the request:
+        /// the parent's own placement check is the point.
+        host_va: u64,
     },
     /// The verb failed.
     Failed(WireError),
@@ -664,6 +722,32 @@ impl Envelope {
                 out.extend_from_slice(&region.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
             }
+            Request::JoinFbLeaf {
+                vas,
+                len,
+                at,
+                phys,
+                prot,
+            } => {
+                out.push(20);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+                out.extend_from_slice(&phys.to_le_bytes());
+                out.push(*prot);
+            }
+            Request::FbJoinPeek {
+                phys,
+                len,
+                poke,
+                pattern,
+            } => {
+                out.push(21);
+                out.extend_from_slice(&phys.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*poke);
+                out.extend_from_slice(&pattern.to_le_bytes());
+            }
         }
         out
     }
@@ -755,6 +839,19 @@ impl Envelope {
                 region: c.u64("guest ram region")?,
                 len: c.u64("guest ram len")?,
             },
+            20 => Request::JoinFbLeaf {
+                vas: c.u64("join vas")?,
+                len: c.u64("join len")?,
+                at: c.u64("join at")?,
+                phys: c.u64("join phys")?,
+                prot: c.u8("join prot")?,
+            },
+            21 => Request::FbJoinPeek {
+                phys: c.u64("peek phys")?,
+                len: c.u64("peek len")?,
+                poke: c.u8("peek poke")?,
+                pattern: c.u32("peek pattern")?,
+            },
             tag => {
                 return Err(ProtoError::UnknownTag {
                     what: "request",
@@ -805,6 +902,20 @@ impl Reply {
                 out.extend_from_slice(&offset.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
+            }
+            Reply::JoinedBacking {
+                offset,
+                len,
+                prot,
+                memory,
+                host_va,
+            } => {
+                out.push(10);
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&host_va.to_le_bytes());
             }
             Reply::Failed(e) => {
                 out.push(7);
@@ -870,6 +981,13 @@ impl Reply {
                 offset: c.u64("backing offset")?,
                 len: c.u64("backing len")?,
                 prot: c.u8("backing prot")?,
+            },
+            10 => Reply::JoinedBacking {
+                offset: c.u64("joined offset")?,
+                len: c.u64("joined len")?,
+                prot: c.u8("joined prot")?,
+                memory: c.u64("joined memory")?,
+                host_va: c.u64("joined host va")?,
             },
             tag => return Err(ProtoError::UnknownTag { what: "reply", tag }),
         };
@@ -1081,6 +1199,37 @@ mod tests {
                 region: 0x4000_0000_0000_0001,
                 len: 0x1_0000,
             },
+            // ★ The second fd-carrying request. Both protections, for `MapGuestRam`'s
+            // reason one entry up.
+            Request::JoinFbLeaf {
+                vas: 7,
+                len: 0x20_0000,
+                at: 0x2_0020_0000,
+                phys: 0x2_efba_e000,
+                prot: PROT_READ_WRITE,
+            },
+            Request::JoinFbLeaf {
+                vas: 7,
+                len: 0x1_0000,
+                at: 0x2_0020_0000,
+                phys: 0,
+                prot: PROT_READ_ONLY,
+            },
+            // ★ BOTH arms of the instrument: a bare read and a read-then-poke. A wire that
+            // dropped `poke` would round-trip the read correctly and turn every poke into a
+            // silent no-op — a control that reports the pattern it never wrote.
+            Request::FbJoinPeek {
+                phys: 0x2_efba_e000,
+                len: 4096,
+                poke: 0,
+                pattern: 0,
+            },
+            Request::FbJoinPeek {
+                phys: 0x2_efba_e000,
+                len: 4096,
+                poke: 1,
+                pattern: 0xa19a_5a5b,
+            },
         ]
     }
 
@@ -1112,6 +1261,8 @@ mod tests {
             Request::MapGuestRam { .. } => "MapGuestRam",
             Request::UnmapGuestRam { .. } => "UnmapGuestRam",
             Request::DescribeGuestRam { .. } => "DescribeGuestRam",
+            Request::JoinFbLeaf { .. } => "JoinFbLeaf",
+            Request::FbJoinPeek { .. } => "FbJoinPeek",
         }
     }
 
@@ -1133,8 +1284,10 @@ mod tests {
                 "DescribeGuestRam",
                 "ExportBacking",
                 "ExportSurface",
+                "FbJoinPeek",
                 "FbRead",
                 "Free",
+                "JoinFbLeaf",
                 "MapGpuVa",
                 "MapGuestRam",
                 "RingDoorbell",
@@ -1199,6 +1352,15 @@ mod tests {
                 prot: PROT_READ_ONLY,
             },
             Reply::Failed(WireError::NotExportableAsMemory(0xC1D0_0011)),
+            // ★ The joined reply — geometry AND the two RM facts, with the descriptor
+            // still absent from the body.
+            Reply::JoinedBacking {
+                offset: 0,
+                len: 0x20_0000,
+                prot: PROT_READ_WRITE,
+                memory: 0xC1D0_0021,
+                host_va: 0x2_0020_0000,
+            },
         ];
         for r in replies {
             assert_eq!(Reply::decode(&r.encode()), Ok(r));

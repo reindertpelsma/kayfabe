@@ -2894,17 +2894,72 @@ struct SharedDoorbell {
     /// not print one guest-RAM line, which is what keeps the negative control
     /// byte-comparable to the armed run.
     guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
-    /// ★★★★★ §5.9 — whether the SECOND CROSSING is armed, from the composition root's own
-    /// reading of [`FB_BACKING_ENV`].
+    /// ★★★★★ §5.12 — which arm of the framebuffer-leaf **join** this boot is running, from
+    /// the composition root's own reading of [`FB_JOIN_ENV`].
     ///
-    /// ★ Like `guest_ram_backing` above, it is the arming flag for the whole path: `false`
-    /// ⇒ this port allocates no host vidmem and prints not one `GR-FB-BACKING` line, which
-    /// is what keeps the negative control comparable to the armed run line for line.
-    /// ⊘ Read only by the `host-isolates` arm — there is no second crossing to arm in an
-    /// archive with no isolate plane, and the flag is still CARRIED so the two builds
-    /// differ in what they can do rather than in what they can say.
+    /// ★ Like `guest_ram_backing` above, it is the arming flag for the whole path:
+    /// [`FbJoinArm::Off`] ⇒ this port materializes nothing and prints not one `GR-FB-JOIN`
+    /// line, which is what keeps the arming control comparable to the armed run line for
+    /// line. ⊘ Read only by the `host-isolates` arm; the value is still CARRIED so the two
+    /// builds differ in what they can do rather than in what they can say.
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
-    fb_backing: bool,
+    fb_join: FbJoinArm,
+    /// ★★★★★ §5.12 — the route from a backing token to a descriptor this process can `mmap`
+    /// ([`kayfabe_isolate_host::isolate::ExportDirectory`]).
+    ///
+    /// # ⊘ Why the shell needs one at all
+    ///
+    /// The core holds `Box<dyn Isolate>` and must: it has no business knowing an isolate is a
+    /// process that owns file descriptors. So a shell that has just been told *"leaf X is
+    /// joined, its backing is token T"* has **no path** from the core back to the registry T
+    /// indexes. This handle is that path, cloned off the factory at the composition root
+    /// before the factory is boxed into the object model.
+    ///
+    /// `None` in an archive whose isolate plane is stillborn — there is no isolate to hand up
+    /// a descriptor, and a directory would be an empty table pretending otherwise.
+    exports: FbExportDir,
+}
+
+/// ★★★★★ **§5.12 — a joined framebuffer range, as the device crate's port sees it.**
+///
+/// `kayfabe_device` is pure: it holds no descriptor and performs no `mmap`, so the memory
+/// behind a join reaches it as a `dyn kayfabe_device::FbJoined`. This is the one
+/// implementation, and it is four lines because that is genuinely all the join is on this
+/// side — the guest's framebuffer window reads and writes an `mmap` of the same `memfd` the
+/// isolate described to RM.
+///
+/// ⊘ **No length check of its own.** `MappedRegion` bounds every access against the extent it
+/// was mapped with and answers `RawError` outside it, and a second check here would be a
+/// second source of truth for one extent. What this adds is the *name* of the refusal, so a
+/// store's `FbRefused` carries a sentence rather than a `Debug`.
+#[cfg(feature = "host-isolates")]
+#[derive(Debug)]
+struct MappedFb(kayfabe_linux_raw::MappedRegion);
+
+/// [`MappedFb`]'s one sentence when an access falls outside the mapping.
+#[cfg(feature = "host-isolates")]
+const JOINED_OUT_OF_EXTENT: &str =
+    "that access falls outside the joined backing's own extent; the mapping bounds it and \
+     this port refuses rather than wrapping, because a wrapped framebuffer access would read \
+     another part of the same leaf and look like a plausible answer";
+
+#[cfg(feature = "host-isolates")]
+impl kayfabe_device::FbJoined for MappedFb {
+    fn len(&self) -> u64 {
+        self.0.len_bytes()
+    }
+
+    fn read(&self, off: u64, buf: &mut [u8]) -> Result<(), &'static str> {
+        self.0
+            .read_into(kayfabe_linux_raw::HostOffset::new(off), buf)
+            .map_err(|_| JOINED_OUT_OF_EXTENT)
+    }
+
+    fn write(&mut self, off: u64, bytes: &[u8]) -> Result<(), &'static str> {
+        self.0
+            .write_from(kayfabe_linux_raw::HostOffset::new(off), bytes)
+            .map_err(|_| JOINED_OUT_OF_EXTENT)
+    }
 }
 
 /// ★★★ **E10e — what the shell owns on behalf of the CPU copy-engine executor.**
@@ -3803,44 +3858,44 @@ impl SharedDoorbell {
         }
     }
 
-    /// ★★★★★ **§5.9 — back every FRAMEBUFFER leaf this census named with real host
-    /// vidmem, then RE-STATE the census so the rows that moved can be read as moving.**
+    /// ★★★★★ **§5.12 — JOIN every framebuffer leaf this census named, so the leaf the
+    /// guest reads and the leaf the engine reads are ONE memory.**
     ///
-    /// `C: docs/design/mode2_fb_crossing_question.md` §5 (GEN-2), settled 2026-06-04.
+    /// `fb_cpu_view.md` §4. ⊘ **This REPLACES `w228`'s `back_census_framebuffer_leaves`**,
+    /// which backed the same leaves with real host **vidmem and no CPU view** — the engine
+    /// reading the card object and the guest reading the shell's `SparseFb`, silently, in
+    /// both directions. The two are not layers and not fallbacks for each other: a leaf
+    /// served by both would have two host objects at one guest VA. The vidmem chain is still
+    /// expressible ([`kayfabe_rt::FbLeafBacking::Vidmem`]) and has **no caller**.
     ///
-    /// # ★★★ Why it is driven off the census and does not re-derive anything
+    /// # ★★★ The order, and why it is what makes the whole thing safe
     ///
-    /// `[measured 2026-08-10, boot `w227c_537894e_census2`]` **3 of the 4 bound operands of
-    /// `cuCtxCreate`'s GR submission are in the emulated framebuffer** — the majority, not
-    /// the remainder. The census already resolved each of them, through the guest's own
-    /// page tables, on one walk, and carries the **leaf** each fell in
-    /// ([`kayfabe_rt::completion_watch::FbLeaf`]). ⊘ So this function performs **no second
-    /// walk and no second read of the ring**: two reads of one ring at two instants are two
-    /// descriptions of the wire that agree until they do not, which is the failure this
-    /// campaign has paid for more than any other. Every number below came off the same
-    /// `read_submission_methods` the line above printed.
+    /// 1. **Join** — an isolate round trip, with **no plane lock held**: mint a fabricated
+    ///    backing, map it there, describe it to RM, place it at the leaf's VA.
+    /// 2. **Adopt + map** — `dup` the descriptor out of this isolate's export registry and
+    ///    `mmap` it here. This is the guest's view.
+    /// 3. **Establish + install** — one hold of the plane lock
+    ///    ([`kayfabe_device::RegPlane::join_fb`]): copy what the guest has ALREADY written
+    ///    into the backing, then make the range live.
     ///
-    /// # ★★ The re-statement is a JOIN, not a second resolution
+    /// ★ Step 3 is what answers the owner's *"mapping after execution seems racy to me"*.
+    /// It is racy — once the engine has written the real object and the guest has written the
+    /// fabricated one there is **no correct merge**, only a choice about which writes to
+    /// lose. The establishment copy removes the question rather than answering it: after it
+    /// there is one memory, so there is never a merge.
     ///
-    /// The row's `phys` is the walk's. The row's host backing is the **publish's own
-    /// reply**. Two different facts from two different sources, each stated once — as
-    /// against re-resolving the VA, which would be a second projection of the *same* fact
-    /// and is exactly what `Site::Unresolved`'s doc forbids one screen away.
+    /// # ⊘ What a green line here still does NOT mean
     ///
-    /// # ⊘ What a green line here does NOT mean
-    ///
-    /// - **Nothing executed.** No doorbell was routed, no engine was pointed at anything.
-    ///   A host object existing at an address is not the host engine dereferencing it, and
-    ///   `Route::NotACopyEngineChannel` still refuses every `GrCompute` doorbell one
-    ///   function below.
-    /// - **The object is blank**, and the guest's own CPU accesses at that framebuffer
-    ///   address still go to the shell's fabricated aperture, not to it. **Two memories.**
+    /// - **Nothing executed.** No doorbell is routed and no engine is pointed at anything;
+    ///   `Route::NotACopyEngineChannel` refuses every `GrCompute` doorbell one function below,
+    ///   exactly as at `w228`. **The guest did not move.**
+    /// - **The leaf is host SYSMEM.** A named performance divergence from the C artifact,
+    ///   with its reason on [`kayfabe_isolate::FbLeafJoined`]. Card memory is precisely what
+    ///   cannot carry a guest-reachable CPU view.
     /// - **`GuestRam` and `Unresolved` rows are untouched by construction** — the `match`
-    ///   below has one arm. They are the standing negative controls of this pass: a
-    ///   framebuffer crossing that moved the semaphore row would be backing the *first*
-    ///   crossing's business, and a crossing that resolved an ASLR'd unresolvable address
-    ///   would be inventing one.
+    ///   below has one arm, and they are this pass's standing negative controls.
     #[cfg(feature = "host-isolates")]
+    #[allow(clippy::too_many_lines)]
     fn back_census_framebuffer_leaves(
         &self,
         facts: &kayfabe_rt::device::CeChannelFacts,
@@ -3851,156 +3906,184 @@ impl SharedDoorbell {
     ) {
         use kayfabe_rt::completion_watch::Site;
         let head = format!(
-            "kayfabe: GR-FB-BACKING proc={} chan={}",
+            "kayfabe: GR-FB-JOIN proc={} chan={}",
             facts.proc.0, facts.chan.0
         );
-        if !self.fb_backing {
-            // ⊘ Silent. The negative control's log must not contain a line the armed run's
-            // does not, or the two stop being comparable — which is the whole use of a
-            // control. The absence IS the statement, and `KAYFABE_FB_BACKING` is reported
-            // in the startup census either way.
+        if !self.fb_join.armed() {
+            // ⊘ Silent. The arming control's log must not contain a line the armed run's does
+            // not, or the two stop being comparable — which is the whole use of a control.
+            // The absence IS the statement, and `KAYFABE_FB_JOIN` is reported in the startup
+            // census either way.
             return;
         }
         let Some(pdb) = facts.vas_pdb else {
             eprintln!(
                 "{head} → NO PDB (the channel's VA space did not resolve, so there is no \
-                 address space to back INTO; ⊘ not a miss — nothing was asked of the host)"
+                 address space to join INTO; ⊘ not a miss — nothing was asked of the host)"
             );
             return;
         };
-        // ★ The join table: leaf VA → what the publish answered. Keyed by the leaf and not
-        // by the operand, because two operands can fall in ONE leaf and the second must
-        // replay rather than ask for a second fixed map at an occupied address — which RM
-        // answers `0x51`, a status that ⊘ cannot be told apart from real exhaustion.
-        // ⊘ `(host_va, memory)` rather than the reply struct: `kayfabe-qemu-raw` links
-        // `kayfabe-rt`, not `kayfabe-fwd`, and naming a type across a crate boundary this
-        // shim does not depend on is a dependency edge added by accident. The two scalars
-        // are all the re-statement needs.
-        let mut backed: std::collections::BTreeMap<u64, (u64, u64)> =
+        let (Some(exports), Some(plane)) = (self.exports.as_ref(), self.plane.upgrade()) else {
+            eprintln!(
+                "{head} → ⊘ NOT ARMABLE: exports_directory={} plane={} — this build has no \
+                 route from a backing token to a descriptor, or the register plane is gone. \
+                 ⊘ Nothing was asked of the host and no leaf was touched",
+                self.exports.is_some(),
+                self.plane.upgrade().is_some(),
+            );
+            return;
+        };
+        // ★ leaf VA → what the join answered. Keyed by the leaf and not by the operand,
+        // because two operands can fall in ONE leaf and the second must replay rather than
+        // ask for a second fixed map at an occupied address — which RM answers `0x51`, a
+        // status that ⊘ cannot be told apart from real exhaustion.
+        let mut joined: std::collections::BTreeMap<u64, (u64, u64)> =
             std::collections::BTreeMap::new();
+        // Which leaves reached step 3, so the both-directions probe below has a range it
+        // knows the isolate is holding rather than one it hopes it is.
+        let mut live: Vec<(u64, u64)> = Vec::new();
+        let isolate = kayfabe_isolate::IsolateId::new(facts.proc.0, DOORBELL_TARGET_GPU);
         for (op, site) in census {
             let Site::Framebuffer { leaf, .. } = site else {
                 continue;
             };
-            if backed.contains_key(&leaf.va) {
+            if joined.contains_key(&leaf.va) {
                 continue;
             }
-            match self.device.back_fb_leaf(
+            // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
+            let backed = match self.device.back_fb_leaf(
                 DOORBELL_TARGET_GPU,
                 pdb,
                 kayfabe_rt::GpuVa(leaf.va),
                 leaf.len,
                 leaf.phys,
+                kayfabe_rt::FbLeafBacking::Joined,
             ) {
-                Ok(b) => {
+                Ok(b) => b,
+                Err(e) => {
                     eprintln!(
-                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → {} \
-                         memory={:#x} host_va=0x{:x} placed_as_asked={} — ★ a REAL host \
-                         `NV01_MEMORY_LOCAL_USER` vidmem object now exists and is mapped \
-                         FIXED at the guest's own VA in this proc's own host VAS. ⊘ It is \
-                         BLANK, nothing consumes it, and the guest's own CPU accesses at \
-                         fb_phys still go to the fabricated aperture",
+                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ⊘ REFUSED BY \
+                         NAME `{:?}` — ⊘ NOT retried, NOT downgraded to the vidmem chain, \
+                         and nothing was adopted. ⚠ If this is `Rm(NoMemory)` it is status \
+                         0x51, which is collision-or-exhaustion and CANNOT be told apart",
+                        op.name, leaf.va, leaf.len, leaf.phys, e
+                    );
+                    continue;
+                }
+            };
+            joined.insert(leaf.va, (backed.host_va, backed.memory.raw()));
+            let Some(backing) = backed.backing else {
+                // A replay. The view was installed by the call that did the work; a second
+                // descriptor would be a second lifetime for one file.
+                eprintln!(
+                    "{head} {} leaf va=0x{:x} → ALREADY JOINED (idempotent replay; no second \
+                     object, no second descriptor, no second establishment copy)",
+                    op.name, leaf.va
+                );
+                continue;
+            };
+            // ---- 2. ADOPT + MAP. ★★ The ONE property the negative control changes is the
+            // `Backing` variant on the next line; everything either side of it is this same
+            // code. ⊘ Not "a second memfd", which would be a tautology.
+            let Some(fd) = exports.dup(isolate, backing.token) else {
+                eprintln!(
+                    "{head} {} leaf va=0x{:x} → ⚠ THE BACKING CROSSED AND THE VMM COULD NOT \
+                     CLAIM IT: token={} is not in {isolate:?}'s export registry. The host \
+                     object EXISTS and is placed; the guest's view does not. ⊘ That is two \
+                     memories again and it is said out loud rather than logged as a join",
+                    op.name, leaf.va, backing.token
+                );
+                continue;
+            };
+            let region = match kayfabe_linux_raw::MappedRegion::map(
+                match self.fb_join {
+                    FbJoinArm::Shared => kayfabe_linux_raw::Backing::SharedFile {
+                        fd: std::os::fd::AsFd::as_fd(&fd),
+                        offset: backing.offset,
+                    },
+                    FbJoinArm::Private | FbJoinArm::Off => {
+                        kayfabe_linux_raw::Backing::PrivateAnonymous
+                    }
+                },
+                backing.len,
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                kayfabe_linux_raw::CachePolicy::WriteBack,
+                kayfabe_linux_raw::HostPageSize::query(),
+            ) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!(
+                        "{head} {} leaf va=0x{:x} → ⚠ THE VMM'S OWN MAPPING FAILED {e:?} — \
+                         the host object exists and is placed and the guest's view does not",
+                        op.name, leaf.va
+                    );
+                    continue;
+                }
+            };
+            // ---- 3. ESTABLISH + INSTALL, in ONE hold of the plane lock.
+            match plane.join_fb(leaf.phys, Box::new(MappedFb(region))) {
+                Ok(est) => {
+                    live.push((leaf.phys, backing.len));
+                    eprintln!(
+                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → JOINED ({}) \
+                         memory={:#x} host_va=0x{:x} placed_as_asked={} established={} bytes \
+                         over {} page(s), of which {} NON-ZERO — ★ ONE memory: the pages the \
+                         host GR engine walks to are the pages this device's framebuffer \
+                         window now reads and writes. ⚠ The leaf is host SYSMEM, a named \
+                         divergence from the C. ⊘ Nothing executed and no doorbell was routed",
                         op.name,
                         leaf.va,
                         leaf.len,
                         leaf.phys,
-                        if b.already {
-                            "ALREADY BACKED (idempotent replay; no second object, no second fixed map)"
-                        } else {
-                            "BACKED"
-                        },
-                        b.memory.raw(),
-                        b.host_va,
-                        b.host_va == leaf.va,
+                        self.fb_join.as_str(),
+                        backed.memory.raw(),
+                        backed.host_va,
+                        backed.host_va == leaf.va,
+                        est.copied,
+                        est.pages,
+                        est.nonzero,
                     );
-                    backed.insert(leaf.va, (b.host_va, b.memory.raw()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ⊘ REFUSED \
-                         BY NAME `{:?}` — ⊘ NOT retried, NOT downgraded, and nothing was \
-                         adopted. ⚠ If this is `Rm(NoMemory)` it is status 0x51, which is \
-                         collision-or-exhaustion and CANNOT be told apart: the C's own R2 \
-                         refuted reading it as ALREADY-MAPPED",
-                        op.name, leaf.va, leaf.len, leaf.phys, e
-                    );
-                }
-            }
-        }
-        // ★★★★★ **THE NEGATIVE CONTROL — and the FIRST version of it tested nothing.**
-        //
-        // ⊘ It probed one leaf past the highest leaf this census named, expecting a
-        // refusal. That address is simply **unbound**, and an unbound leaf is the chain's
-        // ordinary fresh-publish path: the control would have ALLOCATED A HOST OBJECT and
-        // reported success as though the guard had fired. `back_fb_leaf` does not walk the
-        // guest's page tables — it is *given* the walk's answer — so "an address the guest
-        // does not bind" is not a thing it can refuse. Caught before the boot, and recorded
-        // because the shape is `a_diagnostic_gated_on_the_failure`'s cousin: a control that
-        // exercises a guard the code does not have.
-        //
-        // ★★★ What it probes instead is the guard this whole rung is ABOUT. Take a leaf
-        // that was just backed — so the address table demonstrably binds it at the walk's
-        // own physical address — and re-ask for it naming a **different** physical address.
-        // The two sources now disagree, and `FbLeafDisagrees` must fire with BOTH numbers
-        // and allocate nothing.
-        //
-        // ⊘ Every input is derived from what this boot produced: the leaf is one the census
-        // named, and the wrong address is that leaf's own `phys` displaced by its own `len`.
-        // Nothing is hardcoded, so the control is as valid on another machine as on this one.
-        if let Some((&va, _)) = backed.iter().next() {
-            let leaf = census.iter().find_map(|(_, s)| match s {
-                Site::Framebuffer { leaf, .. } if leaf.va == va => Some(*leaf),
-                _ => None,
-            });
-            if let Some(leaf) = leaf {
-                let wrong = leaf.phys.wrapping_add(leaf.len);
-                match self.device.back_fb_leaf(
-                    DOORBELL_TARGET_GPU,
-                    pdb,
-                    kayfabe_rt::GpuVa(leaf.va),
-                    leaf.len,
-                    wrong,
-                ) {
-                    Err(kayfabe_rt::FwdFault::FbLeafDisagrees { walked, tabled, .. }) => {
+                    if est.copied == 0 {
                         eprintln!(
-                            "{head} ✅ NEGATIVE CONTROL: leaf va=0x{:x} re-asked with the \
-                             WRONG framebuffer address 0x{wrong:x} → REFUSED BY NAME as \
-                             `FbLeafDisagrees` walked={walked:?} tabled={tabled:?} — both \
-                             numbers printed, neither used, and no second object allocated",
-                            leaf.va
+                            "{head}   ⊘ the establishment copy was VACUOUS for this leaf: no \
+                             page of it was resident, so nothing the guest had written came \
+                             across. That is CORRECT (an unwritten leaf is zeros either way) \
+                             and it is NOT evidence that the copy works"
                         );
                     }
-                    other => eprintln!(
-                        "{head} ⚠⚠ NEGATIVE CONTROL DID NOT FIRE: leaf va=0x{:x} re-asked \
-                         with the WRONG framebuffer address 0x{wrong:x} answered {other:?} \
-                         instead of `FbLeafDisagrees`. The two-source check is the property \
-                         this rung exists for. ⊘ Read every line above with that in mind",
-                        leaf.va
-                    ),
                 }
+                Err(e) => eprintln!(
+                    "{head} {} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
+                     phys=0x{:x} len={} why=`{}` — the host object exists and is placed, and \
+                     this device still serves that range from its own pages. ⊘ Two memories, \
+                     named",
+                    op.name, leaf.va, leaf.phys, e.phys, e.len, e.why
+                ),
             }
         }
+        self.probe_joined_leaves(&head, facts, &live, &plane);
         // ★★★ THE RE-STATEMENT. Same operands, same order, same walk — only the backing
         // column can have changed, and it changed because of the replies printed above.
         eprintln!(
-            "kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER BACKING) proc={} chan={} \
-             backed_leaves={} ⊘ still nothing executed and still nothing is permission",
+            "kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc={} chan={} \
+             joined_leaves={} live_views={} ⊘ still nothing executed and still nothing is \
+             permission",
             facts.proc.0,
             facts.chan.0,
-            backed.len()
+            joined.len(),
+            live.len(),
         );
         for (op, site) in census {
             let restated = match site {
-                Site::Framebuffer { phys, leaf } => match backed.get(&leaf.va) {
+                Site::Framebuffer { phys, leaf } => match joined.get(&leaf.va) {
                     Some(&(host_va, memory)) => Site::HostBackedFb {
                         phys: *phys,
                         leaf: *leaf,
                         host_va,
                         memory,
                     },
-                    // ⊘ Unchanged, and it MUST be: a leaf whose publish refused is not
-                    // backed, and rendering it as anything else would make the refusal
-                    // above unreadable.
+                    // ⊘ Unchanged, and it MUST be: a leaf whose join refused is not backed,
+                    // and rendering it as anything else would make the refusal unreadable.
                     None => site.clone(),
                 },
                 other => other.clone(),
@@ -4009,6 +4092,148 @@ impl SharedDoorbell {
                 "      {:<40} m=0x{:04x} sub={} va=0x{:x} → {restated:?}",
                 op.name, op.method, op.subch, op.va.0
             );
+        }
+    }
+
+    /// ★★★★★ **BOTH DIRECTIONS, over a leaf the census actually named** — the measurement
+    /// this rung exists to produce, and the arm the negative control is watched to fail.
+    ///
+    /// # ★★★ Which line do I expect the control to execute?
+    ///
+    /// `kayfabe_linux_raw::Backing::PrivateAnonymous`'s arm of the `mmap` argument
+    /// computation (`crates/kayfabe-linux-raw/src/mapping_unsafe.rs:344-347`), yielding
+    /// `MAP_PRIVATE|MAP_ANONYMOUS` where the armed run yields `MAP_SHARED` — **one property**,
+    /// with the identical isolate chain, the identical establishment copy and the identical
+    /// probe either side of it.
+    ///
+    /// ★★ And its fail arm is not "zeros". Direction 2 reads back **direction 1's own
+    /// pattern**, still sitting in the private pages this run wrote it into, because the
+    /// isolate's poke went to the memfd and never reached them. A control that merely
+    /// returned zeros would be consistent with a mapping that was never written at all; this
+    /// one demonstrates both views are live, hold different bytes, and are read by the same
+    /// loop. (`fb_cpu_view.md` §3.2 measured exactly this shape on real hardware.)
+    ///
+    /// # ⊘ Why the pattern is per word
+    ///
+    /// Word *i* is `base + i`. A read that returned a zero fill, a truncated length or a
+    /// different buffer's bytes cannot match — whereas a whole-buffer compare against one
+    /// repeated word passes on any single correct word.
+    #[cfg(feature = "host-isolates")]
+    fn probe_joined_leaves(
+        &self,
+        head: &str,
+        facts: &kayfabe_rt::device::CeChannelFacts,
+        live: &[(u64, u64)],
+        plane: &kayfabe_device::RegPlane,
+    ) {
+        /// How many bytes of a leaf the probe exercises.
+        ///
+        /// ⊘ Not the whole 2 MiB leaf: this runs inside a doorbell, and the reply travels in
+        /// one frame. 4 KiB is a page — enough that a truncation, a misaddressing or a
+        /// wrong-buffer answer cannot match, and small enough that the instrument cannot
+        /// become the thing that stalls the plane.
+        const PROBE: usize = 4096;
+        let Some(&(phys, _)) = live.first() else {
+            eprintln!(
+                "{head} ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is \
+                 nothing to ask about. ⊘ That is the absence of a measurement, NOT a \
+                 measurement of absence"
+            );
+            return;
+        };
+        // ⊘ Derived from what THIS boot produced — the leaf's own framebuffer address — so
+        // the patterns differ run to run and a stale buffer cannot masquerade as a match.
+        let g2h = (phys as u32) ^ 0x5a5a_5a5b;
+        let h2g = !g2h;
+        let image = |base: u32| -> Vec<u8> {
+            let mut v = vec![0u8; PROBE];
+            for (i, w) in v.chunks_exact_mut(4).enumerate() {
+                w.copy_from_slice(&base.wrapping_add(i as u32).to_le_bytes());
+            }
+            v
+        };
+        let first_mismatch = |want: &[u8], got: &[u8]| -> Option<(usize, u32, u32)> {
+            (0..PROBE / 4).find_map(|i| {
+                let w = u32::from_le_bytes(want[4 * i..4 * i + 4].try_into().unwrap_or_default());
+                let g = u32::from_le_bytes(got[4 * i..4 * i + 4].try_into().unwrap_or_default());
+                (w != g).then_some((i, g, w))
+            })
+        };
+
+        // ---- DIRECTION 1: guest view → isolate view. Written through the register plane's
+        // own framebuffer store, i.e. the exact path a guest PRAMIN/BAR write takes.
+        let want1 = image(g2h);
+        if let Err(e) = plane.fb_poke(phys, &want1) {
+            eprintln!("{head} ⊘ PROBE ABORTED: the guest-side write refused `{e}`");
+            return;
+        }
+        let mut got1 = vec![0u8; PROBE];
+        // ★ ONE round trip carries both directions: the read is of what direction 1 wrote,
+        // and the poke is direction 2's stimulus. See `RmBackend::fb_join_peek`.
+        let covered = match self.device.fb_join_peek(
+            facts.proc,
+            DOORBELL_TARGET_GPU,
+            phys,
+            &mut got1,
+            Some(h2g),
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{head} ⊘ PROBE ABORTED: the isolate refused the peek `{e:?}`");
+                return;
+            }
+        };
+        if !covered {
+            eprintln!(
+                "{head} ⚠ PROBE MISS: the isolate holds NO joined range covering \
+                 fb_phys=0x{phys:x}. ⊘ That is not zeros and not a mismatch — it is the \
+                 isolate saying it never joined this leaf, which contradicts the line above"
+            );
+            return;
+        }
+        match first_mismatch(&want1, &got1) {
+            None => eprintln!(
+                "{head} ★ DIRECTION 1 (guest view → isolate view) fb_phys=0x{phys:x} \
+                 AGREES over {} words: what this device's framebuffer window wrote is what \
+                 the isolate's own mapping — the one RM describes to the GPU — holds",
+                PROBE / 4
+            ),
+            Some((i, got, want)) => eprintln!(
+                "{head} ⊘ DIRECTION 1 (guest view → isolate view) DISAGREES at word {i} \
+                 (got 0x{got:08x}, want 0x{want:08x}) of {}",
+                PROBE / 4
+            ),
+        }
+
+        // ---- DIRECTION 2: isolate view → guest view. The poke above already wrote it.
+        let want2 = image(h2g);
+        let mut got2 = vec![0u8; PROBE];
+        if let Err(e) = plane.fb_peek(phys, &mut got2) {
+            eprintln!("{head} ⊘ PROBE ABORTED: the guest-side read refused `{e}`");
+            return;
+        }
+        match first_mismatch(&want2, &got2) {
+            None => eprintln!(
+                "{head} ★ DIRECTION 2 (isolate view → guest view) fb_phys=0x{phys:x} \
+                 AGREES over {} words: what the isolate wrote is what this device's \
+                 framebuffer window reads",
+                PROBE / 4
+            ),
+            Some((i, got, want)) => {
+                eprintln!(
+                    "{head} ⊘ DIRECTION 2 (isolate view → guest view) DISAGREES at word {i} \
+                     (got 0x{got:08x}, want 0x{want:08x}) of {}",
+                    PROBE / 4
+                );
+                if got == g2h.wrapping_add(i as u32) {
+                    eprintln!(
+                        "{head}   ★★ AND THE VALUE READ BACK IS DIRECTION 1'S OWN PATTERN, \
+                         not zeros — so BOTH views are live and hold DIFFERENT bytes. That \
+                         is the negative control firing exactly as `fb_cpu_view.md` §3.2 \
+                         measured it, and zeros alone could not have shown it"
+                    );
+                }
+            }
         }
     }
 
@@ -5702,6 +5927,7 @@ impl Regs {
             isolate_plane,
             device,
             guest_ram_backing,
+            exports,
         ) = object_policy(abi.driver, chip.engines)?;
         let plane = RegPlane::with_objects(
             chip,
@@ -5769,7 +5995,7 @@ impl Regs {
         // ★ §5.9 — read HERE, at the composition root, beside every other plane decision,
         // and carried into the doorbell port. ⊘ Never re-read at a doorbell: an arming
         // flag consulted twice is a run that can change its mind halfway through a boot.
-        let fb_backing = selected_fb_backing()?;
+        let fb_join = selected_fb_join()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -5782,6 +6008,39 @@ impl Regs {
             ce_executor.as_str(),
             isolate_plane == IsolatePlane::Stillborn || ce_executor == CeExecutorChoice::Local,
         );
+        // ★★★★★ §5.12 — THE ARMING, PRINTED, on every arm including `off`.
+        //
+        // ⚠ `[measured, this campaign]` a boot can run with a plane **off** and still produce
+        // a full `dmesg`, a full serial log, a full census and `RC=0` — with not one line of
+        // the changed code having run. Every signal says the experiment happened. The only
+        // cure is that the boot's own on-disk evidence states the arming, so a reader can
+        // tell an armed run from its control without trusting whichever shell exported the
+        // variables. `boot_nvkvm.sh` sends this stderr to `run_<tag>_qemu.log`.
+        //
+        // ★ `exports_directory` is printed beside it because the arm alone is not sufficient:
+        // an armed boot in a build with no route from a backing token to a descriptor joins
+        // nothing, and would otherwise look identical here.
+        eprintln!(
+            "kayfabe: FB-JOIN arm={} exports_directory={} ⇒ leaves are {}",
+            fb_join.as_str(),
+            {
+                #[cfg(feature = "host-isolates")]
+                {
+                    exports.is_some()
+                }
+                #[cfg(not(feature = "host-isolates"))]
+                {
+                    false
+                }
+            },
+            match fb_join {
+                FbJoinArm::Off => "NOT materialized at all (the arming control)",
+                FbJoinArm::Shared => "JOINED — one backing, two mappings, ONE memory",
+                FbJoinArm::Private =>
+                    "the NEGATIVE CONTROL — the VMM's view is MAP_PRIVATE|MAP_ANONYMOUS, so \
+                     the two views must DISAGREE in both directions",
+            },
+        );
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
@@ -5793,7 +6052,8 @@ impl Regs {
             local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn
                 || ce_executor == CeExecutorChoice::Local,
             guest_ram_backing,
-            fb_backing,
+            fb_join,
+            exports,
         }));
         Ok(Regs {
             plane,
@@ -6830,6 +7090,39 @@ type ObjectLink = (
     //
     // `None` when the crossing is not armed: nothing was adopted, so nothing is claimed.
     Option<kayfabe_vmm_qemu::layout::BackingId>,
+    // ★★★★★ §5.12 — the isolate factory's export directory, cloned off it BEFORE it was
+    // boxed into the object model. Carried out for exactly `guest_ram_backing`'s reason: it
+    // is the only moment at which the concrete factory is reachable, and re-deriving it
+    // afterwards is impossible rather than merely a second source of truth.
+    //
+    // `None` when the isolate plane is stillborn — no isolate can hand a descriptor up, and
+    // an empty directory would pretend otherwise.
+    FbExportDir,
+);
+
+/// ★★★★★ §5.12 — the composition root's route from a backing token to a descriptor.
+///
+/// ⊘ **An alias and not a `#[cfg]` field**, for a reason the compiler enforces: attributes
+/// are not allowed on tuple-struct fields or in tuple patterns, so a conditional field would
+/// have had to become a conditional *tuple shape* — two arities of one type, and every
+/// destructuring of it written twice. The alias keeps the shape constant and moves the
+/// condition into what the shape CONTAINS, which is where it belongs: an archive with no
+/// isolate plane has no directory to carry, and `()` says exactly that.
+#[cfg(feature = "host-isolates")]
+pub type FbExportDir = Option<kayfabe_isolate_host::isolate::ExportDirectory>;
+
+/// An archive with no isolate plane has no descriptor to route. See the other definition.
+#[cfg(not(feature = "host-isolates"))]
+pub type FbExportDir = ();
+
+/// Everything [`isolate_factory`] decides in one selection: the factory itself, the
+/// guest-RAM block it adopted, and ★★★★★ §5.12's [`FbExportDir`] — the route from a backing
+/// token to a descriptor, which can only be taken here, while the CONCRETE factory still
+/// exists. One line later it is a `Box<dyn IsolateFactory>` and the route is gone for good.
+pub type IsolatePlaneParts = (
+    Box<dyn kayfabe_isolate::IsolateFactory>,
+    Option<kayfabe_vmm_qemu::layout::BackingId>,
+    FbExportDir,
 );
 
 fn object_policy(
@@ -6844,7 +7137,7 @@ fn object_policy(
     // two readings of one environment variable is two facts that can disagree, which is
     // the shape this file already refuses for the probe set and for the isolate plane.
     let guest_ram = selected_guest_ram_source()?;
-    let (isolates, guest_ram_backing) = isolate_factory(isolate_plane, guest_ram)?;
+    let (isolates, guest_ram_backing, exports) = isolate_factory(isolate_plane, guest_ram)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
         isolates,
@@ -6941,6 +7234,7 @@ fn object_policy(
         isolate_plane,
         device,
         guest_ram_backing,
+        exports,
     ))
 }
 
@@ -7326,48 +7620,92 @@ fn selected_ce_executor() -> Result<CeExecutorChoice, (Status, &'static str)> {
     }
 }
 
-/// ★★★★★ **§5.9 — the environment variable that arms THE SECOND CROSSING** (the
-/// framebuffer-leaf backing). `off` is the default and `on` is the operator asking.
+/// ★★★★★ **§5.12 — which chain, if any, materializes a framebuffer leaf.**
 ///
-/// ⊘ **Not defaulted on, and not `Auto`.** It is the arming flag the negative control turns
-/// off: with it unset this port allocates no host vidmem, prints no `GR-FB-BACKING` line
-/// and leaves every census row reading `Framebuffer { .. }` — so an armed boot and its
-/// control differ in the log by exactly the thing under test.
+/// ⊘ **This REPLACES `KAYFABE_FB_BACKING`**, which armed `w228`'s vidmem chain. That chain
+/// is not extended by this one and is not a fallback for it: a vidmem leaf is real card
+/// memory with **no CPU view**, so the engine reads the card object and the guest reads the
+/// emulator's own — two memories, silent in both directions. `fb_cpu_view.md` §0.1 measured
+/// why the card object cannot grow the missing view, so there is nothing to keep armed.
+///
+/// | value | what it does |
+/// |---|---|
+/// | `off` (default) | no leaf is materialized at all; not one line is printed |
+/// | `shared` | ★ the join: one backing, two mappings, one memory |
+/// | `private` | ★★ **the negative control** |
+///
+/// ★★★ **`private` changes exactly ONE property** — the VMM maps the isolate's backing
+/// `MAP_PRIVATE|MAP_ANONYMOUS` instead of `MAP_SHARED`, i.e.
+/// `kayfabe_linux_raw::Backing::PrivateAnonymous`'s arm of the `mmap` argument computation
+/// (`crates/kayfabe-linux-raw/src/mapping_unsafe.rs:344-347`). Everything either side of it
+/// is the same code, the same isolate chain and the same establishment copy. ⊘ Not "a second
+/// memfd", which would be a tautology — two different files obviously hold different bytes.
 ///
 /// ⚠ A value that names nothing is **refused**, not defaulted, for [`CE_EXECUTOR_ENV`]'s
-/// reason: a typo that silently selected `off` would make an evidence run and its own
-/// control indistinguishable.
-pub const FB_BACKING_ENV: &str = "KAYFABE_FB_BACKING";
+/// reason: a typo that silently disarmed the join would make an evidence run and its own
+/// control indistinguishable, and the symptom would appear at the first GR doorbell.
+pub const FB_JOIN_ENV: &str = "KAYFABE_FB_JOIN";
 
-/// Whether `value` arms the second crossing — the pure half of [`selected_fb_backing`].
+/// Which arm of the framebuffer-leaf join a boot is running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbJoinArm {
+    /// Nothing is materialized. The arming control.
+    Off,
+    /// ★ The join. `MAP_SHARED` — the VMM's view and the isolate's view are one memory.
+    Shared,
+    /// ★★ The negative control. `MAP_PRIVATE|MAP_ANONYMOUS` on the VMM's side only.
+    Private,
+}
+
+impl FbJoinArm {
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FbJoinArm::Off => "off",
+            FbJoinArm::Shared => "shared",
+            FbJoinArm::Private => "private",
+        }
+    }
+
+    /// Whether this arm materializes anything at all.
+    #[must_use]
+    pub fn armed(self) -> bool {
+        self != FbJoinArm::Off
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_fb_join`].
 ///
 /// # Errors
-/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it
-/// is `false`.
-pub fn fb_backing_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`FbJoinArm::Off`].
+pub fn fb_join_from(value: Option<&str>) -> Result<FbJoinArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(false),
-        Some("on") => Ok(true),
+        None | Some("off") => Ok(FbJoinArm::Off),
+        Some("shared") => Ok(FbJoinArm::Shared),
+        Some("private") => Ok(FbJoinArm::Private),
         Some(_) => Err((
             Status::Unsupported,
-            "KAYFABE_FB_BACKING does not name a state: the only values are `off` (the \
-             default) and `on`. It is not defaulted, because a typo that silently \
-             disarmed the crossing would make an evidence run and its own negative \
-             control indistinguishable — and the symptom would appear at the first GR \
-             doorbell, not here.",
+            "KAYFABE_FB_JOIN does not name an arm: the only values are `off` (the default), \
+             `shared` (the join) and `private` (the negative control). It is not defaulted, \
+             because a typo that silently disarmed the join would make an evidence run and \
+             its own control indistinguishable — and the symptom would appear at the first \
+             GR doorbell, not here. ⊘ `on` was KAYFABE_FB_BACKING's spelling and it is gone: \
+             the vidmem chain it armed is superseded, not renamed.",
         )),
     }
 }
 
-/// Whether [`FB_BACKING_ENV`] arms the second crossing.
+/// Which arm [`FB_JOIN_ENV`] names.
 ///
 /// # Errors
-/// [`Status::Unsupported`] for a value that names neither state, **including a non-UTF-8
-/// one** — which takes the `Some` arm, because it was SET and must not read as unset.
-fn selected_fb_backing() -> Result<bool, (Status, &'static str)> {
-    match std::env::var_os(FB_BACKING_ENV) {
-        None => Ok(false),
-        Some(v) => fb_backing_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_fb_join() -> Result<FbJoinArm, (Status, &'static str)> {
+    match std::env::var_os(FB_JOIN_ENV) {
+        None => Ok(FbJoinArm::Off),
+        Some(v) => fb_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 
@@ -7407,18 +7745,13 @@ pub fn selected_mc_service_budget() -> Option<u32> {
 pub fn isolate_factory(
     plane: IsolatePlane,
     guest_ram: GuestRamSource,
-) -> Result<
-    (
-        Box<dyn kayfabe_isolate::IsolateFactory>,
-        Option<kayfabe_vmm_qemu::layout::BackingId>,
-    ),
-    (Status, &'static str),
-> {
+) -> Result<IsolatePlaneParts, (Status, &'static str)> {
     guest_ram_is_reachable_on(plane, guest_ram)?;
     match plane {
         IsolatePlane::Stillborn => Ok((
             Box::new(kayfabe_isolate::StillbornIsolates::new(STILLBORN_WHY)),
             None,
+            FbExportDir::default(),
         )),
         #[cfg(feature = "host-isolates")]
         IsolatePlane::Loopback => {
@@ -7428,7 +7761,8 @@ pub fn isolate_factory(
                 ),
                 guest_ram,
             )?;
-            Ok((Box::new(f), id))
+            let exports = f.export_directory();
+            Ok((Box::new(f), id, Some(exports)))
         }
         #[cfg(feature = "host-isolates")]
         IsolatePlane::Real => {
@@ -7436,7 +7770,8 @@ pub fn isolate_factory(
                 kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real),
                 guest_ram,
             )?;
-            Ok((Box::new(f), id))
+            let exports = f.export_directory();
+            Ok((Box::new(f), id, Some(exports)))
         }
         #[cfg(not(feature = "host-isolates"))]
         IsolatePlane::Loopback | IsolatePlane::Real => Err((

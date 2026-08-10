@@ -94,7 +94,7 @@ pub use kayfabe_arch::ids::GpuVa;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};
-pub use kayfabe_fwd::{EngineObjectForwarded, FwdFault};
+pub use kayfabe_fwd::{EngineObjectForwarded, FbLeafBacking, FwdFault};
 
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
 // public types. `BlockingSection` is deliberately ABSENT: it is `!Send` by

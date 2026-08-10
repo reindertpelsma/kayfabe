@@ -136,8 +136,8 @@ use kayfabe_abi::submit::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, GuestRamGrant,
-    GuestRamMapped, HostHandle, IsolateId, RmBackend, RmError,
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafJoined,
+    GuestRamGrant, GuestRamMapped, HostHandle, IsolateId, RmBackend, RmError,
 };
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
@@ -155,6 +155,16 @@ use std::time::{Duration, Instant};
 /// A distinct, greppable value rather than `0` or an RM status: it must never be mistaken
 /// for something the driver said. `0x4B46` is `"KF"`.
 pub const NOT_ON_THIS_RUNG: u32 = 0x4B46;
+
+/// ★★★ The status a backend with **no shared framebuffer-join table** refuses
+/// [`RmBackend::join_fb_leaf`] with.
+///
+/// ⊘ Distinct from [`NOT_ON_THIS_RUNG`] because it is not a missing rung — the verb is built
+/// and works. It is a **composition** fault: this backend was constructed without
+/// [`crate::fbjoin::FbJoinTable`], and the alternative to refusing is minting a private one,
+/// which would be correct on every one-worker test and wrong at the first boot whose second
+/// request landed on another pool slot. `0x4B4D` is `"KM"`.
+pub const FB_JOIN_NO_TABLE: u32 = 0x4B4D;
 
 /// The first handle this isolate mints for itself.
 ///
@@ -1826,6 +1836,15 @@ pub struct HostRmBackend {
     /// ★★★ **E6 — the recorder-only CE witness**, `None` unless a diagnostic asked for
     /// one ([`HostRmBackend::with_ce_witness`]). See [`CeWitness`].
     ce_witness: Option<Arc<CeWitness>>,
+    /// ★★★★★ This isolate's joined framebuffer leaves (`crate::fbjoin`), or `None` when the
+    /// composition root built no table.
+    ///
+    /// ⚠ Shared with every sibling worker, exactly like `exports` and `guest_ram` above, and
+    /// for a reason that has already cost this campaign a rung: **an isolate is a pool**. The
+    /// worker that joins a leaf need not be the worker later asked to read it. ⊘ There is no
+    /// `Default` that fabricates one — `None` refuses by name ([`FB_JOIN_NO_TABLE`]), because
+    /// a per-worker table is a bug no single-worker test can observe.
+    fb_joins: Option<Arc<crate::fbjoin::FbJoinTable>>,
 }
 
 /// ★★★ **E6 — what the LAST [`RmBackend::ce_copy`] this backend performed actually
@@ -2265,7 +2284,18 @@ impl HostRmBackend {
             exports,
             guest_ram: None,
             ce_witness: None,
+            fb_joins: None,
         }
+    }
+
+    /// ★★★★★ Install this isolate's **shared** framebuffer-join table.
+    ///
+    /// ⊘ Takes the `Arc` rather than building one, and that is the whole point: the caller is
+    /// the party that knows there is exactly one table per isolate. See [`crate::fbjoin`].
+    #[must_use]
+    pub fn with_fb_joins(mut self, joins: Arc<crate::fbjoin::FbJoinTable>) -> Self {
+        self.fb_joins = Some(joins);
+        self
     }
 
     /// Install this isolate's guest-RAM plane (or, with `None`, state that it has none).
@@ -2928,6 +2958,132 @@ impl RmBackend for HostRmBackend {
             return Err(RmError::NotExportableAsMemory { memory });
         };
         mint_fabricated(&self.exports, want)
+    }
+
+    /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — `fb_cpu_view.md` §4's chain, and it is
+    /// `PinGuestRam`'s chain with the `memfd`'s **owner inverted**.
+    ///
+    /// `mint → mmap here → OS_DESCRIPTOR → map_gpu_va(FIXED)`, then the descriptor rides the
+    /// reply back to the VMM, which maps the same pages as the guest's view of
+    /// `[phys, phys+len)`. Guest RAM crosses VMM→isolate at spawn on a fixed fd number; this
+    /// crosses isolate→VMM on the reply. **No device fd anywhere** — decision (b) is honoured
+    /// rather than circumvented.
+    ///
+    /// ★★ **Sysmem, not vidmem, and it is a NAMED divergence** from the C artifact
+    /// (`C: nvkvm_gpu_emul.c:8454-8459` double-maps a *vidmem* object) and from
+    /// [`kayfabe_isolate::VerbPlan::PublishVidmem`]. The C can do that because it is
+    /// monolithic: QEMU holds `/dev/nvidia` itself, so the CPU half of the double mapping
+    /// never has to cross a process boundary. Here it would have to, and
+    /// [`ExportSource::HostDeviceMemory`]'s three cited refusals are exactly why it cannot.
+    /// The engine reaches this leaf over PCIe instead of out of local framebuffer. ⊘ That is
+    /// a **performance** divergence and it is not optional.
+    ///
+    /// ## ⚠ The unwind, and the one asymmetry in it
+    ///
+    /// Every step undoes the ones before it. ⊘ The `memfd` is **not** unwound: it is owned by
+    /// [`ChildExports`], which is the isolate's table and not this call's, and a mint that is
+    /// never described costs one file this isolate holds until it dies. Reclaiming exports is
+    /// a table-lifetime question and is not this verb's to answer — the same asymmetry
+    /// `describe_guest_ram` records for the guest-RAM mapping it does not free.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] carrying [`FB_JOIN_NO_TABLE`] when this backend was built without a
+    /// shared join table — ⊘ **never a private one**, see [`crate::fbjoin`];
+    /// [`RmError::NoMemory`] if the backing will not mint or the mapping will not take;
+    /// [`RmError::PlacementRefused`] when RM did not place it at `at`; otherwise RM's own
+    /// refusal.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError> {
+        // ★★★ The pool gate, first and by name. A backend with no shared table cannot serve
+        // this verb, and the alternative — minting one here — is the defect this whole module
+        // is written against: it would work on every single-worker test and fail at the first
+        // boot whose second doorbell landed on a different pool slot.
+        let table = Arc::clone(
+            self.fb_joins
+                .as_ref()
+                .ok_or(RmError::Other(FB_JOIN_NO_TABLE))?,
+        );
+        let range = self.narrow(vas)?;
+        let backing = mint_fabricated(
+            &self.exports,
+            ExportRequest {
+                source: ExportSource::Fabricated,
+                len,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        )?;
+        // ⊘ Borrowed only for the `mmap`. `Backing::SharedFile`'s own docs record that the
+        // mapping outlives the descriptor, and `ChildExports` holds the authoritative end —
+        // a second owned copy here would be a second lifetime for one file.
+        let fd = self
+            .exports
+            .lend(backing.token)
+            .map_err(|e| region_error(&e))?;
+        let region = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            len,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            // ★ `WriteBack`, which is what `Backing::attainable_cache_policy` answers for a
+            // shared file — the one class whose effective CPU memory type is knowable.
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .map_err(|e| region_error(&e))?;
+        drop(fd);
+        let desc = self
+            .conn
+            .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;
+        let host_va = match self.conn.raw_map_dma(range, desc, len, Some(at.0)) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        // ★★★ `placed_as_asked`, checked HERE as well as by `Worker::execute`. Not
+        // redundant: this is the only side that can still unwind the descriptor cheaply, and
+        // a mapping adopted at the wrong VA is a host engine pointed at whatever else lives
+        // there — `PinGuestRam`'s own argument, one plane over.
+        if host_va != at.0 {
+            let _ = self.conn.raw_unmap_dma(range, host_va);
+            let _ = self.free(self.stamp(desc));
+            return Err(RmError::PlacementRefused {
+                want: at.0,
+                got: host_va,
+            });
+        }
+        // ⊘ Installed LAST, after the chain has succeeded: a table entry for a leaf whose
+        // fixed map refused would answer the instrument about memory no engine can reach.
+        table.install(phys, len, at.0, region);
+        Ok(FbLeafJoined {
+            backing,
+            memory: self.stamp(desc),
+            host_va,
+        })
+    }
+
+    /// ★★★ The instrument over [`crate::fbjoin::FbJoinTable::peek`]. Every decision — the
+    /// ordering, the per-word pattern, the `Ok(false)` miss — is that method's; this is the
+    /// port's projection of it.
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        let table = self
+            .fb_joins
+            .as_ref()
+            .ok_or(RmError::Other(FB_JOIN_NO_TABLE))?;
+        table.peek(phys, buf, poke).map_err(|e| region_error(&e))
     }
 
     /// ★★★★★ The real backend's guest-RAM door. It **decides nothing**: the grant's numbers

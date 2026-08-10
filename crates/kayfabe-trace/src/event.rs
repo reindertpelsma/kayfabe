@@ -357,6 +357,12 @@ pub enum VerbTag {
     /// plan variant is distinct: the two differ in which store the bytes came out of,
     /// and that is precisely what a reader of a trace wants from this field.
     PublishVidmem,
+    /// ★★★★★ Mint + map + describe + publish **one memory** for a framebuffer leaf — the
+    /// chain that replaces [`VerbTag::PublishVidmem`]. ⊘ A distinct tag for that variant's
+    /// own reason and one more: this one hands a descriptor back to the VMM, so a trace that
+    /// could not tell the two apart could not say whether the leaf the guest reads and the
+    /// leaf the engine reads are the same bytes.
+    JoinFbLeaf,
     /// ★★★ Map + describe + publish the **guest's own** pages at the guest's own VA.
     /// ⊘ Deliberately a distinct tag from [`VerbTag::Publish`]: the two chains differ in
     /// whose bytes are underneath, which is the only fact a reader of a trace would want
@@ -381,6 +387,7 @@ impl VerbTag {
         match plan {
             VerbPlan::Publish { .. } => VerbTag::Publish,
             VerbPlan::PublishVidmem { .. } => VerbTag::PublishVidmem,
+            VerbPlan::JoinFbLeaf { .. } => VerbTag::JoinFbLeaf,
             VerbPlan::PinGuestRam { .. } => VerbTag::PinGuestRam,
             VerbPlan::Doorbell { .. } => VerbTag::Doorbell,
             VerbPlan::EngineObject { .. } => VerbTag::EngineObject,
