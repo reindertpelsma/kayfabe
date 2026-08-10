@@ -12618,7 +12618,7 @@ green line gets read as evidence for the wrong thing.
 ## §16.68 ★★★★★ `R26` — a host channel whose GPFIFO ring is at an address **WE DICTATE**, and the host-Xid watcher that makes its failure legible
 
 `[measured 2026-08-10, RTX 3060 GA106 / 580.159.04, bench `vh`, binary stamped`
-`REV_UNDER_TEST=2bd6c3a6e711b01ad3f5fbfa739946b26516edf1,`
+`REV_UNDER_TEST=7fc2f942b453d506daf2bf141a02039f8201131b — a 40-character DERIVED stamp,`
 `traces/real_ga106/rmladder_r26_dictated_ring_real_ga106.txt]`
 
 ### 16.68.1 ⊘ WHAT I REFUTED FIRST — four of the brief's claims, and one of my own instruments
@@ -12812,3 +12812,16 @@ is VOID whatever it printed"*.
 - **Not `NoMemory`'s exact RM status.** The negative control's refusal is reported through the
   port's error type; which NVIDIA status produced it was not decoded, and the control does not
   need it.
+
+### 16.68.7 ⊘ The re-run at the SHIPPED head, because the delta LOOKED inert
+
+The four arms were first taken at a work-in-progress revision; the tree then moved by a
+formatting reflow, a `free` of the negative control's squatter object, a dead-constant
+deletion in an unrelated crate and this section's prose. ⊘ **That delta looks inert, which is
+exactly the reading the rev-stamp trap punishes** — and one item in it is not inert at all:
+freeing the squatter changes what the *second* run of the control would find. So it was
+re-run rather than assumed, at `7fc2f942b453d506daf2bf141a02039f8201131b` on a clean tree,
+and the committed trace carries that stamp.
+
+★ The stamp in that trace is **40 characters**, and this is the first ladder trace in the
+repository for which that is true by construction rather than by an operator's typing.
