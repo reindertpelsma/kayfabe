@@ -12848,3 +12848,178 @@ still the binary this tree builds. ⊘ *"That commit was only tests and docs"* i
 sentence as *"the delta looks inert"*; the difference is that this one was **run** — the
 question "which files does the artifact actually depend on?" has an answer a command can
 give, and taking it from a command is the whole discipline.
+
+---
+
+## §16.69 ★★★★★ `p1`/`p2` — THE FORWARDING PLANE HAS NEVER BEEN ON, and the brief's "additive by construction" is REFUTED BY THE TREE'S OWN CODE
+
+### 16.69.1 ⊘ WHAT I REFUTED BEFORE WRITING A LINE — and the first two void the rung as briefed
+
+The brief for this rung said: *"Turn the plane on for GR only. `w202` made this **additive by
+construction**: the route is computed per channel **before** any plane state, so `Ce` still goes
+to the CPU executor and only `GrCompute` changes destination. The `s51`/`s54` census is the
+evidence."* And: *"⊘ **Do not flip `local_ce_is_the_only_executor`.**"*
+
+**(1) ⊘⊘ THOSE TWO INSTRUCTIONS ARE THE SAME INSTRUCTION, AND THEY CONTRADICT.**
+`local_ce_is_the_only_executor` is not an independent flag that one could decline to touch. It
+is **defined as the plane**, at `crates/kayfabe-qemu-raw/src/shim.rs:4262`:
+
+```rust
+local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn,
+```
+
+Turning the plane on *is* flipping it. There is no arrangement in which `KAYFABE_ISOLATES=real`
+leaves it true.
+
+**(2) ⊘⊘ AND THE FLAG'S READ SITE IS ON THE `Ce` PATH, NOT THE GR PATH, SO `Ce` MOVES.** The
+route gate is `shim.rs:3074-3086` and it does run first — that half of the brief is right. But a
+`Ce` doorbell **passes** that gate (`Ce => CpuCe`) and lands on `shim.rs:3090`:
+
+```rust
+if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor {
+    return None; // the core can address AND serve this channel; it is not ours.
+}
+```
+
+With the plane real, `!false` holds, and every `Ce` doorbell with a published PDB **falls through
+to `SharedDevice::doorbell`** instead of the CPU executor. ⇒ The destination is decided by the
+route **and** the plane, not by the route alone. *"Only `GrCompute` changes destination"* is
+false; `Ce` is the engine that changes destination, and `GrCompute` is the one that does not
+(it is refused by route on **both** planes).
+
+⇒ **Falsifier cell D as briefed — *"any `Ce` number moves, or a `SERVED-LOCAL` line disappears
+⇒ Revert"* — fires BY CONSTRUCTION.** It is not a regression detector here; it is a description
+of what turning the plane on means. The cell is retired and replaced below.
+
+**(3) ⊘⊘⊘ THE `s51`/`s54` CENSUS IS NOT EVIDENCE THAT THIS IS ADDITIVE, BECAUSE NO `s`-SERIES
+BOOT EVER HAD A PLANE.** Every one of them reports `isolates: 2 materialized, 2 live, 2 refusing
+(2 no-plane, 0 spawn-failed)` — `StillbornIsolates`, whose own `why` string is *"this build has
+no forwarding plane: the object model accepts protocol facts and no host verb can be issued"*.
+Swept across every committed boot log in `traces/guest_boots/`, **exactly one** boot in the
+repository has ever had a live plane: `iso1_319d29a_real_qemu.log` (`1 materialized, 1 live, 0
+refusing`), which is E0's witness and many rungs old.
+
+★ And it is stronger than "not selected": it was **not linked**. `strings` over the bench binary
+at `af255fa` (the `s52`/`s53`/`s54` binary) contains the `#[cfg(not(feature = "host-isolates"))]`
+arm's text — *"this archive was built without the `host-isolates` feature"*. `0 forwarded` on
+every `s`-series boot is therefore **over-determined**: the route refuses GR, and there is no
+plane to forward to in any case. A number produced by two independent impossibilities cannot
+license a claim about either.
+
+**(4) ⊘ "Wire plane R" — there is no "plane R" in this tree.** Swept `docs/`, `crates/`,
+`ARCHITECTURE.md`: zero occurrences of `plane R` in any casing. The planes are named
+(address / execution / completion / isolate+arena in the core; register / memory / isolate /
+slot / CPU in the shell), and `R` is the prefix of the **host-RM ladder rungs** (`R25`, `R26`).
+The intended referent is the RC + error-notifier path in `crates/kayfabe-rmrpc/src/fault.rs`.
+Naming a real thing with an invented name is how a brief acquires a claim nobody can check.
+
+**(5) ⊘ "All 11 of its tests are mock-level."** There is no reading of the tree on which that
+path has 11 tests. `crates/kayfabe-rmrpc/src/fault.rs` has **zero** in-file tests;
+`tests/tests/simulated_fault.rs` has **12**, of which **7** call `rc_triggered_for`;
+`crates/kayfabe-abi/src/notifier.rs` has **6** unit tests; `tests/tests/rmrpc_bridge.rs` adds
+**1**. So 12, or 7, or 19, or 14 — never 11. (`simulated_gpu_fault.md:514` still says "8 tests",
+stale since `4a42ea7`; the count was 8 at `aabd389`.) ★ *"Mock-level"* is exactly right and is
+the doc's own word (`simulated_gpu_fault.md:532`: *"The evidence here is mock-level. No guest
+ran."*).
+
+**(6) ⊘ "Nothing calls it in production" is precise for the EMIT half and over-broad for the
+file.** `simulated_gpu_fault.md:518-521` is quoted correctly and the line numbers are exact —
+`rc_triggered_for` / `FaultEmission::deliver` / `ErrorNotification::rc` have **zero** non-test
+callers, and so do both upstream stages (`kayfabe_core::fault::verdict`,
+`kayfabe_fwd::fault_facts`). But `notifier.rs` is **half-live**: `ChannelNotifierWire::decode`
+and `ChannelUserdWire::decode` run on **every guest channel alloc**, via
+`versions.rs:1023/1045` → `kayfabe-rmrpc/src/lib.rs:1348,1354`, outside any `cfg(test)`. The
+write half is unwired; the read half is production. ⇒ The guest's `errorNotifier` GPA is
+**already** threaded to `AllocFacts` — the emit site does not have to go find it.
+
+**(7) ⊘ The `ogkm` citation drifted — but only in the copy that does not matter.** The brief
+wrote *"`ogkm: uvm_ampere_host.c:140`"*. In `research_clones/ogkm` the `UVM_SPIN_WHILE` is at
+line **132**; in `research_clones/ogkm-580.159.04` — the version the bench actually runs — it is
+at line **140**. §16.68.6 already writes it as `ogkm-580:` and is correct. ★ The **substance**
+re-verified and holds exactly: `UVM_SPIN_LOOP` (`ogkm-580: uvm_common.h:288-298`) *does* compute
+`NV_ERR_TIMEOUT_RETRY`, and both call sites discard it — `uvm_ampere_host.c:140` as a `for`-loop
+increment expression, `uvm_channel_wait` (`uvm_channel.c:2157-2176`) as a bare statement. The
+only non-`NV_OK` exit from `uvm_channel_wait` is `uvm_channel_check_errors` →
+`uvm_channel_get_status` → `error_notifier->status != 0` → `NV_ERR_RC_ERROR`
+(`uvm_channel.c:2057-2081`). The escape hatch is real and is the notifier.
+
+**(8) ⊘ `alloc_channel_at` DOES exist — the brief retired it one level too far.** It is an
+inherent method on the concrete backend, `crates/kayfabe-isolate-host/src/rm.rs:2799`, with
+`ring_at: Option<GpuVa>`. What it is *not* is a **trait** method: `RmBackend::alloc_channel`
+(`crates/kayfabe-isolate/src/lib.rs:490`) still takes no ring VA. ⚠ And the trap its own doc
+records (`rm.rs:2762-2768`) is worth carrying forward: `ring_at` is the ring **object's base**,
+while `gpFifoOffset` is `ring_at + GPFIFO_OFFSET` (`0x1000`, `rm.rs:512`, applied at `:2904`).
+Passing a guest `gpFifoOffset` as `ring_at` is a silent one-page error that surfaces as a wild
+`gpEntry` far from the call.
+
+### 16.69.2 ⇒ WHAT THE RUNG BECOMES, and why it is the same rung
+
+The brief's step 1 was *"turn the plane on"* treated as a one-line prerequisite to the
+interesting work. (1)–(3) say it is the whole rung: it is a **build** change
+(`KAYFABE_SHIM_FEATURES=host-isolates`) plus a **deployment** change (`KAYFABE_ISOLATES=real`),
+it moves the `Ce` path rather than the `GrCompute` path, and its effect on a guest has never
+been measured at any revision in this log.
+
+★★★ **And the tree already contains a measured prediction that it BREAKS THE GUEST.**
+`SharedDoorbell::local_ce_is_the_only_executor`'s own doc (`shim.rs:2661-2699`) records
+`[measured 2026-08-08, boot pub1_3e43e9a]`: once `facts.vas_pdb` became `Some`, the CPU executor
+declined the CeUtils **scrubber's** copy as *"not ours"*, the doorbell fell through to the
+forwarding plane, and the guest driver died —
+
+```
+doorbells: 1 arrived, 0 served, 1 REFUSED [FwdFault::IsolateRetired]
+memmgrMemSet → NV_ERR_TIMEOUT 0x65 (mem_mgr.c:463)
+ce_utils.c:349  lastCompletedPayload == lastSubmittedPayload  FAILED
+RmInitAdapter failed! (0x25:0x65:1249)
+```
+
+⊘ That was measured against a **`Stillborn`** fall-through — the plane refused because there was
+none. **Whether a REAL plane serves that scrubber copy is the open question, and it is the
+question this boot asks.** It is `cup2`'s precondition: if the forwarding plane cannot serve the
+scrubber, no guest gets as far as a channel, and a forwarded GR doorbell is unreachable for a
+reason that has nothing to do with GR.
+
+### 16.69.3 ★★★ THE FALSIFIER, committed BEFORE the boot
+
+Baseline is `s54_af255fa_wallrepeat` (§16.66.4): `448 arrived / 362 served / 86 REFUSED`,
+`GrCompute=86 GrGraphics=0 Ce=362 NvEnc=0 NvDec=0 Other=0 unrouted=0`, `362 local … 0 forwarded`,
+**16** `SERVED-LOCAL [CpuCe::ServedLocally]` lines logged, first refusal
+`Route::NotACopyEngineChannel`, `CUP2_RC=1` with `cuCtxCreate → operation not supported (801)`,
+`isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)`.
+
+Two boots off **one** binary (`29e7c25`, `host-isolates` **linked**), differing only in the
+`KAYFABE_ISOLATES` environment variable. Both wrapped in `scripts/bench/host_xid_watch.sh`.
+
+**Arm CTL — `p1`, `KAYFABE_ISOLATES` unset.** ⊘ **This arm is not a formality and the rung is
+void without it.** It separates *linking* the feature from *selecting* the plane. Required:
+`served`/`REFUSED`/`by engine` **bit-identical** to `s54` and `isolates: … 2 refusing (2
+no-plane, …)`. If `p1` differs from `s54` in any of those, linking `kayfabe-isolate-host` is not
+observationally neutral, and **every comparison below is void** — that is the finding and the
+rung stops there.
+
+| arm (`p2`, `KAYFABE_ISOLATES=real`) | the line that distinguishes it |
+|---|---|
+| **A — the plane is live and the guest survives it** | `isolates: N materialized, N live, **0 refusing**`, guest `dmesg` still carries `RmInitAdapter`, and `of the served: … **>0 forwarded**`. ★ The first guest doorbell this project has ever carried to a host GPU channel. Report `CUP2_RC` and `cuCtxCreate`'s status, which this arm does not predict |
+| **B — the plane is live and the guest driver DIES** | guest `dmesg` carries `RmInitAdapter failed`, or `nvidia-smi`/`cuInit` never reaches its wall. ⇒ `pub1_3e43e9a` reproduced one plane over: the CE fall-through is real and a **real** plane does not rescue the scrubber either. ★ This is what `shim.rs:2661-2699` predicts, and it would make "turn the plane on" a rung of its own rather than a prerequisite |
+| **C — the plane does not come up** | `isolates: … 0 live, N refusing (0 no-plane, **N spawn-failed**)`. ⇒ deployment, not design. Print the spawn error verbatim and do not score A/B/D against it |
+| **D — the plane is live, `Ce` leaves the CPU executor, and nothing catches it** | `0 refusing`, `SERVED-LOCAL` count **0**, `forwarded` **0**, and the doorbells refused under some other name. Report that name **first** — it is the name of what the forwarding plane cannot yet do |
+| **E — NONE OF THE ABOVE** | ⊘ Reserved and it will be **used**, not rounded. §16.65's four cells were cut from a false premise and the boot landed in none of them; §16.66 added this row for that reason |
+
+★ **Printed either way, whatever the arm** — because these are the numbers that make the
+mechanism legible rather than the verdict:
+1. the `SERVED-LOCAL [CpuCe::ServedLocally]` line count on both boots (`s54` = 16). This is
+   `local_ce_is_the_only_executor` **observed** rather than argued: if it drops to 0 on `p2`, the
+   flag is demonstrably not independent of the plane;
+2. `by engine` on both boots. `GrCompute=86` must be **unchanged** on `p2` — GR is refused by
+   route on both planes, so a change there means the route is reading plane state;
+3. the isolate line on both boots, verbatim.
+
+⊘ **The bar is TWO facts and neither is a return value** (`R26`'s discipline). For arm A they are
+`>0 forwarded` in the device's own census **and** a host-side witness that an isolate child was
+alive (`e0_isolate_witness.sh`'s `/proc/*/cmdline` sampler). `DoorbellReport::Served` is neither.
+
+⊘ **What this rung does NOT attempt, stated now.** No `RmBackend` trait method gains a ring VA;
+no guest `gpFifoOffset` is passed to `alloc_channel_at`; the RC/error-notifier path stays
+unwired. Per the brief's own reasoning, half-built fault delivery is **worse than none**
+(`ogkm-580: uvm_ampere_host.c:140` hangs a kernel thread forever on a fault whose CHRAM bit
+never gets set), and nothing is forwarded yet for a refusal to be delivered *about*.
