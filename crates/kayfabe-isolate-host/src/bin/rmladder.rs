@@ -21,7 +21,7 @@
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{IsolateId, RmBackend, RmError};
-use kayfabe_isolate_host::rm::{HostRmBackend, RmConnection};
+use kayfabe_isolate_host::rm::{HostRmBackend, OsDescSeed, RmConnection};
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
 
@@ -1268,7 +1268,7 @@ fn ce_pce_mask_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHan
 ///   VAS built from *guest* VAs would miss is not visible from here, and with fault
 ///   delivery unbuilt such a miss is a **hang** inside UVM's replayable-fault loop rather
 ///   than an error.
-fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bool {
     // A plausible guest sysmem VA: above whatever the driver reserves at the bottom of a
     // fresh `FERMI_VASPACE_A`, 2 MiB-aligned, and deliberately NOT R9's constant — two
     // rungs sharing an address cannot show that the address was honoured rather than
@@ -1278,9 +1278,15 @@ fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 
     println!(
         "info  R25 osdesc probe   = GPU {gpu}, euid {} — a sealed memfd, described to RM, \
-         mapped at {:#018x}, read by a real CE",
+         mapped at {:#018x}, read by a real CE{}",
         kayfabe_linux_raw::geteuid(),
-        AT.0
+        AT.0,
+        match seed {
+            OsDescSeed::BeforeDescribe => "",
+            OsDescSeed::Never =>
+                "  [NEGATIVE CONTROL: the memfd is deliberately NOT written, so a \
+                 MISMATCH AT WORD 0 is the PASS]",
+        }
     );
 
     let vas = match rm.alloc_vaspace() {
@@ -1291,15 +1297,63 @@ fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         }
     };
 
-    let verdict = match rm.prove_os_descriptor(vas, AT, PATTERN) {
+    let verdict = match rm.prove_os_descriptor(vas, AT, PATTERN, seed) {
+        // ⊘ The negative control, judged FIRST and by its own rule: everything up to the
+        // bytes must hold, and the bytes must DISAGREE at word 0. A `reached()` here would
+        // mean the comparison is not reading what it claims to.
+        Ok(e) if !e.seeded => match e.mismatch {
+            Some(m) if m.word == 0 && m.want == PATTERN => {
+                println!(
+                    "ok    R25 neg control    = the memfd was never written and the CE \
+                         delivered {:#010x} at word 0 where the pattern would have been \
+                         {:#010x} — the comparison CAN fail, so the positive run's \
+                         agreement is a measurement",
+                    m.got, m.want
+                );
+                true
+            }
+            Some(m) => {
+                println!(
+                    "??    R25 neg control    = it mismatched, but at word {} not word 0 \
+                         (got {:#010x}, want {:#010x}) — the first {} bytes of an UNWRITTEN \
+                         memfd matched a pattern nobody stored, which is a fact about the \
+                         instrument, not about the descriptor",
+                    m.word,
+                    m.got,
+                    m.want,
+                    m.word * 4
+                );
+                false
+            }
+            None => {
+                println!(
+                    "FAIL  R25 neg control    = an UNWRITTEN memfd compared EQUAL over \
+                         all {} of {} bytes. The comparison is not reading the destination, \
+                         and every green this rung has ever printed is void.",
+                    e.bytes_compared, e.bytes
+                );
+                false
+            }
+        },
         Ok(e) if e.reached() => {
             println!(
                 "★     R25 osdesc         = placed at {:#018x} AS ASKED, CE retired \
-                 (sem {:#010x}), {} of {} bytes match — guest-RAM-shaped memory reaches \
-                 the host GPU's MMU",
-                e.got_va, e.submit.semaphore, e.bytes, e.bytes
+                 (sem {:#010x}), dst[0] {:#010x} -> {:#010x}, and {} of {} bytes compared \
+                 EQUAL — guest-RAM-shaped memory reaches the host GPU's MMU",
+                e.got_va, e.submit.semaphore, e.before, e.after, e.bytes_compared, e.bytes
             );
             true
+        }
+        // ★ A comparison that stopped early without recording a mismatch is an instrument
+        // failure, and it is checked BEFORE the coherency arm so it can never be reported
+        // as one: "the loop did not run" and "the pages disagree" are different subjects.
+        Ok(e) if e.mismatch.is_none() && !e.compared_everything() => {
+            println!(
+                "FAIL  R25 instrument     = the comparison covered {} of {} bytes and found \
+                 no mismatch — a partial loop with a clean verdict. This run is VOID.",
+                e.bytes_compared, e.bytes
+            );
+            false
         }
         // ★ Arm C first, because a mapping that landed somewhere else makes every byte
         // downstream a statement about a different address.
@@ -1669,7 +1723,7 @@ fn main() -> std::process::ExitCode {
     let mut want_bus_info = false;
     let mut want_atomics = false;
     let mut want_pce_mask = false;
-    let mut want_osdesc = false;
+    let mut want_osdesc: Option<OsDescSeed> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -1694,7 +1748,9 @@ fn main() -> std::process::ExitCode {
             "--bus-info-sweep" => want_bus_info = true,
             "--atomics-probe" => want_atomics = true,
             "--pce-mask-probe" => want_pce_mask = true,
-            "--osdesc-probe" => want_osdesc = true,
+            "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
+            // ⊘ The negative control. Same chain, unwritten memfd, inverted verdict.
+            "--osdesc-negative" => want_osdesc = Some(OsDescSeed::Never),
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1841,12 +1897,12 @@ fn main() -> std::process::ExitCode {
     // attributable to `OS_DESCRIPTOR` and cannot be R13's channel or R9's mapping from
     // earlier in the ladder. That attribution IS the rung — the question is which of four
     // named things refused, not whether something did.
-    if want_osdesc {
+    if let Some(seed) = want_osdesc {
         println!(
             "REV_UNDER_TEST={}",
             option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
         );
-        let ok = osdesc_probe(&mut rm, gpu);
+        let ok = osdesc_probe(&mut rm, gpu, seed);
         println!("done — osdesc probe only");
         return if ok {
             std::process::ExitCode::SUCCESS

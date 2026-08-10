@@ -1970,6 +1970,17 @@ pub struct OsDescEvidence {
     /// The first word of the destination that is not what we wrote into the memfd, if any.
     /// `None` means **every** word of [`Self::bytes`] matched.
     pub mismatch: Option<WordMismatch>,
+    /// ★★ How many bytes were actually **compared**, counted by the comparison loop.
+    ///
+    /// ⊘ Not a copy of [`Self::bytes`], and the distinction is a defect this rung already
+    /// shipped once: the first version printed `"{} of {} bytes match"` from `bytes`
+    /// **twice**, so the reassuring number was a tautology that would have read `65536 of
+    /// 65536` over a loop that compared nothing. A reported count must come from the thing
+    /// that did the counting — `measure_at_the_boundary_not_inside`, in miniature.
+    pub bytes_compared: u64,
+    /// ⊘ **Was the pattern written into the memfd at all?** `false` is the deliberate
+    /// negative control ([`OsDescSeed::Never`]), where a mismatch is the PASS.
+    pub seeded: bool,
     /// The submission's own cursors and release semaphore.
     pub submit: SubmitOutcome,
     /// The payload the engine was told to release.
@@ -1983,20 +1994,59 @@ impl OsDescEvidence {
         self.got_va == self.asked_va
     }
 
-    /// Did the whole chain hold: placed as asked, engine retired, and every byte the GPU
-    /// delivered is a byte we wrote?
+    /// ★ Did the comparison loop actually look at every byte that was copied?
+    ///
+    /// The guard on [`Self::bytes_compared`]: a loop that compared nothing reports zero
+    /// here and `None` for [`Self::mismatch`], which without this check is
+    /// indistinguishable from a perfect match.
+    #[must_use]
+    pub fn compared_everything(&self) -> bool {
+        self.bytes_compared == self.bytes
+    }
+
+    /// Did the whole chain hold: placed as asked, engine retired, **every** byte compared,
+    /// and every byte the GPU delivered a byte we wrote?
     ///
     /// ★ `before != after` is in the conjunction for R17's reason — bytes that match
     /// without the destination ever changing would mean the sentinel write, not the copy,
-    /// is what we are reading.
+    /// is what we are reading. [`Self::compared_everything`] is in it for the same reason
+    /// one step further out: a `None` mismatch over an empty loop is not agreement.
+    ///
+    /// ⊘ **Meaningless for [`OsDescSeed::Never`]**, where the correct answer is `false` and
+    /// the caller must invert its own verdict rather than ask this.
     #[must_use]
     pub fn reached(&self) -> bool {
         self.placed_as_asked()
             && self.submit.semaphore == self.payload
             && self.before == self.sentinel
             && self.after != self.sentinel
+            && self.compared_everything()
             && self.mismatch.is_none()
     }
+}
+
+/// ⊘ **Whether [`HostRmBackend::prove_os_descriptor`] writes the pattern at all** — the
+/// negative control, as a parameter rather than a comment.
+///
+/// ★★★ This exists because a rung that has only ever been seen to pass is an instrument
+/// with no demonstrated failure mode, and this campaign's single most repeated finding is
+/// that the instrument was the defect. `Never` runs the identical chain over a memfd nobody
+/// wrote, so the copy engine reads the kernel's zero pages: a mismatch at word 0 is then
+/// the **expected** result, and a *match* would mean the comparison is not looking at what
+/// it claims to.
+///
+/// ⚠ It is not a "disable the check" flag. Both arms compare every word; they differ only
+/// in what the correct answer is, and [`HostRmBackend::prove_os_descriptor`]'s caller must
+/// invert its verdict accordingly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OsDescSeed {
+    /// Write the per-word pattern into the memfd **before** describing it to RM. The real
+    /// measurement.
+    BeforeDescribe,
+    /// Write nothing. The memfd is a fresh `memfd_create` + `ftruncate`, so its pages read
+    /// as zero — and the pattern's first word is deliberately non-zero, so word 0 must
+    /// mismatch.
+    Never,
 }
 
 impl CeEvidence {
@@ -3420,6 +3470,7 @@ impl HostRmBackend {
         vas: HostHandle,
         at: GpuVa,
         pattern: u32,
+        seed: OsDescSeed,
     ) -> Result<OsDescEvidence, RmError> {
         const BYTES: u64 = 0x1_0000;
         const WORDS: u64 = BYTES / 4;
@@ -3452,13 +3503,22 @@ impl HostRmBackend {
 
         // 3 — the pattern, by ordinary CPU stores through a write-back mapping. Per-word so
         // a copy that moved only a header, or a length truncated to one dword, is visible.
-        let mut image = vec![0u8; BYTES as usize];
-        for i in 0..WORDS as usize {
-            image[4 * i..4 * i + 4].copy_from_slice(&pattern.wrapping_add(i as u32).to_le_bytes());
+        //
+        // ⊘ `OsDescSeed::Never` skips exactly this and nothing else: the memfd's pages stay
+        // as `ftruncate` left them, which is zero. Everything downstream — the descriptor,
+        // the mapping, the engine, the whole-buffer compare — runs identically, so a run
+        // that still reports a match is reporting on something other than these bytes.
+        let seeded = seed == OsDescSeed::BeforeDescribe;
+        if seeded {
+            let mut image = vec![0u8; BYTES as usize];
+            for i in 0..WORDS as usize {
+                image[4 * i..4 * i + 4]
+                    .copy_from_slice(&pattern.wrapping_add(i as u32).to_le_bytes());
+            }
+            region
+                .write_from(HostOffset::new(0), &image)
+                .map_err(|e| region_error(&e))?;
         }
-        region
-            .write_from(HostOffset::new(0), &image)
-            .map_err(|e| region_error(&e))?;
 
         // 4 — arm B. Reported by its own `Err` so a refusal here is never read as a copy
         // that did not land.
@@ -3513,11 +3573,15 @@ impl HostRmBackend {
             // page as a pass.
             let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
             let mut mismatch = None;
+            // ★ Counted by the loop that does the comparing, never re-derived from `BYTES`.
+            // The first version of this rung printed `BYTES` twice and called it a result.
+            let mut bytes_compared = 0u64;
             for i in 0..WORDS {
                 let got = second
                     .load_u32(HostOffset::new(i * 4))
                     .map_err(|e| region_error(&e))?;
                 let want = pattern.wrapping_add(i as u32);
+                bytes_compared += 4;
                 if got != want {
                     mismatch = Some(WordMismatch { word: i, got, want });
                     break;
@@ -3536,6 +3600,8 @@ impl HostRmBackend {
                 after,
                 sentinel,
                 mismatch,
+                bytes_compared,
+                seeded,
                 submit,
                 payload,
             })

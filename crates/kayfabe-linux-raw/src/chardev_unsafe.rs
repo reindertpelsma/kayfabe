@@ -775,18 +775,15 @@ mod tests {
         let d = dev_null();
         let mut arg = [0u8; 32];
         let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
-        let mut patch = [Indirect::describing(
-            8,
-            &region,
-            HostOffset::new(page.bytes()),
-            page.bytes(),
-        )
-        .expect("the second page is inside it too")];
+        let mut patch =
+            [
+                Indirect::describing(8, &region, HostOffset::new(page.bytes()), page.bytes())
+                    .expect("the second page is inside it too"),
+            ];
         let r = d.ioctl(req, &mut arg, &mut patch);
         assert!(r.is_err(), "/dev/null answers ENOTTY");
         assert_eq!(
-            arg,
-            [0u8; 32],
+            arg, [0u8; 32],
             "a region's address survived a FAILED ioctl in the caller's buffer"
         );
 
