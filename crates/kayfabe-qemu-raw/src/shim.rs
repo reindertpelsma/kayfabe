@@ -2777,6 +2777,55 @@ impl core::fmt::Debug for SharedDoorbell {
 /// The GPU a `nvkvm-gpu` device is. See [`SharedDoorbell`]'s docs.
 const DOORBELL_TARGET_GPU: kayfabe_rt::GpuId = kayfabe_rt::GpuId(0);
 
+/// ★★★ How many attribute→decode rounds one doorbell will run — see
+/// [`SharedDoorbell::decode_cpu_pt_writes`].
+///
+/// # Why more than one, and why a fixed few
+///
+/// `Spine::pt_page_owner` knows a page-table page only once something published it: **roots**
+/// by declaration, everything deeper only after a decode learned it. `[measured 2026-08-10,
+/// boot `w208_797a6bc_real`]` the walling ring's tree is five levels of pages the guest's CPU
+/// wrote — `L0 #39, L1 #40, L2 #41, L3 #67, L5 #68` — so at the first drain **one** of the
+/// five is attributable and the other four are *"not yet"*. Each round decodes what it could
+/// attribute, which publishes that subtree's pages, which makes the next round's leftovers
+/// attributable. A GA10x tree is at most 6 levels; 8 is that with slack, and the loop also
+/// stops the moment a round attributes nothing.
+///
+/// ⊘ Not "until fixpoint": an unbounded loop over a set the guest writes is a guest-driven
+/// stall on the vCPU that took the trap.
+const PT_DECODE_ROUNDS: usize = 8;
+
+/// What [`SharedDoorbell::decode_cpu_pt_writes`]'s rounds added up to, for one line.
+///
+/// ⊘ Every field is carried separately and none is folded into another. `unwitnessed`,
+/// `unreachable` and `sparse` are the design **working** (a leaf whose page nobody was seen
+/// to write must not bind); `faults`, `refusals` and `reach_faults` are three different
+/// components failing — the guest's page tables, our address table, and our reachability
+/// shadow. A reader that cannot tell those five apart debugs the wrong one.
+#[derive(Debug, Default)]
+struct PtDecodeTally {
+    bound: usize,
+    unchanged: usize,
+    repointed: usize,
+    unbound: usize,
+    learned: usize,
+    meta_refused: usize,
+    published: usize,
+    publish_refused: usize,
+    unwitnessed: usize,
+    unreachable: usize,
+    sparse: usize,
+    dropped: usize,
+    refusals: usize,
+    faults: usize,
+    reach_faults: usize,
+    retired: usize,
+    pass_vas_gone: usize,
+    /// The first fault of any kind, whole — see the assignment site for why a count is not
+    /// enough.
+    first_fault: Option<String>,
+}
+
 /// One refused doorbell report, so the three refusal sites in [`SharedDoorbell`] cannot
 /// come to disagree about the shape of a refusal.
 fn refused(
@@ -2912,6 +2961,28 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
                  not two"
             );
         }
+        // ★★★★★ **§16.74 — G1+G2+G3, RUN BEFORE THE RING IS READ.**
+        //
+        // The order is the whole point and it is not stylistic: `forward_ring` below reads
+        // this channel's GPFIFO ring through `AddressTable::binding_at`, and for four
+        // consecutive rungs that lookup has answered `RING-VA-UNBOUND va=0x420064000 →
+        // NOTHING FORWARDED`. §16.73's ruling says why — the table is INCOMPLETE, because
+        // the transport that published that mapping is the guest's CPU through BAR2 and
+        // nothing witnessed it. This is the populate pass for that transport, and it must
+        // commit **before** the read that consumes it or it may as well not have run.
+        //
+        // ⊘ It is NOT a second address plane and it resolves nothing: it latches witnessed
+        // pages, decodes them with the walker every other path uses, and forward-populates
+        // the one authoritative per-VAS table. Miss is still fault; the table is still
+        // never reverse-resolved.
+        //
+        // ⚠ Printed unconditionally on this path, including `drained=0`. A populate pass
+        // that ran and found nothing and a populate pass that did not run are different
+        // facts, and only one of them is about the guest.
+        eprintln!(
+            "kayfabe: PT-DECODE token={token:#010x}{}",
+            self.decode_cpu_pt_writes()
+        );
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
         // meant, in `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell
         // on a host channel into which the guest's methods were never copied"* — and the
@@ -3497,6 +3568,156 @@ impl SharedDoorbell {
     ///
     /// ⊘ **No resolver is changed and nothing here is served.** Identical body, identical
     /// output, one fewer resolution.
+    /// ★★★★★ **G1 + G2 + G3 — the CPU transport's page-table writes, attributed, decoded
+    /// and published, at the guest's own commit point.**
+    ///
+    /// `execution_plane_increments.md` §16.73.8's three wirings, joined here because this is
+    /// the one place that holds both halves: the **plane** (which witnessed the writes and
+    /// holds the bytes) and the **device** (which owns the address table). Neither crate may
+    /// name the other's state, and neither is the composition root.
+    ///
+    /// # What each link is
+    ///
+    /// 1. **G1 — the witness.** `RegPlane::drain_pt_witness` — pages the guest's CPU wrote
+    ///    through a framebuffer window, recorded at the same statement that stamps
+    ///    `/byBAR2`. Until this rung `Vas::pt_pages` was fed **only** by a CE pushbuffer
+    ///    parse, so everything this transport published stayed a miss.
+    /// 2. **G2 — the consumer.** `SharedDevice::decode_pt_writes`, which had a definition,
+    ///    two test call sites and **no production caller** — the
+    ///    `a_declared_capability_reachable_from_nowhere` shape, for the fourth time in this
+    ///    campaign. It is called here, at the doorbell, which `ceresolve`'s module doc
+    ///    already names as the guest's own submit fence and the only commit point on this
+    ///    path.
+    /// 3. **G3 — the byte source.** `RegPlane::pt_bytes`, the device's own `FbStore`, and
+    ///    **not** `kayfabe_fwd::IsolateFb` — whose production backend is
+    ///    `Err(NOT_ON_THIS_RUNG)` and which reads the fabricated aperture, a different
+    ///    store. See `SharedDevice::decode_pt_writes_from` for the seam and the measurement
+    ///    that decides it.
+    ///
+    /// # ⊘ Where it is called from, and why the control stays byte-identical
+    ///
+    /// From the **forwarding fall-through only**, beside the `RING-PROJ` block and for that
+    /// block's stated reason: on the `Stillborn` control plane `try_ce_submission` claims
+    /// every routed doorbell terminally, so no doorbell reaches this line and the control's
+    /// committed census cannot move. ⚠ That is a claim about a code path, and the boot is
+    /// what tests it — `PT-DECODE` must read **0 lines** on the control.
+    ///
+    /// # ⚠ Locks
+    ///
+    /// Called with **no** lock held — before `self.ce.vmm` is taken below, and `ring` is
+    /// documented as running with no plane lock out. The plane's mutex is taken and released
+    /// inside each `PlanePtBytes::read`; the core's ranked locks are taken and released
+    /// inside each phase of the pass. ⊘ The two are never nested, in either direction.
+    fn decode_cpu_pt_writes(&self) -> String {
+        let Some(plane) = self.plane.upgrade() else {
+            return String::new();
+        };
+        let mut pending = plane.drain_pt_witness();
+        let drained = pending.len();
+        if drained == 0 {
+            // ⊘ Printed, not skipped. `[measured 2026-08-10, boot `w208_797a6bc_real`]` the
+            // first-writer census reads `BAR2 50 / PRAMIN 21 / EXEC 0`, so a drain of zero
+            // on the real arm would say the witness is not on the path the census names —
+            // a finding about **this instrument**, and a missing line could not carry it.
+            return " | PT-DECODE drained=0 (the CPU transport wrote nothing this window)"
+                .to_string();
+        }
+        // ★ Zero-sized and stateless (`Ga10xGmmu` is a unit struct), so this is the same
+        // *value* the composition root installed with `plane.set_mmu` — not a second
+        // format that could drift from it.
+        let fmt = kayfabe_chips::Ga10xGmmu::new();
+        let (mut latched, mut vas_gone, mut rounds) = (0usize, 0usize, 0usize);
+        // ⊘ A local tally rather than a folded `PtDecodeOutcome`, for one reason that is
+        // about linkage and not about style: this crate does not depend on `kayfabe-fwd`
+        // and must not start to. The shipped archive's edge set is itself a security
+        // surface (see this crate's manifest on `host-isolates`), and a diagnostic is not a
+        // reason to widen it.
+        let mut acc = PtDecodeTally::default();
+        while rounds < PT_DECODE_ROUNDS && !pending.is_empty() {
+            let w = self
+                .device
+                .witness_cpu_pt_pages(DOORBELL_TARGET_GPU, &pending);
+            latched += w.latched;
+            vas_gone += w.vas_gone;
+            pending = w.unattributed;
+            if w.procs.is_empty() {
+                // Nothing became attributable this round, so nothing will next round
+                // either — the index only grows from a decode, and no decode ran.
+                break;
+            }
+            rounds += 1;
+            for pid in w.procs {
+                let mut fb = plane.pt_bytes();
+                let Some(out) = self.device.decode_pt_writes_from(pid, &fmt, &mut fb) else {
+                    continue;
+                };
+                acc.bound += out.bound;
+                acc.unchanged += out.unchanged;
+                acc.repointed += out.repointed;
+                acc.unbound += out.unbound;
+                acc.learned += out.meta_learned;
+                acc.meta_refused += out.meta_refused;
+                acc.published += out.pages_published;
+                acc.publish_refused += out.pages_publish_refused;
+                acc.unwitnessed += out.unwitnessed;
+                acc.unreachable += out.unreachable;
+                acc.sparse += out.sparse;
+                acc.pass_vas_gone += out.vas_gone;
+                acc.dropped += out.dropped.len();
+                acc.refusals += out.refusals.len();
+                acc.faults += out.faults.len();
+                acc.reach_faults += out.reach_faults.len();
+                acc.retired += out.retired.len();
+                // ★ The FIRST fault, whole, beside the count. A count says a subtree was
+                // unreadable; only the fault says which address and why, and this pass has
+                // three different kinds that a single number cannot tell apart.
+                if acc.first_fault.is_none() {
+                    if let Some(f) = out.faults.first() {
+                        acc.first_fault = Some(format!("{f:?}"));
+                    } else if let Some(r) = out.refusals.first() {
+                        acc.first_fault = Some(format!("{r:?}"));
+                    } else if let Some(r) = out.reach_faults.first() {
+                        acc.first_fault = Some(format!("{r:?}"));
+                    }
+                }
+            }
+        }
+        // ⊘ THE LEFTOVERS GO BACK. A page the index cannot name an owner for is not a page
+        // that was not written, and the witness is the only record that it was.
+        let requeue_refused = plane.requeue_pt_witness(pending.iter().copied());
+        let st = plane.pt_witness_stats();
+        format!(
+            " | PT-DECODE drained={drained} latched={latched} unowned_vas={vas_gone} \
+             requeued={} rounds={rounds} → bound={} unchanged={} repointed={} unbound={} \
+             learned={} published={}/{} meta_refused={} unwitnessed={} unreachable={} \
+             sparse={} dropped={} refusals={} faults={} reach_faults={} retired={} \
+             pass_vas_gone={} first={} [witness writes={} pending={} refused={}+{}]",
+            pending.len(),
+            acc.bound,
+            acc.unchanged,
+            acc.repointed,
+            acc.unbound,
+            acc.learned,
+            acc.published,
+            acc.publish_refused,
+            acc.meta_refused,
+            acc.unwitnessed,
+            acc.unreachable,
+            acc.sparse,
+            acc.dropped,
+            acc.refusals,
+            acc.faults,
+            acc.reach_faults,
+            acc.retired,
+            acc.pass_vas_gone,
+            acc.first_fault.as_deref().unwrap_or("NONE"),
+            st.writes,
+            st.pending,
+            st.refused,
+            requeue_refused,
+        )
+    }
+
     fn addressing_probe_facts(&self, facts: kayfabe_rt::device::CeChannelFacts) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();

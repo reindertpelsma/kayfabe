@@ -497,6 +497,14 @@ pub struct Counters {
 pub struct PlaneResidue {
     /// Every route counter, as [`RegPlane::counters`] reports them.
     pub counters: Counters,
+    /// ★★★★ **G1's witness** — what the guest's CPU wrote through the framebuffer windows
+    /// and nothing has drained yet ([`PtWitnessStats`]).
+    ///
+    /// In the residue for `bar_pdes`' reason: a page the **previous** guest wrote, carried
+    /// across a device life and then attributed to this guest's address space, would
+    /// publish the previous guest's page-table bytes as this one's mappings. See
+    /// [`RegPlane::device_reset`], which clears it.
+    pub pt_witness: PtWitnessStats,
     /// ★★ The emulated GSP, **whole**: phase, queue binding, both ring cursors, both
     /// sequence numbers, the mailbox shadows, the boot-args conjunction, the region
     /// identity and both latches. `PartialEq` is derived over every field it has.
@@ -607,6 +615,59 @@ struct PlaneState {
     /// answers *"this port has no page-table format"* by name rather than guessing a
     /// stride. See [`RegPlane::set_mmu`].
     mmu: Option<Box<dyn GmmuFmt>>,
+    /// ★★★★ **G1 — THE WITNESS FOR THE CPU TRANSPORT.** Framebuffer pages the **guest's
+    /// own CPU** wrote through one of this plane's windows, deduped to the 4 KiB page.
+    ///
+    /// # Why this exists, measured
+    ///
+    /// `[measured 2026-08-10, boot `w208_797a6bc_real`]` every one of the five page-table
+    /// pages on the walling ring's tree carries `/byBAR2` — `#39, #40, #41, #67, #68` — and
+    /// the same boot's first-writer census reads `EXEC 0`. So the transport that publishes
+    /// that tree is the CPU through [`RegPlane::fb_write`], and `Vas::pt_pages`' only
+    /// writers are fed from a **CE pushbuffer parse**. Everything that transport published
+    /// stayed a miss (`reachability_on_transition.md` §7.2).
+    ///
+    /// # ⊘ Why a DRAINED SET here and not a `PtWitnessPort` on the `set_doorbell` precedent
+    ///
+    /// A port would be called on **every** framebuffer-window write — 384 807 of them in
+    /// one measured boot — each one taking the port's own lock and a trait-object call,
+    /// *after* `drop(s)`. This set is inserted into under the mutex the write **already
+    /// holds**, so the hot path pays one `BTreeSet` insert (an already-present key on all
+    /// but the first write to a page) and **no new lock**. `unranked_locks.rs` is the gate
+    /// that would have to grow a row for the alternative, and the row it already carries
+    /// for `Mutex<PlaneState>` says why: it is held across the whole policy chain on the
+    /// vCPU's own MMIO trap.
+    ///
+    /// ⊘ It carries **no** claim that these pages are page tables. It is the transport's
+    /// name for what the CPU wrote; who owns each page, and whether it is a page table at
+    /// all, is answered by the core's `Spine::pt_page_owner` at the drain.
+    pt_witness: std::collections::BTreeSet<u64>,
+    /// Pages [`PlaneState::pt_witness`] could not take because [`MAX_PT_WITNESS_PAGES`] was
+    /// reached. Loud, never silent: a witness that quietly stopped witnessing is
+    /// indistinguishable from a guest that stopped writing.
+    pt_witness_refused: u64,
+    /// Every window write that reached the witness, deduped or not — the denominator
+    /// `pt_witness.len()` is a numerator of.
+    pt_witness_writes: u64,
+}
+
+/// How many distinct framebuffer pages [`PlaneState::pt_witness`] will hold.
+///
+/// ★ A bound of **ours** on a set the guest drives (boundary-1). The measured population is
+/// tiny — `[measured 2026-08-10, boot `w208_797a6bc_real`]` `PRAMIN 21 / BAR1 0 / BAR2 50 /
+/// EXEC 0`, so **71** CPU-written pages in a whole boot — and a guest that scribbles one
+/// byte into every page of a 4 GiB framebuffer would otherwise mint a million entries.
+pub const MAX_PT_WITNESS_PAGES: usize = 1 << 16;
+
+/// ★★★★ **G1's report** — what the CPU transport wrote, as a fact a caller can print.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PtWitnessStats {
+    /// Distinct 4 KiB pages currently held, waiting to be drained.
+    pub pending: usize,
+    /// Window writes that reached the witness, over this device's life.
+    pub writes: u64,
+    /// Pages refused because [`MAX_PT_WITNESS_PAGES`] was reached.
+    pub refused: u64,
 }
 
 /// How many distinct unclaimed offsets are remembered.
@@ -1126,6 +1187,32 @@ struct FbStoreReader<'a> {
     fb: &'a mut dyn FbStore,
 }
 
+/// ★★★★ **G3 — [`FbRead`] over this plane's own framebuffer, one lock acquisition per
+/// page.** Built by [`RegPlane::pt_bytes`]; see that method for which store is
+/// authoritative for a page-table decode and why the lock is taken per read.
+///
+/// ⊘ It holds **no bytes** and no guard — the same property [`FbStoreReader`] has, for the
+/// same reason: [`FbRead`] has no method that hands content *in*, so *"the core acquired a
+/// store of device memory"* stays unrepresentable.
+#[derive(Debug)]
+pub struct PlanePtBytes<'a> {
+    plane: &'a RegPlane,
+}
+
+impl FbRead for PlanePtBytes<'_> {
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        let mut s = self.plane.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.read(phys, buf).is_ok()
+    }
+
+    /// The same per-address first-writer answer [`FbStoreReader`] gives, so a decode and a
+    /// `walk:` line read the identical fact about a page.
+    fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
+        let s = self.plane.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
+    }
+}
+
 impl FbRead for FbStoreReader<'_> {
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.fb.read(phys, buf).is_ok()
@@ -1365,6 +1452,9 @@ impl RegPlane {
                 cpu_intr: CpuIntrTree::new(),
                 fb: Box::new(RefusingFb),
                 mmu: None,
+                pt_witness: std::collections::BTreeSet::new(),
+                pt_witness_refused: 0,
+                pt_witness_writes: 0,
             }),
             c: PlaneCounters::default(),
             unserviced,
@@ -1456,6 +1546,94 @@ impl RegPlane {
     pub fn set_doorbell(&self, port: Box<dyn DoorbellPort>) {
         let mut p = self.doorbell.write().unwrap_or_else(|e| e.into_inner());
         *p = port;
+    }
+
+    /// ★★★★ **G1 — take every page the guest's CPU has written since the last drain.**
+    ///
+    /// Ascending, deduped to the 4 KiB page. **Drained**, exactly as `plan_pt_decode`
+    /// drains `Vas::pt_pages` and for the same reason: a page written again after this call
+    /// must be witnessed again, and leaving it set would make the second write
+    /// indistinguishable from the first.
+    ///
+    /// ⊘ The caller owes [`RegPlane::requeue_pt_witness`] whatever it could not attribute.
+    /// A page the core cannot yet name an owner for is **not** a page that was not written.
+    pub fn drain_pt_witness(&self) -> Vec<u64> {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        std::mem::take(&mut s.pt_witness).into_iter().collect()
+    }
+
+    /// ★★★ Put pages back that the caller could not attribute — the other half of
+    /// [`RegPlane::drain_pt_witness`].
+    ///
+    /// # ⊘ Why the drain is not simply a read
+    ///
+    /// A page-table page is routinely written **before** anything points at it
+    /// (`PtDecodePlan::deferred`'s orphan leaf, one level up: here it is a page written
+    /// before its *owner* is derivable). Dropping it would destroy the only record that the
+    /// guest wrote it, and `reachability_on_transition.md` §2.2 is explicit that a leaf
+    /// binds only if the guest was **seen** to write its page. So an unattributable page is
+    /// carried, not discarded, until a later decode learns whose it is.
+    ///
+    /// Returns how many were refused for want of room ([`MAX_PT_WITNESS_PAGES`]).
+    pub fn requeue_pt_witness(&self, pages: impl IntoIterator<Item = u64>) -> u64 {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut refused = 0;
+        for p in pages {
+            let page = p & !0xfff;
+            if s.pt_witness.contains(&page) {
+                continue;
+            }
+            if s.pt_witness.len() < MAX_PT_WITNESS_PAGES {
+                s.pt_witness.insert(page);
+            } else {
+                refused += 1;
+                s.pt_witness_refused = s.pt_witness_refused.saturating_add(1);
+            }
+        }
+        refused
+    }
+
+    /// What the CPU transport has written — see [`PtWitnessStats`].
+    #[must_use]
+    pub fn pt_witness_stats(&self) -> PtWitnessStats {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        PtWitnessStats {
+            pending: s.pt_witness.len(),
+            writes: s.pt_witness_writes,
+            refused: s.pt_witness_refused,
+        }
+    }
+
+    /// ★★★★ **G3 — THE BYTE SOURCE A PAGE-TABLE DECODE ON THIS PLANE MUST READ.**
+    ///
+    /// # ⊘ Which store is authoritative, and why it is this one rather than the isolate
+    ///
+    /// `kayfabe_fwd::IsolateFb` reads through `Worker::fb_read` → `RmBackend::fb_read`,
+    /// whose host implementation is `Err(NOT_ON_THIS_RUNG)` and whose own doc says the
+    /// aperture's extent *"is not written down anywhere in this tree"*. That source is
+    /// right for §12.2's fabricated aperture — memory **we** put bytes into on behalf of a
+    /// copy we performed. It is the wrong source here, and the boot says so by name: the
+    /// walk that produced the ruling read these very pages out of **this** store and
+    /// tagged every one of them `/byBAR2`, which is `FbWriter::Window(InstanceWindow)`,
+    /// stamped by [`RegPlane::fb_write`] four hundred lines up. The guest's page tables on
+    /// the Mode-2 plane are in the device's own [`FbStore`], because the emulated BAR2
+    /// window is what put them there.
+    ///
+    /// ⚠ This is the seam decision §16.73.7 flagged and declined to take. Getting it wrong
+    /// is *a self-consistent wrong store* — a writer and a reader that agree and are both
+    /// wrong — so it is taken against the transport tag rather than against a preference.
+    ///
+    /// # ⚠ The lock, and why it is taken PER READ
+    ///
+    /// Every read here takes and releases the plane's FSM mutex. Handing out a guard-borrowed
+    /// reader instead would put the caller's **core** locks beneath it — and although
+    /// plane→core is the established order, `unranked_locks.rs`' row for `Mutex<PlaneState>`
+    /// is explicit that *nothing may block beneath it*, and a rank-1 proc mutex can block.
+    /// `decode_page` reads a whole page-table page per call (`kayfabe_mmu::walker:573`), so
+    /// the measured population is tens of acquisitions per doorbell, not thousands.
+    #[must_use]
+    pub fn pt_bytes(&self) -> PlanePtBytes<'_> {
+        PlanePtBytes { plane: self }
     }
 
     /// What this device life's doorbell aperture has seen — see [`DoorbellLog`].
@@ -2105,9 +2283,22 @@ impl RegPlane {
             // through `set_mmu`. Two lives of the same chip cannot differ here, and it
             // holds no guest bytes.
             mmu: _,
+            // ★★★★ G1's set IS guest-driven device state — the pages the guest's CPU wrote
+            // and nothing has yet attributed — so it is carried out, like `fb_window` and
+            // the census. ⊘ As a count and not as the addresses: the residue is a
+            // comparison object, and a per-boot physical address would make two identical
+            // devices compare unequal for a reason that is about the guest's allocator.
+            pt_witness,
+            pt_witness_refused,
+            pt_witness_writes,
         } = &*s;
         PlaneResidue {
             counters,
+            pt_witness: PtWitnessStats {
+                pending: pt_witness.len(),
+                writes: *pt_witness_writes,
+                refused: *pt_witness_refused,
+            },
             gsp: fsm.clone(),
             unclaimed: unclaimed.clone(),
             fb_window: fb_window.clone(),
@@ -2269,6 +2460,16 @@ impl RegPlane {
         // are `0x00000000` (`ogkm-580: ampere/ga102/dev_vm.h:52,56,60`), so a device that
         // came back from a power-on reset with pending bits is not modelling silicon.
         s.cpu_intr = CpuIntrTree::new();
+        // ★★★★ **AND G1'S WITNESS** — for `BarPdeLog::device_reset`'s reason, sharpened by
+        // what this one feeds. An undrained page here is handed to `Spine::pt_page_owner`
+        // and then **decoded as page-table bytes** into whichever address space claims it.
+        // Carried across a device life, that publishes the PREVIOUS guest's page tables as
+        // this guest's mappings — the cross-life information leak `bar_pdes` guards
+        // against, except that this one ends in a translation the new guest's copies use.
+        // ⊘ The write/refusal totals are life-scoped diagnostics and are cleared with it.
+        s.pt_witness.clear();
+        s.pt_witness_refused = 0;
+        s.pt_witness_writes = 0;
         // ★★★ And the published roots. See `crate::bar2::BarPdeLog::device_reset` for why
         // this one is a cross-life *information* leak and not merely stale state.
         self.bar_pdes.device_reset();
@@ -2713,6 +2914,39 @@ impl RegPlane {
         let outcome = match s.fb.write_tagged(phys, &bytes[..n], FbWriter::Window(w)) {
             Ok(()) => {
                 self.c.fb_writes.fetch_add(1, Ordering::Relaxed);
+                // ★★★★ **G1 — THE WITNESS FOR THE CPU TRANSPORT, taken at the one line that
+                // stamps `/byBAR2`.**
+                //
+                // `FbWriter::Window(w)` two lines up is what makes the walk print
+                // `L0@0x2efa9c000/byBAR2#39`. So *this* call is the writer §16.73's ruling
+                // named, and the witness is taken from the same statement rather than from a
+                // second derivation of "which window" — the §16.16 rule that two projections
+                // of one fact are never reconciled in silence.
+                //
+                // ⊘ Only on the LANDED arm. A refused write changed no byte, and witnessing
+                // it would put a page into the drain that the store does not back —
+                // `unwitnessed` would then be under-reported for a page nobody wrote, which
+                // is the witness gate lying in the direction that binds.
+                //
+                // ⊘ It records a PAGE, never a value and never a claim that the page is a
+                // page table. `Spine::pt_page_owner` decides ownership at the drain, and a
+                // page nothing owns is requeued, not guessed at.
+                s.pt_witness_writes = s.pt_witness_writes.saturating_add(1);
+                // ★ BOTH pages when the access straddles, because `FbStore::write` really
+                // does land bytes in two frames (`SparseFb::runs`). A witness that recorded
+                // only the first would leave the second page written-and-unwitnessed, which
+                // is the one state that binds nothing and looks like nothing happened.
+                let last = phys.saturating_add(n as u64 - 1);
+                for page in [phys & !0xfff, last & !0xfff] {
+                    if s.pt_witness.contains(&page) {
+                        continue;
+                    }
+                    if s.pt_witness.len() < MAX_PT_WITNESS_PAGES {
+                        s.pt_witness.insert(page);
+                    } else {
+                        s.pt_witness_refused = s.pt_witness_refused.saturating_add(1);
+                    }
+                }
                 WriteOutcome {
                     fb_landed: Some(phys),
                     ..WriteOutcome::nothing()

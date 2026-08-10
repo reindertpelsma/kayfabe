@@ -456,6 +456,29 @@ impl<P> Staged<P> {
     }
 }
 
+/// ★★★★ **G1 — what one attribution pass over the CPU transport's pages did.**
+///
+/// See [`SharedDevice::witness_cpu_pt_pages`]. Every page handed in lands in exactly one of
+/// [`Self::latched`], [`Self::vas_gone`] or [`Self::unattributed`], and those three mean
+/// three different things about three different components: the page reached its `Vas`; the
+/// index named an owner whose address space is gone (**ours**, R5); the index does not know
+/// this page yet (**not yet**, and it must be requeued).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CpuPtWitness {
+    /// Pages inserted into an owning `Vas`'s dirty set.
+    pub latched: usize,
+    /// Pages the index attributed and whose `Vas` had gone by the time the lock was taken.
+    pub vas_gone: usize,
+    /// ★★★ Pages no owner could be derived for, **carried back to be requeued**. Reported
+    /// as addresses rather than counted so a caller can put them back and a test can name
+    /// one — see [`SharedDevice::witness_cpu_pt_pages`] for why dropping them destroys the
+    /// witness.
+    pub unattributed: Vec<u64>,
+    /// Procs that got at least one page, ascending — the population a decode pass must now
+    /// be run for.
+    pub procs: Vec<ProcId>,
+}
+
 /// ★★★★ What [`SharedDevice::forward_ring`]'s locked read phase found, **named**.
 ///
 /// ⊘ The three non-`Fresh` variants are the arms on which a doorbell is reported `Served`
@@ -2118,21 +2141,61 @@ impl SharedDevice {
         fmt: &dyn kayfabe_arch::GmmuFmt,
         worker: &mut kayfabe_isolate::Worker,
     ) -> Option<kayfabe_fwd::PtDecodeOutcome> {
+        let mut fb = kayfabe_fwd::IsolateFb::new(worker);
+        let mut out = self.decode_pt_writes_from(pid, fmt, &mut fb)?;
+        // ★ A transport failure is surfaced as its own fact rather than blended into the
+        // walk faults: `Ok(false)` from the isolate is a statement about the GUEST's page
+        // tables, an `Err` is a statement about US, and a caller that cannot tell them
+        // apart debugs the wrong plane. ⊘ Read HERE and not inside the shared body: it is
+        // a property of *this* byte source, and the plane's store has no socket to break.
+        out.transport = fb.transport_error();
+        Some(out)
+    }
+
+    /// ★★★★ **G3 — the same pass, over a byte source the CALLER chooses.**
+    ///
+    /// [`SharedDevice::decode_pt_writes`] is this with `kayfabe_fwd::IsolateFb` supplied;
+    /// everything that method's docs say about the three phases, the locks and the fourth
+    /// PUBLISH phase applies here unchanged.
+    ///
+    /// # ⊘ Why the source is a parameter at all — the seam, stated
+    ///
+    /// **Which store is authoritative for a page-table decode is not one answer.** §12.2's
+    /// fabricated aperture is memory *we* wrote on behalf of a copy *we* performed, and it
+    /// lives in the isolate; the Mode-2 emulated plane's page tables are written by the
+    /// **guest's own CPU** through the emulated BAR2 window and live in the device's
+    /// `kayfabe_device::FbStore`. `[measured 2026-08-10, boot `w208_797a6bc_real`]` names
+    /// which one the walling ring's tree is in and does not leave it to be argued: all five
+    /// of its page-table pages carry `/byBAR2`, and the same boot's census reads `EXEC 0`.
+    ///
+    /// ⚠ Getting this wrong is *a self-consistent wrong store* — a writer and a reader that
+    /// agree and are both wrong — so the caller states its source and the pass does not
+    /// pick one.
+    ///
+    /// ⊘ [`kayfabe_fwd::PtDecodeOutcome::transport`] is left `None` here. A transport
+    /// failure is a property of the source, `FbRead` has no channel to report one, and
+    /// inventing an absence would be worse than the honest `None` a caller can override.
+    ///
+    /// Returns `None` if `pid` is not live.
+    ///
+    /// # Panics
+    /// If a ranked lock is somehow held across the execute phase and the source asserts it
+    /// (`kayfabe_isolate::Worker::fb_read` does).
+    pub fn decode_pt_writes_from(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+    ) -> Option<kayfabe_fwd::PtDecodeOutcome> {
         // PLAN — rank 1, the owner's lock and no other.
         let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_decode)?;
         // EXECUTE — no lock held. `with_proc_mut` released it above, and the borrow of
         // the plan is of owned data, so nothing keeps a guard alive into here (★ a `Drop`
         // is a call site: `plan` owns `Vec`s of plain values, whose drop touches nothing).
-        let results = {
-            let mut fb = kayfabe_fwd::IsolateFb::new(worker);
-            let r = kayfabe_fwd::run_pt_decode(
-                fmt,
-                &mut fb,
-                &plan.tasks,
-                kayfabe_fwd::PT_DECODE_BUDGET,
-            );
-            (r, fb.transport_error())
-        };
+        let results = (
+            kayfabe_fwd::run_pt_decode(fmt, fb, &plan.tasks, kayfabe_fwd::PT_DECODE_BUDGET),
+            None,
+        );
         // COMMIT — rank 1 again, re-resolving every target (R5).
         let mut out =
             self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_decode(fmt, p, &results.0))?;
@@ -2170,12 +2233,99 @@ impl SharedDevice {
                 out.pages_publish_refused += refused;
             }
         }
-        // ★ A transport failure is surfaced as its own fact rather than blended into the
-        // walk faults: `Ok(false)` from the isolate is a statement about the GUEST's page
-        // tables, an `Err` is a statement about US, and a caller that cannot tell them
-        // apart debugs the wrong plane.
+        // ⊘ `transport` stays as `commit_pt_decode` left it. It is a property of the byte
+        // source, which this body does not own; the caller that chose the source sets it.
         out.transport = results.1;
         Some(out)
+    }
+
+    /// ★★★★ **G1's consumer side — attribute the pages the guest's CPU wrote, and latch
+    /// each one onto the `Vas` that owns it.**
+    ///
+    /// This is `kayfabe_fwd::latch_pt_writes` for the **other transport**. The CE path
+    /// arrives with an owner already resolved (`CeOperands::PhysOperand` asked
+    /// `classify_ce` under the same lock as the parse); a CPU window write arrives as a
+    /// bare framebuffer address, so ownership is asked here —
+    /// [`kayfabe_core::gpu::Spine::pt_page_owner`], the same declared-then-discovered index
+    /// the CE path consults.
+    ///
+    /// # ⊘ An unattributed page is RETURNED, never dropped
+    ///
+    /// A page the index cannot name an owner for is not a page that was not written. It is
+    /// most often a page-table page whose parent has not been decoded yet — the index knows
+    /// **roots** by declaration and everything deeper only after a decode published it — so
+    /// the honest answer is *"not yet"*, and [`CpuPtWitness::unattributed`] carries it back
+    /// for the caller to requeue. Dropping it would destroy the witness
+    /// (`reachability_on_transition.md` §2.2: a leaf binds only if the guest was **seen** to
+    /// write its page) and the page would then never bind, which is exactly the standing
+    /// residue this rung exists to close.
+    ///
+    /// # The locks
+    ///
+    /// Rank 0 for the whole attribution (one read guard, released before anything else),
+    /// then **one proc lock at a time** for the latch — R3, and the same shape
+    /// `SharedDevice::parse_pushbuffer`'s latch phase uses, because the owner of a written
+    /// page is routinely not the proc that is submitting.
+    pub fn witness_cpu_pt_pages(&self, gpu: GpuId, pages: &[u64]) -> CpuPtWitness {
+        let mut out = CpuPtWitness::default();
+        // ROUTE — rank 0, and released before any proc lock is taken.
+        let owned: Vec<(u64, ProcId, Pdb)> = {
+            let g = self.state.read();
+            pages
+                .iter()
+                .filter_map(|&p| {
+                    let page = p & !0xfff;
+                    g.spine
+                        .pt_page_owner(gpu, page)
+                        .map(|(pid, pdb)| (page, pid, pdb))
+                })
+                .collect()
+        };
+        let claimed: std::collections::BTreeSet<u64> = owned.iter().map(|&(p, ..)| p).collect();
+        // ⊘ Through a set, not a `dedup()`: `dedup` only collapses *adjacent* equals, so an
+        // unsorted input would requeue the same page twice and the count a report prints
+        // would be of rows rather than of pages.
+        out.unattributed = pages
+            .iter()
+            .map(|&p| p & !0xfff)
+            .filter(|p| !claimed.contains(p))
+            .collect::<std::collections::BTreeSet<u64>>()
+            .into_iter()
+            .collect();
+        // LATCH — grouped by owner so each proc's rank-1 lock is taken once, never twice
+        // and never two at a time.
+        let mut by_proc: std::collections::BTreeMap<ProcId, Vec<(Pdb, u64)>> =
+            std::collections::BTreeMap::new();
+        for (page, pid, pdb) in owned {
+            by_proc.entry(pid).or_default().push((pdb, page));
+        }
+        for (pid, rows) in by_proc {
+            let rows_len = rows.len();
+            let latched = self.with_proc_mut(pid, |p| {
+                let mut n = 0;
+                for (pdb, page) in rows {
+                    // ⊘ The `Vas` may have gone between the index read and this lock (R5).
+                    // A page whose address space died is dropped here rather than
+                    // re-attached to whatever inherited the PDB — the C's never-pruned-table
+                    // aliasing class, refused the same way `latch_pt_writes` refuses it.
+                    if let Some(vas) = p.vases.get_mut(&(gpu, pdb)) {
+                        vas.pt_pages.insert(page);
+                        n += 1;
+                    }
+                }
+                n
+            });
+            // ⊘ Counted per PAGE, not per proc: "attributed but not latched" is a different
+            // fact from `unattributed` (which is *"the index does not know this page"*), and
+            // a per-proc tally would report one for a proc that lost 400 of 401 `Vas`es.
+            let n = latched.unwrap_or(0);
+            out.latched += n;
+            out.vas_gone += rows_len - n;
+            if n > 0 {
+                out.procs.push(pid);
+            }
+        }
+        out
     }
 
     /// Back `[va, va+len)` in the `(gpu, pdb)` VAS. **Plan**: route via `by_pdb`,

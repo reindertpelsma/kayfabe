@@ -14021,3 +14021,128 @@ boot as "the drift went away".
 ⊘ **And a falsifier for that rung must not be "the table has an entry"**: it is `FWD-RING`
 ceasing to say `RING-VA-UNBOUND`, `CE-SUBMIT` printing a span, and `GP_GET` moving — R26's
 two-fact bar, unchanged.
+
+## §16.74 ★★★★★ `w209` — **G1 + G2 + G3 BUILT**: the CPU transport is witnessed, attributed, decoded and published
+
+### 16.74.1 ⊘ WHAT I REFUTED BEFORE BOOTING — five, and three are the brief's
+
+**(1) ⊘⊘ MY OWN BITE WAS REFUTED BY ITS OWN RUN, and it is the sharpest thing in this
+section.** The first draft of the regression test transplanted the tree's bytes into a fresh
+`SparseFb` so that *no framebuffer-window write ever happened*, then latched all five pages
+by hand "so the pass would execute", and asserted `bound == 0`. It came back **`bound = 1`**.
+⇒ `plan_pt_decode` takes the witness **at the drain** (`vas.reach.witness(page)`), so *handing
+a page to the latch **is** witnessing it*. The test could not have failed for the reason it
+was named for: it was about the provenance of the **bytes** when the mechanism is about the
+provenance of the **pages**. ★★★★ **A bite that runs is not a bite that discriminates** — and
+only running it found this, exactly as §16.73.1(4) found its own. The replacement latches the
+**root alone**, and asserts the four-rung state in a unit test: the descent reaches the leaf,
+learns all four deeper pages out of the device's own store, reports `unwitnessed > 0`, and
+binds **nothing**. The second arm then witnesses the other four pages and the same leaf binds.
+The mutation is run **both ways on one fixture**.
+
+**(2) ⊘ The brief's "★ the witness point is named: `plane.rs`'s `fb_write`, on the
+`set_doorbell` precedent" — the SITE is right and the SHAPE is refused.** A `PtWitnessPort`
+would be invoked on **every** framebuffer-window write (`[measured 2026-08-10, boot
+`w208_797a6bc_real`]` **384 807** in one boot), each one taking the port's `RwLock` and a
+trait-object call *after* `drop(s)`, and would have needed a new row in
+`tests/tests/unranked_locks.rs`. The dedupe set is instead a field of `PlaneState` — inserted
+into under **the mutex the write already holds** — so the hot path pays one `BTreeSet` insert
+(an already-present key on all but the first write to a page) and **no new lock**. ★ The
+brief's own constraint (*"it must dedupe by page in the device"*) is what rules the port out:
+a port that deduped downstream would still have paid 384 807 calls to learn 71 pages.
+
+**(3) ⊘ "the claim ledger is 88 over its ceiling" — it is 89** (470 against `UNATTRIBUTED_BAR
+= 381`), and this rung adds **zero**: the site list is byte-identical to `5aa2bb0`'s modulo
+line numbers, checked by diffing `claim_ledger.py --list UNATTRIBUTED` across a `git stash`.
+⊘ Not a correction that matters on its own; it matters because *"do not add to it"* is only
+checkable against a number that is right.
+
+**(4) ⊘ The brief's G3 framing — "if called, its byte source refuses" — understates it by one
+step.** `RmBackend::fb_read` really is `Err(NOT_ON_THIS_RUNG)`, so *nothing would have been
+read*. But the fix is not "point it at a store that answers": it is that **`FbRead` has no
+channel to report a transport failure**, so a source swapped in underneath
+`PtDecodeOutcome::transport` would have silently reported `None` for a broken one.
+`decode_pt_writes_from` therefore leaves `transport` as `None` **and says so**, and
+`decode_pt_writes` — the isolate-backed sibling — sets it from `IsolateFb::transport_error()`
+after the pass returns. ⊘ Three different failure classes (`faults` = the guest's page tables,
+`refusals` = our address table, `transport` = us) stay three fields.
+
+**(5) ⊘ "The three gates are the same three, same first causes" — TRUE, and re-measured
+rather than assumed.** `scripts/ci_gates.sh` real rc **1** (read off `$?` of the script, not
+of a `tail`): `kayfabe-device` (bridge-exclusivity, first cause `unserviced.rs:169`),
+`ogkm-version-tag` (**162** untagged doc citations against a bar of 161 — identical at
+`5aa2bb0`, verified under `git stash`), `CLAIM LEDGER`. None of the three moved.
+
+### 16.74.2 THE INCREMENT — three links, and the one design decision in them
+
+| | what was built | where |
+|---|---|---|
+| **G1** | `PlaneState::pt_witness` — a page-deduped set of every framebuffer address a **window** write landed at, inserted at the *same statement* that stamps `FbWriter::Window(w)`, i.e. the statement that makes the walk print `/byBAR2`. Bounded (`MAX_PT_WITNESS_PAGES`), counted, drained, **and cleared by `device_reset`** — an undrained page carried across a device life is decoded as *this* guest's page tables out of the *previous* guest's bytes | `kayfabe-device/src/plane.rs` |
+| **G1b** | `SharedDevice::witness_cpu_pt_pages` — `latch_pt_writes` for the other transport. Ownership is asked of `Spine::pt_page_owner` (rank 0, released) and each owner is latched on its own rank-1 lock (R3). ⊘ **An unattributable page is RETURNED, never dropped** | `kayfabe-rt/src/device.rs` |
+| **G2** | `SharedDevice::decode_pt_writes` gains its **first production caller**, at the doorbell — the commit point `ceresolve`'s module doc already names | `kayfabe-qemu-raw/src/shim.rs` |
+| **G3** | `RegPlane::pt_bytes` → `PlanePtBytes`, an `FbRead` over the **device's own `FbStore`**, one lock acquisition per page; `decode_pt_writes_from` takes the source as a parameter | plane + rt |
+
+★★★ **The one decision, and it is G3's.** *Which store is authoritative for a page-table
+decode on the Mode-2 plane?* The device's `FbStore`, and the argument is the transport tag,
+not a preference: `[measured 2026-08-10, boot `w208_797a6bc_real`]` all five page-table pages
+of the walling ring's tree read `/byBAR2` — which **is** `FbWriter::Window(InstanceWindow)`,
+stamped by `fb_write` — and the same boot's census reads `EXEC 0`. `IsolateFb` remains right
+for §12.2's fabricated aperture and is untouched. ⚠ Getting this wrong is *a self-consistent
+wrong store*; `a_byte_source_that_holds_none_of_the_tree_faults_rather_than_decoding_zeros`
+is the assertion that an empty store produces an empty tree rather than a plausible one.
+
+★★ **Why the doorbell runs a bounded LOOP and not one pass.** `pt_page_owner` knows a page
+only once something published it — **roots** by declaration, everything deeper only after a
+decode learned it. The measured tree is five levels, so the first drain can attribute
+**one** page and must carry four. Each round decodes what it could attribute, which publishes
+that subtree, which makes the next round's leftovers attributable. `PT_DECODE_ROUNDS = 8`
+(a GA10x tree is at most 6 levels) and the loop also stops the instant a round attributes
+nothing. ⊘ Not "until fixpoint": an unbounded loop over a guest-written set is a guest-driven
+stall on the vCPU that took the trap.
+
+⊘ **NO resolver changed and no new transport was invented.** The pass latches witnessed
+pages, walks them with `kayfabe_mmu::walker` — the same walker every other path uses — and
+forward-populates the one authoritative per-VAS table. Miss is still fault; the table is
+still never reverse-resolved. §16.73's ruling stands untouched.
+
+**Tests**: `tests/tests/cpu_pt_transport.rs`, 10 new. Suite **2531 declared** (was 2521),
+2530 passing, 1 ignored, `KAYFABE_SLOW=1`. Clippy 0. ★ Bitten twice, both restored:
+disabling the `fb_write` insert reddens **8 of 10**; making `witness_cpu_pt_pages` drop its
+unattributed pages instead of returning them reddens **3**.
+
+### 16.74.3 ★★★ THE FALSIFIER, committed BEFORE the boot
+
+⊘ **The bar is R26's two facts and nothing else**: the host channel's **`GP_GET` moving** and
+the **release semaphore reaching its payload**. `Ok(())`, a `Served` report, a `PT-DECODE`
+line with `bound=1`, and *"the table now has an entry"* are **none of them** — the last is
+verifying a change by the thing the change produces, which is what §16.73.4 forbade.
+
+Read, on the real arm, for `key=0xc1e00006:0x2 ring=0x420064000`: the new
+`kayfabe: PT-DECODE token=… drained=… latched=… → bound=…` line, the `FWD-RING` line's tag,
+and `CE-SUBMIT`.
+
+| arm | distinguishing line | pre-boot status | what it forces |
+|---|---|---|---|
+| **A — THE DEBT IS PAID** | `PT-DECODE … bound≥1`, `FWD-RING … RING bytes=… spans=N` with N≥1, **and ≥1 `CE-SUBMIT … gp_get=… gp_put=…` line from the isolate with `gp_get` advanced and the semaphore retired** | **live** — every link is built and unit-tested; ⊘ the two-fact half has never been reached in any boot, so its pre-boot status is *unknown*, not *favoured* | G1–G3 were the gap, and `CE-SUBMIT`'s four-rung silence was a consequence of it. The ring is read and the plane executes |
+| **B — the ring is READ and decodes to nothing** | `FWD-RING … RING bytes=… spans=0 → NOTHING FORWARDED (the ring decoded to no CE span…)` | **live** | the ADDRESS plane is fixed and the EXECUTION plane is not. `RING-VA-UNBOUND` is gone, `CE-SUBMIT` stays 0, and the next rung is about the pushbuffer codec — a different component, named |
+| **C — the table is populated and the ring lookup still misses** | `PT-DECODE … bound≥1` beside `FWD-RING … RING-VA-UNBOUND va=0x420064000` | **live** | we bound the **wrong** VAS or the wrong VA. The attribution is wrong, not the witness; compare the `PT-DECODE` proc/pdb against `FWD-RING`'s `key=`/`pdb=` |
+| **D — witnessed, attributed, and NOTHING BINDS** | `PT-DECODE … latched≥1 … bound=0` with `unwitnessed>0` or `unreachable>0` | **live** | the reachability/witness gates are refusing, which means the pages the doorbell drains are **not** the pages the walk reads. ⊘ That would contradict `/byBAR2` on all five levels |
+| **E — nothing is drained at all** | `PT-DECODE … drained=0` on the real arm | ⊘ **excluded pre-boot, by construction and not by reading**: the witness is inserted at the *same statement* that produces the `/byBAR2` tag §16.73 ruled on, so a zero drain and a `/byBAR2` walk cannot both be true of one boot. ★ If it fires anyway the finding is about **this instrument**, and the walk is what adjudicates | say so and **stop** |
+| **F — nothing is ATTRIBUTED** | `PT-DECODE … drained>0 latched=0 requeued=drained` | **live** | `Spine::pt_roots` does not contain the walling channel's root, i.e. the core's `Vas` for that channel is rooted elsewhere than `0x2efa9c000`. That is a statement about `SetPageDir`/`vas_pdb`, and it is the one arm that indicts neither the witness nor the decode |
+| ⊘ **none of the above** | `PT-DECODE` absent on a doorbell that reached the fall-through; or `bound` > the number of leaves the tree declares; or `PT-DECODE` printing on the **control** | live | report the disagreement as the finding; ⊘ do not rule from an instrument that contradicts its own preconditions |
+
+### 16.74.4 ⊘ WHAT THIS BOOT CANNOT ESTABLISH — stated before it runs
+
+- ⊘ **Nothing about GR.** The 86 `GrCompute` doorbells are refused above this line by
+  `Route::NotACopyEngineChannel` and never reach the pass.
+- ⊘ **Nothing about the completion tail.** The forwarding path still writes no guest
+  finishPayload and raises no interrupt (§15.5's order: wire the ring first).
+- ⊘ **Nothing about multi-process.** One proc, one address space.
+- ⊘ **Nothing about `IsolateFb`**, which is unchanged and remains the right source for the
+  fabricated aperture.
+- ⚠ **`Ce` doorbell counts are ±2 and the drift is NOT monotone** — three control boots read
+  362 / 364 / 362. Structural rows only are exact: `86/86` refusals by route, `16
+  SERVED-LOCAL`, `26` rings, the `801` wall.
+- ⚠ **The control must print `PT-DECODE` 0 times.** The call site is on the forwarding
+  fall-through, which the `Stillborn` plane never reaches — that is an argument about a code
+  path, and the control boot is what tests it.
