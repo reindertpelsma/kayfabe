@@ -158,6 +158,30 @@ struct NvkvmState {
      * so the boot's own report proves what it ran with. */
     char    *probe_arm_notifier;
 
+    /* ★★★ The model name this device declares, default NULL (= absent, NOT "").  This is
+     * what the guest's NV2080_CTRL_CMD_GPU_GET_NAME_STRING answers with and therefore what
+     * nvidia-smi prints in its Name column; absent leaves the array zero and the guest
+     * prints ERR!.
+     *
+     * ⊘ There is deliberately NO default and no per-chip fallback.  Under the owner's
+     * READ-NATIVE / WRITE-TRAP ruling the model name is a READ whose source is the host
+     * GPU's own answer, so a port that is TOLD the host's name supports whatever card is in
+     * the box, while a port with a built-in table supports the cards somebody remembered.
+     * It arrives as a property because it cannot be queried later: fn 65
+     * (GET_GSP_STATIC_INFO) is the second RPC of the guest driver's whole life, before any
+     * RM object or isolate exists.
+     *
+     * ⚠ A string the guest's RM could not copy out as a NUL-terminated ASCII array — non
+     * ASCII, or >= 64 bytes — REFUSES realize by name.  RM portMemCopy's the fixed-width
+     * array out whole and treats it as a C string; a silent truncation would put a model
+     * name nobody wrote in front of a user. */
+    char    *gpu_name;
+    /* The die string (gpuShortNameString, e.g. "GA106-A"), same rules.  Independent of
+     * gpu_name on purpose: the long name is one host query away and the short one is
+     * surfaced by nothing an operator normally runs, so requiring both would make an
+     * operator who has one INVENT the other. */
+    char    *gpu_short_name;
+
     /* --- regions ---------------------------------------------------------------- */
     MemoryRegion mr[NVKVM_N_REGIONS];
     /* ★ The constructor-call counter.  Its whole job is to disagree with the table's row
@@ -2871,9 +2895,16 @@ static void nvkvm_realize(PCIDevice *pci, Error **errp)
         uint64_t msg_len = 0;
         void *handle = NULL;
         const char *probe = s->probe_arm_notifier ? s->probe_arm_notifier : "";
+        /* Empty means ABSENT, not a zero-length name -- see the field comments. */
+        const char *gname = s->gpu_name ? s->gpu_name : "";
+        const char *gshort = s->gpu_short_name ? s->gpu_short_name : "";
         int32_t rc = kayfabe_shim_regs_create((uint16_t)s->chip_device_id,
                                               (const uint8_t *)probe,
                                               (uint64_t)strlen(probe),
+                                              (const uint8_t *)gname,
+                                              (uint64_t)strlen(gname),
+                                              (const uint8_t *)gshort,
+                                              (uint64_t)strlen(gshort),
                                               &handle, &msg, &msg_len);
 
         if (rc != KAYFABE_OK) {
@@ -2999,6 +3030,13 @@ static const Property nvkvm_properties[] = {
      * report the set it actually ran with: three boots ran probe-off while looking
      * armed from the launching shell, and their conclusions had to be retracted. */
     DEFINE_PROP_STRING("probe-arm-notifier", NvkvmState, probe_arm_notifier),
+    /* ★★★ The model strings the guest reports.  Unset = the port was told no name, which
+     * leaves the arrays zero and nvidia-smi printing ERR! in the Name column -- today's
+     * behaviour, kept as the default so this property adds a capability and changes no
+     * boot that does not use it.  A VMM that knows which host GPU backs this device should
+     * pass that GPU's own answer. */
+    DEFINE_PROP_STRING("gpu-name", NvkvmState, gpu_name),
+    DEFINE_PROP_STRING("gpu-short-name", NvkvmState, gpu_short_name),
     NVKVM_PROP_TERMINATOR
 };
 

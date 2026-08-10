@@ -1124,9 +1124,20 @@ int32_t kayfabe_shim_chip_identity(uint16_t device_id, KayfabeChipIdentity *out,
  * instrumentation, never a shipping path).  Pass (NULL, 0) or an empty string for the
  * shipping configuration.  ⊘ Junk in the string refuses the device BY NAME rather than
  * booting probe-off — the predecessor env var silently did the latter, three boots in a
- * row.  The set in effect comes back in KayfabeRegAudit.probe_arm. */
+ * row.  The set in effect comes back in KayfabeRegAudit.probe_arm.
+ *
+ * ★★★ `gpu_name`/`gpu_short_name` carry the `gpu-name` and `gpu-short-name` device
+ * properties -- the model strings the guest's NV2080_CTRL_CMD_GPU_GET_NAME_STRING answers
+ * with, and therefore what nvidia-smi prints in its Name column.  Empty or (NULL, 0) means
+ * this VMM was told no name: the arrays stay zero and the guest reports ERR!.  ⊘ There is
+ * no fallback behind them -- an absent measurement must not decode as a value.
+ *
+ * ⚠ A name RM could not copy out as a NUL-terminated ASCII C string (non-ASCII, or >= 64
+ * bytes) refuses the device at realize BY NAME rather than being truncated. */
 int32_t kayfabe_shim_regs_create(uint16_t device_id,
                                  const uint8_t *probe_arm, uint64_t probe_arm_len,
+                                 const uint8_t *gpu_name, uint64_t gpu_name_len,
+                                 const uint8_t *gpu_short_name, uint64_t gpu_short_name_len,
                                  void **out_handle,
                                  const uint8_t **out_msg, uint64_t *out_msg_len);
 

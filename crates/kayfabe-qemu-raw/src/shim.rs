@@ -4796,6 +4796,36 @@ impl Regs {
     /// that is not a comma-separated decimal list within
     /// [`kayfabe_abi::eventnotify::PROBE_ARM_MAX`] entries.
     pub fn create_probed(device_id: u16, probe_arm: &str) -> Result<Regs, (Status, &'static str)> {
+        Regs::create_named(
+            device_id,
+            probe_arm,
+            kayfabe_device::staticinfo::GpuNames::default(),
+        )
+    }
+
+    /// Build the register plane with the **model names** a VMM was told, on top of
+    /// [`Regs::create_probed`].
+    ///
+    /// ★★★ This is the seam the `gpu-name` / `gpu-short-name` device properties come
+    /// through, and it exists because there is nowhere later: fn 65
+    /// (`GET_GSP_STATIC_INFO`) is the **second RPC of the guest driver's whole life**, and
+    /// the isolate that carries host verbs is materialized by the first accepted guest RM
+    /// event — strictly after. The value must be in hand before the plane is built, so the
+    /// composition root is the only place it can enter.
+    /// See [`kayfabe_device::staticinfo::GpuNames`].
+    ///
+    /// ⊘ [`kayfabe_device::staticinfo::GpuNames::default`] — both absent — is the shipping
+    /// behaviour of a VMM that was told no name: the arrays stay zero and the guest reports
+    /// `Name: ERR!`. That is a *statement*, not a placeholder, and there is deliberately no
+    /// chip-row fallback behind it (`c_oracle_empty_rows_are_wrong`).
+    ///
+    /// # Errors
+    /// As [`Regs::create_probed`].
+    pub fn create_named(
+        device_id: u16,
+        probe_arm: &str,
+        names: kayfabe_device::staticinfo::GpuNames,
+    ) -> Result<Regs, (Status, &'static str)> {
         let probe_arm =
             kayfabe_abi::eventnotify::ProbeArmSet::parse(probe_arm).map_err(|e| match e {
                 kayfabe_abi::eventnotify::ProbeArmParseError::NotDecimal => (
@@ -4829,6 +4859,7 @@ impl Regs {
             Box::new(HostMonotonicClock::new()),
             probe_arm,
             links,
+            names,
         )
         .map_err(|e| classify_chip(&e))?;
         // ★★★ **THE COMPOSITION ROOT'S FRAMEBUFFER DECISION, made here and nowhere else.**
@@ -6074,6 +6105,69 @@ fn clamp_bar(bar: u32) -> u8 {
 /// An access width the plane can express. Anything wider than 8 bytes is 8.
 fn clamp_size(size: u32) -> u8 {
     u8::try_from(size).unwrap_or(8)
+}
+
+/// Turn the `gpu-name` / `gpu-short-name` device-property strings into the model names the
+/// emulated GSP declares, refusing anything the guest's RM could not treat as a C string.
+///
+/// # ★★★ Why this leaks, and why leaking is the right answer HERE and nowhere else
+///
+/// [`kayfabe_abi::gspstaticinfo::GpuName`] holds a `&'static str`, because every other caller
+/// is a compile-time row and a chip table has no lifetimes to manage. A QOM string property
+/// is a *runtime* value, so one of the two has to give.
+///
+/// ⊘ Widening `GpuName` to an owned buffer would put an allocation on a `Copy` type that the
+/// whole static-info encoder passes by value, to buy a lifetime that does not exist here: this
+/// runs **once per device at realize**, the device outlives every reader, and QEMU's own
+/// property string is itself never freed while the device lives. A leak of at most two short
+/// strings per device is the *shorter-lived* of the two allocations, not a lost one.
+///
+/// ⚠ It is confined to the composition root deliberately. If a second caller ever needs a
+/// runtime name, that is the moment to widen the type rather than to copy this function.
+///
+/// # ⊘ Empty is ABSENT, not a name
+///
+/// An unset QOM string property arrives as an empty string, and empty must mean *"this VMM
+/// was told nothing"* — the [`kayfabe_device::staticinfo::GpuNames::default`] state, which
+/// leaves the array zero and the guest reporting `ERR!`. ⊘ It must **not** become a
+/// zero-length name: that would be a measurement-shaped absence, which is the
+/// `c_oracle_empty_rows_are_wrong` failure exactly.
+///
+/// # Errors
+///
+/// A message naming the property, for a string RM could not copy out as a NUL-terminated
+/// ASCII array — non-ASCII, or 64 bytes or longer. ⊘ Refused rather than truncated: RM
+/// `portMemCopy`s the fixed-width array out whole and treats it as a string, so a silent
+/// truncation is a model name nobody wrote appearing in front of a user.
+pub fn gpu_names(
+    name: &str,
+    short_name: &str,
+) -> Result<kayfabe_device::staticinfo::GpuNames, &'static str> {
+    fn one(
+        s: &str,
+        bad: &'static str,
+    ) -> Result<Option<kayfabe_abi::gspstaticinfo::GpuName>, &'static str> {
+        if s.is_empty() {
+            return Ok(None);
+        }
+        let leaked: &'static str = Box::leak(s.to_string().into_boxed_str());
+        kayfabe_abi::gspstaticinfo::GpuName::new(leaked)
+            .map(Some)
+            .ok_or(bad)
+    }
+    Ok(kayfabe_device::staticinfo::GpuNames {
+        name: one(
+            name,
+            "gpu-name must be printable ASCII shorter than 64 bytes: the guest's RM copies \
+             this fixed-width array out and treats it as a NUL-terminated C string, so a name \
+             it could not terminate is refused rather than truncated",
+        )?,
+        short_name: one(
+            short_name,
+            "gpu-short-name must be printable ASCII shorter than 64 bytes, for the same \
+             reason gpu-name must",
+        )?,
+    })
 }
 
 #[cfg(test)]

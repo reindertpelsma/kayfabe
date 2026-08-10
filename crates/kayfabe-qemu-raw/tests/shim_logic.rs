@@ -2006,3 +2006,84 @@ fn a_value_that_is_not_a_ce_executor_name_refuses_rather_than_defaulting() {
         }
     }
 }
+
+/// ★★★ The `gpu-name` / `gpu-short-name` device properties, at the seam they enter through.
+///
+/// The subject is [`kayfabe_qemu_raw::shim::gpu_names`], and the property that matters most is
+/// the boring one: **an unset property is ABSENT, not a zero-length name.** QOM hands an unset
+/// string through as `""`, and if `""` became `Some(GpuName)` the guest would be told a name
+/// of length zero — a measurement-shaped absence, which is exactly the
+/// `c_oracle_empty_rows_are_wrong` failure this port refuses to repeat.
+#[test]
+fn an_unset_gpu_name_property_is_absent_not_an_empty_name() {
+    let names = kayfabe_qemu_raw::shim::gpu_names("", "").expect("empty is legal");
+    assert_eq!(names, kayfabe_device::staticinfo::GpuNames::default());
+    assert!(names.name.is_none());
+    assert!(names.short_name.is_none());
+}
+
+/// A supplied name reaches the policy, and the two halves stay independent — the operator who
+/// can answer `0x20800110` but not `0x20800111` must not be forced to invent the second.
+#[test]
+fn the_two_name_properties_are_independent() {
+    let long_only = kayfabe_qemu_raw::shim::gpu_names("NVIDIA GeForce RTX 3060", "")
+        .expect("a real model string");
+    assert_eq!(
+        long_only.name.expect("set").as_str(),
+        "NVIDIA GeForce RTX 3060"
+    );
+    assert!(long_only.short_name.is_none());
+
+    let short_only = kayfabe_qemu_raw::shim::gpu_names("", "GA106-A").expect("a die string");
+    assert!(short_only.name.is_none());
+    assert_eq!(short_only.short_name.expect("set").as_str(), "GA106-A");
+}
+
+/// ⚠ A string RM could not copy out as a NUL-terminated ASCII C string **refuses realize by
+/// name** rather than being truncated or sanitised.
+///
+/// ⊘ The 63/64 boundary is the load-bearing one and is asserted from both sides: RM
+/// `portMemCopy`s a fixed 64-byte array out and treats it as a string, so a 64-byte name
+/// leaves no room for the terminator and the "string" runs into whatever follows.
+#[test]
+fn a_name_rm_could_not_terminate_refuses_the_device() {
+    assert!(
+        kayfabe_qemu_raw::shim::gpu_names(&"A".repeat(63), "").is_ok(),
+        "63 bytes plus a NUL is exactly the array"
+    );
+    assert!(
+        kayfabe_qemu_raw::shim::gpu_names(&"A".repeat(64), "").is_err(),
+        "64 bytes would fill the array with no room to terminate it"
+    );
+    assert!(
+        kayfabe_qemu_raw::shim::gpu_names("NVIDIA GeForce\u{2122} RTX 3060", "").is_err(),
+        "non-ASCII cannot be widened to the UTF-16 array by byte-doubling"
+    );
+    assert!(
+        kayfabe_qemu_raw::shim::gpu_names("", &"B".repeat(64)).is_err(),
+        "the short name is checked too, not only the long one"
+    );
+}
+
+/// ⊘ The property is **wired**, not merely parsed: [`Regs::create_named`] accepts the names
+/// and [`Regs::create`] / [`Regs::create_probed`] pass the absent pair — so the shipping
+/// constructors change no boot that does not set the property.
+///
+/// ⚠ **What this test can and cannot say.** A `Regs` exposes no fn-65 reply, so this asserts
+/// the constructors exist and realize; the assertion that the value reaches the static-info
+/// body is made where the body is observable —
+/// `kayfabe-device/tests/gsp_static_info.rs::the_named_chain_serves_the_name_it_was_given`,
+/// which drives the whole `served_policy` chain. Saying so here rather than letting this
+/// test's name imply more is the point: `a_signature_is_not_the_dispatch`.
+#[test]
+fn the_shipping_constructors_pass_the_absent_pair() {
+    let named = kayfabe_qemu_raw::shim::Regs::create_named(
+        0,
+        "",
+        kayfabe_qemu_raw::shim::gpu_names("NVIDIA GeForce RTX 3060", "GA106-A").expect("legal"),
+    )
+    .expect("the shipped chip row realizes with a name");
+    let nameless = kayfabe_qemu_raw::shim::Regs::create(0).expect("and without one");
+    let probed = kayfabe_qemu_raw::shim::Regs::create_probed(0, "").expect("and probed");
+    let _ = (&named, &nameless, &probed);
+}

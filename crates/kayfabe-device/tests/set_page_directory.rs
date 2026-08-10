@@ -111,6 +111,7 @@ fn chain_with_log() -> (Box<dyn CommandPolicy>, SetPageDirLog) {
         },
         kayfabe_device::census::ControlCensusLog::new(),
         kayfabe_device::ObjectLinks::default(),
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     (chain, log)
 }
@@ -389,6 +390,7 @@ fn seating_the_link_changes_no_other_reply_byte() {
         kayfabe_device::ChainLogs::default(),
         kayfabe_device::census::ControlCensusLog::new(),
         kayfabe_device::ObjectLinks::default(),
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
 
     // A spread over ids the chain really answers, ids it really refuses, and the

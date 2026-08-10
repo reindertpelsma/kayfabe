@@ -94,6 +94,9 @@ fn chain(objects: bool, publications: bool) -> Box<dyn CommandPolicy> {
             publications: publications.then(publication_link),
             objects: objects.then(object_link),
         },
+        // ⊘ No model name: this file's subject is which SEATS the chain has, not what the
+        // static-info body says.
+        kayfabe_device::staticinfo::GpuNames::default(),
     )
 }
 
@@ -314,6 +317,7 @@ fn the_publication_seat_sees_the_commands_the_link_below_it_answers() {
             })),
             objects: None,
         },
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
 
     let all = every_command();

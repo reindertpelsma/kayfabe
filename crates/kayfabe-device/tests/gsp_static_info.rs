@@ -611,3 +611,106 @@ fn a_request_whose_body_is_not_the_struct_this_port_encodes_is_refused_in_the_en
     assert_eq!(ok.rpc_result, 0);
     assert_eq!(ok.body.len(), GSP_STATIC_CONFIG_INFO_SIZE);
 }
+
+/// ★★★ The **production** seam: [`StaticInfoPolicy::with_names`], where the `gpu-name` and
+/// `gpu-short-name` device properties land — and where they are allowed to arrive
+/// **independently**.
+///
+/// ⊘ The pair-taking [`StaticInfoPolicy::with_name`] is right for a test that has both. It is
+/// wrong for the composition root: `[measured 2026-08-10, nvdiff host reference]` the long
+/// name is one host query away on any box with the card, and the short one (`"GA106-A"`,
+/// `0x20800111`) is surfaced by nothing an operator normally runs. Requiring both would make
+/// an operator who has one **invent** the other, which is `c_oracle_empty_rows_are_wrong` with
+/// a friendlier face.
+///
+/// ★ So the half-supplied case is the one that must be pinned: the long name reaches both the
+/// ASCII and the UTF-16 arrays, and the short array stays **zero** rather than borrowing from
+/// its neighbour.
+#[test]
+fn the_two_names_arrive_independently_and_neither_fills_in_for_the_other() {
+    let long_only = policy()
+        .with_names(kayfabe_device::staticinfo::GpuNames {
+            name: GpuName::new("NVIDIA GeForce RTX 3060"),
+            short_name: None,
+        })
+        .body()
+        .expect("GA106 encodes");
+    assert_eq!(&long_only[1388..1388 + 23], b"NVIDIA GeForce RTX 3060");
+    assert_eq!(&long_only[1516..1516 + 2], b"N\0", "the UTF-16 array too");
+    assert!(
+        long_only[1452..1516].iter().all(|b| *b == 0),
+        "gpuShortNameString must stay zero — an unsupplied name is absent, not derived"
+    );
+
+    let short_only = policy()
+        .with_names(kayfabe_device::staticinfo::GpuNames {
+            name: None,
+            short_name: GpuName::new("GA106-A"),
+        })
+        .body()
+        .expect("GA106 encodes");
+    assert_eq!(&short_only[1452..1452 + 7], b"GA106-A");
+    assert!(
+        short_only[1388..1452].iter().all(|b| *b == 0),
+        "gpuNameString must stay zero"
+    );
+    assert!(short_only[1516..1644].iter().all(|b| *b == 0));
+
+    // ⊘ And the default is the port's behaviour before this seam existed: told nothing,
+    // says nothing.
+    let neither = policy()
+        .with_names(kayfabe_device::staticinfo::GpuNames::default())
+        .body()
+        .expect("GA106 encodes");
+    assert!(neither[1388..1644].iter().all(|b| *b == 0));
+}
+
+/// ★★★ The **chain** serves the name it was given — the assertion that makes the device
+/// property a wire, not a parsed string.
+///
+/// ⊘ This is the gate `bus_get_c2c_info.rs` was written after the fact for: `with_names`
+/// could be perfect and the seat in `served_chain` could still be constructed with
+/// `StaticInfoPolicy::new` alone, and every unit test either side of the seam would stay
+/// green. `a_signature_is_not_the_dispatch`. So the subject here is the whole chain
+/// [`kayfabe_device::served_policy`] builds, driven with a real fn-65 command.
+#[test]
+fn the_named_chain_serves_the_name_it_was_given() {
+    fn body_for(names: kayfabe_device::staticinfo::GpuNames) -> Vec<u8> {
+        let mut chain = kayfabe_device::served_policy(
+            chip(),
+            *table_for(BENCH_DRIVER).expect("bench ABI"),
+            kayfabe_device::ChainLogs::default(),
+            kayfabe_device::census::ControlCensusLog::new(),
+            kayfabe_device::ObjectLinks::default(),
+            names,
+        );
+        let reply = chain
+            .respond(&command(
+                RpcFunction::GetGspStaticInfo,
+                65,
+                GSP_STATIC_CONFIG_INFO_SIZE,
+            ))
+            .expect("the chain claims fn 65");
+        assert_eq!(reply.rpc_result, 0, "a served fn-65 carries NV_OK");
+        reply.body
+    }
+
+    let told = body_for(kayfabe_device::staticinfo::GpuNames {
+        name: GpuName::new("NVIDIA GeForce RTX 3060"),
+        short_name: GpuName::new("GA106-A"),
+    });
+    assert_eq!(
+        &told[1388..1388 + 23],
+        b"NVIDIA GeForce RTX 3060",
+        "the name the composition root was handed must reach the wire"
+    );
+    assert_eq!(&told[1452..1452 + 7], b"GA106-A");
+
+    // ⊘ Non-vacuity, and the statement that this changes no boot that does not set the
+    // property: the default chain still serves zeros.
+    let untold = body_for(kayfabe_device::staticinfo::GpuNames::default());
+    assert!(
+        untold[1388..1644].iter().all(|b| *b == 0),
+        "a VMM that was told no name must still serve zeros"
+    );
+}

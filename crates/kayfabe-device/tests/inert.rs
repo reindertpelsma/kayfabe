@@ -174,6 +174,9 @@ fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
         // and NOT reaching the ledger; adding one would make the assertion depend on a link
         // that has no opinion about fn 47 at all.
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     let reply = chain
         .respond(&command(

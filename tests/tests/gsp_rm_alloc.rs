@@ -123,6 +123,8 @@ fn chain_with_objects() -> (
             // change no assertion here.
             ..Default::default()
         },
+        // ⊘ No model name: this file's subject is `GSP_RM_ALLOC`, not the static-info body.
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     (policy, log)
 }
@@ -143,6 +145,7 @@ fn chain_without_objects() -> (
         },
         kayfabe_device::census::ControlCensusLog::new(),
         kayfabe_device::ObjectLinks::default(),
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     (policy, log)
 }

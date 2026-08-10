@@ -1028,6 +1028,40 @@ pub enum WantedTable {
     /// than clamped, and a buffer whose aperture this port cannot name is refused rather than
     /// folded into sysmem.
     PromoteFaultMethodBuffers,
+    /// `0x20810108` — the one control on `NV2081_BINAPI`, and ★★★ the **first status
+    /// divergence from real hardware** in a CUDA program's whole ioctl stream.
+    ///
+    /// `[measured 2026-08-10, nvdiff host↔guest differential]` hardware answers `NV_OK` and
+    /// this port answered `0x56`; the id is in boot `w221`'s unserviced census
+    /// (`traces/guest_boots/run_w221_49dc3ec_grfwd_qemu.log:447`), which is the positive
+    /// statement that nothing answered it.
+    ///
+    /// ★ The reply is the request **verbatim**, and [`kayfabe_abi::binapictl`] is where the
+    /// honesty of that lives: unlike [`Self::GssLegacy8159`], `in == out` here is the
+    /// *weakest* possible measurement — the captured body is all zeros on both sides, so it
+    /// cannot separate "copied back unchanged" from "copy-out skipped" from "wrote zeros".
+    /// The echo is chosen as the one rule correct under all three, not read off the reply.
+    /// ⊘ `[[an-echo-is-unverifiable-by-its-reply]]`.
+    ///
+    /// ⊘ It buys **no rung**: `[measured 2026-08-08, real GA106]` forcing this control to
+    /// `NV_ERR_NOT_SUPPORTED` leaves `cuInit(0) = 0`. The *class* is load-bearing; the command
+    /// on it is not.
+    BinApiCtrl0108,
+    /// `NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X` (`0x20800a9a`) — ★★★ the id the
+    /// differential's worklist did **not** name.
+    ///
+    /// ⊘⊘ The `0x56` census named `0x2080200a` `NV2080_CTRL_CMD_PERF_BOOST`, the second ioctl
+    /// of `cuCtxCreate`. **That id never reaches this port.** `[measured 2026-08-10]`
+    /// `0x2080200a` appears in **zero** committed device logs and `0x20800a9a` in **38**: the
+    /// guest kernel implements `0x2080200a` itself (`subdeviceCtrlCmdKPerfBoost_IMPL`) and
+    /// re-packages its two fields under *this* id for physical RM, returning that status
+    /// unchanged to userspace. Serving the userspace id would have been dead code with a green
+    /// unit test. See [`kayfabe_abi::perfboost`] for the source path and the greps.
+    ///
+    /// ⚠ The reply is an **acknowledgement, not a performance** — both fields are `[in]`, this
+    /// port governs no clock domain, and the answer therefore carries no fact of ours. That
+    /// argument expires the day the control gains an output.
+    InternalPerfBoostSet2x,
 }
 
 impl WantedTable {
@@ -1058,7 +1092,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 41] = [
+    pub const ALL: [WantedTable; 43] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1100,6 +1134,8 @@ impl WantedTable {
         Self::GssLegacy8162,
         Self::C2cInfo,
         Self::PromoteFaultMethodBuffers,
+        Self::BinApiCtrl0108,
+        Self::InternalPerfBoostSet2x,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1188,6 +1224,8 @@ impl WantedTable {
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
             }
+            Self::BinApiCtrl0108 => kayfabe_abi::binapictl::BINAPI_CTRL_0X0108,
+            Self::InternalPerfBoostSet2x => kayfabe_abi::perfboost::INTERNAL_PERF_BOOST_SET_2X,
         }
     }
 
@@ -1252,6 +1290,10 @@ impl WantedTable {
             Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
+            }
+            Self::BinApiCtrl0108 => kayfabe_abi::binapictl::BINAPI_CTRL_0X0108_PARAMS_SIZE,
+            Self::InternalPerfBoostSet2x => {
+                kayfabe_abi::perfboost::INTERNAL_PERF_BOOST_SET_2X_PARAMS_SIZE
             }
         }
     }
@@ -2283,6 +2325,52 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kayfabe_abi::fmbpromote::decode_promote_fault_method_buffers(raw) {
                     Ok(req) => kayfabe_abi::fmbpromote::encode_promote_fault_method_buffers(&req),
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The second arm in this table whose reply is the request VERBATIM — and the
+            // one whose licence to be an echo is *weaker* than [`WantedTable::GssLegacy8159`]'s
+            // and says so. That id's copy-out is provably unconditional because GSS-legacy
+            // bypasses resserv; this one goes through resserv like any other control, and its
+            // captured body is all zeros on BOTH sides, so `in == out` cannot separate "copied
+            // back unchanged" from "copy-out skipped" from "wrote zeros".
+            //
+            // ⊘ The echo is therefore a RULE, justified by being correct under all three
+            // hypotheses, rather than a reading of the reply — `[[an-echo-is-unverifiable-by-
+            // its-reply]]`. `kayfabe_abi::binapictl` carries the argument in full, including
+            // why the current answer (an empty body, which the transport zero-fills) is the one
+            // option wrong under all three.
+            WantedTable::BinApiCtrl0108 => {
+                let at = req.params_at;
+                match kayfabe_abi::binapictl::answer_binapi_0108(
+                    req.cmd,
+                    &cmd.payload[at..at + want.params_size()],
+                ) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The ACKNOWLEDGEMENT arm for the P-state boost, and ⊘ the arm that exists
+            // because the worklist named the WRONG ID. `0x2080200a` — the id the ioctl
+            // differential measured `0x56` on — is implemented by the guest KERNEL and never
+            // reaches this port; `kperfBoostSet_IMPL` re-packages its two fields under
+            // `0x20800a9a` for physical RM, and the status of THAT call is what userspace
+            // reads. `[measured 2026-08-10]` 0 committed device logs name `0x2080200a` and 38
+            // name `0x20800a9a`. An arm for the userspace id would have compiled, unit-tested
+            // green and served nothing.
+            //
+            // ⚠ Decode-then-re-encode, not `to_vec()`, for `PromoteFaultMethodBuffers`' reason:
+            // a flag bit the header does not define, an undefined command encoding, or a
+            // duration past RM's own documented bound is REFUSED by name rather than masked —
+            // and a value the decode rejected then cannot travel around the check inside the
+            // same buffer.
+            WantedTable::InternalPerfBoostSet2x => {
+                let at = req.params_at;
+                let Some(raw) = cmd.payload.get(at..at + want.params_size()) else {
+                    return refuse();
+                };
+                match kayfabe_abi::perfboost::decode_perf_boost_set_2x(raw) {
+                    Ok(req) => kayfabe_abi::perfboost::encode_perf_boost_set_2x(&req),
                     Err(_) => return refuse(),
                 }
             }

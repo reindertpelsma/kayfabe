@@ -90,6 +90,9 @@ fn chain() -> Box<dyn CommandPolicy> {
                 kayfabe_device::ga10x::GA106_ENGINES,
             ))),
         },
+        // ⊘ No model name: this file quantifies over the ADMITTED control set, and the
+        // static-info body is not a control reply.
+        kayfabe_device::staticinfo::GpuNames::default(),
     )
 }
 

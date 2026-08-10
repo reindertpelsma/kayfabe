@@ -50,6 +50,43 @@ use crate::ChipProfile;
 /// `NV_OK`.
 const NV_OK: u32 = 0;
 
+/// ★★★ **The model names a VMM hands this device** — the value that decides whether
+/// `nvidia-smi` prints `NVIDIA GeForce RTX 3060` or `ERR!` in its Name column.
+///
+/// # Why a struct, and why both halves are optional and independent
+///
+/// The two strings have **different availability**, and collapsing them into one required
+/// pair would force an operator who can supply one to invent the other.
+/// `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` (`0x20800110`) is what every user-facing tool reads
+/// and is trivially obtainable from a host that has the card; `GET_SHORT_NAME_STRING`
+/// (`0x20800111`, `"GA106-A"` on the reference part) is surfaced by nothing an operator
+/// normally runs. ⇒ `Default` is *both absent*, which is exactly this port's behaviour before
+/// this type existed, and each is filled in only when a source exists.
+///
+/// ⊘ **Absence stays absence.** There is deliberately no fallback to a chip-row constant. The
+/// owner's standing **READ-NATIVE, WRITE-TRAP** ruling makes the model name a *read* whose
+/// source is the host GPU's own answer, and `kayfabe_abi::gspstaticinfo::GpuName`'s own docs
+/// spell out why a per-generation table is the thing that ruling exists to prevent: a port
+/// that asks the host supports whatever card is in the box; a port with a table supports the
+/// cards somebody remembered. A `None` here leaves the array zero and the guest says so —
+/// `c_oracle_empty_rows_are_wrong`, an absent measurement must not decode as a value.
+///
+/// ★ **Why a VMM-supplied value is still READ-NATIVE and not a hardcode.** Nothing on the
+/// fn-65 path can issue a host ioctl — fn 65 is the second RPC of the driver's whole life and
+/// the isolate that carries host verbs is materialized by the first accepted guest RM event,
+/// strictly later (see [`StaticInfoPolicy::with_name`]). The value must already be in hand
+/// when the policy is built, so the *composition root* is the only place it can enter. This
+/// type is that seam. What travels through it is a fact about the host's card, not a fact this
+/// port made up; the `gpu-name` device property is where it is stated, so the boot's own
+/// command line records which name the guest was told.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GpuNames {
+    /// `gpuNameString` — the marketing model string, e.g. `"NVIDIA GeForce RTX 3060"`.
+    pub name: Option<GpuName>,
+    /// `gpuShortNameString` — the die string, e.g. `"GA106-A"`.
+    pub short_name: Option<GpuName>,
+}
+
 /// Answers `GET_GSP_STATIC_INFO` with the static facts a chip row states.
 ///
 /// Every other command gets `None`, i.e. the next link in the chain, or the FSM's own
@@ -128,6 +165,26 @@ impl StaticInfoPolicy {
     pub fn with_name(mut self, name: GpuName, short_name: GpuName) -> StaticInfoPolicy {
         self.name = Some(name);
         self.short_name = Some(short_name);
+        self
+    }
+
+    /// [`StaticInfoPolicy::with_name`] for the case where the two strings arrive
+    /// **independently** — which is the production case.
+    ///
+    /// ★ The pair-taking setter above is right for a caller that has both, which is every
+    /// test. It is wrong for the composition root: `[measured 2026-08-10, nvdiff host
+    /// reference]` the long name is one `nvidia-smi` query away on any host with the card,
+    /// while the short name (`"GA106-A"`) is surfaced by nothing an operator runs — so
+    /// demanding both would make an operator who has one **invent** the other, which is the
+    /// exact failure `c_oracle_empty_rows_are_wrong` records. See [`GpuNames`].
+    ///
+    /// ⊘ Passing [`GpuNames::default`] is *not* a no-op dressed as configuration: it is the
+    /// positive statement *"this VMM was told no model name"*, and it leaves the arrays zero,
+    /// which is what the guest then reports.
+    #[must_use]
+    pub fn with_names(mut self, names: GpuNames) -> StaticInfoPolicy {
+        self.name = names.name;
+        self.short_name = names.short_name;
         self
     }
 

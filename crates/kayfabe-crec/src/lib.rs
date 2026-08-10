@@ -219,6 +219,12 @@ pub fn served_policy() -> Box<dyn kayfabe_gsp::CommandPolicy> {
         // (`kayfabe_gsp::CommandObserver` has no return value), but it would declare into
         // an object model, and the replay has none to declare into.
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ **No model name, and that is required rather than incidental.** The C oracle
+        // this replay diffs against never posted one — its static-info body leaves the
+        // three name arrays zero — so declaring a name here would make every capture's
+        // fn-65 reply differ from ours at three offsets and read as a regression. The
+        // replay's job is to reproduce the C, and the C was nameless.
+        kayfabe_device::staticinfo::GpuNames::default(),
     )
 }
 

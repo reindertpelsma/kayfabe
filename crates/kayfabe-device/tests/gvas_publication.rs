@@ -97,6 +97,9 @@ fn chain_with_log() -> (Box<dyn CommandPolicy>, GvasPubLog) {
         },
         kayfabe_device::census::ControlCensusLog::new(),
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     (chain, log)
 }

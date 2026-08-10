@@ -501,6 +501,9 @@ fn the_full_chain_answers_and_still_records() {
         },
         kayfabe_device::census::ControlCensusLog::new(),
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     let sent = params(0x0003_1000, &stock_pages());
     let reply = chain
@@ -552,6 +555,9 @@ fn the_two_registrations_are_counted_and_recorded_apart() {
         },
         kayfabe_device::census::ControlCensusLog::new(),
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     chain
         .respond(&control(

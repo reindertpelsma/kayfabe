@@ -1420,6 +1420,7 @@ impl RegPlane {
             clock,
             kayfabe_abi::eventnotify::ProbeArmSet::default(),
             crate::ObjectLinks::default(),
+            crate::staticinfo::GpuNames::default(),
         )
     }
 
@@ -1449,6 +1450,7 @@ impl RegPlane {
         clock: Box<dyn NanoClock>,
         probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
         links: crate::ObjectLinks,
+        names: crate::staticinfo::GpuNames,
     ) -> Result<RegPlane, ChipError> {
         let rom = crate::rom_for(chip)?;
         let model = (chip.gsp_model)();
@@ -1490,6 +1492,7 @@ impl RegPlane {
                     },
                     census.clone(),
                     links,
+                    names,
                 ),
                 unclaimed: Vec::new(),
                 fb_window: Vec::new(),

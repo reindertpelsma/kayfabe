@@ -104,6 +104,9 @@ fn guarded() -> Box<dyn CommandPolicy> {
         // a link that cannot change a single assertion here — and would quietly make these
         // tests depend on the object model realizing.
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     )
 }
 
@@ -119,6 +122,9 @@ fn unguarded() -> Box<dyn CommandPolicy> {
         // a link that cannot change a single assertion here — and would quietly make these
         // tests depend on the object model realizing.
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     )
 }
 

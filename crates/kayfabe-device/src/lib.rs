@@ -1073,6 +1073,7 @@ pub fn served_policy(
     logs: ChainLogs,
     census: census::ControlCensusLog,
     links: ObjectLinks,
+    names: staticinfo::GpuNames,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     // ★ The notifier PROBE SET comes out of the census log — deliberately, and not as a
     // convenience: the census is what the end-of-run report prints, so reading the set
@@ -1084,7 +1085,10 @@ pub fn served_policy(
     Box::new(census::ControlCensus::new(
         driver,
         census,
-        sticky::StickyAnswerGuard::new(driver, served_chain(chip, driver, logs, probe_arm, links)),
+        sticky::StickyAnswerGuard::new(
+            driver,
+            served_chain(chip, driver, logs, probe_arm, links, names),
+        ),
     ))
 }
 
@@ -1102,6 +1106,7 @@ pub fn served_chain(
     logs: ChainLogs,
     probe_arm: kayfabe_abi::eventnotify::ProbeArmSet,
     links: ObjectLinks,
+    names: staticinfo::GpuNames,
 ) -> Box<dyn kayfabe_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE, and the missing `..` is load-bearing for [`Shim::audit`]'s reason
     // one crate over: a latch added to `ChainLogs` and not seated in a link below is a fact
@@ -1191,7 +1196,11 @@ pub fn served_chain(
         Box::new(inittables::InitTablePolicy::with_probe_arm(
             chip, driver, probe_arm,
         )),
-        Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
+        // ★★★ The model name enters HERE and nowhere else. `GpuNames::default()` — both
+        // absent — is what a VMM that was told no name passes, and it leaves the arrays zero,
+        // which the guest reports as `Name: ERR!`. See `staticinfo::GpuNames` for why the
+        // value cannot be queried on this path and must arrive from the composition root.
+        Box::new(staticinfo::StaticInfoPolicy::new(chip, driver).with_names(names)),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         // ★★★ `#149`. Position: among the ANSWERING links, before the recorders, and
         // before `InertPolicy` would have a chance to grow an arm for it. It answers

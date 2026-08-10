@@ -95,6 +95,7 @@
 
 /// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
 pub mod bifstatic;
+pub mod binapictl;
 pub mod bringup;
 pub mod businfo;
 pub mod c2cinfo;
@@ -134,6 +135,7 @@ pub mod memsysconfig;
 pub mod notifier;
 pub mod oracle;
 pub mod pcibars;
+pub mod perfboost;
 pub mod postevent;
 pub mod rc;
 pub mod regaccessmap;

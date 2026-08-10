@@ -66,7 +66,7 @@ use kayfabe_vmm_qemu::slots::KvmSlotPlane;
 
 use crate::shim::{
     ABI_VERSION, BarDesc, KayfabeChipIdentity, KayfabeRegAudit, Regs, SectionWire, Shim,
-    ShimConfig, Status, bar_index,
+    ShimConfig, Status, bar_index, gpu_names,
 };
 
 /// What one register WRITE did, on the wire.
@@ -1103,6 +1103,39 @@ pub unsafe extern "C" fn kayfabe_shim_chip_identity(
     }
 }
 
+/// Read a `(ptr, len)` device-property string, or the empty string for a NULL.
+///
+/// ★ Factored out because `kayfabe_shim_regs_create` now carries three of them and the
+/// property-specific message is the only thing that differed. A copy per property is how the
+/// second one comes to accept a NULL with a non-zero length.
+///
+/// # Safety
+/// `ptr` must point to `len` readable bytes, or be NULL with `len == 0`.
+unsafe fn prop_str<'a>(
+    ptr: *const u8,
+    len: u64,
+    prop: &'static str,
+    bad_null: &'static str,
+    bad_utf8: &'static str,
+    msg: &MsgOut,
+) -> Result<&'a str, i32> {
+    let _ = prop;
+    if ptr.is_null() {
+        if len != 0 {
+            msg.set(bad_null);
+            return Err(Status::Malformed.code());
+        }
+        return Ok("");
+    }
+    // SAFETY: non-null with `len` readable bytes is this function's documented
+    // precondition, checked as far as a pointer can be.
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
+    core::str::from_utf8(bytes).map_err(|_| {
+        msg.set(bad_utf8);
+        Status::Malformed.code()
+    })
+}
+
 /// Create the register plane. `device_id` of 0 selects the table's default row.
 ///
 /// `probe_arm` / `probe_arm_len` carry the `probe-arm-notifier` device property — a
@@ -1110,15 +1143,31 @@ pub unsafe extern "C" fn kayfabe_shim_chip_identity(
 /// `(NULL, 0)` or an empty string for the shipping configuration. ⊘ Junk in the string
 /// refuses the device by name rather than booting probe-off.
 ///
+/// ★★★ `gpu_name` / `gpu_short_name` carry the `gpu-name` and `gpu-short-name` device
+/// properties — the model strings the guest's `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` answers
+/// with, and therefore what `nvidia-smi` prints in its Name column. Empty or `(NULL, 0)`
+/// means *this VMM was told no name*, which leaves the arrays zero and the guest reporting
+/// `ERR!`. ⊘ There is no fallback behind them; see
+/// [`kayfabe_device::staticinfo::GpuNames`].
+///
+/// ⚠ A name the guest's RM could not treat as a NUL-terminated ASCII C string — empty is
+/// fine, but non-ASCII, or 64 bytes or longer — **refuses the device at realize**. Silently
+/// truncating a model string would put a value nobody wrote in front of a user, and it is
+/// exactly the fixed-width array RM `portMemCopy`s out whole.
+///
 /// # Safety
 /// `out_handle` must be writable; the message out-parameters must be writable or empty;
-/// `probe_arm` must point to `probe_arm_len` readable bytes, or be NULL with
-/// `probe_arm_len == 0`.
+/// each `(ptr, len)` property pair must point to `len` readable bytes, or be NULL with
+/// `len == 0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kayfabe_shim_regs_create(
     device_id: u16,
     probe_arm: *const u8,
     probe_arm_len: u64,
+    gpu_name: *const u8,
+    gpu_name_len: u64,
+    gpu_short_name: *const u8,
+    gpu_short_name_len: u64,
     out_handle: *mut *mut c_void,
     out_msg: *mut *const u8,
     out_msg_len: *mut u64,
@@ -1131,28 +1180,59 @@ pub unsafe extern "C" fn kayfabe_shim_regs_create(
         msg.set("the shim asked for a register plane with nowhere to put the handle");
         return Status::Malformed.code();
     }
-    let probe_str = if probe_arm.is_null() {
-        if probe_arm_len != 0 {
-            msg.set("probe-arm-notifier arrived as NULL with a non-zero length");
+    // SAFETY: the `(ptr, len)` precondition is this function's, restated per property.
+    let probe_str = match unsafe {
+        prop_str(
+            probe_arm,
+            probe_arm_len,
+            "probe-arm-notifier",
+            "probe-arm-notifier arrived as NULL with a non-zero length",
+            "probe-arm-notifier is not UTF-8; a probe string that cannot be read \
+             must refuse the device rather than boot probe-off",
+            &msg,
+        )
+    } {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+    // SAFETY: as above.
+    let name_str = match unsafe {
+        prop_str(
+            gpu_name,
+            gpu_name_len,
+            "gpu-name",
+            "gpu-name arrived as NULL with a non-zero length",
+            "gpu-name is not UTF-8; the guest copies this array out as a C string, so a \
+             name that cannot be read must refuse the device rather than boot nameless",
+            &msg,
+        )
+    } {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+    // SAFETY: as above.
+    let short_str = match unsafe {
+        prop_str(
+            gpu_short_name,
+            gpu_short_name_len,
+            "gpu-short-name",
+            "gpu-short-name arrived as NULL with a non-zero length",
+            "gpu-short-name is not UTF-8; the guest copies this array out as a C string, \
+             so a name that cannot be read must refuse the device rather than boot nameless",
+            &msg,
+        )
+    } {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+    let names = match gpu_names(name_str, short_str) {
+        Ok(n) => n,
+        Err(m) => {
+            msg.set(m);
             return Status::Malformed.code();
         }
-        ""
-    } else {
-        // SAFETY: non-null with `probe_arm_len` readable bytes is this function's
-        // documented precondition, checked as far as a pointer can be.
-        let bytes = unsafe { core::slice::from_raw_parts(probe_arm, probe_arm_len as usize) };
-        match core::str::from_utf8(bytes) {
-            Ok(s) => s,
-            Err(_) => {
-                msg.set(
-                    "probe-arm-notifier is not UTF-8; a probe string that cannot be read \
-                     must refuse the device rather than boot probe-off",
-                );
-                return Status::Malformed.code();
-            }
-        }
     };
-    match Regs::create_probed(device_id, probe_str) {
+    match Regs::create_named(device_id, probe_str, names) {
         Ok(regs) => {
             let handle = Box::into_raw(Box::new(regs)).cast::<c_void>();
             // SAFETY: `out_handle` was proven non-null above, and that it is writable and

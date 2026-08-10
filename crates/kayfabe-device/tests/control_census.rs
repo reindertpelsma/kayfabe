@@ -47,6 +47,9 @@ fn chain_with_census() -> (Box<dyn CommandPolicy>, ControlCensusLog) {
         kayfabe_device::ChainLogs::default(),
         census.clone(),
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     );
     (chain, census)
 }
@@ -240,6 +243,7 @@ fn the_census_changes_no_byte_of_any_reply() {
                 kayfabe_device::ChainLogs::default(),
                 kayfabe_abi::eventnotify::ProbeArmSet::default(),
                 kayfabe_device::ObjectLinks::default(),
+                kayfabe_device::staticinfo::GpuNames::default(),
             ),
         ));
     let arming = arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT);
@@ -320,6 +324,9 @@ fn a_plane_reports_the_probe_set_it_was_built_with() {
         Box::new(StillClock),
         ProbeArmSet::parse("35").expect("parses"),
         kayfabe_device::ObjectLinks::default(),
+        // ⊘ No model name: this file's subject is not the static-info body, and declaring
+        // one would make it depend on a value no assertion here reads.
+        kayfabe_device::staticinfo::GpuNames::default(),
     )
     .expect("GA106 is servable");
     assert_eq!(
