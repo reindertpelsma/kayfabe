@@ -12051,3 +12051,76 @@ four CeUtils `SERVED-LOCAL` lines on token `0x00010002`.
 record count is ~456, not ~538. And the rev must be read off the **hypervisor**, not from
 `build_qom_shim.sh`'s exit code (`CARGO_TARGET_DIR` redirects cargo away from its hard-coded
 `$REPO/target/release` and it copies a stale archive at `rc=0`).
+
+### 16.64.5 ★★★ THE OUTCOME — read against §16.64.4, which was committed before the boot
+
+Two boots, both at revisions **read off the hypervisor** (`strings … | grep kayfabe-rev`), not
+off a build script's exit code:
+
+| | `s45_748a207_tsgsched` (before) | `s49_57bd756_declroot2` | `s50_9a446e9_probefix` |
+|---|---|---|---|
+| doorbells | **448 / 261 / 187** | **448 / 354 / 94** | 448 / 354 / 94 |
+| first refusal | `[CeResolve::NoPublication]` | `[FwdFault::SubmissionHasNoLaunch]` | same |
+| `CeResolve::NoPublication` | the wall | **0** | **0** |
+| `rng=` / `fin=` | `NOPUB` / `NOPUB` | (probe stale — see §16.64b) | `V:0x1024000` / `V:0x102c004` |
+| ring scan | *all 1024 failed to resolve* | — | `1024/1024 … unread=0` |
+| walk | `walk=NO-PUBLICATION` | — | **four levels to a `LEAF`** |
+
+⇒ **Falsifier arms A and B BOTH, which is a stronger result than either alone.**
+
+- **A landed.** `NoPublication` went to **0** and 93 doorbells moved from *refused* to
+  **served** (`261 → 354`, `187 → 94`).
+- **B landed too.** The residue refuses under a **different name**,
+  `FwdFault::SubmissionHasNoLaunch { methods: 3, opaque: 2, set_object: ClassId(0xc7b5) }` —
+  a refusal that is **true**, replacing one this rung established was **false about the guest**.
+- **C refuted.** Not still `NoPublication`.
+- **D did not fire.** `SET_PAGE_DIRECTORY (0x00801813): 2 ACCEPTED, 0 refused` — the new
+  aperture fork refused nothing on the path `cup2` walks, exactly as the measured `flags 0x8`
+  predicted. Positive control intact: `pdb=Y ×8` on `cs=ok(h0x5c000007…)` unchanged, and
+  `SERVED-LOCAL` is **16 in both** boots. `DeclaredRootUnusable`: **0** — the derivation never
+  failed.
+
+★★★★ **What the walk proves, and it is not the same claim as "the count moved."** `s50`'s probe
+descends from the declared root through every level to a real leaf:
+
+```text
+root=0x201000/ap1/sh47 rootsrc=declared(object-model)
+L0@0x201000=PDE@0x0->0x202000/Vidmem   L1@0x202000=PDE@0x0->0x203000/Vidmem
+L2@0x203000=PDE@0x200000000->0x204000/Vidmem
+L3@0x204000[ch29 lf7]=LEAF@0x200200000->0x1000000/Vidmem/sz0x200000
+pbm[8w of 32B]: [0]sub4/m0x0/…=0xc7b5 [1]sub4/m0x240/…n3 [2]sub4/m0x300/…=0x14
+```
+
+⊘ Four levels of the **guest's own** page tables decoding to well-formed PDEs and a 2 MiB leaf,
+then real pushbuffer methods behind it, is not something a wrong root produces — a wrong root
+lands on `Invalid` or on bytes that do not decode. The `page_shift 47` printed there was
+**derived from the installed format**, never a literal, and it agrees with what a real GA106
+publishes.
+
+⊘ **`row=ABSENT-FROM-ROOT-TABLE(11 rows)` is still printed and is still CORRECT** — the
+publication table genuinely has no row for this pair, which is the whole finding. It now sits
+beside `rootsrc=declared(object-model)`, so it reads as *"the other source answered"* instead
+of as a contradiction.
+
+### 16.64.6 ⊘ What this rung did NOT establish, and the coordinator's prediction it refuted
+
+★★★ **A parallel read predicted the count would stay at ~187 with a new tag** — the reasoning
+being that the 187 are `GrCompute` channels claimed by the CE executor (true, and its
+mechanism is confirmed: see the corrected comment in §16.64b), whose rings decode to `Opaque`
+and would simply refuse for a different reason. ⊘ **Measurement refutes the prediction while
+confirming the mechanism**: a rename preserves the count, and **93 doorbells moved into
+`served`**. So a majority of that population was real CE work blocked behind a false refusal;
+only the remaining 94 are the engine-partition residue that story describes.
+
+⚠ **The per-`EngineKind` doorbell histogram was asked for and is NOT in this rung.** It is the
+right instrument and the reason is not that it is unnecessary — it is that the doorbell census
+is formatted **in the C shim** (`qemu/hw/misc/nvkvm/nvkvm.c:2360`) from a fixed ABI struct, so
+a histogram is a cross-ABI change, and adding one at the end of a rung whose falsifier had
+already returned is how an instrument ships unvalidated. ⊘ It is also not load-bearing for
+*this* verdict: the count **moved by 93**, which already discriminates "the fix helped" from
+"the fix renamed the refusal" — the exact ambiguity it was proposed to resolve. It is the
+natural first step of `w202`, where the partition it measures is the subject.
+
+⊘ **`cup3` is not reached and was never in scope.** GR compute remains structurally
+unreachable in every shipping build; this rung moves `cup2`'s CE path and says nothing about
+the completion plane, which has no C oracle at all.
