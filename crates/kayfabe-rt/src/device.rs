@@ -537,9 +537,9 @@ impl RingRead {
     /// A tag naming this outcome and carrying its numbers, for the diagnostic line.
     fn tag(&self) -> String {
         match self {
-            RingRead::Fresh {
-                done, n, bytes, ..
-            } => format!("RING bytes={bytes} cursor={done} live={n}"),
+            RingRead::Fresh { done, n, bytes, .. } => {
+                format!("RING bytes={bytes} cursor={done} live={n}")
+            }
             RingRead::NoRing(look) => match look {
                 kayfabe_fwd::RingLook::RingDeclaredEmpty { va, entries } => {
                     format!("{} va={va:#x} entries={entries}", look.tag())

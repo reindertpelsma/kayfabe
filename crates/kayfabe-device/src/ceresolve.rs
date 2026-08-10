@@ -785,7 +785,12 @@ fn trace_from(
             // ★★★ EVERY child at the covering base, not the `max_by_key` pick. Two
             // children share a `vabase` exactly when the slot is DUAL, and which of the
             // two carries `va` is a fact only the sub-tables hold.
-            let sibs: Vec<PtPage> = d.children.iter().copied().filter(|c| c.vabase == b).collect();
+            let sibs: Vec<PtPage> = d
+                .children
+                .iter()
+                .copied()
+                .filter(|c| c.vabase == b)
+                .collect();
             let n = sibs.len();
             let mut out = census;
             for (i, c) in sibs.iter().enumerate() {

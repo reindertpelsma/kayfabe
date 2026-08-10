@@ -751,7 +751,10 @@ fn a_dual_slot_is_traced_through_both_halves_and_the_trace_agrees_with_resolve()
     }
 
     // (which half holds the mapping, a name for the failure message)
-    for (answering_table, which) in [(L1, "edge (the FIRST half)"), (L1 + SIB, "also (the SECOND half)")] {
+    for (answering_table, which) in [
+        (L1, "edge (the FIRST half)"),
+        (L1 + SIB, "also (the SECOND half)"),
+    ] {
         let mut fb = Fb::new();
         fb.put(ROOT + 8, pde(L1)); // slot 1 = `VA >> 30`; names L1 and, dually, L1 + SIB.
         // The other half is left ENTIRELY BLANK — the measured shape of the big-page
@@ -770,7 +773,10 @@ fn a_dual_slot_is_traced_through_both_halves_and_the_trace_agrees_with_resolve()
              told it was the tree — answer in {which}: {t}"
         );
         assert!(
-            t.contains(&format!("=LEAF@0x{:x}->0x{LEAF_PHYS:x}/Vidmem", VA & !0x1f_ffff)),
+            t.contains(&format!(
+                "=LEAF@0x{:x}->0x{LEAF_PHYS:x}/Vidmem",
+                VA & !0x1f_ffff
+            )),
             "★★★ the trace must reach the leaf, whichever half holds it — this is the \
              assertion that goes red if the selection becomes a pick again. Answer in \
              {which}: {t}"
