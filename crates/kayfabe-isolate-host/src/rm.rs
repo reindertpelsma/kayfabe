@@ -1898,6 +1898,82 @@ struct CeChannel {
     next_payload: u32,
 }
 
+/// ★★★ **W229 — where the isolate's own copy-engine control structures were PLACED**,
+/// reported as raw range handles so the comparison is the caller's.
+///
+/// The two space fields being **equal** is the co-location defect
+/// (`C: docs/design/s1_what_does_it_protect.md` §3): our ring, USERD and completion
+/// semaphore sitting in the one address space a guest channel is bound to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeControlPlacement {
+    /// The `NV01_MEMORY_VIRTUAL` range a guest channel over this `Vas` is bound to, and
+    /// the one every fixed publish lands in.
+    pub guest_space: u32,
+    /// The range the isolate's own CE ring is mapped through.
+    pub control_space: u32,
+    /// Where the ring object landed.
+    pub ring_va: u64,
+    /// The completion semaphore word hardware writes.
+    pub sem_va: u64,
+    /// The payload the isolate's last copy over this `Vas` released — the value an engine
+    /// that reads [`CeControlPlacement::sem_va`] would find, and one nothing else has.
+    pub last_payload: u32,
+}
+
+/// What [`HostRmBackend::probe_va`] found at one VA in one address space.
+#[derive(Debug)]
+pub enum VaProbe {
+    /// Nothing was there: a fresh object took the address exactly as asked.
+    Free,
+    /// RM refused the fixed placement — something already occupies it.
+    Occupied(RmError),
+    /// ⊘ RM placed it elsewhere. Occupied, *and* the ask was treated as a hint — a
+    /// distinct finding from a clean refusal and never folded into it.
+    Relocated(u64),
+}
+
+/// What an engine bound to the **guest's** address space did with the isolate's semaphore
+/// VA — [`HostRmBackend::probe_guest_reachability`]'s verdict.
+#[derive(Debug)]
+pub enum GuestReach {
+    /// ⊘ The positive control did not land, so the probe was never issued and this run
+    /// says nothing about reachability.
+    ControlFailed,
+    /// ★★★ **THE DEFECT, MEASURED**: the copy retired and moved a word out of the
+    /// isolate's semaphore address.
+    Read {
+        /// What landed in the destination.
+        word: u32,
+        /// The submission's own cursors and release.
+        outcome: SubmitOutcome,
+    },
+    /// The engine did not retire the copy: the address does not resolve in this space.
+    /// ⚠ Expect a host `Xid 31 FAULT_PDE` for this channel.
+    NotResolved(SubmitOutcome),
+    /// Bytes moved and the engine did not report the release. Neither arm, so neither is
+    /// claimed.
+    Ambiguous {
+        /// What landed in the destination.
+        word: u32,
+        /// The submission's own cursors and release.
+        outcome: SubmitOutcome,
+    },
+}
+
+/// [`HostRmBackend::probe_guest_reachability`]'s full report — the control and the probe,
+/// never the probe alone.
+#[derive(Debug)]
+pub struct GuestReachProbe {
+    /// The positive control's submission.
+    pub control: SubmitOutcome,
+    /// What the control actually moved.
+    pub control_read: u32,
+    /// What the control was supposed to move.
+    pub control_want: u32,
+    /// The probe's verdict.
+    pub reach: GuestReach,
+}
+
 /// What one submission produced — the whole evidence bar for rung 3, as data.
 ///
 /// ★ A struct rather than a `bool` because the *interesting* case is the one where every
@@ -3571,6 +3647,272 @@ impl HostRmBackend {
     pub fn channel_ring_va(&self, chan: HostHandle) -> Option<u64> {
         let raw = self.narrow(chan).ok()?;
         self.conn.channel_parts(raw).map(|p| p.ring_va)
+    }
+
+    /// ★★★ **W229 — which address space the isolate's OWN copy-engine control structures
+    /// are in, reported next to the one a GUEST channel over the same `Vas` is bound to.**
+    ///
+    /// The owner's invariant is *"VMM state must never be placed where a guest VA can name
+    /// it"*, and until this existed the only thing upholding it was a doc comment
+    /// ([`RmConnection::raw_map_dma`]: *"memory the isolate allocated for itself, which no
+    /// guest ever names"*). A sentence is not a measurement. This returns the **two range
+    /// handles as separate fields precisely so a caller can compare them** — equality is
+    /// the defect, and it is the whole reason the accessor reports both rather than
+    /// answering a `bool` we computed ourselves.
+    ///
+    /// ⊘ Two equal handles are not *proof* of reachability and two different ones are not
+    /// proof of unreachability; they are handles. What settles it is
+    /// [`HostRmBackend::probe_va`] (is anything mapped at that VA in that space?) and
+    /// [`HostRmBackend::probe_guest_reachability`] (does an engine bound to the guest's
+    /// space read our word?). This accessor exists to tell those two probes *where to
+    /// look*.
+    ///
+    /// `None` if `vas` is not a handle of this backend's, or if no copy-engine channel has
+    /// been built over it yet — the placement does not exist before the channel does.
+    #[must_use]
+    pub fn ce_control_placement(&self, vas: HostHandle) -> Option<CeControlPlacement> {
+        let guest_space = self.narrow(vas).ok()?;
+        let ce = *self.ce_channels.get(&guest_space)?;
+        let chan_raw = self.narrow(ce.chan).ok()?;
+        let parts = self.conn.channel_parts(chan_raw)?;
+        Some(CeControlPlacement {
+            guest_space,
+            control_space: parts.range,
+            ring_va: parts.ring_va,
+            sem_va: parts.ring_va + SEMAPHORE_OFFSET,
+            last_payload: ce.next_payload.wrapping_sub(1),
+        })
+    }
+
+    /// ★★★ **Is anything mapped at `va` in the address space named by the raw range handle
+    /// `space`?** — asked the only way this layer can ask it: by trying to put something
+    /// there.
+    ///
+    /// A fresh device-local object is allocated and fixed-mapped at `va`. RM's **[OUT]**
+    /// `dmaOffset` decides the answer, so this is two parties and not our own argument
+    /// echoed — the shape `dictated_ring_negative` established on this hardware, reused
+    /// because it is already calibrated.
+    ///
+    /// ⊘ **The limit, stated because the pass arm is the weak one.** [`VaProbe::Free`] says
+    /// the VA was **unclaimed at this instant**, which is what *"a guest VA cannot name our
+    /// semaphore"* reduces to in a GPU address space — an unmapped VA resolves to nothing
+    /// and faults. It does **not** say a later mapping could not put something there, and
+    /// it is not a statement about any other address. That is why the rung that uses it
+    /// runs the **same call** against the space our ring *is* in, where the answer must be
+    /// [`VaProbe::Occupied`]: a probe whose refusing arm is unreachable proves nothing.
+    ///
+    /// Everything allocated is freed before returning, on every arm.
+    ///
+    /// # Errors
+    /// Only if the *allocation* failed — a refused placement is [`VaProbe::Occupied`],
+    /// which is an answer rather than an error.
+    pub fn probe_va(&mut self, space: u32, va: u64) -> Result<VaProbe, RmError> {
+        const PROBE_BYTES: u64 = RING_OBJECT_BYTES;
+        let obj = self.conn.alloc_device_local(PROBE_BYTES)?;
+        let out = match self.conn.raw_map_dma(space, obj, PROBE_BYTES, Some(va)) {
+            Ok(got) if got == va => {
+                let _ = self.conn.raw_unmap_dma(space, got);
+                VaProbe::Free
+            }
+            Ok(got) => {
+                let _ = self.conn.raw_unmap_dma(space, got);
+                VaProbe::Relocated(got)
+            }
+            Err(e) => VaProbe::Occupied(e),
+        };
+        let _ = self.free(self.stamp(obj));
+        Ok(out)
+    }
+
+    /// ★★★★★ **W229's real falsifier — point a copy engine BOUND TO THE GUEST'S ADDRESS
+    /// SPACE at the isolate's own semaphore and see whether it reads it.**
+    ///
+    /// [`HostRmBackend::probe_va`] asks RM's allocator a question about a VA.
+    /// This asks **hardware** the question the invariant is actually about: a channel is
+    /// created over `vas` — the same address space `kayfabe_fwd::plan_doorbell`
+    /// materializes a *guest's* channel in — and made to `LAUNCH_DMA` four bytes out of
+    /// `sem_va` into a scratch buffer we then read.
+    ///
+    /// ## The two submissions, and why the order is not negotiable
+    ///
+    /// 1. **The positive control runs FIRST**: the same probe channel copies from a scratch
+    ///    source holding a known word. Without it, *"the probe copy never retired"* is
+    ///    indistinguishable from *"this channel never worked"* — and the second is what a
+    ///    typo produces. ⊘ A run whose control did not land reports nothing about the
+    ///    probe.
+    /// 2. **The probe** then copies from `sem_va`. If the isolate's ring is in this space,
+    ///    the engine resolves the address and the word lands: [`GuestReach::Read`] carrying
+    ///    a value the caller can compare against the payload **our** last copy released —
+    ///    a number the guest-bound channel has no other way to obtain.
+    ///
+    /// ⚠ **A `NotResolved` verdict means the engine faulted**, which is the correct end
+    /// state and is *not* free: the host `dmesg` will carry an `Xid 31 FAULT_PDE` for this
+    /// channel, and the channel is dead afterwards. That is why this is a stand-alone
+    /// diagnostic that tears its own channel down, and why the control precedes it.
+    ///
+    /// # Errors
+    /// Whatever the allocations, mappings, channel or schedule refused — each before any
+    /// submission, so an error here is never a fault.
+    pub fn probe_guest_reachability(
+        &mut self,
+        vas: HostHandle,
+        sem_va: u64,
+    ) -> Result<GuestReachProbe, RmError> {
+        const BYTES: u64 = 4096;
+        /// Neither zero nor a plausible semaphore payload: the control's word must not be
+        /// confusable with what the probe is looking for.
+        const CONTROL_WORD: u32 = 0x5EA1_C071;
+        /// What the destination holds before either copy. A word that survives is a copy
+        /// that did not happen.
+        const SENTINEL: u32 = 0xDEAD_0000;
+
+        let range = self.narrow(vas)?;
+        let ctrl_src = self.conn.alloc_device_local(BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(ctrl_src));
+                return Err(e);
+            }
+        };
+
+        let mut mapped: Vec<u64> = Vec::new();
+        let mut chan: Option<HostHandle> = None;
+        let mut go = || -> Result<GuestReachProbe, RmError> {
+            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, None)?;
+            mapped.push(ctrl_src_va);
+            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, None)?;
+            mapped.push(dst_va);
+
+            // Seed both buffers through CPU mappings that are dropped before any engine
+            // runs — the read-back below opens its own.
+            {
+                let (n, m) = self.conn.map_cpu(ctrl_src, BYTES, CachePolicy::WriteCombining)?;
+                m.store_u32(HostOffset::new(0), CONTROL_WORD)
+                    .map_err(|e| region_error(&e))?;
+                drop(m);
+                drop(n);
+                let (n, m) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+                m.store_u32(HostOffset::new(0), SENTINEL)
+                    .map_err(|e| region_error(&e))?;
+                m.store_u32(HostOffset::new(4), SENTINEL)
+                    .map_err(|e| region_error(&e))?;
+                drop(m);
+                drop(n);
+                release_fence();
+            }
+
+            // ★ THE STAND-IN FOR A GUEST CHANNEL. `alloc_channel_on` over the `Vas`'s own
+            // range is exactly what `plan_doorbell` reaches for a guest submission, engine
+            // and all — the point of the rung is that this channel is ORDINARY.
+            let (c, token) = self.alloc_channel_on(vas, ENGINE_TYPE_COPY0)?;
+            chan = Some(c);
+            let mut params = [0u8; CeAllocParams::SIZE];
+            CeAllocParams {
+                version: CeAllocParams::VERSION_1,
+                engine_type: ENGINE_TYPE_COPY0,
+            }
+            .encode_into(&mut params)
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+            self.alloc_ce_engine_object(c, self.conn.classes.ce_object(), &params)?;
+            self.schedule(c)?;
+
+            let control = self.probe_copy(c, token, ctrl_src_va, dst_va, 1)?;
+            let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let control_read = view.load_u32(HostOffset::new(0)).map_err(|e| region_error(&e))?;
+            drop(view);
+            drop(node);
+
+            // ⊘ The probe is not issued at all if the control did not land: a fault
+            // provoked on a channel that was never shown to work is a measurement of
+            // nothing, and it costs a real `Xid`.
+            if !(control.landed(1) && control_read == CONTROL_WORD) {
+                return Ok(GuestReachProbe {
+                    control,
+                    control_read,
+                    control_want: CONTROL_WORD,
+                    reach: GuestReach::ControlFailed,
+                });
+            }
+
+            let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
+            let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let probe_read = view.load_u32(HostOffset::new(4)).map_err(|e| region_error(&e))?;
+            drop(view);
+            drop(node);
+
+            let reach = if probe.landed(2) {
+                GuestReach::Read {
+                    word: probe_read,
+                    outcome: probe,
+                }
+            } else if probe_read != SENTINEL {
+                // ⊘ Neither arm: bytes moved and the engine did not say so. Reported
+                // rather than folded into one of the two, because a partial answer that
+                // looks like a clean one is how a green gets believed.
+                GuestReach::Ambiguous {
+                    word: probe_read,
+                    outcome: probe,
+                }
+            } else {
+                GuestReach::NotResolved(probe)
+            };
+            Ok(GuestReachProbe {
+                control,
+                control_read,
+                control_want: CONTROL_WORD,
+                reach,
+            })
+        };
+        let out = go();
+        if let Some(c) = chan {
+            let _ = self.free(c);
+        }
+        for va in mapped.into_iter().rev() {
+            let _ = self.conn.raw_unmap_dma(range, va);
+        }
+        let _ = self.free(self.stamp(dst));
+        let _ = self.free(self.stamp(ctrl_src));
+        out
+    }
+
+    /// One four-byte `LAUNCH_DMA` on `chan`, releasing `payload`. The submission half of
+    /// [`HostRmBackend::probe_guest_reachability`], factored out only because that rung
+    /// issues it twice and the two must be identical in everything but their operands.
+    fn probe_copy(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        src: u64,
+        dst: u64,
+        payload: u32,
+    ) -> Result<SubmitOutcome, RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let slot = self.next_slot(raw);
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+        let words = ce_pushbuffer(CePush {
+            class_id: self.conn.classes.ce_object(),
+            src,
+            dst,
+            len: 4,
+            sem_va,
+            payload,
+        })?;
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)?;
+        self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, CE_COPY_TIMEOUT)
     }
 
     /// ★★★ R14b — **prove the mapped bytes are in the GPU's memory and not in ours.**

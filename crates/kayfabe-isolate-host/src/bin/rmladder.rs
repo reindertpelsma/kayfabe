@@ -1806,6 +1806,273 @@ impl TapFree for bool {
     }
 }
 
+/// ★★★★★ R30 — **is the isolate's own completion semaphore NAMEABLE from the address
+/// space a guest channel is bound to?**
+///
+/// The owner's invariant is *"VMM state must never be placed where a guest VA can name
+/// it"*. Until this rung, the only thing upholding it on the copy-engine path was a
+/// sentence in `raw_map_dma`'s doc comment — *"memory the isolate allocated for itself,
+/// which no guest ever names"* — and the audit that produced this rung
+/// (`C: docs/design/s1_what_does_it_protect.md` §3) found the address is **RM-chosen,
+/// which makes it unpredictable rather than unnameable.** Unpredictability is not a
+/// boundary.
+///
+/// ## ★★ THREE arms, and the middle one is what makes the first mean anything
+///
+/// ```text
+///   A  guest space  @ sem_va -> must be FREE       -- nothing of ours is there
+///   B  control space@ sem_va -> must be OCCUPIED   -- the same call, watched to REFUSE
+///   C  a CE channel BOUND TO THE GUEST SPACE reads sem_va -> must NOT resolve
+/// ```
+///
+/// ⊘ **Arm A alone is the arm every "did it pass?" check would score green**, and it is
+/// green for free if `probe_va` can never refuse. Arm B is the identical call against the
+/// space our ring *is* in, so a run where B reports `Free` indicts the **instrument**, not
+/// the placement — and the rung says so instead of passing.
+///
+/// ★ Arm C is the only one that asks **hardware**. Arms A and B are questions for RM's VA
+/// allocator; C points a real copy engine, bound to the guest's own space, at `sem_va` and
+/// reads what lands. Before the placement fix it returns the payload our last copy
+/// released — a number that channel has no other way to obtain. ⚠ After the fix it must
+/// **fault**, and the host `dmesg` will carry an `Xid 31 FAULT_PDE`: that is the boundary
+/// working, and `scripts/bench/host_xid_watch.sh` is what should be reading the log while
+/// this runs.
+///
+/// ⊘ **What a pass does NOT establish.** Nothing about the *guest's* materialized channel
+/// ring, which is isolate-allocated memory that stays in the guest's space by design; and
+/// nothing about any address other than this one. It is a statement about the copy-engine
+/// control structures, which is the scope the rung claims and the whole scope it claims.
+fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) -> bool {
+    use kayfabe_isolate_host::rm::{GuestReach, VaProbe};
+
+    println!(
+        "info  R30 executor VAS    = GPU {gpu}, euid {} — build the isolate's OWN copy-engine \
+         channel over a `Vas`, then ask whether its semaphore VA is nameable from that same \
+         `Vas` (the space a GUEST channel is bound to)",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R30 the bar is THREE arms: A the guest space must be FREE at sem_va, B the \
+         SAME call against the control space must REFUSE, C an engine bound to the guest \
+         space must NOT resolve sem_va. ⊘ A alone is vacuous"
+    );
+
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R30 vaspace         = the rung needs its own address space");
+        return false;
+    };
+
+    // ★ A real copy, for two reasons: it is the only thing that BUILDS the isolate's CE
+    // channel (which is what the rung is about), and it leaves a payload in the semaphore
+    // that arm C can recognise. It is also, incidentally, the R17 round-trip — so a
+    // regression in the thing being changed fails here first.
+    const PATTERN: u32 = 0xC0FF_EE30;
+    match rm.prove_ce_copy(vas, PATTERN) {
+        Ok(e) if e.copied() => println!(
+            "ok    R30 CE round-trip   = {} bytes moved, dst[0] {:#010x} -> {:#010x} — the \
+             isolate's own copy-engine channel now EXISTS, which is what the rest of this \
+             rung is about",
+            e.bytes, e.before, e.after
+        ),
+        Ok(e) => {
+            println!(
+                "FAIL  R30 CE round-trip   = the copy did not land (dst[0] {:#010x} -> \
+                 {:#010x}, sem {:#010x}) — every arm below would be about a channel that \
+                 does not work",
+                e.before, e.after, e.submit.semaphore
+            );
+            let _ = rm.free(vas);
+            return false;
+        }
+        Err(e) => {
+            println!("FAIL  R30 CE round-trip   = {e:?}");
+            let _ = rm.free(vas);
+            return false;
+        }
+    }
+
+    let Some(p) = rm.ce_control_placement(vas) else {
+        println!(
+            "FAIL  R30 placement       = the copy landed and no CE channel is recorded over \
+             this `Vas` — the accessor and the copy disagree, and the accessor is what every \
+             arm below reads"
+        );
+        let _ = rm.free(vas);
+        return false;
+    };
+    let colocated = p.guest_space == p.control_space;
+    println!(
+        "{}  R30 spaces          = guest range {:#010x}, control range {:#010x}, ring \
+         {:#018x}, sem {:#018x}, our last payload {:#010x}{}",
+        if colocated { "??   " } else { "ok   " },
+        p.guest_space,
+        p.control_space,
+        p.ring_va,
+        p.sem_va,
+        p.last_payload,
+        if colocated {
+            " — ★ THE SAME ADDRESS SPACE. This is the co-location defect stated as two \
+             equal handles; the arms below say what it costs"
+        } else {
+            " — two different address spaces"
+        }
+    );
+
+    // --- arm A: the guest-bound space must have nothing of ours at sem_va ---------------
+    let arm_a = match rm.probe_va(p.guest_space, p.sem_va) {
+        Ok(VaProbe::Free) => {
+            println!(
+                "ok    R30 arm A guest     = {:#018x} is UNCLAIMED in the guest-bound space \
+                 (a fresh object took it, RM reported that address back)",
+                p.sem_va
+            );
+            true
+        }
+        Ok(VaProbe::Occupied(e)) => {
+            println!(
+                "FAIL  R30 arm A guest     = {:#018x} is ALREADY MAPPED in the space a guest \
+                 channel is bound to ({e:?}) — VMM state is placed where a guest VA can name \
+                 it, which is the invariant, violated",
+                p.sem_va
+            );
+            false
+        }
+        Ok(VaProbe::Relocated(got)) => {
+            println!(
+                "FAIL  R30 arm A guest     = asked {:#018x}, RM placed {got:#018x} — occupied, \
+                 AND the fixed ask was a hint. ⊘ Two findings, not one",
+                p.sem_va
+            );
+            false
+        }
+        Err(e) => {
+            println!("FAIL  R30 arm A guest     = the probe could not allocate: {e:?}");
+            false
+        }
+    };
+
+    // --- arm B: THE CALIBRATION. The same call, against the space our ring IS in --------
+    let arm_b = match rm.probe_va(p.control_space, p.sem_va) {
+        Ok(VaProbe::Occupied(e)) => {
+            println!(
+                "ok    R30 arm B control   = the SAME call REFUSES at {:#018x} in the control \
+                 space ({e:?}) — the probe can detect occupancy, so arm A's `Free` is a \
+                 measurement and not a constant",
+                p.sem_va
+            );
+            true
+        }
+        Ok(VaProbe::Relocated(got)) => {
+            println!(
+                "ok    R30 arm B control   = the SAME call was RELOCATED to {got:#018x} rather \
+                 than granted {:#018x} — occupancy detected, by the other of the two legal \
+                 shapes",
+                p.sem_va
+            );
+            true
+        }
+        Ok(VaProbe::Free) => {
+            println!(
+                "FAIL  R30 arm B control   = {:#018x} reads as FREE in the very space our ring \
+                 is mapped in. ⊘ This does NOT say the placement is fine — it says the \
+                 INSTRUMENT is broken, and arm A's answer is worth nothing this run",
+                p.sem_va
+            );
+            false
+        }
+        Err(e) => {
+            println!("FAIL  R30 arm B control   = the probe could not allocate: {e:?}");
+            false
+        }
+    };
+
+    // --- arm C: hardware's own answer ---------------------------------------------------
+    let arm_c = if !want_alias_arm {
+        println!(
+            "info  R30 arm C           = NOT RUN (pass `--executor-vas-alias`). It provokes a \
+             real host fault when the boundary HOLDS, so it is opt-in and belongs under \
+             `scripts/bench/host_xid_watch.sh`"
+        );
+        true
+    } else {
+        match rm.probe_guest_reachability(vas, p.sem_va) {
+            Ok(r) => match r.reach {
+                GuestReach::ControlFailed => {
+                    println!(
+                        "??    R30 arm C control   = the POSITIVE CONTROL did not land (sem \
+                         {:#010x}, GP_GET {} GP_PUT {}, moved {:#010x} want {:#010x}) — the \
+                         probe was never issued and this run says NOTHING about reachability",
+                        r.control.semaphore,
+                        r.control.gp_get,
+                        r.control.gp_put,
+                        r.control_read,
+                        r.control_want
+                    );
+                    false
+                }
+                GuestReach::Read { word, outcome } => {
+                    let ours = word == p.last_payload;
+                    println!(
+                        "FAIL  R30 arm C REACHED   = a copy engine BOUND TO THE GUEST'S SPACE \
+                         retired a read of {:#018x} and moved {word:#010x} (GP_GET {} GP_PUT \
+                         {}). Our last payload was {:#010x} — {}",
+                        p.sem_va,
+                        outcome.gp_get,
+                        outcome.gp_put,
+                        p.last_payload,
+                        if ours {
+                            "★★★ THE SAME VALUE. The guest-bound engine read the isolate's \
+                             own completion semaphore. The defect is not latent; it is \
+                             MEASURED"
+                        } else {
+                            "a different value — the address RESOLVED in the guest's space \
+                             either way, which is already the violation"
+                        }
+                    );
+                    false
+                }
+                GuestReach::NotResolved(outcome) => {
+                    println!(
+                        "★     R30 arm C REFUSED   = the guest-bound engine did NOT retire a \
+                         read of {:#018x} (sem {:#010x}, GP_GET {} GP_PUT {}) — the address \
+                         does not resolve in the space a guest channel is bound to. ⚠ Expect \
+                         one `Xid 31 FAULT_PDE` in the host dmesg for this channel; that is \
+                         the boundary, not a bug",
+                        p.sem_va, outcome.semaphore, outcome.gp_get, outcome.gp_put
+                    );
+                    true
+                }
+                GuestReach::Ambiguous { word, outcome } => {
+                    println!(
+                        "??    R30 arm C ambiguous = the destination changed to {word:#010x} \
+                         and the engine did not release (sem {:#010x}, GP_GET {} GP_PUT {}). \
+                         Neither arm is claimed",
+                        outcome.semaphore, outcome.gp_get, outcome.gp_put
+                    );
+                    false
+                }
+            },
+            Err(e) => {
+                println!(
+                    "FAIL  R30 arm C           = the probe could not be built: {e:?} (an error \
+                     here is never a fault — nothing had been submitted)"
+                );
+                false
+            }
+        }
+    };
+
+    let _ = rm.free(vas);
+    let verdict = arm_a && arm_b && arm_c;
+    if verdict {
+        println!(
+            "★     R30 executor VAS    = the isolate's CE semaphore is NOT nameable from the \
+             address space a guest channel is bound to"
+        );
+    }
+    verdict
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -2103,6 +2370,8 @@ fn main() -> std::process::ExitCode {
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
     let mut want_guest_pin = false;
+    let mut want_executor_vas = false;
+    let mut want_executor_alias = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -2134,6 +2403,12 @@ fn main() -> std::process::ExitCode {
             // ⊘ The negative control. Same address, occupied first, inverted verdict.
             "--dictated-ring-negative" => want_dictated_neg = true,
             "--guest-ram-pin" => want_guest_pin = true,
+            "--executor-vas" => want_executor_vas = true,
+            // ★ Arm C, opt-in: it provokes a real host fault when the boundary HOLDS.
+            "--executor-vas-alias" => {
+                want_executor_vas = true;
+                want_executor_alias = true;
+            }
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -2323,6 +2598,25 @@ fn main() -> std::process::ExitCode {
         );
         let ok = guest_ram_pin_probe(&mut rm, gpu);
         println!("done — guest-RAM pin probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★ R30 runs here and RETURNS, for R25's reason exactly: it allocates its own `Vas`,
+    // its own copy-engine channel and its own probe objects, so every answer attributes to
+    // the PLACEMENT of the isolate's control structures and cannot be an earlier rung's
+    // channel or mapping. It is also the rung that provokes a host fault on its arm C, and
+    // a fault must never land in the middle of a ladder someone is reading top to bottom.
+    if want_executor_vas {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = executor_vas_probe(&mut rm, gpu, want_executor_alias);
+        println!("done — executor-VAS probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
