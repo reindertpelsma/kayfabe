@@ -250,6 +250,25 @@ struct NvkvmState {
      * counted by different code and a disagreement between them (arrivals that were never
      * logged, beyond the bound) is visible in the report rather than inferred. */
     uint64_t doorbells_logged;
+    /* ★★★★ §16.78 — how many REFUSED arrivals got their own timestamped line, counted
+     * SEPARATELY from `doorbells_logged`.
+     *
+     * ⊘ **`w214` is why this field exists, and the defect it fixes is an INSTRUMENT one.**
+     * `[measured 2026-08-10, boot `w214_9b65664_ctl`]` that run refused 8 doorbells, every
+     * one of them `Route::NotACopyEngineChannel` on a `GrCompute` channel — and **not one
+     * of the 8 appears in the log**, because the shared `NVKVM_DOORBELL_LOG_MAX` bound had
+     * already been spent on the first 16 arrivals, all of which were CE servings from the
+     * device-open phase.  So the boot could say *that* GR doorbells were refused and could
+     * never say *when*, and "were they the last thing the guest did before it began to
+     * spin?" — the question that decides whether the GR executor is on `cuCtxCreate`'s path
+     * at all — had no answer in the evidence.  ⊘ A bound shared between a common event and
+     * a rare one is spent by the common one; the rare event is the diagnosis. */
+    uint64_t doorbell_refusals_logged;
+    /* ★★★ §16.78 — total arrivals SEEN BY THE SHELL, and the heartbeat lines spent on them.
+     * Two fields for one fact, on purpose: the modulus needs a monotonic count that the
+     * bound never freezes, and the bound needs its own counter. */
+    uint64_t doorbell_arrivals;
+    uint64_t doorbell_heartbeats_logged;
 };
 
 /* ★★ How many doorbell arrivals get a timestamped log line before the device goes quiet.
@@ -258,6 +277,18 @@ struct NvkvmState {
  * acceptance run that rings a handful of times on purpose, not a trace.  A guest that rings
  * in a loop must be able to move a counter and unable to fill a disk. */
 #define NVKVM_DOORBELL_LOG_MAX 16u
+
+/* ★★ The REFUSAL bound, and it is deliberately its OWN budget rather than a larger shared
+ * one.  A refusal is the diagnosis; a serving is progress.  Raising the shared bound would
+ * buy 8 refusal lines at the cost of hundreds of serving lines nobody asked for, and would
+ * change the shape of every committed census that quotes "(16 logged)".  ⊘ Still bounded:
+ * a guest that rings a refused channel in a loop moves `doorbells_refused` and cannot fill
+ * a disk. */
+#define NVKVM_DOORBELL_REFUSAL_LOG_MAX 24u
+
+/* ★★ The heartbeat cap.  64 lines covers ~2048 arrivals at one line per 32; past that the
+ * device goes quiet and the counters carry on. */
+#define NVKVM_DOORBELL_HEARTBEAT_MAX 64u
 
 /*
  * ═══ ★★★ #151: DELIVERY ════════════════════════════════════════════════════════════════
@@ -403,6 +434,32 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
      * that would find one is increments E4/E5).  A warning would train a reader to ignore
      * the line that matters later. */
     if (w.doorbell != KAYFABE_DOORBELL_NONE) {
+        /* ★★★★ §16.78 — EVERY refusal gets a timestamped line, on its own budget, BEFORE
+         * the shared bound is consulted.  See `doorbell_refusals_logged`: w214 refused 8
+         * and logged 0 of them.  ⊘ This runs first and independently, so a refusal is
+         * never hidden by a flood of servings — the exact ordering defect being fixed. */
+        if (w.doorbell == KAYFABE_DOORBELL_REFUSED
+            && s->doorbell_refusals_logged < NVKVM_DOORBELL_REFUSAL_LOG_MAX) {
+            s->doorbell_refusals_logged++;
+            info_report("nvkvm: DOORBELL-REFUSED #%" PRIu64 " token 0x%08" PRIx64
+                        " at +0x%" PRIx64 " [%.*s]",
+                        s->doorbell_refusals_logged, w.doorbell_token, (uint64_t)addr,
+                        (int)w.doorbell_kind_len, (const char *)w.doorbell_kind);
+        }
+        /* ★★★ §16.78 — A HEARTBEAT, so the run has a TIME AXIS beyond its first 16 rings.
+         *
+         * `w214`'s 16 logged lines all fall inside 21 seconds of a 210-second run, so the
+         * evidence cannot say whether the guest went quiet after the refusals or kept
+         * ringing — and "did it go quiet?" is what separates *waiting on the refused work*
+         * from *waiting on something else*.  One line per 32nd arrival, capped, is a time
+         * axis at ~6 lines for a run this size. */
+        s->doorbell_arrivals++;
+        if ((s->doorbell_arrivals % 32u) == 0
+            && s->doorbell_heartbeats_logged < NVKVM_DOORBELL_HEARTBEAT_MAX) {
+            s->doorbell_heartbeats_logged++;
+            info_report("nvkvm: DOORBELL-HEARTBEAT arrival #%" PRIu64 " token 0x%08" PRIx64,
+                        s->doorbell_arrivals, w.doorbell_token);
+        }
         if (s->doorbells_logged < NVKVM_DOORBELL_LOG_MAX) {
             s->doorbells_logged++;
             if (w.doorbell == KAYFABE_DOORBELL_REFUSED) {

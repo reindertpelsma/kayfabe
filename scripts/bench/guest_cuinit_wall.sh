@@ -44,6 +44,27 @@
 # `kill -9`ed and **the end-of-run census is lost**. `guest_uvm_status.sh` still uses bare
 # `timeout 180`; this hook does not. Detached + poll on OUR clock, and when the deadline fires
 # `/proc/<pid>/stack` is the measurement.
+#
+# ## ⊘⊘ ★★★★★ THE PARAGRAPH ABOVE IS REFUTED BY THIS HOOK'S OWN OUTPUT (§16.78)
+#
+# `[measured 2026-08-10, boot `w214_9b65664_ctl`, `traces/guest_boots/run_w214_9b65664_ctl_probe.log`]`
+# — the three `/proc/<pid>/stack` samples this hook took at its deadline were:
+#
+#     pid=1811 state=Rl
+#     --- stack sample 1 ---            (empty)
+#     --- stack sample 2 ---            [<0>] ktime_get_raw_ts64+0x41/0xd0
+#     --- stack sample 3 ---            [<0>] __x64_sys_clock_gettime+0xb4/0x110
+#
+# ⇒ `state=R`, and a kernel stack that is nothing but `clock_gettime`. **The process is NOT
+# spinning in `uvm_spin_loop` and is NOT blocked in the kernel at all — it is spinning in
+# USERSPACE**, inside `libcuda`, and `/proc/<pid>/stack` is structurally incapable of saying
+# where. The instrument ran, printed output, and that output is about a different plane from
+# the one the wall is on. ⊘ Three consecutive boots (`w212`/`w213`/`w214`) recorded `state=Rl`
+# beside an empty kernel stack and the wall was still described as a kernel spin.
+#
+# ⇒ `scripts/bench/guest_userstack.c` is added below and runs BESIDE the kernel sample (not
+# instead of it — the kernel sample is what proves the userspace claim). It resolves `RIP`
+# per thread through the target's own `/proc/<pid>/maps`.
 set -uo pipefail
 REPO=${KAYFABE_REPO:-/workspace/bench/kayfabe}
 G="$REPO/scripts/bench/gssh_nv"
@@ -51,6 +72,7 @@ DEADLINE=${CUP2_DEADLINE:-150}
 CUP2_SRC=${KAYFABE_CUP2_SRC:-/workspace/bench/cup2.c}
 RM_SRC=$REPO/scripts/rpctrace/cuda_ioctl_trace.c
 UVM_SRC=$REPO/scripts/bench/uvm_ioctl_trace.c
+USTACK_SRC=$REPO/scripts/bench/guest_userstack.c
 
 die() { echo "★ guest_cuinit_wall hook FAILED: $*"; exit 2; }
 stamp() { # ⊘ WHICH COPY RAN — the trap that made §14.29's bisect unreachable for two rungs.
@@ -59,17 +81,22 @@ stamp() { # ⊘ WHICH COPY RAN — the trap that made §14.29's bisect unreachab
 }
 
 echo "=== sources that will run (md5, so a run cannot silently be the other copy) ==="
-stamp "$CUP2_SRC"; stamp "$RM_SRC"; stamp "$UVM_SRC"
+stamp "$CUP2_SRC"; stamp "$RM_SRC"; stamp "$UVM_SRC"; stamp "$USTACK_SRC"
 
 echo "=== push + build inside the guest ==="
 $G 'cat > /tmp/cup2.c'             < "$CUP2_SRC" || die "could not push cup2.c"
 $G 'cat > /tmp/cuda_ioctl_trace.c' < "$RM_SRC"   || die "could not push the RM interposer"
 $G 'cat > /tmp/uvm_ioctl_trace.c'  < "$UVM_SRC"  || die "could not push the UVM interposer"
+$G 'cat > /tmp/guest_userstack.c'  < "$USTACK_SRC" || die "could not push the userspace sampler"
 $G 'gcc -O0 -o /tmp/cup2 /tmp/cup2.c -lcuda 2>&1; echo GCC_CUP2_RC=$?'
 $G 'gcc -O0 -fPIC -shared -o /tmp/cuda_ioctl_trace.so /tmp/cuda_ioctl_trace.c -ldl 2>&1; echo GCC_RM_RC=$?'
 $G 'gcc -O1 -fPIC -shared -o /tmp/uvm_ioctl_trace.so  /tmp/uvm_ioctl_trace.c  -ldl 2>&1; echo GCC_UVM_RC=$?'
+$G 'gcc -O1 -o /tmp/guest_userstack /tmp/guest_userstack.c 2>&1; echo GCC_USTACK_RC=$?'
 $G 'test -x /tmp/cup2 && test -s /tmp/cuda_ioctl_trace.so && test -s /tmp/uvm_ioctl_trace.so' \
   || die "cup2 or one of the two interposers did not build"
+# ⊘ NOT a `die`: the sampler is a NEW instrument on its own first run and a build failure in
+# it must not cost the boot the census. Its absence is reported where it would have printed.
+$G 'test -x /tmp/guest_userstack' || echo "★ the userspace sampler did not build — its section below will be EMPTY, and an empty section is evidence of NOTHING"
 
 # ⊘ Clear the ring buffer so what follows is `cuInit`'s ALONE. The device-open output (RC
 # watchdog, CeUtils scrubber, the I2C `0x402c` refusal) otherwise drowns it, and has already
@@ -101,7 +128,25 @@ else
   echo "CUP2_RC=TIMEOUT"
   $G 'cat /tmp/cup2.out 2>/dev/null
       p=$(pgrep -x cup2 | head -1); echo "pid=$p state=$(ps -o stat= -p $p 2>/dev/null)"
-      for i in 1 2 3; do echo "--- stack sample $i ---"; sudo cat /proc/$p/stack 2>&1; sleep 1; done'
+      echo "--- per-thread state (⊘ R = spinning in USERSPACE; D/S = blocked in the kernel) ---"
+      ps -L -o tid,stat,pcpu,wchan:24,comm -p $p 2>&1
+      echo "--- /proc/<tid>/syscall per thread (nr arg0..arg5 sp pc; \"running\" = userspace) ---"
+      for t in /proc/$p/task/*; do echo "    ${t##*/}: $(sudo cat $t/syscall 2>&1)"; done
+      for i in 1 2 3; do echo "--- kernel stack sample $i (⊘ EXPECTED TO BE EMPTY OR clock_gettime — see this hook'"'"'s header) ---"; sudo cat /proc/$p/stack 2>&1; sleep 1; done'
+
+  # ★★★★★ §16.78 — THE MEASUREMENT THE KERNEL STACK CANNOT MAKE.
+  echo "=== ★★★★★ USERSPACE STACK — where in libcuda is cuCtxCreate actually spinning? ==="
+  $G 'p=$(pgrep -x cup2 | head -1)
+      if [ -x /tmp/guest_userstack ] && [ -n "$p" ]; then
+        sudo /tmp/guest_userstack "$p" 4 400 2>&1
+      else
+        echo "★ NOT RUN: sampler=$( [ -x /tmp/guest_userstack ] && echo present || echo ABSENT ) pid=${p:-NONE}"
+      fi'
+  # ★ The join key for every offset above. libcuda is stripped of local symbols, so this is
+  # the exported surface only — enough to bracket an offset, never to name an internal.
+  echo "=== libcuda identity + exported symbol table (the join for the offsets above) ==="
+  $G 'l=$(ls -1 /usr/lib/x86_64-linux-gnu/libcuda.so.* 2>/dev/null | head -1)
+      echo "libcuda=$l"; [ -n "$l" ] && { md5sum "$l"; ls -la "$l"; }'
 fi
 
 # ---- ★★ DID THE INSTRUMENT RUN? Assert before citing, on BOTH planes -------------------
