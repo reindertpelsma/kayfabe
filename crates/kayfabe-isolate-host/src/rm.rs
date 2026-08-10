@@ -4135,11 +4135,20 @@ impl HostRmBackend {
         token: u64,
     ) -> Result<(), RmError> {
         let raw = self.narrow(chan)?;
-        let layout = self
+        let parts = self
             .conn
             .channel_parts(raw)
-            .ok_or(RmError::BadHandle(chan))?
-            .layout;
+            .ok_or(RmError::BadHandle(chan))?;
+        // ★★★ Refused HERE, at the top, on a channel whose ring is the guest's — not three
+        // stores later. `ring_store_u32` would refuse anyway (`RING_NOT_OURS`), but the
+        // failure would then be *"a store was refused"* on a function whose subject is a
+        // SUBMISSION, and the offsets below are ours: `GPFIFO_OFFSET` is where OUR GPFIFO
+        // sits inside OUR ring object, and the guest's ring has its own layout. ⇒ Composing
+        // methods into a ring we do not own is the wrong verb, and it says so by name.
+        if parts.owner == RingOwner::HandedIn {
+            return Err(RmError::Other(RING_NOT_OURS));
+        }
+        let layout = parts.layout;
         let entry = gp_entry(pb_va, pb_len).ok_or(RmError::Other(BAD_ENCODE))?;
         let at = GPFIFO_OFFSET + slot * GP_ENTRY_SIZE;
         self.ring_store_u32(chan, at, entry as u32)?;
