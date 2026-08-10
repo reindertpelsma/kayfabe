@@ -1680,8 +1680,7 @@ impl QemuMachine {
         // counted for every section rather than only the interesting ones. A funnel whose
         // first stage is only incremented on the happy path cannot distinguish "nothing
         // arrived" from "everything arrived and was dropped".
-        v.layout
-            .saw(kind == RegionKind::Ram, s.backing.is_some());
+        v.layout.saw(kind == RegionKind::Ram, s.backing.is_some());
         let region = RamRegionId(0x4000_0000_0000_0000 | s.gpa);
         v.regions.declare(region, kind, s.gpa, s.len).map_err(|_| {
             VmmError::Unsupported("a reported section that leaves the 64-bit space")
@@ -1981,6 +1980,46 @@ impl QemuVmm {
     #[must_use]
     pub fn audit(&self) -> AuditReport {
         self.plane.audit.report()
+    }
+
+    /// ★★★★★ **The stated layout, asked through the handle a data-plane caller already
+    /// holds** — the same table [`QemuMachine::resolve_guest_ram`] answers from, because it
+    /// is the same `Plane`.
+    ///
+    /// ## ⊘ Why this is not a second projection of the layout
+    ///
+    /// This project has now measured two projections of one fact disagreeing three times,
+    /// so a second accessor needs an argument. There is no second table here: `QemuVmm` is
+    /// a handle onto the machine's plane ([`QemuMachine::vmm`] clones the `Arc`), and this
+    /// reads `plane.view().layout` exactly as the machine's own accessor does. What it
+    /// buys is *reach* — the doorbell path holds a `QemuVmm` and does not hold a
+    /// `QemuMachine`, and the alternative was to carry the layout a second time so that it
+    /// could.
+    ///
+    /// ⚠ It answers from the **LIVE** table, like every resolver. At a doorbell that is the
+    /// right instant and the table is populated; at memory-plane attach and at teardown it
+    /// is empty, which is `guest_ram_crossing.md` §5.7.3's whole finding and is why the
+    /// *report* reads a different table from the *resolver*.
+    ///
+    /// # Errors
+    /// Every arm of [`layout::LayoutRefusal`]. ⊘ Never a clamped success.
+    pub fn resolve_guest_ram(
+        &self,
+        backing: layout::BackingId,
+        gpa: u64,
+        len: u64,
+    ) -> Result<layout::StatedRun, layout::LayoutRefusal> {
+        let (v, _h) = self.plane.view();
+        v.layout.resolve(backing, gpa, len)
+    }
+
+    /// The runs stated **right now** for one backing file, coalesced, in guest-physical
+    /// order. ⊘ Empty is *"nothing is stated at this instant"* and never *"this file backs
+    /// nothing"* — see [`QemuMachine::stated_guest_ram`].
+    #[must_use]
+    pub fn stated_guest_ram(&self, backing: layout::BackingId) -> Vec<layout::StatedRun> {
+        let (v, _h) = self.plane.view();
+        v.layout.contiguous_runs(backing)
     }
 
     /// ★★★ Resolve, in the one order that matters.

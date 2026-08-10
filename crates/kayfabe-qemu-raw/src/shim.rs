@@ -2882,6 +2882,18 @@ struct SharedDoorbell {
     /// submission on a second path. A build that selects a real isolate plane keeps the old
     /// routing exactly — a channel the core can address goes to the core.
     local_ce_is_the_only_executor: bool,
+    /// ★★★★★ §5.8 — the filesystem identity of the guest-RAM block this root ADOPTED, or
+    /// `None` when the crossing is not armed.
+    ///
+    /// ⊘ **Carried from the composition root, never re-derived**, for [`Regs`]'s own copy's
+    /// reason: re-taking the descriptor census here would be a SECOND selection of "which
+    /// block is guest RAM", and two projections of one fact have been measured disagreeing
+    /// three times in this project.
+    ///
+    /// ★ It is also the arming flag for the whole pin path below. `None` ⇒ this port does
+    /// not print one guest-RAM line, which is what keeps the negative control
+    /// byte-comparable to the armed run.
+    guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
 }
 
 /// ★★★ **E10e — what the shell owns on behalf of the CPU copy-engine executor.**
@@ -3187,6 +3199,17 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
             "kayfabe: PT-DECODE token={token:#010x}{}",
             self.decode_cpu_pt_writes()
         );
+        // ★★★★★ **§5.8 — THE FIRST GUEST BYTE.** Ordered HERE, and the order is the whole
+        // argument: the pin resolves the ring's VA through the address table, and the
+        // table only carries that binding because the populate pass one line up has just
+        // committed it. Before it, this would read `AddressFault::Miss` on every doorbell
+        // and the miss would be an artefact of ordering rather than a fact about the guest.
+        //
+        // ⊘ Silent — not merely quiet — when the crossing is not armed. See
+        // `SharedDoorbell::guest_ram_backing`.
+        if let Some(line) = self.pin_ring_guest_ram(token, seen.as_ref()) {
+            eprintln!("kayfabe: {line}");
+        }
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
         // meant, in `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell
         // on a host channel into which the guest's methods were never copied"* — and the
@@ -3916,6 +3939,218 @@ impl SharedDoorbell {
     /// documented as running with no plane lock out. The plane's mutex is taken and released
     /// inside each `PlanePtBytes::read`; the core's ranked locks are taken and released
     /// inside each phase of the pass. ⊘ The two are never nested, in either direction.
+    /// ★★★★★ **THE FIRST PRODUCTION `GuestRamGrant`** — pin the page of GUEST RAM the
+    /// channel's ring lives in into the host VAS, at the guest's own VA
+    /// (`guest_ram_crossing.md` §5.8, step 3).
+    ///
+    /// Returns the line to print, or `None` when the crossing is not armed.
+    ///
+    /// # ★★★ Where every number comes from, because that is the rule this rung exists for
+    ///
+    /// | number | source | why not somewhere else |
+    /// |---|---|---|
+    /// | the ring's **VA** | the channel's own declared `gp_fifo_ring` ([`kayfabe_rt::device::CeChannelFacts::ring_va`]) | it is the guest's, and address identity means the host mapping must land on exactly it |
+    /// | the ring's **GPA** | the core's address table, resolved in the channel's own `Vas` | the guest's page tables are the authority on what backs its own VA; ⊘ **the leaf address `0x237fe000` §16.73 measured is NOT reusable** — three channels of one boot resolved to `0x768a000`, `0x802d000` and `0x206cf000` |
+    /// | the **file offset** | [`kayfabe_vmm_qemu::QemuVmm::resolve_guest_ram`], the hypervisor's own stated layout | ⊘ **never derived from the GPA.** Identity holds on `-m 2048` and breaks silently at `-m 8G`; that is `layout`'s entire reason for existing |
+    /// | the **length** | [`Self::RING_PIN_BYTES`] | see that constant — it is a measurement, not a default |
+    ///
+    /// ⊘ **No number in the grant was proposed by the isolate, and none was checked
+    /// against itself.** `mode2_isolate_memory_boundary.md` §3.
+    ///
+    /// # ⊘ What this does NOT do, stated before anyone reads a green line as more
+    ///
+    /// It pins **one page**, of **one** channel's ring, and **nothing consumes it**. The
+    /// forwarding plane still reads the ring through `Vmm::gpa_read` as before and the host
+    /// GPU is never pointed at the pinned mapping on this rung. What is established is the
+    /// two facts the rung was set: a real RM object exists over guest RAM, and a **fixed**
+    /// `map_dma` placed it at the guest's own VA. ⊘ That is not a shadow channel.
+    ///
+    /// # ⚠ Locks
+    ///
+    /// The layout is read under `self.ce.vmm`'s unranked mutex, which is **released before**
+    /// the pin — [`kayfabe_rt::device::SharedDevice::pin_guest_ram`] runs host ioctls and
+    /// may park on the isolate pool, and holding an unranked mutex across that is the exact
+    /// shape the `ring` body's own lock note warns about one screen down.
+    fn pin_ring_guest_ram(
+        &self,
+        token: u64,
+        facts: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<String> {
+        let backing = self.guest_ram_backing?;
+        let head = format!(
+            "GUEST-RAM PIN token={token:#010x} dev={} ino={}",
+            backing.dev, backing.ino
+        );
+        // ⊘ Every early return below still prints. A pass that ran and found nothing to do
+        // and a pass that did not run are different facts about the boot, and only one of
+        // them is about the guest — the same rule `PT-DECODE` states one function down.
+        let Some(f) = facts else {
+            return Some(format!(
+                "{head} → NO CHANNEL (the token routed to no channel, so there is no ring \
+                 and nothing to pin)"
+            ));
+        };
+        let Some(ring_va) = f.ring_va else {
+            return Some(format!(
+                "{head} proc={} chan={} → NO RING VA DECLARED (the channel named no \
+                 `gp_fifo_ring`; ⊘ not a miss — there is no address to pin AT)",
+                f.proc.0, f.chan.0
+            ));
+        };
+        let Some(pdb) = f.vas_pdb else {
+            return Some(format!(
+                "{head} proc={} chan={} ring=0x{ring_va:x} → NO PDB (the channel's VA space \
+                 did not resolve, so there is no address space to pin INTO)",
+                f.proc.0, f.chan.0
+            ));
+        };
+        let who = format!(
+            "{head} proc={} chan={} pdb=0x{:x} ring=0x{ring_va:x}",
+            f.proc.0, f.chan.0, pdb.0
+        );
+        // ---- 1. the GPA, from the guest's own page tables (via the core's table) -------
+        let va = kayfabe_rt::GpuVa(ring_va);
+        let (binding, off) = match self.device.resolve(DOORBELL_TARGET_GPU, pdb, va) {
+            Ok(r) => r,
+            Err(e) => {
+                return Some(format!(
+                    "{who} → UNRESOLVED {e:?} (the address table does not bind this VA; \
+                     ⊘ MISS = FAULT, and nothing here guesses a guest-physical address)"
+                ));
+            }
+        };
+        let gpa = binding.phys.saturating_add(off);
+        let len = Self::RING_PIN_BYTES;
+        // ---- 2. the file offset, from the HYPERVISOR's own stated layout ---------------
+        //
+        // ⊘ Two different questions are asked of two different sources here, and that is
+        // the point: the guest's page tables say WHICH guest-physical bytes, and the
+        // hypervisor says where those bytes live in the descriptor. Deriving the second
+        // from the first is the identity shortcut `layout.rs` refuses.
+        let (run, control) = {
+            let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(vmm) = held.as_ref() else {
+                drop(held);
+                return Some(format!(
+                    "{who} gpa=0x{gpa:x} → NO MEMORY PLANE (between realize and \
+                     `attach_ram` there is no layout to resolve against)"
+                ));
+            };
+            let run = vmm.resolve_guest_ram(backing, gpa, len);
+            // ★★★ THE NEGATIVE CONTROL, taken from the SAME table, in the SAME instant, on
+            // the SAME line. A control read at a different moment could differ for a
+            // reason that has nothing to do with the mechanism.
+            //
+            // ⊘ The probe address is DERIVED, not a constant: one page past the top of the
+            // highest run stated right now, so it is outside every stated run **by
+            // construction** on any machine and any `-m`. A hardcoded address would be
+            // outside on this bench and could silently be inside on another — and a
+            // control that passes because of the machine it ran on is not a control.
+            let top = vmm
+                .stated_guest_ram(backing)
+                .iter()
+                .map(|r| r.gpa_end())
+                .max()
+                .unwrap_or(0);
+            let probe = u64::try_from(top).unwrap_or(u64::MAX).saturating_add(len);
+            let control = (probe, vmm.resolve_guest_ram(backing, probe, len));
+            drop(held);
+            (run, control)
+        };
+        let control = match control.1 {
+            Err(r) => format!(
+                " | ✅ NEGATIVE CONTROL: gpa=0x{:x} (one page past the top of every stated \
+                 run) REFUSED BY NAME as `{}` — no clamping, no best-effort, no \
+                 probably-identity",
+                control.0,
+                r.name()
+            ),
+            Ok(bad) => format!(
+                " | ⚠⚠ NEGATIVE CONTROL DID NOT FIRE: gpa=0x{:x} was ANSWERED with file \
+                 offset 0x{:x}. Either the layout grew past the top this probe was derived \
+                 from between the two reads, or the resolver is answering outside what it \
+                 was told. ⊘ Read every line above with that in mind",
+                control.0, bad.file_offset
+            ),
+        };
+        let run = match run {
+            Ok(r) => r,
+            Err(r) => {
+                return Some(format!(
+                    "{who} gpa=0x{gpa:x} len={len} → REFUSED BY NAME `{}` (the hypervisor \
+                     stated no run covering this guest-physical address for the block we \
+                     adopted; ⊘ NOT clamped and NOT assumed identity){control}",
+                    r.name()
+                ));
+            }
+        };
+        // ---- 3. the grant, and it is minted from the VMM's numbers and nothing else ----
+        let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+            run.file_offset,
+            len,
+            // ★ Read-WRITE, and it is a decision rather than the wider default. These pages
+            // carry the channel's GPFIFO and, at `+0x8004`, its finishPayload semaphore —
+            // memory the ENGINE writes. `OS_DESCRIPTOR` hands RM a host VA it walks with
+            // `pin_user_pages`, and pinning for a DMA the device writes needs a writable
+            // mapping. ⊘ The narrower grant is not the safer one here; it is the one that
+            // fails at the ioctl for a reason the status code will not name.
+            kayfabe_vmm::Prot::ReadWrite,
+        );
+        // ---- 4. the pin -------------------------------------------------------------
+        match self
+            .device
+            .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, va, grant)
+        {
+            Ok(p) => Some(format!(
+                "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → {} memory={:#x} \
+                 host_va=0x{:x} placed_as_asked={} — ★ a REAL host RM object \
+                 (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) now exists over the guest's own \
+                 pages, mapped FIXED at the guest's own VA. ⊘ Nothing consumes it yet{control}",
+                run.file_offset,
+                if p.already {
+                    "ALREADY PINNED (idempotent replay; no second OS_DESCRIPTOR and no second fixed map)"
+                } else {
+                    "PINNED"
+                },
+                p.memory.raw(),
+                p.host_va,
+                p.host_va == ring_va,
+            )),
+            Err(e) => Some(format!(
+                "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → REFUSED {e:?}. \
+                 ⚠ If this names `PlacementRefused`, the fixed map landed somewhere else \
+                 and was UNWOUND rather than adopted. ⚠ If it names an RM status `0x51`, \
+                 that is `NV_ERR_NO_MEMORY` and it is COLLISION-OR-EXHAUSTION — the two \
+                 are indistinguishable from the status alone and neither reads as \
+                 success{control}",
+                run.file_offset
+            )),
+        }
+    }
+
+    /// ★★ **How much of the ring this rung pins: ONE host page.**
+    ///
+    /// ⊘ It looks like a placeholder and is a measurement. `[measured 2026-08-10, boot
+    /// `w209_ffc80f8_real`]` the ring's own descent prints its first four pages and their
+    /// guest-physical addresses are **not contiguous**:
+    ///
+    /// ```text
+    /// fbRING[p0]@va0x420064000=S:0x768a000  fbRING[p1]@va0x420065000=S:0x521c000
+    /// fbRING[p2]@va0x420066000=S:0x8505000  fbRING[p3]@va0x420067000=S:0x764f000
+    /// ```
+    ///
+    /// ⇒ Four consecutive guest **virtual** pages, four scattered guest **physical** pages.
+    /// `OS_DESCRIPTOR` describes ONE contiguous host range, so "one descriptor per
+    /// contiguous run" is, for this ring, **one descriptor per page** — and the leaf the
+    /// walk reaches says so itself (`sz0x1000`).
+    ///
+    /// ★ So a larger constant here would not pin more of the ring; it would ask the layout
+    /// for a range whose *guest-physical* contiguity nothing has established, and get a
+    /// plausible file offset for bytes that live somewhere else. The multi-page ring is a
+    /// LOOP over runs, not a bigger number — and that loop belongs with the consumer that
+    /// needs the whole ring, which does not exist yet.
+    const RING_PIN_BYTES: u64 = 4096;
+
     fn decode_cpu_pt_writes(&self) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
@@ -4946,6 +5181,7 @@ impl Regs {
             // [`CE_EXECUTOR_ENV`] and [`ce_executor_from`].
             local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn
                 || ce_executor == CeExecutorChoice::Local,
+            guest_ram_backing,
         }));
         Ok(Regs {
             plane,
@@ -5131,7 +5367,11 @@ impl Regs {
                     "kayfabe:   stated by dev={} ino={}: {n} section(s), {bytes} bytes{}",
                     b.dev,
                     b.ino,
-                    if *b == backing { "  <= THE BLOCK WE ADOPTED" } else { "" }
+                    if *b == backing {
+                        "  <= THE BLOCK WE ADOPTED"
+                    } else {
+                        ""
+                    }
                 );
             }
         }
@@ -6484,8 +6724,7 @@ fn with_guest_ram(
             // selected, and travels with the descriptor. `into_descriptor` consumes the
             // candidate, so this is also the last moment it can be taken without asking the
             // question a second time.
-            let backing =
-                kayfabe_vmm_qemu::layout::BackingId::new(found.dev(), found.inode());
+            let backing = kayfabe_vmm_qemu::layout::BackingId::new(found.dev(), found.inode());
             eprintln!(
                 "kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's {QEMU_MACHINE_RAM_MEMFD} \
                  block, {} bytes, dev={} ino={}. Every isolate this factory spawns is granted \

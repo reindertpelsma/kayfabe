@@ -646,6 +646,16 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             region: raw(region),
             len,
         })),
+        // ★★★★★ `OS_DESCRIPTOR` over guest RAM. Same discipline as the door above: the
+        // child names a MAPPING and computes no range. `len` is reconstructed from the
+        // frame because `GuestRamMapped` carries it, and the backend's own plane is what
+        // decides how many bytes are really there.
+        Request::DescribeGuestRam { region, len } => {
+            handle(rm.describe_guest_ram(GuestRamMapped {
+                region: raw(region),
+                len,
+            }))
+        }
     }
 }
 

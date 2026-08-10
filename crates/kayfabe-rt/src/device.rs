@@ -2355,6 +2355,39 @@ impl SharedDevice {
         )
     }
 
+    /// ★★★★★ **Pin the GUEST's own pages at `va` in the `(gpu, pdb)` VAS.** Same three
+    /// phases as [`SharedDevice::publish_backing`], and it is deliberately a sibling of it
+    /// rather than a mode of it — see [`kayfabe_isolate::VerbPlan::PinGuestRam`].
+    ///
+    /// ⊘ `grant` is the **VMM's** instruction and is carried through untouched. Nothing in
+    /// this crate or below derives it, checks it, or clamps it; the only party that can is
+    /// the one holding the hypervisor's stated layout.
+    ///
+    /// # Errors
+    /// Whatever [`kayfabe_fwd::plan_pin_guest_ram`] refuses with, or the host's own
+    /// refusal — including [`kayfabe_isolate::RmError::PlacementRefused`] when the fixed
+    /// map did not land where it was asked to.
+    pub fn pin_guest_ram(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        va: GpuVa,
+        grant: kayfabe_isolate::GuestRamGrant,
+    ) -> Result<kayfabe_fwd::GuestRamPinned, FwdFault> {
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+                    |_spine, proc, ()| {
+                        let planned = kayfabe_fwd::plan_pin_guest_ram(proc, gpu, pdb, va, grant)?;
+                        Staged::check_out(proc, gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| kayfabe_fwd::commit_pin_guest_ram(proc, plan, reply),
+        )
+    }
+
     /// **Case 1**: forward an engine-object alloc on the channel identified by
     /// `vchid`, same three phases. An idempotent re-send resolves entirely in the
     /// plan phase and issues **no verbs and no checkout at all**.

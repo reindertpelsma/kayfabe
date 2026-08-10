@@ -855,6 +855,39 @@ pub trait RmBackend: Send + Sync {
     /// [`RmError::GuestRamUnavailable`] if there is no guest RAM to unmap; whatever the
     /// transport refuses with.
     fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError>;
+
+    /// ★★★★★ **Describe a live guest-RAM mapping to the host driver as a memory object** —
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the pages [`RmBackend::map_guest_ram`]
+    /// already mapped (`guest_ram_crossing.md` §5.8).
+    ///
+    /// This is the verb that turns *"this process can read the guest's bytes"* into
+    /// *"the host GPU can reach the guest's bytes"*, and it is the last one missing
+    /// between the two. After it, nothing new is needed:
+    /// [`RmBackend::map_gpu_va`] already places a memory object at a **dictated** address
+    /// and already refuses a placement it did not get.
+    ///
+    /// ## ⊘ Why this is a SEPARATE verb and not a flag on `map_guest_ram`
+    ///
+    /// The two have different failure modes and different lifetimes. `map_guest_ram` is an
+    /// `mmap` in this process and is undone by `munmap`; this is an RM allocation that
+    /// **pins** those pages for the host GPU and is undone by `free`. Folding them would
+    /// make the natural cleanup — drop the mapping — silently leave RM holding pinned
+    /// pages, which is the class [`RmBackend::map_guest_ram`]'s own docs already refuse to
+    /// hide. ⚠ `alloc_os_descriptor`'s note applies verbatim: **dropping the host mapping
+    /// does not release RM's reference.**
+    ///
+    /// ## ⊘ What this verb may NOT grow
+    ///
+    /// An offset and a length. It describes **exactly** what the grant named, because the
+    /// grant's numbers are the VMM's and a second pair of numbers here would be a second
+    /// description of the same authorization — and the isolate would own one of them. That
+    /// is `mode2_isolate_memory_boundary.md` §3's circularity arriving one verb later.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if this isolate has no guest-RAM plane;
+    /// [`RmError::NoMemory`] if `mapped` names no live mapping; whatever RM refuses the
+    /// allocation with.
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError>;
 }
 
 /// ★★ Session identity of an isolate — the **`(Proc, GpuId)` pair**, because that is
@@ -1314,6 +1347,42 @@ pub enum VerbPlan {
         /// mapping is placed HERE, not wherever the host driver would have chosen.
         at: GpuVa,
     },
+    /// ★★★★★ **THE GUEST'S OWN PAGES, published at the guest's own VA** — the chain
+    /// [`VerbPlan::Publish`] is the *fabricated* counterpart of
+    /// (`guest_ram_crossing.md` §5.8).
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::map_guest_ram`] →
+    /// [`RmBackend::describe_guest_ram`] → [`RmBackend::map_gpu_va`] **at `at`**, with
+    /// [`VerbPlan::Publish`]'s own placement check applied unchanged.
+    ///
+    /// ## ⊘ Why it is a second variant and not a field on `Publish`
+    ///
+    /// `Publish` allocates **host** sysmem and maps it at the guest's VA: the address is
+    /// the guest's and the bytes are not. That is correct for a range the guest has never
+    /// written and wrong for a ring the guest is *polling* — the guest advances `GP_PUT`
+    /// in its own pages, and a host allocation at the same address is a different buffer
+    /// that will never change. The two chains therefore differ in what a **wrong** answer
+    /// costs, which is exactly the distinction a `bool` erases.
+    ///
+    /// ## ★★★ The grant's numbers are the VMM's, and the type says so
+    ///
+    /// [`GuestRamGrant`] can only be minted by
+    /// [`GuestRamGrant::originated_by_the_vmm`], so a plan carrying one carries the
+    /// VMM's own derivation from its own stated layout. ⊘ There is deliberately **no
+    /// guest-physical address in this variant** — a GPA would be a number the core could
+    /// be tempted to re-derive an offset from, and re-deriving it is the `-m 8G` bug
+    /// `kayfabe_vmm_qemu::layout` exists to refuse.
+    PinGuestRam {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// ★★★ The VMM's instruction: which slice of the guest-RAM block, and what the
+        /// isolate may do with it.
+        grant: GuestRamGrant,
+        /// ★★★ The guest VA these pages must be addressable at. Address identity, and
+        /// here it is not a convention but the guest's *existing* binding — this range is
+        /// already mapped at `at` in the guest's own page tables.
+        at: GpuVa,
+    },
     /// The doorbell chain: (optionally) host VAS → (optionally) host channel →
     /// (optionally) schedule → ring.
     ///
@@ -1549,7 +1618,9 @@ impl VerbPlan {
     #[must_use]
     pub fn handles(&self) -> Vec<HostHandle> {
         match self {
-            VerbPlan::Publish { host_vas, .. } => host_vas.iter().copied().collect(),
+            VerbPlan::Publish { host_vas, .. } | VerbPlan::PinGuestRam { host_vas, .. } => {
+                host_vas.iter().copied().collect()
+            }
             VerbPlan::Doorbell {
                 host_vas, channel, ..
             }
@@ -1585,6 +1656,22 @@ pub enum VerbReply {
         /// The allocated host memory object.
         memory: HostHandle,
         /// The host GPU VA it was mapped at.
+        host_va: u64,
+    },
+    /// ★★★ [`VerbPlan::PinGuestRam`]'s reply — **and it carries the guest-RAM mapping
+    /// as well as the RM object**, because releasing one does not release the other.
+    GuestRamPinned {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// ★ The isolate's `mmap` of the guest pages. ⊘ Reported separately from
+        /// `memory`: the RM object pins the pages and the mapping is this process's view
+        /// of them, and a caller that freed only the object would leave an isolate with a
+        /// live window onto guest RAM it no longer has any reason to see.
+        mapped: GuestRamMapped,
+        /// The `OS_DESCRIPTOR` object RM built over those pages.
+        memory: HostHandle,
+        /// The host GPU VA it was mapped at — equal to the plan's `at`, or the verb
+        /// failed.
         host_va: u64,
     },
     /// [`VerbPlan::Doorbell`]'s reply.
@@ -2042,6 +2129,74 @@ impl Worker {
                 }
                 Ok(VerbReply::Published {
                     host_vas: fresh_vas,
+                    memory,
+                    host_va,
+                })
+            }
+            // ★★★★★ **THE FIRST GUEST BYTE.** Structurally `Publish`'s twin, and every
+            // difference between them is a difference in *whose* pages are underneath.
+            VerbPlan::PinGuestRam {
+                host_vas,
+                grant,
+                at,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                // ⊘ The grant is passed through untouched. Nothing here recomputes its
+                // offset, clamps its length or checks it against anything — the numbers
+                // are the VMM's and the only check available in this process would be a
+                // check of a request against itself.
+                let mapped = match rm.map_guest_ram(*grant) {
+                    Ok(m) => m,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                // ⚠ The unwind sets below name `mapped` NOWHERE, and that is not an
+                // omission: `Orphans` frees RM objects and unmaps GPU VAs, and a
+                // guest-RAM mapping is neither. It is released on this same worker, in
+                // line, before the error leaves — because after that the name is gone and
+                // nobody can.
+                let memory = match rm.describe_guest_ram(mapped) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        let _ = rm.unmap_guest_ram(mapped);
+                        return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
+                    }
+                };
+                let host_va = match rm.map_gpu_va(vas, memory, grant.len(), *at) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        let _ = rm.unmap_guest_ram(mapped);
+                        let mut orphans = vec![memory];
+                        orphans.extend(fresh_vas);
+                        return Err(unwind(rm, orphans, e));
+                    }
+                };
+                // ★★★ `placed_as_asked`. The SAME check `Publish` makes, and it matters
+                // more here: a fabricated buffer relocated by RM is merely unreachable,
+                // while the guest's own ring relocated by RM is a host channel pointed at
+                // whatever else lives at that address. ⊘ Never adopted.
+                if host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, host_va);
+                    let _ = rm.unmap_guest_ram(mapped);
+                    let mut orphans = vec![memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::GuestRamPinned {
+                    host_vas: fresh_vas,
+                    mapped,
                     memory,
                     host_va,
                 })

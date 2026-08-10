@@ -309,7 +309,10 @@ impl GuestRamLayout {
         Self::coalesce(&self.ever, backing)
     }
 
-    fn coalesce(from: &BTreeMap<u64, (BackingId, StatedRun)>, backing: BackingId) -> Vec<StatedRun> {
+    fn coalesce(
+        from: &BTreeMap<u64, (BackingId, StatedRun)>,
+        backing: BackingId,
+    ) -> Vec<StatedRun> {
         let mut out: Vec<StatedRun> = Vec::new();
         for (_, run) in from.values().filter(|(b, _)| *b == backing) {
             match out.last_mut() {
@@ -397,7 +400,11 @@ impl GuestRamLayout {
         };
         if end > run.gpa_end() {
             let available = u64::try_from(run.gpa_end() - u128::from(gpa)).unwrap_or(u64::MAX);
-            return Err(LayoutRefusal::StraddlesRuns { gpa, len, available });
+            return Err(LayoutRefusal::StraddlesRuns {
+                gpa,
+                len,
+                available,
+            });
         }
         Ok(StatedRun {
             gpa,

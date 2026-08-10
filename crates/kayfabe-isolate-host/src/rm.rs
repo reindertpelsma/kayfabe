@@ -2775,6 +2775,36 @@ impl RmBackend for HostRmBackend {
             .ok_or(RmError::GuestRamUnavailable)?;
         plane.release(mapped.region.raw())
     }
+
+    /// ★★★★★ **`OS_DESCRIPTOR` OVER GUEST RAM** — the one call that makes the host GPU
+    /// able to reach the guest's own pages, and it is `alloc_os_descriptor` applied to a
+    /// mapping this isolate did not choose.
+    ///
+    /// ⊘ **`HostOffset::ZERO` and `mapped.len`, and neither is a decision.**
+    /// [`crate::guestram::GuestRamPlane::honour`] mapped exactly the grant's slice, so
+    /// offset zero of that mapping *is* the grant's first byte. Passing anything else here
+    /// would be this process re-deriving a range the VMM already stated — the circularity
+    /// `mode2_isolate_memory_boundary.md` §3 forbids, arriving through a parameter instead
+    /// of through a request.
+    ///
+    /// ⚠ **The pages are now pinned by RM and stay pinned until the returned handle is
+    /// freed.** Releasing the guest-RAM mapping does *not* release them; that asymmetry is
+    /// `alloc_os_descriptor`'s own warning and is why the port carries the two names
+    /// separately in [`kayfabe_isolate::VerbReply::GuestRamPinned`].
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError> {
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        // ★ The closure keeps the `MappedRegion` inside the plane — `with_region`'s whole
+        // shape — so the address never becomes a value this file can hold. `Indirect`
+        // writes it into the ioctl argument and scrubs it back out, one crate down.
+        let raw = plane.with_region(mapped.region.raw(), |region| {
+            self.conn
+                .alloc_os_descriptor(region, HostOffset::ZERO, mapped.len)
+        })??;
+        Ok(self.stamp(raw))
+    }
 }
 
 /// ★ The fabricated arm, shared by the real backend and the loopback fixture.

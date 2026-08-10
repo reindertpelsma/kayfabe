@@ -216,6 +216,21 @@ pub struct Vas {
     /// the double free unrepresentable), so the two live side by side — the same split
     /// G1 made between the placement and the allocation.
     pub blocks: BTreeMap<u64, GpaBlock>,
+    /// ★★★★★ **The guest-RAM pins live in this VAS** — VA → what was built over the
+    /// guest's own pages there (`guest_ram_crossing.md` §5.8).
+    ///
+    /// ## ⊘ It is an IDEMPOTENCE SET before it is a record, and that is not tidiness
+    ///
+    /// A doorbell fires many times on one channel, and the pin is driven from a doorbell.
+    /// Without this map the second doorbell would issue a second `OS_DESCRIPTOR` over the
+    /// same pages and a second **fixed** `map_dma` at an address the first one already
+    /// occupies — and RM answers that with `0x51 NV_ERR_NO_MEMORY`, which is
+    /// indistinguishable from genuine exhaustion. ⇒ The failure this map prevents is not a
+    /// leak, it is a **refusal whose cause cannot be read off it**.
+    ///
+    /// ⊘ Keyed by VA within this `Vas`, exactly like [`Self::blocks`], because a `Vas` is
+    /// `(GpuId, Pdb)` and a pin is only meaningful in the address space it was placed in.
+    pub guest_ram_pins: BTreeMap<u64, GuestRamPin>,
     /// VAs currently bound into `table` by the **RPC map source** (`MapMemoryDma`),
     /// so the sync can idempotently add/remove them without disturbing bindings from
     /// other populate sources (`publish_backing`, CE-PT-write capture).
@@ -306,6 +321,27 @@ impl Vas {
     }
 }
 
+/// ★★★ One live pin of **guest** pages into a host VAS — the record
+/// [`Vas::guest_ram_pins`] holds.
+///
+/// Two names rather than one, and it is the same asymmetry `alloc_os_descriptor` warns
+/// about: `memory` is the RM object that **pins** the pages for the GPU and is undone by
+/// `free`; `mapped` is the isolate's own window onto them and is undone by `munmap`.
+/// Releasing either alone leaves the other, so a record that carried one of them could
+/// not describe a complete teardown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamPin {
+    /// The host GPU VA the pages were placed at — equal to the guest's own VA, or the
+    /// verb that produced this refused (`RmError::PlacementRefused`).
+    pub host_va: u64,
+    /// The `OS_DESCRIPTOR` object RM built over the pages.
+    pub memory: HostHandle,
+    /// The isolate's mapping of the same pages.
+    pub mapped: kayfabe_isolate::GuestRamMapped,
+    /// How many bytes the grant named.
+    pub len: u64,
+}
+
 impl Vas {
     fn new(gpu: GpuId, pdb: Pdb, origin: ResourceKey) -> Self {
         Vas {
@@ -321,6 +357,7 @@ impl Vas {
             // checks at every commit.
             reach: kayfabe_mmu::reach::ReachShadow::new(pdb.0 & !0xfff),
             blocks: BTreeMap::new(),
+            guest_ram_pins: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),
             promote_halves: BTreeMap::new(),

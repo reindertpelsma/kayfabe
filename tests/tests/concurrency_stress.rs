@@ -287,6 +287,15 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
         // numbers the VMM derived, not namespace-scoped values, and two isolates legitimately
         // naming the same guest page is the VMM's decision to make, not this sweep's.
         RmVerb::MapGuestRam { region, .. } | RmVerb::UnmapGuestRam { region, .. } => own(region),
+        // ★★★ The `OS_DESCRIPTOR` over guest RAM names TWO handles and both are checked:
+        // the mapping it was built from and the RM object it minted. The second one is the
+        // one that matters most here — it is a real host object that PINS guest pages for
+        // the GPU, so an object minted in one isolate's namespace and presented on another
+        // is the same escalation the mapping itself would be, arriving one verb later.
+        RmVerb::DescribeGuestRam { region, memory, .. } => {
+            own(region);
+            own(memory);
+        }
     }
 }
 

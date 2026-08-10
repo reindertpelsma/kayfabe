@@ -352,6 +352,11 @@ pub enum CompletionOp {
 pub enum VerbTag {
     /// Allocate + map guest-published backing.
     Publish,
+    /// ★★★ Map + describe + publish the **guest's own** pages at the guest's own VA.
+    /// ⊘ Deliberately a distinct tag from [`VerbTag::Publish`]: the two chains differ in
+    /// whose bytes are underneath, which is the only fact a reader of a trace would want
+    /// from this field.
+    PinGuestRam,
     /// Materialize/schedule a channel and ring it.
     Doorbell,
     /// The Case-1 engine-object chain.
@@ -370,6 +375,7 @@ impl VerbTag {
     pub fn of(plan: &VerbPlan) -> VerbTag {
         match plan {
             VerbPlan::Publish { .. } => VerbTag::Publish,
+            VerbPlan::PinGuestRam { .. } => VerbTag::PinGuestRam,
             VerbPlan::Doorbell { .. } => VerbTag::Doorbell,
             VerbPlan::EngineObject { .. } => VerbTag::EngineObject,
             VerbPlan::Control { .. } => VerbTag::Control,

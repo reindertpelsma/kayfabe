@@ -686,6 +686,23 @@ impl RmBackend for ProxyRmBackend {
             len: mapped.len,
         })
     }
+
+    /// ★★★★★ Ask the child to describe its guest-RAM mapping to RM.
+    ///
+    /// ★ The returned handle is stamped with **this connection's** isolate, exactly as
+    /// [`Self::map_guest_ram`] stamps the mapping's name — a child cannot name another
+    /// isolate's namespace even by lying, and the object this mints is one
+    /// [`kayfabe_isolate::Worker::execute`]'s foreign-handle gate must be able to judge.
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError> {
+        let reply = self.call(Request::DescribeGuestRam {
+            region: mapped.region.raw(),
+            len: mapped.len,
+        })?;
+        match self.lift(reply)? {
+            Reply::Handle(raw) => Ok(HostHandle::new(self.isolate, raw)),
+            _ => Err(RmError::Wedged),
+        }
+    }
 }
 
 // =====================================================================================

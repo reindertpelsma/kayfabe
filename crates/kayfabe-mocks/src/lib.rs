@@ -1306,6 +1306,15 @@ pub enum RmVerb {
         /// Length in bytes.
         len: u64,
     },
+    /// ★★★ Intent: a live guest-RAM mapping was described to RM as a memory object.
+    DescribeGuestRam {
+        /// The mapping that was described.
+        region: HostHandle,
+        /// Length in bytes.
+        len: u64,
+        /// The double's name for the memory object it minted.
+        memory: HostHandle,
+    },
     /// Intent: an engine object allocated on a host channel (the Case-1 forward).
     AllocEngineObject {
         /// The host channel it was allocated on.
@@ -1471,6 +1480,8 @@ pub enum VerbKind {
     MapGuestRam,
     /// [`RmBackend::unmap_guest_ram`].
     UnmapGuestRam,
+    /// [`RmBackend::describe_guest_ram`].
+    DescribeGuestRam,
 }
 
 /// Which verb occurrence a hold latches onto. Every field is optional; `None`
@@ -2482,6 +2493,13 @@ impl RmRecorder {
                 | RmVerb::AllocVaSpace { handle }
                 | RmVerb::AllocSysmem { handle, .. }
                 | RmVerb::AllocChannel { handle, .. } => Some(*handle),
+                // ★★★ An `OS_DESCRIPTOR` over guest RAM is an **acquisition** like any
+                // other: RM built an object, it pins pages, and only a `free` releases it.
+                // ⊘ It is minted by a verb whose name does not begin with `Alloc`, which is
+                // exactly why it had to be named here — `[measured 2026-08-10]` the first
+                // pin test reported the object as DANGLING (core names it, the ledger has no
+                // record) purely because this arm quantified over a naming convention.
+                RmVerb::DescribeGuestRam { memory, .. } => Some(*memory),
                 _ => None,
             };
             if let Some(h) = minted {
@@ -2649,6 +2667,23 @@ impl MockRmBackend {
             // be written without, so it is what the double does unless told otherwise.
             guest_ram: None,
         }
+    }
+
+    /// ★★ A backend outside any pool, for a test that must **wrap** it.
+    ///
+    /// The factory is the ordinary way in and it hands out [`kayfabe_isolate::Worker`]s, out
+    /// of which a backend cannot be taken again. A test that asserts a property of the verb
+    /// **chain** against a deliberately-misbehaving backend has to compose one, and this is
+    /// the seam for that and nothing else — it mints its own namespace, its own cancel seam
+    /// and its own client lock, so it shares state with no pool.
+    ///
+    /// ⊘ Do not reach for this to avoid building a device. A test that could have gone
+    /// through the factory and did not is testing a composition nothing ships.
+    #[must_use]
+    pub fn standalone(id: IsolateId, worker: WorkerId, recorder: SharedRecorder) -> Self {
+        let ns = MockRmBackend::namespace(u64::from(id.proc()) + 1, id.gpu());
+        let cancel = MockCancelSink::new(id, worker, Arc::clone(&recorder));
+        MockRmBackend::new(id, worker, recorder, ns, cancel, ClientLock::new(id))
     }
 
     /// ★ Open this double's guest-RAM door, with `bytes` of it.
@@ -3217,6 +3252,39 @@ impl RmBackend for MockRmBackend {
         });
         Ok(())
     }
+
+    /// ★★★ The double's `OS_DESCRIPTOR` arm — **closed by the same door**
+    /// `map_guest_ram` is, and for the same reason: an isolate that was never granted
+    /// guest RAM has nothing to describe, and answering anyway would let a core-side
+    /// consumer be written against an outcome the majority deployment cannot produce.
+    ///
+    /// ⊘ It models the ALLOCATION, never the pinning. There is no `pin_user_pages` here
+    /// and no page state at all; what a test can check with this is that the chain runs in
+    /// the right order and that the object it mints is namespaced to this isolate.
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError> {
+        let _client = self.gate(VerbKind::DescribeGuestRam)?;
+        if self.guest_ram.is_none() {
+            return Err(RmError::GuestRamUnavailable);
+        }
+        // ⊘ A zero-length mapping is refused rather than described: `alloc_os_descriptor`
+        // encodes `limit = len - 1`, so a zero length is an underflow on the real path and
+        // must not be the one shape the double accepts and hardware does not.
+        if mapped.len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        // ★ `mint`, not a bare handle: the object this verb returns is a REAL RM object on
+        // the production path — `map_gpu_va` will name it and `free` must be able to
+        // destroy it — so it belongs in the namespace every other allocation lands in.
+        // ⊘ The guest-RAM MAPPING deliberately does not (it is not an RM object and
+        // `narrow` must refuse it); this is the other half of that distinction.
+        let memory = self.mint();
+        self.record(RmVerb::DescribeGuestRam {
+            region: mapped.region,
+            len: mapped.len,
+            memory,
+        });
+        Ok(memory)
+    }
 }
 
 /// One pool slot's state (`l1_concurrency.md` §7.2/§7.3).
@@ -3390,6 +3458,10 @@ pub struct MockIsolateFactory {
     /// lock). The lock is taken around the push only. Read it with
     /// [`MockIsolateFactory::spawned`].
     spawned: Mutex<Vec<IsolateId>>,
+    /// ★ How much guest RAM every isolate this factory spawns can see, or `None` — the
+    /// default, and the deployment majority. See [`MockRmBackend::map_guest_ram`] for why
+    /// closed is the default rather than open.
+    guest_ram: Option<u64>,
 }
 
 impl MockIsolateFactory {
@@ -3416,9 +3488,22 @@ impl MockIsolateFactory {
                 recorder: Arc::clone(&recorder),
                 pool_size,
                 spawned: Mutex::new(Vec::new()),
+                guest_ram: None,
             },
             recorder,
         )
+    }
+
+    /// ★ Open the guest-RAM door on every isolate this factory spawns, with `bytes` of it.
+    ///
+    /// A test that calls this is **stating** that the deployment it models launched the VM
+    /// with a shared, fd-backed memory block AND that the operator asked for the crossing —
+    /// both facts, because on the real path both are required and either one missing is a
+    /// refusal by name.
+    #[must_use]
+    pub fn with_guest_ram(mut self, bytes: u64) -> Self {
+        self.guest_ram = Some(bytes);
+        self
     }
 
     /// Every spawned session id, in order (the birth witness).
@@ -3459,14 +3544,20 @@ impl IsolateFactory for MockIsolateFactory {
                 Slot::Idle(Worker::with_cancel(
                     id,
                     w,
-                    Box::new(MockRmBackend::new(
-                        id,
-                        w,
-                        Arc::clone(&self.recorder),
-                        Arc::clone(&ns),
-                        Arc::clone(&cancels[i]),
-                        Arc::clone(&client),
-                    )),
+                    Box::new({
+                        let b = MockRmBackend::new(
+                            id,
+                            w,
+                            Arc::clone(&self.recorder),
+                            Arc::clone(&ns),
+                            Arc::clone(&cancels[i]),
+                            Arc::clone(&client),
+                        );
+                        match self.guest_ram {
+                            Some(bytes) => b.with_guest_ram(bytes),
+                            None => b,
+                        }
+                    }),
                     Arc::clone(&cancels[i]) as Arc<dyn CancelSink>,
                 ))
             })

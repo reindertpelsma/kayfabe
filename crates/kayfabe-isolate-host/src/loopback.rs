@@ -397,6 +397,31 @@ impl RmBackend for LoopbackRm {
         self.verb(false)?;
         plane.release(mapped.region.raw())
     }
+
+    /// ★★ The fixture's arm, and it is honest about **which half it models**.
+    ///
+    /// It checks the one thing that does not need a GPU — that the name really is a live
+    /// guest-RAM mapping *this* isolate made — and then mints an object handle from the
+    /// same table every other alloc here uses. ⊘ **No `OS_DESCRIPTOR` is issued and none
+    /// is modelled**: this double has no RM, so the only fact it can carry forward is that
+    /// the *chain* is wired, which is exactly what `tests/guest_ram.rs` uses it for on a
+    /// box with no card.
+    ///
+    /// ⊘ Do not read a green loopback run as evidence that RM accepted anything. The
+    /// verb's real content — that the driver will `pin_user_pages`-walk a host VA it was
+    /// handed and build a memory object over guest RAM — is unmodellable here and is
+    /// measured only on hardware.
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError> {
+        let Some(plane) = self.guest_ram.clone() else {
+            return Err(RmError::GuestRamUnavailable);
+        };
+        // ★ The liveness check is real, and it is the reason this is not simply
+        // `alloc_sysmem` under another name: a name that no longer maps anything must be
+        // refused here, or the fixture would happily "describe" a released window.
+        plane.with_region(mapped.region.raw(), |_| ())?;
+        let h = self.verb(false)?;
+        Ok(self.stamp(h))
+    }
 }
 
 #[cfg(test)]

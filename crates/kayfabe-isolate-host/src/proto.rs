@@ -221,6 +221,22 @@ pub enum Request {
         /// Length in bytes.
         len: u64,
     },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::describe_guest_ram`] — make an RM
+    /// memory object out of guest pages this isolate already has mapped.
+    ///
+    /// ⊘ **It names a MAPPING, never a range.** There is no offset and no length in this
+    /// frame beyond the mapping's own, because the range was authorized once, by the VMM,
+    /// in the [`Request::MapGuestRam`] that produced `region`. A second pair of numbers
+    /// here would be a range the *isolate* chose, which is
+    /// `mode2_isolate_memory_boundary.md` §3's circularity re-entering through the door
+    /// the previous verb closed.
+    DescribeGuestRam {
+        /// The isolate's raw name for the mapping.
+        region: u64,
+        /// Length in bytes, as the grant stated it. Carried for the reply-shaping check
+        /// only — the child re-reads the mapping's own extent and does not trust this.
+        len: u64,
+    },
 }
 
 /// A request plus the checkout transaction it belongs to.
@@ -631,6 +647,11 @@ impl Envelope {
                 out.extend_from_slice(&region.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
             }
+            Request::DescribeGuestRam { region, len } => {
+                out.push(18);
+                out.extend_from_slice(&region.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
         }
         out
     }
@@ -712,6 +733,10 @@ impl Envelope {
                 prot: c.u8("guest ram prot")?,
             },
             17 => Request::UnmapGuestRam {
+                region: c.u64("guest ram region")?,
+                len: c.u64("guest ram len")?,
+            },
+            18 => Request::DescribeGuestRam {
                 region: c.u64("guest ram region")?,
                 len: c.u64("guest ram len")?,
             },
@@ -1036,6 +1061,10 @@ mod tests {
                 region: 0x4000_0000_0000_0001,
                 len: 0x1_0000,
             },
+            Request::DescribeGuestRam {
+                region: 0x4000_0000_0000_0001,
+                len: 0x1_0000,
+            },
         ]
     }
 
@@ -1065,6 +1094,7 @@ mod tests {
             Request::ExportBacking { .. } => "ExportBacking",
             Request::MapGuestRam { .. } => "MapGuestRam",
             Request::UnmapGuestRam { .. } => "UnmapGuestRam",
+            Request::DescribeGuestRam { .. } => "DescribeGuestRam",
         }
     }
 
@@ -1082,6 +1112,7 @@ mod tests {
                 "AllocVaSpace",
                 "CeCopy",
                 "Control",
+                "DescribeGuestRam",
                 "ExportBacking",
                 "ExportSurface",
                 "FbRead",

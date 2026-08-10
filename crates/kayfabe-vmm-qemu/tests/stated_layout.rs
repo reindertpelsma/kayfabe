@@ -30,9 +30,15 @@ use kayfabe_vmm_qemu::host::{SectionBacking, SectionFacts};
 use kayfabe_vmm_qemu::layout::{BackingId, GuestRamLayout, LayoutRefusal, StatedRun};
 
 /// The block a census would have adopted.
-const RAM: BackingId = BackingId { dev: 0x21, ino: 777 };
+const RAM: BackingId = BackingId {
+    dev: 0x21,
+    ino: 777,
+};
 /// Some other `is_ram` block in the same machine — video RAM is the real-world instance.
-const OTHER: BackingId = BackingId { dev: 0x21, ino: 778 };
+const OTHER: BackingId = BackingId {
+    dev: 0x21,
+    ino: 778,
+};
 
 const GIB: u64 = 1 << 30;
 
@@ -149,7 +155,9 @@ fn nothing_stated_means_everything_refused_with_no_identity_fallback() {
     let l = GuestRamLayout::new();
     for gpa in [0u64, 0x1000, 4 * GIB, 0x7fff_ffff_f000] {
         assert_eq!(
-            l.resolve(RAM, gpa, 0x1000).expect_err("nothing stated").name(),
+            l.resolve(RAM, gpa, 0x1000)
+                .expect_err("nothing stated")
+                .name(),
             "NoStatedRun",
             "gpa {gpa:#x} must be refused, not assumed to be its own file offset"
         );
@@ -176,7 +184,11 @@ fn sections_coalesce_only_when_both_axes_are_contiguous() {
         vec![run(0, 0x3000, 0)],
         "three sections of one block are one run"
     );
-    assert_eq!(both.stated_sections(), 3, "coalescing does not lose sections");
+    assert_eq!(
+        both.stated_sections(),
+        3,
+        "coalescing does not lose sections"
+    );
 
     let mut gpa_only = GuestRamLayout::new();
     gpa_only.state(RAM, run(0, 0x1000, 0));
@@ -223,7 +235,10 @@ fn a_forgotten_run_is_refused_again() {
 fn a_zero_length_request_and_a_wrapping_one_are_both_named() {
     let mut l = GuestRamLayout::new();
     l.state(RAM, run(0, 0x1000, 0));
-    assert_eq!(l.resolve(RAM, 0, 0).expect_err("empty").name(), "EmptyRange");
+    assert_eq!(
+        l.resolve(RAM, 0, 0).expect_err("empty").name(),
+        "EmptyRange"
+    );
     assert_eq!(
         l.resolve(RAM, u64::MAX - 0x10, 0x100)
             .expect_err("wraps")
@@ -245,7 +260,11 @@ fn identity_is_reported_but_a_non_identity_run_resolves_by_its_statement() {
     l.state(RAM, run(0x8000, 0x1000, 0x8000));
     l.state(RAM, run(0x9000, 0x1000, 0x4_0000));
     let runs = l.contiguous_runs(RAM);
-    assert_eq!(runs.len(), 2, "not contiguous in the file, so not coalesced");
+    assert_eq!(
+        runs.len(),
+        2,
+        "not contiguous in the file, so not coalesced"
+    );
     assert!(runs[0].is_identity());
     assert!(!runs[1].is_identity());
     assert_eq!(
@@ -341,12 +360,8 @@ fn the_regions_own_offset_into_the_file_is_added_to_the_sections() {
 #[test]
 fn a_section_with_no_reported_backing_states_nothing() {
     let (m, host, _slots) = common::machine();
-    m.region_add(host.mint_foreign(
-        common::FOREIGN_RAM,
-        4 * common::page(),
-        common::ram_facts(),
-    ))
-    .expect("a reported RAM section");
+    m.region_add(host.mint_foreign(common::FOREIGN_RAM, 4 * common::page(), common::ram_facts()))
+        .expect("a reported RAM section");
 
     let id = BackingId::new(0x21, 4244);
     assert!(m.stated_guest_ram(id).is_empty());
@@ -444,12 +459,8 @@ fn the_section_funnel_counts_all_three_stages_separately() {
     m.region_add(host.mint_foreign(0x2000_0000, common::page(), SectionFacts::device()))
         .expect("a device section");
     // RAM with no backing: reported, RAM, unbacked.
-    m.region_add(host.mint_foreign(
-        common::FOREIGN_RAM,
-        common::page(),
-        common::ram_facts(),
-    ))
-    .expect("unbacked RAM");
+    m.region_add(host.mint_foreign(common::FOREIGN_RAM, common::page(), common::ram_facts()))
+        .expect("unbacked RAM");
     // RAM with a backing: all three.
     m.region_add(host.mint_backed(
         common::FOREIGN_RAM + common::page(),
@@ -465,4 +476,88 @@ fn the_section_funnel_counts_all_three_stages_separately() {
 
     let c = m.layout_census();
     assert_eq!((c.seen, c.ram, c.backed, c.forgotten), (3, 2, 1, 0));
+}
+
+// =====================================================================================
+// ★★★★★ §5.8 — THE DATA-PLANE HANDLE ASKS THE SAME TABLE, AND THE NEGATIVE CONTROL FIRES
+// =====================================================================================
+
+/// ★★★★★ **`QemuVmm` answers the layout identically to `QemuMachine`, and a GPA outside
+/// every stated run is REFUSED BY NAME through it.**
+///
+/// # Why the accessor exists at all, and why that needed a test rather than a comment
+///
+/// The production caller of the guest-RAM pin sits on the **doorbell** path, which holds a
+/// [`QemuVmm`] and does not hold a [`QemuMachine`]. Giving it the layout could have been
+/// done two ways: carry a second copy of the table to where it is needed, or reach the one
+/// that exists. This project has measured **two projections of one fact disagreeing three
+/// times**, so the second way was taken — and this test is what makes "it is the same
+/// table" a checked statement instead of an assertion about `Arc`s.
+///
+/// # ★★★ And the negative control, which is the half a reader should look at first
+///
+/// The pin's whole safety argument is that a guest-physical address the hypervisor never
+/// stated is refused rather than assumed to be its own file offset. That refusal is
+/// asserted here, **through the handle the production caller actually uses** — because a
+/// control taken through a different accessor would be a control over different code.
+#[test]
+fn the_vmm_handle_answers_the_same_layout_and_refuses_outside_it_by_name() {
+    let (m, host, _slots) = common::machine();
+    let backing = SectionBacking {
+        dev: 0x21,
+        ino: 4244,
+        file_offset_of_region: 0x20_0000,
+    };
+    let id = BackingId::new(backing.dev, backing.ino);
+    m.region_add(host.mint_backed(
+        common::FOREIGN_RAM,
+        4 * common::page(),
+        common::ram_facts(),
+        backing,
+    ))
+    .expect("a reported RAM section");
+
+    let vmm = m.vmm();
+    assert_eq!(
+        vmm.stated_guest_ram(id),
+        m.stated_guest_ram(id),
+        "one table, two accessors — not two tables"
+    );
+    let inside = common::FOREIGN_RAM + common::page();
+    assert_eq!(
+        vmm.resolve_guest_ram(id, inside, common::page()),
+        m.resolve_guest_ram(id, inside, common::page()),
+        "and the resolver agrees byte for byte, which is the property the doorbell path \
+         depends on"
+    );
+    assert_eq!(
+        vmm.resolve_guest_ram(id, inside, common::page())
+            .expect("inside")
+            .file_offset,
+        0x20_0000 + common::page(),
+        "⊘ the offset is the FILE's, region base included — not the guest-physical address"
+    );
+
+    // ★★★ THE NEGATIVE CONTROL, derived exactly as the production caller derives it: one
+    // page past the top of the highest stated run, so it is outside by construction on any
+    // machine and any `-m`.
+    let top = vmm
+        .stated_guest_ram(id)
+        .iter()
+        .map(|r| r.gpa_end())
+        .max()
+        .expect("a run was stated");
+    let outside = u64::try_from(top).expect("fits") + common::page();
+    let refused = vmm
+        .resolve_guest_ram(id, outside, common::page())
+        .expect_err(
+            "★ a GPA in no stated run must be REFUSED, never clamped and never \
+                     assumed to be its own file offset",
+        );
+    assert_eq!(
+        refused.name(),
+        "NoStatedRun",
+        "and refused BY NAME — `{refused:?}`; a bare `None` here would leave the caller \
+         unable to tell 'nothing is here' from 'this is video RAM'"
+    );
 }

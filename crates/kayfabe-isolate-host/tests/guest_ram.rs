@@ -423,3 +423,93 @@ fn releasing_a_name_that_was_never_minted_is_refused() {
     };
     assert!(with_worker(&mut iso, |w| w.unmap_guest_ram(bogus)).is_err());
 }
+
+// =====================================================================================
+// ★★★★★ §5.8 — THE DESCRIBE VERB, ACROSS A REAL PROCESS BOUNDARY
+// =====================================================================================
+
+/// ★★★★★ **`describe_guest_ram` crosses the sandbox**, on the same fixed-descriptor grant,
+/// and names the mapping rather than a range.
+///
+/// # What this establishes, and — read this first — what it does NOT
+///
+/// It establishes the **transport**: a new wire verb encodes, decodes, dispatches in a real
+/// child process, and comes back stamped with the namespace *we* asked on. That is the half
+/// that can be measured without a GPU.
+///
+/// ⊘ It establishes **nothing** about `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`. The loopback
+/// backend has no RM: it checks the mapping is live and mints a handle from the same table
+/// every other allocation comes from, and says so in its own docs. Whether a real driver
+/// will `pin_user_pages`-walk a host VA over a guest `memfd` is one ioctl on one real
+/// driver, and it is measured in a boot log.
+///
+/// ★ The **order** is the assertion that is worth something here: a handle minted for a
+/// mapping that was already given back would be an object pinning pages nobody can name, so
+/// the release-then-describe arm is checked too.
+#[test]
+fn a_live_mapping_can_be_described_across_the_sandbox_and_a_released_one_cannot() {
+    let ram = guest_ram();
+    let page = HostPageSize::query().bytes();
+    let id = IsolateId::new(9, GpuId(0));
+    let mut iso = isolate_with_ram(id, dup(&ram), ram_bytes());
+
+    let mapped = with_worker(&mut iso, |w| {
+        w.map_guest_ram(GuestRamGrant::originated_by_the_vmm(
+            page,
+            page,
+            Prot::ReadWrite,
+        ))
+    })
+    .expect("the grant is honoured");
+
+    let memory = with_worker(&mut iso, |w| w.with_rm(|rm| rm.describe_guest_ram(mapped)))
+        .expect("the mapping is described");
+    assert_eq!(
+        memory.isolate(),
+        id,
+        "★ stamped from the connection we asked on, never from the wire"
+    );
+    assert_ne!(
+        memory, mapped.region,
+        "★★ the OBJECT and the MAPPING are different names for different things — one is \
+         freed, the other is unmapped, and a design that returned the same value could not \
+         express a teardown that does both"
+    );
+    assert!(
+        u32::try_from(memory.raw()).is_ok(),
+        "⊘ an RM object handle must fit RM's 32 bits — the guest-RAM MAPPING deliberately \
+         does not (`GUEST_RAM_NAME_TAG`), so `narrow` refuses it where an object is \
+         expected. If this ever failed, that gate would start refusing real objects"
+    );
+
+    // ★ Give the mapping back, then ask again. A handle minted over pages nobody is holding
+    // would be an RM object pinning memory with no name on this side.
+    with_worker(&mut iso, |w| w.unmap_guest_ram(mapped)).expect("released");
+    let after = with_worker(&mut iso, |w| w.with_rm(|rm| rm.describe_guest_ram(mapped)));
+    assert!(
+        after.is_err(),
+        "★ describing a mapping that is no longer live is a REFUSAL, not a fresh object"
+    );
+}
+
+/// ⊘ **The deployment refusal reaches the new verb too** — an isolate that was never
+/// granted guest RAM cannot describe any, and it says so by name across the boundary.
+///
+/// ⚠ Asserted separately rather than assumed from `map_guest_ram`'s own refusal: the two
+/// are different wire verbs with different dispatch arms, and "the door is shut" has to be
+/// true of every door.
+#[test]
+fn an_isolate_with_no_guest_ram_cannot_describe_any() {
+    let mut iso = isolate_without_ram(IsolateId::new(10, GpuId(0)));
+    let bogus = kayfabe_isolate::GuestRamMapped {
+        region: kayfabe_isolate::HostHandle::new(IsolateId::new(10, GpuId(0)), 1 << 62 | 1),
+        len: HostPageSize::query().bytes(),
+    };
+    let e = with_worker(&mut iso, |w| w.with_rm(|rm| rm.describe_guest_ram(bogus)))
+        .expect_err("refused");
+    assert_eq!(
+        e,
+        kayfabe_isolate::RmError::GuestRamUnavailable,
+        "a DEPLOYMENT fact, refused by its own name rather than as a host resource condition"
+    );
+}

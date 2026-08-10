@@ -1231,10 +1231,7 @@ pub unsafe extern "C" fn kayfabe_shim_regs_attach_ram(regs: *mut c_void, shim: *
 /// `regs` must be empty or one [`kayfabe_shim_regs_create`] returned and not yet destroyed;
 /// `shim` must be empty or one [`kayfabe_shim_realize`] returned and not yet unrealized.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kayfabe_shim_regs_report_ram_layout(
-    regs: *mut c_void,
-    shim: *mut c_void,
-) {
+pub unsafe extern "C" fn kayfabe_shim_regs_report_ram_layout(regs: *mut c_void, shim: *mut c_void) {
     if let (Some(regs), Some(shim)) = (borrow_regs(regs), borrow(shim)) {
         regs.report_stated_guest_ram_at(shim, "END OF RUN");
     }

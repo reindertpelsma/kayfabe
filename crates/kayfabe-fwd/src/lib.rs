@@ -82,8 +82,8 @@ use kayfabe_completion::{CompletionError, OsEventRef, PostBatch};
 use kayfabe_core::gpu::{Channel, Gpu, Proc, Spine};
 use kayfabe_core::{ChanId, ProcAnchor, ProcId};
 use kayfabe_isolate::{
-    CancelReason, ChannelHandles, HostHandle, IsolateId, RmError, VerbPlan, VerbReply, Worker,
-    WorkerId,
+    CancelReason, ChannelHandles, GuestRamGrant, HostHandle, IsolateId, RmError, VerbPlan,
+    VerbReply, Worker, WorkerId,
 };
 #[doc(inline)]
 pub use kayfabe_isolate::{CeExecutor, CeSource, CeSubCopy};
@@ -269,6 +269,36 @@ pub enum FwdFault {
         chan: ChanId,
         /// The PDB of the declared-but-unpublished `Vas`.
         pdb: Pdb,
+    },
+    /// ★★★ **A guest-RAM pin was asked for at a VA whose backing is not guest RAM.**
+    ///
+    /// The VA resolves — this is not a miss — and its binding's aperture is something
+    /// other than sysmem: the guest's own page tables say these bytes live in the
+    /// framebuffer, in a peer's memory, or in fabricated space. Pinning the *hypervisor's*
+    /// RAM at that address would publish a range of guest memory under an address the
+    /// guest uses for something else entirely.
+    ///
+    /// ⊘ **Loud, and never downgraded to a skip.** The caller derived a guest-physical
+    /// address from this same table before it asked; if the aperture disagrees with what
+    /// it derived, the two readings are of different things and neither may be used.
+    GuestRamNotSysmem {
+        /// The VA that was to be pinned.
+        va: GpuVa,
+        /// The aperture its binding actually names.
+        aperture: Aperture,
+    },
+    /// ★★★ **A guest-RAM pin was asked for at a VA that is already HOST-PUBLISHED.**
+    ///
+    /// [`publish_backing`] has minted host sysmem at this address and mapped it there.
+    /// Pinning the guest's own pages on top would demand the same host GPU VA twice, and
+    /// RM answers a colliding fixed map with `0x51 NV_ERR_NO_MEMORY` — a status that
+    /// cannot be told apart from real exhaustion. ⇒ Refused **here**, where the cause is
+    /// still legible, rather than at the ioctl where it is not.
+    GuestRamAddressTaken {
+        /// The VA that was to be pinned.
+        va: GpuVa,
+        /// The host GPU VA the existing publication occupies.
+        host_va: u64,
     },
     /// ★ A copy-engine request partitioned into more sub-copies than [`MAX_CE_SPANS`]
     /// (`#102` stage C2). Guest-influenced on both axes — the request's length and the
@@ -1248,6 +1278,278 @@ pub fn publish_backing(
     let planned = plan_publish(proc, gpu, pdb, va, len)?;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_publish(proc, &planned.plan, reply)
+    })
+}
+
+/// ★★★★★ **What one guest-RAM pin produced** — [`pin_guest_ram`]'s answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamPinned {
+    /// The host GPU VA the guest's pages were placed at. Equal to the VA asked for, or
+    /// the verb refused with [`kayfabe_isolate::RmError::PlacementRefused`] and this
+    /// value never existed.
+    pub host_va: u64,
+    /// The `OS_DESCRIPTOR` object RM built over the guest pages.
+    pub memory: HostHandle,
+    /// ★★★ Whether this call did the work, or found it already done.
+    ///
+    /// ⊘ Reported rather than hidden, and it is the field a caller on a **doorbell** needs
+    /// most: the pin is idempotent and a doorbell repeats, so a caller that could not tell
+    /// "pinned now" from "was already pinned" would log a first-time event on every ring
+    /// and a reader would conclude the descriptor was being re-created.
+    pub already: bool,
+}
+
+/// The ID-shaped hints [`commit_pin_guest_ram`] re-validates against. Identities only.
+///
+/// ⊘ **The grant is carried whole and is never recomputed here.** It is the VMM's
+/// statement; the core's job is to route it, not to check it. A core that re-derived an
+/// offset would need a layout, and the only layout it could build is one derived from the
+/// guest-physical address — which is `kayfabe_vmm_qemu::layout`'s `-m 8G` bug, arrived at
+/// from the other side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PinGuestRamPlan {
+    /// The owning proc.
+    pub proc: ProcId,
+    /// The target GPU (isolate key).
+    pub gpu: GpuId,
+    /// The `Vas`'s PDB.
+    pub pdb: Pdb,
+    /// The guest VA the pages must be addressable at.
+    pub va: GpuVa,
+    /// The VMM's grant.
+    pub grant: GuestRamGrant,
+    /// The `Vas`'s host VAS as observed at plan time.
+    pub host_vas: Option<HostHandle>,
+    /// ★ The pin this plan found already live, if any — the idempotent replay.
+    pub existing: Option<kayfabe_core::gpu::GuestRamPin>,
+}
+
+/// ★★★★★ **Pin `[va, va+grant.len())`'s GUEST pages into the host VAS at `va`.**
+///
+/// `guest_ram_crossing.md` §5.8, step 3. The difference from [`publish_backing`] is the
+/// whole point and is one word: the bytes are the **guest's**. `publish_backing` mints
+/// host sysmem and maps it at the guest's address, which is right for a range the guest
+/// has never written and wrong for a ring the guest is polling.
+///
+/// # Errors
+/// Every arm of [`FwdFault`] the plan can raise, plus whatever the host refused.
+pub fn pin_guest_ram(
+    proc: &mut Proc,
+    gpu: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+    grant: GuestRamGrant,
+) -> Result<GuestRamPinned, FwdFault> {
+    let planned = plan_pin_guest_ram(proc, gpu, pdb, va, grant)?;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_pin_guest_ram(proc, &planned.plan, reply)
+    })
+}
+
+/// PLAN (R1): decide the pin's host work from core state. A pure `&Proc` read.
+///
+/// ## What it checks, and the one thing it deliberately does NOT
+///
+/// It checks facts about **this address space**: that the VA resolves at all, that its
+/// binding is sysmem, that nothing is already host-published there, and whether a pin is
+/// already live. ⊘ It does **not** check the grant's offset or length against anything.
+/// There is nothing in the core to check them against — the layout that produced them is
+/// the hypervisor's — and a check invented here would be a check of a request against
+/// itself, which is [an echo is unverifiable by its reply].
+///
+/// # Errors
+/// [`FwdFault::RetiredProc`], [`FwdFault::SystemDataPlane`], [`FwdFault::UnknownPdb`],
+/// [`FwdFault::NoTarget`], [`FwdFault::Address`] (a miss),
+/// [`FwdFault::GuestRamNotSysmem`], [`FwdFault::GuestRamAddressTaken`], or the isolate
+/// deferral.
+pub fn plan_pin_guest_ram(
+    proc: &Proc,
+    gpu: GpuId,
+    pdb: Pdb,
+    va: GpuVa,
+    grant: GuestRamGrant,
+) -> Result<Planned<PinGuestRamPlan>, FwdFault> {
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(proc.id));
+    }
+    // ★ §12.26's system-plane rule, for the same reason `plan_publish` states it: the
+    // system proc's isolate exists to serve the device's own bring-up and never the data
+    // plane, and a guest-RAM pin is as data-plane as it gets.
+    if proc.id == Gpu::SYSTEM_PROC {
+        return Err(FwdFault::SystemDataPlane);
+    }
+    let pid = proc.id;
+    let vas = proc
+        .vases
+        .get(&(gpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
+    if !proc.isolates.contains_key(&gpu) {
+        return Err(missing_isolate(proc, gpu));
+    }
+    // ★★★ THE IDEMPOTENCE ARM, and it is FIRST among the address checks on purpose: a
+    // live pin makes every check below true-by-construction, so asking them first would
+    // refuse a replay for a condition the replay itself created.
+    if let Some(existing) = vas.guest_ram_pins.get(&va.0).copied() {
+        return Ok(Planned {
+            plan: PinGuestRamPlan {
+                proc: pid,
+                gpu,
+                pdb,
+                va,
+                grant,
+                host_vas: vas.host_vas,
+                existing: Some(existing),
+            },
+            // ⊘ No verbs at all. `verb_op` commits straight through and never touches the
+            // isolate pool — the same shape an idempotent engine-object re-send takes.
+            verbs: None,
+        });
+    }
+    // ★★★ The guest's own page tables are the authority on what lives at `va`, and this
+    // is where their answer is consulted. MISS = FAULT: an unbound VA is refused rather
+    // than pinned speculatively.
+    let (binding, _off) = vas.table.resolve(pdb, va)?;
+    match binding.aperture {
+        Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {}
+        aperture => return Err(FwdFault::GuestRamNotSysmem { va, aperture }),
+    }
+    if let Some(host_va) = binding.host_va() {
+        return Err(FwdFault::GuestRamAddressTaken { va, host_va });
+    }
+    let host_vas = vas.host_vas;
+    Ok(Planned {
+        plan: PinGuestRamPlan {
+            proc: pid,
+            gpu,
+            pdb,
+            va,
+            grant,
+            host_vas,
+            existing: None,
+        },
+        verbs: Some(VerbPlan::PinGuestRam {
+            host_vas,
+            grant,
+            at: va,
+        }),
+    })
+}
+
+/// COMMIT (R5): re-resolve through IDs and record the pin, or refuse and hand back what
+/// could not be adopted.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::GuestRamPinned`] its plan asked for.
+///
+/// # Errors
+/// [`Refusal`] carrying [`Stale`] when the proc or the `Vas` moved under the chain.
+pub fn commit_pin_guest_ram(
+    proc: &mut Proc,
+    plan: &PinGuestRamPlan,
+    reply: Option<VerbReply>,
+) -> Result<GuestRamPinned, Refusal> {
+    // ★ The replay arm. No verbs ran, so there is nothing to adopt and nothing to orphan.
+    if let Some(existing) = plan.existing {
+        let None = reply else {
+            return wrong_reply("pin_guest_ram replay");
+        };
+        return Ok(GuestRamPinned {
+            host_va: existing.host_va,
+            memory: existing.memory,
+            already: true,
+        });
+    }
+    let Some(VerbReply::GuestRamPinned {
+        host_vas: fresh_vas,
+        mapped,
+        memory,
+        host_va,
+    }) = reply
+    else {
+        return wrong_reply("pin_guest_ram");
+    };
+    // ⚠ `mapped` is NOT in this list, and cannot be: `Orphans` frees RM objects and
+    // unmaps GPU VAs. The isolate's own window onto the guest pages is released when the
+    // isolate dies, which `GuestRamPlane`'s ownership makes a destructor rather than a
+    // step — see that type. So a refused commit leaks a mapping until proc teardown and
+    // **nothing else**, which is stated here rather than left for a reader to derive.
+    let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
+        unmap: vec![(vas_used, host_va)],
+        free: with_vas.into_iter().chain([memory]).collect(),
+    };
+    let vas_used = fresh_vas
+        .or(plan.host_vas)
+        .expect("chain produced a host VAS");
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Proc(plan.proc)),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    }
+    let pid = proc.id;
+    let isolate = IsolateId::new(pid.0, plan.gpu);
+    if !memory.belongs_to(isolate) {
+        return Err(Refusal {
+            fault: FwdFault::ForeignBacking { isolate, memory },
+            // Only what is OURS goes on the release list — the same judgement
+            // `commit_publish` makes about a foreign object.
+            orphans: Orphans::default(),
+            retry: false,
+        });
+    }
+    let Some(vas) = proc.vases.get_mut(&(plan.gpu, plan.pdb)) else {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Vas {
+                gpu: plan.gpu,
+                pdb: plan.pdb,
+            }),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    };
+    // ★★ R5's rebind check, in the shape `commit_publish` uses: a sibling thread may have
+    // materialized a host VAS in the gap, and adopting ours over theirs would orphan a
+    // VAS the address table already names.
+    if let Some(theirs) = vas.host_vas
+        && let Some(ours) = fresh_vas
+        && theirs != ours
+    {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Rebound),
+            orphans: orphans(ours, fresh_vas),
+            retry: true,
+        });
+    }
+    // ★ And the same for the pin itself: a sibling may have pinned this VA in the gap.
+    // Refuse rather than overwrite — the map entry is the only record of the objects, so
+    // replacing one silently would leak the pair it named.
+    if let Some(theirs) = vas.guest_ram_pins.get(&plan.va.0).copied() {
+        return Err(Refusal {
+            fault: FwdFault::GuestRamAddressTaken {
+                va: plan.va,
+                host_va: theirs.host_va,
+            },
+            orphans: orphans(vas_used, fresh_vas),
+            retry: false,
+        });
+    }
+    if let Some(h) = fresh_vas {
+        vas.host_vas = Some(h);
+    }
+    vas.guest_ram_pins.insert(
+        plan.va.0,
+        kayfabe_core::gpu::GuestRamPin {
+            host_va,
+            memory,
+            mapped,
+            len: plan.grant.len(),
+        },
+    );
+    Ok(GuestRamPinned {
+        host_va,
+        memory,
+        already: false,
     })
 }
 

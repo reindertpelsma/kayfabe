@@ -143,6 +143,7 @@ pub fn reachable_objects(
         for (_va, _len, binding) in vas.table.iter() {
             live.extend(binding.host_memory());
         }
+        live.extend(guest_ram_pins(vas).map(|p| p.memory));
     }
     for chan in proc.channels.values() {
         live.extend(chan.host_channel);
@@ -182,8 +183,29 @@ pub fn reachable_memory(
         for (_va, _len, binding) in vas.table.iter() {
             live.extend(binding.host_memory());
         }
+        live.extend(guest_ram_pins(vas).map(|p| p.memory));
     }
     live
+}
+
+/// ★★★ **The guest-RAM pins are core-reachable objects too, and the harness had to be
+/// TOLD** (`guest_ram_crossing.md` §5.8).
+///
+/// ⚠ `[measured 2026-08-10]` the first green `pin_guest_ram` test failed its **teardown
+/// post-condition**, not its own assertions: `★★ UNACCOUNTED … 1 mapping(s) are OUTSTANDING
+/// and NOTHING can name them`. The record was in core state the whole time
+/// ([`kayfabe_core::gpu::Vas::guest_ram_pins`]); these three enumerations simply did not
+/// read it, because every host mapping this port had ever made lived on a
+/// [`kayfabe_mmu::Binding`] and they were written to walk the address table.
+///
+/// ★ That is the harness working, not failing: an object nothing enumerates is exactly an
+/// object nothing will free, and the ledger said so on the first run rather than on some
+/// later one. ⊘ The wrong fix would have been a `ResidueClaim` — declaring the leak instead
+/// of accounting for it.
+fn guest_ram_pins(
+    vas: &kayfabe_core::gpu::Vas,
+) -> impl Iterator<Item = &kayfabe_core::gpu::GuestRamPin> {
+    vas.guest_ram_pins.values()
 }
 
 /// The **channel-shaped** half of [`reachable_objects`] — see [`reachable_memory`] for the
@@ -218,6 +240,10 @@ pub fn reachable_maps(
                 live.insert((host_vas, host_va));
             }
         }
+        // ★★★ A pinned guest range is mapped in this `Vas`'s host VAS exactly like a
+        // published one — the difference is whose bytes are under it, which is not a fact
+        // the mapping ledger keys on.
+        live.extend(guest_ram_pins(vas).map(|p| (host_vas, p.host_va)));
     }
     live
 }

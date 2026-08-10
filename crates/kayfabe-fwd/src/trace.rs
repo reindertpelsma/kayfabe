@@ -46,6 +46,8 @@ impl Faulted for FwdFault {
             FwdFault::IsolateRetired { .. } => FaultTag("FwdFault::IsolateRetired"),
             FwdFault::IsolatePending { .. } => FaultTag("FwdFault::IsolatePending"),
             FwdFault::NoHostVas { .. } => FaultTag("FwdFault::NoHostVas"),
+            FwdFault::GuestRamNotSysmem { .. } => FaultTag("FwdFault::GuestRamNotSysmem"),
+            FwdFault::GuestRamAddressTaken { .. } => FaultTag("FwdFault::GuestRamAddressTaken"),
             FwdFault::CeTooFragmented { .. } => FaultTag("FwdFault::CeTooFragmented"),
             FwdFault::UnknownPdb { .. } => FaultTag("FwdFault::UnknownPdb"),
             FwdFault::NoTarget { .. } => FaultTag("FwdFault::NoTarget"),

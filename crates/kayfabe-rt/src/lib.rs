@@ -85,6 +85,11 @@ pub use kayfabe_arch::ids::ClassId;
 /// id is API hygiene, not a new edge: it is a plain newtype over an integer and carries no
 /// architecture with it.
 pub use kayfabe_arch::ids::GpuId;
+/// ★ §5.8 — the address type [`device::SharedDevice::pin_guest_ram`] takes, re-exported for
+/// the same reason and under the same rule: the shim must be able to NAME a guest VA
+/// without taking an edge to `kayfabe-arch`, which its own manifest forbids. ⊘ A newtype
+/// over an integer; it carries no architecture.
+pub use kayfabe_arch::ids::GpuVa;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};
