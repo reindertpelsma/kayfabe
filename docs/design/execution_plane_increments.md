@@ -14273,10 +14273,17 @@ fall-through.
   on every graph change; all three `PT-DECODE` lines re-learn the same 30 pages. Attribution
   is **not monotone across doorbells**, and the requeue is what makes that survivable. Noted,
   not changed.
-- ⊘ **`w208`'s own cited evidence was UNTRACKED** — `traces/guest_boots/run_w208_797a6bc_*`
-  existed only in the bench's working tree and is in no commit. It is committed here beside
-  `w209`'s. ★ `boot_evidence_must_be_asserted_into_the_repo`, one rung after the rung that
-  wrote the rule.
+- ⊘⊘ **I CLAIMED `w208`'s EVIDENCE WAS UNTRACKED. IT IS NOT, AND THE CLAIM IS RETRACTED
+  IN THE COMMIT THAT MADE IT.** `git status` on the bench showed
+  `?? traces/guest_boots/run_w208_797a6bc_*`, and I read that as *"the cited evidence is in
+  no commit"* — the `boot_evidence_must_be_asserted_into_the_repo` shape, apparently one
+  rung after the rung that wrote it. It is false: `git show --stat 01b5321` lists all eight
+  files, byte-identical to the bench's copies. ⇒ **the bench was simply checked out at
+  `797a6bc`, the commit *before* `01b5321` added them**, so at that tree they are untracked
+  *by definition*. ★★★ **`??` is a statement about ONE checkout, never about the
+  repository** — and the instrument that answers the question I actually asked is
+  `git log -- <path>`, which I ran only after the claim was written. A working-tree status
+  cannot see a commit that is not checked out.
 
 ### 16.74.8 ★ THE NEXT INCREMENT, named
 
