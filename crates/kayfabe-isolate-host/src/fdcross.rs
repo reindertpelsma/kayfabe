@@ -267,7 +267,25 @@ pub fn read_frame_with_fds(
     let mut len_bytes = [0u8; 4];
     let mut filled = 0;
     while filled < 4 {
-        let n = recv_with_fds(sock, &mut len_bytes[filled..], fds, max_fds)?;
+        let n = match recv_with_fds(sock, &mut len_bytes[filled..], fds, max_fds) {
+            Ok(n) => n,
+            // ★★ THE INTERRUPT RULE, position-dependent — the same rule
+            // [`crate::proto::read_exact_or_eof`] states, and it has to be **restated**
+            // here rather than inherited, because these two readers share no code.
+            //
+            // At a frame BOUNDARY (`filled == 0`) an interrupt is a cancel that landed and
+            // must be reported: that is the whole §7.2 mechanism, and the worker loop
+            // spends it by looping.
+            //
+            // MID-FRAME it is a stray signal that must be RETRIED, because abandoning half
+            // a frame desynchronises the channel permanently. ⚠ And here it is worse than
+            // in the plain reader: the descriptors have **already arrived and been
+            // adopted** into `fds` by the recvmsg that got the first bytes, so a
+            // mid-frame abandon closes real descriptors and strands the frame that named
+            // them.
+            Err(e) if filled > 0 && e.is_interrupted() => continue,
+            Err(e) => return Err(e.into()),
+        };
         if n == 0 {
             if filled == 0 {
                 return Ok(false);
@@ -292,7 +310,13 @@ pub fn read_frame_with_fds(
     // enforced.
     let mut filled = 0;
     while filled < len {
-        let n = recv_with_fds(sock, &mut buf[filled..], fds, max_fds)?;
+        // Past the length word every byte is mid-frame by definition, so the retry arm has
+        // no `filled > 0` guard here — a frame boundary cannot occur inside a body.
+        let n = match recv_with_fds(sock, &mut buf[filled..], fds, max_fds) {
+            Ok(n) => n,
+            Err(e) if e.is_interrupted() => continue,
+            Err(e) => return Err(e.into()),
+        };
         if n == 0 {
             return Err(FdFrameError::Incomplete {
                 what: "between a frame's length and its body",

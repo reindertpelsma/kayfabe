@@ -219,6 +219,32 @@ pub enum RawError {
     },
 }
 
+impl RawError {
+    /// Whether this is the **interrupted-syscall** refusal (`EINTR`).
+    ///
+    /// ★★ It lives here rather than at the call site because `errno` numbers are exactly
+    /// what this crate exists to keep in one place — a caller outside it would have to take
+    /// a `libc` dependency to ask, which is how a raw-surface boundary erodes one constant
+    /// at a time.
+    ///
+    /// ⊘ And it is matched on the **errno**, never on the `call` string: every syscall in
+    /// this crate reports through [`crate::error::last_syscall_error`] with a fixed name,
+    /// and a predicate keyed on that name would keep compiling — and silently stop
+    /// matching — the day the name is reworded. Callers need this to be true rather than
+    /// merely plausible: `EINTR` is how a landed cancel is distinguished from a dead peer,
+    /// and both sides of the isolate boundary act on the difference.
+    #[must_use]
+    pub fn is_interrupted(&self) -> bool {
+        matches!(
+            self,
+            RawError::Syscall {
+                errno: Some(errno),
+                ..
+            } if *errno == libc::EINTR
+        )
+    }
+}
+
 impl fmt::Display for RawError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

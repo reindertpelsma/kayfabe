@@ -665,6 +665,74 @@ fn a_peer_that_dies_mid_frame_is_distinguished_from_a_clean_shutdown() {
     );
 }
 
+/// ★★★ THE INTERRUPT RULE, on the fd-carrying reader: a stray signal **mid-frame** is
+/// retried, and the descriptors that arrived with the length word survive it.
+///
+/// This is the property `proto::read_exact_or_eof` states for the plain reader, and the two
+/// readers share no code — so it has to be asserted here or it is only true over there. The
+/// fd-carrying case is strictly worse than the plain one: the descriptors are **already
+/// adopted** by the `recvmsg` that got the length word, so abandoning mid-frame closes real
+/// descriptors *and* desynchronises the channel, and the caller cannot tell that from a
+/// peer that never sent them.
+///
+/// ⚠ The bite that makes this non-vacuous is the ordering: the signal is delivered while the
+/// reader is blocked with `filled > 0` (the body has been promised but not sent), which is
+/// exactly the window the naive reader would have failed in. The pass condition is not
+/// "no error" — it is that the frame **completes with its descriptor**, which a reader that
+/// propagated `EINTR` cannot do.
+#[test]
+fn a_stray_signal_mid_frame_is_retried_and_the_descriptor_survives_it() {
+    let _fd_table = serialized();
+    kayfabe_linux_raw::install_break_handler().expect("a handler without SA_RESTART");
+    let (file, _path) = a_regular_file("mid-frame-eintr");
+    let (vmm, isolate) = wire();
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        tx.send(kayfabe_linux_raw::current_thread_id())
+            .expect("publish the thread id");
+        let (mut body, mut fds) = (Vec::new(), Vec::new());
+        let done = read_frame_with_fds(vmm.as_fd(), &mut body, &mut fds, 1);
+        (done, body, fds)
+    });
+    let reader_tid = rx.recv().expect("the reader's thread id");
+
+    // Length word + the descriptor, and NOT the body. The reader is now blocked mid-frame
+    // holding an adopted descriptor.
+    kayfabe_linux_raw::send_with_fds(isolate.as_fd(), &4u32.to_le_bytes(), &[file.as_fd()])
+        .expect("length word plus one descriptor");
+
+    // Give the reader time to reach the blocking body read, then interrupt it there. A
+    // signal that lands before the read merely returns EINTR from a call that had not
+    // started, which would make this test pass for the wrong reason — so it is retried
+    // until the frame is seen to complete rather than fired once and hoped about.
+    for _ in 0..50 {
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        kayfabe_linux_raw::interrupt_thread(reader_tid).expect("deliver the break signal");
+    }
+
+    // Now finish the frame. A reader that abandoned on EINTR has already returned an error
+    // and dropped its end, so this write gets `EPIPE` — which is a **symptom**, not the
+    // finding, so it is tolerated here and the verdict is left to the assertions below.
+    // (Bite-checked: with the retry arm removed this write fails with `BrokenPipe`, and
+    // letting that panic would have reported the wrong thing.)
+    let _ = (&isolate).write_all(b"BODY");
+
+    let (done, body, fds) = reader.join().expect("the reader thread");
+    assert_eq!(
+        done,
+        Ok(true),
+        "★ a mid-frame signal must NOT abandon the frame — that is a permanent \
+         desynchronisation, not a cancel"
+    );
+    assert_eq!(body, b"BODY", "and the body is the one that was sent");
+    assert_eq!(
+        fds.len(),
+        1,
+        "★ the descriptor adopted with the length word survives the interruption"
+    );
+}
+
 /// ★ A descriptor that arrived on a frame whose *body* then fails is still closed.
 ///
 /// The order matters and it is the hazard-1 case that is easiest to get wrong: the
