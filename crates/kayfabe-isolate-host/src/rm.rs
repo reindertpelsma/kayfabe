@@ -1261,24 +1261,43 @@ impl RmConnection {
     ///
     /// ★★ `None` is **not** a weakening of `#102`. Address identity exists so a
     /// *forwarded* pushbuffer's guest VAs resolve; it says nothing about memory the
-    /// isolate allocated for itself, which no guest ever names. A channel's own ring is
-    /// exactly that, and demanding a fixed address for it would mean inventing a
-    /// host-private VA window — a policy this rung has no way to enforce and every way to
-    /// get wrong.
+    /// isolate allocated for itself. A channel's own ring is exactly that.
     ///
-    /// ★ The residual, named: RM's own VA allocator and our fixed publishes share one
-    /// address space, so RM *could* place a ring where a guest later demands a fixed
-    /// mapping. That collision surfaces as a refused fixed map with an RM status, which
-    /// is loud; it is not silent corruption. A host-private reservation is the real fix
-    /// and it belongs with the address plane, not here.
+    /// # ⊘⊘⊘ THE SENTENCE THAT USED TO FOLLOW WAS FALSE, AND IT WAS THE INVARIANT
     ///
-    /// ⚠ **Amended by R26.** The paragraph above still describes `alloc_channel_on`, and
-    /// the sentence *"demanding a fixed address for a ring would mean inventing a
-    /// host-private VA window"* no longer describes the tree:
-    /// [`HostRmBackend::alloc_channel_at`] takes `Some` here and a **caller** supplies the
-    /// address, which is what a shadow-forwarded channel needs. What the paragraph got
-    /// right is that the *policy* is not this function's — it is still the caller's, and
-    /// there is still no host-private reservation.
+    /// This paragraph read *"…memory the isolate allocated for itself, **which no guest
+    /// ever names**"*, and the owner's invariant — *"VMM state must never be placed where a
+    /// guest VA can name it"* — rested on it and on nothing else. It was **untrue as
+    /// placement** for as long as the copy-engine path existed. `plan_ce` →
+    /// `ce_channel(vas)` → `alloc_channel_on(vas, COPY0)` put the isolate's ring, USERD and
+    /// completion semaphore in **the one address space a guest channel is bound to**, at an
+    /// RM-chosen address — which makes it *unpredictable, not unnameable*, and
+    /// unpredictability is not a boundary
+    /// (`C: docs/design/s1_what_does_it_protect.md` §3).
+    ///
+    /// ⚠ **[measured 2026-08-10, `vh`, at `cc5d55c`]** a copy engine bound to that space
+    /// retired a read of the semaphore's VA and moved `0x00000001` — **the exact payload
+    /// the isolate's own last copy had released**, a number that channel has no other way
+    /// to obtain (`kayfabe-rm-ladder --executor-vas-alias`, arm C).
+    ///
+    /// ⇒ Closed by **separation**, not by a reservation: see [`ExecutorVas`]. ⊘ A reserved
+    /// window inside this space would have stopped RM's *allocator* from colliding with our
+    /// objects and done nothing about a guest **naming** them, because the mapping would
+    /// still be in the page tables the guest's engine walks. The two fixes are easy to
+    /// confuse and only one of them is this one. At `2ce8bd0` the same probe faults:
+    /// `Xid 31 … ENGINE CE0 … FAULT_PDE ACCESS_TYPE_VIRT_READ @ 0x1_20022000`.
+    ///
+    /// ★ The residual, still named and now *only* a collision: RM's own VA allocator and
+    /// our fixed publishes share the guest-facing space, so RM could place something where
+    /// a guest later demands a fixed mapping. That surfaces as a refused fixed map with an
+    /// RM status, which is loud; it is not silent corruption, and it is a different problem
+    /// from the one above.
+    ///
+    /// ⚠ **Amended by R26.** The first paragraph once said *"demanding a fixed address for
+    /// a ring would mean inventing a host-private VA window"*, which no longer describes
+    /// the tree: [`HostRmBackend::alloc_channel_at`] takes `Some` here and a **caller**
+    /// supplies the address, which is what a shadow-forwarded channel needs. What it got
+    /// right is that the *policy* is not this function's — it is still the caller's.
     fn raw_map_dma(
         &self,
         h_dma: u32,
@@ -1815,6 +1834,14 @@ pub struct HostRmBackend {
     /// [`RmBackend::ce_copy`]. Built on first use and reused, because a channel is six RM
     /// objects and a copy is one pushbuffer.
     ce_channels: BTreeMap<u32, CeChannel>,
+    /// ★★★ **W229** — `guest range -> the isolate's OWN address space over the same
+    /// `Vas``, built on first use.
+    ///
+    /// Per guest `Vas` rather than one per backend, and that is `#14`, not tidiness: two
+    /// procs publish at **identical** guest VAs by construction (`#102`), so a single
+    /// shared executor space would have them collide on the first fixed map. One shadow
+    /// per space keeps the separation the guest-facing side already has.
+    executor_vases: BTreeMap<u32, ExecutorVas>,
     /// ★ The isolate's table of backings minted for the VMM (`crate::export`). Shared with
     /// every sibling worker: a backing belongs to the isolate, not to the pool slot that
     /// happened to mint it.
@@ -1896,6 +1923,52 @@ struct CeChannel {
     /// The payload the next copy will release, so two copies on one channel cannot be
     /// confused for each other by a stale word.
     next_payload: u32,
+}
+
+/// ★★★★★ **W229 — a host address space NO GUEST CHANNEL IS EVER BOUND TO.**
+///
+/// This is the type half of the owner's invariant, *"VMM state must never be placed where a
+/// guest VA can name it"*. Before it, that invariant was a sentence in
+/// [`RmConnection::raw_map_dma`]'s doc comment — *"memory the isolate allocated for itself,
+/// which no guest ever names"* — and the isolate's copy-engine ring, USERD and completion
+/// semaphore were mapped into the very space `kayfabe_fwd::plan_doorbell` materializes a
+/// guest's channel in. Measured at `124b69b`: a copy engine bound to that space read the
+/// isolate's semaphore and moved its payload (`R30` arm C).
+///
+/// # ★★ SEPARATION, not a reservation — and the distinction is the whole point
+///
+/// `raw_map_dma`'s own docs propose *"a host-private reservation"*, and a reserved window
+/// inside the shared space is **not this and is not sufficient**. A reservation stops RM's
+/// allocator from *colliding* with our objects; it does nothing about a guest **naming**
+/// the address, because the address is still mapped in the space the guest's engine walks.
+/// ⇒ What this type carries is a **different `FERMI_VASPACE_A`**, so the isolate's control
+/// structures are not in the guest's page tables at all and the address does not resolve
+/// there.
+///
+/// # ⊘ It is NOT a weakening of `#102`, and the guest's addresses do not move
+///
+/// Address identity exists so a *forwarded pushbuffer's* guest VAs resolve. Every isolate
+/// publish — fabricated backings, guest-RAM pins, `w228`'s FB leaves — is still placed
+/// **FIXED at the guest's own VA**, and is now placed at that same VA in **both** spaces
+/// ([`HostRmBackend::map_dma_both`]), because the isolate's own engine has to resolve the
+/// operands it is asked to copy. Nothing the guest names moves. Only our ring does.
+///
+/// # ★ The teeth
+///
+/// The field is **private**, and the only expression that builds one is
+/// [`HostRmBackend::executor_vas`]. There is no `From<HostHandle>`, no public constructor
+/// and no `pub` field, so `ce_channel`'s signature is not a convention a later refactor can
+/// quietly reinterpret: a caller holding a guest `Vas`'s [`HostHandle`] has **no way to
+/// spell** the argument. `tests/ui/name_an_executor_vas.rs` pins it, and
+/// `tests/executor_vas_census.rs` pins the mint site count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecutorVas {
+    /// The `NV01_MEMORY_VIRTUAL` range over the isolate's own `FERMI_VASPACE_A`.
+    ///
+    /// ⊘ Deliberately **not** a [`HostHandle`]: a port handle is a thing the core can be
+    /// handed and can pass back into any verb, and this space must never be reachable that
+    /// way. It is a raw handle behind a private field precisely so it cannot leave.
+    range: u32,
 }
 
 /// ★★★ **W229 — where the isolate's own copy-engine control structures were PLACED**,
@@ -2229,6 +2302,7 @@ impl HostRmBackend {
             conn,
             slots: BTreeMap::new(),
             ce_channels: BTreeMap::new(),
+            executor_vases: BTreeMap::new(),
             exports,
             guest_ram: None,
             ce_witness: None,
@@ -2348,40 +2422,16 @@ impl HostRmBackend {
         Ok(out)
     }
 
-    fn stamp(&self, raw: u32) -> HostHandle {
-        HostHandle::new(self.id, u64::from(raw))
-    }
-
-    /// Narrow a handle back to RM's 32 bits. A value that does not fit was never minted by
-    /// this connection, so it is a `BadHandle` **here** rather than an ioctl that would name
-    /// a truncated, possibly live, object.
-    fn narrow(&self, h: HostHandle) -> Result<u32, RmError> {
-        u32::try_from(h.raw()).map_err(|_| RmError::BadHandle(h))
-    }
-}
-
-impl RmBackend for HostRmBackend {
-    fn alloc(
-        &mut self,
-        parent: HostHandle,
-        class: ClassId,
-        params: &[u8],
-    ) -> Result<HostHandle, RmError> {
-        let parent_raw = if parent == HostHandle::NULL {
-            self.conn.client.raw()
-        } else {
-            self.narrow(parent)?
-        };
-        let want = self.conn.mint();
-        let mut params = params.to_vec();
-        let h = self
-            .conn
-            .raw_alloc(parent_raw, want, class.0, &mut params)?;
-        self.conn.remember(h, parent_raw);
-        Ok(self.stamp(h))
-    }
-
-    fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError> {
+    /// [`RmBackend::alloc_vaspace`]'s body, returning the **raw** `NV01_MEMORY_VIRTUAL`
+    /// range handle instead of a port handle.
+    ///
+    /// ★★ It exists because there are now TWO kinds of address space in this backend and
+    /// only one of them is the port's. [`HostRmBackend::executor_vas`] mints a space that
+    /// is deliberately **not** reachable through a [`HostHandle`] — handing one out is
+    /// exactly how the isolate's own memory ends up somewhere a guest can name — so it
+    /// cannot go through the trait verb, and duplicating R7b's two-object dance is how the
+    /// pairing gets forgotten.
+    fn alloc_vaspace_raw(&mut self) -> Result<u32, RmError> {
         // R7. All-zero parameters: index 0, no flags, `vaSize = 0` meaning the default
         // range. Per-`Vas` separation is the property that matters, not the geometry.
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
@@ -2420,7 +2470,7 @@ impl RmBackend for HostRmBackend {
             Ok(h) => {
                 self.conn.remember(h, self.conn.device);
                 self.conn.pair(h, space);
-                Ok(self.stamp(h))
+                Ok(h)
             }
             Err(e) => {
                 // The address space exists and the caller will never learn its handle, so
@@ -2430,6 +2480,130 @@ impl RmBackend for HostRmBackend {
                 Err(e)
             }
         }
+    }
+
+    /// ★★★★★ **THE ONE MINT SITE for [`ExecutorVas`]** — the isolate's own address space
+    /// over the guest `Vas` named by the raw range handle `guest_range`, built on first use.
+    ///
+    /// ⊘ **Nothing else in this crate may write `ExecutorVas { … }`.** The type's guarantee
+    /// is *"no guest channel is bound to this space"*, and that is a claim about how the
+    /// handle was **obtained**, which only the constructor can make. A second construction
+    /// site is a second claim, made by whoever wrote it.
+    /// `tests/executor_vas_census.rs` counts them.
+    ///
+    /// ★ Lazy rather than allocated alongside every `Vas`: a `Vas` that never carries an
+    /// isolate copy costs nothing, and the cost of being wrong about that is one extra
+    /// `FERMI_VASPACE_A`, not a wrong address.
+    ///
+    /// # Errors
+    /// Whatever RM refused the address space or its range with.
+    fn executor_vas(&mut self, guest_range: u32) -> Result<ExecutorVas, RmError> {
+        if let Some(e) = self.executor_vases.get(&guest_range) {
+            return Ok(*e);
+        }
+        let range = self.alloc_vaspace_raw()?;
+        let e = ExecutorVas { range };
+        self.executor_vases.insert(guest_range, e);
+        Ok(e)
+    }
+
+    /// ★★★ **Map `memory` into BOTH the guest-facing space and the isolate's own — at the
+    /// SAME address.**
+    ///
+    /// This is what makes [`ExecutorVas`] affordable. The isolate's copy engine now lives
+    /// in a space no guest channel is bound to, and the operands it is asked to copy are
+    /// **guest VAs**; if those VAs resolved only in the guest's space, every forwarded copy
+    /// would walk the host MMU into nothing (`Xid 31 FAULT_PDE`). So each publish is placed
+    /// twice, at one address.
+    ///
+    /// ⊘ **The guest's address is unchanged and is still chosen first.** `at = Some(va)`
+    /// demands it in the guest's space exactly as before; the shadow is then made to match
+    /// **the address RM reported back**, never the one we asked for. With `at = None` RM
+    /// picks, and the shadow follows. Either way the guest-facing placement is the
+    /// authority and the isolate's copy is derived from it — the reverse would let a
+    /// shadow failure silently relocate a guest VA.
+    ///
+    /// ★ It is all-or-nothing. A shadow that refuses tears the guest-side mapping down and
+    /// returns the refusal, because a range mapped in one space and not the other is
+    /// exactly the state that makes a later copy fault somewhere unrelated.
+    ///
+    /// # Errors
+    /// Whatever either mapping refused, or [`RmError::PlacementRefused`] if the shadow
+    /// could not take the guest-side address.
+    fn map_dma_both(
+        &mut self,
+        guest_range: u32,
+        memory: u32,
+        len: u64,
+        at: Option<u64>,
+    ) -> Result<u64, RmError> {
+        let va = self.conn.raw_map_dma(guest_range, memory, len, at)?;
+        let exec = match self.executor_vas(guest_range) {
+            Ok(e) => e,
+            Err(e) => {
+                let _ = self.conn.raw_unmap_dma(guest_range, va);
+                return Err(e);
+            }
+        };
+        match self.conn.raw_map_dma(exec.range, memory, len, Some(va)) {
+            Ok(got) if got == va => Ok(va),
+            Ok(got) => {
+                let _ = self.conn.raw_unmap_dma(exec.range, got);
+                let _ = self.conn.raw_unmap_dma(guest_range, va);
+                Err(RmError::PlacementRefused { want: va, got })
+            }
+            Err(e) => {
+                let _ = self.conn.raw_unmap_dma(guest_range, va);
+                Err(e)
+            }
+        }
+    }
+
+    /// Undo one [`HostRmBackend::map_dma_both`]. The shadow first, so a failure to unmap it
+    /// cannot leave the guest side free for reuse while the isolate's engine still
+    /// resolves the address.
+    fn unmap_dma_both(&mut self, guest_range: u32, va: u64) -> Result<(), RmError> {
+        if let Some(exec) = self.executor_vases.get(&guest_range).copied() {
+            let _ = self.conn.raw_unmap_dma(exec.range, va);
+        }
+        self.conn.raw_unmap_dma(guest_range, va)
+    }
+
+    fn stamp(&self, raw: u32) -> HostHandle {
+        HostHandle::new(self.id, u64::from(raw))
+    }
+
+    /// Narrow a handle back to RM's 32 bits. A value that does not fit was never minted by
+    /// this connection, so it is a `BadHandle` **here** rather than an ioctl that would name
+    /// a truncated, possibly live, object.
+    fn narrow(&self, h: HostHandle) -> Result<u32, RmError> {
+        u32::try_from(h.raw()).map_err(|_| RmError::BadHandle(h))
+    }
+}
+
+impl RmBackend for HostRmBackend {
+    fn alloc(
+        &mut self,
+        parent: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError> {
+        let parent_raw = if parent == HostHandle::NULL {
+            self.conn.client.raw()
+        } else {
+            self.narrow(parent)?
+        };
+        let want = self.conn.mint();
+        let mut params = params.to_vec();
+        let h = self
+            .conn
+            .raw_alloc(parent_raw, want, class.0, &mut params)?;
+        self.conn.remember(h, parent_raw);
+        Ok(self.stamp(h))
+    }
+
+    fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError> {
+        self.alloc_vaspace_raw().map(|r| self.stamp(r))
     }
 
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
@@ -2623,6 +2797,14 @@ impl RmBackend for HostRmBackend {
         if let Some(ce) = self.ce_channels.remove(&raw) {
             let _ = self.free(ce.chan);
         }
+        // ★★★ W229 — and the isolate's OWN address space over that `Vas` goes with it,
+        // AFTER the channel whose ring is mapped in it. The order is not cosmetic: `free`
+        // of the channel unmaps `ChannelParts::ring_va` through `ChannelParts::range`,
+        // which for an isolate channel IS this space, and unmapping through a freed range
+        // handle names an object RM has destroyed.
+        if let Some(exec) = self.executor_vases.remove(&raw) {
+            let _ = self.free_one(exec.range);
+        }
         // The slot counter is per-channel state with nothing to free; dropping it keeps a
         // recycled handle from inheriting a stale cursor.
         self.slots.remove(&raw);
@@ -2686,14 +2868,20 @@ impl RmBackend for HostRmBackend {
         // driver. A host older than that speaks the 56-byte one
         // (`kayfabe_abi::transcribed::Nvos46ParametersPre580`), and selecting between
         // them from the R2 version string is the follow-up this rung does not do.
+        //
+        // ★★★ **W229 — placed TWICE, at ONE address.** The guest-facing placement below is
+        // unchanged, bit for bit; what is new is that the same object is also mapped at the
+        // same VA in the isolate's own [`ExecutorVas`], because the isolate's copy engine
+        // no longer lives in the guest's space and still has to resolve these operands. See
+        // [`HostRmBackend::map_dma_both`].
         let h_dma = self.narrow(vas)?;
         let h_memory = self.narrow(memory)?;
-        self.conn.raw_map_dma(h_dma, h_memory, len, Some(at.0))
+        self.map_dma_both(h_dma, h_memory, len, Some(at.0))
     }
 
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
         let h_dma = self.narrow(vas)?;
-        self.conn.raw_unmap_dma(h_dma, gpu_va)
+        self.unmap_dma_both(h_dma, gpu_va)
     }
     /// ★★★ **Rung 3.** Not an ioctl at all: a store into the mapped usermode BAR window
     /// (see `RmConnection::doorbell`).
@@ -3074,9 +3262,41 @@ impl HostRmBackend {
         ring_at: Option<GpuVa>,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
+        self.alloc_channel_in(range, engine_type, ring_at)
+    }
+
+    /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
+    ///
+    /// [`Self::alloc_channel_at`]'s body over an [`ExecutorVas`] instead of a guest `Vas`.
+    /// The two verbs differ in exactly one thing and it is the one that matters: which
+    /// address space the channel's ring, USERD and completion semaphore land in.
+    ///
+    /// ⊘ There is no `HostHandle` overload of this. A caller who has a guest `Vas` has no
+    /// way to spell an [`ExecutorVas`], which is the whole mechanism — see that type.
+    ///
+    /// # Errors
+    /// As [`Self::alloc_channel_at`].
+    fn alloc_channel_for_isolate(
+        &mut self,
+        vas: ExecutorVas,
+        engine_type: u32,
+    ) -> Result<(HostHandle, u64), RmError> {
+        self.alloc_channel_in(vas.range, engine_type, None)
+    }
+
+    /// The body both of the above share, over a raw `NV01_MEMORY_VIRTUAL` range.
+    fn alloc_channel_in(
+        &mut self,
+        range: u32,
+        engine_type: u32,
+        ring_at: Option<GpuVa>,
+    ) -> Result<(HostHandle, u64), RmError> {
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
-        let space = self.conn.space_of(range).ok_or(RmError::BadHandle(vas))?;
+        let space = self
+            .conn
+            .space_of(range)
+            .ok_or_else(|| RmError::BadHandle(self.stamp(range)))?;
 
         let ring = self.conn.alloc_device_local(RING_OBJECT_BYTES)?;
         let unwind = |me: &mut Self, objs: &[u32]| {
@@ -3525,7 +3745,13 @@ impl HostRmBackend {
             return Err(RmError::Other(BAD_ENCODE));
         }
 
-        let ce_chan = self.ce_channel(vas)?;
+        // ★★★ W229 — the CE channel is built in the isolate's OWN address space, never in
+        // `vas`. `vas` still names the space the OPERANDS live in, and `map_dma_both` has
+        // placed them at the same addresses in both, which is why `src`/`dst` below need no
+        // translation.
+        let key = self.narrow(vas)?;
+        let exec = self.executor_vas(key)?;
+        let ce_chan = self.ce_channel(key, exec)?;
         let payload = ce_chan.next_payload;
         let chan = ce_chan.chan;
         let raw = self.narrow(chan)?;
@@ -3581,12 +3807,11 @@ impl HostRmBackend {
     /// engine context is not a thing this port wants to depend on being fine — but the
     /// dependency is *asserted from those sources*, not from a bite that fired here. A
     /// step kept for a reason that has not been demonstrated must say so.
-    fn ce_channel(&mut self, vas: HostHandle) -> Result<CeChannel, RmError> {
-        let key = self.narrow(vas)?;
+    fn ce_channel(&mut self, key: u32, vas: ExecutorVas) -> Result<CeChannel, RmError> {
         if let Some(c) = self.ce_channels.get(&key) {
             return Ok(*c);
         }
-        let (chan, token) = self.alloc_channel_on(vas, ENGINE_TYPE_COPY0)?;
+        let (chan, token) = self.alloc_channel_for_isolate(vas, ENGINE_TYPE_COPY0)?;
         let mut params = [0u8; CeAllocParams::SIZE];
         CeAllocParams {
             version: CeAllocParams::VERSION_1,
@@ -3814,6 +4039,11 @@ impl HostRmBackend {
         let mut mapped: Vec<u64> = Vec::new();
         let mut chan: Option<HostHandle> = None;
         let mut go = || -> Result<GuestReachProbe, RmError> {
+            // ⊘ `raw_map_dma`, NOT `map_dma_both`, and deliberately: these buffers stand
+            // in for the GUEST's memory, and the channel below is bound to the guest's
+            // space. Publishing them into the isolate's space too would be the rung
+            // arranging for its own operands to resolve where the thing under test lives.
+            //
             // ★ FIXED, and refused rather than adopted if RM disagrees — see
             // `PROBE_RING_AT`. An operand RM placed next to `sem_va` is an operand the
             // probe would then read instead of the thing it is asking about.
@@ -4058,9 +4288,13 @@ impl HostRmBackend {
         };
         let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
         let mut go = || -> Result<CeEvidence, RmError> {
-            let src_va = self.conn.raw_map_dma(range, src, BYTES, None)?;
+            // ★ W229 — through `map_dma_both`, exactly as a production publish is: the
+            // isolate's copy engine is in its own space now, and an operand mapped only in
+            // the guest's would fault. RM still chooses the address, in the guest's space,
+            // and the shadow follows it.
+            let src_va = self.map_dma_both(range, src, BYTES, None)?;
             cleanup[0].1 = Some(src_va);
-            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, None)?;
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
             cleanup[1].1 = Some(dst_va);
 
             let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
@@ -4119,7 +4353,7 @@ impl HostRmBackend {
         let out = go();
         for (h, va) in cleanup.into_iter().rev() {
             if let Some(va) = va {
-                let _ = self.conn.raw_unmap_dma(range, va);
+                let _ = self.unmap_dma_both(range, va);
             }
             let _ = self.free(self.stamp(h));
         }
@@ -4370,9 +4604,13 @@ impl HostRmBackend {
         let mut go = || -> Result<OsDescEvidence, RmError> {
             // 5 — arm C. `Some(at)` sets `DMA_OFFSET_FIXED_TRUE`; the returned VA is
             // compared against `at` by the caller, because `Ok` is not placement.
-            let got_va = self.conn.raw_map_dma(range, desc, BYTES, Some(at.0))?;
+            // ★ W229 — `map_dma_both`, because the copy below runs on the isolate's own
+            // channel in its own address space. The FIXED ask is unchanged and is still
+            // made against the guest-facing space; the shadow follows the address RM
+            // reported, so a relocation is still this rung's finding and not hidden by it.
+            let got_va = self.map_dma_both(range, desc, BYTES, Some(at.0))?;
             cleanup[0].1 = Some(got_va);
-            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, None)?;
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
             cleanup[1].1 = Some(dst_va);
 
             let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
@@ -4442,7 +4680,7 @@ impl HostRmBackend {
         let out = go();
         for (h, va) in cleanup.into_iter().rev() {
             if let Some(va) = va {
-                let _ = self.conn.raw_unmap_dma(range, va);
+                let _ = self.unmap_dma_both(range, va);
             }
             // ⚠ Freeing the descriptor object is what un-pins the guest-RAM pages. Dropping
             // `reservation` below only unmaps our own view of them.

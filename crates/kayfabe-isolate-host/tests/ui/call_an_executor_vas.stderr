@@ -1,0 +1,10 @@
+error[E0423]: expected function, tuple struct or tuple variant, found struct `ExecutorVas`
+  --> tests/ui/call_an_executor_vas.rs:10:19
+   |
+10 |     let _called = ExecutorVas(0xcafe_0005);
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+  ::: src/rm.rs
+   |
+   | pub struct ExecutorVas {
+   | ---------------------- `ExecutorVas` defined here

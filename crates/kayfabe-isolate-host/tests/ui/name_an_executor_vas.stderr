@@ -1,0 +1,5 @@
+error[E0451]: field `range` of struct `ExecutorVas` is private
+  --> tests/ui/name_an_executor_vas.rs:11:32
+   |
+11 |     let _named = ExecutorVas { range: 0xcafe_0005 };
+   |                                ^^^^^ private field

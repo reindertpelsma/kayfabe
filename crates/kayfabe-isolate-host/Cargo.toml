@@ -47,6 +47,10 @@ path = "src/bin/sandbox_probe.rs"
 # The R1 lock witness, so the real backend can be driven WITH a ranked lock held and the
 # assert watched to fire — a gate never seen to fail is not evidence.
 kayfabe-util.workspace = true
+# ★★★ W229 — `tests/compile_fail.rs`. The isolate's own address space (`rm::ExecutorVas`)
+# must be UNSPELLABLE outside this crate, and an impossibility asserted only in prose is
+# the failure class this repo keeps cataloguing.
+trybuild = "1.0" 
 
 [lints]
 workspace = true
