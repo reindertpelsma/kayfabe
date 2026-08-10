@@ -56,14 +56,14 @@ use kayfabe_arch::{
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
-    ExportedBacking, HostHandle, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn,
-    Worker, WorkerId,
+    ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle, Isolate, IsolateFactory, IsolateId,
+    RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
     BarId, CoreEvent, FbMeta, GuestRamMap, HostRegion, IrqSpec, Present, PresentError, Prot,
-    RamHandle, RamRegionId, RegionKind, SlotId, SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
-    RAM_EXPORT_TOKEN_TAG, RAM_TOKEN_AS_A_BACKING,
+    RAM_EXPORT_TOKEN_TAG, RAM_TOKEN_AS_A_BACKING, RamHandle, RamRegionId, RegionKind, SlotId,
+    SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
 };
 
 // ---------------------------------------------------------------------------------
@@ -1288,6 +1288,24 @@ pub enum RmVerb {
         /// Returned handle.
         handle: HostHandle,
     },
+    /// ★★★ Intent: the VMM instructed this isolate to map a slice of guest RAM.
+    MapGuestRam {
+        /// Byte offset into the guest-RAM block, as the VMM derived it.
+        offset: u64,
+        /// Length in bytes.
+        len: u64,
+        /// What the isolate was authorized to do with the pages.
+        prot: Prot,
+        /// The double's name for the mapping it reported back.
+        region: HostHandle,
+    },
+    /// Intent: a guest-RAM mapping was given back.
+    UnmapGuestRam {
+        /// The mapping that was released.
+        region: HostHandle,
+        /// Length in bytes.
+        len: u64,
+    },
     /// Intent: an engine object allocated on a host channel (the Case-1 forward).
     AllocEngineObject {
         /// The host channel it was allocated on.
@@ -1449,6 +1467,10 @@ pub enum VerbKind {
     ExportSurface,
     /// [`RmBackend::export_backing`].
     ExportBacking,
+    /// [`RmBackend::map_guest_ram`].
+    MapGuestRam,
+    /// [`RmBackend::unmap_guest_ram`].
+    UnmapGuestRam,
 }
 
 /// Which verb occurrence a hold latches onto. Every field is optional; `None`
@@ -2570,6 +2592,13 @@ pub struct MockRmBackend {
     cancel: Arc<MockCancelSink>,
     /// The RM client lock every worker of this isolate shares ([`ClientLock`]).
     client: Arc<ClientLock>,
+    /// ★★★ How many bytes of guest RAM this isolate was given, or `None` — **the default**
+    /// — for an isolate whose VM was launched without a shared memory backing.
+    ///
+    /// Not a knob for convenience: `None` is what a deployment that did not opt in
+    /// produces, and it is the case a core-side consumer is most likely to be written
+    /// without. See [`MockRmBackend::map_guest_ram`].
+    guest_ram: Option<u64>,
 }
 
 /// ★★ The part of a mock handle a **real host** would see.
@@ -2615,7 +2644,20 @@ impl MockRmBackend {
             ns,
             cancel,
             client,
+            // ⊘ CLOSED by default — see `map_guest_ram`. A VM launched without a shared
+            // memory backing is the majority case and the one a consumer is likeliest to
+            // be written without, so it is what the double does unless told otherwise.
+            guest_ram: None,
         }
+    }
+
+    /// ★ Open this double's guest-RAM door, with `bytes` of it.
+    ///
+    /// A test that calls this is **stating** that the deployment it is modelling launched
+    /// the VM with `memory-backend-memfd,share=on`; a test that does not gets the refusal.
+    pub fn with_guest_ram(mut self, bytes: u64) -> Self {
+        self.guest_ram = Some(bytes);
+        self
     }
 
     /// High 40 bits shared by every handle/surface: `idlane` (bits ≥32, so `>>32`
@@ -3121,6 +3163,59 @@ impl RmBackend for MockRmBackend {
             len: want.len,
             prot: want.prot,
         })
+    }
+
+    /// ★★★ The double's guest-RAM door — and by default it is **CLOSED**, because that is
+    /// what a VM launched without `share=on` does.
+    ///
+    /// ⊘ Defaulting to success would be the mock-wall shape this file already records for
+    /// `export_backing`: a core-side consumer written against an outcome most deployments
+    /// cannot produce. The refusal is the *common* case, so it is the default, and a test
+    /// that wants the open case has to say so with [`MockRmBackend::with_guest_ram`] —
+    /// which is also how a test proves it exercised the open path rather than assuming it.
+    ///
+    /// ★ The mapping is named by a [`HostHandle`] namespaced like every other mock handle,
+    /// so a mapping minted by proc A's isolate and presented on proc B's is visible in an
+    /// assertion rather than plausible.
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        let _client = self.gate(VerbKind::MapGuestRam)?;
+        let Some(bytes) = self.guest_ram else {
+            return Err(RmError::GuestRamUnavailable);
+        };
+        // The bounds check is the isolate's, not the caller's: the grant is authoritative
+        // about WHICH bytes, and the isolate is authoritative about how many there are.
+        if grant.is_empty() || grant.offset().saturating_add(grant.len()) > bytes {
+            return Err(RmError::NoMemory);
+        }
+        let n = {
+            let mut ns = self.ns.lock().expect("ns");
+            let n = ns.next;
+            ns.next += 1;
+            n
+        };
+        let region = HostHandle::new(self.id, self.handle_hi() | n);
+        self.record(RmVerb::MapGuestRam {
+            offset: grant.offset(),
+            len: grant.len(),
+            prot: grant.prot(),
+            region,
+        });
+        Ok(GuestRamMapped {
+            region,
+            len: grant.len(),
+        })
+    }
+
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        let _client = self.gate(VerbKind::UnmapGuestRam)?;
+        if self.guest_ram.is_none() {
+            return Err(RmError::GuestRamUnavailable);
+        }
+        self.record(RmVerb::UnmapGuestRam {
+            region: mapped.region,
+            len: mapped.len,
+        });
+        Ok(())
     }
 }
 

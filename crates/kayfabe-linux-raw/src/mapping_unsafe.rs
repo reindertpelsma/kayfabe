@@ -212,9 +212,16 @@ enum Disposition {
 /// `// SAFETY:` comment below cites it by name.
 ///
 /// It is private, it has no accessor that yields the pointer, and `Mapping` is neither
-/// `Send` nor `Sync` (a `NonNull` field makes it neither by default) — so no region type
-/// is either, which is `tests/ui/region_is_not_send.rs`. Adding `Send` later is a reviewed
-/// relaxation in this file, visible to the ratchet.
+/// `Send` nor `Sync` (a `NonNull` field makes it neither by default) — so a region type has
+/// only what this file grants it **per type, with the argument above the `impl`**, never as
+/// a blanket.
+///
+/// ★ As of the guest-RAM crossing that is: `VolatileRegion` — both; `MappedRegion` —
+/// `Send` only; `Reservation` — neither. The compile-fail row that pins the boundary is
+/// `tests/ui/region_is_not_sync.rs`, and it is about **`Sync`** because that is the half
+/// with something behind it: `MappedRegion::write_from` is a bulk `memcpy` through `&self`,
+/// so two threads sharing one could race. ⚠ The row used to say `Send`, which was the
+/// property that was easiest to state and not the one that was protecting anything.
 #[derive(Debug)]
 struct Mapping {
     base: NonNull<u8>,
@@ -373,6 +380,27 @@ pub struct MappedRegion {
     prot: HostProt,
     cache: CachePolicy,
 }
+
+// SAFETY: a `MappedRegion` owns a process-wide mapping, not a thread-affine resource. Its
+// three fields are the mapping (established by exactly one `mmap` in `map`, never
+// rewritten, released by exactly one `munmap` in `Drop`) and two `Copy` attributes.
+// `munmap` from a thread other than the one that called `mmap` is valid on Linux, so moving
+// the owner between threads is sound. Same argument as `VolatileRegion`'s and
+// `GuestWindow`'s.
+//
+// ★★★ And `Sync` is DELIBERATELY NOT granted, which is the load-bearing half. This type's
+// accessors take `&self` and `write_from` performs a bulk `memcpy` through one — i.e. it is
+// interior mutability with no synchronisation. Two threads holding `&MappedRegion` could
+// write the same bytes concurrently, which is a data race in the abstract machine, and no
+// discipline inside this file prevents it. `VolatileRegion` earns `Sync` because every
+// access there is a naturally-aligned `Relaxed` atomic and there is no bulk accessor at
+// all; that argument does not transfer here and must not be copied across.
+//
+// ⇒ A caller that needs to share one of these between threads must put it behind a lock —
+// `Mutex<T>` is `Sync` for any `T: Send`, so this grant is exactly enough for
+// `kayfabe_isolate_host::guestram::GuestRamPlane`'s `Mutex<BTreeMap<u64, MappedRegion>>`
+// and no more.
+unsafe impl Send for MappedRegion {}
 
 impl MappedRegion {
     /// Map `len` bytes of `backing`, requiring cache policy `cache`.

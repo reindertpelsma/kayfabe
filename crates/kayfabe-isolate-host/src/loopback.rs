@@ -37,8 +37,8 @@
 use crate::export::ChildExports;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
-    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle, IsolateId, RmBackend,
-    RmError,
+    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, GuestRamGrant, GuestRamMapped,
+    HostHandle, IsolateId, RmBackend, RmError,
 };
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
@@ -146,6 +146,10 @@ pub struct LoopbackRm {
     park: std::io::PipeReader,
     /// ★ The isolate's export table (`crate::export`), shared with every sibling worker.
     exports: Arc<ChildExports>,
+    /// This isolate's guest-RAM plane, or `None`. ⊘ The fixture uses the **real** plane, not
+    /// a model of one: `mmap`ping a `memfd` needs no GPU, so faking it here would be a
+    /// second implementation of the one thing this fixture could have honestly run.
+    guest_ram: Option<Arc<crate::guestram::GuestRamPlane>>,
 }
 
 impl LoopbackRm {
@@ -164,7 +168,15 @@ impl LoopbackRm {
             shared,
             park,
             exports,
+            guest_ram: None,
         })
+    }
+
+    /// Install this isolate's guest-RAM plane (or, with `None`, state that it has none).
+    #[must_use]
+    pub fn with_guest_ram(mut self, plane: Option<Arc<crate::guestram::GuestRamPlane>>) -> Self {
+        self.guest_ram = plane;
+        self
     }
 
     /// Take the client lock, park if this verb is the parking one, and mint. The lock is
@@ -362,6 +374,28 @@ impl RmBackend for LoopbackRm {
         // serialised path RM would serialise, so a parked sibling blocks this too.
         self.verb(false)?;
         crate::rm::mint_fabricated(&self.exports, want)
+    }
+
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        let Some(plane) = self.guest_ram.clone() else {
+            return Err(RmError::GuestRamUnavailable);
+        };
+        // Under the client lock, like every other verb — RM serialises per client and the
+        // fixture's whole job is to model that, not to be fast.
+        self.verb(false)?;
+        let raw = plane.honour(grant)?;
+        Ok(GuestRamMapped {
+            region: HostHandle::new(self.id, raw),
+            len: grant.len(),
+        })
+    }
+
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        let Some(plane) = self.guest_ram.clone() else {
+            return Err(RmError::GuestRamUnavailable);
+        };
+        self.verb(false)?;
+        plane.release(mapped.region.raw())
     }
 }
 

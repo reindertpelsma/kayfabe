@@ -29,7 +29,10 @@
 
 use crate::export::ChildExports;
 use crate::fdcross::write_frame_with_fds;
-use crate::isolate::{CONTROL_FD, PARK_WITNESS_FD, RmMode, WORKER_FD_BASE, decode_control};
+use crate::guestram::GuestRamPlane;
+use crate::isolate::{
+    CONTROL_FD, GUEST_RAM_FD, PARK_WITNESS_FD, RmMode, WORKER_FD_BASE, decode_control,
+};
 use crate::loopback::{LoopbackRm, LoopbackShared, ParkVerb};
 use crate::proto::{
     EXPORT_SOURCE_FABRICATED, EXPORT_SOURCE_HOST_DEVICE, Envelope, Reply, Request, WireError,
@@ -38,12 +41,13 @@ use crate::proto::{
 use crate::rm::{HostRmBackend, RmConnection};
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, HostHandle, IsolateId, RmBackend,
-    RmError,
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, GuestRamGrant, GuestRamMapped,
+    HostHandle, IsolateId, RmBackend, RmError,
 };
 use kayfabe_linux_raw::sandbox::{self, SandboxPolicy};
 use kayfabe_linux_raw::{
-    ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler, interrupt_thread,
+    HostPageSize, ThreadId, adopt_inherited_fd, current_thread_id, install_break_handler,
+    interrupt_thread,
 };
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::net::{UnixDatagram, UnixStream};
@@ -62,6 +66,13 @@ pub struct ChildArgs {
     pub rm: RmMode,
     /// Which verb parks forever (loopback only).
     pub park: ParkVerb,
+    /// ★★★ How many bytes of guest RAM were granted on
+    /// [`crate::isolate::GUEST_RAM_FD`], or `0` for "no grant was made".
+    ///
+    /// ⊘ The extent is told to the child rather than discovered by it — see
+    /// [`crate::guestram::GuestRamPlane`]'s `bytes` field for why a second source of truth
+    /// for this one number is the hazard.
+    pub guest_ram_bytes: u64,
 }
 
 impl ChildArgs {
@@ -79,6 +90,7 @@ impl ChildArgs {
         let mut workers = None;
         let mut rm = None;
         let mut park = ParkVerb::Nothing;
+        let mut guest_ram_bytes: u64 = 0;
         let mut it = args.into_iter();
         while let Some(flag) = it.next() {
             let value = it.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -90,6 +102,11 @@ impl ChildArgs {
                 }
                 "--rm" => rm = Some(RmMode::parse(&value).ok_or(format!("--rm {value}"))?),
                 "--park" => park = ParkVerb::parse(&value).ok_or(format!("--park {value}"))?,
+                "--guest-ram-bytes" => {
+                    guest_ram_bytes = value
+                        .parse()
+                        .map_err(|_| format!("--guest-ram-bytes {value}"))?;
+                }
                 other => return Err(format!("unknown flag {other}")),
             }
         }
@@ -103,6 +120,7 @@ impl ChildArgs {
             workers,
             rm: rm.ok_or("--rm is required")?,
             park,
+            guest_ram_bytes,
         })
     }
 
@@ -157,9 +175,31 @@ pub fn serve(args: &ChildArgs) -> i32 {
     // happened to serve the request, and the parent has no way to know which that was.
     let exports = Arc::new(ChildExports::new());
 
+    // ★★★ Guest RAM, adopted from the FIXED number the parent granted it on — and only
+    // when the parent said it granted one. ⊘ An absent descriptor here is the EXPECTED
+    // state for a VM launched without a shared memory backing, not a degradation to
+    // tolerate silently: the parent's grant and this adoption are conditional on the same
+    // predicate (`--guest-ram-bytes`), so a descriptor that is missing when the parent said
+    // it granted one is a genuine startup failure and ends the isolate.
+    let guest_ram = if args.guest_ram_bytes == 0 {
+        None
+    } else {
+        match adopt_inherited_fd(GUEST_RAM_FD) {
+            Ok(fd) => Some(Arc::new(GuestRamPlane::new(
+                fd,
+                args.guest_ram_bytes,
+                HostPageSize::query(),
+            ))),
+            Err(e) => {
+                eprintln!("kayfabe-isolate: the guest-RAM descriptor was not granted: {e}");
+                return 2;
+            }
+        }
+    };
+
     // ★ Build the backends BEFORE announcing readiness, so a bring-up failure is reported
     // on the hello frame rather than on the first guest operation.
-    let backends = match build_backends(args, id, &exports) {
+    let backends = match build_backends(args, id, &exports, guest_ram.as_ref()) {
         Ok(b) => b,
         Err(why) => {
             eprintln!("kayfabe-isolate: {why}");
@@ -207,6 +247,7 @@ fn build_backends(
     args: &ChildArgs,
     id: IsolateId,
     exports: &Arc<ChildExports>,
+    guest_ram: Option<&Arc<GuestRamPlane>>,
 ) -> Result<Vec<Box<dyn RmBackend>>, String> {
     match args.rm {
         RmMode::Real => {
@@ -242,11 +283,10 @@ fn build_backends(
             );
             Ok((0..args.workers)
                 .map(|_| {
-                    Box::new(HostRmBackend::new(
-                        id,
-                        Arc::clone(&conn),
-                        Arc::clone(exports),
-                    )) as Box<dyn RmBackend>
+                    Box::new(
+                        HostRmBackend::new(id, Arc::clone(&conn), Arc::clone(exports))
+                            .with_guest_ram(guest_ram.map(Arc::clone)),
+                    ) as Box<dyn RmBackend>
                 })
                 .collect())
         }
@@ -267,7 +307,8 @@ fn build_backends(
             for _ in 0..args.workers {
                 out.push(Box::new(
                     LoopbackRm::new(id, Arc::clone(&shared), Arc::clone(exports))
-                        .map_err(|e| format!("park pipe dup: {e}"))?,
+                        .map_err(|e| format!("park pipe dup: {e}"))?
+                        .with_guest_ram(guest_ram.map(Arc::clone)),
                 ));
             }
             Ok(out)
@@ -582,6 +623,29 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 },
             },
         )),
+        // ★★★★★ The guest-RAM door. The child does not decide WHICH guest bytes it maps —
+        // it reconstructs the VMM's grant verbatim and hands it to the plane. There is no
+        // arm here that computes an offset or a length.
+        Request::MapGuestRam { offset, len, prot } => {
+            match crate::proto::prot_from_code(prot) {
+                Some(prot) => {
+                    match rm.map_guest_ram(GuestRamGrant::originated_by_the_vmm(offset, len, prot))
+                    {
+                        Ok(m) => Reply::Handle(m.region.raw()),
+                        Err(e) => failed(e),
+                    }
+                }
+                // ⊘ An unrecognised protection code is a REFUSAL, never a default. The
+                // direction that fails open is the dangerous one: defaulting to read-write
+                // would map guest pages writable on an authorization that said read-only,
+                // which §3 names as a silent escalation.
+                None => failed(RmError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            }
+        }
+        Request::UnmapGuestRam { region, len } => unit(rm.unmap_guest_ram(GuestRamMapped {
+            region: raw(region),
+            len,
+        })),
     }
 }
 
@@ -612,6 +676,10 @@ fn failed(e: RmError) -> Reply {
         // card"* from *"the host refused"*, and the whole value of naming the boundary
         // is that those are different facts with different consequences.
         RmError::NotExportableAsMemory { memory } => WireError::NotExportableAsMemory(memory.raw()),
+        // ★★★ Likewise its own wire form: *"this VM was not launched with a shared memory
+        // backing"* is a DEPLOYMENT fact and *"the host refused"* is not, and the two have
+        // different fixes.
+        RmError::GuestRamUnavailable => WireError::GuestRamUnavailable,
         // #102: a child backend cannot produce `PlacementRefused` — the check that mints
         // it lives in the PARENT's `Worker::execute`, above the wire. Listed explicitly
         // rather than caught by a wildcard, so adding a variant stays a compile error.
@@ -705,6 +773,7 @@ mod tests {
                 workers: 4,
                 rm: RmMode::Loopback,
                 park: ParkVerb::Nothing,
+                guest_ram_bytes: 0,
             }
         );
         assert_eq!(args.isolate(), IsolateId::new(3, GpuId(1)));

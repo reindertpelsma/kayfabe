@@ -277,6 +277,16 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
                 assert_eq!(token >> 32, ns, "an export token leaked across isolates");
             }
         }
+        // ★★★ A guest-RAM mapping names ONE handle — the isolate's own name for it — and
+        // that is exactly what this sweep must check: guest RAM is the one resource whose
+        // cross-isolate reach would be a real escalation rather than untidiness (isolate A
+        // mapping guest process B's pages, and the guest kernel's, is a privilege the
+        // client process could never have had).
+        //
+        // ⊘ The `offset`/`len` are NOT checked here and must not be: they are guest-physical
+        // numbers the VMM derived, not namespace-scoped values, and two isolates legitimately
+        // naming the same guest page is the VMM's decision to make, not this sweep's.
+        RmVerb::MapGuestRam { region, .. } | RmVerb::UnmapGuestRam { region, .. } => own(region),
     }
 }
 

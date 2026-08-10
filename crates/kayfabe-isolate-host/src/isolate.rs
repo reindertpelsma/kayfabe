@@ -56,8 +56,8 @@ use crate::proto::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
-    ExportRequest, ExportSource, ExportedBacking, HostHandle, Isolate, IsolateFactory, IsolateId,
-    RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportRequest, ExportSource, ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle,
+    Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
@@ -113,8 +113,20 @@ pub const RESERVED_NEVER_GRANTED_FD: i32 = 4;
 /// why a duration cannot stand in for it. ⊘ A production isolate never receives this grant, so
 /// this number is simply an unopened descriptor there — reserved, not silently reused.
 pub const PARK_WITNESS_FD: i32 = 5;
+/// ★★★★★ fd number of the **guest-RAM descriptor**, granted only when the VMM has one.
+///
+/// A **fixed** number, and that is the whole design rather than tidiness
+/// (`mode2_isolate_memory_boundary.md` §2): the seccomp filter that will later deny
+/// `read`/`write`/`lseek`/`ioctl`/`close` on this descriptor, and deny `dup`/`fcntl(F_DUPFD*)`
+/// so the number cannot move, has to **hardcode a number**. A descriptor that arrived
+/// per-request would have none to hardcode.
+///
+/// ⊘ Like [`PARK_WITNESS_FD`], the number is **reserved rather than reused** when no grant
+/// is made: an isolate whose VM was launched without a shared memory backing simply has an
+/// unopened descriptor here, so the layout does not depend on a deployment choice.
+pub const GUEST_RAM_FD: i32 = 6;
 /// fd number of pool worker 0's stream in the child; worker *n* is `WORKER_FD_BASE + n`.
-pub const WORKER_FD_BASE: i32 = 6;
+pub const WORKER_FD_BASE: i32 = 7;
 
 // ★ The descriptor contract, checked at COMPILE time rather than by a test. It is a
 // relationship between three constants, so a runtime assertion could only ever be
@@ -128,8 +140,12 @@ const _: () = {
         "the park witness comes after the reserved hole"
     );
     assert!(
-        WORKER_FD_BASE > PARK_WITNESS_FD,
-        "workers come after the reserved hole AND after the park witness"
+        GUEST_RAM_FD > PARK_WITNESS_FD,
+        "guest RAM comes after the reserved hole and the park witness"
+    );
+    assert!(
+        WORKER_FD_BASE > GUEST_RAM_FD,
+        "workers come after the reserved hole, the park witness AND guest RAM"
     );
     assert!(
         RESERVED_NEVER_GRANTED_FD == 4,
@@ -637,6 +653,39 @@ impl RmBackend for ProxyRmBackend {
             _ => Err(RmError::Wedged),
         }
     }
+
+    /// ★★★★★ Carry the VMM's guest-RAM grant to the child.
+    ///
+    /// ⊘ **No descriptor rides this frame**, and the ordinary `write_frame`/`read_frame`
+    /// pair is used rather than the fd-carrying twins. The guest-RAM `memfd` crossed at
+    /// SPAWN, on [`GUEST_RAM_FD`] — see [`crate::guestram`] for why a fixed number is the
+    /// design rather than a convenience. So `max_fds` stays **zero** on this reply, exactly
+    /// as it is for every request but `ExportBacking`, and a child that attached one anyway
+    /// has it closed by the kernel and the frame refused.
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        let reply = self.call(Request::MapGuestRam {
+            offset: grant.offset(),
+            len: grant.len(),
+            prot: prot_code(grant.prot()),
+        })?;
+        match self.lift(reply)? {
+            // ★ The isolate is stamped HERE, from the connection we asked on — never taken
+            // from the wire. A child cannot name another isolate's namespace even by lying,
+            // which is the same rule `WireError::into_rm_error` applies to a `BadHandle`.
+            Reply::Handle(raw) => Ok(GuestRamMapped {
+                region: HostHandle::new(self.isolate, raw),
+                len: grant.len(),
+            }),
+            _ => Err(RmError::Wedged),
+        }
+    }
+
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        self.unit(Request::UnmapGuestRam {
+            region: mapped.region.raw(),
+            len: mapped.len,
+        })
+    }
 }
 
 // =====================================================================================
@@ -964,6 +1013,15 @@ pub struct HostIsolateFactory {
     /// exists to prevent, and `kayfabe_util::leafwitness` is blind to it. Read it with
     /// [`HostIsolateFactory::spawned`].
     spawned: std::sync::Mutex<Vec<IsolateId>>,
+    /// ★★★ The guest-RAM descriptor every isolate this factory spawns is granted, and how
+    /// many bytes it holds — or `None` when the VM was not launched with a shared memory
+    /// backing.
+    ///
+    /// ⊘ The **length comes from the VMM**, which is why it is stored beside the descriptor
+    /// rather than derived in the child. The extent of guest RAM is a fact the VMM owns;
+    /// an isolate that re-derived it with an `lseek` would give the one number the whole
+    /// authorization is bounded by a second source of truth.
+    guest_ram: Option<(std::sync::Arc<OwnedFd>, u64)>,
 }
 
 impl HostIsolateFactory {
@@ -976,7 +1034,25 @@ impl HostIsolateFactory {
             rm,
             park: crate::loopback::ParkVerb::Nothing,
             spawned: std::sync::Mutex::new(Vec::new()),
+            // ⊘ OFF unless the VMM says otherwise. A factory that defaulted to granting
+            // guest RAM would be granting it on every deployment that never asked, and the
+            // grant is the whole boundary.
+            guest_ram: None,
         }
+    }
+
+    /// ★★★ Grant every isolate this factory spawns a view of guest RAM.
+    ///
+    /// `fd` must be the VMM's shared, fd-backed guest-memory block
+    /// (`memory-backend-memfd,share=on`) and `bytes` its extent. Both come from the VMM;
+    /// neither is discoverable by the child. Without this, every
+    /// [`kayfabe_isolate::RmBackend::map_guest_ram`] on an isolate from this factory is
+    /// [`kayfabe_isolate::RmError::GuestRamUnavailable`] — loudly, rather than degrading
+    /// into a copy that cannot work (see that variant).
+    #[must_use]
+    pub fn with_guest_ram(mut self, fd: OwnedFd, bytes: u64) -> Self {
+        self.guest_ram = Some((std::sync::Arc::new(fd), bytes));
+        self
     }
 
     /// Every id this factory was asked for, in order (the birth witness).
@@ -1039,10 +1115,16 @@ impl HostIsolateFactory {
     /// that one line from `build_isolate` would turn nothing red.
     pub fn spawn_host(&self, id: IsolateId) -> HostIsolate {
         self.spawned.lock().expect("the spawn witness").push(id);
-        let built = self
-            .image
-            .clone()
-            .and_then(|image| build_isolate(image, self.rm, self.park, id, self.pool));
+        let built = self.image.clone().and_then(|image| {
+            build_isolate(
+                image,
+                self.rm,
+                self.park,
+                id,
+                self.pool,
+                self.guest_ram.as_ref(),
+            )
+        });
         built.unwrap_or_else(|why| HostIsolate::stillborn(id, self.pool, why))
     }
 }
@@ -1054,6 +1136,7 @@ fn build_isolate(
     park: crate::loopback::ParkVerb,
     id: IsolateId,
     pool: usize,
+    guest_ram: Option<&(std::sync::Arc<OwnedFd>, u64)>,
 ) -> Result<HostIsolate, String> {
     let (control_ours, control_theirs) =
         UnixDatagram::pair().map_err(|e| format!("control socketpair: {e}"))?;
@@ -1100,6 +1183,18 @@ fn build_isolate(
         Some((r, w)) => (Some(r), Some(w)),
         None => (None, None),
     };
+    // ★★★ Guest RAM, granted at a FIXED number and only when the VMM has some. Each spawn
+    // takes its own `dup`, so one isolate's exit cannot close the next one's view — the
+    // same rule the program image already follows.
+    if let Some((fd, bytes)) = guest_ram {
+        let dup = fd
+            .try_clone()
+            .map_err(|e| format!("duplicating the guest-RAM descriptor for this spawn: {e}"))?;
+        spec = spec
+            .grant(FdGrant::new(dup, GUEST_RAM_FD))
+            .arg("--guest-ram-bytes")
+            .arg(bytes.to_string());
+    }
     for i in 0..pool {
         let (mine, theirs) = UnixStream::pair().map_err(|e| format!("worker socketpair: {e}"))?;
         ours.push(mine);
@@ -1258,6 +1353,7 @@ mod tests {
             rm: RmMode::Loopback,
             park: crate::loopback::ParkVerb::Nothing,
             spawned: std::sync::Mutex::new(Vec::new()),
+            guest_ram: None,
         };
         assert_eq!(f.embedded(), Err("no image in this build".to_owned()));
         let id = IsolateId::new(1, GpuId(0));

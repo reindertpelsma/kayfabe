@@ -1,0 +1,37 @@
+# Guest-RAM memfd, RE-MEASURED ON A SECOND PHYSICAL BOX (vh, vast 47029542)
+#
+# 2026-08-10. Independent confirmation of guest_ram_crossing.md §1, which was measured
+# on vh2 (47373001). Both are RTX 3060 / GA106, host 580.159.04 open, but they are
+# different machines and different QEMU processes.
+#
+# ★ Shim revision under test: kayfabe-rev:346921b2162965cca404de913265107590c9eeb0
+#   (read with `strings <binary> | grep kayfabe-rev`, NOT assumed from the worktree —
+#   the 2026-08-01 post-mortem is what that instrument exists for). The revision is
+#   PRE-#238: none of the crossing's isolate-side code is in this binary, and no VMM
+#   code calls `with_guest_ram` at any revision. ⊘ So this measures the LAUNCH FLAG
+#   and nothing else. It is not a boot of the shape that landed today.
+#
+# ★★ The fd NUMBER moved between boxes: vh2 reported fd=14, vh reports fd=15. That is
+#   trap 2 of §1.1 confirmed rather than merely restated — a probe keyed on the number,
+#   or on 'the first memfd', would have been right on one box and wrong on the other.
+#   The probe keys on the readlink's /memfd: prefix AND the size, and asserts EXACTLY
+#   one candidate.
+
+=== WITH NVKVM_RAM_BACKEND=memfd (boot tag vhmemfd) ===
+QEMU pid 865507
+  fd=15 -> /memfd:memory-backend-memfd (deleted) size=2147483648 (2048.0 MiB)
+  fd=23 -> /memfd:displaysurface (deleted) size=1228800 (1.2 MiB)
+memfds total=2  guest-RAM candidates=1
+OPENED from ANOTHER process, 268435456 bytes
+pages with content in first 256 MiB: 47217 / 65536
+  Linux version    found=True
+  nvkvm-guest      found=False
+  systemd          found=True
+  nvidia           found=True
+VERDICT: guest RAM is an openable shared memfd holding live guest memory
+
+=== CONTROL: same binary, same script, flag ABSENT (boot tag vhctrl) ===
+QEMU pid 865800
+  fd=22 -> /memfd:displaysurface (deleted) size=1228800 (1.2 MiB)
+memfds total=1  guest-RAM candidates=0
+VERDICT: NO guest-RAM memfd (this is the control's expected answer)

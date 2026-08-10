@@ -356,8 +356,134 @@ pub enum RmError {
         /// The RM object whose pages were asked for.
         memory: HostHandle,
     },
+    /// ★★★ **This isolate has no guest-RAM descriptor**, so a [`GuestRamGrant`] cannot be
+    /// honoured — and it is a *deployment* fact, not a bug and not a host resource
+    /// condition (`mode2_isolate_memory_boundary.md` §2, `guest_ram_crossing.md` §1).
+    ///
+    /// Guest RAM is only shareable when the VM was **launched** with a shared, fd-backed
+    /// memory block (`memory-backend-memfd,share=on`). No code gate can observe how the
+    /// operator started the VM — the same argument
+    /// [`kayfabe_linux_raw::Backing::PrivateAnonymous`] already writes down for the VMM's
+    /// own side of the same fact — so the only available mechanism is a **loud refusal at
+    /// the first grant**.
+    ///
+    /// ⊘ A caller must never fall back to copying the range instead. The guest **polls**
+    /// its completion semaphore out of its own RAM and advances `GP_PUT` in its own ring;
+    /// a poll has no trigger point at which a copy-back could happen, so a copying fallback
+    /// is not a degraded version of this — it is a different, wrong mechanism that looks
+    /// like it works until the guest waits forever.
+    GuestRamUnavailable,
     /// Any other backend-reported failure (opaque status for diagnostics).
     Other(u32),
+}
+
+/// ★★★★★ **An instruction to map a slice of GUEST RAM into an isolate** — and the whole
+/// point is *who wrote the numbers in it*.
+///
+/// `mode2_isolate_memory_boundary.md` §3, the load-bearing rule: **the VMM originates the
+/// numbers; it never validates numbers the isolate proposed.** If the isolate could say
+/// *"I would like offset X length Y"* and the VMM checked *"is that inside guest RAM?"*,
+/// the check would be **circular** — it validates a request against itself, which is
+/// exactly [an echo is unverifiable by its reply]. `(offset, len)` must come from the VMM's
+/// own address-table derivation, and this type exists so that the shape of the call
+/// enforces it rather than a comment asking for it.
+///
+/// ## ★ Why this is a SHAPE and had to land before the first caller
+///
+/// §5 of that page: *"Checks can be added later; shapes cannot."* If the crossing lands
+/// without this, every call site is written assuming *"I can map what I need"*, and
+/// retrofitting means auditing and rewriting all of them. The seccomp enforcement — fd
+/// pinning, the filter, `SECCOMP_RET_USER_NOTIF` on `mmap`, the `munmap` confirmation —
+/// lands **behind** this interface without touching a single call site, because the shape
+/// already forced everything through one door.
+///
+/// ## ⊘ What this rung deliberately does NOT dictate, and why that is not a hole
+///
+/// The **host virtual address**. §3's "Matching" paragraph wants `addr` in the match set
+/// too, and it is not here yet because dictating a host VA requires a *host-private VA
+/// reservation in the isolate's address space* — `kayfabe_linux_raw` has no
+/// `MAP_FIXED_NOREPLACE` anywhere by deliberate policy, and
+/// [`kayfabe_linux_raw::Reservation::map_fixed_in`] is the only sanctioned way to place a
+/// mapping at a chosen address. That reservation is designed and not built
+/// (`guest_ram_crossing.md` §3).
+///
+/// ★ And the omission is **sound rather than merely tolerable**, which is the part worth
+/// stating: the circularity §3 forbids is about *which guest memory* an isolate may reach.
+/// The host VA says where in the isolate's own address space the pages land, which
+/// authorizes nothing — an isolate that could pick its own host VA still cannot pick which
+/// guest bytes are there. So the authorization is complete as written, and the host VA
+/// tightens the *seccomp match* later rather than plugging a gap now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamGrant {
+    offset: u64,
+    len: u64,
+    prot: Prot,
+}
+
+impl GuestRamGrant {
+    /// Mint a grant. **The name is the contract**: a caller that is not the VMM deriving
+    /// these numbers from its own region map is misusing this, and the spelling is meant to
+    /// be uncomfortable to write anywhere else.
+    ///
+    /// ⊘ There is deliberately no `from_request`, no `validate`, and no constructor that
+    /// takes numbers the isolate sent. Adding one re-opens §3's circularity.
+    #[must_use]
+    pub fn originated_by_the_vmm(offset: u64, len: u64, prot: Prot) -> Self {
+        GuestRamGrant { offset, len, prot }
+    }
+
+    /// Byte offset into the guest-RAM block.
+    #[must_use]
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+
+    /// Length in bytes.
+    #[must_use]
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Whether the isolate may write these pages.
+    ///
+    /// ★ Carried explicitly because authorizing read-only and receiving `PROT_WRITE` is a
+    /// **silent escalation** (§3, "Matching"). A ring the isolate only reads must be mapped
+    /// read-only *in the isolate*, which is
+    /// [`kayfabe_linux_raw::HostProt`]'s whole reason for being a distinct type from this
+    /// one.
+    #[must_use]
+    pub fn prot(&self) -> Prot {
+        self.prot
+    }
+
+    /// Whether the grant names no bytes at all.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+/// What the isolate made of a [`GuestRamGrant`]: **a named mapping**, not an address.
+///
+/// ⊘⊘ **It deliberately does not carry a host virtual address**, and the reason is a
+/// boundary rather than taste. `kayfabe_linux_raw::MappedRegion::addr_at` is `pub(crate)`:
+/// no representation of a host mapping's address crosses that crate, because the one
+/// consumer that needs one (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, which hands RM an address
+/// it then `pin_user_pages`-walks) is served by patching the value into the ioctl argument
+/// *inside* the raw crate and scrubbing it back out. Reporting a host VA up to the VMM
+/// would have punched a hole in that for a number the VMM has no use for — it cannot
+/// dereference an address in another process, and it does not choose this one.
+///
+/// ★ So the mapping is named by a [`HostHandle`], like every other isolate-side object.
+/// That is not a stand-in for the address: it buys the cross-isolate check for free, since
+/// [`Worker::execute`]'s foreign-handle gate already refuses a handle minted by one
+/// isolate presented on another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamMapped {
+    /// The isolate's name for this mapping.
+    pub region: HostHandle,
+    /// Length in bytes, as granted.
+    pub len: u64,
 }
 
 /// ★★★ **What the VMM is asking the isolate to make installable** —
@@ -682,6 +808,53 @@ pub trait RmBackend: Send + Sync {
     /// [`RmError::NotExportableAsMemory`] for the device class; [`RmError::NoMemory`] if
     /// the host would not mint the backing; whatever the transport refuses with.
     fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError>;
+
+    /// ★★★★★ **Map a slice of GUEST RAM into this isolate — because the VMM said to.**
+    ///
+    /// This is the one door. `mode2_isolate_memory_boundary.md` §5: *the isolate never
+    /// `mmap`s guest RAM on its own; it is instructed.* Everything the isolate can reach of
+    /// the guest's memory arrives through a [`GuestRamGrant`], whose numbers the VMM
+    /// derived from its own region map — see that type for why the alternative (the isolate
+    /// asking and the VMM checking) is a circular check rather than a weaker one.
+    ///
+    /// ## Why guest RAM has to be MAPPED and cannot be COPIED
+    ///
+    /// The refuted alternative, and it is refuted by the guest's own behaviour rather than
+    /// by preference: the guest **polls** its completion semaphore directly out of its own
+    /// RAM, and advances `GP_PUT` in its own ring expecting the engine to see it. A poll
+    /// has **no trigger point** — no event, no ioctl, no exit — at which a copy-back could
+    /// be scheduled. ★ The C agrees and did it this way: for sysmem it mapped
+    /// (`pci_dma_map` → host VA → `OS_DESCRIPTOR` over the real pages) and copied only for
+    /// emulated-framebuffer seeding, which is memory it owned.
+    ///
+    /// ## ⊘ What this verb is NOT
+    ///
+    /// It is **not** [`RmBackend::export_backing`]'s inverse and must not be confused with
+    /// it. `export_backing` runs isolate → VMM and hands up memory the *isolate* minted;
+    /// this runs VMM → isolate and hands down memory the *guest* owns. The two directions
+    /// have opposite threat models, which is why [`ExportedBacking`] and
+    /// [`kayfabe_vmm::RamHandle`] are separate types with separate token spaces.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if the VM was not launched with a shared memory
+    /// backing — a deployment fact, refused loudly rather than degraded into a copy;
+    /// [`RmError::NoMemory`] if the host refused the mapping; whatever the transport
+    /// refuses with.
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError>;
+
+    /// Give back what [`RmBackend::map_guest_ram`] mapped.
+    ///
+    /// ⚠ §3's freeing rule, stated here because it is the half a later reader drops: the
+    /// kernel frees the pages on `munmap` regardless — what confirming this buys is
+    /// **knowing the isolate has lost access before the range is reused**. So a VMM that
+    /// reclaims a guest-RAM range must wait for this to return, and on the timeout path
+    /// must free after the child is **reaped**, not after it is signalled: between the
+    /// signal and the mm teardown the mappings still exist.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if there is no guest RAM to unmap; whatever the
+    /// transport refuses with.
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError>;
 }
 
 /// ★★ Session identity of an isolate — the **`(Proc, GpuId)` pair**, because that is
@@ -1745,6 +1918,55 @@ impl Worker {
             });
         }
         self.backend.export_backing(want)
+    }
+
+    /// ★★★★★ Carry the VMM's guest-RAM grant to this worker's isolate.
+    ///
+    /// R1 first, for [`Worker::export_backing`]'s reason: this is a syscall in another
+    /// process reached over a socket.
+    ///
+    /// ⊘ There is **no foreign-handle gate on the way in**, and that is a statement rather
+    /// than an omission: a [`GuestRamGrant`] names no [`HostHandle`] at all. It carries a
+    /// guest-physical offset the VMM derived, which belongs to no isolate's namespace and
+    /// cannot be a value from a sibling's. The gate exists on the way *back* — the mapping
+    /// this returns is named in **this** isolate's namespace, and
+    /// [`Worker::unmap_guest_ram`] refuses a name from any other.
+    ///
+    /// # Errors
+    /// [`RmError::GuestRamUnavailable`] if the VM was launched without a shared memory
+    /// backing; otherwise whatever [`RmBackend::map_guest_ram`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("mapping guest RAM into an isolate");
+        self.backend.map_guest_ram(grant)
+    }
+
+    /// Give back a guest-RAM mapping.
+    ///
+    /// ★★ The foreign-handle gate **is** here, and it is load-bearing rather than
+    /// symmetric-for-tidiness: guest RAM is the one resource whose cross-isolate reach is a
+    /// real escalation (isolate A releasing — or, once the enforcement layer lands,
+    /// re-authorizing — isolate B's view of guest process B's pages). The same raw value is
+    /// live-and-different in every namespace, so an ungated release would act on a
+    /// bystander mapping.
+    ///
+    /// # Errors
+    /// [`RmError::ForeignHandle`] before anything runs; otherwise whatever
+    /// [`RmBackend::unmap_guest_ram`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("releasing a guest-RAM mapping");
+        if !mapped.region.belongs_to(self.isolate) {
+            return Err(RmError::ForeignHandle {
+                handle: mapped.region,
+                worker_isolate: self.isolate,
+            });
+        }
+        self.backend.unmap_guest_ram(mapped)
     }
 
     /// ★ Run `plan`'s verb chain. **Asserts R1 first** — invoking a host verb with

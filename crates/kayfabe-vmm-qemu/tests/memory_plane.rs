@@ -647,9 +647,7 @@ fn a_guest_ram_token_is_refused_where_a_host_backing_id_is_required() {
             },
             Prot::ReadWrite
         ),
-        Err(VmmError::Unsupported(
-            kayfabe_vmm::RAM_TOKEN_AS_A_BACKING
-        )),
+        Err(VmmError::Unsupported(kayfabe_vmm::RAM_TOKEN_AS_A_BACKING)),
         "★ by NAME — 'an id this backend never minted' would also be true of a typo, and this \
          is not a typo, it is guest RAM about to be mapped into a guest window"
     );

@@ -1388,9 +1388,29 @@ jobs:
           #      that `ret` was created by the `mmap` two lines above, is exactly `len_host`
           #      bytes, and has not been recorded in any `Placement` — nothing can be holding
           #      it, because nothing has been told about it.
+          # ★★ 90 -> 91 at THE GUEST-RAM CROSSING (task #238, 2026-08-10). ONE new
+          # relaxation, and it is a trait impl rather than a block:
+          #   +1 `mapping_unsafe.rs` — `unsafe impl Send for MappedRegion`. A `MappedRegion`
+          #      owns a process-wide mapping, not a thread-affine resource: one `mmap` in
+          #      `map`, never rewritten, one `munmap` in `Drop`, and `munmap` from a thread
+          #      other than the one that called `mmap` is valid on Linux. Same argument
+          #      `VolatileRegion` and `GuestWindow` already carry.
+          #      ★★★ What makes it worth a review line is what it does NOT grant. `Sync` is
+          #      DELIBERATELY withheld: this type's `write_from` performs a bulk `memcpy`
+          #      through `&self`, i.e. interior mutability with no synchronisation, so two
+          #      threads holding `&MappedRegion` could race. `VolatileRegion` earns `Sync`
+          #      because every access there is a naturally-aligned `Relaxed` atomic and there
+          #      is no bulk accessor at all — an argument that must NOT be copied across.
+          #      The one consumer (`kayfabe_isolate_host::guestram::GuestRamPlane`) holds its
+          #      regions in a `Mutex<BTreeMap<u64, MappedRegion>>`, and `Mutex<T>: Sync` for
+          #      `T: Send` — so this grant is exactly enough and no more.
           # ⊘ Note what did NOT move: `chardev_unsafe.rs` stays at 4 across the ioctl-size
           # bound that landed at `6d82fb4`, because a bound added in SAFE code above an
           # existing block is the shape this ratchet should never charge for.
+          # ⊘ And `kayfabe-isolate-host` did not appear on this list: the crossing's whole
+          # isolate-side plane (`guestram.rs`) contains no `unsafe` at all, because the
+          # mapping act is `MappedRegion::map` — a safe call into the audited crate. That is
+          # the containment working, not an omission.
           # ★★★ `kayfabe-qemu-raw` 47 -> 48 AT ABI 16, 2026-08-07 — the
           # `probe-arm-notifier` device property. ONE relaxation:
           #
@@ -1410,7 +1430,7 @@ jobs:
           # launching shell). The string must therefore cross the FFI boundary once, at
           # regs-create time, instead of being ambiently readable — the one new unsafe
           # site IS the fix's mechanism, not incidental.
-          AUDITED="kayfabe-linux-raw:90 kayfabe-qemu-raw:48"
+          AUDITED="kayfabe-linux-raw:91 kayfabe-qemu-raw:48"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

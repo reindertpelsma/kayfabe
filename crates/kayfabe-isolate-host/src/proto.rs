@@ -187,6 +187,40 @@ pub enum Request {
         /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
         prot: u8,
     },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::map_guest_ram`] — the VMM instructing the
+    /// isolate to map a slice of **guest RAM** (`mode2_isolate_memory_boundary.md` §5).
+    ///
+    /// ⊘⊘ **It carries no descriptor, and that is the finding rather than a shortcut.**
+    /// The obvious design — and the one the task framing assumed — is a first
+    /// parent→child `SCM_RIGHTS` request carrying the guest-RAM `memfd`. It is not needed:
+    /// §2 of that page says the fd is handed to the isolate at a **fixed, known number**,
+    /// precisely so the seccomp filter installed afterwards can hardcode it, and
+    /// [`kayfabe_linux_raw::FdGrant`] already delivers descriptors at fixed numbers at
+    /// spawn. So this verb moves **scalars only**, which is also what makes the later
+    /// `SECCOMP_RET_USER_NOTIF` match trivial: every argument of the `mmap` the child is
+    /// about to issue is already in this frame.
+    ///
+    /// ★ The consequence worth writing down: the fd-IN gap on the request path is REAL
+    /// (the child's reader is `read_frame`, with no control buffer at all) and is **not on
+    /// this path**. Building it here would have been a whole mechanism serving a verb that
+    /// does not want it.
+    MapGuestRam {
+        /// Byte offset into the guest-RAM block. VMM-derived — see
+        /// [`kayfabe_isolate::GuestRamGrant`].
+        offset: u64,
+        /// Length in bytes. VMM-derived.
+        len: u64,
+        /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
+        prot: u8,
+    },
+    /// [`kayfabe_isolate::RmBackend::unmap_guest_ram`].
+    UnmapGuestRam {
+        /// The isolate's raw name for the mapping, as a previous [`Request::MapGuestRam`]
+        /// reply reported it.
+        region: u64,
+        /// Length in bytes.
+        len: u64,
+    },
 }
 
 /// A request plus the checkout transaction it belongs to.
@@ -268,6 +302,14 @@ pub enum WireError {
     /// able to tell *"the bytes are on the card and cannot cross as memory"* from
     /// *"the host refused"*, and a status code makes those the same fact.
     NotExportableAsMemory(u64),
+    /// ★★★ [`RmError::GuestRamUnavailable`] — the VM was not launched with a shared,
+    /// fd-backed memory block, so this isolate has no guest RAM to map.
+    ///
+    /// Named on the wire for the same reason as the variant above: it is a **deployment**
+    /// fact the isolate can observe and the VMM cannot, and arriving as an opaque status
+    /// would make it indistinguishable from "the host refused" — which is the difference
+    /// between *reconfigure the VM* and *file a bug*.
+    GuestRamUnavailable,
 }
 
 impl WireError {
@@ -287,6 +329,7 @@ impl WireError {
             WireError::NotExportableAsMemory(raw) => RmError::NotExportableAsMemory {
                 memory: kayfabe_isolate::HostHandle::new(isolate, raw),
             },
+            WireError::GuestRamUnavailable => RmError::GuestRamUnavailable,
         }
     }
 }
@@ -577,6 +620,17 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
             }
+            Request::MapGuestRam { offset, len, prot } => {
+                out.push(16);
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*prot);
+            }
+            Request::UnmapGuestRam { region, len } => {
+                out.push(17);
+                out.extend_from_slice(&region.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
         }
         out
     }
@@ -652,6 +706,15 @@ impl Envelope {
                 len: c.u64("export len")?,
                 prot: c.u8("export prot")?,
             },
+            16 => Request::MapGuestRam {
+                offset: c.u64("guest ram offset")?,
+                len: c.u64("guest ram len")?,
+                prot: c.u8("guest ram prot")?,
+            },
+            17 => Request::UnmapGuestRam {
+                region: c.u64("guest ram region")?,
+                len: c.u64("guest ram len")?,
+            },
             tag => {
                 return Err(ProtoError::UnknownTag {
                     what: "request",
@@ -721,6 +784,7 @@ impl Reply {
                         out.push(6);
                         out.extend_from_slice(&raw.to_le_bytes());
                     }
+                    WireError::GuestRamUnavailable => out.push(7),
                 }
             }
         }
@@ -747,6 +811,7 @@ impl Reply {
                 4 => WireError::Interrupted,
                 5 => WireError::Other(c.u32("status")?),
                 6 => WireError::NotExportableAsMemory(c.u64("unexportable memory")?),
+                7 => WireError::GuestRamUnavailable,
                 tag => {
                     return Err(ProtoError::UnknownTag {
                         what: "wire error",
@@ -954,6 +1019,23 @@ mod tests {
                 len: 0x1000,
                 prot: PROT_READ_ONLY,
             },
+            // ★ BOTH protections, for the reason `prot_code` exists at all: the direction
+            // that fails open here is the dangerous one, and a sample carrying only
+            // read-write would prove the round trip about the harmless half.
+            Request::MapGuestRam {
+                offset: 0x237f_e000,
+                len: 0x1_0000,
+                prot: PROT_READ_WRITE,
+            },
+            Request::MapGuestRam {
+                offset: 0,
+                len: 0x1000,
+                prot: PROT_READ_ONLY,
+            },
+            Request::UnmapGuestRam {
+                region: 0x4000_0000_0000_0001,
+                len: 0x1_0000,
+            },
         ]
     }
 
@@ -981,6 +1063,8 @@ mod tests {
             Request::FbRead { .. } => "FbRead",
             Request::ExportSurface { .. } => "ExportSurface",
             Request::ExportBacking { .. } => "ExportBacking",
+            Request::MapGuestRam { .. } => "MapGuestRam",
+            Request::UnmapGuestRam { .. } => "UnmapGuestRam",
         }
     }
 
@@ -1003,9 +1087,11 @@ mod tests {
                 "FbRead",
                 "Free",
                 "MapGpuVa",
+                "MapGuestRam",
                 "RingDoorbell",
                 "Schedule",
                 "UnmapGpuVa",
+                "UnmapGuestRam",
             ]
             .into_iter()
             .collect(),
@@ -1084,6 +1170,7 @@ mod tests {
             WireError::Interrupted,
             WireError::Other(0),
             WireError::NotExportableAsMemory(1),
+            WireError::GuestRamUnavailable,
         ] {
             match w.into_rm_error(iso) {
                 RmError::Wedged => panic!("a child claimed it never answered"),

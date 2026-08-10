@@ -136,8 +136,8 @@ use kayfabe_abi::submit::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, HostHandle,
-    IsolateId, RmBackend, RmError,
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, GuestRamGrant,
+    GuestRamMapped, HostHandle, IsolateId, RmBackend, RmError,
 };
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
@@ -1819,6 +1819,10 @@ pub struct HostRmBackend {
     /// every sibling worker: a backing belongs to the isolate, not to the pool slot that
     /// happened to mint it.
     exports: Arc<ChildExports>,
+    /// ★★★ This isolate's guest-RAM plane, or `None` when the VM was launched without a
+    /// shared memory backing. Shared with every sibling worker — a guest-RAM mapping
+    /// belongs to the isolate, not to the pool slot that happened to order it.
+    guest_ram: Option<Arc<crate::guestram::GuestRamPlane>>,
     /// ★★★ **E6 — the recorder-only CE witness**, `None` unless a diagnostic asked for
     /// one ([`HostRmBackend::with_ce_witness`]). See [`CeWitness`].
     ce_witness: Option<Arc<CeWitness>>,
@@ -2107,8 +2111,16 @@ impl HostRmBackend {
             slots: BTreeMap::new(),
             ce_channels: BTreeMap::new(),
             exports,
+            guest_ram: None,
             ce_witness: None,
         }
+    }
+
+    /// Install this isolate's guest-RAM plane (or, with `None`, state that it has none).
+    #[must_use]
+    pub fn with_guest_ram(mut self, plane: Option<Arc<crate::guestram::GuestRamPlane>>) -> Self {
+        self.guest_ram = plane;
+        self
     }
 
     /// ★★★ **E6** — install a recorder-only [`CeWitness`]. See that type for why it
@@ -2735,6 +2747,33 @@ impl RmBackend for HostRmBackend {
             return Err(RmError::NotExportableAsMemory { memory });
         };
         mint_fabricated(&self.exports, want)
+    }
+
+    /// ★★★★★ The real backend's guest-RAM door. It **decides nothing**: the grant's numbers
+    /// are the VMM's, and everything this body adds is the refusal for an isolate that was
+    /// never given a descriptor.
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        let raw = plane.honour(grant)?;
+        Ok(GuestRamMapped {
+            // ★ Stamped through `HostHandle::new` directly rather than through `stamp`,
+            // which narrows to RM's 32 bits: a guest-RAM name is deliberately WIDER than an
+            // RM handle (`guestram::GUEST_RAM_NAME_TAG`) so that presenting one where an RM
+            // object is expected is refused by `narrow` — a gate that already exists.
+            region: HostHandle::new(self.id, raw),
+            len: grant.len(),
+        })
+    }
+
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        plane.release(mapped.region.raw())
     }
 }
 

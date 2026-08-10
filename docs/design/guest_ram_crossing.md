@@ -224,3 +224,147 @@ i.e. the first production caller is what arms it. Mint the two token spaces sepa
 ⊘ **Still forbidden, and this rung does not touch any of it:** no ring or pushbuffer parsing
 (#231), no semaphore writer (that is the C's forgery branch), no blocking wait on the vCPU
 thread.
+
+---
+
+## 4. ★★★ What LANDED (2026-08-10, task #238) — and lead with the refutations
+
+`[built + unit-measured]` on master. Every claim below is a code/test citation, not a bench run;
+§4.4 says plainly what is still unmeasured.
+
+### R6. ⊘⊘ The fd does NOT ride a request — and building fd-IN for it would have been WRONG
+
+§0's R3 is correct that the child's request loop has no `recvmsg` reader, and the task framing
+made the natural inference: *the guest-RAM `memfd` crosses on a new fd-bearing request*. It does
+not, and the reason is in the companion page's own §2: the descriptor is handed to the isolate
+**at a fixed, known number**, *precisely so the seccomp filter installed afterwards can hardcode
+that number*. A descriptor arriving per-request has **no fixed number to hardcode**.
+
+⇒ It crosses at **spawn**, through `kayfabe_linux_raw::FdGrant` — the mechanism that already
+delivers the control socket, the worker sockets and the park witness — on
+`isolate::GUEST_RAM_FD` (a new **6**; `WORKER_FD_BASE` moved to **7**, and the compile-time
+descriptor-contract assertion grew an arm so a future edit that collides two grants fails the
+build). The wire verb therefore moves **scalars only**.
+
+★ And that is not merely "less work": it is what makes the eventual `SECCOMP_RET_USER_NOTIF`
+match trivial rather than a policy decision — every argument of the `mmap` the child is about to
+issue is already in the frame that ordered it.
+
+⊘ So the fd-IN gap is **real and off this path**. It stays open, correctly, in §2's ledger.
+
+### R7. ⊘ NO host virtual address crosses the boundary, and the design sketch assumed one would
+
+`mode2_isolate_memory_boundary.md` §3's "Matching" paragraph wants `addr` in the authorization
+match, on the ground that *"the VMM dictates it anyway, for VA identity"*. It cannot today, and
+the obstacle is a boundary rather than a missing feature: `MappedRegion::addr_at` is
+`pub(crate)` in `kayfabe-linux-raw`, deliberately — the one consumer that needs a host address
+(`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, which hands RM an address it then `pin_user_pages`-walks)
+is served by patching the value into the ioctl argument **inside** that crate and scrubbing it
+back out. `MAP_FIXED_NOREPLACE` likewise appears nowhere in the crate, by policy.
+
+⇒ A mapping is named by a **`HostHandle`** instead. That is not a stand-in for the address: it
+buys the cross-isolate check for free, because `Worker::unmap_guest_ram`'s foreign-handle gate
+already refuses a name minted by one isolate presented on another — and guest RAM is precisely
+the resource whose cross-isolate reach is a real escalation rather than untidiness.
+
+★ And the authorization is **complete without it**, which is the part worth stating rather than
+apologising for. §3's circularity rule is about *which guest memory* an isolate may reach. The
+host VA says where in the isolate's own address space the pages land, and authorizes nothing —
+an isolate that picks its own host VA still cannot pick which guest bytes are there. So the
+host VA tightens the *seccomp match* later; it does not plug a gap now.
+
+### R8. ⊘ §2.1's fix is NOT "two vectors" — two zero-based index spaces collide at every index
+
+§2.1 called for minting the two token spaces separately, and the obvious reading (a second
+`Vec`) would have left `RamHandle.token == 0` and `HostRegion.id == 0` still interchangeable.
+What landed puts the separation **in the value**: `kayfabe_vmm::RAM_EXPORT_TOKEN_TAG` (bit 63)
+plus `RAM_TOKEN_AS_A_BACKING`, defined once so three backends cannot drift, with `map_guest`
+refusing a tagged id **by name and before the table lookup**. `MockVmm` refuses it too — a mock
+that accepted it would be the more dangerous half, since the confusion would then typecheck and
+run green in every unit test.
+
+The regression test carries its own bite: strip the tag and the **same index** maps, which is
+what proves the two spaces really did collide there rather than the id merely being out of range.
+
+### R9. ⚠ The fd-carrying reader had NO interrupt rule, and it is worse there than elsewhere
+
+Found while building this, latent until now. `proto::read_exact_or_eof` states a
+position-dependent rule — at a frame boundary `EINTR` is a landed cancel and must be reported;
+mid-frame it is a stray signal and must be retried — and `fdcross::read_frame_with_fds` had
+neither half. The two readers share no code, so the rule was true of one and false of the other
+with nothing saying so.
+
+⚠ It is **strictly worse** on the fd reader: the descriptors arrive with the frame's *length
+word* and are already adopted by the time the body read blocks, so a mid-frame abandon closes
+real descriptors **and** strands the frame that named them. Fixed with `RawError::is_interrupted`
+(in the raw crate, where errno numbers belong, matched on the errno and never on the call
+string), and bite-checked.
+
+### 4.1 The shape, as built
+
+| piece | where |
+|---|---|
+| `GuestRamGrant` — VMM-originated `(offset, len, prot)`; sole constructor `originated_by_the_vmm` | `crates/kayfabe-isolate/src/lib.rs` |
+| `GuestRamMapped` — a `HostHandle`, deliberately not an address (R7) | same |
+| `RmBackend::map_guest_ram` / `unmap_guest_ram`; `Worker` wrappers with R1 + the foreign-handle gate | same |
+| `RmError::GuestRamUnavailable` — a **deployment** fact, named on the wire | same, + `proto.rs` |
+| `GuestRamPlane` — the one `mmap` of guest memory in the isolate; owns the mappings, so isolate death releases them | `crates/kayfabe-isolate-host/src/guestram.rs` |
+| `GUEST_RAM_NAME_TAG` — puts a mapping's name beyond RM's 32 bits, so the existing `narrow` gate refuses it as an object handle | same |
+| wire verbs 16/17, scalars only, `max_fds = 0` | `crates/kayfabe-isolate-host/src/proto.rs` |
+| the spawn-time grant | `crates/kayfabe-isolate-host/src/isolate.rs` |
+| `unsafe impl Send for MappedRegion` — and **deliberately not `Sync`**; the argument is written at the impl | `crates/kayfabe-linux-raw/src/mapping_unsafe.rs` |
+
+### 4.2 ★★★ The one test that could not have been written the obvious way
+
+`writes_the_vmm_makes_after_the_mapping_are_visible_to_the_isolate`
+(`crates/kayfabe-isolate-host/tests/guest_ram.rs`) drives a **real spawned child** over a real
+socket with a real `memfd` on the grant number. The obvious version — write, map, read back —
+would pass identically against a design that **copied** the range at map time, which is exactly
+§6's refuted alternative. So the ordering *is* the assertion: the isolate maps first, the VMM
+writes second, the isolate's view changes. Only a shared mapping can answer.
+
+### 4.3 ⚠ An instrument this rung got wrong, and corrected
+
+The isolate-death test first counted `/proc/self/fd` before and after. It reported **12 against
+34** — because the test binary runs its threads in parallel and the count was reading every
+other test's descriptors. ⊘ Serialising the file would have been the wrong fix: the count could
+never have witnessed the claim, since the mappings being released are in **another process's**
+address space and vanish with it. The child-side property is now asserted where it is
+observable — `guestram`'s own unit tests, against a plane whose table is in reach — and the
+process-side test asserts the converse it *can* see: guest RAM outlives every isolate that saw
+it, intact and writable.
+
+### 4.4 ⊘ What is still NOT measured
+
+- **Nothing has run on the bench.** Everything above is unit-and-integration measured on a box
+  with no GPU. The `NVKVM_RAM_BACKEND=memfd` flag is landed and §1-measured, but **no VMM code
+  calls `with_guest_ram` yet** — the QEMU shim has no route to the hypervisor's own guest-RAM
+  descriptor, which is §3's still-open (A)-vs-(B) question and the next thing on this path.
+- **No `OS_DESCRIPTOR` has been taken over a guest page.** `GuestRamPlane::with_region` exists
+  so the alloc can name one, and has no caller.
+- **The enforcement layer is not built** — no fd pinning, no filter, no notify loop, no `munmap`
+  confirmation. That is §5's deliberate split: the shape now, the enforcement behind it.
+
+### 4.5 ★ Re-measured on a SECOND physical box
+
+`[measured 2026-08-10, vh (vast 47029542), shim rev 346921b]` —
+`docs/reference/bench_evidence/guest_ram_memfd_vh_346921b.out`, boot logs
+`traces/guest_boots/run_vhmemfd_qemu.log` and `run_vhctrl_qemu.log`.
+
+§1 was measured on `vh2`. The paired boot reproduces on `vh`: with the flag, one 2 GiB
+`/memfd:memory-backend-memfd` openable from another process and holding live guest memory
+(`Linux version`, `systemd`, `nvidia` all present); without it, only the 1.2 MiB
+`displaysurface` decoy and **zero** candidates. The `memory plane realized` line is
+**byte-identical** across the pair — observational neutrality confirmed on a second machine
+rather than restated from the first.
+
+★★ And one of §1.1's traps got a second data point instead of a second mention: the fd
+**number moved**, 14 on `vh2` and 15 on `vh`. A probe keyed on the number, or on "the first
+memfd", would have been right on one box and wrong on the other. The probe keys on the
+`readlink`'s `/memfd:` prefix **and** the size, and asserts exactly one candidate.
+
+⊘ **What this boot does NOT show, stated because every signal says otherwise.** The bench
+binary is `346921b`, which predates everything in §4 — and no VMM code calls
+`with_guest_ram` at *any* revision. So this is a measurement of the **launch flag**, and it
+is not a boot of the shape that landed. A reader who sees "boot evidence, 2026-08-10" beside
+§4 and infers the crossing ran end to end would be wrong.

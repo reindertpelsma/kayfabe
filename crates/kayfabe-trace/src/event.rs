@@ -193,6 +193,7 @@ impl Faulted for RmError {
             RmError::ForeignHandle { .. } => FaultTag("RmError::ForeignHandle"),
             RmError::PlacementRefused { .. } => FaultTag("RmError::PlacementRefused"),
             RmError::NotExportableAsMemory { .. } => FaultTag("RmError::NotExportableAsMemory"),
+            RmError::GuestRamUnavailable => FaultTag("RmError::GuestRamUnavailable"),
             RmError::Other(_) => FaultTag("RmError::Other"),
         }
     }

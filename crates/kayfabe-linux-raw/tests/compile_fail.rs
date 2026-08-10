@@ -49,7 +49,7 @@ const REQUIRED_ROWS: &[&str] = &[
     "no_wide_volatile_load.rs",
     "offset_arithmetic.rs",
     "page_size_literal.rs",
-    "region_is_not_send.rs",
+    "region_is_not_sync.rs",
     "view_outlives_region.rs",
 ];
 

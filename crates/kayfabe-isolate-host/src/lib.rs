@@ -74,6 +74,7 @@
 pub mod child;
 pub mod export;
 pub mod fdcross;
+pub mod guestram;
 pub mod isolate;
 pub mod loopback;
 pub mod proto;

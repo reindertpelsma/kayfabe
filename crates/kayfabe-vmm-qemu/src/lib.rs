@@ -124,8 +124,8 @@ use kayfabe_linux_raw::{
 use kayfabe_util::Instant;
 use kayfabe_util::leafwitness::{self, assert_leaf_free};
 use kayfabe_vmm::{
-    BarId, CoreEvent, DeferQueue, GuestRamMap, HostRegion, IrqSpec, Prot, RamHandle, RamRegionId,
-    RegionKind, SlotId, TrapMode, Vmm, VmmError, RAM_EXPORT_TOKEN_TAG, RAM_TOKEN_AS_A_BACKING,
+    BarId, CoreEvent, DeferQueue, GuestRamMap, HostRegion, IrqSpec, Prot, RAM_EXPORT_TOKEN_TAG,
+    RAM_TOKEN_AS_A_BACKING, RamHandle, RamRegionId, RegionKind, SlotId, TrapMode, Vmm, VmmError,
 };
 
 use host::{BarPlacement, BlockerId, HostError, MrHandle, QemuHost, SectionDesc};

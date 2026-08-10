@@ -242,13 +242,17 @@
 //!   today and would make every suite that composes this backend non-deterministic —
 //!   which §8.3 forbids. It becomes real when something outside a test has to be woken by
 //!   a deadline nobody is waiting on.
-//! - **`Send`/`Sync` for the region types.** Still not implemented for
-//!   [`MappedRegion`]/[`VolatileRegion`]/[`Reservation`], deliberately — the compiler
-//!   holds the thread contract for free until a caller needs it
-//!   (`tests/ui/region_is_not_send.rs`). ★ [`GuestWindow`] **does** have both, granted
-//!   per type with the argument written above the `impl`s rather than as one blanket
-//!   relaxation: it is the one object a hypervisor's guest memory genuinely is, live to
-//!   every thread at every instant.
+//! - **`Sync` for [`MappedRegion`] and [`Reservation`].** Refused, and pinned by
+//!   `tests/ui/region_is_not_sync.rs`. `MappedRegion::write_from` performs a bulk `memcpy`
+//!   through `&self`, so two threads sharing one could race; a caller that must share puts
+//!   it behind a lock, which needs only `Send`.
+//!   ★ Every grant in this crate is **per type, with the argument written above the
+//!   `impl`**, never one blanket relaxation — and the three that exist say different
+//!   things. [`VolatileRegion`] has both, because every access is a naturally-aligned
+//!   `Relaxed` atomic and there is no bulk accessor to tear. [`MappedRegion`] has `Send`
+//!   only (the isolate's guest-RAM plane shares its mappings across a worker pool through a
+//!   `Mutex`). [`GuestWindow`] has both: it is the one object a hypervisor's guest memory
+//!   genuinely is, live to every thread at every instant.
 //! - **The `KAYFABE_FORCE_HOST_PAGE_SIZE` env knob** (§5.2 item 3). The *test axis* it
 //!   exists for is delivered — this crate's geometry runs at 4/16/64 KiB — but the knob
 //!   itself is consumed by the integration harness (M2-e), and implementing it now would

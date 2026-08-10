@@ -338,6 +338,8 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::CeCopy { .. } => "CeCopy",
             RmVerb::FbRead { .. } => "FbRead",
             RmVerb::ExportBacking { .. } => "ExportBacking",
+            RmVerb::MapGuestRam { .. } => "MapGuestRam",
+            RmVerb::UnmapGuestRam { .. } => "UnmapGuestRam",
         }
     };
 
