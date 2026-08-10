@@ -283,3 +283,91 @@ fn a_short_params_image_is_named_not_read() {
         );
     }
 }
+
+// =====================================================================================
+// ★★★★★ §16.78 — THE BISECTION BUDGET
+//
+// `ObjectPolicy::with_mc_service_budget`. See the arm's own docs for the disassembly of
+// the guest's caller: the wait is UNBOUNDED and its only exit short of the work completing
+// is a non-`NV_OK` from this control, so a truthful `NV_OK` here is what makes every rung's
+// "does `cuCtxCreate` terminate?" cost a 150 s hang and return no status.
+// =====================================================================================
+
+/// ⊘⊘ **The shipped policy is UNARMED, and this is the assertion that keeps it so.** Every
+/// other test in this file describes what this port serves; that description is only true
+/// while the default is `None`. A change that armed it by default would make this port
+/// refuse a control it can truthfully answer — and would do it silently, since the refusal
+/// status is one this command documents.
+#[test]
+fn the_shipped_policy_has_no_budget_and_answers_forever() {
+    let mut p = policy();
+    assert_eq!(
+        p.mc_service_state(),
+        (0, None),
+        "the default must be unarmed"
+    );
+
+    // ★ 200 calls is past the 170 `[measured 2026-08-10, boot w215_79ed443_ctl]` and past
+    // the 150 the deadline allows, so a budget hiding anywhere in this range would show.
+    for i in 1..=200u32 {
+        let reply = answer(
+            &mut p,
+            NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
+            &GUEST_W209_PARAMS_BYTES,
+        )
+        .unwrap_or_else(|| panic!("call {i} must be claimed"));
+        assert_eq!(reply.rpc_result, 0, "call {i} must be answered NV_OK");
+    }
+    assert_eq!(p.mc_service_state(), (200, None));
+}
+
+/// Armed: the first `budget` calls are `NV_OK` and every one after is refused — which is
+/// what terminates the guest's loop.
+#[test]
+fn an_armed_budget_answers_exactly_that_many_and_then_refuses() {
+    for budget in [0u32, 1, 3, 17] {
+        let mut p = policy().with_mc_service_budget(Some(budget));
+        assert_eq!(p.mc_service_state(), (0, Some(budget)));
+
+        for i in 1..=budget + 5 {
+            let reply = answer(
+                &mut p,
+                NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
+                &GUEST_W209_PARAMS_BYTES,
+            )
+            .unwrap_or_else(|| panic!("budget {budget} call {i} must still be CLAIMED"));
+            if i <= budget {
+                assert_eq!(
+                    reply.rpc_result, 0,
+                    "budget {budget}: call {i} is within it"
+                );
+            } else {
+                // ⊘ The refusal is the command's own documented status, never `0x56` — the
+                // FSM's "nobody claimed this" signature, which §16.75 exists to keep off
+                // this id. An armed instrument must not reintroduce it.
+                assert_eq!(
+                    reply.rpc_result, MC_SERVICE_INTERRUPTS_REFUSED_STATUS,
+                    "budget {budget}: call {i} is past it"
+                );
+                assert_ne!(reply.rpc_result, 0x56);
+            }
+        }
+    }
+}
+
+/// ⊘ **An armed budget must never turn a MALFORMED request into a well-formed refusal.**
+/// The two refusals carry the same status, so the only thing separating "your params are
+/// wrong" from "the instrument fired" is the ORDER of the checks — validation first. A
+/// budget that short-circuited ahead of it would hide a real params bug behind an
+/// instrument nobody was reading.
+#[test]
+fn the_budget_is_checked_after_validation_so_it_cannot_mask_a_params_bug() {
+    let mut p = policy().with_mc_service_budget(Some(0));
+    // Malformed: shorter than the 4-byte params image.
+    let reply =
+        answer(&mut p, NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS, &[0xffu8; 2]).expect("still claimed");
+    assert_eq!(reply.rpc_result, MC_SERVICE_INTERRUPTS_REFUSED_STATUS);
+    // ★ And it did NOT consume budget: the counter only advances for requests that got
+    // past validation, so "how many did the guest actually get answered" stays readable.
+    assert_eq!(p.mc_service_state(), (0, Some(0)));
+}

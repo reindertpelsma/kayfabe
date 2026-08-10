@@ -1401,6 +1401,36 @@ pub struct ObjectPolicy {
     /// hand-written description of one silicon is the drift `inittables.rs` forbids by
     /// name.
     engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
+    /// ★★★★★ **§16.78 — THE BISECTION BUDGET for `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`.
+    /// `None` (the default, and the shipped value) means "no budget": every call is
+    /// answered, forever, exactly as [`ObjectPolicy::respond_mc_service_interrupts`]
+    /// describes.**
+    ///
+    /// ⊘⊘ **This is an INSTRUMENT, not a behaviour, and the distinction is the whole of
+    /// why it is an `Option` that defaults to `None`.** Answering this control `NV_OK` is
+    /// TRUE of this device — that argument is unchanged and is not weakened here. What
+    /// §16.78 measured is a *consequence* of the truthful answer that nothing had recorded:
+    /// the guest's caller is an **unbounded** 1 Hz watchdog whose only escape is a
+    /// non-`NV_OK` from this very control, so a truthful `NV_OK` hands `cuCtxCreate` a
+    /// fresh second, every second, forever. See the arm's docs for the disassembly.
+    ///
+    /// ⇒ Every rung's falsifier "does `cuCtxCreate` terminate?" costs a 150 s hang and
+    /// yields no status. With a budget it costs ~1 s and yields the guest's own CUDA error
+    /// — which is a *reading of the guest*, not a claim of ours.
+    ///
+    /// ⚠ **It must never be on by default and it must be impossible to leave on by
+    /// accident.** The refusal it emits is deliberately
+    /// [`kayfabe_abi::submit::MC_SERVICE_INTERRUPTS_REFUSED_STATUS`] — the same
+    /// `NV_ERR_INVALID_PARAM_STRUCT` the malformed-params path uses and a status this
+    /// command documents — and the census counts it, so a boot in which it fired says so.
+    /// ⊘ A run with a budget set is NOT evidence about what this port serves; it is
+    /// evidence about what the guest was waiting for.
+    mc_service_budget: Option<u32>,
+    /// How many `MC_SERVICE_INTERRUPTS` calls have been answered `NV_OK`. Counted always,
+    /// budget or not — ⊘ a counter that only exists when the instrument is armed cannot
+    /// say what the un-armed run did, and "170 calls" is the number that made the 1 Hz
+    /// train legible in the first place.
+    mc_service_calls: u32,
 }
 
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
@@ -1555,7 +1585,40 @@ impl ObjectPolicy {
             gpu,
             isolates,
             engines,
+            // ⊘ The shipped value, stated here rather than by `Default`: this field's
+            // safety argument is entirely "it is off unless a human turned it on".
+            mc_service_budget: None,
+            mc_service_calls: 0,
         }
+    }
+
+    /// ★★★★★ **§16.78 — arm the `MC_SERVICE_INTERRUPTS` bisection budget.** See
+    /// [`ObjectPolicy::mc_service_budget`] for what it is for and why it is off by default.
+    ///
+    /// After `budget` calls have been answered `NV_OK`, the next one is refused, and the
+    /// guest's unbounded 1 Hz wait terminates with a status a reader can name.
+    ///
+    /// ⊘ A builder method rather than a constructor argument, deliberately: the four
+    /// existing constructors describe what this port *is*, and an instrument is not part of
+    /// that description. A caller that never mentions it gets the shipped behaviour, and
+    /// the diff of a boot that armed it is one visible line.
+    #[must_use]
+    pub fn with_mc_service_budget(mut self, budget: Option<u32>) -> ObjectPolicy {
+        self.mc_service_budget = budget;
+        self
+    }
+
+    /// How many `MC_SERVICE_INTERRUPTS` calls have reached this arm, and whether a budget
+    /// was armed.
+    ///
+    /// ⊘ **Not wired into the teardown census, because the census already carries both
+    /// numbers and a second copy could disagree with the first** — `controls: N answered …
+    /// (result 0 = served; non-zero = served-but-REFUSED)` splits `0x20801702` into its
+    /// `NV_OK` and its refused populations by construction. This accessor exists for tests,
+    /// which need the pair without parsing a report.
+    #[must_use]
+    pub fn mc_service_state(&self) -> (u32, Option<u32>) {
+        (self.mc_service_calls, self.mc_service_budget)
     }
 
     /// Whether this policy claims `f` — the predicate `respond` gates on, exposed so the
@@ -1786,6 +1849,39 @@ impl ObjectPolicy {
     /// invented distinction rather than a checked one. ⚠ **The re-check condition is
     /// therefore named instead**: the day this port queues any GSP-side interrupt state, an
     /// unconditional `NV_OK` here stops being true and this arm must consult it.
+    ///
+    /// # ★★★★★ §16.78 — WHAT THE TRUTHFUL `NV_OK` COSTS, and it was never recorded
+    ///
+    /// Everything above is unchanged and still correct. What follows is a fact about the
+    /// **caller**, measured by disassembling the exact `libcuda` the bench runs
+    /// (`libcuda.so.580.159.04`, `md5 10e2dd6c89409898ba8c68533cde1432`, byte-identical in
+    /// guest and host — so this is a reading of the shipped binary, not of a doc):
+    ///
+    /// ```text
+    ///   22be17:  pause                      ; the spin
+    ///   22be1f:  call f9df90                ; the predicate — is the awaited work done?
+    ///   22be28:  je   22bdf8                ; 0 = NOT DONE -> keep going
+    ///   22be11:  je   22c0d0                ; -> the elapsed-time check
+    ///   22c0f7:  call 3185a0                ; elapsed, in ms, since a stored start
+    ///   22c0fc:  comiss 0x1185a90           ; the constant is 1000.0f
+    ///   22c103:  jbe  22bdeb                ; <= 1000 ms -> back to the pause loop
+    ///   22c124:  call *0x438(%rcx)          ; > 1000 ms -> NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS
+    ///   22c12c:  je   22bde3                ; NV_OK -> RESET THE CLOCK and loop again
+    ///            (non-zero -> fall through, exit the loop, return the status)
+    /// ```
+    ///
+    /// ⇒ **The wait has no overall timeout. Its ONLY exit, short of the work completing,
+    /// is a non-`NV_OK` from this control.** `[measured 2026-08-10, boot `w215_79ed443_ctl`,
+    /// rev 79ed443]` this port answered it `x170` with `NV_OK`, `cup2`'s main thread sat in
+    /// that `pause` loop for the whole 150 s deadline (`state=Rl`, `RIP` in `[vdso]` at
+    /// `clock_gettime`, `RSP` identical across four samples 400 ms apart), and two `libcuda`
+    /// helper threads sat in `poll()`.
+    ///
+    /// ⊘⊘ **So "does `cuCtxCreate` terminate?" is not a question a longer deadline can
+    /// answer** — the loop is unbounded and we are the ones keeping it fed. Three rungs
+    /// have now paid a 150 s hang for a falsifier that could never have fired. That is what
+    /// [`ObjectPolicy::mc_service_budget`] exists to make cheap, and why it is an instrument
+    /// and not a change to what this arm claims.
     fn respond_mc_service_interrupts(
         &mut self,
         cmd: &RpcCommand,
@@ -1811,6 +1907,16 @@ impl ObjectPolicy {
         ) else {
             return refuse();
         };
+        // ★★★★★ §16.78 — THE BUDGET, checked AFTER the params are validated and BEFORE the
+        // reply is built. ⊘ After validation, so an armed budget can never turn a malformed
+        // request into a well-formed refusal and hide a real params bug; before the reply,
+        // so the refused call is not also counted as answered.
+        self.mc_service_calls = self.mc_service_calls.saturating_add(1);
+        if let Some(budget) = self.mc_service_budget
+            && self.mc_service_calls > budget
+        {
+            return refuse();
+        }
         let mut body = cmd.payload.clone();
         let params_out = kayfabe_abi::submit::encode_mc_service_interrupts(&params);
         body[req.params_at..req.params_at + want].copy_from_slice(&params_out);

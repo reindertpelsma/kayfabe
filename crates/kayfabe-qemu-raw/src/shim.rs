@@ -5462,7 +5462,23 @@ fn object_policy(
         Box::new(SharedObjectModel(Arc::clone(&device))),
         engines,
         kayfabe_rmrpc::ReasmLimits::default(),
-    );
+    )
+    // ★★★★★ §16.78 — the bisection budget, ARMED ONLY BY AN EXPLICIT ENVIRONMENT VALUE.
+    // Unset (the shipped case) is `None`, which is exactly what `ObjectPolicy::over` already
+    // stored, so this call is a no-op on every boot that does not ask for it.
+    .with_mc_service_budget(selected_mc_service_budget());
+    // ★★ ARMED runs SAY SO, loudly and at the top of the log, because every other line in
+    // the run has to be read differently when this is on. ⊘ Silence when unset: a boot that
+    // did not ask for the instrument must not carry a line about it.
+    if let Some(budget) = selected_mc_service_budget() {
+        eprintln!(
+            "kayfabe: ⚠ {MC_SERVICE_BUDGET_ENV}={budget} — the MC_SERVICE_INTERRUPTS \
+             bisection budget is ARMED. After {budget} NV_OK answers this port refuses \
+             0x20801702, which TERMINATES the guest's unbounded 1 Hz wait. ⊘ This run is \
+             evidence about WHAT THE GUEST WAS WAITING FOR, and is NOT evidence about what \
+             this port serves."
+        );
+    }
     // ★ The handle is taken BEFORE the policy is boxed, because afterwards there is no
     // `ObjectPolicy` left to ask — that is the whole reason the census had to become a
     // shared store rather than a field behind `&self`.
@@ -5631,6 +5647,26 @@ fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
         // it was SET, so it must not read as unset.
         Some(v) => isolate_plane_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
+}
+
+/// ★★★★★ **§16.78** — the environment variable that arms the `MC_SERVICE_INTERRUPTS`
+/// bisection budget. See [`kayfabe_rmrpc::ObjectPolicy::with_mc_service_budget`].
+pub const MC_SERVICE_BUDGET_ENV: &str = "KAYFABE_MC_SERVICE_BUDGET";
+
+/// The budget [`MC_SERVICE_BUDGET_ENV`] names, or `None` when it is unset.
+///
+/// ⊘ **A value that does not parse yields `None`, and that is deliberate the opposite way
+/// round from [`selected_isolate_plane`].** There, a bad value must fail the build-up
+/// because it names something the port would otherwise silently not do. Here, the safe
+/// state is *unarmed*: an instrument that turns itself on because somebody typed `yes`
+/// would be a diagnostic that fires without being asked, which is the one thing this field
+/// must never do. ⚠ It is reported in the teardown census either way, so an armed run and a
+/// mistyped one are not confusable after the fact.
+#[must_use]
+pub fn selected_mc_service_budget() -> Option<u32> {
+    std::env::var_os(MC_SERVICE_BUDGET_ENV)?
+        .to_str()
+        .and_then(|s| s.trim().parse::<u32>().ok())
 }
 
 /// Build the factory for `plane`.
