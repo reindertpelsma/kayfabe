@@ -2789,6 +2789,7 @@ struct SharedDoorbell {
 ///   submission arriving while the memory plane is detached is refused by name.
 /// - the per-channel **GPFIFO cursor**. See `kayfabe_rt::ceutils::GpCursor` for why the
 ///   ring's read position is state the shell must keep rather than derive.
+///
 /// ★★★ §16.79 — how many route-refused pushbuffers get dumped per device life.
 ///
 /// Small, and the smallness is the argument: the question ("is this golden-context init or
@@ -4791,14 +4792,32 @@ impl Regs {
         // `&self`, so the order costs nothing and the cycle is broken by construction.
         let plane = Arc::new(plane);
         let ce = Arc::new(CeShellState::default());
+        // ★★★★★ §16.80 — the SECOND composition-root selector, read exactly once, here.
+        // ⊘ A different variable from `KAYFABE_ISOLATES`, so this is not the "two readings
+        // of one selector" the field's doc forbids; it is one reading of each.
+        let ce_executor = selected_ce_executor()?;
+        // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
+        // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
+        // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
+        // — so the configuration a boot ran with is committed beside its result, rather
+        // than living in whichever shell exported the variables.
+        eprintln!(
+            "kayfabe: EXECUTORS isolate_plane={} ce_executor={} ⇒ \
+             local_ce_is_the_only_executor={}",
+            isolate_plane.as_str(),
+            ce_executor.as_str(),
+            isolate_plane == IsolatePlane::Stillborn || ce_executor == CeExecutor::Local,
+        );
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
             ce: Arc::clone(&ce),
-            // ★★★ §14.24 — from the composition root's OWN selector reading, not from a
-            // second one. `Stillborn` means, in that plane's own words, *"no host verb can
-            // be issued"*, so nothing but this shell's CPU executor can run a copy.
-            local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn,
+            // ★★★ §14.24 / ★★★★★ §16.80 — from the composition root's OWN selector
+            // readings, not from a second one. Two terms, and the second one is a
+            // measured refutation of the first standing alone; see
+            // [`CE_EXECUTOR_ENV`] and [`ce_executor_from`].
+            local_ce_is_the_only_executor: isolate_plane == IsolatePlane::Stillborn
+                || ce_executor == CeExecutor::Local,
         }));
         Ok(Regs {
             plane,
@@ -5766,6 +5785,118 @@ fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
         // ★ A non-UTF-8 value takes the `Some(non-name)` arm rather than the `None` arm:
         // it was SET, so it must not read as unset.
         Some(v) => isolate_plane_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+// =====================================================================================
+// ★★★★★ §16.80 — WHICH EXECUTOR OWNS `Ce` DOORBELLS, asked separately from which plane
+// =====================================================================================
+
+/// ★★★★★ **§16.80** — the environment variable that names the executor for `Ce` doorbells.
+///
+/// # ⊘⊘ Why this exists: the plane selector was answering a question it cannot answer
+///
+/// [`SharedDoorbell::local_ce_is_the_only_executor`] was `isolate_plane ==
+/// IsolatePlane::Stillborn`, and its own doc states the question correctly — *"is there any
+/// other executor?"*. The defect is the **inference**: it read *"a real plane is installed"*
+/// as *"a real plane can serve this"*, which is the same shape as the `vas_pdb.is_none()`
+/// test it replaced (*the core can ADDRESS it, therefore the core can SERVE it*), one level
+/// up. `accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`, third instance.
+///
+/// ⚠ **And the host CE path says so at its own definition.** `kayfabe_isolate_host`'s
+/// `HostRmBackend::ce_copy` refuses **two** things unconditionally and by name:
+/// `CeExecutor::Ours` (*"needs the isolate's mapping of the fabricated aperture, which does
+/// not exist"*) and `CeSource::Constant` (*"a fill is `LAUNCH_DMA` with `REMAP_ENABLE` plus
+/// the `SET_REMAP_*` method block, which `kayfabe_abi::submit::ce` does not transcribe"*).
+///
+/// ★ **`RmInitAdapter`'s CeUtils scrubber is both at once**, so the host plane can serve
+/// **zero** of the CE work the guest actually issues:
+///
+/// `[measured 2026-08-10, boot `w219_fe65678_realbase`, rev `fe65678`, `KAYFABE_ISOLATES=real`]`
+/// — `kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0) → REFUSED
+/// BEFORE SUBMISSION Other(19270)`, ×3, then `NVRM: RmInitNvDevice: *** Cannot load state
+/// into the device` → `RmInitAdapter failed! (0x25:0x65:1249)`. Identical signature at
+/// `w209_ffc80f8_real` (rev `ffc80f8`), nine commits and a whole interrupt plane earlier.
+///
+/// ⇒ **Selecting a real plane took the only working CE executor away and put nothing in its
+/// place**, so the guest died ~40 s before `cuCtxCreate` exists. Every rung stated as
+/// *"needs a live isolate plane"* was therefore unreachable in the shipped shape: turning the
+/// plane on is the operation that removes the executor that gets the guest to the rung.
+///
+/// ⊘ **This is not a fallback-after-refusal and does not degrade anything.** It is a second
+/// composition-root choice, made before any doorbell arrives, defaulting to the executor
+/// that is measured to work. [`CeExecutor::Host`] keeps the previously-measured arm exactly
+/// reachable — a deleted configuration cannot be a control.
+pub const CE_EXECUTOR_ENV: &str = "KAYFABE_CE_EXECUTOR";
+
+/// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CeExecutor {
+    /// The shell's own CPU copy-engine executor, on **every** plane. **The default**, and
+    /// the only value under which a guest has ever reached `cuCtxCreate` with a live
+    /// isolate plane installed.
+    Local,
+    /// Hand `Ce` doorbells whose channel the core can address to the forwarding plane —
+    /// the arm `p2_29e7c25_planereal`, `w209_ffc80f8_real` and `w219_fe65678_realbase`
+    /// measured. ⚠ On a `Stillborn` plane this value changes nothing: there is provably no
+    /// other executor, so the first term of the decision still holds.
+    Host,
+}
+
+impl CeExecutor {
+    /// Every executor, so a gate can quantify over the enum rather than over a
+    /// hand-written list that shrinks in one place with nothing going red.
+    pub const ALL: [CeExecutor; 2] = [CeExecutor::Local, CeExecutor::Host];
+
+    /// The name [`CE_EXECUTOR_ENV`] uses.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            CeExecutor::Local => "local",
+            CeExecutor::Host => "host",
+        }
+    }
+
+    /// Parse an exact, lowercase name. No aliases and no trimming — see
+    /// [`isolate_plane_from`] for why a selector that is generous about spelling makes an
+    /// evidence run and its own negative control indistinguishable.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<CeExecutor> {
+        match s {
+            "local" => Some(CeExecutor::Local),
+            "host" => Some(CeExecutor::Host),
+            _ => None,
+        }
+    }
+}
+
+/// The executor named by `value` — the pure half of [`selected_ce_executor`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no executor. **Absent is not an error**; it is
+/// [`CeExecutor::Local`].
+pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutor, (Status, &'static str)> {
+    match value {
+        None => Ok(CeExecutor::Local),
+        Some(v) => CeExecutor::parse(v).ok_or((
+            Status::Unsupported,
+            "KAYFABE_CE_EXECUTOR does not name an executor: the only values are `local` \
+             (the default) and `host`. It is not defaulted, because a typo that silently \
+             selected the other executor would make an evidence run and its own negative \
+             control indistinguishable.",
+        )),
+    }
+}
+
+/// The executor [`CE_EXECUTOR_ENV`] names, or [`CeExecutor::Local`] if it is unset.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no executor, **including a non-UTF-8
+/// one** — which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_ce_executor() -> Result<CeExecutor, (Status, &'static str)> {
+    match std::env::var_os(CE_EXECUTOR_ENV) {
+        None => Ok(CeExecutor::Local),
+        Some(v) => ce_executor_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 

@@ -35,8 +35,33 @@ if [ -n "$FEATURES" ]; then
 fi
 echo "== building the archive"
 ( cd "$REPO" && cargo build --release -p kayfabe-qemu-raw "${FEATARGS[@]}" )
-ARCHIVE="$REPO/target/release/libkayfabe_qemu_raw.a"
+# ★★★ ASK CARGO WHERE IT PUT THE ARCHIVE — never assume `$REPO/target`.
+#
+# `[measured 2026-08-10, bench `vh`]` this line read `ARCHIVE="$REPO/target/release/…"`.
+# A build invoked as `CARGO_TARGET_DIR=/workspace/bench/cargo-target … build_qom_shim.sh`
+# compiled the archive **with `host-isolates`** into the target dir it was told to use, and
+# then copied a DIFFERENT, older, feature-less archive out of `$REPO/target/release/` —
+# which still existed from an earlier build. Every line of the build log was green:
+# `== archive features: host-isolates`, `Finished release profile in 20.87s`, `== built:`.
+# The only signal was the rev stamp inside the two artifacts naming the PREVIOUS commit.
+#
+# ⊘ That is `bench_origin_is_a_bundle_and_cargo_is_not_on_path` one layer in: the build ran,
+# succeeded, and installed something nobody chose. Two assertions close it — locate the
+# archive by asking cargo, and refuse to install one that is older than the build.
+ARCHIVE=$(
+  cd "$REPO" && cargo metadata --format-version 1 --no-deps 2>/dev/null |
+    sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p'
+)
+ARCHIVE="${ARCHIVE:-$REPO/target}/release/libkayfabe_qemu_raw.a"
 [ -f "$ARCHIVE" ] || { echo "★ no archive at $ARCHIVE"; exit 1; }
+# ★ And it must be THIS build's. A stale archive at the right path is the same defect with
+# the path bug fixed, so the freshness is asserted rather than inferred from the log.
+if [ -n "$(find "$ARCHIVE" -mmin +30 2>/dev/null)" ]; then
+  echo "★ $ARCHIVE is more than 30 minutes old — cargo did not rebuild it and this"
+  echo "  script will not install an archive it did not just produce."
+  exit 1
+fi
+echo "== archive: $ARCHIVE ($(stat -c %y "$ARCHIVE" 2>/dev/null))"
 
 # ---- 2. the overlay -----------------------------------------------------------------
 echo "== laying the overlay into hw/misc/nvkvm"
