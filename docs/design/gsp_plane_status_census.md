@@ -30,15 +30,15 @@ real NVIDIA GSP firmware, driver 580.159.04, the same `RmInitAdapter` workload:
 **12 distinct control commands** are answered `NV_ERR_NOT_SUPPORTED` (`0x56`) by NVIDIA's own
 firmware, and one more is answered `0x57`:
 
-| cmd | status | n | | cmd | status | n |
-|---|---|---|---|---|---|---|
-| `0x2080012f` | `0x56` | 1 | | `0x20801357` | `0x56` | 2 |
-| `0x2080014b` | `0x57` | 8 | | `0x20808546` | `0x56` | 12 |
-| `0x20800157` | `0x56` | 2 | | `0x20809038` | `0x56` | 1 |
-| `0x20800a87` | `0x56` | 2 | | `0x2080a0f2` | `0x56` | 1 |
-| `0x20800b05` | `0x56` | 2 | | `0x2080a63c` | `0x56` | 1 |
-| `0x20801322` | `0x56` | 1 | | `0x90e70113` | `0x56` | 1 |
-| `0x20801344` | `0x56` | 1 | | | | |
+| cmd | status | n | cmd | status | n |
+|---|---|---:|---|---|---:|
+| `0x2080012f` | `0x56` | 1 | `0x20801357` | `0x56` | 2 |
+| `0x2080014b` | `0x57` | 8 | `0x20808546` | `0x56` | 12 |
+| `0x20800157` | `0x56` | 2 | `0x20809038` | `0x56` | 1 |
+| `0x20800a87` | `0x56` | 2 | `0x2080a0f2` | `0x56` | 1 |
+| `0x20800b05` | `0x56` | 2 | `0x2080a63c` | `0x56` | 1 |
+| `0x20801322` | `0x56` | 1 | `0x90e70113` | `0x56` | 1 |
+| `0x20801344` | `0x56` | 1 | — | — | |
 
 ⇒ On this plane `0x56` is **not an anomaly, it is normal firmware behaviour**. A census that
 ranks by "we emitted a `0x56`" ranks nothing here. Had this document been written to the brief's
@@ -119,8 +119,20 @@ per distinct id. Nothing in §3 is a frequency.
 `NV_ERR_NOT_SUPPORTED` for **every** variant, deliberately
 (`crates/kayfabe-rmrpc/src/policy.rs:2204-2212`): *"That makes a refused promote-ctx
 wire-indistinguishable from an unserviced one."* ⇒ From the guest's dmesg alone one **cannot**
-tell "no arm claimed this" from "an arm decided to refuse". §3 marks the two known decided
-refusals; there may be others.
+tell "no arm claimed this" from "an arm decided to refuse".
+
+★★★★ **(d) And the device-side census UNDERCOUNTS our own refusals — measured.** The
+`unserviced fn 76 cmd …` ledger is fed by the *fall-through* at the end of the responder chain,
+so a control that has an arm which **decides** to refuse never reaches it. `0x2080012b`
+`GPU_PROMOTE_CTX` is exactly that: `grep -c 'unserviced fn 76 cmd 0x2080012b'` over both boot
+logs returns **0**, while the guest logs its `0x56` five times and `policy.rs:2214-2231`
+documents choosing that status on purpose.
+
+⇒ **The 41-id set in §3 is a LOWER BOUND on what we refuse, not the refusal set.** The two
+boundaries are not two views of one population: the guest's dmesg sees refusals the ledger
+cannot, and the ledger sees ids the guest never logs. This census only found `0x2080012b`
+because the *guest* named it — an id-worklist built from the device ledger alone would have
+been silently short, with no counter anywhere reading zero to say so.
 
 ---
 
@@ -321,8 +333,10 @@ supplied R1, which is the finding that reshapes the plane.
   exemption the predecessor predicted would be needed.
 - ⊘ **Whether an alloc reply carries a body** (§3.2). Only the status is established.
 - ⊘ **Which of our refusals are *decided*.** All variants ride the same `0x56`
-  (`policy.rs:2204-2212`), on purpose. The guest's dmesg cannot see the difference; only our own
-  census can, and it does not currently record the variant per id.
+  (`policy.rs:2204-2212`), on purpose. The guest's dmesg cannot see the difference — and per
+  §1(d) our own ledger cannot either, because a decided refusal never reaches it. Neither
+  instrument alone enumerates the refusal set; the two must be unioned, and this document is
+  the first thing that does it.
 - ⊘ **Whether the ranked item is *the* blocker or *a* blocker.** This census establishes that it
   is the only refusal exclusive to the failing stage and the last event before the silence. It
   does not establish sufficiency — that is a bench question, and this is a census.
