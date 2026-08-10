@@ -53,6 +53,16 @@ kayfabe-gsp.workspace = true
 # ★★★ The REAL host isolate plane — OPTIONAL, and off unless `host-isolates` is on. See
 # `[features]` below for why this is a feature rather than an ordinary dependency.
 kayfabe-isolate-host = { workspace = true, optional = true }
+# ★★★ The guest-RAM crossing's descriptor probe (`MemfdCensus`) — OPTIONAL, and gated by
+# the SAME feature, so the default archive's dependency graph is byte-for-byte master's.
+#
+# ⊘ This is a *use* of the raw crate, not an extension of it. §2.2's ruling is that
+# hypervisor-specific `unsafe` must not be PUT in `kayfabe-linux-raw`; finding a `memfd`
+# through `/proc/self/fd` is host-side OS specificity, which §1.1 licenses there, and it
+# needs no `unsafe` at all (a `memfd` re-opens, unlike a KVM anonymous inode). The
+# hypervisor-specific half — that QEMU names the block after the backend TYPE — stays
+# here, in `QEMU_MACHINE_RAM_MEMFD`.
+kayfabe-linux-raw = { workspace = true, optional = true }
 
 # =====================================================================================
 # ★★★ `host-isolates` — the first join between the device path and a real host GPU
@@ -84,7 +94,7 @@ kayfabe-isolate-host = { workspace = true, optional = true }
 # binary run both arms of a negative control, so an evidence run and its control cannot
 # differ in anything but the variable.
 [features]
-host-isolates = ["dep:kayfabe-isolate-host"]
+host-isolates = ["dep:kayfabe-isolate-host", "dep:kayfabe-linux-raw"]
 
 # ★ `kayfabe-arch` is not a dependency of this crate and must not become one — the shim
 # names no architecture. `tests/shim_logic.rs` needs `GpuId` only to build the

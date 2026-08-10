@@ -5655,7 +5655,11 @@ fn object_policy(
     engines: &'static [kayfabe_abi::inittables::FifoDeviceEntry],
 ) -> Result<ObjectLink, (Status, &'static str)> {
     let isolate_plane = selected_isolate_plane()?;
-    let isolates = isolate_factory(isolate_plane)?;
+    // ★★★ §4.4's missing link. Read ONCE, here, beside the plane it is checked against —
+    // two readings of one environment variable is two facts that can disagree, which is
+    // the shape this file already refuses for the probe set and for the isolate plane.
+    let guest_ram = selected_guest_ram_source()?;
+    let isolates = isolate_factory(isolate_plane, guest_ram)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
         isolates,
@@ -5879,6 +5883,152 @@ fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
 }
 
 // =====================================================================================
+// ★★★★★ THE GUEST-RAM CROSSING — where the isolate's view of guest memory comes from
+// =====================================================================================
+
+/// ★★★ The environment variable that arms the guest-RAM crossing.
+///
+/// `guest_ram_crossing.md` §4.4 named this as the one missing link: the isolate side of
+/// the crossing landed on 2026-08-10 and **no VMM code called `with_guest_ram`**, so
+/// nothing could reach `OS_DESCRIPTOR`, so nothing could reach the ring.
+///
+/// ## ⊘ Why the crossing is armed HERE and not by the hypervisor's launch flag
+///
+/// The tempting shape is *"if guest RAM happens to be a shared `memfd`, use it"* — no new
+/// variable, one less thing to set. ⊘ That makes the boundary a **coincidence of how the
+/// operator started the VM**. `HostIsolateFactory::with_guest_ram`'s own comment states
+/// the rule the other way round: *"a factory that defaulted to granting guest RAM would be
+/// granting it on every deployment that never asked, and the grant is the whole
+/// boundary."* A hypervisor may be launched with `share=on` for a dozen unrelated reasons
+/// (vhost-user, virtiofs, `ivshmem`), and none of them is a decision to let a GPU isolate
+/// map the guest's memory.
+///
+/// ⇒ Two independent facts, and both are required: the operator's **launch** flag makes
+/// the descriptor exist, and this variable is the operator **asking for it to cross**.
+///
+/// ⚠ Same process-global caveat as [`ISOLATE_PLANE_ENV`], for the same reason and with the
+/// same owner: a hypervisor with two `nvkvm-gpu` devices gets one answer for both.
+pub const GUEST_RAM_ENV: &str = "KAYFABE_GUEST_RAM";
+
+/// ★★ The `memfd` creation name QEMU gives the machine's RAM backend.
+///
+/// ⊘ **It is the backend TYPE, not your `id=`** — `guest_ram_crossing.md` §1.1 trap 1. A
+/// probe keyed on `ram0` (the id the bench's command line gives it) found **nothing** on a
+/// boot where guest RAM was open the whole time, and an empty result reads as *"the
+/// backend is not there"*. Measured on two physical boxes:
+/// `/memfd:memory-backend-memfd (deleted)`.
+pub const QEMU_MACHINE_RAM_MEMFD: &str = "memory-backend-memfd";
+
+/// Where an isolate's view of guest RAM comes from, if anywhere.
+///
+/// ⊘ There is no `Auto`, for [`IsolatePlane`]'s reason: a source that silently degraded to
+/// `none` when the descriptor was absent would make an armed run and its negative control
+/// indistinguishable — and here it would do so *at the first doorbell*, hours into a boot,
+/// rather than at startup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestRamSource {
+    /// No isolate sees any guest memory. **The default**, and what every boot before this
+    /// one did. Every `map_guest_ram` is `RmError::GuestRamUnavailable`, by name.
+    None,
+    /// ★ The hypervisor's own machine-RAM `memfd`, found in **this process** by
+    /// [`kayfabe_linux_raw::MemfdCensus`].
+    ///
+    /// This is `guest_ram_crossing.md` §3's option **(A)** — zero new hypervisor surface —
+    /// serving a **(B)**-shaped interface: what crosses is a descriptor plus an extent,
+    /// and the only reason it is found by a `/proc/self/fd` census rather than asked for
+    /// is that QEMU has no API to ask. A VMM that *does* (Cloud Hypervisor backs guest RAM
+    /// with a `memfd` natively under `--memory shared=on`) supplies the same pair without
+    /// a census.
+    HypervisorMemfd,
+}
+
+impl GuestRamSource {
+    /// The spelling this source is selected by. Round-trips with [`GuestRamSource::parse`].
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            GuestRamSource::None => "none",
+            GuestRamSource::HypervisorMemfd => "memfd",
+        }
+    }
+
+    /// Parse a source name. Exact and case-sensitive, as every other selector in this file.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<GuestRamSource> {
+        match s {
+            "none" => Some(GuestRamSource::None),
+            "memfd" => Some(GuestRamSource::HypervisorMemfd),
+            _ => None,
+        }
+    }
+
+    /// Every source this enum can express, for gates that must quantify over the whole set.
+    pub const ALL: [GuestRamSource; 2] = [GuestRamSource::None, GuestRamSource::HypervisorMemfd];
+}
+
+/// The source named by `value` — the pure half of [`selected_guest_ram_source`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no source. **Absent is not an error**; it is
+/// [`GuestRamSource::None`].
+pub fn guest_ram_source_from(
+    value: Option<&str>,
+) -> Result<GuestRamSource, (Status, &'static str)> {
+    match value {
+        None => Ok(GuestRamSource::None),
+        Some(v) => GuestRamSource::parse(v).ok_or((
+            Status::Unsupported,
+            "KAYFABE_GUEST_RAM does not name a guest-RAM source: the only values are \
+             `none` (the default) and `memfd`. It is not defaulted, because a typo that \
+             silently selected `none` would leave every isolate blind to guest memory \
+             while the run looked armed — and the symptom would appear at the first \
+             doorbell, not here.",
+        )),
+    }
+}
+
+/// The source [`GUEST_RAM_ENV`] names, or [`GuestRamSource::None`] if it is unset.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no source, **including a non-UTF-8 one**
+/// — which takes the `Some` arm, because it was SET.
+fn selected_guest_ram_source() -> Result<GuestRamSource, (Status, &'static str)> {
+    match std::env::var_os(GUEST_RAM_ENV) {
+        None => Ok(GuestRamSource::None),
+        Some(v) => guest_ram_source_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// ★★ Asking for guest RAM on a plane that has no isolates is refused, **by name and at
+/// startup**.
+///
+/// ⊘ Not tolerated as a harmless no-op. [`IsolatePlane::Stillborn`] retires every isolate
+/// at birth, so there is nobody to hold the grant; an operator who set `KAYFABE_GUEST_RAM`
+/// and left `KAYFABE_ISOLATES` unset has asked for a crossing that cannot happen, and the
+/// run would otherwise look armed and behave exactly like the control. That is the
+/// *"an evidence run and its own negative control indistinguishable"* failure this file
+/// refuses everywhere else.
+///
+/// # Errors
+/// [`Status::Unsupported`], naming both variables.
+pub fn guest_ram_is_reachable_on(
+    plane: IsolatePlane,
+    source: GuestRamSource,
+) -> Result<(), (Status, &'static str)> {
+    match (plane, source) {
+        (IsolatePlane::Stillborn, GuestRamSource::HypervisorMemfd) => Err((
+            Status::Unsupported,
+            "KAYFABE_GUEST_RAM=memfd asks for guest memory to cross into an isolate, and \
+             KAYFABE_ISOLATES is `stillborn` — the plane that retires every isolate at \
+             birth. There is nothing to grant it to. Set KAYFABE_ISOLATES=loopback or \
+             =real, or unset KAYFABE_GUEST_RAM: a run that quietly granted nothing would \
+             be indistinguishable from its own negative control.",
+        )),
+        _ => Ok(()),
+    }
+}
+
+// =====================================================================================
 // ★★★★★ §16.80 — WHICH EXECUTOR OWNS `Ce` DOORBELLS, asked separately from which plane
 // =====================================================================================
 
@@ -6021,19 +6171,23 @@ pub fn selected_mc_service_budget() -> Option<u32> {
 /// [`Status::Unsupported`], naming what this build cannot do.
 pub fn isolate_factory(
     plane: IsolatePlane,
+    guest_ram: GuestRamSource,
 ) -> Result<Box<dyn kayfabe_isolate::IsolateFactory>, (Status, &'static str)> {
+    guest_ram_is_reachable_on(plane, guest_ram)?;
     match plane {
         IsolatePlane::Stillborn => Ok(Box::new(kayfabe_isolate::StillbornIsolates::new(
             STILLBORN_WHY,
         ))),
         #[cfg(feature = "host-isolates")]
-        IsolatePlane::Loopback => Ok(Box::new(kayfabe_isolate_host::HostIsolateFactory::new(
-            kayfabe_isolate_host::RmMode::Loopback,
-        ))),
+        IsolatePlane::Loopback => Ok(Box::new(with_guest_ram(
+            kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Loopback),
+            guest_ram,
+        )?)),
         #[cfg(feature = "host-isolates")]
-        IsolatePlane::Real => Ok(Box::new(kayfabe_isolate_host::HostIsolateFactory::new(
-            kayfabe_isolate_host::RmMode::Real,
-        ))),
+        IsolatePlane::Real => Ok(Box::new(with_guest_ram(
+            kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real),
+            guest_ram,
+        )?)),
         #[cfg(not(feature = "host-isolates"))]
         IsolatePlane::Loopback | IsolatePlane::Real => Err((
             Status::Unsupported,
@@ -6041,6 +6195,92 @@ pub fn isolate_factory(
              without the `host-isolates` feature — it does not link \
              `kayfabe-isolate-host` and cannot spawn anything. Rebuild with \
              `--features kayfabe-qemu-raw/host-isolates`.",
+        )),
+    }
+}
+
+/// ★★★★★ Route the shim to the hypervisor's **own** guest-RAM descriptor, and refuse by
+/// name at startup if it is not there.
+///
+/// # ⊘⊘ The refusal is here and not at the first doorbell, and that is the whole point
+///
+/// Whether guest RAM is shareable is a **deployment fact no code gate can observe** — it
+/// is a command-line flag on a process we did not start. `RmError::GuestRamUnavailable`
+/// exists for exactly that and is the right answer at the seam; but it would surface
+/// twenty seconds into a boot, inside a doorbell, as one more refusal in a log full of
+/// them. An operator who forgot `NVKVM_RAM_BACKEND=memfd` must be told **before the guest
+/// runs an instruction**.
+///
+/// # ★ The census is PRINTED on refusal, always
+///
+/// `guest_ram_crossing.md` §1.1 trap 1 is a probe that searched for the wrong name, found
+/// nothing, and read as *"the backend is not there"* — on a boot where guest RAM was open
+/// at a descriptor the whole time. The absence of a match is not the absence of the thing,
+/// and the only cure is showing what **was** seen. So every `memfd` in the process goes to
+/// the log on the failing path, with its name, its size and whether it is shared-mapped.
+///
+/// # Errors
+/// [`Status::Unsupported`] when the census cannot be taken, when no shared-mapped `memfd`
+/// carries [`QEMU_MACHINE_RAM_MEMFD`], or when more than one does.
+#[cfg(feature = "host-isolates")]
+fn with_guest_ram(
+    factory: kayfabe_isolate_host::HostIsolateFactory,
+    source: GuestRamSource,
+) -> Result<kayfabe_isolate_host::HostIsolateFactory, (Status, &'static str)> {
+    if source == GuestRamSource::None {
+        return Ok(factory);
+    }
+    let census = kayfabe_linux_raw::MemfdCensus::take_of_this_process().map_err(|_| {
+        (
+            Status::Unsupported,
+            "KAYFABE_GUEST_RAM=memfd needs to enumerate this process's own descriptors and \
+             /proc/self/fd could not be listed. That is a deployment fault (no /proc), not \
+             an empty answer, and it is refused rather than read as `no guest RAM`.",
+        )
+    })?;
+    // ★ The census goes to the log on BOTH paths, before the decision. On the failing path
+    // it is the only evidence an operator has; on the succeeding path it is what makes a
+    // later "which block did it take?" answerable from the boot log alone.
+    for c in census.seen() {
+        eprintln!(
+            "kayfabe: memfd census — name={:?} bytes={} shared_mapped={} (listed at fd {}, \
+             reported only: this number MOVED between two physical benches and is never \
+             matched on)",
+            c.name(),
+            c.bytes(),
+            c.shared_mapped(),
+            c.listed_as()
+        );
+    }
+    match census.the_only_shared_memfd_named(QEMU_MACHINE_RAM_MEMFD) {
+        Ok(found) => {
+            eprintln!(
+                "kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's {QEMU_MACHINE_RAM_MEMFD} \
+                 block, {} bytes. Every isolate this factory spawns is granted a view of it \
+                 at a fixed descriptor number; nothing is mapped until a grant says so.",
+                found.bytes()
+            );
+            let (fd, bytes) = found.into_descriptor();
+            Ok(factory.with_guest_ram(fd, bytes))
+        }
+        Err(kayfabe_linux_raw::MemfdRefusal::NoSuchMemfd) => Err((
+            Status::Unsupported,
+            "KAYFABE_GUEST_RAM=memfd, and no shared-mapped `memfd` named \
+             `memory-backend-memfd` is open in this process — see the census above for \
+             what IS. Guest RAM is shareable only if the VM was LAUNCHED that way: \
+             `-object memory-backend-memfd,id=ram0,size=<N>,share=on -machine \
+             memory-backend=ram0`, with `-m <N>` matching exactly. ⊘ Refused here rather \
+             than at the first doorbell, and never degraded to a copy: the guest POLLS, so \
+             a copy has no trigger point at which to be refreshed.",
+        )),
+        Err(kayfabe_linux_raw::MemfdRefusal::Ambiguous { .. }) => Err((
+            Status::Unsupported,
+            "KAYFABE_GUEST_RAM=memfd, and MORE THAN ONE shared-mapped `memfd` named \
+             `memory-backend-memfd` is open in this process — see the census above. This \
+             is refused rather than resolved by a tie-break: every tie-break available \
+             (lowest descriptor, largest block, first listed) is a rule keyed on position, \
+             and the descriptor number of guest RAM was measured MOVING between two \
+             physical benches running the same image.",
         )),
     }
 }

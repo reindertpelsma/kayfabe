@@ -1423,7 +1423,10 @@ fn the_c_shell_prints_the_same_unbuilt_half_the_abi_declares() {
 // §E0-evidence — an evidence run and a negative control that differ in nothing but the
 // variable. If that pair is not in the doc, this seam is untested where it matters.
 
-use kayfabe_qemu_raw::shim::{IsolatePlane, isolate_factory, isolate_plane_from};
+use kayfabe_qemu_raw::shim::{
+    GuestRamSource, IsolatePlane, guest_ram_is_reachable_on, guest_ram_source_from,
+    isolate_factory, isolate_plane_from,
+};
 
 /// The default is the plane master shipped — **absent is not an error**.
 #[test]
@@ -1512,7 +1515,8 @@ fn the_stillborn_factory_retires_every_isolate_at_birth() {
     use kayfabe_arch::ids::GpuId;
     use kayfabe_isolate::IsolateId;
 
-    let f = isolate_factory(IsolatePlane::Stillborn).expect("the default plane builds");
+    let f = isolate_factory(IsolatePlane::Stillborn, GuestRamSource::None)
+        .expect("the default plane builds");
     let id = IsolateId::new(7, GpuId(0));
     let mut iso = f.spawn(id);
     assert_eq!(iso.id(), id);
@@ -1548,7 +1552,7 @@ fn the_stillborn_factory_retires_every_isolate_at_birth() {
 #[test]
 fn without_the_feature_a_host_plane_is_a_named_refusal_not_a_silent_stillborn() {
     for plane in [IsolatePlane::Loopback, IsolatePlane::Real] {
-        let (status, why) = isolate_factory(plane)
+        let (status, why) = isolate_factory(plane, GuestRamSource::None)
             .err()
             .unwrap_or_else(|| panic!("★ {plane:?} was BUILT in an archive that cannot link it"));
         assert_eq!(
@@ -1572,10 +1576,133 @@ fn without_the_feature_a_host_plane_is_a_named_refusal_not_a_silent_stillborn() 
 fn with_the_feature_both_host_planes_build_a_factory() {
     for plane in [IsolatePlane::Loopback, IsolatePlane::Real] {
         assert!(
-            isolate_factory(plane).is_ok(),
+            isolate_factory(plane, GuestRamSource::None).is_ok(),
             "★ {plane:?} could not be built in an archive that links kayfabe-isolate-host"
         );
     }
+}
+
+// ── The guest-RAM crossing's selector ──────────────────────────────────────────────
+
+/// A source name this build does not know is a **refusal**, never a quiet `none`.
+///
+/// ⊘ The failure this guards is not a typo per se: `none` is the arm in which every
+/// isolate is blind to guest memory, so a mistyped value that defaulted to it produces a
+/// run that *looks* armed, behaves exactly like its own negative control, and only says so
+/// at the first doorbell — twenty seconds later, inside a log full of refusals.
+#[test]
+fn an_unknown_guest_ram_source_is_refused_rather_than_defaulted() {
+    assert_eq!(guest_ram_source_from(None), Ok(GuestRamSource::None));
+    assert_eq!(
+        guest_ram_source_from(Some("memfd")),
+        Ok(GuestRamSource::HypervisorMemfd)
+    );
+    for bad in ["", "Memfd", "MEMFD", "memfd ", "yes", "1", "true", "shared"] {
+        let (status, why) = guest_ram_source_from(Some(bad))
+            .expect_err("★ an unknown source must refuse the device");
+        assert_eq!(status.code(), Status::Unsupported.code());
+        assert!(
+            why.contains("KAYFABE_GUEST_RAM"),
+            "the refusal must name the variable to fix: {why}"
+        );
+    }
+    // Every arm round-trips through its own spelling — quantified over `ALL`, so a source
+    // added tomorrow is checked tonight rather than added to a list here.
+    for s in GuestRamSource::ALL {
+        assert_eq!(GuestRamSource::parse(s.as_str()), Some(s));
+    }
+}
+
+/// ★★ Asking for guest RAM on the plane that has **no isolates** is refused by name.
+///
+/// ⊘ Not a no-op. `stillborn` retires every isolate at birth, so the grant has no holder;
+/// a run configured that way is indistinguishable from its own control, which is the one
+/// thing this file refuses everywhere else. The control is the other two planes: they must
+/// pass, or this test would be asserting that the crossing is simply unavailable.
+#[test]
+fn guest_ram_on_the_stillborn_plane_is_refused_and_reachable_on_the_others() {
+    let (status, why) =
+        guest_ram_is_reachable_on(IsolatePlane::Stillborn, GuestRamSource::HypervisorMemfd)
+            .expect_err("★ a crossing into a plane with no isolates must refuse");
+    assert_eq!(status.code(), Status::Unsupported.code());
+    assert!(
+        why.contains("KAYFABE_ISOLATES") && why.contains("KAYFABE_GUEST_RAM"),
+        "the refusal must name BOTH variables, since either one is the fix: {why}"
+    );
+    assert_eq!(
+        guest_ram_is_reachable_on(IsolatePlane::Stillborn, GuestRamSource::None),
+        Ok(()),
+        "the shipped default is not a refusal"
+    );
+    for plane in [IsolatePlane::Loopback, IsolatePlane::Real] {
+        assert_eq!(
+            guest_ram_is_reachable_on(plane, GuestRamSource::HypervisorMemfd),
+            Ok(()),
+            "★ the control: {plane:?} really can hold the grant"
+        );
+    }
+}
+
+/// ★★★★★ **The rung itself: the shim reaches the hypervisor's own guest-RAM descriptor,
+/// and refuses BY NAME AT STARTUP when there is none.**
+///
+/// `guest_ram_crossing.md` §4.4: the isolate side landed and *"no VMM code calls
+/// `with_guest_ram`"*. This is the call, asserted at the seam a live boot exercises.
+///
+/// # ⊘ Why both halves are ONE test, in this order
+///
+/// The refusal alone would pass against an arm that is simply unimplemented — *"returns
+/// `Unsupported` always"* satisfies it perfectly. So the same call is made twice in the
+/// same process with **one thing changed**: a shared-mapped `memfd` of the hypervisor's
+/// name appears between them. Absent → refused, naming the launch flag; present →
+/// accepted. That is a negative control rather than a pair of independent assertions, and
+/// it cannot be split into two `#[test]`s because this binary runs its tests in parallel
+/// threads of one process — the "absent" half would see the other half's block.
+///
+/// ⊘ It does not assert that anything was *mapped*. Nothing is: the grant is handed to a
+/// factory, and mapping happens only when a `GuestRamGrant` orders it. Claiming more here
+/// would be the shape §4.5 already refuses.
+#[cfg(feature = "host-isolates")]
+#[test]
+fn the_shim_finds_guest_ram_when_it_is_there_and_refuses_by_name_when_it_is_not() {
+    use kayfabe_linux_raw::{
+        Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam,
+    };
+    use kayfabe_qemu_raw::shim::QEMU_MACHINE_RAM_MEMFD;
+
+    // --- absent -----------------------------------------------------------------
+    let (status, why) = isolate_factory(IsolatePlane::Loopback, GuestRamSource::HypervisorMemfd)
+        .err()
+        .expect("★ with no shared guest-RAM memfd in this process the shim must refuse");
+    assert_eq!(status.code(), Status::Unsupported.code());
+    assert!(
+        why.contains("memory-backend-memfd") && why.contains("share=on"),
+        "★ the refusal must name the LAUNCH FLAG, because that is the deployment fact no \
+         code gate can observe and the only thing an operator can change: {why}"
+    );
+
+    // --- the one thing that changes ---------------------------------------------
+    let page = HostPageSize::query();
+    let name = std::ffi::CString::new(QEMU_MACHINE_RAM_MEMFD).expect("a name with no NUL");
+    let ram = SharedRam::create_named(&name, 4 * page.bytes()).expect("a shared block");
+    let _mapped = MappedRegion::map(
+        Backing::SharedFile {
+            fd: ram.as_backing_fd(),
+            offset: 0,
+        },
+        4 * page.bytes(),
+        HostProt::ReadWrite,
+        CachePolicy::WriteBack,
+        page,
+    )
+    .expect("★ the block must be MAPPED SHARED — that is the property the census keys on");
+
+    // --- present ----------------------------------------------------------------
+    assert!(
+        isolate_factory(IsolatePlane::Loopback, GuestRamSource::HypervisorMemfd).is_ok(),
+        "★★★ the same call, one shared-mapped memfd later, must now find it — otherwise \
+         the refusal above is about an unimplemented arm and not about the descriptor"
+    );
 }
 
 // ── The probe-arm device property: strict parse, reported set ──────────────────────

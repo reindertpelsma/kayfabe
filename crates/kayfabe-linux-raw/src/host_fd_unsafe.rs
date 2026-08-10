@@ -79,6 +79,35 @@ impl SharedRam {
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
     pub fn create(len: u64) -> Result<Self, RawError> {
+        Self::create_named(c"kayfabe-guest-ram", len)
+    }
+
+    /// Create `len` bytes of shareable, sealed backing under a **chosen** creation name.
+    ///
+    /// ## ★ Why the name is a parameter at all
+    ///
+    /// A `memfd`'s creation name is the only thing that distinguishes it from every other
+    /// `memfd` in a process — it is what [`crate::MemfdCensus`] matches on, because a
+    /// `memfd` has no path. [`SharedRam::create`]'s single fixed name is right for
+    /// production (one kind of block, one name) and is *wrong for the census's own tests*:
+    /// this crate's test binary runs in parallel threads, so two tests sharing a name is
+    /// two blocks the census cannot tell apart — which is a real property of the census
+    /// ([`crate::MemfdRefusal::Ambiguous`]) leaking into unrelated tests as flakiness.
+    ///
+    /// ⊘ It is `pub` rather than `pub(crate)` because the consumer that most needs it is
+    /// **in another crate**: `kayfabe-qemu-raw`'s test for the guest-RAM crossing has to
+    /// stand up a block carrying the hypervisor's own backend name, so that "the shim
+    /// refuses when the descriptor is absent" can be controlled against "and accepts when
+    /// it is present" — one process, one call, one thing changed. A production caller that
+    /// wanted a differently-named block would be creating a second KIND of shared memory,
+    /// which is a design change and not a parameter.
+    ///
+    /// # Errors
+    /// As [`SharedRam::create`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn create_named(name: &std::ffi::CStr, len: u64) -> Result<Self, RawError> {
         lockwitness::assert_lock_free("memfd_create (a shareable guest-RAM backing)");
         if len == 0 {
             return Err(RawError::ZeroLength {
@@ -89,12 +118,11 @@ impl SharedRam {
             libc::off_t::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
 
         // SAFETY: `memfd_create` reads the NUL-terminated name and dereferences nothing
-        // else; the literal is a `&CStr`, so the terminator is guaranteed by the type
-        // rather than by us. It returns a fresh descriptor or a negative error, and
-        // `adopt_fd` (which checks the sign) is what takes ownership — this block retains
-        // nothing.
-        let raw =
-            unsafe { libc::memfd_create(c"kayfabe-guest-ram".as_ptr(), libc::MFD_ALLOW_SEALING) };
+        // else; `name` is a `&CStr`, so the terminator is guaranteed by the type rather
+        // than by us, and the borrow outlives the call. It returns a fresh descriptor or a
+        // negative error, and `adopt_fd` (which checks the sign) is what takes ownership —
+        // this block retains nothing.
+        let raw = unsafe { libc::memfd_create(name.as_ptr(), libc::MFD_ALLOW_SEALING) };
         let fd = adopt_fd(raw, "memfd_create")?;
 
         // SAFETY: `fd` is a live descriptor this function owns (adopted on the line

@@ -280,6 +280,7 @@ mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod memtype;
 pub mod page_size;
+pub mod procfd;
 mod sandbox_unsafe;
 mod scm_unsafe;
 mod signal_unsafe;
@@ -315,6 +316,7 @@ pub use mapping_unsafe::{
     Backing, HostProt, MappedRegion, PlacementId, Reservation, VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
+pub use procfd::{MemfdCandidate, MemfdCensus, MemfdRefusal};
 pub use scm_unsafe::{
     DescriptorKind, MAX_FDS_PER_FRAME, descriptor_kind, recv_with_fds, require_kind, send_with_fds,
 };
