@@ -1,4 +1,7 @@
-# Adopting the guest's ring — `w230`
+# §5.11 — ADOPTING THE GUEST'S RING (`w230`)
+
+> Series note: §5.9 is `fb_cpu_view.md`, §5.10 is `executor_vas_separation.md`. This is the
+> rung after them, and it builds on §5.10's `ExecutorVas` without re-opening it.
 
 > **The blocker, stated exactly.** We allocate a host channel with **its own** command
 > queue, which stays empty, so the GPU consumes nothing forever. The guest is pushing into
@@ -37,6 +40,71 @@ R25N_RC=0 R29_RC=0 LADDER_RC=0`, including `R30 arm C REFUSED`, `R26 dictated ri
 1 caught GP_PUT 1`), `R26n CONTROL FIRED`, `R15 SEM LANDED`, `R17 CE COPY`.
 
 ---
+
+## 1b. The boots — and the arming control that fired
+
+| tag | rev | isolates | fb_backing | guest-RAM crossing | doorbells | G6 lines |
+|---|---|---|---|---|---|---|
+| `w230a_0aea0f2_guestring` | `0aea0f2` | real | on | — | **191/183/8** | 0 |
+| `w230b_65d7532_guestring` | `65d7532` | real | on | — | **191/183/8** | 0 |
+| `w230c_65d7532_guestring_memfd` | `65d7532` | real | on | `NVKVM_RAM_BACKEND=memfd` only | **191/183/8** | **0** ⚠ |
+| `w230d_65d7532_guestring_gram` | `65d7532` | real | on | `NVKVM_RAM_BACKEND` **+** `KAYFABE_GUEST_RAM` | **191/183/8** | **0** ⊘ |
+
+★ The census is **byte-identical to `w229c`** on every row — `191 arrived, 183 served, 8
+REFUSED by name; last token 0x00010001 (16 logged)` — with `GR-FB-BACKING` at 32 and a 34-line
+`dmesg` carrying 31 `NVRM` lines each time. The guest's addresses did not move and the
+guest's behaviour did not change. ⊘ `cup2` times out on every row and was expected to; this
+rung does not move the guest.
+
+⚠ **`w230c` is the arming trap, caught by an instrument rather than by luck.** It was booted
+with `NVKVM_RAM_BACKEND=memfd`, which is the flag that makes **QEMU** back guest RAM with a
+memfd — and the guest-RAM crossing is armed by a **second, separate** variable,
+`KAYFABE_GUEST_RAM=memfd` (`shim.rs:7229`, read in `selected_guest_ram_source`). So `w230c`
+looked completely healthy — full `dmesg`, printed census, `CAPTURE_RC=0` — while **not one
+line of G6 ran**. It is kept as the arming control it accidentally is: the four rows differ
+by exactly the flags in their column, and `w230d` is the one that executes the changed code.
+
+⇒ ★ This is `w229`'s lesson landing a second time in two nights, on a *different* variable.
+The general form: **the flag you know about is not the flag that arms the code you changed.**
+The only thing that separates the two is grepping the log for the specific line you expect —
+which is why the verification script asks "G6 executed?" as a count and not as a `[ -f ]`.
+
+### 1c. ⊘⊘ AND THE ARMING WAS NOT THE REASON — G6's call site is UNREACHABLE on this bench
+
+★★★ Arming `KAYFABE_GUEST_RAM=memfd` too (`w230d`) did **not** produce a `GUEST-RAM PIN`
+line either, and the census of committed evidence says why:
+
+| line | boots that contain it |
+|---|---|
+| `GUEST-RAM PIN` | **2 of 101** committed `_qemu.log` files — `run_w226a`, `run_w226c`, **once each** |
+| `RING-PROJ` (its neighbour on the same fall-through) | 8 of 101 |
+| either one, in `w229a/b/c` — the rung that WROTE the pin | **0** |
+
+`pin_ring_guest_ram` is called only on the **forwarding fall-through** of
+`SharedDoorbell::ring`, which is reached only when `try_ce_submission` declines — and it
+declines only for a doorbell that is both `DoorbellRoute::CpuCe` **and** has a resolved
+`vas_pdb` (`shim.rs:4126`). In this boot's shape the 8 refusals are `GrCompute` (refused
+above that test) and the 183 served are `CpuCe` with **no** `vas_pdb`, so they are claimed
+terminally. Nothing falls through.
+
+⇒ **G6 is written, reviewed and unexecuted, and no environment variable can change that.**
+It is a routing fact, not an arming fact. ⊘ Do not read the code as evidence.
+
+★ What *is* evidence is the one line the pin ever printed, and it corroborates G6's premise
+exactly — `run_w226a_qemu.log`:
+
+```text
+GUEST-RAM PIN token=0x00010002 … pdb=0x2efa9c000 ring=0x420064000 gpa=0x23092000
+    → file offset 0x23092000 (4096 bytes) → REFUSED SystemDataPlane
+```
+
+`ring=0x420064000` is the **4096-entry** ring (`RING-PROJ`, same boot family) — 32 KiB — and
+the pin named **4096 bytes**. One eighth, in the only measurement that exists.
+
+⇒ ★ **The next rung's first question is not the cursor; it is why `vas_pdb` is `None` for
+every served doorbell on this bench when `w226` resolved it** (`pdb=0x2efa9c000`, printed
+above). Until that is answered, everything on the forwarding fall-through — the pin, the
+ring projection, the CPU page-table decode — is code nothing reaches.
 
 ## 2. The five gaps, and what each one turned out to be
 
@@ -143,3 +211,41 @@ failure mode the pin exists to prevent). ⇒ The ordering constraint that surviv
 
 ⚠ R30 arm C provokes a real `Xid 31 FAULT_PDE` when the boundary holds; R31 provokes none —
 it schedules nothing and rings nothing.
+
+---
+
+## 6. Evidence, by file
+
+| what | where |
+|---|---|
+| R31 alone, first run | `docs/reference/bench_evidence/w230_r31_b39f95f.out` |
+| the full ladder at the rung's first revision | `docs/reference/bench_evidence/w230_ladder_b39f95f.out` |
+| ★ the full ladder at the **final** revision | `docs/reference/bench_evidence/w230_ladder_65d7532.out` |
+| the four boots | `traces/guest_boots/run_w230{a,b,c,d}_*_{qemu,dmesg,probe,serial,isolate}.log` |
+| ⚠ the flake attribution | `docs/reference/bench_evidence/w230_flake_attribution.out` |
+
+### 6.1 ⚠ `cargo test --workspace` is NOT clean on this bench, and it is not this rung's
+
+`WS_RC=101` at `65d7532`, and the failure is one test out of 149 in
+`kayfabe-linux-raw::spawn_unsafe::tests`, with `execve` returning **errno 26 (`ETXTBSY`)`**.
+Attribution, measured and on disk:
+
+- a **different** test fails on each full-suite run (`one_image_spawns_more_than_once`, then
+  `an_image_that_is_not_an_executable_fails_the_exec`);
+- the same tests pass **3/3 when run alone**;
+- ★ **the control**: the **untouched `w229` tree at `b66bd44`**, which contains none of this
+  rung's code, fails the same module with the same errno in **2 of 6** repeats;
+- and the same suite was `WS_RC=0` earlier tonight at `b39f95f`.
+
+⇒ Flaky, pre-existing, and about test parallelism (a writable fd on an image another thread
+is `execve`ing), not about this rung. `deterministic_failure_indicts_the_test; flaky indicts
+the system` — recorded rather than "fixed", because silencing someone else's race at the end
+of a rung is how a real defect gets a `#[ignore]`.
+
+⊘ `tests/` (`TS_RC=0`) and the **single-writer census (7/7, `SW_RC=0`)** are clean at
+`65d7532`.
+
+⚠ The ladder was re-run at `65d7532` and not merely at `b39f95f`, because the last commit
+touched `submit_entry` — which is the submission path `R15`, `R17`, `R26` and `R30` all go
+through. A green ladder at the earlier revision would have been a green ladder for different
+code.

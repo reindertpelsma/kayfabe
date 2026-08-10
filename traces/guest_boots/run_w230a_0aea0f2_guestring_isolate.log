@@ -1,0 +1,248 @@
+=== e0_isolate_witness tag=w230a_0aea0f2_guestring at 2026-08-10T23:05:45+00:00 ===
+REV_UNDER_TEST=0aea0f20064bef1e4683d36c514506e4b853acc6
+TREE_DIRTY_FILES=0
+KAYFABE_ISOLATES=real
+qemu binary: -rwxr-xr-x 1 root root 87327984 Aug 10 23:05 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:0aea0f20064bef1e4683d36c514506e4b853acc6
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+archive rev == source rev
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:w230a_0aea0f2_guestring] booting (extra args: none)
+t+35   [boot_capture:w230a_0aea0f2_guestring] guest is up after 35s
+t+37   [boot_capture:w230a_0aea0f2_guestring] module unloaded and ring buffer cleared; loading cold
+t+38   [boot_capture:w230a_0aea0f2_guestring] opening the device (this is what runs RmInitAdapter)
+=== ISOLATE CHILD pid 1538304  at 2026-08-10T23:06:32+00:00  (t+45s from witness start) ===
+cmdline: kayfabe-isolate --proc 0 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 1525608
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -machine q35,accel=kvm -m 2048 -cpu host -smp 3 -driv
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug 10 23:06 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug 10 23:06 1 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:06 10 -> socket:[2135779]
+  l--------- 1 root root 64 Aug 10 23:06 11 -> /dev
+  lrwx------ 1 root root 64 Aug 10 23:06 12 -> /dev/nvidia0
+  l-wx------ 1 root root 64 Aug 10 23:06 2 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:06 3 -> socket:[2135771]
+  lrwx------ 1 root root 64 Aug 10 23:06 5 -> /dev/nvidiactl
+  lrwx------ 1 root root 64 Aug 10 23:06 6 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:06 7 -> socket:[2135773]
+  lrwx------ 1 root root 64 Aug 10 23:06 8 -> socket:[2135775]
+  lrwx------ 1 root root 64 Aug 10 23:06 9 -> socket:[2135777]
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  737cec03c000-737cec04c000 rw-s 00000000 00:05 515                        /dev/nvidia0
+--- containment ---
+  Name:	memfd:kayfabe-i
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	6
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026533097]  host=user:[4026531837]
+    pid   child=pid:[4026533037]  host=pid:[4026531836]
+    net   child=net:[4026533101]  host=net:[4026531840]
+    mnt   child=mnt:[4026533098]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026533100]  host=ipc:[4026531839]
+    uts   child=uts:[4026533099]  host=uts:[4026531838]
+
+t+51   [boot_capture:w230a_0aea0f2_guestring] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w230a_0aea0f2_guestring_dmesg.log
+t+51   [boot_capture:w230a_0aea0f2_guestring] --- the verdict lines ---
+t+51   [boot_capture:w230a_0aea0f2_guestring] running POST_CAPTURE_HOOK: /workspace/kayfabe_w230/scripts/bench/cup2_hook_deadline.sh
+=== ISOLATE CHILD SETTLED pid 1538304  (first seen t+45s, settled at t+52s) ===
+cmdline: kayfabe-isolate --proc 0 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 1525608
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -machine q35,accel=kvm -m 2048 -cpu host -smp 3 -driv
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug 10 23:06 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug 10 23:06 1 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:06 10 -> socket:[2135779]
+  l--------- 1 root root 64 Aug 10 23:06 11 -> /dev
+  lrwx------ 1 root root 64 Aug 10 23:06 12 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:06 13 -> /dev/nvidia0
+  l-wx------ 1 root root 64 Aug 10 23:06 2 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:06 3 -> socket:[2135771]
+  lrwx------ 1 root root 64 Aug 10 23:06 4 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:06 5 -> /dev/nvidiactl
+  lrwx------ 1 root root 64 Aug 10 23:06 6 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:06 7 -> socket:[2135773]
+  lrwx------ 1 root root 64 Aug 10 23:06 8 -> socket:[2135775]
+  lrwx------ 1 root root 64 Aug 10 23:06 9 -> socket:[2135777]
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  737ceb5fd000-737ceb60d000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  737ceb60d000-737ceb61d000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  737cec03c000-737cec04c000 rw-s 00000000 00:05 515                        /dev/nvidia0
+--- containment ---
+  Name:	memfd:kayfabe-i
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	6
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026533097]  host=user:[4026531837]
+    pid   child=pid:[4026533037]  host=pid:[4026531836]
+    net   child=net:[4026533101]  host=net:[4026531840]
+    mnt   child=mnt:[4026533098]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026533100]  host=ipc:[4026531839]
+    uts   child=uts:[4026533099]  host=uts:[4026531838]
+
+=== ISOLATE CHILD pid 1548695  at 2026-08-10T23:07:02+00:00  (t+75s from witness start) ===
+cmdline: kayfabe-isolate --proc 2 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 1525608
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -machine q35,accel=kvm -m 2048 -cpu host -smp 3 -driv
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug 10 23:07 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug 10 23:07 1 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:07 10 -> socket:[2154917]
+  l--------- 1 root root 64 Aug 10 23:07 11 -> /dev
+  lrwx------ 1 root root 64 Aug 10 23:07 12 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 13 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 14 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 15 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 16 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 17 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 18 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 19 -> /dev/nvidia0
+  l-wx------ 1 root root 64 Aug 10 23:07 2 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:07 20 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 21 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 3 -> socket:[2154909]
+  lrwx------ 1 root root 64 Aug 10 23:07 4 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 5 -> /dev/nvidiactl
+  lrwx------ 1 root root 64 Aug 10 23:07 6 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 7 -> socket:[2154911]
+  lrwx------ 1 root root 64 Aug 10 23:07 8 -> socket:[2154913]
+  lrwx------ 1 root root 64 Aug 10 23:07 9 -> socket:[2154915]
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  796c72bf5000-796c72c05000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c05000-796c72c15000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c15000-796c72c25000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c25000-796c72c35000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c35000-796c72c45000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c45000-796c72c55000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c55000-796c72c65000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c65000-796c72c75000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c76000-796c72c86000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c86000-796c72c96000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c736b5000-796c736c5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+--- containment ---
+  Name:	memfd:kayfabe-i
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	6
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026533159]  host=user:[4026531837]
+    pid   child=pid:[4026533039]  host=pid:[4026531836]
+    net   child=net:[4026533163]  host=net:[4026531840]
+    mnt   child=mnt:[4026533160]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026533162]  host=ipc:[4026531839]
+    uts   child=uts:[4026533161]  host=uts:[4026531838]
+
+=== ISOLATE CHILD SETTLED pid 1548695  (first seen t+75s, settled at t+83s) ===
+cmdline: kayfabe-isolate --proc 2 --gpu 0 --workers 4 --rm real --park none 
+ppid   : 1525608
+ppid is: /workspace/bench/qemu-build/qemu-system-x86_64 -machine q35,accel=kvm -m 2048 -cpu host -smp 3 -driv
+--- open descriptors (the RM nodes are the point) ---
+  total 0
+  lrwx------ 1 root root 64 Aug 10 23:07 0 -> /dev/null
+  l-wx------ 1 root root 64 Aug 10 23:07 1 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:07 10 -> socket:[2154917]
+  l--------- 1 root root 64 Aug 10 23:07 11 -> /dev
+  lrwx------ 1 root root 64 Aug 10 23:07 12 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 13 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 14 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 15 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 16 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 17 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 18 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 19 -> /dev/nvidia0
+  l-wx------ 1 root root 64 Aug 10 23:07 2 -> /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log
+  lrwx------ 1 root root 64 Aug 10 23:07 20 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 21 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 22 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 23 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 24 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 25 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 26 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 27 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 3 -> socket:[2154909]
+  lrwx------ 1 root root 64 Aug 10 23:07 4 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 5 -> /dev/nvidiactl
+  lrwx------ 1 root root 64 Aug 10 23:07 6 -> /dev/nvidia0
+  lrwx------ 1 root root 64 Aug 10 23:07 7 -> socket:[2154911]
+  lrwx------ 1 root root 64 Aug 10 23:07 8 -> socket:[2154913]
+  lrwx------ 1 root root 64 Aug 10 23:07 9 -> socket:[2154915]
+--- mappings naming an nvidia node (an RM-SERVED mmap) ---
+  796c72b95000-796c72ba5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72ba5000-796c72bb5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72bb5000-796c72bc5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72bc5000-796c72bd5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72bd5000-796c72be5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72be5000-796c72bf5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72bf5000-796c72c05000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c05000-796c72c15000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c15000-796c72c25000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c25000-796c72c35000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c35000-796c72c45000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c45000-796c72c55000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c55000-796c72c65000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c65000-796c72c75000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c76000-796c72c86000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c72c86000-796c72c96000 rw-s 00000000 00:05 515                        /dev/nvidia0
+  796c736b5000-796c736c5000 rw-s 00000000 00:05 515                        /dev/nvidia0
+--- containment ---
+  Name:	memfd:kayfabe-i
+  Uid:	0	0	0	0
+  Gid:	0	0	0	0
+  Threads:	6
+  CapPrm:	0000000000000000
+  CapEff:	0000000000000000
+  CapBnd:	0000000000000000
+  NoNewPrivs:	1
+  Seccomp:	0
+  Seccomp_filters:	0
+  namespaces (vs this shell's):
+    user  child=user:[4026533159]  host=user:[4026531837]
+    pid   child=pid:[4026533039]  host=pid:[4026531836]
+    net   child=net:[4026533163]  host=net:[4026531840]
+    mnt   child=mnt:[4026533160]  host=mnt:[4026531841]
+    ipc   child=ipc:[4026533162]  host=ipc:[4026531839]
+    uts   child=uts:[4026533161]  host=uts:[4026531838]
+
+t+242  [boot_capture:w230a_0aea0f2_guestring] hook finished: rc=0
+t+242  [boot_capture:w230a_0aea0f2_guestring] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+250  [boot_capture:w230a_0aea0f2_guestring] census present:
+t+250      2026-08-10T23:09:56.666229Z qemu-system-x86_64: info: nvkvm: doorbells: 191 arrived, 183 served, 8 REFUSED by name; last token 0x00010001 (16 logged)
+t+250      2026-08-10T23:09:56.666401Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [Route::NotACopyEngineChannel] this channel's engine is GrCompute (route HostGr), so its pushbuffer is not copy-engine work and the shell's CPU copy-engine executor is the wrong executor for it; refused by the ROUTING fact rather than decoded by a codec that can only decline
+t+250  [boot_capture:w230a_0aea0f2_guestring] evidence carried into the repo: /workspace/kayfabe_w230/traces/guest_boots/run_w230a_0aea0f2_guestring_{qemu,dmesg,probe}.log
+t+250  [boot_capture:w230a_0aea0f2_guestring] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+t+250  [boot_capture:w230a_0aea0f2_guestring]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+t+250  [boot_capture:w230a_0aea0f2_guestring] done. serial=/workspace/bench/run_w230a_0aea0f2_guestring_serial.log qemu=/workspace/bench/run_w230a_0aea0f2_guestring_qemu.log dmesg=/workspace/bench/run_w230a_0aea0f2_guestring_dmesg.log probe=/workspace/bench/run_w230a_0aea0f2_guestring_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 100   (0 = never seen alive)
+distinct isolate-child pids: 2
+plane->RmMode mapping check: ok
+E0b lazy-spawn check: ok — first isolate child at t+45s, guest opened the device at
+            t+38s ⇒ the spawn FOLLOWS the guest's action
+=== E1: the device's own isolate-plane census (from /workspace/bench/run_w230a_0aea0f2_guestring_qemu.log) ===
+  2026-08-10T23:09:56.666198Z qemu-system-x86_64: info: nvkvm: isolates: 2 materialized, 2 live, 0 refusing (0 no-plane, 0 spawn-failed)

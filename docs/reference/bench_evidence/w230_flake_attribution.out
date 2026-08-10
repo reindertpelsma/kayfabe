@@ -1,0 +1,23 @@
+=== w230 FLAKE ATTRIBUTION, 2026-08-10 ===
+--- 1. w230 @ 65d7532, full workspace: run 1 ---
+test spawn_unsafe::tests::one_image_spawns_more_than_once ... FAILED
+test result: FAILED. 148 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+WS_RC=101
+--- 2. w230 @ 65d7532, full workspace: run 2 (a DIFFERENT test) ---
+test spawn_unsafe::tests::an_image_that_is_not_an_executable_fails_the_exec ... FAILED
+test result: FAILED. 148 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+WS_RC=101
+--- 3. the same tests, run ALONE, 3x ---
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 131 filtered out; finished in 0.05s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 131 filtered out; finished in 0.03s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 131 filtered out; finished in 0.05s
+--- 4. THE CONTROL: the UNTOUCHED w229 tree @ b66bd44, same module ---
+b66bd441a6efa2a81e28d4f3f3707935e91809a9
+test host_fd_unsafe::tests::a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing ... ok
+--- 5. w230 @ b39f95f earlier tonight ---
+WS_RC=0
+--- 4b. THE CONTROL REPEATED: untouched w229 @ b66bd44, kayfabe-linux-raw --lib, 6 runs ---
+test host_fd_unsafe::tests::a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing ... ok test spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all ... FAILED spawn from image: Syscall { call: "execve", errno: Some(26) } test result: FAILED. 148 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s 
+test host_fd_unsafe::tests::a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing ... ok test result: ok. 149 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s 
+test host_fd_unsafe::tests::a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing ... ok test result: ok. 149 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s 
+test host_fd_unsafe::tests::a_negative_syscall_return_is_refused_by_exact_errno_and_adopts_nothing ... ok test spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all ... FAILED spawn from image: Syscall { call: "execve", errno: Some(26) } test result: FAILED. 148 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s 

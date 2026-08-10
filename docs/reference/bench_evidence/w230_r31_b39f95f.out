@@ -1,0 +1,32 @@
+=== REV: b39f95fcaa29e5e7f856b72d2910bfd0b8629860  tree:[] ===
+=== host: NVIDIA GeForce RTX 3060, 580.159.04 euid=0 ===
+=== R31 guest-ring channel ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00ba0
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=b39f95fcaa29e5e7f856b72d2910bfd0b8629860
+info  R31 guest ring      = GPU 0, euid 0 — a sealed memfd → OS_DESCRIPTOR → FIXED map → a channel whose gpFifoOffset and gpFifoEntries are the CALLER'S, with no ring allocated and no CPU map of it
+★     R31 arm D entries   = a zero `gpFifoEntries` was REFUSED BY NAME (`RING_ENTRIES_REFUSED`) and NOTHING was allocated on the way — the CPU-map counter did not move. The refusal is reachable, so the arms below are not vacuous
+info  R31 what was asked  = ring object at 0x0000000900000000, gpFifoOffset 0x0000000900003000 (= ring + 0x3000, deliberately NOT our 0x1000), gpFifoEntries 4096 (the guest's measured count; ours is 64)
+★     R31 adopt           = HOST RM BUILT THE CHANNEL (token 0x4) over an object it did not allocate, placed AS ASKED at 0x0000000900000000, told gpFifoOffset 0x0000000900003000 and gpFifoEntries 4096 — and building it asked RM for exactly ONE CPU mapping (USERD). A store into the ring is refused by name (`RING_NOT_OURS`)
+★     R31 arm B nomap     = the CPU map of the guest-backed ring was ATTEMPTED and REFUSED Other(86) — so `no CPU map` is not a policy we chose, it is the only available answer
+⚠⚠    R31 arm C unbound   = the SAME call with gpFifoOffset 0x0000000b00000000 — an address nothing was ever mapped at — was ACCEPTED (token 0x4, freed). ⇒ RM does NOT resolve gpFifoOffset at alloc time, exactly as `ogkm-580: kernel_channel.c:2664` and `kernel_graphics.c:2420-2424` say. TWO consequences: (1) arm A's acceptance is about the ioctl and the NUMBERS, not about the binding; (2) the host channel's birth does NOT have to move to the doorbell — the binding is needed when hardware FETCHES, which is after it
+★     R31 guest ring      = a host channel over the GUEST'S queue, at the GUEST'S address and the GUEST'S entry count, on real hardware. ⊘ It is NOT runnable: nothing writes `GP_PUT`, so the engine has nothing to fetch. cup2 does not pass and the completion watcher stays NOT-OBSERVED
+done — guest-ring channel probe only
+R31_RC=0
+--- host dmesg ---
+[196077.905572] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[196077.905577] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[196077.982539] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[196077.982550] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[196077.982555] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[196078.039425] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[196078.039436] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[196078.039440] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[196078.089287] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[196078.089298] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[196078.089302] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[196078.140187] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[196078.140197] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[196078.140202] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[198532.888984] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
