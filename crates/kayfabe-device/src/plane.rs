@@ -3210,12 +3210,12 @@ impl RegPlane {
         }
         self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        // ⊘ `cpu_intr` is deliberately NOT bound here any more: §16.77.1 moved the only
+        // consumer to `RegPlane::ring_doorbell`, and leaving the binding would have let a
+        // future edit re-latch a vector from a register write without anyone noticing that
+        // it is the trigger this rung deleted.
         let PlaneState {
-            fsm,
-            ram,
-            policy,
-            cpu_intr,
-            ..
+            fsm, ram, policy, ..
         } = &mut *s;
         match fsm.mmio_write_with(
             ram.as_mut(),
