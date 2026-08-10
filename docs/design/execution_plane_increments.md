@@ -14902,3 +14902,48 @@ falsifiably:
   hook's full 150 s deadline instead of 13 s, and a hung `cup2` is what makes the QEMU monitor
   teardown path load-bearing. If F6's next rung does not close it, back half 3 out rather than
   carry a hang indefinitely.
+
+### 16.76.11 ★★★★★ `w212` BOOTED — **F6 IS DECIDED: the bookkeeping is SOUND and the guest really does not enable that leaf**
+
+`[measured 2026-08-10, boot w212_e309a85_ctl, rev e309a85f]` — stamp verified out of the built
+binary; evidence at `traces/guest_boots/run_w212_e309a85_ctl_{qemu,dmesg,probe}.log` +
+`xid_w212ctl.log`. The one line §16.76.9 added:
+
+```text
+interrupt tree: 9642 register accesses, 2 guest LEAF_TRIGGER raises, 0 of them would be masked
+```
+
+⇒ **`cpu_intr_masked == 0` while `cpu_intr_raises == 2`.** The guest's own
+`_osVerifyInterrupts` loopback — which writes `LEAF_EN_SET` immediately before it triggers
+(`ogkm-580: intr_swintr_tu102.c:72-90`) and which **passed** in this boot (no
+`NV_ERR_IRQ_NOT_FIRING`, the adapter came up) — is seen by our model as **enabled**.
+
+⊘ **Hypothesis (b) is REFUTED: the enable bookkeeping is not blind.** `suspect_the_instrument_first`
+was the right order to ask in and the instrument came back clean, which is what makes the rest of
+the reading usable. ⇒ **hypothesis (a) stands**: at the instant this device latches
+`MC_ENGINE_IDX_GSP`'s stall vector (155 = leaf 4, bit 27), the guest's `LEAF_EN` bit for it is
+genuinely **clear** — and note that it is the *same leaf register* the loopback enables bit 1 of,
+so this is a per-bit fact and not a whole-row blind spot. The CE non-stall vectors are the same
+story at 4 of 4.
+
+★ **`w212` reproduces `w211` exactly** — 3 registered / 3 retired / 0 live, 1 `POST_EVENT` in 1
+batch, 348 gated, 0 `IRQSCLR`, 1 raised / 1 masked, 82 doorbells served with 82 new, three
+`hClass=0x00000079 status=0x00000000` and **zero** refused, `bad sequence` 0/0/0, and `cup2`
+timing out at 150 s. ⊘ `deterministic_failure_indicts_the_test` does not apply — this is not a
+test, it is the same guest doing the same thing twice, which is what makes the one changed
+number readable as the answer to the one changed question.
+
+⇒ **THE NEXT RUNG, NAMED.** Either (i) find where a GSP-offload driver enables
+`MC_ENGINE_IDX_GSP`'s stall vector and why our boot never sees that write — the candidate is that
+`_osVerifyInterrupts` **disables every other tree** before its self-test (`os_sanity.c:117-291`)
+and the restore does not land through a path this plane decodes, which the 2464 unclaimed
+register writes make worth checking first — or (ii) if it genuinely never enables it, the
+announcement mechanism is wrong: the GSP's message-queue interrupt reaches this driver through
+the **GSP falcon's own** `IRQSTAT`/`IRQSCLR` path, which this device already models
+(`GspFalconIrqstat` reads back `swgen0_pending`), and the CPU_INTR leaf latch is a second,
+unnecessary hop we chose because the C chooses it.
+
+⚠ ⊘ **And note what the C's success does NOT license here.** The C latches 155 too (`C:1832-1835`)
+and its ladder went green — but the C's green `cup2` ran with `m2cexec=OFF` and its own doorbell
+trigger, so *"the C does it this way"* is evidence that the shape is **acceptable**, never that
+the leaf is **enabled**. `citing_the_oracle_is_not_the_oracle_being_right`.
