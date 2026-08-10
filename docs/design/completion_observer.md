@@ -274,3 +274,134 @@ construction**. That is why the start line, the stop line and `WatchStats` are a
 ★ **F is the falsifier that costs me something.** Every prior rung on this line reported
 `191/183/8` and `GrCompute=8 Ce=183` identically; if those move, the finding is about my
 change and not about the completion plane.
+
+---
+
+## 7. ★★★★★ THE BOOTS — scored against §6, and the answer is **B**
+
+`[measured 2026-08-10, boots `w226_534e1b3_cobs` and `w226b_534e1b3_cup2`, rev `534e1b3`
+(binary stamp `kayfabe-rev:534e1b3195817cebcdd6b1966f6ada818de57869`, clean), `vh2` /
+vast 47373001, RTX 3060 GA106, host driver 580.159.04, `KAYFABE_ISOLATES=real`, CE executor
+`local`]`
+
+### 7.1 ⊘ `w226` first — and it could not answer, for a reason outside the rung
+
+`HOOK_RC=127`. `cup2_hook_deadline.sh` hardcodes `GSSH=/workspace/bench/kayfabe/scripts/…`
+and `/workspace/bench/cup2.c`, neither of which existed for a tree checked out at
+`/workspace/kayfabe_w226`. So `cuCtxCreate` never ran: **2 doorbells arrived, `GrCompute=0
+Ce=2`**. ★ The observer **started** (`COMPLETION-OBSERVER started`) and correctly declared
+**nothing**, because there was nothing to declare. ⊘ That boot is committed and is evidence
+of the observer starting, and of **nothing else**. It is exactly the harness trap
+`boot_capture.sh`'s own header is about, one level out.
+
+### 7.2 ★★★★★ `w226b` — the observer DECLARED EIGHT and READ THE GUEST'S OWN POLL WORD
+
+```
+COMPLETION-OBSERVER started — one thread, one epoll, one armed counter source.
+COMPLETION-DECLARE token=0x00000007 proc=2 chan=0 engine=GrCompute
+  → DECLARED va=0x20440fff0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1
+    class=0xc7c0 site=GuestRam { gpa: 0x2059fff0 }
+  … ×8, chan 0-7, va 0x20440fff0 / ffe0 / ffd0 / ffc0 / ffb0 / ffa0 / ff90 / ff80
+COMPLETION-WATCH proc=2 chan=0 va=0x20440fff0 payload=0x00000001
+  → NOT-OBSERVED samples=86 last_seen=0x00000000
+  … ×8, samples 86/86/86/85/84/83/82/81, every one last_seen=0x00000000
+```
+
+★★★ **Outcome B — and §6 called B *"strictly better than A"* before the boot.** Three things
+are now measured that were not:
+
+1. **The guest's poll target RESOLVES.** `site=GuestRam { gpa: 0x2059fff0 }` — §16.73's
+   `RING-VA-UNBOUND` prior, which four rungs had reported and which §6 predicted here, is
+   **refuted for this address**. The address table binds it.
+2. **It is a POOL of eight, not one semaphore** — `0x2_0440ff80 … 0x2_0440fff0`, 16-byte
+   stride, one per `GrCompute` channel, each with the **same literal payload `1`**. The
+   `GrCompute=8` in the doorbell census and the eight `0xc7c0` allocs `§16.80.2` forwarded
+   are the same eight objects, now joined to their completion addresses.
+3. ★★★ **The word is `0x00000000` and stays `0x00000000` across 86 reads spanning the whole
+   `cuCtxCreate` wall.** Not stale, not torn, not backwards — **never written by anyone**.
+
+⇒ **THE WALL HAS MOVED FROM ADDRESSING TO EXECUTION.** We can read the exact word
+`cuCtxCreate` spins on. Nothing puts a value in it, and S1 (`Route::NotACopyEngineChannel`)
+is now the only thing between the guest and a real one.
+
+### 7.3 ⊘ The falsifier's costly arm, F, is NO
+
+| | `w218` | `w220` | `w221` | `w222` | **`w226b`** |
+|---|---|---|---|---|---|
+| doorbells | 191/183/8 | 191/183/8 | 191/183/8 | 191/183/8 | **191/183/8** |
+| by engine | — | `GrCompute=8 Ce=183` | same | same | **`GrCompute=8 Ce=183`** |
+| forwarded | 0 | 0 | 0 | 0 | **0** |
+| `SMI_RC` / `CUP2_RC` | 0 / TIMEOUT | 0 / TIMEOUT | 0 / TIMEOUT | 0 / TIMEOUT | **0 / TIMEOUT** |
+
+**Byte-identical.** The declare path perturbed the control plane by nothing, which is what a
+print-and-insert instrument must do. ⊘ Arms C, D, E and G did not fire.
+
+---
+
+## 8. ★★★★★ THE WRITER CENSUS — *"do WE have two writers to `0x2_0440xxxx`?"*
+
+Asked by the coordinator mid-rung, after verifying that the C's `§0.7` route-B ruling
+(`6b4a56b`, 2026-06-10) was superseded **the next day** by `ceb13f5` (2026-06-11), whose fix
+was a **third option §0.7 never listed: delete the second writer**. The C's
+`MC_SERVICE_INTERRUPTS` spin was never a *missing* completion — it was a **corrupted** one,
+a lagging bridged host CE DMA-writing stale payloads `1,2` over a live `0x1e`, which UVM's
+32→64-bit wrap detector read as a backwards jump. ⇒ If we have two writers we are
+reproducing M5.38 and every completion-delivery mechanism is treatment of a symptom.
+
+### 8.1 THE ANSWER — **ZERO writers to that page, and exactly ONE writer anywhere in the tree**
+
+`[MEASURED — /bin/grep over `crates/` + `qemu/`, tests and mocks excluded, at `534e1b3`]`
+
+**Every production caller of `Vmm::gpa_write` in the whole workspace — there are two:**
+
+| # | `file:line` | writes what | can it reach `0x2_0440xxxx`? |
+|---|---|---|---|
+| **W1** | `crates/kayfabe-rt/src/cpu_ce.rs:127` (`write_plane`) | the CPU CE executor's bytes — both the **copy/fill** (`execute_ours`) and the **completion payload** (`write_resolved_completion:463`) | only at an address **the guest's own pushbuffer named**, and only for a submission the local executor RAN |
+| **W2** | `crates/kayfabe-qemu-raw/src/shim.rs:878` (`MachineRam::write`) | the register plane's guest-RAM port | reached only through `kayfabe_gsp`'s `GspRegion::write` (`ram.rs:262`, `boot.rs:1099/1614`) and `rmrpc/fault.rs:126` — **bounded to declared GSP regions and the RM event notifier `notifier_gpa`**, neither of which is a semaphore |
+
+**And exactly one function in the tree writes a completion semaphore at all:**
+`cpu_ce::write_resolved_completion` (`cpu_ce.rs:420`), with **exactly two production call
+sites**, both inside `ceutils::run_submission` (`ceutils.rs:641`, `:721`) — the local CPU CE
+executor. ⊘ `cpu_ce::write_completion` (`:509`), the second door, has **zero** production
+callers: two doc references and its own definition.
+
+### 8.2 Every candidate SECOND writer, excluded by name
+
+| candidate | why it is not a second writer |
+|---|---|
+| **the host GPU's own release** | `ce_pushbuffer`'s `sem_va` is `parts.ring_va + SEMAPHORE_OFFSET` at **both** construction sites (`rm.rs:3224`, `:3358`), i.e. inside **our** host channel's ring object. It is never a guest address. The host engine releases to us; we relay. **One writer to guest memory, by construction.** |
+| **the host GPU DMA-ing into guest RAM** | it cannot reach guest RAM at all. `with_guest_ram` moves an `OwnedFd` into `HostIsolateFactory` and **nothing in the QEMU process maps it**; `shim.rs:6093` says in its own words that *"the isolate side of the crossing landed on 2026-08-10 and no VMM code called `with_guest_ram`"*. (#238 step 3, another branch.) |
+| **the forwarding path** (`forward_ring` → `forward_ce`) | writes **no completion at all** — `e7bed44`'s residual (2), verbatim: *"No completion tail. The guest's finishPayload is not written and no interrupt is raised on this path."* |
+| **the completion REDELIVERY plane** | `kayfabe_fwd::deliver_completions` (`lib.rs:2077`) and `poll_completions` (`:2090`) have **zero** production callers — each grep finds exactly its own definition. Their consumer `Executor` is never constructed. And a `PostBatch` delivers **notifiers**, not semaphores. |
+| **a forged / emulated `SET_REPORT_SEMAPHORE` release** | there is none. The pushbuffer codec is class-gated to CE; a GR ring decodes to `Opaque`, so no compute-class release can be synthesised — and `Route::NotACopyEngineChannel` refuses the doorbell above the executor anyway. |
+| **this rung's observer** | ⊘ a **reader by type**: `WatchList::sweep` is handed a `GuestReader` and there is no write half in the signature. `grep -c gpa_write crates/kayfabe-rt/src/completion_watch.rs` = 0 (one doc mention saying so). |
+
+### 8.3 ★★★ And the census is CORROBORATED FROM THE OTHER SIDE
+
+`[measured 2026-08-10, boot `w226b_534e1b3_cup2`]` The static census says nothing writes `0x2_0440xxxx`. `w226b` **read that page 86 times over
+the whole `cuCtxCreate` wall and it was `0x00000000` every time**, on all eight channels.
+⇒ Not "one writer", not "two writers" — **zero**. A page with two writers is a page with at
+least one write.
+
+★ This is the strongest available corroboration precisely because a *static* census and a
+*dynamic* read are different instruments: the grep could miss a writer, and the read could
+miss a write that was overwritten — but a writer the grep missed would have had to write
+`0` eighty-six times running to hide.
+
+### 8.4 ⇒ WHAT THIS RULES IN AND OUT
+
+- ⊘ **We are NOT reproducing M5.38.** There is nothing to corrupt because there is no writer,
+  and a backwards write (fatal on first occurrence — UVM reads any decrease as a 2³² wrap,
+  exceeds `UVM_GPU_SEMAPHORE_MAX_JUMP`, and `UVM_ASSERT_MSG_RELEASE` is compiled into
+  **release** builds) cannot occur against a value that never moves.
+- ★ **The single-writer rule holds today and is worth writing down as an invariant BEFORE
+  #238 lands**, because #238 is exactly what makes a second writer possible: the moment the
+  host GPU can address guest RAM, `partition_ce`'s per-span split means one submission's
+  bytes can come from two engines. ⊘ It still would not give the *semaphore* two writers —
+  the release is resolved separately as a `ResolvedRelease` and never becomes a `CeSpan` —
+  but that property is currently accidental, asserted nowhere, and one refactor from
+  untrue.
+- ⇒ **The completion-delivery mechanism the original brief asked for remains suspended, and
+  the reason is now a reading of `w226b_534e1b3_cup2` rather than an argument**: on our
+  path the completion is not corrupted and not lost. It is **never produced**, because the
+  work never runs.
