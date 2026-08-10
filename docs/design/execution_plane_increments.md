@@ -11961,7 +11961,9 @@ correctly, to different handles of one resource.** No handle-keyed table can joi
 there. ⊘ Recorded because two of the three logs in that boot have >169 lines, so the citation
 silently resolves to the wrong file and reads as a refutation.
 
-★★ **Confirmed unchanged:** doorbells `448 arrived, 261 served, 187 REFUSED` (verbatim);
+★★ **Confirmed unchanged** `[measured 2026-08-10, boot `s45_748a207_tsgsched`, re-read here
+from this repo's own committed `traces/guest_boots/run_s45_748a207_tsgsched_{qemu,probe}.log`
+rather than inherited from the brief]`: doorbells `448 arrived, 261 served, 187 REFUSED`;
 records 73/74 are the only two `hClass=0x90f1` allocs in the boot, same `hRoot=0xc1d0000c`,
 same `hParent=0x5c000002`, `hObject` `0x5c000007` / `0x5c000008`; and the aperture trap is
 real — `_APERTURE_VIDMEM == 0` (`ctrl0080dma.h:842-845`) against `GMMU_APERTURE_INVALID == 0`
