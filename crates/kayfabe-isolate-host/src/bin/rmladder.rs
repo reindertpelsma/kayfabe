@@ -1430,6 +1430,292 @@ fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bool {
     verdict
 }
 
+/// ★★★ R26 — **will host RM build a channel whose GPFIFO ring is at an address WE
+/// dictate, and will the engine then FETCH from it?**
+///
+/// R25 established that guest-RAM-shaped memory reaches a real host GPU's MMU at a VA we
+/// choose. That was a *data* mapping, read by a copy engine as an operand. This is the
+/// same question one plane over, about the **control** plane: a channel's ring is the one
+/// mapping hardware's host unit walks by itself, from an address baked into
+/// `NV_CHANNEL_ALLOC_PARAMS::gpFifoOffset` at allocation time. A shadow-forwarded channel
+/// has to name the *guest's* ring address there, so if RM insists on choosing, the design
+/// is unbuildable and everything downstream of it is wasted.
+///
+/// ## ★★★ The evidence bar is TWO facts, and the second is the whole reason for the rung
+///
+/// ```text
+///   1. the ring landed where we asked   -- read back from ChannelParts, not from Ok(())
+///   2. the GPU CONSUMED a ring entry    -- GP_GET advanced, and the semaphore released
+/// ```
+///
+/// ⊘ **Fact 1 alone is the R25 tautology wearing a different hat.** `alloc_channel_at`
+/// returning `Ok` is the thing under test; checking that it returned `Ok` measures
+/// nothing. Worse, fact 1 can hold *while the channel is dead*: RM records a mapping at
+/// our address, the channel allocates, the token is minted, and hardware never fetches a
+/// byte — the exact `userdOffset` shape the C spent M5.47 on, which produced **zero
+/// utilisation and no Xid**. So the rung submits, and `GP_GET` — the one word in this
+/// crate hardware writes and we do not — has to move.
+///
+/// ★ Hence the four arms below are not "did it work"; they are four *different* things
+/// that can be true, and the interesting one is **arm C**.
+///
+/// ```text
+///   ★     R26 dictated ring   = asked X, RM placed X, GP_GET advanced, sem released  -> a PORT
+///   FAIL  R26 place           = PlacementRefused want X got Y     -> RM chooses; shadow-forward is dead
+///   FAIL  R26 alloc           = RM refused the channel outright   -> the address is legal to ASK and not to USE
+///   ??    R26 inert channel   = placed at X, but GP_GET never moved -> ★ THE CELL A "did the alloc
+///                                                                      succeed?" TEST SCORES GREEN
+/// ```
+///
+/// ## ⊘ What it cannot see
+///
+/// - **Not a guest VA.** The address is one *we* chose, deliberately neither R25's
+///   `0x3_0040_0000` nor R9's constant, so a pass cannot be a remembered address. Whether
+///   a *guest's* VA is acceptable is a question about the number, and this rung only
+///   establishes that the number is ours to pick.
+/// - **Not the guest's ring LAYOUT.** `alloc_channel_at` places the isolate's own 64 KiB
+///   ring object; `gpFifoOffset` is still derived from our `GPFIFO_OFFSET`. A guest ring
+///   is guest memory with a guest layout, and that is the next increment.
+/// - **Not a host fault.** If the engine never fetched, this rung cannot tell "the ring
+///   was unreachable" from "the ring was reachable and empty". That distinction lives in
+///   the **host** `dmesg`, and `scripts/bench/host_xid_watch.sh` is what reads it — this
+///   rung is meant to be run inside that watcher, which is why it prints nothing about
+///   faults itself rather than printing a guess.
+/// ★★★ The negative control for R26 — **occupy the address first**, then ask for it.
+///
+/// ⊘ A green whose red is unreachable proves nothing, and R26's green has a specific way of
+/// being vacuous: if `channel_ring_va` merely echoed the address we asked for, every run
+/// would pass at every address and the rung would be measuring its own argument. R25 was
+/// bitten by precisely this shape one plane over (`§16.67.4`: `65536 of 65536` printed from
+/// one variable twice), so the check has to be *watched to fail*.
+///
+/// This maps a device-local object at `RING_AT` **first**, in the same `Vas`, and then asks
+/// for a channel ring there. The address is now taken, so one of two things must happen and
+/// **either one is the control firing**:
+///
+/// - RM refuses the fixed map outright — the address is enforced by the driver;
+/// - RM relocates and `alloc_channel_at` converts that into `PlacementRefused` — the
+///   placement check is enforced by us.
+///
+/// ⊘ **A third outcome would be a finding, not a pass.** If the channel is built at
+/// `RING_AT` while another object is mapped there, then two objects share one GPU VA, the
+/// "address identity" the whole data plane rests on does not hold, and R26's green means
+/// something much weaker than it says. That arm is printed as `FAIL`, loudly, and it is the
+/// reason this control is worth its lines.
+fn dictated_ring_negative(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    const RING_AT: u64 = 0x0000_0004_1100_0000;
+    println!(
+        "info  R26n neg control    = GPU {gpu}, euid {} — OCCUPY {RING_AT:#018x} first, then \
+         ask for a channel ring at the same address. The control fires if the ask is REFUSED",
+        kayfabe_linux_raw::geteuid()
+    );
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R26n vaspace        = the rung needs its own address space");
+        return false;
+    };
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R26n engine         = COPY0 is not expressible");
+        let _ = rm.free(vas);
+        return false;
+    };
+    // ★ The squatter is the same size as a ring object, so the collision is total rather
+    // than a partial overlap RM might legitimately place around.
+    let squatter = match rm.alloc_probe_local(0x1_0000) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R26n squatter       = could not allocate the occupying object: {e:?}");
+            let _ = rm.free(vas);
+            return false;
+        }
+    };
+    let verdict = match rm.map_gpu_va(vas, squatter, 0x1_0000, GpuVa(RING_AT)) {
+        Ok(va) if va == RING_AT => {
+            println!("ok    R26n occupied       = {RING_AT:#018x} is now taken by another object");
+            match rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) {
+                Err(RmError::PlacementRefused { want, got }) => {
+                    println!(
+                        "★     R26n CONTROL FIRED  = the channel ring was RELOCATED to \
+                         {got:#018x} from {want:#018x} and `alloc_channel_at` REFUSED it — \
+                         the placement check is not an echo of our own argument"
+                    );
+                    true
+                }
+                Err(e) => {
+                    println!(
+                        "★     R26n CONTROL FIRED  = RM refused the channel at an occupied \
+                         {RING_AT:#018x} with {e:?} — the address is enforced by the driver, \
+                         so R26's green is a fact about RM and not about our formatting"
+                    );
+                    true
+                }
+                Ok((chan, _)) => {
+                    println!(
+                        "FAIL  R26n TWO OBJECTS    = a channel ring was built at \
+                         {RING_AT:#018x} while another object is mapped there. ⊘ This is not \
+                         a control failure, it is a FINDING: one GPU VA now names two \
+                         objects, and address identity does not hold the way #102 assumes"
+                    );
+                    let _ = rm.free(chan);
+                    false
+                }
+            }
+        }
+        Ok(va) => {
+            println!(
+                "FAIL  R26n occupied       = the squatter asked {RING_AT:#018x} and landed at \
+                 {va:#018x}; the control never got to run"
+            );
+            false
+        }
+        Err(e) => {
+            println!("FAIL  R26n occupied       = could not place the squatter: {e:?}");
+            false
+        }
+    };
+    // ★ The squatter is NOT freed by freeing the `Vas`: `free` takes a channel down with its
+    // address space, and an occupying memory object is neither. A diagnostic that is only
+    // ever run once still has to free it — the next person to put this in a loop inherits
+    // whatever it left behind, and a VA that is still occupied would make the control
+    // "fire" for the wrong reason on iteration two.
+    let _ = rm.free(squatter);
+    let _ = rm.free(vas);
+    verdict
+}
+
+fn dictated_ring_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // ★ Neither R25's `0x3_0040_0000` nor R9's constant: a rung that passes at an address
+    // some earlier rung already proved is a rung that may be reading a remembered answer.
+    // 64 KiB-aligned because that is the ring object's size and RM's device-local
+    // granularity; an unaligned ask would be refused for the alignment and read as a
+    // refusal of the *idea*.
+    const RING_AT: u64 = 0x0000_0004_1100_0000;
+    // Neither 0 (the sentinel `submit_semaphore_probe` writes first) nor a plausible token.
+    const PAYLOAD: u32 = 0x1DEA_0026;
+
+    println!(
+        "info  R26 dictated ring   = GPU {gpu}, euid {} — allocate a host channel whose \
+         RING OBJECT is placed at {RING_AT:#018x} BY US, then make the engine fetch from it",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R26 the bar is TWO facts: the placement RM reports back, and GP_GET moving. \
+         ⊘ `Ok(())` from the call under test is not one of them"
+    );
+
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R26 vaspace         = the rung needs its own address space");
+        return false;
+    };
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R26 engine          = COPY0 is not expressible");
+        let _ = rm.free(vas);
+        return false;
+    };
+
+    let verdict = match rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) {
+        Ok((chan, token)) => {
+            // ★★ Fact 1, read back from the connection's record of RM's [OUT] `dmaOffset`
+            // rather than from the call's return value. Two parties, not one.
+            let got = rm.channel_ring_va(chan);
+            if got != Some(RING_AT) {
+                println!(
+                    "FAIL  R26 place           = the alloc succeeded but the recorded ring VA \
+                     is {got:?}, not {RING_AT:#018x} — `alloc_channel_at` accepted a \
+                     placement it should have refused"
+                );
+                let _ = rm.free(chan);
+                let _ = rm.free(vas);
+                return false;
+            }
+            println!(
+                "ok    R26 placement       = RM reports the ring at {RING_AT:#018x} AS ASKED \
+                 (token {token:#010x}) — necessary, and NOT yet sufficient"
+            );
+            if let Err(e) = rm.schedule(chan) {
+                println!("FAIL  R26 schedule        = {e:?} (the channel exists and cannot run)");
+                let _ = rm.free(chan);
+                let _ = rm.free(vas);
+                return false;
+            }
+            // ★★★ Fact 2. The pushbuffer, the GPFIFO entry and the semaphore are all read
+            // by hardware at `ring_va + <offset>` — i.e. at OUR address. If the host MMU
+            // could not resolve it, nothing here can succeed.
+            match rm.submit_semaphore_probe(chan, token, PAYLOAD, std::time::Duration::from_secs(2))
+            {
+                Ok(o) if o.landed(PAYLOAD) => {
+                    println!(
+                        "★     R26 dictated ring   = ring placed at {RING_AT:#018x} AS ASKED, \
+                         GP_GET {} caught GP_PUT {}, sem {:#010x} (want {PAYLOAD:#010x}) — \
+                         the GPU FETCHED from an address we chose",
+                        o.gp_get, o.gp_put, o.semaphore
+                    );
+                    true
+                }
+                Ok(o) if o.gp_get == 0 && o.gp_put != 0 => {
+                    // ★★★ THE CELL. Everything a "did the alloc succeed?" test looks at is
+                    // green, and the channel is inert.
+                    println!(
+                        "??    R26 INERT CHANNEL   = placed at {RING_AT:#018x} as asked and the \
+                         engine NEVER FETCHED: GP_GET {} GP_PUT {} sem {:#010x}. ⊘ This is NOT \
+                         a placement failure and NOT a success — the ring is where we said and \
+                         hardware did not read it. Read the host Xid log: an `Xid 31 FAULT_PDE` \
+                         says the address was unreachable, a CLEAN log says it was reachable \
+                         and something else (USERD, the token, the schedule) is wrong",
+                        o.gp_get, o.gp_put, o.semaphore
+                    );
+                    false
+                }
+                Ok(o) => {
+                    println!(
+                        "FAIL  R26 submit          = placed at {RING_AT:#018x}, entry FETCHED \
+                         (GP_GET {} GP_PUT {}) and the methods did not release: sem {:#010x}, \
+                         want {PAYLOAD:#010x}",
+                        o.gp_get, o.gp_put, o.semaphore
+                    );
+                    false
+                }
+                Err(e) => {
+                    println!("FAIL  R26 submit          = {e:?}");
+                    false
+                }
+            }
+            .tap_free(rm, chan)
+        }
+        Err(RmError::PlacementRefused { want, got }) => {
+            println!(
+                "FAIL  R26 place           = asked {want:#018x}, RM chose {got:#018x} \
+                 (DMA_OFFSET_FIXED_TRUE not honoured for a CHANNEL RING) — a shadow-forwarded \
+                 channel cannot name the guest's ring, and the design must change"
+            );
+            false
+        }
+        Err(e) => {
+            println!(
+                "FAIL  R26 alloc           = the channel was refused {e:?} at ring \
+                 {RING_AT:#018x}. ⊘ Do NOT read this as `RM chooses the address` — that is \
+                 the arm above, and it looks different. This says the ADDRESS was legal to \
+                 ask for and the channel was not built over it"
+            );
+            false
+        }
+    };
+    let _ = rm.free(vas);
+    verdict
+}
+
+/// A `bool` that frees a channel on its way out, so the four submit arms above can each be
+/// a single expression without four copies of the teardown — the shape that grows a leak
+/// on whichever arm gets edited last.
+trait TapFree {
+    fn tap_free(self, rm: &mut HostRmBackend, chan: kayfabe_isolate::HostHandle) -> Self;
+}
+impl TapFree for bool {
+    fn tap_free(self, rm: &mut HostRmBackend, chan: kayfabe_isolate::HostHandle) -> Self {
+        let _ = rm.free(chan);
+        self
+    }
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -1724,6 +2010,8 @@ fn main() -> std::process::ExitCode {
     let mut want_atomics = false;
     let mut want_pce_mask = false;
     let mut want_osdesc: Option<OsDescSeed> = None;
+    let mut want_dictated_ring = false;
+    let mut want_dictated_neg = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -1751,6 +2039,9 @@ fn main() -> std::process::ExitCode {
             "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
             // ⊘ The negative control. Same chain, unwritten memfd, inverted verdict.
             "--osdesc-negative" => want_osdesc = Some(OsDescSeed::Never),
+            "--dictated-ring" => want_dictated_ring = true,
+            // ⊘ The negative control. Same address, occupied first, inverted verdict.
+            "--dictated-ring-negative" => want_dictated_neg = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1897,6 +2188,39 @@ fn main() -> std::process::ExitCode {
     // attributable to `OS_DESCRIPTOR` and cannot be R13's channel or R9's mapping from
     // earlier in the ladder. That attribution IS the rung — the question is which of four
     // named things refused, not whether something did.
+    // ★ R26 runs here and RETURNS, for R25's reason exactly: it allocates its own `Vas` and
+    // its own channel at its own address, so a refusal is attributable to the **dictated
+    // placement** and cannot be R13's RM-placed channel from earlier in the ladder. Two
+    // channel allocations in one process, one placed and one not, would make "which one
+    // refused?" a question — and the answer to that question IS the rung.
+    if want_dictated_neg {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = dictated_ring_negative(&mut rm, gpu);
+        println!("done — dictated-ring negative control only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    if want_dictated_ring {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = dictated_ring_probe(&mut rm, gpu);
+        println!("done — dictated-ring probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
     if let Some(seed) = want_osdesc {
         println!(
             "REV_UNDER_TEST={}",

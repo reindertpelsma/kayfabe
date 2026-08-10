@@ -12612,3 +12612,203 @@ correct answer is.
 — and so are R21 (gpu-info sweep), R22 (bus-info sweep), R23 (atomics) and R24 (PCE mask). A
 rung number is how a bench result is attributed months later; two rungs sharing one is how a
 green line gets read as evidence for the wrong thing.
+
+---
+
+## §16.68 ★★★★★ `R26` — a host channel whose GPFIFO ring is at an address **WE DICTATE**, and the host-Xid watcher that makes its failure legible
+
+`[measured 2026-08-10, RTX 3060 GA106 / 580.159.04, bench `vh`, binary stamped`
+`REV_UNDER_TEST=2bd6c3a6e711b01ad3f5fbfa739946b26516edf1,`
+`traces/real_ga106/rmladder_r26_dictated_ring_real_ga106.txt]`
+
+### 16.68.1 ⊘ WHAT I REFUTED FIRST — four of the brief's claims, and one of my own instruments
+
+**(1) ⊘ "No harness has ever read the host's `dmesg`."** Two do, and both predate this rung:
+`scripts/bench/gpu_fault_containment.sh:34` (`xid() { dmesg 2>/dev/null | grep -ci xid; }`) and
+`scripts/bench/gpu_wedge_containment.sh:37`, each running on the **host** over `ssh root@BOX`.
+★ The *substance* of the brief's point survives and is why this rung still built one: those
+two are **containment experiments**, self-contained scripts that read `dmesg` about their own
+deliberate fault. Nothing wrapped the **ladder**, so no RM-level run this project has ever
+taken was watched. The gap was the ladder's, not the tree's.
+
+**(2) ⊘ The line citations were drifted, all four of them.** `rm.rs:2129` (*"map ring into the
+Vas (RM chooses the VA)"*) is at **`:2350`**, with `alloc_channel` at `:2383` and the body it
+delegates to, `alloc_channel_on`, at **`:2739`**. `map_gpu_va(at)` is not at `:2280-2301`; the
+trait impl is at **`:2503`** and the primitive that actually sets `DMA_OFFSET_FIXED_TRUE` is
+`raw_map_dma` at **`:1259-1290`**. Minor individually — but the third one matters, because the
+*real* obstacle lives at `raw_map_dma` and not at either site the brief named.
+
+**(3) ⊘ THE ACTUAL WALL was a reasoned refusal, not a missing parameter.** `raw_map_dma`'s
+docs already argued the opposite of this rung, on purpose: *"`None` is **not** a weakening of
+`#102` … A channel's own ring is exactly that, and demanding a fixed address for it would
+mean inventing a host-private VA window — a policy this rung has no way to enforce and every
+way to get wrong."* A parallel read of the whole test tree found this to be **the single
+strongest wall against the increment**, and it is prose, not a test. ⇒ It was answered rather
+than deleted: the paragraph is amended in place, naming what it got right (the *policy* is not
+that function's) and what no longer describes the tree (a caller now supplies the address).
+⊘ A design doc that silently stops being true is the trap; a stale comment is what the port
+was bitten by two rungs ago.
+
+**(4) ⊘ "`alloc_channel_at` should be the port's verb" — NOT this rung, and the tree says so.**
+`RmBackend` gains **no method**. Nothing in the core has a dictated ring VA to pass; the
+shadow-forward that will is unbuilt, and a trait verb with no caller is exactly the bolt-on
+`alloc_engine_object`'s own docs warn about one method up. A verb-set sweep priced the
+alternative: a new trait method needs four backend impls, a new `Request` variant (which the
+runtime set-assertion `proto.rs:988` pins), a `VerbKind`, and — ★ the nasty one — an entry in
+`kayfabe-mocks/src/lib.rs:2440`'s acquisition fold, whose `_ => None` arm would have compiled
+fine and then fired `"★★ DANGLING …"` teardown failures across every audited suite with
+nothing pointing at the cause. The increment is instead `HostRmBackend::alloc_channel_at`,
+`pub` for exactly the reason `alloc_channel_on` is: the ladder is the only thing that can ask
+hardware this question.
+
+**(5) ⊘⊘ AND ONE OF MINE — `REV_UNDER_TEST` WAS NEVER DERIVED FOR THIS BINARY.** The first
+`--dictated-ring` run on real hardware printed **`REV_UNDER_TEST=unstamped`**. `KAYFABE_BUILD_REV`
+is emitted by **`kayfabe-qemu-raw/build.rs`**, and `cargo:rustc-env` applies to *that crate
+only*; `kayfabe-rm-ladder` lives in `kayfabe-isolate-host`, so its `option_env!` was `None`
+unless someone exported the variable by hand. ⇒ **Every earlier ladder trace's revision was an
+operator's assertion about the tree, made by the same person making the claim, standing where
+a derivation was supposed to be.** A stale binary rebuilt with a freshly typed variable would
+have claimed the fresh revision — the precise failure `CLAUDE.md`'s rev-stamp trap exists to
+catch, defeated by the trap's own instrument. `kayfabe-isolate-host/build.rs` now derives it
+from `git` with the same 40-hex shape check and the same `-dirty` suffix, and the run below was
+re-taken at a stamped, clean binary rather than reasoned about.
+
+★★★ **And this is not an inference — the committed traces prove it by their LENGTH.**
+`[measured 2026-08-10]`, over `traces/real_ga106/*.txt`, the historical `REV_UNDER_TEST`
+values fall into three populations:
+
+| value | length | what it can only have come from |
+|---|---|---|
+| `4e79a140f35eb2741bd620bba2bf129db5abb551` (R22) | **40** | a derivation — `git rev-parse HEAD`, shape-checked |
+| `40d44db84` (R25), `8dac2705d` (R25 re-run), `6f8239835` (R18), `1d5704dd9`, `6c9e3d2bb` | **9** | ⊘ **a HUMAN.** The derivation shape-checks for *exactly 40* hex and falls back to `unknown`; it is structurally incapable of emitting an abbreviated sha |
+| `unstamped` (R21, R24) | — | nothing was exported at all |
+
+⇒ **Every 9-character stamp in this repository is an operator's assertion wearing a
+derivation's clothes.** ⚠ In particular `fd4ffe7`'s commit message — *"§16.67 R25 re-run at the
+SHIPPED head — the stamp read off the binary, not the checkout"* — is describing a stamp that
+was inside the binary **because a person put it there**. The re-run was still the right call
+and its four arms still measured green; what it did **not** do is what its title claims, and
+the distinction is the entire content of the rev-stamp trap.
+
+★ The tell was available the whole time and nobody had a reason to look: **a real sha is 40
+characters.** A provenance marker that can be produced by typing is not provenance, and the
+cheapest possible check on one is its shape.
+
+⚠ The build-shim half of the rev-stamp trap (`CARGO_TARGET_DIR` vs `build_qom_shim.sh:38`)
+**does not apply**: R26 is host-only, there is no hypervisor and no QOM shim in the path. Said
+explicitly rather than skipped silently.
+
+### 16.68.2 The increment
+
+`HostRmBackend::alloc_channel_at(vas, engine_type, ring_at: Option<GpuVa>)` is
+`alloc_channel_on`'s body with one degree of freedom; `alloc_channel_on` is now
+`alloc_channel_at(.., None)` and is byte-for-byte the previous behaviour. `Some(va)` passes
+`DMA_OFFSET_FIXED_TRUE` and then **checks RM's `[OUT]` `dmaOffset` against the ask**, unwinding
+into `RmError::PlacementRefused` on a mismatch.
+
+★★ `ring_at` names the **ring object's base**, not `gpFifoOffset` — the two differ by
+`GPFIFO_OFFSET`, and confusing them is a silent off-by-a-page in which hardware fetches 64
+bytes of *pushbuffer* as GPFIFO entries and fails nowhere near this call.
+
+⊘ **It is deliberately not the guest's `gpFifoOffset` yet.** A shadow-forwarded ring is guest
+memory with a guest layout; this establishes the one fact that stood between here and there.
+
+`HostRmBackend::channel_ring_va` reads the placement back out of `ChannelParts`, so a
+diagnostic can check the placement **without asking the call under test**.
+
+### 16.68.3 ★★★★ THE FALSIFIER, committed before the run — and the fourth cell is the point
+
+| arm | reading | outcome |
+|---|---|---|
+| **A** | it is a **port** | ★ **THIS ONE**, at both privilege levels |
+| **B** | `PlacementRefused` — RM chooses, and shadow-forwarding is dead as designed | ⊘ did not fire |
+| **C** | RM refuses the channel outright — the address is legal to *ask* and not to *use* | ⊘ did not fire |
+| **⊘ D** | **INERT CHANNEL** — placed as asked, and `GP_GET` never moved | ⊘ did not fire — ★ **and this is the cell a "did the alloc succeed?" test scores green** |
+
+★★★ **Cell D is why the rung submits.** `alloc_channel_at` returning `Ok` is the thing under
+test, so verifying it by checking that it returned `Ok` measures nothing — the R25 tautology
+(`§16.67.4`) one plane over. Worse, cell D can hold *while every green above it holds*: RM
+records a mapping at our address, the channel allocates, a token is minted, and hardware never
+fetches a byte. That is the C's M5.47 shape, which produced **zero utilisation and no Xid**.
+So the bar is two facts, and the second is `GP_GET` — the one word in this crate hardware
+writes and we do not.
+
+### 16.68.4 ★★★★★ THE RESULT
+
+```
+ok    R26 placement       = RM reports the ring at 0x0000000411000000 AS ASKED (token 0x00000004)
+                            — necessary, and NOT yet sufficient
+★     R26 dictated ring   = ring placed at 0x0000000411000000 AS ASKED, GP_GET 1 caught GP_PUT 1,
+                            sem 0x1dea0026 (want 0x1dea0026) — the GPU FETCHED from an address we chose
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after
+```
+
+★★ **Arm B tested, not assumed away**, on R25's precedent: re-run under
+`setpriv --reuid=65534 --regid=65534 --clear-groups --no-new-privs`, with
+`Uid: 65534`, `CapPrm/CapEff/CapAmb = 0`, `NoNewPrivs: 1` captured in the same trace.
+Identical green. ⇒ **RM does not require privilege to let a process dictate where its own
+channel's ring lives.**
+
+★★★ **AND A NEGATIVE CONTROL, because a green with no reachable red proves nothing.**
+`--dictated-ring-negative` maps a 64 KiB object at `0x4_1100_0000` **first**, then asks for a
+channel ring at the same address:
+
+```
+ok    R26n occupied       = 0x0000000411000000 is now taken by another object
+★     R26n CONTROL FIRED  = RM refused the channel at an occupied 0x0000000411000000 with
+                            NoMemory — the address is enforced by the driver
+```
+
+⇒ the placement is **RM's fact, not our formatting**. ⊘ The control's third arm — a channel
+built at an address another object already occupies — is printed as `FAIL` and would have been
+a *finding* about address identity, not a control failure.
+
+### 16.68.5 ★★★★ THE HOST-Xid WATCHER — `scripts/bench/host_xid_watch.sh`
+
+Landed in the same commit, because without it *"the copy silently did nothing"* and *"the GPU
+faulted"* are **the same observation**: a semaphore that never landed, a destination that never
+changed, and every ioctl returning `NV_OK`. A host GPU missing on a host VAS built from our
+addresses raises **no guest fault** — the host driver services it and prints `Xid 31 FAULT_PDE`
+into the **host** ring buffer, which no ladder run had ever read.
+
+⊘ **The nasty edge, and the reason phase 0 exists: `dmesg` *failing* and `dmesg` finding *no
+Xid* produce the same empty grep.** `kernel.dmesg_restrict=1`, a container without
+`CAP_SYSLOG`, or a wrapped ring buffer all yield "no Xid lines" from an instrument that
+observed nothing — and a green from such a watcher is *worse* than no watcher, because it reads
+as a watched clean. So readability is asserted **positively and first** (`dmesg` must exit 0
+**and** produce ≥2 lines), the count is recorded in the log as `host_dmesg_lines=N`, and an
+unreadable log exits **7**, never 0.
+
+★★★ **Both failure paths were watched to fire before the instrument was trusted**, on the same
+discipline R25's negative control established:
+
+| control | expected | observed |
+|---|---|---|
+| `dmesg` shimmed to exit 1 | **7**, "UNWATCHED" | ★ fired, `rc=7`, and it did **not** print a clean |
+| a synthetic `Xid 31 … FAULT_PDE` injected mid-run, watched command exiting **0** | **6**, run void | ★ fired, `rc=6` — the command's own success did not rescue it |
+
+⚠ It exits **6** on a new Xid even when the watched command returned 0, deliberately: *"the run
+is VOID whatever it printed"*.
+
+### 16.68.6 ⊘ WHAT R26 CANNOT SEE
+
+- **Not a guest VA.** `0x4_1100_0000` is ours, chosen to be neither R25's `0x3_0040_0000` nor
+  R9's constant so a pass cannot be a remembered address. That the number is *ours to pick* is
+  the finding; that a *guest's* number would be accepted is not tested.
+- **Not the guest's ring LAYOUT.** `gpFifoOffset` is still derived from our `GPFIFO_OFFSET`
+  over our own 64 KiB object.
+- **Not a forwarded doorbell.** The submission is the isolate's own. A guest doorbell is the
+  next rung, and per the standing sequencing it should land with the RC/error-notifier path
+  wired, so a ring-gate refusal becomes an error rather than a hang.
+- **Not fault DELIVERY.** Nothing here delivers a fault to a guest. ⚠ And the reason not to
+  build it half-way, stated precisely rather than repeated: `ogkm-580:
+  uvm_ampere_host.c:140` spins on the CHRAM `FAULTED` bit via `UVM_SPIN_WHILE`, which is
+  `for (uvm_spin_loop_init(spin); (cond); UVM_SPIN_LOOP(spin))`
+  (`ogkm-580: uvm_common.h:302-304`). ★ The correction worth carrying: `UVM_SPIN_LOOP`
+  **does** compute a timeout status — and this call site **discards it**, so the loop's only
+  exit is the bit itself. It is not that the driver lacks a timeout mechanism; it is that
+  this path declines to read it. Delivering a fault and failing to set that bit hangs a
+  guest kernel thread forever.
+- **Not `NoMemory`'s exact RM status.** The negative control's refusal is reported through the
+  port's error type; which NVIDIA status produced it was not decoded, and the control does not
+  need it.

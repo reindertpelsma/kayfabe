@@ -1271,6 +1271,14 @@ impl RmConnection {
     /// mapping. That collision surfaces as a refused fixed map with an RM status, which
     /// is loud; it is not silent corruption. A host-private reservation is the real fix
     /// and it belongs with the address plane, not here.
+    ///
+    /// ⚠ **Amended by R26.** The paragraph above still describes `alloc_channel_on`, and
+    /// the sentence *"demanding a fixed address for a ring would mean inventing a
+    /// host-private VA window"* no longer describes the tree:
+    /// [`HostRmBackend::alloc_channel_at`] takes `Some` here and a **caller** supplies the
+    /// address, which is what a shadow-forwarded channel needs. What the paragraph got
+    /// right is that the *policy* is not this function's — it is still the caller's, and
+    /// there is still no host-private reservation.
     fn raw_map_dma(
         &self,
         h_dma: u32,
@@ -2741,6 +2749,59 @@ impl HostRmBackend {
         vas: HostHandle,
         engine_type: u32,
     ) -> Result<(HostHandle, u64), RmError> {
+        self.alloc_channel_at(vas, engine_type, None)
+    }
+
+    /// ★★★ **R26 — a host channel whose ring lives at an address WE dictate.**
+    ///
+    /// [`Self::alloc_channel_on`]'s body, with one degree of freedom added: `ring_at`.
+    /// `None` reproduces the previous behaviour exactly — RM chooses where the ring goes.
+    /// `Some(va)` demands that address via `DMA_OFFSET_FIXED_TRUE` and **refuses** with
+    /// [`RmError::PlacementRefused`] if RM reports a different one.
+    ///
+    /// # ★★ `ring_at` names the RING OBJECT'S BASE, not `gpFifoOffset`
+    ///
+    /// The two differ by [`GPFIFO_OFFSET`], and picking the wrong one of them is a silent
+    /// off-by-a-page: the channel would be told its GPFIFO is where the **pushbuffer**
+    /// lives, hardware would fetch 64 bytes of methods as GPFIFO entries, and the failure
+    /// would surface as a wild `gpEntry` — nowhere near this call. So the parameter names
+    /// the object, and `gpFifoOffset` is derived from it here, exactly as it was before.
+    ///
+    /// ⊘ **This is deliberately not the guest's `gpFifoOffset` yet.** A shadow-forwarded
+    /// channel's ring is the *guest's* memory, and its whole 64 KiB layout —
+    /// pushbuffer, GPFIFO, semaphore — is the guest's rather than
+    /// [`PUSHBUFFER_OFFSET`]/[`GPFIFO_OFFSET`]/[`SEMAPHORE_OFFSET`]. What this verb
+    /// establishes is the *one fact* that stood between here and there: that host RM will
+    /// let a channel name a ring at an address its caller chose. Deriving `gpFifoOffset`
+    /// from a guest-declared layout is the next increment and belongs with the memory that
+    /// carries it.
+    ///
+    /// # ⊘ Why this is not (yet) a port verb
+    ///
+    /// [`RmBackend`] deliberately does not grow a method here. Nothing in the core has a
+    /// dictated ring VA to pass — the shadow-forward that will is unbuilt — and a trait
+    /// verb with no caller is the bolt-on `alloc_engine_object`'s docs already warn about
+    /// one method up. It is `pub` for the same single reason [`Self::alloc_channel_on`]
+    /// is: the `kayfabe-rm-ladder` diagnostic, which is the only thing that can ask
+    /// hardware this question.
+    ///
+    /// # ★ The residual `raw_map_dma` named, now reachable
+    ///
+    /// `raw_map_dma`'s docs record that RM's own VA allocator and our fixed publishes
+    /// share one address space, so RM *could* place something where a later fixed map is
+    /// demanded. With `Some` that collision is now reachable **from this call** — and it
+    /// surfaces as `PlacementRefused` or an RM status, both loud. It is still not silent
+    /// corruption, and a host-private reservation is still the real fix.
+    ///
+    /// # Errors
+    /// Whatever RM refuses with, or [`RmError::PlacementRefused`] if `ring_at` was named
+    /// and not honoured — after unwinding everything already built, in both cases.
+    pub fn alloc_channel_at(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring_at: Option<GpuVa>,
+    ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
@@ -2761,15 +2822,40 @@ impl HostRmBackend {
             }
         };
 
-        // The ring must be resolvable by hardware before a channel may name it. RM picks
-        // the address — see `raw_map_dma` for why `None` here does not weaken `#102`.
-        let ring_va = match self.conn.raw_map_dma(range, ring, RING_OBJECT_BYTES, None) {
-            Ok(va) => va,
-            Err(e) => {
-                unwind(self, &[ring, userd]);
-                return Err(e);
-            }
-        };
+        // The ring must be resolvable by hardware before a channel may name it. With
+        // `ring_at = None` RM picks the address — see `raw_map_dma` for why that does not
+        // weaken `#102`. With `Some`, `DMA_OFFSET_FIXED_TRUE` makes `dmaOffset` an [IN]
+        // parameter and the address is ours.
+        let ring_va =
+            match self
+                .conn
+                .raw_map_dma(range, ring, RING_OBJECT_BYTES, ring_at.map(|a| a.0))
+            {
+                Ok(va) => va,
+                Err(e) => {
+                    unwind(self, &[ring, userd]);
+                    return Err(e);
+                }
+            };
+        // ★★★ The placement check, and it reads RM's **[OUT]** `dmaOffset` rather than the
+        // value we asked for. `raw_map_dma` returns what RM wrote back, so this is a
+        // comparison between two different parties' numbers and not our argument echoed.
+        //
+        // ⊘ A downgraded placement must never be adopted. A channel whose ring RM quietly
+        // relocated is created, schedulable, and rings a doorbell — and the *guest's*
+        // pushbuffer, which names the address we asked for, then walks the host MMU into
+        // nothing. `RmError::PlacementRefused`'s own docs name that end state: `Xid 31
+        // FAULT_PDE`, a host-side fault with no guest-visible cause.
+        if let Some(want) = ring_at
+            && ring_va != want.0
+        {
+            let _ = self.conn.raw_unmap_dma(range, ring_va);
+            unwind(self, &[ring, userd]);
+            return Err(RmError::PlacementRefused {
+                want: want.0,
+                got: ring_va,
+            });
+        }
 
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         let encoded = NvChannelGroupAllocationParameters {
@@ -3279,6 +3365,24 @@ impl HostRmBackend {
                     .map_err(|e| region_error(&e))
             })
             .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// ★★ Where this connection's records say `chan`'s ring object was placed, or `None`
+    /// if `chan` is not a channel of ours.
+    ///
+    /// ★ It exists so a caller can check a placement **without asking the call that made
+    /// it**. `alloc_channel_at` returning `Ok` is the thing under test; verifying it by
+    /// reading its own return value is the R25 tautology one plane over. This reads
+    /// `ChannelParts::ring_va`, which was written from RM's `[OUT]` `dmaOffset` — so a
+    /// diagnostic comparing it against the address it asked for is comparing two parties.
+    ///
+    /// ⊘ It is still not hardware's word. Nothing but a submission that the engine
+    /// **fetches** says the GPU agrees the ring is there; `SubmitOutcome::gp_get` is that
+    /// word, and R26 requires both.
+    #[must_use]
+    pub fn channel_ring_va(&self, chan: HostHandle) -> Option<u64> {
+        let raw = self.narrow(chan).ok()?;
+        self.conn.channel_parts(raw).map(|p| p.ring_va)
     }
 
     /// ★★★ R14b — **prove the mapped bytes are in the GPU's memory and not in ours.**

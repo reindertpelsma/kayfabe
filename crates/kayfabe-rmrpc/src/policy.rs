@@ -1288,6 +1288,7 @@ impl CommandPolicy for GraphPolicy<'_> {
 ///   `kayfabe_device::inittables::InitTablePolicy`, which answers six of them. Controls
 ///   reach the object model through the device chain's own links or not at all until
 ///   somebody measures that they must.
+///
 /// ⊘ **`DUP_OBJECT` used to be listed here and is no longer** — see [`OBJECT_VERBS`]'s
 /// `DupObject` row for why, and for the one thing worth keeping from the old text: this
 /// paragraph named its own expiry condition (*"the cost of being wrong is one named refusal

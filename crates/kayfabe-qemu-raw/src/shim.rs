@@ -1014,15 +1014,6 @@ pub const ISOLATE_REFUSAL_SPAWN_FAILED: u64 = 2;
 /// is a diagnostic that clips exactly when it is read.
 pub const DOORBELL_REFUSAL_LEN: usize = 2048;
 
-/// ★★★★ §16.25 — how many example channels [`SharedDoorbell::vas_census_line`] names per
-/// outcome group before it summarises the rest as `+N more`.
-///
-/// Three, because the comparison the census exists for needs only enough rows to see
-/// *which* channels share an outcome, not all of them — and because the whole sentence has
-/// [`DOORBELL_REFUSAL_LEN`] bytes for every other probe too. ⊘ The elision is always
-/// printed, never silent.
-const CENSUS_EXEMPLARS: usize = 3;
-
 /// ★★★★ §16.40 — how many bytes of the promote-ctx diagnosis cross the ABI.
 ///
 /// Sized like [`DOORBELL_REFUSAL_LEN`] and for the same measured reason: the sentence
@@ -3308,7 +3299,11 @@ impl SharedDoorbell {
     ///    the spot; if they split, the group boundary names the difference. A flat list
     ///    would leave that comparison for a human to do by eye across 24 lines.
     ///
-    /// ⊘ Exemplars are capped at [`CENSUS_EXEMPLARS`] per group, and the cap is **reported**
+    /// ⊘ Exemplars are capped at [`kayfabe_core::gpu::VAS_CENSUS_EXEMPLARS`] per group —
+    /// ★ **the one the census actually applies**, in the core function that builds the line.
+    /// A private `CENSUS_EXEMPLARS` sat here saying the same `3` and was read by nothing;
+    /// it is deleted rather than `allow`ed, because a second constant that agrees today is
+    /// how the cap and the sentence describing it drift apart. The cap is **reported**
     /// (`+N more`) rather than silently applied — an elided row must never read as an
     /// absent one, which is the C oracle's `dlen=0` mistake in miniature.
     /// ★★★★ §16.27 — what the walling channel's own client namespace holds, by kind.

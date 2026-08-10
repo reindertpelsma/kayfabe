@@ -64,7 +64,56 @@ const NESTED: &str = "KAYFABE_ISOLATE_NESTED_BUILD";
 /// The reviewed opt-out for a cross-*check* job — see the module docs.
 const STUB: &str = "KAYFABE_ISOLATE_IMAGE_STUB";
 
+/// ★★★★ Stamp this crate with the revision the COMPILER read, not the one an operator
+/// believed they were building.
+///
+/// ⊘ **This existed and did not reach the ladder.** `kayfabe-qemu-raw/build.rs` derives
+/// exactly this and emits it as `cargo:rustc-env` — which cargo applies to **that crate
+/// only**. `kayfabe-rm-ladder` lives here, so its `option_env!("KAYFABE_BUILD_REV")` was
+/// `None` unless the variable happened to be exported into the build's environment by hand.
+///
+/// ⚠ `[measured 2026-08-10, bench `vh`]` — a `--dictated-ring` run built with a plain
+/// `cargo build --release` printed **`REV_UNDER_TEST=unstamped`**. Earlier ladder traces in
+/// `traces/real_ga106/` carry real shas, so the stamp there came from a **human exporting a
+/// value**: an assertion about the tree, made by the same person making the claim, in the
+/// place a derivation was supposed to be. That is strictly weaker than it reads — a stale
+/// binary rebuilt with a freshly typed variable claims the fresh revision, which is the
+/// precise failure `CLAUDE.md`'s rev-stamp trap exists to catch.
+///
+/// ⇒ Derived here, from `git`, with the same shape check and the same `-dirty` suffix as
+/// the qemu-raw copy. `KAYFABE_GIT_SHA` still overrides, for builds with no git.
+fn stamp_build_rev() {
+    println!("cargo::rerun-if-env-changed=KAYFABE_GIT_SHA");
+    let sha = std::env::var("KAYFABE_GIT_SHA").ok().or_else(|| {
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let s = String::from_utf8(out.stdout).ok()?.trim().to_owned();
+        // ★ Shape-checked, not trusted: 40 lowercase hex. A `git` that printed a warning or
+        // an empty line becomes `unknown` rather than a marker that looks like provenance.
+        (s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit())).then_some(s)
+    });
+    // ★ DIRTY is a separate question from WHICH COMMIT, and the one that matters most here:
+    // a bench run is normally taken on a tree with uncommitted edits, and a
+    // clean-looking sha would attribute it to a commit that does not contain them.
+    let dirty = std::process::Command::new("git")
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .output()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false);
+    println!(
+        "cargo::rustc-env=KAYFABE_BUILD_REV={}{}",
+        sha.as_deref().unwrap_or("unknown"),
+        if dirty { "-dirty" } else { "" }
+    );
+}
+
 fn main() {
+    stamp_build_rev();
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
     let image = out_dir.join(IMAGE_FILE);
 
