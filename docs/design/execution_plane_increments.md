@@ -11132,7 +11132,7 @@ last non-zero record before the `FREE` burst begins.
 ```
    327  ALLOC hClass=0x00000079 … status=0x00000000
    328  CTRL cmd=0x20801702 … status=0x00000056        ← MC_SERVICE_INTERRUPTS (×20+, forgiven)
-   329  CTRL cmd=0x83de0309 hObject=0x5c000072 … status=0x00000056
+   329  CTRL cmd=0x83de0309 hObject=0x5c000072 … status=0x00000056   ← NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK
    330  CTRL cmd=0x20801702 … status=0x00000056
 ★  331  CTRL cmd=0x20801210 hClient=0xc1d0000c hObject=0x5c000003 size=32 status=0x00000056
              in=01000000 1200005c 0000…      ← NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE
@@ -11249,3 +11249,61 @@ why `ABI_VERSION` exists at all.
 ⊘ **E requires BOTH halves.** `id=` lines with `s45`'s numbers not reproducing is `H`, not `E` —
 a new instrument that also changed what it measures has answered a different question
 (`a_correct_capture_can_answer_the_wrong_question`).
+
+## §16.58 ★★★★ BOOTED `s46_1a9e93c_abi35` — **OUTCOME E**, both halves. The first refused class ids this port has ever printed
+
+`[measured 2026-08-10, boot s46_1a9e93c_abi35]`. Stamp `kayfabe-rev:1a9e93c…` on **both**
+the hypervisor and the archive, read before the boot. Evidence:
+`traces/guest_boots/run_s46_1a9e93c_abi35_{qemu,dmesg,probe}.log`.
+
+### 16.58.1 ★★★★ HALF ONE — the ids are in **our** log
+
+```
+nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist x18 id=0x0000c36f,0x0000c574
+nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::Refused        x3  id=0x0000402c,0x000083de
+nvkvm:   bridge refusal BridgeRefusal::UnmappedAllocClass                     x10 id=0x00000070,0x00000079,0x0000208f
+nvkvm:   bridge refusal BridgeRefusal::ReservedClient                         x2
+nvkvm:   bridge refusal PromoteFault::UnknownContextObject                    x2
+nvkvm:   bridge refusal RmGraphError::FreeUnknown                             x31
+```
+
+Before this rung, that block read `NotOnAllowlist x18` and nothing else, and
+`grep -c hClass` over **every** committed device log returned `0`. Three rows now name what
+they refused; three name nothing, correctly, because they are not about an id.
+
+★★ **And the first reading is already worth the rung.** `0x000083de` is `GT200_DEBUGGER`
+(`ogkm-580: class/cl83de.h:33`), refused under `Refused` — i.e. **denied by name in our own
+`DENIED_CLASSES`** — and record 329 of the RM stream is
+`0x83de0309 NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK`, a control on that class, two records
+before the wall. ⊘ Whether the two are connected is **not measured** and must not be assumed
+from adjacency; what is new is that the question is *askable from our own evidence*.
+
+⚠ `0x0000c574` also appears here. §16.55.4 recorded it as *"`s38`-only, as claimed"* on the
+strength of the **guest's** dmesg. ⊘ That is **not** contradicted and **not** confirmed:
+this instrument did not exist for any earlier boot, so "absent from earlier device logs" and
+"invisible to earlier device logs" are the same observation from here. One boot cannot
+separate them; a second one, diffed against this, can.
+
+### 16.58.2 ★★★★ HALF TWO — outcome `H` EXCLUDED. Every guest-facing number is byte-identical to `s45`
+
+| | `s45` (ABI 34) | `s46` (ABI 35) |
+|---|---|---|
+| commands decoded / unserviced / distinct | 717 / 135 / 46 | **717 / 135 / 46** |
+| bridge refusals | 66 total, 6 distinct | **66 total, 6 distinct** |
+| controls answered | 150, 47 distinct | **150, 47 distinct** |
+| isolates | 2 / 2 / 2 (2 no-plane) | **2 / 2 / 2 (2 no-plane)** |
+| doorbells | 448 / 261 / 187 | **448 / 261 / 187** |
+| RM records | 456 | **456** |
+| record 196 | `0xa06c0101 … status=0x00000000` | **identical** |
+| records 233, 270 | `0xa06c0101 … status=0x00000000` | **identical** |
+| record 331 / 332 | `0x20801210 → 0x56` / `FREE` | **identical** |
+| `CUP2_RC` | 1 | 1 |
+
+⇒ The ABI 34 → 35 change is **report-only in fact and not merely in intent**, and `s45`'s
+result reproduces on a second, independent boot at a different revision. ★ That second
+property was not the falsifier's subject and is the more valuable one: `s45`'s numbers are
+not a one-off — the whole of §16.57 replays.
+
+⊘ **`G` was excluded before any of this was read**: the guest reached a login prompt and
+`RmInitAdapter` ran, which a size disagreement between `kayfabe_shim.h` and the archive would
+have prevented at realize. That is the ABI design being its own positive control.

@@ -248,8 +248,10 @@ static LEDGER: &[u32] = &[
     // second look beside `cap1`'s `IrqRaise == 1` with zero `IRQSCLR` writes — event
     // delivery is gated off after `INIT_DONE`, and this is the guest noticing.
     0x2080_1702,
-    // A `GT200_DEBUGGER` (`hClass=0x83de`) control on `0x5c000072`. Forgiven — the object
-    // is freed 18 records later and `cup2` continues past it.
+    // `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK` on a `GT200_DEBUGGER`
+    // (`ogkm-580: ctrl/ctrl83de/ctrl83dedebug.h:225`, `class/cl83de.h:33`) — libcuda arming
+    // SM exception reporting on `0x5c000072`. Forgiven: the object is freed 18 records
+    // later and `cup2` continues past it.
     0x83de_0309,
     // `NVA06C_CTRL_CMD_SET_TIMESLICE` and `NVA06C_CTRL_CMD_PREEMPT`, both on the TSG. ★
     // Both arrive **after** teardown has begun (records 344 and 352, inside the `FREE`
