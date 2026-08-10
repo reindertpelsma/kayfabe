@@ -63,6 +63,7 @@ use kayfabe_util::Instant;
 use kayfabe_vmm::{
     BarId, CoreEvent, FbMeta, GuestRamMap, HostRegion, IrqSpec, Present, PresentError, Prot,
     RamHandle, RamRegionId, RegionKind, SlotId, SurfaceHandle, TrapMode, Vblank, Vmm, VmmError,
+    RAM_EXPORT_TOKEN_TAG, RAM_TOKEN_AS_A_BACKING,
 };
 
 // ---------------------------------------------------------------------------------
@@ -1189,6 +1190,13 @@ impl Vmm for MockVmm {
                  is a WINDOW property; both real backends refuse this",
             ));
         }
+        // ★★★ The mock refuses a guest-RAM export token here for the same reason the real
+        // backends do. A mock that ACCEPTED one would be the more dangerous half of the
+        // defect: the confusion would typecheck, run green in every unit test, and only the
+        // two real backends would refuse it — i.e. the fixture would certify the bug.
+        if backing.id & RAM_EXPORT_TOKEN_TAG != 0 {
+            return Err(VmmError::Unsupported(RAM_TOKEN_AS_A_BACKING));
+        }
         let id = SlotId(self.next_slot);
         self.next_slot += 1;
         self.slots.insert(
@@ -1224,7 +1232,8 @@ impl Vmm for MockVmm {
     fn export_ram(&mut self, slice: Option<Range<u64>>) -> Result<RamHandle, VmmError> {
         self.exports.push(slice.clone());
         Ok(RamHandle {
-            token: self.exports.len() as u64,
+            // Tagged, like both real backends — see [`kayfabe_vmm::RAM_EXPORT_TOKEN_TAG`].
+            token: RAM_EXPORT_TOKEN_TAG | (self.exports.len() as u64),
             covers: slice,
         })
     }

@@ -487,12 +487,41 @@ pub enum IrqSpec {
     IntxLevel(bool),
 }
 
+/// ★★★ The **tag bit** that separates the guest-RAM export token space from the host-backing
+/// id space ([`HostRegion::id`]).
+///
+/// Both spaces are backend-scoped indices into a descriptor table, and on both real backends
+/// they were minted from the **same** `Vec` and the **same** running index, so a
+/// [`RamHandle::token`] was a *valid* [`HostRegion::id`] — feeding one to
+/// [`Vmm::map_guest`] would `MAP_FIXED` **guest RAM into a guest window**. That was inert only
+/// while `export_ram` had no callers, i.e. the first production caller is what arms it.
+///
+/// ⊘ Two separate `Vec`s alone do **not** fix it: two zero-based index spaces collide at every
+/// index. The separation has to be visible **in the value**, so a confusion is refusable by
+/// name rather than merely unlikely. Same argument as [`SurfaceHandle`], which is a distinct
+/// *type* for the same reason (seam audit GR-2a) — here the value crosses a `u64`-typed ABI,
+/// so the discipline has to live in the bits.
+///
+/// A backend that mints [`RamHandle`] tokens MUST set this bit; a backend that resolves a
+/// [`HostRegion`] MUST refuse an id that carries it. See [`RAM_TOKEN_AS_A_BACKING`].
+pub const RAM_EXPORT_TOKEN_TAG: u64 = 1 << 63;
+
+/// The refusal a backend owes when a guest-RAM export token is presented where a host backing
+/// id was required. ★ Refused **by name**: "an id this backend never minted" would be true of a
+/// typo too, and the whole point is that this particular confusion maps guest RAM into a guest
+/// window.
+pub const RAM_TOKEN_AS_A_BACKING: &str =
+    "a guest-RAM export token used where a host backing id was required";
+
 /// A shareable handle over (a slice of) guest RAM, for mapping into isolates
 /// (the `m2_stub_ram_base` MAP_FIXED share; Mode-1's double-mmap). Opaque to the
 /// core; the isolate adapter consumes it.
+///
+/// ★ [`Self::token`] carries [`RAM_EXPORT_TOKEN_TAG`]; it is **not** interchangeable with
+/// [`HostRegion::id`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RamHandle {
-    /// Backend-scoped opaque token.
+    /// Backend-scoped opaque token. Carries [`RAM_EXPORT_TOKEN_TAG`].
     pub token: u64,
     /// The guest-physical range this handle covers (`None` = all of guest RAM).
     pub covers: Option<Range<u64>>,

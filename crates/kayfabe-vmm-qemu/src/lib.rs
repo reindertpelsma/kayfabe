@@ -125,7 +125,7 @@ use kayfabe_util::Instant;
 use kayfabe_util::leafwitness::{self, assert_leaf_free};
 use kayfabe_vmm::{
     BarId, CoreEvent, DeferQueue, GuestRamMap, HostRegion, IrqSpec, Prot, RamHandle, RamRegionId,
-    RegionKind, SlotId, TrapMode, Vmm, VmmError,
+    RegionKind, SlotId, TrapMode, Vmm, VmmError, RAM_EXPORT_TOKEN_TAG, RAM_TOKEN_AS_A_BACKING,
 };
 
 use host::{BarPlacement, BlockerId, HostError, MrHandle, QemuHost, SectionDesc};
@@ -763,7 +763,13 @@ struct Installer {
     window_slot: BTreeMap<SlotId, RamRegionId>,
     traps: Vec<TrapSpec>,
     registered_traps: Vec<(BarId, Range<u64>, TrapMode)>,
+    /// Descriptors minted by [`QemuMachine::register_backing`], indexed by [`HostRegion::id`].
     exports: Vec<std::os::fd::OwnedFd>,
+    /// ★★★ Descriptors minted by [`Vmm::export_ram`], indexed by
+    /// `RamHandle::token & !RAM_EXPORT_TOKEN_TAG`. **A separate vector, and a separate token
+    /// space** — these two used to share both, which made a guest-RAM token a valid backing id
+    /// (see [`kayfabe_vmm::RAM_EXPORT_TOKEN_TAG`]).
+    ram_exports: Vec<std::os::fd::OwnedFd>,
     rams: BTreeMap<RamRegionId, Arc<SharedRam>>,
     blocker: Option<BlockerId>,
     next_region: u64,
@@ -1057,6 +1063,7 @@ impl QemuMachine {
                 traps: cfg.traps.clone(),
                 registered_traps: Vec::new(),
                 exports: Vec::new(),
+                ram_exports: Vec::new(),
                 rams: BTreeMap::new(),
                 blocker: Some(blocker),
                 next_region: 1,
@@ -2086,6 +2093,14 @@ impl Vmm for QemuVmm {
         // ---- EXECUTE (every lock dropped) ------------------------------------------
         assert_leaf_free("map_guest's MAP_FIXED");
         {
+            // ★★★ A guest-RAM export token is NOT a backing id, and this is where the
+            // confusion would have become a `MAP_FIXED` of guest RAM into a guest window.
+            // Refused by name and BEFORE the table lookup — an untagged token would fall out
+            // of the generic "never minted" arm only by the accident of the two vectors
+            // having different lengths.
+            if backing.id & RAM_EXPORT_TOKEN_TAG != 0 {
+                return Err(VmmError::Unsupported(RAM_TOKEN_AS_A_BACKING));
+            }
             let (ins, _h) = p.installer();
             let fd = usize::try_from(backing.id)
                 .ok()
@@ -2299,9 +2314,12 @@ impl Vmm for QemuVmm {
             .dup_for_export()
             .map_err(|e| host_refused("duplicating guest RAM", &e))?;
         let (mut ins, _h) = p.installer();
-        ins.exports.push(dup);
+        // ★★★ Its OWN vector and its OWN token space, tagged. See
+        // [`kayfabe_vmm::RAM_EXPORT_TOKEN_TAG`] for why two vectors alone would not have been
+        // the fix, and `map_guest` for the refusal that makes the separation observable.
+        ins.ram_exports.push(dup);
         Ok(RamHandle {
-            token: ins.exports.len() as u64 - 1,
+            token: RAM_EXPORT_TOKEN_TAG | (ins.ram_exports.len() as u64 - 1),
             covers: slice,
         })
     }

@@ -1132,10 +1132,15 @@ fn a_machine_without_a_shareable_backing_refuses_the_first_export() {
             .vmm()
             .export_ram(Some(GPA_RAM..(GPA_RAM + p.bytes()))),
         Ok(kayfabe_vmm::RamHandle {
-            token: 1,
+            token: kayfabe_vmm::RAM_EXPORT_TOKEN_TAG | 1,
             covers: Some(GPA_RAM..(GPA_RAM + p.bytes()))
         }),
         "a per-slice export is a distinct handle — least-privilege sharing (§4.3.4)"
+    );
+    assert_ne!(
+        h.token & kayfabe_vmm::RAM_EXPORT_TOKEN_TAG,
+        0,
+        "★★★ every guest-RAM token carries the tag; an untagged one is a valid HostRegion id"
     );
     assert_eq!(
         shared.vmm().export_ram(Some(0xDEAD_0000..0xDEAD_1000)),

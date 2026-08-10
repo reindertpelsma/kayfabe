@@ -611,6 +611,62 @@ fn exporting_a_slice_no_reservation_covers_is_refused_by_its_own_name() {
         .expect("a slice the reservation does cover");
 }
 
+/// ★★★ A guest-RAM export token is **refused where a host backing id is required**, and the
+/// refusal is proved NON-VACUOUS: the very same index, untagged, maps.
+///
+/// The two spaces used to be one `Vec` and one running index, so `RamHandle::token` was a
+/// *valid* `HostRegion::id` and `map_guest` would have `MAP_FIXED` **guest RAM into a guest
+/// window**. It was inert only because `export_ram` had no callers — the first production
+/// caller is what would have armed it, so the fix has to land before the caller, not after.
+///
+/// ⊘ Two separate vectors alone would not be a fix and this test would not have caught that:
+/// both index spaces start at zero, so index 0 stays ambiguous. The tag is what makes the
+/// confusion **nameable**, and the second half below is what proves index 0 really is a live
+/// backing id rather than a number the backend happens to reject anyway.
+#[test]
+fn a_guest_ram_token_is_refused_where_a_host_backing_id_is_required() {
+    let (m, _host, _slots) = machine();
+    let mut v = m.vmm();
+    let h = m
+        .vmm()
+        .export_ram(Some(window_gpa()..window_gpa() + page()))
+        .expect("a shareable export");
+    assert_ne!(
+        h.token & kayfabe_vmm::RAM_EXPORT_TOKEN_TAG,
+        0,
+        "every guest-RAM token must carry the tag"
+    );
+
+    assert_eq!(
+        v.map_guest(
+            window_gpa(),
+            page(),
+            HostRegion {
+                id: h.token,
+                offset: 0
+            },
+            Prot::ReadWrite
+        ),
+        Err(VmmError::Unsupported(
+            kayfabe_vmm::RAM_TOKEN_AS_A_BACKING
+        )),
+        "★ by NAME — 'an id this backend never minted' would also be true of a typo, and this \
+         is not a typo, it is guest RAM about to be mapped into a guest window"
+    );
+
+    // ★ The bite: strip the tag and the SAME index is a live backing id that maps. Without
+    // this half the assertion above would still pass on a backend that had simply never
+    // minted a backing, i.e. it would be measuring an empty table rather than a collision.
+    let bare = h.token & !kayfabe_vmm::RAM_EXPORT_TOKEN_TAG;
+    let b = m.register_backing(page()).expect("a host backing");
+    assert_eq!(
+        b.id, bare,
+        "the two index spaces really do collide at this index — that IS the defect"
+    );
+    v.map_guest(window_gpa(), page(), b, Prot::ReadWrite)
+        .expect("the untagged index is a real backing and maps");
+}
+
 /// ★ A zero-length access is still proved against the map — it is not a free pass.
 #[test]
 fn a_zero_length_access_is_still_proved_against_the_region_map() {
