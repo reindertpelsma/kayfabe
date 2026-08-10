@@ -2201,6 +2201,35 @@ pub fn route_engine_object_by_parent(
     parent: HObject,
     class: ClassId,
 ) -> Result<EngineObjectRoute, FwdFault> {
+    // ★★★ THE CLASS GATE RUNS FIRST, and this ordering is a MEASURED correction rather
+    // than a preference.
+    //
+    // `[measured 2026-08-10, boot `w221_49dc3ec_grfwd`]` this function delegated the
+    // `engine_of_object` check to `route_engine_object` — i.e. LAST, after the graph
+    // lookup — while the comment at its only call site said the opposite ("every
+    // non-engine alloc exits before the graph is touched"). The boot printed the truth:
+    //
+    //   ENGINE-OBJECT class=0x0000 … → REFUSED EngineObjectParent { … NotAChannel }
+    //   ENGINE-OBJECT class=0x0080 … → REFUSED EngineObjectParent { … NotAChannel }
+    //   ENGINE-OBJECT class=0x2080 … → REFUSED EngineObjectParent { … NotAChannel }
+    //
+    // ⊘ A client root refused as *"your parent is not a channel"* is a **true sentence
+    // about the wrong question** — the class was never an engine object and the parent
+    // was never going to matter. And it was not merely untidy: the report is bounded, and
+    // nineteen lines of kernel bring-up noise had consumed most of that bound before the
+    // one alloc the instrument exists for (`0xc7c0`) arrived.
+    //
+    // ★ My own test passed over it, because it asserted only that no HOST verb was
+    // issued — never WHICH refusal. A claim written in a comment and not asserted
+    // anywhere is prose (`a_comment_that_names_an_exception_is_a_bug_report`).
+    // ⊘ The result is deliberately DISCARDED: `route_engine_object` at the end of this
+    // function asks the same question and remains the one authority for the ANSWER. This
+    // call is the GATE — it decides whether to proceed — never a second resolution whose
+    // value could come to disagree with the first.
+    spine
+        .arch()
+        .engine_of_object(class)
+        .ok_or(FwdFault::NotAnEngine(class))?;
     let miss = |why| FwdFault::EngineObjectParent {
         client,
         object: parent,

@@ -251,12 +251,37 @@ fn no_non_engine_alloc_reaches_the_host_as_an_engine_object() {
         .tsg(h::C, h::DEV, h::TSG, h::VAS)
         .ctxshare(h::C, h::VAS, h::CTXSHARE, h::VAS)
         .channel(h::C, h::TSG, h::GR, gr_flags(), 0, h::VAS);
-    let (_policy, rec) = drive(&s);
+    let (policy, rec) = drive(&s);
     assert_eq!(
         host_engine_objects(&rec),
         vec![],
         "★ a non-engine class was forwarded as an engine object"
     );
+    // ★★★ …and it must be refused BY THE CLASS, not by something downstream that happens
+    // to say no. `[measured 2026-08-10, boot `w221_49dc3ec_grfwd`]` this assertion did not
+    // exist and the route delegated the class check to its LAST hop, so a client root came
+    // back as `EngineObjectParent { … NotAChannel }` — a true sentence about a question the
+    // class had already answered — and nineteen such lines ate a bounded diagnostic before
+    // the one alloc it was built for arrived. ⊘ "No host verb was issued" is satisfied by
+    // every wrong refusal as well as by the right one.
+    let gpu = policy.gpu().expect("a bare Gpu model");
+    for (class, what) in [
+        (w::NV01_ROOT, "the client root"),
+        (0x0080, "the device"),
+        (w::FERMI_VASPACE_A, "the VA space"),
+        (w::AMPERE_CHANNEL_GPFIFO_A, "the channel itself"),
+    ] {
+        assert_eq!(
+            kayfabe_fwd::route_engine_object_by_parent(
+                &gpu.spine,
+                HClient(h::C),
+                HObject(h::GR),
+                ClassId(class),
+            ),
+            Err(FwdFault::NotAnEngine(ClassId(class))),
+            "★ {what} ({class:#06x}) is refused by something other than its CLASS, even              though its parent here IS a channel — so the class gate is not the first hop"
+        );
+    }
     // ★ …and the host saw nothing AT ALL, which is the stronger statement: a channel is
     // materialized lazily, by the first engine object or doorbell that needs it, and
     // seven allocs that build one must not have materialized anything.

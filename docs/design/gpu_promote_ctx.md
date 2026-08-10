@@ -1061,3 +1061,52 @@ turning a host refusal into an alloc failure would fail `cuCtxCreate` outright
 
 ★ All three are the same shape as this section's headline: **a mechanism with no caller cannot be
 wrong, and every instrument aimed at it is green for that reason.**
+
+### ★★★★★ §16.80.1 — MEASURED: the host built one, and the falsifier could not fire
+
+`[boot `w221_49dc3ec_grfwd`, rev `49dc3ec`, `KAYFABE_ISOLATES=real`, CE executor `local`]`
+
+```
+kayfabe: ENGINE-OBJECT class=0xc797 client=0xc1e00007 parent=0xbaba0045 params=0B
+  → FORWARDED engine=GrGraphics host_object=0xcafe0011 materialized_channel=true reused=false
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00006 parent=0x2      params=8B → REFUSED Rm(Other(64))
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00005 parent=0x2      params=8B → REFUSED NoVas(ChanId(0))
+```
+
+`0xc797` = `AMPERE_B`. **A real GA106's RM, reached from an unprivileged sandboxed isolate,
+accepted a guest's graphics engine-object alloc and materialized the host channel under it.**
+`Rm(Other(64))` is the host's own status on a CE object — the forward reached NVIDIA's code and
+NVIDIA declined; `NoVas` is ours and is right (the CeUtils scrubber channel carries
+`hVASpace = NV01_NULL_OBJECT` by design, `ogkm-580: channel_utils.c:86-93`).
+
+⊘ Everything else is byte-identical to `w220`/`w218`: `191 / 183 / 8`, `GrCompute=8 Ce=183`,
+`0 forwarded`, `SMI_RC=0`, `CUP2_RC=TIMEOUT`.
+
+#### ⊘⊘ REFUTED — "then the host GR engine, executing the guest's own bytes, writes that semaphore"
+
+That chain has a link that is **refused above the forwarding plane, by name**. A `GrCompute`
+doorbell never reaches `SharedDevice::doorbell`: `SharedDoorbell::try_ce_submission` returns
+`Some(refused(… "Route::NotACopyEngineChannel"))` **terminally** for any route that is not
+`CpuCe`, and that refusal's own comment states why it must —
+
+> *"GR forwarding needs a host channel that SHADOWS the guest's plus the `OS_DESCRIPTOR`
+> primitive, neither of which is built … A true refusal outranks a forwarded no-op."*
+
+⇒ **Allocating the host GR context and ringing it are two rungs.** F1 (the GR re-rings stop) and
+F2 (the GPU writes `0x2_0440fff0`) are properties of the *second*, and no amount of engine-object
+forwarding can produce them. ⚠ Do not open that gate to make a falsifier fire: `same_class_id_
+opposite_directions` records that the available mistake on this exact line is unblocking
+`OS_DESCRIPTOR` guest→us to enable an internal capability, and it is a hostile-guest boundary.
+
+#### ★★★ AND THE RUNG'S OWN INSTRUMENT PRINTED A DEFECT IN THE RUNG
+
+Nineteen of the thirty-two reported outcomes read `EngineObjectParent { … NotAChannel }` for
+classes `0x0000`, `0x0080`, `0x2080`, `0x007e` — client roots, devices, subdevices, events. The
+class gate was delegated to `route_engine_object`, i.e. asked **last**, while the call site's
+comment said *"every non-engine alloc exits before the graph is touched"*.
+
+⊘ Not merely untidy. A client root refused as *"your parent is not a channel"* is a **true
+sentence about the wrong question**, and the noise consumed a bounded report before `0xc7c0`
+arrived — so the one line the instrument exists for was never printed. ★ And the test written for
+this property passed, because it asserted only that no **host verb** was issued, never **which
+refusal**. A claim written in a comment and asserted nowhere is prose.
