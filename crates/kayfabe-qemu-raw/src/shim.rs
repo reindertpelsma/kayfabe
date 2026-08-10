@@ -4630,7 +4630,14 @@ impl Regs {
         {
             let (rows, dropped) = self.rings.roster();
             eprintln!(
-                "kayfabe: RING-ROSTER {} row(s), {dropped} dropped past the cap (a                  non-zero drop count means this list is a PREFIX and its absences prove                  nothing)",
+                // ⊘ The runs of spaces this line used to carry were a real defect and are
+                // recorded rather than quietly fixed: the string was written through a
+                // generator that ate the `\` continuations and left their indentation, and
+                // `w206`'s own roster is what showed it. An instrument that garbles its
+                // own header is one a reader distrusts before reading its rows.
+                "kayfabe: RING-ROSTER {} row(s), {dropped} dropped past the cap (a \
+                 non-zero drop count means this list is a PREFIX and its absences prove \
+                 nothing)",
                 rows.len(),
             );
             for r in &rows {

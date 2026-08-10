@@ -13407,3 +13407,165 @@ which of two resolvers owns the forwarding path (`mode2_address_table.md`'s *"ON
 truth, forward-populated, never reverse-resolved"* is on one side of it, and the walker that
 demonstrably finds the ring is on the other). Making that ruling from one boot, with the table
 above unresolved, would be picking a mechanism before measuring which one is even being asked.
+
+## §16.71 ★★★★★ `w206` — THE JOIN KEY, and a question that DISSOLVED instead of resolving
+
+### 16.71.1 ⊘ WHAT I REFUTED BEFORE BOOTING — the rung's own premise, twice
+
+The brief set this rung as *"print `ce_channel_facts.ring_va` and
+`rmgraph.node_of_resource().facts.gp_fifo_ring` — §16.16's two projections, never yet printed
+side by side."* ⊘ **Both halves of that sentence are false, and the source says so.**
+
+**(1) They are not two projections.** Both resolvers end at the *same field of the same node
+reached by the same key*:
+
+| | expression |
+|---|---|
+| `ce_channel_facts` (`kayfabe-rt/src/device.rs`) | `node = spine.rmgraph.node_of_resource(chan.key)` → `ring_va: node.facts.gp_fifo_ring.map(\|r\| r.va)` |
+| `read_gpfifo_ring` (`kayfabe-fwd/src/lib.rs`) | `node = spine.rmgraph.node_of_resource(chan.key)` → `ring = node.facts.gp_fifo_ring` |
+
+and `cid` is the same on both sides — `SharedDevice::doorbell` calls
+`route_doorbell(token)` and hands `out.chan` straight to `forward_ring`, while
+`ce_channel_facts` calls the same `route_doorbell(token)`. ★ `kayfabe-rt/src/ceutils.rs`
+already carried the sentence — *"via `SharedDevice::ce_channel_facts`, so they cannot be two
+projections"* — and it was never carried into §16.70.6.
+
+⇒ ★★★★ **The falsifier's `DIFFERENT` arm was impossible before it was written.** For one
+token on one boot the two cannot name different channels unless the graph mutated between the
+two lock acquisitions — which is the ⊘ **lifetime** cell, not the value cell. Two live arms,
+not three. That is §16.70.1(3) repeated exactly, one rung later, and it is the second
+consecutive rung whose falsifier carried an arm already excluded by committed evidence.
+
+**(2) "The same token" was never established.** §16.70.6 attributes the control's
+`0x120064000` to token `0x00010002`. Its **only** source is
+`run_w205_227194f_ctl_qemu.log:235` — `last CPU-CE serving: … sem fin va=0x12006c004` — a
+**tokenless** summary of the **last** of 362 servings, on a boot whose `last token` was
+`0x00010001` and whose 16 logged `SERVED-LOCAL` lines span five distinct tokens. ⇒ The table
+row *"control: ring VA for token `0x00010002` = `0x120064000`"* is a join across two lines
+that **share no key**.
+
+### 16.71.2 THE INCREMENT — identity on every ring address this port prints
+
+⊘ **No resolver was changed**, per the brief's instruction and the previous agent's judgement.
+
+1. `CeChannelFacts::chan_key` — the `(client, handle)` of the node the facts were read off,
+   taken on the same line of the same locked look as `ring_va`.
+2. `RingWho`, on the `FWD-RING` line — the forwarding resolver names the object it resolved,
+   in the same locked look that reads the ring, and prints `UNRESOLVED-AT-RING-READ`
+   **distinctly** from a different key, so the lifetime cell cannot masquerade as the value cell.
+3. `RING-PROJ` — printed on the forwarding fall-through from the facts `try_ce_submission`
+   **already** resolved (an out-parameter, never a second `ce_channel_facts` call — §16.64's
+   boot is what that costs). An unrouted token says so rather than printing nothing.
+4. `RingRow` / `RING-ROSTER` — **every** declared ring with its owner, capped at 64 and
+   reporting its own drop count. ★ The owner was already passing through
+   `SharedRingCensus::record` and was being discarded.
+
+### 16.71.3 ★★★ THE FALSIFIER, committed BEFORE the boot (`8a2280b`), and how it scored
+
+| arm | predicted | measured |
+|---|---|---|
+| **SAME** — one channel identity, difference is mapping/aperture | ★ **predicted**, and forced by §16.71.1(1) from source, not guessed | ✅ **HIT.** All three doorbells: both lines carry `key=0xc1e00006:0x2` (resp. `0xc1e0000e`, `0xc1e00013`), `pdb=0x2efa9c000`, `ring=0x420064000`. Every field agrees |
+| **DIFFERENT** — the forwarding path resolves the wrong channel | excluded pre-boot | ⊘ **refuted for the two RESOLVERS** — and see §16.71.4, where it turns out to be true of the two **ADDRESSES**, for a reason no cell named |
+| ⊘ **none of the above** — a lifetime problem | live cell | not observed; no `UNRESOLVED-AT-RING-READ`, no absent projection |
+
+### 16.71.4 ★★★★★ THE FINDING — there was never a discrepancy; there were always TWO CHANNELS
+
+`[measured 2026-08-10, boots `w206_8a2280b_ctl` and `w206_8a2280b_real`, ONE binary stamped
+`kayfabe-rev:8a2280ba0019bd70bda2f59d608184ce9c4d061b` read off the **hypervisor**
+(`strings /workspace/bench/qemu-build/qemu-system-x86_64`), 40 hex and equal to
+`git rev-parse HEAD`, differing only in `KAYFABE_ISOLATES`. Both wrapped in
+`host_xid_watch.sh`, both `xid_before=0 xid_after=0` off a ring buffer proved readable at
+**997 lines**. Both ran `POST_CAPTURE_HOOK=scripts/bench/guest_cuinit_wall.sh`.]`
+
+The real arm's roster, in full — **six rings, and they are three PAIRS**:
+
+```
+RING-ROSTER 6 row(s), 0 dropped past the cap
+  key=0xc1e00005:0x2 ring=0x120064000 entries=4096
+  key=0xc1e00006:0x2 ring=0x420064000 entries=4096   ← the doorbell's channel (chan=1)
+  key=0xc1e0000d:0x2 ring=0x120064000 entries=4096
+  key=0xc1e0000e:0x2 ring=0x420064000 entries=4096   ← chan=3
+  key=0xc1e00012:0x2 ring=0x120064000 entries=4096
+  key=0xc1e00013:0x2 ring=0x420064000 entries=4096   ← chan=5
+```
+
+⇒ ★★★★★ **`RmInitAdapter` allocates TWO channels per attempt**, in consecutive client
+namespaces, **both handle `0x2`, both 4096 entries**, one ringed at `0x120064000` and one at
+`0x420064000` — and the guest retries three times, giving six. The control shows the identical
+pattern (`0xc1e00005`/`0xc1e00006`, then `0xc1e00010`/`0xc1e00011`) plus `cuInit`'s own 20
+rings at `0x1210x0000` and `0x2002xx000`.
+
+⇒ ⊘ **§16.70.6's table compared two DIFFERENT CHANNELS OF ONE PAIR and read it as one channel
+seen twice.** Both of its readings are refuted:
+
+- **Reading 1 — "RM placed it differently between the boots."** ⊘ Refuted. RM places **both**
+  addresses, in **every** boot, deterministically. Nothing moved.
+- **Reading 2 — "the two paths are looking at different channels."** ⊘ Refuted **as stated** —
+  the two resolvers agree on every field. Its *conclusion* is nonetheless right, for a cause
+  no cell named: the two **addresses** are two different channels, just not the two resolvers'.
+
+★★★★ **The question did not resolve; it dissolved.** The instrument that was owed was
+identity, and identity did not adjudicate between two readings — it showed there had never
+been one fact to disagree about. ⇒ **A "discrepancy" can be an artefact of a join, and the
+fix is a key, not an explanation.** Both numbers were always right; nothing ever printed what
+either belonged to.
+
+### 16.71.5 ⚠ WHAT THIS BREAKS UPSTREAM — §16.70.4's headline is not supported
+
+§16.70.4 concluded: *"TWO RESOLVERS FOR ONE ADDRESS, and only one of them can find it … the
+shell's own walker, which descends what the guest published, finds it every time."*
+
+⊘ **The evidence for that sentence was a serving of the OTHER CHANNEL OF THE PAIR.** The
+control's `sem fin va=0x12006c004` is `0x120064000 + 0x8004` — the **first** member
+(`0xc1e00005`-class). The forwarding path is asked about the **second** (`0xc1e00006`-class,
+`0x420064000`). ⇒ The walker has never been shown to resolve `0x420064000` at all. A success
+on channel A was read as a success on channel B because neither line named its channel.
+
+⇒ ★★★ **The resolver ruling §16.70.6 was gating is not a live question, and must not be made.**
+"Point `read_gpfifo_ring` at the descent the CPU executor uses" rests on the premise that the
+descent finds this ring. That premise is now **unmeasured**, not established. The next rung's
+question is the narrow one: *does the published-root descent resolve `0x420064000` in pdb
+`0x2efa9c000`, for the channel the doorbell actually names?* — and it is answerable by
+pointing the existing `addressing_probe` at a **served** doorbell, which today runs only on
+refusals.
+
+### 16.71.6 ⊘ WHAT THIS BOOT DID NOT ESTABLISH
+
+- ⊘ **`CE-SUBMIT` is STILL wired and silent — 0 lines, and this boot does NOT supply its
+  non-vacuity.** It cannot: a span reaches `ce_copy` only after the ring is read, and the ring
+  was not read. ★ The debt stated in §16.70.5 is carried forward unpaid and no claim rests on
+  that instrument.
+- ⊘ **Nothing about the completion tail, and nothing about GR** (`GrCompute=0` on the real arm
+  again, because `cup2` never ran). Unchanged from §16.70.5.
+- ⊘ **The wall itself did not move, and was not meant to.** `RING-VA-UNBOUND va=0x420064000`,
+  `pdb=0x2efa9c000`, `vas=0xa dec=0xa`, all three doorbells; census `3 arrived, 3 served,
+  0 REFUSED`, `0 local, 3 forwarded`, `Ce=3`, guest `RmInitAdapter failed! (0x25:0x65:1249)`,
+  host Xid 0 → 0. This was an instrument rung.
+- ⊘ **Why RM builds the pair, and what the first member is for, is NOT explained here** — only
+  that it exists, deterministically, in both arms. Naming its purpose from a roster would be
+  the move this campaign keeps paying for.
+
+### 16.71.7 ⊘ THE POSITIVE CONTROL HELD — the instrument is observationally neutral
+
+`w206_8a2280b_ctl` against `p1b`/`w205`'s committed numbers, **bit-identical on every one**:
+
+```
+isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)
+doorbells: 448 arrived, 362 served, 86 REFUSED by name; last token 0x00010001 (16 logged)
+  of the served: 362 local (CPU CE, end witnessed), 0 forwarded (host channel rung)
+  by engine: GrCompute=86 GrGraphics=0 Ce=362 NvEnc=0 NvDec=0 Other=0 unrouted=0
+gpfifo rings: 26 declared, 24 with a non-zero address; first 0x0000000120064000
+SERVED-LOCAL 16   FWD-RING 0   CE-SUBMIT 0   ★ RING-PROJ 0
+```
+
+★ `RING-PROJ 0` on the control is **correct rather than a failure to print**: it emits only on
+the forwarding fall-through, which no routed doorbell reaches on the `Stillborn` plane
+(`try_ce_submission` claims every one terminally; `unrouted=0`). `RING-ROSTER` is a new
+teardown line on both arms and changes no counted number.
+
+⊘ **And the instrument caught a defect in itself**: the roster's header printed runs of
+whitespace, because the string was written through a generator that ate its `\` continuations
+and left their indentation. Recorded rather than quietly fixed — an instrument that garbles
+its own header is one a reader distrusts before reading its rows. ⚠ Fixed **after** both
+boots, deliberately: rebuilding between the arms would have cost the *one binary, one
+environment variable apart* property the control depends on.
