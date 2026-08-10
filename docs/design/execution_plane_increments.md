@@ -13569,3 +13569,90 @@ and left their indentation. Recorded rather than quietly fixed — an instrument
 its own header is one a reader distrusts before reading its rows. ⚠ Fixed **after** both
 boots, deliberately: rebuilding between the arms would have cost the *one binary, one
 environment variable apart* property the control depends on.
+
+## §16.72 ★★★★★ `w207` — DOES THE DESCENT SEE `0x420064000`? The question §16.71.5 left, posed with a key
+
+### 16.72.1 ⊘ WHAT I REFUTED BEFORE BOOTING — three of them, and one is my own near-miss
+
+**(1) ⊘ "`addressing_probe` runs only on refusals" understates it: in `w206` it ran ZERO
+times, on BOTH arms.** The brief said "verify that", so it was verified rather than inherited,
+and the verification changes what the increment has to be:
+
+- The **real** arm refused nothing at all — `3 arrived, 3 served, 0 REFUSED by name`
+  (`run_w206_8a2280b_real_qemu.log`). A probe on the refusal path cannot fire on a boot with
+  no refusals.
+- The **control**'s 86 refusals are **every one** `Route::NotACopyEngineChannel`
+  (`run_w206_8a2280b_ctl_qemu.log:263`), raised at `shim.rs:3183` — **above every one** of the
+  probe's four call sites (`shim.rs:2970` on the forwarding refusal, and `:3292`, `:3315`,
+  `:3349` in the CE executor), and carrying none of it. ⚠ **Four, not three** — the count in my
+  own first draft was wrong, and the fourth is the one in `ring()` that a forwarding refusal
+  would take. It is unreachable here for the same reason: `NotACopyEngineChannel` returns
+  `Some(report)` from `try_ce_submission`, so `ring()` returns before it. Confirmed negatively
+  as well: `grep -c "walk:"` and `grep -c "rng="` over that log are both **0**.
+- ⚠ **And a refusal would not have sufficed anyway.** Only the **first** refusal's `why` string
+  reaches the census summary (`first doorbell refusal [...]`), so making the walling doorbell
+  refuse would print the descent only if it also happened to be first.
+
+⇒ The reach had to be to a site that prints **unconditionally, per doorbell**. That is the
+`RING-PROJ` fall-through, which is also the only site already holding the facts.
+
+**(2) ⊘ The "published VA window does not cover the ring" argument is WRONG, and I nearly
+committed it as a pre-boot exclusion of the `RESOLVES` arm.** All seven distinct publications
+on the real arm declare the *same* window — `va [0x100000000..0x11fffffff]` — and
+`0x420064000` sits far outside it, which reads as a decisive pre-boot answer. It is not:
+`ceresolve.rs:606-609` says in as many words that the descent starts at the root's **entry 0**
+and ⊘ **NOT** at `virt_addr_lo`, *"reading it as the root's base is exactly the set-membership
+mistake §14.12 adjudicated against"*. The committed evidence agrees: the control resolved
+`0x12006c004`, whose level-2 index is **9**, while the declared window `[0x100000000..0x11fffffff]`
+covers level-2 index **8** only. A window that does not contain an address the descent
+demonstrably resolved is not a bound. ⇒ **The arm stays live.** ★ This is the brief's own
+warned-against move — an arm excluded by a reading — caught one step before it was made.
+
+**(3) ★★★ What the arithmetic DOES say, and it is why this rung is cheap and sharp.** With
+`pageShift 47/38/29/21` and root `size 0x20`, the two rings of a pair diverge at **exactly one
+entry of exactly one table**:
+
+| va | L0 (`>>47`) | L1 (`>>38 &511`) | L2 (`>>29 &511`) |
+|---|---|---|---|
+| `0x120064000` — first of the pair, **known to resolve** | 0 | 0 | **9** |
+| `0x420064000` — second, the doorbell's | 0 | 0 | **33** |
+
+Both descend root[0] → L1[0] into the level-2 page at `0x2efa9a000`. The whole question is
+whether **slot 33** of that one page is a valid PDE. ⊘ That is a per-boot contents fact; no
+amount of reading answers it.
+
+### 16.72.2 THE INCREMENT — an instrument reach, and ⊘ NO RESOLVER CHANGED
+
+1. `addressing_probe` split into a token-resolving wrapper and `addressing_probe_facts(facts)`.
+   ⊘ Identical body and identical output; the split exists so the fall-through can pass the
+   `CeChannelFacts` it **already holds** instead of calling `ce_channel_facts` a second time —
+   §16.64's measured defect, and §16.71.2(3) already paid for it once.
+2. The descent appended to the `RING-PROJ` line as ` DESCENT | …`, so `key=`, `pdb=`, `ring=`
+   and the walk's answer are **one line**. ★ §16.71.4's lesson applied rather than restated:
+   the answer must not be separable from the channel it is about.
+
+### 16.72.3 ★★★ THE FALSIFIER, committed BEFORE the boot
+
+The line to read is the real arm's `RING-PROJ … key=0xc1e00006:0x2 … ring=0x420064000 DESCENT …`,
+and the deciding fields are `rng=` (the resolver's own answer) beside `walk:` (the per-level
+trace). ⊘ **The falsifier is NOT "the probe ran"** — that is what the change produces. It is
+which of these the descent says about `0x420064000`.
+
+| arm | distinguishing line | pre-boot status | next step it forces |
+|---|---|---|---|
+| **A — RESOLVES** | `rng=` a location tag (`V:0x…`/`S:0x…`), `walk:` terminating in a leaf | **live** — §16.72.1(2); not excluded by the window | the walk sees the second ring and the address table does not ⇒ the resolver question §16.71.5 retired becomes live and **properly posed for the first time** |
+| **B — DOES NOT RESOLVE** | `rng=` a refusal (`MISS`/`INVALID-SLOT`-class), `walk:` reporting `INVALID-SLOT` or `SPARSE` at level 2 | **live** | ★ **neither** mechanism can see it ⇒ the defect is upstream of both, in what publishes that ring's mapping. Look at *why every publication declares the same 512 MiB window and none covers `0x4_2006_4000`* |
+| **C — CANNOT BE ASKED** | `DESCENT` absent, or `root=none rootsrc=NONE`, or `walk=NO-ROOT`/`NO-ROOT-LEVEL` | ⊘ **`rootsrc=NONE` is excluded pre-boot** — `doorbell_root` returns `Absent` only when `vas_pdb` is `None` (`shim.rs:3093`), and it is `0x2efa9c000`; moreover a publication keyed **exactly** `hClient 0xc1e00006 hObject 0xa` exists (`run_w206…_real_qemu.log:54-55`), so `published_root` hits and the source is `published`. `Underivable`/`NO-ROOT-LEVEL` remain live | say so and **stop**; ⊘ do not infer from the refusal path |
+| ⊘ **none of the above** | anything else — `rng=` and `walk:` **disagreeing**, `ring=NONE-DECLARED`, a `DESCENT` on a key that is not `0xc1e00006`-class | live cell, and the disagreement variant is a real one: the two are printed side by side *on purpose* (`ceresolve.rs:662-664`) | report the disagreement as the finding |
+
+### 16.72.4 ⊘ WHAT THIS BOOT CANNOT ESTABLISH — stated before it runs
+
+- ⊘ **`CE-SUBMIT` will NOT be made non-vacuous by this boot, and I am not going to owe it a
+  third time silently.** It is printed by the isolate's `ce_copy` (`rm.rs:2621`, `:2638`),
+  reached only through `forward_ce` with a non-empty `ce_spans` — which requires
+  `read_gpfifo_ring` to have returned `Ring(bytes)`. This rung **changes no resolver**, so that
+  call still answers `RingVaUnbound` and no span is built. ⇒ **`CE-SUBMIT 0` is PREDICTED, and
+  a `0` here is not evidence about the instrument.** ★ Three campaign instances now of an
+  instrument that exists and is unreachable; the debt is carried, named, and unpaid.
+- ⊘ Nothing about the completion tail, nothing about GR (`cup2` does not run), and the wall
+  itself is not expected to move. This is an instrument rung.

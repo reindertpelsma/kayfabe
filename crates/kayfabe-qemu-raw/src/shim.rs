@@ -2847,10 +2847,43 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // plane is reached by no routed doorbell at all (`try_ce_submission` claims every
         // one of them terminally) — so the control's committed census stays byte-identical.
         if let Some(f) = &seen {
+            // ★★★★★ **§16.72 — THE PUBLISHED-ROOT DESCENT, ASKED ABOUT THE RING THE
+            // FORWARDING PATH IS ABOUT TO FAIL ON, ON THE SAME LINE AS ITS KEY.**
+            //
+            // §16.71.5 retired §16.70.4's headline (*"the walker finds it every time; the
+            // forwarding path misses"*) because its evidence was a serving of the **other
+            // channel of the pair**: the control's `sem fin va=0x12006c004` is
+            // `0x120064000 + 0x8004`, the `0xc1e00005`-class ring, while the doorbell that
+            // walls names the `0xc1e00006`-class ring `0x420064000`. ⇒ **The descent has
+            // never been asked about `0x420064000` at all.**
+            //
+            // This appends `addressing_probe_facts` — the descent already used by the three
+            // CE-executor refusal sites — to the line that carries `key=`, `pdb=` and
+            // `ring=`. ⊘ **The join is the point.** §16.71.4's whole finding is that a
+            // "discrepancy" was an artefact of comparing two lines that shared no key; the
+            // fix is not a better number but the owner printed beside it, so this answer is
+            // never separable from the channel it is an answer about.
+            //
+            // ⊘ **It could not be reached before, and not merely because it was unwired.**
+            // `addressing_probe` runs on refusals, and `[measured 2026-08-10, boots
+            // `w206_8a2280b_ctl`/`_real`]` **neither arm ran it once**: the real arm refused
+            // nothing (`3 arrived, 3 served, 0 REFUSED`) and every one of the control's 86
+            // refusals is `Route::NotACopyEngineChannel`, raised above the probe's three
+            // sites and carrying none. ⚠ And even a refusal would not have printed it here —
+            // only the **first** refusal's `why` reaches the census summary.
+            //
+            // ⊘ **Observationally neutral on the control, by the same argument that already
+            // guards this block**: on the `Stillborn` plane `try_ce_submission` claims every
+            // routed doorbell terminally and `unrouted=0`, so this fall-through is reached by
+            // no doorbell at all and `RING-PROJ 0` stays `RING-PROJ 0`.
+            //
+            // ⚠ Locks: called exactly where the refusal sites call it — with `ce.vmm`
+            // **not** held (that lock is taken below, at `let mut held`) and no cursor lock
+            // outstanding. This is a read-only observer; it serves nothing.
             eprintln!(
                 "kayfabe: RING-PROJ token={token:#010x} proc={} chan={} vchid={} \
                  key=0x{:x}:0x{:x} engine={} vas={} dec={} pdb={} ring={} entries={} \
-                 (projection: ce_channel_facts)",
+                 (projection: ce_channel_facts) DESCENT{}",
                 f.proc.0,
                 f.chan.0,
                 f.vchid,
@@ -2866,6 +2899,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
                 f.ring_va
                     .map_or_else(|| "NONE-DECLARED".to_string(), |v| format!("0x{v:x}")),
                 f.ring_entries,
+                self.addressing_probe_facts(*f),
             );
         } else {
             // ⊘ The token did not route at all, so there is no second projection to print.
@@ -3444,10 +3478,27 @@ impl SharedDoorbell {
     }
 
     fn addressing_probe(&self, token: u64) -> String {
-        let Some(plane) = self.plane.upgrade() else {
+        let Ok(facts) = self.device.ce_channel_facts(DOORBELL_TARGET_GPU, token) else {
             return String::new();
         };
-        let Ok(facts) = self.device.ce_channel_facts(DOORBELL_TARGET_GPU, token) else {
+        self.addressing_probe_facts(facts)
+    }
+
+    /// ★★★★ **§16.72 — the probe over facts SOMEBODY ELSE ALREADY RESOLVED.**
+    ///
+    /// [`SharedDoorbell::addressing_probe`] takes a token and resolves the channel itself,
+    /// which is right for the three refusal sites (they have no facts in hand). It is
+    /// **wrong** for the forwarding fall-through, which is holding
+    /// [`kayfabe_rt::device::CeChannelFacts`] in `seen` — a second `ce_channel_facts` call
+    /// there would be §16.64's defect exactly: *"a probe that re-derives what it describes
+    /// can disagree with it, and this one did, in the direction that reads as still
+    /// broken"*. §16.71.2(3) already paid for this once and took the out-parameter; this
+    /// split is what lets the walk reuse it rather than re-derive it.
+    ///
+    /// ⊘ **No resolver is changed and nothing here is served.** Identical body, identical
+    /// output, one fewer resolution.
+    fn addressing_probe_facts(&self, facts: kayfabe_rt::device::CeChannelFacts) -> String {
+        let Some(plane) = self.plane.upgrade() else {
             return String::new();
         };
         // ⊘ A channel that named no VA space has no address space to resolve in, and a
