@@ -163,12 +163,12 @@ refusal.
 is not permission to let an engine dereference it. It decodes, resolves, and reports; it
 produces no plan, lowers nothing to a host verb, and makes nothing executable.
 
-### 3.1 The result
+⚠ **Three defects, all in the instrument, all found.** They are written up before the number
+because they are the reason to believe the number: `suspect_the_instrument_first` says this
+project's tests have been the defect about twenty times, and an instrument built tonight that
+reported no trouble would be the one to distrust.
 
-`[measured 2026-08-10, boot `w227b_<rev>_census`, `KAYFABE_ISOLATES=real`, CE executor
-`local` — see §5]`
-
-### 3.2 ★ The instrument bit me before the boot did
+### 3.1 ★ DEFECT ONE, caught before the boot: the generalisation of a correct decoder is not a correct decoder
 
 `SET_REPORT_SEMAPHORE_A_OFFSET_UPPER` is `7:0`, so `decode_report_semaphore` masks `_A` with
 `0xff` — correct, and correct **only for that method**. The census was first written by
@@ -181,6 +181,115 @@ column derived from the class header.
 ⇒ ★★ **The generalisation of a correct decoder is not a correct decoder**, and the wrong
 answer here was `0` — the value that looks like absence. Recorded because
 `a_wall_that_can_carry_no_name` is the same failure with the polarity flipped.
+
+### 3.2 ⊘ DEFECT TWO, caught AT the boot: the first result was wrong, and its error pointed the ENCOURAGING way
+
+`[measured 2026-08-10, boot `w227b_184df5f_census`, `KAYFABE_ISOLATES=real`, CE executor
+`local`, RTX 3060 GA106, host driver 580.159.04]` — identical on all eight `GrCompute`
+channels:
+
+```
+GR-ADDRESS-CENSUS proc=2 chan=0 class=0xc7c0 operands=2 bound=2 unbound=0 mme_dwords=39
+      SET_VALID_SPAN_OVERFLOW_AREA   m=0x0200 sub=1 va=0x200000000  → Framebuffer { phys: 0x400000 }
+      SET_REPORT_SEMAPHORE           m=0x1b00 sub=1 va=0x20440fff0  → GuestRam { gpa: 0x564fff0 }
+```
+
+⊘ **`operands=2` is wrong; the stream names five.** The guest writes address registers **two
+different ways in one pushbuffer** — `SET_VALID_SPAN_OVERFLOW_AREA` as a single three-argument
+`INCREASING` run, and `SET_TEX_HEADER_POOL` / `SET_TEX_SAMPLER_POOL` /
+`SET_SHADER_SHARED_MEMORY_WINDOW` as **separate single-argument methods, one per half**. The
+decoder read only the run spelling.
+
+★★★★★ **And the failure pointed the encouraging way.** Three missing operands made the line
+read `unbound=0` — *"every address the guest names already binds"*, the most positive answer
+the instrument can produce. §5's arm **B** had named that outcome in advance as *"strictly
+better than A **and the first thing to distrust**"*. Distrusting it is the only reason the
+defect was found in the same hour instead of being written up as *"only closure separates us
+from a containable GR channel."*
+
+⇒ ★ **A falsifier that flags its own good news is worth writing.** Every falsifier in this
+campaign so far has been armed against a disappointing result; this one earned its keep by
+being armed against a pleasing one.
+
+**The fix:** the decoder now models the hardware's **register file** rather than a set of runs
+— expand each run per `SECOP` (`INCREASING` walks the method address, `NON_INCREASING` repeats
+it), latch each half independently, emit an operand only when **both** halves have been
+written. Spelling-independent by construction rather than by having seen the spellings.
+
+### 3.3 ★★ DEFECT THREE, caught by the fix: the FIXTURE was a second implementation of the wire
+
+The unit fixture built the MME loads with the `INCREASING` header helper. `[measured]` the
+real ones are `NON_INCREASING` (`hdr=0x600f2046`, `0x60182046`) — so the corrected decoder,
+being correct, walked 15 microcode dwords across fifteen consecutive registers, landed two of
+them on `SET_GLOBAL_RENDER_ENABLE_A/B`, and **invented a sixth operand out of microcode**.
+
+⊘ A false *positive*, manufactured inside the instrument that exists to count false negatives,
+by a fixture that was a second description of the wire. `hdr_ni` now carries the measured
+`SECOP` and two tests pin it.
+
+### 3.4 ★★★★★ THE CORRECTED RESULT — arm A, and it moves the named dependency
+
+`[measured 2026-08-10, boot `w227c_537894e_census2`, rev `537894e` (stamped in the binary),
+`KAYFABE_ISOLATES=real`, CE executor `local`, RTX 3060 GA106, host driver 580.159.04]` —
+**identical on all eight `GrCompute` channels**:
+
+```
+GR-ADDRESS-CENSUS proc=2 chan=0 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39
+  SET_VALID_SPAN_OVERFLOW_AREA     m=0x0200 va=0x2_00000000    → Framebuffer { phys: 0x400000 }
+  SET_SHADER_SHARED_MEMORY_WINDOW  m=0x02a0 va=0x7f5c_a9000000 → Unresolved("CeWalk … Fault")
+  SET_TEX_SAMPLER_POOL             m=0x155c va=0x100_02000000  → Framebuffer { phys: 0x800000 }
+  SET_TEX_HEADER_POOL              m=0x1574 va=0x100_00000000  → Framebuffer { phys: 0x600000 }
+  SET_REPORT_SEMAPHORE             m=0x1b00 va=0x2_0440fff0    → GuestRam { gpa: 0x43b0fff0 }
+```
+
+#### ★★★★★ THE HEADLINE: FOUR OF THE FIVE BIND, AND THREE OF THOSE FOUR ARE IN THE EMULATED FRAMEBUFFER
+
+The completion observer's one address (`SET_REPORT_SEMAPHORE`) is the **only** operand in guest
+RAM. Everything else the host GR engine would dereference — the texture header pool, the
+sampler pool, the valid-span overflow area — resolves into **our emulated framebuffer**, which
+is memory in the QEMU process that the host GPU has no mapping of and no way to acquire one.
+
+⇒ **The FB crossing is not a successor question. It is the majority of the surface.**
+`mode2_fb_crossing_question.md` was carried as *"the named successor — assert the dependency by
+name if you reach it; do not build it."* This rung reached it and can now quantify it: **3 of
+the 4 bindable operands, 75 %,** are on the far side of a crossing that does not exist.
+`GuestRamGrant` (`28b7bb2`) crosses the **one** that is not.
+
+★ That reverses the intuition this campaign has been carrying. The guest-RAM crossing was
+treated as *the* enabling primitive because the completion lives there; the census says the
+completion is the **exception**, and the context buffers — which is what a GR context *is* —
+are somewhere else entirely.
+
+#### ⊘ AND THE ONE `Unresolved` IS NOT A GAP — reading it as one would be the third mistake tonight
+
+`SET_SHADER_SHARED_MEMORY_WINDOW` faults at `0x7f5c_a9000000`. Before calling that a hole in
+the address table, note that the value **changes between boots**: `0x7d1e_e9000000` at `w226b`
+and `w227a`, `0x7f5c_a9000000` at `w227c`. A `0x7f…` base that moves per run is an **ASLR'd
+userspace address**, and `SET_SHADER_SHARED_MEMORY_WINDOW` is by its own name a **window base**
+— the aperture against which generic addresses are disambiguated — not an allocation. Nothing
+is expected to be mapped at a window base, so a walk that faults there is the table being
+**right**.
+
+⇒ ★★ `bound=4 unbound=1` therefore reads as **5 of 5 accounted for**, and the honest headline
+is not *"one address is missing"* but *"every address is known, and 3 of 5 are in the wrong
+plane."* ⊘ A census that reported `unbound` as a synonym for `missing` would have manufactured
+a fourth false finding out of a correct measurement — the same shape as §3.2, one level up.
+`[NOT MEASURED]` whether the window base is ever dereferenced by the engine; the reading above
+rests on the method's name and on the value's per-boot variance, not on hardware behaviour.
+
+#### The falsifier's costly arm did not fire
+
+| | `w218` | `w220` | `w221` | `w222` | `w226b` | **`w227a`** | **`w227b`** | **`w227c`** |
+|---|---|---|---|---|---|---|---|---|
+| doorbells | 191/183/8 | 191/183/8 | 191/183/8 | 191/183/8 | 191/183/8 | **191/183/8** | **191/183/8** | **191/183/8** |
+| by engine | — | `Gr=8 Ce=183` | same | same | same | **same** | **same** | **same** |
+| `forwarded` | 0 | 0 | 0 | 0 | 0 | **0** | **0** | **0** |
+| `SMI_RC` / `CUP2_RC` | 0 / TO | 0 / TO | 0 / TO | 0 / TO | 0 / TO | **0 / TO** | **0 / TO** | **0 / TO** |
+| `COMPLETION-WATCH` | — | — | — | — | 8× NOT-OBS | **8× NOT-OBS** | **8× NOT-OBS** | **8× NOT-OBS** |
+
+**Byte-identical across three boots of this rung.** A print-and-resolve instrument must move
+nothing, and it moved nothing.
+
 
 ---
 
@@ -202,12 +311,23 @@ which exists today:
 4. **Per-guest** — one such space per guest process, never shared, or §2.1's write primitive
    crosses tenants.
 
-**The named dependency for (1) and (2):** the guest-RAM crossing. `map_guest_ram` arm B
-(`isolate-host/src/rm.rs:2816-2840`) already builds an `OS_DESCRIPTOR` over guest pages, and
-`GuestRamGrant` landed at `28b7bb2` (R29: placed at `0x301400000` as asked, isolate mapping
-reads `0x9a114001`). ⇒ **the primitive exists; the VA-space discipline built on it does not.**
-The successor question — whether GR context buffers force a second crossing — is
-`mode2_fb_crossing_question.md`, asserted here by name and not built.
+**The named dependencies for (1), and §3.4 changed which one leads.** There are **two**
+crossings, not one:
+
+| plane | operands | crossing |
+|---|---|---|
+| guest RAM | 1 of 5 (`SET_REPORT_SEMAPHORE`) | ★ **exists** — `map_guest_ram` arm B (`isolate-host/src/rm.rs:2816-2840`) builds an `OS_DESCRIPTOR` over guest pages, and `GuestRamGrant` landed at `28b7bb2` (R29: placed at `0x301400000` as asked, isolate mapping reads `0x9a114001`) |
+| the **emulated framebuffer** | ★★★ **3 of 5** (`SET_TEX_HEADER_POOL`, `SET_TEX_SAMPLER_POOL`, `SET_VALID_SPAN_OVERFLOW_AREA`) | ⊘ **does not exist.** `mode2_fb_crossing_question.md` — asserted by name here and **not built** |
+
+⇒ **The primitive that exists covers the minority of the surface.** The FB crossing was
+carried as a successor question; the census makes it the load-bearing one, because a GR
+context *is* its context buffers and they are all on that side.
+
+⚠ And it is not the same crossing twice. Guest RAM is memory the hypervisor holds for the life
+of the machine and can hand out as an `OwnedFd`; the emulated framebuffer is a **store inside
+the QEMU process** (`kayfabe_device::FbStore`) with no fd, no page-aligned host backing
+contract, and a first-writer census that assumes we are the only writer. Making it
+host-GPU-addressable is a different design, not a second call to the same function.
 
 ⊘ **Do not read this as "just build a big VA space".** Property 2 is the hard one and it is a
 *subtraction*: the value of the isolate today is partly that our objects and the guest's live
@@ -226,9 +346,30 @@ in one place. GR execution requires them not to.
 | **E — the doorbell census MOVES** | ⚠ ✱ **the costly arm.** `191/183/8`, `GrCompute=8 Ce=183`, `forwarded=0` at `w218`/`w220`/`w221`/`w222`/`w226b`/`w227a`. The census is read-only on the same read the observer already did; if these move, the finding is about my change |
 | **F — `COMPLETION-WATCH` moves off `NOT-OBSERVED`** | ⚠ **nothing in this build runs GR work and the writer census is zero.** Do not report it as progress — find the writer |
 
-### 5.1 The result
+### 5.1 The result — scored
 
-`[to be filled from `w227b`]`
+| arm | fired? | |
+|---|---|---|
+| **A — a mixed census** | ★ **YES**, at `w227c`: `operands=5 bound=4 unbound=1 mme_dwords=39` | the predicted arm, and §3.4 reads it |
+| **B — everything binds** | ⚠ **YES at `w227b`, and it was FALSE** — `operands=2 unbound=0`. Arm B's own instruction (*"the first thing to distrust"*) is what found the decoder defect (§3.2) | ★★★ the arm that paid for itself |
+| **C — nothing binds** | no | |
+| **D — no census line** | no — 8 lines, one per channel, at both `w227b` and `w227c` | |
+| **E — the doorbell census moves** | ⊘ **no.** `191/183/8`, `GrCompute=8 Ce=183`, `forwarded=0`, byte-identical across `w227a`/`w227b`/`w227c` | the costly arm, and it is clean |
+| **F — `COMPLETION-WATCH` moves off `NOT-OBSERVED`** | ⊘ **no.** 8 × `NOT-OBSERVED`, `last_seen=0x00000000`, on all three boots | as expected: nothing runs GR work |
+
+### 5.2 ★ THE WRITER CENSUS, RE-RUN — still ZERO, both instruments
+
+- **static** — `tests/tests/single_writer_census.rs`, 7 tests green at `537894e`. The whole
+  workspace's guest-visible write surface is the pinned set: **two** `gpa_write` production
+  sites (the CE/completion funnel and the emulated-GSP RAM port), **zero** production callers
+  of the raw-address completion door, `write_plane` still private.
+- **dynamic** — `w227a`/`w227b`/`w227c`, 8 channels each, `last_seen=0x00000000` over 81-88
+  samples per channel spanning the whole `cuCtxCreate` wall. **A page with two writers is a
+  page with at least one write.**
+
+⇒ ⊘ **We are still not reproducing M5.38.** The completion is not corrupted and not lost. It
+is **never produced**, because the work never runs — and §2 is the reason the work must not be
+made to run yet.
 
 ---
 
