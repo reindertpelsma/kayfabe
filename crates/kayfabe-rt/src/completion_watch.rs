@@ -277,56 +277,116 @@ pub struct AddressOperand {
 /// Returns the **last** value seen for each operand — a pushbuffer may re-arm a register,
 /// and the binding the engine would reach is the one written last. Deduplicated by method,
 /// so the answer is a set of live registers rather than a transcript.
+///
+/// # ★★★★★ It decodes a REGISTER FILE, not a set of runs — and the first version did not
+///
+/// `[measured 2026-08-10, boot `w227b_184df5f_census`]` this decoder was first written to
+/// read an `_A`/`_B` pair out of **one** method run's argument list. It reported
+/// `operands=2 bound=2 unbound=0` on `cuCtxCreate`'s pushbuffer. The stream actually names
+/// **five** addresses, and the guest writes them **two different ways in one pushbuffer**:
+///
+/// ```text
+/// m[070] addr=0x0200 count=3 secop=1 args=[0x2, 0x0, 0xa8000]   <- ONE run, A/B/C
+/// m[079] addr=0x1574 count=1 secop=1 args=[0x00000100]          <- SEPARATE methods,
+/// m[080] addr=0x1578 count=1 secop=1 args=[0x00000000]             one per half
+/// ```
+///
+/// ⊘ **And the failure was silent in the worst possible direction.** Three operands were not
+/// reported at all, so the line read `unbound=0` — which is *"every address the guest names
+/// already binds"*, the most encouraging answer available. `gr_execution_boundary.md` §5 had
+/// named that outcome as arm B, *"strictly better than A and the first thing to distrust"*,
+/// **before** the boot; distrusting it is the only reason the defect was found in the same
+/// hour. ★ A falsifier that flags its own good news is worth writing.
+///
+/// ⇒ So the model is the hardware's: expand each run into per-register writes (honouring
+/// `SECOP` — `INCREASING` walks the method address, `NON_INCREASING` repeats it), latch each
+/// half independently, and emit an operand only when **both** halves have been written. That
+/// is spelling-independent by construction rather than by having seen the spellings.
+///
+/// ⚠ [`decode_report_semaphore`] still reads its four words out of one run, because
+/// `[measured]` the guest writes `SET_REPORT_SEMAPHORE` as a single `count=4` run on every
+/// boot recorded. That is a narrower claim than this function's and is left narrow
+/// deliberately: it is the decoder the completion observer depends on, it is measured on
+/// exactly the streams it runs against, and widening it is a change to a load-bearing path
+/// to fix a problem no boot has shown. ⊘ Recorded here so the divergence is a decision.
 #[must_use]
 pub fn decode_address_operands(methods: &[(u32, Vec<u32>)]) -> (Vec<AddressOperand>, usize) {
     let mut bound: [Option<u32>; 8] = [None; 8];
-    let mut live: BTreeMap<u32, AddressOperand> = BTreeMap::new();
+    // ★★★ THE REGISTER FILE, not the runs: `_A` half and `_B` half latched independently,
+    // keyed by the `_A` offset. See this function's docs for the boot that made this the
+    // shape.
+    let mut half: BTreeMap<u32, (u32, Option<u32>, Option<u32>)> = BTreeMap::new();
     let mut mme_dwords = 0usize;
     for (header, args) in methods {
-        let addr = (header & 0x1fff) << 2;
+        let base = (header & 0x1fff) << 2;
         let subch = ((header >> 13) & 0x7) as usize;
-        if addr == SET_OBJECT {
-            if let Some(class) = args.first() {
-                bound[subch] = Some(*class & 0xffff);
+        // ⚠ SECOP decides whether a multi-argument run WALKS the method address or repeats
+        // it: `1` is INCREASING (arg `i` lands at `base + 4i`), `3` is NON_INCREASING (every
+        // arg lands at `base`). ⊘ Treating an INCREASING run as one method is how a
+        // three-argument `SET_VALID_SPAN_OVERFLOW_AREA_A` run gets read as an `_A` write of
+        // three words instead of `_A`, `_B` and `_C`.
+        let inc = (header >> 29) != 3;
+        for (i, v) in args.iter().enumerate() {
+            let addr = if inc {
+                base + 4 * u32::try_from(i).unwrap_or(u32::MAX)
+            } else {
+                base
+            };
+            if addr == SET_OBJECT {
+                bound[subch] = Some(*v & 0xffff);
+                continue;
             }
-            continue;
-        }
-        // ⊘ The class gate, on EVERY row. An unbound subchannel is not assumed to be
-        // compute — "we did not see the SET_OBJECT" and "it is AMPERE_COMPUTE_B" are
-        // different facts and only the second licenses a decode.
-        if bound[subch] != Some(AMPERE_COMPUTE_B) {
-            continue;
-        }
-        if addr == LOAD_MME_INSTRUCTION_RAM {
-            mme_dwords += args.len();
-            continue;
-        }
-        let Some((method, name, hi_bit)) = COMPUTE_ADDRESS_OPERANDS
-            .iter()
-            .copied()
-            .find(|(m, _, _)| *m == addr)
-        else {
-            continue;
-        };
-        // ⚠ A/B must BOTH be present. A run that carried only the high word named no
-        // address, and inventing a zero for the low word would fabricate an operand at a
-        // VA the guest never wrote — the `an_in_annotation_is_not_a_transport_fact` shape.
-        let Some([a, b]) = args.first_chunk::<2>().copied() else {
-            continue;
-        };
-        live.insert(
-            method,
-            AddressOperand {
-                method,
-                name,
+            // ⊘ The class gate, on EVERY write. An unbound subchannel is not assumed to be
+            // compute — "we did not see the SET_OBJECT" and "it is AMPERE_COMPUTE_B" are
+            // different facts and only the second licenses a decode.
+            if bound[subch] != Some(AMPERE_COMPUTE_B) {
+                continue;
+            }
+            if addr == LOAD_MME_INSTRUCTION_RAM {
+                mme_dwords += 1;
+                continue;
+            }
+            if let Some((m, _, hi)) = COMPUTE_ADDRESS_OPERANDS
+                .iter()
+                .copied()
+                .find(|(m, _, _)| *m == addr)
+            {
                 // ⚠ THE PER-ROW MASK. See [`COMPUTE_ADDRESS_OPERANDS`] for the boot this
                 // would have mis-reported with one constant mask.
-                va: GpuVa((u64::from(a & mask_to(hi_bit)) << 32) | u64::from(b)),
-                subch: subch as u32,
-            },
-        );
+                let e = half.entry(m).or_insert((subch as u32, None, None));
+                e.0 = subch as u32;
+                e.1 = Some(*v & mask_to(hi));
+            } else if let Some((m, _, _)) = COMPUTE_ADDRESS_OPERANDS
+                .iter()
+                .copied()
+                .find(|(m, _, _)| *m + 4 == addr)
+            {
+                let e = half.entry(m).or_insert((subch as u32, None, None));
+                e.0 = subch as u32;
+                e.2 = Some(*v);
+            }
+        }
     }
-    (live.into_values().collect(), mme_dwords)
+    let live = half
+        .into_iter()
+        .filter_map(|(method, (subch, a, b))| {
+            // ⚠ BOTH halves or nothing. A register with only its high word written names no
+            // address, and inventing a zero for the low word would put an operand in the
+            // census at a VA the guest never wrote — `an_in_annotation_is_not_a_transport_fact`.
+            let (a, b) = (a?, b?);
+            let (_, name, _) = COMPUTE_ADDRESS_OPERANDS
+                .iter()
+                .copied()
+                .find(|(m, _, _)| *m == method)?;
+            Some(AddressOperand {
+                method,
+                name,
+                va: GpuVa((u64::from(a) << 32) | u64::from(b)),
+                subch,
+            })
+        })
+        .collect();
+    (live, mme_dwords)
 }
 
 /// Where the declared VA landed when the declaring thread resolved it — **once**, under the
@@ -676,9 +736,24 @@ kayfabe_util::assert_send_sync!(WatchList, WatchStats, DeclaredCompletion, Watch
 mod tests {
     use super::*;
 
-    /// Build the header word the way the wire does.
+    /// Build the header word the way the wire does — `SECOP = INCREASING`, which is what
+    /// `[measured]` every method in `cuCtxCreate`'s stream uses except the MME loads.
     fn hdr(addr: u32, subch: u32, count: u32) -> u32 {
-        (addr >> 2) | (subch << 13) | (count << 16)
+        (addr >> 2) | (subch << 13) | (count << 16) | (1 << 29)
+    }
+
+    /// ★★★ `SECOP = NON_INCREASING` — every argument lands at the SAME method address.
+    ///
+    /// ⚠ `[measured, and the fixture was wrong before it]` the MME loads are the only
+    /// non-increasing runs in `cuCtxCreate`'s pushbuffer (`hdr=0x600f2046`, `0x60182046`).
+    /// This fixture originally built them with the increasing helper, and the decoder — being
+    /// correct — walked the 15 arguments across fifteen consecutive registers, landing two of
+    /// them on `SET_GLOBAL_RENDER_ENABLE_A/B` and inventing a sixth operand out of microcode.
+    /// ⊘ **A fixture that is not the wire is a second implementation of the wire**, which is
+    /// the failure this campaign has paid for more than any other — here it manufactured a
+    /// *false positive* in the instrument that exists to count false negatives.
+    fn hdr_ni(addr: u32, subch: u32, count: u32) -> u32 {
+        (addr >> 2) | (subch << 13) | (count << 16) | (3 << 29)
     }
 
     /// ★ `[measured 2026-08-10, boot `w218_cb6adcc_grfull`, `gpu_promote_ctx.md` §16.79]`
@@ -717,8 +792,11 @@ mod tests {
     fn measured_ctxinit_full() -> Vec<(u32, Vec<u32>)> {
         vec![
             (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
-            // SET_SHADER_SHARED_MEMORY_WINDOW_A/B
-            (hdr(0x02a0, 1, 2), vec![0x0000_7d1e, 0xe900_0000]),
+            // ★ SET_SHADER_SHARED_MEMORY_WINDOW_A/B as TWO SEPARATE single-argument
+            // methods — the spelling the guest actually uses, and the one the first version
+            // of this decoder could not see (see `decode_address_operands`).
+            (hdr(0x02a0, 1, 1), vec![0x0000_7d1e]),
+            (hdr(0x02a4, 1, 1), vec![0xe900_0000]),
             // SET_VALID_SPAN_OVERFLOW_AREA_A/B/C — the third word is a SIZE, not address.
             (
                 hdr(0x0200, 1, 3),
@@ -726,9 +804,15 @@ mod tests {
             ),
             // LOAD_MME_INSTRUCTION_RAM — 15 then 24 dwords of GUEST-AUTHORED MICROCODE.
             (hdr(0x0114, 1, 1), vec![0x0000_0000]),
-            (hdr(LOAD_MME_INSTRUCTION_RAM, 1, 15), vec![0x0014_0003; 15]),
+            (
+                hdr_ni(LOAD_MME_INSTRUCTION_RAM, 1, 15),
+                vec![0x0014_0003; 15],
+            ),
             (hdr(0x0114, 1, 1), vec![0x0000_000f]),
-            (hdr(LOAD_MME_INSTRUCTION_RAM, 1, 24), vec![0x0000_0003; 24]),
+            (
+                hdr_ni(LOAD_MME_INSTRUCTION_RAM, 1, 24),
+                vec![0x0000_0003; 24],
+            ),
             // ⊘ The copy engine binds subchannel 4 in the SAME stream — the collision the
             // class gate exists for, reproduced here so the census is asked about it too.
             (hdr(SET_OBJECT, 4, 1), vec![0xc7b5]),
@@ -787,6 +871,72 @@ mod tests {
     }
 
     #[test]
+    fn the_two_spellings_of_one_address_register_decode_identically() {
+        // ★★★★★ THE DEFECT `w227b` MEASURED, pinned. The guest writes the SAME register two
+        // ways in ONE pushbuffer: `SET_VALID_SPAN_OVERFLOW_AREA` as a single 3-argument
+        // INCREASING run, and `SET_TEX_HEADER_POOL` as three separate 1-argument methods.
+        // The first version of this decoder read only the run spelling and reported
+        // `operands=2 bound=2 unbound=0` — three addresses missing, and the missing ones
+        // made the answer read as "everything already binds".
+        let run = vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            (
+                hdr(0x1574, 1, 3),
+                vec![0x0000_0100, 0x0000_0000, 0x000f_ffff],
+            ),
+        ];
+        let split = vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            (hdr(0x1574, 1, 1), vec![0x0000_0100]),
+            (hdr(0x1578, 1, 1), vec![0x0000_0000]),
+            (hdr(0x157c, 1, 1), vec![0x000f_ffff]),
+        ];
+        assert_eq!(
+            decode_address_operands(&run),
+            decode_address_operands(&split),
+            "★★★ the wire's two spellings of one register must be ONE fact. A decoder that \
+             sees only one of them under-reports SILENTLY, and `unbound=0` on an \
+             under-reported census is the most encouraging answer the instrument can give."
+        );
+        assert_eq!(decode_address_operands(&run).0.len(), 1);
+        assert_eq!(
+            decode_address_operands(&run).0[0].va,
+            GpuVa(0x100_0000_0000)
+        );
+    }
+
+    #[test]
+    fn a_non_increasing_run_does_not_walk_into_the_next_register() {
+        // ⚠ SECOP is load-bearing. 15 dwords of MME microcode written NON_INCREASING are 15
+        // writes to 0x0118; written INCREASING they would be 15 CONSECUTIVE registers, two
+        // of which are `SET_GLOBAL_RENDER_ENABLE_A/B` — i.e. microcode read as an address.
+        let ni = vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            (
+                hdr_ni(LOAD_MME_INSTRUCTION_RAM, 1, 15),
+                vec![0x0014_0003; 15],
+            ),
+        ];
+        assert_eq!(
+            decode_address_operands(&ni),
+            (vec![], 15),
+            "microcode is microcode, and none of it is an address"
+        );
+        // The mirror: the same words as an INCREASING run ARE fifteen register writes, and
+        // the decoder must say so rather than special-casing the method.
+        let inc = vec![
+            (hdr(SET_OBJECT, 1, 1), vec![AMPERE_COMPUTE_B]),
+            (hdr(LOAD_MME_INSTRUCTION_RAM, 1, 15), vec![0x0014_0003; 15]),
+        ];
+        let (ops, mme) = decode_address_operands(&inc);
+        assert_eq!(mme, 1, "only the FIRST word landed on the MME port");
+        assert!(
+            ops.iter().any(|o| o.name == "SET_GLOBAL_RENDER_ENABLE"),
+            "0x0118 + 4*6 = 0x0130; the walk is real and the decoder follows it: {ops:#?}"
+        );
+    }
+
+    #[test]
     fn a_census_row_on_a_subchannel_bound_to_the_copy_engine_is_not_decoded() {
         // ⊘ The same collision the semaphore decoder is gated for, asked of the census:
         // `0x1574` is SET_TEX_HEADER_POOL on 0xc7c0 and something else entirely on 0xc7b5.
@@ -815,7 +965,7 @@ mod tests {
                 hdr(0x1574, 2, 3),
                 vec![0x0000_0100, 0x0000_0000, 0x000f_ffff],
             ),
-            (hdr(LOAD_MME_INSTRUCTION_RAM, 2, 15), vec![0x1; 15]),
+            (hdr_ni(LOAD_MME_INSTRUCTION_RAM, 2, 15), vec![0x1; 15]),
         ];
         assert_eq!(decode_address_operands(&stream), (vec![], 0));
     }
@@ -833,7 +983,7 @@ mod tests {
     }
 
     #[test]
-    fn a_re_armed_address_register_reports_the_LAST_value() {
+    fn a_re_armed_address_register_reports_the_last_value() {
         // A pushbuffer may rewrite a register; the binding the engine would reach is the one
         // written last, and a census that reported both would be a transcript, not a state.
         let stream = vec![

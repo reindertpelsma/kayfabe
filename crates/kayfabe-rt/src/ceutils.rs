@@ -866,6 +866,27 @@ fn read_submission_methods(
     })
 }
 
+/// ★★★ What ONE read of a GR submission established. Returned whole rather than as a tuple
+/// so the census and the completion can never be attributed to two different reads.
+#[derive(Debug, Clone)]
+pub struct ObservedSubmission {
+    /// The completion the guest declared, and where its address landed.
+    pub declared: (
+        crate::completion_watch::DeclaredCompletion,
+        crate::completion_watch::Site,
+    ),
+    /// ★★★★★ **Every OTHER 64-bit address these bytes name, and where each one landed** —
+    /// see [`census_gr_addresses`] for what the number is for and what it is not.
+    pub census: Vec<(
+        crate::completion_watch::AddressOperand,
+        crate::completion_watch::Site,
+    )>,
+    /// Guest-authored MME instruction dwords in this submission. See
+    /// [`crate::completion_watch::LOAD_MME_INSTRUCTION_RAM`] for why this number, and not
+    /// any list of decoded methods, is what bounds a method allowlist.
+    pub mme_dwords: usize,
+}
+
 /// ★★★★★ **THE DECLARE HALF OF THE COMPLETION OBSERVER** — decode the completion this
 /// submission declares, and resolve its address **once**, here, on the thread that already
 /// holds the locks a resolution needs.
@@ -891,27 +912,6 @@ fn read_submission_methods(
 /// # Errors
 /// [`CeUtilsRefusal`] if the ring or the pushbuffer itself could not be read — i.e. the
 /// same refusals [`dump_submission_methods`] reports, from the same read.
-/// ★★★ What ONE read of a GR submission established. Returned whole rather than as a tuple
-/// so the census and the completion can never be attributed to two different reads.
-#[derive(Debug, Clone)]
-pub struct ObservedSubmission {
-    /// The completion the guest declared, and where its address landed.
-    pub declared: (
-        crate::completion_watch::DeclaredCompletion,
-        crate::completion_watch::Site,
-    ),
-    /// ★★★★★ **Every OTHER 64-bit address these bytes name, and where each one landed** —
-    /// see [`census_gr_addresses`] for what the number is for and what it is not.
-    pub census: Vec<(
-        crate::completion_watch::AddressOperand,
-        crate::completion_watch::Site,
-    )>,
-    /// Guest-authored MME instruction dwords in this submission. See
-    /// [`crate::completion_watch::LOAD_MME_INSTRUCTION_RAM`] for why this number, and not
-    /// any list of decoded methods, is what bounds a method allowlist.
-    pub mme_dwords: usize,
-}
-
 pub fn observe_declared_completion(
     ce: &mut CePlane<'_>,
     pb: &dyn PushbufferAbi,
