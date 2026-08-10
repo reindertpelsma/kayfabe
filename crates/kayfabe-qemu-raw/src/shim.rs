@@ -259,7 +259,21 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// seventeen committed boot logs, and in none since doorbells began to be served — the
 /// address plane's only diagnostic was gated on the execution plane failing. See
 /// [`kayfabe_core::gpu::Gpu::vas_census_string`].
-pub const ABI_VERSION: u32 = 34;
+/// ★★★★ Bumped to **35** at §16.56, the ABI-3 reason a twenty-third time:
+/// [`KayfabeBridgeRefusal`] gained [`Self::ids`] and `ids_len`
+/// ([`REFUSAL_IDS_PER_TAG`] words plus a length), so an ABI-34 shim would allocate the old
+/// layout and this archive would write **`32 × 40` = 1 280 bytes** past the end of it.
+///
+/// ⊘ And this one closes a hole in the *reporting* rather than adding a measurement:
+/// `[measured 2026-08-10, over traces/guest_boots/*_qemu.log]` `grep -c hClass` over every
+/// committed device log returns **0** — this port had never once named a class it refused.
+/// `NotOnAllowlist x10` was the whole report, and answering *which ten* meant reading the
+/// **guest's** dmesg (§16.55.4), a plane we neither own nor always capture.
+pub const ABI_VERSION: u32 = 35;
+
+/// ★★★★ §16.56 — how many refused ids each `FaultTag` row carries across the ABI. Must
+/// equal `KAYFABE_REFUSAL_IDS_PER_TAG` and `kayfabe_rmrpc::REFUSAL_DETAIL_CAP`.
+pub const REFUSAL_IDS_PER_TAG: usize = 8;
 
 /// What a shim entry point tells its C caller.
 ///
@@ -1565,6 +1579,23 @@ pub struct KayfabeBridgeRefusal {
     pub tag_len: u64,
     /// How many refusals carried it.
     pub count: u64,
+    /// ★★★★ **§16.56 — the IDENTIFIERS the tag cannot carry**: the `hClass` values under
+    /// an `AllocClassNotPermitted` / `UnmappedAllocClass` row, the `cmd` values under a
+    /// `ControlNotPermitted` / `UnknownControl` row. Ascending; entries at or past
+    /// [`Self::ids_len`] carry no meaning.
+    ///
+    /// ⊘ **A `FaultTag` is a `&'static str`**, so a refusal *about a value* lost that
+    /// value the instant it became a census key — and the census keys by tag alone. The
+    /// consequence is measured, not feared: no committed device log has ever printed an
+    /// `hClass`, so no `grep` over our own evidence could answer *"which class did we
+    /// refuse?"*. A method prescribed on that basis — *"enumerate the refused classes,
+    /// then filter"* — could not have terminated.
+    pub ids: [u32; REFUSAL_IDS_PER_TAG],
+    /// How many entries of [`Self::ids`] are populated. ★ Capped at
+    /// [`REFUSAL_IDS_PER_TAG`] while [`Self::count`] is **not** capped, so a truncated id
+    /// list can never read as a complete one: `n` ids beside a larger count is a visible
+    /// truncation (`a_saturated_instrument_looks_exactly_like_absence`).
+    pub ids_len: u64,
 }
 
 /// ★★★★ §16.40 — one promote-ctx refusal KIND, with the address plane's state at the first
@@ -1602,6 +1633,8 @@ impl Default for KayfabeBridgeRefusal {
             tag: [0; BRIDGE_REFUSAL_TAG_LEN],
             tag_len: 0,
             count: 0,
+            ids: [0; REFUSAL_IDS_PER_TAG],
+            ids_len: 0,
         }
     }
 }
@@ -3954,6 +3987,15 @@ impl Regs {
             row.tag[..take].copy_from_slice(&bytes[..take]);
             row.tag_len = take as u64;
             row.count = n as u64;
+            // ★★★★ §16.56 — the ids beside the tag. `RefusalCensus::ids` is already capped
+            // at `REFUSAL_DETAIL_CAP`; the `zip` is the second bound, so a cap raised on
+            // one side alone cannot overrun this array.
+            let mut k = 0usize;
+            for (slot, id) in row.ids.iter_mut().zip(census.ids(tag)) {
+                *slot = id;
+                k += 1;
+            }
+            row.ids_len = k as u64;
             bridge_refusal_len += 1;
         }
         // ⊘ Reported from the census, not from the loop: a set larger than the array must

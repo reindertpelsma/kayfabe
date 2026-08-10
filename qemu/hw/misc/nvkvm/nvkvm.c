@@ -2039,10 +2039,24 @@ static void nvkvm_report_registers(NvkvmState *s)
             int len = (int)(r->tag_len > KAYFABE_BRIDGE_REFUSAL_TAG_LEN
                             ? KAYFABE_BRIDGE_REFUSAL_TAG_LEN : r->tag_len);
 
+            /* ★★★★ 16.56 — the ids the tag cannot carry, appended to the SAME line so a
+             * grep for the tag returns them.  A row with no ids prints exactly as before. */
+            char ids[KAYFABE_REFUSAL_IDS_PER_TAG * 12u + 8u];
+            uint64_t nid = r->ids_len > KAYFABE_REFUSAL_IDS_PER_TAG
+                           ? KAYFABE_REFUSAL_IDS_PER_TAG : r->ids_len;
+            int at = 0;
+            uint64_t j;
+
+            ids[0] = '\0';
+            for (j = 0; j < nid && at >= 0 && (size_t)at < sizeof(ids); j++) {
+                at += snprintf(ids + at, sizeof(ids) - (size_t)at,
+                               j == 0 ? " id=0x%08x" : ",0x%08x", r->ids[j]);
+            }
             /* %.*s, never %s: the tag is NUL-PADDED and a name that exactly fills the
              * array carries no terminator. */
-            info_report("nvkvm:   bridge refusal %.*s x%" PRIu64,
-                        len, (const char *)r->tag, r->count);
+            info_report("nvkvm:   bridge refusal %.*s x%" PRIu64 "%s%s",
+                        len, (const char *)r->tag, r->count, ids,
+                        r->ids_len > nid ? " (+more, count is not capped)" : "");
         }
     }
 

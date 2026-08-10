@@ -499,9 +499,16 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // boot `alloc1` had to be diagnosed by `fn 103` being ABSENT from six lines. Each row
     // carries the FaultTag's name by value — see `KayfabeBridgeRefusal` for why a pointer
     // was not available.
+    // ★★★★ §16.56 — plus `REFUSAL_IDS_PER_TAG` ids and their length. A `FaultTag` is a
+    // `&'static str`, so a refusal ABOUT A VALUE (an `hClass`, a control `cmd`) lost that
+    // value the instant it became a census key. `[measured 2026-08-10, over
+    // traces/guest_boots/*_qemu.log]` `grep -c hClass` over every committed device log
+    // returns ZERO — this port had never once named a class it refused.
     assert_eq!(
         size_of::<kayfabe_qemu_raw::shim::KayfabeBridgeRefusal>(),
-        kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_TAG_LEN + 2 * size_of::<u64>()
+        kayfabe_qemu_raw::shim::BRIDGE_REFUSAL_TAG_LEN
+            + 3 * size_of::<u64>()
+            + kayfabe_qemu_raw::shim::REFUSAL_IDS_PER_TAG * size_of::<u32>()
     );
     // ★ 19 -> 25 at `#146`: five framebuffer counters and the residency level, because a
     // window that serves bytes and one that drops them must not report the same numbers.

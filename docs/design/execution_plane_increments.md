@@ -11064,3 +11064,159 @@ is a fourth state, and it reads as `A` to anyone who only checks the status.
 Also captured every boot, and asserted non-empty: `run_s45_*_dmesg.log` containing
 `RmInitAdapter`, `CUP2_RC`, the qemu log's `commands:` / `unserviced` / `controls:` census
 lines, and `nvkvm: control 0xa06c0101 result …`.
+
+---
+
+## §16.57 ★★★★★ BOOTED `s45_748a207_tsgsched` — **OUTCOME A**. The wall moved, and it moved 207 records
+
+`[measured 2026-08-10, boot s45_748a207_tsgsched]`. Binary stamped
+`kayfabe-rev:748a207…` — ⚠ **verified on BOTH** `qemu-build/qemu-system-x86_64` and
+`target/release/libkayfabe_qemu_raw.a`, and the first attempt at this rebuild **failed that
+check**: see §16.57.4. Evidence:
+`traces/guest_boots/run_s45_748a207_tsgsched_{qemu,dmesg,probe}.log`, tracked, passing
+`assert_boot_evidence.sh`.
+
+### 16.57.1 ★★★★★ RECORD 196 IS NOW `status=0x00000000`
+
+The exact record `cup2` died on in `s44`, byte for byte, one rung later:
+
+```
+s44:   196  CTRL cmd=0xa06c0101 hClient=0xc1d0000c hObject=0x5c000012 size=3 status=0x00000056  in=010000
+s45:   196  CTRL cmd=0xa06c0101 hClient=0xc1d0000c hObject=0x5c000012 size=3 status=0x00000000  in=010000 out=010000
+```
+
+Same client, same TSG handle, same three bytes, same record index. And it is not the only
+one: libcuda goes on to build **two more** channel groups and schedule both —
+
+```
+   233  CTRL cmd=0xa06c0101 … hObject=0x5c00003b … status=0x00000000
+   270  CTRL cmd=0xa06c0101 … hObject=0x5c000049 … status=0x00000000
+```
+
+— matched on the device side by `nvkvm: control 0xa06c0101 result 0x00000000 x3`. ★ The
+positive control fired on the plane it was chosen for: `TSG_ALLOC_SEEN=3`,
+`TSG_SCHED_SEEN=3`. (`PROMOTE_CTX_SEEN=0` again, and it is *still* the right value —
+§16.55.5's correction holds; it is printed unpromoted precisely so its zero is legible.)
+
+### 16.57.2 ★★★★ HOW FAR IT MOVED — every plane, `s44` → `s45`
+
+| | `s44` | `s45` |
+|---|---|---|
+| RM ioctl records captured | 249 | **456** |
+| `ALLOC hClass=0xa06c` (TSGs) | 1 | **3** |
+| `0xc56f` channels | 8 | **16** |
+| `0xc7b5` copy objects | 8 | **16** |
+| ★ **allocations that failed** | 0 of 52 | **0 of 96** |
+| commands decoded (device) | 589 | **717** |
+| unserviced | 104, 42 distinct | 135, 46 distinct |
+| controls answered | 143, 46 distinct | 150, 47 distinct |
+| bridge refusals | 34 total, 6 distinct | 66 total, 6 distinct |
+| ★★★ **doorbells** | 170 arrived, 170 served, **0 REFUSED** | **448 arrived, 261 served, 187 REFUSED** |
+| `cuCtxCreate` | 801 | **801** |
+
+⊘ **The rung did not pass, and it was never going to** — §16.55.7 said so before the boot:
+*"do not read this as 'implement `0xa06c0101` and `cup2` goes green'."* What moved is the
+**distance**: 207 more RM records, twice the context built, and the execution plane went
+from a place no doorbell was ever refused (because none reached it) to one carrying 448.
+
+★ Read the doorbell row carefully, because its two halves point opposite ways: `0 REFUSED`
+in `s44` was **not** health — the channels were never scheduled, so the 278 doorbells that
+now exist were never rung. `187 REFUSED` is new traffic meeting a named obstacle, not a
+regression. A counter that improves by falling is one to check the denominator of.
+
+### 16.57.3 ⇒ THE NEXT WALL, named at both ends — and there are TWO, on different planes
+
+**Guest plane** — `[measured]` the same reading method §16.55.1 used, in guest order: the
+last non-zero record before the `FREE` burst begins.
+
+```
+   327  ALLOC hClass=0x00000079 … status=0x00000000
+   328  CTRL cmd=0x20801702 … status=0x00000056        ← MC_SERVICE_INTERRUPTS (×20+, forgiven)
+   329  CTRL cmd=0x83de0309 hObject=0x5c000072 … status=0x00000056
+   330  CTRL cmd=0x20801702 … status=0x00000056
+★  331  CTRL cmd=0x20801210 hClient=0xc1d0000c hObject=0x5c000003 size=32 status=0x00000056
+             in=01000000 1200005c 0000…      ← NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE
+   332  FREE …                                ← teardown starts here
+```
+
+⇒ **`0x20801210` = `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`**, and its params name
+the TSG: the second word is `0x5c000012`, the very group record 196 just scheduled. It is
+**on the allowlist and in no claim list** — the same admitted-and-unserved shape.
+
+★★★★★ **And this is where the new gate paid for itself, on its first outing.** The moment
+`s45`'s log entered the tree, `every_unserviced_id_a_boot_recorded_is_classified` went **red**
+and named five ids no earlier boot had ever reached, because `cup2` had never got this far:
+
+```
+★★★ 5 control id(s) reached the unserviced ledger in a committed boot and this port
+    has no recorded position on them:
+  0x20801210  (recorded by 1 boot(s): s45_748a207_tsgsched)   ← the new wall
+  0x20801702  (recorded by 1 boot(s): s45_748a207_tsgsched)   ← MC_SERVICE_INTERRUPTS, x20+
+  0x83de0309  (recorded by 1 boot(s): s45_748a207_tsgsched)
+  0xa06c0103  (recorded by 1 boot(s): s45_748a207_tsgsched)   ← SET_TIMESLICE, in teardown
+  0xa06c0105  (recorded by 1 boot(s): s45_748a207_tsgsched)   ← PREEMPT, in teardown
+```
+
+⊘ Note what the gate did **not** do: it did not rank them, and it cannot. Two of the five
+arrive *inside* the `FREE` burst and are RM tearing the group down — that ordering came from
+reading the stream, as §16.55.3 says it must. What the gate did is make it **impossible for
+the five to enter the tree unremarked**, which is the whole of what was missing when
+`0xa06c0101` sat unargued for six boots. The rung's own new ids forced their own rows, in
+the same commit as the boot that produced them.
+
+**Device plane** — `nvkvm: first doorbell refusal [CeResolve::NoPublication] no
+page-directory root was published for (hClient 0xc1d0000c, hVASpace 0x5c000007)`, with a
+complete walk beside it: `scan=1024/1024 declared (COMPLETE: every declared entry was read),
+unread=1024, nonzero=NONE`. `0x5c000007` is libcuda's own `FERMI_VASPACE_A` — the handle
+§16.38 already identified as the one UVM dups.
+
+⊘ **Do not assume these are one wall.** They are on different planes and no run has yet
+established whether either causes the other `[not measured — stated as an open question,
+not as an inference]`; `0x20801210` is what the *guest* gives up on, and
+`CeResolve::NoPublication` is what *we* refuse. Establishing the relation is a measurement,
+not an inference, and it is the next rung's question.
+
+### 16.57.4 ⚠ THE REV-STAMP TRAP FIRED — on the first rebuild of this very rung
+
+The first `build_qom_shim.sh` run of this rung was invoked with `CARGO_TARGET_DIR=/workspace/bench/cargo-target`
+(the bench's shared cache). It exited **0**, relinked `qemu-system-x86_64`, and produced:
+
+```
+qemu-system-x86_64          → kayfabe-rev:b17381c…   ← the PREVIOUS rung's binary
+cargo-target/…_raw.a        → kayfabe-rev:ce59601…   ← this rung's archive
+```
+
+`build_qom_shim.sh:38` reads `ARCHIVE="$REPO/target/release/libkayfabe_qemu_raw.a"` — a
+**hard-coded path** that `CARGO_TARGET_DIR` silently redirects cargo away from. So the
+script copied a stale archive, meson relinked, and everything downstream said *success*.
+
+★ This is CLAUDE.md's *"the bench silently served a binary built from `862c7c2` for weeks"*,
+reproduced in one command, and the only thing that caught it was reading the stamp off
+**both** artefacts before booting. ⇒ Read the stamp off the **hypervisor**, not off the
+archive and not off the build's exit code: the archive is what you built, the hypervisor is
+what runs.
+
+### 16.57.5 ⚠ ALSO LANDED — the refused **id** now crosses the seam (ABI 34 → 35)
+
+`[measured 2026-08-10, over traces/guest_boots/*_qemu.log]` **`grep -c hClass` over every
+committed device log returns `0`.** This port has never once named a class it refused:
+`NotOnAllowlist x10` was the whole report, and §16.55.4 could only answer *which ten* by
+reading the **guest's** dmesg — a plane we neither own nor always capture.
+
+The cause is structural: `FaultTag` is a `&'static str`, `SharedRefusalCensus` keys on it,
+and `BridgeRefusal::AllocClassNotPermitted { class, denial }` **captures the class** and then
+drops it at the `FaultTag` boundary. ⇒ A method prescribed on that evidence — *"enumerate the
+refused classes, then filter"* — could not have terminated.
+
+Landed: `BridgeRefusal::fault_id`, `RefusalCensus::ids`, `KayfabeBridgeRefusal::{ids, ids_len}`,
+`KAYFABE_REFUSAL_IDS_PER_TAG = 8`, and the C printer appends ` id=0x…,0x…` to the same line
+so a grep for the tag returns them.
+
+⊘ **Capped at eight per tag, and the cap is the security property**: the tag set is closed
+and cannot grow with traffic, but an `hClass` is a **guest-supplied value** and an uncapped
+set of them is an unbounded allocation a hostile guest drives directly (the
+`GpuError::SpineCapacity` rule). ★ The cap is safe only because `count` is **not** capped —
+`n` ids beside a larger count reads as a visible truncation, never as a complete list.
+
+⚠ This is **not yet measured on a boot**: `s45` ran at `748a207`, ABI **34**, before this
+landed. The next boot is where the first refused class id appears in a device log.

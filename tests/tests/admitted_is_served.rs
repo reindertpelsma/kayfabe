@@ -139,7 +139,7 @@ const BOOT_LOGS: &str = "traces/guest_boots";
 
 /// The newest boot this file is calibrated against. Named, not inferred: a gate whose
 /// universe depends on lexical filename order changes meaning when a tag is added.
-const NEWEST_BOOT: &str = "s44_b17381c_rmtrace";
+const NEWEST_BOOT: &str = "s45_748a207_tsgsched";
 
 /// Every `unserviced fn 76 cmd 0x…` id in every committed boot log, mapped to the set of
 /// boot tags that recorded it.
@@ -232,6 +232,32 @@ static LEDGER: &[u32] = &[
     0x2080_0aff,
     0x2080_0b03,
     0x2080_0b05,
+    // ★★★★ §16.57 — **THE NEW FIRST WALL**, and the five rows below are this gate firing
+    // on its FIRST outing, on the very next boot. `[measured 2026-08-10, boot
+    // s45_748a207_tsgsched]` `every_unserviced_id_a_boot_recorded_is_classified` went red
+    // the moment `s45`'s log entered the tree and named exactly these five — none of which
+    // any earlier boot had reached, because `cup2` had never got this far.
+    //
+    // `0x20801210` `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`: record **331** of 456,
+    // `status=0x56`, and record 332 begins the `FREE` burst. Its params name the TSG that
+    // record 196 had just scheduled (`in=01000000 1200005c …`). ⊘ Listing it is NOT a
+    // decision to leave it unserved — it is the statement that we know it is the wall.
+    0x2080_1210,
+    // `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`, ×20+ in `s45` and **forgiven every time**:
+    // the guest asks, we refuse, and it keeps going for another 50 records. ⚠ Worth a
+    // second look beside `cap1`'s `IrqRaise == 1` with zero `IRQSCLR` writes — event
+    // delivery is gated off after `INIT_DONE`, and this is the guest noticing.
+    0x2080_1702,
+    // A `GT200_DEBUGGER` (`hClass=0x83de`) control on `0x5c000072`. Forgiven — the object
+    // is freed 18 records later and `cup2` continues past it.
+    0x83de_0309,
+    // `NVA06C_CTRL_CMD_SET_TIMESLICE` and `NVA06C_CTRL_CMD_PREEMPT`, both on the TSG. ★
+    // Both arrive **after** teardown has begun (records 344 and 352, inside the `FREE`
+    // burst), so neither is a wall: they are RM tearing the group down. ⊘ Recorded anyway —
+    // an id whose position in the stream is the whole of its meaning is exactly the kind
+    // this list must not let pass silently.
+    0xa06c_0103,
+    0xa06c_0105,
     0x2080_1357,
     0x2080_2068,
     0x2080_2a0f,
@@ -371,10 +397,14 @@ fn the_s44_wall_is_recorded_by_the_boots_and_answered_by_the_port() {
          file's module doc has moved, and the doc must move with it",
         boots.len(),
     );
+    // ★★★★ §16.57 — and it is GONE from the newest boot, which is the transition itself.
+    // `[measured 2026-08-10, boot s45_748a207_tsgsched]` record 196 — the same client, the
+    // same TSG handle, the same three bytes — returns `status=0x00000000`, and the guest
+    // goes on to schedule two more groups and issue 207 more RM ioctls.
     assert!(
-        boots.iter().any(|t| t == NEWEST_BOOT),
-        "{NEWEST_BOOT} does not record 0xa06c0101 — this file is calibrated against the \
-         wrong boot",
+        !boots.iter().any(|t| t == NEWEST_BOOT),
+        "★★★ {NEWEST_BOOT} still records 0xa06c0101 as unserviced — the control is claimed \
+         in this tree, so either the boot ran an older binary or the seat is not reached",
     );
     assert!(
         is_served(cmd),

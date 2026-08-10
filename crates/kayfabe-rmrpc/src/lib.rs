@@ -863,6 +863,39 @@ impl BridgeRefusal {
     }
 }
 
+impl BridgeRefusal {
+    /// ★★★★ **§16.56 — the IDENTIFIER the tag cannot carry.**
+    ///
+    /// [`FaultTag`] is a `&'static str`, so a refusal *about a value* — an `hClass`, a
+    /// control `cmd` — loses that value the moment it becomes a census key, and
+    /// `SharedRefusalCensus` counts by tag alone. ⊘ The consequence was measured:
+    /// `[measured 2026-08-10, over traces/guest_boots/*_qemu.log]` **`grep -c hClass` over
+    /// every committed device log returns 0.** Our side has never once named a class it
+    /// refused; `NotOnAllowlist x10` was the whole report, and finding *which ten* meant
+    /// reading the **guest's** dmesg (§16.55.4) — a plane we do not own and do not always
+    /// capture. A method prescribed to an earlier agent, *"enumerate the refused classes,
+    /// then filter"*, could not have terminated.
+    ///
+    /// ⇒ This is that value, beside the tag rather than inside it. `None` for refusals
+    /// that are not about an id.
+    ///
+    /// ⊘ **It is not a second key**, and the distinction is what keeps the census bounded:
+    /// the map is still keyed by tag — a closed set — and the ids are a bounded *set* under
+    /// each key, capped by [`crate::policy::REFUSAL_DETAIL_CAP`]. A guest that sends a
+    /// thousand distinct bad classes gets the first few named and a truthful count, not an
+    /// unbounded allocation (the `GpuError::SpineCapacity` rule this file already carries).
+    pub(crate) fn fault_id(&self) -> Option<u32> {
+        match self {
+            BridgeRefusal::AllocClassNotPermitted { class, .. }
+            | BridgeRefusal::UnmappedAllocClass { class, .. } => Some(*class),
+            BridgeRefusal::ControlNotPermitted { cmd, .. }
+            | BridgeRefusal::UnknownControl { cmd, .. } => Some(*cmd),
+            _ => None,
+        }
+    }
+
+}
+
 impl Faulted for BridgeRefusal {
     /// Exhaustive by construction, so a new refusal variant cannot reach the wire without
     /// reaching the trace.

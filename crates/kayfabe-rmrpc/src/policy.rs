@@ -61,7 +61,7 @@
 //! reachable, and `two_identical_fragmented_controls_produce_two_identical_events` is the
 //! canary for it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_abi::DriverAbi;
 use kayfabe_abi::GuestOs;
@@ -83,30 +83,56 @@ use crate::{BridgeRefusal, ReasmLimits, Reassembled, Reassembler, Translation, t
 /// be a guest-reachable unbounded allocation of exactly the shape `GpuError::SpineCapacity`
 /// exists to refuse.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RefusalCensus(BTreeMap<FaultTag, usize>);
+pub struct RefusalCensus {
+    counts: BTreeMap<FaultTag, usize>,
+    ids: BTreeMap<FaultTag, BTreeSet<u32>>,
+}
+
+/// ★★★★ **§16.56 — how many distinct ids are kept per tag.**
+///
+/// ⊘ A cap rather than a full set, and it is the guest-reachable-allocation rule this
+/// module already states for the map itself: the tag set is closed and cannot grow with
+/// traffic, but the `hClass` a guest sends is a **guest-supplied value** and an uncapped
+/// set of them is an unbounded allocation a hostile guest drives directly.
+///
+/// ★ The cap is safe *because the count is not capped*: `RefusalCensus::of` still reports
+/// every refusal, so a saturated id list can never read as a complete one — the report
+/// prints `n` ids beside a larger count, which is a visible truncation rather than a silent
+/// one (`a_saturated_instrument_looks_exactly_like_absence`).
+pub const REFUSAL_DETAIL_CAP: usize = 8;
 
 impl RefusalCensus {
     /// How many refusals carried `tag`.
     #[must_use]
     pub fn of(&self, tag: FaultTag) -> usize {
-        self.0.get(&tag).copied().unwrap_or(0)
+        self.counts.get(&tag).copied().unwrap_or(0)
     }
 
     /// Every tag seen, with its count, in tag order.
     pub fn tags(&self) -> impl Iterator<Item = (FaultTag, usize)> + '_ {
-        self.0.iter().map(|(&t, &n)| (t, n))
+        self.counts.iter().map(|(&t, &n)| (t, n))
+    }
+
+    /// ★★★★ **§16.56 — the ids refused under `tag`**, ascending, at most
+    /// [`REFUSAL_DETAIL_CAP`] of them. Empty for tags that are not about an id.
+    ///
+    /// ⊘ This is the answer to *"which class did we refuse?"*, a question no `grep` over
+    /// any committed device log could answer before it existed — see
+    /// [`crate::BridgeRefusal::fault_id`] for the measurement.
+    pub fn ids(&self, tag: FaultTag) -> impl Iterator<Item = u32> + '_ {
+        self.ids.get(&tag).into_iter().flatten().copied()
     }
 
     /// Total refusals, across every tag.
     #[must_use]
     pub fn total(&self) -> usize {
-        self.0.values().sum()
+        self.counts.values().sum()
     }
 
     /// Nothing has been refused.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.counts.is_empty()
     }
 }
 
@@ -357,8 +383,11 @@ impl SharedPromoteTally {
     }
 }
 
+/// The refusal census as a **handle** — see the type's own docs below for why ownership
+/// was the obstruction. ⊘ Its inner value is a whole [`RefusalCensus`] since §16.56, not a
+/// bare count map: the ids live beside the counts and must snapshot atomically with them.
 #[derive(Debug, Clone, Default)]
-pub struct SharedRefusalCensus(std::sync::Arc<std::sync::Mutex<BTreeMap<FaultTag, usize>>>);
+pub struct SharedRefusalCensus(std::sync::Arc<std::sync::Mutex<RefusalCensus>>);
 
 impl SharedRefusalCensus {
     /// A fresh, empty census.
@@ -371,12 +400,22 @@ impl SharedRefusalCensus {
     #[must_use]
     pub fn snapshot(&self) -> RefusalCensus {
         let g = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        RefusalCensus(g.clone())
+        g.clone()
     }
 
     fn record(&self, r: &BridgeRefusal) {
         let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        *g.entry(r.fault_tag()).or_default() += 1;
+        let tag = r.fault_tag();
+        *g.counts.entry(tag).or_default() += 1;
+        // ★★★★ §16.56 — the id beside the tag. ⊘ The COUNT above is incremented
+        // unconditionally and the id set below is capped, so truncation can never subtract
+        // from the census; it can only stop naming.
+        if let Some(id) = r.fault_id() {
+            let set = g.ids.entry(tag).or_default();
+            if set.len() < REFUSAL_DETAIL_CAP {
+                set.insert(id);
+            }
+        }
     }
 }
 

@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 34u
+#define KAYFABE_SHIM_ABI 35u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -357,10 +357,24 @@ typedef struct KayfabeRegWrite {
 #define KAYFABE_BRIDGE_REFUSAL_SLOTS 32u
 #define KAYFABE_BRIDGE_REFUSAL_TAG_LEN 64u
 
+/* ★★★★ 16.56 — how many refused IDENTIFIERS each tag row carries.  MUST equal
+ * `kayfabe_qemu_raw::shim::REFUSAL_IDS_PER_TAG` and `kayfabe_rmrpc::REFUSAL_DETAIL_CAP`.
+ *
+ * ⊘ A FaultTag is a &'static str, so a refusal ABOUT A VALUE — an hClass, a control cmd —
+ * lost that value the instant it became a census key.  [measured 2026-08-10, over
+ * traces/guest_boots/*_qemu.log] `grep -c hClass` over every committed device log returns
+ * ZERO: this port had never once named a class it refused, and answering "which ones?"
+ * meant reading the GUEST's dmesg, a plane we neither own nor always capture. */
+#define KAYFABE_REFUSAL_IDS_PER_TAG 8u
+
 typedef struct KayfabeBridgeRefusal {
     uint8_t tag[KAYFABE_BRIDGE_REFUSAL_TAG_LEN];  /* NUL-PADDED, not NUL-terminated */
     uint64_t tag_len;
     uint64_t count;
+    /* Ascending; entries at or past `ids_len` carry no meaning.  `ids_len` is CAPPED and
+     * `count` is NOT, so `n` ids beside a larger count reads as a visible truncation. */
+    uint32_t ids[KAYFABE_REFUSAL_IDS_PER_TAG];
+    uint64_t ids_len;
 } KayfabeBridgeRefusal;
 
 /* How many bytes of the isolate plane's refusal SENTENCE KayfabeRegAudit carries, and the
