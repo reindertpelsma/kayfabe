@@ -453,10 +453,50 @@ pub struct RingCensus {
     pub first_nonzero: Option<(u64, u32)>,
 }
 
+/// ★★★★ **§16.71 — one declared ring, WITH THE OBJECT THAT DECLARED IT.**
+///
+/// # ⊘ The row that did not exist, and what it cost
+///
+/// [`RingCensus`] keeps a count and the **first** non-zero address. `[measured 2026-08-10,
+/// boots `w205_227194f_ctl` / `_real`]` both arms printed
+/// *"first 0x0000000120064000 (4096 entries)"* while the real arm's forwarded doorbells
+/// declared `0x420064000` — so a single boot demonstrably held **both** addresses, and the
+/// census could name neither's owner. §16.70.6 was therefore forced to record *"two ring
+/// addresses for one token"* as an open question, when the fact needed to close it (are
+/// they two channels or one?) was already passing through this recorder and being thrown
+/// away.
+///
+/// ⊘ A count plus a sample of one is not a census of a population; it is the population's
+/// first element wearing a census's name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RingRow {
+    /// The client namespace the channel was allocated in.
+    pub client: u32,
+    /// The channel object's own handle.
+    pub handle: u32,
+    /// `gpFifoOffset` as declared — **including zero**, which is a real declaration.
+    pub va: u64,
+    /// `gpFifoEntries` as declared.
+    pub entries: u32,
+}
+
+/// How many [`RingRow`]s the roster keeps.
+///
+/// ⊘ A cap, and the roster **says when it hit it** — a saturated instrument that looks like
+/// a complete one is this campaign's `a_saturated_instrument_looks_exactly_like_absence`.
+/// 64 is above every declaration count either `w205` arm reached (26 and 6).
+const RING_ROSTER_MAX: usize = 64;
+
 /// [`RingCensus`] as a handle the composition root keeps after handing the policy away —
 /// same shape, and the same ownership argument, as [`SharedRefusalCensus`].
 #[derive(Debug, Clone, Default)]
-pub struct SharedRingCensus(std::sync::Arc<std::sync::Mutex<RingCensus>>);
+pub struct SharedRingCensus(
+    std::sync::Arc<std::sync::Mutex<RingCensus>>,
+    /// ★ The roster, beside the tally rather than inside it: [`RingCensus`] is `Copy` and
+    /// destructured **without `..`** at the C boundary on purpose, and a `Vec` field would
+    /// have forced that gate open for a report the C shell does not read.
+    std::sync::Arc<std::sync::Mutex<(Vec<RingRow>, u64)>>,
+);
 
 impl SharedRingCensus {
     /// A fresh, empty census.
@@ -471,8 +511,19 @@ impl SharedRingCensus {
         *self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Record one channel alloc's declared ring.
-    fn record(&self, r: kayfabe_core::rmgraph::GpFifoRing) {
+    /// ★★★ **The roster of declared rings, with owners** — and the number of declarations
+    /// that did **not** fit, which is returned rather than hidden.
+    ///
+    /// ⊘ `(rows, dropped)`. A non-zero `dropped` means this list is a PREFIX of the
+    /// population and every conclusion drawn from its absences is void.
+    #[must_use]
+    pub fn roster(&self) -> (Vec<RingRow>, u64) {
+        let g = self.1.lock().unwrap_or_else(|e| e.into_inner());
+        g.clone()
+    }
+
+    /// Record one channel alloc's declared ring, and **who declared it**.
+    fn record(&self, client: u32, handle: u32, r: kayfabe_core::rmgraph::GpFifoRing) {
         let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
         g.declarations = g.declarations.saturating_add(1);
         if r.va != 0 {
@@ -480,6 +531,21 @@ impl SharedRingCensus {
             if g.first_nonzero.is_none() {
                 g.first_nonzero = Some((r.va, r.entries));
             }
+        }
+        drop(g);
+        let mut roster = self.1.lock().unwrap_or_else(|e| e.into_inner());
+        // ⊘ Every declaration, zero-VA ones included: the golden-context channel's
+        // deliberate `gpFifoOffset = 0` (`ogkm-580: kernel_graphics.c:2420-2424`) is a row
+        // a reader must be able to see, not an entry to filter out on our judgement.
+        if roster.0.len() < RING_ROSTER_MAX {
+            roster.0.push(RingRow {
+                client,
+                handle,
+                va: r.va,
+                entries: r.entries,
+            });
+        } else {
+            roster.1 = roster.1.saturating_add(1);
         }
     }
 }
@@ -986,6 +1052,8 @@ impl Bridge {
                     // boot in which the guest declared one and we said no. The question
                     // is what the GUEST named, not what we accepted.
                     if let kayfabe_core::rmgraph::RmEvent::Alloc {
+                        client,
+                        handle,
                         facts:
                             kayfabe_core::rmgraph::AllocFacts {
                                 gp_fifo_ring: Some(r),
@@ -994,7 +1062,11 @@ impl Bridge {
                         ..
                     } = ev
                     {
-                        rings.record(r);
+                        // ★★★★ §16.71 — the OWNER, recorded with the address. Both were
+                        // right here and only the address was kept; see [`RingRow`] for
+                        // the boot that then could not say whether two ring addresses
+                        // belonged to two channels or one.
+                        rings.record(client.0, handle.0, r);
                     }
                     gpu.apply(ev)
                         .map(|()| Translation::Event(ev))

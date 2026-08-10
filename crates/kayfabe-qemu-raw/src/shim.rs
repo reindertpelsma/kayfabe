@@ -2818,8 +2818,65 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // real CE work blocked behind a false refusal — and the remainder are refused by a
         // name that is true. ⊘ The field's own doc at [`SharedDoorbell`] is correct; only
         // this sentence was stale, and being first is what made it costly.
-        if let Some(report) = self.try_ce_submission(token) {
+        let mut seen: Option<kayfabe_rt::device::CeChannelFacts> = None;
+        if let Some(report) = self.try_ce_submission(token, &mut seen) {
             return report;
+        }
+        // ★★★★ **§16.71 — THE OTHER PROJECTION OF THE RING, printed on the doorbell that
+        // is about to be forwarded**, so the two resolvers' answers appear on the same
+        // boot, for the same token, with the identity each one carries.
+        //
+        // `[measured 2026-08-10, boots `w205_227194f_ctl` / `_real`]` §16.70.6 recorded two
+        // ring addresses — `0x120064000` and `0x420064000` — for what it called one token,
+        // and stated in as many words that it could not tell *"RM placed it differently"*
+        // from *"the two paths are looking at different channels"*. The reason is visible
+        // above: this executor resolves the ring through `ce_channel_facts` and the
+        // forwarding path resolves it through `kayfabe_fwd::read_gpfifo_ring`, and **no
+        // boot has ever run both on one doorbell with either one naming its object**.
+        //
+        // ⊘ These are NOT two independent measurements and this line does not claim they
+        // are: both ultimately read `AllocFacts::gp_fifo_ring` off the node
+        // `rmgraph.node_of_resource` returns. What they do not share is the *instant* and
+        // the *lock acquisition* — this one completes before `SharedDevice::doorbell`
+        // re-routes the same token — so a disagreement between them is a statement about
+        // LIFETIME, and an agreement is a statement that the resolver seam is a
+        // table-population question and nothing else. That is the discrimination §16.70.6
+        // asked for; it is not corroboration and must not be read as any.
+        //
+        // ⊘ Printed only on the forwarding fall-through, which on the `Stillborn` control
+        // plane is reached by no routed doorbell at all (`try_ce_submission` claims every
+        // one of them terminally) — so the control's committed census stays byte-identical.
+        if let Some(f) = &seen {
+            eprintln!(
+                "kayfabe: RING-PROJ token={token:#010x} proc={} chan={} vchid={} \
+                 key=0x{:x}:0x{:x} engine={} vas={} dec={} pdb={} ring={} entries={} \
+                 (projection: ce_channel_facts)",
+                f.proc.0,
+                f.chan.0,
+                f.vchid,
+                f.chan_key.0,
+                f.chan_key.1,
+                f.engine_name(),
+                f.vaspace
+                    .map_or_else(|| "NONE".to_string(), |v| format!("0x{v:x}")),
+                f.vaspace_declared
+                    .map_or_else(|| "NONE".to_string(), |v| format!("0x{v:x}")),
+                f.vas_pdb
+                    .map_or_else(|| "NONE".to_string(), |p| format!("0x{:x}", p.0)),
+                f.ring_va
+                    .map_or_else(|| "NONE-DECLARED".to_string(), |v| format!("0x{v:x}")),
+                f.ring_entries,
+            );
+        } else {
+            // ⊘ The token did not route at all, so there is no second projection to print.
+            // ★ Said out loud rather than skipped: a missing line is indistinguishable from
+            // an instrument that did not run, and this rung's whole subject is a number
+            // that was printed without anything naming what it belonged to.
+            eprintln!(
+                "kayfabe: RING-PROJ token={token:#010x} UNROUTED — ce_channel_facts \
+                 resolved no channel for this token, so this doorbell has ONE projection, \
+                 not two"
+            );
         }
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
         // meant, in `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell
@@ -3007,7 +3064,16 @@ impl SharedDoorbell {
         }
     }
 
-    fn try_ce_submission(&self, token: u64) -> Option<kayfabe_device::DoorbellReport> {
+    /// ⊘ `seen` is an OUT-parameter, not a convenience. [`SharedDoorbell::ring`] needs the
+    /// facts this function already resolved, and §16.64's boot is this campaign's own
+    /// instance of what a second `ce_channel_facts` call costs: *"two resolutions of one
+    /// fact can disagree, and the weaker one is the only thing a reader sees."* So the
+    /// facts are handed **out of the one resolution**, never resolved again.
+    fn try_ce_submission(
+        &self,
+        token: u64,
+        seen: &mut Option<kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<kayfabe_device::DoorbellReport> {
         // ★★★★ §16.65 — **the census is taken HERE**, at the top of the one function every
         // doorbell passes through (`ring` calls it unconditionally, first), and from the
         // same `CeChannelFacts` the routing decision below reads. ⊘ Not from a second
@@ -3034,6 +3100,11 @@ impl SharedDoorbell {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .by_engine[facts.engine_index()] += 1;
+        // ★ Handed out HERE — after the census and before any gate — so a doorbell this
+        // function declines on ANY of its arms still leaves its caller the facts. ⊘ A
+        // store placed after the routing gate below would be absent on exactly the
+        // population `ring` goes on to forward, which is the population the report is for.
+        *seen = Some(facts);
         // ★★★★ **§16.65 — THE ROUTING STATEMENT, and it comes BEFORE every other gate.**
         //
         // The gate below asks about the isolate *plane*, never about the *engine*, and on
@@ -4543,6 +4614,32 @@ impl Regs {
             nonzero: gpfifo_ring_nonzero,
             first_nonzero: gpfifo_ring_first,
         } = self.rings.snapshot();
+        // ★★★★ **§16.71 — THE ROSTER, printed beside the tally it summarises.**
+        //
+        // The C line above reports `N declared, M non-zero, first 0x…`. `[measured
+        // 2026-08-10]` both `w205` arms printed the same `first 0x120064000` while the real
+        // arm's doorbells were resolving `0x420064000`, so ONE boot held both addresses and
+        // the line could name the owner of neither. ⇒ §16.70.6's question — *"two ring
+        // addresses for one token: two channels, or one channel placed differently?"* —
+        // could not be answered from any log this port produced.
+        //
+        // ⊘ On stderr rather than through the C audit struct: the audit's ring block is
+        // four scalars and a roster is a list, and §16.70.1(6) established that the
+        // isolate/rt stderr **is** QEMU's stderr and is captured. No ABI change buys
+        // nothing here.
+        {
+            let (rows, dropped) = self.rings.roster();
+            eprintln!(
+                "kayfabe: RING-ROSTER {} row(s), {dropped} dropped past the cap (a                  non-zero drop count means this list is a PREFIX and its absences prove                  nothing)",
+                rows.len(),
+            );
+            for r in &rows {
+                eprintln!(
+                    "kayfabe:   RING-ROSTER key=0x{:x}:0x{:x} ring=0x{:x} entries={}",
+                    r.client, r.handle, r.va, r.entries,
+                );
+            }
+        }
         // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
         // TRIGGER: the C printer emits `DELIVERY_UNBUILT` beside it whenever it is non-zero,
         // so serving `0x20800a9b` and stating what serving it did NOT buy are one act.

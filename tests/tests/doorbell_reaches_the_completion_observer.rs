@@ -471,3 +471,94 @@ fn the_same_fixture_with_the_ring_bound_reads_it() {
         look.tag()
     );
 }
+
+/// ★★★★ **§16.71 — THE TWO RING RESOLVERS NAME THE SAME OBJECT, or this test says so.**
+///
+/// # ⊘ The question this closes, and why a boot alone could not close it
+///
+/// `[measured 2026-08-10, boots `w205_227194f_ctl` and `_real`]` two ring addresses were
+/// carried out of one campaign for what `execution_plane_increments.md` §16.70.6 called
+/// *"one token"*: `0x120064000` from the CPU executor's path
+/// (`SharedDoorbell::try_ce_submission` → [`SharedDevice::ce_channel_facts`]) and
+/// `0x420064000` from the forwarding path ([`kayfabe_fwd::read_gpfifo_ring`]). §16.70.6
+/// recorded two readings it could not separate — *RM placed it differently* versus
+/// *the two paths are looking at different channels* — and made the separation the gate on
+/// the resolver ruling.
+///
+/// ★ **It is separable from the source, and this test is that separation.** Both resolvers
+/// end at the *same expression*: `rmgraph.node_of_resource(chan.key).facts.gp_fifo_ring`,
+/// reached through the same `proc.channels[cid]`, where `cid` came from the same
+/// `route_doorbell(token)` in both cases (`SharedDevice::doorbell` routes and then hands
+/// `out.chan` to `forward_ring`). ⇒ For one token, on one boot, they are **incapable** of
+/// naming different channels unless the graph changed between the two lock acquisitions.
+/// That is a **lifetime** answer, not a value one, and it is the third cell of the rung's
+/// falsifier rather than either of the first two.
+///
+/// ⊘ **So this test is not corroboration and must not be read as any** — two of our own
+/// computations agreeing proves nothing about the guest (`measure_at_the_boundary_not_inside`).
+/// What it pins is narrower and is exactly what the boot needs: the *join key* both
+/// instruments now print (`CeChannelFacts::chan_key` and the `FWD-RING` line's `key=`)
+/// really does identify the same object, so a boot in which the two lines carry **different**
+/// keys is a real finding and not an artefact of the two fields meaning different things.
+///
+/// ⚠ Run against the `bind_gpfifo = false` fixture — the very shape that produced
+/// `RING-VA-UNBOUND` on the bench — so the identity is asserted on the population the
+/// question is about, not on a healthy channel that never walls.
+#[test]
+fn the_two_ring_resolvers_name_the_same_object() {
+    let (gpu, mut vmm, _rec, pid, cid) = guest_with_gpfifo_binding(false);
+
+    // ---- The FORWARDING path's identity, read exactly where `read_gpfifo_ring` reads it.
+    let (fwd_client, fwd_handle, fwd_ring) = {
+        let proc = &gpu.procs[&pid];
+        let chan = proc
+            .channels
+            .get(&cid)
+            .expect("the fixture's channel is live");
+        let node = gpu
+            .spine
+            .rmgraph
+            .node_of_resource(chan.key)
+            .expect("and it has a graph node — `NoChannelNode` would be a different arm");
+        (
+            node.key.client.0,
+            node.key.handle.0,
+            node.facts.gp_fifo_ring.map(|r| r.va),
+        )
+    };
+
+    // ★ Confirm the forwarding resolver really does wall here, so the identity above is
+    // the identity of the walling channel and not of some other one.
+    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm)
+        .expect("an unbound ring VA is an absence, never a fault");
+    assert_eq!(
+        look,
+        kayfabe_fwd::RingLook::RingVaUnbound {
+            va: pb_va(GPFIFO_GPA).0
+        },
+        "the fixture must reproduce the bench's arm, or this asserts about a channel the \
+         question is not about. Got {look:?}"
+    );
+
+    // ---- The CPU executor's identity, through the whole `route_doorbell` → graph chain.
+    let dev = SharedDevice::new(gpu, LockMode::Sharded);
+    let facts = dev
+        .ce_channel_facts(GPU, MockArch::token_for(CE_VCHID))
+        .expect("the token routes");
+
+    assert_eq!(
+        (facts.chan_key.0, facts.chan_key.1, facts.ring_va),
+        (fwd_client, fwd_handle, fwd_ring),
+        "★★★★ §16.70.6's open question, decided at the source: the two resolvers must \
+         name the SAME object and the SAME declared ring for one token, because they read \
+         one field of one node reached by one route. A failure here means the two paths \
+         genuinely resolve different channels and the address-table miss is a SYMPTOM, \
+         not the defect — which is the rung's `DIFFERENT` arm, and it would be the finding."
+    );
+    assert_eq!(
+        facts.ring_va,
+        Some(pb_va(GPFIFO_GPA).0),
+        "⊘ and both name the ring the fixture declared — otherwise the equality above \
+         could hold with both sides equally wrong"
+    );
+}

@@ -493,6 +493,46 @@ enum RingRead {
     },
 }
 
+/// ★★★★ **§16.71 — WHICH OBJECT the forwarding resolver resolved**, printed beside the
+/// ring outcome so a reader can join it to the other projection's
+/// [`CeChannelFacts::chan_key`].
+///
+/// # ⊘ The question this exists to make answerable
+///
+/// `[measured 2026-08-10]` §16.70.6 carried two ring addresses out of two boots —
+/// `0x120064000` (control, CPU executor) and `0x420064000` (real plane, forwarding path) —
+/// and recorded that it *could not say* whether RM had placed one channel's ring
+/// differently or the two resolvers were reading **different channels**. Both numbers were
+/// printed bare. ⇒ The log could not answer it *in principle*, not merely in fact, and no
+/// amount of re-reading it would have helped.
+///
+/// ⊘ **Absence is carried as absence.** `key: None` means the channel record or its graph
+/// node did not resolve at the instant the ring was read — which is a **lifetime** answer,
+/// distinct from *"they are different channels"*, and the two must not print the same.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RingWho {
+    /// The RM-graph node the ring was read off, as `(client, handle)`, or `None` if it did
+    /// not resolve.
+    key: Option<(u32, u32)>,
+    /// The channel's bound page-directory base — the table `binding_at` was asked in.
+    pdb: Option<u64>,
+}
+
+impl std::fmt::Display for RingWho {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.key {
+            Some((c, h)) => write!(f, "key=0x{c:x}:0x{h:x}")?,
+            // ⊘ Named, never blank: a channel whose node is gone is a different fact from a
+            // channel whose node names a different object.
+            None => write!(f, "key=UNRESOLVED-AT-RING-READ")?,
+        }
+        match self.pdb {
+            Some(p) => write!(f, " pdb=0x{p:x}"),
+            None => write!(f, " pdb=NONE"),
+        }
+    }
+}
+
 impl RingRead {
     /// A tag naming this outcome and carrying its numbers, for the diagnostic line.
     fn tag(&self) -> String {
@@ -1635,6 +1675,12 @@ impl SharedDevice {
                     // would be the same projection twice. See
                     // `CeChannelFacts::vaspace_declared`.
                     vaspace_declared: node.facts.h_vaspace.map(|h| h.0),
+                    // ★ Off the SAME `node` the ring below is read from — see
+                    // [`CeChannelFacts::chan_key`]. ⊘ NOT `chan.key`: the point is to name
+                    // the object this struct's facts actually came out of, and a key read
+                    // off the channel record rather than off the resolved node would be a
+                    // different statement wearing the same name.
+                    chan_key: (node.key.client.0, node.key.handle.0),
                     ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
                     ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
                     // ★ Off the SAME node the ring came from, so the two declarations can
@@ -1778,34 +1824,59 @@ impl SharedDevice {
         // the PORT rang; it has never counted work.
         let look = self.route_act(
             |_spine| Ok((pid, ())),
-            |spine, proc, ()| -> Result<RingRead, FwdFault> {
+            |spine, proc, ()| -> Result<(RingRead, RingWho), FwdFault> {
+                // ★★★★ §16.71 — **WHO the forwarding path resolved**, taken in the SAME
+                // locked look, from the SAME two lookups `read_gpfifo_ring` performs
+                // (`proc.channels[cid]` → `rmgraph.node_of_resource(chan.key)`), so the
+                // identity and the ring address below cannot come from different instants.
+                //
+                // ⊘ This is a JOIN KEY, not corroboration. §16.70.6 recorded two ring
+                // addresses for what it called one token and could not say whether the two
+                // resolvers were looking at one channel or two, because **neither side ever
+                // printed which object it had resolved**. Two of our own computations
+                // agreeing proves nothing (`measure_at_the_boundary_not_inside`); what this
+                // buys is that the *other* machinery's line
+                // (`CeChannelFacts::chan_key`, produced under a different lock acquisition
+                // at a different instant) can be joined to this one by a reader.
+                let who = RingWho {
+                    key: proc
+                        .channels
+                        .get(&cid)
+                        .and_then(|c| spine.rmgraph.node_of_resource(c.key))
+                        .map(|n| (n.key.client.0, n.key.handle.0)),
+                    pdb: proc.channels.get(&cid).and_then(|c| c.vas_pdb).map(|p| p.0),
+                };
                 let ring = match kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm)? {
                     kayfabe_fwd::RingLook::Ring(bytes) => bytes,
-                    absent => return Ok(RingRead::NoRing(absent)),
+                    absent => return Ok((RingRead::NoRing(absent), who)),
                 };
                 let done = proc.exec.forwarded.get(&cid).copied().unwrap_or(0);
                 let pb = spine.arch().pushbuffer();
                 let at = (done as usize).saturating_mul(pb.gpfifo_entry_stride());
                 let bytes = ring.len();
                 if at >= bytes {
-                    return Ok(RingRead::CursorPastEnd { done, bytes });
+                    return Ok((RingRead::CursorPastEnd { done, bytes }, who));
                 }
                 let fresh = &ring[at..];
                 // ⊘ Only the entries the guest has WRITTEN. The tail of a ring is zeros,
                 // and a zero entry is the ring saying "no more work" — not a malformed one.
                 let n = kayfabe_fwd::gpfifo_live_entries(pb, fresh);
                 if n == 0 {
-                    return Ok(RingRead::NoLiveEntries { done, bytes });
+                    return Ok((RingRead::NoLiveEntries { done, bytes }, who));
                 }
                 let take = n * pb.gpfifo_entry_stride();
-                Ok(RingRead::Fresh {
-                    fresh: fresh[..take].to_vec(),
-                    done,
-                    n: u32::try_from(n).unwrap_or(u32::MAX),
-                    bytes,
-                })
+                Ok((
+                    RingRead::Fresh {
+                        fresh: fresh[..take].to_vec(),
+                        done,
+                        n: u32::try_from(n).unwrap_or(u32::MAX),
+                        bytes,
+                    },
+                    who,
+                ))
             },
         )??;
+        let (look, who) = look;
         let RingRead::Fresh {
             fresh,
             done,
@@ -1816,8 +1887,8 @@ impl SharedDevice {
             // ⊘ Printed on the arm that forwards NOTHING, which is the arm a counter cannot
             // see. The absence carries its own name; nothing here decides what it means.
             eprintln!(
-                "kayfabe: FWD-RING proc={} chan={} {} → NOTHING FORWARDED (the doorbell \
-                 still reports SERVED)",
+                "kayfabe: FWD-RING proc={} chan={} {who} {} → NOTHING FORWARDED (the \
+                 doorbell still reports SERVED)",
                 pid.0,
                 cid.0,
                 look.tag(),
@@ -1836,7 +1907,7 @@ impl SharedDevice {
             // retire must not report `Served` (§14.8).
             let fwd = self.forward_ce(pid, cid, &parsed.ce_spans)?;
             eprintln!(
-                "kayfabe: FWD-RING proc={} chan={} RING bytes={bytes} cursor={done} \
+                "kayfabe: FWD-RING proc={} chan={} {who} RING bytes={bytes} cursor={done} \
                  live={n} spans={spans} → host_ce={} ours={} (each host_ce sub-copy has \
                  its own CE-SUBMIT line from the isolate)",
                 pid.0, cid.0, fwd.host_ce, fwd.ours,
@@ -1845,7 +1916,7 @@ impl SharedDevice {
             // ⊘ A ring that decoded to no copy-engine operand at all. The bytes were read
             // and parsed; nothing in them was work an engine could be pointed at.
             eprintln!(
-                "kayfabe: FWD-RING proc={} chan={} RING bytes={bytes} cursor={done} \
+                "kayfabe: FWD-RING proc={} chan={} {who} RING bytes={bytes} cursor={done} \
                  live={n} spans=0 → NOTHING FORWARDED (the ring decoded to no CE span; \
                  the doorbell still reports SERVED)",
                 pid.0, cid.0,
@@ -2773,6 +2844,25 @@ pub struct CeChannelFacts {
     /// `None` — see [`kayfabe_core::project::ChannelFacts::vas_device_default`] for why
     /// that combination is the correct shape rather than a half-resolved one.
     pub vaspace_device_default: Option<u32>,
+    /// ★★★★ **§16.71 — the RM-graph node this whole struct was read off**, as
+    /// `(client, handle)`.
+    ///
+    /// # ⊘ Why an identity, and why on this struct
+    ///
+    /// `[measured 2026-08-10, boots `w205_227194f_ctl` / `_real`]` two ring addresses were
+    /// carried out of this campaign for what §16.70.6 called *"one token"* —
+    /// `0x120064000` on the control and `0x420064000` on the real plane — and the record
+    /// could not say whether that was RM placing one channel's ring differently or the two
+    /// paths reading **different channels**. Neither number was printed with anything that
+    /// names *which object it belongs to*, so the question was unanswerable from the log
+    /// rather than merely unanswered.
+    ///
+    /// ⊘ This field decides **nothing**; it is the join key a reader needs to compare this
+    /// projection with [`kayfabe_fwd::read_gpfifo_ring`]'s. It is the key of the very node
+    /// [`Self::ring_va`] is read from, on the same line of the same locked look, so a ring
+    /// address and the object that declared it can never be attributed to different
+    /// channels.
+    pub chan_key: (u32, u32),
     /// `gpFifoOffset` — a **GPU VIRTUAL** address (`ogkm-580: ctrl2080fifo.h:809`).
     /// `None` = the channel's alloc params declared no ring at all, which is different
     /// from `Some(0)` (a ring the driver deliberately declares at zero for its golden-context
