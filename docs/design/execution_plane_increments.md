@@ -14402,3 +14402,95 @@ guaranteed and C is impossible: the instrument measures the change rather than i
   Both are unbuilt.
 - ⊘ Nothing about the interrupt plane from `cap1` — F-1 stands: that capture constrains it
   not at all.
+
+### 16.75.6 ★★★★★ BOOTED `w210_8574466_ctl` — **ARM B**, and the wall moved to the C's OWN WALL C
+
+`[measured 2026-08-10, boot `w210_8574466_ctl`, rev `8574466`. Stamp read off the
+**hypervisor** — `strings /workspace/bench/qemu-build/qemu-system-x86_64` →
+`kayfabe-rev:8574466d895bdef934be6a1ad606ad6915639b05`, 40 hex, equal to the archive's stamp
+and to `git rev-parse HEAD` on the bench. Wrapped in `host_xid_watch.sh`, `xid_before=0
+xid_after=0` off a ring buffer proved readable at 997 lines. `POST_CAPTURE_HOOK=
+scripts/bench/guest_cuinit_wall.sh`, the same hook `w209` ran. Evidence committed:
+`traces/guest_boots/run_w210_8574466_ctl_{qemu,dmesg,probe}.log`, `xid_w210ctl.log`.]`
+
+⊘ **The `ctl` arm only** (`KAYFABE_ISOLATES` unset ⇒ `Stillborn`), because `w209_ctl` is the
+baseline that carries the signature: the `real` arm dies earlier, at `RmInitAdapter`.
+
+| | `w209_ffc80f8_ctl` | `w210_8574466_ctl` |
+|---|---|---|
+| `cmd=0x20801702` records (guest rmtrace) | 13, **every one `status=0x00000056`** | **192, every one `status=0x00000000`** |
+| device census | `unserviced fn 76 cmd 0x20801702` | ★ `control 0x20801702 result 0x00000000 x171` |
+| `MC_SERVICE_INTERRUPTS` dmesg lines | 13 | **0** — ⊘ by construction; see §16.75.4 |
+| **F2 — `cuCtxCreate`** | `FAIL cuCtxCreate(&ctx,0,d) -> operation not supported (801)`, `CUP2_RC=1` | ★★★★★ **`cup2 DID NOT RETURN within 150s`, `CUP2_RC=TIMEOUT`, `state=Rl`** |
+| the last 25 RM calls | teardown | **25 × `0x20801702`, nothing else** |
+| `FREE` records | the full teardown burst | **2** |
+| `0x79` os-event allocs | 7 (3 + **4 mid-stall at 65.31, freed at 67.32**) | **3** |
+| commands decoded / unserviced / distinct | 710 / 127 / 45 | **848 / 111 / 41** |
+| unserviced ids | 45 | 41 — ⊘ **four LEFT, none arrived** |
+| doorbells arrived / served / REFUSED | 448 / 362 / 86 | 191 / 183 / 8 |
+| host Xid | 0 → 0 | 0 → 0 |
+
+### 16.75.7 ★★★★★ WHAT IT MEANS — the give-up is gone and the wall is the C's
+
+**⇒ FALSIFIER ARM B, and it is the win #229 said to report as one.** F1 did not collapse — it
+went the other way, **13 → 192**, and the *shape* changed with it: a 1 Hz timed retry became a
+**tight busy-poll**. The last 25 RM calls before the deadline are `0x20801702` and nothing
+else, `psize=4`, `IN=OUT=0xffffffff`, thread state `Rl`.
+
+★★★★★ **That is `c_cuda_ladder.md` §"Wall C", word for word**: *"`cuCtxCreate` hangs in a tight
+poll on `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` (`0x20801702`), `psize=4`,
+`IN=OUT=0xffffffff` forever"* (`C: mode2_cuctxcreate_999_diagnosis.md:99-104`, 2026-06-04) —
+including the params. **This port has reproduced the C artifact's own wall.** The C's diagnosis
+of it stands unchanged and is now *ours*: libcuda submitted a context-finalization GPU op whose
+completion is signalled by an interrupt the emulated device never raises.
+
+★★★★ **The context is BUILT, and both boots build it identically.** 8 × `0xc7c0`, 16 × `0xc7b5`,
+16 × `0xc56f`, 3 × `0xa06c`, `0x9067`, `0x90f1` ×2 — and the traces are step-for-step equal
+through record 733 (`ALLOC 0x79 → 0x5c000056`, `ALLOC 0x3e`, `CTRL 0xd01`). **Everything that
+differs happens after that point.** So this rung changed nothing upstream and exactly one thing
+downstream.
+
+★★★ **The four ids that left the unserviced ledger say the same thing from the other side.**
+`0x20801702` left because we serve it; `0x83de0309`, `0xa06c0103` and `0xa06c0105` left because
+**the guest never reached them** — `admitted_is_served.rs` already recorded all three as
+arriving *inside the `FREE` burst* (records 344, 352), and there is no `FREE` burst any more
+(2 frees, not a teardown). ⊘ An id leaving the ledger for that reason is not progress on the
+id; it is corroboration that the give-up did not happen.
+
+★★★ **And #229's step 3/4 is re-read.** The brief's *"FOUR MORE os-events registered MID-STALL
+(0x5c000079/7a/7b/7c) … THOSE SAME FOUR FREED — the give-up"* read as a last hopeful retry.
+`[measured]` those four do not occur at all now: `0x79` allocs go 7 → 3. They were **part of
+the give-up path**, allocated and freed by the error unwind, not an attempt at anything.
+
+⚠ **STATE THE COST PLAINLY: a bounded failure became an unbounded hang.** `w209` returned `801`
+in ~12 s; `w210` spins past 150 s. By the project's bar (`cuCtxCreate → cup2 → cup3`) neither
+passes, and *"it no longer gives up"* is only progress because the thing it now waits for is a
+thing we can build. ⊘ If half 2 does not land, this is a liveness regression and should be
+reported as one.
+
+### 16.75.8 ⊘ WHAT THIS BOOT DID NOT ESTABLISH
+
+- ⊘ **Nothing about delivery.** Nothing was delivered, because there is nothing to deliver and
+  no transport to deliver it on (§16.75.3). The 192 `NV_OK`s are 192 true statements that the
+  GSP had no pending engine interrupt.
+- ⊘ **Nothing about the `real` arm.** `RmInitAdapter failed! (0x25:0x65:1249)` is upstream of
+  everything here and was not re-measured at this revision.
+- ⊘ **The doorbell numbers are NOT comparable.** 448 → 191 and 86 → 8 refusals are dominated by
+  the teardown that no longer runs and by the 150 s deadline cutting the process off mid-flight.
+  ⊘ Do not read 86 → 8 as a refusal fix.
+- ⊘ **Nothing about half 1 or half 2.** Both unbuilt. The guest still refuses `0x79` at the GSP
+  plane (3 × `rpcRmApiAlloc_GSP … hClass=0x00000079 … status=0x00000056` in the same dmesg).
+
+### 16.75.9 ★ THE NEXT INCREMENT, named by this boot rather than by the brief
+
+1. **Half 1 — accept `0x79`.** `DriverAbiTable::alloc_params` has no arm for it, so the class
+   is refused `UnmappedAllocClass`. The precedent is exact and one row up:
+   `NV01_EVENT_KERNEL_CALLBACK_EX` shares the same `NV0005_ALLOC_PARAMETERS` and sits on
+   `NoDeclaredFacts` **because** its `NvP64 data` is a guest-kernel pointer nothing may decode.
+   ★ And on this RPC `data` is provably `0`: the params are RM's own stack struct, built by
+   `NV_RM_RPC_ALLOC_EVENT` (`ogkm-580: rpc.h:348-352`), not libcuda's.
+2. **Half 2 — the transport, and it is a transport rather than a call.** A `POST_EVENT`
+   encoder, a poster that owns the `PostBatch`, an `IRQSCLR` observation to call
+   `completions_drained`, and only then a `poll_completions` call from this arm. ⚠ Trap (a)
+   from #229 is live at that point: `NVKVM_STALL_VECTOR` is an MSI-X **table index** and the
+   C's 155 is an interrupt-tree **leaf bit**; the C does both, in order.
