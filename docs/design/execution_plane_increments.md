@@ -11652,3 +11652,67 @@ nothing else on the control plane.
 ★ The control stays served. It is honest, it is classified rather than echoed, it costs
 nothing, and it removes an id from the unserviced ledger that would otherwise have been
 re-nominated as the wall by the next reader applying the same rule.
+
+## §16.61 ★★★ THE FALSIFIER FOR `s48` (`w201-completion-observer`), committed BEFORE the boot
+
+`w201` wires the guest doorbell to the only function in this tree that observes a real host
+GPU completion — arm **(b)** of `completion_wait_architecture.md` §4, no completion tail. It
+had slipped five rungs. Re-verified on this base rather than trusted:
+`tests/tests/doorbell_reaches_the_completion_observer.rs` is **0 passed / 2 failed** at
+`a12456e` and **3 passed / 0 failed** at `e7bed44`, and the two commits are separate so each
+half is falsifiable on its own.
+
+### 16.61.1 ⚠ WHAT MAKES THIS A LIVE-PATH RUNG AND NOT A DARK ONE
+
+`SharedDevice::doorbell` now calls `forward_ring` **whenever the caller passes a VMM port**,
+and `kayfabe-qemu-raw`'s `SharedDoorbell::ring` passes its attached port whenever it has one
+(`device.rs:1607-1631`). ⊘ That is **not** gated on `KAYFABE_ISOLATES` — the isolate plane
+selector gates what happens *after* `forward_ce`, not whether the ring is read. So on a
+**default** boot, every doorbell that `plan_doorbell` accepted now attempts a ring read where
+it previously did nothing at all. `[measured 2026-08-10, boot s47_81582e3_ctxsw]` that is
+**261** doorbells.
+
+★★★ And `forward_ring` propagates every failure with `?`. This is residual **(4)** of the
+wiring commit's own list, stated there as `[NOT MEASURED]`:
+
+> a doorbell whose ring now faults (MISS, wrong aperture, an unretired copy) **refuses**
+> where it previously reported `Served`.
+
+⇒ **The doorbells row is the falsifier.** `s47` is the reference: `448 arrived, 261 served,
+187 REFUSED`.
+
+⊘ **A limit of this instrument, named in advance so it is not discovered as a result.** A
+ring read that runs and legitimately finds nothing (`read_gpfifo_ring` answers `Ok(None)` for
+the three shapes that are the *guest* saying something) is **indistinguishable in the device
+report** from a ring read that never ran. So outcome `N` below cannot prove the new code
+executed; it can only prove it did no harm. ⊘ *"The port is passed"* is **unmeasured on a
+boot**: it is read from `kayfabe-qemu-raw`'s `SharedDoorbell::ring`, and a source read is not
+a run.
+
+### 16.61.2 THE TABLE
+
+Instrument: `scripts/bench/boot_capture.sh s48_<rev>_cwait` with the same
+`POST_CAPTURE_HOOK=scripts/bench/cup2_hook_rmtrace.sh`. ⚠ Read `kayfabe-rev` off the
+**hypervisor** first (§16.57.4), and run the liveness check this rung's own boots ran —
+`pgrep -x qemu-system-x86` **and** `ss -tln | grep 2223` — rather than inheriting anyone's
+"bench is clean".
+
+⚠ **Positive control**, `[measured 2026-08-10, boots s45_748a207_tsgsched,
+s46_1a9e93c_abi35 and s47_81582e3_ctxsw]`: `CTRL cmd=0xa06c0101 … status=0x00000000` **×3**,
+`TSG_ALLOC_SEEN=3`, `TSG_SCHED_SEEN=3`. ⊘ If absent, nothing below
+is scored.
+
+| # | outcome | the distinguishable line | verdict |
+|---|---|---|---|
+| **N** | `doorbells: 448 arrived, 261 served, 187 REFUSED` **and** the guest plane reproduces `s47` | every row of §16.60.3 unchanged | ★★★ the wiring is **observationally neutral on the shipping path**, and residual (4) did not bite on this workload. ⊘ Does **not** show the observer was reached — see §16.61.1 |
+| **O** | `served` **< 261** (and `REFUSED` up by the same amount) | the doorbells row moves | ★★★★ **residual (4) BIT** — the most informative outcome. **Report the fault tag**: the refusal carries a name (`Faulted::fault_tag`), which is exactly why the wiring was written to refuse rather than to swallow. This is a real behaviour change on live traffic and it is what a boot is for |
+| **P** | the guest plane moves: RM records ≠ 456, record 331 ≠ `status=0`, `0xa06c0101` not ×3 at `status=0`, or `CUP2_RC` ≠ 1 | any row of §16.60.3 | ★★★★ the ring read perturbed the **control** plane, which it has no business touching. Report the delta before anything else |
+| **Q** | the guest never reaches a login prompt, or `cup2` never returns inside the hook's 180 s deadline | `boot_capture.sh` times out; no `CUP2_RC` line | ⚠ **residual (5) is the first suspect**, not the only one: `CeShellState::vmm` is held across a call that can park in `PoolGate::wait_for_return`, and a hang is the shape a lock inversion takes. ⊘ But **a slow boot is not a crash** — the guest needs ~20–25 s and `-serial file:` lags. Confirm with `ss -tln \| grep 2223` before calling it a hang |
+| **R** | the device does not realize | an ABI/`struct_size` line, or QEMU exiting before the guest boots | ⊘⊘ `PushbufferAbi` gained a **required** method (`gpfifo_entry_stride`) this rung; a shim/archive disagreement would surface here. Not a port result |
+
+⊘ **`N` is the expected outcome and it is the least interesting one.** `O` is the one worth
+having: it converts a `[NOT MEASURED]` residual into a measurement, and the whole reason the
+wiring propagates the fault instead of swallowing it is so that `O` is *legible* rather than
+silent. ⇒ Do not read `O` as a regression to be reverted without reading the tag first — a
+doorbell that reports `Served` on a copy that never retired is the defect §14.8 names, and
+refusing it is the correction.
