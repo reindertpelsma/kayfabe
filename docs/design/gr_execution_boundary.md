@@ -298,8 +298,10 @@ nothing, and it moved nothing.
 **X = a CLOSED GUEST-IMAGE VA SPACE for host GR channels**, with four properties, none of
 which exists today:
 
-1. **Complete** — every VA this guest's compute pushbuffers can name resolves. §3 measures
-   the current shortfall.
+1. **Complete** — every VA this guest's compute pushbuffers can name resolves **to something
+   the host GPU can address**. ★ §3.4 sharpens this: our address *table* is already complete
+   for this workload (5 of 5 accounted for), so the shortfall is **not** a binding problem —
+   it is that 3 of the 5 bind into a plane the host GPU cannot reach.
 2. **Closed** — *nothing that is not this guest's memory is mapped in it.* In particular the
    isolate's own ring, USERD and semaphore objects must **not** be reachable (§2.5), which
    means `alloc_channel_at`'s "put our control structures in the VAS we were handed" shape has
@@ -332,6 +334,27 @@ host-GPU-addressable is a different design, not a second call to the same functi
 ⊘ **Do not read this as "just build a big VA space".** Property 2 is the hard one and it is a
 *subtraction*: the value of the isolate today is partly that our objects and the guest's live
 in one place. GR execution requires them not to.
+
+### 4.1 ⇒ THE NEXT RUNG, ORDERED — and none of these is "open the route"
+
+The census reorders the work. In dependency order, cheapest and most falsifiable first:
+
+1. ★★ **Ask the fault-containment question** (property 3). `scripts/bench/gpu_fault_containment.sh`
+   exists. Until it is answered, *every* plan above is conditional on a `[NOT MEASURED]`, and
+   it is the one item here that can be measured **without building anything**.
+2. ★★★ **Scope the FB crossing** — `mode2_fb_crossing_question.md`, now known to be 75 % of the
+   surface. The question is not *"can we OS_DESCRIPTOR the FbStore"* but *"what is the
+   framebuffer, such that a host GPU can address it"* — today it is a process-local store with
+   no fd and a first-writer census that assumes a single writer.
+3. **Then** property 2 (closure): move the isolate's ring/USERD/semaphore out of any VAS a
+   guest channel is bound to. ⊘ This is a change to `alloc_channel_at` that has nothing to do
+   with GR and can be done, and tested, on the CE path where there is already a working
+   executor to regress against.
+4. ⊘ **Only then** is *"open S1"* a question with a defensible answer.
+
+⚠ **And the instrument is already in the tree for step 2's falsifier**: `GR-ADDRESS-CENSUS`
+prints the plane of every operand, so *"the FB crossing works"* has an existing, measured
+before-shape — `bound=4` with **3 × `Framebuffer`** — and a green shape nobody has to invent.
 
 ---
 
@@ -378,11 +401,14 @@ made to run yet.
 1. ⊘ **It did not open S1.** `Route::NotACopyEngineChannel` is untouched.
 2. ⊘ **It did not build a VA space, a GR codec, or a shadow channel.** §4 is a specification,
    not an implementation, and the fault-containment property (4.3) is explicitly unmeasured.
-3. ⊘ **It says nothing about `§12.26` / `SystemDataPlane`.** `w226c`'s pin was refused because
-   that doorbell is the guest **kernel's** own client `0xc1e00006` — the CE scrubber. ★ The
-   completion this campaign is about is on the **user proc's** `GrCompute` path (`proc=2`,
-   client `0xc1d0000c`), which fails somewhere else entirely. **The two are separate walls**;
-   re-opening §12.26 is an owner decision and is not on this path. Established as a finding,
+3. ⊘ **It says nothing about `§12.26` / `SystemDataPlane`, and the SEPARATION is now measured
+   rather than argued.** `w226c`'s pin was refused because that doorbell belongs to the guest
+   **kernel's** own client. `[measured, `w227c_537894e_census2`]` the two populations do not
+   overlap at all: every `GrCompute` channel in the boot is client **`0xc1d0000c`**, `proc=2`
+   — libcuda's — while the CE scrubber's channels are **`0xc1e00005`/`0xc1e00006`**, `proc=0`,
+   the kernel's. ★ **The completion this campaign is about is on the user proc's path and
+   fails somewhere else entirely.** Re-opening §12.26 is an owner decision and is not on this
+   path. Established as a finding,
    not acted on.
 4. ⊘ **The completion plane is still not delivered**, and the reason is unchanged from
    `completion_observer.md` §8.4: on our path the completion is not corrupted and not lost —
