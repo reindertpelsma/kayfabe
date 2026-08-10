@@ -517,7 +517,7 @@ the grant, so that run would be indistinguishable from its own negative control.
 | ★ the spawn-time grant on a live boot (`GUEST_RAM_FD`=6, `WORKER_FD_BASE`=7) | ★★ **MEASURED IN THE CHILD**, §5.5 `w224d` |
 | a `GuestRamGrant` ever constructed in production | **NEITHER** — nothing orders a mapping |
 | `OS_DESCRIPTOR` over a guest page | **NEITHER** — `GuestRamPlane::with_region` still has no caller |
-| GPA → offset for a machine with more than one RAM run | ⊘ **NOT DECIDED** — §5.6, though §5.5 measures the bench's own |
+| GPA → offset for a machine with more than one RAM run | ★ **DECIDED AND MEASURED** — §5.7: STATED by the topology listener, joined on `(st_dev, st_ino)`, 4 runs on the bench; refused by name outside a stated run |
 | the enforcement layer (fd pinning, filter, notify, `munmap` confirmation) | **NEITHER**, deliberately behind the shape |
 
 ⊘ **Nothing has been mapped into an isolate and nothing has been pinned into a GPU VAS.**
@@ -627,3 +627,115 @@ refuses when it takes the VMM's length rather than an `lseek`.
 ⇒ Step 2 owes either the VMM's own statement of the layout, or a **refusal by name** for
 every GPA outside the single run this deployment is known to have. ⊘ It must not assume
 identity because the one command line `w224m` `[2026-08-10]` covers happens to have it.
+
+---
+
+## 5.7 ★★★ STEP 2 LANDED — the layout is **STATED**, and both easy instants report it EMPTY
+
+`[measured 2026-08-10, `vh`, real GA106, rev e1e57f6 — boots `w225a`, `w225f`, `w225g`]`
+
+§5.6 owed "the VMM's own statement of the layout, or a refusal by name". Both are now in the
+tree, and the mechanism is the one the hypervisor already had: the **topology listener**.
+QEMU calls `region_add` for every section of its flat view, carrying the section's
+guest-physical base, its length and its offset within its region. That is the statement. What
+was missing was any way to tell *which* of those sections is the block we adopted.
+
+### 5.7.1 The join is on the BLOCK, and it needed four new facts on the wire
+
+`KayfabeSection` grew from five unclassified facts to nine (`KAYFABE_SHIM_ABI` 37 → 38):
+`fd_backed`, `backing_dev`, `backing_ino`, `file_offset_of_region`. The C reads them from
+`memory_region_get_fd(sec->mr)` + `fstat`, and `mr->ram_block->fd_offset` as a field — the
+same justification the file already carries for `mr->rom_device`: no public accessor answers
+it, and the alternative is an assumption with nothing to catch it.
+
+⊘ **`mr` cannot do this job**, and that is why the fields exist. `mr` is a region object's
+address: unique to one process's lifetime, meaningless to anything that has to `mmap` the
+bytes, and not comparable against the descriptor the census adopted. The join is on
+`(st_dev, st_ino)` — the same discipline `procfd.rs` was forced onto one layer down when
+descriptor *numbers* turned out to move between two physical benches.
+
+⊘ **`fd_backed == 0` is UNMEASURED, not "no backing".** A section that reports no descriptor
+states nothing, so every address in it is refused rather than attributed to whichever block
+the caller asked about.
+
+### 5.7.2 What the hypervisor actually stated — `w225f`
+
+```
+GUEST-RAM CROSSING ARMED — memory-backend-memfd, 2147483648 bytes, dev=1 ino=6739
+GUEST-RAM LAYOUT AT END OF RUN — dev=1 ino=6739: 4 contiguous run(s) totalling 2147135488 bytes
+  Section funnel: 76 reported -> 10 classified RAM -> 8 carried a backing file, 8 later withdrawn
+  gpa 0x0000000000000000..0x00000000000a0000 -> file offset 0x0 (655360 bytes)
+  gpa 0x00000000000cb000..0x00000000000ce000 -> file offset 0xcb000 (12288 bytes)
+  gpa 0x00000000000e8000..0x00000000000f0000 -> file offset 0xe8000 (32768 bytes)
+  gpa 0x0000000000100000..0x0000000080000000 -> file offset 0x100000 (2146435072 bytes)
+```
+
+★ The four runs total **2 147 135 488** of the descriptor's **2 147 483 648** bytes. The
+348 160-byte difference is exactly the legacy/SMRAM holes at `0xa0000`, `0xce000` and
+`0xf0000` — i.e. the layout is a *real* PC memory map and not a single identity range, on the
+very command line §5.6 said was uninteresting. **8 reported sections coalesced to 4 runs**,
+which is the shape step 3 wants: one descriptor per contiguous run.
+
+⊘ Every run is identity **here**, and the report says so with the word "OBSERVATION" attached.
+Nothing in `layout.rs` branches on `is_identity`; `resolve` answers from the stated offset in
+all cases, and `tests/stated_layout.rs` asserts the `-m 8G` split — where identity is wrong by
+one PCI hole, silently — resolves correctly.
+
+### 5.7.3 ★★★★ THE FINDING: the layout has NO instant at which it is both live and complete
+
+This cost four boots and it is the part worth carrying forward.
+
+The first armed boot, `w225a`, reported **0 runs**. The mechanism was correct; the *instant*
+was not. Then the fix moved the report to the exit notifier — and it reported **0 runs
+again**, for an unrelated reason. Both zeros are real, and they have nothing in common:
+
+| instant | what the live table says | why |
+|---|---|---|
+| memory-plane attach | `0 reported -> 0 RAM -> 0 backed` | the listener is registered on the device's **bus-master address space**, whose flat view is empty until the guest enables bus mastering — long after attach |
+| exit notifier | `76 reported -> 10 RAM -> 8 backed, 8 later withdrawn` | teardown replays `region_del` over every range, so the live table is empty **again** |
+
+★ This is `a_correct_capture_can_answer_the_wrong_question`, twice in one rung: a working
+instrument, correct numbers, and a question about a **lifetime** answered by sampling an
+instant. ⊘ And the first attempt at the second instant was *worse* than the first, because it
+looked like progress — the report moved and the number did not.
+
+⇒ Three consequences, all in the tree:
+
+1. **`resolve` reads the LIVE table; the report reads an `ever` table** that is added to and
+   never withdrawn. ⊘ They must not become one: answering from `ever` would serve ranges the
+   hypervisor had stopped backing — a stale mapping with a plausible offset, which is the
+   whole class this module refuses. `a_withdrawn_run_leaves_the_evidence_and_leaves_the_resolver`
+   is the test that holds them apart.
+2. **The report names its instant** (`AT MEMORY PLANE ATTACH` / `AT END OF RUN`) and says in
+   the line itself that an empty reading is a statement about *when* it was taken.
+3. **A zero is diagnosed, never just printed.** The three-stage funnel plus the withdrawn
+   count turns "0 runs" into one of five named sentences — nothing reported yet *and expected
+   at this instant*; nothing reported all run (**ordering**); nothing classified RAM
+   (**classification**); nothing carried a backing (**the shim's `fd_backed`**); runs stated
+   for other files (**the join**), which then prints every `(dev, ino)` that did state one.
+
+★★ Stage (5) is the one that earned its keep. `w225c`/`w225d` reported `76 -> 10 -> 8` with
+zero runs for our block and named it a **JOIN fault** — which was wrong in an instructive way:
+the join was fine, the rows had simply been withdrawn before the report ran. The funnel was
+one counter short, and the missing counter was `forgotten`. ⇒ **A funnel that only counts
+arrivals cannot see removals**, and an empty table at the end of a run is far more likely to
+be a teardown than a mismatch.
+
+### 5.7.4 The control, and what step 2 still does NOT show
+
+`w225g` — same binary, same script, `KAYFABE_GUEST_RAM` **unset** — prints **zero** layout
+lines and the same `doorbells: 2 arrived, 2 served, 0 REFUSED`. The instrument is
+observationally neutral, so the armed run stays comparable to its own control.
+
+⊘ **No guest byte has been mapped or pinned.** `GuestRamPlane::honour` still has no
+production caller and no `GuestRamGrant` is constructed anywhere. Step 2 delivers a resolver
+and its evidence; step 3 is `OS_DESCRIPTOR` + `map_dma` **fixed at the guest VA**, one
+descriptor per contiguous run at the GPA-ordered layout above, asserting `placed_as_asked`
+per run.
+
+⚠ One scope limit worth stating rather than discovering: the listener sits on the device's
+**bus-master** address space, not on system memory. For a machine with no vIOMMU those hold
+the same RAM, and every run above is real. On a machine with a vIOMMU they are **not** the
+same space, and this map would then describe what the device may DMA to rather than the
+guest's physical map. That is the correct space for a DMA descriptor and possibly the wrong
+one for a CPU mapping — undecided, and not decided by these boots.
