@@ -12831,3 +12831,20 @@ and the committed trace carries that stamp.
 
 ★ The stamp in that trace is **40 characters**, and this is the first ladder trace in the
 repository for which that is true by construction rather than by an operator's typing.
+
+★★ **And when later commits moved HEAD past the revision that trace names, the attribution
+was CHECKED rather than argued:**
+
+```
+git diff --name-only ed51a26 HEAD
+  docs/design/execution_plane_increments.md
+  tests/tests/cpu_ce_executor.rs
+  tests/tests/gsp_rm_alloc.rs
+  traces/real_ga106/rmladder_r26_dictated_ring_real_ga106.txt
+```
+
+⇒ none of them is in `kayfabe-rm-ladder`'s dependency tree, so the binary the trace names is
+still the binary this tree builds. ⊘ *"That commit was only tests and docs"* is the same
+sentence as *"the delta looks inert"*; the difference is that this one was **run** — the
+question "which files does the artifact actually depend on?" has an answer a command can
+give, and taking it from a command is the whole discipline.
