@@ -5004,6 +5004,36 @@ impl Regs {
                 );
             }
         }
+        // ★★★★★ **§16.77 — THE UNCLAIMED CENSUS, and it is the instrument that would have
+        // found §16.77's bug in ONE boot instead of five.**
+        //
+        // `RegPlane::unclaimed_sample` has existed since the plane did, is documented in
+        // `kayfabe_device::plane`'s own header as the *which* behind `unclaimed_reads`, and
+        // **was never printed anywhere**. So every boot reported a bare count — `w212`:
+        // `UNCLAIMED 2888r/2464w` — and an operator could learn how much of the boot was
+        // answered with a defaulted zero but never WHICH register got one.
+        //
+        // ⊘ That is the failure class this repo already has a name for: a diagnostic that
+        // exists, crosses no ABI, costs nothing, and is invisible. The offsets that decided
+        // `w212` — `NV_PRISCV_RISCV_IRQMASK` at `0xb...111528` and `IRQDEST` at `0x11152c` —
+        // were in that vector on every one of the five boots that hunted this wall.
+        //
+        // ⚠ **BOUNDED, AND IT SAYS SO.** The sample stops at
+        // `kayfabe_device::plane::UNCLAIMED_SAMPLE_MAX` distinct `(bar, offset)` pairs, so an
+        // ABSENCE from this list proves nothing once the cap is reached — same reading rule
+        // as the roster above. It is a first-N sample, not a set.
+        {
+            let sample = self.plane.unclaimed_sample();
+            eprintln!(
+                "kayfabe: UNCLAIMED-CENSUS {} distinct (bar, offset) pair(s) answered with a \
+                 DEFAULTED ZERO (⊘ bounded first-N sample — an absence here proves nothing; \
+                 the totals are the `registers:` line's UNCLAIMED counts)",
+                sample.len(),
+            );
+            for (bar, off) in &sample {
+                eprintln!("kayfabe:   UNCLAIMED-CENSUS bar{bar} off=0x{off:06x}");
+            }
+        }
         // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
         // TRIGGER: the C printer emits `DELIVERY_UNBUILT` beside it whenever it is non-zero,
         // so serving `0x20800a9b` and stating what serving it did NOT buy are one act.

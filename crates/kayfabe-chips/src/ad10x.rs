@@ -72,6 +72,23 @@ const QUEUE_HEAD_COUNT: u64 = 8;
 /// (`ogkm-580: ampere/ga102/dev_falcon_second_pri.h:26`) + `NV_PRISCV_RISCV_CPUCTL`
 /// `0x388` (`ogkm-580: ampere/ga102/dev_riscv_pri.h:32`).
 const GSP_RISCV_CPUCTL: u64 = 0x0011_1388;
+/// ★★★★★ §16.77 — `NV_PRISCV_RISCV_IRQMASK`: `NV_FALCON2_GSP_BASE` (`0x0011_1000`,
+/// `ogkm-580: ampere/ga102/dev_falcon_second_pri.h:26`) + `0x528`
+/// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:28`).
+///
+/// ⚠ **This offset is GENERATION-KEYED and the two generations are not close**: Turing and
+/// GA100 publish `0x2b4`/`0x2b8` (`ogkm-580: turing/tu102/dev_riscv_pri.h:32-33`), which is
+/// exactly why RM keeps `kflcnRiscvReadIntrStatus_TU102` and `_GA102` as separate HALs with
+/// byte-identical bodies — the difference lives entirely in which header the translation
+/// unit includes. So this constant belongs to the chip row and must never be hoisted.
+///
+/// See [`kayfabe_arch::gsp::GspReg::GspRiscvIrqmask`] for what a defaulted zero here does.
+/// ⊘ Ada publishes no `dev_riscv_pri.h` of its own; it consumes the Ampere one, which is
+/// the same provenance this module's header note records for `NV_PRISCV_RISCV_CPUCTL`.
+const GSP_RISCV_IRQMASK: u64 = 0x0011_1528;
+/// `NV_PRISCV_RISCV_IRQDEST`: `NV_FALCON2_GSP_BASE` + `0x52c`
+/// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:29`).
+const GSP_RISCV_IRQDEST: u64 = 0x0011_152c;
 /// `NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK`
 /// (`ogkm-580: ampere/ga102/dev_gc6_island.h:27`).
 const GFW_BOOT_PLM: u64 = 0x0011_8128;
@@ -156,6 +173,8 @@ impl Ad10xGspModel {
             GspReg::GspFalconIrqdest => PGSP + FALCON_IRQDEST,
             GspReg::GspFalconIrqsclr => PGSP + FALCON_IRQSCLR,
             GspReg::GspRiscvCpuctl => GSP_RISCV_CPUCTL,
+            GspReg::GspRiscvIrqmask => GSP_RISCV_IRQMASK,
+            GspReg::GspRiscvIrqdest => GSP_RISCV_IRQDEST,
             GspReg::Sec2FalconCpuctl => PSEC + FALCON_CPUCTL,
             GspReg::Sec2FalconMailbox0 => PSEC + FALCON_MAILBOX0,
             GspReg::Sec2FalconDmatrfcmd => PSEC + FALCON_DMATRFCMD,
@@ -184,6 +203,8 @@ impl GspModel for Ad10xGspModel {
             GFW_BOOT_PROGRESS => GspReg::GfwBootProgress,
             GFW_BOOT_PLM => GspReg::GfwBootPlm,
             GSP_RISCV_CPUCTL => GspReg::GspRiscvCpuctl,
+            GSP_RISCV_IRQMASK => GspReg::GspRiscvIrqmask,
+            GSP_RISCV_IRQDEST => GspReg::GspRiscvIrqdest,
             WPR2_ADDR_LO => GspReg::Wpr2AddrLo,
             WPR2_ADDR_HI => GspReg::Wpr2AddrHi,
             _ => match (off & !0xFFFF, off & 0xFFFF) {
@@ -238,7 +259,14 @@ impl GspModel for Ad10xGspModel {
                     0
                 }
             }
-            GspReg::GspFalconIrqmask | GspReg::GspFalconIrqdest => IRQSTAT_SWGEN0,
+            // ★★★★★ §16.77 — the falcon PAIR and the RISC-V PAIR both advertise SWGEN0.
+            // `kflcnGetPendingHostInterrupts` reads ONE pair or the OTHER depending on a
+            // mode latched at bootstrap, so answering only the falcon pair made the
+            // RISC-V AND collapse to zero. `C: nvkvm_gpu_emul.c:1570-1573` answers all four.
+            GspReg::GspFalconIrqmask
+            | GspReg::GspFalconIrqdest
+            | GspReg::GspRiscvIrqmask
+            | GspReg::GspRiscvIrqdest => IRQSTAT_SWGEN0,
             GspReg::GspFalconIrqsclr => 0,
             GspReg::GspRiscvCpuctl => {
                 if obs.riscv_active {

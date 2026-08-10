@@ -103,6 +103,26 @@ const FALCON_DMATRFCMD: u64 = 0x118;
 /// because the fixture needs *an* offset to decode; nothing in this crate's conclusion
 /// depends on it, and it is flagged so it is never mistaken for a measurement.
 const GSP_RISCV_CPUCTL: u64 = 0x0011_1388;
+/// ★★★★★ §16.77 — `NV_PRISCV_RISCV_IRQMASK`: `NV_FALCON2_GSP_BASE` (`0x0011_1000`,
+/// `ogkm-580: ampere/ga102/dev_falcon_second_pri.h:26`) + `0x528`
+/// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:28`).
+///
+/// ⚠ **This offset is GENERATION-KEYED and the two generations are not close**: Turing and
+/// GA100 publish `0x2b4`/`0x2b8` (`ogkm-580: turing/tu102/dev_riscv_pri.h:32-33`), which is
+/// exactly why RM keeps `kflcnRiscvReadIntrStatus_TU102` and `_GA102` as separate HALs with
+/// byte-identical bodies — the difference lives entirely in which header the translation
+/// unit includes. So this constant belongs to the chip row and must never be hoisted.
+///
+/// See [`kayfabe_arch::gsp::GspReg::GspRiscvIrqmask`] for what a defaulted zero here does.
+/// ⊘ `hopper/gh100/dev_riscv_pri.h` publishes NO `IRQMASK`/`IRQDEST` override, and GH100
+/// binds `kflcnRiscvReadIntrStatus_GA102` (`ogkm-580: g_kernel_falcon_nvoc.c:617-635` — the
+/// `else` arm covers everything past GA100), whose translation unit includes
+/// `published/ampere/ga102/dev_riscv_pri.h` (`kernel_falcon_ga102.c:35`). So the Ampere
+/// offsets ARE Hopper's here, derived from the binding rather than assumed from the family.
+const GSP_RISCV_IRQMASK: u64 = 0x0011_1528;
+/// `NV_PRISCV_RISCV_IRQDEST`: `NV_FALCON2_GSP_BASE` + `0x52c`
+/// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:29`).
+const GSP_RISCV_IRQDEST: u64 = 0x0011_152c;
 
 /// `NV_PFB_PRI_MMU_WPR2_ADDR_LO` (`ogkm-580: hopper/gh100/dev_fb.h:43`).
 const WPR2_ADDR_LO: u64 = 0x001F_A824;
@@ -513,6 +533,8 @@ impl Gh100GspModel {
             GspReg::GspFalconIrqdest => PGSP + FALCON_IRQDEST,
             GspReg::GspFalconIrqsclr => PGSP + FALCON_IRQSCLR,
             GspReg::GspRiscvCpuctl => GSP_RISCV_CPUCTL,
+            GspReg::GspRiscvIrqmask => GSP_RISCV_IRQMASK,
+            GspReg::GspRiscvIrqdest => GSP_RISCV_IRQDEST,
             GspReg::Wpr2AddrLo => WPR2_ADDR_LO,
             GspReg::Wpr2AddrHi => WPR2_ADDR_HI,
             // ★ CORRECTED: present after all, because the Turing HAL is this chip's HAL
@@ -539,6 +561,8 @@ impl GspModel for Gh100GspModel {
         }
         Some(match off {
             GSP_RISCV_CPUCTL => GspReg::GspRiscvCpuctl,
+            GSP_RISCV_IRQMASK => GspReg::GspRiscvIrqmask,
+            GSP_RISCV_IRQDEST => GspReg::GspRiscvIrqdest,
             WPR2_ADDR_LO => GspReg::Wpr2AddrLo,
             WPR2_ADDR_HI => GspReg::Wpr2AddrHi,
             #[allow(clippy::cast_possible_truncation)]
@@ -614,7 +638,14 @@ impl GspModel for Gh100GspModel {
                     0
                 }
             }
-            GspReg::GspFalconIrqmask | GspReg::GspFalconIrqdest => IRQSTAT_SWGEN0,
+            // ★★★★★ §16.77 — the falcon PAIR and the RISC-V PAIR both advertise SWGEN0.
+            // `kflcnGetPendingHostInterrupts` reads ONE pair or the OTHER depending on a
+            // mode latched at bootstrap, so answering only the falcon pair made the
+            // RISC-V AND collapse to zero. `C: nvkvm_gpu_emul.c:1570-1573` answers all four.
+            GspReg::GspFalconIrqmask
+            | GspReg::GspFalconIrqdest
+            | GspReg::GspRiscvIrqmask
+            | GspReg::GspRiscvIrqdest => IRQSTAT_SWGEN0,
             GspReg::GspFalconIrqsclr => 0,
             GspReg::GspRiscvCpuctl => {
                 if obs.riscv_active {

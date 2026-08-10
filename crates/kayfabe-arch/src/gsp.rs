@@ -123,6 +123,45 @@ pub enum GspReg {
     /// `src/nvidia/src/kernel/gpu/falcon/arch/ampere/kernel_falcon_ga102.c:53-55` — same
     /// path, same lines, byte-identical at both tags).
     GspRiscvCpuctl,
+    /// ★★★★★ **§16.77 — `NV_PRISCV_RISCV_IRQMASK`, and it is one of the two registers
+    /// that decide whether the guest's ISR believes its own interrupt.**
+    ///
+    /// `kgspService_TU102` opens with `kflcnGetPendingHostInterrupts`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:1155`),
+    /// which branches on `kflcnIsRiscvMode` (`kernel_falcon.c:84-90`):
+    ///
+    /// - falcon mode → `IRQSTAT & FALCON_IRQMASK & FALCON_IRQDEST`;
+    /// - **RISC-V mode → `IRQSTAT & NV_PRISCV_RISCV_IRQMASK & NV_PRISCV_RISCV_IRQDEST`**
+    ///   (`kflcnRiscvReadIntrStatus_GA102`: `kernel_falcon_ga102.c:311-321`).
+    ///
+    /// ⚠ **The mode is not probed at service time; it is LATCHED at bootstrap.**
+    /// `kflcnResetIntoRiscv_GA102` calls `kflcnSetRiscvMode(…, NV_TRUE)` unconditionally
+    /// (`kernel_falcon_ga102.c:84-95`), reached from the GSP boot sequencer's
+    /// `GSP_SEQ_BUF_OPCODE_CORE_RESUME` (`kernel_gsp_ga102.c:161`), and
+    /// `kflcnIsRiscvMode` caches the tristate forever after. So a GSP-offload adapter is
+    /// in RISC-V mode by the time any interrupt is ever serviced, and `BCR_CTRL` is never
+    /// consulted — which is why modelling `BCR_CTRL` would not have helped and is not done
+    /// here (`C: src/qemu/nvkvm_gpu_emul.c:1562-1573` does not model it either).
+    ///
+    /// ⇒ Leaving this register undecoded made it read as an unclaimed **zero**, so
+    /// `intrStatus` was `IRQSTAT & 0 & 0 = 0` no matter what `IRQSTAT` said, and the guest
+    /// took the *"nothing to do"* exit at `kernel_gsp_tu102.c:1158-1162` **without writing
+    /// `IRQSCLR` and without draining the status queue**. `[measured 2026-08-10, boot
+    /// w212 at e309a85]`: `NVRM: nvAssertFailedNoLog: Assertion failed: KGSP service
+    /// called when no KGSP interrupt pending @ kernel_gsp_tu102.c:1160`, with `0 IRQSCLR
+    /// cleared` and `348 gated` in the same boot's device report.
+    ///
+    /// ⊘ **This is why "raised into a masked leaf" was the wrong diagnosis.** The guest's
+    /// ISR *did* find the vector — reaching `kgspService` at all proves the interrupt
+    /// tree scan attributed it to `MC_ENGINE_IDX_GSP` — and the stall scan does not
+    /// consult `LEAF_EN` at all (`intrGetPendingStallEngines_TU102`:
+    /// `intr_tu102.c:895-899`, *"We skip checking if it is enabled in the leaf register"*;
+    /// `intrGetLeafStatus_TU102:1108-1141` reads `LEAF` raw).
+    GspRiscvIrqmask,
+    /// `NV_PRISCV_RISCV_IRQDEST` — the second half of the RISC-V AND. See
+    /// [`GspReg::GspRiscvIrqmask`] for the whole story; the two are only separate because
+    /// the register block is.
+    GspRiscvIrqdest,
     /// SEC2 falcon `CPUCTL` — the Booter's start register.
     Sec2FalconCpuctl,
     /// SEC2 falcon `MAILBOX0` — the Booter's argument, and the only thing that

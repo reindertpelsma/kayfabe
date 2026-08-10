@@ -518,7 +518,12 @@ impl FakeGspModel {
             GspReg::Sec2FalconDmatrfcmd => 14,
             GspReg::Wpr2AddrLo => 15,
             GspReg::Wpr2AddrHi => 16,
-            GspReg::GspQueueHead(i) => 17 + u64::from(i),
+            // ★ §16.77 — appended, not inserted: the index IS the fixture's register
+            // offset (`base + i * stride`), so renumbering the existing rows would move
+            // every register a test has ever addressed by hand.
+            GspReg::GspRiscvIrqmask => 17,
+            GspReg::GspRiscvIrqdest => 18,
+            GspReg::GspQueueHead(i) => 19 + u64::from(i),
         }
     }
 }
@@ -547,7 +552,9 @@ impl GspModel for FakeGspModel {
             14 => GspReg::Sec2FalconDmatrfcmd,
             15 => GspReg::Wpr2AddrLo,
             16 => GspReg::Wpr2AddrHi,
-            17..=24 => GspReg::GspQueueHead((i - 17) as u8),
+            17 => GspReg::GspRiscvIrqmask,
+            18 => GspReg::GspRiscvIrqdest,
+            19..=26 => GspReg::GspQueueHead((i - 19) as u8),
             _ => return None,
         })
     }
@@ -594,7 +601,13 @@ impl GspModel for FakeGspModel {
                     0
                 }
             }
-            GspReg::GspFalconIrqmask | GspReg::GspFalconIrqdest => self.swgen0_bit,
+            // ★★★★★ §16.77 — the RISC-V pair answers exactly as the falcon pair does; the
+            // guest ANDs `IRQSTAT` with ONE pair or the OTHER (`kflcnGetPendingHostInterrupts`,
+            // `ogkm-580: src/nvidia/src/kernel/gpu/falcon/kernel_falcon.c:84-90`).
+            GspReg::GspFalconIrqmask
+            | GspReg::GspFalconIrqdest
+            | GspReg::GspRiscvIrqmask
+            | GspReg::GspRiscvIrqdest => self.swgen0_bit,
             GspReg::GspFalconIrqsclr => 0,
             GspReg::GspRiscvCpuctl => {
                 if obs.riscv_active {
