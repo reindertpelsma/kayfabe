@@ -1109,17 +1109,20 @@ pub unsafe extern "C" fn kayfabe_shim_chip_identity(
 /// property-specific message is the only thing that differed. A copy per property is how the
 /// second one comes to accept a NULL with a non-zero length.
 ///
-/// # Safety
-/// `ptr` must point to `len` readable bytes, or be NULL with `len == 0`.
-unsafe fn prop_str<'a>(
+/// ⊘ **A safe fn with one documented relaxation inside, not an `unsafe fn`** — this file's
+/// module doc §"Where the surface was FOLDED" states the rule and the reason: it has exactly
+/// **one kind of caller**, an entry point that is already unsafe and whose `# Safety` clause
+/// states the very precondition this needs. Making it `unsafe` instead would charge the
+/// ratchet four relaxations (the definition plus three call sites) for one obligation, and
+/// three scattered acknowledgements of one obligation is worse for an auditor than one place
+/// that performs it.
+fn prop_str<'a>(
     ptr: *const u8,
     len: u64,
-    prop: &'static str,
     bad_null: &'static str,
     bad_utf8: &'static str,
     msg: &MsgOut,
 ) -> Result<&'a str, i32> {
-    let _ = prop;
     if ptr.is_null() {
         if len != 0 {
             msg.set(bad_null);
@@ -1127,8 +1130,10 @@ unsafe fn prop_str<'a>(
         }
         return Ok("");
     }
-    // SAFETY: non-null with `len` readable bytes is this function's documented
-    // precondition, checked as far as a pointer can be.
+    // SAFETY: non-null with `len` readable bytes is the CALLER's documented precondition —
+    // `kayfabe_shim_regs_create`'s `# Safety` clause states it for all three properties —
+    // checked here as far as a pointer can be. The slice does not outlive the call: the
+    // string is parsed into owned values before the entry point returns.
     let bytes = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
     core::str::from_utf8(bytes).map_err(|_| {
         msg.set(bad_utf8);
@@ -1180,48 +1185,36 @@ pub unsafe extern "C" fn kayfabe_shim_regs_create(
         msg.set("the shim asked for a register plane with nowhere to put the handle");
         return Status::Malformed.code();
     }
-    // SAFETY: the `(ptr, len)` precondition is this function's, restated per property.
-    let probe_str = match unsafe {
-        prop_str(
-            probe_arm,
-            probe_arm_len,
-            "probe-arm-notifier",
-            "probe-arm-notifier arrived as NULL with a non-zero length",
-            "probe-arm-notifier is not UTF-8; a probe string that cannot be read \
-             must refuse the device rather than boot probe-off",
-            &msg,
-        )
-    } {
+    let probe_str = match prop_str(
+        probe_arm,
+        probe_arm_len,
+        "probe-arm-notifier arrived as NULL with a non-zero length",
+        "probe-arm-notifier is not UTF-8; a probe string that cannot be read must refuse \
+         the device rather than boot probe-off",
+        &msg,
+    ) {
         Ok(s) => s,
         Err(code) => return code,
     };
-    // SAFETY: as above.
-    let name_str = match unsafe {
-        prop_str(
-            gpu_name,
-            gpu_name_len,
-            "gpu-name",
-            "gpu-name arrived as NULL with a non-zero length",
-            "gpu-name is not UTF-8; the guest copies this array out as a C string, so a \
-             name that cannot be read must refuse the device rather than boot nameless",
-            &msg,
-        )
-    } {
+    let name_str = match prop_str(
+        gpu_name,
+        gpu_name_len,
+        "gpu-name arrived as NULL with a non-zero length",
+        "gpu-name is not UTF-8; the guest copies this array out as a C string, so a name \
+         that cannot be read must refuse the device rather than boot nameless",
+        &msg,
+    ) {
         Ok(s) => s,
         Err(code) => return code,
     };
-    // SAFETY: as above.
-    let short_str = match unsafe {
-        prop_str(
-            gpu_short_name,
-            gpu_short_name_len,
-            "gpu-short-name",
-            "gpu-short-name arrived as NULL with a non-zero length",
-            "gpu-short-name is not UTF-8; the guest copies this array out as a C string, \
-             so a name that cannot be read must refuse the device rather than boot nameless",
-            &msg,
-        )
-    } {
+    let short_str = match prop_str(
+        gpu_short_name,
+        gpu_short_name_len,
+        "gpu-short-name arrived as NULL with a non-zero length",
+        "gpu-short-name is not UTF-8; the guest copies this array out as a C string, so a \
+         name that cannot be read must refuse the device rather than boot nameless",
+        &msg,
+    ) {
         Ok(s) => s,
         Err(code) => return code,
     };

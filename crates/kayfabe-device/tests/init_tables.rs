@@ -463,7 +463,18 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `0x20802a07` it needs no derivation either, because EVERY field is `[input]`. The
     // reply is the guest's own facts re-encoded from what the decoder accepted; this port
     // states no number of its own anywhere in it. See `kayfabe_abi::fmbpromote`.
-    assert_eq!(WantedTable::ALL.len(), 41, "the served universe\'s size");
+    // ★★★ 41 -> 43 at the ioctl differential's first firing: `0x20810108` (the one control
+    // on `NV2081_BINAPI`, and the FIRST status divergence from real hardware in a CUDA
+    // program's whole ioctl stream) and `0x20800a9a`
+    // (`NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X`).
+    // ⊘ The second is NOT the id the differential named. It measured `0x2080200a`
+    // `PERF_BOOST` at the userspace boundary; that control has a KERNEL implementation and
+    // reaches this port ZERO times (`[measured 2026-08-10]`, 0 of 38 committed device logs
+    // name it, all 38 name `0x20800a9a`). `kperfBoostSet_IMPL` re-packages its two fields
+    // under the internal id, so the status userspace read was this port's refusal of THAT
+    // one. A row for the userspace id would have been dead code with a green test — see
+    // `kayfabe_abi::perfboost` and `crates/kayfabe-device/tests/status_divergence.rs`.
+    assert_eq!(WantedTable::ALL.len(), 43, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

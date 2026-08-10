@@ -234,6 +234,30 @@ static GRADUATED: &[u32] = &[
     // `ogkm-580: rpc.c:11085-11090` copies the reply's params over the caller's struct
     // whenever `paramsSize != 0`, and it is 4 here.
     0x2080_1702,
+    // ★★★ The two rungs the **host↔guest ioctl differential** produced, and the pair is the
+    // clearest thing this list has ever shown about its own direction of travel: one of them
+    // was on the worklist under a DIFFERENT ID.
+    //
+    // `0x20810108` — the one control on `NV2081_BINAPI`, the §14.26 "phantom", admitted by
+    // the `BinApiRule` rather than by a table row. `[measured 2026-08-10, nvdiff]` it is the
+    // **first status divergence from real hardware** in a CUDA program's entire ioctl
+    // stream: hardware answers `NV_OK` with the 992-byte body unchanged and this port
+    // answered `0x56`. ⚠ Served as an echo chosen as a RULE, not read off the reply — the
+    // captured body is all zeros on both sides, so `in == out` cannot separate three
+    // hypotheses; see `kayfabe_abi::binapictl`.
+    0x2081_0108,
+    // `NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X`. ⊘⊘ **The differential named
+    // `0x2080200a` `PERF_BOOST` and that id NEVER REACHES THIS PORT** — it has a kernel-side
+    // implementation, and `kperfBoostSet_IMPL` re-packages its two fields under this id for
+    // physical RM, returning that status unchanged to userspace. `[measured 2026-08-10]` 0
+    // of 38 committed device logs name `0x2080200a`; all 38 name this one. That this row
+    // was ALREADY in `LEDGER` — recorded by a boot, under the id the wire actually carries —
+    // while the userspace census was naming a different one is the ledger doing its job.
+    //
+    // ⚠ "Served" here means **acknowledged**: both fields are `[in]`, this port governs no
+    // clock domain, and the reply carries no fact of its own. A flag bit the SDK header
+    // does not name is still refused. See `kayfabe_abi::perfboost`.
+    0x2080_0a9a,
 ];
 
 static LEDGER: &[u32] = &[
@@ -260,7 +284,6 @@ static LEDGER: &[u32] = &[
     0x2080_0a70,
     0x2080_0a80,
     0x2080_0a87,
-    0x2080_0a9a,
     0x2080_0a9c,
     0x2080_0a9e,
     0x2080_0ab8,
@@ -299,9 +322,6 @@ static LEDGER: &[u32] = &[
     0x2080_9009,
     0x2080_a612,
     0x2080_a618,
-    // ★ `NV2081_BINAPI` — the §14.26 "phantom". Admitted by the `BinApiRule` rather than by
-    // a table row, which is the admission class this file's module doc says it cannot sweep.
-    0x2081_0108,
     0x2081_0110,
     0x208f_1105,
     0x402c_0101,
@@ -594,8 +614,9 @@ fn the_chain_serves_controls_the_allowlist_does_not_admit() {
     );
 }
 
-/// ★★★★ **The measured inversion, pinned: 29 controls this port ANSWERS that its
-/// userspace-ioctl allowlist does not ADMIT.** `[measured 2026-08-10, rev 2fa5d84]`
+/// ★★★★ **The measured inversion, pinned: 31 controls this port ANSWERS that its
+/// userspace-ioctl allowlist does not ADMIT.** `[measured 2026-08-10, rev 2fa5d84; 29 -> 31
+/// at the ioctl differential's first firing]`
 ///
 /// ⊘ Two of these were named to me as the counter-examples and both check out:
 /// `0x20802a08` (`CE_GET_FAULT_METHOD_BUFFER_SIZE`) and `0xa06c010a`. The rest are the
@@ -603,6 +624,23 @@ fn the_chain_serves_controls_the_allowlist_does_not_admit() {
 /// never crosses a userspace ioctl boundary and so has no business on an `nvproxy`-derived
 /// allowlist. ⇒ The two surfaces are **not nested in either direction**, and that is a fact
 /// about the planes rather than a defect in either table.
+///
+/// ★★ **The two rows added by the ioctl differential land on OPPOSITE sides of that
+/// argument, and both are correct.**
+///
+/// `0x20800a9a` (`INTERNAL_PERF_BOOST_SET_2X`) is the ordinary case: an
+/// `NV2080_CTRL_CMD_INTERNAL_*` id that by construction never crosses a userspace ioctl
+/// boundary. What userspace issues is `0x2080200a`, which **is** on the allowlist
+/// (`capability.rs`, origin `Nvproxy`) and which the guest KERNEL answers. ⇒ the two
+/// surfaces are visibly doing different jobs on one request, which is this list's thesis
+/// stated by an example rather than by assertion.
+///
+/// `0x20810108` is the awkward one and is listed honestly: it **is** admitted, by the
+/// `BinApiRule` rather than by a table row, and `all_controls()` enumerates rows only. So its
+/// membership here is a property of how the allowlist is *enumerated*, not of what it
+/// permits. ⊘ Left in rather than special-cased: an exception would make this gate quieter
+/// and less true, and the module doc already records that rule-admitted ids are the class
+/// this file cannot sweep.
 static SERVED_BUT_NOT_ADMITTED: &[&str] = &[
     "0x208001b0",
     "0x20800a1c",
@@ -622,6 +660,7 @@ static SERVED_BUT_NOT_ADMITTED: &[&str] = &[
     "0x20800a5c",
     "0x20800a61",
     "0x20800a6c",
+    "0x20800a9a",
     "0x20800a9b",
     "0x20800a9d",
     "0x20800aac",
@@ -632,6 +671,7 @@ static SERVED_BUT_NOT_ADMITTED: &[&str] = &[
     "0x20802a0b",
     "0x20808159",
     "0x20808162",
+    "0x20810108",
     "0xa06c010a",
 ];
 

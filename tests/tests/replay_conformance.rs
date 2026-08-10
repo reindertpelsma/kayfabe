@@ -1423,13 +1423,27 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // the unclaimed arm to the claimed one only because this function now sends the version
     // handshake — see the fn-1 block above. Without it the control is served-but-refusing,
     // which is what property 4 caught.
+    // ⊘ 96 -> 99 at the ioctl differential's first firing, and the +3 is again attributed by
+    // MEASUREMENT rather than apportioned: `[measured 2026-08-10]` counting the two new ids'
+    // little-endian command words in `traces/rpctrace_ga106_boot1.bin` (each control appears
+    // once in its request and once in its reply, so the raw counts halve) gives
+    // `0x20810108` = **3** and `0x20800a9a` = **0**. The whole delta is the binary-API
+    // control.
+    //
+    // ★★ That zero-and-three is a coverage statement worth reading twice. It says this
+    // capture — the repo's only GSP-level recording of real firmware — **does** judge
+    // `0x20810108`'s reply against a real part, and **cannot** judge `0x20800a9a`'s at all.
+    // ⊘ It also refutes the tempting shared rationale in `cap1b_differential.rs`: "an
+    // `RmInitAdapter` capture issues neither" is false for the first id.
     assert_eq!(
         (n_claimed, n_unclaimed),
-        (96, 214),
+        (99, 211),
         "`[measured]` 2026-08-03: 87 of the 310 recorded control calls are ones this port \
          claims (84 before §14.28 added `0x20800102`, which the capture demands 3 times); \
          `[measured]` 2026-08-08: 95 after §14.29's `0x20800a4c`, demanded 8 times; \
-         `[measured]` 2026-08-09: 96 after §14.35's `0x20803601`, demanded once. The \
+         `[measured]` 2026-08-09: 96 after §14.35's `0x20803601`, demanded once; \
+         `[measured]` 2026-08-10: 99 after the ioctl differential's `0x20810108`, demanded \
+         three times (`0x20800a9a` contributes zero — it is not in this capture). The \
          served arm is not near-vacuous and the number is pinned so a silent collapse of it \
          is red"
     );
@@ -1620,6 +1634,28 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // same boot's `nvidia-smi` window, so no TSG is allocated on the `RmInitAdapter`
         // path this capture records.
         0xa06c_010a,
+        // ★★★ The ioctl differential's rung, and ⊘⊘ **its NEIGHBOUR on that worklist needs no
+        // row here at all** — which is the useful half of this entry.
+        //
+        // `NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X`. `[measured 2026-08-10]` this capture
+        // contains it **zero** times, and the reason is structural rather than incidental:
+        // its only path is `subdeviceCtrlCmdKPerfBoost_IMPL` -> `kperfBoostSet_IMPL`
+        // (`ogkm-580: kern_perf_boost.c:44-108`), i.e. a client explicitly asking for a
+        // P-state boost. The differential measured that as the **second ioctl of
+        // `cuCtxCreate`**; an `RmInitAdapter` capture has no such client.
+        //
+        // ⊘ The size claim is 8 — `NvBool flags` then, at the `NvU32`'s alignment,
+        // `NvU32 duration` (`ogkm-580: ctrl2080internal.h:1706-1710`) — and it is
+        // unevidenced by any capture. What makes that acceptable is what the reply CONTAINS:
+        // both fields are `[in]`, so the eight bytes we answer with are the eight the guest
+        // sent, re-encoded from the decode. There is no number of ours in it to be wrong.
+        //
+        // ★★ Contrast `0x20810108`, the other id that rung added: it is **absent from this
+        // list on purpose**, because this capture demands it three times and its 992-byte
+        // size was therefore judged against real GSP firmware. Two ids from one worklist,
+        // one evidenced here and one not — recorded so nobody assumes a shared provenance
+        // they do not have.
+        0x2080_0a9a,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
@@ -1646,10 +1682,16 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // `0x2080182b` are both claimed and neither is demanded by this capture, so the set of
     // sizes it can judge shrinks while the served universe grows. A number that only ever
     // rises would be measuring the wrong thing.
+    // ⊘ 26 -> 27 -> 28 at the ioctl differential's first firing: `0x20810108` is demanded by
+    // this capture **three times**, so its 992-byte reply size IS judged against real
+    // firmware and it needs no exemption row. Its worklist neighbour `0x20800a9a` moves this
+    // number by ZERO and gains an exemption instead. ★ One rung, two ids, opposite effects on
+    // the same gate — which is why the two numbers are pinned separately rather than as a
+    // delta.
     assert_eq!(
         size_checked.len(),
-        27,
-        "27 distinct controls had their reply paramsSize judged against a real GA106 GSP \
+        28,
+        "28 distinct controls had their reply paramsSize judged against a real GA106 GSP \
          on 580.159.04, and every one agreed"
     );
     // And refusal really is the majority answer, which is the honest shape of this port

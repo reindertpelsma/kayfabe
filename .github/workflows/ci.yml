@@ -1394,9 +1394,16 @@ jobs:
           # ★★★ `kayfabe-qemu-raw` 47 -> 48 AT ABI 16, 2026-08-07 — the
           # `probe-arm-notifier` device property. ONE relaxation:
           #
-          #   [p16-a] `kayfabe_shim_regs_create` — the `unsafe {
-          #           core::slice::from_raw_parts(probe_arm, probe_arm_len as usize) }`
-          #           that reads the property string the C shell passes as (ptr, len).
+          #   [p16-a] the `unsafe { core::slice::from_raw_parts(ptr, len as usize) }` that
+          #           reads a device-property string the C shell passes as (ptr, len).
+          #           ⊘ AMENDED 2026-08-10: it now lives in the SAFE helper `prop_str`
+          #           rather than inline in `kayfabe_shim_regs_create`, because that entry
+          #           point carries THREE such properties since `gpu-name`/`gpu-short-name`
+          #           landed. The count is unchanged at 48 and that is the point: an
+          #           `unsafe fn` helper would have charged four (the definition plus three
+          #           call sites) for ONE obligation. `shim_unsafe.rs`'s module doc states
+          #           the rule — fold when there is exactly one kind of caller, and that
+          #           caller's own `# Safety` clause states the precondition.
           #           Same shape as the existing `cfg.bars` read in
           #           `kayfabe_shim_realize` (NULL is checked first,
           #           NULL-with-nonzero-len is refused Malformed, and the bytes are

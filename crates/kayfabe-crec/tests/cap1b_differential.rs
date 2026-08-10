@@ -496,6 +496,32 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // THIS policy's boundary — the call-site coverage `WantedTable::C2cInfo` was shipped
         // twice without. ⊘ The envelope is still absent and that cost is real.
         WantedTable::PromoteFaultMethodBuffers,
+        // ⚠ The ioctl differential's two rungs, and ⊘⊘ **they are exempt for DIFFERENT
+        // reasons — the obvious shared one is refuted by a capture in this same tree.**
+        //
+        // The tempting sentence was *"`cap1b` is an `RmInitAdapter` capture and neither id is
+        // issued on that path"*. `[measured 2026-08-10]` that is **false for the first one**:
+        // `traces/rpctrace_ga106_boot1.bin` — the repo's only GSP-level capture of a real
+        // GA106, also an `RmInitAdapter` capture — carries `0x20810108` **three times**, and
+        // `tests/tests/replay_conformance.rs` counts those three in its claimed/unclaimed pin
+        // (96 -> 99, the whole delta attributed to this id by measurement). So `0x20810108`
+        // IS demanded by a real boot; it is absent from **this** capture specifically, which
+        // is a fact about `cap1b` and not about the id. ★ That makes its coverage *stronger*
+        // than an exemption normally implies: a real firmware capture judges its reply, just
+        // not this one.
+        WantedTable::BinApiCtrl0108,
+        // `0x20800a9a` is the genuine module-boundary case: `[measured 2026-08-10]`
+        // `rpctrace_ga106_boot1.bin` contains it **zero** times. It is reached only through
+        // `subdeviceCtrlCmdKPerfBoost_IMPL`, i.e. only when a client asks for a P-state
+        // boost — which the differential measured as the second ioctl of `cuCtxCreate` and
+        // which no `RmInitAdapter` window issues. ⊘ No closure limit reaches a control the
+        // capture's driver never issues.
+        //
+        // ★ Its reply plane is covered where it can be: `kayfabe_abi::perfboost` sweeps the
+        // decoder, and `crates/kayfabe-device/tests/status_divergence.rs` asserts the reply
+        // at THIS policy's boundary — including the routing claim, which is the part a reply
+        // test alone cannot make. ⊘ The envelope is still absent and that cost is real.
+        WantedTable::InternalPerfBoostSet2x,
     ]
     .into_iter()
     .collect();
@@ -574,10 +600,13 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `ce1442`]` the sole caller `kchangrpapiConstruct_IMPL` fails in `cup2`'s dmesg delta
     // and never in the same boot's `nvidia-smi` window. ★ A `cuInit`-driven capture would
     // close it.
-    assert_eq!(universe.len(), 41, "non-vacuity: the universe is not empty");
+    // ⊘ 41 -> 43 at the ioctl differential's first firing (`0x20810108`, `0x20800a9a`), and
+    // BOTH are exceptions — a FIFTEENTH and SIXTEENTH — but ⚠ for different reasons, one of
+    // which is refuted by a capture in this same tree. See their rows above.
+    assert_eq!(universe.len(), 43, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        22,
+        24,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
