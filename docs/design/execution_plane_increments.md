@@ -12127,7 +12127,7 @@ natural first step of `w202`, where the partition it measures is the subject.
 unreachable in every shipping build; this rung moves `cup2`'s CE path and says nothing about
 the completion plane, which has no C oracle at all.
 
-## §16.65 ★★★★★ BOOTED `s51_d502ac6_engroute` (`w202`) — **OUTCOME B**, and my brief's central *evidence* was misattributed
+## §16.65 ★★★★★ BOOTED `s51_d502ac6_engroute` (`w202`) — **AN OUTCOME THE FALSIFIER HAD NO CELL FOR**, because its own evidence was misattributed
 
 `[measured 2026-08-10, boot `s51_d502ac6_engroute`, both artifacts stamped
 `kayfabe-rev:d502ac658b7fa11c02190de74d587a869aa03c91`]`
@@ -12164,7 +12164,30 @@ check), plus **8 refused `Ce` doorbells**, totalling the 94. The routing defect 
 built for is **real and is 86 doorbells wide**, and nothing but this histogram could say so:
 before the change those 86 were *already* refused, under a name that described bytes.
 
-### 16.65.3 ★★★★★ OUTCOME B — and the refutation is of my own brief's EVIDENCE, not its fix
+### 16.65.3 ★★★★★ THE FALSIFIER HAD NO CELL FOR THIS, and that is the finding
+
+⊘ **Scored honestly first, against the three values committed before the boot.**
+
+| clause of **A** (the predicted landing) | on `s51_d502ac6_engroute` |
+|---|---|
+| `448/354/94` unchanged in count | ✔ |
+| `CUP2_RC=1`, `pdb=Y`, `SERVED-LOCAL` on `0x00010002` unchanged | ✔ |
+| the 94's tag becomes `Route::NotACopyEngineChannel` | **partly** — 86 of 94 |
+| `SubmissionHasNoLaunch` → 0 | ✘ **it is still 1, and it is still FIRST** |
+
+**B** required *"the refused count moves **off** 94"*. It did not. **C** required a refusal
+from an `EngineKind::Ce` channel — one *did* occur, but not for C's stated reason (the engine
+refinement reached UVM's channels correctly; `Ce=362` is the proof). **D** required `served`
+to drop; it did not.
+
+⇒ The boot landed in **no cell**. A three-valued falsifier is only as good as the premise its
+cells are cut from, and this one was cut from *"the first refusal is a misrouted GR
+pushbuffer"* — which is false. ★ Same family as `falsifier_blocker_vs_only_blocker`: the
+values were fine and the **partition** was wrong, so `[measured 2026-08-10, boot
+`s51_d502ac6_engroute`]` had nowhere to land. ⊘ The instrument that rescued the rung was the histogram, which was not a falsifier
+value at all.
+
+### 16.65.3b The refutation is of my own brief's EVIDENCE, not its fix
 
 The brief's motivating sentence was: *"the `methods: 3, opaque: 2` above is a GR pushbuffer
 being decoded by the CE codec and correctly declining to find a CE launch."*
@@ -12182,8 +12205,7 @@ That is a **CE** pushbuffer, on a **CE**-labelled channel, routed to the **CE** 
 is exactly where it belongs, and `w202` could not move it and did not. ⇒ The rung's fix is
 right and its cited evidence was a different doorbell's.
 
-★ **This is why B was the informative outcome and why the histogram was the rung's first
-step.** With only `448/354/94` and an unchanged first-refusal tag, `s51` reads as *"nothing
+★ **This is why the histogram had to be the rung's first step.** With only `448/354/94` and an unchanged first-refusal tag, `s51` reads as *"nothing
 happened"*. The partition says 86 doorbells changed executor-verdict while the count held —
 the same shape §16.64.6 recorded as a prediction refuted by a rename that preserved a count,
 now with the instrument that separates the two.
