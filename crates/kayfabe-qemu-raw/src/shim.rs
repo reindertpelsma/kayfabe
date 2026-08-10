@@ -4599,14 +4599,97 @@ impl SharedDoorbell {
             }
         };
         let gpa = binding.phys.saturating_add(off);
-        let len = Self::RING_PIN_BYTES;
+        // ★★★★★ **G6 — HOW MUCH OF THE RING, and it is DERIVED from the guest's own
+        // declaration rather than chosen.**
+        //
+        // [measured 2026-08-10, `run_w229b_b66bd44_execvas_real_qemu.log`] the entry counts
+        // this guest declares are **4096** (the CE channel behind the doorbells we forward),
+        // **1024** and **32**. A GPFIFO entry is 8 bytes, so those rings are **32 KiB**,
+        // **8 KiB** and 256 bytes — and the one page this used to pin is **one eighth** of
+        // the first. ⇒ The old constant was not merely conservative: seven eighths of the
+        // queue hardware would fetch from was never described to RM at all.
+        //
+        // ⊘ And a bigger constant is still the wrong shape, for the reason
+        // `RING_PIN_BYTES`'s own docs record: four consecutive guest **virtual** pages of
+        // this ring resolve to four scattered guest **physical** pages, and an
+        // `OS_DESCRIPTOR` describes ONE contiguous host range. So the length is derived and
+        // then **split at every discontinuity** — one descriptor per contiguous run, walked
+        // below.
+        let want = u64::from(f.ring_entries).saturating_mul(Self::GP_FIFO_ENTRY_BYTES);
+        if want == 0 {
+            return Some(format!(
+                "{who} gpa=0x{gpa:x} → NO EXTENT (the channel declared {} entries, so the \
+                 ring is zero bytes long; ⊘ not a miss — there is nothing to pin)",
+                f.ring_entries
+            ));
+        }
+        if !ring_va.is_multiple_of(Self::RING_PIN_BYTES) {
+            return Some(format!(
+                "{who} gpa=0x{gpa:x} want={want} → UNALIGNED RING VA (the walk below steps in \
+                 host pages and cannot express a ring that starts mid-page; ⊘ refused by \
+                 name rather than silently rounded, which would pin bytes the guest did not \
+                 name)"
+            ));
+        }
+        // ---- 1b. the RUNS, from the guest's own page tables, one lookup per page --------
+        //
+        // ⊘ Every page is resolved through the address table exactly as the first one was.
+        // Nothing here assumes the next page follows the last: that assumption is what the
+        // measurement above refutes, and adopting it would produce a plausible file offset
+        // for bytes that live somewhere else.
+        let pages = want.div_ceil(Self::RING_PIN_BYTES);
+        let mut runs: Vec<(u64, u64, u64)> = Vec::new(); // (va, gpa, len)
+        let mut unresolved: Option<(u64, String)> = None;
+        for i in 0..pages {
+            let pva = ring_va + i * Self::RING_PIN_BYTES;
+            let Ok((b, o)) = self
+                .device
+                .resolve(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(pva))
+            else {
+                unresolved = Some((pva, format!("page {i} of {pages}")));
+                break;
+            };
+            let pgpa = b.phys.saturating_add(o);
+            match runs.last_mut() {
+                Some((_, rgpa, rlen)) if *rgpa + *rlen == pgpa => *rlen += Self::RING_PIN_BYTES,
+                _ => runs.push((pva, pgpa, Self::RING_PIN_BYTES)),
+            }
+        }
+        // ★ The last run is trimmed to the ring's true end: a 4096-entry ring is a whole
+        // number of pages, a 32-entry one is 256 bytes, and pinning the rest of that page
+        // would be describing memory the guest did not name to this channel.
+        if let Some((va0, _, rlen)) = runs.last_mut() {
+            let end = ring_va + want;
+            if *va0 + *rlen > end {
+                *rlen = end - *va0;
+            }
+        }
+        let geometry = format!(
+            " | ★ GEOMETRY: {} entries x {} = {want} bytes = {pages} pages \
+             in {} contiguous run(s){}",
+            f.ring_entries,
+            Self::GP_FIFO_ENTRY_BYTES,
+            runs.len(),
+            match &unresolved {
+                Some((pva, at)) => format!(
+                    " — ⚠ TRUNCATED: {at} (va 0x{pva:x}) does not resolve, so the runs below \
+                     cover only the prefix that does"
+                ),
+                None => String::new(),
+            }
+        );
+        let Some(&(_, _, len)) = runs.first() else {
+            return Some(format!(
+                "{who} gpa=0x{gpa:x} → NOT ONE PAGE RESOLVED{geometry}"
+            ));
+        };
         // ---- 2. the file offset, from the HYPERVISOR's own stated layout ---------------
         //
         // ⊘ Two different questions are asked of two different sources here, and that is
         // the point: the guest's page tables say WHICH guest-physical bytes, and the
         // hypervisor says where those bytes live in the descriptor. Deriving the second
         // from the first is the identity shortcut `layout.rs` refuses.
-        let (run, control) = {
+        let (resolved, control) = {
             let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
             let Some(vmm) = held.as_ref() else {
                 drop(held);
@@ -4615,7 +4698,15 @@ impl SharedDoorbell {
                      `attach_ram` there is no layout to resolve against)"
                 ));
             };
-            let run = vmm.resolve_guest_ram(backing, gpa, len);
+            // ★ Every run is asked of the hypervisor separately, under ONE hold of the
+            // layout: two runs resolved either side of a layout change would be two answers
+            // about two different machines.
+            let resolved: Vec<_> = runs
+                .iter()
+                .map(|&(va, rgpa, rlen)| {
+                    (va, rgpa, rlen, vmm.resolve_guest_ram(backing, rgpa, rlen))
+                })
+                .collect();
             // ★★★ THE NEGATIVE CONTROL, taken from the SAME table, in the SAME instant, on
             // the SAME line. A control read at a different moment could differ for a
             // reason that has nothing to do with the mechanism.
@@ -4634,7 +4725,7 @@ impl SharedDoorbell {
             let probe = u64::try_from(top).unwrap_or(u64::MAX).saturating_add(len);
             let control = (probe, vmm.resolve_guest_ram(backing, probe, len));
             drop(held);
-            (run, control)
+            (resolved, control)
         };
         let control = match control.1 {
             Err(r) => format!(
@@ -4652,88 +4743,129 @@ impl SharedDoorbell {
                 control.0, bad.file_offset
             ),
         };
-        let run = match run {
-            Ok(r) => r,
-            Err(r) => {
-                return Some(format!(
-                    "{who} gpa=0x{gpa:x} len={len} → REFUSED BY NAME `{}` (the hypervisor \
-                     stated no run covering this guest-physical address for the block we \
-                     adopted; ⊘ NOT clamped and NOT assumed identity){control}",
-                    r.name()
-                ));
-            }
-        };
-        // ---- 3. the grant, and it is minted from the VMM's numbers and nothing else ----
-        let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-            run.file_offset,
-            len,
+        // ---- 3+4. one grant and one pin PER CONTIGUOUS RUN -----------------------------
+        //
+        // ⊘ Every run is reported, including the ones that refuse, and the report says which
+        // run it is out of how many. A loop that stopped at the first refusal would make
+        // "the ring is one run and it failed" and "the ring is eight runs and the second
+        // failed" the same line.
+        let total = resolved.len();
+        let mut lines: Vec<String> = Vec::new();
+        let mut pinned = 0usize;
+        let mut bytes_pinned = 0u64;
+        let mut wall = false;
+        for (i, &(rva, rgpa, rlen, ref run)) in resolved.iter().enumerate() {
+            let at = format!(
+                "{who} run {}/{total} va=0x{rva:x} gpa=0x{rgpa:x} len={rlen}",
+                i + 1
+            );
+            let run = match run {
+                Ok(r) => r,
+                Err(r) => {
+                    lines.push(format!(
+                        "{at} → REFUSED BY NAME `{}` (the hypervisor stated no run covering \
+                         this guest-physical address for the block we adopted; ⊘ NOT clamped \
+                         and NOT assumed identity)",
+                        r.name()
+                    ));
+                    continue;
+                }
+            };
             // ★ Read-WRITE, and it is a decision rather than the wider default. These pages
             // carry the channel's GPFIFO and, at `+0x8004`, its finishPayload semaphore —
             // memory the ENGINE writes. `OS_DESCRIPTOR` hands RM a host VA it walks with
             // `pin_user_pages`, and pinning for a DMA the device writes needs a writable
             // mapping. ⊘ The narrower grant is not the safer one here; it is the one that
             // fails at the ioctl for a reason the status code will not name.
-            kayfabe_vmm::Prot::ReadWrite,
-        );
-        // ---- 4. the pin -------------------------------------------------------------
-        match self
-            .device
-            .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, va, grant)
-        {
-            Ok(p) => Some(format!(
-                "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → {} memory={:#x} \
-                 host_va=0x{:x} placed_as_asked={} — ★ a REAL host RM object \
-                 (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) now exists over the guest's own \
-                 pages, mapped FIXED at the guest's own VA. ⊘ Nothing consumes it yet{control}",
+            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
                 run.file_offset,
-                if p.already {
-                    "ALREADY PINNED (idempotent replay; no second OS_DESCRIPTOR and no second fixed map)"
-                } else {
-                    "PINNED"
-                },
-                p.memory.raw(),
-                p.host_va,
-                p.host_va == ring_va,
-            )),
-            // ★★★★★ **THE WALL, and it is NAMED rather than left to be decoded.**
-            //
-            // `SystemDataPlane` is not a defect and must not be read as one. Every doorbell
-            // that reaches this fall-through on this bench belongs to the **system proc** —
-            // RmInitAdapter's CE scrubber, client `0xc1e0…`, a KERNEL client — and
-            // `l1_concurrency.md` §12.26 forbids the system proc a data plane: its work is
-            // FORGED to its own completion queue, never forwarded, precisely so it can
-            // never hold host state whose reclaim has no defined point. That rule's own
-            // docs say the day it must be re-opened, it is re-opened **deliberately**,
-            // "with a refcount or a global quiesce point — not discovered afterwards".
-            //
-            // ⊘ So this line is where a rung stops, not where a fix goes. Relaxing the
-            // guard here to make a pin happen would be deleting a lifetime boundary to
-            // enable an internal capability, which is `same_class_id_opposite_directions`
-            // exactly.
-            Err(kayfabe_rt::FwdFault::SystemDataPlane) => Some(format!(
-                "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → ⊘ REFUSED \
-                 `SystemDataPlane` — THE WALL, and it is a STANDING DESIGN RULE, not a \
-                 defect. This channel belongs to the SYSTEM proc (the guest kernel's own \
-                 client), and `l1_concurrency.md` §12.26 gives the system proc no data \
-                 plane: its work is FORGED, never forwarded, so it can hold no host state \
-                 whose reclaim has no defined point. ★ Everything BEFORE this line \
-                 succeeded — the ring's VA resolved, its GPA came out of the guest's own \
-                 page tables, and the hypervisor's stated layout answered with a file \
-                 offset. ⇒ What is unbuilt is a LIFETIME for system-proc host state, and \
-                 re-opening §12.26 is an owner decision{control}",
-                run.file_offset
-            )),
-            Err(e) => Some(format!(
-                "{who} gpa=0x{gpa:x} → file offset 0x{:x} ({len} bytes) → REFUSED {e:?}. \
-                 ⚠ If this names `PlacementRefused`, the fixed map landed somewhere else \
-                 and was UNWOUND rather than adopted. ⚠ If it names an RM status `0x51`, \
-                 that is `NV_ERR_NO_MEMORY` and it is COLLISION-OR-EXHAUSTION — the two \
-                 are indistinguishable from the status alone and neither reads as \
-                 success{control}",
-                run.file_offset
-            )),
+                rlen,
+                kayfabe_vmm::Prot::ReadWrite,
+            );
+            match self
+                .device
+                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(rva), grant)
+            {
+                Ok(p) => {
+                    pinned += 1;
+                    bytes_pinned += rlen;
+                    lines.push(format!(
+                        "{at} → file offset 0x{:x} → {} memory={:#x} host_va=0x{:x} \
+                         placed_as_asked={}",
+                        run.file_offset,
+                        if p.already {
+                            "ALREADY PINNED (idempotent replay)"
+                        } else {
+                            "PINNED"
+                        },
+                        p.memory.raw(),
+                        p.host_va,
+                        p.host_va == rva,
+                    ));
+                }
+                Err(e) => {
+                    if matches!(e, kayfabe_rt::FwdFault::SystemDataPlane) {
+                        wall = true;
+                    }
+                    lines.push(format!(
+                        "{at} → file offset 0x{:x} → REFUSED {e:?}",
+                        run.file_offset
+                    ));
+                }
+            }
         }
+        // ★★★★★ **THE WALL, and it is NAMED rather than left to be decoded.**
+        //
+        // `SystemDataPlane` is not a defect and must not be read as one. Every doorbell that
+        // reaches this fall-through on this bench belongs to the **system proc** —
+        // RmInitAdapter's CE scrubber, client `0xc1e0…`, a KERNEL client — and
+        // `l1_concurrency.md` §12.26 forbids the system proc a data plane: its work is
+        // FORGED to its own completion queue, never forwarded, precisely so it can never
+        // hold host state whose reclaim has no defined point. That rule's own docs say the
+        // day it must be re-opened, it is re-opened **deliberately**, "with a refcount or a
+        // global quiesce point — not discovered afterwards".
+        //
+        // ⊘ So this line is where a rung stops, not where a fix goes. Relaxing the guard
+        // here to make a pin happen would be deleting a lifetime boundary to enable an
+        // internal capability, which is `same_class_id_opposite_directions` exactly.
+        let verdict = if pinned == total {
+            format!(
+                " | ★ ALL {total} RUN(S) PINNED, {bytes_pinned} of {want} bytes — one REAL \
+                 host RM object (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) per contiguous run now \
+                 exists over the guest's own pages, each mapped FIXED at the guest's own VA. \
+                 ⊘ Nothing consumes them yet"
+            )
+        } else if wall {
+            format!(
+                " | ⊘ {pinned} of {total} run(s) pinned — REFUSED `SystemDataPlane`, THE \
+                 WALL, and it is a STANDING DESIGN RULE, not a defect. This channel belongs \
+                 to the SYSTEM proc (the guest kernel's own client), and `l1_concurrency.md` \
+                 §12.26 gives the system proc no data plane: its work is FORGED, never \
+                 forwarded, so it can hold no host state whose reclaim has no defined point. \
+                 ★ Everything BEFORE it succeeded — every run's VA resolved, its GPA came out \
+                 of the guest's own page tables, and the hypervisor's stated layout answered \
+                 with a file offset. ⇒ What is unbuilt is a LIFETIME for system-proc host \
+                 state, and re-opening §12.26 is an owner decision"
+            )
+        } else {
+            format!(
+                " | ⚠ {pinned} of {total} run(s) pinned, {bytes_pinned} of {want} bytes. ⚠ If \
+                 a line below names `PlacementRefused`, that fixed map landed somewhere else \
+                 and was UNWOUND rather than adopted. ⚠ If one names an RM status `0x51`, \
+                 that is `NV_ERR_NO_MEMORY` and it is COLLISION-OR-EXHAUSTION — the two are \
+                 indistinguishable from the status alone and neither reads as success"
+            )
+        };
+        Some(format!(
+            "{who} gpa=0x{gpa:x}{geometry}{verdict}{control}\n    {}",
+            lines.join("\n    ")
+        ))
     }
+
+    /// One GPFIFO entry, in bytes. ⊘ Not a tunable: it is the width of the hardware
+    /// structure `gpFifoEntries` counts, and the multiplier that turns the guest's declared
+    /// count into an extent.
+    const GP_FIFO_ENTRY_BYTES: u64 = 8;
 
     /// ★★ **How much of the ring this rung pins: ONE host page.**
     ///
