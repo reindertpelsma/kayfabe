@@ -13073,8 +13073,11 @@ together; two held (`0 refusing`, `>0 forwarded`) and the third — the guest su
 
 ★★★★★ **AND THE FACT NO CELL PREDICTED, which is the rung's actual finding: THREE GUEST
 DOORBELLS WERE CARRIED TO A HOST GPU CHANNEL.** `of the served: … 3 forwarded (host channel
-rung)` is the first non-zero `forwarded` count in this project's history — every prior boot in
-`traces/guest_boots/` reads `0 forwarded`. They are **`Ce`**, all on token `0x00010002`, at
+rung)` is the first non-zero `forwarded` count in this project's history. ⊘ **Stated at its exact
+strength**: the `local`/`forwarded` split is an ABI-36 counter, so only **6** committed boot logs
+carry the line at all — five read `0 forwarded` and `p2` is the only non-zero. The older boots
+are silent on it rather than agreeing with it, and `0 forwarded` was in any case over-determined
+(§16.69.1(3)). They are **`Ce`**, all on token `0x00010002`, at
 `05:48:29`, `05:48:55`, `05:49:11`. ⊘ **And they were `Ce`, exactly as §16.69.1(2) predicted from
 the code** — the engine that changes destination when the plane comes on is the one the brief
 said would not.
