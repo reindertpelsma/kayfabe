@@ -772,3 +772,140 @@ fn decode_methods(pb: &dyn PushbufferAbi, bytes: &[u8]) -> Vec<(u32, Vec<u32>)> 
 }
 
 kayfabe_util::assert_send_sync!(GpCursor, CeUtilsChannel, CeUtilsRun, CeUtilsRefusal);
+
+// =====================================================================================
+// ★★★★★ §16.79 — THE METHOD STREAM, READ AND NOT INTERPRETED
+// =====================================================================================
+
+/// ★★★★★ **Dump the raw method headers of the submission this doorbell is about, WITHOUT
+/// deciding what any of them mean.**
+///
+/// # Why this exists, and why it is not [`run_submission`]
+///
+/// `[measured 2026-08-10, boots `w215_79ed443_ctl` / `w216_f5f55ad_mcbudget`]` `cuCtxCreate`
+/// waits on GrCompute channel token `0x00000007` and rings it 86 times, while `cup2`
+/// performs **zero kernel launches** — no `cuModuleLoad`, no PTX, nothing to execute. Two
+/// readings fit: the traffic is user compute, or it is **golden-context initialisation**
+/// (context-buffer setup and a report semaphore). They ask for completely different rungs,
+/// and ⊘ **the channel's class cannot tell them apart** — `AMPERE_COMPUTE_B` is allocated
+/// during context creation whether or not anything is ever launched.
+///
+/// Only the method stream can. [`run_submission`] cannot be asked: it is the CE executor's
+/// reader, it decodes against the CE codec, and on a GR ring every method comes back
+/// [`kayfabe_arch::PushMethod::Opaque`] by class gating — *"no launch found"* out of a
+/// decoder that could not have found one is not evidence.
+///
+/// # ⊘ What this function refuses to do
+///
+/// It does **not** decode, classify, or name a single method. It reports the header word,
+/// the method address the header carries, and the argument words — as numbers. A reader
+/// joins them to `clc7c0.h` offline. ⊘ That is the whole discipline: a dump that said
+/// "SET_OBJECT" would be this port's opinion about a GR class it has no codec for, and the
+/// question being asked is precisely whether our opinion of this stream is right.
+///
+/// It advances nothing: `cursor` is taken by value and no state is written back, so calling
+/// this on a doorbell the port then refuses leaves the channel exactly as it was.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] when the ring or a pushbuffer range will not resolve — the same walk,
+/// the same names, as [`run_submission`]'s.
+pub fn dump_submission_methods(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    max_methods: usize,
+) -> Result<String, CeUtilsRefusal> {
+    let mut last: Option<(GpuVa, CeResolve)> = None;
+    let entries = if chan.ring_entries == 0 {
+        RING_ENTRIES_FALLBACK
+    } else {
+        chan.ring_entries
+    };
+    let start_index = cursor.next % entries;
+    let mut next = cursor.next;
+
+    // ---- 1. THE RING — the same read, the same arch decoder, as `run_submission`. -------
+    let mut ranges: Vec<kayfabe_arch::PushRange> = Vec::new();
+    for _ in 0..MAX_ENTRIES_PER_DOORBELL {
+        let idx = next % entries;
+        let at = chan
+            .ring_va
+            .wrapping_add(u64::from(idx) * GP_ENTRY_SIZE as u64);
+        let mut raw = [0u8; GP_ENTRY_SIZE];
+        read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
+            fault: f,
+            detail: last,
+        })?;
+        let Some(r) = pb.gpfifo_entries(&raw).into_iter().next() else {
+            break;
+        };
+        ranges.push(r);
+        next = next.wrapping_add(1) % entries;
+    }
+    if ranges.is_empty() {
+        return Err(CeUtilsRefusal::plain(FwdFault::RingBroughtNoEntry {
+            ring_va: GpuVa(chan.ring_va),
+            index: start_index,
+            entries,
+        }));
+    }
+
+    // ---- 2. THE METHOD WORDS — bounded exactly as the executor's are. -------------------
+    let mut methods: Vec<(u32, Vec<u32>)> = Vec::new();
+    let mut total = 0usize;
+    for r in &ranges {
+        if total >= MAX_PUSH_TOTAL_BYTES {
+            break;
+        }
+        let len = (r.len as usize)
+            .min(MAX_PUSH_RANGE_BYTES)
+            .min(MAX_PUSH_TOTAL_BYTES - total);
+        let mut buf = vec![0u8; len];
+        read_va(ce, vmm, &mut last, r.va.0, &mut buf).map_err(|f| CeUtilsRefusal {
+            fault: f,
+            detail: last,
+        })?;
+        methods.extend(decode_methods(pb, &buf));
+        total += len;
+    }
+
+    // ---- 3. THE REPORT — numbers only. -------------------------------------------------
+    let mut out = format!(
+        "ring=0x{:x} idx={start_index} entries={entries} ranges={} methods={} bytes={total}",
+        chan.ring_va,
+        ranges.len(),
+        methods.len(),
+    );
+    for r in &ranges {
+        out.push_str(&format!(" | range va=0x{:x} len={}", r.va.0, r.len));
+    }
+    for (n, (header, args)) in methods.iter().take(max_methods).enumerate() {
+        // ★ The method ADDRESS as the class headers write it: the header's low 13 bits are
+        // the address in dwords, so `<< 2` is the byte offset a `clc7c0.h` `#define` states.
+        // ⊘ Arithmetic on the header, not an interpretation of it — the only claim here is
+        // that this arch packs the address in those bits, which `PushbufferAbi::method_len`
+        // already relies on to walk the stream at all.
+        let addr = (header & 0x1fff) << 2;
+        let count = (header >> 16) & 0x1fff;
+        let secop = header >> 29;
+        out.push_str(&format!(
+            "\n      m[{n:03}] hdr=0x{header:08x} addr=0x{addr:04x} count={count} secop={secop} args=["
+        ));
+        for (i, a) in args.iter().take(8).enumerate() {
+            out.push_str(&format!("{}0x{a:08x}", if i == 0 { "" } else { "," }));
+        }
+        if args.len() > 8 {
+            out.push_str(&format!(",..+{}", args.len() - 8));
+        }
+        out.push(']');
+    }
+    if methods.len() > max_methods {
+        out.push_str(&format!(
+            "\n      ⊘ BOUNDED-DUMP: {} further method(s) not shown",
+            methods.len() - max_methods
+        ));
+    }
+    Ok(out)
+}

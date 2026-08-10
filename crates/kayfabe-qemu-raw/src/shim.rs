@@ -2789,6 +2789,18 @@ struct SharedDoorbell {
 ///   submission arriving while the memory plane is detached is refused by name.
 /// - the per-channel **GPFIFO cursor**. See `kayfabe_rt::ceutils::GpCursor` for why the
 ///   ring's read position is state the shell must keep rather than derive.
+/// ★★★ §16.79 — how many route-refused pushbuffers get dumped per device life.
+///
+/// Small, and the smallness is the argument: the question ("is this golden-context init or
+/// user compute?") is decided by the FIRST submissions on the channel, and 86 rings of one
+/// channel would otherwise bury them. ⊘ A guest that rings a refused channel in a loop moves
+/// a counter and cannot fill a disk.
+const GR_PUSHBUFFER_DUMPS_MAX: u32 = 4;
+
+/// How many method words each dump prints. Enough to carry a `SET_OBJECT`, a context-buffer
+/// setup run and a report semaphore; the dump says how many it did not show.
+const GR_PUSHBUFFER_METHODS_MAX: usize = 48;
+
 #[derive(Debug, Default)]
 struct CeShellState {
     /// The memory plane, once realized. See the type docs.
@@ -2808,6 +2820,10 @@ struct CeShellState {
         std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>,
     /// ★★★★ **§16.65 — THE PER-ENGINE DOORBELL CENSUS.** See [`DoorbellCensus`].
     census: std::sync::Mutex<DoorbellCensus>,
+    /// ★★★ §16.79 — how many route-refused (GR) pushbuffers have been dumped this device
+    /// life. Bounded by [`GR_PUSHBUFFER_DUMPS_MAX`]: `cuCtxCreate` rings one GR channel 86
+    /// times and the first submissions are the ones that decide the question.
+    gr_dumps: std::sync::Mutex<u32>,
 }
 
 /// ★★★★ **§16.65 — how the arriving doorbells PARTITION by the engine of the channel they
@@ -3250,6 +3266,97 @@ impl SharedDoorbell {
     /// instance of what a second `ce_channel_facts` call costs: *"two resolutions of one
     /// fact can disagree, and the weaker one is the only thing a reader sees."* So the
     /// facts are handed **out of the one resolution**, never resolved again.
+    /// ★★★★★ §16.79 — print the raw method stream of a route-refused (GR) submission, at
+    /// most [`GR_PUSHBUFFER_DUMPS_MAX`] times per device life.
+    ///
+    /// ⊘ **It decides nothing and names nothing.** See
+    /// [`kayfabe_rt::ceutils::dump_submission_methods`] for why the numbers are the answer
+    /// and a decode would be this port's opinion about a class it has no codec for.
+    ///
+    /// ⊘ Every arm that cannot produce a dump SAYS SO with the reason. An absent section
+    /// would read as *"the ring was empty"*, which is the one thing it must never be
+    /// mistaken for — an empty capture is evidence of nothing.
+    fn dump_gr_pushbuffer_once(&self, token: u64, facts: &kayfabe_rt::device::CeChannelFacts) {
+        {
+            let mut n = self.ce.gr_dumps.lock().unwrap_or_else(|e| e.into_inner());
+            if *n >= GR_PUSHBUFFER_DUMPS_MAX {
+                return;
+            }
+            *n += 1;
+        }
+        let head = format!(
+            "kayfabe: GR-PUSHBUFFER token={token:#010x} engine={} ",
+            facts.engine_name()
+        );
+        let (Some(vaspace), Some(ring_va)) = (facts.vaspace, facts.ring_va) else {
+            eprintln!(
+                "{head}⊘ NO DUMP: the channel declared vaspace={:?} ring_va={:?}",
+                facts.vaspace, facts.ring_va
+            );
+            return;
+        };
+        let Some(plane) = self.plane.upgrade() else {
+            eprintln!("{head}⊘ NO DUMP: the register plane is gone");
+            return;
+        };
+        let root = match SharedDoorbell::doorbell_root(
+            &plane,
+            facts.client,
+            vaspace,
+            facts.vas_pdb.map(|p| p.0),
+        ) {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+            DoorbellRoot::Absent => {
+                eprintln!("{head}⊘ NO DUMP: this channel has no VA space root at all");
+                return;
+            }
+            DoorbellRoot::Underivable(pdb, why) => {
+                eprintln!(
+                    "{head}⊘ NO DUMP: root underivable from pdb 0x{pdb:x}: {}",
+                    why.kind()
+                );
+                return;
+            }
+        };
+        let chan = kayfabe_rt::ceutils::CeUtilsChannel {
+            client: facts.client,
+            vaspace,
+            ring_va,
+            ring_entries: facts.ring_entries,
+        };
+        // ⊘ The channel's OWN cursor, read and not written — the dump must not move a
+        // submission the port is about to refuse.
+        let cursor = *self
+            .ce
+            .cursors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(facts.proc.0, facts.chan.0))
+            .unwrap_or(&kayfabe_rt::ceutils::GpCursor::default());
+        let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(vmm) = held.as_mut() else {
+            eprintln!("{head}⊘ NO DUMP: the memory plane is not attached");
+            return;
+        };
+        let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+        let out = plane.ce_session_with_root(&root, demand, |ce| {
+            self.device.with_pushbuffer(|pb| {
+                kayfabe_rt::ceutils::dump_submission_methods(
+                    ce,
+                    pb,
+                    vmm,
+                    chan,
+                    cursor,
+                    GR_PUSHBUFFER_METHODS_MAX,
+                )
+            })
+        });
+        match out {
+            Ok(dump) => eprintln!("{head}{dump}"),
+            Err(refusal) => eprintln!("{head}⊘ NO DUMP: {}", refusal.describe()),
+        }
+    }
+
     fn try_ce_submission(
         &self,
         token: u64,
@@ -3325,6 +3432,19 @@ impl SharedDoorbell {
         // ⊘ `Ce` is unaffected on both planes — it falls through to exactly today's gate.
         let route = facts.route();
         if route != kayfabe_rt::DoorbellRoute::CpuCe {
+            // ★★★★★ §16.79 — READ THE PUSHBUFFER BEFORE REFUSING IT.
+            //
+            // The refusal below is true and stays. But it is refusing by ROUTE, and a route
+            // is a fact about the channel's engine, not about what the guest put in the
+            // ring. `[measured 2026-08-10, w216]` `cuCtxCreate` rings GrCompute token
+            // `0x00000007` 86 times while `cup2` performs **zero kernel launches**, so the
+            // traffic is either user compute or golden-context initialisation — two
+            // completely different rungs that the channel's class cannot separate.
+            //
+            // ⊘ BOUNDED to the first few refusals and PRINT-ONLY: it advances no cursor,
+            // writes no state, and takes the memory-plane lock only here, before the CE path
+            // below takes it. A refusal that returns above this point is unaffected.
+            self.dump_gr_pushbuffer_once(token, &facts);
             return Some(refused(
                 token,
                 kayfabe_device::FaultTag("Route::NotACopyEngineChannel"),
