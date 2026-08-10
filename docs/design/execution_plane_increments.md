@@ -13656,3 +13656,142 @@ which of these the descent says about `0x420064000`.
   instrument that exists and is unreachable; the debt is carried, named, and unpaid.
 - ⊘ Nothing about the completion tail, nothing about GR (`cup2` does not run), and the wall
   itself is not expected to move. This is an instrument rung.
+
+### 16.72.5 ★★★★★ THE OUTCOME — **ARM A**, and the disagreement cell fired too
+
+`[measured 2026-08-10, boots `w207_4395ebd_real`, `w207_4395ebd_ctl`, `w207_4395ebd_ctl2`, ONE
+binary stamped `kayfabe-rev:4395ebdd1bf54f3824da8dd1d8966edc6b67a3d7` read off the
+**hypervisor** (`strings /workspace/bench/qemu-build/qemu-system-x86_64`), 40 hex and equal to
+`git rev-parse HEAD`, differing only in `KAYFABE_ISOLATES`. All three wrapped in
+`host_xid_watch.sh`, all `xid_before=0 xid_after=0` off a ring buffer proved readable at **997
+lines**. All ran `POST_CAPTURE_HOOK=scripts/bench/guest_cuinit_wall.sh`.]`
+
+The two lines, **adjacent, on one boot, both carrying `key=0xc1e00006:0x2 pdb=0x2efa9c000`** —
+the join §16.71.4 said was the whole fix:
+
+```
+FWD-RING  … key=0xc1e00006:0x2 pdb=0x2efa9c000 RING-VA-UNBOUND va=0x420064000 → NOTHING FORWARDED
+RING-PROJ … key=0xc1e00006:0x2 … ring=0x420064000 DESCENT | … root=0x2efa9c000/ap1/sh47 rootsrc=published
+      rng=S:0x22e86000  fin=S:0x2c9ea004
+      gp[0]@0x420064000=0x420000064+0x60 pb=S:0x5e27064 pbm[24w of 96B]: [0]sub0/m0x0 … [8]sub0/m0x10
+      scan=4096/4096 declared (COMPLETE: every declared entry was read), unread=0,
+      nonzero=[0]=0x0000600420000064
+```
+
+⇒ ★★★★★ **ARM A, and it is not a marginal hit.** The published-root descent resolves
+`0x420064000` in pdb `0x2efa9c000` (`rng=S:0x22e86000`), resolves the finishPayload at
+`+0x8004`, **reads the entire 4096-entry ring** (`COMPLETE … unread=0`), finds exactly one
+non-zero entry, decodes it as a valid GPFIFO entry, resolves *its* pushbuffer
+(`pb=S:0x5e27064`) and decodes **24 words of coherent CE methods** out of it. The whole
+submission is legible to the walk. ⊘ Meanwhile `read_gpfifo_ring` — the same channel, the same
+VA, the same boot, three lines up — answers `RING-VA-UNBOUND`.
+
+⇒ ★★★ **The resolver question §16.71.5 retired is NOW LIVE, and properly posed for the first
+time**: the descent sees this ring and the forward-populated address table
+(`proc.vases[(gpu,pdb)].table.binding_at`) does not. §16.70.4's headline sentence turns out to
+be **true** — but it was unsupported when it was written, and it is supported now by a
+different measurement on the channel it is actually about. ★ A claim being right is not the
+same as its evidence being about it.
+
+### 16.72.6 ★★★★ THE ⊘ NONE-OF-THE-ABOVE CELL FIRED TOO — `walk:` CONTRADICTS `rng=`
+
+The same line ends:
+
+```
+walk: L0@0x2efa9c000[ch1 lf0 sp0 inv3]=PDE@0x0->0x2efa9b000/Vidmem
+      L1@0x2efa9b000[ch1 lf0 sp0 inv511]=PDE@0x0->0x2efa9a000/Vidmem
+      L2@0x2efa9a000[ch26 lf0 sp0 inv486]=PDE@0x420000000->0x2efa80000/Vidmem
+      L3@0x2efa80000[ch2 lf0 sp0 inv255]=PDE@0x420000000->0x2efa7ef00/Vidmem
+      L4@0x2efa7ef00[ch0 lf0 sp0 inv32]=INVALID-SLOT
+```
+
+`rng=` says **resolved**; `walk:` says **INVALID-SLOT** on the same address. `ceresolve.rs:662-664`
+put them side by side precisely so this would be visible — *"a trace whose terminal leaf
+disagrees with `rng=` is itself the finding"* — and this is the first boot in which it has.
+
+★★★★ **The cause is the instrument, and the arithmetic pins it: `walk_trace` follows ONE HALF
+of a DUAL PDE.** `kayfabe_mmu::walker`'s own docs state both halves of the story:
+
+- `walker.rs:405` — *"A **dual** slot contributes **two** entries here with the same `vabase`"*.
+- `walker.rs:200-202` — *"**Both halves of a dual slot are tried** … A point query cannot know
+  from the slot alone whether `va` is mapped by the small-page sub-table or the big-page one"*,
+  and `:580` follows both.
+
+But `ceresolve.rs:694-698` selects with `children.iter().filter(|c| c.vabase <= va).max_by_key(|c| c.vabase)`.
+⊘ **Two children with an EQUAL `vabase` make that selection arbitrary** — `max_by_key` returns
+the *last* maximum — so the trace descends exactly one sub-table and reports `INVALID-SLOT` if
+that is the wrong one. The counts confirm which:
+
+| level | slots | reading |
+|---|---|---|
+| `L3[ch2 … inv255]` | 2 + 255 = 256 | a 4 KiB page of **16-byte dual** PDEs = 256 slots; **one** dual slot contributes the two children |
+| `L4[ch0 lf0 sp0 inv32]` | **32** | 2 MiB ÷ **64 KiB** = 32 ⇒ the **big-page** sub-table. The small-page one would have 2 MiB ÷ 4 KiB = **512** |
+
+⇒ The walk followed the **big-page** table — all 32 entries invalid, because the ring is mapped
+with small pages — while `resolve` followed the **small-page** sibling and found the leaf.
+`0x2efa7ef00` is not even page-aligned, exactly as a 32×8 = 0x100-byte table packed at offset
+0xf00 would be.
+
+⊘ **NOT FIXED HERE, deliberately.** It is an observer, the brief forbids changing a resolver,
+and `walk_trace`'s output is evidence *this section just cited* — repairing it now would edit
+an instrument whose reading is load-bearing in the paragraph above. ★ It is also not a
+counter-argument to §16.72.5: `rng=`, the ring read, the entry decode and the pushbuffer decode
+are four independent confirmations from the resolver, and the walk is the only dissenter.
+⇒ Next rung's cheap fix: make the selection prefer a child whose sub-table actually covers `va`,
+or print **both** halves. ⚠ Until then, ★ **`INVALID-SLOT` from `walk_trace` means "one of the
+two sub-tables has nothing there", not "the VA is unmapped"** — and six prior sections read it
+as the latter.
+
+### 16.72.7 ⊘ THE CONTROL — one arm FLAKED, and the flake is the reason to say so
+
+⚠ **`w207_4395ebd_ctl` is NOT a control and must not be cited as one.** It came back
+`2 arrived, 2 served, 0 REFUSED`, `3 rings declared`, against the committed `448/362/86` and
+`26` — because **`cuInit(0)` itself failed, `unknown error (999)`**, where the baseline's
+`cuInit` succeeds and the wall is `cuCtxCreate → 801`.
+
+★★★ **And the guest kernel driver did the SAME THING on both**: with the `[   nn.nnnnnn]`
+timestamps stripped, `run_w207_4395ebd_ctl_dmesg.log` is **byte-identical** to
+`run_w206_8a2280b_ctl_dmesg.log` — same assertions, same order, same handles. The hook's three
+source md5s are identical too. ⇒ The whole divergence is in **userspace `cuInit`**, downstream
+of a kernel driver that reached exactly the same state. ⊘ That is a much narrower fact than
+"the boot flaked", and it is the one worth carrying.
+
+⊘ **It is not my change**, and the proof is positive rather than an alibi: `RING-PROJ 0`,
+`walk: 0`, `rng= 0`, `DESCENT 0` and `0 REFUSED` on that boot — **no line of the increment
+executed**. The `Stillborn` plane never reaches the fall-through, which is the same argument
+that makes the instrument neutral.
+
+`w207_4395ebd_ctl2`, same binary, same command, re-run:
+
+| | committed baseline | `ctl2` | |
+|---|---|---|---|
+| REFUSED / `GrCompute` | 86 / 86 | **86 / 86** | ✅ |
+| `SERVED-LOCAL` | 16 | **16** | ✅ |
+| `FWD-RING` / `CE-SUBMIT` / `RING-PROJ` | 0 / 0 / 0 | **0 / 0 / 0** | ✅ the neutrality claim |
+| rings declared | 26 | **26** | ✅ |
+| wall | `cuCtxCreate → 801` | **`cuCtxCreate → 801`** | ✅ |
+| `last CPU-CE` sem | `va=0x12006c004` | **`va=0x12006c004`** | ✅ |
+| arrived / served / `Ce` | 448 / 362 / 362 | **450 / 364 / 364** | ⚠ **+2** |
+
+⇒ ★★★ **The control is reproduced in every structural respect and DRIFTS BY 2 Ce doorbells.**
+The brief asked for bit-identity; it is not bit-identical, and that is reported rather than
+rounded. ⊘ The +2 cannot be the increment (`RING-PROJ 0`), and the flaked arm shows the guest
+varying its `RmInitAdapter` retry count boot to boot — one pair there, three pairs in every
+other boot. ⇒ ★★ **The doorbell census is NOT deterministic on this bench at ±2**, and a future
+rung reading a 2-doorbell control as a regression would be reading a `cuInit` flake. Add it to
+what "the control held" is allowed to mean.
+
+### 16.72.8 ⊘ WHAT THIS BOOT DID NOT ESTABLISH — including the debt PREDICTED unpaid
+
+- ⊘ **`CE-SUBMIT` = 0, exactly as §16.72.4 predicted before the boot**, and for the stated
+  reason: no resolver changed, so `read_gpfifo_ring` still answers `RingVaUnbound`, no span is
+  built, and `ce_copy` is not reached. ★ **The debt is stated, predicted and still unpaid** —
+  three rungs now. It is not evidence about the instrument in either direction.
+- ⊘ **Nothing about WHY the address table lacks the binding.** This rung measured that the
+  descent has it and the table does not; what populates the table, and which of the two
+  co-equal sources should have carried `0x420064000`, is untouched.
+- ⊘ **Nothing about why RM builds the pair**, unchanged from §16.71.6. And ⊘ nothing about the
+  completion tail or GR — `cup2` reached `cuCtxCreate` on the control only, and `GrCompute=0`
+  on the real arm again.
+- ⊘ **The wall did not move and was not meant to**: `RmInitAdapter failed! (0x25:0x65:1249)`,
+  host Xid 0 → 0.
