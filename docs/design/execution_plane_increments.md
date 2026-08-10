@@ -13802,10 +13802,19 @@ what "the control held" is allowed to mean.
 
 ### 16.73.1 ⊘ WHAT I REFUTED BEFORE BOOTING — five, and three are the brief's
 
-**(1) ⊘ "2519 tests" — MEASURED 2518.** `KAYFABE_SLOW=1 cargo test --workspace` at `52d418f`
-sums `passed=2518 failed=0` over 40 `test result:` lines. ⚠ And the *plain* run (no
-`KAYFABE_SLOW`) is **751** — a third of the suite is behind one environment variable, so a
-count quoted without the variable is meaningless. Gates re-measured at **3 red**
+**(1) ★ ⊘⊘ "2519 tests" — I REFUTED IT, AND MY REFUTATION WAS THE THING THAT WAS WRONG.**
+My first measurement summed `passed=` over `test result:` lines and got **2518**, and I wrote
+that down as a refutation. It is a **miscount**, and the way it failed is worth more than the
+number: `passed=` **excludes ignored tests**, the suite has exactly one, and my run had
+raced a concurrent `cargo clippy` so it emitted 40 result lines where a complete run emits
+**215**. Settled by counting the population instead of a run's summary —
+`KAYFABE_SLOW=1 cargo test --workspace -- --list | grep -c ': test$'` — in a clean worktree at
+each revision: **`52d418f` = 2520 declared, `797a6bc` = 2521** (+1, this rung's dual-PDE
+test). 2520 declared − 1 ignored = **2519 passing**, which is exactly what the brief said.
+⇒ ★★★ **A SUM OVER OUTCOMES IS NOT A COUNT OF THE POPULATION**, and the discrepancy pointed
+at my instrument, not at the brief. ⚠ And the *plain* run (no `KAYFABE_SLOW`) reports **751**,
+so a suite count quoted without the variable is meaningless in either direction.
+Gates re-measured at **3 red**
 (`kayfabe-device`, `ogkm-version-tag`, `CLAIM LEDGER`), `scripts/ci_gates.sh` real rc **1** —
 ⚠ read off `$?` of the script, not of a `tail` in a pipeline, which is the trap the brief named
 and which my first invocation walked into (`GATES_RC=0` from `tail`).
