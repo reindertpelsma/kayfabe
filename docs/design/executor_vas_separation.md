@@ -2,7 +2,7 @@
 
 **Status:** landed and measured on a real GA106 (`vh`, GA106 / 580.159.04), 2026-08-10.
 Revisions: falsifier `124b69b`, instrument corrections `83651d8` and `cc5d55c`, fix `254cf38`,
-pool fix `<this commit>`.
+pool fix `b66bd44`, boot evidence `1a5d16e`.
 
 > **The owner's invariant:** *VMM state must never be placed where a guest VA can name it.*
 
