@@ -1457,7 +1457,8 @@ fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bool {
 /// crate hardware writes and we do not — has to move.
 ///
 /// ★ Hence the four arms below are not "did it work"; they are four *different* things
-/// that can be true, and the interesting one is **arm C**.
+/// that can be true, and the interesting one is the **last** — the inert channel, which is
+/// the only arm every other check in this file would score as a pass.
 ///
 /// ```text
 ///   ★     R26 dictated ring   = asked X, RM placed X, GP_GET advanced, sem released  -> a PORT
