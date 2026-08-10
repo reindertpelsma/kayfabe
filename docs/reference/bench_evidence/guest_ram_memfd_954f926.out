@@ -1,0 +1,32 @@
+=== guest-RAM crossing, launch-time memfd — measured 2026-08-10T13:38:59Z ===
+box: vast 47373001 (vh2), RTX 3060 GA106, host 580.159.04 open
+rev: 954f926513f25730b8d1e1a07d1d79c58b600d98
+qemu stamp: kayfabe-rev:954f926513f25730b8d1e1a07d1d79c58b600d98mid
+
+### ARM: NVKVM_RAM_BACKEND=memfd
+QEMU pid 67790
+  fd=1 -> /workspace/bench/run_memfdA_qemu.log size=376 (0.0 MiB)
+  fd=14 -> /memfd:memory-backend-memfd (deleted) size=2147483648 (2048.0 MiB)
+  fd=15 -> /workspace/bench/run_memfdA_serial.log size=59887 (0.1 MiB)
+  fd=2 -> /workspace/bench/run_memfdA_qemu.log size=376 (0.0 MiB)
+  fd=22 -> /memfd:displaysurface (deleted) size=1228800 (1.2 MiB)
+OPENED from ANOTHER process, 2147483648 bytes
+pages with content in first 256 MiB: 44660 / 65536
+  Linux version    found=True
+  nvkvm-guest      found=True
+  systemd          found=True
+  nvidia           found=True
+VERDICT: guest RAM IS reachable as a shared fd, with NO new QEMU surface
+2026-08-10T13:39:04.834015Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+/root/memfd_evidence.sh: line 35: 67790 Killed                  NVKVM_RAM_BACKEND=memfd nohup bash scripts/bench/boot_nvkvm.sh memfdA > /dev/null 2>&1
+
+### CONTROL: same binary, flag absent (-m 2048)
+QEMU pid 67816
+  fd=21 -> /memfd:displaysurface (deleted) size=1228800
+shared rw-s mappings >= 1 GiB:
+  (none if no line above)
+2026-08-10T13:39:33.185834Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+/root/memfd_evidence.sh: line 35: 67816 Killed                  nohup bash scripts/bench/boot_nvkvm.sh ctrlA > /dev/null 2>&1
+
+VERDICT: the flag is NECESSARY and SUFFICIENT for guest RAM to exist as a shared fd,
+and OBSERVATIONALLY NEUTRAL to the device (identical memory-plane line).
