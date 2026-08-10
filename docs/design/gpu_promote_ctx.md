@@ -1110,3 +1110,9 @@ sentence about the wrong question**, and the noise consumed a bounded report bef
 arrived — so the one line the instrument exists for was never printed. ★ And the test written for
 this property passed, because it asserted only that no **host verb** was issued, never **which
 refusal**. A claim written in a comment and asserted nowhere is prose.
+
+⊘ **`Rm(Other(64))` decodes.** `64` = `0x40` = `NV_ERR_INVALID_STATE`
+(`ogkm-580: src/common/sdk/nvidia/inc/nvstatuscodes.h:93`, byte-identical at `ogkm`). ★ That is a
+**host** status carried back verbatim, not one of ours — `NOT_ON_THIS_RUNG` is `0x4B46` and
+`ioctl_error` tags errnos with `0x8000_0000`. So the CE engine-object forward reached NVIDIA's own
+code and NVIDIA refused it; the number is a lead, not a wall of ours.
