@@ -1732,6 +1732,42 @@ impl RegPlane {
         resolve_locked(&mut s, self.chip, root, va, demand)
     }
 
+    /// ★★★ **§16.64 — read the bytes behind a GPU VA against a root the caller holds.**
+    ///
+    /// [`MemoryPlane::read_published_va`]'s sibling; same aperture routing, same stores, and
+    /// the same refusal that PEER memory is not backed. Only the root's provenance differs.
+    ///
+    /// # Errors
+    /// The resolution whenever it was not `Resolved`, or the store's refusal sentence.
+    pub fn read_va_from_root(
+        &self,
+        root: &crate::ceresolve::VasRoot,
+        va: u64,
+        buf: &mut [u8],
+        demand: crate::ceresolve::Demand,
+    ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let r = resolve_locked(&mut s, self.chip, root, va, demand);
+        let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
+            return Err(PublishedVaRead::Unresolved(r));
+        };
+        match aperture {
+            Aperture::Vidmem => s
+                .fb
+                .read(phys, buf)
+                .map(|()| r)
+                .map_err(|e| PublishedVaRead::Store(e.why)),
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => s
+                .ram
+                .read(phys, buf)
+                .map(|()| r)
+                .map_err(|e| PublishedVaRead::Store(e.why)),
+            Aperture::Peer => Err(PublishedVaRead::Store(
+                "the leaf names PEER memory and this device backs no peer aperture",
+            )),
+        }
+    }
+
     /// ★★★ **§16.64 — the per-level descent trace for a root the caller already holds.**
     ///
     /// [`RegPlane::published_walk_trace`]'s sibling; produces a **sentence**, no address,

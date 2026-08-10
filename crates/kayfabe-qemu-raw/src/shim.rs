@@ -2730,12 +2730,32 @@ fn refused(
 
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
     fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
-        // ★★★ **E10e — the CPU copy-engine branch is tried FIRST, and only for a channel
-        // the core cannot serve at all.** `try_ce_submission` answers `None` unless the
-        // routed channel has **no `Vas`** (`vas_pdb == None`), which is precisely the case
-        // `plan_doorbell` refuses `NoVas`. So no channel changes hands: this arm serves
-        // exactly the doorbells that were refused before it existed, and every other
-        // doorbell takes the forwarding path below, unchanged.
+        // ★★★★ §16.64 — ⊘ **THIS COMMENT ASSERTED THE OPPOSITE OF THE CODE**, and it is the
+        // first sentence a reader of the doorbell path meets.
+        //
+        // What stood here: *"`try_ce_submission` answers `None` unless the routed channel has
+        // no `Vas` (`vas_pdb == None`) … So no channel changes hands."* The gate it describes
+        // is [`SharedDoorbell::try_ce_submission`]'s
+        // `facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor`, and the second
+        // conjunct is missing from that sentence entirely.
+        //
+        // ⇒ On the **shipping** configuration the sentence is exactly backwards.
+        // `local_ce_is_the_only_executor` is `isolate_plane == IsolatePlane::Stillborn`,
+        // which is the DEFAULT, so `!self.local_ce_is_the_only_executor` is `false` and the
+        // early return **never fires**. This arm therefore claims **every** doorbell whose
+        // channel has a `vaspace` and a `ring_va` — `Ce` and `GrCompute` alike — and it
+        // answers `Some(..)` **terminally**: a refusal here returns at the `if` below and
+        // the forwarding path underneath is never reached. Channels very much do change
+        // hands.
+        //
+        // ★ That is not a defect being introduced here and this rung does not change it (the
+        // executor partition is `w202`'s increment). It is recorded because the *count* it
+        // governs is what any doorbell measurement is read against: `[measured 2026-08-10,
+        // boots `s45_748a207_tsgsched` → `s49_57bd756_declroot2`]` the refused population
+        // moved `187 → 94` once the root resolved, so a majority of those doorbells were
+        // real CE work blocked behind a false refusal — and the remainder are refused by a
+        // name that is true. ⊘ The field's own doc at [`SharedDoorbell`] is correct; only
+        // this sentence was stale, and being first is what made it costly.
         if let Some(report) = self.try_ce_submission(token) {
             return report;
         }
@@ -2832,6 +2852,30 @@ const PROBE_PUSH_BYTES: usize = 128;
 /// a UVM `channel_init` push, and a hard stop against a hostile pushbuffer of tiny runs.
 const PROBE_PUSH_METHODS: usize = 12;
 
+/// ★★★★ §16.64 — **which of the two sources answered for a channel's page-directory root**,
+/// as a value both the executor and the report read.
+///
+/// ⊘ The provenance is a variant rather than a `bool` or a bare `Option<VasRoot>` because
+/// the two sources know **different things** and a reader must be able to tell them apart:
+/// a published root carries the guest's own `pageShift` and VA window, while a declared one
+/// is a base the object model resolved by resource identity with its geometry derived from
+/// the installed format. Collapsing them would make a report say "root=…" without saying
+/// which question it answered.
+#[derive(Debug, Clone, Copy)]
+enum DoorbellRoot {
+    /// This device's publication table answered — `(hClient, hVASpace)` keyed.
+    Published(kayfabe_device::ceresolve::VasRoot),
+    /// ★ The **object model's** base for the VA space this channel resolved to, walkable.
+    /// The arm that exists because a UVM-managed VA space publishes on a transport the
+    /// table above never sees, under a dup handle it could not match anyway.
+    Declared(kayfabe_device::ceresolve::VasRoot),
+    /// Neither source knows of a root. ⊘ Genuinely nobody — not "we did not look".
+    Absent,
+    /// A base exists but no walkable root could be derived from it, carrying the base and
+    /// the derivation's own refusal so the report never restates this as `NoPublication`.
+    Underivable(u64, kayfabe_device::ceresolve::CeResolve),
+}
+
 impl SharedDoorbell {
     /// ★★★ **E10e item (c) — SERVE a doorbell on a VAS-less copy-engine channel, on the
     /// CPU, in the shell.** `None` means *"not ours"*, and the forwarding path runs.
@@ -2866,6 +2910,41 @@ impl SharedDoorbell {
     /// the core under the plane's mutex — and it is why the whole executor lives out here
     /// rather than inside `apply_pushbuffer`, which holds a rank-1 proc lock.
     /// ⊘ `ce_channel_facts` is called and **completed** before the plane lock is taken.
+    /// ★★★★ **§16.64 — the two root sources, resolved ONCE, for every reader.**
+    ///
+    /// # ⊘ Why this is a function and not two call sites
+    ///
+    /// `[measured 2026-08-10, boot `s49_57bd756_declroot2`]` the serving path had already
+    /// been taught the second source while [`SharedDoorbell::addressing_probe`] had not, and
+    /// the result is this campaign's own named failure printed verbatim: the boot **served
+    /// 93 doorbells** through a declared root while the probe beside them said
+    /// `root=none rng=NOPUB row=ABSENT-FROM-ROOT-TABLE`. ⇒ *Two projections of one fact,
+    /// disagreeing, with the weaker one the only thing a reader sees.* A future rung reading
+    /// that line would have concluded the root still does not resolve.
+    ///
+    /// ⊘ So the order — publication table first, then the object model's own base — lives
+    /// here and nowhere else. A probe that re-derived it could drift from the answer it is
+    /// describing, which is exactly what it did.
+    fn doorbell_root(
+        plane: &kayfabe_device::RegPlane,
+        client: u32,
+        vaspace: u32,
+        vas_pdb: Option<u64>,
+    ) -> DoorbellRoot {
+        if let Some(root) = plane.published_root(client, vaspace) {
+            return DoorbellRoot::Published(root);
+        }
+        // ⊘ `None` here is a channel with genuinely no VA space (route 4's device-default
+        // shape) — a real absence, never papered over with a zero.
+        let Some(pdb) = vas_pdb else {
+            return DoorbellRoot::Absent;
+        };
+        match plane.root_from_declared_pdb(pdb) {
+            Ok(root) => DoorbellRoot::Declared(root),
+            Err(why) => DoorbellRoot::Underivable(pdb, why),
+        }
+    }
+
     fn try_ce_submission(&self, token: u64) -> Option<kayfabe_device::DoorbellReport> {
         let facts = self
             .device
@@ -2943,36 +3022,33 @@ impl SharedDoorbell {
         // the guest's own published `pageShift` and VA window, source 2 derives the shift
         // from the installed format because the control has no field for one. A root that
         // states its own geometry beats one that infers it.
-        let root = match plane.published_root(facts.client, vaspace) {
-            Some(root) => Some(root),
-            // ⊘ `vas_pdb` is `None` for a channel with genuinely no VA space (route 4's
-            // device-default shape). That is a real absence and falls through to the
-            // refusal below — it is not papered over with a zero.
-            None => match facts.vas_pdb {
-                Some(pdb) => match plane.root_from_declared_pdb(pdb.0) {
-                    Ok(root) => Some(root),
-                    // ⊘ The derivation's own refusal is REPORTED BY ITS OWN NAME rather
-                    // than collapsed into `NoPublication`. "The guest published nothing"
-                    // and "we could not size the format's root level" are different
-                    // diagnoses and exactly one of them is our defect.
-                    Err(why) => {
-                        return Some(refused(
-                            token,
-                            kayfabe_device::FaultTag("CeResolve::DeclaredRootUnusable"),
-                            format!(
-                                "the object model resolved page-directory base 0x{:x} for \
-                                 (hClient 0x{:x}, hVASpace 0x{vaspace:x}), but a walkable \
-                                 root could not be derived from it: {}{}",
-                                pdb.0,
-                                facts.client,
-                                why.describe(),
-                                self.addressing_probe(token)
-                            ),
-                        ));
-                    }
-                },
-                None => None,
-            },
+        // ⊘ Selected by [`SharedDoorbell::doorbell_root`], which the PROBE also calls —
+        // see its docs for the boot in which these were two sites and disagreed in the log.
+        let root = match SharedDoorbell::doorbell_root(&plane, facts.client, vaspace, facts.vas_pdb.map(|p| p.0))
+        {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => Some(r),
+            // ⊘ A channel with genuinely no VA space. A real absence, falling through to
+            // the refusal below — never papered over with a zero.
+            DoorbellRoot::Absent => None,
+            // ⊘ The derivation's own refusal is REPORTED BY ITS OWN NAME rather than
+            // collapsed into `NoPublication`. "The guest published nothing" and "we could
+            // not size the format's root level" are different diagnoses and exactly one of
+            // them is our defect.
+            DoorbellRoot::Underivable(phys, why) => {
+                drop(held);
+                return Some(refused(
+                    token,
+                    kayfabe_device::FaultTag("CeResolve::DeclaredRootUnusable"),
+                    format!(
+                        "the object model resolved page-directory base 0x{phys:x} for \
+                         (hClient 0x{:x}, hVASpace 0x{vaspace:x}), but a walkable root \
+                         could not be derived from it: {}{}",
+                        facts.client,
+                        why.describe(),
+                        self.addressing_probe(token)
+                    ),
+                ));
+            }
         };
         let outcome = root.as_ref().map(&mut run);
         drop(held);
@@ -3255,7 +3331,32 @@ impl SharedDoorbell {
             }
         };
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell;
-        let root = plane.published_root(facts.client, vaspace);
+        // ★★★★ §16.64 — THE SAME SELECTION THE EXECUTOR MADE, not a second one.
+        //
+        // `[measured 2026-08-10, boot `s49_57bd756_declroot2`]` this line read
+        // `plane.published_root(...)` while the executor beside it had two sources, and the
+        // boot printed `root=none rng=NOPUB row=ABSENT-FROM-ROOT-TABLE` on doorbells it had
+        // just **served** — 93 of them. ⊘ A probe that re-derives what it describes can
+        // disagree with it, and this one did, in the direction that reads as "still broken".
+        let sel = SharedDoorbell::doorbell_root(
+            &plane,
+            facts.client,
+            vaspace,
+            facts.vas_pdb.map(|p| p.0),
+        );
+        // ★ WHICH SOURCE ANSWERED, printed. `root=` alone cannot say whether the geometry
+        // beside it is the guest's own published `pageShift` or one derived from the
+        // installed format, and those are different claims.
+        let rootsrc = match sel {
+            DoorbellRoot::Published(_) => " rootsrc=published",
+            DoorbellRoot::Declared(_) => " rootsrc=declared(object-model)",
+            DoorbellRoot::Absent => " rootsrc=NONE",
+            DoorbellRoot::Underivable(..) => " rootsrc=UNDERIVABLE",
+        };
+        let root = match sel {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => Some(r),
+            DoorbellRoot::Absent | DoorbellRoot::Underivable(..) => None,
+        };
         // ★★★★ §16.6 — THE WHOLE ROW THE LOOKUP CHOSE, read out of the SAME table
         // `published_root` reads. Six boots named this pair in a refusal and printed no
         // body for it; see [`publication_row`] for what each field decides.
@@ -3272,8 +3373,14 @@ impl SharedDoorbell {
         // ⊘ Printed BESIDE `rng=`, which is `resolve`'s own answer for the same address, so
         // the two projections are compared by a reader rather than trusted apart. A trace
         // whose terminal leaf disagrees with `rng=` is itself the finding.
-        let walk = plane.published_walk_trace(facts.client, vaspace, ring_va);
-        let ring = plane.resolve_published_va(facts.client, vaspace, ring_va, demand());
+        let walk = root.as_ref().map_or_else(
+            || " walk=NO-ROOT".to_string(),
+            |r| plane.walk_trace_from_root(r, ring_va),
+        );
+        let ring = root.as_ref().map_or(
+            kayfabe_device::ceresolve::CeResolve::NoPublication,
+            |r| plane.resolve_va_from_root(r, ring_va, demand()),
+        );
         // ★★★★ §16.12 — THE RING'S OWN PAGE. §16.10 proved the walk lands on `V:0x20000`
         // correctly; the open question is whether OUR framebuffer has ever had a byte
         // written there. ⊘ Addressed by the resolution's OWN answer, never by a literal:
@@ -3283,12 +3390,10 @@ impl SharedDoorbell {
         // §16.16 dumped the leaf page alone and called the result "the ring's frame"; a
         // 1024-entry ring is 8 KiB and occupies TWO pages, so that sentence was true of
         // half the ring. See [`RING_PAGE_DUMPS`].
-        let ringpage = self.ring_pages(facts.client, vaspace, ring_va, facts.ring_entries);
-        let fin = plane.resolve_published_va(
-            facts.client,
-            vaspace,
-            ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING),
-            demand(),
+        let ringpage = self.ring_pages(root.as_ref(), ring_va, facts.ring_entries);
+        let fin = root.as_ref().map_or(
+            kayfabe_device::ceresolve::CeResolve::NoPublication,
+            |r| plane.resolve_va_from_root(r, ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING), demand()),
         );
         // The pushbuffer the entry AT THE CURSOR points at — read the entry, decode it, walk
         // its target. ⊘ Every step can fail and every failure is reported as itself: a ring
@@ -3315,7 +3420,12 @@ impl SharedDoorbell {
         };
         let gp_va = ring_va.wrapping_add(u64::from(idx) * PROBE_RING_BYTES as u64);
         let mut gp = [0u8; PROBE_RING_BYTES];
-        let pb = match plane.read_published_va(facts.client, vaspace, gp_va, &mut gp, demand()) {
+        let pb = match root.as_ref().map_or(
+            Err(kayfabe_device::plane::PublishedVaRead::Unresolved(
+                kayfabe_device::ceresolve::CeResolve::NoPublication,
+            )),
+            |r| plane.read_va_from_root(r, gp_va, &mut gp, demand()),
+        ) {
             Err(e) => format!("gp[{idx}]@0x{gp_va:x} ringread={}", e.describe()),
             Ok(_) => match kayfabe_abi::submit::gp_entry_decode(u64::from_le_bytes(gp)) {
                 None => format!(
@@ -3327,14 +3437,23 @@ impl SharedDoorbell {
                     d.gpu_va,
                     d.len_bytes,
                     plane
-                        .resolve_published_va(facts.client, vaspace, d.gpu_va, demand())
+                        .resolve_va_from_root(
+                            root.as_ref().expect("pb only decodes behind a root"),
+                            d.gpu_va,
+                            demand(),
+                        )
                         .tag(),
-                    self.push_headers(&plane, facts.client, vaspace, d.gpu_va, d.len_bytes)
+                    self.push_headers(
+                        &plane,
+                        root.as_ref().expect("pb only decodes behind a root"),
+                        d.gpu_va,
+                        d.len_bytes,
+                    )
                 ),
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} dec={declared}{userd} root={} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
+            " | c=0x{:x} vas=0x{vaspace:x} dec={declared}{userd} root={}{rootsrc} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),
@@ -3353,7 +3472,7 @@ impl SharedDoorbell {
             ),
             ring.tag(),
             fin.tag(),
-            self.ring_scan(facts.client, vaspace, ring_va, facts.ring_entries),
+            self.ring_scan(root.as_ref(), ring_va, facts.ring_entries),
         )
     }
 
@@ -3441,8 +3560,7 @@ impl SharedDoorbell {
     fn push_headers(
         &self,
         plane: &kayfabe_device::RegPlane,
-        client: u32,
-        vaspace: u32,
+        root: &kayfabe_device::ceresolve::VasRoot,
         push_va: u64,
         len_bytes: u64,
     ) -> String {
@@ -3452,7 +3570,7 @@ impl SharedDoorbell {
         }
         let mut buf = vec![0u8; take];
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
-        if let Err(e) = plane.read_published_va(client, vaspace, push_va, &mut buf, demand) {
+        if let Err(e) = plane.read_va_from_root(root, push_va, &mut buf, demand) {
             return format!("pbm=UNREADABLE({})", e.describe());
         }
         let words: Vec<u32> = buf
@@ -3483,7 +3601,12 @@ impl SharedDoorbell {
         out
     }
 
-    fn ring_pages(&self, client: u32, vaspace: u32, ring_va: u64, entries: u32) -> String {
+    fn ring_pages(
+        &self,
+        root: Option<&kayfabe_device::ceresolve::VasRoot>,
+        ring_va: u64,
+        entries: u32,
+    ) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
         };
@@ -3496,9 +3619,14 @@ impl SharedDoorbell {
         let want = span as usize;
         let take = want.min(RING_PAGE_DUMPS);
         let mut out = String::new();
+        // ⊘ Checked ONCE, before the loop: a per-iteration check that returns would report
+        // "no root" as if it were a property of page 0.
+        let Some(root) = root else {
+            return " fbRING=NO-ROOT (neither source has a page-directory root)".to_string();
+        };
         for i in 0..take {
             let va = ring_va.wrapping_add((i as u64) * 4096);
-            let r = plane.resolve_published_va(client, vaspace, va, demand);
+            let r = plane.resolve_va_from_root(root, va, demand);
             match r.vidmem_phys() {
                 // ⊘ A page that does not resolve to video memory is reported as itself and
                 // not skipped: "the ring's second page resolves elsewhere" is a finding.
@@ -3516,7 +3644,7 @@ impl SharedDoorbell {
         // ★ The semaphore's page — the third address, and the one that can be resident
         // while both ring pages are not.
         let sem_va = ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING);
-        let sem = plane.resolve_published_va(client, vaspace, sem_va, demand);
+        let sem = plane.resolve_va_from_root(root, sem_va, demand);
         match sem.vidmem_phys() {
             None => out.push_str(&format!(" fbFIN@va0x{sem_va:x}=NOT-VIDMEM({})", sem.tag())),
             Some(phys) => out.push_str(&fb_level_dump(&plane, "fbFIN", phys)),
@@ -3524,18 +3652,29 @@ impl SharedDoorbell {
         out
     }
 
-    fn ring_scan(&self, client: u32, vaspace: u32, ring_va: u64, entries: u32) -> String {
+    fn ring_scan(
+        &self,
+        root: Option<&kayfabe_device::ceresolve::VasRoot>,
+        ring_va: u64,
+        entries: u32,
+    ) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
         };
         let n = (entries as usize).clamp(1, RING_SCAN_ENTRIES);
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+        // ⊘ §16.63's rule, one source further out: a scan with no root read NOTHING, and
+        // must not render as a scan that read zeroes.
+        let Some(root) = root else {
+            return " scan=NO-ROOT — nothing was read, so this says NOTHING about the ring"
+                .to_string();
+        };
         let mut nonzero: Vec<String> = Vec::new();
         let mut unread = 0usize;
         for i in 0..n {
             let at = ring_va.wrapping_add((i * PROBE_RING_BYTES) as u64);
             let mut gp = [0u8; PROBE_RING_BYTES];
-            match plane.read_published_va(client, vaspace, at, &mut gp, demand) {
+            match plane.read_va_from_root(root, at, &mut gp, demand) {
                 Err(_) => unread += 1,
                 Ok(_) => {
                     let raw = u64::from_le_bytes(gp);
