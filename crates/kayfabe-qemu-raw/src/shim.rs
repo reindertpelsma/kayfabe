@@ -3491,24 +3491,32 @@ impl SharedDoorbell {
         // a whole ring from one sixteenth of it. A reader must not have to do the division,
         // so a truncated scan now says so in words and a complete one says THAT in words
         // too — otherwise the absence of a warning is itself ambiguous.
-        let coverage = if (n as u32) < entries {
-            format!(
-                " ⊘ BOUNDED-READING: {n} of {entries} entries — a write at any entry >= {n} is INVISIBLE here"
-            )
-        } else {
-            " (COMPLETE: every declared entry was read)".to_string()
-        };
-        format!(
-            " scan={}/{} declared{coverage}, unread={}, nonzero={}",
-            n,
-            entries,
-            unread,
-            if nonzero.is_empty() {
-                "NONE — every scanned entry is ZERO".to_string()
-            } else {
-                nonzero.join(" ")
-            }
-        )
+        // ★★★★★ **NOTHING READ IS NOT EVERYTHING ZERO — and this line asserted the second
+        // when the first was true.** `[measured 2026-08-10, boots s45/s46/s47/s48]` every
+        // one of them printed
+        //
+        // ```text
+        // scan=1024/1024 declared (COMPLETE: every declared entry was read), unread=1024,
+        //   nonzero=NONE — every scanned entry is ZERO
+        // ```
+        //
+        // and **both** parenthetical clauses were false. `read_published_va` answers
+        // `Err(Unresolved(NoPublication))` *before it touches any store*
+        // (`kayfabe-device/src/plane.rs`, `published_root` → early return), so a
+        // `NoPublication` makes all `n` reads fail: `unread == n`, and `nonzero` is empty
+        // because nothing was ever appended to it, not because the entries were zero. The
+        // old `coverage` was computed from the **loop bound alone**, with no reference to
+        // `unread`, so it said `COMPLETE` about a scan that read nothing.
+        //
+        // ⇒ The line restated `NoPublication` as if it were independent evidence about the
+        // ring — the same finding twice, the second time wearing a different instrument's
+        // clothes (`measure_at_the_boundary_not_inside`: two of your own computations
+        // agreeing is not corroboration). ⚠ It was cited as evidence in
+        // `execution_plane_increments.md` §16.57.3 and §16.60.4 before it was checked.
+        //
+        // ⊘ The guard is `unread == n`, not `unread > 0`: a partial read really did scan
+        // `n - unread` entries and *those* are legitimately reported.
+        ring_scan_sentence(n, entries, unread, &nonzero)
     }
 }
 
@@ -3630,6 +3638,63 @@ fn fb_ring_sweep(plane: &kayfabe_device::plane::RegPlane) -> Option<FbRingSweep>
         }
     }
     Some(out)
+}
+
+/// ★★★★★ **The `ring_scan` sentence — a free function so it can be tested without a plane,
+/// because it asserted a FALSEHOOD on four committed boots.**
+///
+/// `[measured 2026-08-10, boots s45_748a207_tsgsched, s46_1a9e93c_abi35,
+/// s47_81582e3_ctxsw and s48_4f5b357_cwait]` every one of them printed
+///
+/// ```text
+/// scan=1024/1024 declared (COMPLETE: every declared entry was read), unread=1024,
+///   nonzero=NONE — every scanned entry is ZERO
+/// ```
+///
+/// and **both** parenthetical clauses were false.
+/// [`kayfabe_device::plane::MemoryPlane::read_published_va`] answers
+/// `Err(Unresolved(NoPublication))` *before it touches any store*, so a `NoPublication`
+/// makes all `n` reads fail: `unread == n`, and `nonzero` is empty because nothing was ever
+/// appended to it — **not** because the entries were zero. The old `coverage` clause was
+/// computed from the **loop bound alone**, with no reference to `unread`, so it said
+/// `COMPLETE` about a scan that read nothing.
+///
+/// ⇒ The line restated `CeResolve::NoPublication` as if it were independent evidence about
+/// the ring: the same finding twice, the second time wearing a different instrument's
+/// clothes (`measure_at_the_boundary_not_inside` — two of your own computations agreeing is
+/// not corroboration). ⚠ And it was **cited as evidence** in
+/// `docs/design/execution_plane_increments.md` §16.57.3 and §16.60.4 before anyone checked
+/// what produced it.
+///
+/// ⊘ The guard is `unread == n`, **not** `unread > 0`: a partial read really did scan
+/// `n - unread` entries, and those are legitimately reported — with the denominator said
+/// out loud, which is `RING_SCAN_ENTRIES`' own rule.
+fn ring_scan_sentence(n: usize, entries: u32, unread: usize, nonzero: &[String]) -> String {
+    if unread == n {
+        return format!(
+            " ⊘ NOTHING WAS READ: all {n} of {entries} declared entries failed to resolve, \
+             so this scan says NOTHING about the ring's contents — it is the resolution \
+             failure above, restated"
+        );
+    }
+    let coverage = if (n as u32) < entries {
+        format!(
+            " ⊘ BOUNDED-READING: {n} of {entries} entries — a write at any entry >= {n} is INVISIBLE here"
+        )
+    } else {
+        " (COMPLETE: every declared entry was read)".to_string()
+    };
+    let found = if !nonzero.is_empty() {
+        nonzero.join(" ")
+    } else if unread == 0 {
+        "NONE — every scanned entry is ZERO".to_string()
+    } else {
+        // ⊘ The denominator is the entries that RESOLVED, never the loop bound: saying
+        // "every scanned entry is ZERO" over a partial read is the same conflation this
+        // function exists to refuse, one order of magnitude smaller.
+        format!("NONE among the {} entries that RESOLVED", n - unread)
+    };
+    format!(" scan={n}/{entries} declared{coverage}, unread={unread}, nonzero={found}")
 }
 
 /// How many GPFIFO entries [`SharedDoorbell::ring_scan`] reads.
@@ -4763,4 +4828,60 @@ fn clamp_bar(bar: u32) -> u8 {
 /// An access width the plane can express. Anything wider than 8 bytes is 8.
 fn clamp_size(size: u32) -> u8 {
     u8::try_from(size).unwrap_or(8)
+}
+
+#[cfg(test)]
+mod ring_scan_sentence_tests {
+    use super::ring_scan_sentence;
+
+    /// ★★★★★ **The regression this function was extracted for.** A scan in which *nothing
+    /// resolved* must not claim completeness and must not claim the entries were zero.
+    #[test]
+    fn a_scan_that_read_nothing_says_so_and_claims_nothing_about_the_ring() {
+        let s = ring_scan_sentence(1024, 1024, 1024, &[]);
+        assert!(s.contains("NOTHING WAS READ"), "{s}");
+        assert!(
+            !s.contains("COMPLETE"),
+            "★★★ a scan that resolved zero entries called itself COMPLETE on four committed \
+             boots (s45..s48) — that is the exact falsehood this test exists to hold down: {s}"
+        );
+        assert!(
+            !s.contains("every scanned entry is ZERO"),
+            "★★★ `nonzero` is empty here because nothing was ever appended to it, not \
+             because the entries were zero. Reporting the second is inventing a measurement \
+             out of a failure: {s}"
+        );
+    }
+
+    /// ⊘ Non-vacuity: a scan that DID read reports normally, so the guard above is not
+    /// simply suppressing the whole sentence.
+    #[test]
+    fn a_scan_that_read_everything_still_reports_completeness_and_zeros() {
+        let s = ring_scan_sentence(1024, 1024, 0, &[]);
+        assert!(s.contains("COMPLETE"), "{s}");
+        assert!(s.contains("every scanned entry is ZERO"), "{s}");
+        assert!(!s.contains("NOTHING WAS READ"), "{s}");
+    }
+
+    /// ★★ A PARTIAL read is a third state and must read as one: it reports what resolved,
+    /// with the denominator of the entries that resolved — never the loop bound.
+    #[test]
+    fn a_partial_read_reports_the_resolved_denominator_and_not_the_loop_bound() {
+        let s = ring_scan_sentence(1024, 1024, 1000, &[]);
+        assert!(!s.contains("NOTHING WAS READ"), "{s}");
+        assert!(
+            s.contains("NONE among the 24 entries that RESOLVED"),
+            "★ 24 resolved, not 1024 — a partial read that says `every scanned entry is \
+             ZERO` is the same conflation one order of magnitude smaller: {s}"
+        );
+    }
+
+    /// ⊘ A non-zero entry is still reported when some reads failed — the guard must not
+    /// swallow a real finding.
+    #[test]
+    fn a_nonzero_entry_survives_a_partial_read() {
+        let s = ring_scan_sentence(64, 1024, 60, &["[7]=0x00000000deadbeef".to_string()]);
+        assert!(s.contains("deadbeef"), "{s}");
+        assert!(s.contains("BOUNDED-READING"), "{s}");
+    }
 }

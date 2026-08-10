@@ -11166,9 +11166,15 @@ the same commit as the boot that produced them.
 
 **Device plane** — `nvkvm: first doorbell refusal [CeResolve::NoPublication] no
 page-directory root was published for (hClient 0xc1d0000c, hVASpace 0x5c000007)`, with a
-complete walk beside it: `scan=1024/1024 declared (COMPLETE: every declared entry was read),
-unread=1024, nonzero=NONE`. `0x5c000007` is libcuda's own `FERMI_VASPACE_A` — the handle
-§16.38 already identified as the one UVM dups.
+`scan=1024/1024 declared (COMPLETE: every declared entry was read),
+unread=1024, nonzero=NONE` beside it. `0x5c000007` is libcuda's own `FERMI_VASPACE_A` — the
+handle §16.38 already identified as the one UVM dups.
+
+⚠ ★★★★ **CORRECTION (§16.63) — that scan clause is a FABRICATION, and calling it a
+"complete walk" here is the error it licensed.** `unread=1024` means **every** read failed,
+because `read_published_va` answers `NoPublication` before touching any store; `nonzero=NONE`
+is an empty vector nothing was appended to, and `COMPLETE` came from the loop bound alone.
+Nothing was walked. Fixed at `ring_scan_sentence`.
 
 ⊘ **Do not assume these are one wall.** They are on different planes and no run has yet
 established whether either causes the other `[not measured — stated as an open question,
@@ -11643,6 +11649,15 @@ nvkvm: first doorbell refusal [CeResolve::NoPublication] no page-directory root 
 Unchanged from `s45` and `s46`, down to the handle. **187 of 448 doorbells refused**, and
 `0x5c000007` is libcuda's own `FERMI_VASPACE_A`.
 
+⚠ ★★★★ **CORRECTION (§16.63) — the `scan=…` half of that line is a FABRICATION and I cited
+it here.** `read_published_va` answers `NoPublication` *before it touches any store*, so all
+1024 reads failed: `unread=1024` means **nothing was scanned**, `nonzero=NONE` is an empty
+vector that was never appended to, and `COMPLETE` was computed from the loop bound with no
+reference to `unread`. The clause said the ring's entries were zero when **no entry was
+read**. ⇒ Read this paragraph as *"the refusal is identical across boots"*, which is true and
+is all it ever measured; the scan clause is `NoPublication` restated. Fixed at
+`ring_scan_sentence`, which now says `⊘ NOTHING WAS READ`.
+
 ⊘ **And the question the brief posed is now answered.** *"Nothing has measured whether Wall 1
 and Wall 2 are one wall"* — `[measured 2026-08-10, boot s47]` they are **not**: Wall 1 was
 removed and Wall 2 did not move by a single count. More than that, Wall 1 was not a wall at
@@ -11820,3 +11835,90 @@ reading alone, and is tagged as such.
   production caller; whether a *default* build can reach it is §16.62.2's separate answer.
 - ⊘ **It did NOT establish that a guest doorbell reaches a real host completion on the bench.**
   Saying otherwise would be the five-rung-old claim this boot was run to test, restated.
+
+## §16.63 ★★★★★ AN INSTRUMENT THAT ASSERTED A FALSEHOOD ON FOUR BOOTS — and I cited it twice before checking it
+
+`[measured 2026-08-10, census over every committed `traces/guest_boots/*_qemu.log`]`
+
+### 16.63.1 THE CENSUS THAT SETTLES IT — and it splits cleanly
+
+```
+   9  scan=64/1024    unread=0     nonzero=NONE     ← honest: bounded, and it says so
+   1  scan=1024/1024  unread=0     nonzero=NONE     ← honest: a real complete scan
+   4  scan=1024/1024  unread=1024  nonzero=NONE     ← ★ FABRICATED
+```
+
+The four are `s45_748a207_tsgsched`, `s46_1a9e93c_abi35`, `s47_81582e3_ctxsw` and
+`s48_4f5b357_cwait` — every boot since the wall reached `CeResolve::NoPublication`. The lone
+honest complete scan is `s17`/`s19`/`s20`/`s21`'s.
+
+`MemoryPlane::read_published_va` answers `Err(Unresolved(NoPublication))` **before it touches
+any store**. So under a `NoPublication` all `n` reads fail:
+
+- `unread == n` — nothing was scanned;
+- `nonzero` is empty because **nothing was ever appended to it**, not because the entries
+  were zero — yet the sentence read `nonzero=NONE — every scanned entry is ZERO`;
+- `COMPLETE: every declared entry was read` was computed from the **loop bound alone**, with
+  no reference to `unread`.
+
+⇒ The line restated `CeResolve::NoPublication` as if it were independent evidence about the
+ring's *contents*. Two of your own computations agreeing is not corroboration
+(`measure_at_the_boundary_not_inside`) — and here they were not even two: it was one fact
+printed twice, the second time wearing a different instrument's clothes.
+
+### 16.63.2 ⚠ AND I CITED IT — twice, in this document, in the same session
+
+- §16.57.3 called it *"with a complete walk beside it"*. Nothing was walked.
+- §16.60.4 quoted it whole as the evidence that Wall 2 was unmoved.
+
+⊘ **The load-bearing half of both citations survives**: the refusal line *is* byte-identical
+across `s45`–`s48`, and that identity is what both paragraphs actually needed. The scan clause
+added nothing and asserted something false. Both are corrected in place rather than deleted,
+because a citation that was wrong is worth more visible than absent.
+
+★ **The older citation is exonerated by the same census, and that matters.** §12's *"the scan
+cap was NOT the cause, and lifting it proved so — the whole ring is zero, not the first
+6.25 %"* rests on the **`unread=0`** complete scan. It read all 1024 entries and they were
+zero. ⇒ This is not "the instrument was always lying"; it is *"the instrument became a liar
+the moment its subject started failing to resolve"*, which is a narrower and more useful
+statement — and it is why the fix is a **guard**, not a deletion.
+
+### 16.63.3 THE FIX
+
+`ring_scan_sentence` is now a free function (testable without a plane) with three states
+instead of two:
+
+| condition | sentence |
+|---|---|
+| `unread == n` | `⊘ NOTHING WAS READ: all n of N declared entries failed to resolve, so this scan says NOTHING about the ring's contents — it is the resolution failure above, restated` |
+| `0 < unread < n` | `nonzero=NONE among the {n - unread} entries that RESOLVED` |
+| `unread == 0` | unchanged — `COMPLETE` / `every scanned entry is ZERO` |
+
+⊘ The guard is `unread == n`, **not** `unread > 0`: a partial read really did scan
+`n - unread` entries and those are legitimately reported, with the denominator said out loud.
+Four tests in `kayfabe-qemu-raw`, one per state plus the non-vacuity that a real complete scan
+still reports completeness.
+
+★★★ **The transferable rule, and it is a sharper form of one this campaign already has.**
+`RING_SCAN_ENTRIES`' own doc says *"when the bound and the declared size differ, the sentence
+itself must change — a reader should not have to do the division."* That rule was applied to
+the **numerator** and not to the **failure count**. ⇒ **Every field a diagnostic prints must
+be derivable from what was actually observed, and a summary clause must be computed from the
+same variables it describes.** `COMPLETE` was computed from `n` and `entries` while claiming
+something about `unread`; that is the whole defect, and it is checkable by inspection.
+
+### 16.63.4 ⇒ WHAT THIS DOES *NOT* CHANGE, and the next rung's question
+
+⊘ The refusal itself is untouched: `CeResolve::NoPublication` for `(0xc1d0000c, 0x5c000007)`
+is real, reproduces across four boots, and is the live wall. What the correction removes is a
+**false corroboration** of it — one that made "the ring is empty" look like an independent
+finding when it was the same refusal wearing a scan's clothes.
+
+★★★★★ And the coordinator's parallel read answers the next question, verified here against
+`s45`'s own log rather than adopted: line 169 of `run_s45_748a207_tsgsched_qemu.log` carries
+`{8x pdb=Y own=not-declared cs=ok(h0x5c000007=>c0xc1d0000c/0x5c000007) … GrCompute …}` —
+**eight channels, `pdb=Y`, for the exact `(hClient, hVASpace)` pair line 234 of the same boot
+says has no published root.** ⇒ Our object model already holds that root; `CeResolve` reads a
+different, weaker projection keyed by **raw handle**. The refusal's sentence — *"the guest
+published no page-directory root"* — is **false about the guest**. That is the next rung, and
+it is wiring rather than design.
