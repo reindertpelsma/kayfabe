@@ -13023,3 +13023,144 @@ no guest `gpFifoOffset` is passed to `alloc_channel_at`; the RC/error-notifier p
 unwired. Per the brief's own reasoning, half-built fault delivery is **worse than none**
 (`ogkm-580: uvm_ampere_host.c:140` hangs a kernel thread forever on a fault whose CHRAM bit
 never gets set), and nothing is forwarded yet for a refusal to be delivered *about*.
+
+### 16.69.4 ★★★★★ THE OUTCOME — **B**, scored against §16.69.3 as committed, with a fact no cell predicted
+
+`[measured 2026-08-10, boots `p1b_29e7c25_planectl` and `p2_29e7c25_planereal`, ONE binary
+stamped `kayfabe-rev:29e7c25e9deab5b8e27d9ce94bdf88449d3462de` read off the **hypervisor**
+(`strings /workspace/bench/qemu-build/qemu-system-x86_64`), differing only in `KAYFABE_ISOLATES`.
+Both wrapped in `scripts/bench/host_xid_watch.sh`; both `xid_before=0 xid_after=0` from a ring
+buffer proved readable at 997 lines.]`
+
+**ARM CTL PASSES, so the rung is valid.** `p1b` (`KAYFABE_ISOLATES` unset, `host-isolates`
+**linked**) is bit-identical to `s54` on every committed number:
+
+```
+doorbells: 448 arrived, 362 served, 86 REFUSED by name; last token 0x00010001 (16 logged)
+  of the served: 362 local (CPU CE, end witnessed), 0 forwarded (host channel rung)
+  by engine: GrCompute=86 GrGraphics=0 Ce=362 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  first doorbell refusal [Route::NotACopyEngineChannel] …
+isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)
+```
+
+⇒ **Linking `kayfabe-isolate-host` is observationally neutral.** Every difference below is the
+environment variable and nothing else.
+
+⚠ **And the first attempt at CTL was not a comparison at all** — `p1_29e7c25_planectl` ran
+`boot_capture.sh` with **no** `POST_CAPTURE_HOOK` and reported `2 arrived, 2 served`. `s54` ran
+`guest_cuinit_wall.sh`. That is §16.66.6(1) exactly, one rung later: the baseline and the
+measurement differed in the code *and* in the thing doing the looking. Caught before it was
+scored, by reading `s54`'s own probe log for the hook name rather than remembering it.
+
+#### The measurement
+
+| | `p1b` (unset ⇒ `Stillborn`) | `p2` (`KAYFABE_ISOLATES=real`) |
+|---|---|---|
+| isolates | 2 materialized, 2 live, **2 refusing (2 no-plane)** | 1 materialized, 1 live, **0 refusing** |
+| isolate child on the host | **none ever existed** (0 samples) | **1 distinct child, pid 734677**, first seen t+44s |
+| doorbells | 448 arrived, 362 served, 86 REFUSED | **3 arrived, 3 served, 0 REFUSED** |
+| of the served | **362 local**, 0 forwarded | **0 local, 3 FORWARDED (host channel rung)** |
+| `SERVED-LOCAL [CpuCe::ServedLocally]` lines | **16** | **0** |
+| by engine | `GrCompute=86 Ce=362` | `GrCompute=0 **Ce=3**` |
+| guest driver | (no `RmInitAdapter` line — success is silent) | **`RmInitAdapter failed! (0x25:0x65:1249)`** |
+| `nvidia-smi` | enumerates | **`No devices were found`** |
+| `cuInit` | `ok` | **`unknown error (999)`** |
+| host Xid | 0 → 0 | **0 → 0** |
+
+⇒ **Row B**: *"the plane is live and the guest driver DIES."* Arm A required three clauses
+together; two held (`0 refusing`, `>0 forwarded`) and the third — the guest surviving — did not.
+⊘ It is scored **B**, not "A with a caveat".
+
+★★★★★ **AND THE FACT NO CELL PREDICTED, which is the rung's actual finding: THREE GUEST
+DOORBELLS WERE CARRIED TO A HOST GPU CHANNEL.** `of the served: … 3 forwarded (host channel
+rung)` is the first non-zero `forwarded` count in this project's history — every prior boot in
+`traces/guest_boots/` reads `0 forwarded`. They are **`Ce`**, all on token `0x00010002`, at
+`05:48:29`, `05:48:55`, `05:49:11`. ⊘ **And they were `Ce`, exactly as §16.69.1(2) predicted from
+the code** — the engine that changes destination when the plane comes on is the one the brief
+said would not.
+
+#### ★★★★ WHY THE GUEST DIED, and it is the completion plane
+
+The guest's own assertions name the whole chain, in order
+(`traces/guest_boots/run_p2_29e7c25_planereal_dmesg.log`):
+
+```
+memmgrMemSet(…, TRANSFER_FLAGS_PREFER_CE) → NV_ERR_TIMEOUT (0x65)   @ mem_mgr.c:463
+pCeUtils->lastCompletedPayload == lastSubmittedPayload   FAILED      @ ce_utils.c:349
+memmgrInitCeUtils(…) → NV_ERR_TIMEOUT                                @ mem_mgr.c:526
+RmInitNvDevice: *** Cannot load state into the device
+RmInitAdapter failed! (0x25:0x65:1249)
+```
+
+Byte-for-byte the triple `(0x25:0x65:1249)` that `SharedDoorbell::local_ce_is_the_only_executor`'s
+own doc records for `[measured 2026-08-08, boot pub1_3e43e9a]`. ⊘ **But the cause is not the
+same, and that distinction is the rung.** On `pub1` the doorbell fell through to a `Stillborn`
+plane and was **refused** (`1 REFUSED [FwdFault::IsolateRetired]`). Here it was **served** —
+three times, on a real host channel, by a live isolate child — and `lastCompletedPayload` still
+never advanced.
+
+⇒ **The forwarding plane rings; it does not complete.** `SharedDevice::forward_ring`'s own doc
+says so in advance (*"It does not write the guest's finishPayload and raises no interrupt … Wire
+the ring first, complete second"*), and this is that sentence measured against a guest for the
+first time. The three doorbells are the driver's ~25 s retry interval: submit, wait, time out,
+resubmit, twice, then bail.
+
+★★★ **The first customer of the forwarding plane is not CUDA — it is `RmInitAdapter`'s own memory
+scrubber.** Token `0x00010002` is the CeUtils channel, and it runs *before* any guest process
+exists. ⇒ **No guest can reach `cuCtxCreate` on a real plane until the CE completion path is
+honest end-to-end.** That re-orders the ladder: "forward a GR doorbell" is not the next rung,
+because the plane cannot be left on for long enough to ring one.
+
+⊘ **The `by engine` comparison is VOID and is not scored.** `GrCompute=0` on `p2` is not GR
+routing changing; it is `cup2` never running, because the driver never initialised. §16.69.3
+asked for `GrCompute=86` unchanged as a check that the route does not read plane state; that
+check **could not be performed** and is owed to a boot in which the guest survives the plane.
+
+#### ★★★ `local_ce_is_the_only_executor`, OBSERVED
+
+`SERVED-LOCAL` lines: **16 → 0**, one environment variable apart, same binary. §16.69.1(1) argued
+from `shim.rs:4262` that the flag *is* the plane; this is the same statement as a measurement.
+⊘ There is no build in which one can "turn the plane on" and "not flip the flag".
+
+### 16.69.5 ⊘ WHAT THIS BOOT DID NOT ESTABLISH
+
+- ⊘ **Nothing about GR.** Zero `GrCompute` doorbells were routed anywhere on `p2`. The `HostGr`
+  route is still served by nothing, and this rung did not change a line of it.
+- ⊘ **Not that the host GPU executed anything.** `3 forwarded` counts doorbells the *port* rang
+  on a host channel. Neither the host channel's `GP_GET` nor a host semaphore was read back, so
+  *"the host GPU ran the guest's copy and we lost the completion"* and *"the host channel was
+  rung with nothing in it"* are **both** consistent with this evidence. ★ Distinguishing them is
+  the next instrument, and it is exactly `R26`'s two-fact bar applied one plane over.
+- ⊘ **Not a leak or a hang.** Host Xid clean across both boots, from a readable log; the guest
+  failed as an **error** (`RmInitAdapter failed`, `nvidia-smi: No devices were found`), not as a
+  wedge. The RC/error-notifier path was **not** wired and was not needed: the driver's own CE
+  timeout produced a legible failure without it.
+- ⊘ **`p2` is one boot.** `p1b` reproduced `s54` exactly, which is evidence the *baseline* is
+  stable; `p2` has not been repeated.
+
+### 16.69.6 ★★★ A HYPOTHESIS OF MINE, REFUTED BEFORE THE BOOT
+
+I suspected the 86 `GrCompute` doorbells were **mislabelled `Ce`** channels — §16.65.5's latent
+hazard gone live — on the reasoning that only 2 `0xa06f0104` binds occur per boot and both are
+`COPY2`. ⊘ **Measured false from the committed probe logs.** All eight of `cup2`'s channels carry
+a real `AMPERE_COMPUTE_B` (`0xc7c0`) engine object, allocated `status=0`, and the guest's own
+`GET_CLASS_ENGINEID` (`0x906f0101`) answers `engineID=1` (`GRAPHICS`) for each. The label is
+**earned**. ★ And the bind ctrl was never the refinement key — `project.rs:1109-1133` keys on the
+engine **object**, which is why 2 binds against 14 channels was never a problem.
+
+⚠ Two things that survey *did* find:
+- ⊘ `project.rs:1102-1104` justifies its first-wins `or_insert` with *"the real protocol allocates
+  one engine object per channel context"*. **Each of the 8 compute channels carries TWO**
+  (`0xc7c0` then `0xc7b5`, the GRCE). The outcome is right — the compute object always holds the
+  lower handle, so `GrCompute` wins — but it is right by handle ordering, not by the stated
+  premise. §16.65.5 called that comment "unverified against a boot"; it is now verified as
+  **false**, with the conclusion intact.
+- ⊘ **No decoded pushbuffer for any of the 86 exists anywhere in the tree.** The single dump in
+  `s50`/`s51` belongs to a `Ce`-routed doorbell (proved by `s51` still latching
+  `SubmissionHasNoLaunch` after `w202` installed a route gate that fires before any ring read).
+  ⇒ *"the 86 carry GR compute work"* is **not** something this repository can currently show. What
+  it can show is that they are libcuda's context-construction traffic inside `cuCtxCreate`, after
+  `GPFIFO_SCHEDULE` succeeds and before the `FREE` cascade — and that **`cup2` launches no kernel
+  at all**, so no CUDA kernel launch is among them. The instrument owed is a per-refusal
+  pushbuffer dump rather than a single latched first, the same gap §16.66.5 recorded for the
+  served side.

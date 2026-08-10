@@ -1,0 +1,43 @@
+[xid-watch] tag=p2real  host=ubuntu  utc=2026-08-10T05:47:42Z
+[xid-watch] command: ./scripts/bench/e0_isolate_witness.sh p2_29e7c25_planereal real
+[xid-watch] host_dmesg_lines=997  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+[e0:p2_29e7c25_planereal] sampling for isolate children; plane=real rev=97bab4bb874db918148f771da336d3af6a929151
+t+1    [boot_capture:p2_29e7c25_planereal] booting (extra args: none)
+t+34   [boot_capture:p2_29e7c25_planereal] guest is up after 33s
+t+36   [boot_capture:p2_29e7c25_planereal] module unloaded and ring buffer cleared; loading cold
+t+37   [boot_capture:p2_29e7c25_planereal] opening the device (this is what runs RmInitAdapter)
+t+58   [boot_capture:p2_29e7c25_planereal] captured 22 dmesg lines, 19 NVRM, 3 adapter → /workspace/bench/run_p2_29e7c25_planereal_dmesg.log
+t+58   [boot_capture:p2_29e7c25_planereal] --- the verdict lines ---
+t+58   [   44.419222] NVRM: RmInitNvDevice: *** Cannot load state into the device
+t+58   [   44.419225] NVRM: RmInitAdapter: RmInitNvDevice failed, bailing out of RmInitAdapter
+t+58   [   45.442133] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x25:0x65:1249)
+t+58   [boot_capture:p2_29e7c25_planereal] running POST_CAPTURE_HOOK: /workspace/bench/kayfabe/scripts/bench/guest_cuinit_wall.sh
+t+108  [boot_capture:p2_29e7c25_planereal] hook finished: rc=0
+t+108  [boot_capture:p2_29e7c25_planereal] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+112  [boot_capture:p2_29e7c25_planereal] census present:
+t+112      2026-08-10T05:49:35.453956Z qemu-system-x86_64: info: nvkvm: doorbells: 3 arrived, 3 served, 0 REFUSED by name; last token 0x00010002 (3 logged)
+t+112  [boot_capture:p2_29e7c25_planereal] evidence carried into the repo: /workspace/bench/kayfabe/traces/guest_boots/run_p2_29e7c25_planereal_{qemu,dmesg,probe}.log
+t+112  [boot_capture:p2_29e7c25_planereal] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+t+112  [boot_capture:p2_29e7c25_planereal]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+t+112  [boot_capture:p2_29e7c25_planereal] done. serial=/workspace/bench/run_p2_29e7c25_planereal_serial.log qemu=/workspace/bench/run_p2_29e7c25_planereal_qemu.log dmesg=/workspace/bench/run_p2_29e7c25_planereal_dmesg.log probe=/workspace/bench/run_p2_29e7c25_planereal_probe.log
+./scripts/bench/e0_isolate_witness.sh: line 191: 722211 Killed                  sampler
+[e0:p2_29e7c25_planereal] boot_capture rc=0 ; isolate-child samples=18
+[e0:p2_29e7c25_planereal] witness → /workspace/bench/run_p2_29e7c25_planereal_isolate.log
+[e0:p2_29e7c25_planereal] plane->RmMode mapping check: ok
+[e0:p2_29e7c25_planereal] ★ 1 DISTINCT ISOLATE CHILD(REN) EXISTED — see the t+ stamps for WHICH PHASE spawned each
+    t+1    [boot_capture:p2_29e7c25_planereal] booting (extra args: none)
+    t+34   [boot_capture:p2_29e7c25_planereal] guest is up after 33s
+    t+37   [boot_capture:p2_29e7c25_planereal] opening the device (this is what runs RmInitAdapter)
+    === ISOLATE CHILD pid 734677  at 2026-08-10T05:48:27+00:00  (t+44s from witness start) ===
+[e0:p2_29e7c25_planereal] E0b lazy-spawn check: ok — first isolate child at t+44s, guest opened the device at
+            t+37s ⇒ the spawn FOLLOWS the guest's action
+    2026-08-10T05:49:35.453936Z qemu-system-x86_64: info: nvkvm: isolates: 1 materialized, 1 live, 0 refusing (0 no-plane, 0 spawn-failed)
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (997 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_p2real.log

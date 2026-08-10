@@ -1,0 +1,38 @@
+=== e0_isolate_witness tag=p1b_29e7c25_planectl at 2026-08-10T05:45:45+00:00 ===
+REV_UNDER_TEST=97bab4bb874db918148f771da336d3af6a929151
+TREE_DIRTY_FILES=3
+KAYFABE_ISOLATES=<unset>
+qemu binary: -rwxr-xr-x 1 root root 86674032 Aug 10 05:40 /workspace/bench/qemu-build/qemu-system-x86_64
+archive rev embedded in the qemu binary:
+  kayfabe-rev:29e7c25e9deab5b8e27d9ce94bdf88449d3462de
+host gpu: NVIDIA GeForce RTX 3060, 580.159.04
+⚠ ARCHIVE REV != SOURCE REV. Files differing 29e7c25e..97bab4bb:
+    docs/design/execution_plane_increments.md
+  ⊘ If any line above is under crates/ or Cargo.lock, this run does NOT measure 97bab4bb874db918148f771da336d3af6a929151.
+
+=== boot_capture phases (t+ seconds from witness start) ===
+t+0    [boot_capture:p1b_29e7c25_planectl] booting (extra args: none)
+t+33   [boot_capture:p1b_29e7c25_planectl] guest is up after 33s
+t+35   [boot_capture:p1b_29e7c25_planectl] module unloaded and ring buffer cleared; loading cold
+t+36   [boot_capture:p1b_29e7c25_planectl] opening the device (this is what runs RmInitAdapter)
+t+50   [boot_capture:p1b_29e7c25_planectl] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_p1b_29e7c25_planectl_dmesg.log
+t+50   [boot_capture:p1b_29e7c25_planectl] --- the verdict lines ---
+t+50   [boot_capture:p1b_29e7c25_planectl] running POST_CAPTURE_HOOK: /workspace/bench/kayfabe/scripts/bench/guest_cuinit_wall.sh
+t+94   [boot_capture:p1b_29e7c25_planectl] hook finished: rc=0
+t+94   [boot_capture:p1b_29e7c25_planectl] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+t+99   [boot_capture:p1b_29e7c25_planectl] census present:
+t+99       2026-08-10T05:47:26.056608Z qemu-system-x86_64: info: nvkvm: doorbells: 448 arrived, 362 served, 86 REFUSED by name; last token 0x00010001 (16 logged)
+t+99       2026-08-10T05:47:26.056689Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [Route::NotACopyEngineChannel] this channel's engine is GrCompute (route HostGr), so its pushbuffer is not copy-engine work and the shell's CPU copy-engine executor is the wrong executor for it; refused by the ROUTING fact rather than decoded by a codec that can only decline
+t+99   [boot_capture:p1b_29e7c25_planectl] evidence carried into the repo: /workspace/bench/kayfabe/traces/guest_boots/run_p1b_29e7c25_planectl_{qemu,dmesg,probe}.log
+t+99   [boot_capture:p1b_29e7c25_planectl] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+t+99   [boot_capture:p1b_29e7c25_planectl]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+t+99   [boot_capture:p1b_29e7c25_planectl] done. serial=/workspace/bench/run_p1b_29e7c25_planectl_serial.log qemu=/workspace/bench/run_p1b_29e7c25_planectl_qemu.log dmesg=/workspace/bench/run_p1b_29e7c25_planectl_dmesg.log probe=/workspace/bench/run_p1b_29e7c25_planectl_probe.log
+=== summary ===
+boot_capture rc: 0
+isolate-child samples: 0   (0 = never seen alive)
+distinct isolate-child pids: 0
+plane->RmMode mapping check: ok
+E0b lazy-spawn check: not applicable (plane=unset spawns nothing by design)
+=== E1: the device's own isolate-plane census (from /workspace/bench/run_p1b_29e7c25_planectl_qemu.log) ===
+  2026-08-10T05:47:26.056588Z qemu-system-x86_64: info: nvkvm: isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)
+  2026-08-10T05:47:26.056841Z qemu-system-x86_64: info: nvkvm:   isolate refusal [no-plane] this build has no forwarding plane: the object model accepts protocol facts and no host verb can be issued
