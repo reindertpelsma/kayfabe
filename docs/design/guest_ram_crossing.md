@@ -368,3 +368,262 @@ binary is `346921b`, which predates everything in §4 — and no VMM code calls
 `with_guest_ram` at *any* revision. So this is a measurement of the **launch flag**, and it
 is not a boot of the shape that landed. A reader who sees "boot evidence, 2026-08-10" beside
 §4 and infers the crossing ran end to end would be wrong.
+
+---
+
+## 5. ★★★ THE ROUTE (2026-08-10, task #238 cont.) — the VMM now calls `with_guest_ram`
+
+`[built, unit-measured, and BOOTED on `vh`]`. §4.4's first bullet was *"no VMM code calls
+`with_guest_ram` yet — the QEMU shim has no route to the hypervisor's own guest-RAM
+descriptor"*. That route now exists, and it is the whole of this rung. It is §3's option
+**(A)** — a `/proc/self/fd` census inside the hypervisor's own process — serving a
+**(B)**-shaped interface: what crosses is a descriptor plus an extent.
+
+### R10. ⊘ The falsifier I was handed does not exist — `221/479` is not a fraction
+
+The task's falsifier was *"the progress fraction. `221/479` today."* There is no metric in
+this repository with denominator 479: `grep -rn 479` over every tracked file returns `ogkm`
+line numbers, one `rpctrace` session's record count, and nothing else.
+
+**221 is a target count, not a numerator.** It is §4's own evidence line — *"`cargo test
+--workspace --no-fail-fast`: 221 targets"* — the number of test binaries plus doc-test
+targets cargo compiles. It moves when a file is added and says nothing about progress;
+placed over a denominator it acquires a meaning it does not have.
+
+⇒ The numbers this rung actually moves, all measured on the dev box at `d7af8fb` → `7b0694f`:
+
+| | before | after |
+|---|---|---|
+| tests passed / failed (`--workspace --no-fail-fast`) | **2586 / 0** | **2595 / 0** |
+| test binaries + doc-test targets | 219 | 219 |
+| `scripts/ci_gates.sh` failures | 3 | **the same 3** (kayfabe-device bridge-exclusivity, ogkm-version-tag, claim-ledger) |
+| claim sites unattributed / conflated / bare-hw | 492 / 75 / 19 | 492 / 75 / 19 |
+| `kayfabe-linux-raw` audited relaxations | 91 | **91** — see R11 |
+
+⊘ And *"tests passed"* is not a progress fraction either; it is a floor, saying only that
+nothing broke. The honest statement of where the crossing stands is §5.4's ledger.
+
+### R11. ★★★ The descriptor costs ZERO new `unsafe_code` relaxations, and that is not luck
+
+The obvious implementation is the one this repository already has:
+`KvmVm::discover_in_this_process` reads a number out of `/proc/self/fd` and `dup`s it
+through `BorrowedFd::borrow_raw` — a relaxation whose own `SAFETY:` comment openly states an
+obligation it cannot discharge (that no other thread closed the number in between). Copying
+that shape here would have cost at least two more.
+
+It is not needed, because the two are **different kinds of object**. A KVM handle is an
+anonymous inode — the ratchet's own note records `/proc/self/fd/N` answering `ENXIO` on
+re-open, measured. A `memfd` is a real shmem file and **re-opens**; §1's measurement already
+relied on exactly that, from another process. So the census is `std::fs::OpenOptions`,
+`read_link` and `metadata`, and `kayfabe-linux-raw`'s audited surface is unchanged at 91.
+
+★ It is also *stronger* than a `dup`: a re-open gets its own open-file description, so the
+descriptor granted to an isolate does not share a file offset with the hypervisor's own.
+
+### R12. ⊘⊘ "Re-derive every property from the descriptor you own" is NOT sufficient
+
+`[measured 2026-08-10, `cargo test -p kayfabe-linux-raw --lib procfd`]`, and it is the
+rung's real finding.
+
+A census that opens the descriptors it enumerates **occupies the numbers it is about to
+visit**. `open` returns the lowest free descriptor; the directory handle releases one when
+the listing is drained; the first re-open takes that number back; the loop then visits it
+and finds — its own re-open. `[measured 2026-08-10, `cargo test -p kayfabe-linux-raw --lib
+procfd`]`: a process holding **two** `memfd`s of one name reported **three**.
+
+⊘ The discipline this module's own header argues for does not catch it. Re-deriving the
+name, size and inode from the descriptor we now own **confirms every one of them**, because
+the recycled number really is a `memfd` of exactly the right name. *A verification cannot
+tell an object from itself.*
+
+⊘⊘ And it was not cosmetic. In production the duplicate carries guest RAM's name, inode and
+shared-mapped state, so the selector would have answered `MemfdRefusal::Ambiguous` —
+**refusing the one boot the module exists to serve**.
+
+★ My first explanation was wrong. I diagnosed *"`read_dir` is lazy, so the loop enumerates
+its own new descriptors"*, drained the listing before opening anything, and the count did
+not change; a debug print of `/proc/self/fd` gave the mechanism in one line. Two fixes,
+closing two different things:
+
+1. numbers this census itself opened are skipped — the instrument cannot observe itself;
+2. the census is over **blocks, not descriptors**, joined on the inode. A hypervisor is
+   entitled to hold two descriptors on one `memfd`, and that must not read as two blocks.
+   ★★ **That is not hypothetical: it is what this rung's own code produces.** §5.5's boot
+   shows QEMU holding `/memfd:memory-backend-memfd` at **fd 15 and fd 25, same inode** —
+   15 is the hypervisor's, 25 is the shim's adopted re-open. A second `nvkvm-gpu` device
+   taking a census after the first would see both. Two *different* `memfd`s of one name have
+   different inodes and stay ambiguous, which is the fact worth refusing.
+
+### 5.1 What landed
+
+| piece | where |
+|---|---|
+| `MemfdCensus` / `MemfdCandidate` / `MemfdRefusal` — the property-keyed probe | `crates/kayfabe-linux-raw/src/procfd.rs` |
+| `SharedRam::create_named` — the creation name as a parameter | `crates/kayfabe-linux-raw/src/host_fd_unsafe.rs` |
+| `GUEST_RAM_ENV` (`KAYFABE_GUEST_RAM`), `GuestRamSource`, `guest_ram_source_from` | `crates/kayfabe-qemu-raw/src/shim.rs` |
+| `QEMU_MACHINE_RAM_MEMFD` — the hypervisor-specific half, kept out of the raw crate | same |
+| `guest_ram_is_reachable_on` — the plane × source cross-check | same |
+| `with_guest_ram` — census → select → `HostIsolateFactory::with_guest_ram` | same |
+| `isolate_factory(plane, guest_ram)` — one more argument, read once in `object_policy` | same |
+
+### 5.2 ★★ The four properties the probe keys on, and the trap each closes
+
+Each is §1.1's or §4.5's, made executable rather than restated:
+
+1. **the `/memfd:` prefix of the whole `readlink`**, never a substring — trap 3, where a
+   boot tagged `memfd1` made the *log file* match;
+2. **the name after it, exactly** — trap 1, where a lookup keyed on the command line's
+   `id=ram0` found nothing on a boot with guest RAM open the whole time, and read as *"the
+   backend is not there"*;
+3. **mapped `rw-s` in this process**, joined on the **inode** — trap 2. §5.5 found a third
+   decoy §1.1 never saw, and it is **ours**: `kayfabe-isolate`, the embedded isolate image's
+   own `memfd`, 709 280 bytes, `shared_mapped=false`. It is excluded on two independent
+   properties, which is the margin this list is supposed to have;
+4. **exactly one match** — §4.5, where the descriptor **number** moved (14 on `vh2`, 15 on
+   `vh`), so every position-based tie-break was right on one bench and wrong on the other.
+   `listed_as` is printed to the log and decides nothing.
+
+### 5.3 ⊘ Two independent facts are required, and the second is NOT the launch flag
+
+The cheap shape is *"if guest RAM happens to be a shared `memfd`, use it"* — no new
+variable. ⊘ That makes the boundary **a coincidence of how the operator started the VM**. A
+hypervisor may carry `share=on` for vhost-user, virtiofs or `ivshmem`, and none of those is
+a decision to let a GPU isolate map the guest's memory.
+`HostIsolateFactory::with_guest_ram` already states the rule the other way round: *"a
+factory that defaulted to granting guest RAM would be granting it on every deployment that
+never asked, and the grant is the whole boundary."*
+
+⇒ The launch flag makes the descriptor **exist**; `KAYFABE_GUEST_RAM=memfd` is the operator
+**asking for it to cross**. Both, or nothing crosses.
+
+★ And the refusal is **at startup**, not at the first doorbell. `RmError::GuestRamUnavailable`
+is right at the seam and wrong for an operator: it would arrive twenty seconds into a boot
+as one more refusal in a log full of them. ★ On the failing path the **whole census is
+printed first** — trap 1 is precisely a probe that found nothing and read as *"the thing is
+not there"*.
+
+⊘ `KAYFABE_GUEST_RAM=memfd` on the `stillborn` plane is refused by name too: nobody can hold
+the grant, so that run would be indistinguishable from its own negative control.
+
+### 5.4 The ledger, updated — and what is STILL not done
+
+| thing | status |
+|---|---|
+| bench launched with a shareable RAM backend | **BUILT**, §1, default off |
+| guest RAM openable as an fd | **MEASURED**, §1 + §4.5, two boxes |
+| the isolate-side shape (`GuestRamGrant`, `GuestRamPlane`, verbs 16/17) | **BUILT**, §4 |
+| ★ a VMM caller of `with_guest_ram` | ★ **BUILT this rung** |
+| ★ the shim reaching the hypervisor's own descriptor | ★ **BUILT + BOOTED**, §5.5 |
+| ★ the spawn-time grant on a live boot (`GUEST_RAM_FD`=6, `WORKER_FD_BASE`=7) | ★★ **MEASURED IN THE CHILD**, §5.5 `w224d` |
+| a `GuestRamGrant` ever constructed in production | **NEITHER** — nothing orders a mapping |
+| `OS_DESCRIPTOR` over a guest page | **NEITHER** — `GuestRamPlane::with_region` still has no caller |
+| GPA → offset for a machine with more than one RAM run | ⊘ **NOT DECIDED** — §5.6, though §5.5 measures the bench's own |
+| the enforcement layer (fd pinning, filter, notify, `munmap` confirmation) | **NEITHER**, deliberately behind the shape |
+
+⊘ **Nothing has been mapped into an isolate and nothing has been pinned into a GPU VAS.**
+This rung moves a descriptor and an extent to the place that can grant them. The first
+`mmap` of guest memory still needs a `GuestRamGrant`, and the only thing that can build one
+is a caller that knows *which* guest bytes it wants — step 2, and it is not here.
+
+### 5.5 ★★★ BOOTED — `vh` (vast 47029542, RTX 3060 GA106), shim rev `7b0694f`
+
+Five runs, evidence committed under `traces/guest_boots/`. ★ The revision is the one
+**stamped inside the binary** (`strings … | grep kayfabe-rev` →
+`7b0694f5e9325f9a792d18e2553b91a382c1c258`), not the worktree's — the 2026-08-01 post-mortem
+is what that instrument exists for.
+
+**`w224a` — ARMED** (`NVKVM_RAM_BACKEND=memfd KAYFABE_ISOLATES=real KAYFABE_GUEST_RAM=memfd`),
+`run_w224a_{qemu,dmesg,probe}.log`. The census printed three `memfd`s and selected one:
+
+```
+kayfabe: memfd census — name="memory-backend-memfd" bytes=2147483648 shared_mapped=true (listed at fd 15, …)
+kayfabe: memfd census — name="displaysurface"       bytes=1228800    shared_mapped=true (listed at fd 23, …)
+kayfabe: memfd census — name="kayfabe-isolate"      bytes=709280     shared_mapped=false (listed at fd 24, …)
+kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's memory-backend-memfd block, 2147483648 bytes.
+```
+
+★ **fd 15, exactly as §4.5 measured on this box** — and the probe ignored it. ★★ And the
+**third** `memfd` is new information: `kayfabe-isolate` is *our own* embedded image, so the
+decoy population is not the two §1.1 knew about, and one of them is created by this project.
+
+The guest booted normally: `SMI_RC=0`, 34 `dmesg` lines / 31 `NVRM`, `isolates: 1
+materialized, 1 live, 0 refusing`, `doorbells: 2 arrived, 2 served, 0 REFUSED`.
+
+**`w224c` — the negative control**, same binary, same script, `KAYFABE_GUEST_RAM` **unset**.
+No census line, no adopt line, and the device path is unchanged. Normalised for timestamps
+and with the census lines removed, `run_w224a_qemu.log` and `run_w224c_qemu.log` are
+**213 lines each with three differing lines**, all of them ordinary run-to-run variance:
+`registers: 4406 reads / 188982 writes` vs `4407 / 188990`, `interrupt tree: 626` vs `634`
+register accesses, and the CPU-CE semaphore's guest-chosen target address. ⇒ **arming the
+crossing is observationally neutral to everything else this pair measures**
+`[2026-08-10, `vh`, rev 7b0694f]`, which is exactly what must be true while nothing is
+mapped.
+
+**`w224b` — the refusal**, `KAYFABE_GUEST_RAM=memfd` with the launch flag **absent**,
+`run_w224b_qemu.log`. QEMU exits `rc=1` **at device realize**, having first printed the two
+`memfd`s it *did* see, and then:
+
+```
+nvkvm: the register plane refused to build (3): KAYFABE_GUEST_RAM=memfd, and no shared-mapped
+`memfd` named `memory-backend-memfd` is open in this process — see the census above for what IS. …
+```
+
+**`w224m` — the layout**, `run_w224m_mtree.log`: QEMU's own `info mtree -f` flat view, which
+is the VMM **stating** the map rather than us deriving it. For `-m 2048` on q35 there are
+**12 `ram0` ranges, 0 of them non-identity** (`GPA == offset` for every one, including the
+legacy `rom` aliases at `0xc0000`–`0xfffff`), and **no range at or above 4 GiB**. See §5.6
+for why that settles the bench and not the mechanism.
+
+**`w224d` — ★★★ THE SANDBOXED CHILD REALLY HOLDS IT**, `run_w224d_isolatefd.log`, taken by
+`scripts/bench/probe_guest_ram_holders.sh` while the guest driver ran. Every `/proc/*/fd`
+in the host, joined on guest RAM's **inode**:
+
+```
+guest-RAM inode=757510
+  pid=1056047 comm=qemu-system-x86  fd=15 exe=…/qemu-system-x86_64
+  pid=1056047 comm=qemu-system-x86  fd=25 exe=…/qemu-system-x86_64
+  pid=1056143 comm=memfd:kayfabe-i  fd=6  exe=/memfd:kayfabe-isolate (deleted)
+```
+
+⇒ The isolate child holds guest RAM at **fd 6 — `isolate::GUEST_RAM_FD` exactly** — on a
+real boot, which is the half `tests/guest_ram.rs` can only assert on a GPU-less box. And the
+two QEMU-side descriptors on one inode are R12's second mechanism, measured in production:
+15 is the hypervisor's, 25 is the shim's adopted re-open.
+
+⚠ **Three prior attempts failed, and both selectors I reached for were wrong** — worth
+recording, because they are the *same* trap this repository already carries for
+`qemu-system-x86_64`:
+
+- **`comm` is `memfd:kayfabe-i`.** The isolate is `execveat`-ed from a `memfd`, so the kernel
+  derives `comm` from the descriptor's own name — **including the `memfd:` prefix** — and
+  truncates it at 15 characters. `pgrep -x kayfabe-isolate` can therefore **never match**,
+  which is `/proc/PID/comm` truncating to 15 for the second time in this project.
+- **It is not a direct child of QEMU.** `ps -eo ppid` finds nothing under the QEMU pid; the
+  namespaced spawn reparents it.
+
+★ The **inode** was the only selector that worked, and it is the same lesson as the census
+itself: name and position are guesses, identity is a fact.
+
+⊘ **What these boots do NOT show** `[2026-08-10, `vh`, rev 7b0694f]`. No guest byte was
+mapped into an isolate and none was pinned into a GPU VAS — the ledger above says so, and
+`guest-RAM refusals 0` in the register census is *zero because nothing asked*, not because
+something succeeded. All five runs establish is that the descriptor is **in the isolate's
+hands**; the first `mmap` still waits on a `GuestRamGrant` that nothing constructs.
+
+### 5.6 ⊘ The GPA→offset map: what `w224m` shows, and what it does not decide
+
+`OS_DESCRIPTOR` describes one contiguous host VA range while guest GPAs need not be
+contiguous, so step 2 needs a map from a guest-physical run to an offset in this descriptor.
+§5.5's `w224m` `[2026-08-10, `vh`]` settles it for the bench: identity, one run, nothing
+above 4 GiB.
+
+⊘ **That is a property of one command line, not of the mechanism.**
+`bench_rebuild_notes.md` records boots at `-m 8G`, where RAM is split across the 4 GiB PCI
+hole and the high run's offset is the size of the low one. The census cannot answer it
+either: it yields a descriptor and its **extent**, and an extent is not a layout. Deriving
+one from the machine type would be re-deriving a VMM fact — the exact thing `GuestRamPlane`
+refuses when it takes the VMM's length rather than an `lseek`.
+
+⇒ Step 2 owes either the VMM's own statement of the layout, or a **refusal by name** for
+every GPA outside the single run this deployment is known to have. ⊘ It must not assume
+identity because the one command line `w224m` `[2026-08-10]` covers happens to have it.

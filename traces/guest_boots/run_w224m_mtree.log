@@ -1,0 +1,215 @@
+i[K[Din[K[D[Dinf[K[D[D[Dinfo[K[D[D[D[Dinfo [K[D[D[D[D[Dinfo m[K[D[D[D[D[D[Dinfo mt[K[D[D[D[D[D[D[Dinfo mtr[K[D[D[D[D[D[D[D[Dinfo mtre[K[D[D[D[D[D[D[D[D[Dinfo mtree[K[D[D[D[D[D[D[D[D[D[Dinfo mtree [K[D[D[D[D[D[D[D[D[D[D[Dinfo mtree -[K[D[D[D[D[D[D[D[D[D[D[D[Dinfo mtree -f[K
+FlatView #0
+ AS "memory", root: system
+ AS "cpu-memory-0", root: system
+ AS "cpu-memory-1", root: system
+ AS "cpu-memory-2", root: system
+ AS "ich9-ahci", root: bus master container
+ AS "virtio-net-pci", root: bus master container
+ AS "virtio-blk-pci", root: bus master container
+ Root memory region: system
+  0000000000000000-000000000009ffff (prio 0, ram): ram0 KVM
+  00000000000a0000-00000000000bffff (prio 1, i/o): vga-lowmem
+  00000000000c0000-00000000000cafff (prio 0, rom): ram0 @00000000000c0000 KVM
+  00000000000cb000-00000000000cdfff (prio 0, ram): ram0 @00000000000cb000 KVM
+  00000000000ce000-00000000000e7fff (prio 0, rom): ram0 @00000000000ce000 KVM
+  00000000000e8000-00000000000effff (prio 0, ram): ram0 @00000000000e8000 KVM
+  00000000000f0000-00000000000fffff (prio 0, rom): ram0 @00000000000f0000 KVM
+  0000000000100000-000000007fffffff (prio 0, ram): ram0 @0000000000100000 KVM
+  00000000b0000000-00000000bfffffff (prio 0, i/o): pcie-mmcfg-mmio
+  00000000e0000000-00000000efffffff (prio 1, i/o): nvkvm-bar1-window
+  00000000f0000000-00000000f1ffffff (prio 1, i/o): nvkvm-bar2-window
+  00000000f2000000-00000000f2ffffff (prio 1, ram): vga.vram KVM
+  00000000f3000000-00000000f3000fff (prio 0, i/o): virtio-pci-common-virtio-net
+  00000000f3001000-00000000f3001fff (prio 0, i/o): virtio-pci-isr-virtio-net
+  00000000f3002000-00000000f3002fff (prio 0, i/o): virtio-pci-device-virtio-net
+  00000000f3003000-00000000f3003fff (prio 0, i/o): virtio-pci-notify-virtio-net
+  00000000f3004000-00000000f3004fff (prio 0, i/o): virtio-pci-common-virtio-blk
+  00000000f3005000-00000000f3005fff (prio 0, i/o): virtio-pci-isr-virtio-blk
+  00000000f3006000-00000000f3006fff (prio 0, i/o): virtio-pci-device-virtio-blk
+  00000000f3007000-00000000f3007fff (prio 0, i/o): virtio-pci-notify-virtio-blk
+  00000000fd000000-00000000fdffffff (prio 1, i/o): nvkvm-bar0-regs
+  00000000fe050000-00000000fe05017f (prio 0, i/o): edid
+  00000000fe050180-00000000fe0503ff (prio 1, i/o): vga.mmio @0000000000000180
+  00000000fe050400-00000000fe05041f (prio 0, i/o): vga ioports remapped
+  00000000fe050420-00000000fe0504ff (prio 1, i/o): vga.mmio @0000000000000420
+  00000000fe050500-00000000fe050515 (prio 0, i/o): bochs dispi interface
+  00000000fe050516-00000000fe0505ff (prio 1, i/o): vga.mmio @0000000000000516
+  00000000fe050600-00000000fe050607 (prio 0, i/o): qemu extended regs
+  00000000fe050608-00000000fe050fff (prio 1, i/o): vga.mmio @0000000000000608
+  00000000fe051000-00000000fe05103f (prio 0, i/o): msix-table
+  00000000fe051800-00000000fe051807 (prio 0, i/o): msix-pba
+  00000000fe052000-00000000fe05207f (prio 0, i/o): msix-table
+  00000000fe052800-00000000fe052807 (prio 0, i/o): msix-pba
+  00000000fe053000-00000000fe05303f (prio 0, i/o): msix-table
+  00000000fe053800-00000000fe053807 (prio 0, i/o): msix-pba
+  00000000fe054000-00000000fe054fff (prio 1, i/o): ahci
+  00000000fec00000-00000000fec00fff (prio 0, i/o): kvm-ioapic
+  00000000fed00000-00000000fed003ff (prio 0, i/o): hpet
+  00000000fed1c000-00000000fed1ffff (prio 1, i/o): lpc-rcrb-mmio
+  00000000fee00000-00000000feefffff (prio 4096, i/o): kvm-apic-msi
+  00000000fffc0000-00000000ffffffff (prio 0, rom): pc.bios KVM
+
+FlatView #1
+ AS "I/O", root: io
+ Root memory region: io
+  0000000000000000-0000000000000007 (prio 0, i/o): dma-chan
+  0000000000000008-000000000000000f (prio 0, i/o): dma-cont
+  0000000000000010-000000000000001f (prio 0, i/o): io @0000000000000010
+  0000000000000020-0000000000000021 (prio 0, i/o): kvm-pic
+  0000000000000022-000000000000003f (prio 0, i/o): io @0000000000000022
+  0000000000000040-0000000000000043 (prio 0, i/o): kvm-pit
+  0000000000000044-000000000000005f (prio 0, i/o): io @0000000000000044
+  0000000000000060-0000000000000060 (prio 0, i/o): i8042-data
+  0000000000000061-0000000000000061 (prio 0, i/o): pcspk
+  0000000000000062-0000000000000063 (prio 0, i/o): io @0000000000000062
+  0000000000000064-0000000000000064 (prio 0, i/o): i8042-cmd
+  0000000000000065-000000000000006f (prio 0, i/o): io @0000000000000065
+  0000000000000070-0000000000000070 (prio 0, i/o): rtc-index
+  0000000000000071-0000000000000071 (prio 0, i/o): rtc @0000000000000001
+  0000000000000072-000000000000007d (prio 0, i/o): io @0000000000000072
+  000000000000007e-000000000000007f (prio 0, i/o): kvmvapic
+  0000000000000080-0000000000000080 (prio 0, i/o): ioport80
+  0000000000000081-0000000000000083 (prio 0, i/o): dma-page
+  0000000000000084-0000000000000086 (prio 0, i/o): io @0000000000000084
+  0000000000000087-0000000000000087 (prio 0, i/o): dma-page
+  0000000000000088-0000000000000088 (prio 0, i/o): io @0000000000000088
+  0000000000000089-000000000000008b (prio 0, i/o): dma-page
+  000000000000008c-000000000000008e (prio 0, i/o): io @000000000000008c
+  000000000000008f-000000000000008f (prio 0, i/o): dma-page
+  0000000000000090-0000000000000091 (prio 0, i/o): io @0000000000000090
+  0000000000000092-0000000000000092 (prio 0, i/o): port92
+  0000000000000093-000000000000009f (prio 0, i/o): io @0000000000000093
+  00000000000000a0-00000000000000a1 (prio 0, i/o): kvm-pic
+  00000000000000a2-00000000000000b1 (prio 0, i/o): io @00000000000000a2
+  00000000000000b2-00000000000000b3 (prio 0, i/o): apm-io
+  00000000000000b4-00000000000000bf (prio 0, i/o): io @00000000000000b4
+  00000000000000c0-00000000000000cf (prio 0, i/o): dma-chan
+  00000000000000d0-00000000000000df (prio 0, i/o): dma-cont
+  00000000000000e0-00000000000000ef (prio 0, i/o): io @00000000000000e0
+  00000000000000f0-00000000000000f0 (prio 0, i/o): ioportF0
+  00000000000000f1-00000000000001cd (prio 0, i/o): io @00000000000000f1
+  00000000000001ce-00000000000001d1 (prio 0, i/o): vbe
+  00000000000001d2-0000000000000377 (prio 0, i/o): io @00000000000001d2
+  0000000000000378-000000000000037f (prio 0, i/o): parallel
+  0000000000000380-00000000000003b3 (prio 0, i/o): io @0000000000000380
+  00000000000003b4-00000000000003b5 (prio 0, i/o): vga
+  00000000000003b6-00000000000003b9 (prio 0, i/o): io @00000000000003b6
+  00000000000003ba-00000000000003ba (prio 0, i/o): vga
+  00000000000003bb-00000000000003bf (prio 0, i/o): io @00000000000003bb
+  00000000000003c0-00000000000003cf (prio 0, i/o): vga
+  00000000000003d0-00000000000003d3 (prio 0, i/o): io @00000000000003d0
+  00000000000003d4-00000000000003d5 (prio 0, i/o): vga
+  00000000000003d6-00000000000003d9 (prio 0, i/o): io @00000000000003d6
+  00000000000003da-00000000000003da (prio 0, i/o): vga
+  00000000000003db-00000000000003f7 (prio 0, i/o): io @00000000000003db
+  00000000000003f8-00000000000003ff (prio 0, i/o): serial
+  0000000000000400-00000000000004cf (prio 0, i/o): io @0000000000000400
+  00000000000004d0-00000000000004d0 (prio 0, i/o): kvm-elcr
+  00000000000004d1-00000000000004d1 (prio 0, i/o): kvm-elcr
+  00000000000004d2-000000000000050f (prio 0, i/o): io @00000000000004d2
+  0000000000000510-0000000000000511 (prio 0, i/o): fwcfg
+  0000000000000512-0000000000000513 (prio 0, i/o): io @0000000000000512
+  0000000000000514-000000000000051b (prio 0, i/o): fwcfg.dma
+  000000000000051c-00000000000005ff (prio 0, i/o): io @000000000000051c
+  0000000000000600-0000000000000603 (prio 0, i/o): acpi-evt
+  0000000000000604-0000000000000605 (prio 0, i/o): acpi-cnt
+  0000000000000606-0000000000000607 (prio 0, i/o): io @0000000000000606
+  0000000000000608-000000000000060b (prio 0, i/o): acpi-tmr
+  000000000000060c-000000000000061f (prio 0, i/o): io @000000000000060c
+  0000000000000620-000000000000062f (prio 0, i/o): acpi-gpe0
+  0000000000000630-0000000000000637 (prio 0, i/o): acpi-smi
+  0000000000000638-000000000000065f (prio 0, i/o): io @0000000000000638
+  0000000000000660-000000000000067f (prio 0, i/o): sm-tco
+  0000000000000680-00000000000006ff (prio 0, i/o): io @0000000000000680
+  0000000000000700-000000000000073f (prio 1, i/o): pm-smbus
+  0000000000000740-0000000000000cbf (prio 0, i/o): io @0000000000000740
+  0000000000000cc0-0000000000000cd7 (prio 0, i/o): acpi-pci-hotplug
+  0000000000000cd8-0000000000000ce3 (prio 0, i/o): acpi-cpu-hotplug
+  0000000000000ce4-0000000000000cf7 (prio 0, i/o): io @0000000000000ce4
+  0000000000000cf8-0000000000000cf8 (prio 0, i/o): pci-conf-idx
+  0000000000000cf9-0000000000000cf9 (prio 1, i/o): lpc-reset-control
+  0000000000000cfa-0000000000000cfb (prio 0, i/o): pci-conf-idx @0000000000000002
+  0000000000000cfc-0000000000000cff (prio 0, i/o): pci-conf-data
+  0000000000000d00-0000000000005657 (prio 0, i/o): io @0000000000000d00
+  0000000000005658-0000000000005658 (prio 0, i/o): vmport
+  0000000000005659-000000000000bfff (prio 0, i/o): io @0000000000005659
+  000000000000c000-000000000000c07f (prio 1, i/o): virtio-pci
+  000000000000c080-000000000000c0bf (prio 0, i/o): io @000000000000c080
+  000000000000c0c0-000000000000c0df (prio 1, i/o): virtio-pci
+  000000000000c0e0-000000000000c0ff (prio 1, i/o): ahci-idp
+  000000000000c100-000000000000ffff (prio 0, i/o): io @000000000000c100
+
+FlatView #2
+ AS "mch", root: bus master container
+ AS "ICH9-LPC", root: bus master container
+ AS "ICH9-SMB", root: bus master container
+ AS "VGA", root: bus master container
+ AS "nvkvm-gpu", root: bus master container
+ Root memory region: (none)
+  No rendered FlatView
+
+FlatView #3
+ AS "virtio-pci-cfg-mem-as", root: virtio-pci
+ Root memory region: virtio-pci
+  00000000f3004000-00000000f3004fff (prio 0, i/o): virtio-pci-common-virtio-blk
+  00000000f3005000-00000000f3005fff (prio 0, i/o): virtio-pci-isr-virtio-blk
+  00000000f3006000-00000000f3006fff (prio 0, i/o): virtio-pci-device-virtio-blk
+  00000000f3007000-00000000f3007fff (prio 0, i/o): virtio-pci-notify-virtio-blk
+
+FlatView #4
+ AS "virtio-pci-cfg-mem-as", root: virtio-pci
+ Root memory region: virtio-pci
+  00000000f3000000-00000000f3000fff (prio 0, i/o): virtio-pci-common-virtio-net
+  00000000f3001000-00000000f3001fff (prio 0, i/o): virtio-pci-isr-virtio-net
+  00000000f3002000-00000000f3002fff (prio 0, i/o): virtio-pci-device-virtio-net
+  00000000f3003000-00000000f3003fff (prio 0, i/o): virtio-pci-notify-virtio-net
+
+FlatView #5
+ AS "KVM-SMRAM", root: mem-container-smram
+ AS "cpu-smm-0", root: mem-container-smram
+ AS "cpu-smm-1", root: mem-container-smram
+ AS "cpu-smm-2", root: mem-container-smram
+ Root memory region: mem-container-smram
+  0000000000000000-00000000000bffff (prio 0, ram): ram0 KVM
+  00000000000c0000-00000000000cafff (prio 0, rom): ram0 @00000000000c0000 KVM
+  00000000000cb000-00000000000cdfff (prio 0, ram): ram0 @00000000000cb000 KVM
+  00000000000ce000-00000000000e7fff (prio 0, rom): ram0 @00000000000ce000 KVM
+  00000000000e8000-00000000000effff (prio 0, ram): ram0 @00000000000e8000 KVM
+  00000000000f0000-00000000000fffff (prio 0, rom): ram0 @00000000000f0000 KVM
+  0000000000100000-000000007fffffff (prio 0, ram): ram0 @0000000000100000 KVM
+  00000000b0000000-00000000bfffffff (prio 0, i/o): pcie-mmcfg-mmio
+  00000000e0000000-00000000efffffff (prio 1, i/o): nvkvm-bar1-window
+  00000000f0000000-00000000f1ffffff (prio 1, i/o): nvkvm-bar2-window
+  00000000f2000000-00000000f2ffffff (prio 1, ram): vga.vram KVM
+  00000000f3000000-00000000f3000fff (prio 0, i/o): virtio-pci-common-virtio-net
+  00000000f3001000-00000000f3001fff (prio 0, i/o): virtio-pci-isr-virtio-net
+  00000000f3002000-00000000f3002fff (prio 0, i/o): virtio-pci-device-virtio-net
+  00000000f3003000-00000000f3003fff (prio 0, i/o): virtio-pci-notify-virtio-net
+  00000000f3004000-00000000f3004fff (prio 0, i/o): virtio-pci-common-virtio-blk
+  00000000f3005000-00000000f3005fff (prio 0, i/o): virtio-pci-isr-virtio-blk
+  00000000f3006000-00000000f3006fff (prio 0, i/o): virtio-pci-device-virtio-blk
+  00000000f3007000-00000000f3007fff (prio 0, i/o): virtio-pci-notify-virtio-blk
+  00000000fd000000-00000000fdffffff (prio 1, i/o): nvkvm-bar0-regs
+  00000000fe050000-00000000fe05017f (prio 0, i/o): edid
+  00000000fe050180-00000000fe0503ff (prio 1, i/o): vga.mmio @0000000000000180
+  00000000fe050400-00000000fe05041f (prio 0, i/o): vga ioports remapped
+  00000000fe050420-00000000fe0504ff (prio 1, i/o): vga.mmio @0000000000000420
+  00000000fe050500-00000000fe050515 (prio 0, i/o): bochs dispi interface
+  00000000fe050516-00000000fe0505ff (prio 1, i/o): vga.mmio @0000000000000516
+  00000000fe050600-00000000fe050607 (prio 0, i/o): qemu extended regs
+  00000000fe050608-00000000fe050fff (prio 1, i/o): vga.mmio @0000000000000608
+  00000000fe051000-00000000fe05103f (prio 0, i/o): msix-table
+  00000000fe051800-00000000fe051807 (prio 0, i/o): msix-pba
+  00000000fe052000-00000000fe05207f (prio 0, i/o): msix-table
+  00000000fe052800-00000000fe052807 (prio 0, i/o): msix-pba
+  00000000fe053000-00000000fe05303f (prio 0, i/o): msix-table
+  00000000fe053800-00000000fe053807 (prio 0, i/o): msix-pba
+  00000000fe054000-00000000fe054fff (prio 1, i/o): ahci
+  00000000fec00000-00000000fec00fff (prio 0, i/o): kvm-ioapic
+  00000000fed00000-00000000fed003ff (prio 0, i/o): hpet
+  00000000fed1c000-00000000fed1ffff (prio 1, i/o): lpc-rcrb-mmio
+  00000000fee00000-00000000feefffff (prio 4096, i/o): kvm-apic-msi
+  00000000fffc0000-00000000ffffffff (prio 0, rom): pc.bios KVM
+
+(qemu) 
