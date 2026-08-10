@@ -3243,11 +3243,32 @@ impl RegPlane {
                         .status_irq_cleared
                         .fetch_add(opened as u64, Ordering::Relaxed);
                 }
-                let raise_cpu_intr = self.deliver_os_events(fsm, ram.as_mut(), cpu_intr);
+                // ⊘⊘ §16.77.1 — **NO os-event delivery from here, and the deletion is the
+                // fix.** This arm used to call `deliver_os_events` on EVERY claimed GSP
+                // register write. That was invisible while the flow-control gate was stuck
+                // shut after one batch; the instant §16.77 made the guest able to drain,
+                // it became a livelock the guest names in its own log:
+                //
+                //   `[measured 2026-08-10, boot w213 at b0df550]`
+                //   `NVRM: _intrServiceStallExactList: Stuck interrupt detected for
+                //    mcEngine 50` … `Bailing after 1000 iterations` — repeatedly —
+                //   beside `125251 batches` / `375751 POST_EVENT` / `125440 vectors
+                //   delivered`, of which `125237 WOKE WITH NOTHING`.
+                //
+                // ★ The C has exactly ONE call site, and it is not a register write: it is
+                // the DOORBELL path, gated on `any_completed`, with the comment *"a channel
+                // finished: deliver the os-event completion"*
+                // (`C: src/qemu/nvkvm_gpu_emul.c:4358-4367`). The trigger is **work
+                // completing**, never **a register being touched** — see
+                // `RegPlane::ring_doorbell`, which is where this now lives.
+                //
+                // ★★ And this port's own instrument had already said so: `woke_with_nothing`
+                // is defined as *"a batch announced with no newly-served doorbell behind
+                // it"*, and it was 125 237 of 125 251. The number named the defect a rung
+                // before anyone read it that way.
                 WriteOutcome {
                     claimed: true,
                     raise_status_irq: report.raise_status_irq,
-                    raise_cpu_intr,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
                     ..WriteOutcome::nothing()
@@ -3341,6 +3362,37 @@ impl RegPlane {
             // over. ⊘ And not `Refused`, which is the same claim with the sign flipped.
             DoorbellReport::Served { .. } | DoorbellReport::Refused { .. } => false,
         };
+        // ★★★★★ **§16.77.1 — THE OS-EVENT WAKEUP, ON THE C's OWN TRIGGER.**
+        //
+        // `C: src/qemu/nvkvm_gpu_emul.c:4358-4367` — its single call site, inside the
+        // doorbell handler, gated on `any_completed`: *"a channel finished: deliver the
+        // os-event completion so libcuda's blocking-sync poll() wakes … Posting per
+        // completed-doorbell is bounded by the queue ring."*
+        //
+        // ⊘ **`ServedLocally`, and nothing else — the SAME precondition
+        // [`RegPlane::announce_completion`] documents.** The two are one truth claim: this
+        // device witnessed the bytes move and the finishPayload advance. A `Served`
+        // (forwarded) doorbell finishes on a host engine we are not standing at, and a
+        // `Refused` one finished nowhere.
+        //
+        // ⚠ **Bounded by construction, and that is the whole point.** The previous trigger
+        // — every claimed GSP register write — produced 125 251 batches in one boot and the
+        // guest's `_intrServiceStallExactList` declared `mcEngine 50` STUCK. This trigger
+        // fires at most once per locally-served doorbell (`[measured, w213]` 183 of them).
+        //
+        // ⊘ The lock is taken HERE and not around the port call above: `ring_doorbell`'s
+        // contract is that no plane lock is held across `port.ring(token)`, and this runs
+        // after it — the same shape `announce_completion` uses one statement up.
+        let raise_os_event = if matches!(report, DoorbellReport::ServedLocally { .. }) {
+            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let PlaneState {
+                fsm, ram, cpu_intr, ..
+            } = &mut *s;
+            self.deliver_os_events(fsm, ram.as_mut(), cpu_intr)
+        } else {
+            false
+        };
+        let raise_cpu_intr = raise_cpu_intr || raise_os_event;
         WriteOutcome {
             // ★ `claimed`, because this device DOES own the offset — whatever the core then
             // decided. A doorbell reported as unclaimed would tell an operator the aperture
