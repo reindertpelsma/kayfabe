@@ -305,6 +305,13 @@ fn wire_of(d: SectionDesc) -> SectionWire {
         is_rom_device: d.facts.is_rom_device,
         readonly: d.facts.readonly,
         nonvolatile: d.facts.nonvolatile,
+        // ★ The backing facts round-trip through the wire exactly as the other nine do.
+        // `SectionDesc::backing` is `None` for every section the mock mints by default, so
+        // these are zeros unless a test asked for a backed one.
+        fd_backed: d.backing.is_some(),
+        backing_dev: d.backing.map_or(0, |b| b.dev),
+        backing_ino: d.backing.map_or(0, |b| b.ino),
+        file_offset_of_region: d.backing.map_or(0, |b| b.file_offset_of_region),
     }
 }
 
@@ -1515,8 +1522,15 @@ fn the_stillborn_factory_retires_every_isolate_at_birth() {
     use kayfabe_arch::ids::GpuId;
     use kayfabe_isolate::IsolateId;
 
-    let f = isolate_factory(IsolatePlane::Stillborn, GuestRamSource::None)
+    let (f, backing) = isolate_factory(IsolatePlane::Stillborn, GuestRamSource::None)
         .expect("the default plane builds");
+    // ★ §5.7 — a plane that adopted no guest-RAM block claims no backing identity. `None`
+    // here is what makes the stated-layout report silent on an unarmed boot, which is what
+    // keeps the negative control comparable to the armed run.
+    assert!(
+        backing.is_none(),
+        "★ the stillborn plane named a guest-RAM block it never adopted"
+    );
     let id = IsolateId::new(7, GpuId(0));
     let mut iso = f.spawn(id);
     assert_eq!(iso.id(), id);

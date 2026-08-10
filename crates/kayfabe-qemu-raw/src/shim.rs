@@ -45,7 +45,9 @@ use std::time::Instant;
 
 use kayfabe_device::{ChipError, ChipProfile, NanoClock, RamRefused, RegPlane};
 use kayfabe_vmm::{BarId, Vmm, VmmError};
-use kayfabe_vmm_qemu::host::{BarPlacement, MrHandle, QemuHost, SectionDesc, SectionFacts};
+use kayfabe_vmm_qemu::host::{
+    BarPlacement, MrHandle, QemuHost, SectionBacking, SectionDesc, SectionFacts,
+};
 use kayfabe_vmm_qemu::slots::SlotPlane;
 use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 
@@ -290,7 +292,7 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// `cuCtxCreate` that never returns looks identical whether this device never woke the
 /// waiter or woke it with an unchanged semaphore behind it. `os_event_woke_with_nothing`
 /// is the field that separates them, and it is worth an ABI bump for that alone.
-pub const ABI_VERSION: u32 = 37;
+pub const ABI_VERSION: u32 = 38;
 
 /// ★★★★ §16.65 — how many engine buckets the doorbell census has. Must equal
 /// `KAYFABE_ENGINE_KINDS` and `kayfabe_rt::ENGINE_KIND_COUNT`.
@@ -499,6 +501,20 @@ pub struct SectionWire {
     pub readonly: bool,
     /// The section is non-volatile.
     pub nonvolatile: bool,
+    /// ★★ The region has a backing file the hypervisor could identify. When false the three
+    /// fields below are meaningless and are **not** read.
+    ///
+    /// ⊘ A separate flag rather than a sentinel in `backing_ino`, because zero is a legal
+    /// inode number on some filesystems and "the value that means unmeasured" must not be a
+    /// value the measurement can produce.
+    pub fd_backed: bool,
+    /// `st_dev` of the backing file. Meaningful only when `fd_backed`.
+    pub backing_dev: u64,
+    /// `st_ino` of the backing file. Meaningful only when `fd_backed`.
+    pub backing_ino: u64,
+    /// Byte offset into the backing file at which the **region** begins. Meaningful only
+    /// when `fd_backed`.
+    pub file_offset_of_region: u64,
 }
 
 impl SectionWire {
@@ -517,6 +533,11 @@ impl SectionWire {
                 readonly: self.readonly,
                 nonvolatile: self.nonvolatile,
             },
+            backing: self.fd_backed.then_some(SectionBacking {
+                dev: self.backing_dev,
+                ino: self.backing_ino,
+                file_offset_of_region: self.file_offset_of_region,
+            }),
         }
     }
 }
@@ -4760,6 +4781,14 @@ pub struct Regs {
     /// port. See [`CeShellState`]; this handle exists so [`Regs::attach_ram`] can install
     /// the memory plane into a port that was built before one existed.
     ce: Arc<CeShellState>,
+    /// ★★★ §5.7 — the filesystem identity of the guest-RAM block the composition root
+    /// adopted, or `None` when the crossing is not armed.
+    ///
+    /// It is here rather than beside the descriptor because this is the object that meets
+    /// the *memory* plane: [`Regs::attach_ram`] is the one place where the block we hold and
+    /// the hypervisor's stated topology are both in scope, and joining them is what turns an
+    /// extent into a layout.
+    guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
 }
 
 impl core::fmt::Debug for Regs {
@@ -4821,8 +4850,17 @@ impl Regs {
                  refuses below its floor rather than nearest-neighbouring",
             )
         })?;
-        let (links, refusals, promote_diag, rings, isolates, publications, isolate_plane, device) =
-            object_policy(abi.driver, chip.engines)?;
+        let (
+            links,
+            refusals,
+            promote_diag,
+            rings,
+            isolates,
+            publications,
+            isolate_plane,
+            device,
+            guest_ram_backing,
+        ) = object_policy(abi.driver, chip.engines)?;
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -4918,6 +4956,7 @@ impl Regs {
             isolates,
             publications,
             ce,
+            guest_ram_backing,
         })
     }
 
@@ -4980,6 +5019,155 @@ impl Regs {
         // description of guest memory. Installed here for `MachineRam`'s own reason: the
         // memory plane does not exist at device realize.
         *self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner()) = Some(shim.machine().vmm());
+        self.report_stated_guest_ram_at(shim, Self::ATTACH);
+    }
+
+    /// ★ The instant the memory plane came up. Named rather than spelled twice, because the
+    /// zero-case diagnosis branches on it and a typo would silently pick the wrong reading.
+    const ATTACH: &'static str = "MEMORY PLANE ATTACH";
+
+    /// ★★★ §5.7 — **the join**: the block this root adopted, met with the hypervisor's own
+    /// statement of where that block appears in the guest's physical space.
+    ///
+    /// This is the whole of step 2's evidence, and it is printed rather than merely stored
+    /// because [`boot_evidence_must_be_asserted_into_the_repo`] applies exactly here: the
+    /// layout is the input every later mapping is computed from, and a boot that produced a
+    /// wrong one would look identical to a boot that produced a right one until an isolate
+    /// read somebody else's page.
+    ///
+    /// ⊘ **Silent when the crossing is not armed.** A boot that did not ask for guest RAM
+    /// must not carry a line about guest RAM's layout — otherwise the negative control stops
+    /// being byte-comparable to the armed run, which is the property that makes it a control.
+    ///
+    /// ⊘ **A zero-run report is printed too, and loudly.** An armed run whose adopted block
+    /// matched no stated section is the interesting failure — the descriptor is real, the
+    /// topology is real, and the *join* is what is broken — and it is invisible unless the
+    /// section count is printed beside the run count.
+    pub fn report_stated_guest_ram_at(&self, shim: &Shim, at: &str) {
+        let Some(backing) = self.guest_ram_backing else {
+            return;
+        };
+        // ★★★ THE RUNS REPORTED ARE THE `ever` ONES, and that is the correction w225c/w225d
+        // forced. The LIVE table is empty at memory-plane attach (the listener sits on the
+        // bus-master address space, which the guest has not enabled) and empty again at the
+        // exit notifier (teardown replays `region_del` over every range). It was correct
+        // throughout the middle, and neither instant a device can reach shows it.
+        // ⊘ `resolve` still answers from the LIVE table only — this is the report, not the
+        // resolver, and the two must not become one.
+        let runs = shim.machine().stated_guest_ram_ever(backing);
+        let live = shim.machine().stated_guest_ram(backing).len();
+        let sections = shim.machine().stated_sections();
+        let c = shim.machine().layout_census();
+        let total: u128 = runs.iter().map(|r| u128::from(r.len)).sum();
+        eprintln!(
+            "kayfabe: ★★★ GUEST-RAM LAYOUT AT {at}, AS THE HYPERVISOR STATED IT — dev={} \
+             ino={}: {} contiguous run(s) totalling {total} bytes, out of {sections} stated \
+             section(s) LIVE over all backing files ({live} live run(s) for this block). \
+             Section funnel: {} reported -> {} classified RAM -> {} carried a backing file, \
+             {} later withdrawn. ⊘ Every run below arrived on a topology \
+             callback; NOTHING here is derived from the machine type or from `-m`, and a \
+             guest-physical address outside these runs is refused by name rather than \
+             assumed to be its own file offset. ⚠ This is ONE INSTANT: the listener is \
+             registered on the device's bus-master address space, which is empty until the \
+             guest enables bus mastering, so an empty report here is a statement about WHEN \
+             it was taken and not about the machine.",
+            backing.dev,
+            backing.ino,
+            runs.len(),
+            c.seen,
+            c.ram,
+            c.backed,
+            c.forgotten
+        );
+        if runs.is_empty() {
+            // ★★ The funnel, read out as a sentence, because 0-of-0 and 12-of-0 are
+            // different defects in different files and a reader should not have to derive
+            // which from three integers.
+            let where_it_broke = if c.seen == 0 && at == Self::ATTACH {
+                // ⊘ NOT a fault, and saying so was the first version's mistake. The listener
+                // is registered on the device's bus-master address space, which the guest has
+                // not enabled at this instant, so an empty flat view here is the EXPECTED
+                // reading. `[measured 2026-08-10, boots w225c-w225e]`: the same run reports
+                // 0 sections here and 76 at the end.
+                "nothing yet, and at THIS instant that is expected rather than broken — the \
+                 guest has not enabled bus mastering, so the address space this device \
+                 listens on is still empty. Read the END OF RUN report instead"
+            } else if c.seen == 0 {
+                "the listener reported NOTHING for the whole run — the topology callback \
+                 never fired, or fired before this device had a handle to receive it. That \
+                 is an ORDERING fault in the hypervisor shim, not a layout fault"
+            } else if c.ram == 0 {
+                "sections arrived and NONE classified as plain RAM — every one was a device, \
+                 a ROM, read-only or non-volatile. That is a CLASSIFICATION fault; see \
+                 `classify::is_ram`"
+            } else if c.backed == 0 {
+                "RAM sections arrived and NONE carried a backing file — the hypervisor could \
+                 not identify a descriptor behind them. That is a fault in the shim's \
+                 `fd_backed` fact, not in this module"
+            } else {
+                "sections stated runs, but for OTHER backing files — the descriptor this \
+                 device adopted is not the one behind the guest's RAM. That is a JOIN fault"
+            };
+            eprintln!(
+                "kayfabe: ⊘⊘ ZERO RUNS, and the crossing IS armed — the descriptor was \
+                 adopted and {sections} section(s) stated a run, but none named this block. \
+                 ★ Where it broke: {where_it_broke}. Nothing can be mapped until this joins; \
+                 an empty layout refuses every address, which is correct and is not progress."
+            );
+        }
+        if runs.is_empty() {
+            // ★★★ PRINT WHAT WAS THERE. A join that matched nothing is diagnosable only from
+            // the OTHER side's keys; without these lines the log says "no match" and the
+            // next person goes looking on the wrong side of the seam.
+            let seen = shim.machine().layout_backings_seen();
+            if seen.is_empty() {
+                eprintln!(
+                    "kayfabe:   (no backing file stated any run at all, so there is nothing \
+                     to have matched against)"
+                );
+            }
+            for (b, n, bytes) in &seen {
+                eprintln!(
+                    "kayfabe:   stated by dev={} ino={}: {n} section(s), {bytes} bytes{}",
+                    b.dev,
+                    b.ino,
+                    if *b == backing { "  <= THE BLOCK WE ADOPTED" } else { "" }
+                );
+            }
+        }
+        for r in &runs {
+            eprintln!(
+                "kayfabe:   gpa 0x{:016x}..0x{:016x} -> file offset 0x{:016x} ({} bytes){}",
+                r.gpa,
+                r.gpa_end(),
+                r.file_offset,
+                r.len,
+                if r.is_identity() {
+                    " [identity — an OBSERVATION about this run, never a rule]"
+                } else {
+                    " [★ NON-IDENTITY — a derived layout would have been wrong here]"
+                }
+            );
+        }
+    }
+
+    /// The stated guest-RAM runs for the adopted block, in guest-physical order.
+    ///
+    /// Empty when the crossing is not armed, and empty when it is armed and nothing joined —
+    /// ⊘ two very different facts that a caller must not merge. [`Regs::guest_ram_backing`]
+    /// distinguishes them.
+    #[must_use]
+    pub fn stated_guest_ram(&self, shim: &Shim) -> Vec<kayfabe_vmm_qemu::layout::StatedRun> {
+        self.guest_ram_backing
+            .map(|b| shim.machine().stated_guest_ram(b))
+            .unwrap_or_default()
+    }
+
+    /// The filesystem identity of the adopted guest-RAM block, or `None` when the crossing
+    /// is not armed.
+    #[must_use]
+    pub fn guest_ram_backing(&self) -> Option<kayfabe_vmm_qemu::layout::BackingId> {
+        self.guest_ram_backing
     }
 
     /// Put the plane back to refusing every guest-memory access, by name.
@@ -5645,6 +5833,18 @@ type ObjectLink = (
     IsolatePlane,
     // ★★★ E2 — and the shell itself, because the doorbell port needs the SAME one.
     Arc<kayfabe_rt::device::SharedDevice>,
+    // ★★★ §5.7 — the filesystem identity of the guest-RAM block this root ADOPTED, carried
+    // out beside the descriptor it was taken from.
+    //
+    // ⊘ Carried rather than re-derived, and that is the whole reason it is in this tuple.
+    // The identity is available at any time by re-taking the descriptor census, and doing
+    // so would create a SECOND selection of "which block is guest RAM" — two projections of
+    // one fact, which this project has now measured disagreeing three times. There is one
+    // selection, in `with_guest_ram`, and this is its answer travelling to the one place
+    // that joins the hypervisor's stated layout against it.
+    //
+    // `None` when the crossing is not armed: nothing was adopted, so nothing is claimed.
+    Option<kayfabe_vmm_qemu::layout::BackingId>,
 );
 
 fn object_policy(
@@ -5659,7 +5859,7 @@ fn object_policy(
     // two readings of one environment variable is two facts that can disagree, which is
     // the shape this file already refuses for the probe set and for the isolate plane.
     let guest_ram = selected_guest_ram_source()?;
-    let isolates = isolate_factory(isolate_plane, guest_ram)?;
+    let (isolates, guest_ram_backing) = isolate_factory(isolate_plane, guest_ram)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
         isolates,
@@ -5755,6 +5955,7 @@ fn object_policy(
         publication_census,
         isolate_plane,
         device,
+        guest_ram_backing,
     ))
 }
 
@@ -6169,25 +6370,44 @@ pub fn selected_mc_service_budget() -> Option<u32> {
 ///
 /// # Errors
 /// [`Status::Unsupported`], naming what this build cannot do.
+/// ★ The second element is the **adopted guest-RAM block's filesystem identity**, or `None`
+/// when nothing was adopted. It leaves this function beside the factory that holds the
+/// descriptor, because it is the *same selection's* answer and must never become a second
+/// one.
 pub fn isolate_factory(
     plane: IsolatePlane,
     guest_ram: GuestRamSource,
-) -> Result<Box<dyn kayfabe_isolate::IsolateFactory>, (Status, &'static str)> {
+) -> Result<
+    (
+        Box<dyn kayfabe_isolate::IsolateFactory>,
+        Option<kayfabe_vmm_qemu::layout::BackingId>,
+    ),
+    (Status, &'static str),
+> {
     guest_ram_is_reachable_on(plane, guest_ram)?;
     match plane {
-        IsolatePlane::Stillborn => Ok(Box::new(kayfabe_isolate::StillbornIsolates::new(
-            STILLBORN_WHY,
-        ))),
+        IsolatePlane::Stillborn => Ok((
+            Box::new(kayfabe_isolate::StillbornIsolates::new(STILLBORN_WHY)),
+            None,
+        )),
         #[cfg(feature = "host-isolates")]
-        IsolatePlane::Loopback => Ok(Box::new(with_guest_ram(
-            kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Loopback),
-            guest_ram,
-        )?)),
+        IsolatePlane::Loopback => {
+            let (f, id) = with_guest_ram(
+                kayfabe_isolate_host::HostIsolateFactory::new(
+                    kayfabe_isolate_host::RmMode::Loopback,
+                ),
+                guest_ram,
+            )?;
+            Ok((Box::new(f), id))
+        }
         #[cfg(feature = "host-isolates")]
-        IsolatePlane::Real => Ok(Box::new(with_guest_ram(
-            kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real),
-            guest_ram,
-        )?)),
+        IsolatePlane::Real => {
+            let (f, id) = with_guest_ram(
+                kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real),
+                guest_ram,
+            )?;
+            Ok((Box::new(f), id))
+        }
         #[cfg(not(feature = "host-isolates"))]
         IsolatePlane::Loopback | IsolatePlane::Real => Err((
             Status::Unsupported,
@@ -6226,9 +6446,15 @@ pub fn isolate_factory(
 fn with_guest_ram(
     factory: kayfabe_isolate_host::HostIsolateFactory,
     source: GuestRamSource,
-) -> Result<kayfabe_isolate_host::HostIsolateFactory, (Status, &'static str)> {
+) -> Result<
+    (
+        kayfabe_isolate_host::HostIsolateFactory,
+        Option<kayfabe_vmm_qemu::layout::BackingId>,
+    ),
+    (Status, &'static str),
+> {
     if source == GuestRamSource::None {
-        return Ok(factory);
+        return Ok((factory, None));
     }
     let census = kayfabe_linux_raw::MemfdCensus::take_of_this_process().map_err(|_| {
         (
@@ -6254,14 +6480,25 @@ fn with_guest_ram(
     }
     match census.the_only_shared_memfd_named(QEMU_MACHINE_RAM_MEMFD) {
         Ok(found) => {
+            // ★★★ §5.7 — the identity is taken HERE, at the one instant a block was
+            // selected, and travels with the descriptor. `into_descriptor` consumes the
+            // candidate, so this is also the last moment it can be taken without asking the
+            // question a second time.
+            let backing =
+                kayfabe_vmm_qemu::layout::BackingId::new(found.dev(), found.inode());
             eprintln!(
                 "kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's {QEMU_MACHINE_RAM_MEMFD} \
-                 block, {} bytes. Every isolate this factory spawns is granted a view of it \
-                 at a fixed descriptor number; nothing is mapped until a grant says so.",
-                found.bytes()
+                 block, {} bytes, dev={} ino={}. Every isolate this factory spawns is granted \
+                 a view of it at a fixed descriptor number; nothing is mapped until a grant \
+                 says so. ⊘ The size is an EXTENT, not a LAYOUT — where in the guest's \
+                 physical space these bytes appear is stated separately, by the hypervisor's \
+                 own topology callbacks, and is reported when the memory plane attaches.",
+                found.bytes(),
+                backing.dev,
+                backing.ino
             );
             let (fd, bytes) = found.into_descriptor();
-            Ok(factory.with_guest_ram(fd, bytes))
+            Ok((factory.with_guest_ram(fd, bytes), Some(backing)))
         }
         Err(kayfabe_linux_raw::MemfdRefusal::NoSuchMemfd) => Err((
             Status::Unsupported,

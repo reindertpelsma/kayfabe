@@ -108,6 +108,7 @@
 
 pub mod classify;
 pub mod host;
+pub mod layout;
 pub mod mock_host;
 pub mod slots;
 pub mod viewer_install;
@@ -592,6 +593,14 @@ pub(crate) struct View {
     /// that is what they are through the hypervisor. Crate doc finding 3.
     regions: GuestRamMap,
     backings: BTreeMap<RamRegionId, HostOwned>,
+    /// ★★★ §5.6's answer: the hypervisor's own **statement** of where guest RAM is, as
+    /// guest-physical runs paired with offsets into the file that backs them.
+    ///
+    /// Populated only from [`QemuMachine::region_add`] — i.e. only from numbers the
+    /// hypervisor itself produced. ⊘ Nothing in this crate derives a run from the machine
+    /// type, from `-m`, or from the assumption that guest-physical equals file offset. See
+    /// [`crate::layout`] for why that assumption is a `-m 8G` bug waiting to be silent.
+    layout: layout::GuestRamLayout,
     /// ★★★ **Our** reservations, consulted BEFORE `regions` and served by our own offset
     /// arithmetic. Nothing here is ever reachable through the hypervisor.
     windows: BTreeMap<RamRegionId, WindowView>,
@@ -1667,6 +1676,12 @@ impl QemuMachine {
             None
         };
         let (mut v, _h) = p.view();
+        // ★ Counted here, BEFORE any of the ways this call can decline to state a run, and
+        // counted for every section rather than only the interesting ones. A funnel whose
+        // first stage is only incremented on the happy path cannot distinguish "nothing
+        // arrived" from "everything arrived and was dropped".
+        v.layout
+            .saw(kind == RegionKind::Ram, s.backing.is_some());
         let region = RamRegionId(0x4000_0000_0000_0000 | s.gpa);
         v.regions.declare(region, kind, s.gpa, s.len).map_err(|_| {
             VmmError::Unsupported("a reported section that leaves the 64-bit space")
@@ -1679,6 +1694,22 @@ impl QemuMachine {
                     region_off: s.offset_within_region,
                 },
             );
+            // ★★★ THE STATEMENT (§5.6). Only reported RAM with a reported backing file
+            // states anything. A section whose backing is `None` states NOTHING and is not
+            // recorded as "unbacked" — `None` is unmeasured, and a layout that recorded it
+            // would be answering from an absence.
+            if let Some(b) = s.backing {
+                v.layout.state(
+                    layout::BackingId::new(b.dev, b.ino),
+                    layout::StatedRun {
+                        gpa: s.gpa,
+                        len: s.len,
+                        file_offset: b
+                            .file_offset_of_region
+                            .saturating_add(s.offset_within_region),
+                    },
+                );
+            }
         }
         v.foreign.insert(s.gpa, (region, s.len, mr));
         p.bump_topology(&mut v);
@@ -1697,6 +1728,10 @@ impl QemuMachine {
             };
             v.regions.undeclare(gpa, declared_len.max(len));
             v.backings.remove(&region);
+            // ★ The statement is withdrawn in the same critical section that undeclares the
+            // region. A layout row outliving its region would be a range this device would
+            // still answer for after the hypervisor stopped backing it.
+            v.layout.forget(gpa);
             p.bump_topology(&mut v);
             mr
         };
@@ -1704,6 +1739,75 @@ impl QemuMachine {
             p.host.unref_region(mr);
         }
         p.audit.topology_dels.fetch_add(1, Ordering::SeqCst);
+    }
+
+    // --- the stated guest-RAM layout (§5.6) ------------------------------------------
+
+    /// ★★★ The runs the hypervisor stated for one backing file, in guest-physical order,
+    /// adjacent sections coalesced.
+    ///
+    /// This is the whole of what this device knows about where guest RAM is, and every byte
+    /// of it came off a topology callback. An empty answer means the hypervisor never said
+    /// anything about that file — ⊘ **not** that the file backs nothing.
+    #[must_use]
+    pub fn stated_guest_ram(&self, backing: layout::BackingId) -> Vec<layout::StatedRun> {
+        let (v, _h) = self.plane.view();
+        v.layout.contiguous_runs(backing)
+    }
+
+    /// ★★★ The runs stated for one backing file at **any point** in this run, rather than
+    /// right now. ⊘ Evidence only — nothing resolves against it. See
+    /// [`layout::GuestRamLayout::contiguous_runs_ever`] for why a live-only report is empty
+    /// at both instants a device can conveniently reach.
+    #[must_use]
+    pub fn stated_guest_ram_ever(&self, backing: layout::BackingId) -> Vec<layout::StatedRun> {
+        let (v, _h) = self.plane.view();
+        v.layout.contiguous_runs_ever(backing)
+    }
+
+    /// ★★★ Resolve a guest-physical range to an offset into a backing file, or refuse by
+    /// name.
+    ///
+    /// This is the call step 3's `OS_DESCRIPTOR` path is built on, and the reason it returns
+    /// a `Result` rather than an `Option<u64>` is that "which way did this fail?" is a
+    /// question the caller has to be able to answer in a log: a range in no stated run and a
+    /// range that runs off the end of one are different defects with different fixes.
+    ///
+    /// # Errors
+    /// [`layout::LayoutRefusal`], every arm of it. ⊘ Never a clamped success.
+    pub fn resolve_guest_ram(
+        &self,
+        backing: layout::BackingId,
+        gpa: u64,
+        len: u64,
+    ) -> Result<layout::StatedRun, layout::LayoutRefusal> {
+        let (v, _h) = self.plane.view();
+        v.layout.resolve(backing, gpa, len)
+    }
+
+    /// How many topology sections currently state something, over all backing files. The
+    /// non-vacuity half of [`Self::stated_guest_ram`]: an empty run list is only meaningful
+    /// next to a non-zero section count.
+    #[must_use]
+    pub fn stated_sections(&self) -> usize {
+        let (v, _h) = self.plane.view();
+        v.layout.stated_sections()
+    }
+
+    /// ★★★ The three-stage funnel every reported section passed through. See
+    /// [`layout::LayoutCensus`] for why an empty layout is uninterpretable without it.
+    #[must_use]
+    pub fn layout_census(&self) -> layout::LayoutCensus {
+        let (v, _h) = self.plane.view();
+        v.layout.census()
+    }
+
+    /// ★★★ Every backing file that stated a run, so a failed join can name the key it did
+    /// not match rather than only its own. See [`layout::GuestRamLayout::backings_seen`].
+    #[must_use]
+    pub fn layout_backings_seen(&self) -> Vec<(layout::BackingId, usize, u128)> {
+        let (v, _h) = self.plane.view();
+        v.layout.backings_seen()
     }
 
     // --- teardown ------------------------------------------------------------------

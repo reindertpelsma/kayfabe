@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 37u
+#define KAYFABE_SHIM_ABI 38u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -129,6 +129,16 @@ typedef struct KayfabeRealizeCfg {
  * ★★ Five facts, not one predicate, because "is this memory?" is wrong in three independent
  * directions and no single accessor answers it.  The shim reports what it sees; the rule that
  * turns five facts into a verdict lives in exactly one place, and it is not here.
+ *
+ * ★★★ Now NINE facts.  The four new ones name the BACKING FILE, and they exist because a
+ * census yields an EXTENT and an extent is not a LAYOUT: knowing how big guest RAM is says
+ * nothing about which guest-physical address is which byte of the file.  `mr` cannot answer
+ * that -- it is a region object's address, unique to one process's lifetime and not
+ * comparable against a descriptor anybody holds.  The join has to be on the BLOCK.
+ *
+ * ⊘ `fd_backed == 0` means UNMEASURED, not "no backing".  The consumer states nothing for
+ * such a section and therefore refuses every address in it, rather than reading the absence
+ * as a fact about the range.
  */
 typedef struct KayfabeSection {
     uint64_t mr;
@@ -140,6 +150,10 @@ typedef struct KayfabeSection {
     int32_t  is_rom_device;
     int32_t  readonly;
     int32_t  nonvolatile;
+    int32_t  fd_backed;             /* the three below are read only when this is nonzero */
+    uint64_t backing_dev;           /* st_dev of the backing file                         */
+    uint64_t backing_ino;           /* st_ino of the backing file                         */
+    uint64_t file_offset_of_region; /* where the REGION starts in that file, not the section */
 } KayfabeSection;
 
 /* Counters, so an acceptance test outside the process can assert on more than an exit code.
@@ -183,6 +197,15 @@ int32_t kayfabe_shim_realize(const KayfabeHostOps *ops, void *dev,
                              const uint8_t **out_msg, uint64_t *out_msg_len);
 
 void    kayfabe_shim_unrealize(void *handle);
+
+/* ★★★ Report the stated guest-RAM layout again, at the END of the run.
+ *
+ * ⊘ The attach-time report answers a question about ONE INSTANT.  The topology listener is
+ * registered on the device's bus-master address space, which is EMPTY until the guest turns
+ * bus mastering on -- measured 2026-08-10, boots w225a/w225b: `0 reported -> 0 RAM -> 0
+ * backed` on a machine with 2 GiB of guest RAM the device had already adopted.  Both reports
+ * name their instant, and the difference between them is the finding. */
+void    kayfabe_shim_regs_report_ram_layout(void *regs, void *shim);
 
 int32_t kayfabe_shim_region_add(void *handle, const KayfabeSection *section,
                                 const uint8_t **out_msg, uint64_t *out_msg_len);

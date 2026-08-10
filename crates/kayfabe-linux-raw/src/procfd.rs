@@ -87,6 +87,15 @@ pub struct MemfdCandidate {
     /// against, so that "is it mapped shared" is a fact about *this object* rather than
     /// about a path string that appeared twice.
     inode: u64,
+    /// ★ Its `st_dev`, from the same `fstat`.
+    ///
+    /// An inode number is unique only within a device, and the consumer of this census now
+    /// joins it against an identity the **hypervisor** reported for a region's backing file
+    /// — a different process's `fstat` of a different descriptor. Carrying `dev` makes that
+    /// join total rather than very-probably-right. Every `memfd` in fact lives on the one
+    /// internal `shmem` mount, which is exactly why the missing half would never have been
+    /// caught here.
+    dev: u64,
     /// Whether some `rw-s` mapping in this process names this inode.
     shared_mapped: bool,
     /// ★ The number it was **listed at**, for the log only.
@@ -128,6 +137,13 @@ impl MemfdCandidate {
     #[must_use]
     pub fn inode(&self) -> u64 {
         self.inode
+    }
+
+    /// Its `st_dev`, the other half of the filesystem identity. See the field's note for why
+    /// both halves are carried.
+    #[must_use]
+    pub fn dev(&self) -> u64 {
+        self.dev
     }
 
     /// Take the descriptor and the length the kernel reported for it.
@@ -272,6 +288,7 @@ impl MemfdCensus {
                 name,
                 bytes: meta.len(),
                 inode,
+                dev: meta.dev(),
                 shared_mapped: shared_inodes.contains(&inode),
                 listed_as: number,
                 file,

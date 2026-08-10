@@ -269,6 +269,33 @@ impl MockQemuHost {
             len,
             offset_within_region,
             facts,
+            // ⊘ `None`, and deliberately so: a mock that invented a backing identity would
+            // let every existing test state a layout by accident, and the layout tests would
+            // then be asserting over rows nobody wrote. Use [`Self::mint_backed`] to state
+            // one on purpose.
+            backing: None,
+        }
+    }
+
+    /// ★★★ Mint a section that also names the **file** behind it — what a hypervisor
+    /// reports for RAM it backs with a descriptor.
+    ///
+    /// This is the only constructor in the mock that causes a run to be stated, because
+    /// stating a layout must be something a test *asks for* rather than something it gets by
+    /// calling the ordinary helper.
+    ///
+    /// # Panics
+    /// If the section does not fit inside the region it claims to be a slice of.
+    pub fn mint_backed(
+        &self,
+        gpa: u64,
+        len: u64,
+        facts: crate::host::SectionFacts,
+        backing: crate::host::SectionBacking,
+    ) -> SectionDesc {
+        SectionDesc {
+            backing: Some(backing),
+            ..self.mint_foreign(gpa, len, facts)
         }
     }
 

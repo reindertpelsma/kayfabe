@@ -52,6 +52,10 @@
 /* ★ §16.16 — `get_system_memory()`, for the trap-status table. QEMU 10.2 moved this header
  * from `exec/` to `system/`; the bench tree carries only the `system/` spelling. */
 #include "system/address-spaces.h"
+/* ★ For `RAMBlock::fd_offset`, read as a field in the topology listener. Same justification
+ * as `MemoryRegion::rom_device` there: no public accessor answers it, and the alternative
+ * is an assumption with nothing to catch it. */
+#include "system/ramblock.h"
 #include "system/system.h"
 
 #include "kayfabe_shim.h"
@@ -1277,6 +1281,40 @@ static void nvkvm_listener_region_add(MemoryListener *l, MemoryRegionSection *se
     w.is_rom_device = sec->mr->rom_device;
     w.readonly      = sec->readonly;
     w.nonvolatile   = sec->nonvolatile;
+    /* ★★★ THE LAYOUT, STATED.  A census of this process's descriptors yields the SIZE of
+     * guest RAM and nothing about its shape; the mapping from guest-physical address to
+     * byte-of-the-file is a fact only the hypervisor holds, and this is where it says it.
+     *
+     * ⊘ Deliberately NOT derived from the machine type.  On `-m 2048` q35 the map is the
+     * identity and `traces/guest_boots/run_w224m_mtree.log` measured that -- for ONE command
+     * line.  With `-m 8G` RAM splits around the 4 GiB PCI hole and the identity stops
+     * holding, so a consumer that assumed it would be silently wrong on a boot nobody
+     * thought was unusual.
+     *
+     * `mr` cannot carry this: it is this process's pointer to a region object.  The consumer
+     * has to join against a DESCRIPTOR it holds, so the identity reported is the block's --
+     * `(st_dev, st_ino)` -- exactly the key the descriptor census was forced onto when fd
+     * numbers turned out to move between two physical benches.
+     *
+     * `fd_offset` is read as a field for the same reason `rom_device` above is: there is no
+     * public accessor, and the alternative is to assume it is zero.  It IS zero for every
+     * `memory-backend-memfd` this bench has booted -- which is precisely why an assumption
+     * would never be caught. */
+    w.fd_backed             = 0;
+    w.backing_dev           = 0;
+    w.backing_ino           = 0;
+    w.file_offset_of_region = 0;
+    if (memory_region_is_ram(sec->mr) && sec->mr->ram_block) {
+        int fd = memory_region_get_fd(sec->mr);
+        struct stat st;
+
+        if (fd >= 0 && fstat(fd, &st) == 0) {
+            w.fd_backed             = 1;
+            w.backing_dev           = (uint64_t)st.st_dev;
+            w.backing_ino           = (uint64_t)st.st_ino;
+            w.file_offset_of_region = sec->mr->ram_block->fd_offset;
+        }
+    }
 
     rc = kayfabe_shim_region_add(s->shim, &w, &msg, &msg_len);
     if (rc != KAYFABE_OK) {
@@ -2679,6 +2717,11 @@ static void nvkvm_exit_notify(Notifier *n, void *data)
 
     (void)data;
     nvkvm_report_registers(s);
+    /* ★★★ The layout, at the END of the run.  The attach-time report is taken before the
+     * guest has enabled bus mastering, so on its own it can only ever say "nothing yet". */
+    if (s->regs && s->shim) {
+        kayfabe_shim_regs_report_ram_layout(s->regs, s->shim);
+    }
 }
 
 /*

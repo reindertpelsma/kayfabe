@@ -342,6 +342,13 @@ fn wire_of(d: SectionDesc) -> SectionWire {
         is_rom_device: d.facts.is_rom_device,
         readonly: d.facts.readonly,
         nonvolatile: d.facts.nonvolatile,
+        // ★ The backing facts round-trip through the wire exactly as the other nine do.
+        // `SectionDesc::backing` is `None` for every section the mock mints by default, so
+        // these are zeros unless a test asked for a backed one.
+        fd_backed: d.backing.is_some(),
+        backing_dev: d.backing.map_or(0, |b| b.dev),
+        backing_ino: d.backing.map_or(0, |b| b.ino),
+        file_offset_of_region: d.backing.map_or(0, |b| b.file_offset_of_region),
     }
 }
 

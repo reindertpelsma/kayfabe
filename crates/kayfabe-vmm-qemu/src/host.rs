@@ -141,6 +141,32 @@ impl SectionFacts {
     }
 }
 
+/// ★★ Which host **file** backs a section, and where in it the section's region starts.
+///
+/// This is the sixth, seventh and eighth unclassified fact, and it arrives for the same
+/// reason the first five did: no single predicate answers "is this guest RAM?", and the rule
+/// that turns facts into a verdict lives in one place — [`crate::layout`] — which is not the
+/// listener and is not this file.
+///
+/// ⊘ `mr` cannot do this job. It is a region object's address: unique within one process's
+/// lifetime, meaningless to anything that has to `mmap` the bytes, and not comparable
+/// against the descriptor step 1's census adopted. The join has to be on the **block**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SectionBacking {
+    /// `st_dev` of the backing file.
+    pub dev: u64,
+    /// `st_ino` of the backing file.
+    pub ino: u64,
+    /// ★ Byte offset into the backing file at which the *region* begins — **not** the
+    /// section. The section's own offset into the file is this plus
+    /// [`SectionDesc::offset_within_region`].
+    ///
+    /// Carried rather than assumed zero. It is zero for every `memory-backend-memfd` the
+    /// bench has ever booted, and assuming that here would be one more derived fact with
+    /// nothing to catch it when it stops holding.
+    pub file_offset_of_region: u64,
+}
+
 /// One section of the guest-physical topology, as the listener reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SectionDesc {
@@ -154,6 +180,14 @@ pub struct SectionDesc {
     pub offset_within_region: u64,
     /// The unclassified facts (§5.3).
     pub facts: SectionFacts,
+    /// ★ The backing file, when the region has one. `None` for a region with no descriptor
+    /// behind it — anonymous RAM, or anything that is not memory at all.
+    ///
+    /// ⊘ `None` is **unmeasured**, never "no backing": a hypervisor too old to report the
+    /// fact and a region genuinely without a descriptor arrive identically, so nothing in
+    /// [`crate::layout`] may read `None` as an answer. It states nothing, and a range with
+    /// nothing stated over it is refused.
+    pub backing: Option<SectionBacking>,
 }
 
 /// Where a region we publish is placed, so the caller never has to name a raw address.

@@ -387,6 +387,15 @@ pub struct KayfabeSection {
     pub readonly: i32,
     /// The section is non-volatile.
     pub nonvolatile: i32,
+    /// ★★ The region has a backing file whose identity the hypervisor could take. When
+    /// zero, the three fields below are not read.
+    pub fd_backed: i32,
+    /// `st_dev` of the backing file.
+    pub backing_dev: u64,
+    /// `st_ino` of the backing file.
+    pub backing_ino: u64,
+    /// Byte offset into the backing file at which the region begins.
+    pub file_offset_of_region: u64,
 }
 
 // =====================================================================================
@@ -923,6 +932,10 @@ pub unsafe extern "C" fn kayfabe_shim_region_add(
         is_rom_device: s.is_rom_device != 0,
         readonly: s.readonly != 0,
         nonvolatile: s.nonvolatile != 0,
+        fd_backed: s.fd_backed != 0,
+        backing_dev: s.backing_dev,
+        backing_ino: s.backing_ino,
+        file_offset_of_region: s.file_offset_of_region,
     };
     match shim.region_add(w) {
         Ok(()) => Status::Ok.code(),
@@ -1196,6 +1209,35 @@ pub unsafe extern "C" fn kayfabe_shim_regs_attach_ram(regs: *mut c_void, shim: *
     };
     regs.attach_ram(shim);
     Status::Ok.code()
+}
+
+/// ★★★ §5.7 — report the stated guest-RAM layout **again, at the end of the run**.
+///
+/// # ⊘ Why this exists at all: the attach-time report answered the wrong question
+///
+/// `[measured 2026-08-10, boots w225a/w225b, rev fbc8cd7/99672fe]` the report taken inside
+/// [`kayfabe_shim_regs_attach_ram`] said **`0 reported -> 0 RAM -> 0 backed`** on a machine
+/// with 2 GiB of guest RAM open at a descriptor this device had already adopted. The layout
+/// was not wrong; the *instant* was. The topology listener is registered on the device's
+/// bus-master address space, whose flat view is empty until the guest turns bus mastering
+/// on, and attach-time is long before that.
+///
+/// ★ That is `a_correct_capture_can_answer_the_wrong_question` exactly: a working instrument,
+/// a correct number, and a question about a **lifetime** answered by sampling one instant.
+/// So the layout is reported twice and both reports say which instant they are, because the
+/// difference between them is itself the finding.
+///
+/// # Safety
+/// `regs` must be empty or one [`kayfabe_shim_regs_create`] returned and not yet destroyed;
+/// `shim` must be empty or one [`kayfabe_shim_realize`] returned and not yet unrealized.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_regs_report_ram_layout(
+    regs: *mut c_void,
+    shim: *mut c_void,
+) {
+    if let (Some(regs), Some(shim)) = (borrow_regs(regs), borrow(shim)) {
+        regs.report_stated_guest_ram_at(shim, "END OF RUN");
+    }
 }
 
 /// Put the register plane back to refusing every guest-memory access, by name.

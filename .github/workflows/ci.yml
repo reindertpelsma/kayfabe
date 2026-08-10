@@ -1430,7 +1430,27 @@ jobs:
           # launching shell). The string must therefore cross the FFI boundary once, at
           # regs-create time, instead of being ambiently readable — the one new unsafe
           # site IS the fix's mechanism, not incidental.
-          AUDITED="kayfabe-linux-raw:91 kayfabe-qemu-raw:48"
+          # ★★★ `kayfabe-qemu-raw` 48 -> 49 AT ABI 38, 2026-08-10 — the guest-RAM LAYOUT
+          # report (`guest_ram_crossing.md` §5.7). ONE relaxation, and it is an entry
+          # point rather than a pointer read:
+          #
+          #   [p38-a] `kayfabe_shim_regs_report_ram_layout` — `{unsafe} extern "C" fn`,
+          #           counted by the fifth form of the sweep because a definition is a
+          #           relaxation. It takes the two opaque handles every other paired entry
+          #           point takes, borrows them through the SAME `borrow_regs`/`borrow`
+          #           helpers as `kayfabe_shim_regs_attach_ram` two functions above, and
+          #           dereferences nothing itself. It returns `void`: there is no failure
+          #           to report, because a report that cannot be produced is a missing log
+          #           line and not a fault the caller can act on.
+          #
+          # ⊘ Why a SECOND entry point rather than reporting inside the existing attach:
+          # the attach-time report was measured EMPTY on a machine with 2 GiB of guest RAM
+          # (boots `w225a`-`w225d`). The topology listener sits on the device's bus-master
+          # address space, which the guest has not enabled at attach time, so that instant
+          # can only ever say "nothing yet". The layout has no single instant at which it
+          # is both complete and live, which is why it is reported twice and why the second
+          # report needs a caller the C already has: the exit notifier.
+          AUDITED="kayfabe-linux-raw:91 kayfabe-qemu-raw:49"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
