@@ -1523,6 +1523,36 @@ static void nvkvm_report_registers(NvkvmState *s)
                 s->irq_vectors_delivered, s->irq_vectors_undeliverable,
                 s->irq_requests_dropped);
 
+    /* ★★★★★ §16.76.9 — THE INTERRUPT TREE'S OWN NUMBERS, and this line exists to settle ONE
+     * ambiguity that `w211` could not.
+     *
+     * That boot reported `1 would be masked` for the os-event announcement AND `4 of 4` for
+     * the CE completions — i.e. EVERY vector this device has ever latched read as masked.
+     * Two hypotheses with opposite fixes: (a) the guest genuinely never enables these leaves
+     * on a GSP-offload adapter, or (b) our own `leaf_en` bookkeeping never sees the guest's
+     * enable writes (the same boot logged 2464 UNCLAIMED register writes).
+     *
+     * ⊘ `cpu_intr_masked` is the DISCRIMINATOR and it was already on the wire, unprinted.
+     * It counts the guest's OWN `LEAF_TRIGGER` writes — overwhelmingly the driver's
+     * `_osVerifyInterrupts` loopback on vector 129, which we KNOW succeeded (no
+     * NV_ERR_IRQ_NOT_FIRING, and the adapter came up).  `_osVerifyInterrupts` writes
+     * `LEAF_EN_SET` immediately before it triggers (ogkm-580: intr_swintr_tu102.c:72-90), so:
+     *
+     *   masked == 0 while raises > 0  ->  the bookkeeping WORKS; hypothesis (a).
+     *   masked == raises              ->  the bookkeeping is BLIND; hypothesis (b), and the
+     *                                     "would be masked" numbers above mean nothing.
+     *
+     * ★ `suspect_the_instrument_first`: this device raises unconditionally by standing
+     * decision (kayfabe_device::cpuintr), so a blind enable-tracker costs NOTHING at run time
+     * and corrupts EVERY masked reading.  A number that is only ever read as a diagnosis must
+     * be able to say that it is the one that is broken. */
+    info_report("nvkvm: interrupt tree: %" PRIu64 " register accesses, %" PRIu64
+                " guest LEAF_TRIGGER raises, %" PRIu64 " of them would be masked "
+                "(⊘ if that equals the raises, the ENABLE BOOKKEEPING is blind and every "
+                "\"would be masked\" number in this report is meaningless — the loopback "
+                "self-test enables its leaf immediately before triggering)",
+                a.cpu_intr_accesses, a.cpu_intr_raises, a.cpu_intr_masked);
+
     /* ★★★ §14.18 — THE COMPLETION-NOTIFICATION LINE, printed unconditionally for the same
      * reason as the one above.  Serving notifier index 35 is a promise to raise a non-stall
      * vector when the engine's work completes; this line is whether the promise was kept.
