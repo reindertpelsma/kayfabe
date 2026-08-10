@@ -842,3 +842,103 @@ At `rev 4a93d54` the first run measured **16 of 18** firing, and both misses wer
 
 ★ Neither miss is a defect in the port: the join's behaviour did not change. What changed
 is that two of its properties stopped being asserted by nothing.
+
+---
+
+## ★★★★★ §16.79 — THE GR CONTEXT WALL, MEASURED, AND THREE PREMISES REFUTED
+
+`[measured 2026-08-10, boots `w215_79ed443_ctl` / `w216_f5f55ad_mcbudget` / `w217_2f616e2_grpush` /
+`w218_cb6adcc_grfull`]`, all committed under `traces/guest_boots/`. Driver source citations are
+`research_clones/ogkm-580.159.04/src/nvidia/...`.
+
+### What `cuCtxCreate` is actually doing
+
+It submits **one 86-method, 864-byte pushbuffer** on GrCompute channel token `0x00000007` and then
+spins in **userspace** waiting for it (`state=Rl`, `RIP` in `[vdso]` at `clock_gettime`, `RSP`
+identical across four 400 ms samples; two `libcuda` helper threads parked in `poll()`).
+
+The stream, decoded against `clc7c0.h` (subchannel 1 = `AMPERE_COMPUTE_B` unless noted):
+
+| | method | value |
+|---|---|---|
+| m000 | `SET_OBJECT` | `0xc7c0` |
+| m002-3 | `SET_SHADER_SHARED_MEMORY_WINDOW_A/B` | `0x79000000_000078ce` |
+| m004 | `SET_SPA_VERSION` | `0x0806` — SM 8.6, GA106's own |
+| m005-68 | `SET_CWD_REF_COUNTER` ×64 | `0x0005403f` **descending to** `0x00054000` |
+| m070 | `SET_VALID_SPAN_OVERFLOW_AREA_A/B/C` | `2, 0, 0xa8000` |
+| m072-77 | `LOAD_MME_INSTRUCTION_RAM*` | 39 words of MME microcode |
+| m078 | `SET_OBJECT` **[subchannel 4]** | `0xc7b5` (`AMPERE_DMA_COPY_B`) |
+| m079-84 | `SET_TEX_HEADER_POOL_A/B/C`, `SET_TEX_SAMPLER_POOL_A/B/C` | |
+| **m085** | **`SET_REPORT_SEMAPHORE_A/B/C/D`** | **VA `0x2_0440fff0`, payload `1`** |
+
+⊘ **No launch method anywhere in the 86**: no `SEND_PCAS_A/B` (`0x02b4/0x02b8`), no
+`SEND_SIGNALING_PCAS_B` (`0x02bc`), no `SEND_SIGNALING_PCAS2_B` (`0x02c0`), no
+`SET_INLINE_QMD_ADDRESS_A/B` (`0x0318/0x031c`), no `LAUNCH_DMA` (`0x01b0`). ⇒ **Context
+initialisation, not user compute** — consistent with `cup2` performing zero kernel launches.
+
+⇒ **THE WALL, TO THE BYTE:** nothing writes `1` to GPU VA `0x2_0440fff0`. The payload is a
+**literal immediate in the guest's own bytes**, so an executor that runs those bytes is right by
+construction and anything that re-encodes them is right only by luck.
+
+### ⊘ REFUTED 1 — "a backed non-faulting dummy page at the deterministic GR VA satisfies the guest kernel's checks"
+
+**The guest kernel checks SIZES, not memory.** Every fatal check in the GR bring-up
+(`_kgrAlloc`, `kernel_graphics_object.c:179-228`) is on the guest's **own** `MEMORY_DESCRIPTOR`
+pointers (`kgrctxMapCtxBuffers_IMPL`, `kernel_graphics_context.c:1630-1631`) and on **sizes returned
+by static-info controls** (`kgraphicsGetMainCtxBufferSize`, `kernel_graphics.c:1754-1756`;
+`kgrctxAllocPmBuffer_IMPL:1291-1292`). It never reads a GR ctx buffer's contents, never checksums
+one, and never touches its VA. ⇒ A dummy page would satisfy **nothing**, and the only forgiveness
+mechanism in the mapping path is a **zero size** in `CONTEXT_BUFFERS_INFO` — which the driver reads
+as *"unsupported, skip"* (`kernel_graphics_context.c:1481-1489`, `kernel_graphics.c:1875-1883`).
+
+### ⊘ REFUTED 2 — "GR context is the host's job, so the guest does not manage ctx buffers"
+
+`gpu_registry.c:153-156` sets `bClientRmAllocatedCtxBuffer = NV_TRUE` **unconditionally for every
+`IS_GSP_CLIENT` GPU**, and `kgrctxShouldManageCtxBuffers_KERNEL` (`kernel_graphics_context.c:2599-2607`)
+is exactly that flag. ⇒ **A GSP-client guest allocates, maps and promotes its own GR ctx buffers by
+construction.** The ownership ruling is right about who builds the *real* context and has **no
+expression in the guest's code path**: `GPU_PROMOTE_CTX` (`0x2080012b`) must still return `NV_OK` or
+`AMPERE_COMPUTE_B` alloc fails outright (`kernel_graphics_object.c:224-225` →
+`kgrobjConstruct_IMPL:353-360`, no retry, no degradation).
+
+⚠ And the **PATCH buffer is NOT `GPU_PRIVILEGED`** — `kgrctxAllocPatchBuffer_IMPL:1206` sets only
+`MEMDESC_FLAGS_OWNED_BY_CURRENT_DEVICE`, while MAIN (`:1127`) and PM (`:1277`) are privileged. It is
+on the mandatory promote list for a compute object (`kgrobjGetPromoteIds_FWCLIENT:594-602`).
+
+### ⊘ REFUTED 3 — "the host RM already builds the context because we forward the `0xc7c0` alloc"
+
+**We do not forward it.** `0xc7c0` decodes to `AllocParams::NoDeclaredFacts`
+(`kayfabe-abi/src/versions.rs:1098-1100`) and is answered by the **local** object model. The Case-1
+forward is fully built — `route/plan/commit/exec/forward_engine_object`
+(`kayfabe-fwd/src/lib.rs:2144-2411`), `DeviceShell::forward_engine_object`
+(`kayfabe-rt/src/device.rs:2359-2380`), `RmBackend::alloc_engine_object`
+(`kayfabe-isolate/src/lib.rs:497-507`) — and has **zero production callers**; every reference is a
+test. ⇒ On the running path no host GR context exists and nothing self-promotes.
+
+★ **That is the smallest identified increment on this line**, and it is a *wiring* change to code
+that already exists rather than a new plane. ⚠ It needs a live isolate plane; the shipped bench
+build reports `isolates: 2 materialized, 2 live, 2 refusing (2 no-plane)`.
+
+### ★★★★★ AND A HARD PROHIBITION, now measured rather than ruled
+
+`NVC7C0_SET_CWD_REF_COUNTER` is `0x0248`. `NVC7B5_SET_SEMAPHORE_PAYLOAD` is **also `0x0248`**
+(and `NVC7C0_INVALIDATE_TEXTURE_HEADER_CACHE_NO_WFI 0x0244` is `NVC7B5_SET_SEMAPHORE_B`). The
+pushbuffer above writes `0x0248` **64 times with strictly descending values**. A class-blind CE
+parser shown this exact stream latches 64 copy-engine semaphore payloads running **backwards**; UVM
+reads any decrease as a 2^32 wrap, exceeds `UVM_GPU_SEMAPHORE_MAX_JUMP`, and takes
+`UVM_ASSERT_MSG_RELEASE` — compiled into **release** builds — into `uvm_global_set_fatal_error`. No
+retry, no recovery, fatal on first occurrence.
+
+⇒ The class gating that makes a GR ring decode to `Opaque` is **not conservatism; it is what stands
+between this port and a guaranteed fatal error.** "Build a GR pushbuffer parser" is refused by
+measurement, not only by ruling. And any dump of a mixed-class stream **must print the subchannel** —
+an address alone cannot tell a compute counter from a CE semaphore payload.
+
+### ⊘ A NEGATIVE THAT NARROWS THE SEARCH
+
+The guest **kernel** has no wait attached to this pushbuffer at all: zero occurrences of
+`gpuSetTimeout`/`gpuCheckTimeout`/`osSpinLoop`/semaphore/notifier/idle in `kernel_graphics.c`,
+`kernel_graphics_object.c` or `kernel_graphics_context.c`. `kgraphicsCreateGoldenImageChannel_IMPL`
+(`kernel_graphics.c:2136-2543`) allocates a channel and a GR object and frees the tree — it never
+writes a GPFIFO entry or rings a doorbell. ⇒ **The wait is `libcuda`'s, in userspace**, which is what
+the sampler measured, and the only thing the kernel blocks on is the synchronous GSP RPC reply.
