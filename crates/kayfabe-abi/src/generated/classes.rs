@@ -241,6 +241,44 @@ pub const AMPERE_CHANNEL_GPFIFO_A: u32 = 0xc56f;
 /// ogkm `src/common/sdk/nvidia/inc/class/clc076.h`.
 pub const GP100_UVM_SW: u32 = 0xc076;
 
+/// `UVM_CHANNEL_RETAINER` — the handle UVM takes on a channel it did not create, so
+/// that the channel cannot be freed while UVM still has work referring to it.
+///
+/// ★★ Its alloc params are `NV_UVM_CHANNEL_RETAINER_ALLOC_PARAMS` — exactly two
+/// `NvHandle`s, `{hClient, hChannel}`, 8 bytes, no pointer
+/// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc574.h:44-47`), matching the
+/// `paramsSize=0x00000008` recorded on the wire
+/// (`[src] traces/guest_boots/run_w210_8574466_ctl_probe.log:923-927` — a READING of a
+/// committed capture, not a run taken for this row).
+///
+/// ★★★ **BOTH parameters are `[IN]`, and the constructor writes NOTHING back.**
+/// `uvmchanrtnrConstruct_IMPL` reads the two handles, resolves the channel, takes a
+/// reference on it and returns — it never stores anything into the caller's params
+/// struct. That is why echoing the request body back is bookkeeping rather than a lie:
+/// there is no `[OUT]` field whose value we would be inventing.
+///
+/// ⊘ **Contrast [`an_echo_is_unverifiable_by_its_reply`]**: an echo is dangerous exactly
+/// when the reply carries a field the caller will act on, because then the echo hides a
+/// decision. Here the reply carries no such field, and the class's entire effect is
+/// host-internal refcounting that this port's own object model already performs. The
+/// safety of the echo is a property of THIS class's parameter directions, established
+/// from the header, and does not generalise.
+///
+/// ⊘ **Do NOT forward it to the host**, and the reason is structural rather than
+/// evidential: the object it would retain is a channel in OUR object model, and the
+/// handle pair the params carry names nothing the host has ever been told about. (The
+/// C artifact reports a host refusal for this class; ⊘ no run of it is cited here, so
+/// nothing above rests on it.)
+///
+/// ⚠ **Expect the progress fraction NOT to move.** `mode2_cuctxcreate_resume.md`
+/// §0.6-0.7 names this port's exact symptom — the guest polling `MC_SERVICE_INTERRUPTS`
+/// forever — and rules that it is *not* a control-plane refusal: *"the shortcut fakes
+/// the completion without running the work = the oracle's dead end."* This row is
+/// admitted because it is cheap and honest, not because it is the wall.
+///
+/// ogkm `src/common/sdk/nvidia/inc/class/clc574.h`.
+pub const UVM_CHANNEL_RETAINER: u32 = 0xc574;
+
 /// `AMPERE_COMPUTE_B` — the compute engine object a CUDA process allocates
 /// on its GR channel. Declares no `AllocFacts`; its whole protocol content is the
 /// edge (channel -> engine object) that refines the channel's `EngineKind`.

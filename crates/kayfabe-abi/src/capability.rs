@@ -1081,6 +1081,22 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         name: "AMPERE_CHANNEL_GPFIFO_A",
         origin: Origin::Nvproxy,
     },
+    // ★★ `UVM_CHANNEL_RETAINER` — UVM's reference on a channel it did not create. Admitted
+    // because serving it is BOOKKEEPING rather than a forgery: both of its two parameters
+    // are `[IN]` handles and `uvmchanrtnrConstruct_IMPL` writes nothing back, so echoing the
+    // request body invents no value the guest will act on. ⊘ Never forwarded to the host:
+    // the channel it retains is one in OUR object model, so the handle pair it carries names
+    // nothing the host knows. (A host refusal for this class is reported by the C artifact;
+    // ⊘ no run of it is cited here, so it is not leaned on — the object-model argument stands
+    // alone.) See `generated::classes::UVM_CHANNEL_RETAINER` for the full citation.
+    //
+    // ⚠ Admitting it is NOT expected to move the progress fraction: the wall this port is at
+    // is a completion, not a control-plane refusal.
+    ClassEntry {
+        class: 0x0000c574,
+        name: "UVM_CHANNEL_RETAINER",
+        origin: Origin::Mode2Rpc,
+    },
     ClassEntry {
         class: 0x0000c597,
         name: "TURING_A",
@@ -1983,14 +1999,14 @@ mod tests {
                 "550.54.04",
                 (550, 54, 4),
                 155,
-                76,
+                77,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
                 156,
-                76,
+                77,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2000,14 +2016,14 @@ mod tests {
                 "555.42.02",
                 (555, 42, 2),
                 155,
-                76,
+                77,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
                 156,
-                84,
+                85,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -2017,7 +2033,7 @@ mod tests {
                 "570.86.15",
                 (570, 86, 15),
                 158,
-                90,
+                91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
@@ -2029,7 +2045,7 @@ mod tests {
                 "575.51.02",
                 (575, 51, 2),
                 159,
-                90,
+                91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2042,7 +2058,7 @@ mod tests {
                 "580.65.06",
                 (580, 65, 6),
                 159,
-                92,
+                93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2055,7 +2071,7 @@ mod tests {
                 "610.43.02",
                 (610, 43, 2),
                 159,
-                92,
+                93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2479,13 +2495,25 @@ mod tests {
     /// deliberate act; it moved because a boot named the row, and the four numbers moving
     /// **together** is the evidence that the row went into the shared base rather than
     /// into one boundary by accident.
+    ///
+    /// ★★ **+1 again at every boundary on 2026-08-10: `UVM_CHANNEL_RETAINER` (`0xc574`).**
+    /// SHARED for the same reason as its two predecessors — the class is version-invariant
+    /// and UVM takes the reference on every driver this table spans — and the four numbers
+    /// again move **together**, which is the evidence rather than the bookkeeping.
+    ///
+    /// ⚠ Unlike `GP100_UVM_SW`, this row was **not** admitted because a boot showed it to be
+    /// fatal. It is admitted because serving it is cheap and honest: both params are `[IN]`
+    /// and the constructor writes nothing back, so an echoed reply invents nothing. ⊘ It is
+    /// therefore **not** expected to move the progress fraction, and a report that credits it
+    /// with movement is reading a coincidence — `mode2_cuctxcreate_resume.md` §0.6-0.7 rules
+    /// this port's wall to be a completion, not a control-plane refusal.
     #[test]
     fn the_ported_surface_is_the_reviewed_size() {
         assert_eq!(bench().all_controls().count(), 159, "controls");
-        assert_eq!(at(550, 54, 4).all_classes().count(), 76, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 84, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 90, "classes at 570");
-        assert_eq!(bench().all_classes().count(), 92, "classes at 580");
+        assert_eq!(at(550, 54, 4).all_classes().count(), 77, "classes at 550");
+        assert_eq!(at(560, 28, 3).all_classes().count(), 85, "classes at 560");
+        assert_eq!(at(570, 86, 15).all_classes().count(), 91, "classes at 570");
+        assert_eq!(bench().all_classes().count(), 93, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 13, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 4, "denied classes");
     }
@@ -2583,7 +2611,13 @@ mod tests {
         // params table, so seven registrations in `w209_ffc80f8_ctl` were refused
         // `0x56` by the decoder gate and not by the boundary — which is exactly the
         // asymmetry this test's own docs describe, seen from the other side.
-        assert_eq!(seen, 15, "the port decodes fifteen classes today");
+        // 15 → 16 on 2026-08-10: `UVM_CHANNEL_RETAINER` (`0xc574`), UVM's reference on a
+        // channel it did not create. ★ The only row on this list admitted for its PARAMETER
+        // DIRECTIONS rather than for a measured failure: `{hClient, hChannel}` are both
+        // `[IN]` and `uvmchanrtnrConstruct_IMPL` writes nothing back, so `NoDeclaredFacts`
+        // plus an echoed body forges no value. ⊘ Cheap and correct is the whole claim; it is
+        // not claimed to be the wall.
+        assert_eq!(seen, 16, "the port decodes sixteen classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

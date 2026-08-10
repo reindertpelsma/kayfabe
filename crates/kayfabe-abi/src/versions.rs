@@ -1151,7 +1151,28 @@ impl DriverAbiTable {
             // `capability.rs` row for the scope, which is narrower than `AMPERE_B`'s: the
             // object exists to hold a subchannel for `FAULT_CANCEL_A`, and this port
             // raises no fault for UVM to cancel.
-            | classes::GP100_UVM_SW => {
+            | classes::GP100_UVM_SW
+            // ★★★ `UVM_CHANNEL_RETAINER` (`0xc574`) — and this row's justification is the
+            // OPPOSITE shape to every other member of this arm. The others are here because
+            // no params struct exists, or because one exists and nothing reads it. This
+            // class HAS a declared struct and it is fully read — `NV_UVM_CHANNEL_RETAINER_
+            // ALLOC_PARAMS { NvHandle hClient; NvHandle hChannel; }`, 8 bytes, matching the
+            // `paramsSize=0x00000008` on the wire
+            // (`run_w210_8574466_ctl_probe.log:923-927`).
+            //
+            // ★★ It is `NoDeclaredFacts` because both members are `[IN]` and the constructor
+            // writes **nothing** back, so there is no reply field this port would have to
+            // invent — which is the only question this enum decides. ⊘ It is NOT a claim
+            // that the params are unread, and the distinction matters: the day something
+            // above needs the retained channel as an EDGE, this row becomes a real
+            // `AllocParams` shape rather than staying here by inertia.
+            //
+            // ⊘ `an_echo_is_unverifiable_by_its_reply` is the standing hazard for any
+            // echoed body, and it does not bite here for a reason that must be checked per
+            // class rather than assumed: an echo hides a decision only when the reply
+            // carries a field the caller acts on. This one carries none. ⊘ Never forwarded
+            // to the host — the C artifact measured `0x33`.
+            | classes::UVM_CHANNEL_RETAINER => {
                 Some(AllocParams::NoDeclaredFacts)
             }
             // ★★ The two classes the 2026-08-01 boot measured this table missing, and
