@@ -1,19 +1,19 @@
 # R26 — a host channel whose GPFIFO ring is at an address WE dictate
-# RTX 3060 GA106 / driver 580.159.04, bench vh, 2026-08-10T05:17:42Z
-# SHIPPED HEAD: git 496188100bb06bf5867d9ef61aa88a64b665d1f0, clean tree
+# RTX 3060 GA106 / driver 580.159.04, bench vh, 2026-08-10T05:20:07Z
+# SHIPPED HEAD: git ed51a26a77f06d537701b43abefa899201e4d6cd, clean tree
 # the REV_UNDER_TEST below is DERIVED by kayfabe-isolate-host/build.rs, not exported by hand
 
 === arm A — root, under scripts/bench/host_xid_watch.sh ===
-[xid-watch] tag=r26_dictated_ring  host=ubuntu  utc=2026-08-10T05:17:42Z
+[xid-watch] tag=r26_dictated_ring  host=ubuntu  utc=2026-08-10T05:20:07Z
 [xid-watch] command: ./target/release/kayfabe-rm-ladder --dictated-ring
-[xid-watch] host_dmesg_lines=995  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_dmesg_lines=996  (readable — the clean/unwatched ambiguity is closed)
 [xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
 [xid-watch] xid_before=0
 [xid-watch] --- command output begins ---
 ok    R2 version         = "580.159.04"
-ok    R4 hClient         = 0xc1d007e8
+ok    R4 hClient         = 0xc1d007ee
 ok    R6 hSubdevice      = 0xcafe0002
-REV_UNDER_TEST=496188100bb06bf5867d9ef61aa88a64b665d1f0
+REV_UNDER_TEST=ed51a26a77f06d537701b43abefa899201e4d6cd
 info  R26 dictated ring   = GPU 0, euid 0 — allocate a host channel whose RING OBJECT is placed at 0x0000000411000000 BY US, then make the engine fetch from it
 info  R26 the bar is TWO facts: the placement RM reports back, and GP_GET moving. ⊘ `Ok(())` from the call under test is not one of them
 ok    R26 placement       = RM reports the ring at 0x0000000411000000 AS ASKED (token 0x00000004) — necessary, and NOT yet sufficient
@@ -22,7 +22,7 @@ done — dictated-ring probe only
 [xid-watch] --- command output ends (rc=0) ---
 [xid-watch] xid_after=0
 [xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
-[xid-watch]   ring buffer PROVED READABLE in phase 0 (995 lines). ⊘ That proof is what
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (996 lines). ⊘ That proof is what
 [xid-watch]   separates this line from the same line printed by a blind instrument.
 [xid-watch] evidence: /workspace/bench/xid_r26_dictated_ring.log
 watcher rc=0
@@ -35,9 +35,9 @@ CapEff:	0000000000000000
 CapAmb:	0000000000000000
 NoNewPrivs:	1
 ok    R2 version         = "580.159.04"
-ok    R4 hClient         = 0xc1d007e9
+ok    R4 hClient         = 0xc1d007f0
 ok    R6 hSubdevice      = 0xcafe0002
-REV_UNDER_TEST=496188100bb06bf5867d9ef61aa88a64b665d1f0
+REV_UNDER_TEST=ed51a26a77f06d537701b43abefa899201e4d6cd
 info  R26 dictated ring   = GPU 0, euid 65534 — allocate a host channel whose RING OBJECT is placed at 0x0000000411000000 BY US, then make the engine fetch from it
 info  R26 the bar is TWO facts: the placement RM reports back, and GP_GET moving. ⊘ `Ok(())` from the call under test is not one of them
 ok    R26 placement       = RM reports the ring at 0x0000000411000000 AS ASKED (token 0x00000004) — necessary, and NOT yet sufficient
@@ -46,16 +46,16 @@ done — dictated-ring probe only
 rc=0
 
 === NEGATIVE CONTROL — the address occupied first ===
-[xid-watch] tag=r26n_negative  host=ubuntu  utc=2026-08-10T05:17:44Z
+[xid-watch] tag=r26n_negative  host=ubuntu  utc=2026-08-10T05:20:09Z
 [xid-watch] command: ./target/release/kayfabe-rm-ladder --dictated-ring-negative
-[xid-watch] host_dmesg_lines=995  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_dmesg_lines=996  (readable — the clean/unwatched ambiguity is closed)
 [xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
 [xid-watch] xid_before=0
 [xid-watch] --- command output begins ---
 ok    R2 version         = "580.159.04"
-ok    R4 hClient         = 0xc1d007eb
+ok    R4 hClient         = 0xc1d007f2
 ok    R6 hSubdevice      = 0xcafe0002
-REV_UNDER_TEST=496188100bb06bf5867d9ef61aa88a64b665d1f0
+REV_UNDER_TEST=ed51a26a77f06d537701b43abefa899201e4d6cd
 info  R26n neg control    = GPU 0, euid 0 — OCCUPY 0x0000000411000000 first, then ask for a channel ring at the same address. The control fires if the ask is REFUSED
 ok    R26n occupied       = 0x0000000411000000 is now taken by another object
 ★     R26n CONTROL FIRED  = RM refused the channel at an occupied 0x0000000411000000 with NoMemory — the address is enforced by the driver, so R26's green is a fact about RM and not about our formatting
@@ -63,7 +63,7 @@ done — dictated-ring negative control only
 [xid-watch] --- command output ends (rc=0) ---
 [xid-watch] xid_after=0
 [xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
-[xid-watch]   ring buffer PROVED READABLE in phase 0 (995 lines). ⊘ That proof is what
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (996 lines). ⊘ That proof is what
 [xid-watch]   separates this line from the same line printed by a blind instrument.
 [xid-watch] evidence: /workspace/bench/xid_r26n_negative.log
 watcher rc=0

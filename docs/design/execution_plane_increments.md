@@ -12618,7 +12618,7 @@ green line gets read as evidence for the wrong thing.
 ## §16.68 ★★★★★ `R26` — a host channel whose GPFIFO ring is at an address **WE DICTATE**, and the host-Xid watcher that makes its failure legible
 
 `[measured 2026-08-10, RTX 3060 GA106 / 580.159.04, bench `vh`, binary stamped`
-`REV_UNDER_TEST=496188100bb06bf5867d9ef61aa88a64b665d1f0 — a 40-character DERIVED stamp,`
+`REV_UNDER_TEST=ed51a26a77f06d537701b43abefa899201e4d6cd — a 40-character DERIVED stamp,`
 `traces/real_ga106/rmladder_r26_dictated_ring_real_ga106.txt]`
 
 ### 16.68.1 ⊘ WHAT I REFUTED FIRST — four of the brief's claims, and one of my own instruments
@@ -12824,7 +12824,7 @@ formatting reflow, a `free` of the negative control's squatter object, a dead-co
 deletion in an unrelated crate and this section's prose. ⊘ **That delta looks inert, which is
 exactly the reading the rev-stamp trap punishes** — and one item in it is not inert at all:
 freeing the squatter changes what the *second* run of the control would find. So it was
-re-run rather than assumed, at `496188100bb06bf5867d9ef61aa88a64b665d1f0` on a clean tree —
+re-run rather than assumed, at `ed51a26a77f06d537701b43abefa899201e4d6cd` on a clean tree —
 and then AGAIN when clippy found that the insertion had attached R26's doc-comment to the
 negative control, because "only the function order moved" is another delta that looks inert,
 and the committed trace carries that stamp.
