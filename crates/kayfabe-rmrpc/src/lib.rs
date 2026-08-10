@@ -760,6 +760,39 @@ pub enum BridgeRefusal {
         /// distinguishable from a defined one we do not back.
         aperture: u32,
     },
+    /// ★★★★ **§16.64 — the SAME fork, at the OTHER birth site.**
+    /// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`0x00801813`) declaring a root that is
+    /// not in the framebuffer.
+    ///
+    /// # ⊘ This existed on one of the two arms and not the other, and that was the defect
+    ///
+    /// [`Self::PublishedPdesRootAperture`]'s own doc says it is *"that refusal at the
+    /// point the fact is born instead of at the point it is used"* — but `0x90f10106` is
+    /// only **one** of the two controls that give birth to a [`Pdb`]. `0x00801813` is the
+    /// other, it is **UVM's** transport (`ogkm-580: nv_gpu_ops.c:8778-8871`, reached from
+    /// `uvm_gpu.c:1305` / `uvm_va_space.c:1394`), and it built `Pdb(p.phys_address)` with
+    /// **no aperture fork at all**. A sysmem-rooted `SET_PAGE_DIRECTORY` therefore became
+    /// a guest-physical address wearing a framebuffer offset's type — silently, and with
+    /// the sibling arm's refusal sitting twenty lines away.
+    ///
+    /// ⚠ **The two encodings are NOT the same**, which is why this cannot share the
+    /// sibling's raw word. `levels[0].aperture` on `0x90f10106` is `GMMU_APERTURE_*`,
+    /// where `0 == GMMU_APERTURE_INVALID` and `1 == GMMU_APERTURE_VIDEO`
+    /// (`ogkm-580: gmmu_fmt.h:277-285`). `flags[1:0]` here is
+    /// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE`, where **`0 == _VIDMEM`**
+    /// (`ogkm-580: ctrl0080dma.h:842-845`). Decoding one with the other's table turns
+    /// *vidmem* into *invalid* — or, one layer on, routes a framebuffer offset into the
+    /// guest-RAM store. So this carries the **decoded** [`kayfabe_abi::view::PdbAperture`]
+    /// and never a bare word that a reader could match against the wrong table.
+    ///
+    /// ★ `[measured 2026-08-10, boot `s45_748a207_tsgsched`]` the live boot's own
+    /// `SET_PAGE_DIRECTORY` is `flags 0x8 (aperture 0)` — **vidmem**, so this refusal does
+    /// not fire on the path `cup2` walks, and closing the asymmetry regresses nothing that
+    /// boot does. It is the *unmeasured* aperture this refuses to guess at.
+    SetPageDirRootAperture {
+        /// The decoded aperture, in `SET_PAGE_DIRECTORY`'s own encoding.
+        aperture: kayfabe_abi::view::PdbAperture,
+    },
     /// `hClient == 0`. `NV01_NULL_OBJECT` is not a namespace; the core reserves
     /// `HClient(0)` as its system anchor and would refuse it too. Refused here as a
     /// well-formedness property of the *message* — which needs no graph state, and so is
@@ -984,6 +1017,9 @@ impl Faulted for BridgeRefusal {
             }
             BridgeRefusal::PublishedPdesRootAperture { .. } => {
                 FaultTag("BridgeRefusal::PublishedPdesRootAperture")
+            }
+            BridgeRefusal::SetPageDirRootAperture { .. } => {
+                FaultTag("BridgeRefusal::SetPageDirRootAperture")
             }
             BridgeRefusal::ParamsSizeExceedsPayload { .. } => {
                 FaultTag("BridgeRefusal::ParamsSizeExceedsPayload")
@@ -1394,12 +1430,34 @@ fn translate_alloc(
 ///
 /// ## What else is dropped, and the one that will matter
 ///
-/// `numEntries`, `chId`, `subDeviceId`, `pasid` — none has a home in `RmEvent`. And
-/// **`aperture`** (`flags[1:0]`), which is the interesting one:
-/// [`kayfabe_abi::view::PdbAperture`] decodes it and `RmEvent::SetPageDir` has nowhere to
-/// put it, so a vidmem-rooted and a sysmem-rooted page directory become *the same event*.
+/// `numEntries`, `chId`, `subDeviceId`, `pasid` — none has a home in `RmEvent`.
 ///
-/// That is safe **exactly as long as `Pdb` is only ever a key**, which today it is:
+/// ## ★★★★ §16.64 — **`aperture` is no longer among them**, and this paragraph was a bug report
+///
+/// What stood here said the aperture *"is dropped … so a vidmem-rooted and a sysmem-rooted
+/// page directory become the same event"*, then named its own expiry: *"The day a walker
+/// follows a PDB it must know whether the address is a framebuffer offset or a
+/// guest-physical address."*
+///
+/// ⊘ **That day is §16.64.** The whole point of the rung is to let the doorbell's CE
+/// resolver walk the root the guest published through this arm, which is precisely the
+/// dereference the paragraph said would end the drop's safety. And the drop was never as
+/// symmetric as it read: [`translate_published_pdes`], the *other* birth site of a `Pdb`,
+/// has always forked on the aperture and refused a non-framebuffer root — so the sentence
+/// described a global property that only one of the two arms actually had.
+///
+/// ⇒ This arm now takes the same fork ([`BridgeRefusal::SetPageDirRootAperture`]), and the
+/// invariant `Pdb`'s own doc asserts — *"a per-GPU FB address"* — is **true by
+/// construction on every path that can mint one** rather than true by assumption. The
+/// aperture is not carried because it no longer needs to be: there is exactly one value it
+/// can have by the time an event exists.
+///
+/// ⚠ The two arms read two **different encodings** and must never share a decoder:
+/// `GMMU_APERTURE_VIDEO == 1` on `0x90f10106`, `_APERTURE_VIDMEM == 0` here. Both mean
+/// vidmem; `0` means opposite things. See [`BridgeRefusal::SetPageDirRootAperture`].
+///
+/// The historical argument, kept because it is what made the risk legible: a bare `Pdb` is
+/// safe **exactly as long as it is only ever a key**, which for the address table it is:
 /// `kayfabe_mmu::AddressTable` takes a `Pdb` to name a table and to name a fault, and
 /// nothing in the tree dereferences one. The day a walker follows a PDB it must know
 /// whether the address is a framebuffer offset or a guest-physical address — two different
@@ -1495,6 +1553,24 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
     // VASpace, an object this RPC does not identify. See `BridgeRefusal::ImplicitVaspace`.
     if p.h_vaspace == 0 {
         return Err(BridgeRefusal::ImplicitVaspace);
+    }
+    // ★★★★ §16.64 — THE FORK, and it is the one `translate_published_pdes` has always had.
+    //
+    // `Pdb` is documented as a per-GPU **framebuffer** address. This arm built one out of
+    // `physAddress` unconditionally, so a `_SYSMEM_COH` root — a guest-physical address —
+    // became a `Pdb` with nothing saying so, while the sibling publication arm twenty
+    // lines up refused exactly that. ⊘ The asymmetry was invisible precisely because both
+    // arms produce the *same event*: the drop this function's own rustdoc calls "safe
+    // exactly as long as `Pdb` is only ever a key" was being taken at a second site that
+    // paragraph never named.
+    //
+    // ⚠ `p.aperture` is `flags[1:0]` under `SET_PAGE_DIRECTORY`'s OWN table, where
+    // `_VIDMEM == 0` — NOT `GMMU_APERTURE_*`, where `0` is `INVALID`. The decode is
+    // `kayfabe_abi::view::PdbAperture::from_flags`'s, so the two encodings never meet.
+    if p.aperture != kayfabe_abi::view::PdbAperture::Vidmem {
+        return Err(BridgeRefusal::SetPageDirRootAperture {
+            aperture: p.aperture,
+        });
     }
     Ok(Translation::Event(RmEvent::SetPageDir {
         client,

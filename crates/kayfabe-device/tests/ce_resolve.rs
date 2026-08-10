@@ -770,3 +770,117 @@ fn residency_separates_a_page_never_written_from_one_written_with_zeros() {
     );
     assert_eq!(RefusingFb.is_resident(0x4000), None);
 }
+
+// =====================================================================================
+// §16.64 — the root the OBJECT MODEL resolved, for the VA spaces a handle-keyed
+// publication table structurally cannot answer for.
+// =====================================================================================
+
+/// ★★★ The page shift is DERIVED from the installed format, never assumed and never a
+/// literal.
+///
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` has no `pageShift` field, so the root's level
+/// has to come from somewhere. It comes from `GmmuFmt::level_shift(0)` — the root of a walk
+/// is level 0 of the installed format by definition — and `TinyFmt` says that is **30**,
+/// which is deliberately *not* the 47 a real GA106 publishes. A literal would have read
+/// correctly on exactly one chip.
+#[test]
+fn a_declared_root_takes_its_page_shift_from_the_installed_format() {
+    let r = kayfabe_device::ceresolve::root_from_declared_pdb(&TinyFmt, 0x0034_1000).unwrap();
+    assert_eq!(
+        r.page_shift, 30,
+        "level 0 of THIS format, not a remembered GA106 number",
+    );
+    assert_eq!(r.phys, 0x0034_1000);
+}
+
+/// ⚠⚠ The two aperture encodings disagree about `0`, and this root must carry the value
+/// that means **vidmem in the field's own encoding**.
+///
+/// `VasRoot::aperture_raw` is declared to hold a `GMMU_APERTURE_*` word, where vidmem is
+/// `1` and `0` is `INVALID`. The control this root came from encodes vidmem as `0`
+/// (`ogkm-580: ctrl0080dma.h:842-845`). ⊘ Copying the control's word across would decode to
+/// `INVALID`; the test that would have caught that is this one.
+#[test]
+fn a_declared_root_is_vidmem_in_the_gmmu_encoding_and_not_the_controls() {
+    let r = kayfabe_device::ceresolve::root_from_declared_pdb(&TinyFmt, 0x0034_1000).unwrap();
+    assert_eq!(r.aperture, Some(Aperture::Vidmem));
+    assert_eq!(
+        r.aperture_raw,
+        kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+        "the GMMU word for vidmem is 1; the control's word for vidmem is 0, and they are \
+         never converted into one another",
+    );
+    assert_ne!(r.aperture_raw, 0, "0 is GMMU_APERTURE_INVALID, not vidmem");
+}
+
+/// ★★★ A root derived this way WALKS — and is INDISTINGUISHABLE from the published root
+/// for the same base.
+///
+/// ⊘ This is the property that matters and the one a "does it construct?" test would miss:
+/// the two provenances must be interchangeable *at the walk*, or the fallback is a
+/// different address space wearing the right type. The comparison is against
+/// `root_at(ROOT, GMMU_APERTURE_VIDEO, 30)` — the fixture every other test in this file
+/// walks — so this is a differential and not a restatement of the constructor.
+#[test]
+fn a_declared_root_is_indistinguishable_from_the_published_root_for_the_same_base() {
+    let declared =
+        kayfabe_device::ceresolve::root_from_declared_pdb(&TinyFmt, ROOT).expect("level 0 exists");
+    assert_eq!(
+        declared,
+        root_at(ROOT, GMMU_APERTURE_VIDEO, 30),
+        "a root the object model declared must BE the root a publication would have given",
+    );
+    // ⊘ And it is checked at the WALK too, not only at the struct: equality of fields is a
+    // claim about this constructor, while the resolved byte is a claim about the tree.
+    assert_eq!(
+        resolve(
+            &TinyFmt,
+            &mut tree(),
+            &declared,
+            VA,
+            LIMITS,
+            Demand::from_doorbell(),
+        ),
+        CeResolve::Resolved {
+            phys: LEAF_PHYS + 0x1234,
+            aperture: Aperture::Vidmem,
+            page_size: 2 << 20,
+            read_only: false,
+            level: 1,
+        },
+    );
+}
+
+/// ⊘ A format with no level 0 REFUSES BY NAME rather than guessing a stride.
+///
+/// The same discipline `GmmuFmt::level_shift`'s own doc states: *"an un-enumerated size is
+/// a loud fault, never a silent drop."*
+#[test]
+fn a_declared_root_against_a_format_with_no_root_level_refuses_by_name() {
+    struct NoLevels;
+    impl GmmuFmt for NoLevels {
+        fn version(&self) -> GmmuVersion {
+            GmmuVersion::Ver2
+        }
+        fn page_sizes(&self) -> &[PageSize] {
+            &[PageSize(4096)]
+        }
+        fn entry_size(&self, _l: u8) -> u8 {
+            8
+        }
+        fn levels(&self) -> u8 {
+            0
+        }
+        fn level_shift(&self, _l: u8) -> Option<LevelShift> {
+            None
+        }
+        fn decode_entry(&self, _l: u8, _raw: u128) -> PteDecode {
+            PteDecode::Invalid
+        }
+    }
+    assert_eq!(
+        kayfabe_device::ceresolve::root_from_declared_pdb(&NoLevels, 0x1000),
+        Err(CeResolve::NoRootLevel { page_shift: 0 }),
+    );
+}

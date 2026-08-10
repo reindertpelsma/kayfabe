@@ -1691,6 +1691,62 @@ impl RegPlane {
         crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)
     }
 
+    /// ★★★★ **§16.64 — the walkable root for a page-directory base the OBJECT MODEL
+    /// resolved**, derived against *this plane's* installed format.
+    ///
+    /// The whole argument — why a handle-keyed table structurally cannot answer for a
+    /// UVM-managed VA space, and why claiming `Vidmem` here is a fact rather than a
+    /// convenience — is on [`crate::ceresolve::root_from_declared_pdb`]. This method exists
+    /// so the derivation reads the format **this plane installed**, for
+    /// [`RegPlane::resolve_published_va`]'s reason exactly: a root sized against a second
+    /// format would describe a different device.
+    ///
+    /// # Errors
+    /// [`crate::ceresolve::CeResolve::NoMmuPort`] when no format is installed, or whatever
+    /// the derivation refuses.
+    pub fn root_from_declared_pdb(
+        &self,
+        pdb_phys: u64,
+    ) -> Result<crate::ceresolve::VasRoot, crate::ceresolve::CeResolve> {
+        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(fmt) = s.mmu.as_deref() else {
+            return Err(crate::ceresolve::CeResolve::NoMmuPort);
+        };
+        crate::ceresolve::root_from_declared_pdb(fmt, pdb_phys)
+    }
+
+    /// ★★★ **§16.64 — resolve one GPU VA against a root the caller already holds.**
+    ///
+    /// The sibling of [`RegPlane::resolve_published_va`] for the case where the root did
+    /// not come from this device's publication table. ⊘ Same `demand` discipline, same
+    /// body ([`resolve_locked`]), same framebuffer — only the root's *provenance* differs,
+    /// and that difference is the caller's to state.
+    #[must_use]
+    pub fn resolve_va_from_root(
+        &self,
+        root: &crate::ceresolve::VasRoot,
+        va: u64,
+        demand: crate::ceresolve::Demand,
+    ) -> crate::ceresolve::CeResolve {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        resolve_locked(&mut s, self.chip, root, va, demand)
+    }
+
+    /// ★★★ **§16.64 — the per-level descent trace for a root the caller already holds.**
+    ///
+    /// [`RegPlane::published_walk_trace`]'s sibling; produces a **sentence**, no address,
+    /// and therefore takes no [`crate::ceresolve::Demand`].
+    #[must_use]
+    pub fn walk_trace_from_root(&self, root: &crate::ceresolve::VasRoot, va: u64) -> String {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let PlaneState { mmu, fb, .. } = &mut *s;
+        let Some(fmt) = mmu.as_deref() else {
+            return " walk=NO-MMU-PORT".to_string();
+        };
+        let mut src = FbStoreReader { fb: fb.as_mut() };
+        crate::ceresolve::walk_trace(fmt, &mut src, root, va)
+    }
+
     /// ★★★ **One CE submission's worth of this plane, under ONE lock acquisition**
     /// (`execution_plane_increments.md` §14.15 obstacle 3, the *"the plane hands out its
     /// stores"* half of the owner's two options).
@@ -1725,14 +1781,37 @@ impl RegPlane {
         f: impl FnOnce(&mut CePlane<'_>) -> R,
     ) -> Option<R> {
         let root = crate::ceresolve::published_root(&self.gvas_pub.snapshot(), client, vaspace)?;
+        Some(self.ce_session_with_root(&root, demand, f))
+    }
+
+    /// ★★★★ **§16.64 — a CE session over a root the caller already holds**, for the VA
+    /// spaces [`MemoryPlane::ce_session`]'s handle-keyed lookup structurally cannot answer
+    /// for.
+    ///
+    /// ⊘ **Not an `Option`, and that is the difference that matters.** `ce_session` returns
+    /// `None` to mean *"the guest published no root for that `(hClient, hVASpace)`"* — a
+    /// sentence [`crate::ceresolve::root_from_declared_pdb`] shows is **false about the
+    /// guest** for a UVM-managed VA space, which publishes through a transport that lookup
+    /// never sees and under a *dup* handle it could not match anyway. A caller that has
+    /// already obtained a root has nothing left to refuse *here*, so this cannot manufacture
+    /// a second refusal wearing the first one's name.
+    ///
+    /// ★ Same body, same lock, same [`CePlane`] as `ce_session` — which now delegates — so
+    /// the two entry points cannot come to disagree about what a session is.
+    pub fn ce_session_with_root<R>(
+        &self,
+        root: &crate::ceresolve::VasRoot,
+        demand: crate::ceresolve::Demand,
+        f: impl FnOnce(&mut CePlane<'_>) -> R,
+    ) -> R {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let mut ce = CePlane {
             state: &mut s,
             chip: self.chip,
-            root,
+            root: *root,
             demand,
         };
-        Some(f(&mut ce))
+        f(&mut ce)
     }
 
     /// The publication latch itself, as a shared handle — for

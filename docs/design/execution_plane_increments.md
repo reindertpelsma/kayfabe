@@ -11922,3 +11922,132 @@ says has no published root.** ⇒ Our object model already holds that root; `CeR
 different, weaker projection keyed by **raw handle**. The refusal's sentence — *"the guest
 published no page-directory root"* — is **false about the guest**. That is the next rung, and
 it is wiring rather than design.
+
+## §16.64 — Wall 2: the root we already held, and the aperture we were dropping
+
+### 16.64.1 What I REFUTED before writing a line
+
+★★★ The brief for this rung was right about the wall and wrong in three places I had to
+measure to find. Each is recorded because each would have shipped.
+
+**R1 — `gpu_vaspace.c:523` does NOT say what it was cited for.** The brief cited it for
+*"an externally-owned VAS publishes through `0x00801813 SET_PAGE_DIRECTORY` instead"*. Line
+523-524 is a **comment inside the `VASPACE_FLAGS_ENABLE_ATS` arm** saying PASID is programmed
+via that control. It is not a publication path and not about externally-owned VA spaces. ⊘
+The *conclusion* holds, on a citation nobody had produced: `nvGpuOpsSetPageDirectory`
+(`ogkm-580: nv_gpu_ops.c:8778-8871`) builds the params and issues
+`NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` at `:8870`, reached from UVM at `uvm_gpu.c:1305` and
+`uvm_va_space.c:1394`.
+
+★ And the flag chain the brief asserted without one is real, in three hops, all verified
+here: `NV_VASPACE_ALLOCATION_FLAGS_IS_EXTERNALLY_OWNED` sets **`VASPACE_FLAGS_DISABLE_SPLIT_VAS`**
+(`vaspace_api.c:617-621`) → that flag is exactly what excludes the call to
+`gvaspaceReserveSplitVaSpace` (`gpu_vaspace.c:598-612`) → which is the **only** writer of
+`vaStartServerRMOwned` (`:394-421`) → so it stays `0` and
+`gvaspaceCopyServerRmReservedPdesToServerRm_IMPL` returns `NV_OK` having published nothing
+(`:4046-4051`).
+
+**R2 — "a raw-handle key with no alias resolution" is the wrong diagnosis.** Alias
+resolution *does* run: `ChannelFacts::vas_origin` is documented and implemented as the VASpace
+**resource** with dup-aliases resolved, and `CeChannelFacts::vas_pdb` comes off it via
+`RmGraph::pdb_of_resource`. The actual fault is sharper and worse for any handle-keyed fix:
+the publication is filed under UVM's **dup** (`hClient 0xc1d0000a hVASpace 0xcaf00036`) while
+the channel resolves to the **origin** (`c0xc1d0000c/0x5c000007`). ⇒ **Both sides resolve
+correctly, to different handles of one resource.** No handle-keyed table can join them, and
+"normalize the key" — the obvious fix — would have failed whichever handle it normalized to.
+
+**R3 — the brief's s45 line numbers are for a file it did not name.** Lines 169/234 are in
+`run_s45_748a207_tsgsched_qemu.log`, not the `_probe.log`. Both lines are verbatim correct
+there. ⊘ Recorded because two of the three logs in that boot have >169 lines, so the citation
+silently resolves to the wrong file and reads as a refutation.
+
+★★ **Confirmed unchanged:** doorbells `448 arrived, 261 served, 187 REFUSED` (verbatim);
+records 73/74 are the only two `hClass=0x90f1` allocs in the boot, same `hRoot=0xc1d0000c`,
+same `hParent=0x5c000002`, `hObject` `0x5c000007` / `0x5c000008`; and the aperture trap is
+real — `_APERTURE_VIDMEM == 0` (`ctrl0080dma.h:842-845`) against `GMMU_APERTURE_INVALID == 0`
+/ `GMMU_APERTURE_VIDEO == 1` (`gmmu_fmt.h:277-285`).
+
+### 16.64.2 The defect underneath the wall — and it was NOT the one I was sent for
+
+★★★★ Chasing the transport turned up something the brief did not name and that outranks it.
+`RmEvent::SetPageDir` is minted at **two** sites. `translate_published_pdes` (`0x90f10106`)
+forks on the aperture and refuses a non-framebuffer root — its refusal's own doc calls this
+*"that refusal at the point the fact is born instead of at the point it is used."*
+`translate_control`'s `0x00801813` arm — **UVM's** transport, the one this whole rung is
+about — built `Pdb(p.phys_address)` with **no aperture fork at all**.
+
+So a `_SYSMEM_COH` root became a `Pdb`, which `kayfabe_arch::ids::Pdb` documents as *"a
+per-GPU FB address"*. Silent, and with the sibling's refusal twenty lines away.
+
+★★★★ **A comment that names an exception is a bug report, and this one named its own expiry
+and still shipped.** `translate_control`'s rustdoc said the drop *"is safe exactly as long as
+`Pdb` is only ever a key … The day a walker follows a PDB it must know whether the address is
+a framebuffer offset or a guest-physical address."* **This rung is that day** — its entire
+purpose is to let the CE resolver walk that root. The paragraph was correct, precise, and had
+no reader. ⊘ And it was never true globally anyway: it described a property only one of the
+two arms had.
+
+★★★★★ **A GREEN TEST PINNED THE DEFECT AS A PROPERTY.** `rmrpc_bridge.rs` carried
+`the_aperture_is_dropped_so_a_vidmem_and_a_sysmem_root_are_the_same_event`, asserting all four
+`flags[1:0]` encodings produce one identical event. Its doc even wrote the expiry down —
+*"The day a walker follows a PDB, this test is the one that has to change, and it will say so
+by failing."* It did exactly that, which is the good half. The bad half is the mechanism: a
+**passing** test is read by nobody, so a correctly-written expiry condition is only ever
+delivered to someone who has already broken it. This is the same shape as
+`gvas_publication.rs:436-438`'s wrong quantifier — a green assertion holding a wall in place.
+
+★★★★ **And its fixture encoded a MISREAD of a correct citation.** `HEX_SPD_FLAGS` was
+`SYSMEM_COH`, justified as *"the shape UVM actually sends (`nv_gpu_ops.c:8857-8862`)"*. That
+citation is real and correctly located, and it is a **ternary**: UVM sends `_VIDMEM` *or*
+`_SYSMEM_COH` depending on `bVidMemAperture`. Reading one arm of a conditional as a constant
+produced a fixture our own boot contradicts — `[measured 2026-08-10, boot
+`s45_748a207_tsgsched`]` the live control is `flags 0x8 (aperture 0)`, **VIDMEM**. ⇒ The
+transferable rule: *a citation to a conditional must carry the condition.* Checking that a
+claim is **sourced** never checks that the source says it — the same failure class as the C
+oracle's empty `dlen=0` rows satisfying a `C:` citation gate.
+
+### 16.64.3 What landed
+
+1. **The fork, at the second birth site.** `BridgeRefusal::SetPageDirRootAperture` carries the
+   **decoded** `PdbAperture`, never a bare word, so the two encodings can never be matched
+   against the wrong table. ⇒ `Pdb`'s documented meaning is now true **by construction on
+   every path that can mint one**, which is what makes step 2 sound rather than convenient.
+2. **`ceresolve::root_from_declared_pdb`** — a walkable root from a base the object model
+   resolved **by resource identity**. `page_shift` is derived from `GmmuFmt::level_shift(0)`
+   (the control has no such field); `aperture_raw` is stamped `GMMU_APERTURE_VIDEO` — the
+   value meaning vidmem *in that field's own encoding* — and the control's `0` is **not**
+   copied across.
+3. **A second root source at the doorbell**, tried only after the publication table misses, so
+   nothing that works today is routed differently. Its own failure reports by its own name
+   (`CeResolve::DeclaredRootUnusable`), never as `NoPublication`.
+4. **The `NoPublication` sentence narrowed** to what it can still truthfully claim: neither
+   the device's table nor the object model knows of a root.
+
+### 16.64.4 ⊘ THE FALSIFIER — committed BEFORE the boot
+
+⊘ The instruction I am holding myself to: **the falsifier must not be the thing the fix
+produces.** "`published_root` now resolves" is unusable — it is the change restated. Every
+value below is read off the **guest's** subsequent behaviour.
+
+- **A — the route landed.** `448/261/187` moves to `448/>261/<187` **and** the
+  `CeResolve::NoPublication` count for `(0xc1d0000c, 0x5c000007)` goes to 0.
+- **B — the wall moves one hop deeper (EXPECTED).** Doorbells still refuse, but the refusal
+  **changes name** — `Fault(Unmapped)`, `Fault(Sparse)`, `AddressOutOfRange`, or a CeUtils
+  refusal. Necessity is not sufficiency; a root that resolves is not a ring that decodes.
+  ★ B is a **confirmation**, and I am predicting it rather than A.
+- **C — refuted at the doorbell surface.** Still `NoPublication` at 187. Then the question is
+  whether `facts.vas_pdb` was `None` for those channels — i.e. the graph never held the root
+  for the *channels that ring*, only for the ones the promote census printed.
+- **D — ⚠ the NEW regression arm, and it exists because step 1 can take something away.**
+  `pdb=Y ×8` becomes `pdb=N`, or the four CeUtils `SERVED-LOCAL` lines on token `0x00010002`
+  disappear. That would mean a `SET_PAGE_DIRECTORY` this boot *needs* is being refused by the
+  new aperture fork. The measured aperture is `0` (VIDMEM) so this should not fire — which is
+  exactly why it must be checked rather than assumed.
+
+⊘ **Positive control that must not regress:** `pdb=Y ×8` on `cs=ok(h0x5c000007…)`, and the
+four CeUtils `SERVED-LOCAL` lines on token `0x00010002`.
+
+⚠ Counting discipline for the read-back: the probe log **reprints its last 80 records** — the
+record count is ~456, not ~538. And the rev must be read off the **hypervisor**, not from
+`build_qom_shim.sh`'s exit code (`CARGO_TARGET_DIR` redirects cargo away from its hard-coded
+`$REPO/target/release` and it copies a stale archive at `rc=0`).

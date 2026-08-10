@@ -2915,22 +2915,82 @@ impl SharedDoorbell {
         // so the addresses of THIS submission are past their publication window
         // (`gmmu_publication_discipline.md` §6.1 / §7 rule 1).
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
-        let outcome = plane.ce_session(facts.client, vaspace, demand, |ce| {
-            self.device.with_pushbuffer(|pb| {
-                kayfabe_rt::ceutils::run_submission(ce, pb, vmm, chan, cursor, state)
+        let mut run = |root: &kayfabe_device::ceresolve::VasRoot| {
+            plane.ce_session_with_root(root, demand, |ce| {
+                self.device.with_pushbuffer(|pb| {
+                    kayfabe_rt::ceutils::run_submission(ce, pb, vmm, chan, cursor, state)
+                })
             })
-        });
+        };
+        // ★★★★ §16.64 — TWO ROOT SOURCES, tried in the order of what each one KNOWS.
+        //
+        // 1. This device's own publication table, keyed `(hClient, hVASpace)`. It answers
+        //    for every RM-managed VA space and is the path `pdb=Y ×8` and the four CeUtils
+        //    `SERVED-LOCAL` lines already take. ⊘ Tried FIRST and unchanged, so nothing
+        //    that works today can be routed differently by what follows.
+        // 2. The **object model's** base for the VA space this channel actually resolved
+        //    to. `[measured 2026-08-10, boot `s45_748a207_tsgsched`]` 187 of 448 doorbells
+        //    were refused `NoPublication` on a root the graph was holding the whole time:
+        //    a UVM-managed VAS publishes through `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`
+        //    (source 1 watches only the two `0x90f1`/`0x2080` RPC arms — see
+        //    `kayfabe_device::gvaspub::is_pde_publication`) and it publishes under UVM's
+        //    **dup** handle, while the channel resolves to the **origin** handle. Both
+        //    sides resolve correctly, to different handles of one resource, so no
+        //    handle-keyed table can join them — but `facts.vas_pdb` is resolved by resource
+        //    IDENTITY (`RmGraph::pdb_of_resource`) and is therefore already the right base.
+        //
+        // ⊘ The order is not a preference, it is a claim about knowledge: source 1 carries
+        // the guest's own published `pageShift` and VA window, source 2 derives the shift
+        // from the installed format because the control has no field for one. A root that
+        // states its own geometry beats one that infers it.
+        let root = match plane.published_root(facts.client, vaspace) {
+            Some(root) => Some(root),
+            // ⊘ `vas_pdb` is `None` for a channel with genuinely no VA space (route 4's
+            // device-default shape). That is a real absence and falls through to the
+            // refusal below — it is not papered over with a zero.
+            None => match facts.vas_pdb {
+                Some(pdb) => match plane.root_from_declared_pdb(pdb.0) {
+                    Ok(root) => Some(root),
+                    // ⊘ The derivation's own refusal is REPORTED BY ITS OWN NAME rather
+                    // than collapsed into `NoPublication`. "The guest published nothing"
+                    // and "we could not size the format's root level" are different
+                    // diagnoses and exactly one of them is our defect.
+                    Err(why) => {
+                        return Some(refused(
+                            token,
+                            kayfabe_device::FaultTag("CeResolve::DeclaredRootUnusable"),
+                            format!(
+                                "the object model resolved page-directory base 0x{:x} for \
+                                 (hClient 0x{:x}, hVASpace 0x{vaspace:x}), but a walkable \
+                                 root could not be derived from it: {}{}",
+                                pdb.0,
+                                facts.client,
+                                why.describe(),
+                                self.addressing_probe(token)
+                            ),
+                        ));
+                    }
+                },
+                None => None,
+            },
+        };
+        let outcome = root.as_ref().map(&mut run);
         drop(held);
 
         let Some(outcome) = outcome else {
-            // No publication for this `(hClient, hVASpace)` — a fact about the guest, and
-            // the one refusal `ce_session` answers before a byte is read.
+            // ⊘ NEITHER source had a root. §16.64 narrowed what this sentence may claim:
+            // it used to say "no page-directory root was published", which was **false
+            // about the guest** whenever a UVM-managed VAS had published one through a
+            // transport this device's table does not watch. Reaching here now also means
+            // the object model holds no base for the VA space the channel resolved to —
+            // i.e. nobody, on either side, knows of a root.
             return Some(refused(
                 token,
                 kayfabe_device::FaultTag("CeResolve::NoPublication"),
                 format!(
-                    "no page-directory root was published for (hClient 0x{:x}, hVASpace \
-                     0x{vaspace:x}){}",
+                    "no page-directory root is known for (hClient 0x{:x}, hVASpace \
+                     0x{vaspace:x}) — neither this device's publication table nor the \
+                     object model's own base for the VA space this channel resolved to{}",
                     facts.client,
                     self.addressing_probe(token)
                 ),

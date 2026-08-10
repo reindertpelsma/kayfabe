@@ -262,6 +262,83 @@ pub fn published_root(snap: &GvasPubSnapshot, client: u32, vaspace: u32) -> Opti
     })
 }
 
+/// ★★★★ **§16.64 — the walkable root for a page-directory base the OBJECT MODEL
+/// resolved**, for the address spaces [`published_root`] structurally cannot answer for.
+///
+/// # ⊘ The two transports do not meet at any HANDLE, and that is the whole bug
+///
+/// [`published_root`] is keyed `(hClient, hVASpace)` over
+/// [`crate::gvaspub::GvasPubSnapshot::roots`], which only
+/// [`crate::gvaspub::is_pde_publication`]'s **two RPC arms** ever write. An
+/// **externally-owned (UVM-managed)** VA space cannot publish through those arms at all:
+/// `gvaspaceCopyServerRmReservedPdesToServerRm_IMPL` returns `NV_OK` having published
+/// **nothing** when `vaStartServerRMOwned == 0` (`ogkm-580: gpu_vaspace.c:4046-4051`), and
+/// that field is only ever set by `gvaspaceReserveSplitVaSpace_IMPL` (`:394-421`), which is
+/// called only when `VASPACE_FLAGS_DISABLE_SPLIT_VAS` is clear (`:605`) — a flag
+/// `NV_VASPACE_ALLOCATION_FLAGS_IS_EXTERNALLY_OWNED` **always** sets
+/// (`vaspace_api.c:617-621`). Such a VAS publishes through
+/// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` instead (`nvGpuOpsSetPageDirectory`,
+/// `nv_gpu_ops.c:8778-8871`, reached from UVM at `uvm_gpu.c:1305` / `uvm_va_space.c:1394`).
+///
+/// ★ And the two do not meet at a handle even in principle. `[measured 2026-08-10, boot
+/// `s45_748a207_tsgsched`]` the `SET_PAGE_DIRECTORY` arrives under UVM's **dup**
+/// (`hClient 0xc1d0000a hVASpace 0xcaf00036`), while the walling channel's VA space
+/// resolves — correctly, dup-aliases and all — to the **origin** handle
+/// (`c0xc1d0000c/0x5c000007`). Both sides resolve; they resolve to *different handles of
+/// one resource*. ⇒ **No handle-keyed table can join them**, which is why this constructor
+/// takes a base the graph resolved **by resource identity** and no handle at all.
+///
+/// # ⊘⊘ Why claiming `Vidmem` here is a FACT and not a convenience
+///
+/// A [`kayfabe_arch::ids::Pdb`] is documented as a per-GPU **framebuffer** address, and as
+/// of §16.64 that is true **by construction on every path that can mint one**: both birth
+/// sites fork on the aperture and refuse a non-framebuffer root —
+/// `BridgeRefusal::PublishedPdesRootAperture` for `0x90f10106` and
+/// `BridgeRefusal::SetPageDirRootAperture` for `0x00801813`. Before that second fork
+/// existed this constructor would have been unsound, and it is the reason the fork landed
+/// first rather than alongside.
+///
+/// ⚠⚠ **The two encodings disagree about `0` and are NEVER converted into one another.**
+/// `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE_VIDMEM == 0`
+/// (`ogkm-580: ctrl0080dma.h:842-845`); `GMMU_APERTURE_INVALID == 0` and
+/// `GMMU_APERTURE_VIDEO == 1` (`gmmu_fmt.h:277-285`). [`VasRoot::aperture_raw`] is declared
+/// to hold a `GMMU_APERTURE_*` word, so it is stamped [`GMMU_APERTURE_VIDEO`] — the value
+/// that *means vidmem in the field's own encoding* — and the `0` the control carried is
+/// **not** copied into it. Copying it would decode to `INVALID`, and routing on
+/// `PdbAperture::is_sysmem` would send a framebuffer offset into the guest-RAM store.
+///
+/// # The page shift is DERIVED, never assumed
+///
+/// `SET_PAGE_DIRECTORY` carries no `pageShift` — it has no field for one. The root of a
+/// walk is level 0 of the installed format by definition, so the shift is read straight off
+/// [`GmmuFmt::level_shift`]`(0)`, which is the same derivation [`root_page`] then inverts to
+/// pick the level back out. ⊘ A literal `47` would be this GA106's number and no other
+/// chip's.
+///
+/// # Errors
+/// [`CeResolve::NoRootLevel`] if the installed format declares no level 0 — the same loud
+/// answer an un-sizeable level gets everywhere else, never a guessed stride.
+pub fn root_from_declared_pdb(fmt: &dyn GmmuFmt, phys: u64) -> Result<VasRoot, CeResolve> {
+    let Some(geo) = fmt.level_shift(0) else {
+        // ⊘ `page_shift: 0` is the *question* this refusal is about ("no level 0 exists to
+        // read a shift from"), not a shift anyone derived. It never reaches a walk.
+        return Err(CeResolve::NoRootLevel { page_shift: 0 });
+    };
+    Ok(VasRoot {
+        phys,
+        aperture: Some(Aperture::Vidmem),
+        aperture_raw: GMMU_APERTURE_VIDEO,
+        page_shift: geo.shift,
+        // ⊘ The publication's VA window is a REPORT-ONLY field on this struct and this
+        // transport carries no equivalent. Zeroes here are "this root came from a control
+        // with no VA range", and nothing in the walk reads them — `root_page`'s own doc is
+        // explicit that the root covers its whole address space and that `virt_addr_lo` is
+        // NOT its base.
+        virt_addr_lo: 0,
+        virt_addr_hi: 0,
+    })
+}
+
 /// What resolving one GPU VA in one published VA space came to.
 ///
 /// ★ Every arm is a **distinct finding**, and none of them is a value a caller could

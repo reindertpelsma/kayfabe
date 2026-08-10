@@ -4364,7 +4364,7 @@ fn the_compute_subgraph_reaches_the_graph_through_the_real_transport() {
 ///  ── NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS ──     (params+N shown)
 ///  72..80  physAddress        0x341000000  (+0)
 ///  80..84  numEntries         512          (+8)
-///  84..88  flags              0x9          (+12)  SYSMEM_COH | ALL_CHANNELS
+///  84..88  flags              0x8          (+12)  VIDMEM | ALL_CHANNELS
 ///  88..92  hVASpace           0x5c000010   (+16)  a PARAMS field
 ///  92..96  chId               0            (+20)
 ///  96..100 subDeviceId        1            (+24)
@@ -4376,13 +4376,36 @@ const HEX_SET_PAGE_DIR: [u8; 104] = [
     0x71, 0x00, 0xd0, 0xc1, 0x01, 0x00, 0x00, 0x5c, 0x13, 0x18, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x03, 0x00, 0x00, 0x00,
-    0x00, 0x02, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x02, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x00, 0x00,
     0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
-/// The `flags` word `HEX_SET_PAGE_DIR` carries: `SYSMEM_COH | ALL_CHANNELS`, which is the
-/// shape UVM actually sends (`ogkm-580: nv_gpu_ops.c:8857-8862`).
-const HEX_SPD_FLAGS: u32 = w::PDB_APERTURE_SYSMEM_COH | w::PDB_FLAGS_ALL_CHANNELS;
+/// The `flags` word `HEX_SET_PAGE_DIR` carries: `VIDMEM | ALL_CHANNELS`.
+///
+/// # ★★★★ §16.64 — this constant WAS `SYSMEM_COH`, and the sentence justifying it MISREAD
+/// its own (correct) citation
+///
+/// What stood here said `SYSMEM_COH` is *"the shape UVM actually sends
+/// (`ogkm-580: nv_gpu_ops.c:8857-8862`)"*. The citation is real, correctly located, and
+/// says something else — it is a **ternary**, not a constant:
+///
+/// ```c
+/// params.flags = bVidMemAperture ?
+///                DRF_DEF(0080, _CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS, _APERTURE, _VIDMEM) :
+///                DRF_DEF(0080, _CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS, _APERTURE, _SYSMEM_COH);
+/// params.flags |= DRF_DEF(0080, _CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS, _ALL_CHANNELS, _TRUE);
+/// ```
+///
+/// UVM sends **whichever aperture its page directory is in**. Reading one arm of a ternary
+/// as "the shape UVM sends" turned a conditional into a fact — and the fact it produced is
+/// the one our own boot contradicts: `[measured 2026-08-10, boot `s45_748a207_tsgsched`]`
+/// the live `SET_PAGE_DIRECTORY` is `flags 0x8 (aperture 0)` — **VIDMEM** | ALL_CHANNELS.
+///
+/// ⇒ The primary fixture is now the shape the guest we serve actually sends. ⊘ The sysmem
+/// shape is **not** deleted — it is exactly the input
+/// [`a_sysmem_rooted_set_page_directory_is_refused_by_name`] exists for, where it is a
+/// *refusal* rather than a silently-identical event.
+const HEX_SPD_FLAGS: u32 = w::PDB_APERTURE_VIDMEM | w::PDB_FLAGS_ALL_CHANNELS;
 
 /// The hand-written hex and the independent builder agree byte for byte — the third
 /// transcription checked against the second, with the decoder taking no part.
@@ -4493,31 +4516,42 @@ fn one_changed_field_of_the_control_moves_exactly_one_field_of_the_event() {
     );
 }
 
-/// ★★ The **aperture is dropped**, and here is what that costs, stated as a test rather
-/// than as a comment.
+/// ★★★★ §16.64 — **the aperture is the FORK**, and this test is the inverse of the one it
+/// replaces.
 ///
-/// `flags[1:0]` says whether the page directory lives in framebuffer or in guest RAM —
-/// two different address spaces — and `kayfabe_abi::view::PdbAperture` decodes it
-/// perfectly well. `RmEvent::SetPageDir` has nowhere to put it, so all three apertures
-/// (and an undefined fourth) produce **the same event**.
+/// # ⊘ What stood here, and why a GREEN test held a wall in place
 ///
-/// That is safe exactly as long as `Pdb` is only ever a KEY, which today it is: nothing in
-/// the tree dereferences one. The day a walker follows a PDB, this test is the one that
-/// has to change, and it will say so by failing.
+/// This assertion used to be named `the_aperture_is_dropped_so_a_vidmem_and_a_sysmem_root_
+/// are_the_same_event`, and it pinned exactly that: all four `flags[1:0]` encodings —
+/// vidmem, both sysmems, and the undefined fourth — produced **one identical event**. It
+/// passed on every run.
+///
+/// Its own doc named its expiry precisely: *"That is safe exactly as long as `Pdb` is only
+/// ever a KEY … The day a walker follows a PDB, this test is the one that has to change,
+/// and it will say so by failing."* ★ That is a correct and admirable warning, and it was
+/// still not enough — because a test that passes says nothing, and the *only* reader who
+/// would ever meet the sentence is someone who had already broken it. §16.64 is that day:
+/// the doorbell's CE resolver now walks the root this control publishes, which is the
+/// dereference the paragraph named.
+///
+/// # The property now
+///
+/// [`kayfabe_arch::ids::Pdb`] is documented as a per-GPU **framebuffer** address, so only a
+/// `_VIDMEM` root can become one. Every other encoding is
+/// [`BridgeRefusal::SetPageDirRootAperture`] — refused **by name**, carrying the decoded
+/// aperture, rather than becoming a guest-physical address wearing a framebuffer offset's
+/// type.
+///
+/// ⊘ This is not a new rule; it is the rule [`translate_published_pdes`] has always applied
+/// to the *other* control that mints a `Pdb`. What was new was noticing that only one of
+/// the two birth sites had it.
 #[test]
-fn the_aperture_is_dropped_so_a_vidmem_and_a_sysmem_root_are_the_same_event() {
-    let want = Ok(Translation::Event(expected_set_page_dir(
-        spd::C,
-        spd::VAS,
-        spd::PDB,
-    )));
+fn a_sysmem_rooted_set_page_directory_is_refused_by_name() {
+    // ★ The one encoding that IS a framebuffer address still lands, unchanged — with and
+    // without the `ALL_CHANNELS` bit, so the fork reads `flags[1:0]` and not the word.
     for flags in [
         w::PDB_APERTURE_VIDMEM,
-        w::PDB_APERTURE_SYSMEM_COH,
-        w::PDB_APERTURE_SYSMEM_NONCOH,
-        3, // the undefined fourth encoding — `PdbAperture::Undefined(3)`
-        w::PDB_APERTURE_SYSMEM_COH | w::PDB_FLAGS_ALL_CHANNELS,
-        u32::MAX, // every other flag bit set as well
+        w::PDB_APERTURE_VIDMEM | w::PDB_FLAGS_ALL_CHANNELS,
     ] {
         assert_eq!(
             xlate(&set_page_dir_msg(
@@ -4527,10 +4561,81 @@ fn the_aperture_is_dropped_so_a_vidmem_and_a_sysmem_root_are_the_same_event() {
                 spd::PDB,
                 flags
             )),
-            want,
-            "flags {flags:#x} must not change the fact — the aperture has nowhere to go",
+            Ok(Translation::Event(expected_set_page_dir(
+                spd::C,
+                spd::VAS,
+                spd::PDB
+            ))),
+            "flags {flags:#x} is a VIDMEM root and must still become the declared event",
         );
     }
+    // ⊘ And every root that is NOT in the framebuffer refuses, by name, carrying the
+    // aperture it decoded — never `Pdb`-shaped, never silently the same event.
+    for (flags, want) in [
+        (
+            w::PDB_APERTURE_SYSMEM_COH,
+            kayfabe_abi::view::PdbAperture::SysmemCoherent,
+        ),
+        (
+            w::PDB_APERTURE_SYSMEM_NONCOH,
+            kayfabe_abi::view::PdbAperture::SysmemNoncoherent,
+        ),
+        // the undefined fourth encoding — folded into neither neighbour
+        (3, kayfabe_abi::view::PdbAperture::Undefined(3)),
+        (
+            w::PDB_APERTURE_SYSMEM_COH | w::PDB_FLAGS_ALL_CHANNELS,
+            kayfabe_abi::view::PdbAperture::SysmemCoherent,
+        ),
+        // every other flag bit set as well: `[1:0]` is `3`, and the tail must not leak in
+        (u32::MAX, kayfabe_abi::view::PdbAperture::Undefined(3)),
+    ] {
+        assert_eq!(
+            xlate(&set_page_dir_msg(
+                spd::C,
+                spd::DEV,
+                spd::VAS,
+                spd::PDB,
+                flags
+            )),
+            Err(BridgeRefusal::SetPageDirRootAperture { aperture: want }),
+            "flags {flags:#x} does not name a framebuffer root and must refuse BY NAME",
+        );
+    }
+}
+
+/// ⚠⚠ §16.64 — **the two aperture encodings disagree about what `0` means**, and this is
+/// the test that keeps them from ever being decoded by one another's table.
+///
+/// | encoding | vidmem | zero means |
+/// |---|---|---|
+/// | `NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_FLAGS_APERTURE` (`ogkm-580: ctrl0080dma.h:842-845`) | **0** | vidmem |
+/// | `GMMU_APERTURE_*` (`ogkm-580: gmmu_fmt.h:277-285`) | **1** | `INVALID` |
+///
+/// Both words appear in one boot report — `[measured 2026-08-10, boot
+/// `s45_748a207_tsgsched`]` prints gvas roots at `aperture 1` and `SET_PAGE_DIRECTORY` at
+/// `(aperture 0)`, **both vidmem**. So the failure this pins is not exotic: decoding a
+/// `SET_PAGE_DIRECTORY` with the GMMU table turns the *only accepted* aperture into
+/// `INVALID`, and the inverse routes a framebuffer offset into the guest-RAM store.
+#[test]
+fn the_two_aperture_encodings_disagree_at_zero_and_are_never_shared() {
+    // The value that means vidmem is DIFFERENT in the two tables, and that is the point.
+    assert_eq!(w::PDB_APERTURE_VIDMEM, 0, "SET_PAGE_DIRECTORY: vidmem is 0");
+    assert_eq!(
+        kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+        1,
+        "GMMU_APERTURE_*: vidmem is 1, and 0 is INVALID",
+    );
+    // ⇒ The accepted control's word, read through the OTHER table, is not vidmem.
+    assert_ne!(
+        w::PDB_APERTURE_VIDMEM,
+        kayfabe_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
+        "if these were ever equal, sharing a decoder would stop being detectable",
+    );
+    // And the decoder this crate actually uses agrees with the control's own table.
+    assert_eq!(
+        kayfabe_abi::view::PdbAperture::from_flags(w::PDB_APERTURE_VIDMEM),
+        kayfabe_abi::view::PdbAperture::Vidmem,
+    );
 }
 
 /// The three tail fields — `chId`, `subDeviceId`, `pasid` — are declared and dropped too,
@@ -5243,7 +5348,7 @@ fn a_second_different_pdb_for_one_vaspace_is_accepted_and_the_last_one_wins() {
         .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
         .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_A, w::PDB_APERTURE_VIDMEM)
         // The second declaration, with a DIFFERENT root for the SAME VASpace.
-        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_SYSMEM_COH);
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_VIDMEM);
 
     let gpu = gpu_from_script(&s);
     let b = boundaries(&gpu);
@@ -5269,8 +5374,8 @@ fn a_second_different_pdb_for_one_vaspace_is_accepted_and_the_last_one_wins() {
         .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
         .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
         .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
-        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_SYSMEM_COH)
-        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_SYSMEM_COH);
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_VIDMEM)
+        .set_page_dir(cp::C, cp::DEV, cp::VAS, PDB_B, w::PDB_APERTURE_VIDMEM);
     assert_eq!(boundaries(&gpu_from_script(&same)), b);
 }
 

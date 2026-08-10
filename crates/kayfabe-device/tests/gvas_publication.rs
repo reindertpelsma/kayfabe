@@ -431,10 +431,33 @@ fn every_published_va_space_resolves_even_past_the_reports_cap() {
             0x0000_5c00 + i
         );
     }
+    // ⊘⊘ §16.64 — the ASSERTION is right; the sentence that stood beside it was WRONG, and
+    // wrong in the direction that holds a wall in place.
+    //
+    // It read: "the table is complete and every `NoPublication` this snapshot could produce
+    // is a fact about the guest". That quantifier is false. `roots_refused == 0` excludes
+    // exactly ONE cause of a miss — the row cap — and there are two others, both of which
+    // were live and neither of which this number can see:
+    //
+    //   1. TRANSPORT. This table is written only by `gvaspub::is_pde_publication`'s two RPC
+    //      arms. A UVM-managed VA space cannot publish through them at all (see
+    //      `ceresolve::root_from_declared_pdb` for the four-hop `ogkm` chain) and uses
+    //      `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` instead.
+    //   2. NAMING. The key is a raw `(hClient, hObject)` pair. `[measured 2026-08-10, boot
+    //      `s45_748a207_tsgsched`]` the publication arrives under UVM's *dup* handle while
+    //      the channel resolves to the *origin* handle — two handles of ONE resource, so a
+    //      handle-keyed lookup misses whichever side it normalizes to.
+    //
+    // ⇒ 187 of 448 doorbells in that boot were refused with a sentence about the guest that
+    // was false about the guest, while this assertion was green. A cap being unreached says
+    // the table dropped nothing it was OFFERED; it says nothing about what it was never
+    // offered. Scope the claim to what the number measures.
     assert_eq!(
         snap.roots_refused, 0,
-        "nothing near GVAS_ROOT_TABLE_MAX here, so the table is complete and every \
-         `NoPublication` this snapshot could produce is a fact about the guest"
+        "nothing near GVAS_ROOT_TABLE_MAX here, so this table dropped no publication it was \
+         OFFERED — ⊘ which is NOT the same as every `NoPublication` being a fact about the \
+         guest: a root published on another transport, or under another handle of the same \
+         resource, was never offered to this table at all"
     );
     // ⊘ And a pair the guest never published still resolves to NOTHING. A table that
     // answered everything would pass every assertion above and be worthless.
