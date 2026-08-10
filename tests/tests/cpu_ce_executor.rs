@@ -849,6 +849,15 @@ fn resolving_then_writing_a_completion_is_the_same_as_doing_both_at_once() {
     const SEM_PHYS: u64 = 0x41_0000;
     let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
     let releases = [(GpuVa(SEM_VA), 0x0BAD_F00Du64)];
+    // ★ §16.66 — the same release, said in the vocabulary phase 1 now takes. `write_completion`
+    // builds exactly this from its `(va, payload)` pairs, so the two halves of the equivalence
+    // this test asserts are still the SAME release and not two similar ones.
+    let completions = [kayfabe_arch::CeCompletion {
+        addr: GpuVa(SEM_VA),
+        payload: 0x0BAD_F00D,
+        structure: kayfabe_arch::CeSemStructure::OneWord,
+        payload_bytes: 4,
+    }];
 
     let mut fb_a = SparseFb::new(FB_LIMIT);
     let mut vmm_a = MockVmm::new();
@@ -864,7 +873,7 @@ fn resolving_then_writing_a_completion_is_the_same_as_doing_both_at_once() {
     let mut vmm_b = MockVmm::new();
     let resolved = kayfabe_rt::cpu_ce::resolve_releases(
         &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
-        &releases,
+        &completions,
     )
     .expect("phase 1 resolves");
     assert_eq!(resolved[0].op.addr, PlaneAddr(SEM_PHYS));
@@ -873,11 +882,174 @@ fn resolving_then_writing_a_completion_is_the_same_as_doing_both_at_once() {
         vmm_b.irqs.is_empty(),
         "⊘ phase 1 writes nothing and signals nothing"
     );
-    kayfabe_rt::cpu_ce::write_resolved_completion(&mut fb_b, &mut vmm_b, &resolved)
+    kayfabe_rt::cpu_ce::write_resolved_completion(&mut fb_b, &mut vmm_b, &resolved, None)
         .expect("phase 2 writes");
 
     assert_eq!(vmm_a.ram_read(SEM_PHYS, 4), vmm_b.ram_read(SEM_PHYS, 4));
     assert_eq!(vmm_a.ram_read(SEM_PHYS, 4), 0x0BAD_F00Du32.to_le_bytes());
     assert_eq!(vmm_a.irqs, vmm_b.irqs);
     assert_eq!(vmm_b.irqs, vec![IrqSpec::Msix(0)]);
+}
+
+// =====================================================================================
+// ★★★★ §16.66 — THE FOUR-WORD (TIMESTAMPED) RELEASE, which the executor could not write
+// until this rung, and which `[measured 2026-08-10, boot s51_d502ac6_engroute]` is the
+// only thing standing between the guest's first copy-engine doorbell and being served.
+// =====================================================================================
+
+/// ★★★ **All SIXTEEN bytes land, and the timestamp is at byte 8** — the offset the driver
+/// that reads the field computes for itself (`ogkm-580: uvm_push.c:478`, `timestamp += 1`
+/// on an `NvU64 *` over the 16-byte buffer).
+///
+/// ⊘ The payload is asserted **separately from** the timestamp, at their own offsets. A
+/// single 16-byte comparison would pass just as well if the two were swapped, and a
+/// swapped record is the exact shape of `#12`: a value that appears somewhere real, that
+/// the guest reads, and that means something else.
+#[test]
+fn a_four_word_release_writes_the_payload_then_the_timestamp_at_byte_eight() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    const SEM_VA: u64 = 0x310_0000;
+    const SEM_PHYS: u64 = 0x41_0000;
+    const NOW_NS: u64 = 0x0000_00AB_CDEF_1234;
+    let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
+    let c = kayfabe_arch::CeCompletion {
+        addr: GpuVa(SEM_VA),
+        payload: 0x5A5A,
+        structure: kayfabe_arch::CeSemStructure::FourWord,
+        payload_bytes: 4,
+    };
+    let resolved = kayfabe_rt::cpu_ce::resolve_releases(
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
+        &[c],
+    )
+    .expect("all four words resolve inside one bound page");
+    assert_eq!(
+        resolved[0].words.iter().filter(|w| w.is_some()).count(),
+        4,
+        "⊘ a four-word release is FOUR resolved words — a record resolved as one word and \
+         then written with pointer arithmetic is the straddle bug waiting to happen"
+    );
+    let n =
+        kayfabe_rt::cpu_ce::write_resolved_completion(&mut fb, &mut vmm, &resolved, Some(NOW_NS))
+            .expect("the record writes");
+    assert_eq!(n, 1);
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS, 4),
+        0x5A5Au32.to_le_bytes(),
+        "the payload the guest waits on, at offset 0"
+    );
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS + 4, 4),
+        0u32.to_le_bytes(),
+        "⊘ the payload slot is 64 bits wide and a one-word payload ZERO-EXTENDS into it — \
+         see `ResolvedRelease::record`, where that judgement is stated as one"
+    );
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS + 8, 8),
+        NOW_NS.to_le_bytes(),
+        "★ the timestamp, at byte 8, little-endian, whole"
+    );
+    assert_eq!(
+        vmm.irqs.len(),
+        1,
+        "and the completion interrupt fires AFTER every one of the sixteen bytes"
+    );
+}
+
+/// ★★★ **A record that straddles the end of its binding is REFUSED, and nothing lands.**
+///
+/// The semaphore's first word resolves; byte 8 is in the next page, which nothing bound.
+/// ⊘ The property under test is not just the refusal — it is that the payload half, which
+/// *did* resolve, is **not written**. A guest released over a record we only half-wrote
+/// would proceed on a timestamp that is somebody else's memory.
+#[test]
+fn a_four_word_release_that_straddles_an_unbound_page_writes_nothing_at_all() {
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    // Bind ONE page, and put the semaphore 8 bytes below its end: words 0 and 1 are inside,
+    // words 2 and 3 (the timestamp) are past it.
+    const SEM_VA: u64 = 0x310_0000 + 0x1000 - 8;
+    const SEM_PHYS: u64 = 0x41_0000 + 0x1000 - 8;
+    let table = sem_table_in_sysmem(0x310_0000, 0x41_0000);
+    let c = kayfabe_arch::CeCompletion {
+        addr: GpuVa(SEM_VA),
+        payload: 0x5A5A,
+        structure: kayfabe_arch::CeSemStructure::FourWord,
+        payload_bytes: 4,
+    };
+    let err = kayfabe_rt::cpu_ce::resolve_releases(
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
+        &[c],
+    )
+    .expect_err("the timestamp half is past the binding and MISS = FAULT");
+    assert!(
+        matches!(err, FwdFault::Address(_)),
+        "refused by the address plane's own name: {err:?}"
+    );
+    assert!(
+        vmm.ram_read(SEM_PHYS, 4) == 0u32.to_le_bytes(),
+        "⊘ and the half that DID resolve was never written — phase 1 writes nothing"
+    );
+    let _ = &mut fb;
+    assert!(vmm.irqs.is_empty(), "no completion is signalled");
+}
+
+/// ★★★★ **A timestamped release with no clock is REFUSED BY NAME, never written as zeros.**
+///
+/// `0` is a legal `PTIMER` reading. A guest handed one cannot tell it from a real sample —
+/// it subtracts two of them and believes the answer. `[measured 2026-08-10, boot
+/// `s51_d502ac6_engroute`]` that semaphore page reads `fbFIN@0x102c004=0000…0000 nz0/4096
+/// resN-NEVER-WRITTEN`, so a zeroed timestamp is byte-identical to never having run. That
+/// is the C oracle's fifth limit (*"an empty capture is evidence of nothing, not evidence
+/// of emptiness"*) reproduced one plane over, and `NanoClock`'s own standing rule for this
+/// device is *never answer a free-running counter with a constant*.
+///
+/// ⊘ Note the control in the same test: the identical release as a **one-word** record has
+/// no timestamp field, so `None` is not a gap there and it must still write. A refusal that
+/// fired for both would be refusing the absence of a clock rather than the need for one.
+#[test]
+fn a_timestamped_release_without_a_clock_refuses_while_a_one_word_release_does_not() {
+    const SEM_VA: u64 = 0x310_0000;
+    const SEM_PHYS: u64 = 0x41_0000;
+    let table = sem_table_in_sysmem(SEM_VA, SEM_PHYS);
+    let mk = |structure| kayfabe_arch::CeCompletion {
+        addr: GpuVa(SEM_VA),
+        payload: 0x5A5A,
+        structure,
+        payload_bytes: 4,
+    };
+
+    let mut fb = SparseFb::new(FB_LIMIT);
+    let mut vmm = MockVmm::new();
+    let resolved = kayfabe_rt::cpu_ce::resolve_releases(
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
+        &[mk(kayfabe_arch::CeSemStructure::FourWord)],
+    )
+    .expect("resolves");
+    let err = kayfabe_rt::cpu_ce::write_resolved_completion(&mut fb, &mut vmm, &resolved, None)
+        .expect_err("a timestamp with no source is refused");
+    assert!(
+        matches!(err, FwdFault::CeReleaseNoClock),
+        "refused by a name that says WHICH source was missing: {err:?}"
+    );
+    assert_eq!(
+        vmm.ram_read(SEM_PHYS, 4),
+        0u32.to_le_bytes(),
+        "⊘ and the payload did NOT land — the refusal precedes every write"
+    );
+    assert!(vmm.irqs.is_empty());
+
+    // The control: same address, same payload, ONE-word structure, same `None`.
+    let mut fb2 = SparseFb::new(FB_LIMIT);
+    let mut vmm2 = MockVmm::new();
+    let resolved = kayfabe_rt::cpu_ce::resolve_releases(
+        &mut kayfabe_fwd::TableOperands::new(Some(&table), Some(SEM_PDB)),
+        &[mk(kayfabe_arch::CeSemStructure::OneWord)],
+    )
+    .expect("resolves");
+    kayfabe_rt::cpu_ce::write_resolved_completion(&mut fb2, &mut vmm2, &resolved, None)
+        .expect("a one-word record has no timestamp word, so no source is owed");
+    assert_eq!(vmm2.ram_read(SEM_PHYS, 4), 0x5A5Au32.to_le_bytes());
+    assert_eq!(vmm2.irqs.len(), 1);
 }

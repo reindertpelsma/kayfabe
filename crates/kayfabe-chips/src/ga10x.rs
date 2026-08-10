@@ -1104,6 +1104,10 @@ impl Ga10xPushbuffer {
             submit::ce::SET_SEMAPHORE_A => Some(11),
             submit::ce::SET_SEMAPHORE_B => Some(12),
             submit::ce::SET_SEMAPHORE_PAYLOAD => Some(13),
+            // ★★★ §16.66 — the payload's HIGH half, at `0x24C`, consecutive with the three
+            // above. Latched but consulted **only** under `SEMAPHORE_PAYLOAD_SIZE_TWO_WORD`
+            // (bit 27), which no writer in reach sets; see `ce_completion`.
+            submit::ce::SET_SEMAPHORE_PAYLOAD_UPPER => Some(14),
             _ => None,
         }
     }
@@ -1121,38 +1125,81 @@ impl Ga10xPushbuffer {
     /// logs say we served it. Refusing the pair is loud in the one place a boot can see it.
     /// (Same discipline as `MULTI_LINE_ENABLE`, one field over.)
     ///
-    /// The two refusals, each a distinct thing:
-    /// - **`RELEASE_FOUR_WORD_SEMAPHORE`** (`clc7b5.h:100`) — sixteen bytes, of which eight
-    ///   are a **hardware timestamp** the engine samples. This port has no such clock, and
-    ///   writing the payload while leaving the timestamp words stale is a completion a
-    ///   timestamp-reading guest would misdate. `RELEASE_CONDITIONAL_INTR_SEMAPHORE`
-    ///   (value 3) is refused with it: the release is conditional on engine state we do not
-    ///   model, so *"did it release?"* is not answerable.
-    /// - **A one-word release whose `SET_SEMAPHORE_*` registers were never latched.** `0` is
-    ///   a legal payload and a legal address, so written-ness is asked for separately — the
-    ///   same rule the offsets already follow, and for the sharper reason: an unlatched
-    ///   address would send a completion to physical/virtual zero.
+    /// The refusals, each a distinct thing:
+    /// - **`RELEASE_CONDITIONAL_INTR_SEMAPHORE`** (value 3, `clc7b5.h:103`) — the release
+    ///   is conditional on engine state this port does not model, so *"did it release?"* is
+    ///   not answerable and neither answer may be given.
+    /// - **A release whose `SET_SEMAPHORE_*` registers were never latched.** `0` is a legal
+    ///   payload and a legal address, so written-ness is asked for separately — the same
+    ///   rule the offsets already follow, and for the sharper reason: an unlatched address
+    ///   would send a completion to physical/virtual zero.
+    /// - **A `SEMAPHORE_PAYLOAD_SIZE_TWO_WORD` release whose `_PAYLOAD_UPPER` was never
+    ///   latched.** Same rule, one register over, and it is the rule that keeps the
+    ///   four-word arm below from inventing the top half of a fence.
+    ///
+    /// # ★★★ §16.66 — `RELEASE_FOUR_WORD_SEMAPHORE` is DECODED here, and used to be refused
+    ///
+    /// `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` the guest's first refused
+    /// copy-engine doorbell carried a whole pushbuffer of `SET_OBJECT(0xc7b5)` +
+    /// `SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA = 0x14`, i.e. `FLUSH_ENABLE |
+    /// SEMAPHORE_TYPE_RELEASE_FOUR_WORD` with `DATA_TRANSFER_TYPE = NONE`. This arm
+    /// returned `None`, which refuses the launch, which makes the whole submission decode
+    /// to no launch at all — and the guest waits on that release forever.
+    ///
+    /// ⊘ The reason it was refused was written down and was **wrong in both halves**:
+    /// *"eight bytes are a hardware timestamp … this port has no such clock"*.
+    /// - There **is** a clock: the free-running nanosecond counter this device already
+    ///   answers the guest's own `PTIMER` reads from (`kayfabe_device::CePlane::now_ns`).
+    ///   Taking the timestamp from *that* source is not a fabrication — it is the only
+    ///   choice under which a guest that correlates a release timestamp against a `PTIMER`
+    ///   reading gets a consistent answer, because both come from one counter.
+    /// - And the alternative the old text implied — write the payload, leave the timestamp
+    ///   words alone — is the worse of the two, not the safe one: it leaves a reader a
+    ///   **stale** eight bytes that are indistinguishable from a measurement.
+    ///
+    /// ⚠ What is still owed and is NOT claimed here: that counter is a synthetic CPU-side
+    /// clock, not the host GPU's `PTIMER` (`kayfabe_device::NanoClock`'s own docs call the
+    /// port a boot-only stopgap). So the timestamp is in the same timebase as everything
+    /// else this device tells the guest about time, and in a *different* one from any real
+    /// host-GPU timestamp — which matters the moment compute is actually forwarded, and is
+    /// `#128`'s read-native memslot, not this rung's.
     fn ce_completion(
         state: &MethodState,
         subch: usize,
         flags: u32,
     ) -> Option<Option<kayfabe_arch::CeCompletion>> {
-        match flags & submit::ce::LAUNCH_SEMAPHORE_TYPE_MASK {
-            submit::ce::LAUNCH_SEMAPHORE_TYPE_NONE => Some(None),
-            submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD => {
-                let hi = state.latched(subch, 11)?;
-                let lo = state.latched(subch, 12)?;
-                let payload = state.latched(subch, 13)?;
-                Some(Some(kayfabe_arch::CeCompletion {
-                    addr: GpuVa(
-                        (u64::from(hi & submit::ce::SET_SEMAPHORE_A_UPPER_MASK) << 32)
-                            | u64::from(lo),
-                    ),
-                    payload: u64::from(payload),
-                }))
+        let structure = match flags & submit::ce::LAUNCH_SEMAPHORE_TYPE_MASK {
+            submit::ce::LAUNCH_SEMAPHORE_TYPE_NONE => return Some(None),
+            submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD => kayfabe_arch::CeSemStructure::OneWord,
+            submit::ce::LAUNCH_SEMAPHORE_TYPE_RELEASE_FOUR_WORD => {
+                kayfabe_arch::CeSemStructure::FourWord
             }
-            _ => None,
-        }
+            // `RELEASE_CONDITIONAL_INTR_SEMAPHORE`, and nothing else: the mask is two bits.
+            _ => return None,
+        };
+        let hi = state.latched(subch, 11)?;
+        let lo = state.latched(subch, 12)?;
+        let payload_lo = state.latched(subch, 13)?;
+        // ★★★ `SEMAPHORE_PAYLOAD_SIZE` is bit 27 and is a DIFFERENT FIELD from
+        // `SEMAPHORE_TYPE` (bits 4:3). A four-word release still carries a one-word payload
+        // unless this bit says otherwise, and `[measured 2026-08-10]` the guest's own
+        // `0x14` leaves it clear. Same discipline as `sem_release`'s
+        // `SEM_EXECUTE_PAYLOAD_SIZE_64BIT` one method-family over.
+        let (payload, payload_bytes) =
+            if flags & submit::ce::LAUNCH_SEMAPHORE_PAYLOAD_SIZE_TWO_WORD == 0 {
+                (u64::from(payload_lo), 4u8)
+            } else {
+                let upper = state.latched(subch, 14)?;
+                (u64::from(payload_lo) | (u64::from(upper) << 32), 8u8)
+            };
+        Some(Some(kayfabe_arch::CeCompletion {
+            addr: GpuVa(
+                (u64::from(hi & submit::ce::SET_SEMAPHORE_A_UPPER_MASK) << 32) | u64::from(lo),
+            ),
+            payload,
+            structure,
+            payload_bytes,
+        }))
     }
 
     /// ★★★ **Decode a remap-enabled launch's constant fill: the repeating pattern and the
@@ -1256,8 +1303,14 @@ impl Ga10xPushbuffer {
     ///   addresses mean whatever its bound object says they mean; `0x300` on a compute
     ///   object is not `LAUNCH_DMA`. Firing without checking would decode a graphics
     ///   method as a copy.
-    /// - **`DATA_TRANSFER_TYPE == NONE`.** The engine moves no bytes; the launch exists to
-    ///   release a semaphore. There is no copy to report.
+    /// - ⊘ **NOT `DATA_TRANSFER_TYPE == NONE`.** This bullet used to read *"the engine
+    ///   moves no bytes; the launch exists to release a semaphore. There is no copy to
+    ///   report"* — and it stayed here, unchanged, after `b731e3c` (§15.7) turned that arm
+    ///   into a [`PushMethod::CeRelease`]. `[measured 2026-08-10]` the §16.65 brief quoted
+    ///   this very sentence as the live explanation of a boot's first refusal; the live
+    ///   refusal was `ce_completion`'s four-word arm, eighty lines down. ★ A doc comment
+    ///   that outlives the code it describes does not go quiet — it **answers**, and it is
+    ///   the answer a reader trusts most because the file is the source.
     /// - **`MULTI_LINE_ENABLE == TRUE`.** Then `LINE_LENGTH_IN` is a *per-line* byte count
     ///   and the region is `LINE_COUNT` lines separated by `PITCH_IN`/`PITCH_OUT` — which
     ///   is **not** the contiguous `len` bytes [`PushMethod::CeLaunchDma`] means. Reporting

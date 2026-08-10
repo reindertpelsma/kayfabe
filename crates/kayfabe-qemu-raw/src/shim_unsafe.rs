@@ -749,7 +749,10 @@ pub extern "C" fn kayfabe_shim_engine_kind_name(idx: u32) -> *const c_char {
 /// tree to name the relaxation keyword and breach the `*_unsafe.rs` naming audit.
 #[must_use]
 pub fn engine_kind_c_name(idx: u32) -> &'static core::ffi::CStr {
-    ENGINE_KIND_C_NAMES.get(idx as usize).copied().unwrap_or(c"?")
+    ENGINE_KIND_C_NAMES
+        .get(idx as usize)
+        .copied()
+        .unwrap_or(c"?")
 }
 
 /// The bucket labels as NUL-terminated C strings, in `kayfabe_rt::EngineKind::ALL` order.

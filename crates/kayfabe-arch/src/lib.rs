@@ -1014,13 +1014,58 @@ pub struct CeCompletion {
     /// a plausible address out of the halves swapped.
     pub addr: GpuVa,
     /// The payload the engine writes there when the copy retires — `SET_SEMAPHORE_PAYLOAD`,
-    /// zero-extended from its 32 bits.
+    /// widened to 64 bits.
     ///
-    /// ⊘ 32 bits and not 64: `SET_SEMAPHORE_PAYLOAD_UPPER` (`clc7b5.h`, method `0x24C`) is a
-    /// separate register this codec does not latch, and it is only consulted by the
-    /// four-word release — which is refused rather than decoded, so the upper half can never
-    /// be silently needed.
+    /// ★★★ Whether the high half is part of the value is decided by `LAUNCH_DMA`'s
+    /// **`SEMAPHORE_PAYLOAD_SIZE`** field (bit `27`), *not* by `SEMAPHORE_TYPE`. Under
+    /// `_ONE_WORD` the engine writes four bytes and
+    /// `kayfabe_abi::submit::ce::SET_SEMAPHORE_PAYLOAD_UPPER` is not consulted at all;
+    /// under `_TWO_WORD` it is, and the codec requires it to have been latched rather than
+    /// defaulting it.
+    ///
+    /// ⊘ This doc used to say the upper half *"can never be silently needed"* because the
+    /// four-word release *"is refused rather than decoded"*. That was a **comment naming
+    /// an exception**, and §16.66 is the rung that made the exception false: the moment
+    /// the four-word release is decoded, the question becomes live. It is answered by
+    /// [`CeCompletion::payload_bytes`] rather than by the sentence that used to stand here.
     pub payload: u64,
+    /// ★★★ How many bytes the engine writes at [`CeCompletion::addr`], and what is in
+    /// them — the **structure**, which is `LAUNCH_DMA.SEMAPHORE_TYPE`.
+    pub structure: CeSemStructure,
+    /// How many of those bytes are payload — `LAUNCH_DMA.SEMAPHORE_PAYLOAD_SIZE`, 4 or 8.
+    ///
+    /// ⊘ Carried as a decoded width rather than as the raw bit so that no consumer has to
+    /// re-derive a field extent, which is how the two eight-bit-apart fields get conflated.
+    pub payload_bytes: u8,
+}
+
+/// ★★★ The **shape** a copy-engine semaphore release writes at its address —
+/// `LAUNCH_DMA.SEMAPHORE_TYPE` (`clc7b5.h:95-101`), decoded.
+///
+/// ⊘ A two-variant enum rather than a `bool timestamp`, because the third and fourth
+/// encodings (`RELEASE_CONDITIONAL_INTR_SEMAPHORE`, and `NONE` which produces no
+/// `CeCompletion` at all) are neither of these and must not be expressible as one of them
+/// by flipping a flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CeSemStructure {
+    /// `RELEASE_ONE_WORD_SEMAPHORE`: the payload and nothing else.
+    OneWord,
+    /// ★★★ `RELEASE_FOUR_WORD_SEMAPHORE` (a.k.a. `_RELEASE_SEMAPHORE_WITH_TIMESTAMP`, the
+    /// same value under two names): **sixteen** bytes — the payload word, then an
+    /// eight-byte timestamp at
+    /// [`kayfabe_abi::submit::ce::SEM_FOUR_WORD_TIMESTAMP_OFFSET`].
+    ///
+    /// # ⚠ The executor owes SIXTEEN bytes, not four
+    ///
+    /// An executor that writes only the payload half of one of these leaves twelve bytes
+    /// of the guest's semaphore holding whatever was there before. That is not a smaller
+    /// version of the right answer: a reader of the timestamp gets a **stale value it
+    /// cannot tell from a real reading**, which is the failure mode this project names
+    /// *"an empty capture is evidence of nothing"* one layer down. `[measured 2026-08-10,
+    /// boot `s51_d502ac6_engroute`]` the guest's semaphore page reads
+    /// `fbFIN@0x102c004=0000…0000 nz0/4096 resN-NEVER-WRITTEN` — so on the very boot this
+    /// rung is about, "never written" and "written zero" are the same sixteen bytes.
+    FourWord,
 }
 
 /// One pushbuffer range to walk: a contiguous run of method words a GPFIFO entry

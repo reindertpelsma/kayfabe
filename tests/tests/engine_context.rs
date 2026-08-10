@@ -624,11 +624,15 @@ fn fence_arm_selection_is_exact_at_the_channel() {
 /// `[measured 2026-08-10, boots s49/s50]` the shim's CPU copy-engine executor claimed
 /// **every** doorbell that had a VA space and a ring — `Ce` and `GrCompute` alike — because
 /// the only gate in front of it asked about the *isolate plane* and never about the
-/// *engine*. The visible symptom was `FwdFault::SubmissionHasNoLaunch { methods: 3,
-/// opaque: 2 }`: a **GR** pushbuffer handed to the **CE** codec, which is class-gated and
-/// so correctly decoded it to `Opaque` and declined. ⊘ Nothing was forged — and that is
-/// precisely why nothing caught it. The refusal was *true of the bytes* and *silent about
-/// the cause*, so the boot reported a pushbuffer problem where it had a routing problem.
+/// *engine*. `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` it was **86 doorbells
+/// wide**: `GrCompute=86 Ce=362`, summing to the 448 that arrived. ⊘ Nothing was forged —
+/// and that is precisely why nothing caught it. A GR ring decodes to `Opaque` at a
+/// class-gated codec, so the refusal was *true of the bytes* and *silent about the cause*.
+///
+/// ⊘ **The `SubmissionHasNoLaunch { methods: 3, opaque: 2 }` this doc used to name as the
+/// symptom was a different doorbell's** — its own printed pushbuffer reads `SET_OBJECT →
+/// AMPERE_DMA_COPY_B`, a CE push on a CE channel at the CE executor, and it was §16.66's
+/// four-word semaphore release.
 ///
 /// ★ So the statement is *"which executor owns this channel's work"*, and it is
 /// **exhaustive over `EngineKind`**: a variant added without a route fails to compile in
@@ -654,9 +658,7 @@ fn every_engine_kind_names_the_executor_that_owns_its_doorbells() {
             // ladder is walking toward, and a census must be able to say how much traffic
             // is waiting on work that is planned.
             EngineKind::GrCompute | EngineKind::GrGraphics => DoorbellRoute::HostGr,
-            EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => {
-                DoorbellRoute::Unserved
-            }
+            EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => DoorbellRoute::Unserved,
         };
         assert_eq!(
             kayfabe_rt::device::route_of_engine(kind),
@@ -713,11 +715,18 @@ fn the_engine_census_buckets_are_distinct_and_cover_the_enum() {
             "★ `index` and `ALL` disagree, so every label in a boot log is off by one",
         );
     }
-    assert!(seen.into_iter().all(|b| b), "⊘ a bucket nothing counts into");
+    assert!(
+        seen.into_iter().all(|b| b),
+        "⊘ a bucket nothing counts into"
+    );
 
     // ⊘ And the names are distinct, or the census prints two columns a reader cannot tell
     // apart — the same argument `rmrpc_bridge.rs`'s refusal-tag sweep makes one plane over.
     let names: std::collections::BTreeSet<&str> =
         EngineKind::ALL.iter().map(|k| k.name()).collect();
-    assert_eq!(names.len(), EngineKind::ALL.len(), "★ two engines share a label");
+    assert_eq!(
+        names.len(),
+        EngineKind::ALL.len(),
+        "★ two engines share a label"
+    );
 }

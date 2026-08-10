@@ -511,7 +511,25 @@ pub enum FwdFault {
     /// it decoded methods the chip's codec recognized none of; or it decoded methods that
     /// are real but belong to a **different engine** — which is the only reading under
     /// which a class was ever the question.
-    SubmissionHasNoLaunch {
+    ///
+    /// # ★★★★ §16.66 — THE NAME WAS `SubmissionHasNoLaunch`, AND IT WAS FALSE
+    ///
+    /// `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` the submission this fired on
+    /// **had** a `LAUNCH_DMA`. Its own printed pushbuffer says so:
+    /// `[2]sub4/m0x300/Incrementing/n1=0x14`. What it had no *copy*: `0x14` decodes as
+    /// `FLUSH_ENABLE | SEMAPHORE_TYPE_RELEASE_FOUR_WORD` with `DATA_TRANSFER_TYPE = NONE`,
+    /// a zero-byte timestamped semaphore release, and the codec declined it for a reason
+    /// that had nothing to do with a missing method.
+    ///
+    /// ⊘ *"Submission has no launch"* sends a reader to hunt for a method that is **right
+    /// there in the line the fault itself prints**, and it sent several rungs there. The
+    /// name is now about what the *decode* produced — no work this executor can perform —
+    /// which is true whether the cause is empty bytes, a foreign engine, or a launch whose
+    /// shape the codec refuses. ★ Same family as `NotAnEngine(ClassId(0))` and
+    /// `PushTooFragmented { len: 0 }` before it, and it is the third time in this file: a
+    /// refusal's name is a claim, and a claim that names the wrong noun costs more than
+    /// silence because it is *followed*.
+    SubmissionDecodedNoWork {
         /// GPFIFO entries this doorbell consumed before decoding.
         entries: u32,
         /// The ring index the cursor started at — **which** submission this is about.
@@ -538,6 +556,19 @@ pub enum FwdFault {
         /// recomputed through any resolver.
         set_object: Option<ClassId>,
     },
+    /// ★★★ **§16.66 — a `RELEASE_FOUR_WORD_SEMAPHORE` reached an executor with no clock.**
+    ///
+    /// The record is `{ payload: u64, timestamp: u64 }` and the second half needs a
+    /// nanosecond source. ⊘ Refused rather than written as zeros: `0` is a legal `PTIMER`
+    /// reading, so a zeroed timestamp is not a smaller answer — it is a **plausible wrong
+    /// one**, and a guest that subtracts two of them gets a number it has no way to
+    /// distrust. `kayfabe_device::NanoClock`'s own standing rule for this device is *never
+    /// answer a free-running counter with a constant*.
+    ///
+    /// ⚠ Reaching this is a **wiring** fault, not a guest one: the CE session carries
+    /// `CePlane::now_ns`, so the only way here is a caller that resolved a four-word
+    /// release and then declined to pass the source it had.
+    CeReleaseNoClock,
     /// ★★★ **§16.24's admission scope, EXPIRED** — the submission carries a
     /// `GP100_UVM_SW` fault method, so UVM is acting on a fault this port never delivered.
     ///
@@ -562,7 +593,7 @@ pub enum FwdFault {
     /// is a tripwire under an assumption, not a wall anybody stands at.
     UvmFaultMethodWithoutFaultDelivery {
         /// The `NVC076_*` method address read out of the guest's own pushbuffer.
-        /// ⊘ Not a constant chosen here — see [`FwdFault::SubmissionHasNoLaunch`] for the
+        /// ⊘ Not a constant chosen here — see [`FwdFault::SubmissionDecodedNoWork`] for the
         /// six boots the opposite habit cost.
         method: u32,
     },

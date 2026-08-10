@@ -494,9 +494,15 @@ static void emit_ce_fill_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_
  * `push_sem` selects whether the three registers are pushed at all, so "asked for a
  * release with nothing latched" is a case rather than an assumption.
  */
+/*
+ * `push_sem`: 0 = push no `SET_SEMAPHORE_*` at all; 1 = push the three-register run RM and
+ * UVM both use (`NV_PUSH_INC_3U` at `_A`); 2 = ★ §16.66 push FOUR registers, i.e. include
+ * `SET_SEMAPHORE_PAYLOAD_UPPER` at `0x24C`, which is the only shape a
+ * `SEMAPHORE_PAYLOAD_SIZE_TWO_WORD` release may legally take.
+ */
 static void emit_ce_sem_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_len,
                             NvU32 pattern, NvU32 components, NvU64 sem_addr, NvU32 payload,
-                            NvU32 flags, int push_sem)
+                            NvU32 flags, int push_sem, NvU32 payload_upper)
 {
     NvU32 w[32];
     unsigned n = 0, i;
@@ -525,10 +531,12 @@ static void emit_ce_sem_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_l
     sem_lo = (NvU32) sem_addr;
     pay    = DRF_NUM(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, payload);
     if (push_sem) {
-        w[n++] = hdr_inc(sub, NVC7B5_SET_SEMAPHORE_A, 3);
+        w[n++] = hdr_inc(sub, NVC7B5_SET_SEMAPHORE_A, push_sem == 2 ? 4 : 3);
         w[n++] = sem_up;
         w[n++] = sem_lo;
         w[n++] = pay;
+        if (push_sem == 2)
+            w[n++] = DRF_NUM(C7B5, _SET_SEMAPHORE_PAYLOAD_UPPER, _PAYLOAD, payload_upper);
     }
 
     w[n++] = hdr_inc(sub, NVC7B5_LAUNCH_DMA, 1);
@@ -542,7 +550,7 @@ static void emit_ce_sem_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_l
            "transfer=%u multiline=%u remap=%u srcphys=%u dstphys=%u "
            "map=1 consts=1 consta=0x%x constb=0x%x compsize=%u numdst=%u "
            "dstx=%u dsty=%u dstz=%u dstw=%u "
-           "pushsem=%d semtype=%u sem=0x%llx payload=0x%x\n",
+           "pushsem=%d semtype=%u sem=0x%llx payload=0x%x paysize=%u payupper=0x%x\n",
            name, CE_PART_ALL,
            (unsigned) DRF_VAL(C56F, _SET_OBJECT, _NVCLASS, AMPERE_DMA_COPY_B),
            (unsigned long long) (((NvU64) DRF_VAL(C7B5, _OFFSET_OUT_UPPER, _UPPER, out_up) << 32)
@@ -570,7 +578,15 @@ static void emit_ce_sem_run(const char *name, NvU32 sub, NvU64 dst, NvU32 line_l
             * order — so a Rust decoder that swapped `_A` and `_B` disagrees here. */
            (unsigned long long) (((NvU64) DRF_VAL(C7B5, _SET_SEMAPHORE_A, _UPPER, sem_up) << 32)
                                  | (NvU64) DRF_VAL(C7B5, _SET_SEMAPHORE_B, _LOWER, sem_lo)),
-           (unsigned) DRF_VAL(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, pay));
+           (unsigned) DRF_VAL(C7B5, _SET_SEMAPHORE_PAYLOAD, _PAYLOAD, pay),
+           /* ★★★ §16.66 — `SEMAPHORE_PAYLOAD_SIZE` is bit 27 and is a DIFFERENT FIELD from
+            * `SEMAPHORE_TYPE` (4:3). NVIDIA's own `DRF_VAL` extracts it here so a Rust
+            * decoder that conflated the two — reading "four word" as "eight-byte payload"
+            * — disagrees with the header rather than with our opinion. */
+           (unsigned) DRF_VAL(C7B5, _LAUNCH_DMA, _SEMAPHORE_PAYLOAD_SIZE, flags),
+           (unsigned) DRF_VAL(C7B5, _SET_SEMAPHORE_PAYLOAD_UPPER, _PAYLOAD,
+                              DRF_NUM(C7B5, _SET_SEMAPHORE_PAYLOAD_UPPER, _PAYLOAD,
+                                      payload_upper)));
 }
 
 /*
@@ -1263,27 +1279,49 @@ int main(void)
                 NvU32 sem_cond = fill_base
                                | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_TYPE,
                                          _RELEASE_CONDITIONAL_INTR_SEMAPHORE);
+                NvU32 sem_four_two = sem_four
+                                   | DRF_DEF(C7B5, _LAUNCH_DMA, _SEMAPHORE_PAYLOAD_SIZE,
+                                             _TWO_WORD);
                 emit_ce_sem_run("sem_rm_memset", 2, 0x22000, 4, 0u, map_rm,
-                                0x42006c004ULL, 1u, sem_one, 1);
+                                0x42006c004ULL, 1u, sem_one, 1, 0u);
                 /* ★ A semaphore address that USES the `16:0` upper field: a decoder that
                  * took the whole `_A` word, or that swapped the halves, lands elsewhere. */
                 emit_ce_sem_run("sem_high_addr", 2, 0x22000, 0x40,
                                 0x0403UL | 0x02010000UL, map_rm,
-                                0x0001AAAA55550000ULL, 0xDEADBEEFu, sem_one, 1);
+                                0x0001AAAA55550000ULL, 0xDEADBEEFu, sem_one, 1, 0u);
                 /* ⊘ NON-VACUITY: all three registers latched, and `SEMAPHORE_TYPE_NONE`.
                  * A decoder keyed on written-ness instead of the field reports a
                  * completion the engine never writes. */
                 emit_ce_sem_run("sem_none_despite_registers", 2, 0x22000, 0x40,
                                 0x0403UL | 0x02010000UL, map_rm,
-                                0x42006c004ULL, 7u, fill_base, 1);
+                                0x42006c004ULL, 7u, fill_base, 1, 0u);
+                /* ★★★ §16.66 — the FOUR-WORD (with-timestamp) release, which this codec
+                 * refused for four boots and now decodes. Two cases, because the payload's
+                 * WIDTH is a second, independent field:
+                 *  - `sem_fourword`      — `PAYLOAD_SIZE` left `_ONE_WORD`, which is what
+                 *                          the guest actually sends (`LAUNCH_DMA = 0x14`,
+                 *                          bit 27 clear, boot `s51_d502ac6_engroute`);
+                 *  - `sem_fourword_wide` — `PAYLOAD_SIZE_TWO_WORD` WITH `_PAYLOAD_UPPER`
+                 *                          pushed, the only legal shape for it. */
+                emit_ce_sem_run("sem_fourword", 2, 0x22000, 0x40,
+                                0x0403UL | 0x02010000UL, map_rm,
+                                0x42006c004ULL, 0x5A5Au, sem_four, 1, 0u);
+                emit_ce_sem_run("sem_fourword_wide", 2, 0x22000, 0x40,
+                                0x0403UL | 0x02010000UL, map_rm,
+                                0x42006c004ULL, 0x5A5Au, sem_four_two, 2, 0x1234u);
                 /* ⊘ The refusals: two release kinds this codec cannot express, and a
                  * one-word release whose registers were never pushed. */
-                emit_ce_sem_run("refusesem_fourword", 2, 0x22000, 0x40,
-                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_four, 1);
                 emit_ce_sem_run("refusesem_condintr", 2, 0x22000, 0x40,
-                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_cond, 1);
+                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_cond, 1, 0u);
                 emit_ce_sem_run("refusesem_nolatch", 2, 0x22000, 0x40,
-                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_one, 0);
+                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_one, 0, 0u);
+                /* ★★★ §16.66 — `PAYLOAD_SIZE_TWO_WORD` with `_PAYLOAD_UPPER` NEVER PUSHED.
+                 * `0` is a legal high half, so written-ness is asked for separately — the
+                 * same rule as `refusesem_nolatch`, one register over. Without this vector
+                 * a decoder could default the upper half and invent the top of a fence. */
+                emit_ce_sem_run("refusesem_wide_nolatch", 2, 0x22000, 0x40,
+                                0x11111111u, map_rm, 0x42006c004ULL, 1u, sem_four_two, 1,
+                                0u);
             }
 
             /*

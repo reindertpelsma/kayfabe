@@ -1486,9 +1486,10 @@ fn a_ce_launch_decodes_the_engine_class_completion_semaphore() {
         // test rather than silencing it.
         assert_eq!(
             names.len(),
-            3,
+            5,
             "[{tag}] the completion corpus is RM's own memset block, an address using the \
-             `16:0` upper field, and the latched-but-not-requested case: {names:?}"
+             `16:0` upper field, the latched-but-not-requested case, and (§16.66) the \
+             four-word release in both payload widths: {names:?}"
         );
         let mut with_release = 0usize;
         for name in names {
@@ -1506,22 +1507,40 @@ fn a_ce_launch_decodes_the_engine_class_completion_semaphore() {
             let PushMethod::CeLaunchDma { completion, .. } = *launches[0] else {
                 unreachable!("filtered")
             };
+            // ★★★ §16.66 — the STRUCTURE and the PAYLOAD WIDTH come from two different
+            // `DRF_VAL`s in the oracle, so a decoder that read one as the other disagrees
+            // with NVIDIA's header rather than with our opinion. `paysize` is
+            // `SEMAPHORE_PAYLOAD_SIZE` (bit 27): 0 = `_ONE_WORD` (4 bytes), 1 = `_TWO_WORD`.
+            let payload_bytes = if num(&d["paysize"]) == 0 { 4u8 } else { 8 };
+            let payload = if payload_bytes == 4 {
+                num(&d["payload"])
+            } else {
+                num(&d["payload"]) | (num(&d["payupper"]) << 32)
+            };
             match num(&d["semtype"]) {
                 0 => assert_eq!(
                     completion, None,
                     "[{tag}] {name}: ⊘ SEMAPHORE_TYPE_NONE releases nothing, even though \
                      SET_SEMAPHORE_A/B/PAYLOAD were all latched — the FIELD decides"
                 ),
-                1 => {
+                t @ (1 | 2) => {
                     with_release += 1;
                     assert_eq!(
                         completion,
                         Some(kayfabe_arch::CeCompletion {
                             addr: kayfabe_arch::ids::GpuVa(num(&d["sem"])),
-                            payload: num(&d["payload"]),
+                            payload,
+                            structure: if t == 1 {
+                                kayfabe_arch::CeSemStructure::OneWord
+                            } else {
+                                kayfabe_arch::CeSemStructure::FourWord
+                            },
+                            payload_bytes,
                         }),
                         "[{tag}] {name}: the completion is NVIDIA's own recombination of \
-                         SET_SEMAPHORE_A (HIGH, 16:0) over SET_SEMAPHORE_B (LOW)"
+                         SET_SEMAPHORE_A (HIGH, 16:0) over SET_SEMAPHORE_B (LOW), with the \
+                         structure from SEMAPHORE_TYPE and the width from \
+                         SEMAPHORE_PAYLOAD_SIZE — two fields, eight bits apart"
                     );
                 }
                 other => panic!("[{tag}] {name}: unexpected SEMAPHORE_TYPE {other}"),
@@ -1545,10 +1564,19 @@ fn a_ce_launch_decodes_the_engine_class_completion_semaphore() {
 /// counters say we served it. That is the silent shape this project treats as worse than a
 /// stalled boot, so the pair is refused together and the launch shows up as `Opaque`.
 ///
-/// Three cases: the four-word (with-timestamp) release, whose eight timestamp bytes this
-/// port has no clock for; the conditional-interrupt release, whose *"did it release?"* is
-/// engine state we do not model; and a one-word release whose registers were never pushed —
-/// `0` being a legal address, written-ness is asked for rather than assumed.
+/// Three cases: the conditional-interrupt release, whose *"did it release?"* is engine
+/// state we do not model; a one-word release whose registers were never pushed — `0` being
+/// a legal address, written-ness is asked for rather than assumed; and (§16.66) a
+/// `SEMAPHORE_PAYLOAD_SIZE_TWO_WORD` release whose `SET_SEMAPHORE_PAYLOAD_UPPER` was never
+/// pushed, which is the same rule one register over.
+///
+/// ⊘ **The four-word release used to be the first of these and is no longer a refusal at
+/// all** (§16.66). The reason it was listed here — *"whose eight timestamp bytes this port
+/// has no clock for"* — was false: the device answers the guest's own `PTIMER` from a
+/// free-running counter, and `kayfabe_device::CePlane::now_ns` is that counter. It is now
+/// asserted as a positive decode by
+/// `a_ce_launch_decodes_the_engine_class_completion_semaphore`, so this corpus shrinking by
+/// one is a *measured* move and not a lost case.
 #[test]
 fn a_completion_this_codec_cannot_express_refuses_the_whole_launch() {
     let oracles =
@@ -1563,8 +1591,9 @@ fn a_completion_this_codec_cannot_express_refuses_the_whole_launch() {
         assert_eq!(
             names.len(),
             3,
-            "[{tag}] three named completion refusals — four-word, conditional-intr, and \
-             a release with nothing latched: {names:?}"
+            "[{tag}] three named completion refusals — conditional-intr, a release with \
+             nothing latched, and (§16.66) a TWO_WORD payload whose `_PAYLOAD_UPPER` was \
+             never pushed: {names:?}"
         );
         for name in names {
             let got = decode_fresh(&o.ceruns[name]);
@@ -1684,6 +1713,8 @@ fn uvms_release_only_launch_decodes_across_two_subchannels() {
                 kayfabe_arch::CeCompletion {
                     addr: kayfabe_arch::ids::GpuVa(num(&d["sem"])),
                     payload: num(&d["payload"]),
+                    structure: kayfabe_arch::CeSemStructure::OneWord,
+                    payload_bytes: 4,
                 },
                 "[{tag}] {name}: SET_SEMAPHORE_A (HIGH, 16:0) over SET_SEMAPHORE_B (LOW)"
             );

@@ -1101,7 +1101,7 @@ fn a_non_incrementing_run_at_the_operand_addresses_latches_nothing() {
 ///    nothing about faults. This is why the predicate is a range and not `!= SET_OBJECT`.
 /// 3. ★ **Every fault method MUST fire**, each reported with **its own address read out of
 ///    the stream** — not a constant chosen at the raise site, which is the defect
-///    `FwdFault::SubmissionHasNoLaunch` was built to end.
+///    `FwdFault::SubmissionDecodedNoWork` was built to end.
 /// 4. ⊘ **The same addresses on a subchannel bound to the COPY ENGINE must NOT fire.** The
 ///    binding is load-bearing: `0x104` is `FAULT_CANCEL_A` on `GP100_UVM_SW` and something
 ///    else entirely on `AMPERE_DMA_COPY_B`, and a codec that read the address without the

@@ -525,7 +525,7 @@ fn a_submission_that_launches_nothing_reports_the_class_its_set_object_declared(
     let mut cursor = GpCursor::default();
 
     let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("nothing in it can run");
-    let FwdFault::SubmissionHasNoLaunch {
+    let FwdFault::SubmissionDecodedNoWork {
         entries,
         index,
         methods,
@@ -576,7 +576,7 @@ fn a_submission_with_no_set_object_reports_none_and_not_class_zero() {
     let mut cursor = GpCursor::default();
 
     let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("nothing in it can run");
-    let FwdFault::SubmissionHasNoLaunch {
+    let FwdFault::SubmissionDecodedNoWork {
         methods,
         opaque,
         set_object,
@@ -736,7 +736,7 @@ fn the_second_doorbell_runs_on_the_class_the_first_one_bound() {
 /// goes green, the positive above proves nothing: it would mean the second push runs for
 /// some reason other than the binding it is supposed to depend on.
 ///
-/// The refusal is asserted **by its fields**, because `SubmissionHasNoLaunch` with
+/// The refusal is asserted **by its fields**, because `SubmissionDecodedNoWork` with
 /// `opaque == methods` and `set_object: None` is the exact line the bench printed.
 #[test]
 fn with_a_per_doorbell_accumulator_the_same_second_push_decodes_to_nothing() {
@@ -752,7 +752,7 @@ fn with_a_per_doorbell_accumulator_the_same_second_push_decodes_to_nothing() {
 
     let err = ring_once(&plane, &mut vmm, &mut cursor)
         .expect_err("★ the amnesia is the whole defect: no binding, no launch");
-    let FwdFault::SubmissionHasNoLaunch {
+    let FwdFault::SubmissionDecodedNoWork {
         methods,
         opaque,
         set_object,

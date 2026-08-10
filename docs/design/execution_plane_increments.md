@@ -12266,3 +12266,116 @@ differing by a single event. That is not coverage of the executor.
 ⊘ **`cup3` is not reached.** `CUP2_RC=1` is unchanged, `0 forwarded` is unchanged, and the
 completion plane still has no C oracle. GR now refuses by a name that is true; it still needs
 a host channel that **shadows** the guest's and the `OS_DESCRIPTOR` primitive, neither built.
+
+## §16.66 ★★★★★ `w203` — THE ZERO-BYTE SEMAPHORE RELEASE, and four claims of the brief refuted before a line was written
+
+### 16.66.1 ⊘ WHAT I REFUTED FIRST, because three of the four would have aimed the rung wrong
+
+**(1) ⊘ The refusal is NOT `DATA_TRANSFER_TYPE == NONE`, and the doc that says so is STALE.**
+The `w203` brief quoted `Ga10xPushbuffer`'s own text — *"`DATA_TRANSFER_TYPE == NONE`. The
+engine moves no bytes; the launch exists to release a semaphore. There is no copy to
+report."* — as the live explanation of `s51`'s first refusal. That arm **stopped returning
+`None` at `b731e3c` (§15.7)**, four commits before `s51` booted; it returns
+`PushMethod::CeRelease`, and `ceutils` executes it. The sentence survived as a **doc-comment
+bullet on `ce_launch`** and answered the question anyway. ★ A stale doc does not go quiet, it
+**answers**, and it is the answer a reader trusts most because the file is the source.
+
+The single reachable refusal for flags `0x14` is `ce_completion`'s `_ => None`, reached via
+`ce_launch`'s `Self::ce_completion(state, subch, flags)??`. That is a **code certainty**, not
+a reading: the four-word arm did not exist, and no other arm can return `None` for a launch
+whose `SET_SEMAPHORE_*` registers are all latched.
+
+**(2) ⊘ The emitter is NOT UVM and NOT kernel RM — and the pushbuffer says so in one field.**
+`uvm_hal_maxwell_ce_init` binds the CE class on **subchannel 0**, and says why in its own
+comment (*"Notably this sends SET_OBJECT with the CE class on subchannel 0 instead of the
+recommended by HW subchannel 4"*, `ogkm-580: uvm_maxwell_ce.c:29-38`). Kernel RM's
+`RM_SUBCHANNEL` is **`0x0`** (`ogkm-580: inc/kernel/gpu/mem_mgr/channel_utils.h:61`). The
+refused push binds on **subchannel 4** (`[0]sub4/m0x0/…=0xc7b5`). ⇒ neither. Two further
+confirmations: UVM's Ampere HAL ORs `plc_mode` = `DISABLE_PLC` (bit 26) into **every**
+`LAUNCH_DMA` (`uvm_hal.c:143-149` → `uvm_ampere_ce.c:113-116`), and `0x14` has bit 26 clear;
+and RM's only four-word emitter is none — `channel_utils.c:645,832` push
+`_RELEASE_ONE_WORD_SEMAPHORE` and nothing else. The guest is the **open** 580.159.04 module
+(`run_s51…_dmesg.log:4`), so this is the whole kernel-side universe. ⇒ the emitter is
+**userspace `libcuda`**, and `cup2` dies at `cuCtxCreate` (801) with `cuInit` green
+(`run_s51…_probe.log:64,75`), which is where it would be.
+⚠ **Consequence for this rung's crux**: *"what does the guest do with the timestamp?"* cannot
+be answered from `ogkm`, because the reader is closed source. It is answered structurally
+below instead, and the difference is stated rather than smoothed over.
+
+**(3) ⊘ `SEMAPHORE_PAYLOAD_SIZE` is a SEPARATE FIELD, and it dissolves the "four words = 8-byte
+payload" problem the brief inherited.** `NVC7B5_LAUNCH_DMA_SEMAPHORE_PAYLOAD_SIZE` is bit
+**`27:27`** (`clc7b5.h:157-159`); `SEMAPHORE_TYPE` is `4:3`. `RELEASE_FOUR_WORD` names the
+**sixteen-byte structure**, `PAYLOAD_SIZE` names how much of it is payload. `0x14` leaves bit
+27 clear ⇒ a **one-word (32-bit) payload** inside a four-word record, and
+`SET_SEMAPHORE_PAYLOAD_UPPER` (`0x24C`) is **not consulted**. ★ `CeCompletion::payload`'s own
+doc had said the upper half *"can never be silently needed"* **because** the four-word release
+*"is refused rather than decoded"* — a comment naming an exception, whose exception this rung
+makes false. It is now a decoded field with its own refusal when unlatched, not a sentence.
+
+**(4) ⊘ The brief's owed item is half right.** `SetPageDirPolicy` (no aperture fork, answers
+`NV_OK`) and `kayfabe_rmrpc::translate_control` (refuses
+`BridgeRefusal::SetPageDirRootAperture` by name) **do** disagree on a non-vidmem root — that
+part holds. But *"`mean_wire.rs:1448` carries a stale comment your own boot contradicts"* does
+not: those bytes are a **hand-built decoder fixture**, and the boot neither corroborates nor
+contradicts them. What the boot actually says is stronger and different — `SET_PAGE_DIRECTORY
+… flags 0x8 (aperture 0)`, i.e. **every root this port has ever seen is vidmem**, so the
+sysmem arm of *both* layers is unexercised by any measured traffic and the disagreement cannot
+fire. The comment is corrected to say that, which is a smaller claim than the brief's and the
+true one. ⚠ Naming a fixture after a guest behaviour is how a fixture becomes a citation.
+
+### 16.66.2 The change
+
+- `ce_completion` **decodes** `RELEASE_FOUR_WORD` into `CeCompletion { structure:
+  CeSemStructure::FourWord, payload_bytes }`, gating the payload width on bit 27 and
+  requiring `_PAYLOAD_UPPER` to be latched when it is set. `RELEASE_CONDITIONAL_INTR` stays
+  refused, and its refusal is now narrow enough to be true.
+- `ResolvedRelease` resolves **every four-byte word of the record separately**, so a
+  sixteen-byte release that straddles a page refuses instead of writing into whatever page
+  follows. `write_resolved_completion` checks every word's backing **before** writing any.
+- **The timestamp source is `CePlane::now_ns` — `RegPlane`'s own `NanoClock`, the same
+  counter `ptimer_read` answers the guest's `NV_PTIMER_TIME_0/1` from.** ⊘ Not
+  `Instant::now`, not a counter of this executor's own: being the *same* clock is the whole
+  property, so it is taken through the same object rather than passed by a caller who could
+  pass another. A guest that stamps, reads `PTIMER`, and subtracts gets a consistent answer.
+  ⚠ **Stated, not hidden**: that counter is a synthetic CPU-side clock (`NanoClock`'s own docs
+  call it a boot-only stopgap), so it is in a different timebase from any *real host GPU*
+  timestamp. That matters the moment compute is actually forwarded and it is `#128`'s
+  read-native memslot, not this rung's.
+- ⊘ **A four-word release with no clock is `FwdFault::CeReleaseNoClock`, not zeros.** `0` is a
+  legal `PTIMER` reading; `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` that semaphore
+  page reads `fbFIN@0x102c004=0000…0000 nz0/4096 resN-NEVER-WRITTEN`, so a zeroed timestamp is
+  **byte-identical to never having run**. Writing zeros is the oracle's fifth limit rebuilt
+  one plane over. The third option the brief listed — fabricate — is refused by name.
+- `FwdFault::SubmissionHasNoLaunch` → **`SubmissionDecodedNoWork`**. The old name was
+  **false**: the submission *had* a `LAUNCH_DMA` (`[2]sub4/m0x300/…=0x14`); it had no *copy*.
+- Four in-code comments carrying §16.65's refuted *"a GR pushbuffer decoded by the CE codec"*
+  attribution are corrected in place (`shim.rs`, `device.rs`, `e2_doorbell.rs`,
+  `engine_context.rs`). The correction was committed to this doc at `1f4adaa` and **not** to
+  the code, where four readers would have met it first.
+- The **C oracle** (`tests/oracle/pushbuffer_abi_oracle.c`, compiled against NVIDIA's own
+  headers) gains `sem_fourword`, `sem_fourword_wide` and `refusesem_wide_nolatch`, and now
+  emits `paysize`/`payupper` from NVIDIA's own `DRF_VAL`. ★ So the two-fields-eight-bits-apart
+  claim is checked against the header, not against my reading of it. Both gates print `RAN`.
+
+### 16.66.3 ★★★ THE FALSIFIER, committed BEFORE the boot
+
+Baseline is `s51_d502ac6_engroute`: `448 arrived / 354 served / 94 REFUSED`, `GrCompute=86
+Ce=362 unrouted=0`, first refusal `FwdFault::SubmissionHasNoLaunch`, `CUP2_RC=1` with
+`cuCtxCreate → operation not supported (801)`, `sem fin va=0x12006c004 -> S:0x3089c004`.
+
+⊘ **The falsifier is about what the GUEST does, never about what my fix produces.** A
+counter of four-word releases would go up by construction; none of these arms reads one.
+
+| arm | the line that distinguishes it |
+|---|---|
+| **A — the release is served and the guest moves** | `REFUSED` **< 94** *and* `served` **> 354** (they must move together and by the same amount), `by engine` still `GrCompute=86 Ce=362`, first-refusal tag now `Route::NotACopyEngineChannel`, **and** `CUP2_RC` changes or `cuCtxCreate`'s error changes off `801` |
+| **B — the release is served and the guest does NOT move** | the same counter movement and the same tag change, but `CUP2_RC=1` with `cuCtxCreate → … (801)` **unchanged**. ⇒ the wall was real and was not the last one |
+| **C — the release decodes and then refuses somewhere new** | `REFUSED` still `94` (or moves by less than the `Ce` deficit) **and** the first-refusal tag is one of `FwdFault::Address`, `FwdFault::CeUnstableBacking`, `FwdFault::CeReleaseNoClock`. ★ This is the `#12` cell: the release resolved nowhere, or somewhere the guest does not read |
+| **D — regression** | `served` **< 354**, or `by engine` off `86`/`362`, or `unrouted > 0`, or `arrived ≠ 448` |
+| **E — NONE OF THE ABOVE** | ⊘ **Reserved, and it will be used rather than rounded to the nearest arm.** §16.65's falsifier had four arms cut from a false premise and the boot landed in none of them; the correct response was to add the cell, not to score it as `B`. If the numbers land outside every row above, this row is the answer and the reason goes here |
+
+★ **And one thing that is NOT an arm but must be printed either way** — the `#12` check the
+brief demanded: the **aperture** the four-word release resolves to. `completion_at` carries
+`(va, plane, plane_addr)` and the report prints it as `sem fin va=… -> S:…` / `V:…`. A release
+written to `V:` while the guest polls a sysmem `pbCpuVA` is `#12` rebuilt, and it would be
+invisible in every count in the table above.

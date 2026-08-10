@@ -64,7 +64,10 @@ impl Faulted for FwdFault {
             FwdFault::NonRamGpa { .. } => FaultTag("FwdFault::NonRamGpa"),
             FwdFault::PushbufferAperture { .. } => FaultTag("FwdFault::PushbufferAperture"),
             FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
-            FwdFault::SubmissionHasNoLaunch { .. } => FaultTag("FwdFault::SubmissionHasNoLaunch"),
+            FwdFault::SubmissionDecodedNoWork { .. } => {
+                FaultTag("FwdFault::SubmissionDecodedNoWork")
+            }
+            FwdFault::CeReleaseNoClock => FaultTag("FwdFault::CeReleaseNoClock"),
             FwdFault::UvmFaultMethodWithoutFaultDelivery { .. } => {
                 FaultTag("FwdFault::UvmFaultMethodWithoutFaultDelivery")
             }

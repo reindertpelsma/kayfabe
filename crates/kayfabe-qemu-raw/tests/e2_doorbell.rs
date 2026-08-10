@@ -539,13 +539,17 @@ fn the_archive_realizes_exactly_one_object_model() {
 /// every doorbell whose channel had a VA space and a ring — `Ce` and `GrCompute` alike —
 /// because the only gate in front of it asked about the isolate *plane*, never the
 /// *engine*, and on the shipping `Stillborn` configuration that gate never fires. The
-/// symptom was `FwdFault::SubmissionHasNoLaunch { methods: 3, opaque: 2 }`: a **GR**
-/// pushbuffer handed to the **CE** codec, which is class-gated and so decoded it to
-/// `Opaque` and correctly declined to find a CE launch in it.
+/// defect was **86 doorbells wide** (`[measured 2026-08-10, boot s51_d502ac6_engroute]`:
+/// `GrCompute=86 Ce=362`, summing to 448).
 ///
-/// ⊘ Nothing was forged, and that is exactly why nothing caught it — the refusal was *true
-/// of the bytes* and *silent about the cause*, so a boot reported a pushbuffer problem
-/// where it had a routing problem. A test asserting "it refuses" would have passed
+/// ⊘ Nothing was forged, and that is exactly why nothing caught it — a GR ring decodes to
+/// `Opaque` at a class-gated codec, so the refusal was *true of the bytes* and *silent
+/// about the cause*.
+///
+/// ⊘ **The `SubmissionHasNoLaunch { methods: 3, opaque: 2 }` this doc used to name as the
+/// symptom was NOT one of the 86.** Its own printed pushbuffer is `SET_OBJECT →
+/// AMPERE_DMA_COPY_B`: a CE push on a CE channel at the CE executor. It was §16.66's
+/// four-word semaphore release, and it survived `w202` unchanged. A test asserting "it refuses" would have passed
 /// throughout. This one asserts **which name**, because the name is the whole increment.
 ///
 /// # ★★★★ The non-vacuity, and it is the finding this rung actually turned up
@@ -559,10 +563,10 @@ fn the_archive_realizes_exactly_one_object_model() {
 /// doorbell rang. That is the difference this test makes visible, on purpose.
 #[test]
 fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
+    use kayfabe_abi::generated::classes as nv;
     use kayfabe_arch::ClientKind;
     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb, VChid};
     use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
-    use kayfabe_abi::generated::classes as nv;
 
     // ⊘ One fixture, parameterised by the single event under study, so the two outcomes
     // cannot differ by anything else. A second hand-written fixture could drift.

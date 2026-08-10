@@ -556,7 +556,7 @@ pub fn run_submission(
     //
     // ⊘ Its only consumer is the `launches == 0` refusal below, and it exists because that
     // refusal used to throw every one of these facts away and report the literal
-    // `ClassId(0)` instead (`FwdFault::SubmissionHasNoLaunch` carries the full account).
+    // `ClassId(0)` instead (`FwdFault::SubmissionDecodedNoWork` carries the full account).
     // A submission that read no method words, one that read words the codec recognized
     // nothing in, and one that decoded a `SET_OBJECT` for some other engine are three
     // different findings that produced one identical line in the boot report.
@@ -621,17 +621,25 @@ pub fn run_submission(
             run.releases += 1;
             let resolved = {
                 let mut ops = WalkOperands::new(ce, &mut last);
-                crate::cpu_ce::resolve_releases(&mut ops, &[(completion.addr, completion.payload)])
-                    .map_err(|f| CeUtilsRefusal {
+                crate::cpu_ce::resolve_releases(&mut ops, &[completion]).map_err(|f| {
+                    CeUtilsRefusal {
                         fault: f,
                         detail: last,
-                    })?
+                    }
+                })?
             };
             if let Some(r) = resolved.first() {
                 run.completion_at = Some((r.va, r.op.residency.plane, r.op.addr.0));
             }
-            run.completions += crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved)
-                .map_err(CeUtilsRefusal::plain)?;
+            // ★★★ §16.66 — the timestamp source, sampled HERE, once, at the moment this
+            // release retires. ⊘ Not hoisted above the loop: a run may carry several
+            // releases and hardware stamps each with the time IT completed, so one sample
+            // shared across a run would report a single instant for a sequence of events —
+            // the same shape as an end-of-boot census answering a lifetime question.
+            let now_ns = ce.now_ns();
+            run.completions +=
+                crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved, Some(now_ns))
+                    .map_err(CeUtilsRefusal::plain)?;
             continue;
         }
         let PushMethod::CeLaunchDma {
@@ -700,18 +708,18 @@ pub fn run_submission(
         };
         let resolved = {
             let mut ops = WalkOperands::new(ce, &mut last);
-            crate::cpu_ce::resolve_releases(&mut ops, &[(c.addr, c.payload)]).map_err(|f| {
-                CeUtilsRefusal {
-                    fault: f,
-                    detail: last,
-                }
+            crate::cpu_ce::resolve_releases(&mut ops, &[c]).map_err(|f| CeUtilsRefusal {
+                fault: f,
+                detail: last,
             })?
         };
         if let Some(r) = resolved.first() {
             run.completion_at = Some((r.va, r.op.residency.plane, r.op.addr.0));
         }
-        run.completions += crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved)
-            .map_err(CeUtilsRefusal::plain)?;
+        let now_ns = ce.now_ns();
+        run.completions +=
+            crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved, Some(now_ns))
+                .map_err(CeUtilsRefusal::plain)?;
     }
 
     // ⊘ A submission that decoded no launch moved no byte. It is not served.
@@ -726,7 +734,7 @@ pub fn run_submission(
     // `RingBroughtNoEntry` replaced, one layer later — a borrowed variant whose argument
     // then had to be invented, and an invented argument reads exactly like a measurement.
     if run.launches == 0 {
-        return Err(CeUtilsRefusal::plain(FwdFault::SubmissionHasNoLaunch {
+        return Err(CeUtilsRefusal::plain(FwdFault::SubmissionDecodedNoWork {
             entries: u32::try_from(run.entries).unwrap_or(u32::MAX),
             index: start_index,
             methods: u32::try_from(run.methods).unwrap_or(u32::MAX),

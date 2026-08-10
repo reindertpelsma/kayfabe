@@ -3045,13 +3045,23 @@ impl SharedDoorbell {
             .by_engine[facts.engine_index()] += 1;
         // ★★★★ **§16.65 — THE ROUTING STATEMENT, and it comes BEFORE every other gate.**
         //
-        // `[measured 2026-08-10, boots s49/s50]` this executor's first refusal was
-        // `FwdFault::SubmissionHasNoLaunch { entries: 1, index: 0, methods: 3, opaque: 2 }`
-        // — a **GR** pushbuffer decoded by the **CE** codec, correctly declining to find a
-        // CE launch in it. The gate below asks about the isolate *plane*, never about the
-        // *engine*, and on the shipping (`Stillborn`) configuration it never fires at all,
-        // so this arm claimed every doorbell with a VA space and a ring regardless of which
-        // engine the channel belongs to.
+        // The gate below asks about the isolate *plane*, never about the *engine*, and on
+        // the shipping (`Stillborn`) configuration it never fires at all, so this arm
+        // claimed every doorbell with a VA space and a ring regardless of which engine the
+        // channel belongs to. `[measured 2026-08-10, boot s51_d502ac6_engroute]` that was
+        // **86 doorbells wide**, and the per-engine histogram shipped with this gate is the
+        // only thing that could say so: `GrCompute=86 Ce=362`, `86 + 362 = 448`.
+        //
+        // ⊘ **AND THE EVIDENCE §16.65 CITED FOR IT WAS A DIFFERENT DOORBELL'S.** This
+        // comment used to open by naming the executor's first refusal —
+        // `SubmissionHasNoLaunch { methods: 3, opaque: 2 }` — as *"a GR pushbuffer decoded
+        // by the CE codec"*. Measured false on all three of `s49`/`s50`/`s51`: that
+        // refusal prints its own pushbuffer, and it reads `SET_OBJECT →
+        // AMPERE_DMA_COPY_B`, i.e. a **CE** push on a **CE** channel at the **CE**
+        // executor, exactly where it belonged. `w202` could not move it and did not; it
+        // was §16.66's four-word semaphore release. ★ The routing defect was real and the
+        // fix is right; the sentence that motivated it was about something else. When a
+        // diagnostic carries its own evidence, read that evidence before theorising.
         //
         // ⊘ **Nothing was ever forged** — the pushbuffer codec is class-gated
         // (`kayfabe-chips/src/ga10x.rs`, `kayfabe-arch/src/lib.rs`), so a GR ring decodes to
@@ -3158,8 +3168,12 @@ impl SharedDoorbell {
         // states its own geometry beats one that infers it.
         // ⊘ Selected by [`SharedDoorbell::doorbell_root`], which the PROBE also calls —
         // see its docs for the boot in which these were two sites and disagreed in the log.
-        let root = match SharedDoorbell::doorbell_root(&plane, facts.client, vaspace, facts.vas_pdb.map(|p| p.0))
-        {
+        let root = match SharedDoorbell::doorbell_root(
+            &plane,
+            facts.client,
+            vaspace,
+            facts.vas_pdb.map(|p| p.0),
+        ) {
             DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => Some(r),
             // ⊘ A channel with genuinely no VA space. A real absence, falling through to
             // the refusal below — never papered over with a zero.
@@ -3511,10 +3525,11 @@ impl SharedDoorbell {
             || " walk=NO-ROOT".to_string(),
             |r| plane.walk_trace_from_root(r, ring_va),
         );
-        let ring = root.as_ref().map_or(
-            kayfabe_device::ceresolve::CeResolve::NoPublication,
-            |r| plane.resolve_va_from_root(r, ring_va, demand()),
-        );
+        let ring = root
+            .as_ref()
+            .map_or(kayfabe_device::ceresolve::CeResolve::NoPublication, |r| {
+                plane.resolve_va_from_root(r, ring_va, demand())
+            });
         // ★★★★ §16.12 — THE RING'S OWN PAGE. §16.10 proved the walk lands on `V:0x20000`
         // correctly; the open question is whether OUR framebuffer has ever had a byte
         // written there. ⊘ Addressed by the resolution's OWN answer, never by a literal:
@@ -3525,10 +3540,15 @@ impl SharedDoorbell {
         // 1024-entry ring is 8 KiB and occupies TWO pages, so that sentence was true of
         // half the ring. See [`RING_PAGE_DUMPS`].
         let ringpage = self.ring_pages(root.as_ref(), ring_va, facts.ring_entries);
-        let fin = root.as_ref().map_or(
-            kayfabe_device::ceresolve::CeResolve::NoPublication,
-            |r| plane.resolve_va_from_root(r, ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING), demand()),
-        );
+        let fin = root
+            .as_ref()
+            .map_or(kayfabe_device::ceresolve::CeResolve::NoPublication, |r| {
+                plane.resolve_va_from_root(
+                    r,
+                    ring_va.wrapping_add(FINISH_PAYLOAD_FROM_RING),
+                    demand(),
+                )
+            });
         // The pushbuffer the entry AT THE CURSOR points at — read the entry, decode it, walk
         // its target. ⊘ Every step can fail and every failure is reported as itself: a ring
         // that would not read and a ring that read as a malformed entry are different facts.

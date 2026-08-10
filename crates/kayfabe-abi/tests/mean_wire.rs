@@ -1445,7 +1445,18 @@ fn a_realistic_event_stream_decodes_and_the_skewed_event_in_the_middle_is_refuse
     );
     seen.push("alloc-device");
 
-    // 3. RM_CONTROL SET_PAGE_DIRECTORY — a sysmem-rooted UVM VAS.
+    // 3. RM_CONTROL SET_PAGE_DIRECTORY — a root whose aperture bits say SYSMEM_COH.
+    //
+    // ⊘ These bytes are HAND-BUILT to exercise the decoder's aperture fork, and the comment
+    // here used to call them "a sysmem-rooted UVM VAS" — which reads as a statement about
+    // the guest and is not one. `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` every
+    // SET_PAGE_DIRECTORY this port has ever seen carries `flags 0x8`, i.e. bits `1:0` = 0 =
+    // `_VIDMEM` (`2 ACCEPTED, 0 refused; … flags 0x8 (aperture 0)`). So the sysmem arm is
+    // real in the ABI, decoded here, and **unexercised by any measured traffic** — which is
+    // also why `kayfabe_device`'s `SetPageDirPolicy` (no aperture fork, answers `NV_OK`) and
+    // `kayfabe_rmrpc`'s `translate_control` (refuses `BridgeRefusal::SetPageDirRootAperture`
+    // by name) can disagree about this input without any boot noticing. Naming a fixture
+    // after a guest behaviour is how a fixture becomes a citation.
     let mut ctl = vec![0u8; 32];
     nvos::Nvos54Parameters {
         h_client: 0xC1D0_0067,

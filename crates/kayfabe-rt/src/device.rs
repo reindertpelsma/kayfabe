@@ -2733,12 +2733,16 @@ pub struct CeChannelFacts {
 /// `[measured 2026-08-10, boots s49/s50]` the shim's CPU copy-engine executor claimed
 /// **every** doorbell that had a VA space and a ring, `Ce` and `GrCompute` alike, because
 /// the only gate in front of it asked about the *isolate plane* and not about the *engine*.
-/// The visible symptom was `FwdFault::SubmissionHasNoLaunch { methods: 3, opaque: 2 }` —
-/// a **GR** pushbuffer being decoded by the **CE** codec, correctly declining to find a CE
-/// launch in it. ⊘ Nothing was forged (the codec is class-gated, so a GR ring decodes to
-/// `Opaque`), but those doorbells reached the wrong executor and could never reach a right
-/// one, and the refusal they got named the *pushbuffer's* shape rather than the *routing*
-/// mistake that put them there.
+/// `[measured 2026-08-10, boot `s51_d502ac6_engroute`]` it was **86 doorbells wide**:
+/// `GrCompute=86 Ce=362`, and `86 + 362 = 448`. ⊘ Nothing was forged (the codec is
+/// class-gated, so a GR ring decodes to `Opaque`), but those doorbells reached the wrong
+/// executor and could never reach a right one.
+///
+/// ⊘ **What this doc used to claim as the visible symptom was a DIFFERENT doorbell's**:
+/// `SubmissionHasNoLaunch { methods: 3, opaque: 2 }` was named here as *"a GR pushbuffer
+/// being decoded by the CE codec"*, and the refusal's own printed pushbuffer says
+/// `SET_OBJECT → AMPERE_DMA_COPY_B` — a CE push, on a CE channel, at the CE executor.
+/// `w202` neither moved it nor could have. It was §16.66's four-word semaphore release.
 ///
 /// ★ So the statement is *"this channel's work belongs to executor X"*, made once, keyed on
 /// the one total field ([`CeChannelFacts::engine`]) — never on the sparse

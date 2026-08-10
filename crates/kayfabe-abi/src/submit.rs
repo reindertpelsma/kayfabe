@@ -1961,12 +1961,53 @@ pub mod ce {
     /// nothing; the `SET_SEMAPHORE_*` registers are not read at all.
     pub const LAUNCH_SEMAPHORE_TYPE_NONE: u32 = 0;
     /// `LAUNCH_DMA_SEMAPHORE_TYPE_RELEASE_FOUR_WORD_SEMAPHORE` — value 2, i.e. the
-    /// with-timestamp release (`clc7b5.h:100, :102`). Sixteen bytes: the payload plus a
-    /// **hardware timestamp** this port has no source for.
+    /// with-timestamp release (`clc7b5.h:100`, and `:98`
+    /// `_RELEASE_SEMAPHORE_WITH_TIMESTAMP` is the **same value** under its other name).
+    /// Sixteen bytes: an eight-byte payload word followed by an eight-byte **timestamp**.
+    ///
+    /// ⊘ This doc used to end *"a hardware timestamp this port has no source for"*, and
+    /// that sentence is what kept `Ga10xPushbuffer::ce_completion` refusing the whole
+    /// launch for four boots (`execution_plane_increments.md` §16.66). It was false in
+    /// both halves: see [`SEM_FOUR_WORD_TIMESTAMP_OFFSET`] for where the timestamp goes
+    /// and `kayfabe_device::CePlane::now_ns` for the source — **the same free-running
+    /// nanosecond counter this device answers the guest's own `PTIMER` reads from**, which
+    /// is the only value that makes a guest correlation of the two come out right.
     pub const LAUNCH_SEMAPHORE_TYPE_RELEASE_FOUR_WORD: u32 = 2 << 3;
     /// `LAUNCH_DMA_SEMAPHORE_TYPE_RELEASE_CONDITIONAL_INTR_SEMAPHORE` — value 3
     /// (`clc7b5.h:103`).
     pub const LAUNCH_SEMAPHORE_TYPE_RELEASE_CONDITIONAL_INTR: u32 = 3 << 3;
+    /// `SET_SEMAPHORE_PAYLOAD_UPPER` @ `0x24C` — the payload's HIGH 32 bits
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:53-54`).
+    ///
+    /// ★★★ **Read only when [`LAUNCH_SEMAPHORE_PAYLOAD_SIZE_TWO_WORD`] is set**, which is
+    /// a *different field* from [`LAUNCH_SEMAPHORE_TYPE_MASK`]. Conflating the two is the
+    /// easy error here: `RELEASE_FOUR_WORD` names the **sixteen-byte structure** written
+    /// to memory, `PAYLOAD_SIZE` names how many of those bytes are payload. A four-word
+    /// release with `PAYLOAD_SIZE_ONE_WORD` — which is what the guest actually sends
+    /// (`[measured 2026-08-10, boot s51_d502ac6_engroute]`, `LAUNCH_DMA = 0x14`, bit 27
+    /// clear) — never consults this register at all.
+    pub const SET_SEMAPHORE_PAYLOAD_UPPER: u32 = 0x0000_024C;
+    /// `LAUNCH_DMA_SEMAPHORE_PAYLOAD_SIZE` — field `27:27`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:157`), value 1 =
+    /// `_TWO_WORD` (`:159`), value 0 = `_ONE_WORD` (`:158`).
+    ///
+    /// ⊘ Named as the TWO_WORD constant rather than as a bare mask so that a reader cannot
+    /// take "the bit is set" for "the semaphore is four-word": the two fields are eight
+    /// bits apart and mean different things.
+    pub const LAUNCH_SEMAPHORE_PAYLOAD_SIZE_TWO_WORD: u32 = 1 << 27;
+    /// How many bytes a [`LAUNCH_SEMAPHORE_TYPE_RELEASE_FOUR_WORD`] release writes.
+    /// "Four word" is four **32-bit** words.
+    pub const SEM_FOUR_WORD_BYTES: u64 = 16;
+    /// ★★★ Where the timestamp sits inside those sixteen bytes: **byte 8**, eight bytes
+    /// wide, with the payload occupying bytes `0..8`.
+    ///
+    /// `[src]` `ogkm-580: kernel-open/nvidia-uvm/uvm_push.c:468-485` — `uvm_push_timestamp`
+    /// reserves a 16-byte inline buffer, hands its address to
+    /// `ce_hal->semaphore_timestamp`, and then returns `((NvU64 *)buffer) + 1` to its
+    /// caller as *the timestamp*. The `+ 1` on an `NvU64 *` **is** this offset, written by
+    /// the driver that reads the field. `uvm_gpu_semaphore.h:44-45` says the same thing in
+    /// prose (*"16-byte semaphores that include an 8-byte timestamp"*).
+    pub const SEM_FOUR_WORD_TIMESTAMP_OFFSET: u64 = 8;
     /// `LAUNCH_DMA_SRC_MEMORY_LAYOUT_PITCH` — field `7:7`, value 1
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:108`).
     pub const LAUNCH_SRC_PITCH: u32 = 1 << 7;

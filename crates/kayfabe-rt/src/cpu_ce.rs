@@ -26,8 +26,9 @@
 //! that did not move the bytes, or landing them where the guest cannot read them. The bytes
 //! move first; E10d signals only after.
 
+use kayfabe_abi::submit;
 use kayfabe_arch::ids::GpuVa;
-use kayfabe_arch::{Backing, CpuOperand, CpuPlane, PlaneAddr};
+use kayfabe_arch::{Backing, CeCompletion, CeSemStructure, CpuOperand, CpuPlane, PlaneAddr};
 use kayfabe_device::{FbRefused, FbStore, FbWriter};
 use kayfabe_fwd::{COMPLETION_VECTOR, CeSpan, FwdFault};
 use kayfabe_isolate::{CeExecutor, CeSource};
@@ -278,10 +279,88 @@ pub fn execute_ours_spans(
 pub struct ResolvedRelease {
     /// The virtual address the guest's pushbuffer named, kept for the report.
     pub va: GpuVa,
-    /// Where that address lives, and at what address in that plane.
+    /// Where the release's **first** word lands. ★ This is the `#12` answer — the plane
+    /// and plane address the guest's semaphore VA actually resolved to — and it is what
+    /// [`crate::ceutils::CeUtilsRun::completion_at`] carries into the boot report.
     pub op: CpuOperand,
-    /// The payload the release carries. Written as its low 32 bits (a one-word release).
+    /// The payload the release carries, already widened per `SEMAPHORE_PAYLOAD_SIZE`.
     pub payload: u64,
+    /// The record this release writes — [`CeSemStructure::FourWord`] is sixteen bytes.
+    pub structure: CeSemStructure,
+    /// How many of the payload's bytes the guest asked for: 4 or 8.
+    pub payload_bytes: u8,
+    /// ★★★ **Every four-byte word this release writes, resolved SEPARATELY**: index `i`
+    /// is the word at byte offset `4 * i` from [`ResolvedRelease::va`], `Some` exactly for
+    /// the words the record covers.
+    ///
+    /// # ⊘ Why each word gets its own resolution rather than one base plus arithmetic
+    ///
+    /// Because a sixteen-byte record can **straddle a page boundary**, and the two halves
+    /// of a straddle need not be contiguous — or even in the same plane — once the guest's
+    /// own page tables have had their say. Adding 12 to a resolved plane address assumes
+    /// they are, and that assumption fails silently: the bytes land in whatever page
+    /// happens to follow, which is somebody else's. The four-byte granularity is the
+    /// resolver's own ([`kayfabe_fwd::OperandResolver::resolve_word`]), so this asks it
+    /// exactly the question it can answer, once per word.
+    ///
+    /// ⊘ A fixed array and not a `Vec`: the record is at most sixteen bytes by the class's
+    /// own definition, and keeping this `Copy` keeps the resolve/write split a value.
+    pub words: [Option<CpuOperand>; 4],
+}
+
+impl ResolvedRelease {
+    /// The sixteen (or four, or eight) bytes this release puts at [`ResolvedRelease::va`],
+    /// as a little-endian record, with `None` for a word the release does not write.
+    ///
+    /// # ★★★ The four-word record, byte for byte, and the one judgement call in it
+    ///
+    /// `{ payload: u64, timestamp: u64 }` — the timestamp at
+    /// [`submit::ce::SEM_FOUR_WORD_TIMESTAMP_OFFSET`], which is where the driver that
+    /// reads the field looks for it (`uvm_push.c:478`, `timestamp += 1` on an `NvU64 *`).
+    ///
+    /// ⚠ **The judgement call**: when `SEMAPHORE_PAYLOAD_SIZE` is `_ONE_WORD` the guest
+    /// named only 32 bits of payload, yet the record's payload slot is 64 bits wide. This
+    /// **zero-extends** into the slot rather than leaving bytes `4..8` untouched. Stated
+    /// as a choice because it is one:
+    /// - a reader that takes the payload as a `u32` — every reader in reach — cannot tell
+    ///   the two apart;
+    /// - a reader that takes it as a `u64` gets the payload it asked for under
+    ///   zero-extension, and gets **whatever was in that memory before** under the other
+    ///   choice. Between a defined value and a stale one, this project's rule is not to
+    ///   leave a byte of a record it claims to have written to chance.
+    ///
+    /// ⊘ It is *not* a claim about what hardware does with those four bytes — no run in
+    /// this tree has observed them. It is a choice about what WE write, made where it can
+    /// be changed in one place, with this paragraph as the reason it was reachable.
+    #[must_use]
+    pub fn record(&self, timestamp_ns: u64) -> [Option<u32>; 4] {
+        let p = self.payload.to_le_bytes();
+        let payload_words = [
+            Some(u32::from_le_bytes([p[0], p[1], p[2], p[3]])),
+            Some(u32::from_le_bytes([p[4], p[5], p[6], p[7]])),
+        ];
+        match self.structure {
+            CeSemStructure::OneWord => [
+                payload_words[0],
+                if self.payload_bytes >= 8 {
+                    payload_words[1]
+                } else {
+                    None
+                },
+                None,
+                None,
+            ],
+            CeSemStructure::FourWord => {
+                let t = timestamp_ns.to_le_bytes();
+                [
+                    payload_words[0],
+                    payload_words[1],
+                    Some(u32::from_le_bytes([t[0], t[1], t[2], t[3]])),
+                    Some(u32::from_le_bytes([t[4], t[5], t[6], t[7]])),
+                ]
+            }
+        }
+    }
 }
 
 /// ★★★ **Phase 1 of the completion tail — resolve every release's VA through the operand
@@ -295,15 +374,35 @@ pub struct ResolvedRelease {
 /// - [`FwdFault::CePeerOperand`] if it resolves into peer memory.
 pub fn resolve_releases(
     ops: &mut dyn kayfabe_fwd::OperandResolver,
-    releases: &[(GpuVa, u64)],
+    releases: &[CeCompletion],
 ) -> Result<Vec<ResolvedRelease>, FwdFault> {
     releases
         .iter()
-        .map(|&(va, payload)| {
+        .map(|c| {
+            // How many four-byte words the record covers. ⊘ From the STRUCTURE, which is
+            // what the class says the engine writes, and never from the payload width —
+            // those are two different fields and a four-word release with a one-word
+            // payload still writes sixteen bytes.
+            let words = match c.structure {
+                CeSemStructure::OneWord => u64::from(c.payload_bytes).div_ceil(4),
+                CeSemStructure::FourWord => submit::ce::SEM_FOUR_WORD_BYTES / 4,
+            };
+            let mut resolved: [Option<CpuOperand>; 4] = [None; 4];
+            for (i, slot) in resolved.iter_mut().enumerate() {
+                if (i as u64) < words {
+                    // ⚠ MISS = FAULT on EVERY word, including the timestamp's. A record
+                    // whose second half does not resolve is not written at all and does
+                    // not signal — a half-written completion is worse than a refused one.
+                    *slot = Some(ops.resolve_word(GpuVa(c.addr.0 + 4 * i as u64))?);
+                }
+            }
             Ok(ResolvedRelease {
-                va,
-                op: ops.resolve_word(va)?,
-                payload,
+                va: c.addr,
+                op: resolved[0].ok_or(FwdFault::CeNoTable { va: c.addr })?,
+                payload: c.payload,
+                structure: c.structure,
+                payload_bytes: c.payload_bytes,
+                words: resolved,
             })
         })
         .collect()
@@ -322,13 +421,47 @@ pub fn write_resolved_completion(
     fb: &mut dyn FbStore,
     vmm: &mut dyn Vmm,
     releases: &[ResolvedRelease],
+    timestamp_ns: Option<u64>,
 ) -> Result<usize, FwdFault> {
-    // 1. WRITE every payload first. A refusal here returns before any signal.
+    // ⊘ CHECK EVERY WORD OF EVERY RECORD BEFORE WRITING ANY OF THEM. A four-word release
+    // whose timestamp half sits on unstable backing must not have its payload half land
+    // first: the guest's waiter would be released over a record only half of which is ours
+    // to have written. `touchable` is pure, so this pass cannot itself have an effect.
     for r in releases {
-        let plane = touchable(r.op)?;
-        // One-word (4-byte) release: the low 32 bits, little-endian.
-        let bytes = (r.payload as u32).to_le_bytes();
-        write_plane(fb, vmm, plane, r.op.addr, &bytes)?;
+        for op in r.words.iter().flatten() {
+            touchable(*op)?;
+        }
+    }
+    // ★★★ **A TIMESTAMPED RELEASE WITHOUT A CLOCK IS REFUSED, NOT ZEROED.**
+    //
+    // `0` is a legal `PTIMER` reading, so a guest handed one cannot tell it from a real
+    // sample — it just computes a nonsense elapsed time and believes it. `[measured
+    // 2026-08-10, boot `s51_d502ac6_engroute`]` the semaphore page in question reads
+    // `fbFIN@0x102c004=0000…0000 nz0/4096 resN-NEVER-WRITTEN`, i.e. zeros are exactly what
+    // "we never wrote this" already looks like there. That is the C oracle's fifth-limit
+    // failure (*"an empty capture is evidence of nothing, not evidence of emptiness"*),
+    // and the standing rule
+    // `kayfabe_device::NanoClock`'s own docs state for this device is **never answer a
+    // free-running counter with a constant**. So the source is a precondition with a
+    // name, checked before a byte moves.
+    let ts = match (
+        releases
+            .iter()
+            .any(|r| r.structure == CeSemStructure::FourWord),
+        timestamp_ns,
+    ) {
+        (true, None) => return Err(FwdFault::CeReleaseNoClock),
+        (_, t) => t.unwrap_or(0),
+    };
+    // 1. WRITE every record. A refusal here returns before any signal.
+    for r in releases {
+        let record = r.record(ts);
+        for (i, op) in r.words.iter().enumerate() {
+            let (Some(op), Some(word)) = (op, record[i]) else {
+                continue;
+            };
+            write_plane(fb, vmm, touchable(*op)?, op.addr, &word.to_le_bytes())?;
+        }
     }
     // 2. SIGNAL — only now, and only because every write above returned Ok. The guest's
     //    poll of `pbCpuVA` already sees the values; the interrupt wakes a blocking waiter.
@@ -379,6 +512,19 @@ pub fn write_completion(
     ops: &mut dyn kayfabe_fwd::OperandResolver,
     releases: &[(GpuVa, u64)],
 ) -> Result<usize, FwdFault> {
-    let resolved = resolve_releases(ops, releases)?;
-    write_resolved_completion(fb, vmm, &resolved)
+    // ★ These are host-FIFO / `channel_utils` finishPayload releases, which the citation
+    // above measures as one-word 4-byte writes — so they are built as exactly that, and
+    // `None` for the timestamp source is not a gap: a `OneWord` record has no timestamp
+    // word to fill, and `write_resolved_completion` refuses only if one asks for one.
+    let completions: Vec<CeCompletion> = releases
+        .iter()
+        .map(|&(addr, payload)| CeCompletion {
+            addr,
+            payload,
+            structure: CeSemStructure::OneWord,
+            payload_bytes: 4,
+        })
+        .collect();
+    let resolved = resolve_releases(ops, &completions)?;
+    write_resolved_completion(fb, vmm, &resolved, None)
 }

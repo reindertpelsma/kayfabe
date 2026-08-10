@@ -1159,11 +1159,12 @@ impl PublishedVaRead {
 /// ★★★ **One CE submission's borrowed view of the register plane** — see
 /// [`RegPlane::ce_session`], which is the only way to obtain one.
 ///
-/// It is deliberately three capabilities and no more:
+/// It is deliberately four capabilities and no more:
 /// [`CePlane::resolve`] (the guest's own page-table walk, from the root the guest
 /// published), [`CePlane::fb`] (the emulated framebuffer, which is both where the page
-/// tables live and where a vidmem operand's bytes go) and [`CePlane::root`] (for the
-/// report). ⊘ It exposes **no guest-RAM port**: the executor's guest-RAM side is the
+/// tables live and where a vidmem operand's bytes go), [`CePlane::root`] (for the report)
+/// and [`CePlane::now_ns`] (§16.66 — the counter a timestamped semaphore release is
+/// stamped from). ⊘ It exposes **no guest-RAM port**: the executor's guest-RAM side is the
 /// shell's own `Vmm`, so that a copy's bytes and a completion's bytes cannot travel by two
 /// different descriptions of one memory plane.
 pub struct CePlane<'a> {
@@ -1171,6 +1172,7 @@ pub struct CePlane<'a> {
     chip: &'static ChipProfile,
     root: crate::ceresolve::VasRoot,
     demand: crate::ceresolve::Demand,
+    clock: &'a dyn NanoClock,
 }
 
 impl core::fmt::Debug for CePlane<'_> {
@@ -1209,6 +1211,26 @@ impl CePlane<'_> {
     #[must_use]
     pub fn fb_len(&self) -> u64 {
         self.chip.fb_length
+    }
+
+    /// ★★★ **§16.66 — the nanosecond counter a four-word (timestamped) copy-engine
+    /// semaphore release is stamped from.**
+    ///
+    /// # ⊘ Why this is a capability of the CE session and not a second clock
+    ///
+    /// It is `RegPlane`'s **own** [`NanoClock`] — literally the field
+    /// [`RegPlane::ptimer_read`] answers the guest's `NV_PTIMER_TIME_0/1` reads from. On
+    /// real hardware a `RELEASE_FOUR_WORD_SEMAPHORE` writes the engine's `PTIMER` sample,
+    /// and a guest that reads `PTIMER` itself and subtracts gets an elapsed time. Handing
+    /// this executor a *different* time source — `Instant::now`, a counter of its own, a
+    /// zero — would break exactly that subtraction, and break it into a **plausible wrong
+    /// number** rather than into an error.
+    ///
+    /// ⚠ Being the same clock is the whole property, so it is taken through the same
+    /// object rather than passed in by a caller who could pass another.
+    #[must_use]
+    pub fn now_ns(&self) -> u64 {
+        self.clock.now_ns()
     }
 }
 
@@ -1773,11 +1795,11 @@ impl RegPlane {
             return Err(PublishedVaRead::Unresolved(r));
         };
         match aperture {
-            Aperture::Vidmem => s
-                .fb
-                .read(phys, buf)
-                .map(|()| r)
-                .map_err(|e| PublishedVaRead::Store(e.why)),
+            Aperture::Vidmem => {
+                s.fb.read(phys, buf)
+                    .map(|()| r)
+                    .map_err(|e| PublishedVaRead::Store(e.why))
+            }
             Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => s
                 .ram
                 .read(phys, buf)
@@ -1867,6 +1889,7 @@ impl RegPlane {
             chip: self.chip,
             root: *root,
             demand,
+            clock: self.clock.as_ref(),
         };
         f(&mut ce)
     }
@@ -2948,7 +2971,9 @@ impl RegPlane {
                 // never report progress without saying whose progress it was.
                 match &report {
                     DoorbellReport::ServedLocally { .. } => {
-                        self.c.doorbells_served_locally.fetch_add(1, Ordering::Relaxed);
+                        self.c
+                            .doorbells_served_locally
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                     DoorbellReport::Served { .. } => {
                         self.c
