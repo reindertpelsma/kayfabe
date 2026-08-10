@@ -204,25 +204,91 @@ impl DevDir {
     }
 }
 
-/// One caller buffer whose **address** the kernel will read out of an ioctl argument.
+/// What an [`Indirect`] points at.
+///
+/// ★★ Two variants, and the difference between them is a **lifetime of the pages, not of
+/// the address**. Both have their address minted here and scrubbed after the syscall; the
+/// address never lives longer than one `ioctl` in either case. What differs is what the
+/// driver does with it in the meantime — see [`IndirectTarget::Region`].
+#[derive(Debug)]
+enum IndirectTarget<'a> {
+    /// A caller buffer the driver reads and writes for the duration of the call.
+    ///
+    /// `&mut` because the NVIDIA ABI's indirect payloads are in/out in every case that
+    /// matters (a control's parameter block is written back in place). A read-only payload
+    /// simply comes back unchanged.
+    Buf(&'a mut [u8]),
+    /// ★★★ A **bounded region of this process's own memory, described to the driver so it
+    /// can pin the pages behind it** — `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`'s `pMemory`.
+    ///
+    /// ⚠ The one indirect whose effect outlives the syscall. RM walks the range with
+    /// `pin_user_pages` and holds those pages until the memory object is freed; the
+    /// address is scrubbed like every other, but the *pin* is not undone by unmapping.
+    /// Bounds are checked at construction ([`Indirect::describing`]) **and** again when the
+    /// address is minted, because a `len` past the end of the region is not a bad read of
+    /// our heap — it is the driver pinning whatever this process mapped next.
+    Region {
+        region: &'a crate::MappedRegion,
+        offset: crate::HostOffset,
+        len: u64,
+    },
+}
+
+/// One caller-owned range whose **address** the kernel will read out of an ioctl argument.
 ///
 /// See the module docs: this is how a safe caller expresses *"field at `at` is a pointer
-/// to this buffer"* without an address ever existing on its side of the crate boundary.
-///
-/// The buffer is `&mut` because the NVIDIA ABI's indirect payloads are in/out in every
-/// case that matters (a control's parameter block is written back in place). A read-only
-/// payload simply comes back unchanged.
+/// to this"* without an address ever existing on its side of the crate boundary.
 #[derive(Debug)]
 pub struct Indirect<'a> {
     at: usize,
-    buf: &'a mut [u8],
+    target: IndirectTarget<'a>,
 }
 
 impl<'a> Indirect<'a> {
     /// The pointer field at byte offset `at` of the argument points at `buf`.
     #[must_use]
     pub fn new(at: usize, buf: &'a mut [u8]) -> Self {
-        Indirect { at, buf }
+        Indirect {
+            at,
+            target: IndirectTarget::Buf(buf),
+        }
+    }
+
+    /// ★★★ The pointer field at byte offset `at` of the argument **describes**
+    /// `[offset, offset + len)` of `region` — the shape
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` needs, and the only one that lets a driver pin
+    /// memory this process already owns without an address crossing a crate boundary.
+    ///
+    /// ⚠ Read [`IndirectTarget::Region`] before using this: the pages stay pinned after
+    /// the call returns, and only freeing the RM object releases them.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`], [`RawError::LengthOverflow`], [`RawError::OutOfRange`],
+    /// [`RawError::TooLargeForHost`] — the range is not inside `region`. Refused **here**,
+    /// at construction, so a caller cannot hold an out-of-range description and discover it
+    /// only when the driver has already walked it.
+    pub fn describing(
+        at: usize,
+        region: &'a crate::MappedRegion,
+        offset: crate::HostOffset,
+        len: u64,
+    ) -> Result<Self, RawError> {
+        if len == 0 {
+            return Err(RawError::ZeroLength {
+                what: "descriptor length",
+            });
+        }
+        // Establishes the bound now; `ioctl` re-establishes it when it mints the address,
+        // because a check whose result is carried is a check that can go stale.
+        region.addr_at(offset, len)?;
+        Ok(Indirect {
+            at,
+            target: IndirectTarget::Region {
+                region,
+                offset,
+                len,
+            },
+        })
     }
 
     /// The offset of the pointer field this patch writes.
@@ -231,17 +297,24 @@ impl<'a> Indirect<'a> {
         self.at
     }
 
-    /// How many bytes the pointed-at buffer holds — the value that belongs in the
+    /// How many bytes the pointed-at range holds — the value that belongs in the
     /// argument's companion *size* field, which the caller must set itself.
+    ///
+    /// ⚠ For `NVOS02` that field is `limit` and is this **minus one**; the off-by-one is
+    /// the ABI's and stays the caller's.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.buf.len()
+        match &self.target {
+            IndirectTarget::Buf(b) => b.len(),
+            IndirectTarget::Region { len, .. } => *len as usize,
+        }
     }
 
-    /// True if the pointed-at buffer is empty.
+    /// True if the pointed-at range is empty. A [`Indirect::describing`] range never is —
+    /// zero length is refused at construction.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.buf.is_empty()
+        self.len() == 0
     }
 }
 
@@ -436,16 +509,41 @@ impl CharDevice {
                     });
                 }
             }
+            // ★ A described region's bound is re-established in **this** pass — the one
+            // that runs before any byte of `arg` is touched — so that the patch loop below
+            // cannot fail partway and leave a live address in a caller's buffer with no
+            // scrub to follow it. Every refusal this function has happens before the first
+            // mutation, and that is the property the scrub's unconditionality rests on.
+            if let IndirectTarget::Region {
+                region,
+                offset,
+                len,
+            } = &p.target
+            {
+                region.addr_at(*offset, *len)?;
+            }
         }
 
         for p in indirect.iter_mut() {
-            // SAFETY (of the ADDRESS, not of a dereference): `p.buf` is a live exclusive
-            // borrow for the whole of this function, so the address is valid for
-            // `p.buf.len()` bytes until this call returns; nothing here reallocates or
-            // drops it. Taking the address is itself a safe operation — the reason this
-            // line is in this file at all is §4.2.1's rule about what may CROSS a crate
-            // boundary, and the scrub below is what holds it.
-            let addr = p.buf.as_mut_ptr() as u64;
+            let addr = match &mut p.target {
+                // SAFETY (of the ADDRESS, not of a dereference): the buffer is a live
+                // exclusive borrow for the whole of this function, so the address is valid
+                // for `len()` bytes until this call returns; nothing here reallocates or
+                // drops it. Taking the address is itself a safe operation — the reason this
+                // line is in this file at all is §4.2.1's rule about what may CROSS a crate
+                // boundary, and the scrub below is what holds it.
+                IndirectTarget::Buf(buf) => buf.as_mut_ptr() as u64,
+                // ★ `addr_at` is the same checked accessor `describing` and the pre-pass
+                // above both called, so this `?` cannot fire — it is written as a `?`
+                // rather than an `unwrap` because a check whose failure is unrepresentable
+                // is still a check, and the pre-pass is what makes it unreachable rather
+                // than a comment claiming it is.
+                IndirectTarget::Region {
+                    region,
+                    offset,
+                    len,
+                } => region.addr_at(*offset, *len)?,
+            };
             arg[p.at..p.at + POINTER_FIELD_WIDTH].copy_from_slice(&addr.to_le_bytes());
         }
 
@@ -643,6 +741,103 @@ mod tests {
             })
         );
         assert_eq!(arg, [0u8; 32], "a refused call patches nothing at all");
+    }
+
+    /// ★★★ [`Indirect::describing`] — the region-backed target, and the three properties
+    /// that distinguish it from a buffer-backed one.
+    ///
+    /// The address is the *region's*, not a copy of its bytes; it is scrubbed like every
+    /// other; and a range that does not fit the region is refused **at construction**,
+    /// before any argument buffer exists to hold it.
+    #[test]
+    fn a_described_region_is_patched_and_scrubbed_like_any_other_pointer() {
+        use crate::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
+
+        let page = HostPageSize::query();
+        let region = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            2 * page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("anonymous mapping");
+
+        // The length it reports is the DESCRIBED length, which is what the caller mirrors
+        // into `limit` — not the region's own size.
+        let p = Indirect::describing(0, &region, HostOffset::new(0), page.bytes())
+            .expect("the first page is inside a two-page region");
+        assert_eq!(p.at(), 0);
+        assert_eq!(p.len() as u64, page.bytes());
+        assert!(!p.is_empty());
+        drop(p);
+
+        let d = dev_null();
+        let mut arg = [0u8; 32];
+        let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
+        let mut patch = [Indirect::describing(
+            8,
+            &region,
+            HostOffset::new(page.bytes()),
+            page.bytes(),
+        )
+        .expect("the second page is inside it too")];
+        let r = d.ioctl(req, &mut arg, &mut patch);
+        assert!(r.is_err(), "/dev/null answers ENOTTY");
+        assert_eq!(
+            arg,
+            [0u8; 32],
+            "a region's address survived a FAILED ioctl in the caller's buffer"
+        );
+
+        // ★ Non-vacuity, checked from INSIDE the audited crate — the only place an address
+        // may be observed. Without this the scrub assertion above passes on a buffer that
+        // was never patched.
+        let expect = region
+            .addr_at(HostOffset::new(page.bytes()), page.bytes())
+            .expect("in bounds");
+        assert_ne!(expect, 0, "a live mapping never has a null address");
+        assert_eq!(
+            expect,
+            region.addr_at(HostOffset::new(0), 1).expect("in bounds") + page.bytes(),
+            "the described address is the region's base plus the OFFSET, not the base"
+        );
+    }
+
+    /// ★★ A described range that runs off the end of its region is refused **before** the
+    /// `Indirect` exists — so a caller cannot hold one and discover the problem only when
+    /// the driver has already pinned whatever this process mapped next.
+    #[test]
+    fn a_described_range_past_the_region_is_refused_at_construction() {
+        use crate::{Backing, CachePolicy, HostOffset, HostPageSize, HostProt, MappedRegion};
+
+        let page = HostPageSize::query();
+        let region = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            page.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .expect("anonymous mapping");
+
+        assert!(
+            Indirect::describing(0, &region, HostOffset::new(0), page.bytes() + 1).is_err(),
+            "one byte past the end is still past the end"
+        );
+        assert!(
+            Indirect::describing(0, &region, HostOffset::new(page.bytes()), page.bytes()).is_err(),
+            "a whole page past the end"
+        );
+        // ★ By NAME, not `is_err()`: zero length and out-of-range are different mistakes
+        // and a driver told to pin zero pages does something different from one told to
+        // pin the wrong ones.
+        assert_eq!(
+            Indirect::describing(0, &region, HostOffset::new(0), 0).err(),
+            Some(RawError::ZeroLength {
+                what: "descriptor length",
+            })
+        );
     }
 
     #[test]

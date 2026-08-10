@@ -91,10 +91,11 @@
 use crate::export::ChildExports;
 use kayfabe_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
-    NV01_MEMORY_SYSTEM, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0, NVOS02_FLAGS_LOCATION_PCI,
-    NVOS02_FLAGS_MAPPING_NO_MAP, NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS,
-    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
-    NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
+    NV01_MEMORY_SYSTEM, NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
+    NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
+    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+    Nv2080AllocParameters, NvMemoryVirtualAllocationParams, NvVaspaceAllocationParameters,
+    Nvos02ParametersWithFd, RegisterFd,
 };
 // ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
 // (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_USERMODE_A`, `AMPERE_DMA_COPY_B`) are gone. They
@@ -1476,6 +1477,91 @@ impl RmConnection {
         Ok(h)
     }
 
+    /// ★★★ **R25 — describe memory this process already owns to RM, so the host GPU can
+    /// reach it.** `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over `[offset, offset+len)` of
+    /// `region`.
+    ///
+    /// This is the one primitive that makes *guest* RAM addressable by the host GPU: the
+    /// VMM maps a slice of the guest's `memfd`, the isolate maps the same pages, and this
+    /// call turns that range into an RM memory object that
+    /// [`RmBackend::map_gpu_va`](kayfabe_isolate::RmBackend::map_gpu_va) can then place in
+    /// a host VAS. Everything after it is machinery that already exists.
+    ///
+    /// ## The four things that are easy to get wrong, all measured or sourced
+    ///
+    /// 1. **The address never crosses a crate boundary.** `pMemory` is filled in by
+    ///    [`Indirect::describing`] inside `kayfabe-linux-raw` and scrubbed back to zero
+    ///    before this function can observe it — §4.2.1's rule, and the reason
+    ///    [`Nvos02ParametersWithFd::p_memory`]'s own docs forbid this crate from writing it.
+    /// 2. **The node.** `NV_ESC_RM_ALLOC_MEMORY` is `NV_ACTUAL_DEVICE_ONLY`, so it goes on
+    ///    the per-GPU node exactly as [`RmBackend::alloc_sysmem`](kayfabe_isolate::RmBackend::alloc_sysmem)
+    ///    does. The C found the same thing the same way: *"ctl fd -> EINVAL"*
+    ///    (`C: nvkvm_gpu_emul.c:7530-7532`).
+    /// 3. **`REGISTER_FD` is a prerequisite** — without it RM answers `0x23
+    ///    INVALID_CLIENT` (`C: nvkvm_gpu_emul.c:7503-7509`). ⊘ **Already done, and this is
+    ///    not a port of it:** [`RmConnection::open`]'s R3 binds the GPU node to the control
+    ///    session for the connection's whole life, so by the time any caller reaches here
+    ///    the prerequisite is a structural property of the type rather than a step. Porting
+    ///    the C's lazy `m2_gpu_registered` flag would add a second, weaker copy of an
+    ///    invariant we already hold.
+    /// 4. ★ **`MAPPING_NO_MAP` is required, not an optimisation.** Without it the driver
+    ///    tries to build an `mmap` context around a describe-only allocation and returns
+    ///    `EINVAL` (`C: nvkvm_gpu_emul.c:7519-7524`). The flag word is `0x40001010` and is
+    ///    reassembled here from four named constants, pinned by
+    ///    `nvos02_flags_encode_a_value_into_their_field`.
+    ///
+    /// ⚠ **The pages stay pinned until the object is freed.** Dropping `region` unmaps this
+    /// process's view; it does not release RM's reference. Free the returned handle.
+    fn alloc_os_descriptor(
+        &self,
+        region: &kayfabe_linux_raw::MappedRegion,
+        offset: HostOffset,
+        len: u64,
+    ) -> Result<u32, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let want = self.mint();
+        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            h_root: self.client.raw(),
+            h_object_parent: self.device,
+            h_object_new: want,
+            h_class: NV01_MEMORY_SYSTEM_OS_DESCRIPTOR,
+            flags: NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_COHERENCY_CACHED
+                | NVOS02_FLAGS_MAPPING_NO_MAP,
+            // ★ Left ZERO on purpose. `Indirect` writes the address and scrubs it; a value
+            // here would be overwritten before the syscall and zeroed after it, so the only
+            // effect of setting it would be to make a reader think this crate mints
+            // addresses.
+            p_memory: 0,
+            pad1: 0,
+            // `limit`, not `length` — the ABI's off-by-one, same as `alloc_sysmem`.
+            limit: len - 1,
+            status: 0,
+            fd: -1,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut describe =
+            [
+                Indirect::describing(Nvos02ParametersWithFd::P_MEMORY_OFFSET, region, offset, len)
+                    .map_err(|e| region_error(&e))?,
+            ];
+        self.gpu
+            .ioctl(req, &mut arg, &mut describe)
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.remember(out.h_object_new, self.device);
+        Ok(out.h_object_new)
+    }
+
     fn forget(&self, child: u32) {
         let _leaf = leafwitness::Held::enter();
         self.objects.lock().expect("objects").parents.remove(&child);
@@ -1836,6 +1922,81 @@ pub struct CeEvidence {
     pub submit: SubmitOutcome,
     /// The payload the engine was told to release.
     pub payload: u32,
+}
+
+/// The first word of a whole-buffer compare that did not match.
+///
+/// ★ An *index*, not a count. "17 words differed" and "the first difference is at word 17"
+/// are different facts, and only the second tells you whether a page boundary, a cache
+/// line or the whole buffer is the story.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WordMismatch {
+    /// Index of the first mismatching 32-bit word.
+    pub word: u64,
+    /// What was read there.
+    pub got: u32,
+    /// What was written there before the descriptor was ever allocated.
+    pub want: u32,
+}
+
+/// ★★★ What [`HostRmBackend::prove_os_descriptor`] observed — **shaped so the four
+/// falsifier arms cannot be collapsed into one boolean.**
+///
+/// Each field answers a different question, and the reason they are separate is that a
+/// "did the ioctl succeed?" test scores three of the four failures as a pass:
+///
+/// | field | the question it answers alone |
+/// |---|---|
+/// | (an `Err` from the call) | may a process of this privilege pin its own pages for RM? |
+/// | [`Self::got_va`] vs [`Self::asked_va`] | does address identity extend to described memory? |
+/// | [`Self::submit`] | did the engine actually fetch and retire? |
+/// | [`Self::mismatch`] | are the pages the GPU saw the pages we wrote? |
+#[derive(Debug, Clone, Copy)]
+pub struct OsDescEvidence {
+    /// The GPU VA we asked `DMA_OFFSET_FIXED_TRUE` to place the mapping at.
+    pub asked_va: u64,
+    /// The GPU VA RM reported. Equal to [`Self::asked_va`] or the rung has failed, however
+    /// green everything downstream looks.
+    pub got_va: u64,
+    /// How many bytes were described, mapped and copied.
+    pub bytes: u64,
+    /// The destination's first word **before** the copy — the sentinel. Non-vacuity: it
+    /// says the destination did not already hold the answer.
+    pub before: u32,
+    /// The destination's first word after, through an independent mapping.
+    pub after: u32,
+    /// What `before` was set to.
+    pub sentinel: u32,
+    /// The first word of the destination that is not what we wrote into the memfd, if any.
+    /// `None` means **every** word of [`Self::bytes`] matched.
+    pub mismatch: Option<WordMismatch>,
+    /// The submission's own cursors and release semaphore.
+    pub submit: SubmitOutcome,
+    /// The payload the engine was told to release.
+    pub payload: u32,
+}
+
+impl OsDescEvidence {
+    /// Was the mapping placed **exactly** where it was asked for?
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// Did the whole chain hold: placed as asked, engine retired, and every byte the GPU
+    /// delivered is a byte we wrote?
+    ///
+    /// ★ `before != after` is in the conjunction for R17's reason — bytes that match
+    /// without the destination ever changing would mean the sentinel write, not the copy,
+    /// is what we are reading.
+    #[must_use]
+    pub fn reached(&self) -> bool {
+        self.placed_as_asked()
+            && self.submit.semaphore == self.payload
+            && self.before == self.sentinel
+            && self.after != self.sentinel
+            && self.mismatch.is_none()
+    }
 }
 
 impl CeEvidence {
@@ -3215,6 +3376,181 @@ impl HostRmBackend {
             }
             let _ = self.free(self.stamp(h));
         }
+        out
+    }
+
+    /// ★★★ **R25 — does memory shaped like guest RAM reach the host GPU's MMU?**
+    ///
+    /// The whole chain, once, on real hardware, with every step's failure distinguishable
+    /// from every other step's:
+    ///
+    /// ```text
+    ///   SharedRam::create            a sealed memfd — what a VMM backs guest RAM with
+    ///   Reservation + map_fixed_in   MAP_SHARED into a range we own (the GuestWindow shape)
+    ///   write a per-word pattern     ordinary CPU stores, write-back
+    ///   alloc_os_descriptor          RM pins those pages                        <- arm B
+    ///   raw_map_dma(FIXED, at)       into a host VAS at an address WE choose     <- arm C
+    ///   ce_copy(src = that VA)       a real engine reads it, real semaphore      <- arm ⊘
+    ///   read the destination back    through a mapping opened after the copy
+    /// ```
+    ///
+    /// ## ★★ Why the destination is device-local and not a second descriptor
+    ///
+    /// If both ends were the same kind of memory, a copy that moved nothing but happened to
+    /// find matching bytes would be indistinguishable from one that worked. The destination
+    /// is vidmem, pre-filled with a **sentinel** through its own mapping and read back
+    /// through a second, independent one — R17's discipline, reused because it is the part
+    /// that makes the answer non-vacuous. The bytes arriving in the destination therefore
+    /// travelled: `our CPU store -> memfd page -> RM's pin -> host GPU VAS -> engine ->
+    /// vidmem`, and only the first and last are ours.
+    ///
+    /// ## ⊘ What this CANNOT see, stated here rather than discovered later
+    ///
+    /// The VA is one **we** choose, so nothing here says whether a host GPU walking a host
+    /// VAS built from *guest* VAs would miss — and with fault delivery unbuilt, such a miss
+    /// is a hang inside UVM's replayable-fault loop rather than an error. That is a limit of
+    /// this rung, not a gap in it.
+    ///
+    /// # Errors
+    /// Whatever the memfd, the mapping, the descriptor alloc, the DMA map or the copy
+    /// refuses with. An `Err` from the descriptor alloc is the falsifier's **arm B** and is
+    /// the one a caller must report by its RM status rather than as "R25 failed".
+    pub fn prove_os_descriptor(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        pattern: u32,
+    ) -> Result<OsDescEvidence, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        const WORDS: u64 = BYTES / 4;
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+        let sentinel = !pattern;
+
+        // 1 — the backing a VMM gives guest RAM: a sealed, shareable memfd.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        // 2 — placed inside a reservation, which is the `GuestWindow` shape rather than a
+        // bare `mmap`: the address space is acquired at a kernel-chosen address first and
+        // the backing is `MAP_FIXED` into a hole we demonstrably own.
+        let mut reservation =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed = reservation
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let region = reservation
+            .placement(placed)
+            .map_err(|e| region_error(&e))?;
+
+        // 3 — the pattern, by ordinary CPU stores through a write-back mapping. Per-word so
+        // a copy that moved only a header, or a length truncated to one dword, is visible.
+        let mut image = vec![0u8; BYTES as usize];
+        for i in 0..WORDS as usize {
+            image[4 * i..4 * i + 4].copy_from_slice(&pattern.wrapping_add(i as u32).to_le_bytes());
+        }
+        region
+            .write_from(HostOffset::new(0), &image)
+            .map_err(|e| region_error(&e))?;
+
+        // 4 — arm B. Reported by its own `Err` so a refusal here is never read as a copy
+        // that did not land.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(region, HostOffset::new(0), BYTES)?;
+
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(desc, None), (dst, None)];
+        let mut go = || -> Result<OsDescEvidence, RmError> {
+            // 5 — arm C. `Some(at)` sets `DMA_OFFSET_FIXED_TRUE`; the returned VA is
+            // compared against `at` by the caller, because `Ok` is not placement.
+            let got_va = self.conn.raw_map_dma(range, desc, BYTES, Some(at.0))?;
+            cleanup[0].1 = Some(got_va);
+            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                dst_map
+                    .store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let before = dst_map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            release_fence();
+            drop(dst_map);
+            drop(dst_node);
+
+            // 6 — a real engine, waiting on its own release semaphore. No forged completion.
+            let (submit, payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(got_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                },
+            )?;
+
+            // 7 — read back through a mapping opened AFTER the copy, and compare EVERY
+            // word. ★ The whole-buffer compare is the point of arm ⊘: a coherency or
+            // cache-policy failure is not "the copy did not happen", it is *some* of the
+            // bytes being the ones we wrote. A first-and-last check would score a partial
+            // page as a pass.
+            let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let mut mismatch = None;
+            for i in 0..WORDS {
+                let got = second
+                    .load_u32(HostOffset::new(i * 4))
+                    .map_err(|e| region_error(&e))?;
+                let want = pattern.wrapping_add(i as u32);
+                if got != want {
+                    mismatch = Some(WordMismatch { word: i, got, want });
+                    break;
+                }
+            }
+            let after = second
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            drop(second);
+            drop(node);
+            Ok(OsDescEvidence {
+                asked_va: at.0,
+                got_va,
+                bytes: BYTES,
+                before,
+                after,
+                sentinel,
+                mismatch,
+                submit,
+                payload,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.conn.raw_unmap_dma(range, va);
+            }
+            // ⚠ Freeing the descriptor object is what un-pins the guest-RAM pages. Dropping
+            // `reservation` below only unmaps our own view of them.
+            let _ = self.free(self.stamp(h));
+        }
+        drop(reservation);
+        drop(ram);
         out
     }
 

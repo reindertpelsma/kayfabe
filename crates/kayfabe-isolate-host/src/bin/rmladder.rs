@@ -1228,6 +1228,154 @@ fn ce_pce_mask_probe(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHan
     }
 }
 
+/// ★★★ R25 — **does memory shaped like GUEST RAM reach the host GPU's MMU?**
+///
+/// The rung that decides whether `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` is a **port** or a
+/// **design**, settled before a line of shadow-channel code exists. Host-only: no guest, no
+/// doorbell, no GR, no VM boot. A sealed `memfd` — what a VMM backs guest RAM with — is
+/// placed in a reservation, written with a per-word pattern by ordinary CPU stores,
+/// described to RM, mapped into a host VAS **at an address we choose**, read by a real copy
+/// engine, and compared word for word out the other side.
+///
+/// ## ★★ Why the number is R25 and not R20
+///
+/// ⊘ **R20 is taken.** It is the `NV2081_BINAPI` probe, forty lines up, and R21–R24 are the
+/// four sweeps after it. A rung number is how a bench result is attributed months later;
+/// two rungs sharing one is how a green line gets read as evidence for the wrong thing.
+///
+/// ## The four outcomes, and the fourth is the point
+///
+/// ```text
+///   ok    R25 osdesc      = st=0, placed at 0x…, CE retired, N/N bytes match   -> a PORT
+///   FAIL  R25 osdesc      = alloc refused <RmError>                            -> arm B
+///   FAIL  R25 place       = asked 0x…, got 0x…                                 -> arm C
+///   ??    R25 coherency   = placed, CE retired, MISMATCH at word N             -> arm ⊘
+/// ```
+///
+/// ★ **Arm ⊘ is the cell a "did the ioctl succeed?" test scores GREEN**: permission and
+/// placement fine, but the pages the GPU saw are not the pages we wrote. It is printed with
+/// `??` rather than `FAIL` because it is not a failure of the chain under test — it is a
+/// different subject (cache policy / coherency) arriving through the same door, and
+/// labelling it `FAIL` would send the next reader to re-check the alloc flags.
+///
+/// ## ⊘ What a PASS here does **not** establish
+///
+/// - **Not the cap-dropped case.** This binary runs as whatever invoked it, and on the
+///   bench that is root — so a pass takes `osIsAdministrator()`'s fast path through
+///   `RmValidateMmapRequest` exactly as R16's docs describe. `euid` is printed with the
+///   result for that reason, and the rung is worth running twice.
+/// - **Not a guest VA.** The address is one *we* choose. Whether a host GPU walking a host
+///   VAS built from *guest* VAs would miss is not visible from here, and with fault
+///   delivery unbuilt such a miss is a **hang** inside UVM's replayable-fault loop rather
+///   than an error.
+fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // A plausible guest sysmem VA: above whatever the driver reserves at the bottom of a
+    // fresh `FERMI_VASPACE_A`, 2 MiB-aligned, and deliberately NOT R9's constant — two
+    // rungs sharing an address cannot show that the address was honoured rather than
+    // remembered.
+    const AT: GpuVa = GpuVa(0x3_0040_0000);
+    const PATTERN: u32 = 0x5EED_0001;
+
+    println!(
+        "info  R25 osdesc probe   = GPU {gpu}, euid {} — a sealed memfd, described to RM, \
+         mapped at {:#018x}, read by a real CE",
+        kayfabe_linux_raw::geteuid(),
+        AT.0
+    );
+
+    let vas = match rm.alloc_vaspace() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R25 vaspace        = {e:?} (the rung needs its own address space)");
+            return false;
+        }
+    };
+
+    let verdict = match rm.prove_os_descriptor(vas, AT, PATTERN) {
+        Ok(e) if e.reached() => {
+            println!(
+                "★     R25 osdesc         = placed at {:#018x} AS ASKED, CE retired \
+                 (sem {:#010x}), {} of {} bytes match — guest-RAM-shaped memory reaches \
+                 the host GPU's MMU",
+                e.got_va, e.submit.semaphore, e.bytes, e.bytes
+            );
+            true
+        }
+        // ★ Arm C first, because a mapping that landed somewhere else makes every byte
+        // downstream a statement about a different address.
+        Ok(e) if !e.placed_as_asked() => {
+            println!(
+                "FAIL  R25 place          = asked {:#018x}, RM chose {:#018x} \
+                 (DMA_OFFSET_FIXED_TRUE not honoured for DESCRIBED memory) — address \
+                 identity does not extend to OS_DESCRIPTOR, so shadow-forwarding cannot \
+                 work as designed",
+                e.asked_va, e.got_va
+            );
+            false
+        }
+        Ok(e) if e.submit.semaphore != e.payload => {
+            println!(
+                "FAIL  R25 CE             = placed at {:#018x}, but the engine did not \
+                 retire: sem {:#010x} (want {:#010x}) GP_GET {} GP_PUT {} — {}",
+                e.got_va,
+                e.submit.semaphore,
+                e.payload,
+                e.submit.gp_get,
+                e.submit.gp_put,
+                if e.submit.gp_get == e.submit.gp_put {
+                    "the entry WAS fetched and the methods did nothing"
+                } else {
+                    "the entry was never fetched"
+                }
+            );
+            false
+        }
+        // ⊘ Arm ⊘. Everything the chain is *about* worked; the bytes disagree.
+        Ok(e) => {
+            match e.mismatch {
+                Some(m) => println!(
+                    "??    R25 coherency      = placed at {:#018x} as asked, CE retired \
+                     (sem {:#010x}), but MISMATCH at word {} (byte {}): got {:#010x}, \
+                     want {:#010x} — permission and placement are fine and the pages the \
+                     GPU saw are NOT the pages we wrote. This is cache policy / coherency \
+                     (the C chose COHERENCY_CACHED, `C: nvkvm_gpu_emul.c:7519-7524`), not \
+                     the descriptor.",
+                    e.got_va,
+                    e.submit.semaphore,
+                    m.word,
+                    m.word * 4,
+                    m.got,
+                    m.want
+                ),
+                // Every word matched but `reached()` still said no — the only way left is
+                // the non-vacuity check, i.e. the destination never held the sentinel. That
+                // is an instrument failure, not a result, and it is named as one.
+                None => println!(
+                    "FAIL  R25 instrument     = every word matched but the destination's \
+                     `before` was {:#010x}, not the sentinel {:#010x} — the pre-fill did \
+                     not take, so a match proves nothing and this run is VOID",
+                    e.before, e.sentinel
+                ),
+            }
+            false
+        }
+        // ★ Arm B, and it is the one that redirects everything. Printed with the RM status
+        // by name, because "refused" and "refused with NV_ERR_INSUFFICIENT_PERMISSIONS" are
+        // different findings.
+        Err(e) => {
+            println!(
+                "FAIL  R25 osdesc         = alloc refused {e:?} — a process of this \
+                 privilege may not describe its own pages to RM. If this is euid 0, the \
+                 whole guest-RAM plan needs another route; if it is not, the SANDBOX POLICY \
+                 is the subject and this is a FINDING, not a licence to relax it."
+            );
+            false
+        }
+    };
+    let _ = rm.free(vas);
+    verdict
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -1521,6 +1669,7 @@ fn main() -> std::process::ExitCode {
     let mut want_bus_info = false;
     let mut want_atomics = false;
     let mut want_pce_mask = false;
+    let mut want_osdesc = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -1545,6 +1694,7 @@ fn main() -> std::process::ExitCode {
             "--bus-info-sweep" => want_bus_info = true,
             "--atomics-probe" => want_atomics = true,
             "--pce-mask-probe" => want_pce_mask = true,
+            "--osdesc-probe" => want_osdesc = true,
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -1684,6 +1834,25 @@ fn main() -> std::process::ExitCode {
         binapi_probe(&mut rm, subdevice, &specs);
         println!("done — binapi probe only");
         return std::process::ExitCode::SUCCESS;
+    }
+
+    // ★ R25 runs here and RETURNS, for R18's reason and one more: it allocates its own
+    // `Vas`, its own descriptor and its own copy-engine channel, so a refusal is
+    // attributable to `OS_DESCRIPTOR` and cannot be R13's channel or R9's mapping from
+    // earlier in the ladder. That attribution IS the rung — the question is which of four
+    // named things refused, not whether something did.
+    if want_osdesc {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = osdesc_probe(&mut rm, gpu);
+        println!("done — osdesc probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
 
     // ★ R19 runs here and RETURNS, for R18's reason: it maps and reads, it submits nothing,

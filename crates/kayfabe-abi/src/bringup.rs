@@ -78,6 +78,29 @@ pub use crate::generated::classes::NV20_SUBDEVICE_0;
 /// `NV01_MEMORY_SYSTEM` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl003e.h`.
 pub const NV01_MEMORY_SYSTEM: u32 = 0x003e;
 
+/// ★★★ `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/cl0071.h`.
+///
+/// **"Here is memory I already have; pin it and let the GPU reach it."** Unlike
+/// [`NV01_MEMORY_SYSTEM`], which asks RM to allocate, this class hands RM an address range
+/// the caller owns and RM `pin_user_pages`-walks it. It is how `cuMemHostRegister` works,
+/// and it is the only route by which memory the **VMM** owns — guest RAM — can become an
+/// object the host GPU's MMU can map.
+///
+/// ## ⚠ Two facts that are not in the name
+///
+/// - The `pMemory` address must be routed through
+///   [`kayfabe_linux_raw::Indirect::describing`]; nothing in this crate may fill the field
+///   in, and [`Nvos02ParametersWithFd::p_memory`] says so.
+/// - ★ **This class is on [`crate::capability::DENIED_CLASSES`]**, refused by name with
+///   [`crate::capability::DeniedBecause::CallerMemoryDescriptor`]. That refusal is about
+///   the **guest** asking for it — honouring a guest-issued `OS_DESCRIPTOR` would hand the
+///   host driver a guest-chosen pointer. The isolate issuing one over a range **it** owns
+///   is the opposite direction and is not what that row denies. The two must not be
+///   conflated, and a future edit that "unblocks" the class for the guest because the host
+///   path needs it would delete the boundary rather than cross it.
+pub const NV01_MEMORY_SYSTEM_OS_DESCRIPTOR: u32 = 0x0071;
+
 /// `NV01_MEMORY_VIRTUAL` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl0070.h:32`.
 ///
 /// ★★ **The object `NV_ESC_RM_MAP_MEMORY_DMA`'s `hDma` field actually names**, and the one
@@ -409,6 +432,14 @@ impl Nvos02ParametersWithFd {
     pub const SIZE: usize = 56;
     /// `alignof`.
     pub const ALIGN: usize = 8;
+    /// ★ Byte offset of [`Self::p_memory`] — the argument's one pointer field, and the
+    /// number a [`kayfabe_linux_raw::Indirect`] needs.
+    ///
+    /// A named constant rather than a literal at the call site because the only consumer is
+    /// an `Indirect`, whose whole job is to write eight bytes at an offset: a wrong offset
+    /// there does not fail to compile, it patches an address over `flags` or `limit` and the
+    /// driver refuses with something that names neither.
+    pub const P_MEMORY_OFFSET: usize = 24;
 
     /// Decode from a little-endian image of at least [`Self::SIZE`] bytes.
     ///
@@ -485,6 +516,22 @@ pub const NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS: u32 = 1 << 4;
 /// frontend building an `mmap` context around the descriptor field
 /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:342-345`).
 pub const NVOS02_FLAGS_MAPPING_NO_MAP: u32 = 1 << 30;
+
+/// ★★ `NVOS02_FLAGS_COHERENCY_CACHED` — field `15:12`, value 1
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:196-198`), i.e. `0x1000`.
+///
+/// The coherency the GPU is told to assume for memory the CPU also writes. **Cached** is
+/// the one that makes a plain store from this process visible to a snooped PCIe read
+/// without an explicit flush, which is the whole reason
+/// [`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`] is worth having: the isolate writes the bytes
+/// with an ordinary `mov` and the engine reads them.
+///
+/// ⚠ **The field has six values and `_CACHED` (1) is not `_WRITE_BACK` (5).** They are
+/// different rows of the same enum and both are plausible names for "the normal one".
+/// The C's proven call sends `0x1000` — value 1 — captured from a real host CUDA
+/// `cuMemHostAlloc` on 580.159.04 (`C: nvkvm_gpu_emul.c:7519-7524`, flags `0x40001010`),
+/// so this is the value hardware has actually accepted and not the one the name suggests.
+pub const NVOS02_FLAGS_COHERENCY_CACHED: u32 = 1 << 12;
 
 /// ★★★ `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` — field `15:15`, value 1
 /// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2094-2096`), i.e. `0x8000`.
@@ -589,6 +636,31 @@ mod tests {
         assert_eq!(Nvos02ParametersWithFd::decode(&bytes).expect("decode"), p);
     }
 
+    /// ★★ [`Nvos02ParametersWithFd::P_MEMORY_OFFSET`] names the field an `Indirect`
+    /// patches, and the way to check it is to **encode a marker and find it there** —
+    /// not to compare the constant with the literal `24` it was written from, which is
+    /// the same reading twice.
+    #[test]
+    fn the_pointer_field_offset_is_where_the_encoder_puts_p_memory() {
+        const MARKER: u64 = 0x0BAD_C0DE_DEAD_BEEF;
+        let mut bytes = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            p_memory: MARKER,
+            ..Default::default()
+        }
+        .encode_into(&mut bytes)
+        .expect("encode");
+        let at = Nvos02ParametersWithFd::P_MEMORY_OFFSET;
+        assert_eq!(
+            u64::from_le_bytes(bytes[at..at + 8].try_into().expect("eight bytes")),
+            MARKER,
+            "an `Indirect` writing at P_MEMORY_OFFSET must land on `pMemory`"
+        );
+        // And the offset is inside the struct with a whole pointer's room after it, which
+        // is the bound `CharDevice::ioctl` checks the patch against.
+        assert!(at + 8 <= Nvos02ParametersWithFd::SIZE);
+    }
+
     /// The padding is not written, so a caller that put something there keeps it — the
     /// same rule the generated `encode_into` follows.
     #[test]
@@ -676,6 +748,21 @@ mod tests {
             | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
             | NVOS02_FLAGS_MAPPING_NO_MAP;
         assert_eq!(all, 0x4000_0010);
+        // COHERENCY is 15:12, CACHED is value 1 — and it is value 1, NOT the `_WRITE_BACK`
+        // row (5) whose name reads like the same thing.
+        assert_eq!((NVOS02_FLAGS_COHERENCY_CACHED >> 12) & 0xF, 1);
+        assert_eq!(NVOS02_FLAGS_COHERENCY_CACHED & !0xF000, 0, "no spill");
+        // ★ The exact word the C sends and a real 580.159.04 accepted, reassembled from
+        // this crate's four constants. A constant that drifts into the wrong field breaks
+        // this equality rather than surfacing as `NV_ERR_INVALID_FLAGS` on hardware.
+        assert_eq!(
+            NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_COHERENCY_CACHED
+                | NVOS02_FLAGS_MAPPING_NO_MAP,
+            0x4000_1010,
+            "C: nvkvm_gpu_emul.c:7519-7524"
+        );
     }
 
     /// The two escape spaces really are disjoint numbering schemes over one magic — the

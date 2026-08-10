@@ -495,6 +495,37 @@ impl MappedRegion {
         RegionView::new(self, offset, len)
     }
 
+    /// ★★★ The host address of `[offset, offset + len)`, as the integer a **driver that
+    /// pins the caller's own pages** must be handed — bounds-checked here, where the
+    /// object that owns the range is.
+    ///
+    /// ★ `pub(crate)`, and that is refusal 3 of §4.2.1 holding, by exactly the precedent
+    /// [`crate::GuestWindow::userspace_addr_at`] set for KVM memslots: the address is
+    /// computed in the file that owns the mapping, its only consumer is
+    /// [`crate::Indirect`] one file over, and it is patched into an ioctl argument and
+    /// **scrubbed back out** before that argument is visible to the caller again. No
+    /// representation of it crosses the crate boundary.
+    ///
+    /// ## ⚠ Why this exists, stated as the hazard rather than the feature
+    ///
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` describes memory the caller already has, by
+    /// address, and the driver `pin_user_pages`-walks that range. So unlike every other
+    /// pointer field in the NVIDIA ABI, the pages behind this one **outlive the syscall**:
+    /// RM holds a reference to them until the object is freed. The address itself does not
+    /// — it is scrubbed with all the others — but a caller must understand that unmapping
+    /// the region does not un-pin the pages, and freeing the RM object is what does.
+    ///
+    /// The bounds check is therefore load-bearing in a way the others are not: a `len`
+    /// past the end of the mapping is not a read of our own heap, it is the **driver**
+    /// pinning whatever this process happens to have mapped next.
+    pub(crate) fn addr_at(&self, offset: HostOffset, len: u64) -> Result<u64, RawError> {
+        let (start, _) =
+            bounds::checked_span(self.map.len_bytes(), offset, len, "descriptor length")?;
+        // Address arithmetic, not a dereference: the sum is in bounds of the mapping by
+        // the check above, and it is handed to the driver rather than to a load.
+        Ok(self.map.base.as_ptr() as u64 + start as u64)
+    }
+
     /// Is this region writable? Used by [`RegionView`] so a view cannot smuggle a write
     /// past the read-only check.
     pub(crate) fn is_writable(&self) -> bool {
