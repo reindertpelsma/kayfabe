@@ -4,7 +4,7 @@
 //! reading:
 //!
 //! > **Exactly one function in the tree observes a real host GPU completion —
-//! > `HostRmBackend::await_semaphore`, `crates/kayfabe-isolate-host/src/rm.rs:2897-2915` —
+//! > `HostRmBackend::await_semaphore`, `crates/kayfabe-isolate-host/src/rm.rs:3260-3279` —
 //! > and it is unreachable from any guest action in any build.**
 //!
 //! ⊘ **This file does NOT test `await_semaphore`.** That function is correct and is
@@ -24,7 +24,7 @@
 //!
 //! 1. **Reachability.** A guest doorbell on a channel whose GPFIFO ring carries one
 //!    `LAUNCH_DMA` must reach `RmBackend::ce_copy`, whose body *is* the observer
-//!    (`ce_copy_outcome` → `await_semaphore`, `rm.rs:2977, 2897`). Asserting on the verb
+//!    (`ce_copy_outcome` → `await_semaphore`, `rm.rs:3293, 3260`). Asserting on the verb
 //!    the backend was asked for is the only thing that distinguishes *"the observer ran"*
 //!    from *"a doorbell was rung at a host channel into which the guest's methods were
 //!    never copied"* — which is what `SERVED` means today (§15.5 check 3).
@@ -34,7 +34,7 @@
 //!    still be the forged completion `mode2_real_forward_not_fake` forbids. So arm 2 arms
 //!    the backend to fail the copy — standing in for the one negative
 //!    `await_semaphore` can produce, `semaphore != payload` ⇒
-//!    `RmError::Other(CE_NEVER_RETIRED)` (`rm.rs:2367-2372`) — and requires the guest's
+//!    `RmError::Other(CE_NEVER_RETIRED)` (`rm.rs:2653-2657`) — and requires the guest's
 //!    doorbell to **refuse**. A `Served` in that arm is a guest told its copy landed when
 //!    the engine never released.
 //!
@@ -109,6 +109,20 @@ const GPFIFO_GPA: u64 = 0x5100_0000;
 /// the address space it is named in can never be attributed to different channels
 /// (`kayfabe-core/src/rmgraph.rs:490-503`).
 fn guest() -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
+    guest_with_gpfifo_binding(true)
+}
+
+/// [`guest`], with the guest's mapping of its **own GPFIFO ring** made optional.
+///
+/// ★★★★ **§16.70 — the arm that produces a `Served` doorbell which forwards NOTHING.**
+/// `bind_gpfifo = false` leaves everything else identical: the channel still *declares*
+/// `gpFifoOffset`/`gpFifoEntries`, the bytes are still in guest RAM, both operands are still
+/// published, and the channel is still scheduled. The single difference is that this port's
+/// forward-populated address table holds no binding for the ring's own VA — which is the
+/// state a real GSP-managed channel can be in, because its ring is mapped on a transport
+/// the table never sees (`mode2_address_table.md`; the shell's CPU executor descends the
+/// guest's published page tables instead, `SharedDoorbell::try_ce_submission`).
+fn guest_with_gpfifo_binding(bind_gpfifo: bool) -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
@@ -204,14 +218,16 @@ fn guest() -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
     bind_ring(&mut gpu, pid, cid, &ring);
     vmm.gpa_write(GPFIFO_GPA, &ring)
         .expect("the ring is written into guest RAM");
-    bind_ring_at(
-        &mut gpu,
-        pid,
-        cid,
-        pb_va(GPFIFO_GPA),
-        GPFIFO_GPA,
-        ring.len() as u64,
-    );
+    if bind_gpfifo {
+        bind_ring_at(
+            &mut gpu,
+            pid,
+            cid,
+            pb_va(GPFIFO_GPA),
+            GPFIFO_GPA,
+            ring.len() as u64,
+        );
+    }
 
     // ★ #177 — the guest schedules before it rings. This file's subject is what happens
     // after that, not the scheduling gate.
@@ -348,7 +364,7 @@ fn a_second_doorbell_over_an_unchanged_ring_forwards_nothing() {
 ///
 /// `await_semaphore` returns three facts and `ce_copy` turns exactly one of them into a
 /// verdict: `semaphore != payload` after `CE_COPY_TIMEOUT` ⇒
-/// `RmError::Other(CE_NEVER_RETIRED)` (`kayfabe-isolate-host/src/rm.rs:2367-2372`). This
+/// `RmError::Other(CE_NEVER_RETIRED)` (`kayfabe-isolate-host/src/rm.rs:2653-2657`). This
 /// arm arms the mock backend with that same error and requires the guest's doorbell to
 /// carry it out as a **refusal**.
 ///
@@ -384,5 +400,74 @@ fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
         "★ the refusal must be the OBSERVER's, by name — an upstream refusal (an unrouted \
          token, the #177 schedule gate, a dead isolate) would also make `is_err()` true \
          while the copy was never issued at all"
+    );
+}
+
+/// ★★★★ **§16.70 — A `Served` DOORBELL THAT FORWARDED NOTHING SAYS SO, BY NAME.**
+///
+/// `[measured 2026-08-10, boot `p2_29e7c25_planereal`]` three guest doorbells were reported
+/// `3 forwarded (host channel rung)` and the guest's copy-engine scrubber died on
+/// `lastCompletedPayload == lastSubmittedPayload`. `execution_plane_increments.md` §16.69.5
+/// records that the evidence could not separate two stories — *the GPU ran the work and we
+/// lost the completion* versus *the channel was rung with nothing in it* — because
+/// `forwarded` counts the doorbells the **port** rang and has never counted work.
+///
+/// This is the second story, constructed: everything about the guest is unchanged except
+/// that this port's address table holds no binding for the ring's own VA. The doorbell is
+/// still **`Ok`** (that is correct — a channel whose ring we cannot read is not a channel to
+/// refuse traffic on at this rung), the backend is asked for **nothing**, and
+/// [`kayfabe_fwd::read_gpfifo_ring`] names the reason `RING-VA-UNBOUND` instead of returning
+/// the bare `None` that made all six of its absences one silence.
+///
+/// ⊘ **The naming is the subject, not the counting.** `copies(&rec).is_empty()` is also true
+/// of `a_second_doorbell_over_an_unchanged_ring_forwards_nothing`, of a ring that decodes to
+/// no CE span, and of four other absences — so an assertion on the count alone would pass
+/// for a completely different reason and prove nothing about which one happened. That is the
+/// §16.69.5 defect one layer down, and asserting on the variant is what closes it.
+#[test]
+fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
+    let (gpu, mut vmm, rec, pid, cid) = guest_with_gpfifo_binding(false);
+
+    // ★ THE NAMED ABSENCE, read off the production function rather than off a print.
+    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm)
+        .expect("an unbound ring VA is an absence, never a fault");
+    assert_eq!(
+        look,
+        kayfabe_fwd::RingLook::RingVaUnbound {
+            va: pb_va(GPFIFO_GPA).0
+        },
+        "★★★ Six different facts used to answer `Ok(None)` here, and §16.69's boot could \
+         not say which of them made `3 forwarded` mean nothing. An absence with no name is \
+         not a measurement. Got {look:?}"
+    );
+
+    // ★ And the doorbell over it: SERVED, with nothing forwarded.
+    let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
+    dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
+        .expect("a doorbell whose ring this port cannot read is still served at this rung");
+    assert!(
+        copies(&rec).is_empty(),
+        "★ the second story, whole: the port reports the doorbell SERVED and the only \
+         function that observes a host completion was asked for nothing. Saw {:?}",
+        copies(&rec)
+    );
+}
+
+/// ★★★ **The POSITIVE control for the arm above** — the same fixture with the ring bound
+/// answers [`kayfabe_fwd::RingLook::Ring`], and the copy is forwarded.
+///
+/// ⊘ Without this, `RingVaUnbound` above could be the fixture never mapping anything, and
+/// the test would assert a property of the harness rather than of the binding. `[refuted
+/// 2026-08-10]` §16.69.1(3) is exactly this failure at a boot's scale: a `0 forwarded`
+/// over-determined by two independent impossibilities, cited as evidence for one of them.
+#[test]
+fn the_same_fixture_with_the_ring_bound_reads_it() {
+    let (gpu, mut vmm, _rec, pid, cid) = guest_with_gpfifo_binding(true);
+    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm)
+        .expect("the bound ring reads");
+    assert!(
+        matches!(look, kayfabe_fwd::RingLook::Ring(ref b) if !b.is_empty()),
+        "★ the control must reach the ring, or the negative above proves nothing. Got {}",
+        look.tag()
     );
 }

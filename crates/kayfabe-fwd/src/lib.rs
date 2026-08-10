@@ -3034,6 +3034,75 @@ pub fn gpfifo_live_entries(pb: &dyn kayfabe_arch::PushbufferAbi, ring: &[u8]) ->
 /// small enough that a ring declared at 4 GiB is a bounded read rather than an allocation.
 pub const MAX_GPFIFO_RING_BYTES: usize = 64 * 1024;
 
+/// ★★★★ **What [`read_gpfifo_ring`] found — the ring, or the NAMED reason there is none.**
+///
+/// # ⊘ Why this is an enum and not an `Option`
+///
+/// `[measured 2026-08-10, boot `p2_29e7c25_planereal`]` three guest doorbells were reported
+/// `SERVED … forwarded (host channel rung)` and the guest's copy-engine scrubber then died
+/// on `lastCompletedPayload == lastSubmittedPayload`. `execution_plane_increments.md`
+/// §16.69.5 records the two stories that evidence could not separate: *the GPU ran the work
+/// and we lost the completion*, or *the channel was rung with nothing in it*. This function
+/// is where the second story is decided — it had **six** distinct `Ok(None)` arms, every one
+/// of which makes [`crate::DoorbellOutcome`] report `Served` with **zero bytes forwarded** —
+/// and an `Option` collapsed all six into the same silence as "the ring was read and was
+/// empty".
+///
+/// ⊘ **An absence with no name is not a measurement.** Each variant below is a different
+/// fact about the guest or about our own address plane, and they are not interchangeable:
+/// `NoAddressSpace` is a channel `kayfabe_rt::ceutils` owns, while `RingVaUnbound` is our
+/// table failing to hold a mapping the guest is actively using.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RingLook {
+    /// The mapped prefix of the ring, as bytes. Never empty.
+    Ring(Vec<u8>),
+    /// The channel's resource has no node in the RM graph — nothing was ever declared.
+    NoChannelNode,
+    /// The node exists and declares no `gpFifoOffset`/`gpFifoEntries` at all.
+    NoRingDeclared,
+    /// A ring was declared, and declared **empty** — `gpFifoOffset = 0` or zero entries.
+    /// The golden-context channel does this on purpose (`ogkm-580: kernel_graphics.c:2420`).
+    RingDeclaredEmpty {
+        /// `gpFifoOffset`, as declared.
+        va: u64,
+        /// `gpFifoEntries`, as declared.
+        entries: u32,
+    },
+    /// The channel has no address space (`vas_pdb == None`), so this table is not the one
+    /// its ring lives in. ⊘ Not a fault: the shell's CPU copy-engine path owns it.
+    NoAddressSpace,
+    /// ★★★ The ring's own VA is **not bound** in the channel's address table. The guest is
+    /// submitting through a mapping our forward-populated table never witnessed.
+    RingVaUnbound {
+        /// The declared `gpFifoOffset` that resolved to nothing.
+        va: u64,
+    },
+    /// The VA is bound, but the binding ends at or before it — zero readable bytes.
+    RingMappedZero {
+        /// The declared `gpFifoOffset`.
+        va: u64,
+    },
+}
+
+impl RingLook {
+    /// A short, stable tag naming this outcome, for a diagnostic line.
+    ///
+    /// ★ The tag is the *variant*, never a derived judgement: a reader must be able to tell
+    /// which of the six absences happened without the printer having decided what it means.
+    #[must_use]
+    pub fn tag(&self) -> &'static str {
+        match self {
+            RingLook::Ring(_) => "RING",
+            RingLook::NoChannelNode => "NO-CHANNEL-NODE",
+            RingLook::NoRingDeclared => "NO-RING-DECLARED",
+            RingLook::RingDeclaredEmpty { .. } => "RING-DECLARED-EMPTY",
+            RingLook::NoAddressSpace => "NO-ADDRESS-SPACE",
+            RingLook::RingVaUnbound { .. } => "RING-VA-UNBOUND",
+            RingLook::RingMappedZero { .. } => "RING-MAPPED-ZERO",
+        }
+    }
+}
+
 /// ★★★ **Read channel `cid`'s own GPFIFO ring out of guest memory**, through that
 /// channel's own address table.
 ///
@@ -3044,10 +3113,11 @@ pub const MAX_GPFIFO_RING_BYTES: usize = 64 * 1024;
 /// guest's methods were never copied"* — and prescribes the order this closes:
 /// **wire the ring first, complete second.**
 ///
-/// # ⊘ `Ok(None)` is a real answer, and it is the common one
+/// # ⊘ A NAMED absence is a real answer, and it is the common one
 ///
-/// Three shapes answer `None` rather than faulting, each because the *guest* said
-/// something rather than because we could not:
+/// Six shapes answer a [`RingLook`] absence rather than faulting, each because the *guest*
+/// said something rather than because we could not. ⚠ They used to be one `Ok(None)`, which
+/// is why §16.69's boot could not say which of them made `3 forwarded` mean nothing:
 ///
 /// 1. **The channel declares no ring at all** (`AllocFacts::gp_fifo_ring == None`), or
 ///    declares `gpFifoOffset = 0` with zero entries — which a real driver does on purpose
@@ -3073,7 +3143,7 @@ pub fn read_gpfifo_ring(
     proc: &Proc,
     cid: ChanId,
     vmm: &mut dyn Vmm,
-) -> Result<Option<Vec<u8>>, FwdFault> {
+) -> Result<RingLook, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
@@ -3081,17 +3151,20 @@ pub fn read_gpfifo_ring(
     let cgpu = chan.gpu;
     // (1) Nothing declared, or declared empty — see the doc's shape 1.
     let Some(node) = spine.rmgraph.node_of_resource(chan.key) else {
-        return Ok(None);
+        return Ok(RingLook::NoChannelNode);
     };
     let Some(ring) = node.facts.gp_fifo_ring else {
-        return Ok(None);
+        return Ok(RingLook::NoRingDeclared);
     };
     if ring.va == 0 || ring.entries == 0 {
-        return Ok(None);
+        return Ok(RingLook::RingDeclaredEmpty {
+            va: ring.va,
+            entries: ring.entries,
+        });
     }
     // (2) No table to read it in. ⊘ Not a fault: `ceutils` owns this channel's ring.
     let Some(pdb) = chan.vas_pdb else {
-        return Ok(None);
+        return Ok(RingLook::NoAddressSpace);
     };
     let table = &proc
         .vases
@@ -3104,14 +3177,14 @@ pub fn read_gpfifo_ring(
     // mapped would fault on a range the guest never claimed held entries.
     let base = GpuVa(ring.va);
     let Some((start, b_len, _)) = table.binding_at(base) else {
-        return Ok(None);
+        return Ok(RingLook::RingVaUnbound { va: ring.va });
     };
     let mapped = b_len.saturating_sub(base.0 - start);
     let len = usize::try_from(mapped)
         .unwrap_or(MAX_GPFIFO_RING_BYTES)
         .min(MAX_GPFIFO_RING_BYTES);
     if len == 0 {
-        return Ok(None);
+        return Ok(RingLook::RingMappedZero { va: ring.va });
     }
     let r = PushRange {
         va: base,
@@ -3121,7 +3194,7 @@ pub fn read_gpfifo_ring(
     for (gpa, at, take) in push_range_gpas(table, pdb, &r, len)? {
         guest_read(vmm, gpa, &mut buf[at..at + take])?;
     }
-    Ok(Some(buf))
+    Ok(RingLook::Ring(buf))
 }
 
 /// Translate one [`PushRange`]'s first `len` bytes into the guest-physical runs they

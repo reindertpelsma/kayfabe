@@ -2589,13 +2589,67 @@ impl RmBackend for HostRmBackend {
         // "the engine never fetched the entry" from "it fetched it and released nothing",
         // and those two have completely different causes. So the body is one level down
         // and this is the port's projection of it.
-        let (outcome, payload) = self.ce_copy_outcome(vas, sub)?;
+        //
+        // ★★★★ **§16.70 — R26's TWO-FACT BAR, one plane over, PRINTED.** R26 settled that a
+        // submission is believed on two facts — the placement RM reports back, and `GP_GET`
+        // moving — and that `Ok(())` from the call under test is not one of them. The same
+        // bar applies here and had no instrument: `[measured 2026-08-10, boot
+        // p2_29e7c25_planereal]` three guest doorbells reported `forwarded (host channel
+        // rung)` and the guest's scrubber died waiting for a completion, with **neither**
+        // `GP_GET` nor the release semaphore read back anywhere a boot log could hold them.
+        // [`SubmitOutcome`] has carried both since it existed; [`HostRmBackend::ce_witness`]
+        // is the in-process recorder for them and has **zero production callers** (only
+        // `tests/tests/e6_hw_join.rs`), so on a boot the two facts were computed and thrown
+        // away.
+        //
+        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
+        // `scripts/bench/boot_nvkvm.sh` redirects to `run_<tag>_qemu.log`. So the line lands
+        // in the boot's own on-disk evidence rather than in a session transcript — the trap
+        // `CLAUDE.md` records for the guest's `dmesg`, avoided by construction.
+        //
+        // ★ Printed on the REFUSAL path too, and before the verdict, for
+        // [`HostRmBackend::ce_witness`]'s own stated reason: a diagnostic that only speaks
+        // when the submission got as far as hardware is silent on exactly the outcomes it is
+        // run to see — `CeExecutor::Ours` and `CeSource::Constant` are both refused by
+        // `ce_copy_outcome` *before* any ring store, and a scrubber's fill is a
+        // `CeSource::Constant`.
+        let result = self.ce_copy_outcome(vas, sub);
+        let (outcome, payload) = match result {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!(
+                    "kayfabe-isolate: CE-SUBMIT dst={:#x} len={} by={:?} src={:?} → REFUSED \
+                     BEFORE SUBMISSION {e:?} (no ring store, no doorbell, no semaphore)",
+                    sub.dst, sub.len, sub.by, sub.src,
+                );
+                return Err(e);
+            }
+        };
         // ★★★ E6 — recorded BEFORE the verdict, and unconditionally: the interesting case
         // is the one where the copy did **not** retire, and a witness that only recorded
         // successes would be blind to exactly the outcome a diagnostic is run to see.
         if let Some(w) = &self.ce_witness {
             w.record(outcome, payload);
         }
+        // ⊘ `gp_get` and `gp_put` are printed as the PAIR they are: `gp_get == gp_put` means
+        // the engine fetched everything we published, `gp_get == 0` with `gp_put == 1` means
+        // it fetched nothing at all, and one of those numbers alone cannot say either.
+        eprintln!(
+            "kayfabe-isolate: CE-SUBMIT dst={:#x} len={} by={:?} gp_get={} gp_put={} \
+             sem={:#010x} want={:#010x} → {}",
+            sub.dst,
+            sub.len,
+            sub.by,
+            outcome.gp_get,
+            outcome.gp_put,
+            outcome.semaphore,
+            payload,
+            if outcome.semaphore == payload {
+                "RETIRED"
+            } else {
+                "NEVER-RETIRED"
+            },
+        );
         if outcome.semaphore == payload {
             Ok(())
         } else {

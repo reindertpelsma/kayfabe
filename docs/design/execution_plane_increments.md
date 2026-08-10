@@ -13167,3 +13167,119 @@ engine **object**, which is why 2 binds against 14 channels was never a problem.
   at all**, so no CUDA kernel launch is among them. The instrument owed is a per-refusal
   pushbuffer dump rather than a single latched first, the same gap §16.66.5 recorded for the
   served side.
+
+---
+
+## §16.70 ★★★★★ `w205` — R26's TWO-FACT BAR, ported to the forwarded doorbell: `GP_GET` and the release semaphore, or the arm that forwarded nothing, BY NAME
+
+### 16.70.1 ⊘ WHAT I REFUTED BEFORE WRITING A LINE — four citations of the brief, and one of its arms
+
+1. ⊘ **`await_semaphore` is not at `rm.rs:2897`.** It is at
+   `crates/kayfabe-isolate-host/src/rm.rs:3260-3279`, and `ce_copy_outcome` — cited as `:2977` —
+   is at `:3293`. The brief's *substance* holds exactly: it polls a real GPU-written semaphore
+   against a bounded deadline and returns **three** facts (`SubmitOutcome { semaphore, gp_get,
+   gp_put }`) rather than conflating "never woken" with "never landed". Three files carried the
+   stale numbers (`kayfabe-rt/src/device.rs`, and two in
+   `tests/tests/doorbell_reaches_the_completion_observer.rs`); all three are corrected here, along
+   with a fourth — the `semaphore != payload` verdict cited as `rm.rs:2367-2372`, now `:2653-2657`.
+
+2. ⊘⊘ **"If the forwarded path does not consult `await_semaphore`, that is likely the whole
+   defect" — REFUTED BY THE TREE. It consults it, and it obeys the verdict.** The chain is
+   unbroken and every link is production code: `SharedDoorbell::ring` (`shim.rs`) →
+   `SharedDevice::doorbell` → `forward_ring` → `parse_pushbuffer` → `forward_ce` → `plan_ce` →
+   `Worker::execute`'s `VerbPlan::CeSplit` arm (`kayfabe-isolate/src/lib.rs:1917-1932`) →
+   `RmBackend::ce_copy` → `ce_copy_outcome` → `await_semaphore`. And `HostRmBackend::ce_copy`
+   ends `if outcome.semaphore == payload { Ok(()) } else { Err(RmError::Other(CE_NEVER_RETIRED)) }`.
+
+3. ★★★★ **⇒ AND THAT DEDUCTION KILLS ONE OF THE BRIEF'S OWN FALSIFIER ARMS, from evidence
+   ALREADY COMMITTED.** Every `?` between `ce_copy` and the shim is direct — no arm catches an
+   `RmError` and converts it to a success — and `SharedDoorbell::ring` turns any `Err` from
+   `SharedDevice::doorbell` into `DoorbellReport::Refused`. `p2` measured **`3 arrived, 3 served,
+   0 REFUSED`**. ⇒ **Arm B ("`GP_GET` advanced, the semaphore never reached its payload") could
+   not have produced `p2`'s numbers**: it would have shown as 3 refusals carrying
+   `Other(0x4b4b)`. The same argument disposes of two more shapes: `ce_copy_outcome` refuses
+   `CeExecutor::Ours` and `CeSource::Constant` with `NOT_ON_THIS_RUNG` **before** any ring store,
+   and both of those are refusals too. ⊘ So the live hypotheses were never three; they were
+   **A or C**, and C did not need a new hardware read to be reachable — it needed the *parent* to
+   say which of its eight silent success paths it took.
+
+4. ⊘ **"`3 forwarded` counts doorbells the PORT rang" is right, and the brief still under-counts
+   the ways.** `SharedDevice::forward_ring` has **eight** distinct paths to `Ok(())`, and on every
+   one of them the doorbell is reported `Served`: six inside `read_gpfifo_ring` (no channel node;
+   no ring declared; a ring declared empty; no address space; the ring's VA unbound in the
+   channel's table; a binding of zero length), plus the cursor-past-end arm, plus a ring that
+   parses to an empty `ce_spans`. All eight answered `Ok(None)` or `Ok(())` and were therefore
+   **one silence**. ⇒ ★ *An absence with no name is not a measurement* — this campaign's fifth
+   limit (`CLAUDE.md`: `dlen=0` is *unmeasured*, never *empty*) reproduced inside our own code.
+
+5. ⊘ **`CeWitness` exists, records both facts unconditionally and before the verdict, and has
+   ZERO production callers.** `with_ce_witness` is called from exactly one place in the tree,
+   `tests/tests/e6_hw_join.rs:164`. So on a boot the two facts were computed by
+   `await_semaphore` and thrown away one frame later. ⇒ The instrument owed was never a *new*
+   measurement; it was a *channel* for one that already existed.
+
+6. ⊘ **The brief's "read back the host channel's `GP_GET`" is not a parent-side act.**
+   `SubmitOutcome` is produced inside the **isolate child process**; the wire
+   (`kayfabe-isolate-host/src/proto.rs`) answers a `Request::CeCopy` with `Reply::Unit` or
+   `Reply::Failed`, so neither number has a wire form. The child's stderr, however, **is** QEMU's
+   stderr — `SandboxChild::spawn` places grants at fd ≥ 3 and closes only above the highest grant,
+   and `boot_nvkvm.sh` redirects QEMU `> "${LOG}_qemu.log" 2>&1`. ⇒ Printing at the source lands
+   the facts in the boot's own on-disk evidence with **no ABI change**, which is also the
+   `CLAUDE.md` dmesg trap avoided by construction rather than by discipline.
+
+### 16.70.2 THE INCREMENT — one named enum, two lines, and a test that cannot pass for the wrong reason
+
+- ★ `kayfabe_fwd::RingLook` replaces `read_gpfifo_ring`'s `Option<Vec<u8>>`: `Ring`,
+  `NoChannelNode`, `NoRingDeclared`, `RingDeclaredEmpty { va, entries }`, `NoAddressSpace`,
+  `RingVaUnbound { va }`, `RingMappedZero { va }`. One production caller.
+- ★ `SharedDevice::forward_ring` prints **one line per doorbell, on every path**:
+  `kayfabe: FWD-RING proc=… chan=… <ARM> → …`. The arms that forward nothing say so and carry
+  their numbers; the arm that forwards says `spans=… → host_ce=… ours=…`.
+- ★★★ `HostRmBackend::ce_copy` prints **R26's two facts**, per sub-copy, before the verdict:
+  `kayfabe-isolate: CE-SUBMIT dst=… len=… by=… gp_get=… gp_put=… sem=… want=… → RETIRED |
+  NEVER-RETIRED`, and on the pre-submission refusal path `→ REFUSED BEFORE SUBMISSION <err>`.
+  ⊘ `gp_get`/`gp_put` are printed as a **pair**: `gp_get == gp_put` is "the engine fetched
+  everything we published", `gp_get=0 gp_put=1` is "it fetched nothing at all", and neither
+  number alone can say either.
+- ★ `tests/tests/doorbell_reaches_the_completion_observer.rs` gains two arms:
+  `a_served_doorbell_that_forwarded_nothing_names_the_reason` (the ring's VA unbound ⇒
+  `RingVaUnbound`, doorbell still `Ok`, backend asked for nothing) and its **positive control**
+  `the_same_fixture_with_the_ring_bound_reads_it`. ⊘ The negative asserts on the *variant*, not on
+  `copies().is_empty()` — that predicate is also true of five other absences, so it would pass for
+  a different reason and prove nothing, which is §16.69.5's defect one layer down.
+
+⊘ **NOT in this rung, deliberately**: no GR forwarding (the brief is right — the scrubber dies
+first, and no guest reaches `cuCtxCreate` on a real plane until the CE completion path is honest);
+no completion tail; no wire change; no `RmBackend` signature change.
+
+### 16.70.3 ★★★ THE FALSIFIER, committed BEFORE the boot
+
+Baseline / **positive control that must not regress**: `p1b_29e7c25_planectl` —
+`448 arrived / 362 served / 86 REFUSED`, `of the served: 362 local, 0 forwarded`,
+`GrCompute=86 GrGraphics=0 Ce=362 NvEnc=0 NvDec=0 Other=0 unrouted=0`, **16** `SERVED-LOCAL`
+lines, `isolates: 2 materialized, 2 live, 2 refusing (2 no-plane, 0 spawn-failed)`.
+
+⚠ **Prove the control is a control** (§16.69.4's own process note): the CTL boot must run the
+**same** `POST_CAPTURE_HOOK` as `p1b` — `scripts/bench/guest_cuinit_wall.sh` — read off `p1b`'s
+probe log rather than remembered.
+
+Two boots off **one** binary, differing only in `KAYFABE_ISOLATES`, both wrapped in
+`host_xid_watch.sh`, both with the rev read off the **hypervisor** (`strings`).
+
+| arm (`p2`-equivalent, `KAYFABE_ISOLATES=real`) | the line that decides it |
+|---|---|
+| **A — the GPU ran guest-submitted work** | ≥1 `CE-SUBMIT` line with `gp_get` advanced (`gp_get == gp_put`, both non-zero) **and** `sem == want` ⇒ `RETIRED`. The wall then moves to **delivery**: the bytes moved and the guest's own `channelWaitForFinishPayload` never saw it, which is `forward_ring`'s documented missing completion tail |
+| **B — the engine fetched and did not retire** | ≥1 `CE-SUBMIT` with `gp_get` advanced and `sem != want` ⇒ `NEVER-RETIRED`. ⚠ **This arm also predicts the doorbell is REFUSED, not served** (§16.70.1(3)), so a boot showing `NEVER-RETIRED` **with** `0 REFUSED` refutes my deduction and is the finding. Name the host `Xid` or its absence |
+| **C — the channel was rung EMPTY** | **zero** `CE-SUBMIT` lines, and a `FWD-RING … → NOTHING FORWARDED` line **naming which arm**. ⇒ `3 forwarded` was counting our own intent. Report the arm verbatim; the six absences are six different defects and are not interchangeable |
+| **D — ⊘ NEITHER INSTRUMENT SPEAKS** | no `FWD-RING` line at all on a boot that reports `>0 forwarded`. ⇒ the child's stderr does not reach `_qemu.log`, or `forward_ring` is not the path. **Say so and stop**; do not infer A or C from the counter that already exists — that is what made this rung necessary |
+| **E — NONE OF THE ABOVE** | ⊘ Reserved and it will be used, not rounded |
+
+★ **My prediction, committed: C, with the arm `RING-VA-UNBOUND` or `NO-LIVE-ENTRIES`.** Reasoning
+(and it is *reasoning*, which is why it is written down to be scored rather than acted on): token
+`0x00010002` is `RmInitAdapter`'s CeUtils scrubber, whose work is a `memmgrMemSet` — a **fill**,
+`CeSource::Constant`, which `ce_copy_outcome` refuses *before* submitting. A refusal would have
+shown as a refused doorbell, and `p2` had none ⇒ the spans never got that far.
+
+⊘ **Printed either way, whatever the arm**: the `FWD-RING` line for every doorbell; every
+`CE-SUBMIT` line; the `SERVED-LOCAL` count on both boots; `by engine` on both boots; the isolate
+line verbatim; `xid_before`/`xid_after` with the watcher's line count.

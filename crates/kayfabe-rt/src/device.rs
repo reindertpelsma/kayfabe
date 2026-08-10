@@ -456,6 +456,70 @@ impl<P> Staged<P> {
     }
 }
 
+/// ★★★★ What [`SharedDevice::forward_ring`]'s locked read phase found, **named**.
+///
+/// ⊘ The three non-`Fresh` variants are the arms on which a doorbell is reported `Served`
+/// and **nothing is handed to any engine**. They were one `Ok(None)` until §16.70, which is
+/// why `[measured 2026-08-10, boot p2_29e7c25_planereal]`'s `3 forwarded (host channel
+/// rung)` could not be read either way — see [`SharedDevice::forward_ring`]'s own note.
+enum RingRead {
+    /// Entries the guest has written and this port has not yet forwarded.
+    Fresh {
+        /// The fresh entries' bytes.
+        fresh: Vec<u8>,
+        /// The resume cursor these entries start at.
+        done: u32,
+        /// How many entries.
+        n: u32,
+        /// How many bytes of ring were readable in total.
+        bytes: usize,
+    },
+    /// [`kayfabe_fwd::read_gpfifo_ring`] found no ring, and said which of its six absences.
+    NoRing(kayfabe_fwd::RingLook),
+    /// The resume cursor is at or past the readable extent of the ring.
+    CursorPastEnd {
+        /// The resume cursor.
+        done: u32,
+        /// Readable ring bytes.
+        bytes: usize,
+    },
+    /// The ring was read and the entries from the cursor on are all zero — the ring's own
+    /// way of saying "no more work". ⊘ A real answer, not a failure to look.
+    NoLiveEntries {
+        /// The resume cursor.
+        done: u32,
+        /// Readable ring bytes.
+        bytes: usize,
+    },
+}
+
+impl RingRead {
+    /// A tag naming this outcome and carrying its numbers, for the diagnostic line.
+    fn tag(&self) -> String {
+        match self {
+            RingRead::Fresh {
+                done, n, bytes, ..
+            } => format!("RING bytes={bytes} cursor={done} live={n}"),
+            RingRead::NoRing(look) => match look {
+                kayfabe_fwd::RingLook::RingDeclaredEmpty { va, entries } => {
+                    format!("{} va={va:#x} entries={entries}", look.tag())
+                }
+                kayfabe_fwd::RingLook::RingVaUnbound { va }
+                | kayfabe_fwd::RingLook::RingMappedZero { va } => {
+                    format!("{} va={va:#x}", look.tag())
+                }
+                other => other.tag().to_owned(),
+            },
+            RingRead::CursorPastEnd { done, bytes } => {
+                format!("CURSOR-PAST-END cursor={done} bytes={bytes}")
+            }
+            RingRead::NoLiveEntries { done, bytes } => {
+                format!("NO-LIVE-ENTRIES cursor={done} bytes={bytes}")
+            }
+        }
+    }
+}
+
 impl SharedDevice {
     /// Wrap a realized [`Gpu`] in the chosen lock configuration. The decomposition
     /// is exactly `Gpu`'s #35 ownership split — no state is reshaped, only wrapped.
@@ -1643,7 +1707,7 @@ impl SharedDevice {
     /// channel into which the guest's methods were never copied"*: the whole
     /// parse → plan → execute chain that ends at the only function in this tree which
     /// observes a real host completion — `HostRmBackend::await_semaphore`
-    /// (`kayfabe-isolate-host/src/rm.rs:2897`, reached through `ce_copy_outcome` and
+    /// (`kayfabe-isolate-host/src/rm.rs:3260-3279`, reached through `ce_copy_outcome` and
     /// `RmBackend::ce_copy`) — had **zero** production callers, so a guest action could not
     /// reach it in any build. `tests/tests/doorbell_reaches_the_completion_observer.rs` is
     /// that statement as a test, and it was RED at the commit before this one.
@@ -1700,46 +1764,92 @@ impl SharedDevice {
         cid: ChanId,
     ) -> Result<(), FwdFault> {
         // ---- READ. One locked look: the ring, where we stopped, and the stride.
-        let read = self.route_act(
+        //
+        // ★★★★ **§16.70 — THE ARM IS NAMED, always, including every arm that forwards
+        // NOTHING.** `[measured 2026-08-10, boot p2_29e7c25_planereal]` three doorbells were
+        // reported `3 forwarded (host channel rung)` and the guest's scrubber then timed out
+        // on a completion that never came. Eight distinct paths through this function reach
+        // `Ok(())` — six inside `read_gpfifo_ring`, plus the cursor-past-end and
+        // no-live-entries arms here, plus an empty span list below — and **every one of them
+        // makes the doorbell report `Served` with zero bytes handed to any engine**. So a
+        // reader of `3 forwarded` could not tell *"the GPU ran it and we lost the
+        // completion"* from *"the channel was rung with nothing in it"*
+        // (`execution_plane_increments.md` §16.69.5). ⊘ `3 forwarded` counts the doorbells
+        // the PORT rang; it has never counted work.
+        let look = self.route_act(
             |_spine| Ok((pid, ())),
-            |spine, proc, ()| -> Result<Option<(Vec<u8>, u32, u32)>, FwdFault> {
-                let Some(ring) = kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm)? else {
-                    return Ok(None);
+            |spine, proc, ()| -> Result<RingRead, FwdFault> {
+                let ring = match kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm)? {
+                    kayfabe_fwd::RingLook::Ring(bytes) => bytes,
+                    absent => return Ok(RingRead::NoRing(absent)),
                 };
                 let done = proc.exec.forwarded.get(&cid).copied().unwrap_or(0);
                 let pb = spine.arch().pushbuffer();
                 let at = (done as usize).saturating_mul(pb.gpfifo_entry_stride());
-                if at >= ring.len() {
-                    return Ok(None);
+                let bytes = ring.len();
+                if at >= bytes {
+                    return Ok(RingRead::CursorPastEnd { done, bytes });
                 }
                 let fresh = &ring[at..];
                 // ⊘ Only the entries the guest has WRITTEN. The tail of a ring is zeros,
                 // and a zero entry is the ring saying "no more work" — not a malformed one.
                 let n = kayfabe_fwd::gpfifo_live_entries(pb, fresh);
                 if n == 0 {
-                    return Ok(None);
+                    return Ok(RingRead::NoLiveEntries { done, bytes });
                 }
                 let take = n * pb.gpfifo_entry_stride();
-                Ok(Some((
-                    fresh[..take].to_vec(),
+                Ok(RingRead::Fresh {
+                    fresh: fresh[..take].to_vec(),
                     done,
-                    u32::try_from(n).unwrap_or(u32::MAX),
-                )))
+                    n: u32::try_from(n).unwrap_or(u32::MAX),
+                    bytes,
+                })
             },
         )??;
-        let Some((fresh, done, n)) = read else {
+        let RingRead::Fresh {
+            fresh,
+            done,
+            n,
+            bytes,
+        } = look
+        else {
+            // ⊘ Printed on the arm that forwards NOTHING, which is the arm a counter cannot
+            // see. The absence carries its own name; nothing here decides what it means.
+            eprintln!(
+                "kayfabe: FWD-RING proc={} chan={} {} → NOTHING FORWARDED (the doorbell \
+                 still reports SERVED)",
+                pid.0,
+                cid.0,
+                look.tag(),
+            );
             return Ok(());
         };
 
         // ---- PARSE, then FORWARD. Each half takes and releases its own locks.
         let parsed = self.parse_pushbuffer(vmm, pid, cid, &fresh)?;
+        let spans = parsed.ce_spans.len();
         if !parsed.ce_spans.is_empty() {
             // ★★★ THE OBSERVER. `forward_ce` → `plan_ce` → `Worker::execute`'s `CeSplit`
             // arm → `RmBackend::ce_copy`, whose host implementation waits on the engine's
             // own release semaphore and answers `CE_NEVER_RETIRED` if it never came. The
             // `?` is what makes that verdict the guest's: a doorbell whose copy did not
             // retire must not report `Served` (§14.8).
-            self.forward_ce(pid, cid, &parsed.ce_spans)?;
+            let fwd = self.forward_ce(pid, cid, &parsed.ce_spans)?;
+            eprintln!(
+                "kayfabe: FWD-RING proc={} chan={} RING bytes={bytes} cursor={done} \
+                 live={n} spans={spans} → host_ce={} ours={} (each host_ce sub-copy has \
+                 its own CE-SUBMIT line from the isolate)",
+                pid.0, cid.0, fwd.host_ce, fwd.ours,
+            );
+        } else {
+            // ⊘ A ring that decoded to no copy-engine operand at all. The bytes were read
+            // and parsed; nothing in them was work an engine could be pointed at.
+            eprintln!(
+                "kayfabe: FWD-RING proc={} chan={} RING bytes={bytes} cursor={done} \
+                 live={n} spans=0 → NOTHING FORWARDED (the ring decoded to no CE span; \
+                 the doorbell still reports SERVED)",
+                pid.0, cid.0,
+            );
         }
 
         // ---- COMMIT the cursor, on the success arm and nowhere else.
