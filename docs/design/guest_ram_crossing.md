@@ -345,7 +345,7 @@ it, intact and writable.
 - **The enforcement layer is not built** — no fd pinning, no filter, no notify loop, no `munmap`
   confirmation. That is §5's deliberate split: the shape now, the enforcement behind it.
 
-### 4.5 ★ Re-measured on a SECOND physical box
+### 4.5 ★ The launch flag, re-run on a SECOND physical box
 
 `[measured 2026-08-10, vh (vast 47029542), shim rev 346921b]` —
 `docs/reference/bench_evidence/guest_ram_memfd_vh_346921b.out`, boot logs
