@@ -739,3 +739,179 @@ the same RAM, and every run above is real. On a machine with a vIOMMU they are *
 same space, and this map would then describe what the device may DMA to rather than the
 guest's physical map. That is the correct space for a DMA descriptor and possibly the wrong
 one for a CPU mapping — undecided, and not decided by these boots.
+
+---
+
+## 5.8 ★★★★★ STEP 3 — the FIRST production `GuestRamGrant`, and the wall it found
+
+`[measured 2026-08-10, `vh`, real GA106, shim rev `db69683` read off the hypervisor — boots
+`w226c` (armed) / `w226d` (control); R29 at rev `f7ba059`]`
+
+### R13. ⊘⊘ Lead with it: the bar's two facts were ALREADY MEASURED before this rung began
+
+The rung was set as *"a real host RM object exists over guest RAM (`OS_DESCRIPTOR` returned a
+handle), and `map_dma` **FIXED** placed it at the guest's VA with `placed_as_asked` asserted"*.
+**Both were already in the tree, and already measured on a real GA106.** `osdesc_probe` (R25)
+does exactly that — a sealed `memfd`, described to RM, placed at a dictated VA, read back by a
+real copy engine, byte-identical — and `OsDescEvidence::placed_as_asked` is its predicate
+(`traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`). Reading the brief as *"build
+them"* would have re-derived a standing result.
+
+★ What R25 **cannot** see is that its route is a **parallel implementation**: it maps the block
+into its own `Reservation` and calls `alloc_os_descriptor` directly. The production route is
+`GuestRamPlane::honour → describe_guest_ram → map_gpu_va(at)`, driven by a VMM-minted grant,
+and **not one line of it is on R25's path**. That is the gap this rung closes, and it is a
+smaller and more honest claim than the one it was handed.
+
+### R14. ⊘ `0x237fe000` IS NOT A CONSTANT, and the brief that named it as the target read one boot's answer as one
+
+`[measured 2026-08-10, boot `w209_ffc80f8_real`]` three channels of a **single** boot resolved
+their ring to `0x768a000`, `0x802d000` and `0x206cf000`; `w226a`/`w226c` read `0x23092000` and
+`0x2b298000`. The GPA is re-derived on every doorbell and nothing keys on it.
+
+### R15. ⊘⊘ AND THE RING IS NOT PHYSICALLY CONTIGUOUS — which decides the pin's LENGTH
+
+Same log, same line:
+
+```text
+fbRING[p0]@va0x420064000=S:0x768a000   fbRING[p1]@va0x420065000=S:0x521c000
+fbRING[p2]@va0x420066000=S:0x8505000   fbRING[p3]@va0x420067000=S:0x764f000
+```
+
+Four consecutive guest **virtual** pages; four scattered guest **physical** pages.
+`OS_DESCRIPTOR` describes ONE contiguous host range, so *"one descriptor per contiguous run"*
+is, for this ring, **one descriptor per page** — and the leaf the walk reaches says so itself
+(`sz0x1000`). ⇒ `RING_PIN_BYTES = 4096` is a **measurement**, not a placeholder. A larger
+constant would ask the layout for a range whose guest-physical contiguity nothing has
+established, and get a plausible file offset for bytes that live somewhere else. The
+multi-page ring is a **loop over runs**, and it belongs with the consumer that needs the whole
+ring — which does not exist yet.
+
+### 5.8.1 What landed
+
+| piece | where |
+|---|---|
+| the port verb `describe_guest_ram` | `kayfabe-isolate` (trait), `rm.rs` (real: `with_region` + `alloc_os_descriptor`), `loopback.rs`, `kayfabe-mocks` |
+| the wire verb `DescribeGuestRam` (tag 18) | `proto.rs`, `child.rs`, `isolate.rs` (proxy) |
+| the chain `VerbPlan::PinGuestRam` / `VerbReply::GuestRamPinned` | `kayfabe-isolate`, executed by `Worker::execute` |
+| the core op `plan_pin_guest_ram` / `commit_pin_guest_ram` / `Vas::guest_ram_pins` | `kayfabe-fwd`, `kayfabe-core` |
+| `SharedDevice::pin_guest_ram` | `kayfabe-rt` |
+| ★ **the VMM caller** `SharedDoorbell::pin_ring_guest_ram` | `kayfabe-qemu-raw/src/shim.rs` |
+| the layout, reachable from the data plane | `QemuVmm::{resolve_guest_ram, stated_guest_ram}` |
+
+**Where every number comes from**, because that is the rule the rung exists for:
+
+| number | source |
+|---|---|
+| the ring's **VA** | the channel's own declared `gp_fifo_ring` |
+| the ring's **GPA** | the guest's own page tables, via the core's address table |
+| the **file offset** | the hypervisor's **stated** layout (§5.7). ⊘ never derived from the GPA |
+| the **length** | R15 above |
+
+⊘ **No number in the grant was proposed by the isolate, and none was checked against itself.**
+`GuestRamGrant` still has exactly one constructor.
+
+### 5.8.2 ★★ Ordering: the pin runs AFTER `PT-DECODE`, and that is not stylistic
+
+The pin resolves the ring's VA through the address table, and the table carries that binding
+only because the CPU page-table populate pass one line above has just committed it. Placed
+before it, every doorbell would read `AddressFault::Miss` — a miss that is an artefact of
+**ordering** and says nothing about the guest.
+
+### 5.8.3 ★★★★★ THE WALL — `SystemDataPlane`, and it is a STANDING RULE rather than a defect
+
+```text
+GUEST-RAM PIN token=0x00010002 dev=1 ino=1205182 proc=0 chan=1 pdb=0x2efa9c000
+  ring=0x420064000 gpa=0x2b298000 → file offset 0x2b298000 (4096 bytes)
+  → ⊘ REFUSED `SystemDataPlane`
+  | ✅ NEGATIVE CONTROL: gpa=0x80001000 REFUSED BY NAME as `NoStatedRun`
+```
+
+★ **Everything before the refusal succeeded**: the ring's VA resolved, its GPA came out of the
+guest's own page tables, and the hypervisor's stated layout answered with a file offset. What
+refused is `l1_concurrency.md` §12.26 — **the system proc has no data plane**. Every doorbell
+that reaches the forwarding fall-through on this bench belongs to the system proc: the client
+is `0xc1e00006`, a **kernel** client, i.e. RmInitAdapter's CE scrubber. §12.26 exists so the
+system proc can hold no host state whose reclaim has no defined point, and its own docs say
+that the day it must be re-opened, it is re-opened *"deliberately — with a refcount or a
+global quiesce point — not discovered afterwards"*.
+
+⊘ **So the guard was NOT relaxed.** Relaxing it to make a pin happen would be deleting a
+lifetime boundary to enable an internal capability, which is `same_class_id_opposite_directions`
+exactly. ⇒ **What is owed is a lifetime for system-proc host state, and re-opening §12.26 is an
+owner decision.**
+
+⚠ And a structural fact that goes with it: **neither executor configuration reaches a
+user-proc doorbell today.** With `KAYFABE_CE_EXECUTOR=local` (the bench default)
+`try_ce_submission` claims every routed doorbell terminally and the fall-through is never
+reached at all — `w225f` shows `RING-PROJ 0`. With `=host` the fall-through is reached and
+`RmInitAdapter` then fails (`0x25:0x65:1249`, §14.24's measured refutation), so no CUDA
+process ever runs. The pin's first user is therefore **necessarily** the system proc, until
+one of those two facts changes.
+
+### 5.8.4 ★★★ R29 — the route, proven against real RM
+
+Because the boot cannot reach the ioctl, the ioctl is reached directly:
+`kayfabe-rm-ladder --guest-ram-pin`, `[measured 2026-08-10, `vh`, real GA106, 580.159.04,
+`REV_UNDER_TEST=f7ba05930cafc00e94903af6ffa51d6356b61ba7`]`,
+`traces/real_ga106/rmladder_r29_guestrampin_real_ga106.txt`:
+
+```text
+★  R29 guestpin = placed at 0x0000000301400000 AS ASKED, 65536 bytes at grant offset 0x10000,
+   and the isolate's mapping reads 0x9a114001 — the word the VMM wrote at that offset.
+```
+
+It drives `GuestRamPlane::honour → describe_guest_ram → map_gpu_va` — **the production verbs**.
+⊘ The block is a `memfd` this process made: it is *shaped* like guest RAM (shared, fd-backed,
+`MAP_SHARED`) and it is **not the guest's**.
+
+★★ **Two predicates, not one.** `placed_as_asked` and `window_is_the_granted_one` are different
+questions, and the grant's offset is **non-zero by construction** with a decoy word in the
+first half — at offset zero a plane that ignored the grant's offset would map the same pages
+and every assertion would still hold. A single boolean over both would score a wrong-window
+plane as a *placement* failure and send the next reader to re-check `DMA_OFFSET_FIXED`.
+
+### 5.8.5 ★★★ Two HARNESS defects the first green test found — fixed, not declared
+
+`[measured 2026-08-10]` the first passing `pin_guest_ram` test failed its **teardown
+post-condition**, not its own assertions:
+
+- `★★ UNACCOUNTED … 1 mapping(s) are OUTSTANDING and NOTHING can name them` — `tests/src/lib.rs`'s
+  three reachability enumerations walk `Binding`s, and a pin's record lives on
+  `Vas::guest_ram_pins`. The record was in core state the whole time; the instrument did not
+  read it.
+- `★★ DANGLING … core state names 1 host object(s) the ledger has no live record of` — the mock
+  ledger's *"minted"* arm quantified over verb names beginning with `Alloc`, and an
+  `OS_DESCRIPTOR` arrives on a verb called `DescribeGuestRam`.
+
+★ Both are the harness working. An object nothing enumerates is exactly an object nothing will
+free, and it said so on the **first** run. ⊘ The wrong fix in both cases was a `ResidueClaim` —
+declaring the leak instead of accounting for it.
+
+### 5.8.6 ★★ Idempotence is a CORRECTNESS requirement here, not an optimisation
+
+The caller sits on a **doorbell**, which repeats. A second `OS_DESCRIPTOR` plus a second
+**fixed** `map_dma` at an occupied address is answered `0x51 NV_ERR_NO_MEMORY` —
+collision-or-exhaustion, and the two are **indistinguishable from the status alone**.
+`Vas::guest_ram_pins` is what keeps a legible failure legible; the replay issues **no host
+verbs at all**.
+
+### 5.8.7 The control, and what step 3 still does NOT show
+
+`w226d` — same binary, same script, `KAYFABE_GUEST_RAM` **unset** — prints **zero**
+`GUEST-RAM` lines and the same doorbell census (`1 arrived, 0 served, 1 REFUSED by name`). The
+instrument is observationally neutral.
+
+⊘ **Nothing consumes the pin.** The forwarding plane still reads the ring through
+`Vmm::gpa_read` and the host GPU is never pointed at the pinned mapping. This is the first
+byte, not a shadow channel.
+
+⊘ **The GR context buffers are a SECOND crossing**, in the emulated FB — settled 2026-06-04 and
+built twice in the C (`mode2_fb_crossing_question.md`, C repo `5ad1788`). Real, owed, and the
+successor to this rung.
+
+⚠ **Carried forward verbatim from §5.7.4**: the topology listener sits on the device's
+**bus-master** address space, not on system memory. With no vIOMMU these hold the same RAM and
+every run is real; with one they are **not** the same space, and this map would describe what
+the device may DMA to rather than the guest's physical map. Undecided, and not decided by these
+boots.

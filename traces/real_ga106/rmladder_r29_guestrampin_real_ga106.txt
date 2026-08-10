@@ -1,0 +1,7 @@
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00aad
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=f7ba05930cafc00e94903af6ffa51d6356b61ba7
+info  R29 guestpin probe = GPU 0, euid 0 — a shared memfd behind a real GuestRamPlane, granted at a NON-ZERO offset, described through the port's own `describe_guest_ram`, mapped at 0x0000000301400000
+★     R29 guestpin       = placed at 0x0000000301400000 AS ASKED, 65536 bytes at grant offset 0x10000, and the isolate's mapping reads 0x9a114001 — the word the VMM wrote at that offset. ⊘ This is the PRODUCTION route (GuestRamPlane -> describe_guest_ram -> map_gpu_va), not R25's parallel one. ⊘ It is a memfd THIS process made: it is SHAPED like guest RAM and it is not the guest's.
+done — guest-RAM pin probe only
