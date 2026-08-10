@@ -12126,3 +12126,121 @@ natural first step of `w202`, where the partition it measures is the subject.
 ⊘ **`cup3` is not reached and was never in scope.** GR compute remains structurally
 unreachable in every shipping build; this rung moves `cup2`'s CE path and says nothing about
 the completion plane, which has no C oracle at all.
+
+## §16.65 ★★★★★ BOOTED `s51_d502ac6_engroute` (`w202`) — **OUTCOME B**, and my brief's central *evidence* was misattributed
+
+`[measured 2026-08-10, boot `s51_d502ac6_engroute`, both artifacts stamped
+`kayfabe-rev:d502ac658b7fa11c02190de74d587a869aa03c91`]`
+
+### 16.65.1 The change
+
+`CeChannelFacts` gained `engine: EngineKind`, copied off the **same** resolved `Channel` that
+already yields `vas_pdb`; `route_of_engine` turns it into a `DoorbellRoute`
+(`CpuCe` / `HostGr` / `Unserved`); `try_ce_submission` refuses a non-`CpuCe` route by name
+(`Route::NotACopyEngineChannel`) **before** it reads a byte of a ring. ⊘
+`local_ce_is_the_only_executor` and `KAYFABE_ISOLATES` untouched; the plane stayed `Stillborn`.
+
+The instrument shipped with it and is the half that mattered: ABI 35 → 36, `KayfabeRegAudit`
+gaining `doorbells_by_engine[6]` + `doorbells_engine_unrouted` and the served split
+`_locally` / `_forwarded`. §16.64.6 deferred exactly this and named `w202` as its home.
+
+### 16.65.2 The measurement
+
+```
+doorbells: 448 arrived, 354 served, 94 REFUSED by name
+  of the served: 354 local (CPU CE, end witnessed), 0 forwarded (host channel rung)
+  by engine: GrCompute=86 GrGraphics=0 Ce=362 NvEnc=0 NvDec=0 Other=0 unrouted=0
+```
+
+Every other number is **bit-identical to `s49`/`s50`**: 16 `SERVED-LOCAL` lines (4 on token
+`0x00010002`), `pdb=Y` ×4, `CUP2_RC=1`, `census[14 chans, 4 outcomes]`. ⊘ **No regression** —
+falsifier D did not fire, and the §15 regression the design claimed to structurally exclude
+did not appear.
+
+★ `86 + 362 = 448` and `362 − 354 = 8`, so the partition closes exactly: **86 `GrCompute`
+doorbells, every one of them now refused by the routing fact** (a code certainty — the gate
+returns `Some(refused(..))` for every non-`CpuCe` route, unconditionally, before any other
+check), plus **8 refused `Ce` doorbells**, totalling the 94. The routing defect §16.65 was
+built for is **real and is 86 doorbells wide**, and nothing but this histogram could say so:
+before the change those 86 were *already* refused, under a name that described bytes.
+
+### 16.65.3 ★★★★★ OUTCOME B — and the refutation is of my own brief's EVIDENCE, not its fix
+
+The brief's motivating sentence was: *"the `methods: 3, opaque: 2` above is a GR pushbuffer
+being decoded by the CE codec and correctly declining to find a CE launch."*
+
+⊘ **Measured false.** The first refusal is **unchanged** across `s49`/`s50`/`s51` —
+`FwdFault::SubmissionHasNoLaunch` — and its own printed pushbuffer is:
+
+```
+[0] sub4/m0x0   /Incrementing/n1 = 0xc7b5     ← SET_OBJECT = AMPERE_DMA_COPY_B (the COPY ENGINE)
+[1] sub4/m0x240 /Incrementing/n3 = 0x2        ← SET_SEMAPHORE_A/B/PAYLOAD
+[2] sub4/m0x300 /Incrementing/n1 = 0x14       ← LAUNCH_DMA
+```
+
+That is a **CE** pushbuffer, on a **CE**-labelled channel, routed to the **CE** executor. It
+is exactly where it belongs, and `w202` could not move it and did not. ⇒ The rung's fix is
+right and its cited evidence was a different doorbell's.
+
+★ **This is why B was the informative outcome and why the histogram was the rung's first
+step.** With only `448/354/94` and an unchanged first-refusal tag, `s51` reads as *"nothing
+happened"*. The partition says 86 doorbells changed executor-verdict while the count held —
+the same shape §16.64.6 recorded as a prediction refuted by a rename that preserved a count,
+now with the instrument that separates the two.
+
+### 16.65.4 ★★★★★ THE ACTUAL WALL AFTER `w202`, named from our own tables
+
+`LAUNCH_DMA` flags `0x14` decode against `kayfabe_abi::submit::ce` as
+`LAUNCH_SEMAPHORE_TYPE_RELEASE_FOUR_WORD (2<<3 = 0x10) | LAUNCH_FLUSH_ENABLE (1<<2 = 0x4)`,
+with `DATA_TRANSFER_TYPE` (field `1:0`) = **0 = NONE**.
+
+⇒ a **zero-byte, flush-enabled, four-word (timestamped) semaphore release** — the
+`finishPayload` the guest then waits on. And `Ga10xPushbuffer`'s own doc already names the
+refusal, correctly, at the codec:
+
+> **`DATA_TRANSFER_TYPE == NONE`.** The engine moves no bytes; the launch exists to release a
+> semaphore. There is no copy to report.
+
+So the codec returns `None` → `PushMethod::Opaque` → the submission carries no `CeLaunchDma` →
+`FwdFault::SubmissionHasNoLaunch`.
+
+⊘ **The fault's NAME is false and that is what hid this.** The submission **does** have a
+`LAUNCH_DMA`; it has no **copy**. *"Submission has no launch"* sends a reader to look for a
+missing method, and the method is right there in the line the fault itself prints. ★ Same
+family as §16.64b: a projection that is true of the thing it measured and wrong about the
+question being asked.
+
+⚠ And `LAUNCH_SEMAPHORE_TYPE_RELEASE_FOUR_WORD`'s own constant records the cost:
+*"Sixteen bytes: the payload plus a **hardware timestamp** this port has no source for."* The
+next rung is that release, not a routing change.
+
+### 16.65.5 ★★★★ A CHANNEL'S `EngineKind` IS A FACT WITH A LIFETIME — found by a test, not by the bench
+
+`Ga10xArch::classify` labels **every** `AMPERE_CHANNEL_GPFIFO_A` `GrCompute` (there is one
+GPFIFO class per architecture; the engine type is an `NV_CHANNEL_ALLOC_PARAMS` field
+`RmEvent::Alloc` has nowhere to carry), and a channel becomes `Ce` only when its
+`AMPERE_DMA_COPY_B` engine object lands and `project.rs`'s refinement pass rewrites it.
+
+⇒ **a channel is `GrCompute` from its alloc until its engine object arrives.** The `s48`
+census that corroborated this rung's design is an **end-of-boot snapshot**: it says what the
+14 channels *are*, and cannot say what they *were* when their first doorbell rang. A CE
+channel ringing before its engine object would be routed away by this gate.
+
+★ It did not happen on `s51` — `unrouted=0`, `GrGraphics=0`, and every count held — so the
+hazard is **latent, not live**. It was found because `e2_doorbell.rs`'s fixture declares a
+channel and **no** engine object, so the test tree reproduced it before the bench could. The
+fixture now declares the engine object, and says in place why.
+
+⊘ Related and **not** dissolved: `project.rs`'s refinement is `or_insert` over ascending
+origin-key order, i.e. **first-wins**, justified by a comment that says *"the real protocol
+allocates one engine object per channel context"*. That comment is unverified against a boot.
+
+### 16.65.6 What this rung did NOT establish
+
+⊘ `try_ce_submission` had **zero** test coverage of any kind before `w202`; it now has the
+pure decision (`route_of_engine`, quantified over the whole enum) and one end-to-end pair
+differing by a single event. That is not coverage of the executor.
+
+⊘ **`cup3` is not reached.** `CUP2_RC=1` is unchanged, `0 forwarded` is unchanged, and the
+completion plane still has no C oracle. GR now refuses by a name that is true; it still needs
+a host channel that **shadows** the guest's and the `OS_DESCRIPTOR` primitive, neither built.
