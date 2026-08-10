@@ -100,7 +100,7 @@ finding, now with a call site that forgives it in the strongest possible way —
 | oracle | `traces/rpctrace_ga106_boot1.bin` — real GA106, real firmware, 1076 records, 2 sessions, `wrapped=false`, `dropped=0`, decoded by `scripts/rpctrace/decode_rpctrace.py` (which refuses an incomplete trace rather than warning about it) |
 | ogkm | ★ `research_clones/ogkm-580.159.04/`. ⊘ The sibling `research_clones/ogkm/` is **610.43.02** — a different tree whose line numbers do not correspond to this guest's dmesg. |
 
-### ⊘ Two instrument gaps, stated before any result
+### ⊘ Four instrument gaps, stated before any result
 
 **(a) The device-side control census does not exist for the `nvd1` boot.** The emulator prints
 `commands: N decoded, M UNSERVICED …, K distinct` **at shutdown**, and the `nvd1` QEMU
@@ -147,16 +147,25 @@ the wall** presenting as a candidate for it.
 | burst | t (s) | lines | what it is |
 |---|---|---|---|
 | 0 | 11 | 1 | module load |
-| 1 | 159–163 | 30 | a `ctx` attempt — init |
-| 2 | 254–258 | 34 | a `ctx` attempt — init, **+16 × `UVM_CHANNEL_RETAINER`** |
-| 3 | 434–440 | 131 | **teardown after the 180 s kill**, overlapping the next init |
-| 4 | 615–617 | 97 | **teardown after the 180 s kill** |
-| 5 | 971–980 | 54 | ★ the **`dev` stage, two runs, `prog rc=0`** |
+| 1 | 159–163 | 30 | a cuInit-bearing attempt — init only |
+| 2 | 254–258 | 34 | a cuInit-bearing attempt, **+16 × `UVM_CHANNEL_RETAINER`** |
+| 3 | 434–440 | 131 | **teardown after a 180 s kill**, overlapping the next init (**+16 × `UVM_CHANNEL_RETAINER`**) |
+| 4 | 615–617 | 97 | **teardown after a 180 s kill** |
+| 5 | 971–980 | 54 | ★ two complete cycles, **no teardown burst, no kill gap** — the `dev` stage, `prog rc=0` |
+
+⚠ **The burst↔run mapping is NOT 1:1, and the census does not pretend it is.** The
+`kgrobjPromoteContext` marker — one per `cuInit` — fires **5** times, while the MANIFEST
+records **4** captured program runs (`dev_r{1,2}`, `ctx_r{1,2}`). One cuInit-bearing process in
+this dmesg is **unattributed**. ⊘ Nothing below rests on the mapping: the ranking rests only on
+burst 5 being the `dev` stage, which three independent signals agree on — it is the last thing
+in a log captured at t≈980 s, it contains **no** 180 s kill gap and **no** `STOP_CHANNEL`
+teardown, and its two cycles complete in 9 s.
 
 ### ★★★★★ Burst 5 is the discriminator, and it is empirical
 
 Burst 5 is the `dev` stage: `cuInit` + every device query, **exit code 0**, the run the
-workload's own stdout calls `DONE`. Every kind below occurs **twice** in it — once per run:
+workload's own stdout calls `DONE`. Every kind below occurs in it, most exactly twice — once
+per run (`GspRmFree` 6× and `vaListDestroy` 8×, being per-object rather than per-run):
 
 `0x20800afe` · `0x20800aff` · `0x20800a80` · `0x20802a0f` · `kceGetPceConfigForLceType()` ·
 `GspRmAlloc 0x0070` · `GspRmAlloc 0xc36f` · `GspRmAlloc 0x402c` · `kgrobjPromoteContext()` ·
@@ -186,13 +195,18 @@ relative to `src/nvidia/src/`.
 | `GspRmAlloc NV01_MEMORY_VIRTUAL` | `0x0070` | 5 | yes | **STOPS** the watchdog heap | `rc/kernel_rc_watchdog.c:669-678` |
 | `GspRmAlloc VOLTA_CHANNEL_GPFIFO_A` | `0xc36f` | 5 | yes | **STOPS** the watchdog channel | `rc/kernel_rc_watchdog.c:1013-1019` |
 | `GspRmAlloc NV40_I2C` | `0x402c` | 5 | yes | **PROCEEDS** | I²C/DDC gateway; nothing on the compute path allocates it |
-| `GspRmAlloc NV20_SUBDEVICE_DIAG` | `0x208f` | 1 | **no** (burst 1 only) | **PROCEEDS** | diagnostics gateway, allocated by nvidia-smi |
+| `GspRmAlloc NV20_SUBDEVICE_DIAG` | `0x208f` | 1 | ⊘ **no** — burst 1 only | **PROCEEDS** (source only) | diagnostics gateway; no in-kernel allocator, allocated by nvidia-smi |
 | watchdog init assert | `rc/kernel_rc_watchdog.c:1198` | 5 | yes | **PROCEEDS globally** | caller is `void` and logs at `LEVEL_INFO`: `rc/kernel_rc_watchdog_callback.c:201-207`; retried by the 1 Hz callback |
 | `GspRmFree` | — | 48 | yes | **PROCEEDS** | `mem_mgr/mem.c:180`, `resserv/rs_client.c:844`, `rs_server.c:1375` are bare `NV_ASSERT`; object is freed regardless |
 | **`GspRmAlloc UVM_CHANNEL_RETAINER`** | **`0xc574`** | **32** | ⊘ **NO** | ★ **STOPS** | `rmapi/nv_gpu_ops.c:10231-10232 if (status != NV_OK) goto error;` |
 | `NVA06F_CTRL_CMD_STOP_CHANNEL` | `0xa06f0112` | 32 | ⊘ no — **teardown only** | n/a | bursts 3–4 only |
 | `NV2080_CTRL_CMD_GPU_EVICT_CTX` | `0x2080012c` | 16 | ⊘ no — **teardown only** | n/a | bursts 3–4 only |
 | `nv_gpu_ops.c:10328` assert | — | 32 | ⊘ no — **teardown only** | n/a | bursts 3–4 only |
+
+⊘ **`0x208f` is the one PROCEEDS in the table not backed by burst 5** — it occurs once, in
+burst 1, and its verdict rests on source alone (it has no in-kernel allocator). ★ It is also
+the best available identification of the unattributed fifth process: `NV20_SUBDEVICE_DIAG` is
+what **nvidia-smi** allocates. Suggestive, not established.
 
 ★ **The `0x0070` / `0xc36f` / `kgrobjPromoteContext` / `kernel_rc_watchdog.c:1198` /
 `mem.c:180` / `rs_*` cluster is ONE event, not six.** It is the RC watchdog's init, in order:
