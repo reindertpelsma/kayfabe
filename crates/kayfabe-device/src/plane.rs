@@ -441,6 +441,38 @@ pub struct Counters {
     /// delivered. A non-zero value here with a hung scrubber is that exact diagnosis, and
     /// without the counter the two are the same silence.
     pub nonstall_masked: u64,
+    /// ★★★★★ §16.76 — how many os-event batches this device **announced**: one GSP stall
+    /// vector latched and one message delivered per batch, never per event.
+    ///
+    /// ★ Compare with `kayfabe_device::osevent::OsEventLog::batches`, which counts the same
+    /// events from the other side of the seam. They must agree; if they do not, the
+    /// interrupt half and the posting half disagree about what happened, which is exactly
+    /// the two-projections defect this port keeps meeting.
+    pub gsp_event_raises: u64,
+    /// ★★★ Batches that were posted and could **not** be announced, because this chip's
+    /// captured interrupt table names no usable stall vector for `MC_ENGINE_IDX_GSP`.
+    ///
+    /// ⊘ **Must be zero on GA106**, whose table publishes `0x9b` — a non-zero value means
+    /// messages are sitting in the guest's status queue with nothing telling it to look.
+    pub gsp_event_unvectored: u64,
+    /// ★★ Of the [`Counters::gsp_event_raises`], how many real silicon would have
+    /// **masked** — [`crate::cpuintr::TriggerOutcome::would_be_masked`] for the GSP's own
+    /// stall vector.
+    ///
+    /// ⚠ Read this before concluding a delivery worked. A latch whose `LEAF_EN` bit is
+    /// clear is a wakeup the ISR will not attribute, and without this counter *"we raised
+    /// and the guest ignored it"* and *"we raised into a masked leaf"* are the same
+    /// silence.
+    pub gsp_event_masked: u64,
+    /// ★★★★★ §16.76 — `IRQSCLR` writes that cleared the status-queue edge
+    /// ([`kayfabe_gsp::Transition::E10`]) — **the opener**.
+    ///
+    /// ⊘ `cap1` contains **zero** of these across 359 062 records, so the oracle constrains
+    /// this number not at all and only a live boot can. It is the one that says whether the
+    /// os-event flow-control gate can ever reopen: `gsp_event_raises > 0` with
+    /// `status_irq_cleared == 0` is a gate latched shut after one batch, and the delivery
+    /// plane has gone quiet without anything going red.
+    pub status_irq_cleared: u64,
     /// ★★★ **E2** — guest MMIO writes that landed on the usermode doorbell register
     /// ([`crate::doorbell_reg`]), i.e. work-submit tokens the guest rang.
     ///
@@ -1031,6 +1063,13 @@ pub struct RegPlane {
     /// `bar_pdes`' two reasons: reading it must not take the FSM's lock behind a doorbell,
     /// and a caller that replaced the policy still gets to read what the guest installed.
     set_page_dir: crate::setpagedir::SetPageDirLog,
+    /// ★★★★★ §16.76 — **the os-event registry** (`crate::osevent`): which
+    /// `(hClient, hEvent, notifyIndex)` a wakeup may be posted to.
+    ///
+    /// Held here for `bar_pdes`' two reasons and one of its own: [`RegPlane::write`] reads
+    /// it on the way OUT of the FSM's own lock, to hand the batch straight back in — so it
+    /// is a plane fact, not merely a report field.
+    os_events: crate::osevent::OsEventLog,
     /// ★★★ **E2 — the usermode doorbell seam** (`crate::doorbell`).
     ///
     /// ⚠ **Outside [`RegPlane::state`], and that is a requirement rather than a
@@ -1126,6 +1165,10 @@ struct PlaneCounters {
     nonstall_raises: AtomicU64,
     nonstall_unvectored: AtomicU64,
     nonstall_masked: AtomicU64,
+    gsp_event_raises: AtomicU64,
+    gsp_event_unvectored: AtomicU64,
+    gsp_event_masked: AtomicU64,
+    status_irq_cleared: AtomicU64,
     doorbells: AtomicU64,
     doorbells_served: AtomicU64,
     /// ★★★★ §16.62.3 — the SPLIT of `doorbells_served`. See `Counters::doorbells_served_locally`.
@@ -1416,6 +1459,7 @@ impl RegPlane {
         let bar_pdes = BarPdeLog::new();
         let gvas_pub = GvasPubLog::new();
         let set_page_dir = crate::setpagedir::SetPageDirLog::new();
+        let os_events = crate::osevent::OsEventLog::new();
         // ★ The probe set is recorded into the census FIRST, and `served_policy` reads it
         // back out of the same log — so "the set the report prints" and "the set the
         // event-plane arm reads" are one stored value, not two values this line promises
@@ -1442,6 +1486,7 @@ impl RegPlane {
                         bar_pdes: bar_pdes.clone(),
                         gvas_pub: gvas_pub.clone(),
                         set_page_dir: set_page_dir.clone(),
+                        os_events: os_events.clone(),
                     },
                     census.clone(),
                     links,
@@ -1463,6 +1508,7 @@ impl RegPlane {
             bar_pdes,
             gvas_pub,
             set_page_dir,
+            os_events,
             // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
             doorbell: RwLock::new(Box::new(RefusingDoorbell)),
             doorbell_log: Mutex::new(DoorbellLog::default()),
@@ -2143,6 +2189,10 @@ impl RegPlane {
             nonstall_raises,
             nonstall_unvectored,
             nonstall_masked,
+            gsp_event_raises,
+            gsp_event_unvectored,
+            gsp_event_masked,
+            status_irq_cleared,
             doorbells,
             doorbells_served,
             doorbells_served_locally,
@@ -2184,6 +2234,10 @@ impl RegPlane {
             nonstall_raises: g(nonstall_raises),
             nonstall_unvectored: g(nonstall_unvectored),
             nonstall_masked: g(nonstall_masked),
+            gsp_event_raises: g(gsp_event_raises),
+            gsp_event_unvectored: g(gsp_event_unvectored),
+            gsp_event_masked: g(gsp_event_masked),
+            status_irq_cleared: g(status_irq_cleared),
             doorbells: g(doorbells),
             doorbells_served: g(doorbells_served),
             doorbells_served_locally: g(doorbells_served_locally),
@@ -2245,6 +2299,9 @@ impl RegPlane {
             bar_pdes,
             gvas_pub,
             set_page_dir,
+            // ⊘ Read through `os_event_log()`; the registry's own counters are what the
+            // report carries, and they are already `Arc`-shared with the chain link.
+            os_events: _,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what this device
             // life SAW through it is carried out as `doorbell` just below.
             doorbell: _,
@@ -2377,6 +2434,17 @@ impl RegPlane {
     #[must_use]
     pub fn fault_buffer_sample(&self) -> Vec<crate::faultbuffer::FaultBufferNote> {
         self.fault_buffer.sample()
+    }
+
+    /// ★★★★★ §16.76 — the os-event registry, as a shared handle.
+    ///
+    /// ⊘ The only channel to what the guest registered, and — for
+    /// [`RegPlane::bar_pde_log`]'s reason — a handle rather than a snapshot:
+    /// [`RegPlane::set_policy`] replaces the whole chain, and the link that records
+    /// registrations lives in it.
+    #[must_use]
+    pub fn os_event_log(&self) -> crate::osevent::OsEventLog {
+        self.os_events.clone()
     }
 
     /// The distinct `(bar, offset)` pairs no source claimed, up to
@@ -3143,7 +3211,11 @@ impl RegPlane {
         self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let PlaneState {
-            fsm, ram, policy, ..
+            fsm,
+            ram,
+            policy,
+            cpu_intr,
+            ..
         } = &mut *s;
         match fsm.mmio_write_with(
             ram.as_mut(),
@@ -3160,9 +3232,22 @@ impl RegPlane {
                 self.c
                     .commands
                     .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
+                // ★★★★★ §16.76 — THE OPENER, counted. See `Counters::status_irq_cleared`.
+                let opened = report
+                    .transitions
+                    .iter()
+                    .filter(|t| **t == kayfabe_gsp::Transition::E10)
+                    .count();
+                if opened > 0 {
+                    self.c
+                        .status_irq_cleared
+                        .fetch_add(opened as u64, Ordering::Relaxed);
+                }
+                let raise_cpu_intr = self.deliver_os_events(fsm, ram.as_mut(), cpu_intr);
                 WriteOutcome {
                     claimed: true,
                     raise_status_irq: report.raise_status_irq,
+                    raise_cpu_intr,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
                     ..WriteOutcome::nothing()
@@ -3265,6 +3350,92 @@ impl RegPlane {
             raise_cpu_intr,
             ..WriteOutcome::nothing()
         }
+    }
+
+    /// ★★★★★ §16.76 — **the os-event wakeup, delivered**: gate, post the batch, latch the
+    /// GSP's own stall vector, and answer whether a message should go out.
+    ///
+    /// # Where it is called from, and why there
+    ///
+    /// At the end of every **claimed GSP register write** — which is where the guest's
+    /// command doorbell (`QUEUE_HEAD`) lands, and therefore where every `GSP_RM_CONTROL`
+    /// the guest issues has just been answered. `C: src/qemu/nvkvm_gpu_emul.c:4363-4367`
+    /// calls `nvkvm_gsp_deliver_events` from the doorbell path for the same reason. ⊘ It is
+    /// **not** hung off `MC_SERVICE_INTERRUPTS` specifically: that control is one of the
+    /// things that arrives through this door, and keying on it would make the wakeup depend
+    /// on the guest choosing the fallback poll rather than on the guest submitting anything
+    /// at all.
+    ///
+    /// # ⊘⊘ THE JOIN, INSTRUMENTED — and the thing this function must not be read as
+    ///
+    /// **A wakeup is not a completion, and this device must never manufacture one.** The
+    /// data plane is passthrough: the guest's buffers are pinned into the **host GPU's**
+    /// address space, so when the guest's channel really executes, the host GPU DMAs the
+    /// release semaphore straight into guest RAM and nothing here is in the path. ⊘ The C's
+    /// *"write sema THEN signal"* (`C:4357-4361`) is its **forgery path**, not the
+    /// architecture — this port's standing limit is that *"there is NO C oracle for the
+    /// completion plane; the C FORGES completions"*
+    /// (`docs/design/c_rust_trace_differential.md`), so citing it as the model would be
+    /// citing the oracle where it is degenerate. Our job on this path is exactly one thing:
+    /// **deliver the notification**.
+    ///
+    /// That leaves one question the boot must be able to answer, and only one: **did any of
+    /// the guest's work actually execute** between this batch and the last? If not, the
+    /// notification is honest and there is nothing behind it — libcuda wakes, re-reads a
+    /// semaphore the host never DMA'd into, and blocks again. ⊘ From outside, that is
+    /// byte-identical to never having woken it.
+    ///
+    /// `[measured 2026-08-10, boot w209_ffc80f8]` this port has executed none of the
+    /// guest's work: `CE-SUBMIT → REFUSED BEFORE SUBMISSION`, and the isolate plane defaults
+    /// to `Stillborn`. So [`crate::osevent::OsEventLog::woke_with_nothing`] is expected to
+    /// equal the batch count, and that is the **diagnosis** — it names the next rung (get
+    /// the guest's channel forwarded and executed) rather than indicting the plane built
+    /// here, and emphatically not a licence to fabricate the payload.
+    fn deliver_os_events(
+        &self,
+        fsm: &mut GspFsm,
+        ram: &mut dyn kayfabe_gsp::GuestRam,
+        cpu_intr: &mut CpuIntrTree,
+    ) -> bool {
+        // ⊘ Cheap-exit on the empty registry BEFORE the FSM is touched: this runs on every
+        // claimed GSP register write, and the overwhelming majority of boots register no
+        // os-event at all. `batch()` takes the registry lock; nothing else here does.
+        let batch = self.os_events.batch();
+        if batch.is_empty() {
+            return false;
+        }
+        let outcome = fsm.deliver_events(ram, &batch);
+        self.os_events.note(&outcome);
+        let kayfabe_gsp::EventDelivery::Delivered { posted, .. } = &outcome else {
+            return false;
+        };
+        // ★★★ THE JOIN. Recorded at the instant of the announcement, against the count of
+        // servings this device actually stood at — see this function's docs.
+        self.os_events.note_join(
+            batch.len(),
+            *posted,
+            self.c.doorbells_served.load(Ordering::Relaxed),
+            self.c.doorbells_served_forwarded.load(Ordering::Relaxed),
+        );
+        // ⚠ TWO NUMBERS, ONE WORD. This is the GPU interrupt-tree vector (155 on GA106),
+        // latched so the guest's ISR has something to FIND; the MSI-X index the shell
+        // delivers is a different number entirely and belongs to the shell.
+        let Ok(vector) = crate::nonstall::gsp_stall_vector(self.chip.intr_table) else {
+            // Posted and unannounceable: the messages are in the guest's queue with
+            // nothing telling it to look. Counted, never guessed at with a default vector.
+            self.c.gsp_event_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        let latched = cpu_intr.latch(vector);
+        if latched.out_of_range {
+            self.c.gsp_event_unvectored.fetch_add(1, Ordering::Relaxed);
+            return false;
+        }
+        self.c.gsp_event_raises.fetch_add(1, Ordering::Relaxed);
+        if latched.would_be_masked {
+            self.c.gsp_event_masked.fetch_add(1, Ordering::Relaxed);
+        }
+        true
     }
 
     /// ★★★ **§14.18 — latch the non-stall vector that says an engine finished the guest's

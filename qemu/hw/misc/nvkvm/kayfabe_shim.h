@@ -19,7 +19,7 @@
 #include <stdint.h>
 
 /* Bump on ANY change to the structures or the meaning of a status code. */
-#define KAYFABE_SHIM_ABI 36u
+#define KAYFABE_SHIM_ABI 37u
 
 /*
  * Status classes.  ★ The negative convention is load-bearing: a return value below zero is
@@ -754,6 +754,47 @@ typedef struct KayfabeRegAudit {
     uint64_t nonstall_raises;
     uint64_t nonstall_unvectored;
     uint64_t nonstall_masked;
+    /* ★★★★★ §16.76 — THE OS-EVENT WAKEUP PLANE, and it answers a different question from
+     * the three above: those announce a COMPLETION on a copy engine, these announce that a
+     * registered os-event FIRED, which is what a userspace waiter blocked in poll() is
+     * actually waiting on (guest _kgspRpcPostEvent -> osNotifyEvent -> nv_post_event).
+     *
+     * ⊘ READ `os_event_woke_with_nothing` BEFORE CONCLUDING ANYTHING WORKED.  A wakeup is
+     * NOT a completion, and this device must never manufacture one.  The data plane is
+     * PASSTHROUGH: the guest's buffers are pinned into the HOST GPU's address space, so when
+     * the guest's channel really executes, the host GPU DMAs the release semaphore straight
+     * into guest RAM and this VMM is not in the path.  (⊘ The C's "write sema THEN signal"
+     * at C:4357-4361 is its FORGERY path, not the architecture — there is no C oracle for
+     * the completion plane.)  So the only question left is whether any of the guest's work
+     * EXECUTED: a batch announced with no newly-served doorbell wakes libcuda, which
+     * re-reads a semaphore the host never wrote, and blocks again — from the outside that is
+     * byte-identical to never having woken it.  This counter is the discriminator, and a
+     * non-zero value names the next rung (get the channel forwarded and executed), never a
+     * payload to fabricate.
+     *
+     * ⊘ AND READ `status_irq_cleared`: it is the guest's IRQSCLR, the ONLY thing that
+     * reopens the flow-control gate.  `os_event_batches == 1` with a large
+     * `os_event_gated` and `status_irq_cleared == 0` is a gate latched shut after one
+     * batch — delivery has stopped, silently, and no test in the tree can see it because
+     * the oracle's own cap1 capture contains zero IRQSCLR writes. */
+    uint64_t gsp_event_raises;
+    uint64_t gsp_event_unvectored;
+    uint64_t gsp_event_masked;
+    uint64_t status_irq_cleared;
+    uint64_t os_events_registered;
+    uint64_t os_events_retired;
+    uint64_t os_events_live;
+    uint64_t os_events_malformed;
+    uint64_t os_events_overflowed;
+    uint64_t os_event_posted;
+    uint64_t os_event_batches;
+    uint64_t os_event_gated;
+    uint64_t os_event_not_running;
+    uint64_t os_event_failed;
+    uint64_t os_event_woke_with_nothing;
+    uint64_t os_event_last_join_served;
+    uint64_t os_event_last_join_forwarded;
+    uint64_t os_event_last_join_advanced;
     uint64_t commands;
     /* ★★★ THE LIST A BOOT IS WORTH.
      *

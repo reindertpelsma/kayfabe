@@ -8439,17 +8439,34 @@ fn an_unpermitted_alloc_class_is_refused_on_the_wire_and_declares_nothing() {
     // ★★ **This row used to be `NV20_SUBDEVICE_0` (`0x2080`), and moving it is the point.**
     // On 2026-08-01 the subdevice got an `alloc_params` row (the `GspRmAlloc` rung: a live
     // boot showed the guest's kernel RM allocating one during `RmInitAdapter`), so it is no
-    // longer permitted-but-unmapped and this assertion went red — correctly. The exemplar
-    // is now `NV01_EVENT_OS_EVENT` (`0x79`): nvproxy lists it, this port models it in no
-    // params table, and it is a *different* class from the `0x7e` the same rung added, so
-    // the two refusals stay distinguishable.
+    // longer permitted-but-unmapped and this assertion went red — correctly.
     //
-    // ⚠ The day `0x79` gets a decoder too, move this row again — do NOT delete the
+    // ★★★★★ **AND IT MOVED AGAIN AT §16.76, exactly as its own warning said it would.** The
+    // exemplar was `NV01_EVENT_OS_EVENT` (`0x79`) and that class now HAS a decoder: seven of
+    // them were refused `0x56` in boot `w209_ffc80f8_ctl` and the refusal came from *here*,
+    // the params table, while the capability gate had permitted the class all along — which
+    // is this test's own distinction, met in production and costing a hang.
+    //
+    // The exemplar is now its bare sibling `NV01_EVENT` (`0x05`): still on the allowlist
+    // (`capability.rs`, `Origin::Empirical`), still modelled in no params table, and one
+    // family over from the two classes that do have rows, so the three answers stay
+    // distinguishable.
+    //
+    // ⚠ The day `0x05` gets a decoder too, move this row a THIRD time — do NOT delete the
     // assertion. `UnmappedAllocClass` and `AllocClassNotPermitted` being different answers
     // is the whole finding this test carries.
     assert_eq!(
-        alloc(0x0000_0079),
-        Err(BridgeRefusal::UnmappedAllocClass { class: 0x0000_0079 }),
+        alloc(0x0000_0005),
+        Err(BridgeRefusal::UnmappedAllocClass { class: 0x0000_0005 }),
+    );
+    // ⊘ And the class that just moved is asserted on the OTHER side of the line, so this
+    // test states the transition rather than merely surviving it.
+    assert!(
+        matches!(alloc(0x0000_0079), Ok(Translation::Event(RmEvent::Alloc { class, facts, .. }))
+            if class == ClassId(0x0000_0079) && facts == AllocFacts::default()),
+        "NV01_EVENT_OS_EVENT is decoded now — as an EDGE declaring nothing, because its \
+         NV0005_ALLOC_PARAMETERS carries an NvP64 guest-kernel callback pointer this port \
+         must never gain a decoder for",
     );
     assert_eq!(
         run.census

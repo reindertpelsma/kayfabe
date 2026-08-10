@@ -109,6 +109,31 @@ pub const NV20_SUBDEVICE_0: u32 = 0x2080;
 /// ogkm `src/common/sdk/nvidia/inc/class/cl2081.h`.
 pub const NV2081_BINAPI: u32 = 0x2081;
 
+/// `NV01_EVENT_OS_EVENT` — the event class **userspace** allocates, and the one
+/// whose registration decides whether a blocking `cuCtxCreate` can ever be woken.
+///
+/// ★★★ It is the class `libcuda` binds its os-event fd to: `eventConstruct_IMPL`
+/// reaches `NV_RM_RPC_ALLOC_EVENT` (`ogkm-580: src/nvidia/src/kernel/rmapi/event.c:161-171`)
+/// and a GSP guest takes the `IS_FW_CLIENT` branch, so the alloc arrives here as a
+/// `GSP_RM_ALLOC`. When we later post `NV_VGPU_MSG_EVENT_POST_EVENT`, the guest's
+/// `_kgspRpcPostEvent` matches on `(hClient, hEvent)` and calls `osNotifyEvent` — which
+/// is the wakeup.
+///
+/// ⚠ Its params are `NV0005_ALLOC_PARAMETERS`, the SAME struct
+/// [`NV01_EVENT_KERNEL_CALLBACK_EX`] carries, whose `data` member is an `NvP64`
+/// guest-kernel callback pointer. ⊘ No struct is mirrored for it here and none may be,
+/// for that class's reason exactly: nothing in this tree dereferences a guest pointer, and
+/// the way that stays true is that no decoder exists to hand one up.
+///
+/// ★ `notifyIndex` is read off the wire by
+/// `kayfabe_device::osevent::OsEventRecorder` as a plain `u32` at a stated offset — a
+/// number echoed back into the event we post and interpreted by nobody here. On this RPC
+/// the params are RM's own stack-local struct (`ogkm-580: inc/kernel/vgpu/rpc.h:345-357`),
+/// not libcuda's, which is why reading one field of it is not a read of user memory.
+///
+/// ogkm `src/common/sdk/nvidia/inc/nvos.h`.
+pub const NV01_EVENT_OS_EVENT: u32 = 0x79;
+
 /// `NV01_EVENT_KERNEL_CALLBACK_EX` — the event class the guest's own KERNEL
 /// RM allocates during adapter init (`[measured]`, the 2026-08-01 boot: it is the
 /// fourth and last class `rpcRmApiAlloc_GSP` asks for before `RmInitAdapter`

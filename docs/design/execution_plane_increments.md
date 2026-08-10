@@ -14619,3 +14619,193 @@ calls CRITICAL, and it surfaces as an **RPC** symptom, not a delivery one.
 boot w210_8574466_ctl]` `grep -icE "bad sequence|seqnum|sequence number"` over both the probe
 and the dmesg returns **0 / 0**. Nothing in this rung posts anything, so that is the expected
 clean baseline and the value half 2 must not change.
+
+## §16.76 ★★★★★ `w211` — THE OS-EVENT WAKEUP PLANE: registry, `POST_EVENT`, SWGEN0, and the gate — with the brief's central claim REFUTED
+
+Successor to §16.75 (`master` at `29241ca`). Half 3 landed and scored **ARM B**: the give-up is
+gone and `cuCtxCreate` stopped returning at all — a **bounded failure became an unbounded
+hang**. This section builds halves 1 and 2, which is the liveness obligation that creates.
+
+### 16.76.1 ⊘⊘⊘ THE BRIEF'S CENTRAL CLAIM IS REFUTED — the two flags are not one flag with two polarities
+
+§16.75.12 and the rung brief both state it the same way: *"⊘⊘ We hold the same
+`swgen0_pending` flag with the OPPOSITE POLARITY — ours re-raises where the C gates. Port the
+guard before the action."* **That is wrong, and porting it as written would have wedged
+delivery permanently.**
+
+They are not one flag. They are **two differently-scoped flags with the same name**:
+
+| | writer | therefore means |
+|---|---|---|
+| C's `gsp_swgen0_pending` | `nvkvm_gsp_raise_swgen0` **only** (`C:1830`), reachable only from `nvkvm_gsp_deliver_events` (`C:1868`) | *"an EVENT BATCH is outstanding"* |
+| ours, `GspFsm::swgen0_pending` | `GspFsm::post` (`boot.rs`), and `answer` posts **every RPC reply** | *"the status queue has something in it"* |
+
+`nvkvm_m3_post_status` — the C's ordinary reply path — never touches the flag. Ours is set by
+essentially every doorbell.
+
+⇒ Gating event delivery on **our** `swgen0_pending` would have refused the **first** batch,
+because an RPC reply always precedes it in the same service pass, and reopened only on an
+`IRQSCLR` — which the guest writes in response to an interrupt that, by then, would never have
+been raised. **A permanent wedge, shipped as a fix, with every mechanical check green.** This is
+the `two_projections_of_one_fact_disagreeing` shape inverted: not one fact projected twice, but
+two facts wearing one name.
+
+★ The fix is a **second field**, `GspFsm::events_outstanding`, carrying exactly the C's
+semantics, cleared by the same `E10` opener. ⊘ `swgen0_pending` is deliberately untouched: it is
+the `IRQSTAT` register shadow the guest reads back, and narrowing it to event batches would make
+that register lie about a queue that does have a message in it.
+
+★★ The refutation is now an **executable property**, not a paragraph:
+`tests/tests/os_event_wakeup.rs::the_gate_is_not_the_irqstat_shadow` asserts a batch IS
+delivered while `observe().swgen0_pending` is true, and its precondition is asserted first so
+that the test goes *blind-red* rather than *silently green* if the precondition ever stops
+holding.
+
+### 16.76.2 ⊘ SECOND REFUTATION — the opener was ALREADY BUILT
+
+The brief: *"You also need the **opener** (an `IRQSCLR` write handler clearing the flag)."*
+It exists and has since before this rung:
+
+- `crates/kayfabe-gsp/src/seq.rs:189` — `GspReg::GspFalconIrqsclr if model.is_swgen0_clear(val)`
+  → `BootStep::ClearStatusIrq`;
+- `crates/kayfabe-device/src/ga10x.rs:348` — `is_swgen0_clear`;
+- `crates/kayfabe-gsp/src/boot.rs` — `ClearStatusIrq` → `swgen0_pending = false`, `Transition::E10`,
+  citing `C:4193-4200`.
+
+What this rung added is one line inside it (`events_outstanding = false`) and a **counter**,
+`Counters::status_irq_cleared`, because the opener's *existence* was never the question — whether
+it ever **fires** is, and ⊘ `cap1` has zero `IRQSCLR` writes so nothing in the tree can answer it.
+
+### 16.76.3 ★★★★ A DEFECT CAUGHT IN THE BUILD: `cmd.payload` DOES NOT CONTAIN AN ALLOC'S PARAMS
+
+The registry's first draft read `notifyIndex` out of `RpcCommand::payload`, which is what the
+sibling `FaultBufferRecorder` reads. **For a control that is right and for an alloc it is
+silently empty**: `rpcRmApiAlloc_GSP` writes the envelope length as plain
+`sizeof(rpc_gsp_rm_alloc_v03_00)` (`ogkm-580: rpc.c:11196-11199`) whose last member is a
+*flexible* `NvU8 params[]`, so the declared payload is 32 bytes and stops exactly where the
+params begin. The params arrive in `RpcCommand::delivered`, reached by `wire_body()`.
+
+⊘ The failure mode had no red test in it: **every** registration would have counted
+`malformed`, the plane would have been dead on the live boot, and six unit tests would still
+have been green had their fixtures been built on the same mistake. So the test helper now
+**constructs the command the way the transport does** — declared payload truncated at 32,
+params only in `delivered` — which makes the fixture able to fail.
+
+### 16.76.4 WHAT LANDED
+
+**Half 1 — the registry.**
+- `NV01_EVENT_OS_EVENT` (`0x79`) generated as a class constant and given an
+  `alloc_params` arm: `AllocParams::NoDeclaredFacts`. ⚠ The STRONG reading, and the same one its
+  sibling `0x7e` takes: the shared `NV0005_ALLOC_PARAMETERS` carries an `NvP64` guest-kernel
+  callback pointer at +16, and no decoder for it may exist.
+- `kayfabe_device::osevent` — `OsEventLog` (registry + counters) and `OsEventRecorder`, a
+  `CommandObserver` seated at the **front** of the chain. Two independent reasons for that seat:
+  the object link *terminates* the chain for `GSP_RM_ALLOC`/`FREE`, and an observer has no
+  return value, so *"the registry changes no reply byte"* is `rustc`'s.
+- ★ **The FREE path**, both shapes (`hEvent`, and `client == handle` for a client-root free).
+  `C:1875-1884` is a three-times-reproduced bug report, not a reading: posting to a dead pair
+  makes `CliGetEventInfo` return `OBJECT_NOT_FOUND`, desyncs the **shared** status queue and
+  wedges the whole RPC path.
+- One field read out of guest params — `notifyIndex`, a plain `u32` at +12, bounds-checked. The
+  pointer at +16 is not loaded, and a unit test poisons it and asserts no half of it reaches the
+  wire.
+
+**Half 2 — delivery.**
+- `kayfabe_abi::postevent` — `rpc_post_event_v17_00` generated (SIZE 32, offsets asserted against
+  `rustc`, padding hole at +18 pinned) and wrapped as `PostEvent`. Empty, non-list event.
+- `GspFsm::deliver_events` — the C's four steps in the C's order: nothing-registered → return;
+  **gate**; post all; latch once. Returns `EventDelivery`, five variants, because *"nothing was
+  delivered"* is four different findings.
+- `RegPlane::deliver_os_events` — called at the end of every claimed GSP register write (where
+  the command doorbell lands, `C:4363-4367`'s position). On `Delivered` it latches
+  `MC_ENGINE_IDX_GSP`'s **stall vector read out of the captured interrupt table** (`0x9b` = 155
+  on GA106, `nonstall::gsp_stall_vector`) into the existing `CpuIntrTree` and sets
+  `raise_cpu_intr`, which the shell already delivers as MSI-X index 0. ⚠ Two numbers, one word:
+  155 is a tree vector, 0 is a table index; the C does both halves in this order.
+- ⊘ `raise_status_irq` is **not** wired to deliver, and the refusal at `nvkvm.c` is **narrowed,
+  not deleted** — its sentence *"a guest that BLOCKS on a status-queue event will not be woken"*
+  became false this rung and now says what is still true: that flag is the archive's own service
+  cadence, not demand.
+
+**ABI 36 → 37** — eighteen new audit words (the registry's five, the gate's five, the raise's
+three, the opener, and the join's three) and two new `info_report` lines.
+
+### 16.76.5 ⊘⊘ A PRESCRIPTION RECEIVED AND RETRACTED MID-RUNG — attributed, because the discriminator matters
+
+The rung's coordinator sent, mid-build, a prescription that half 2 was *"necessary and almost
+certainly not sufficient"* because the C's delivery is **ordered** — *"write sema THEN signal, so
+the payload is already visible when the guest re-checks"* (`C:4357-4361`) — and that the missing
+fourth piece was therefore **something must WRITE the release semaphore**.
+
+**The owner refuted it, and is right.** That is the C's **forgery path**, not the architecture,
+and this project's own standing limit says so: *"there is NO C oracle for the completion plane —
+the C FORGES completions, so a green diff says nothing about it"*, and *"the completion plane
+splits THREE ways: emulated-and-executed ≠ forged"*. The prescription cited the oracle exactly
+where the oracle is degenerate — the same error class as §16.75.10's refuted citation, one plane
+over.
+
+★ **The correct model**: the data plane is **passthrough**. The guest's buffers are pinned into
+the host GPU's address space, so when the guest's channel really executes, **the host GPU DMAs
+the release semaphore straight into guest RAM** and this VMM is not in the path. Our job here is
+exactly one thing — **deliver the notification**.
+
+⊘ No semaphore-writing step was built, and none may be.
+
+★ What survives the retraction is the **instrumentation**, and it is now better posed: the join
+records, at the instant of each announcement, how many events are registered, how many landed,
+and how many doorbells this device has **served** (forwarded + locally executed) since the
+previous batch. `os_event_woke_with_nothing` is the discriminator between *"we never woke it"*
+and *"we woke it with nothing behind it"* — two worlds that produce a byte-identical
+`cuCtxCreate` that does not return.
+
+### 16.76.6 THE FALSIFIER
+
+- **F1 — primary.** `cuCtxCreate` **terminates** at all inside the hook's 150 s deadline. This is
+  the liveness regression closing.
+- **F2.** Its outcome: `0`, or a **different** failure. ★ Failing differently is still a win — say
+  so plainly.
+- **F3.** No `"Bad sequence number"` / seqnum gap. ★ Baseline `0 / 0` in `w210`
+  (§16.75.12); the gate exists to keep it there.
+- **F4.** `os_events_registered` > 0, `os_event_posted` > 0, `gsp_event_raises` > 0, and
+  `status_irq_cleared` > 0 — the last being whether the opener ever fires, which nothing in the
+  tree can predict.
+- **F5 — EXPECTED, and it is a WIN.** The event is posted **and** drained (`status_irq_cleared`
+  > 0, `os_event_batches` > 1) and `cuCtxCreate` still does not return, with
+  `os_event_woke_with_nothing == os_event_batches` and `os_event_last_join_advanced == 0`.
+  ⇒ **the notification path works and the guest's channel is not executing on the host**, so
+  there is no DMA'd payload to wake it for. That converts the wall from *"delivery is unbuilt"*
+  into *"delivery works and there is nothing to deliver"* — a different and much better-posed
+  problem, and it names the next rung precisely: get the guest's channel forwarded and executed
+  (today `CE-SUBMIT → REFUSED BEFORE SUBMISSION`, isolates default `Stillborn`).
+- ⊘ **Arm.** `cuCtxCreate` still never returns AND the counters show the plane never ran — report
+  which of (registry / post / raise / gate / opener) is unreached, **by name**; every one of the
+  five has its own counter for exactly this reason.
+
+### 16.76.7 ⊘ A THIRD SPELLING `unranked_locks.rs` IS BLIND TO — `Arc<Mutex<T>>`
+
+`tests/tests/unranked_locks.rs` requires a field's type to be **immediately** preceded by the
+field's own `:`, so `live: Arc<Mutex<Vec<OsEventRegistration>>>` is not seen: the `Mutex` sits
+behind an `Arc<`. The gate's own header records two previous blindnesses of exactly this shape
+(a fully-qualified `std::sync::Mutex<…>`, and a `rustfmt` line break), each with the same
+sentence — *"the gate was honest about what it checked and did not check the shape the code was
+actually written in."* **This is the third.**
+
+⚠ It is **not new with this rung**: `FaultBufferLog`, `BarPdeLog`, `GvasPubLog`, `UnservicedLog`
+and `ControlCensusLog` are all `Arc<Mutex<…>>` and none of them appears in
+`UNRANKED_VCPU_PATH_LOCKS` either. The list reads as complete and is not. ⊘ Not fixed here,
+deliberately — widening the scanner demands classifying every one of those, which is its own
+rung and would not be reviewed properly inside a liveness fix. Recorded so the next reader finds
+it stated rather than re-derives it a fourth time.
+
+★ The two locks this rung adds are classified here in prose, to the standard the list would have
+demanded:
+
+- `OsEventLog::live` (`Arc<Mutex<Vec<OsEventRegistration>>>`) — taken for one `Vec` scan/push or
+  one `retain`, and released. **No call of any kind runs beneath it**, and `batch()` copies out
+  by value precisely so the poster (`GspFsm::deliver_events`) runs with it dropped.
+- `OsEventLog::last_join` (`Arc<Mutex<JoinPoint>>`) — one `Copy` struct, read and replaced.
+
+Lock **order** is `Mutex<PlaneState>` → `OsEventLog`, in both directions of use: the chain link
+takes the registry while the plane lock is held (it runs inside the policy chain), and
+`deliver_os_events` takes it while the same plane lock is held. There is no path that takes them
+the other way round, and neither can block.

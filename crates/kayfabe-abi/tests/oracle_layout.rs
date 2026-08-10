@@ -116,12 +116,14 @@ fn the_generators_layout_equals_rustcs_for_every_generated_struct() {
     // for task #111's simulated-fault emitter (`docs/design/simulated_gpu_fault.md`).
     // Both literals move together and both are moved BY HAND, which is what makes a
     // silently-widened generator slice a red test rather than a bigger green number.
-    assert_eq!(checked_structs, 20, "the slice is 20 generated structs");
+    // ★ 20 -> 21 and 141 -> 149: `rpc_post_event_v17_00` and its 8 fields, added at
+    // §16.76 for the os-event wakeup (`crate::postevent`).
+    assert_eq!(checked_structs, 21, "the slice is 21 generated structs");
     // 4+7+11+8+7+7+9 (nvos) + 4+9+5+3 (classes) + 7+7 (ctrl) + 8+12 (rpc)
     // + 4+2+17+5+5 (vbios). The first draft of this line said 66 and the test
     // caught it — which is the point of asserting the count rather than trusting
     // the loop ran.
-    assert_eq!(checked_fields, 141, "…with 141 fields between them");
+    assert_eq!(checked_fields, 149, "…with 149 fields between them");
 }
 
 /// The transcribed layout gets the same treatment. A hand-written table that
@@ -649,6 +651,46 @@ fn the_rc_triggered_event_has_two_padding_holes_a_hand_encoder_would_miss() {
     assert_eq!(rpc::RpcRcTriggeredV1702::ALIGN, 4);
 }
 
+/// ★★★★★ §16.76 — the **os-event wakeup** the guest resolves on `(hClient, hEvent)`, with
+/// every offset pinned against the header and the one a hand encoder would get wrong called
+/// out.
+///
+/// The struct is byte-identical at both vendored tags
+/// (`ogkm-580: src/nvidia/generated/g_rpc-structures.h:1545-1556`, `ogkm-610: :1468-1479`),
+/// so there is no version seam to key on — worth pinning, because a future tag that moved a
+/// field would send a wakeup whose `hEvent` landed in `notifyIndex`, which
+/// `CliGetEventInfo` would answer `OBJECT_NOT_FOUND` and thereby desync the SHARED status
+/// queue (`C: src/qemu/nvkvm_gpu_emul.c:1875-1884`).
+#[test]
+fn the_post_event_body_has_the_padding_hole_a_hand_encoder_would_miss() {
+    let l = &rpc::RpcPostEventV1700::LAYOUT;
+    assert_eq!(l.offset_of("h_client"), Some(0), "half the MATCH key");
+    assert_eq!(l.offset_of("h_event"), Some(4), "the other half");
+    assert_eq!(l.offset_of("notify_index"), Some(8));
+    assert_eq!(l.offset_of("data"), Some(12));
+    assert_eq!(l.offset_of("info16"), Some(16));
+    // ★ THE HOLE: `info16` is an `NvU16` at +16 followed by a 4-aligned `NvU32`, so the
+    // compiler inserts two bytes and `status` is at +20, not +18. An encoder that packed in
+    // declaration order would put every field after `info16` two bytes low.
+    assert_eq!(
+        l.offset_of("status"),
+        Some(20),
+        "two padding bytes after the NvU16"
+    );
+    assert_eq!(l.offset_of("event_data_size"), Some(24));
+    assert_eq!(l.offset_of("b_notify_list"), Some(28));
+    // The flexible `eventData[]` tail starts at 32 and we always emit it empty.
+    assert_eq!(rpc::RpcPostEventV1700::SIZE, 32);
+    assert_eq!(rpc::RpcPostEventV1700::ALIGN, 4);
+    // ★ And the C agrees, arithmetically: `C:1819` sets `rpc.length = 32 + 32` — the
+    // 32-byte envelope plus exactly this body.
+    assert_eq!(
+        rpc::RpcMessageHeaderV0300::SIZE + rpc::RpcPostEventV1700::SIZE,
+        64,
+        "nvkvm_gpu_emul.c:1819 stl_le_p(el + 56, 32u + 32u)"
+    );
+}
+
 /// The signature word and the two boot-path ids, against the C emulator's
 /// literals.
 #[test]
@@ -1001,6 +1043,7 @@ fn every_generated_struct_is_covered_by_an_oracle_assertion() {
         "NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ENTRY",
         "rpc_message_header_v03_00",
         "rpc_rc_triggered_v17_02",
+        "rpc_post_event_v17_00",
     ];
     let generated: Vec<&str> = nvos::STRUCTS
         .iter()

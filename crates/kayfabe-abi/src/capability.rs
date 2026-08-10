@@ -2577,7 +2577,13 @@ mod tests {
         // (`0xc076`), UVM's per-channel fault-cancel SW object — refused four times in
         // boot `s22_f4f3865`'s `cuInit` window, once per UVM channel, each refusal fatal
         // to its channel at `ogkm-580: nv_gpu_ops.c:6120`.
-        assert_eq!(seen, 14, "the port decodes fourteen classes today");
+        // 14 → 15 on 2026-08-10 (`execution_plane_increments.md` §16.76):
+        // `NV01_EVENT_OS_EVENT` (`0x79`), the class libcuda binds its blocking-sync os-event
+        // to. ★ The class was PERMITTED here from the beginning and undecodable in the
+        // params table, so seven registrations in `w209_ffc80f8_ctl` were refused
+        // `0x56` by the decoder gate and not by the boundary — which is exactly the
+        // asymmetry this test's own docs describe, seen from the other side.
+        assert_eq!(seen, 15, "the port decodes fifteen classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

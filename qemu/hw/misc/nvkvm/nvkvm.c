@@ -435,27 +435,36 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
             /*
              * ★★ A NAMED REFUSAL, not silence, and the distinction is the whole point.
              *
-             * ⚠ #151 CORRECTED THE SENTENCE THIS USED TO PRINT.  It said "this device does
-             * not deliver vectors yet", and that became false the moment raise_cpu_intr
-             * above started delivering them.  What is still true is narrower and is what it
-             * says now: the GSP's *status queue* announcement is not delivered, because
-             * doing it right means latching the GSP engine's own stall vector into the
-             * interrupt tree first — the C artifact raises vector 155 for
-             * MC_ENGINE_IDX_GSP (`C: src/qemu/nvkvm_gpu_emul.c:1828-1843`) — and a bare
-             * message with nothing pending sends the guest's ISR looking for an interrupt
-             * that is not there.
+             * ⚠ #151 CORRECTED THIS ONCE and §16.76 has NARROWED it a second time.  It is
+             * narrowed rather than deleted, deliberately: what it says must stay TRUE, and
+             * the true statement keeps shrinking as pieces land.
              *
-             * ⊘ Not needed for the boot: the guest POLLS for GSP_INIT_DONE
-             * (kgspWaitForRmInitDone), and the oracle's own cap1 capture contains zero
-             * IRQSCLR writes across 359 062 records.  A guest that blocks on an event we
-             * never deliver would still hang, so this must not go quiet.
+             * What #151 made false: "this device does not deliver vectors yet" — raise_cpu_
+             * intr above started delivering them.
+             *
+             * ⚠ What §16.76 made false: "a guest that BLOCKS on a status-queue event will
+             * not be woken by us".  It IS woken now, when it has REGISTERED an os-event: the
+             * archive latches MC_ENGINE_IDX_GSP's own stall vector (155 on GA106, read from
+             * the captured interrupt table, not written down) into the interrupt tree and
+             * asks for delivery through raise_cpu_intr — the same two-step the C does at
+             * `C: src/qemu/nvkvm_gpu_emul.c:1828-1843`.
+             *
+             * ⊘ WHAT IS STILL TRUE, and it is what this now says: this flag is the archive's
+             * OWN service cadence, raised on the bind and on every subsequent service pass
+             * while anything is queued.  It is NOT demand — nothing is waiting on it — and
+             * wiring it to deliver would ship one message per doorbell with no pending bit
+             * behind it, sending the guest's ISR looking for an interrupt that is not there.
+             * The boot path polls for GSP_INIT_DONE (kgspWaitForRmInitDone) and does not
+             * need it; a real WAITER is served by the os-event path instead, and the
+             * "os-events" lines in the teardown report are where that is counted.
              */
             warn_report("nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and "
-                        "this device does not deliver that one. The guest's own interrupt "
-                        "trigger IS delivered; this is the GSP-engine stall vector, which "
-                        "needs a pending bit in the interrupt tree first. A guest that "
-                        "BLOCKS on a status-queue event will not be woken by us — the boot "
-                        "path polls instead.");
+                        "this device does not deliver that one. It is the archive's own "
+                        "service cadence, not a guest waiting on anything: delivering it "
+                        "would send one message per doorbell with nothing pending behind "
+                        "it. A guest that BLOCKS on a REGISTERED os-event IS woken — that "
+                        "path latches the GSP engine's stall vector and delivers; see the "
+                        "\"os-events\" lines in this report for whether it fired.");
         }
     }
 }
@@ -1527,6 +1536,39 @@ static void nvkvm_report_registers(NvkvmState *s)
                 " UNVECTORED (work done, nothing told the guest), %" PRIu64
                 " would be masked by the guest's own LEAF_EN",
                 a.nonstall_raises, a.nonstall_unvectored, a.nonstall_masked);
+
+    /* ★★★★★ §16.76 — THE OS-EVENT WAKEUP LINE, and it answers a DIFFERENT question from the
+     * completion line above.  That one is "a copy engine finished"; this one is "a userspace
+     * waiter blocked in poll() was told its registered event fired", which is what
+     * cuCtxCreate is actually parked on.
+     *
+     * Printed unconditionally, including all-zero, for every other block's reason: zero
+     * registrations and a registry that never got seated are the same silence otherwise.
+     *
+     * ⊘ THE TWO NUMBERS TO READ, IN THIS ORDER:
+     *   `cleared` — the guest's IRQSCLR.  It is the ONLY thing that reopens the flow-control
+     *     gate.  0 with raises > 0 means the gate latched shut after one batch and delivery
+     *     has stopped silently.  The oracle cannot see this: cap1 has ZERO IRQSCLR writes.
+     *   `woke-with-nothing` — batches announced with no newly-served doorbell behind them.
+     *     A wakeup is not a completion; on the passthrough data plane the HOST GPU DMAs the
+     *     release semaphore into guest RAM, so a batch with nothing executed wakes libcuda
+     *     into an unchanged semaphore and it blocks again.  Non-zero names the next rung
+     *     (get the guest's channel forwarded and executed), never a payload to fabricate. */
+    info_report("nvkvm: os-events: %" PRIu64 " registered / %" PRIu64 " retired / %" PRIu64
+                " live (%" PRIu64 " malformed, %" PRIu64 " refused-full); %" PRIu64
+                " POST_EVENT posted in %" PRIu64 " batch(es); gate: %" PRIu64 " gated, %"
+                PRIu64 " not-running, %" PRIu64 " failed, %" PRIu64 " IRQSCLR cleared",
+                a.os_events_registered, a.os_events_retired, a.os_events_live,
+                a.os_events_malformed, a.os_events_overflowed, a.os_event_posted,
+                a.os_event_batches, a.os_event_gated, a.os_event_not_running,
+                a.os_event_failed, a.status_irq_cleared);
+    info_report("nvkvm: os-event announce: %" PRIu64 " GSP stall vector(s) raised, %" PRIu64
+                " UNVECTORED, %" PRIu64 " would be masked; %" PRIu64
+                " batch(es) WOKE WITH NOTHING (last join: %" PRIu64 " doorbells served, %"
+                PRIu64 " of them forwarded, %" PRIu64 " new since the previous batch)",
+                a.gsp_event_raises, a.gsp_event_unvectored, a.gsp_event_masked,
+                a.os_event_woke_with_nothing, a.os_event_last_join_served,
+                a.os_event_last_join_forwarded, a.os_event_last_join_advanced);
 
     /*
      * ★★★ #146 — THE FRAMEBUFFER LINE, printed unconditionally INCLUDING when every number

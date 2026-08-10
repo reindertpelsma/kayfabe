@@ -133,10 +133,105 @@ pub fn non_stall_vector(
     Ok(row.vector_non_stall)
 }
 
+/// `MC_ENGINE_IDX_GSP` — the interrupt table's key for the GSP engine itself
+/// (`ogkm-580: src/nvidia/inc/kernel/gpu/intr/engine_idx.h`).
+///
+/// ⚠ A **third** index space again, and the whole reason this constant is named: it is not
+/// an `RM_ENGINE_TYPE`, not an `NV2080_ENGINE_TYPE`, and emphatically not the vector.
+pub const MC_ENGINE_IDX_GSP: u16 = 50;
+
+/// Why the GSP's own stall vector cannot be named. See [`gsp_stall_vector`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoGspStallVector {
+    /// The chip's interrupt table carries no row for [`MC_ENGINE_IDX_GSP`].
+    NotInTable,
+    /// The row exists and publishes [`INTR_VECTOR_INVALID`] — hardware's own statement that
+    /// this engine has no stall vector.
+    PublishedInvalid,
+}
+
+impl core::fmt::Display for NoGspStallVector {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            NoGspStallVector::NotInTable => write!(
+                f,
+                "no GSP stall vector: this chip's interrupt table has no row for \
+                 MC_ENGINE_IDX_GSP ({MC_ENGINE_IDX_GSP}) at all"
+            ),
+            NoGspStallVector::PublishedInvalid => write!(
+                f,
+                "no GSP stall vector: MC_ENGINE_IDX_GSP ({MC_ENGINE_IDX_GSP})'s row \
+                 publishes NV2080_INTR_VECTOR_INVALID"
+            ),
+        }
+    }
+}
+
+/// ★★★★★ §16.76 — **which vector announces that the GSP's status queue has a message**.
+///
+/// # ⚠ TWO NUMBERS, ONE WORD — and this function exists so they cannot be confused
+///
+/// The device shell delivers **MSI-X table index 0** (`nvkvm.c`'s `NVKVM_STALL_VECTOR`):
+/// one message, and the guest's ISR demultiplexes by reading the interrupt tree
+/// (`ogkm-580: intr_tu102.c:729-744`). What this returns is the other number entirely — a
+/// **GPU interrupt-tree vector**, `155` (`0x9b`) on GA106, which is what
+/// [`crate::cpuintr::CpuIntrTree::latch`] turns into a `LEAF` bit and a `TOP` summary bit so
+/// that the ISR has something to *find* when the message arrives.
+///
+/// ⊘ Notifying MSI-X 155, or latching bit 0, both look exactly like *"delivered, and the
+/// guest ignored it"*. `C: src/qemu/nvkvm_gpu_emul.c:1828-1843` does both halves in this
+/// order and is the only implementation a real driver has accepted end to end.
+///
+/// ★ It is read from the captured table rather than written down, for the reason
+/// [`non_stall_vector`] is: `0x9b` is a fact about the GA106 whose
+/// `INTERNAL_INTR_GET_KERNEL_TABLE` reply this port replays, and a chip whose table said
+/// something else must not get GA106's answer.
+///
+/// # Errors
+/// [`NoGspStallVector`], by variant.
+pub fn gsp_stall_vector(intr_table: &[IntrTableEntry]) -> Result<u32, NoGspStallVector> {
+    let row = intr_table
+        .iter()
+        .find(|e| e.engine_idx == MC_ENGINE_IDX_GSP)
+        .ok_or(NoGspStallVector::NotInTable)?;
+    if row.vector_stall == INTR_VECTOR_INVALID {
+        return Err(NoGspStallVector::PublishedInvalid);
+    }
+    Ok(row.vector_stall)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ga10x::GA106_INTR_TABLE;
+
+    /// ★★★ The GSP's own stall vector, out of the captured table — the number the C
+    /// hard-codes as `155` and the one this device latches before it announces an
+    /// os-event batch (`C: src/qemu/nvkvm_gpu_emul.c:1832`).
+    #[test]
+    fn the_gsp_stall_vector_is_the_one_the_captured_table_publishes() {
+        assert_eq!(
+            gsp_stall_vector(GA106_INTR_TABLE),
+            Ok(0x9b),
+            "MC_ENGINE_IDX_GSP (50) publishes vectorStall 0x9b = 155 on GA106"
+        );
+    }
+
+    /// ⚠ The two numbers this port must never confuse, asserted apart: the tree vector is
+    /// 155, and the MSI-X index the shell delivers is 0. A test that read one for the
+    /// other would still pass on a device that raises nothing.
+    #[test]
+    fn the_tree_vector_decodes_to_a_leaf_this_chip_actually_has() {
+        let v = gsp_stall_vector(GA106_INTR_TABLE).expect("GA106 publishes one");
+        assert_eq!(crate::cpuintr::vector_to_leaf_reg(v), 4, "155 / 32");
+        assert_eq!(crate::cpuintr::vector_to_leaf_bit(v), 27, "155 % 32");
+        assert_eq!(crate::cpuintr::vector_to_subtree(v), 2, "leaf 4 / 2");
+        assert!(
+            crate::cpuintr::vector_to_leaf_reg(v) < crate::cpuintr::N_LEAF,
+            "a vector that named a row this chip lacks would latch NOTHING and the \
+             device would report a raise it did not make"
+        );
+    }
 
     /// ★★★ The measurement this whole increment turns on, as an assertion: the engine the
     /// scrubber was **observed** to bind resolves to the vector the captured table

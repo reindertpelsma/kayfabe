@@ -287,6 +287,42 @@ pub struct ServiceReport {
     pub unserviced: Vec<Unserviced>,
 }
 
+/// ★★★★★ §16.76 — what one call to [`GspFsm::deliver_events`] did.
+///
+/// ⊘ **Five variants and not an `Option<usize>`**, and the reason is the one this port has
+/// been bitten by repeatedly: *"no events were delivered"* is four different findings whose
+/// next moves are completely different — nobody registered one, the previous batch is still
+/// outstanding, the boot never reached `Running`, or the ring refused us. A single number
+/// would make all four read as the same silence, and the gate in particular is a state that
+/// can be *stuck*, which is the one an operator must be able to see by name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EventDelivery {
+    /// No os-event has been registered, so there is nobody to wake (`C:1851-1853`).
+    NoneRegistered,
+    /// ★ The previous batch has not been drained — [`GspFsm::deliver_events`]'s gate held.
+    ///
+    /// Healthy in steady state (it is what bounds the ring to one batch) and **the symptom
+    /// to look for** if delivery stops: a gate opened only by an `IRQSCLR` stays shut
+    /// forever if the guest never takes the interrupt.
+    Gated,
+    /// The guest has not drained `GSP_INIT_DONE`, so `POST_EVENT` — which is on neither
+    /// driver tag's bootup-window allowlist — must not be posted yet.
+    NotRunning,
+    /// A batch was posted and the gate is now closed until the guest clears the edge.
+    Delivered {
+        /// How many `POST_EVENT` messages landed in the status queue.
+        posted: usize,
+        /// Set when the batch was cut short — the ring refused the rest. The elements that
+        /// did land are still announced; see [`GspFsm::deliver_events`] for why.
+        short: Option<GspFault>,
+    },
+    /// Nothing landed at all. The gate is left OPEN: there is no batch to drain.
+    Failed {
+        /// Why the first post was refused.
+        fault: GspFault,
+    },
+}
+
 /// One command the FSM had to refuse because nothing offered an answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unserviced {
@@ -540,6 +576,49 @@ pub struct GspFsm {
     phase: BootPhase,
     queue: QueueState,
     swgen0_pending: bool,
+    /// ★★★★★ §16.76 — **the os-event flow-control gate**, and it is a SECOND flag beside
+    /// [`GspFsm::swgen0_pending`] rather than a reuse of it.
+    ///
+    /// # What it gates, in the C's own words
+    ///
+    /// `C: src/qemu/nvkvm_gpu_emul.c:1854-1863`, whose comment calls it CRITICAL:
+    ///
+    /// > *"the status queue is SHARED with RPC responses and has strictly monotonic
+    /// > per-message seqNums in a small ring. Posting an event batch on every doorbell
+    /// > (hundreds of times) overflows the ring before the guest drains it → the guest's
+    /// > `rpcRecvPoll` sees a seqNum gap (\"Bad sequence number\") and the whole RPC path
+    /// > breaks."*
+    ///
+    /// So the rule is **post-when-drained, post-all, raise-once**, which bounds the
+    /// outstanding event messages to one batch. [`GspFsm::deliver_events`] is the rule.
+    ///
+    /// # ⊘⊘ WHY IT IS NOT `swgen0_pending`, and this is the refutation that mattered
+    ///
+    /// The brief for this rung said we hold *"the same flag with the opposite polarity"*.
+    /// **We do not — we hold a DIFFERENTLY-SCOPED flag with the same name**, and porting
+    /// the C's gate onto it would have wedged delivery shut permanently:
+    ///
+    /// - In the C, `gsp_swgen0_pending` is written in exactly one place,
+    ///   `nvkvm_gsp_raise_swgen0` (`C:1830`), which is reachable only from
+    ///   `nvkvm_gsp_deliver_events` (`C:1868`). An ordinary RPC reply — `nvkvm_m3_post_status`
+    ///   — **never sets it**. It therefore means *"an EVENT BATCH is outstanding"*.
+    /// - Here, [`GspFsm::post`] sets `swgen0_pending` on **every** post, and `answer` posts
+    ///   every RPC reply. It therefore means *"we have written something to the status
+    ///   queue"*, which is true after essentially every doorbell.
+    ///
+    /// ⇒ Gating on `swgen0_pending` would have refused the FIRST event batch (an RPC reply
+    /// always precedes it in the same service pass) and reopened only on an `IRQSCLR` —
+    /// which the guest writes only in response to an interrupt we would, by then, never
+    /// have raised. A wedge, shipped as a fix, with a green test suite.
+    ///
+    /// ⊘ And `swgen0_pending` is deliberately left alone: it is the `IRQSTAT` **register
+    /// shadow** the guest reads back (`kayfabe_device::ga10x`'s `GspFalconIrqstat` arm), and
+    /// narrowing it to event batches would make that register lie about a queue that does
+    /// have a message in it.
+    ///
+    /// Both are cleared by the same opener, [`Transition::E10`], because both describe
+    /// state the guest's ISR has just finished acting on.
+    events_outstanding: bool,
     /// What the boot-args mailboxes **read back** — a register shadow, so a guest that
     /// reads one gets what it wrote, exactly as hardware would.
     mailbox_lo: u32,
@@ -610,6 +689,7 @@ impl GspFsm {
             phase: BootPhase::Cold,
             queue: QueueState::Unbound,
             swgen0_pending: false,
+            events_outstanding: false,
             mailbox_lo: 0,
             mailbox_hi: 0,
             boot_args_seen: (false, false),
@@ -874,6 +954,22 @@ impl GspFsm {
             // (`C: src/qemu/nvkvm_gpu_emul.c:4193-4200`).
             BootStep::ClearStatusIrq => {
                 self.swgen0_pending = false;
+                // ★★★★★ §16.76 — **THE OPENER**, and it is the same edge for both flags.
+                //
+                // The C gates its event batches on `gsp_swgen0_pending` and clears that flag
+                // in exactly one place: the `IRQSCLR` write handler (`C:4441`). Its ISR
+                // clears the edge before draining, so *"the guest cleared the interrupt"*
+                // and *"the guest is about to consume what we posted"* are the same instant.
+                //
+                // ⊘ **The oracle covers this line NOT AT ALL**, and that is stated rather
+                // than discovered: `cap1` contains **zero** `IRQSCLR` writes across 359 062
+                // records (`crates/kayfabe-crec/tests/cap1_differential.rs` F-3), because
+                // the guest never received an interrupt to clear. A green `cap1` diff says
+                // nothing here; only a live boot exercises it. If it never fires, the gate
+                // latches shut after one batch — which is the SAFE direction (no ring
+                // overflow) and is measurable as
+                // `kayfabe_device::osevent::OsEventLog::gated`.
+                self.events_outstanding = false;
                 report.transitions.push(Transition::E10);
             }
         }
@@ -905,6 +1001,11 @@ impl GspFsm {
         self.queue = QueueState::Unbound;
         self.init_done_posted = false;
         self.swgen0_pending = false;
+        // ★ The batch died with the binding: the queue it was posted into is gone, so the
+        // next life must not inherit a gate that this one closed. ⊘ The registry itself is
+        // NOT cleared here — it lives in the device shell, and the guest's own `FREE`s are
+        // what retire its rows (`kayfabe_device::osevent`).
+        self.events_outstanding = false;
         // The boot-args pair stops meaning anything when the life ends; the register
         // shadow keeps reading back what was written, as hardware would.
         self.boot_args_seen = (false, false);
@@ -1554,6 +1655,99 @@ impl GspFsm {
             return Err(GspFault::NotRunning);
         }
         self.post(ram, rpc)
+    }
+
+    /// ★★★★★ §16.76 — **deliver one batch of os-event wakeups**: the gate, then the
+    /// action.
+    ///
+    /// This is `C: src/qemu/nvkvm_gpu_emul.c:1849-1873` (`nvkvm_gsp_deliver_events`), and
+    /// the port keeps its four steps in the C's own order because three of them exist to
+    /// protect the fourth:
+    ///
+    /// 1. **nothing registered → return.** `C:1851-1853`.
+    /// 2. **previous batch not drained → return.** `C:1861-1863`, gated on
+    ///    [`GspFsm::events_outstanding`] — read that field's docs for why it is not
+    ///    `swgen0_pending`, which is the trap this rung was briefed to walk into.
+    /// 3. **post ALL of them**, one `POST_EVENT` per registered `(hClient, hEvent)`.
+    /// 4. **raise once** — here, by *latching the flag*; the interrupt itself belongs to
+    ///    the device shell, which owns the interrupt tree and the VMM's vocabulary. The FSM
+    ///    deliberately names no `IrqSpec` (see [`ServiceReport::raise_status_irq`]).
+    ///
+    /// # ⊘ What a partial post does, and why it still raises
+    ///
+    /// [`GspFsm::post`] can return [`GspFault::QueueFull`], which its own docs call
+    /// *retryable back-pressure*. If the ring fills part-way through a batch this stops,
+    /// reports how many landed, and **still latches the gate** — because the elements that
+    /// DID land are real messages the guest must be told to drain. Raising for a short
+    /// batch wakes a waiter that then re-checks and finds nothing new, which costs one
+    /// spurious poll; not raising strands posted elements behind a gate that only an
+    /// `IRQSCLR` opens, and no `IRQSCLR` arrives without an interrupt. ⊘ The C does not
+    /// distinguish these cases at all — `nvkvm_m3_post_status` returns `void` — so this is
+    /// strictly more careful than the oracle, in the direction the oracle cannot advise on.
+    ///
+    /// # ⚠ A wakeup is not a completion
+    ///
+    /// Every event posted here says *"the event you registered has fired"* and nothing
+    /// more; the waiter re-reads its own semaphore and decides. ⊘ This is therefore **not**
+    /// a forged completion and must never be read as one — nothing here claims work
+    /// finished, and the execution plane still owes every byte it always owed.
+    pub fn deliver_events(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        events: &[kayfabe_abi::postevent::PostEvent],
+    ) -> EventDelivery {
+        // Step 1 (`C:1851`).
+        if events.is_empty() {
+            return EventDelivery::NoneRegistered;
+        }
+        // Step 2 (`C:1861`) — THE GATE, before the action.
+        if self.events_outstanding {
+            return EventDelivery::Gated;
+        }
+        // ⊘ Asked before the loop and reported by name, because `NotRunning` is a
+        // statement about the BOOT and `QueueFull` is one about the ring — an operator's
+        // next move differs, and a single "delivered 0" would collapse them.
+        if self.phase != BootPhase::Running {
+            return EventDelivery::NotRunning;
+        }
+        let function = self.abi.rpc.codes.post_event;
+        let mut posted = 0usize;
+        let mut refused = None;
+        // Step 3 (`C:1864-1867`) — post ALL of them.
+        for ev in events {
+            let rpc = OutgoingRpc {
+                function,
+                // ⊘ Zero, and it is not a placeholder: an EVENT is unsolicited, so it
+                // echoes no request's transaction id. The guest's receiver dispatches
+                // events on `function` alone (`ogkm-580: kernel_gsp.c:1610-1622`); the
+                // per-message ordering the ring cares about is `stat_seq`, which
+                // `GspFsm::post` owns.
+                sequence: 0,
+                rpc_result: 0,
+                rpc_result_private: 0,
+                payload: ev.encode(),
+            };
+            match self.post_event(ram, &rpc) {
+                Ok(()) => posted += 1,
+                Err(f) => {
+                    refused = Some(f);
+                    break;
+                }
+            }
+        }
+        if posted == 0 {
+            // Nothing landed, so there is nothing for the guest to drain and no reason to
+            // close a gate over an empty batch.
+            return EventDelivery::Failed {
+                fault: refused.unwrap_or(GspFault::QueueNotBound),
+            };
+        }
+        // Step 4 (`C:1868`) — raise ONCE, per batch, by latching. The shell delivers.
+        self.events_outstanding = true;
+        EventDelivery::Delivered {
+            posted,
+            short: refused,
+        }
     }
 
     /// Has the guest drained everything we posted — including `GSP_INIT_DONE`?

@@ -1173,6 +1173,38 @@ impl DriverAbiTable {
             classes::NV20_SUBDEVICE_0 | classes::NV01_EVENT_KERNEL_CALLBACK_EX => {
                 Some(AllocParams::NoDeclaredFacts)
             }
+            // ★★★★★ §16.76 — `NV01_EVENT_OS_EVENT` (`0x79`), and this row is a **liveness**
+            // row rather than a completeness one.
+            //
+            // `[measured 2026-08-10, boot w209_ffc80f8_ctl, rev ffc80f8]` seven of these
+            // arrive from libcuda's own client and every one is refused
+            // `status=0x00000056` — `UnmappedAllocClass`, because this table had no arm for
+            // it while `capability.rs` has admitted the class since the beginning. ⚠ Note
+            // which gate that is: the class was **permitted** and **undecodable**, so the
+            // refusal came from the params table and not from the boundary. `w210`
+            // (`8574466`) then removed the guest's give-up and the same process stopped
+            // returning from `cuCtxCreate` at all — a bounded failure became an unbounded
+            // hang, because nothing supplies the wakeup those seven registrations exist to
+            // receive.
+            //
+            // ⚠ `NoDeclaredFacts` is the STRONG reading, and it is the same reading its
+            // sibling `NV01_EVENT_KERNEL_CALLBACK_EX` takes one arm up: the two classes
+            // share `NV0005_ALLOC_PARAMETERS`, whose `data` member is an `NvP64`
+            // **guest-kernel callback pointer** (`ogkm-580: cl0005.h:40-47`). ⊘ Nothing in
+            // this tree dereferences a guest pointer and the way that stays true is that no
+            // decoder exists to hand one up — so this class reaches the object model as an
+            // EDGE, exactly like its sibling, and the object model learns nothing else.
+            //
+            // ⊘ **The event registry is NOT this arm's output, and that separation is
+            // deliberate.** `kayfabe_device::osevent::OsEventRecorder` reads
+            // `(hClient, hEvent, notifyIndex)` off the wire as a `CommandObserver` — a seat
+            // whose type makes it unable to answer or to change a reply byte — precisely so
+            // that *"the port may post an event to this pair"* and *"the object model
+            // decoded these params"* stay two different facts. Folding `notifyIndex` into
+            // `AllocFacts` would put a wakeup-plane field on the core's object vocabulary
+            // and give this arm a decoder that the pointer argument above says it must not
+            // have.
+            classes::NV01_EVENT_OS_EVENT => Some(AllocParams::NoDeclaredFacts),
             // ★★★ `NV2081_BINAPI` (`0x2081`) — the class **libcuda** needs, and the first
             // row in this table admitted because an *injection experiment* named it rather
             // than because a boot logged it. `[measured 2026-08-08, real GA106, real

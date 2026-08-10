@@ -64,6 +64,7 @@ pub mod gvaspub;
 pub mod inert;
 pub mod inittables;
 pub mod nonstall;
+pub mod osevent;
 pub mod plane;
 pub mod setpagedir;
 pub mod staticinfo;
@@ -970,6 +971,9 @@ pub struct ChainLogs {
     /// first's 184-byte body would require synthesising levels the guest never sent — an
     /// invented encoding that would make the record look like a measurement.
     pub set_page_dir: setpagedir::SetPageDirLog,
+    /// ★★★★★ §16.76 — the os-event registrations a wakeup may be posted to
+    /// ([`osevent`]), and the `FREE`s that retire them.
+    pub os_events: osevent::OsEventLog,
 }
 
 /// ★★★ **The two seats a composition root's object model takes in the served chain**, as
@@ -1109,6 +1113,7 @@ pub fn served_chain(
         bar_pdes,
         gvas_pub,
         set_page_dir,
+        os_events,
     } = logs;
     let ObjectLinks {
         publications,
@@ -1139,6 +1144,20 @@ pub fn served_chain(
         // and it is why the seat moved in the SAME commit that made it answer.
         Box::new(kayfabe_gsp::Observing(Box::new(
             faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
+        ))),
+        // ★★★★★ §16.76 — the os-event registry, and it is an OBSERVER at the FRONT for two
+        // independent reasons, either of which alone would put it here.
+        //
+        // 1. It must see `GSP_RM_ALLOC` and `FREE`, both of which are `OBJECT_VERBS`: the
+        //    object-model link below **terminates** the chain for them, so any seat after it
+        //    is a seat that never sees a registration. That is the saturated-instrument
+        //    shape `faultbuffer` moved to the front to escape, arriving one verb over.
+        // 2. It must not answer one. The answerer is the object model, which now decodes
+        //    `NV01_EVENT_OS_EVENT` as `AllocParams::NoDeclaredFacts` — and the property
+        //    *"the registry changes no reply byte"* is `rustc`'s here, because
+        //    `CommandObserver::observe` has nothing to return.
+        Box::new(kayfabe_gsp::Observing(Box::new(
+            osevent::OsEventRecorder::new(driver, os_events),
         ))),
     ];
     // ★★★ **§14.23 — the FRONT seat, and it is a `CommandObserver` rather than a policy.**

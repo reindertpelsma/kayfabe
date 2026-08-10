@@ -417,6 +417,13 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
             },
             ConstReq {
                 header: NVOS_H,
+                c_name: "NV01_EVENT_OS_EVENT",
+                rust_name: "NV01_EVENT_OS_EVENT",
+                rust_ty: "u32",
+                doc: "`NV01_EVENT_OS_EVENT` — the event class **userspace** allocates, and the one\nwhose registration decides whether a blocking `cuCtxCreate` can ever be woken.\n\n★★★ It is the class `libcuda` binds its os-event fd to: `eventConstruct_IMPL`\nreaches `NV_RM_RPC_ALLOC_EVENT` (`ogkm-580: src/nvidia/src/kernel/rmapi/event.c:161-171`)\nand a GSP guest takes the `IS_FW_CLIENT` branch, so the alloc arrives here as a\n`GSP_RM_ALLOC`. When we later post `NV_VGPU_MSG_EVENT_POST_EVENT`, the guest's\n`_kgspRpcPostEvent` matches on `(hClient, hEvent)` and calls `osNotifyEvent` — which\nis the wakeup.\n\n⚠ Its params are `NV0005_ALLOC_PARAMETERS`, the SAME struct\n[`NV01_EVENT_KERNEL_CALLBACK_EX`] carries, whose `data` member is an `NvP64`\nguest-kernel callback pointer. ⊘ No struct is mirrored for it here and none may be,\nfor that class's reason exactly: nothing in this tree dereferences a guest pointer, and\nthe way that stays true is that no decoder exists to hand one up.\n\n★ `notifyIndex` is read off the wire by\n`kayfabe_device::osevent::OsEventRecorder` as a plain `u32` at a stated offset — a\nnumber echoed back into the event we post and interpreted by nobody here. On this RPC\nthe params are RM's own stack-local struct (`ogkm-580: inc/kernel/vgpu/rpc.h:345-357`),\nnot libcuda's, which is why reading one field of it is not a read of user memory.",
+            },
+            ConstReq {
+                header: NVOS_H,
                 c_name: "NV01_EVENT_KERNEL_CALLBACK_EX",
                 rust_name: "NV01_EVENT_KERNEL_CALLBACK_EX",
                 rust_ty: "u32",
@@ -613,6 +620,16 @@ that codegen gives shapes and never protocol.",
                 // change `sizeof` versus the field-only computation (it does not:
                 // the named fields already end at 32, a multiple of 8).
                 fam_align: Some(8),
+            },
+            StructReq {
+                header: RPC_STRUCTS_H,
+                name: "rpc_post_event_v17_00",
+                // The flexible tail is `NvU8 eventData[]`, so alignment 1 — and we emit
+                // an EMPTY one (`eventDataSize = 0`, `bNotifyList = 0`), which is what
+                // `_kgspRpcPostEvent`'s non-list branch reads: it resolves
+                // `(hClient, hEvent)` and calls `osNotifyEvent` with `data` alone. See
+                // `crate::postevent`.
+                fam_align: Some(1),
             },
             StructReq {
                 header: RPC_STRUCTS_H,

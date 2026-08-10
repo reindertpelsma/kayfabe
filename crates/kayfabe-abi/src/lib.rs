@@ -134,6 +134,7 @@ pub mod memsysconfig;
 pub mod notifier;
 pub mod oracle;
 pub mod pcibars;
+pub mod postevent;
 pub mod rc;
 pub mod regaccessmap;
 pub mod smcmode;

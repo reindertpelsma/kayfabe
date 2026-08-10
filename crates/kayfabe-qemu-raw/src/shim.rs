@@ -281,7 +281,16 @@ use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, QemuVmm};
 /// different refutations of §16.65's routing hypothesis — *"`EngineKind` does not partition
 /// doorbell traffic"* and *"the engine refinement never reached UVM's channels"* — produce
 /// the **same** three numbers. A census that cannot separate them is not an instrument.
-pub const ABI_VERSION: u32 = 36;
+/// ★★★★★ Bumped to **37** at §16.76, the ABI-3 reason a twenty-fifth time:
+/// [`KayfabeRegAudit`] gained the whole os-event wakeup plane — the registry's counts, the
+/// flow-control gate's, the GSP stall-vector raises and the `IRQSCLR` opener — so an ABI-36
+/// shim would allocate the old layout and this archive would write past the end of it.
+///
+/// ⊘ And this one exists because **two opposite findings produce the same silence**: a
+/// `cuCtxCreate` that never returns looks identical whether this device never woke the
+/// waiter or woke it with an unchanged semaphore behind it. `os_event_woke_with_nothing`
+/// is the field that separates them, and it is worth an ABI bump for that alone.
+pub const ABI_VERSION: u32 = 37;
 
 /// ★★★★ §16.65 — how many engine buckets the doorbell census has. Must equal
 /// `KAYFABE_ENGINE_KINDS` and `kayfabe_rt::ENGINE_KIND_COUNT`.
@@ -1862,6 +1871,55 @@ pub struct KayfabeRegAudit {
     /// ★★ §14.18: of the raises, how many the guest's own `LEAF_EN` would hide from its
     /// non-stall scan. See `kayfabe_device::Counters::nonstall_masked`.
     pub nonstall_masked: u64,
+    /// ★★★★★ §16.76: os-event batches this device **announced** — one GSP stall vector
+    /// (155 on GA106) latched and one message delivered per batch, never per event.
+    pub gsp_event_raises: u64,
+    /// §16.76: batches posted that could **not** be announced — the chip's captured
+    /// interrupt table named no usable `MC_ENGINE_IDX_GSP` stall vector. Must be zero.
+    pub gsp_event_unvectored: u64,
+    /// §16.76: of the raises, how many the guest's own `LEAF_EN` would hide.
+    pub gsp_event_masked: u64,
+    /// ★★★ §16.76: `IRQSCLR` writes — **the opener**, the only thing that reopens the
+    /// event flow-control gate. Zero here with a non-zero `gsp_event_raises` means the gate
+    /// is latched shut after one batch.
+    pub status_irq_cleared: u64,
+    /// §16.76: distinct `(hClient, hEvent)` os-events ever registered.
+    pub os_events_registered: u64,
+    /// §16.76: registrations a guest `FREE` retired. ⊘ Posting to a dead pair desyncs the
+    /// SHARED status queue and wedges the whole RPC path — see `kayfabe_device::osevent`.
+    pub os_events_retired: u64,
+    /// §16.76: registrations live at teardown.
+    pub os_events_live: u64,
+    /// §16.76: `NV01_EVENT_OS_EVENT` allocs whose params this port could not read.
+    pub os_events_malformed: u64,
+    /// §16.76: registrations refused because the table was full. ⊘ It refuses, never
+    /// evicts: an eviction would silently stop waking a waiter that is still there.
+    pub os_events_overflowed: u64,
+    /// §16.76: `POST_EVENT` messages put on the wire.
+    pub os_event_posted: u64,
+    /// §16.76: batches delivered — one interrupt each.
+    pub os_event_batches: u64,
+    /// ★★★ §16.76: delivery attempts the flow-control gate refused. Healthy in steady
+    /// state; large beside `os_event_batches == 1` means the gate is stuck.
+    pub os_event_gated: u64,
+    /// §16.76: attempts made before the guest drained `GSP_INIT_DONE`.
+    pub os_event_not_running: u64,
+    /// §16.76: attempts that posted nothing at all — the ring refused the first message.
+    pub os_event_failed: u64,
+    /// ★★★★★ §16.76: batches announced with **no newly-served doorbell behind them** — a
+    /// wakeup with nothing to see, because none of the guest's work executed. ⊘ NOT a call
+    /// to write a semaphore: the host GPU DMAs that into guest RAM on the passthrough path
+    /// and this VMM is not in it. Read this before concluding delivery worked.
+    pub os_event_woke_with_nothing: u64,
+    /// §16.76: `doorbells_served` as of the last announced batch — the only honest proxy
+    /// for *"the guest's work ran, so the host GPU has something to DMA"*.
+    pub os_event_last_join_served: u64,
+    /// §16.76: of those, how many were **forwarded** — the passthrough path, where the host
+    /// GPU writes the release semaphore into guest RAM and this device is not involved.
+    pub os_event_last_join_forwarded: u64,
+    /// §16.76: how many local servings were new at the last announced batch. ⊘ Zero is the
+    /// finding.
+    pub os_event_last_join_advanced: u64,
     /// Commands decoded off the guest's command queue.
     pub commands: u64,
     /// ★★ Of those, the ones **no policy answered**, and which the emulated GSP therefore
@@ -2273,6 +2331,24 @@ impl Default for KayfabeRegAudit {
             cpu_intr_raises: Default::default(),
             cpu_intr_masked: Default::default(),
             nonstall_raises: Default::default(),
+            gsp_event_raises: Default::default(),
+            gsp_event_unvectored: Default::default(),
+            gsp_event_masked: Default::default(),
+            status_irq_cleared: Default::default(),
+            os_events_registered: Default::default(),
+            os_events_retired: Default::default(),
+            os_events_live: Default::default(),
+            os_events_malformed: Default::default(),
+            os_events_overflowed: Default::default(),
+            os_event_posted: Default::default(),
+            os_event_batches: Default::default(),
+            os_event_gated: Default::default(),
+            os_event_not_running: Default::default(),
+            os_event_failed: Default::default(),
+            os_event_woke_with_nothing: Default::default(),
+            os_event_last_join_served: Default::default(),
+            os_event_last_join_forwarded: Default::default(),
+            os_event_last_join_advanced: Default::default(),
             nonstall_unvectored: Default::default(),
             nonstall_masked: Default::default(),
             commands: Default::default(),
@@ -4759,6 +4835,10 @@ impl Regs {
             nonstall_raises,
             nonstall_unvectored,
             nonstall_masked,
+            gsp_event_raises,
+            gsp_event_unvectored,
+            gsp_event_masked,
+            status_irq_cleared,
             commands,
             commands_unserviced,
             doorbells,
@@ -4773,6 +4853,11 @@ impl Regs {
         // disagree with what the doorbell path actually decided, which is §16.64's own
         // named failure.
         let db_census = *self.ce.census.lock().unwrap_or_else(|e| e.into_inner());
+        // ★★★★★ §16.76 — the os-event registry, read from the SAME shared handle the chain
+        // link writes into, for `db_census`' reason exactly: a second copy of the fact could
+        // disagree with what the delivery path actually did.
+        let os_events = self.plane.os_event_log();
+        let os_join = os_events.last_join();
         let (bar_pde_updates, bar_pde_refusals) = self.plane.bar_pde_counts();
         // ★ Truncated to what the wire shape holds, and `unserviced_len` says how many —
         // ⊘⊘ which it did NOT before 2026-08-09: it was `sample.len()`, clamped by the
@@ -5143,6 +5228,24 @@ impl Regs {
             nonstall_raises,
             nonstall_unvectored,
             nonstall_masked,
+            gsp_event_raises,
+            gsp_event_unvectored,
+            gsp_event_masked,
+            status_irq_cleared,
+            os_events_registered: os_events.registered(),
+            os_events_retired: os_events.retired(),
+            os_events_live: os_events.live().len() as u64,
+            os_events_malformed: os_events.malformed(),
+            os_events_overflowed: os_events.overflowed(),
+            os_event_posted: os_events.posted(),
+            os_event_batches: os_events.batches(),
+            os_event_gated: os_events.gated(),
+            os_event_not_running: os_events.not_running(),
+            os_event_failed: os_events.failed(),
+            os_event_woke_with_nothing: os_events.woke_with_nothing(),
+            os_event_last_join_served: os_join.served,
+            os_event_last_join_forwarded: os_join.forwarded,
+            os_event_last_join_advanced: os_join.advanced,
             commands,
             commands_unserviced,
             unserviced_len: unserviced_distinct,

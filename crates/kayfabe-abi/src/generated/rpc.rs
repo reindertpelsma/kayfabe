@@ -441,6 +441,272 @@ const _: () = {
     assert!(core::mem::offset_of!(RpcMessageHeaderV0300, u) == 28);
 };
 
+/// `rpc_post_event_v17_00` — ogkm `src/nvidia/generated/g_rpc-structures.h:1466`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RpcPostEventV1700 {
+    /// `NvHandle hClient` @ +0 (src/nvidia/generated/g_rpc-structures.h:1468).
+    pub h_client: u32,
+    /// `NvHandle hEvent` @ +4 (src/nvidia/generated/g_rpc-structures.h:1469).
+    pub h_event: u32,
+    /// `NvU32 notifyIndex` @ +8 (src/nvidia/generated/g_rpc-structures.h:1470).
+    pub notify_index: u32,
+    /// `NvU32 data` @ +12 (src/nvidia/generated/g_rpc-structures.h:1471).
+    pub data: u32,
+    /// `NvU16 info16` @ +16 (src/nvidia/generated/g_rpc-structures.h:1472).
+    pub info16: u16,
+    /// `NvU32 status` @ +20 (src/nvidia/generated/g_rpc-structures.h:1473).
+    pub status: u32,
+    /// `NvU32 eventDataSize` @ +24 (src/nvidia/generated/g_rpc-structures.h:1474).
+    pub event_data_size: u32,
+    /// `NvBool bNotifyList` @ +28 (src/nvidia/generated/g_rpc-structures.h:1475).
+    pub b_notify_list: u8,
+}
+
+impl RpcPostEventV1700 {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "rpc_post_event_v17_00";
+    /// `sizeof(rpc_post_event_v17_00)`, generator-computed and asserted against rustc below.
+    pub const SIZE: usize = 32;
+    /// `alignof(rpc_post_event_v17_00)`.
+    pub const ALIGN: usize = 4;
+    /// The generator's field-by-field layout.
+    pub const LAYOUT: StructLayout = StructLayout {
+        c_name: "rpc_post_event_v17_00",
+        size: 32,
+        align: 4,
+        fields: &[
+            Field {
+                c_name: "hClient",
+                rust_name: "h_client",
+                offset: 0,
+                width: 4,
+            },
+            Field {
+                c_name: "hEvent",
+                rust_name: "h_event",
+                offset: 4,
+                width: 4,
+            },
+            Field {
+                c_name: "notifyIndex",
+                rust_name: "notify_index",
+                offset: 8,
+                width: 4,
+            },
+            Field {
+                c_name: "data",
+                rust_name: "data",
+                offset: 12,
+                width: 4,
+            },
+            Field {
+                c_name: "info16",
+                rust_name: "info16",
+                offset: 16,
+                width: 2,
+            },
+            Field {
+                c_name: "status",
+                rust_name: "status",
+                offset: 20,
+                width: 4,
+            },
+            Field {
+                c_name: "eventDataSize",
+                rust_name: "event_data_size",
+                offset: 24,
+                width: 4,
+            },
+            Field {
+                c_name: "bNotifyList",
+                rust_name: "b_notify_list",
+                offset: 28,
+                width: 1,
+            },
+        ],
+    };
+
+    /// rustc's own offsets for the same fields, in the same order.
+    pub const RUSTC_OFFSETS: &'static [(&'static str, usize)] = &[
+        (
+            "h_client",
+            core::mem::offset_of!(RpcPostEventV1700, h_client),
+        ),
+        ("h_event", core::mem::offset_of!(RpcPostEventV1700, h_event)),
+        (
+            "notify_index",
+            core::mem::offset_of!(RpcPostEventV1700, notify_index),
+        ),
+        ("data", core::mem::offset_of!(RpcPostEventV1700, data)),
+        ("info16", core::mem::offset_of!(RpcPostEventV1700, info16)),
+        ("status", core::mem::offset_of!(RpcPostEventV1700, status)),
+        (
+            "event_data_size",
+            core::mem::offset_of!(RpcPostEventV1700, event_data_size),
+        ),
+        (
+            "b_notify_list",
+            core::mem::offset_of!(RpcPostEventV1700, b_notify_list),
+        ),
+    ];
+
+    /// Decode from a little-endian byte image of `rpc_post_event_v17_00`.
+    ///
+    /// Accepts a buffer of at least [`Self::SIZE`] bytes and ignores anything
+    /// past it (a longer buffer is a legitimate newer-ABI image, or a flexible
+    /// array tail). A SHORTER buffer is refused loudly — silently zero-extending
+    /// a truncated struct is the `abi_struct_truncation` bug class verbatim.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        Ok(Self {
+            h_client: u32_at(bytes, 0)?,
+            h_event: u32_at(bytes, 4)?,
+            notify_index: u32_at(bytes, 8)?,
+            data: u32_at(bytes, 12)?,
+            info16: u16_at(bytes, 16)?,
+            status: u32_at(bytes, 20)?,
+            event_data_size: u32_at(bytes, 24)?,
+            b_notify_list: u8_at(bytes, 28)?,
+        })
+    }
+
+    /// Write this value back over a little-endian byte image, in place.
+    ///
+    /// Writes **only** the declared fields; padding bytes and any trailing
+    /// payload are left exactly as found. That is deliberate: the C-era
+    /// `writeback_bug_pattern` was a sanitizer that rewrote a whole struct and
+    /// so handed CUDA its own scratch state back. A writer that cannot touch a
+    /// byte it does not name cannot reproduce it.
+    ///
+    /// # Errors
+    ///
+    /// [`AbiError::Truncated`] if `bytes.len() < Self::SIZE`.
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let len = bytes.len();
+        if len < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: len,
+            });
+        }
+        {
+            let src = self.h_client.to_le_bytes();
+            bytes
+                .get_mut(0..4)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.h_event.to_le_bytes();
+            bytes
+                .get_mut(4..8)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.notify_index.to_le_bytes();
+            bytes
+                .get_mut(8..12)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.data.to_le_bytes();
+            bytes
+                .get_mut(12..16)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.info16.to_le_bytes();
+            bytes
+                .get_mut(16..18)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.status.to_le_bytes();
+            bytes
+                .get_mut(20..24)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.event_data_size.to_le_bytes();
+            bytes
+                .get_mut(24..28)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        {
+            let src = self.b_notify_list.to_le_bytes();
+            bytes
+                .get_mut(28..29)
+                .ok_or(AbiError::Truncated {
+                    c_name: Self::C_NAME,
+                    need: Self::SIZE,
+                    got: len,
+                })?
+                .copy_from_slice(&src);
+        }
+        Ok(())
+    }
+}
+
+// The generator's layout vs rustc's, asserted at COMPILE time.
+const _: () = {
+    assert!(core::mem::size_of::<RpcPostEventV1700>() == RpcPostEventV1700::SIZE);
+    assert!(core::mem::align_of::<RpcPostEventV1700>() == RpcPostEventV1700::ALIGN);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, h_client) == 0);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, h_event) == 4);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, notify_index) == 8);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, data) == 12);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, info16) == 16);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, status) == 20);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, event_data_size) == 24);
+    assert!(core::mem::offset_of!(RpcPostEventV1700, b_notify_list) == 28);
+};
+
 /// `rpc_rc_triggered_v17_02` — ogkm `src/nvidia/generated/g_rpc-structures.h:1481`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -812,8 +1078,11 @@ const _: () = {
 
 /// Every struct this module generates, in declaration order — the enumerated-vs-
 /// exercised coverage surface (`mode2_abi_agnostic_layer.md` §2.3, rule 2).
-pub const STRUCTS: &[&StructLayout] =
-    &[&RpcMessageHeaderV0300::LAYOUT, &RpcRcTriggeredV1702::LAYOUT];
+pub const STRUCTS: &[&StructLayout] = &[
+    &RpcMessageHeaderV0300::LAYOUT,
+    &RpcPostEventV1700::LAYOUT,
+    &RpcRcTriggeredV1702::LAYOUT,
+];
 
 /// The generator-computed offsets paired with rustc's own, per struct. The
 /// crate's tests walk this so the agreement is also a RUNTIME assertion the
@@ -823,6 +1092,7 @@ pub const RUSTC_OFFSETS: &[(&str, &[(&str, usize)])] = &[
         "rpc_message_header_v03_00",
         RpcMessageHeaderV0300::RUSTC_OFFSETS,
     ),
+    ("rpc_post_event_v17_00", RpcPostEventV1700::RUSTC_OFFSETS),
     (
         "rpc_rc_triggered_v17_02",
         RpcRcTriggeredV1702::RUSTC_OFFSETS,

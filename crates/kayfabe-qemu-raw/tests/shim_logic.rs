@@ -706,9 +706,19 @@ fn the_register_plane_wire_structures_are_the_sizes_the_header_declares() {
     // checking rather than quietly agreeing with itself — the same reason `PROBE_ARM_SLOTS`
     // is named above. ★ This gate BIT when the fields landed (26672 vs 26600, a 72-byte
     // delta that is 9 x 8 exactly).
+    //
+    // ★★★★★ 115 -> 133 at §16.76: the os-event wakeup plane's eighteen words — the GSP
+    // stall-vector raises (`gsp_event_raises`, `_unvectored`, `_masked`), the opener
+    // (`status_irq_cleared`), the registry's five, the delivery gate's five, and the JOIN's
+    // three. This is the reason the wire ABI moved to 37, and this gate BIT when they
+    // landed (26816 vs 26672, a 144-byte delta that is 18 x 8 exactly).
+    //
+    // ⊘ The JOIN's three are here rather than derived at the C side on purpose: a shell that
+    // computed "did anything execute" from the doorbell counters would be answering it at
+    // TEARDOWN, and the question is about the instant of each announcement.
     assert_eq!(
         size_of::<KayfabeRegAudit>(),
-        (106 + 3
+        (124 + 3
             + kayfabe_qemu_raw::shim::ENGINE_KINDS
             + kayfabe_qemu_raw::shim::PROBE_ARM_SLOTS / 2
             + kayfabe_qemu_raw::shim::UNSERVICED_SLOTS)
