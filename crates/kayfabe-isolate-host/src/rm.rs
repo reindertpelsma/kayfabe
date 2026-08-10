@@ -3707,7 +3707,16 @@ impl HostRmBackend {
     /// Only if the *allocation* failed — a refused placement is [`VaProbe::Occupied`],
     /// which is an answer rather than an error.
     pub fn probe_va(&mut self, space: u32, va: u64) -> Result<VaProbe, RmError> {
-        const PROBE_BYTES: u64 = RING_OBJECT_BYTES;
+        // ★★ ONE PAGE, and the size is the instrument. `alloc_device_local` passes
+        // `alignment = len`, so a 64 KiB probe object cannot be placed at a VA that is only
+        // 4 KiB-aligned — RM rounds the mapping DOWN to the object's alignment and reports
+        // a different address. [measured 2026-08-10, `vh`]: probing a semaphore at
+        // `…120022000` with a 64 KiB object returned `…120020000`, which reads exactly like
+        // `Relocated`-because-occupied and was in fact `Relocated`-because-of-the-probe.
+        // ⊘ An instrument whose own geometry produces the answer it is looking for is not
+        // an instrument. A page is the smallest thing this allocator maps, so it can be
+        // placed at any address a semaphore can live at.
+        const PROBE_BYTES: u64 = 0x1000;
         let obj = self.conn.alloc_device_local(PROBE_BYTES)?;
         let out = match self.conn.raw_map_dma(space, obj, PROBE_BYTES, Some(va)) {
             Ok(got) if got == va => {
