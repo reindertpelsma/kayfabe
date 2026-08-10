@@ -71,7 +71,7 @@ allowlist, a class gate, an operand check — is defeated by one method in the m
 | # | method | value | what it is |
 |---|---|---|---|
 | 000 | `SET_OBJECT` sub 1 | `0xc7c0` | `AMPERE_COMPUTE_B` |
-| 002-003 | `SET_SHADER_SHARED_MEMORY_WINDOW_A/B` | `0x7d1e_e900_0000` | a 64-bit base **the guest chose** |
+| 002-003 | `SET_SHADER_SHARED_MEMORY_WINDOW_A/B` | `0x7d1e_e900_0000` (⚠ **varies per boot** — `0x7f5c_a9000000` at `w227c`) | a 64-bit **window base** the guest chose; see §3.4 for why its per-boot variance is what identifies it |
 | 004 | `SET_SPA_VERSION` | `0x806` | SM 8.6 — GA106 |
 | 005-068 | `SET_CWD_REF_COUNTER` ×64 | `0x5403f … 0x54000` | CWD reference counters, descending |
 | 070 | `SET_VALID_SPAN_OVERFLOW_AREA_A/B/C` | `0x2_0000_0000`, len `0xa8000` | a 672 KiB span the engine may write |
