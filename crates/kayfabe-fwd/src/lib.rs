@@ -2446,39 +2446,84 @@ pub struct DoorbellOutcome {
     pub scheduled_now: bool,
 }
 
-/// Check every VA in `working_set` resolves **host-published** in `table` — the
-/// #14 gate condition. Bound-but-unpublished (`Binding::host = None`, the exact #14
-/// EXECUTION fault: the shadow had it, the host VAS did not) and unbound are both
-/// loud faults, never a guess (`execution_plane.md` §2.4).
+/// Check every VA in `working_set` is **ring-admissible** in `table` — the #14 gate
+/// condition, with each refusal carrying its own name (`execution_plane.md` §2.4).
 ///
 /// ★ This is the **query** form, used by [`gate_working_set`] and the address-probe
 /// sites. The **enforcing** form is [`VasGate`] below, which the same predicate drives
-/// from inside `VerbPlan::gated_doorbell` — one predicate, two callers, no second
-/// definition to drift.
+/// from inside `VerbPlan::gated_doorbell` — one authority, [`ring_admits`], two callers,
+/// no second definition to drift.
 fn gate_vas(
     table: &AddressTable,
     pdb: Pdb,
     working_set: impl IntoIterator<Item = GpuVa>,
 ) -> Result<(), FwdFault> {
     for va in working_set {
-        if !host_published(table, pdb, va) {
-            return Err(FwdFault::Address(AddressFault::Miss { pdb, va }));
-        }
+        ring_admits(table, pdb, va)?;
     }
     Ok(())
 }
 
-/// THE gate predicate, in one place: `va` resolves in `table` under `pdb` **and** its
-/// binding carries a host publication.
+/// ★★★★★ **THE ring-gate authority — may a real engine be pointed at `va` for the
+/// duration of a submission?** Three answers, each with its own name.
 ///
-/// Both misses collapse to one answer deliberately — `AddressTable::resolve` already
-/// reports an unresolved VA as `AddressFault::Miss { pdb, va }`, which is the same fault
-/// a resolved-but-unpublished VA gets, because they are the same thing to a ring: an
-/// address the host GR VAS cannot translate. (That equality is what lets
-/// [`kayfabe_isolate::RingWorkingSet`] be a bare predicate without the two crates
-/// growing two classifications of one miss.)
+/// # ⊘ The correction this carries (2026-08-11)
+///
+/// This asked exactly one question — `binding.host.is_some()`, *"does a host object exist
+/// at this address"* — which is the **same refuted predicate**
+/// [`representability_of`] was corrected off the same day. The correction landed on the
+/// copy-engine classifier and **not** here, so the two authorities for one question
+/// disagreed: `representability_of` refused a
+/// [`kayfabe_mmu::BackingBytes::ShadowsGuestMemory`] backing by name while this gate
+/// admitted it to a ring. [`kayfabe_mmu::BackingBytes`]'s own words are the ruling —
+/// *"⊘ Fatal for anything the guest reads or polls, **which is what a ring is**"* — so the
+/// gate was the site that contradicted the doc, not the doc that over-reached.
+///
+/// ⚠ **`[NOT MEASURED]` as a live defect, and the census is the argument.** The gate is
+/// **vacuous in production today**: the only production caller of
+/// `kayfabe_rt::device::SharedDevice::doorbell` passes `&[]`
+/// (`kayfabe-qemu-raw/src/shim.rs`, which states the emptiness and its reason —
+/// recovering the touched VAs means parsing the ring, increment E4/E5),
+/// [`gate_working_set`] has test callers only, and [`arm_fence`] has no production caller
+/// at all. So no boot has ever run this predicate over a VA. It is **latent**, and it is
+/// fixed here because the working set is what E4/E5 fill — the disagreement becomes live
+/// the moment it is populated, on a plane where being wrong is self-concealing.
+///
+/// # The three answers
+///
+/// - **unresolved** ⇒ [`AddressFault::Miss`] — the table IS the guest's TLB, and a TLB has
+///   no "later".
+/// - **resolved, no host publication** ⇒ the same [`AddressFault::Miss`], deliberately: to
+///   a ring these are one thing, an address the host VAS cannot translate. This is the #14
+///   EXECUTION fault (the shadow had it, the host VAS did not).
+/// - **resolved, host object, but a SECOND memory shadowing what the guest reads** ⇒
+///   [`FwdFault::BackingNotGuestVisible`], the same fault [`representability_of`] raises,
+///   because it is the same prohibition (`ce_executor_tree.md` forbidden #2).
+fn ring_admits(table: &AddressTable, pdb: Pdb, va: GpuVa) -> Result<(), FwdFault> {
+    let miss = || FwdFault::Address(AddressFault::Miss { pdb, va });
+    let Ok((binding, _off)) = table.resolve(pdb, va) else {
+        return Err(miss());
+    };
+    match binding.host {
+        Some(h) if h.is_sole_backing() => Ok(()),
+        Some(_) => Err(FwdFault::BackingNotGuestVisible {
+            addr: va.0,
+            aperture: binding.aperture,
+        }),
+        None => Err(miss()),
+    }
+}
+
+/// THE gate predicate as the bare bool [`kayfabe_isolate::RingWorkingSet`] wants —
+/// **derived from [`ring_admits`]**, never a second reading of the table.
+///
+/// ★ The derivation is the point: the isolate seam cannot name `FwdFault` (it cannot even
+/// name `AddressTable`), so the enforcing form must collapse three answers into one. It
+/// collapses the *authority's* answers rather than re-asking a weaker question, and
+/// `plan_doorbell` re-derives the exact fault from the offending VA — which is the
+/// division of labour [`kayfabe_isolate::RingWorkingSet`]'s own doc specifies.
 fn host_published(table: &AddressTable, pdb: Pdb, va: GpuVa) -> bool {
-    matches!(table.resolve(pdb, va), Ok((binding, _off)) if binding.host.is_some())
+    ring_admits(table, pdb, va).is_ok()
 }
 
 /// ★★ The **enforcing** #14 ring-gate: one channel's `Vas`, handed to
@@ -2712,9 +2757,22 @@ pub fn plan_doorbell(
     };
     let verbs =
         VerbPlan::gated_doorbell(gate, working_set, host_vas, channel, chan.engine, schedule)
-            .map_err(|kayfabe_isolate::UngatedVa(va)| match chan.vas_pdb {
-                Some(pdb) => FwdFault::Address(AddressFault::Miss { pdb, va }),
-                None => FwdFault::NoVas(cid),
+            // ★ Re-derive the EXACT fault from the offending VA, which is the division of
+            // labour `RingWorkingSet`'s doc specifies: the seam carries a bare bool, this
+            // crate owns the vocabulary. Since 2026-08-11 there are three answers, not two
+            // — a `ShadowsGuestMemory` backing is `BackingNotGuestVisible`, not a `Miss`,
+            // and reporting it as a miss would send a reader hunting a mapping that is
+            // present. `ring_admits` is the same authority the gate just ran, so the
+            // re-derivation cannot disagree with the refusal it is naming.
+            .map_err(|kayfabe_isolate::UngatedVa(va)| {
+                match (vas, chan.vas_pdb) {
+                    (Some(v), Some(pdb)) => ring_admits(&v.table, pdb, va)
+                        // ⊘ Total, not `unwrap_err`: the gate refused this VA, so the
+                        // authority refuses it too — but a panic is not the way to say so.
+                        .err()
+                        .unwrap_or(FwdFault::Address(AddressFault::Miss { pdb, va })),
+                    _ => FwdFault::NoVas(cid),
+                }
             })?;
 
     Ok(Planned {

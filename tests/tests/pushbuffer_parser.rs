@@ -480,6 +480,158 @@ fn t14_per_vas_publication_gates_the_ring() {
     );
 }
 
+/// Publish `SHARED_VA` in proc A's Vas, then **restate its backing kind** as `bytes`,
+/// holding everything else byte-identical — same phys, same aperture, same host object,
+/// same host VA (address identity, which `AddressTable::bind` enforces at its entrance).
+///
+/// ⊘ Everything but [`kayfabe_mmu::BackingBytes`] is held constant on purpose: it is the
+/// variable under test, and a two-arm test whose arms differ in more than one place
+/// measures nothing. Same discipline as
+/// `ce_representability_split::classify_host_backed`, which is the *classifier's* half of
+/// the identical question.
+fn published_with_backing(
+    bytes: kayfabe_mmu::BackingBytes,
+) -> (
+    Guarded<Gpu>,
+    kayfabe_core::ProcId,
+    kayfabe_core::ChanId,
+    u64,
+) {
+    let (mut gpu, _vmm, _rec) = two_proc_gpu();
+    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
+    let cid = *gpu.procs[&pid].chan_ids.values().next().unwrap();
+    publish_backing(
+        gpu.procs.get_mut(&pid).unwrap(),
+        GpuId::ZERO,
+        A_PDB,
+        SHARED_VA,
+        0x10000,
+    )
+    .expect("publishes");
+
+    let vas = gpu
+        .procs
+        .get_mut(&pid)
+        .unwrap()
+        .vases
+        .get_mut(&(GpuId::ZERO, A_PDB))
+        .unwrap();
+    let (start, len, b) = vas.table.binding_at(SHARED_VA).expect("published");
+    assert_eq!(start, SHARED_VA.0, "the publication is the whole range");
+    let h = b.host.expect("`publish_backing` writes a host backing");
+    assert_eq!(
+        h.host_va(),
+        SHARED_VA.0,
+        "address identity — the rebind below relies on it and `bind` enforces it"
+    );
+    vas.table
+        .unbind(SHARED_VA)
+        .expect("it was there to replace");
+    vas.table
+        .bind(
+            A_PDB,
+            SHARED_VA,
+            len,
+            kayfabe_mmu::Binding {
+                host: Some(kayfabe_mmu::HostBacking::whole(
+                    h.memory(),
+                    h.host_va(),
+                    bytes,
+                )),
+                ..b
+            },
+        )
+        .expect("rebinds at the same identity");
+    (gpu, pid, cid, len)
+}
+
+/// ★★★★★ **A RING NEVER NAMES A BACKING THE GUEST READS SOMEWHERE ELSE** — the #14 gate
+/// and the copy-engine classifier, made to answer one question with one authority.
+///
+/// # ⊘ What this test is, and what it is NOT
+///
+/// It is **not** a live-defect regression. `[NOT MEASURED as live, census 2026-08-11]` the
+/// ring gate is **vacuous in production**: the only production caller of
+/// `kayfabe_rt::device::SharedDevice::doorbell` passes `&[]` (`kayfabe-qemu-raw`'s
+/// `SharedDoorbell`, which says so and gives the reason — recovering the touched VAs means
+/// parsing the ring, increment E4/E5), `kayfabe_fwd::gate_working_set` has test callers
+/// only, and `kayfabe_fwd::arm_fence` has no production caller at all. No boot has ever run
+/// this predicate over a VA.
+///
+/// It **is** the disagreement between two authorities for one question, closed before the
+/// working set is populated. On 2026-08-11 `kayfabe_fwd::representability_of` was corrected
+/// off the predicate `binding.host.is_some()` — *"does a host object exist here"* — onto
+/// `BackingBytes`, which asks *"are the guest's bytes in it"*. The ring gate was **not**
+/// corrected with it, so the copy-engine classifier refused a `ShadowsGuestMemory` backing
+/// by name while the gate admitted the same backing to a ring. `BackingBytes`'s own words
+/// settle which site was wrong: *"⊘ Fatal for anything the guest reads or polls, **which is
+/// what a ring is**"*.
+///
+/// # Why TWO arms, and why they must differ
+///
+/// The known-positive is the half that makes the falsifier mean anything: a gate that
+/// refused everything would pass a single-arm test while having destroyed the plane. That
+/// is this campaign's §16.85.3 class — a census whose instrument cannot return the other
+/// answer — and it is cheap to close here.
+///
+/// ★ Both **forms** of the gate are asserted, because they are different code paths onto
+/// one predicate: the read-only `gate_working_set` query, and the enforcing form inside
+/// `VerbPlan::gated_doorbell` reached through `handle_doorbell`. A fix to one only would
+/// leave the ring itself open while the query reported it closed — which is strictly worse
+/// than the defect, because it manufactures evidence of a repair.
+#[test]
+fn a_ring_never_names_a_backing_the_guest_reads_somewhere_else() {
+    let a_token = MockArch::token_for(VChid(0x10));
+
+    // ---- known-positive: the gate CAN still say yes -----------------------------------
+    let (mut gpu, pid, cid, _len) = published_with_backing(kayfabe_mmu::BackingBytes::SoleBacking);
+    let sole_query = gate_working_set(&gpu, pid, cid, &[SHARED_VA]);
+    assert_eq!(
+        sole_query,
+        Ok(()),
+        "★ the known-positive: a backing that is the range's ONLY memory still rings. If \
+         this fails the gate has become a blanket refusal and the other arm proves nothing."
+    );
+    assert!(
+        handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]).is_ok(),
+        "…through the ENFORCING form too — the query is not the thing that rings"
+    );
+    drop(gpu);
+
+    // ---- the falsifier: identical in every respect but the backing kind ---------------
+    let (mut gpu, pid, cid, _len) =
+        published_with_backing(kayfabe_mmu::BackingBytes::ShadowsGuestMemory);
+    let shadow_query = gate_working_set(&gpu, pid, cid, &[SHARED_VA]);
+    assert_eq!(
+        shadow_query,
+        Err(FwdFault::BackingNotGuestVisible {
+            addr: SHARED_VA.0,
+            aperture: kayfabe_arch::Aperture::SysmemCoherent,
+        }),
+        "★★★ FORBIDDEN #2 AT THE RING: a second memory at an address the guest reads \
+         through the emulated framebuffer must not be handed to a doorbell. And by NAME — \
+         reporting it as `AddressFault::Miss` would send a reader hunting a mapping that \
+         is present, which is the wrong-name-refusal class §16.108 paid for."
+    );
+    assert_eq!(
+        handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),
+        Err(FwdFault::BackingNotGuestVisible {
+            addr: SHARED_VA.0,
+            aperture: kayfabe_arch::Aperture::SysmemCoherent,
+        }),
+        "…and the ENFORCING form refuses with the SAME name — one authority \
+         (`ring_admits`), re-derived across the isolate seam's bare-bool collapse, so the \
+         query and the ring can never disagree about why"
+    );
+
+    // ---- and the arms must DIFFER, or neither measured anything -----------------------
+    assert_ne!(
+        sole_query, shadow_query,
+        "★ the arms must disagree: a gate that answers the same for both is not reading \
+         `BackingBytes` at all"
+    );
+}
+
 /// ★ The gate is STRUCTURAL, not caller discipline: a doorbell whose working set is
 /// bound-but-unpublished (the #14 EXECUTION-fault state — the shadow had the VA, the
 /// channel's OWN host VAS did not) is refused BEFORE any host op. Once published, the
