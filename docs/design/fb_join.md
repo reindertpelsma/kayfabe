@@ -285,6 +285,22 @@ live, hold different bytes, and are read by the same loop.
 against `R30`'s standalone ladder rung. The same control, now over a real framebuffer leaf
 inside a real boot.
 
+| | armed (`w231a`, `shared`) | control (`w231b`, `private`) |
+|---|---|---|
+| `GR-FB-JOIN` lines | 36 | 37 (the one extra is the control's own ★★ line) |
+| `JOINED (shared)` | **3** | 0 |
+| `JOINED (private)` | 0 | **3** |
+| `★ DIRECTION … AGREES` | **2** | **0** |
+| `⊘ DIRECTION … DISAGREES` | **0** | **2** |
+| establishment vacuity notes | 3 | 3 |
+| `HostBackedFb` rows after re-statement | 24 | 24 |
+| doorbells | `191 / 183 / 8` | `191 / 183 / 8` |
+
+⊘ **Everything except the two direction lines is identical**, including the join itself, the
+placement, the re-statement and the doorbell census. The control changes the VMM's *mapping*,
+not the join — which is why `JOINED` still prints three times and `HostBackedFb` still appears
+24 times in both.
+
 ★ **Which line did I expect this to execute?** The `Backing::PrivateAnonymous` arm named above,
 and nothing else — every other line in the join path is shared with the armed run. That is the
 question `w228`'s first control failed (it asked `back_fb_leaf` about an address it never

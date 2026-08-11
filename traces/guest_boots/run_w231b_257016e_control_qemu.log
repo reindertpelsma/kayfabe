@@ -1,0 +1,717 @@
+2026-08-10T23:58:40.961221Z qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+kayfabe: memfd census — name="memory-backend-memfd" bytes=2147483648 shared_mapped=true (listed at fd 14, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: memfd census — name="displaysurface" bytes=1228800 shared_mapped=true (listed at fd 22, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: memfd census — name="kayfabe-isolate" bytes=721568 shared_mapped=false (listed at fd 23, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's memory-backend-memfd block, 2147483648 bytes, dev=1 ino=251782. Every isolate this factory spawns is granted a view of it at a fixed descriptor number; nothing is mapped until a grant says so. ⊘ The size is an EXTENT, not a LAYOUT — where in the guest's physical space these bytes appear is stated separately, by the hypervisor's own topology callbacks, and is reported when the memory plane attaches.
+kayfabe: EXECUTORS isolate_plane=real ce_executor=local ⇒ local_ce_is_the_only_executor=true
+kayfabe: FB-JOIN arm=private exports_directory=true ⇒ leaves are the NEGATIVE CONTROL — the VMM's view is MAP_PRIVATE|MAP_ANONYMOUS, so the two views must DISAGREE in both directions
+kayfabe: ★★★ GUEST-RAM LAYOUT AT MEMORY PLANE ATTACH, AS THE HYPERVISOR STATED IT — dev=1 ino=251782: 0 contiguous run(s) totalling 0 bytes, out of 0 stated section(s) LIVE over all backing files (0 live run(s) for this block). Section funnel: 0 reported -> 0 classified RAM -> 0 carried a backing file, 0 later withdrawn. ⊘ Every run below arrived on a topology callback; NOTHING here is derived from the machine type or from `-m`, and a guest-physical address outside these runs is refused by name rather than assumed to be its own file offset. ⚠ This is ONE INSTANT: the listener is registered on the device's bus-master address space, which is empty until the guest enables bus mastering, so an empty report here is a statement about WHEN it was taken and not about the machine.
+kayfabe: ⊘⊘ ZERO RUNS, and the crossing IS armed — the descriptor was adopted and 0 section(s) stated a run, but none named this block. ★ Where it broke: nothing yet, and at THIS instant that is expected rather than broken — the guest has not enabled bus mastering, so the address space this device listens on is still empty. Read the END OF RUN report instead. Nothing can be mapped until this joins; an empty layout refuses every address, which is correct and is not progress.
+kayfabe:   (no backing file stated any run at all, so there is nothing to have matched against)
+kayfabe: COMPLETION-OBSERVER started — one thread, one epoll, one armed counter source. ⊘ It READS the addresses the guest declared and can write none of them.
+2026-08-10T23:58:41.037760Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+2026-08-10T23:59:06.730706Z qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. It is the archive's own service cadence, not a guest waiting on anything: delivering it would send one message per doorbell with nothing pending behind it. A guest that BLOCKS on a REGISTERED os-event IS woken — that path latches the GSP engine's stall vector and delivers; see the "os-events" lines in this report for whether it fired.
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00005 parent=0x2 params=8B → REFUSED NoVas(ChanId(0)) [seen=1 forwarded=0]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00006 parent=0x2 params=8B → REFUSED Rm(Other(64)) [seen=2 forwarded=0]
+2026-08-10T23:59:11.211273Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:11.211869Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+kayfabe: ENGINE-OBJECT class=0xc797 client=0xc1e00007 parent=0xbaba0045 params=0B → FORWARDED engine=GrGraphics host_object=0xcafe0011 materialized_channel=true reused=false [seen=3 forwarded=1]
+2026-08-10T23:59:19.371604Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+2026-08-10T23:59:19.371741Z qemu-system-x86_64: warning: nvkvm: the emulated GSP refused a register write at +0x110c00: GspFault::QueueNotBound
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00010 parent=0x2 params=8B → REFUSED NoVas(ChanId(3)) [seen=4 forwarded=1]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1e00011 parent=0x2 params=8B → REFUSED Rm(Other(64)) [seen=5 forwarded=1]
+2026-08-10T23:59:22.256707Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:22.258601Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010002 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+kayfabe: ENGINE-OBJECT class=0xc797 client=0xc1e00012 parent=0xbaba0045 params=0B → FORWARDED engine=GrGraphics host_object=0xcafe001f materialized_channel=true reused=false [seen=6 forwarded=2]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000a parent=0xcaf00012 params=8B → REFUSED Rm(Other(64)) [seen=7 forwarded=2]
+2026-08-10T23:59:24.069973Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000a parent=0xcaf0001d params=8B → REFUSED Rm(Other(64)) [seen=8 forwarded=2]
+2026-08-10T23:59:24.127227Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010004 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000a parent=0xcaf00028 params=8B → REFUSED Rm(Other(64)) [seen=9 forwarded=2]
+2026-08-10T23:59:24.178000Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00020005 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000a parent=0xcaf00033 params=8B → REFUSED Rm(Other(64)) [seen=10 forwarded=2]
+2026-08-10T23:59:24.227698Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00020006 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.227983Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.235073Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.237636Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.238355Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.239665Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.240376Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.242044Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.243156Z qemu-system-x86_64: info: nvkvm: DOORBELL token 0x00010003 at +0xbb0090 SERVED-LOCAL [CpuCe::ServedLocally]
+2026-08-10T23:59:24.423542Z qemu-system-x86_64: info: nvkvm: DOORBELL-HEARTBEAT arrival #32 token 0x00010003
+2026-08-10T23:59:24.429281Z qemu-system-x86_64: info: nvkvm: DOORBELL-HEARTBEAT arrival #64 token 0x00010003
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c000019 params=16B → FORWARDED engine=GrCompute host_object=0xcafe000a materialized_channel=true reused=false [seen=11 forwarded=3]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000019 params=8B → FORWARDED engine=Ce host_object=0xcafe000b materialized_channel=false reused=false [seen=12 forwarded=4]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c00001f params=16B → FORWARDED engine=GrCompute host_object=0xcafe0010 materialized_channel=true reused=false [seen=13 forwarded=5]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c00001f params=8B → FORWARDED engine=Ce host_object=0xcafe0011 materialized_channel=false reused=false [seen=14 forwarded=6]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c000023 params=16B → FORWARDED engine=GrCompute host_object=0xcafe0016 materialized_channel=true reused=false [seen=15 forwarded=7]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000023 params=8B → FORWARDED engine=Ce host_object=0xcafe0017 materialized_channel=false reused=false [seen=16 forwarded=8]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c000027 params=16B → FORWARDED engine=GrCompute host_object=0xcafe001c materialized_channel=true reused=false [seen=17 forwarded=9]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000027 params=8B → FORWARDED engine=Ce host_object=0xcafe001d materialized_channel=false reused=false [seen=18 forwarded=10]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c00002b params=16B → FORWARDED engine=GrCompute host_object=0xcafe0022 materialized_channel=true reused=false [seen=19 forwarded=11]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c00002b params=8B → FORWARDED engine=Ce host_object=0xcafe0023 materialized_channel=false reused=false [seen=20 forwarded=12]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c00002f params=16B → FORWARDED engine=GrCompute host_object=0xcafe0028 materialized_channel=true reused=false [seen=21 forwarded=13]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c00002f params=8B → FORWARDED engine=Ce host_object=0xcafe0029 materialized_channel=false reused=false [seen=22 forwarded=14]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c000033 params=16B → FORWARDED engine=GrCompute host_object=0xcafe002e materialized_channel=true reused=false [seen=23 forwarded=15]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000033 params=8B → FORWARDED engine=Ce host_object=0xcafe002f materialized_channel=false reused=false [seen=24 forwarded=16]
+kayfabe: ENGINE-OBJECT class=0xc7c0 client=0xc1d0000c parent=0x5c000037 params=16B → FORWARDED engine=GrCompute host_object=0xcafe0034 materialized_channel=true reused=false [seen=25 forwarded=17]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000037 params=8B → FORWARDED engine=Ce host_object=0xcafe0035 materialized_channel=false reused=false [seen=26 forwarded=18]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c00003d params=8B → REFUSED Rm(Other(64)) [seen=27 forwarded=18]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000040 params=8B → REFUSED Rm(Other(64)) [seen=28 forwarded=18]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000043 params=8B → REFUSED Rm(Other(64)) [seen=29 forwarded=18]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c000046 params=8B → REFUSED Rm(Other(64)) [seen=30 forwarded=18]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c00004b params=8B → REFUSED Rm(Other(64)) [seen=31 forwarded=18]
+kayfabe: ENGINE-OBJECT class=0xc7b5 client=0xc1d0000c parent=0x5c00004e params=8B → REFUSED Rm(Other(64)) [seen=32 forwarded=18] ⊘ REPORT BOUND REACHED — later outcomes are counted, not printed
+kayfabe: GR-PUSHBUFFER token=0x00000007 engine=GrCompute ring=0x200200000 idx=0 entries=1024 ranges=1 methods=86 bytes=864 | range va=0x200400000 len=864
+      m[000] hdr=0x20012000 sub=1 addr=0x0000 count=1 secop=1 args=[0x0000c7c0]
+      m[001] hdr=0x20012040 sub=1 addr=0x0100 count=1 secop=1 args=[0x00000000]
+      m[002] hdr=0x200120a8 sub=1 addr=0x02a0 count=1 secop=1 args=[0x00007ac2]
+      m[003] hdr=0x200120a9 sub=1 addr=0x02a4 count=1 secop=1 args=[0x31000000]
+      m[004] hdr=0x200120c4 sub=1 addr=0x0310 count=1 secop=1 args=[0x00000806]
+      m[005] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403f]
+      m[006] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403e]
+      m[007] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403d]
+      m[008] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403c]
+      m[009] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403b]
+      m[010] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403a]
+      m[011] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054039]
+      m[012] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054038]
+      m[013] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054037]
+      m[014] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054036]
+      m[015] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054035]
+      m[016] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054034]
+      m[017] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054033]
+      m[018] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054032]
+      m[019] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054031]
+      m[020] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054030]
+      m[021] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402f]
+      m[022] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402e]
+      m[023] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402d]
+      m[024] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402c]
+      m[025] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402b]
+      m[026] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402a]
+      m[027] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054029]
+      m[028] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054028]
+      m[029] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054027]
+      m[030] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054026]
+      m[031] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054025]
+      m[032] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054024]
+      m[033] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054023]
+      m[034] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054022]
+      m[035] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054021]
+      m[036] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054020]
+      m[037] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401f]
+      m[038] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401e]
+      m[039] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401d]
+      m[040] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401c]
+      m[041] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401b]
+      m[042] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401a]
+      m[043] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054019]
+      m[044] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054018]
+      m[045] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054017]
+      m[046] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054016]
+      m[047] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054015]
+      m[048] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054014]
+      m[049] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054013]
+      m[050] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054012]
+      m[051] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054011]
+      m[052] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054010]
+      m[053] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400f]
+      m[054] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400e]
+      m[055] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400d]
+      m[056] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400c]
+      m[057] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400b]
+      m[058] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400a]
+      m[059] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054009]
+      m[060] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054008]
+      m[061] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054007]
+      m[062] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054006]
+      m[063] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054005]
+      m[064] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054004]
+      m[065] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054003]
+      m[066] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054002]
+      m[067] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054001]
+      m[068] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054000]
+      m[069] hdr=0x2001208f sub=1 addr=0x023c count=1 secop=1 args=[0x00000001]
+      m[070] hdr=0x20032080 sub=1 addr=0x0200 count=3 secop=1 args=[0x00000002,0x00000000,0x000a8000]
+      m[071] hdr=0x200120bb sub=1 addr=0x02ec count=1 secop=1 args=[0x0000000e]
+      m[072] hdr=0x20012045 sub=1 addr=0x0114 count=1 secop=1 args=[0x00000000]
+      m[073] hdr=0x600f2046 sub=1 addr=0x0118 count=15 secop=3 args=[0x00140003,0x1d00001b,0x71c08300,0x00000003,0x18c00000,0xb01c5f00,0x00200003,0x18c00000,..+7]
+      m[074] hdr=0x20022047 sub=1 addr=0x011c count=2 secop=1 args=[0x00000000,0x00000000]
+      m[075] hdr=0x20012045 sub=1 addr=0x0114 count=1 secop=1 args=[0x0000000f]
+      m[076] hdr=0x60182046 sub=1 addr=0x0118 count=24 secop=3 args=[0x00000003,0x1d080000,0x31c00300,0x00540003,0x00c00455,0x31c00300,0x2a200003,0x00c00056,..+16]
+      m[077] hdr=0x20022047 sub=1 addr=0x011c count=2 secop=1 args=[0x00000001,0x0000000f]
+      m[078] hdr=0x20018000 sub=4 addr=0x0000 count=1 secop=1 args=[0x0000c7b5]
+      m[079] hdr=0x2001255d sub=1 addr=0x1574 count=1 secop=1 args=[0x00000100]
+      m[080] hdr=0x2001255e sub=1 addr=0x1578 count=1 secop=1 args=[0x00000000]
+      m[081] hdr=0x2001255f sub=1 addr=0x157c count=1 secop=1 args=[0x000fffff]
+      m[082] hdr=0x20012557 sub=1 addr=0x155c count=1 secop=1 args=[0x00000100]
+      m[083] hdr=0x20012558 sub=1 addr=0x1560 count=1 secop=1 args=[0x02000000]
+      m[084] hdr=0x20012559 sub=1 addr=0x1564 count=1 secop=1 args=[0x00000000]
+      m[085] hdr=0x200426c0 sub=1 addr=0x1b00 count=4 secop=1 args=[0x00000002,0x0440fff0,0x00000001,0x00000000]
+kayfabe: COMPLETION-DECLARE token=0x00000007 proc=2 chan=0 engine=GrCompute → DECLARED va=0x20440fff0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407280 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=0 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440fff0 → GuestRam { gpa: 1156407280 }
+kayfabe: GR-FB-JOIN proc=2 chan=0 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 len=0x200000 fb_phys=0x400000 → JOINED (private) memory=0xcafe005e host_va=0x200000000 placed_as_asked=true established=0 bytes over 0 page(s), of which 0 NON-ZERO — ★ ONE memory: the pages the host GR engine walks to are the pages this device's framebuffer window now reads and writes. ⚠ The leaf is host SYSMEM, a named divergence from the C. ⊘ Nothing executed and no doorbell was routed
+kayfabe: GR-FB-JOIN proc=2 chan=0   ⊘ the establishment copy was VACUOUS for this leaf: no page of it was resident, so nothing the guest had written came across. That is CORRECT (an unwritten leaf is zeros either way) and it is NOT evidence that the copy works
+kayfabe: GR-FB-JOIN proc=2 chan=0 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 len=0x200000 fb_phys=0x800000 → JOINED (private) memory=0xcafe005f host_va=0x10002000000 placed_as_asked=true established=0 bytes over 0 page(s), of which 0 NON-ZERO — ★ ONE memory: the pages the host GR engine walks to are the pages this device's framebuffer window now reads and writes. ⚠ The leaf is host SYSMEM, a named divergence from the C. ⊘ Nothing executed and no doorbell was routed
+kayfabe: GR-FB-JOIN proc=2 chan=0   ⊘ the establishment copy was VACUOUS for this leaf: no page of it was resident, so nothing the guest had written came across. That is CORRECT (an unwritten leaf is zeros either way) and it is NOT evidence that the copy works
+kayfabe: GR-FB-JOIN proc=2 chan=0 SET_TEX_HEADER_POOL leaf va=0x10000000000 len=0x200000 fb_phys=0x600000 → JOINED (private) memory=0xcafe0060 host_va=0x10000000000 placed_as_asked=true established=0 bytes over 0 page(s), of which 0 NON-ZERO — ★ ONE memory: the pages the host GR engine walks to are the pages this device's framebuffer window now reads and writes. ⚠ The leaf is host SYSMEM, a named divergence from the C. ⊘ Nothing executed and no doorbell was routed
+kayfabe: GR-FB-JOIN proc=2 chan=0   ⊘ the establishment copy was VACUOUS for this leaf: no page of it was resident, so nothing the guest had written came across. That is CORRECT (an unwritten leaf is zeros either way) and it is NOT evidence that the copy works
+kayfabe: GR-FB-JOIN proc=2 chan=0 ⊘ DIRECTION 1 (guest view → isolate view) DISAGREES at word 0 (got 0x00000000, want 0x5a1a5a5b) of 1024
+kayfabe: GR-FB-JOIN proc=2 chan=0 ⊘ DIRECTION 2 (isolate view → guest view) DISAGREES at word 0 (got 0x5a1a5a5b, want 0xa5e5a5a4) of 1024
+kayfabe: GR-FB-JOIN proc=2 chan=0   ★★ AND THE VALUE READ BACK IS DIRECTION 1'S OWN PATTERN, not zeros — so BOTH views are live and hold DIFFERENT bytes. That is the negative control firing exactly as `fb_cpu_view.md` §3.2 measured it, and zeros alone could not have shown it
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=0 joined_leaves=3 live_views=3 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440fff0 → GuestRam { gpa: 1156407280 }
+2026-08-10T23:59:25.130003Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #1 token 0x00000007 at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: GR-PUSHBUFFER token=0x00000008 engine=GrCompute ring=0x200203000 idx=0 entries=1024 ranges=1 methods=86 bytes=864 | range va=0x200800000 len=864
+      m[000] hdr=0x20012000 sub=1 addr=0x0000 count=1 secop=1 args=[0x0000c7c0]
+      m[001] hdr=0x20012040 sub=1 addr=0x0100 count=1 secop=1 args=[0x00000000]
+      m[002] hdr=0x200120a8 sub=1 addr=0x02a0 count=1 secop=1 args=[0x00007ac2]
+      m[003] hdr=0x200120a9 sub=1 addr=0x02a4 count=1 secop=1 args=[0x31000000]
+      m[004] hdr=0x200120c4 sub=1 addr=0x0310 count=1 secop=1 args=[0x00000806]
+      m[005] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403f]
+      m[006] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403e]
+      m[007] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403d]
+      m[008] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403c]
+      m[009] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403b]
+      m[010] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005403a]
+      m[011] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054039]
+      m[012] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054038]
+      m[013] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054037]
+      m[014] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054036]
+      m[015] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054035]
+      m[016] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054034]
+      m[017] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054033]
+      m[018] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054032]
+      m[019] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054031]
+      m[020] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054030]
+      m[021] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402f]
+      m[022] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402e]
+      m[023] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402d]
+      m[024] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402c]
+      m[025] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402b]
+      m[026] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005402a]
+      m[027] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054029]
+      m[028] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054028]
+      m[029] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054027]
+      m[030] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054026]
+      m[031] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054025]
+      m[032] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054024]
+      m[033] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054023]
+      m[034] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054022]
+      m[035] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054021]
+      m[036] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054020]
+      m[037] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401f]
+      m[038] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401e]
+      m[039] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401d]
+      m[040] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401c]
+      m[041] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401b]
+      m[042] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005401a]
+      m[043] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054019]
+      m[044] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054018]
+      m[045] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054017]
+      m[046] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054016]
+      m[047] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054015]
+      m[048] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054014]
+      m[049] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054013]
+      m[050] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054012]
+      m[051] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054011]
+      m[052] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054010]
+      m[053] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400f]
+      m[054] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400e]
+      m[055] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400d]
+      m[056] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400c]
+      m[057] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400b]
+      m[058] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x0005400a]
+      m[059] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054009]
+      m[060] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054008]
+      m[061] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054007]
+      m[062] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054006]
+      m[063] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054005]
+      m[064] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054004]
+      m[065] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054003]
+      m[066] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054002]
+      m[067] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054001]
+      m[068] hdr=0x20012092 sub=1 addr=0x0248 count=1 secop=1 args=[0x00054000]
+      m[069] hdr=0x2001208f sub=1 addr=0x023c count=1 secop=1 args=[0x00000001]
+      m[070] hdr=0x20032080 sub=1 addr=0x0200 count=3 secop=1 args=[0x00000002,0x00000000,0x000a8000]
+      m[071] hdr=0x200120bb sub=1 addr=0x02ec count=1 secop=1 args=[0x0000000e]
+      m[072] hdr=0x20012045 sub=1 addr=0x0114 count=1 secop=1 args=[0x00000000]
+      m[073] hdr=0x600f2046 sub=1 addr=0x0118 count=15 secop=3 args=[0x00140003,0x1d00001b,0x71c08300,0x00000003,0x18c00000,0xb01c5f00,0x00200003,0x18c00000,..+7]
+      m[074] hdr=0x20022047 sub=1 addr=0x011c count=2 secop=1 args=[0x00000000,0x00000000]
+      m[075] hdr=0x20012045 sub=1 addr=0x0114 count=1 secop=1 args=[0x0000000f]
+      m[076] hdr=0x60182046 sub=1 addr=0x0118 count=24 secop=3 args=[0x00000003,0x1d080000,0x31c00300,0x00540003,0x00c00455,0x31c00300,0x2a200003,0x00c00056,..+16]
+      m[077] hdr=0x20022047 sub=1 addr=0x011c count=2 secop=1 args=[0x00000001,0x0000000f]
+      m[078] hdr=0x20018000 sub=4 addr=0x0000 count=1 secop=1 args=[0x0000c7b5]
+      m[079] hdr=0x2001255d sub=1 addr=0x1574 count=1 secop=1 args=[0x00000100]
+      m[080] hdr=0x2001255e sub=1 addr=0x1578 count=1 secop=1 args=[0x00000000]
+      m[081] hdr=0x2001255f sub=1 addr=0x157c count=1 secop=1 args=[0x000fffff]
+      m[082] hdr=0x20012557 sub=1 addr=0x155c count=1 secop=1 args=[0x00000100]
+      m[083] hdr=0x20012558 sub=1 addr=0x1560 count=1 secop=1 args=[0x02000000]
+      m[084] hdr=0x20012559 sub=1 addr=0x1564 count=1 secop=1 args=[0x00000000]
+      m[085] hdr=0x200426c0 sub=1 addr=0x1b00 count=4 secop=1 args=[0x00000002,0x0440ffe0,0x00000001,0x00000000]
+kayfabe: COMPLETION-DECLARE token=0x00000008 proc=2 chan=1 engine=GrCompute → DECLARED va=0x20440ffe0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407264 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=1 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffe0 → GuestRam { gpa: 1156407264 }
+kayfabe: GR-FB-JOIN proc=2 chan=1 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=1 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=1 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=1 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=1 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffe0 → GuestRam { gpa: 1156407264 }
+2026-08-10T23:59:25.133647Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #2 token 0x00000008 at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: COMPLETION-DECLARE token=0x00000009 proc=2 chan=2 engine=GrCompute → DECLARED va=0x20440ffd0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407248 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=2 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffd0 → GuestRam { gpa: 1156407248 }
+kayfabe: GR-FB-JOIN proc=2 chan=2 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=2 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=2 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=2 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=2 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffd0 → GuestRam { gpa: 1156407248 }
+2026-08-10T23:59:25.136057Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #3 token 0x00000009 at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: COMPLETION-DECLARE token=0x0000000a proc=2 chan=3 engine=GrCompute → DECLARED va=0x20440ffc0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407232 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=3 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffc0 → GuestRam { gpa: 1156407232 }
+kayfabe: GR-FB-JOIN proc=2 chan=3 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=3 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=3 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=3 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=3 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffc0 → GuestRam { gpa: 1156407232 }
+2026-08-10T23:59:25.138351Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #4 token 0x0000000a at +0xbb0090 [Route::NotACopyEngineChannel]
+2026-08-10T23:59:25.138384Z qemu-system-x86_64: info: nvkvm: DOORBELL-HEARTBEAT arrival #96 token 0x0000000a
+kayfabe: COMPLETION-DECLARE token=0x0000000b proc=2 chan=4 engine=GrCompute → DECLARED va=0x20440ffb0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407216 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=4 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffb0 → GuestRam { gpa: 1156407216 }
+kayfabe: GR-FB-JOIN proc=2 chan=4 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=4 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=4 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=4 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=4 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffb0 → GuestRam { gpa: 1156407216 }
+2026-08-10T23:59:25.140705Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #5 token 0x0000000b at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: COMPLETION-DECLARE token=0x0000000c proc=2 chan=5 engine=GrCompute → DECLARED va=0x20440ffa0 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407200 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=5 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffa0 → GuestRam { gpa: 1156407200 }
+kayfabe: GR-FB-JOIN proc=2 chan=5 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=5 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=5 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=5 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=5 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ffa0 → GuestRam { gpa: 1156407200 }
+2026-08-10T23:59:25.142967Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #6 token 0x0000000c at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: COMPLETION-DECLARE token=0x0000000d proc=2 chan=6 engine=GrCompute → DECLARED va=0x20440ff90 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407184 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=6 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ff90 → GuestRam { gpa: 1156407184 }
+kayfabe: GR-FB-JOIN proc=2 chan=6 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=6 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=6 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=6 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=6 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ff90 → GuestRam { gpa: 1156407184 }
+2026-08-10T23:59:25.145239Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #7 token 0x0000000d at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: COMPLETION-DECLARE token=0x0000000e proc=2 chan=7 engine=GrCompute → DECLARED va=0x20440ff80 payload=0x00000001 awaken=0 four_words=1 op=0 subch=1 class=0xc7c0 site=GuestRam { gpa: 1156407168 } (⊘ the observer WATCHES this address; it will never write it)
+kayfabe: GR-ADDRESS-CENSUS proc=2 chan=7 class=0xc7c0 operands=5 bound=4 unbound=1 mme_dwords=39 ⊘ a census of what the host GR engine WOULD dereference; nothing here is executed and nothing here is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → Framebuffer { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 } }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → Framebuffer { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 } }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → Framebuffer { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 } }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ff80 → GuestRam { gpa: 1156407168 }
+kayfabe: GR-FB-JOIN proc=2 chan=7 SET_VALID_SPAN_OVERFLOW_AREA leaf va=0x200000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=7 SET_TEX_SAMPLER_POOL leaf va=0x10002000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=7 SET_TEX_HEADER_POOL leaf va=0x10000000000 → ALREADY JOINED (idempotent replay; no second object, no second descriptor, no second establishment copy)
+kayfabe: GR-FB-JOIN proc=2 chan=7 ⊘ NO PROBE: no leaf reached a live view this doorbell, so there is nothing to ask about. ⊘ That is the absence of a measurement, NOT a measurement of absence
+kayfabe: GR-ADDRESS-CENSUS (RE-STATED AFTER JOINING) proc=2 chan=7 joined_leaves=3 live_views=0 ⊘ still nothing executed and still nothing is permission
+      SET_VALID_SPAN_OVERFLOW_AREA             m=0x0200 sub=1 va=0x200000000 → HostBackedFb { phys: 4194304, leaf: FbLeaf { va: 8589934592, len: 2097152, phys: 4194304 }, host_va: 8589934592, memory: 3405643870 }
+      SET_SHADER_SHARED_MEMORY_WINDOW          m=0x02a0 sub=1 va=0x7ac231000000 → Unresolved("CeWalk { va: GpuVa(134974464327680), kind: \"Fault\" } at va=0x7ac231000000: Fault")
+      SET_TEX_SAMPLER_POOL                     m=0x155c sub=1 va=0x10002000000 → HostBackedFb { phys: 8388608, leaf: FbLeaf { va: 1099545182208, len: 2097152, phys: 8388608 }, host_va: 1099545182208, memory: 3405643871 }
+      SET_TEX_HEADER_POOL                      m=0x1574 sub=1 va=0x10000000000 → HostBackedFb { phys: 6291456, leaf: FbLeaf { va: 1099511627776, len: 2097152, phys: 6291456 }, host_va: 1099511627776, memory: 3405643872 }
+      SET_REPORT_SEMAPHORE                     m=0x1b00 sub=1 va=0x20440ff80 → GuestRam { gpa: 1156407168 }
+2026-08-10T23:59:25.147222Z qemu-system-x86_64: info: nvkvm: DOORBELL-REFUSED #8 token 0x0000000e at +0xbb0090 [Route::NotACopyEngineChannel]
+kayfabe: COMPLETION-WATCH proc=2 chan=0 va=0x20440fff0 payload=0x00000001 → NOT-OBSERVED samples=88 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=1 va=0x20440ffe0 payload=0x00000001 → NOT-OBSERVED samples=87 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=2 va=0x20440ffd0 payload=0x00000001 → NOT-OBSERVED samples=86 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=3 va=0x20440ffc0 payload=0x00000001 → NOT-OBSERVED samples=85 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=4 va=0x20440ffb0 payload=0x00000001 → NOT-OBSERVED samples=84 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=5 va=0x20440ffa0 payload=0x00000001 → NOT-OBSERVED samples=83 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=6 va=0x20440ff90 payload=0x00000001 → NOT-OBSERVED samples=82 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+kayfabe: COMPLETION-WATCH proc=2 chan=7 va=0x20440ff80 payload=0x00000001 → NOT-OBSERVED samples=81 last_seen=0x00000000 awaken=0 four_words=1 ⊘ the address WAS readable and the declared payload never appeared — a statement about the completion plane, not about the observer
+2026-08-11T00:02:07.997661Z qemu-system-x86_64: info: nvkvm: DOORBELL-HEARTBEAT arrival #128 token 0x00010003
+2026-08-11T00:02:08.142819Z qemu-system-x86_64: info: nvkvm: DOORBELL-HEARTBEAT arrival #160 token 0x00010001
+kayfabe: RING-ROSTER 26 row(s), 0 dropped past the cap (a non-zero drop count means this list is a PREFIX and its absences prove nothing)
+kayfabe:   RING-ROSTER key=0xc1e00005:0x2 ring=0x120064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00006:0x2 ring=0x420064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00007:0xbaba0045 ring=0x0 entries=32
+kayfabe:   RING-ROSTER key=0xc1e00010:0x2 ring=0x120064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00011:0x2 ring=0x420064000 entries=4096
+kayfabe:   RING-ROSTER key=0xc1e00012:0xbaba0045 ring=0x0 entries=32
+kayfabe:   RING-ROSTER key=0xc1d0000a:0xcaf00012 ring=0x121010000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000a:0xcaf0001d ring=0x121040000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000a:0xcaf00028 ring=0x121070000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000a:0xcaf00033 ring=0x1210a0000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000019 ring=0x200200000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c00001f ring=0x200203000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000023 ring=0x200206000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000027 ring=0x200209000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c00002b ring=0x20020c000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c00002f ring=0x20020f000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000033 ring=0x200212000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000037 ring=0x200215000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c00003d ring=0x200218000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000040 ring=0x20021b000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000043 ring=0x20021e000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000046 ring=0x200221000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c00004b ring=0x200224000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c00004e ring=0x200227000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000051 ring=0x20022a000 entries=1024
+kayfabe:   RING-ROSTER key=0xc1d0000c:0x5c000054 ring=0x20022d000 entries=1024
+kayfabe: UNCLAIMED-CENSUS 64 distinct (bar, offset) pair(s) answered with a DEFAULTED ZERO (⊘ bounded first-N sample — an absence here proves nothing; the totals are the `registers:` line's UNCLAIMED counts)
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x08841c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x08807c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088898
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088bd8
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088be0
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088bf4
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088bfc
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x100c40
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x100c10
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x001478
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088080
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x820c04
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x82074c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x824148
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x009410
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x009400
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x823814
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x625f04
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x8241c0
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x1103c0
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x111668
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110084
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110624
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x11010c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110600
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110110
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110128
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110114
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x11011c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x111210
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x11119c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x111198
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x111180
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110104
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x001438
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x8400f4
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x8403c0
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840084
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840044
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840624
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x84010c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840600
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840110
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840128
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840114
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x84011c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x841210
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x84119c
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x841198
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x841180
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x840104
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110080
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x110094
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088030
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0xb830b0
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0xb830a0
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0xb830a4
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088068
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x0880c8
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088424
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088430
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088034
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x088038
+kayfabe:   UNCLAIMED-CENSUS bar0 off=0x08803c
+2026-08-11T00:02:10.949323Z qemu-system-x86_64: info: nvkvm: registers: 11846 reads / 417228 writes (chip-constant 422, rom 4632, gsp 722r/1455w, UNCLAIMED 2864r/2470w), faults 2, guest-RAM refusals 0, interrupt requests dropped 837
+2026-08-11T00:02:10.949392Z qemu-system-x86_64: info: nvkvm: timer: 222 counter reads, 0 writes REFUSED (the guest reads the host GPU's counter and may not move it)
+2026-08-11T00:02:10.949421Z qemu-system-x86_64: info: nvkvm: interrupts: 196 vectors delivered, 0 undeliverable (guest had not enabled the table), 837 status-queue requests dropped
+2026-08-11T00:02:10.949449Z qemu-system-x86_64: info: nvkvm: interrupt tree: 9425 register accesses, 2 guest LEAF_TRIGGER raises, 0 of them would be masked (⊘ if that equals the raises, the ENABLE BOOKKEEPING is blind and every "would be masked" number in this report is meaningless — the loopback self-test enables its leaf immediately before triggering)
+2026-08-11T00:02:10.949478Z qemu-system-x86_64: info: nvkvm: completions: 4 announced (non-stall vector raised), 179 UNVECTORED (work done, nothing told the guest), 4 would be masked by the guest's own LEAF_EN
+2026-08-11T00:02:10.949506Z qemu-system-x86_64: info: nvkvm: os-events: 3 registered / 3 retired / 0 live (0 malformed, 0 refused-full); 21 POST_EVENT posted in 7 batch(es); gate: 94 gated, 0 not-running, 0 failed, 6 IRQSCLR cleared
+2026-08-11T00:02:10.949536Z qemu-system-x86_64: info: nvkvm: os-event announce: 7 GSP stall vector(s) raised, 0 UNVECTORED, 4 would be masked; 0 batch(es) WOKE WITH NOTHING (last join: 158 doorbells served, 0 of them forwarded, 1 new since the previous batch)
+2026-08-11T00:02:10.949581Z qemu-system-x86_64: info: nvkvm: framebuffer: 1410 reads / 405167 writes served through the BAR0 moving window (52 window register reads / 42 writes), fb refusals 0, resident 12910592 bytes
+2026-08-11T00:02:10.949611Z qemu-system-x86_64: info: nvkvm:   windows with no address model: 0r/0w — read it beside the BAR1 traffic that had to exist for this zero to say anything: 0 translated read(s) / 483 write(s), bar1PdeBase = 0x2f1cac000. ⊘ With 0 BAR1 accesses this line reports nothing about the guest.
+2026-08-11T00:02:10.949639Z qemu-system-x86_64: info: nvkvm:   framebuffer residency: 3152 page(s) spanning [0x0..0x2f1cac000] — 3087533 page(s) of extent, so the resident set is SPARSE. ⊘ A page NOT in this set was never written; a page in it that reads zero WAS addressed and given zeros. The byte census alone cannot tell those apart.
+2026-08-11T00:02:10.949668Z qemu-system-x86_64: info: nvkvm:   framebuffer FIRST-WRITER census: PRAMIN 21 / BAR1 41 / BAR2 88 / EXEC 3002 / UNATTRIBUTED 0 page(s) — FIRST writer, not last, so this attributes CREATION and not traffic.
+2026-08-11T00:02:10.949697Z qemu-system-x86_64: info: nvkvm:   GPFIFO forward search: swept 3152 of 3152 resident page(s), and NO page carries GPFIFO-entry-shaped bytes. ⊘ This says the ring's bytes are not in THIS store — it does not say the guest never wrote them.
+2026-08-11T00:02:10.949755Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-bar0-regs: base 0xfd000000 -> region 'nvkvm-bar0-regs' (OURS), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-11T00:02:10.949775Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-bar1-window: base 0xe0000000 -> region 'nvkvm-bar1-window' (OURS), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-11T00:02:10.949793Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-bar2-window: base 0xf0000000 -> region 'nvkvm-bar2-window' (OURS), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-11T00:02:10.949812Z qemu-system-x86_64: info: nvkvm:   trap-status nvkvm-msix: base 0xfe052000 -> region 'msix-table' ⚠ (NOT OURS — it overlays this BAR), IO — TRAPPED, every guest access reaches this device. ⇒ a never-written page behind this row IS a statement about the guest, because we would have seen the write.
+2026-08-11T00:02:10.949830Z qemu-system-x86_64: info: nvkvm: discarding reservations: none — every region this device presents either traps to the archive or is the interrupt table. ⊘ This is read off the region table, not off a counter, so it cannot go stale the way an unreachable counter did.
+2026-08-11T00:02:10.949847Z qemu-system-x86_64: info: nvkvm:   BAR1 access log: 16 of 483 access(es) recorded in full (FIRST ones, because the write under test precedes the doorbell) — ⊘ BOUNDED-LOG, later accesses are not shown
+2026-08-11T00:02:10.949865Z qemu-system-x86_64: info: nvkvm:     BAR1[0] WRITE off=0x90000 size=4 val=0x20000000
+2026-08-11T00:02:10.949883Z qemu-system-x86_64: info: nvkvm:     BAR1[1] WRITE off=0x90004 size=4 val=0x2801
+2026-08-11T00:02:10.949900Z qemu-system-x86_64: info: nvkvm:     BAR1[2] WRITE off=0xa008c size=4 val=0x1
+2026-08-11T00:02:10.949918Z qemu-system-x86_64: info: nvkvm:     BAR1[3] WRITE off=0xb0000 size=4 val=0x20100000
+2026-08-11T00:02:10.949935Z qemu-system-x86_64: info: nvkvm:     BAR1[4] WRITE off=0xb0004 size=4 val=0x2801
+2026-08-11T00:02:10.949953Z qemu-system-x86_64: info: nvkvm:     BAR1[5] WRITE off=0xc008c size=4 val=0x1
+2026-08-11T00:02:10.949970Z qemu-system-x86_64: info: nvkvm:     BAR1[6] WRITE off=0xd0000 size=4 val=0x20200000
+2026-08-11T00:02:10.949988Z qemu-system-x86_64: info: nvkvm:     BAR1[7] WRITE off=0xd0004 size=4 val=0x2801
+2026-08-11T00:02:10.950005Z qemu-system-x86_64: info: nvkvm:     BAR1[8] WRITE off=0xe008c size=4 val=0x1
+2026-08-11T00:02:10.950022Z qemu-system-x86_64: info: nvkvm:     BAR1[9] WRITE off=0xf0000 size=4 val=0x20300000
+2026-08-11T00:02:10.950040Z qemu-system-x86_64: info: nvkvm:     BAR1[10] WRITE off=0xf0004 size=4 val=0x2801
+2026-08-11T00:02:10.950057Z qemu-system-x86_64: info: nvkvm:     BAR1[11] WRITE off=0x10008c size=4 val=0x1
+2026-08-11T00:02:10.950075Z qemu-system-x86_64: info: nvkvm:     BAR1[12] WRITE off=0x90008 size=4 val=0x20400000
+2026-08-11T00:02:10.950093Z qemu-system-x86_64: info: nvkvm:     BAR1[13] WRITE off=0x9000c size=4 val=0x6801
+2026-08-11T00:02:10.950110Z qemu-system-x86_64: info: nvkvm:     BAR1[14] WRITE off=0xa008c size=4 val=0x2
+2026-08-11T00:02:10.950128Z qemu-system-x86_64: info: nvkvm:     BAR1[15] WRITE off=0x90010 size=4 val=0x20500000
+2026-08-11T00:02:10.950145Z qemu-system-x86_64: info: nvkvm: BAR2 (translated): 1388 reads / 336728 writes resolved through the GMMU, 0 REFUSED by name; roots published 4 (0 bodies refused), BAR2 root entry 0x0
+2026-08-11T00:02:10.950163Z qemu-system-x86_64: info: nvkvm: SET_PAGE_DIRECTORY (0x00801813): 2 ACCEPTED, 0 refused; latest hClient 0xc1d0000a hObject 0xcaf00000 hVASpace 0xcaf00036 physAddress 0x201000 numEntries 4 flags 0x8 (aperture 0)
+2026-08-11T00:02:10.950186Z qemu-system-x86_64: info: nvkvm: BAR1 (translated): 0 reads / 483 writes resolved through the GMMU, 0 REFUSED by name; bar1PdeBase = 0x2f1cac000 (the framebuffer address WE published and the walk starts from), root entry published by the guest: no, as ogkm-580's two UPDATE_BAR_PDE call sites predict
+2026-08-11T00:02:10.950204Z qemu-system-x86_64: info: nvkvm: VA-space page-directory publications: 12 total, 11 distinct, 0 UNDECODABLE (counted from 0x90f10106 / 0x20800a9f ONLY; ⊘ 0x00801813 publishes a root too and is counted on its own line above, so these totals are NOT every root the guest published)
+2026-08-11T00:02:10.950222Z qemu-system-x86_64: info: nvkvm:   of those, 14 reached the object model, 12 ACCEPTED (Vas::pdb populated from the guest's own publication), 0 not an event
+2026-08-11T00:02:10.950239Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x20800a9f hClient 0x00000000 hObject 0x00000000 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x2
+2026-08-11T00:02:10.950259Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efbae000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950308Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efbad000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950327Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efbac000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950344Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efbab000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950362Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00005 hObject 0x0000000c va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950380Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efba5000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950398Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efba4000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950415Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efba3000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950433Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efba2000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950450Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00006 hObject 0x0000000a va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950468Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa9c000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950486Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa9b000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950503Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa9a000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950521Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa99000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950538Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00007 hObject 0xbaba0042 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950568Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa7c000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950585Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa7b000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950603Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa7a000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950620Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa79000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950638Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1d00008 hObject 0xcaf00000 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950666Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa7c000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950684Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa7b000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950701Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa7a000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950718Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa79000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950736Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00010 hObject 0x0000000c va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950754Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efba5000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950771Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efba4000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950788Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efba3000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950806Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efba2000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950823Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00011 hObject 0x0000000a va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950841Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa9c000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950858Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa9b000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950876Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa9a000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950893Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa99000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950910Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1e00012 hObject 0xbaba0042 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.950928Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa7c000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.950946Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa7b000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.950963Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa7a000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.950981Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa79000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.950998Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1d00013 hObject 0xcaf00000 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.951016Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x00000002efa7c000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.951033Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x00000002efa7b000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.951051Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x00000002efa7a000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.951068Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x00000002efa79000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.951085Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1d0000c hObject 0x5c000008 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.951103Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x0000000000000000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.951121Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x0000000000001000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.951139Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x0000000000002000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.951160Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x0000000000003000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.951178Z qemu-system-x86_64: info: nvkvm:   gvas cmd 0x90f10106 hClient 0xc1d0000a hObject 0xcaf00005 va [0x0000000100000000..0x000000011fffffff] pageSize 0x200000 levels 4 subdev 0/0 x1
+2026-08-11T00:02:10.951195Z qemu-system-x86_64: info: nvkvm:     level[0] ROOT phys 0x0000000000004000 size 0x20 aperture 1 pageShift 47
+2026-08-11T00:02:10.951213Z qemu-system-x86_64: info: nvkvm:     level[1] phys 0x0000000000005000 size 0x1000 aperture 1 pageShift 38
+2026-08-11T00:02:10.951230Z qemu-system-x86_64: info: nvkvm:     level[2] phys 0x0000000000006000 size 0x1000 aperture 1 pageShift 29
+2026-08-11T00:02:10.951248Z qemu-system-x86_64: info: nvkvm:     level[3] phys 0x0000000000007000 size 0x1000 aperture 1 pageShift 21
+2026-08-11T00:02:10.951300Z qemu-system-x86_64: info: nvkvm: commands: 839 decoded, 111 UNSERVICED (refused by name; the guest logs these quietly, which is why they are here), 41 distinct
+2026-08-11T00:02:10.951318Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a87
+2026-08-11T00:02:10.951335Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a4b
+2026-08-11T00:02:10.951352Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800afe
+2026-08-11T00:02:10.951370Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800aff
+2026-08-11T00:02:10.951387Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a70
+2026-08-11T00:02:10.951404Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a80
+2026-08-11T00:02:10.951421Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a0f
+2026-08-11T00:02:10.951455Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080017e
+2026-08-11T00:02:10.951472Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a30
+2026-08-11T00:02:10.951489Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2c
+2026-08-11T00:02:10.951506Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a2e
+2026-08-11T00:02:10.951523Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a34
+2026-08-11T00:02:10.951540Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b03
+2026-08-11T00:02:10.951566Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800b05
+2026-08-11T00:02:10.951583Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a3f
+2026-08-11T00:02:10.951600Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080013f
+2026-08-11T00:02:10.951617Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x402c0101
+2026-08-11T00:02:10.951635Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x00800294
+2026-08-11T00:02:10.951652Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20810108
+2026-08-11T00:02:10.951669Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20810110
+2026-08-11T00:02:10.951686Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080014b
+2026-08-11T00:02:10.951704Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800157
+2026-08-11T00:02:10.951721Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20801357
+2026-08-11T00:02:10.951738Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080852e
+2026-08-11T00:02:10.951755Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20808513
+2026-08-11T00:02:10.951772Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802068
+2026-08-11T00:02:10.951789Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080a618
+2026-08-11T00:02:10.951807Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080a612
+2026-08-11T00:02:10.951824Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20809009
+2026-08-11T00:02:10.951841Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x208f1105
+2026-08-11T00:02:10.951858Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a38
+2026-08-11T00:02:10.951880Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080012f
+2026-08-11T00:02:10.951897Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20802a12
+2026-08-11T00:02:10.951914Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800ab8
+2026-08-11T00:02:10.951931Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a9a
+2026-08-11T00:02:10.951948Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0xa06f0112
+2026-08-11T00:02:10.951966Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x2080012c
+2026-08-11T00:02:10.951983Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x00801814
+2026-08-11T00:02:10.952000Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a9e
+2026-08-11T00:02:10.952017Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a9c
+2026-08-11T00:02:10.952034Z qemu-system-x86_64: info: nvkvm:   unserviced fn 76 cmd 0x20800a1e
+2026-08-11T00:02:10.952051Z qemu-system-x86_64: info: nvkvm: bridge refusals: 18 total, 6 distinct (these ANSWER the command and so never reach the unserviced list)
+2026-08-11T00:02:10.952069Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::NotOnAllowlist x2 id=0x0000c36f
+2026-08-11T00:02:10.952088Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::AllocClassNotPermitted::Refused x2 id=0x0000402c
+2026-08-11T00:02:10.952105Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::ReservedClient x2
+2026-08-11T00:02:10.952123Z qemu-system-x86_64: info: nvkvm:   bridge refusal BridgeRefusal::UnmappedAllocClass x3 id=0x00000070,0x0000208f
+2026-08-11T00:02:10.952140Z qemu-system-x86_64: info: nvkvm:   bridge refusal PromoteFault::UnknownContextObject x2
+2026-08-11T00:02:10.952158Z qemu-system-x86_64: info: nvkvm:   bridge refusal RmGraphError::FreeUnknown x7
+2026-08-11T00:02:10.952175Z qemu-system-x86_64: info: nvkvm: promote-ctx refusals: 3 distinct kind(s), each with the VA-space census AS IT STOOD AT ITS FIRST refusal
+2026-08-11T00:02:10.952192Z qemu-system-x86_64: info: nvkvm:   promote-ctx PromoteFault::UnknownContextObject: UnknownContextObject { client: HClient(3251634184), object: HObject(826366208) } census[2 chans, 2 outcomes] {1x pdb=N own=not-declared cs=not-declared tsg=mid-miss(h0xa,wrong-kind(Device)) dev=dev-default(dev0xa=>h0xc) p0/c0:vc1 Ce c0xc1e00005/0x2} {1x pdb=Y own=ok(h0xa=>c0xc1e00006/0xa) cs=not-attempted tsg=not-attempted dev=not-attempted p0/c1:vc2 Ce c0xc1e00006/0x2}
+2026-08-11T00:02:10.952210Z qemu-system-x86_64: info: nvkvm:   promote-ctx promote-ctx ACCEPTED (last, with the census AT it): bound=0 joined=0 joined_global=0 globals_known=1 globals_added=0 already=1 parked=0 half_already=9 half_unusable=0 orphans(awaiting_va=0,awaiting_phys=9) declined.promote_only=10 declined.initialize_only=0 entries=0 halves=10 client=0xc1d0000a chan_client=0xc1d0000c object=0x5c000037 proc=ProcId(2) census[14 chans, 4 outcomes] {1x pdb=N own=not-declared cs=not-declared tsg=mid-miss(h0xa,wrong-kind(Device)) dev=dev-default(dev0xa=>h0xc) p0/c3:vc1 Ce c0xc1e00010/0x2} {1x pdb=Y own=ok(h0xa=>c0xc1e00011/0xa) cs=not-attempted tsg=not-attempted dev=not-attempted p0/c4:vc2 Ce c0xc1e00011/0x2} {4x pdb=Y own=not-declared cs=not-declared tsg=ok(h0xcaf00005=>c0xc1d0000a/0xcaf00005) dev=not-attempted p0/c6:vc3 Ce c0xc1d0000a/0xcaf00012 p0/c7:vc4 Ce c0xc1d0000a/0xcaf0001d p0/c8:vc5 Ce c0xc1d0000a/0xcaf00028 +1 more} {8x pdb=Y own=not-declared cs=ok(h0x5c000007=>c0xc1d0000c/0x5c000007) tsg=not-attempted dev=not-attempted p2/c0:vc7 GrCompute c0xc1d0000c/0x5c000019 p2/c1:vc8 GrCompute c0xc1d0000c/0x5c00001f p2/c2:vc9 GrCompute c0xc1d0000c/0x5c000023 +5 more}
+2026-08-11T00:02:10.952227Z qemu-system-x86_64: info: nvkvm:   promote-ctx promote-ctx TALLY (cumulative, all promotions): {bid=0x0 phys=1 va=8 complete=2} {bid=0x1 phys=1 va=8 complete=0} {bid=0x2 phys=1 va=8 complete=2} {bid=0x3 phys=0 va=10 complete=0} {bid=0x4 phys=0 va=10 complete=0} {bid=0x5 phys=0 va=10 complete=0} {bid=0x6 phys=0 va=10 complete=0} {bid=0x9 phys=0 va=8 complete=2} {bid=0xa phys=2 va=8 complete=0} {bid=0xb phys=0 va=8 complete=2} || CUMULATIVE bound=8 joined=4 joined_global=1 already=7 globals_added=1
+2026-08-11T00:02:10.952248Z qemu-system-x86_64: info: nvkvm: probe-arm set: EMPTY (shipping configuration: an arming is served only if the index is on SILENT_NOTIFIERS — the event cannot occur — or DELIVERED_NOTIFIERS — this device raises it; all others refused)
+2026-08-11T00:02:10.952279Z qemu-system-x86_64: info: nvkvm: controls: 312 answered, 48 distinct cmd/result rows (result 0 = served; non-zero = served-but-REFUSED, which reaches no other list)
+2026-08-11T00:02:10.952297Z qemu-system-x86_64: info: nvkvm:   control 0x20800a36 result 0x00000000 x2
+2026-08-11T00:02:10.952315Z qemu-system-x86_64: info: nvkvm:   control 0x20800a41 result 0x00000000 x2
+2026-08-11T00:02:10.952332Z qemu-system-x86_64: info: nvkvm:   control 0x208001b0 result 0x00000000 x4
+2026-08-11T00:02:10.952349Z qemu-system-x86_64: info: nvkvm:   control 0x20800a40 result 0x00000000 x2
+2026-08-11T00:02:10.952367Z qemu-system-x86_64: info: nvkvm:   control 0x20801112 result 0x00000000 x2
+2026-08-11T00:02:10.952384Z qemu-system-x86_64: info: nvkvm:   control 0x20800a5c result 0x00000000 x2
+2026-08-11T00:02:10.952401Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1c result 0x00000000 x2
+2026-08-11T00:02:10.952419Z qemu-system-x86_64: info: nvkvm:   control 0x20801803 result 0x00000000 x2
+2026-08-11T00:02:10.952436Z qemu-system-x86_64: info: nvkvm:   control 0x20800af3 result 0x00000000 x4
+2026-08-11T00:02:10.952453Z qemu-system-x86_64: info: nvkvm:   control 0x20800aac result 0x00000000 x2
+2026-08-11T00:02:10.952471Z qemu-system-x86_64: info: nvkvm:   control 0x20800a61 result 0x00000000 x8
+2026-08-11T00:02:10.952498Z qemu-system-x86_64: info: nvkvm:   control 0x20802a08 result 0x00000000 x15
+2026-08-11T00:02:10.952515Z qemu-system-x86_64: info: nvkvm:   control 0x20800301 result 0x00000000 x6
+2026-08-11T00:02:10.952533Z qemu-system-x86_64: info: nvkvm:   control 0x20800a59 result 0x00000000 x2
+2026-08-11T00:02:10.952558Z qemu-system-x86_64: info: nvkvm:   control 0x20800a6c result 0x00000000 x8
+2026-08-11T00:02:10.952576Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9f result 0x00000000 x2
+2026-08-11T00:02:10.952593Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1f result 0x00000000 x2
+2026-08-11T00:02:10.952611Z qemu-system-x86_64: info: nvkvm:   control 0x20800a2a result 0x00000000 x2
+2026-08-11T00:02:10.952628Z qemu-system-x86_64: info: nvkvm:   control 0x20800a26 result 0x00000000 x2
+2026-08-11T00:02:10.952645Z qemu-system-x86_64: info: nvkvm:   control 0x20800a22 result 0x00000000 x2
+2026-08-11T00:02:10.952662Z qemu-system-x86_64: info: nvkvm:   control 0x20800a3d result 0x00000000 x2
+2026-08-11T00:02:10.952680Z qemu-system-x86_64: info: nvkvm:   control 0x20800a48 result 0x00000000 x2
+2026-08-11T00:02:10.952697Z qemu-system-x86_64: info: nvkvm:   control 0x20800a32 result 0x00000000 x2
+2026-08-11T00:02:10.952714Z qemu-system-x86_64: info: nvkvm:   control 0x90f10106 result 0x00000000 x10
+2026-08-11T00:02:10.952732Z qemu-system-x86_64: info: nvkvm:   control 0xa06f0103 result 0x00000000 x8
+2026-08-11T00:02:10.952749Z qemu-system-x86_64: info: nvkvm:   control 0xa06f0104 result 0x00000000 x2
+2026-08-11T00:02:10.952766Z qemu-system-x86_64: info: nvkvm:   control 0x2080012b result 0x00000000 x11
+2026-08-11T00:02:10.952784Z qemu-system-x86_64: info: nvkvm:   control 0x2080012b result 0x00000056 x2 REFUSED
+2026-08-11T00:02:10.952801Z qemu-system-x86_64: info: nvkvm:   control 0x20800a4c result 0x00000000 x5
+2026-08-11T00:02:10.952819Z qemu-system-x86_64: info: nvkvm:   control 0x20800102 result 0x00000000 x2
+2026-08-11T00:02:10.952836Z qemu-system-x86_64: info: nvkvm:   control 0x20801823 result 0x00000000 x1
+2026-08-11T00:02:10.952853Z qemu-system-x86_64: info: nvkvm:   control 0x2080182a result 0x00000000 x1
+2026-08-11T00:02:10.952871Z qemu-system-x86_64: info: nvkvm:   control 0x20801303 result 0x00000000 x2
+2026-08-11T00:02:10.952888Z qemu-system-x86_64: info: nvkvm:   control 0x20802a0b result 0x00000000 x1
+2026-08-11T00:02:10.952910Z qemu-system-x86_64: info: nvkvm:   control 0x20803801 result 0x00000000 x1
+2026-08-11T00:02:10.952927Z qemu-system-x86_64: info: nvkvm:   control 0x20803601 result 0x00000000 x1
+2026-08-11T00:02:10.952945Z qemu-system-x86_64: info: nvkvm:   control 0x20808159 result 0x00000000 x1
+2026-08-11T00:02:10.952962Z qemu-system-x86_64: info: nvkvm:   control 0x20808162 result 0x00000000 x1
+2026-08-11T00:02:10.952979Z qemu-system-x86_64: info: nvkvm:   control 0x2080182b result 0x00000000 x1
+2026-08-11T00:02:10.952996Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9b result 0x00000000 x1
+2026-08-11T00:02:10.953014Z qemu-system-x86_64: info: nvkvm:   control 0x20800a9d result 0x00000000 x1
+2026-08-11T00:02:10.953031Z qemu-system-x86_64: info: nvkvm:   control 0x20800a1d result 0x00000000 x1
+2026-08-11T00:02:10.953048Z qemu-system-x86_64: info: nvkvm:   control 0x20802a07 result 0x00000000 x4
+2026-08-11T00:02:10.953065Z qemu-system-x86_64: info: nvkvm:   control 0x20802a02 result 0x00000000 x4
+2026-08-11T00:02:10.953082Z qemu-system-x86_64: info: nvkvm:   control 0xa06c010a result 0x00000000 x5
+2026-08-11T00:02:10.953100Z qemu-system-x86_64: info: nvkvm:   control 0x00801813 result 0x00000000 x2
+2026-08-11T00:02:10.953117Z qemu-system-x86_64: info: nvkvm:   control 0xa06c0101 result 0x00000000 x3
+2026-08-11T00:02:10.953134Z qemu-system-x86_64: info: nvkvm:   control 0x20801702 result 0x00000000 x162
+2026-08-11T00:02:10.953151Z qemu-system-x86_64: info: nvkvm:   ⊘ CE COMPLETION is UNBUILT: serving 0x20802a07 and 0x20802a02 is what makes queryCopyEngines set supported=NV_TRUE and UVM treat LCE2/LCE3 as usable async copy engines (ce_is_usable = supported && !grce, uvm_channel.c:2913-2923) — but this port DESCRIBES those engines and does not complete their work, so submitted CE work retires no payload and the guest gets a TIMEOUT plus a blown assertion (scrubberDestruct's 4000 ms wait, then ce_utils.c:349 lastCompletedPayload == lastSubmittedPayload), never an error it can read (execution_plane_increments.md)
+2026-08-11T00:02:10.953169Z qemu-system-x86_64: info: nvkvm: notifier armings (0x20800301): 6 total, 6 distinct (result 0xffffffff = nothing answered)
+2026-08-11T00:02:10.953187Z qemu-system-x86_64: info: nvkvm:   arming event 194 action 2 client 0xc1e00002 object 0xcaf00001 result 0x00000000 x1
+2026-08-11T00:02:10.953204Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00005 object 0x0000000b result 0x00000000 x1
+2026-08-11T00:02:10.953222Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00006 object 0x0000000c result 0x00000000 x1
+2026-08-11T00:02:10.953240Z qemu-system-x86_64: info: nvkvm:   arming event 194 action 2 client 0xc1e0000d object 0xcaf00001 result 0x00000000 x1
+2026-08-11T00:02:10.953268Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00010 object 0x0000000b result 0x00000000 x1
+2026-08-11T00:02:10.953288Z qemu-system-x86_64: info: nvkvm:   arming event 35 action 2 client 0xc1e00011 object 0x0000000c result 0x00000000 x1
+2026-08-11T00:02:10.953305Z qemu-system-x86_64: info: nvkvm: channel binds (0xa06f0104): 2 total, 2 distinct (result 0xffffffff = nothing answered)
+2026-08-11T00:02:10.953323Z qemu-system-x86_64: info: nvkvm:   bind engineType 11 (COPY2) client 0xc1e00006 object 0x00000002 result 0x00000000 x1
+2026-08-11T00:02:10.953341Z qemu-system-x86_64: info: nvkvm:   bind engineType 11 (COPY2) client 0xc1e00011 object 0x00000002 result 0x00000000 x1
+2026-08-11T00:02:10.953358Z qemu-system-x86_64: info: nvkvm: isolates: 2 materialized, 2 live, 0 refusing (0 no-plane, 0 spawn-failed)
+2026-08-11T00:02:10.953376Z qemu-system-x86_64: info: nvkvm: doorbells: 191 arrived, 183 served, 8 REFUSED by name; last token 0x00010001 (16 logged)
+2026-08-11T00:02:10.953394Z qemu-system-x86_64: info: nvkvm:   of the served: 183 local (CPU CE, end witnessed), 0 forwarded (host channel rung)
+2026-08-11T00:02:10.953414Z qemu-system-x86_64: info: nvkvm:   by engine: GrCompute=8 GrGraphics=0 Ce=183 NvEnc=0 NvDec=0 Other=0 unrouted=0
+2026-08-11T00:02:10.953436Z qemu-system-x86_64: info: nvkvm:   last CPU-CE serving: cpu-ce: 1 gp, 9 methods, 1 launch (0 release-only), 1 span, 65536 B, 1 sem fin va=0x12006c004 -> S:0x7adb004
+2026-08-11T00:02:10.953454Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [Route::NotACopyEngineChannel] this channel's engine is GrCompute (route HostGr), so its pushbuffer is not copy-engine work and the shell's CPU copy-engine executor is the wrong executor for it; refused by the ROUTING fact rather than decoded by a codec that can only decline
+2026-08-11T00:02:10.953471Z qemu-system-x86_64: info: nvkvm: gpfifo rings: 26 declared, 24 with a non-zero address; first 0x0000000120064000 (4096 entries) — GPU VIRTUAL, untranslated
+2026-08-11T00:02:10.953489Z qemu-system-x86_64: info: nvkvm: replayable fault buffer: 1 registration(s) SERVED NV_OK; first 0x31000 B = 49 pages, 0 malformed
+2026-08-11T00:02:10.953507Z qemu-system-x86_64: info: nvkvm:   ⊘ fault DELIVERY is UNBUILT: this port raises no replayable fault and never advances MMU_FAULT_BUFFER_PUT(1), so a fault the guest should have been told about becomes a HANG inside UVM's replayable-fault service loop, not an error (docs/design/resume_from_fault.md §7 steps 5b-5d)
+2026-08-11T00:02:10.953524Z qemu-system-x86_64: info: nvkvm: client shadow fault buffer: 1 registration(s) SERVED NV_OK; first 0x120c20 B = 289 pages, type 0 (0=non-replayable), 0 malformed
+2026-08-11T00:02:10.953542Z qemu-system-x86_64: info: nvkvm:   ⊘ shadow-queue PUSH is UNBUILT: on a GSP client the GSP is the WRITER of this queue and this port never enqueues a fault packet, so a non-replayable fault surfaces as an RC on the channel plus an error notifier (simulated_gpu_fault.md 5.2, the deliberate choice) and NEVER as a queue entry the guest is polling for
+2026-08-11T00:02:10.953569Z qemu-system-x86_64: info: nvkvm: access counter buffer: 1 registration(s) SERVED NV_OK; first 0x2000 B = 2 pages, 0 malformed
+2026-08-11T00:02:10.953586Z qemu-system-x86_64: info: nvkvm:   ⊘ access-counter NOTIFICATION is UNBUILT: this port advertised the buffer's size as a deliberate fiction (BAR0 0xB83110, which read zero and killed cuInit) and writes no entry into it and raises no notification, so UVM's migration heuristics never fire (resume_from_fault.md S2 ruled that acceptable)
+kayfabe: ★★★ GUEST-RAM LAYOUT AT END OF RUN, AS THE HYPERVISOR STATED IT — dev=1 ino=251782: 4 contiguous run(s) totalling 2147135488 bytes, out of 0 stated section(s) LIVE over all backing files (0 live run(s) for this block). Section funnel: 76 reported -> 10 classified RAM -> 8 carried a backing file, 8 later withdrawn. ⊘ Every run below arrived on a topology callback; NOTHING here is derived from the machine type or from `-m`, and a guest-physical address outside these runs is refused by name rather than assumed to be its own file offset. ⚠ This is ONE INSTANT: the listener is registered on the device's bus-master address space, which is empty until the guest enables bus mastering, so an empty report here is a statement about WHEN it was taken and not about the machine.
+kayfabe:   gpa 0x0000000000000000..0x00000000000a0000 -> file offset 0x0000000000000000 (655360 bytes) [identity — an OBSERVATION about this run, never a rule]
+kayfabe:   gpa 0x00000000000cb000..0x00000000000ce000 -> file offset 0x00000000000cb000 (12288 bytes) [identity — an OBSERVATION about this run, never a rule]
+kayfabe:   gpa 0x00000000000e8000..0x00000000000f0000 -> file offset 0x00000000000e8000 (32768 bytes) [identity — an OBSERVATION about this run, never a rule]
+kayfabe:   gpa 0x0000000000100000..0x0000000080000000 -> file offset 0x0000000000100000 (2146435072 bytes) [identity — an OBSERVATION about this run, never a rule]
