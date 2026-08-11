@@ -113,9 +113,16 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.map_dma_both(",
-        5,
-        "★ The five publishes that must land in BOTH spaces: `map_gpu_va` (the production \
-         one), `prove_ce_copy`'s two operands, `prove_os_descriptor`'s two. ⚠ Every one is \
+        7,
+        "★ The seven publishes that must land in BOTH spaces: `map_gpu_va` (the production \
+         one), `prove_ce_copy`'s two operands, `prove_os_descriptor`'s two, and \
+         **`prove_fb_memfd_join`'s two** (R32 — the described memfd and the vidmem \
+         partner). ⊘ R32's pair is admitted for exactly the reason the ruling names: its \
+         two copies run on the isolate's own CE, in BOTH directions, so both operands must \
+         resolve in the executor's space as well as the guest-facing one. A reverse copy \
+         whose *destination* resolved only in the guest space would fault on the write \
+         rather than the read, which is a different Xid at a different address and would \
+         have read as a J2 failure. ⚠ Every one is \
          memory the ISOLATE'S OWN copy engine must resolve. A publish that reaches \
          `raw_map_dma` directly instead lands in the guest's space only, and the failure is \
          an `Xid 31 FAULT_PDE` on a later copy — nowhere near the omission. \
@@ -126,9 +133,10 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.unmap_dma_both(",
-        3,
-        "The teardowns that must undo BOTH: `unmap_gpu_va` and the two probes' cleanup \
-         loops. ⚠ A teardown that unmaps only the guest side frees that VA for reuse while \
+        4,
+        "The teardowns that must undo BOTH: `unmap_gpu_va` and the three probes' cleanup \
+         loops (`prove_ce_copy`, `prove_os_descriptor`, `prove_fb_memfd_join`). ⚠ A \
+         teardown that unmaps only the guest side frees that VA for reuse while \
          the isolate's engine still resolves it — a use-after-free with a hardware reader.",
     ),
 ];

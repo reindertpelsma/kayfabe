@@ -2519,6 +2519,135 @@ impl OsDescEvidence {
     }
 }
 
+/// ★★★ What [`HostRmBackend::prove_fb_memfd_join`] measured — **R32**.
+///
+/// ⊘ Every field here is a separate question, and a "did the ioctl succeed?" test scores
+/// **six** of the seven failures as a pass:
+///
+/// | field | the question it answers alone |
+/// |---|---|
+/// | (an `Err` from the call) | may this process describe the *second* mapping's pages? |
+/// | [`Self::join_after`] | are the two mappings one memory **at all**, before RM is involved? |
+/// | [`Self::got_va`] vs [`Self::asked_va`] | did address identity survive? |
+/// | [`Self::fwd_submit`] / [`Self::rev_submit`] | did each engine actually fetch and retire? |
+/// | [`Self::fwd_mismatch`] | **J1** — did the GPU read what the OTHER mapping wrote? |
+/// | [`Self::rev_before`] | non-vacuity: did the memfd hold the OLD pattern first? |
+/// | [`Self::rev_mismatch`] | **J2** — did the OTHER mapping read what the GPU wrote? |
+#[derive(Debug, Clone, Copy)]
+pub struct FbJoinEvidence {
+    /// The GPU VA `DMA_OFFSET_FIXED_TRUE` was asked for.
+    pub asked_va: u64,
+    /// The GPU VA RM reported.
+    pub got_va: u64,
+    /// How many bytes were described, mapped and copied — in each direction.
+    pub bytes: u64,
+    /// The join probe word read through `S` **before** `I` wrote it. Zero on a fresh
+    /// memfd; anything else means the file was not pristine and the join is not a
+    /// measurement.
+    pub join_before: u32,
+    /// The join probe word read through `S` **after** `I` wrote it.
+    pub join_after: u32,
+    /// What `I` wrote there.
+    pub join_want: u32,
+    /// The vidmem destination's word 0 before the forward copy — the sentinel.
+    pub fwd_before: u32,
+    /// Its word 0 after.
+    pub fwd_after: u32,
+    /// What [`Self::fwd_before`] was set to.
+    pub fwd_sentinel: u32,
+    /// **J1**: the first vidmem word that is not what `S` wrote into the memfd. `None`
+    /// means every word matched.
+    pub fwd_mismatch: Option<WordMismatch>,
+    /// Counted by the forward comparison loop, never re-derived from [`Self::bytes`].
+    pub fwd_bytes_compared: u64,
+    /// The forward submission's cursors and release semaphore.
+    pub fwd_submit: SubmitOutcome,
+    /// The payload the forward copy was told to release.
+    pub fwd_payload: u32,
+    /// ★★ The memfd's word 0 **through `S`**, immediately before the reverse copy. In the
+    /// seeded arm this must be [`Self::rev_first`] — never the reverse pattern, and never
+    /// zero. It is what separates *"the engine wrote"* from *"we are reading our own
+    /// earlier write"*.
+    pub rev_before: u32,
+    /// What [`Self::rev_before`] must be in the seeded arm: the forward pattern's first
+    /// word.
+    pub rev_first: u32,
+    /// **J2**: the first memfd word, read **through `S`**, that is not what the engine was
+    /// given. `None` means every word matched.
+    pub rev_mismatch: Option<WordMismatch>,
+    /// Counted by the reverse comparison loop.
+    pub rev_bytes_compared: u64,
+    /// The reverse submission's cursors and release semaphore.
+    pub rev_submit: SubmitOutcome,
+    /// The payload the reverse copy was told to release.
+    pub rev_payload: u32,
+    /// ⊘ Was the forward pattern written through `S` at all? `false` is the negative
+    /// control, where a forward mismatch at word 0 is the PASS.
+    pub seeded: bool,
+}
+
+impl FbJoinEvidence {
+    /// Was the mapping placed exactly where it was asked for?
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// Are the two mappings one memory, measured with no GPU in the path?
+    ///
+    /// ★ Both halves: the probe word must have been **absent** before and **present**
+    /// after. A store that answered [`Self::join_want`] unconditionally would pass the
+    /// second half alone.
+    #[must_use]
+    pub fn joined(&self) -> bool {
+        self.join_before == 0 && self.join_after == self.join_want
+    }
+
+    /// Did the forward comparison look at every byte that was copied?
+    #[must_use]
+    pub fn fwd_compared_everything(&self) -> bool {
+        self.fwd_bytes_compared == self.bytes
+    }
+
+    /// Did the reverse comparison look at every byte that was copied?
+    #[must_use]
+    pub fn rev_compared_everything(&self) -> bool {
+        self.rev_bytes_compared == self.bytes
+    }
+
+    /// **J1** — the GPU read, through a descriptor over mapping `I`, exactly what mapping
+    /// `S` wrote.
+    ///
+    /// ⊘ Meaningless for [`OsDescSeed::Never`], where the correct answer is `false`.
+    #[must_use]
+    pub fn forward_reached(&self) -> bool {
+        self.joined()
+            && self.placed_as_asked()
+            && self.fwd_submit.semaphore == self.fwd_payload
+            && self.fwd_before == self.fwd_sentinel
+            && self.fwd_after != self.fwd_sentinel
+            && self.fwd_compared_everything()
+            && self.fwd_mismatch.is_none()
+    }
+
+    /// **J2** — mapping `S` read exactly what the GPU wrote through the descriptor over
+    /// mapping `I`.
+    ///
+    /// ★ [`Self::rev_before`] is in the conjunction for the reason the whole rung exists:
+    /// bytes that match without the memfd ever having held something *else* first would
+    /// mean we are reading the seed, not the engine's write. In the unseeded arm the memfd
+    /// starts at zero, so the check is against that instead.
+    #[must_use]
+    pub fn reverse_reached(&self) -> bool {
+        let expected_before = if self.seeded { self.rev_first } else { 0 };
+        self.joined()
+            && self.rev_submit.semaphore == self.rev_payload
+            && self.rev_before == expected_before
+            && self.rev_compared_everything()
+            && self.rev_mismatch.is_none()
+    }
+}
+
 /// ⊘ **Whether [`HostRmBackend::prove_os_descriptor`] writes the pattern at all** — the
 /// negative control, as a parameter rather than a comment.
 ///
@@ -5470,6 +5599,304 @@ impl HostRmBackend {
             let _ = self.free(self.stamp(h));
         }
         drop(reservation);
+        drop(ram);
+        out
+    }
+
+    /// ★★★ **R32 — the framebuffer memfd JOIN: is ONE memfd, mapped TWICE, ONE memory
+    /// on BOTH sides of the GPU?**
+    ///
+    /// R25 ([`Self::prove_os_descriptor`]) measured a sealed memfd described to RM, placed
+    /// at a dictated VA and read correctly by a real copy engine. ⊘ It measured that
+    /// through **one** mapping and in **one** direction, and the framebuffer-memfd design
+    /// rests on neither of those being the limit:
+    ///
+    /// | | property | R25 | why the FB port needs it |
+    /// |---|---|---|---|
+    /// | **J1** | write through mapping **S**, describe mapping **I**, the GPU reads **S**'s bytes | ⊘ **no** — R25 writes and describes through the same [`kayfabe_linux_raw::MappedRegion`] | the shell holds the BAR view and the isolate holds the described view. They are different mappings; a design proved only through the described one has not been proved |
+    /// | **J2** | the GPU **writes** and a CPU mapping **reads** it back | ⊘ **no** — R25 is CPU-write → GPU-read only | ★ this is the direction `cuCtxCreate` is stuck on. The guest's completion semaphore is a word the **engine writes** and the **guest reads**; every byte of OS_DESCRIPTOR evidence this tree owns runs the other way |
+    ///
+    /// # The chain
+    ///
+    /// ```text
+    ///   memfd  = SharedRam::create(BYTES)              ONE sealed memfd
+    ///   S      = Reservation A + map_fixed_in(memfd)   "the shell's BAR view"
+    ///   I      = Reservation B + map_fixed_in(memfd)   "the isolate's describe view"
+    ///
+    ///   0. CPU join   : write a probe word through S, read it through I
+    ///   1. seed       : write P1 through S             (skipped by `OsDescSeed::Never`)
+    ///   2. describe I : alloc_os_descriptor(I, 0, BYTES)
+    ///   3. map        : FIXED at `at`
+    ///   4. FORWARD    : CE copies memfd -> vidmem; compare vidmem against P1   ⇒ J1
+    ///   5. reload     : write P2 into vidmem through its own CPU map
+    ///   6. REVERSE    : CE copies vidmem -> memfd; compare **through S** against P2 ⇒ J2
+    /// ```
+    ///
+    /// ★ **Step 6 reads through `S`, never through `I`.** Reading back through the mapping
+    /// that was described would leave *"did the other mapping see it"* unasked, which is
+    /// the whole of J1 and J2.
+    ///
+    /// ★ **Three patterns, all distinguishable.** Zero, `P1` and `P2` are different, so the
+    /// reverse arm's three failure modes print apart: `0` = the copy never landed; `P1` =
+    /// we are reading step 1's own write and the engine did nothing; `P2` = the engine
+    /// wrote and `S` saw it. A control that only asked *"is it P2?"* would collapse the
+    /// middle case into the first and lose the one reading that names it.
+    ///
+    /// ⊘ **The CPU join probe sits at the LAST word**, not the first, so that
+    /// [`OsDescSeed::Never`]'s forward compare still meets a pristine zero at word 0 and
+    /// breaks there. Placing it at word 0 would have made the negative control read its
+    /// own probe.
+    ///
+    /// ⊘ **Two mappings, one process.** The cross-process case adds `SCM_RIGHTS` and
+    /// nothing else about the memory; that step is *reasoned*, not measured here, and is
+    /// labelled as such wherever it is used.
+    ///
+    /// # Errors
+    /// Whatever the memfd, either mapping, the descriptor alloc, either DMA map or either
+    /// copy refuses with. An `Err` from the descriptor alloc is R25's **arm B** and must be
+    /// reported by its RM status rather than as "R32 failed".
+    pub fn prove_fb_memfd_join(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        seed: OsDescSeed,
+    ) -> Result<FbJoinEvidence, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        const WORDS: u64 = BYTES / 4;
+        /// The forward pattern — what mapping `S` writes and the GPU must read.
+        const P1: u32 = 0x5EED_0001;
+        /// The reverse pattern — what the GPU writes and mapping `S` must read.
+        /// ⊘ Deliberately unrelated to [`P1`] and to zero.
+        const P2: u32 = 0xB0B0_0001;
+        /// The CPU-level join probe, at the last word so the negative control's forward
+        /// compare still meets zero at word 0.
+        const JOIN: u32 = 0x1010_FACE;
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+        let sentinel = !P1;
+        let join_off = HostOffset::new(BYTES - 4);
+
+        // 1 — ONE memfd. Everything below is two views of these pages.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+
+        // 2 — TWO independent reservations, each `MAP_FIXED` over the same descriptor. Two
+        // `mmap` calls at two kernel-chosen addresses: distinct mappings by construction.
+        // ⊘ Their addresses are NOT reported, and cannot be: `MappedRegion::addr_at` is
+        // `pub(crate)` by a deliberate refusal — no representation of a host address
+        // crosses that crate boundary. Distinctness is therefore structural, and *sharing*
+        // is what this rung measures (step 3).
+        let mut res_s =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed_s = res_s
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let shell = res_s.placement(placed_s).map_err(|e| region_error(&e))?;
+
+        let mut res_i =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed_i = res_i
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let described = res_i.placement(placed_i).map_err(|e| region_error(&e))?;
+
+        // 3 — the CPU join, before RM exists in this story at all. If these two mappings
+        // were not one memory, nothing downstream could be.
+        let mut w = [0u8; 4];
+        shell.read_into(join_off, &mut w).map_err(|e| region_error(&e))?;
+        let join_before = u32::from_le_bytes(w);
+        described
+            .write_from(join_off, &JOIN.to_le_bytes())
+            .map_err(|e| region_error(&e))?;
+        shell.read_into(join_off, &mut w).map_err(|e| region_error(&e))?;
+        let join_after = u32::from_le_bytes(w);
+
+        // 4 — the forward seed, through **S**, per word.
+        //
+        // ⊘ `OsDescSeed::Never` skips exactly this and nothing else. Everything downstream
+        // runs identically, so a run that still reports a forward match is reporting on
+        // something other than these bytes.
+        let seeded = seed == OsDescSeed::BeforeDescribe;
+        if seeded {
+            let mut image = vec![0u8; BYTES as usize];
+            for i in 0..WORDS as usize {
+                image[4 * i..4 * i + 4].copy_from_slice(&P1.wrapping_add(i as u32).to_le_bytes());
+            }
+            shell
+                .write_from(HostOffset::new(0), &image)
+                .map_err(|e| region_error(&e))?;
+        }
+
+        // 5 — describe the OTHER mapping. This is the line the whole rung is about: RM
+        // pins `I`'s pages, and every byte compared afterwards was written or read through
+        // `S`.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(described, HostOffset::new(0), BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(desc, None), (dst, None)];
+        let mut go = || -> Result<FbJoinEvidence, RmError> {
+            let got_va = self.map_dma_both(range, desc, BYTES, Some(at.0))?;
+            cleanup[0].1 = Some(got_va);
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            // 6 — sentinel the vidmem destination, so a forward match cannot be the
+            // destination having already held the answer.
+            let (node, map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                map.store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let fwd_before = map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            release_fence();
+            drop(map);
+            drop(node);
+
+            // 7 — FORWARD. A real engine, waiting on its own release semaphore.
+            let (fwd_submit, fwd_payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(got_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                },
+            )?;
+
+            // 8 — compare the vidmem against what **S** wrote, through a mapping opened
+            // after the copy; then reload it with P2 for the reverse arm. One mapping does
+            // both because `NV_ESC_RM_MAP_MEMORY` is one-shot per descriptor and a third
+            // node is a third failure mode for no gain.
+            let (node, map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let mut fwd_mismatch = None;
+            let mut fwd_compared = 0u64;
+            for i in 0..WORDS {
+                let got = map
+                    .load_u32(HostOffset::new(i * 4))
+                    .map_err(|e| region_error(&e))?;
+                let want = P1.wrapping_add(i as u32);
+                fwd_compared += 4;
+                if got != want {
+                    fwd_mismatch = Some(WordMismatch { word: i, got, want });
+                    break;
+                }
+            }
+            let fwd_after = map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            for i in 0..WORDS {
+                map.store_u32(HostOffset::new(i * 4), P2.wrapping_add(i as u32))
+                    .map_err(|e| region_error(&e))?;
+            }
+            release_fence();
+            drop(map);
+            drop(node);
+
+            // 9 — the memfd's word 0 through **S**, immediately before the reverse copy.
+            // ★ Non-vacuity for J2, and it is the reading that separates the three failure
+            // modes: it must be P1 in the seeded arm (step 4's own write), never P2.
+            let mut w0 = [0u8; 4];
+            shell
+                .read_into(HostOffset::new(0), &mut w0)
+                .map_err(|e| region_error(&e))?;
+            let rev_before = u32::from_le_bytes(w0);
+
+            // 10 — REVERSE. The engine writes into the described memfd.
+            let (rev_submit, rev_payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: got_va,
+                    src: CeSource::Address(dst_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                },
+            )?;
+
+            // 11 — ★★★ J2. Read every word back **through S** — the mapping RM was never
+            // told about — and compare against what the engine was given.
+            let mut image = vec![0u8; BYTES as usize];
+            shell
+                .read_into(HostOffset::new(0), &mut image)
+                .map_err(|e| region_error(&e))?;
+            let mut rev_mismatch = None;
+            let mut rev_compared = 0u64;
+            for i in 0..WORDS as usize {
+                let got = u32::from_le_bytes(
+                    image[4 * i..4 * i + 4]
+                        .try_into()
+                        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?,
+                );
+                let want = P2.wrapping_add(i as u32);
+                rev_compared += 4;
+                if got != want {
+                    rev_mismatch = Some(WordMismatch {
+                        word: i as u64,
+                        got,
+                        want,
+                    });
+                    break;
+                }
+            }
+            Ok(FbJoinEvidence {
+                asked_va: at.0,
+                got_va,
+                bytes: BYTES,
+                join_before,
+                join_after,
+                join_want: JOIN,
+                fwd_before,
+                fwd_after,
+                fwd_sentinel: sentinel,
+                fwd_mismatch,
+                fwd_bytes_compared: fwd_compared,
+                fwd_submit,
+                fwd_payload,
+                rev_before,
+                rev_first: P1,
+                rev_mismatch,
+                rev_bytes_compared: rev_compared,
+                rev_submit,
+                rev_payload,
+                seeded,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.unmap_dma_both(range, va);
+            }
+            // ⚠ Freeing the descriptor object is what un-pins the pages. Dropping the
+            // reservations below only unmaps this process's two views of them.
+            let _ = self.free(self.stamp(h));
+        }
+        drop(res_i);
+        drop(res_s);
         drop(ram);
         out
     }
