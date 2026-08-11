@@ -11,6 +11,22 @@ shapes, and its own text is out of date in exactly two places, each corrected in
   → install; it is now join → adopt+map → install → **bind**. See the correction at that
   section.
 
+★★★ **CORRECTED 2026-08-11 (w260) — THIS TREE HAS NOW BOOTED, AND THE CHAIN REACHES `JOINED`.**
+`[measured 2026-08-11T16:20+00:00, bench `vh`, RTX 3060 GA106, 580.159.04, rev `62ab875`
+asserted from the binary's own stamp]` Three FB leaves, `placed_as_asked=true` on all three,
+and **both directions AGREE over 1024 words** — with a `KAYFABE_FB_JOIN=private` negative
+control in the **same binary** that disagrees at word 0 on pre-registered constants
+(`got 0x00000000, want 0x5a1a5a5b` / `got 0x5a1a5a5b, want 0xa5e5a5a4`). The port's **inverted**
+ordering (join → adopt+map → install → bind) is what ran. Full scoring:
+`traces/boots/w260/README.md`. The primitive underneath it is measured too — R32's J1 **and**
+J2 (`fb_memfd_join_prereg.md` §5.0).
+⊘ **Three things this did NOT witness, and they are exactly the three the ordering change is
+about:** nothing refused, so `release_unadopted_fb_leaf` never ran, the bind-after-install
+ordering is **indistinguishable from bind-before-install on a green boot**, and the
+establishment copy moved **0 bytes over 0 pages** on every leaf. §1.2's ordering-safety
+argument below is still sound by construction and is **not yet witnessed**.
+
+⊘ The paragraph below was true when written and is superseded by the block above.
 ⊘ **The hardware result quoted here is CITED, not re-run, and it is not a measurement of this
 code**: `[measured 2026-08-11, vh2, GA106, 580.159.04, 8eb8dcd]` ran the old ordering over a
 `BackingBytes` variant that did not exist. **Nothing in this tree has booted.**
