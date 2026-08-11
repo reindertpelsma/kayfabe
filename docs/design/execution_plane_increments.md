@@ -15668,3 +15668,95 @@ unanswerable residency question does not defer the executor choice — **it make
   a blank object logs identically to a correct one. The violation and its fix are both decidable
   offline, and the falsifier is GPU-free by construction.
 - ⊘ **Neither ring route started.** §16.83/§16.84 stand unchanged.
+
+## §16.86 ★★★★★ ROUTE B, BUILT AND DEFAULT-OFF — and the WALL is a LOCK-ORDER INVERSION no gate can see
+
+⚠ **STATUS (2026-08-11): MEASUREMENT, not a ruling.** Nothing here decides the shipping
+design. §16.86.4 states the scope question that is the owner's to answer.
+
+### 16.86.1 What was built
+
+`read_gpfifo_ring` refused the boot's 8 `proc 2` doorbells by name
+(`FwdFault::PushbufferAperture`) because their ring's binding names **`Aperture::Vidmem`** —
+`phys` is a framebuffer offset, not a GPA, and `Vmm::gpa_read` would have read the guest RAM
+page that happens to share the number. Route B reads those bytes out of the `SparseFb` we
+already serve, which is where the descent has been printing them all along
+(`fbRING[p0]@0x1024000=0000c002…`).
+
+- `kayfabe_fwd::VidmemRoute` — `Refuse` (**`Default`**) | `OwnFramebuffer`.
+- `kayfabe_fwd::FbBytes` — `read` + **`page_written`**, the seam `RegPlane::pt_bytes` satisfies.
+- `PushSrc::{Gpa, Fb}` — ⊘ **not a `u64` with a flag beside it.** A GPA and an FB offset are
+  different address spaces sharing a numeric type; making the source a variant means the
+  reader is chosen by a `match` the compiler checks.
+
+### 16.86.2 ★★★★★ The gate that makes it safe to attempt — and it is forbidden #2's SELF-CONCEALING form
+
+`FbStore::read` answers an address inside the aperture that **nothing ever wrote** with
+*zeros and `Ok`*, deliberately. A GPFIFO ring is **supposed** to be mostly zeros —
+`gpfifo_live_entries` stops at the first zero entry because RM zero-initialises the buffer.
+⇒ **a never-written ring page and a legitimately quiet ring are byte-identical.** Reading the
+first would report `NoLiveEntries`, serve the doorbell, and produce a boot line
+**indistinguishable from a correct channel**.
+
+⇒ The discriminator is **residency, never bytes**: *a page nothing ever wrote is not in the
+map.* `FwdFault::RingFbNeverWritten` is the refusal.
+
+★★ **`page_written` returns `Option<bool>`, and the `Option` is the `dlen=0` lesson in a
+signature.** A store with no origin tracking must be able to say *"I cannot tell you"* rather
+than be forced into a `false` that reads as a positive claim about the guest. `None` is
+**unmeasured** and proceeds; only `Some(false)` refuses.
+
+**Falsifier watched RED first** (gate reverted, all plumbing in place):
+`Ok(Ring([0, 0, …]))` — 4 KiB of zeros, returned green. Then 4/4 with three further arms:
+the **known-positive** (page written ⇒ the framebuffer's bytes, at the framebuffer's offset),
+the **`None`-is-unmeasured** arm, and `the_default_route_still_refuses_vidmem`.
+
+### 16.86.3 ★★★★★ THE WALL — `core → plane` is an inversion, and `Mutex<PlaneState>` is UNRANKED
+
+**The route is built and is not wired, and the reason is not effort.** The only seam that
+serves framebuffer bytes is `RegPlane::pt_bytes`, which takes the plane's FSM mutex **on every
+read**. `kayfabe_rt::device::forward_ring` calls the ring reader inside a `route_act` closure
+holding the **rank-0 device read lock and the rank-1 proc mutex**. Reading there takes the
+plane mutex *beneath* two core locks — the exact inversion of the established order:
+
+- `plane.rs`, `ce_session`: *"the caller must hold no core lock … the command-policy chain
+  already takes the core's ranked locks under this mutex, so plane→core is the established
+  order and core→plane is its inversion."*
+- `unranked_locks.rs`, the `Mutex<PlaneState>` row: *"★★★ THE HAZARD … NOTHING may block
+  beneath it … and the R1 witness will not say so."*
+
+★★★ **And that last clause is why this is the rung's headline.** The plane mutex is a bare
+`std::sync::Mutex` — **unranked** — so `assert_lock_free` passes **vacuously** while it is
+held. **No existing gate would have failed.** The ABBA partner is not hypothetical and is
+already shipping: the policy chain takes the core's ranked locks under `state.lock()` on
+another vCPU's MMIO trap ⇒ **a guest that rings a doorbell on one vCPU while touching a
+register on another builds the deadlock itself.** That is a guest-reachable hang, which is a
+worse outcome than the wall it would have removed.
+
+⇒ **The R1-correct shape now exists**: `plan_gpfifo_ring` (locked, resolves the runs, touches
+no byte) / `fetch_ring_bytes` (**every ranked guard dropped**, reads them) — the same
+plan/execute/commit split `decode_pt_writes_from` already uses. ⚠ The obligation is
+**uncheckable in the signature**; the types carry it instead, since a `RingPlan` is the only
+way to reach the fetch and producing one is the phase that holds the locks.
+
+★ **This is the class §16.85.3 named, one level up.** A lock-order gate that cannot see the
+lock in question returns the same answer for a safe design and an unsafe one.
+
+### 16.86.4 ⊘ What this does NOT settle — the owner's question, unanswered on purpose
+
+- The 2026-08-07 ruling sanctions *"a different executor producing a true end-state"* but
+  **scopes itself to kernel-originated copy-engine work**. These 8 doorbells are **user
+  `proc 2`**, which the same file calls *passthrough, not inspected*.
+- ⇒ **Enumerating the ring is agreed. What may happen AFTER enumeration is not.** If the
+  operands land `Fabricated`→`Ours` and our CPU executor performs the copy, that is honest by
+  the ruling's letter and outside its stated scope by the ruling's own scoping paragraph.
+- ⇒ `VidmemRoute::Refuse` is the default at **every** production call site, and
+  `the_default_route_still_refuses_vidmem` asserts it. ★ A default-off flag that is not off
+  **by construction** is a default-on flag with a comment.
+
+### 16.86.5 ⊘ No boot, and why that is the honest report
+
+**`CE-SUBMIT` is still 0.** No boot was run, because the wiring a boot would exercise is the
+wiring §16.86.3 refuses to land. ⊘ Booting the *unwired* build would measure the tree that
+already exists and report it as a route-B result — the `a_falsifier_the_fix_silences` shape.
+**The named wall is the deliverable.**

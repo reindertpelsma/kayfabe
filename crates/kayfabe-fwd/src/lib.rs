@@ -528,11 +528,38 @@ pub enum FwdFault {
     /// video memory. It can; this port serves no framebuffer byte
     /// ([`kayfabe_arch::FbWindow`]: *"Nothing here serves a byte"*), so the honest answer
     /// is that we cannot read it, stated by name.
+    ///
+    /// ⊘⊘ **CORRECTED `[w235, 2026-08-11]`, above the sentence it corrects: the clause
+    /// "this port serves no framebuffer byte" is STALE.** `kayfabe_device::SparseFb` has
+    /// served the emulated framebuffer since the BAR1 window landed, and the descent reads
+    /// the guest's own ring out of it (`fbRING[p0]@0x1024000=…`). ⇒ this variant is no
+    /// longer *"we cannot read it"*; it is **[`VidmemRoute::Refuse`], the default, declining
+    /// to**. Pass [`VidmemRoute::OwnFramebuffer`] and a [`FbBytes`] to read it instead.
+    /// ★ The stale clause is left in place rather than deleted, because a reader who
+    /// remembers the old sentence needs to meet the correction where they look for it.
     PushbufferAperture {
         /// The virtual address whose binding named the aperture.
         va: GpuVa,
         /// The aperture the binding named.
         aperture: Aperture,
+    },
+    /// ★★★★★ **A vidmem range resolved into our framebuffer, and NOTHING EVER WROTE THAT
+    /// PAGE** — forbidden #2 caught on the read side instead of the execute side.
+    ///
+    /// [`FbBytes::read`] would answer zeros and `Ok`, and a zero-filled GPFIFO ring is
+    /// indistinguishable from a legitimately quiet one (`gpfifo_live_entries` stops at the
+    /// first zero entry **by design**). So the byte census cannot tell *"the guest wrote no
+    /// entries"* from *"we are reading a page the guest never addressed"*, and only
+    /// residency can: **a page nothing ever wrote is not in the map.**
+    ///
+    /// ⊘ Raised **only** when [`FbBytes::page_written`] answers `Some(false)`. A `None` —
+    /// *"this store cannot tell you"* — is **unmeasured** and must not be read as `false`;
+    /// see [`FbBytes::page_written`] for why that distinction is the `dlen=0` lesson.
+    RingFbNeverWritten {
+        /// The guest virtual address whose binding resolved into the framebuffer.
+        va: GpuVa,
+        /// The framebuffer-physical address that has no page.
+        phys: u64,
     },
     /// ★★★★★ **The range has a host object, and the guest's writes do not land in it** —
     /// `ce_executor_tree.md`'s **forbidden #2**, refused rather than executed.
@@ -3872,8 +3899,19 @@ pub fn read_pushbuffer(
         // TRANSLATE, then read. The clamped length is what gets translated, so the cap
         // above is still the thing that bounds the work — a hostile length cannot make
         // this walk the whole table.
-        for (gpa, at, take) in push_range_gpas(table, pdb, r, len)? {
-            guest_read(vmm, gpa, &mut buf[at..at + take])?;
+        // ⊘ `Refuse`, explicitly: this rung wires the RING out of the framebuffer, not
+        // the pushbuffer the ring points AT. Widening both at once would make a boot
+        // unable to say which of the two reads produced the bytes.
+        for (src, at, take) in push_range_gpas(table, pdb, r, len, VidmemRoute::Refuse)? {
+            match src {
+                PushSrc::Gpa(gpa) => guest_read(vmm, gpa, &mut buf[at..at + take])?,
+                PushSrc::Fb { va, .. } => {
+                    return Err(FwdFault::PushbufferAperture {
+                        va,
+                        aperture: Aperture::Vidmem,
+                    });
+                }
+            }
         }
         methods.extend(decode_methods(spine.arch(), &buf));
         total += len;
@@ -3920,6 +3958,79 @@ pub fn gpfifo_live_entries(pb: &dyn kayfabe_arch::PushbufferAbi, ring: &[u8]) ->
 /// channel_utils.c:243-250`, and `tests/tests/e10e_ceutils_doorbell.rs` encodes it) — and
 /// small enough that a ring declared at 4 GiB is a bounded read rather than an allocation.
 pub const MAX_GPFIFO_RING_BYTES: usize = 64 * 1024;
+
+/// ★★★ **Where one run of a translated range's bytes must be read FROM.**
+///
+/// ⊘ Not a `u64` with a flag beside it. A guest-physical address and a framebuffer offset
+/// are different address spaces that share a numeric type, and the single most likely way
+/// to get this wrong is to carry one and read it with the other's reader — which succeeds,
+/// returns bytes, and returns the **wrong** bytes. Making the source a variant means the
+/// reader is chosen by a `match` the compiler checks, not by a `bool` a caller remembers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PushSrc {
+    /// A guest-physical address, for [`Vmm::gpa_read`].
+    Gpa(u64),
+    /// A framebuffer offset into **our own** [`FbBytes`] store, plus the guest VA it came
+    /// from — the VA is carried only so a refusal can name the address the guest used.
+    Fb { phys: u64, va: GpuVa },
+}
+
+/// ★★★★★ **May a translated range be read out of OUR OWN emulated framebuffer?**
+///
+/// # ⊘ This is a MEASUREMENT SWITCH, not a design decision
+///
+/// `[w235, 2026-08-11]` The guest's GPFIFO ring for the 8 `proc 2` doorbells lives in the
+/// **emulated framebuffer**, not in guest RAM: the descent already prints its bytes
+/// (`fbRING[p0]@0x1024000=0000c002…`). Reading it is *route B*. Route A — influencing the
+/// ring's aperture at allocation time so it lands in sysmem — is being measured
+/// independently and, if it answers YES, is the better route and this becomes a stepping
+/// stone.
+///
+/// ⚠ **The scope tension, named rather than papered over.** The owner's 2026-08-07 ruling
+/// sanctions *"a different executor producing a true end-state"* but **scopes itself to
+/// kernel-originated copy-engine work**; these doorbells are **user `proc 2`**, which the
+/// same file calls *passthrough, not inspected*. Enumerating the ring is agreed. What may
+/// happen **after** enumeration is an open question for the owner, and nothing here decides
+/// it. ⇒ [`VidmemRoute::Refuse`] is the default at every production call site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VidmemRoute {
+    /// ⊘ **The default.** A vidmem range is [`FwdFault::PushbufferAperture`], exactly as
+    /// before this switch existed. No call site reaches the other arm without opting in.
+    #[default]
+    Refuse,
+    /// Read vidmem ranges out of the emulated framebuffer this device already serves.
+    OwnFramebuffer,
+}
+
+/// ★★★★ **The bytes of our own emulated framebuffer, and WHETHER A PAGE WAS EVER WRITTEN.**
+///
+/// # ⊘ Why `read` alone is not enough, and this is the rung's central hazard
+///
+/// [`kayfabe_device::FbStore::read`] answers an address inside the aperture that nothing
+/// ever wrote with **zeros and `Ok`** — deliberately, and documented. A GPFIFO ring is
+/// *supposed* to be mostly zeros (`gpfifo_live_entries` stops at the first zero entry,
+/// because RM zero-initialises the buffer). ⇒ **a ring page that was never written and a
+/// ring page written with an empty tail are byte-identical**, and the first is
+/// `nz0/4096` — the blank operand that is forbidden #2.
+///
+/// ★ So residency, not bytes, is the discriminator: *a page nothing ever wrote is not in
+/// the map.* [`Self::page_written`] is that question, and
+/// [`FwdFault::RingFbNeverWritten`] is the refusal. ⊘ Without this the route would read
+/// 64 KiB of zeros, report `NoLiveEntries`, and look **exactly** like a correct quiet
+/// channel — self-concealing, which is the property that makes forbidden #2 expensive.
+pub trait FbBytes {
+    /// Fill `buf` from framebuffer-physical address `phys`; `false` if this store does not
+    /// back the range at all.
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool;
+
+    /// ★★★ **Was the page containing `phys` ever written?** [`None`] from a store that
+    /// cannot answer — which callers must treat as *unmeasured*, never as *no*.
+    ///
+    /// ⊘ The `Option` is the `dlen=0` lesson in a signature: a store with no origin
+    /// tracking must be able to say *"I cannot tell you"* instead of being forced into a
+    /// `false` that reads as a positive claim about the guest.
+    fn page_written(&self, phys: u64) -> Option<bool>;
+}
 
 /// ★★★★ **What [`read_gpfifo_ring`] found — the ring, or the NAMED reason there is none.**
 ///
@@ -4030,7 +4141,50 @@ pub fn read_gpfifo_ring(
     proc: &Proc,
     cid: ChanId,
     vmm: &mut dyn Vmm,
+    fb: Option<&mut dyn FbBytes>,
 ) -> Result<RingLook, FwdFault> {
+    match plan_gpfifo_ring(spine, proc, cid, fb.is_some())? {
+        RingPlanLook::Planned(plan) => Ok(RingLook::Ring(fetch_ring_bytes(&plan, vmm, fb)?)),
+        RingPlanLook::Absent(a) => Ok(a),
+    }
+}
+
+/// ★★★★★ **The PLAN half — everything that needs the core's locks, and NOTHING that
+/// touches a byte.**
+///
+/// # ⊘ Why this is split at all, and it is a MEASURED hazard, not a style preference
+///
+/// `[w235, 2026-08-11]` Route B needs the emulated framebuffer's bytes, and the only seam
+/// that serves them is [`kayfabe_device::RegPlane::pt_bytes`], **which takes the plane's FSM
+/// mutex on every single read**. `kayfabe_rt::device::forward_ring` calls the ring reader
+/// inside a `route_act` closure holding the **rank-0 device read lock and the rank-1 proc
+/// mutex**. Reading the framebuffer there would take the plane mutex *beneath* two core
+/// locks — the **exact inversion** of the established `plane → core` order:
+///
+/// - `plane.rs`' `ce_session` doc: *"the caller must hold no core lock … the command-policy
+///   chain already takes the core's ranked locks under this mutex, so plane→core is the
+///   established order and core→plane is its inversion."*
+/// - `unranked_locks.rs`' row for `Mutex<PlaneState>`: *"★★★ THE HAZARD … NOTHING may block
+///   beneath it … and the R1 witness will not say so."*
+///
+/// ★★★ **And that last clause is the whole reason this is a function and not a comment.**
+/// The plane mutex is a bare `std::sync::Mutex`, **unranked** — so `assert_lock_free` passes
+/// **vacuously** while it is held and no existing gate would have failed. The ABBA partner
+/// is not hypothetical and is already shipping: the policy chain takes the core's ranked
+/// locks under `state.lock()` on another vCPU's MMIO trap, so a guest that rings a doorbell
+/// on one vCPU while touching a register on another **builds the deadlock itself**.
+///
+/// ⇒ The plan is computed under the core's locks; [`fetch_ring_bytes`] reads the bytes with
+/// **every ranked guard dropped**. Same shape as `decode_pt_writes_from`'s plan/execute/commit.
+///
+/// # Errors
+/// As [`read_gpfifo_ring`].
+pub fn plan_gpfifo_ring(
+    spine: &Spine,
+    proc: &Proc,
+    cid: ChanId,
+    vidmem: bool,
+) -> Result<RingPlanLook, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
@@ -4038,20 +4192,20 @@ pub fn read_gpfifo_ring(
     let cgpu = chan.gpu;
     // (1) Nothing declared, or declared empty — see the doc's shape 1.
     let Some(node) = spine.rmgraph.node_of_resource(chan.key) else {
-        return Ok(RingLook::NoChannelNode);
+        return Ok(RingPlanLook::Absent(RingLook::NoChannelNode));
     };
     let Some(ring) = node.facts.gp_fifo_ring else {
-        return Ok(RingLook::NoRingDeclared);
+        return Ok(RingPlanLook::Absent(RingLook::NoRingDeclared));
     };
     if ring.va == 0 || ring.entries == 0 {
-        return Ok(RingLook::RingDeclaredEmpty {
+        return Ok(RingPlanLook::Absent(RingLook::RingDeclaredEmpty {
             va: ring.va,
             entries: ring.entries,
-        });
+        }));
     }
     // (2) No table to read it in. ⊘ Not a fault: `ceutils` owns this channel's ring.
     let Some(pdb) = chan.vas_pdb else {
-        return Ok(RingLook::NoAddressSpace);
+        return Ok(RingPlanLook::Absent(RingLook::NoAddressSpace));
     };
     let table = &proc
         .vases
@@ -4064,24 +4218,95 @@ pub fn read_gpfifo_ring(
     // mapped would fault on a range the guest never claimed held entries.
     let base = GpuVa(ring.va);
     let Some((start, b_len, _)) = table.binding_at(base) else {
-        return Ok(RingLook::RingVaUnbound { va: ring.va });
+        return Ok(RingPlanLook::Absent(RingLook::RingVaUnbound {
+            va: ring.va,
+        }));
     };
     let mapped = b_len.saturating_sub(base.0 - start);
     let len = usize::try_from(mapped)
         .unwrap_or(MAX_GPFIFO_RING_BYTES)
         .min(MAX_GPFIFO_RING_BYTES);
     if len == 0 {
-        return Ok(RingLook::RingMappedZero { va: ring.va });
+        return Ok(RingPlanLook::Absent(RingLook::RingMappedZero {
+            va: ring.va,
+        }));
     }
     let r = PushRange {
         va: base,
         len: len as u64,
     };
-    let mut buf = vec![0u8; len];
-    for (gpa, at, take) in push_range_gpas(table, pdb, &r, len)? {
-        guest_read(vmm, gpa, &mut buf[at..at + take])?;
+    let route = if vidmem {
+        VidmemRoute::OwnFramebuffer
+    } else {
+        VidmemRoute::Refuse
+    };
+    Ok(RingPlanLook::Planned(RingPlan {
+        runs: push_range_gpas(table, pdb, &r, len, route)?,
+        len,
+    }))
+}
+
+/// ★★★ **The FETCH half — the bytes, with EVERY ranked guard dropped.**
+///
+/// ⚠ **The caller's obligation is not checkable here**: nothing in this signature can
+/// assert that the core's locks are down, because the plane mutex this may take is
+/// **unranked** and the R1 witness is vacuous against it (see [`plan_gpfifo_ring`]). The
+/// type system carries the discipline instead — a [`RingPlan`] is the only way to reach
+/// this function, and producing one is the phase that holds the locks.
+///
+/// # Errors
+/// [`FwdFault::RingFbNeverWritten`] for a framebuffer page nothing ever wrote;
+/// [`FwdFault::PushbufferAperture`] if the store refuses the range; and the `Vmm` read's
+/// own refusals.
+pub fn fetch_ring_bytes(
+    plan: &RingPlan,
+    vmm: &mut dyn Vmm,
+    mut fb: Option<&mut dyn FbBytes>,
+) -> Result<Vec<u8>, FwdFault> {
+    let mut buf = vec![0u8; plan.len];
+    for &(src, at, take) in &plan.runs {
+        match src {
+            PushSrc::Gpa(gpa) => guest_read(vmm, gpa, &mut buf[at..at + take])?,
+            PushSrc::Fb { phys, va } => {
+                // ★★★ THE GATE. Residency first, bytes second — and in that order,
+                // because the bytes cannot answer the question.
+                let fb = fb.as_deref_mut().ok_or(FwdFault::PushbufferAperture {
+                    va,
+                    aperture: Aperture::Vidmem,
+                })?;
+                if fb.page_written(phys) == Some(false) {
+                    return Err(FwdFault::RingFbNeverWritten { va, phys });
+                }
+                if !fb.read(phys, &mut buf[at..at + take]) {
+                    return Err(FwdFault::PushbufferAperture {
+                        va,
+                        aperture: Aperture::Vidmem,
+                    });
+                }
+            }
+        }
     }
-    Ok(RingLook::Ring(buf))
+    Ok(buf)
+}
+
+/// A ring's translated runs, computed under the core's locks and read outside them.
+///
+/// ⊘ Opaque on purpose: the runs name a **framebuffer offset or a GPA** depending on the
+/// aperture, and exposing them as numbers is precisely the confusion [`PushSrc`] exists to
+/// prevent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RingPlan {
+    runs: Vec<(PushSrc, usize, usize)>,
+    len: usize,
+}
+
+/// [`plan_gpfifo_ring`]'s answer: a plan, or one of [`RingLook`]'s named absences.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RingPlanLook {
+    /// The ring resolved; [`fetch_ring_bytes`] will produce its bytes.
+    Planned(RingPlan),
+    /// One of the six named absences. ⊘ Never [`RingLook::Ring`].
+    Absent(RingLook),
 }
 
 /// Translate one [`PushRange`]'s first `len` bytes into the guest-physical runs they
@@ -4104,8 +4329,9 @@ fn push_range_gpas(
     pdb: Pdb,
     r: &PushRange,
     len: usize,
-) -> Result<Vec<(u64, usize, usize)>, FwdFault> {
-    let mut out: Vec<(u64, usize, usize)> = Vec::new();
+    vidmem: VidmemRoute,
+) -> Result<Vec<(PushSrc, usize, usize)>, FwdFault> {
+    let mut out: Vec<(PushSrc, usize, usize)> = Vec::new();
     let mut at = 0usize;
     while at < len {
         // `r.va + at` cannot wrap into a *different* mapping silently: a wrap means the
@@ -4118,23 +4344,33 @@ fn push_range_gpas(
         let (start, b_len, b) = table
             .binding_at(va)
             .ok_or(FwdFault::Address(AddressFault::Miss { pdb, va }))?;
-        match b.aperture {
-            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {}
-            // Vidmem/Peer `phys` is NOT a guest-physical address. Refused by name rather
-            // than handed to `gpa_read`, which would read the guest RAM page that happens
-            // to share the number.
+        // ★★★ Which STORE owns these bytes. Sysmem `phys` is a GPA; vidmem `phys` is a
+        // framebuffer offset into our own `SparseFb`. They are different address spaces
+        // that share a number, so the aperture picks the reader — it is never a cast.
+        let vid = match b.aperture {
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => false,
+            // ⊘ **Default-off, and the default is this arm.** `VidmemRoute::Refuse` keeps
+            // the pre-w235 behaviour byte for byte: vidmem `phys` is not a guest-physical
+            // address, and handing it to `gpa_read` would read the guest RAM page that
+            // happens to share the number.
+            Aperture::Vidmem if vidmem == VidmemRoute::OwnFramebuffer => true,
             other => {
                 return Err(FwdFault::PushbufferAperture {
                     va,
                     aperture: other,
                 });
             }
-        }
+        };
         let off = va.0 - start;
-        let gpa = b
+        let phys = b
             .phys
             .checked_add(off)
             .ok_or(FwdFault::Address(AddressFault::Malformed { pdb, va }))?;
+        let gpa = if vid {
+            PushSrc::Fb { phys, va }
+        } else {
+            PushSrc::Gpa(phys)
+        };
         // `binding_at` never returns a zero-length range (`bind` refuses one), so `take`
         // is always ≥ 1 and this loop always advances.
         let take = usize::try_from((b_len - off).min((len - at) as u64)).unwrap_or(len - at);

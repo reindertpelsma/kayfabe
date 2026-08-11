@@ -1877,7 +1877,28 @@ impl SharedDevice {
                         .map(|n| (n.key.client.0, n.key.handle.0)),
                     pdb: proc.channels.get(&cid).and_then(|c| c.vas_pdb).map(|p| p.0),
                 };
-                let ring = match kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm)? {
+                // ⊘⊘ **`None` — route B is NOT wired here, and the reason is a lock-order
+                // inversion, not an oversight.** `[w235, 2026-08-11]` The 8 `proc 2`
+                // doorbells have their ring in the **emulated framebuffer**, so this call
+                // answers `PushbufferAperture` for them. The bytes exist and the descent
+                // prints them; the only seam that serves them
+                // (`kayfabe_device::RegPlane::pt_bytes`) takes the plane's FSM mutex **per
+                // read**, and this closure runs under `route_act`'s **rank-0 device read
+                // lock + rank-1 proc mutex**. Taking the plane mutex here is the exact
+                // inversion of the established `plane → core` order, whose ABBA partner is
+                // already shipping (the policy chain takes core locks under `state.lock()`
+                // on another vCPU's MMIO trap) — so a guest that rings a doorbell on one
+                // vCPU while touching a register on another **builds the deadlock itself**.
+                // ★★★ And `Mutex<PlaneState>` is **unranked**, so `assert_lock_free` passes
+                // vacuously and **no existing gate would have caught it**
+                // (`unranked_locks.rs`: *"NOTHING may block beneath it … and the R1 witness
+                // will not say so"*).
+                // ⇒ `kayfabe_fwd::plan_gpfifo_ring` / `fetch_ring_bytes` are the R1-correct
+                // shape this needs (plan under the locks, bytes with every guard dropped),
+                // and wiring them is a `forward_ring` restructure plus an `FbRead` threaded
+                // from the shim through `DoorbellPort::ring` — a separate increment, and
+                // one the owner's open scope question should be answered before, not after.
+                let ring = match kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm, None)? {
                     kayfabe_fwd::RingLook::Ring(bytes) => bytes,
                     absent => return Ok((RingRead::NoRing(absent), who)),
                 };

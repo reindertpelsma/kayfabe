@@ -429,7 +429,7 @@ fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
     let (gpu, mut vmm, rec, pid, cid) = guest_with_gpfifo_binding(false);
 
     // ★ THE NAMED ABSENCE, read off the production function rather than off a print.
-    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm)
+    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, None)
         .expect("an unbound ring VA is an absence, never a fault");
     assert_eq!(
         look,
@@ -463,7 +463,7 @@ fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
 #[test]
 fn the_same_fixture_with_the_ring_bound_reads_it() {
     let (gpu, mut vmm, _rec, pid, cid) = guest_with_gpfifo_binding(true);
-    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm)
+    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, None)
         .expect("the bound ring reads");
     assert!(
         matches!(look, kayfabe_fwd::RingLook::Ring(ref b) if !b.is_empty()),
@@ -529,7 +529,7 @@ fn the_two_ring_resolvers_name_the_same_object() {
 
     // ★ Confirm the forwarding resolver really does wall here, so the identity above is
     // the identity of the walling channel and not of some other one.
-    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm)
+    let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, None)
         .expect("an unbound ring VA is an absence, never a fault");
     assert_eq!(
         look,
