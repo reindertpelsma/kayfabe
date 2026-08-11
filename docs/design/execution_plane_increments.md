@@ -16326,3 +16326,73 @@ between RUN and COMMIT?* — **does not arise**, because nothing is mid-flight a
   forbidden-#2 residency gate **proven offline only, never fired on hardware**. Route A untouched.
 - ★ **Second wall in a row that dissolved rather than being climbed** (the pull model was the
   first). ⇒ *when the crux looks unarguable, check whether the question had to be posed.*
+
+## §16.94 ★★★★★ THE LATCH AS BRIEFED WOULD REINTRODUCE `PC-D1` — and not consuming the command dissolves that too
+
+⚠ **STATUS (2026-08-11): DESIGN CORRECTED BEFORE BUILDING. NOT BUILT.** The bench still cannot
+boot. ⊘ The correction came from **this tree's own prior art**, found before a line was written.
+
+### 16.94.1 The friction that appeared immediately
+
+§16.93 named the shape as *"consume the command without answering; post the reply later."*
+`GspFsm::drain_commands`' doc (`kayfabe-gsp/src/boot.rs:1282-1317`) says that is **the exact
+failure a previous rung removed**, and rejects the exact alternative I proposed:
+
+> **PC-D1 — answer BEFORE committing the cursor.** *"This loop used to commit the read pointer
+> and the expected sequence and then call `answer` … the command had already been consumed, so
+> **no reply was ever posted for it, and the guest blocked on `_issueRpcAndWait` for the whole
+> RPC timeout**."*
+
+> *"The alternative — **hold the reply and re-post on the next pass** — needs **a queue of
+> deferred replies**, and a deferred reply is state that **can be lost, reordered or
+> double-sent**. Answer-then-commit needs no state at all: **the cursor is the record of what
+> has been answered**."*
+
+⇒ ★★★ **Consume-without-answering is precisely the pre-PC-D1 bug**, and its symptom is the
+6 s RPC timeout §16.93.2 established — three of which mark the GPU for reset. The briefed latch
+would have traded a **loud abort** for the **silent hang** PC-D1 was written to eliminate.
+
+⊘ The coordinator's warning — *"if the latch goes in without friction, check that it is actually
+on the path"* — was right in a form neither of us predicted: the friction was not in the build,
+it was in a doc comment written by an earlier rung that had already lost this argument once.
+
+### 16.94.2 ★★★★★ THE CORRECTION — do not consume the command at all
+
+The FSM's order is **decode → answer → consume**. The briefed design broke it by consuming
+without answering. The fix is to break neither: **decline to do both.**
+
+1. Under the lock, the policy answers *"not yet"*. The FSM **posts nothing and does not advance
+   the read cursor** — the command stays unread, exactly as if the service had not reached it.
+2. `Regs::write`, lock-free (§16.91), runs the host verb and **memoises the result** keyed by the
+   command's `(function, sequence)`.
+3. It then re-enters the plane. The **same** command is re-read, the policy now finds the memo,
+   and answers it **normally** — through the ordinary answer-then-commit path.
+
+★★★ **There is no queue of deferred replies, so PC-D1's three named risks do not apply**: nothing
+is *lost* (the command was never consumed — the guest's own cursor still points at it), nothing is
+*reordered* (it is answered in its original queue position), and nothing is *double-sent* (the
+cursor advances exactly once, on the ordinary path). ⇒ **the memo is a RESULT CACHE, not a pending
+reply**, and the cursor remains what PC-D1 requires it to be: *the record of what has been
+answered.*
+
+⊘ And §16.92.2's concurrency crux still does not arise — the re-entry is a **fresh top-level FSM
+entry**, not a resumption. The first service completed; it simply answered nothing.
+
+### 16.94.3 ⚠ What the build still owes
+
+- **Idempotent decode.** The command is now decoded **twice** (once to decide the verb, once to
+  answer). ⊘ Decoding must be side-effect-free, and *that has never been required before* — the
+  old path decoded exactly once. This is the first thing a falsifier should attack.
+- **A bounded memo.** One entry per in-flight command; the guest is synchronous under the GPU
+  lock, so the population is 1 — ⚠ *"that is a property of the guest, not of the protocol"*
+  (`boot.rs:1291-1294`), so the memo must refuse to grow rather than assume.
+- **A loud overrun.** §16.93.2's 6 s budget: the verb runs between the two services, so its
+  duration is the guest's wait. An overrun must be **named**, not silent.
+- **No induced RPC** while the guest polls (§16.93.5).
+
+### 16.94.4 ⊘ Scope
+
+⊘ **`CE-SUBMIT` is 0. Nothing was built this rung.** Bench still cannot boot. Route B **wired and
+unmeasured**. Forbidden-#2 gate **proven offline only, never fired on hardware** — ★ still exactly
+the *"capability that exists, is tested, and is never called"* shape, and saying so is not the
+same as fixing it. Route A untouched.
