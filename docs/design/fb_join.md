@@ -285,21 +285,38 @@ live, hold different bytes, and are read by the same loop.
 against `R30`'s standalone ladder rung. The same control, now over a real framebuffer leaf
 inside a real boot.
 
-| | armed (`w231a`, `shared`) | control (`w231b`, `private`) |
-|---|---|---|
-| `GR-FB-JOIN` lines | 36 | 37 (the one extra is the control's own ★★ line) |
-| `JOINED (shared)` | **3** | 0 |
-| `JOINED (private)` | 0 | **3** |
-| `★ DIRECTION … AGREES` | **2** | **0** |
-| `⊘ DIRECTION … DISAGREES` | **0** | **2** |
-| establishment vacuity notes | 3 | 3 |
-| `HostBackedFb` rows after re-statement | 24 | 24 |
-| doorbells | `191 / 183 / 8` | `191 / 183 / 8` |
+### 3.6 ★★★ THE ARMING CONTROL — `w231c_257016e_arming`, and the three-arm table
 
-⊘ **Everything except the two direction lines is identical**, including the join itself, the
-placement, the re-statement and the doorbell census. The control changes the VMM's *mapping*,
-not the join — which is why `JOINED` still prints three times and `HostBackedFb` still appears
-24 times in both.
+**Same binary, same tree, same stamp, `KAYFABE_FB_JOIN=off`.** Nothing is materialized.
+
+| | armed `shared` (`w231a`) | negative control `private` (`w231b`) | arming control `off` (`w231c`) |
+|---|---|---|---|
+| `GR-FB-JOIN` lines | 36 | 37 (the extra is the control's own ★★ line) | **0** |
+| `JOINED (shared)` | **3** | 0 | 0 |
+| `JOINED (private)` | 0 | **3** | 0 |
+| `★ DIRECTION … AGREES` | **2** | **0** | 0 |
+| `⊘ DIRECTION … DISAGREES` | **0** | **2** | 0 |
+| `GR-ADDRESS-CENSUS` blocks | 8 | 8 | **8** |
+| `HostBackedFb` rows | 24 | 24 | **0** |
+| `Framebuffer { … }` rows | 24 | 24 | **24** |
+| doorbells | `191 / 183 / 8` | `191 / 183 / 8` | `191 / 183 / 8` |
+
+★ **The `off` arm is silent, not merely quiet** — it prints no line the armed run does not, so
+its log is a *subset* of the armed one rather than a different log. ⊘ That was a deliberate
+choice at the arming check; a "join disabled" line would have made the control incomparable.
+And the census still runs 8 times with all 24 rows reading `Framebuffer { … }`, which is what
+says the *subject* was exercised and only the *treatment* was withheld.
+
+★★ Read the `a` vs `b` columns together: **everything except the two direction lines is
+identical**, including the join itself, the placement, the re-statement and the doorbell
+census. The negative control changes the VMM's *mapping*, not the join — which is why `JOINED`
+still prints three times and `HostBackedFb` still appears 24 times in both.
+
+⚠ **This is the trap that costs boots, closed.** A boot can run with the plane off and still
+produce a full `dmesg`, a full serial log, a full census and `RC=0` with not one line of the
+changed code having run. The `FB-JOIN arm=…` line is printed on **every** arm, from the
+composition root's own single reading, so a reader can tell the three apart from the boot's own
+on-disk evidence rather than from whichever shell exported the variables.
 
 ★ **Which line did I expect this to execute?** The `Backing::PrivateAnonymous` arm named above,
 and nothing else — every other line in the join path is shared with the armed run. That is the
