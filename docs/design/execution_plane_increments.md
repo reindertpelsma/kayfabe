@@ -17573,8 +17573,9 @@ rung made the failure *countable and attributable*; it did not fix it.
 
 ## §16.106 ★★★★★ THE CHANNEL FOLLOWS THE OBJECT'S DECLARED COPY ENGINE — all 14 refusals have ONE cause, and it is a constant of ours
 
-⚠ **STATUS (2026-08-11): BUILT; boot pending at the time of writing, scored in
-`traces/boots/w255/`.** ⊘ `CE-SUBMIT` **0**; no execution-plane rung is claimed.
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w255/`. 14 → 0, ON BOTH SIDES.** 8 of 8
+predictions. ⊘ `CE-SUBMIT` **0**, the guest's own `dmesg` is byte-identical to `w254`, and **no
+execution-plane rung is claimed**.
 
 ### 16.106.1 What decides the runlist — read from the driver, not from us
 
@@ -17660,3 +17661,40 @@ frame at the wrong offset.
   encode→decode identity so a blob we forward and a blob we read cannot drift.
 - **The wire**: both `hosting` arms in the round-trip sample — the presence byte is exactly what a
   one-arm round trip would never exercise.
+
+### 16.106.5 ★★★★★ MEASURED — the refusals are gone, and the host driver logged NOTHING
+
+`w255_76477ab_cel_runlist` vs its control `w254_e2b6c86_cel_hostdmesg`, identical configuration.
+
+| | `w254` | **`w255`** |
+|---|---|---|
+| our `REFUSED … Rm(Other(64))` | 14 | **0** |
+| our `REFUSED … Rm(..)`, **any** status | 14 | **0** |
+| host `chandesConstruct_IMPL` / `kfifoRunlistSetId_GM107` | 14 / 14 | **0 / 0** |
+| host dmesg delta | 42 lines | **0 lines** (watermark 921; the capture ran and reported zero) |
+| `FORWARDED` | 18 | **32** |
+| `engine=Ce` forwards | 8 | **22**, of which **14** `materialized_channel=true` |
+| remaining refusals | 2 × `NoVas`, `host_chan=NONE` | **2 × `NoVas`, `host_chan=NONE`** |
+| doorbells | 191 / 183 / 8 | 191 / 183 / 8 |
+
+★ **The decomposition is exact**: the 8 CE forwards that already worked are GRCE objects on GR
+channels that already existed (`materialized_channel=false`) and are untouched; the **14** that
+used to be refused now materialize their own channel on the engine the guest declared and
+succeed. `8 + 14 = 22`, and it is the same 14. ⊘ **The failure did not move** — no refusal of any
+other status appeared, which was pre-registered as the way this repair could have been wrong
+while the diagnosis stayed right.
+
+### 16.106.6 ⊘ WHAT DID NOT CHANGE, and one honest qualification
+
+**The guest's own `dmesg` is byte-identical to `w254`.** The guest is not one step further along;
+`CE-SUBMIT` is 0; nothing executed. This rung removed a real, vendor-named defect and made 14 host
+allocations succeed that used to fail — **it did not move the wall**, and no execution-plane
+progress is claimed for it.
+
+⚠ **`forwarded=32` sits exactly on the per-class print bound**, and the last line carries
+`⊘ REPORT BOUND REACHED for this outcome class`. ⇒ it is a **lower bound, not a total**. The
+refusal class (2) is far below its bound and *is* exact, which is what the 14 → 0 result rests on.
+★ Recorded, not fixed: raising the bound would change the instrument in the boot that measures the
+fix. But note the shape — **§16.105's lesson reappearing one rung later on the other class**, in a
+census this rung's author had just rewritten. A saturated instrument does not become safe because
+you know about the last one.

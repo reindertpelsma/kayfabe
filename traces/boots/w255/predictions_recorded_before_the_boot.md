@@ -90,4 +90,41 @@ the one path this boot exercises.
 
 # SCORING (added after the run — the predictions above are unedited)
 
-<!-- filled in after the boot -->
+**Boot `w255_76477ab_cel_runlist`, rev `76477ab` (stamped in the binary), real GA106, host driver
+open 580.159.04, `CAPTURE_RC=0`.** Control: `w254` at `e2b6c86`, identical configuration.
+
+| # | prediction | outcome |
+|---|---|---|
+| 1 | ★★★ `Rm(Other(64))` **14 → 0** | ✅ **0** |
+| 2 | ★★★ host `chandesConstruct_IMPL` **14 → 0**, `kfifoRunlistSetId_GM107` **14 → 0** | ✅ **0 / 0** — the host dmesg delta is **0 lines** (watermark 921, capture ran and reported zero) |
+| 3 | ★★ the failure does not MOVE: total `Rm(..)` of any status = 0 | ✅ **0** — no new status appeared |
+| 4 | `FORWARDED` 18 → 32, last line `forwarded=32 refused=2` | ✅ `[seen=34 forwarded=32 refused=2]` |
+| 5 | every remaining refusal prints `host_chan=NONE` | ✅ both, and both are `NoVas` — refused in the plan phase, before a channel exists |
+| 6 | ⊘ `CE-SUBMIT` stays 0 | ✅ **0** |
+| 7 | bootability unchanged | ✅ `CAPTURE_RC=0`; the guest's own `dmesg` is **byte-identical to `w254`** |
+| 8 | ⚠ doorbells stay `191 / 183 / 8` | ✅ `191 arrived, 183 served, 8 REFUSED by name` |
+
+**8 of 8.**
+
+## The decomposition, and it is exact
+
+`engine=Ce` forwards: **8 → 22**, of which **14 carry `materialized_channel=true`**.
+
+⇒ the 8 that already worked are unchanged (GRCE objects on GR channels that already existed,
+`materialized_channel=false`), and the **14 that used to be refused now materialize their own
+channel on the engine the guest declared and succeed**. 8 + 14 = 22, and 14 is the same 14.
+
+## ⚠ ONE HONEST QUALIFICATION, and it is §16.105's own lesson one rung later
+
+`forwarded=32` **is exactly the per-class print bound**, and the last line carries
+`⊘ REPORT BOUND REACHED for this outcome class`. ⇒ **32 is a lower bound on the forwards, not a
+total.** The refusal class (2) is far below its own bound and *is* exact, which is what
+predictions 1-3 rest on — but a future reading that treats "32 forwarded" as a count will be
+making the mistake this branch just spent three rungs paying for. ⊘ Recorded here rather than
+fixed, because raising the bound changes the instrument and this boot is the fix's measurement.
+
+## ⊘ What did NOT change, stated plainly
+
+The guest's own `dmesg` is byte-identical to `w254`. **The guest is not one step further along.**
+This rung removed a real, vendor-named defect and made 14 host allocations succeed that used to
+fail; it did not move the wall, and no execution-plane progress is claimed.
