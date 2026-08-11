@@ -16624,7 +16624,38 @@ bytes would pass every other assertion in the file.
 - ⊘ Route B **wired and still unmeasured**. The forbidden-#2 residency gate is still **proven
   offline only and has never fired on hardware**. Route A untouched.
 
-### 16.96.6 ★★★★★ MEASURED
+### 16.96.6 ★★★★★ MEASURED — THE BENCH BOOTS
 
-`[measured 2026-08-11, `traces/boots/w244/`]` — see that directory's README for the source
-revision, the stamp check on both artifacts, and the violation counts before and after.
+`[measured 2026-08-11, `traces/boots/w244/` + `traces/guest_boots/run_w244*`, revision
+`acbb9a39579a0c796b19318fe9b4c3508f2367d9`]`, stamped **inside** the archive and the QEMU
+binary and quoted in each probe log.
+
+| | `sandbox spawn` | `issuing a host RM verb` | `RmInitAdapter failed` |
+|---|---|---|---|
+| `810368b` (w238) | **1** | — | — |
+| `842c5c4` (w239) | 0 | **1** → QEMU aborts | — |
+| **`acbb9a3` (w244)** | **0** | **0** | **0** |
+
+Two arms, because one of them is a differential and the other is the default:
+`w244a_acbb9a3_ceh` uses `KAYFABE_CE_EXECUTOR=host`, **byte-identical to w239's configuration**,
+so the only variable is the code; `w244b_acbb9a3_cel` uses the bench default `local`, so *"the
+bench boots"* is not a claim about one exotic switch. Both carry `RUST_BACKTRACE=full` in
+**QEMU's own** environment, leaving the instrument that found the violation armed for a new one.
+
+★★★ **What proves the drain is on the path — a claim no signature could make.**
+`report_engine_forward` has exactly one caller (`report_engine_forward_drain`), which has
+exactly one caller (`Regs::write`, after the guard drops); the admission path prints nothing but
+the latch-full refusal. ⇒ **every `ENGINE-OBJECT … → FORWARDED/REFUSED` line in these logs came
+from the lock-free drain.** `w244a` has **32** (`[seen=32 forwarded=18]`); `842c5c4` has **one**,
+and the abort follows it.
+
+⊘ **What did not fire is also the measurement**: `LATCH FULL` **0** (population stayed at the
+predicted one entry) and `DRAIN OVERRUN` **0** (no drain reached the 1 s budget, so no guest wait
+went anywhere near the 6 s clock).
+
+⊘ **The standing wall is unmoved, and that is correct.** `cuInit` ok, `devices=1`,
+`compute=8.6`, `totalMem=11959 MiB`, then `CUP2_RC=124` — the 180 s timeout at `cuCtxCreate`
+that `scripts/bench/cup2_hook_w232.sh` documents as the standing wall on both executor arms.
+Doorbells **191 arrived / 183 served / 8 REFUSED by name**, reproducing the `w229`/`w230`
+population exactly. `CE-SUBMIT` **0**. This rung removed a **bootability regression** introduced
+by ranking the plane's lock at `5626939`; it did not move the wall and was not meant to.
