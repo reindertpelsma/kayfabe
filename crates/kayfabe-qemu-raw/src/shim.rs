@@ -2959,6 +2959,19 @@ struct CeShellState {
     /// life. Bounded by [`GR_PUSHBUFFER_DUMPS_MAX`]: `cuCtxCreate` rings one GR channel 86
     /// times and the first submissions are the ones that decide the question.
     gr_dumps: std::sync::Mutex<u32>,
+    /// ★★★★★ **§16.81 — how many `Ce` doorbells [`forwarding_plane_owns_ce`]'s system-proc
+    /// term actually CHANGED THE ANSWER FOR** this device life.
+    ///
+    /// ⊘ **Counted and printed, not inferred.** The term is a no-op on both historic arms
+    /// (`local` fails the second conjunct, a `Stillborn` plane fails it too), so a boot in
+    /// which it never fires and a build in which it does not exist produce identical guest
+    /// behaviour. The only thing that separates them is this line — and a rung that read
+    /// *"the guest lived"* as evidence for the term would be inferring from an instrument
+    /// that never ran, which is the trap this campaign has paid for repeatedly.
+    ///
+    /// ⇒ Every occurrence prints, carrying its own running index, so the largest index in a
+    /// boot log **is** the total and no row is ever elided into looking absent.
+    sysproc_kept: std::sync::Mutex<u64>,
     /// ★★★★★ **THE COMPLETION OBSERVER'S WATCH LIST** — the completions the guest DECLARED,
     /// and what has been read at their addresses.
     ///
@@ -4173,8 +4186,45 @@ impl SharedDoorbell {
         }
         // ★★★ §14.24 — see `SharedDoorbell::local_ce_is_the_only_executor` for the boot
         // that turned this from `vas_pdb.is_none()` into a question about EXECUTORS.
-        if facts.vas_pdb.is_some() && !self.local_ce_is_the_only_executor {
+        // ★★★★★ §16.81 — and the THIRD term, which is [`forwarding_plane_owns_ce`]'s whole
+        // subject: **whose proc is this?** See that function for the rule and the boot.
+        if forwarding_plane_owns_ce(
+            facts.proc,
+            facts.vas_pdb.is_some(),
+            self.local_ce_is_the_only_executor,
+        ) {
             return None; // the core can address AND serve this channel; it is not ours.
+        }
+        // ★★★★★ §16.81 — SAY SO WHEN THE NEW TERM IS WHAT KEPT THIS DOORBELL, and only then.
+        //
+        // The condition below is exactly *"the first two terms said hand it away and the
+        // third said no"*. ⊘ It is not `facts.proc == SYSTEM_PROC`: on the `local` arm and on
+        // a `Stillborn` plane this doorbell was already the shell's, and printing there would
+        // make the line mean *"a system-proc doorbell arrived"* — a different, much weaker
+        // statement that would also make the two historic arms' logs stop being byte-
+        // comparable to their own committed predecessors.
+        //
+        // ⇒ On `local` this prints **zero** times and the control stays byte-identical; on
+        // `host` a non-zero count is the term doing the work, and `0` on `host` would mean
+        // the fix never fired and any survival is somebody else's.
+        if facts.vas_pdb.is_some()
+            && !self.local_ce_is_the_only_executor
+            && facts.proc == kayfabe_core::gpu::Gpu::SYSTEM_PROC
+        {
+            let mut n = self.ce.sysproc_kept.lock().unwrap_or_else(|e| e.into_inner());
+            *n += 1;
+            eprintln!(
+                "kayfabe: CE-SYSPROC-KEPT #{n} token={token:#010x} proc={} chan={} \
+                 pdb={} — `l1_concurrency.md` §12.26: the SYSTEM proc has no data plane and \
+                 its CeUtils scrub is FORGED, never forwarded, so this doorbell is the \
+                 shell's whatever KAYFABE_CE_EXECUTOR says. ⊘ The forwarding hand-off stays \
+                 armed for every USER proc.",
+                facts.proc.0,
+                facts.chan.0,
+                facts
+                    .vas_pdb
+                    .map_or_else(|| "NONE".to_string(), |p| format!("0x{:x}", p.0)),
+            );
         }
         let (vaspace, ring_va) = (facts.vaspace?, facts.ring_va?);
         let plane = self.plane.upgrade()?;
@@ -7386,6 +7436,73 @@ pub fn guest_ram_is_reachable_on(
 /// that is measured to work. [`CeExecutorChoice::Host`] keeps the previously-measured arm exactly
 /// reachable — a deleted configuration cannot be a control.
 pub const CE_EXECUTOR_ENV: &str = "KAYFABE_CE_EXECUTOR";
+
+/// ★★★★★ **§16.81 — DOES THE FORWARDING PLANE OWN THIS `Ce` DOORBELL?** The gate
+/// [`SharedDoorbell::try_ce_submission`] asks before it reads a ring, as one predicate
+/// instead of an expression inlined at its only call site.
+///
+/// # ⊘⊘ The term that was missing, and the tree already carried the rule
+///
+/// The two existing terms ask *"can the core address this channel?"* and *"is there any
+/// other executor?"*. Neither asks the question that decides this doorbell:
+/// **whose proc is it?**
+///
+/// `kayfabe_fwd::FwdFault::SystemDataPlane` is that rule, written down, with
+/// `l1_concurrency.md` §12.26 behind it and naming this exact workload:
+///
+/// > *"The SYSTEM proc has no data plane … Guest-kernel work that would need a backing —
+/// > **the CeUtils scrub**, the GR golden capture — is **forged** to the system proc's
+/// > completion queue, **never forwarded**, so the system proc never mints host memory."*
+///
+/// ⇒ A [`kayfabe_core::gpu::Gpu::SYSTEM_PROC`] channel is the shell's on **every** plane
+/// and under **every** value of [`CE_EXECUTOR_ENV`], because the rule is about the proc's
+/// *lifetime regime*, not about which executors happen to be installed. Handing it away is
+/// not a configuration that trades performance for reachability — it is a configuration
+/// that asks a plane to do something the design forbids it to do.
+///
+/// # ★★★ The boot that measured the cost, and it printed the rule on the same doorbell
+///
+/// `[measured 2026-08-10, boot `w231a_ad4ed3c_ceexec_host`, rev `ad4ed3c`,
+/// `KAYFABE_ISOLATES=real KAYFABE_CE_EXECUTOR=host`]` — **one** doorbell arrived,
+/// `proc=0 chan=1`, this gate handed it to the forwarding plane, and three lines later:
+///
+/// - `GUEST-RAM PIN token=0x00010002 … proc=0 … ⊘ 0 of 1 run(s) pinned — REFUSED
+///   `SystemDataPlane`, THE WALL, and it is a STANDING DESIGN RULE, not a defect.`
+/// - `kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0) → REFUSED
+///   BEFORE SUBMISSION Other(19270)`
+/// - `doorbells: 1 arrived, 0 served, 1 REFUSED` → `NVRM: RmInitAdapter failed!
+///   (0x25:0x65:1249)`, `nvidia-smi: No devices were found`.
+///
+/// ⇒ **The pin refused the very hand-off the executor gate had just made, by name, on the
+/// same token, in the same boot.** One instrument stated the rule and the other never asked
+/// it. ★ That is `no_counter_fired_is_not_no_record_exists` inverted: the record existed, was
+/// printed, was correct, and no code read it.
+///
+/// # ⊘ What this is NOT
+///
+/// - ⊘ **Not a repair of `ce_copy`'s refusal, which is CORRECT and stays.**
+///   `docs/design/ce_executor_tree.md` (owner, 2026-08-07) rules that *"the CPU branch
+///   cannot execute in the isolate … so `ce_copy(Ours)` must keep refusing there"*, and calls
+///   it *"the security boundary refusing to leak guest memory into the sandbox, working as
+///   designed"* — explicitly superseding §12.4's *"the executor is the isolate in both
+///   cases"*. The scrubber's fill into fabricated space is `CeExecutor::Ours` and no host
+///   engine can ever be pointed at it.
+/// - ⊘ **Not a narrowing of the forwarding plane.** Every **user** proc's `Ce` doorbell still
+///   falls through exactly as before; the hand-off stays armed for the population it was
+///   built for. This removes one proc from it — the one the tree already excluded.
+/// - ⊘ **Not conditional on the executor choice**, deliberately. `local`, `host` and any
+///   later value get the same answer for the system proc, because §12.26 is not a
+///   performance preference.
+#[must_use]
+pub fn forwarding_plane_owns_ce(
+    proc: kayfabe_core::ProcId,
+    has_vas_pdb: bool,
+    local_ce_is_the_only_executor: bool,
+) -> bool {
+    has_vas_pdb
+        && !local_ce_is_the_only_executor
+        && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
+}
 
 /// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

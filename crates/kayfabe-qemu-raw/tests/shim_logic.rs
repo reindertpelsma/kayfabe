@@ -2147,3 +2147,97 @@ fn a_value_that_is_not_a_ce_executor_name_refuses_rather_than_defaulting() {
         }
     }
 }
+
+// =====================================================================================
+// ★★★★★ §16.81 — WHOSE `Ce` DOORBELL IS IT? The term the executor gate never asked.
+// =====================================================================================
+//
+// ⊘ These drive the pure predicate [`forwarding_plane_owns_ce`], which is the whole of the
+// gate at `SharedDoorbell::try_ce_submission` — extracted precisely so it can be asserted
+// without a device, a plane or a guest.
+//
+// The measurement they are written against: `[boot `w231a_ad4ed3c_ceexec_host`, rev
+// `ad4ed3c`, `KAYFABE_ISOLATES=real KAYFABE_CE_EXECUTOR=host`]` — ONE doorbell arrived,
+// `proc=0 chan=1 pdb=0x2efa9c000`; the gate handed it to the forwarding plane; the pin
+// refused the same token by name (`REFUSED SystemDataPlane`); the isolate refused the copy
+// (`by=Ours src=Constant(0)`); `RmInitAdapter failed! (0x25:0x65:1249)`.
+
+use kayfabe_core::ProcId;
+use kayfabe_core::gpu::Gpu;
+use kayfabe_qemu_raw::shim::forwarding_plane_owns_ce;
+
+/// ★★★ **THE PROPOSITION, and it is the one the target evaluates.** In the exact
+/// configuration `w231a` ran — a live plane (`local_ce_is_the_only_executor == false`) and a
+/// channel the core CAN address (`vas_pdb == Some`) — the SYSTEM proc's doorbell must stay
+/// the shell's.
+#[test]
+fn the_system_procs_ce_doorbell_is_never_the_forwarding_planes() {
+    assert!(
+        !forwarding_plane_owns_ce(Gpu::SYSTEM_PROC, true, false),
+        "★ the system proc's `Ce` doorbell was handed to the forwarding plane. \
+         `l1_concurrency.md` §12.26 (carried in `FwdFault::SystemDataPlane`'s own docs) \
+         names the CeUtils scrub as work that is FORGED and NEVER FORWARDED, and \
+         `w231a_ad4ed3c_ceexec_host` is what handing it away costs: `1 arrived, 0 served, \
+         1 REFUSED` → `RmInitAdapter failed! (0x25:0x65:1249)`."
+    );
+}
+
+/// ★★★★ **THE NEGATIVE CONTROL — the fix must not be a wholesale disarm.**
+///
+/// ⊘ The cheap wrong fix is to stop handing `Ce` doorbells over at all, and it would make
+/// the assertion above pass, keep the guest alive, and quietly delete the forwarding plane's
+/// only reachable population. This is the proposition that fails if it did: **in the very
+/// same configuration, a USER proc's doorbell must still be the forwarding plane's.**
+#[test]
+fn a_user_procs_ce_doorbell_is_still_the_forwarding_planes_in_the_same_configuration() {
+    for pid in [ProcId(1), ProcId(2), ProcId(4242)] {
+        assert_ne!(pid, Gpu::SYSTEM_PROC, "the fixture must use a USER proc");
+        assert!(
+            forwarding_plane_owns_ce(pid, true, false),
+            "★ {pid:?} no longer reaches the forwarding plane. The system-proc term was \
+             supposed to remove ONE proc from the hand-off, not the hand-off — and a build \
+             in which nothing falls through cannot answer whether the fall-through works, \
+             while still looking healthy because the guest boots."
+        );
+    }
+}
+
+/// ★★★ **The rule is keyed on the PROC, not on our ignorance of its address space.**
+///
+/// ⚠ `accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`, and §14.24 is this
+/// campaign's own instance: the gate used to read `vas_pdb.is_none()`, i.e. *"a channel the
+/// core cannot address is ours"* — and the day the core could address it, the executor
+/// vanished. `w231a` prints `pdb=0x2efa9c000` for the system proc's channel, so **both**
+/// values of `has_vas_pdb` are reachable for it and the answer must not move.
+#[test]
+fn the_system_proc_term_does_not_depend_on_whether_we_can_address_its_vas() {
+    for has_vas_pdb in [true, false] {
+        for only_local in [true, false] {
+            assert!(
+                !forwarding_plane_owns_ce(Gpu::SYSTEM_PROC, has_vas_pdb, only_local),
+                "★ the system proc changed hands at has_vas_pdb={has_vas_pdb} \
+                 local_only={only_local} — the rule is about the proc's LIFETIME REGIME \
+                 (§12.26), not about what we happen to know about its address space."
+            );
+        }
+    }
+}
+
+/// ⊘ **Both historic arms are untouched, so both remain controls.** With
+/// `local_ce_is_the_only_executor == true` (the default, and `KAYFABE_ISOLATES` unset)
+/// nothing is ever the forwarding plane's — which is what keeps every committed `ctl` boot
+/// in `traces/guest_boots/` comparable to the next one.
+#[test]
+fn the_shipped_arm_hands_over_nothing_at_all() {
+    for pid in [Gpu::SYSTEM_PROC, ProcId(1)] {
+        for has_vas_pdb in [true, false] {
+            assert!(
+                !forwarding_plane_owns_ce(pid, has_vas_pdb, true),
+                "★ {pid:?} changed hands on the arm where the shell's CPU executor is the \
+                 ONLY executor — there is nobody to hand it to."
+            );
+        }
+    }
+    // ★ And a channel the core cannot address is still nobody's to forward, on every arm.
+    assert!(!forwarding_plane_owns_ce(ProcId(1), false, false));
+}
