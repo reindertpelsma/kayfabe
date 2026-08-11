@@ -323,6 +323,20 @@ already makes for the guest's ring.
 and `fb_cpu_view.md` §0.1's three cited driver facts are why it cannot. Card memory is exactly
 the memory that cannot carry a guest-reachable CPU view.
 
+### 4.1b ⚠ THE PROBE WRITES DEVICE MEMORY, and that is a cost rather than a detail
+
+`probe_joined_leaves` writes 4 KiB of pattern into the **first** joined leaf, through
+`RegPlane::fb_poke` — deliberately, because that is the path a guest `PRAMIN` store takes and a
+check that wrote through some other door would be measuring a door the guest does not use. It
+then leaves the isolate's poke pattern there.
+
+⊘ On this boot that destroyed nothing: the establishment report says the leaf had **no resident
+page at all** (§3.3), so there were no guest bytes to lose. ⚠ **That will not stay true.** The
+first boot in which a leaf carries guest content is a boot in which this instrument corrupts
+4 KiB of it, and nothing in the code notices. It is armed only by `KAYFABE_FB_JOIN` and only on
+the first live leaf per doorbell, but it is not observationally neutral and must not be left
+armed once the join is load-bearing — the same warning the C artifact's `m2rec` carries.
+
 ### 4.2 ⊘ What §4 of `fb_cpu_view.md` left open and this rung still leaves open
 
 - **Extent.** One `SharedRam` per leaf is the safe unit, not the efficient one. The C's
