@@ -316,9 +316,14 @@ which exists today:
    means `alloc_channel_at`'s "put our control structures in the VAS we were handed" shape has
    to change for GR channels.
 3. **Faulting** — an unmapped VA raises an MMU fault rather than aliasing anything, and that
-   fault is contained to this channel's TSG. ⊘ **`[NOT MEASURED]`** whether a GR MMU fault on
-   this bench is contained to one channel or takes the host GPU context with it;
-   `scripts/bench/gpu_fault_containment.sh` exists and this question has not been asked of it.
+   fault is contained to this channel's TSG. ⊘⊘ **MEASURED 2026-08-11 — CONTAINED**
+   (`traces/boots/w248/`, §16.100): a bystander context ran **2 675 519 verified iterations
+   across the attacker's fault, 0 errors 0 wrong bytes**; the faulting context went sticky
+   (`CUDA_ERROR_ILLEGAL_ADDRESS`); Xid 31 named **`ENGINE GRAPHICS … FAULT_PDE`** — so the
+   unmapped VA aliased nothing — and none of §7's escalations occurred. ⚠ Scoped: the attacker
+   was a host CUDA process in its own context, not guest methods on our GR channel; the residual
+   is a **property-2** question. ★ The text below was true when written and the script had simply
+   never been run.
 4. **Per-guest** — one such space per guest process, never shared, or §2.1's write primitive
    crosses tenants.
 

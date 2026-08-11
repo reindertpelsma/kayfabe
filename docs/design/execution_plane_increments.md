@@ -17055,3 +17055,87 @@ the honest report of a completion plane with no executor behind it.
 ⊘ `CE-SUBMIT` **0**; nothing executed; prohibition checks do not arise. Bootability unchanged
 (`no-blocking-under-lock` 0, `RmInitAdapter failed` 0, `SMI_RC=0`, `CUP2_RC=124`). Route A
 untouched. ⚠ §16.86.4's owner question remains live and unanswered.
+
+## §16.100 ★★★★★ PROPERTY 3 IS MEASURED — a guest-reachable GPU fault IS CONTAINED
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w248/`.** `gr_execution_boundary.md` property 3
+carried `[NOT MEASURED]` for four rungs. It is now measured, on the bench, with the instrument
+that already existed. ⊘ No code was written for this.
+
+### 16.100.1 The result — CONTAINED, and the arm that matters is unambiguous
+
+`scripts/bench/gpu_fault_containment.sh` on `vh` (RTX 3060 GA106, host driver 580.159.04),
+`SCRIPT_RC=0`. **All five pre-registered predictions confirmed**
+(`traces/boots/w248/predictions_recorded_before_the_run.md`, committed beside the log).
+
+| arm | result |
+|---|---|
+| **A** baseline victim, idle GPU | `[victim] OK bad=0` rc=0 |
+| **B** attacker faults alone | `sync rc=700 (CUDA_ERROR_ILLEGAL_ADDRESS)`; `context reusable? rc=700 NO (sticky)`; **Xid 4 → 5** |
+| **B2** fresh victim after the fault | rc=0 (⊘ weak arm, fresh context) |
+| ★★★ **C** victim holds a **LIVE context** across the fault | `[loop] DONE iters=2675519 ok=2675519 wrong=0 errors=0` — **victim exit=0** |
+| **D** aftermath | Xid total 6; brand-new victim rc=0; **no** `fell off the bus`, **no** reboot-required |
+
+★★★ **2 675 519 verified iterations of a bystander context, spanning the attacker's MMU fault,
+with zero errors and zero wrong bytes.** ⇒ **the fault is scoped to the offending context; it
+does not take a live bystander with it.**
+
+★★ **And the Xid is exactly the shape property 3 asks about** — the GR engine, not a copy engine:
+
+```text
+NVRM: Xid (PCI:0000:00:07): 31, pid=…, name=gpu_wedge_probe, channel 0x00000008,
+  MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7000_00000000.
+  Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+```
+
+⇒ **`FAULT_PDE`** — the unmapped VA raised a page-directory fault and **aliased nothing**, which
+is property 3's first clause, and the recovery was channel-scoped, which is its second.
+
+### 16.100.2 ⚠ SCOPE, recorded BEFORE the result so it could not be fitted to it
+
+The attacker is a **host CUDA process faulting in its own context on its own channel** — not
+guest-authored methods on our isolate's GR channel. The script says so itself: *"⊘ It is NOT a
+malformed pushbuffer … what it shares with that shape is that it produces a REAL MMU fault and a
+REAL Xid, so the escalation path is entered."*
+
+⇒ **Established**: the blast radius of a GR MMU fault + Xid 31 on this GPU and driver is the
+faulting context. The `guest_blast_radius.md` §7 escalations — whole-runlist preempt, node-level
+reboot latch, GSP death — **did not occur**.
+⊘ **Not established**: that a fault raised *from our isolate's GR channel, in a VAS we built, by
+guest methods* has the same radius. That needs GR execution, which property **2** blocks. ⇒
+property 3 is **discharged for the hazard it names**, and the residual is a property-2 question.
+
+★ **Corroboration from our own code, unlooked-for**: the same host's `dmesg` carries **four
+earlier Xid 31 MMU faults raised by kayfabe itself** — `name=kayfabe-rm-ladd` ×3 and
+`name=a_guests_ring_m` ×1, all `ENGINE CE0 HUBCLIENT_CE1 … FAULT_PDE ACCESS_TYPE_VIRT_READ`. The
+bench has been booting normally ever since. **We have already faulted this GPU four times and it
+survived every one.**
+
+### 16.100.3 ★★★★★ THE SIXTH INSTANCE — the host's own dmesg has been diagnosing us by name
+
+Our engine-object census prints `REFUSED Rm(Other(64))` — **12 of them in `w247` alone**. On the
+**same machine, at the same instant**, the host driver prints the sentence:
+
+```text
+NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible
+  with this engine (requested: 0x2 current: 0x0).
+NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+```
+
+**241 of each, paired 1:1**, accumulated across this campaign's boots. And `Rm(Other(64))`
+decodes: `NV_STATUS_CODE(NV_ERR_INVALID_STATE, 0x00000040, "Generic Error: Invalid state")`
+(`ogkm-580.159.04: kernel-open/common/inc/nvstatuscodes.h:93`) — **`64 == 0x40`**.
+
+⇒ ★★ **We print a number; the driver on the same box prints the cause; no rung has ever read
+it.** Sixth instance tonight of *an instrument that exists and was never consulted* — and the
+first where the instrument is **not ours**.
+⚠ `[CORRELATION, not causation]` The pairing is by timestamp and count, not by a join on a
+channel id. What is certain is that the host driver has a named diagnosis for engine-object
+allocation failures and it is one `ssh vh dmesg` away. **Read the host's dmesg beside our own
+census.** ⊘ `boot_capture.sh` captures the **guest's** dmesg only.
+
+### 16.100.4 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**; nothing was forwarded and nothing executed — this rung ran no guest at all.
+⊘ The bench is **healthy**: `nvidia-smi` answers, a fresh context computes correctly, no
+node-level escalation. ⊘ Property **2 (CLOSED)** is untouched and remains the owner's call.
