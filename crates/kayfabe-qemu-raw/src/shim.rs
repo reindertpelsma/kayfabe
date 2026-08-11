@@ -2971,7 +2971,47 @@ struct CeShellState {
     ///
     /// ⇒ Every occurrence prints, carrying its own running index, so the largest index in a
     /// boot log **is** the total and no row is ever elided into looking absent.
-    sysproc_kept: std::sync::Mutex<u64>,
+    ///
+    /// # ★★★★ Why this is an `AtomicU64` and not the `Mutex<u64>` it shipped as
+    ///
+    /// `[measured 2026-08-11, `b6c5442`]` it shipped as `std::sync::Mutex<u64>` and turned
+    /// `tests/tests/unranked_locks.rs` RED — an unranked lock on the vCPU path with no
+    /// ruling on whether anything may block beneath it. Reading the call site answered the
+    /// question the wrong way: the guard was alive across the `eprintln!` **and** across the
+    /// `String` its `pdb` argument builds, so acquiring the process-global stderr
+    /// `ReentrantLock`, at least one `write(2)` on it (stderr is unbuffered, so a long line
+    /// can be several) and a heap allocation all ran beneath it. ⊘ Exactly ONE allocation,
+    /// not two — `map_or_else` evaluates a single arm, and the difference is the sort of
+    /// thing this file's own comments are held to. `l1_concurrency.md` §3.3 R1 is *"no
+    /// blocking call under ANY lock, ever — no
+    /// potentially-blocking syscall at all"*, and `CeShellState::gr_dumps` two fields up is
+    /// the same counter written the safe way, with its classification in
+    /// `unranked_locks.rs` saying so in as many words: it *"takes it inside its own block
+    /// and DROPS it before the dump does anything — every `eprintln!` … outside that
+    /// scope"*.
+    ///
+    /// ⊘ **Narrowing the critical section would only have made it legal.** A counter has no
+    /// invariant to protect: there is nothing a reader could observe torn, and the one
+    /// property this field's docs claim — *"the largest index in a boot log is the total"* —
+    /// is what `fetch_add` returns by construction. So the lock is deleted rather than
+    /// classified, which is the difference between removing the hazard and annotating it.
+    /// ⚠ This is **not** a way of silencing the gate: the gate's subject is a *critical
+    /// section*, and an atomic increment has no *beneath*.
+    ///
+    /// ## ⊘ `l1_concurrency.md` §4.2 says *"no atomics"* — and this tree measurably means
+    /// *"no hand-rolled lock-free SYNCHRONISATION"*
+    ///
+    /// The rule's own reason is *"keeps TSan a meaningful ceiling and makes `loom`
+    /// unnecessary"*, and neither is engaged by a `Relaxed` statistics counter: TSan models
+    /// atomics exactly (it flags the *non*-atomic race), and `loom` exists for orderings a
+    /// counter that publishes nothing does not have. ★ The practice already says so, in the
+    /// two places most relevant to this one: `kayfabe-device/src/plane.rs`'s
+    /// `PlaneCounters` is an entire struct of `AtomicU64` on the vCPU MMIO path, kept out of
+    /// `PlaneState` *"so that `RegPlane::counters` never blocks behind a doorbell being
+    /// serviced"* — the identical argument, made first — and this very file's
+    /// [`ENGINE_FWD_SEEN`]/[`ENGINE_FWD_OK`] are `AtomicU64` counted `Relaxed`. ⇒ A
+    /// `Mutex<u64>` counter was the anomaly here, not the atomic that replaces it.
+    sysproc_kept: std::sync::atomic::AtomicU64,
     /// ★★★★★ **THE COMPLETION OBSERVER'S WATCH LIST** — the completions the guest DECLARED,
     /// and what has been read at their addresses.
     ///
@@ -4251,8 +4291,21 @@ impl SharedDoorbell {
             && !self.local_ce_is_the_only_executor
             && facts.proc == kayfabe_core::gpu::Gpu::SYSTEM_PROC
         {
-            let mut n = self.ce.sysproc_kept.lock().unwrap_or_else(|e| e.into_inner());
-            *n += 1;
+            // ★★★★ `fetch_add`, NOT a mutex — see [`CeShellState::sysproc_kept`] for the
+            // gate that found the lock and for why deleting it beats classifying it. The
+            // index is still unique and still 1-based, so *"the largest index in the log is
+            // the total"* survives verbatim; `Relaxed` is enough because nothing is
+            // published through this counter — no reader learns about any other memory from
+            // it, and the only consumer is the human reading the line it is printed on.
+            let n = self
+                .ce
+                .sysproc_kept
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1;
+            // ⊘ Deliberately AFTER the increment and beneath no guard at all: the
+            // `eprintln!` takes the process-global stderr lock and issues a `write(2)`, and
+            // the `pdb` argument below allocates a `String`. R1 (`l1_concurrency.md` §3.3)
+            // forbids every one of those beneath a lock, and this site used to do all three.
             eprintln!(
                 "kayfabe: CE-SYSPROC-KEPT #{n} token={token:#010x} proc={} chan={} \
                  pdb={} — `l1_concurrency.md` §12.26: the SYSTEM proc has no data plane and \
@@ -7644,9 +7697,7 @@ pub fn forwarding_plane_owns_ce(
     has_vas_pdb: bool,
     local_ce_is_the_only_executor: bool,
 ) -> bool {
-    has_vas_pdb
-        && !local_ce_is_the_only_executor
-        && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
+    has_vas_pdb && !local_ce_is_the_only_executor && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
 }
 
 /// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.

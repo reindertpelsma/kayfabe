@@ -23,6 +23,22 @@
 //! ★ Same shape as `l1_os_shell.md` §4.2.1.1's residue list and the trybuild `REQUIRED_ROWS`:
 //! the failure mode being guarded is a list quietly getting longer without anyone noticing,
 //! and the answer is enumeration by name in both directions.
+//!
+//! ## ★★★★ Its THIRD catch is the first one that was a REAL violation — and it left no row
+//!
+//! `[measured 2026-08-11, `b6c5442`]` w232 added `CeShellState::sysproc_kept:
+//! std::sync::Mutex<u64>` and this gate went RED on `origin/master`. The first two catches
+//! (`Mutex<ParkState>`, `Mutex<u32>`) were locks that turned out to be **safe**, so the fix
+//! was a row. This one was not: the guard was held across the `eprintln!` that prints the
+//! counter *and* across the `String` one of its arguments builds, so the process-global
+//! stderr lock, a `write(2)` on it and a heap allocation all ran beneath an unranked lock on
+//! the vCPU's own MMIO trap. R1 forbids each of those by name.
+//!
+//! ⊘ **So the fix deleted the lock rather than ruling on it** — the field is an `AtomicU64`
+//! now — and that is why nothing was added to the table below. ★ Note what that means for
+//! reading this list: *the gate's catches are not all here.* A row records a lock that was
+//! **kept**; a lock that was removed leaves the table exactly as it found it. The gate is a
+//! trigger for the review obligation, and the obligation's answer is sometimes "delete it".
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
