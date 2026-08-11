@@ -15760,3 +15760,91 @@ lock in question returns the same answer for a safe design and an unsafe one.
 wiring §16.86.3 refuses to land. ⊘ Booting the *unwired* build would measure the tree that
 already exists and report it as a route-B result — the `a_falsifier_the_fix_silences` shape.
 **The named wall is the deliverable.**
+
+## §16.87 ★★★★★ THE PLANE LOCK IS RANKED — the deepest concurrency gate can now see its highest-traffic lock
+
+⚠ **STATUS (2026-08-11): LIVE.** Supersedes §16.86.3's wall. Route B is now safe to wire.
+
+### 16.87.1 The gap, stated exactly
+
+`kayfabe_rt::lock::check_acquire` has enforced a total lock order since L1: an out-of-order
+acquire panics **before** the OS-level acquire, so an inversion is diagnosable instead of
+occasionally deadlocking. ⊘ **It only ever saw locks that declared a rank.**
+`kayfabe_device::RegPlane::state` — a bare `std::sync::Mutex<PlaneState>` held across the whole
+command-policy chain on the vCPU's own MMIO trap, the **highest-traffic lock in the device** —
+declared none. So `check_acquire` could not see an inversion involving it, and
+`assert_lock_free` passed **vacuously** while it was held.
+
+### 16.87.2 ★★★ The falsifier, RED first (three arms, and the third is a bonus catch)
+
+`plane_lock_is_visible_to_the_witness.rs`. Before the fix:
+
+```text
+test taking_the_plane_lock_under_a_core_lock_panics ......... FAILED
+    ★★★★★ THE INVERSION WENT UNDETECTED.
+test a_blocking_door_beneath_the_plane_lock_is_now_refused ... FAILED
+test the_shipping_plane_then_core_order_is_still_legal ...... ok      ← known-positive
+```
+
+After: **3/3**. ★ The known-positive arm is load-bearing — a "fix" that ranked the plane
+*above* `Device`, or simply forbade the lock, would pass the first two arms and **break every
+vCPU MMIO trap in the device**.
+★★ The panic assertions match on `"R3 lock-rank violation"` / `"R1 no-blocking-under-lock
+violation"`, not on `is_err()`: a poisoned mutex or an unservable chip would also make
+`is_err()` true while proving nothing about lock order.
+
+### 16.87.3 ★★★★ The choice, argued — rank it, and rank it BELOW `Device`
+
+Three options were on the table.
+
+| option | why not / why |
+|---|---|
+| **Teach the witness about unranked locks** (a sentinel bit) | Buys visibility for `assert_lock_free` but **no ordering** — `check_acquire` still could not have refused `core → plane`, which is the actual defect. |
+| **Make it structural (wrong order does not compile)** | ★ The tree has precedent, but lock *order* is a property of an acquisition **sequence in time**, not of a value's type. Encoding it would mean threading a phantom capability through every guard across three crates — and `check_acquire` already gives a **deterministic panic before the OS acquire**, which is the same diagnosability. |
+| ★ **Rank it (taken)** | The mechanism already exists, is proven, and its enforcement is exactly the missing property. |
+
+⇒ `LockRank::Plane = 0`, and `Device`/`Proc`/`Leaf` renumber to 1/2/3. **`MAX_RANKS` was
+already 4** — its doc called the fourth slot *"headroom, not an invitation — a fourth rank is a
+design change"*. This is that design change, made deliberately.
+
+★★★ **BELOW `Device`, and that is the only assignment that works.** The shipping order is
+**plane → core** (`plane.rs`' `ce_session`), and ranks are acquired in **strictly increasing**
+order, so the plane must sort **first**. Ranking it *above* `Device` — the intuitive reading,
+since the plane is "further out" — would make every vCPU MMIO trap panic. The known-positive
+arm is what makes that a measured claim rather than a lucky guess.
+
+⚠ **The module had to MOVE**, and the move is forced, not tidy: `kayfabe-device` owns rank 0
+while `kayfabe-rt` owns 1-3, and **rt depends on device**, so the vocabulary cannot live in rt
+without a cycle. `lock.rs` moved to `kayfabe-util` — the bottom of the graph — and
+`kayfabe_rt::lock` re-exports every name, so no call site changed. ★ This is the identical
+argument the file already made for the held-mask counter: *"those are two crates … so the
+counter sits at the bottom of the graph where both can see it."*
+
+### 16.87.4 ★★★ The census — validated in BOTH directions before it was believed
+
+Predicate: unranked `std::sync` lock declarations in the crates a vCPU thread runs through.
+⊘ §16.85.3's rule applied to itself — **a census's output means nothing until it has produced a
+non-zero for a known-positive**, and this one had two available:
+
+| known-positive | where | found? |
+|---|---|---|
+| `CeShellState::sysproc_kept` (deleted by w232's fix) | `shim.rs` @ `b6c5442` | ✅ |
+| `RegPlane::state` (live) | `plane.rs` @ `e683681` | ✅ |
+
+**Result: the enumerated table was already complete** — 12 rows, no unlisted lock. ⇒ the defect
+was never a missing row; it was that **enumeration is not enforcement**. `Mutex<PlaneState>`
+was on the list, correctly described as *"THE HAZARD"*, for five days — and being listed
+stopped nothing.
+
+⊘ **The row is now DELETED, not reworded**, and `unranked_locks.rs`' module doc carries the
+correction **above** the paragraph it corrects. ⚠ Every other row is still unranked and still
+carries only a review obligation: **ranking one lock does not rank the rest.**
+
+### 16.87.5 ⊘ Scope
+
+- ⊘ **`CE-SUBMIT` is still 0.** This rung wires nothing and executes nothing.
+- ★ **It unblocks §16.86**: route B's framebuffer read under a doorbell is now a *checked*
+  order rather than an unwitnessed one — as is anything else that ever needs a framebuffer byte
+  under a core lock, which given the ring and the completion word both live there is likely
+  everything.
+- ⊘ Route A untouched; `alloc_channel_at` and the allocation path not modified.

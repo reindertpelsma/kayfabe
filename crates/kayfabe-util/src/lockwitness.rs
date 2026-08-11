@@ -34,7 +34,8 @@
 //! Nothing in this module names a lock, a rank, or a layer *by role*: it is a bare
 //! per-thread mask over small integer ranks, exactly as generic as this crate's
 //! charter requires (decision #2). The L1 adapter supplies the meaning
-//! (`kayfabe_rt::lock::LockRank`: device = 0, proc = 1, leaf = 2).
+//! (`crate::lock::LockRank`: **plane = 0**, device = 1, proc = 2, leaf = 3 — the plane rank
+//! was added by w236, §16.87; ranks renumbered, the order itself is unchanged).
 //!
 //! ## Not shared state
 //!

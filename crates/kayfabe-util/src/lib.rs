@@ -22,6 +22,7 @@
 
 pub mod interval_map;
 pub mod leafwitness;
+pub mod lock;
 pub mod lockwitness;
 pub mod time;
 

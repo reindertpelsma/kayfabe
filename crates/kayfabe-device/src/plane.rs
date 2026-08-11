@@ -141,6 +141,7 @@ use kayfabe_arch::{Aperture, GmmuFmt};
 use kayfabe_gsp::{CommandPolicy, GspAbi, GspFault, GspFsm, GuestRam, RamRefused};
 use kayfabe_mmu::walker::{FbRead, PtPage, translate, translate_from_entry};
 use kayfabe_trace::Faulted;
+use kayfabe_util::lock::{LockRank, RankedMutex};
 
 use crate::bar2::{BarPdeLog, BarPdes};
 use crate::cpuintr::CpuIntrTree;
@@ -1031,7 +1032,7 @@ pub struct RegPlane {
     /// behind the FSM's lock would serialize the whole thing behind a doorbell being
     /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
     clock: Box<dyn NanoClock>,
-    state: Mutex<PlaneState>,
+    state: RankedMutex<PlaneState>,
     c: PlaneCounters,
     /// ★★ The list of commands nothing answered. Held here as well as inside the chain's
     /// terminal link because a caller that replaces the policy with
@@ -1244,14 +1245,14 @@ pub struct PlanePtBytes<'a> {
 
 impl FbRead for PlanePtBytes<'_> {
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
-        let mut s = self.plane.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.plane.state.lock();
         s.fb.read(phys, buf).is_ok()
     }
 
     /// The same per-address first-writer answer [`FbStoreReader`] gives, so a decode and a
     /// `walk:` line read the identical fact about a page.
     fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
-        let s = self.plane.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.plane.state.lock();
         s.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
     }
 }
@@ -1472,35 +1473,38 @@ impl RegPlane {
             model,
             rom,
             clock,
-            state: Mutex::new(PlaneState {
-                fsm: GspFsm::new(abi),
-                ram: Box::new(RefusingRam),
-                policy: crate::served_policy(
-                    chip,
-                    abi.driver,
-                    // ★ The SAME handles the plane keeps below — see `ChainLogs`' own docs
-                    // for why this is a struct and not four positional arguments.
-                    crate::ChainLogs {
-                        unserviced: unserviced.clone(),
-                        fault_buffer: fault_buffer.clone(),
-                        bar_pdes: bar_pdes.clone(),
-                        gvas_pub: gvas_pub.clone(),
-                        set_page_dir: set_page_dir.clone(),
-                        os_events: os_events.clone(),
-                    },
-                    census.clone(),
-                    links,
-                ),
-                unclaimed: Vec::new(),
-                fb_window: Vec::new(),
-                bar0_window: Bar0Window::new(),
-                cpu_intr: CpuIntrTree::new(),
-                fb: Box::new(RefusingFb),
-                mmu: None,
-                pt_witness: std::collections::BTreeSet::new(),
-                pt_witness_refused: 0,
-                pt_witness_writes: 0,
-            }),
+            state: RankedMutex::new(
+                LockRank::Plane,
+                PlaneState {
+                    fsm: GspFsm::new(abi),
+                    ram: Box::new(RefusingRam),
+                    policy: crate::served_policy(
+                        chip,
+                        abi.driver,
+                        // ★ The SAME handles the plane keeps below — see `ChainLogs`' own docs
+                        // for why this is a struct and not four positional arguments.
+                        crate::ChainLogs {
+                            unserviced: unserviced.clone(),
+                            fault_buffer: fault_buffer.clone(),
+                            bar_pdes: bar_pdes.clone(),
+                            gvas_pub: gvas_pub.clone(),
+                            set_page_dir: set_page_dir.clone(),
+                            os_events: os_events.clone(),
+                        },
+                        census.clone(),
+                        links,
+                    ),
+                    unclaimed: Vec::new(),
+                    fb_window: Vec::new(),
+                    bar0_window: Bar0Window::new(),
+                    cpu_intr: CpuIntrTree::new(),
+                    fb: Box::new(RefusingFb),
+                    mmu: None,
+                    pt_witness: std::collections::BTreeSet::new(),
+                    pt_witness_refused: 0,
+                    pt_witness_writes: 0,
+                },
+            ),
             c: PlaneCounters::default(),
             unserviced,
             census,
@@ -1533,7 +1537,7 @@ impl RegPlane {
     /// ★ The seam stage Q5 plugs into. It takes `&self` and the lock, so a plane already
     /// answering registers on one vCPU can acquire RAM without being rebuilt.
     pub fn set_ram(&self, ram: Box<dyn GuestRam>) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         s.ram = ram;
     }
 
@@ -1553,7 +1557,7 @@ impl RegPlane {
     /// answering registers acquires memory without being rebuilt and without an interval in
     /// which it answers something else.
     pub fn set_fb(&self, fb: Box<dyn FbStore>) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         s.fb = fb;
     }
 
@@ -1574,7 +1578,7 @@ impl RegPlane {
     /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_fb`] and
     /// [`RegPlane::set_ram`].
     pub fn set_mmu(&self, mmu: Box<dyn GmmuFmt>) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         s.mmu = Some(mmu);
     }
 
@@ -1604,7 +1608,7 @@ impl RegPlane {
     /// ⊘ The caller owes [`RegPlane::requeue_pt_witness`] whatever it could not attribute.
     /// A page the core cannot yet name an owner for is **not** a page that was not written.
     pub fn drain_pt_witness(&self) -> Vec<u64> {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         std::mem::take(&mut s.pt_witness).into_iter().collect()
     }
 
@@ -1622,7 +1626,7 @@ impl RegPlane {
     ///
     /// Returns how many were refused for want of room ([`MAX_PT_WITNESS_PAGES`]).
     pub fn requeue_pt_witness(&self, pages: impl IntoIterator<Item = u64>) -> u64 {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let mut refused = 0;
         for p in pages {
             let page = p & !0xfff;
@@ -1642,7 +1646,7 @@ impl RegPlane {
     /// What the CPU transport has written — see [`PtWitnessStats`].
     #[must_use]
     pub fn pt_witness_stats(&self) -> PtWitnessStats {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         PtWitnessStats {
             pending: s.pt_witness.len(),
             writes: s.pt_witness_writes,
@@ -1674,12 +1678,32 @@ impl RegPlane {
     /// Every read here takes and releases the plane's FSM mutex. Handing out a guard-borrowed
     /// reader instead would put the caller's **core** locks beneath it — and although
     /// plane→core is the established order, `unranked_locks.rs`' row for `Mutex<PlaneState>`
-    /// is explicit that *nothing may block beneath it*, and a rank-1 proc mutex can block.
+    /// is explicit that *nothing may block beneath it*, and a proc mutex can block.
+    ///
+    /// ⊘⊘ **CORRECTED `[w236, 2026-08-11]`: the row cited above NO LONGER EXISTS.** This lock
+    /// is [`kayfabe_util::lock::LockRank::Plane`] now, so the hazard the paragraph reasons
+    /// about is **enforced** rather than argued: taking a core lock and then this one panics
+    /// by name (§16.87). ★ The per-read acquisition is still right — it is what keeps the
+    /// guard from spanning caller code — but it is now a *performance* choice, not the only
+    /// thing standing between us and an unwitnessed inversion.
     /// `decode_page` reads a whole page-table page per call (`kayfabe_mmu::walker:573`), so
     /// the measured population is tens of acquisitions per doorbell, not thousands.
     #[must_use]
     pub fn pt_bytes(&self) -> PlanePtBytes<'_> {
         PlanePtBytes { plane: self }
+    }
+
+    /// ★ **Hold the plane's FSM lock explicitly** — for the rank falsifier only.
+    ///
+    /// ⊘ [`Self::pt_bytes`] takes and releases the mutex **per read** by design, so a test
+    /// asking *"what is refused while this lock is HELD"* cannot pose its question through
+    /// it. This is the only door that holds the guard across caller code, and it exists
+    /// because the alternative — asserting on a lock the test cannot hold — is a test that
+    /// passes for the wrong reason.
+    #[cfg(feature = "test-lock-probe")]
+    #[must_use]
+    pub fn state_guard_for_test(&self) -> impl Drop + '_ {
+        self.state.lock()
     }
 
     /// What this device life's doorbell aperture has seen — see [`DoorbellLog`].
@@ -1813,7 +1837,7 @@ impl RegPlane {
         else {
             return crate::ceresolve::CeResolve::NoPublication;
         };
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         resolve_locked(&mut s, self.chip, &root, va, demand)
     }
 
@@ -1852,7 +1876,7 @@ impl RegPlane {
                 crate::ceresolve::CeResolve::NoPublication,
             ));
         };
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let r = resolve_locked(&mut s, self.chip, &root, va, demand);
         let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
             return Err(PublishedVaRead::Unresolved(r));
@@ -1889,7 +1913,7 @@ impl RegPlane {
         else {
             return " walk=NO-PUBLICATION".to_string();
         };
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let PlaneState { mmu, fb, .. } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
@@ -1905,14 +1929,14 @@ impl RegPlane {
     /// sparse store's page map can.
     #[must_use]
     pub fn fb_residency(&self) -> Option<crate::fbwin::FbResidency> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fb.residency()
     }
 
     /// Whether the framebuffer holds a page for `phys` — [`None`] when it cannot say.
     #[must_use]
     pub fn fb_is_resident(&self, phys: u64) -> Option<bool> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fb.is_resident(phys)
     }
 
@@ -1921,7 +1945,7 @@ impl RegPlane {
     /// converse of `is_resident` is now the question, and why it is a **forward** search.
     #[must_use]
     pub fn fb_resident_frames(&self) -> Option<Vec<u64>> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fb.resident_frames()
     }
 
@@ -1929,7 +1953,7 @@ impl RegPlane {
     /// cannot say **or** nothing is resident there. See [`crate::fbwin::FbWriter`].
     #[must_use]
     pub fn fb_page_origin(&self, phys: u64) -> Option<crate::fbwin::FbPageOrigin> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fb.page_origin(phys)
     }
 
@@ -1957,7 +1981,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         s.fb.read(phys, buf).map_err(|e| e.why)
     }
 
@@ -1986,7 +2010,7 @@ impl RegPlane {
         &self,
         pdb_phys: u64,
     ) -> Result<crate::ceresolve::VasRoot, crate::ceresolve::CeResolve> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         let Some(fmt) = s.mmu.as_deref() else {
             return Err(crate::ceresolve::CeResolve::NoMmuPort);
         };
@@ -2006,7 +2030,7 @@ impl RegPlane {
         va: u64,
         demand: crate::ceresolve::Demand,
     ) -> crate::ceresolve::CeResolve {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         resolve_locked(&mut s, self.chip, root, va, demand)
     }
 
@@ -2024,7 +2048,7 @@ impl RegPlane {
         buf: &mut [u8],
         demand: crate::ceresolve::Demand,
     ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let r = resolve_locked(&mut s, self.chip, root, va, demand);
         let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
             return Err(PublishedVaRead::Unresolved(r));
@@ -2052,7 +2076,7 @@ impl RegPlane {
     /// and therefore takes no [`crate::ceresolve::Demand`].
     #[must_use]
     pub fn walk_trace_from_root(&self, root: &crate::ceresolve::VasRoot, va: u64) -> String {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let PlaneState { mmu, fb, .. } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
@@ -2118,7 +2142,7 @@ impl RegPlane {
         demand: crate::ceresolve::Demand,
         f: impl FnOnce(&mut CePlane<'_>) -> R,
     ) -> R {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let mut ce = CePlane {
             state: &mut s,
             chip: self.chip,
@@ -2139,7 +2163,7 @@ impl RegPlane {
 
     /// Install a command policy, replacing the C-baseline echo.
     pub fn set_policy(&self, policy: Box<dyn CommandPolicy>) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         s.policy = policy;
     }
 
@@ -2312,7 +2336,7 @@ impl RegPlane {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
-        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = state.lock();
         // ★★★ EXHAUSTIVE, for the same reason.
         let PlaneState {
             fsm,
@@ -2455,7 +2479,7 @@ impl RegPlane {
     /// a register one.
     #[must_use]
     pub fn unclaimed_sample(&self) -> Vec<(u8, u64)> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.unclaimed.clone()
     }
 
@@ -2466,14 +2490,14 @@ impl RegPlane {
     /// every entry is a byte of device memory this port did not carry.
     #[must_use]
     pub fn fb_window_sample(&self) -> Vec<(FbWindow, u64)> {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fb_window.clone()
     }
 
     /// The FSM's current boot phase, so a test can assert the guest moved it.
     #[must_use]
     pub fn phase(&self) -> kayfabe_gsp::BootPhase {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fsm.phase()
     }
 
@@ -2492,7 +2516,7 @@ impl RegPlane {
     /// handing out a guard would let a caller hold the register plane shut.
     #[must_use]
     pub fn gsp_state(&self) -> kayfabe_gsp::GspFsm {
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         s.fsm.clone()
     }
 
@@ -2504,7 +2528,7 @@ impl RegPlane {
     /// the previous guest's page tables, instance blocks and semaphores, readable by the
     /// next one through this very window — see [`FbStore::device_reset`].
     pub fn device_reset(&self) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         s.fsm.device_reset();
         s.bar0_window = Bar0Window::new();
         s.fb.device_reset();
@@ -2631,7 +2655,7 @@ impl RegPlane {
             && self.chip.bar0_window_reg != 0
             && off == self.chip.bar0_window_reg
         {
-            let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let s = self.state.lock();
             return ReadOutcome::Bar0Window(mask(u64::from(s.bar0_window.raw()), size));
         }
         // ★★★ THE INTERRUPT TREE, asked before the GSP model for the same reason the
@@ -2642,7 +2666,7 @@ impl RegPlane {
         if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
             && let Some(reg) = crate::cpuintr::decode(off)
         {
-            let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let s = self.state.lock();
             return ReadOutcome::CpuIntr(mask(u64::from(s.cpu_intr.read(reg)), size));
         }
         // ★★★ Device memory, not a register — asked BEFORE the GSP model and before the
@@ -2653,7 +2677,7 @@ impl RegPlane {
         if let Some(w) = self.chip.fb_window(bar, off) {
             return self.fb_read(w, off, size);
         }
-        let s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let s = self.state.lock();
         match s.fsm.mmio_read_with(self.model.as_ref(), bar, off) {
             None => ReadOutcome::Unclaimed,
             Some(Ok(v)) => ReadOutcome::Gsp(mask(v, size)),
@@ -2880,7 +2904,7 @@ impl RegPlane {
 
     /// Serve one framebuffer-window read.
     fn fb_read(&self, w: FbWindow, off: u64, size: u8) -> ReadOutcome {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let phys = match self.window_phys(w, off, false, &mut s) {
             Ok(p) => p,
             Err(WindowRefusal::NoAddressModel) => return ReadOutcome::FbWindow(w),
@@ -2913,7 +2937,7 @@ impl RegPlane {
     /// ([`WriteOutcome::fb_refusal`], with the address and the reason). The `Result` from
     /// [`FbStore::write`] is matched, never discarded.
     fn fb_write(&self, w: FbWindow, off: u64, size: u8, val: u64) -> WriteOutcome {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let phys = match self.window_phys(w, off, true, &mut s) {
             Ok(p) => p,
             Err(WindowRefusal::NoAddressModel) => {
@@ -3092,7 +3116,7 @@ impl RegPlane {
             && off == self.chip.bar0_window_reg
         {
             self.c.bar0_window_writes.fetch_add(1, Ordering::Relaxed);
-            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut s = self.state.lock();
             // ⊘ The whole word, truncated to 32 bits and NOT masked to the two fields this
             // port decodes: the guest reads this register back and re-writes it, so a bit
             // we do not understand must survive the round trip. Dropping it would be a
@@ -3134,7 +3158,7 @@ impl RegPlane {
             && let Some(reg) = crate::cpuintr::decode(off)
         {
             self.c.cpu_intr_accesses.fetch_add(1, Ordering::Relaxed);
-            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut s = self.state.lock();
             let fired = s.cpu_intr.write(reg, val as u32);
             drop(s);
             // ⊘ `out_of_range` raises NOTHING: the guest named a leaf row this chip does
@@ -3209,7 +3233,7 @@ impl RegPlane {
             return WriteOutcome::nothing();
         }
         self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         // ⊘ `cpu_intr` is deliberately NOT bound here any more: §16.77.1 moved the only
         // consumer to `RegPlane::ring_doorbell`, and leaving the binding would have let a
         // future edit re-latch a vector from a register write without anyone noticing that
@@ -3384,7 +3408,7 @@ impl RegPlane {
         // contract is that no plane lock is held across `port.ring(token)`, and this runs
         // after it — the same shape `announce_completion` uses one statement up.
         let raise_os_event = if matches!(report, DoorbellReport::ServedLocally { .. }) {
-            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut s = self.state.lock();
             let PlaneState {
                 fsm, ram, cpu_intr, ..
             } = &mut *s;
@@ -3531,7 +3555,7 @@ impl RegPlane {
             self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
             return false;
         };
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         let outcome = s.cpu_intr.latch(vector);
         drop(s);
         if outcome.out_of_range {
@@ -3549,14 +3573,14 @@ impl RegPlane {
     }
 
     fn note_unclaimed(&self, bar: u8, off: u64) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         if s.unclaimed.len() < UNCLAIMED_SAMPLE_MAX && !s.unclaimed.contains(&(bar, off)) {
             s.unclaimed.push((bar, off));
         }
     }
 
     fn note_fb_window(&self, w: FbWindow, off: u64) {
-        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = self.state.lock();
         if s.fb_window.len() < UNCLAIMED_SAMPLE_MAX && !s.fb_window.contains(&(w, off)) {
             s.fb_window.push((w, off));
         }

@@ -5,6 +5,22 @@
 //! that nobody ranked is invisible to that mask, so `assert_lock_free` returns cleanly while
 //! one is held.
 //!
+//! ## ⊘⊘ CORRECTED `[w236, 2026-08-11]` — THE HEADLINE ROW IS GONE, because it was RANKED
+//!
+//! Everything below described `Mutex<PlaneState>` as this list's worst entry. **It is no longer
+//! on the list**: it is [`kayfabe_util::lock::LockRank::Plane`] (rank 0) as of w236, so
+//! `check_acquire` now refuses `core → plane` deterministically and `assert_lock_free` fires
+//! beneath it. ⇒ **the 2026-08-06 paragraph below is a HISTORICAL account, not a live hazard**,
+//! and the "review obligation" it hands off is discharged for that lock by
+//! `plane_lock_is_visible_to_the_witness.rs`.
+//!
+//! ★ Why it was ranked **below** `Device` rather than above: the shipping order is
+//! **plane → core**, and ranks are acquired in strictly increasing order, so the plane must
+//! sort first or every vCPU MMIO trap would panic. §16.87.
+//!
+//! ⚠ **What did NOT change**: every other row here is still unranked and still carries only a
+//! review obligation. Ranking one lock does not rank the rest.
+//!
 //! ⚠ `[measured]` 2026-08-06 — this is not hypothetical. A control-path host call was being
 //! designed against that assert while the caller held `RegPlane`'s unranked FSM mutex
 //! (`kayfabe-device/src/plane.rs:802`, taken at `:1922` across the whole policy chain). It
@@ -51,9 +67,12 @@ use std::path::{Path, PathBuf};
 /// there cannot wedge the guest's register plane. Widening the scope would trade the property
 /// this list actually asserts for a longer list nobody reads.
 ///
-/// ⚠ The entry that matters is `plane.rs`'s `Mutex<PlaneState>`: it is held across the whole
-/// policy chain on the vCPU's own MMIO trap, so anything blocking beneath it blocks every
-/// other vCPU's register access too.
+/// ⊘⊘ **CORRECTED `[w236, 2026-08-11]`, above the sentence it corrects.** This doc used to
+/// say *"the entry that matters is `plane.rs`'s `Mutex<PlaneState>`"*. **That row is gone** —
+/// the lock is now `LockRank::Plane` and is enforced, not merely enumerated (§16.87).
+/// ⇒ ★ The rows that remain are the ones nobody has ranked **yet**, and none of them is held
+/// across a policy chain on the MMIO trap. That is a weaker list than it used to be, which is
+/// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     (
         "crates/kayfabe-qemu-raw/src/shim.rs",
@@ -66,13 +85,6 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "PoolGate backpressure. BLOCKING IS ITS PURPOSE — a caller waits here for a worker to \
          come back. Safe because every ranked guard is dropped before entry (device.rs:332-398 \
          re-enters from the top after the wait).",
-    ),
-    (
-        "crates/kayfabe-device/src/plane.rs",
-        "Mutex<PlaneState>",
-        "★★★ THE HAZARD. The register-plane FSM mutex, taken at :1922 on the vCPU MMIO trap and \
-         held across the entire policy chain. ⊘ NOTHING may block beneath it: a wait here stalls \
-         every vCPU's register access, and the R1 witness will not say so.",
     ),
     (
         "crates/kayfabe-device/src/plane.rs",

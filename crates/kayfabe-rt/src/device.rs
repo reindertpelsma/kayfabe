@@ -8,9 +8,9 @@
 //! redesign**:
 //!
 //! ```text
-//!   RankedRwLock<DeviceState>                       // rank 0 — the device lock
+//!   RankedRwLock<DeviceState>                       // rank 1 — the device lock
 //!     DeviceState {
-//!         spine:  Spine,                            // device-global, guarded by rank 0
+//!         spine:  Spine,                            // device-global, guarded by rank 1
 //!         system: RankedMutex<Proc>,                // rank 1
 //!         procs:  BTreeMap<ProcId, RankedMutex<Proc>>, // rank 1, one per proc
 //!     }
@@ -30,9 +30,9 @@
 //! ## The two op shapes (R2/R4)
 //!
 //! - **spine op** (apply / pump / poll / drained / reap / source registration) —
-//!   device *write* guard, procs via [`ExclusiveProcs`]. One lock, rank 0.
+//!   device *write* guard, procs via [`ExclusiveProcs`]. One lock, rank 1.
 //! - **per-proc op** (doorbell, publish, resolve, gate, source dispatch) — device
-//!   *read* guard (rank 0) → look up that proc's `RankedMutex` → `lock()` it
+//!   *read* guard (rank 1) → look up that proc's `RankedMutex` → `lock()` it
 //!   (rank 1) → the act phase. Two locks, in rank order, one per rank — the
 //!   route/act split (R4) the core's `kayfabe-fwd` signatures already factor.
 //!
@@ -97,12 +97,12 @@ pub enum LockMode {
     /// Bit-for-bit the stress-proven single-lock shape — L1-M1's shipping
     /// configuration (§3.4 staging).
     Degenerate,
-    /// Spine ops write-lock the device; per-proc ops take device-read (rank 0)
+    /// Spine ops write-lock the device; per-proc ops take device-read (rank 1)
     /// then that proc's mutex (rank 1). The #14-gate configuration.
     Sharded,
 }
 
-/// The rank-0-guarded state: the spine plus the per-proc lock cells.
+/// The rank-1-guarded state: the spine plus the per-proc lock cells.
 struct DeviceState {
     /// Device-global spine (graph, routing maps, targets, delivery, sources).
     spine: Spine,

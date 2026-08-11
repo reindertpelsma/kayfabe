@@ -28,3 +28,8 @@ kayfabe-mmu.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+# ★ Exposes `RegPlane::state_guard_for_test` — the rank falsifier needs to HOLD the plane
+# mutex, which `pt_bytes` deliberately never does. Off in every shipping build.
+test-lock-probe = []
