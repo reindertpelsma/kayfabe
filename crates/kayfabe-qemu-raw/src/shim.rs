@@ -7853,8 +7853,9 @@ pub fn pt_witness_exec_from(value: Option<&str>) -> Result<bool, (Status, &'stat
 fn selected_pt_witness_exec() -> bool {
     match std::env::var_os(PT_WITNESS_EXEC_ENV) {
         None => false,
-        Some(v) => pt_witness_exec_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
-            .unwrap_or(false),
+        Some(v) => {
+            pt_witness_exec_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false)
+        }
     }
 }
 
