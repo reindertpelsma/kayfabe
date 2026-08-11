@@ -20,8 +20,9 @@ use kayfabe_fwd::{
     CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
     forward_engine_object, handle_doorbell, publish_backing, route_control,
 };
+use kayfabe_isolate::RmError;
 use kayfabe_mocks::{
-    MockArch, MockIsolateFactory, RmVerb, SharedRecorder, mock_classes as mc, mock_ctrl,
+    MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbKind, mock_classes as mc, mock_ctrl,
 };
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
@@ -108,6 +109,108 @@ fn case1_forwards_engine_object_on_own_isolate() {
     assert_eq!(
         obj_iso, chan_iso,
         "channel + object forwarded on the SAME isolate"
+    );
+}
+
+/// ★★★★★ **§16.105 — A REFUSED engine-object alloc NAMES THE HOST CHANNEL IT WAS
+/// ATTEMPTED ON**, and the channel it names has already been destroyed.
+///
+/// # Why this cannot be done at the caller, which is the whole point of the change
+///
+/// `EngineObjectPlan::channel` is `None` for a first forward — the host channel is built
+/// **inside the same verb chain** — and the chain's unwind then frees it. Both facts are
+/// asserted below, so a future "simplification" that drops
+/// [`kayfabe_isolate::VerbFailure::on`] and reads the plan instead fails here rather than
+/// silently printing `NONE` on the only path that matters.
+///
+/// ⊘ The status is [`RmError::Other`]`(0x40)` = `NV_ERR_INVALID_STATE`, the exact code a
+/// real GA106 returns for this alloc (`kfifoRunlistSetId_GM107` → `chandesConstruct_IMPL`,
+/// `ogkm-580: channel_descendant.c:243-252`).
+#[test]
+fn a_refused_engine_object_alloc_names_the_host_channel_it_was_attempted_on() {
+    let (mut gpu, recorder) = compute_gpu();
+    recorder
+        .lock()
+        .expect("recorder")
+        .fail_kinds
+        .insert(VerbKind::AllocEngineObject, RmError::Other(0x40));
+
+    let got = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
+        .expect_err("the host refuses the object alloc");
+
+    let log = recorder.lock().expect("recorder");
+    let chan_h = log
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { handle, .. } => Some(*handle),
+            _ => None,
+        })
+        .expect("the host channel WAS built — inside this same chain");
+    assert_eq!(
+        got,
+        FwdFault::Rm {
+            err: RmError::Other(0x40),
+            on: Some(chan_h),
+        },
+        "the refusal names the host channel the alloc was attempted on"
+    );
+    // ⊘ …and that channel no longer exists. This is the falsifier for "just read it off
+    // the plan afterwards": there is nothing left to read it off.
+    assert!(
+        log.log
+            .iter()
+            .any(|(_, v)| matches!(v, RmVerb::Free { obj } if *obj == chan_h)),
+        "the unwind freed the channel it named — the handle is an identity, not a lease"
+    );
+}
+
+/// ★ The other half of §16.105, and the one that keeps `on` honest: when the channel was
+/// **already** materialized, the refusal names THAT channel and the unwind frees nothing.
+///
+/// Without this arm, `on` could be "whatever this chain just allocated" and every
+/// assertion in the test above would still pass.
+#[test]
+fn a_refusal_on_an_existing_channel_names_it_and_frees_nothing() {
+    let (mut gpu, recorder) = compute_gpu();
+    let first = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::COMPUTE, &[])
+        .expect("the first forward materializes the channel");
+    assert!(first.materialized_channel);
+    let chan_h = recorder
+        .lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { handle, .. } => Some(*handle),
+            _ => None,
+        })
+        .expect("host channel allocated");
+
+    recorder
+        .lock()
+        .expect("recorder")
+        .fail_kinds
+        .insert(VerbKind::AllocEngineObject, RmError::Other(0x40));
+    let got = forward_engine_object(&mut gpu, GpuId::ZERO, GR_VCHID, mc::DMA_COPY, &[])
+        .expect_err("the second class is refused on the existing channel");
+
+    assert_eq!(
+        got,
+        FwdFault::Rm {
+            err: RmError::Other(0x40),
+            on: Some(chan_h),
+        },
+        "the refusal names the channel that already existed"
+    );
+    assert!(
+        !recorder
+            .lock()
+            .expect("recorder")
+            .log
+            .iter()
+            .any(|(_, v)| matches!(v, RmVerb::Free { obj } if *obj == chan_h)),
+        "a live channel is not freed by a refusal that merely happened on it"
     );
 }
 

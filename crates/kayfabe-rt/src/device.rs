@@ -1797,6 +1797,10 @@ impl SharedDevice {
             let Ok(reply) = executed else {
                 let failure = executed.expect_err("matched Err");
                 let err = failure.err;
+                // ★ §16.105 — read BEFORE `failure.orphans` is moved out below. See
+                // [`kayfabe_isolate::VerbFailure::on`] for why nothing downstream can
+                // re-derive it.
+                let on = failure.on;
                 // ★ What the worker's own cancel seam OBSERVED, read here — lock-free,
                 // on the thread that ran the verb — so `FwdFault::Cancelled` can name
                 // the truth (§7.3) without `RmError::Interrupted` growing a payload the
@@ -1845,7 +1849,7 @@ impl SharedDevice {
                         gpu,
                         worker: wid,
                     },
-                    e if self.proc_is_live(staged.proc) => FwdFault::Rm(e),
+                    e if self.proc_is_live(staged.proc) => FwdFault::Rm { err: e, on },
                     _ => FwdFault::Stale(kayfabe_fwd::Stale::Proc(staged.proc)),
                 });
             };

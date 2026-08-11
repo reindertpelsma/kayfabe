@@ -281,10 +281,15 @@ fn a_backend_that_ignores_the_placement_request_is_refused_and_unwound() {
     .expect_err("a mapping we cannot address must never be adopted");
     assert_eq!(
         err,
-        FwdFault::Rm(RmError::PlacementRefused {
-            want: SHARED_VA.0,
-            got: SHARED_VA.0 + 0x1000,
-        }),
+        FwdFault::Rm {
+            err: RmError::PlacementRefused {
+                want: SHARED_VA.0,
+                got: SHARED_VA.0 + 0x1000,
+            },
+            // ⊘ A publish names no host channel — §16.105's `on` is the engine-object
+            // alloc's, and nothing else fills it in.
+            on: None,
+        },
         "the refusal names both addresses — a bare failure would not say what went wrong"
     );
 

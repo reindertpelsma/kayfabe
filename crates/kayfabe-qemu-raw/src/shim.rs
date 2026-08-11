@@ -2638,20 +2638,62 @@ impl core::fmt::Debug for SharedObjectModel {
     }
 }
 
-/// ★★★★★ §16.80 — how many engine-object forward outcomes get printed per process life.
+/// ★★★★★ §16.80 — how many engine-object forward outcomes get printed per process life,
+/// **PER OUTCOME CLASS** (forwards and refusals have separate budgets).
 ///
 /// ⊘ Bounded, because a hostile guest can issue allocs in a loop and a diagnostic that a
 /// guest can turn into unbounded host output is a denial-of-service with a log format.
 /// 32 is effectively unbounded for the real workload — `cuCtxCreate` allocs **one**
 /// `AMPERE_COMPUTE_B` and one `AMPERE_DMA_COPY_B` — and the running totals on every line
 /// mean the bound costs detail, never the count.
+///
+/// # ⊘⊘ §16.105 — IT USED TO BE ONE SHARED BUDGET, AND THAT BUDGET IS WHY "12" EXISTS
+///
+/// `[measured 2026-08-11, boots `w250_acbb9a3_hostdmesg2` and `w251_acbb9a3_cel_hostdmesg`,
+/// both committed under `traces/guest_boots/`]` — the two boots printed **18 forwards and
+/// 12 refusals**, the 12th refusal is `seen=32`, and it carries the bound marker. The host
+/// driver logged **14** `chandesConstruct_IMPL` failures in the same boots. Three separate
+/// hypotheses were raised and refuted for that 14-vs-12 gap (§16.102, §16.103) while the
+/// difference was **the last two refusals falling off the end of a shared 32-line budget**:
+/// 18 + 14 = 32 + 2.
+///
+/// ⇒ ★★ **A count read off a TRUNCATED census is a count of what was printed.** The old
+/// wording — *"the bound costs detail, never the count"* — was true only of `[seen=…]`,
+/// which nothing downstream ever read; the numbers people actually counted were the lines.
+/// Splitting the budget per class makes the real workload's whole shape (18 + 14) printable
+/// while leaving a hostile guest bounded at 2 × 32 lines.
+///
+/// ⊘ It does not make truncation impossible — it makes it **visible per class**, because
+/// the marker is now emitted for whichever class hits its own bound.
 const ENGINE_FWD_REPORT_MAX: u64 = 32;
 
-/// Outcomes seen / of those, forwarded / of those, reported. Process-global for
+/// Outcomes seen / of those, forwarded / of those, refused. Process-global for
 /// [`ISOLATE_PLANE_ENV`]'s stated reason: this is bench instrumentation on a
 /// one-device-per-process bench, and a per-device home costs a shim-ABI change.
 static ENGINE_FWD_SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static ENGINE_FWD_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★ §16.105 — counted in its OWN atomic rather than derived as `seen - ok`, so the
+/// per-class budget below is exact under the concurrent `Relaxed` increments rather than
+/// approximately right (`no_instant_at_which_it_is_live_and_complete`).
+static ENGINE_FWD_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ §16.105 — how a refusal names **the host channel the alloc was attempted on**.
+///
+/// The identity comes out of [`kayfabe_isolate::VerbFailure::on`], through
+/// `kayfabe_fwd::FwdFault::Rm { on, .. }`; see that field for why nothing on this side can
+/// re-derive it (the channel is materialized inside the failing chain and freed by its
+/// unwind).
+///
+/// ⊘ **`NONE` is printed, never omitted.** A missing field reads as "no channel involved";
+/// an explicit `NONE` says the fault carried no target, which is a different fact and is
+/// the one that distinguishes *"the object alloc failed on a channel"* from *"the chain
+/// never got as far as a channel"*.
+fn refusal_host_chan(fault: &kayfabe_rt::FwdFault) -> String {
+    match fault {
+        kayfabe_rt::FwdFault::Rm { on: Some(h), .. } => format!("{:#x}", h.raw()),
+        _ => "NONE".to_string(),
+    }
+}
 
 /// Print one engine-object forward outcome into the boot's own `run_<tag>_qemu.log`.
 ///
@@ -2668,12 +2710,19 @@ fn report_engine_forward(
 ) {
     use std::sync::atomic::Ordering::Relaxed;
     let seen = ENGINE_FWD_SEEN.fetch_add(1, Relaxed) + 1;
-    let ok = if out.is_ok() {
-        ENGINE_FWD_OK.fetch_add(1, Relaxed) + 1
-    } else {
-        ENGINE_FWD_OK.load(Relaxed)
+    // ★ `nth` is this outcome's index WITHIN ITS OWN CLASS — the number the per-class
+    // budget is spent against. See `ENGINE_FWD_REPORT_MAX`.
+    let (ok, refused, nth) = match out {
+        Ok(_) => {
+            let ok = ENGINE_FWD_OK.fetch_add(1, Relaxed) + 1;
+            (ok, ENGINE_FWD_REFUSED.load(Relaxed), ok)
+        }
+        Err(_) => {
+            let refused = ENGINE_FWD_REFUSED.fetch_add(1, Relaxed) + 1;
+            (ENGINE_FWD_OK.load(Relaxed), refused, refused)
+        }
     };
-    if seen > ENGINE_FWD_REPORT_MAX {
+    if nth > ENGINE_FWD_REPORT_MAX {
         return;
     }
     let verdict = match out {
@@ -2684,17 +2733,20 @@ fn report_engine_forward(
             f.materialized_channel,
             f.reused,
         ),
-        Err(e) => format!("REFUSED {e:?}"),
+        // ★★★ §16.105 — `host_chan=` is the JOIN KEY, printed beside the variant rather
+        // than only inside its `Debug`, so a reader can group refusals by the channel they
+        // were attempted on without parsing a derive.
+        Err(e) => format!("REFUSED host_chan={} {e:?}", refusal_host_chan(e)),
     };
     eprintln!(
         "kayfabe: ENGINE-OBJECT class={:#06x} client={:#x} parent={:#x} params={}B \
-         → {verdict} [seen={seen} forwarded={ok}]{}",
+         → {verdict} [seen={seen} forwarded={ok} refused={refused}]{}",
         class.0,
         client.0,
         parent.0,
         params_len,
-        if seen == ENGINE_FWD_REPORT_MAX {
-            " ⊘ REPORT BOUND REACHED — later outcomes are counted, not printed"
+        if nth == ENGINE_FWD_REPORT_MAX {
+            " ⊘ REPORT BOUND REACHED for this outcome class — later ones are counted, not printed"
         } else {
             ""
         },

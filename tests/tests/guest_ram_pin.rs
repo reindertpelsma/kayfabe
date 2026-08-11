@@ -365,7 +365,13 @@ fn an_isolate_with_no_guest_ram_refuses_by_name_and_unwinds_what_it_built() {
         .pin_guest_ram(GPU, PDB, RING_VA, grant())
         .expect_err("refused");
     assert!(
-        matches!(e, kayfabe_fwd::FwdFault::Rm(RmError::GuestRamUnavailable)),
+        matches!(
+            e,
+            kayfabe_fwd::FwdFault::Rm {
+                err: RmError::GuestRamUnavailable,
+                ..
+            }
+        ),
         "a deployment fact, refused by its own name rather than as a host resource \
          condition: {e:?}"
     );

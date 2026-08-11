@@ -737,7 +737,26 @@ pub enum FwdFault {
         len: u64,
     },
     /// The isolate's RM backend refused the op.
-    Rm(RmError),
+    ///
+    /// ★★★ **§16.105 — it now carries WHICH HOST OBJECT the refused verb was issued
+    /// against**, and that is a struct variant rather than a second `RmOn`-shaped
+    /// variant on purpose: two variants meaning *"RM refused"* is the
+    /// `two_projections_of_one_fact_disagreeing` shape, and every matcher that tests for
+    /// one would silently miss the other. Making it a field forces every construction
+    /// site to say what it knows, which is what the compiler is for.
+    Rm {
+        /// Why RM refused.
+        err: RmError,
+        /// ★ The host object the refused verb named as its target — for a Case-1
+        /// engine-object alloc, **the host channel it was attempted on**. `None` for
+        /// every verb that has no such target, and for a chain that failed before
+        /// reaching one.
+        ///
+        /// ⊘ **An identity, never a live handle**: for the engine-object alloc whose
+        /// channel was materialized inside the same chain, this handle has already been
+        /// freed by the unwind that produced the failure. See [`kayfabe_isolate::VerbFailure::on`].
+        on: Option<HostHandle>,
+    },
     /// A class the guest tried to alloc as an engine object is not one this arch
     /// recognizes as an engine — MISS=FAULT (never guessed into a GR/CE object).
     NotAnEngine(ClassId),
@@ -938,7 +957,9 @@ impl From<AddressFault> for FwdFault {
 }
 impl From<RmError> for FwdFault {
     fn from(e: RmError) -> Self {
-        FwdFault::Rm(e)
+        // ⊘ `on: None` — a bare `RmError` arrived with no verb context, so there is
+        // nothing to name. Never guessed from the caller's surroundings.
+        FwdFault::Rm { err: e, on: None }
     }
 }
 
@@ -1258,6 +1279,8 @@ fn round_trip<T>(
         // it is checked back in.
         Err(f) => {
             let reason = worker.cancel_observed();
+            // ★ Read BEFORE `f.orphans` is moved out below — see `VerbFailure::on`.
+            let on = f.on;
             // ★★ §7.5 — a WEDGED worker cannot dispose of anything: it is still inside
             // the ioctl that wedged it. Asking it to would produce a second wedge, so
             // the chain's intermediates go straight onto the proc's `pending_release`
@@ -1276,7 +1299,7 @@ fn round_trip<T>(
                     gpu,
                     worker: worker.id(),
                 },
-                e => verb_fault(pid, e, reason),
+                e => verb_fault(pid, e, reason, on),
             })
         }
     };
@@ -1322,14 +1345,27 @@ pub fn dispose_on(worker: &mut Worker, orphans: Orphans) -> Orphans {
 /// recorded why — a backend bug, not a guest condition — so it is surfaced as
 /// [`CancelReason::GuestSignal`], the §5.4 founding case, rather than guessed at or
 /// silently re-typed as a host failure.
+///
+/// ★★★ **§16.105 — `on` is [`kayfabe_isolate::VerbFailure::on`], passed through.** It is
+/// a parameter rather than something re-derived here because the only party that ever
+/// knew it is the worker: a Case-1 engine-object alloc that materializes its own channel
+/// has `EngineObjectPlan::channel == None`, and the unwind frees the channel it built. ⊘
+/// It is deliberately dropped on the `Interrupted` arm: a cancellation is a fact about
+/// the *requester*, and naming a host object there would invite the reading that the host
+/// object is what went wrong.
 #[must_use]
-pub fn verb_fault(proc: ProcId, err: RmError, reason: Option<CancelReason>) -> FwdFault {
+pub fn verb_fault(
+    proc: ProcId,
+    err: RmError,
+    reason: Option<CancelReason>,
+    on: Option<HostHandle>,
+) -> FwdFault {
     match err {
         RmError::Interrupted => FwdFault::Cancelled {
             proc,
             reason: reason.unwrap_or(CancelReason::GuestSignal),
         },
-        e => FwdFault::Rm(e),
+        e => FwdFault::Rm { err: e, on },
     }
 }
 

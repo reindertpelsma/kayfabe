@@ -751,7 +751,10 @@ fn g4_a_cancelled_verb_surfaces_cancelled_not_an_rm_failure() {
         rec.lock().expect("recorder").fail_next = Some(RmError::NoMemory);
         assert_eq!(
             device.publish_backing(GPU, PDB, VA2, 0x1000),
-            Err(FwdFault::Rm(RmError::NoMemory)),
+            Err(FwdFault::Rm {
+                err: RmError::NoMemory,
+                on: None
+            }),
             "({mode:?}) a real host refusal is still Rm(..)"
         );
     }
@@ -904,8 +907,17 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
 #[test]
 fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
     let p = ProcId(7);
+    // ★ §16.105 — the attempted-on handle is carried on EVERY arm's input, so this test
+    // also witnesses that the `Interrupted` arm DROPS it (a cancellation is a fact about
+    // the requester, and naming a host object there would misattribute the cause).
+    let attempted = HostHandle::new(IsolateId::new(0, GPU), 0xcafe_0031);
     assert_eq!(
-        kayfabe_fwd::verb_fault(p, RmError::Interrupted, Some(CancelReason::ProcExit)),
+        kayfabe_fwd::verb_fault(
+            p,
+            RmError::Interrupted,
+            Some(CancelReason::ProcExit),
+            Some(attempted)
+        ),
         FwdFault::Cancelled {
             proc: p,
             reason: CancelReason::ProcExit
@@ -913,7 +925,7 @@ fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
     );
     // …and with nothing observed it still names a reason rather than guessing.
     assert_eq!(
-        kayfabe_fwd::verb_fault(p, RmError::Interrupted, None),
+        kayfabe_fwd::verb_fault(p, RmError::Interrupted, None, None),
         FwdFault::Cancelled {
             proc: p,
             reason: CancelReason::GuestSignal
@@ -926,8 +938,19 @@ fn g4_verb_fault_maps_only_interrupted_to_cancelled() {
         RmError::Other(3),
     ] {
         assert_eq!(
-            kayfabe_fwd::verb_fault(p, e, Some(CancelReason::ProcExit)),
-            FwdFault::Rm(e),
+            kayfabe_fwd::verb_fault(p, e, Some(CancelReason::ProcExit), None),
+            FwdFault::Rm { err: e, on: None },
+            "{e:?}"
+        );
+        // ★ …and when the worker DID name what it was issued against, that identity
+        // reaches the fault unchanged. Without this arm the parameter could be ignored
+        // and every assertion above would still pass.
+        assert_eq!(
+            kayfabe_fwd::verb_fault(p, e, Some(CancelReason::ProcExit), Some(attempted)),
+            FwdFault::Rm {
+                err: e,
+                on: Some(attempted)
+            },
             "{e:?}"
         );
     }
