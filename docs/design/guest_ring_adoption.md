@@ -177,6 +177,22 @@ it fetches from an unbound VA (that is a host fault, `Xid 31 FAULT_PDE`, and it 
 failure mode the pin exists to prevent). ⇒ The ordering constraint that survives is
 **pin-before-doorbell**, which is already where the pin is.
 
+### 3.4 ★★ AMENDED BY `R32` (2026-08-11) — an ordering constraint DOES exist, and it is USERD's
+
+⊘ Everything in §3.3 stands: the **ring** imposes no ordering on the channel's birth.
+`w233`/`R32` then measured the other object and found one that does.
+
+On a GSP-client GPU with USERD in **sysmem**, `kchannelAllocOrDescribeInstMem` **zeroes the
+512 bytes** at alloc time (`ogkm-580: …/fifo/kernel_channel.c:2342-2358` →
+`kfifoSetupUserD_GM107`), and `R32` measured it landing on a caller-supplied `OS_DESCRIPTOR`
+block: **all 512 bytes zeroed, attributable to the `userdOffset` we named**. ⇒ if the block
+handed in is the guest's **live** USERD, the host channel's birth **wipes the guest's own
+cursors**, silently, with the alloc still returning `NV_OK`.
+
+⇒ ★ *"born at the first doorbell"* is safe for the **queue** and unsafe for the **cursors**,
+because the first doorbell is by definition after the guest wrote `GP_PUT`. See
+`docs/design/guest_userd_adoption.md` §3.1 for the three shapes that resolve it.
+
 ---
 
 ## 4. ⊘ What is NOT built, said plainly

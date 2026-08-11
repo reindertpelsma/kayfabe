@@ -2698,10 +2698,12 @@ impl UserdBlock {
     /// Classify `words` against the two dictated patterns.
     fn classify(words: &[u32], bases: &[u32]) -> UserdBlock {
         let all_zero = words.iter().all(|w| *w == 0);
-        let poison_base = bases
-            .iter()
-            .copied()
-            .find(|b| words.iter().enumerate().all(|(i, w)| *w == b.wrapping_add(i as u32)));
+        let poison_base = bases.iter().copied().find(|b| {
+            words
+                .iter()
+                .enumerate()
+                .all(|(i, w)| *w == b.wrapping_add(i as u32))
+        });
         let first_odd = if all_zero || poison_base.is_some() {
             None
         } else {
@@ -3810,7 +3812,12 @@ impl HostRmBackend {
         ring_at: Option<GpuVa>,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at), UserdSource::Ours)
+        self.alloc_channel_in(
+            range,
+            engine_type,
+            RingSource::Ours(ring_at),
+            UserdSource::Ours,
+        )
     }
 
     /// ★★★★★ **W233 / R32 — a host channel whose USERD is the CALLER'S.**
@@ -3874,7 +3881,12 @@ impl HostRmBackend {
         ring: GuestRing,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), UserdSource::Ours)
+        self.alloc_channel_in(
+            range,
+            engine_type,
+            RingSource::Guest(ring),
+            UserdSource::Ours,
+        )
     }
 
     /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
@@ -5426,8 +5438,7 @@ impl HostRmBackend {
         let poison = |at: u64, base: u32| -> Result<(), RmError> {
             let mut image = [0u8; USERD_BYTES];
             for i in 0..USERD_BYTES / 4 {
-                image[4 * i..4 * i + 4]
-                    .copy_from_slice(&base.wrapping_add(i as u32).to_le_bytes());
+                image[4 * i..4 * i + 4].copy_from_slice(&base.wrapping_add(i as u32).to_le_bytes());
             }
             region
                 .write_from(HostOffset::new(at), &image)
@@ -5479,7 +5490,10 @@ impl HostRmBackend {
                     // tell the two writers apart.
                     let after = (read(USERD_AT)?, read(CONTROL_AT)?);
                     let _ = me.free(chan);
-                    (Ok::<(u64, (UserdBlock, UserdBlock)), RmError>((token, after)), cursors)
+                    (
+                        Ok::<(u64, (UserdBlock, UserdBlock)), RmError>((token, after)),
+                        cursors,
+                    )
                 }
                 Err(e) => (Err(e), Err(RmError::Other(NOT_ON_THIS_RUNG))),
             };

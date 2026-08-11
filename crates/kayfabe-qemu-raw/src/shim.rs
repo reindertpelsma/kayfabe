@@ -4211,7 +4211,11 @@ impl SharedDoorbell {
             && !self.local_ce_is_the_only_executor
             && facts.proc == kayfabe_core::gpu::Gpu::SYSTEM_PROC
         {
-            let mut n = self.ce.sysproc_kept.lock().unwrap_or_else(|e| e.into_inner());
+            let mut n = self
+                .ce
+                .sysproc_kept
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             *n += 1;
             eprintln!(
                 "kayfabe: CE-SYSPROC-KEPT #{n} token={token:#010x} proc={} chan={} \
@@ -7499,9 +7503,7 @@ pub fn forwarding_plane_owns_ce(
     has_vas_pdb: bool,
     local_ce_is_the_only_executor: bool,
 ) -> bool {
-    has_vas_pdb
-        && !local_ce_is_the_only_executor
-        && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
+    has_vas_pdb && !local_ce_is_the_only_executor && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
 }
 
 /// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.

@@ -2394,7 +2394,8 @@ fn guest_userd_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // ★★ THE ESTABLISHING READ, first and gating. A fresh memfd reads as ZERO, so
     // "the block is zero afterwards" is true of a run in which RM did nothing at all.
     // Every arm below is vacuous if this one does not hold.
-    let established = e.established.0.is_poison(0xA5D0_0000) && e.established.1.is_poison(0x5B0B_0000);
+    let established =
+        e.established.0.is_poison(0xA5D0_0000) && e.established.1.is_poison(0x5B0B_0000);
     if established {
         println!(
             "ok    R32 establish       = both blocks read back the DICTATED poison before RM \
@@ -2457,7 +2458,11 @@ fn guest_userd_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
              guest's own cursors would SURVIVE a host channel alloc, which is what a shadow \
              channel needs",
             e.userd_at,
-            if e.channel.is_ok() { "NV_OK" } else { "a refusal" }
+            if e.channel.is_ok() {
+                "NV_OK"
+            } else {
+                "a refusal"
+            }
         );
     } else {
         println!(
@@ -2498,7 +2503,11 @@ fn guest_userd_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                      attribution, but the DIFFERENCE between the two arms is itself a \
                      measurement of what RM validates about the offset",
                     e.control_at,
-                    if e.channel.is_ok() { "accepted" } else { "also refused" }
+                    if e.channel.is_ok() {
+                        "accepted"
+                    } else {
+                        "also refused"
+                    }
                 );
                 e.channel.is_err()
             }
@@ -2528,10 +2537,7 @@ fn guest_userd_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                         "FAIL  R32 control         = the effect did NOT track the number. arm A \
                          zeroed={zeroed}; arm C left {:#x} as {:?} and {:#x} as {:?}. ⇒ the \
                          readback is reporting on an address other than the one it names",
-                        e.userd_at,
-                        e.control_after_arm.0,
-                        e.control_at,
-                        e.control_after_arm.1
+                        e.userd_at, e.control_after_arm.0, e.control_at, e.control_after_arm.1
                     );
                     false
                 }
