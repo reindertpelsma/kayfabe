@@ -35,7 +35,7 @@ use crate::capability::{
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::guestsysinfo::VgxVersion;
-use crate::notifier::{ChannelNotifierWire, ChannelUserdWire};
+use crate::notifier::{ChannelEngineWire, ChannelNotifierWire, ChannelUserdWire};
 use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
 use crate::vbios::VbiosWire;
 use crate::view::{
@@ -320,6 +320,17 @@ pub struct DriverAbiTable {
     /// an unopened boundary carries `None` rather than a guess. See
     /// [`ChannelUserdWire`] for why USERD is the canary the ring cannot be.
     channel_userd: Option<ChannelUserdWire>,
+    /// ★★★★★ Where this boundary's `NV_CHANNEL_ALLOC_PARAMS` puts **`engineType`** — the
+    /// only wire field that separates a GR channel from a CE channel, since both are
+    /// `AMPERE_CHANNEL_GPFIFO_A`.
+    ///
+    /// Same seam and same rule as [`Self::channel_notifier`] and [`Self::channel_userd`]:
+    /// the field sits past [`CHANNEL_ALLOC_PREFIX`] in the region 610 shifts by eight
+    /// bytes, so reading it is a right a *read* tree buys and an unopened boundary carries
+    /// `None` rather than a guess. See [`ChannelEngineWire`] for what a `None` costs: the
+    /// core falls back to the engine-object refinement it used before this field existed,
+    /// which is exactly the pre-2026-08-11 behaviour and not a new failure.
+    channel_engine: Option<ChannelEngineWire>,
     /// Why this entry exists — kept in the data so a reader of the table sees
     /// the boundary's justification without leaving the file.
     pub note: &'static str,
@@ -346,6 +357,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_engine: None,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
     },
@@ -376,6 +388,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_engine: None,
         note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
                _STATE, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:906)",
@@ -396,6 +409,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_engine: None,
         note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
                NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:933)",
@@ -416,6 +430,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_engine: None,
         note: "capability-only boundary: +8 allocation classes and \
                +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
@@ -436,6 +451,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_engine: None,
         note: "capability-only boundary: +6 allocation classes and the two \
                DRAM-encryption controls at their PRE-575 numbers, no layout change \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
@@ -474,6 +490,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_engine: None,
         note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
                here and re-adds them one number lower, and adds \
                THERMAL_SYSTEM_EXECUTE_V2 (version.go:1036-1053). CAPS_575_51_02 says all \
@@ -501,6 +518,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         }),
         channel_notifier: Some(ChannelNotifierWire::V580),
         channel_userd: Some(ChannelUserdWire::V580),
+        channel_engine: Some(ChannelEngineWire::V580),
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
     },
@@ -524,6 +542,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         }),
         channel_notifier: Some(ChannelNotifierWire::V610),
         channel_userd: Some(ChannelUserdWire::V610),
+        channel_engine: Some(ChannelEngineWire::V610),
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
                MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
@@ -1045,6 +1064,33 @@ impl DriverAbiTable {
     pub fn decode_channel_userd(&self, bytes: &[u8]) -> Result<Option<(u32, u64)>, AbiError> {
         match self.channel_userd {
             Some(wire) => wire.decode(bytes),
+            None => Ok(None),
+        }
+    }
+
+    /// ★★★★★ Decode the channel's declared **engine** — `NV_CHANNEL_ALLOC_PARAMS.engineType`
+    /// narrowed to the vocabulary the core speaks.
+    ///
+    /// Separate from [`Self::decode_channel_alloc_facts`] for
+    /// [`Self::decode_channel_error_notifier`]'s reason and by the same mechanism: the
+    /// field lives past the +32 prefix, in the region 610 moves.
+    ///
+    /// `Ok(None)` merges three situations, and the merge is safe **only** because the
+    /// consumer's fallback is the behaviour that shipped before this decoder existed: the
+    /// boundary has no pinned layout, the params stopped short, or the declared code is one
+    /// this port does not recognise. ⊘ It is never *"the guest declared GR"* — that is the
+    /// `dlen=0` lesson, and it is the reading that would make this decoder worse than its
+    /// absence, because the guess it replaced is at least labelled a guess.
+    ///
+    /// # Errors
+    /// [`AbiError`] from the primitive readers, which the wire's own length check makes
+    /// unreachable.
+    pub fn decode_channel_engine(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Option<kayfabe_arch::ids::EngineKind>, AbiError> {
+        match self.channel_engine {
+            Some(wire) => wire.decode_kind(bytes),
             None => Ok(None),
         }
     }

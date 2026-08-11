@@ -1519,6 +1519,208 @@ fn osdesc_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bool {
     verdict
 }
 
+/// ★★★ R32 — **is ONE memfd, mapped TWICE, ONE memory on BOTH sides of the GPU?**
+///
+/// The two properties the framebuffer-memfd design rests on and that R25 does not test:
+///
+/// - **J1** — write through mapping `S`, describe mapping `I`, and the GPU reads `S`'s
+///   bytes. R25 writes and describes through the *same* mapping. The shell holds the BAR
+///   view and the isolate holds the described view; they are different mappings, and a
+///   design proved only through the described one has not been proved.
+/// - **J2** — the GPU **writes** and a CPU mapping **reads it back**. ★ This is the
+///   direction `cuCtxCreate` is stuck on: the guest's completion semaphore is a word the
+///   engine writes and the guest reads, and every byte of OS_DESCRIPTOR evidence this tree
+///   owns runs the other way.
+///
+/// ```text
+///   ok    R32 cpu join      = the two mappings are one memory  -> J1/J2 can be asked
+///   ok    R32 forward       = the GPU read what the OTHER mapping wrote  -> J1
+///   ok    R32 reverse       = the OTHER mapping read what the GPU wrote  -> J2
+///   ??    R32 reverse       = ... got P1 ... -> the engine did nothing; we read our own seed
+///   FAIL  R32 osdesc        = alloc refused <RmError>                    -> R25's arm B
+/// ```
+///
+/// ⊘ **Not a boot.** This measures the primitive a framebuffer-memfd port would be built
+/// on, so that a failed boot could not be blamed on it. It says nothing about the shell's
+/// BAR trap path, about sparsity, or about two *processes*.
+fn fb_memfd_join_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bool {
+    // ⊘ Deliberately neither R25's constant nor R26's: two rungs sharing an address cannot
+    // show that the address was honoured rather than remembered.
+    const AT: GpuVa = GpuVa(0x3_0140_0000);
+
+    println!(
+        "info  R32 fb-join probe  = GPU {gpu}, euid {} — ONE sealed memfd mapped TWICE; \
+         mapping I described to RM at {:#018x}; every byte written and read through \
+         mapping S{}",
+        kayfabe_linux_raw::geteuid(),
+        AT.0,
+        match seed {
+            OsDescSeed::BeforeDescribe => "",
+            OsDescSeed::Never =>
+                "  [NEGATIVE CONTROL: S is never written, so a FORWARD MISMATCH AT WORD 0 \
+                 is the PASS — while the REVERSE arm, which does not depend on the seed, \
+                 must still hold]",
+        }
+    );
+
+    let vas = match rm.alloc_vaspace() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R32 vaspace        = {e:?} (the rung needs its own address space)");
+            return false;
+        }
+    };
+
+    let verdict = match rm.prove_fb_memfd_join(vas, AT, seed) {
+        // ★ The join is judged FIRST and on its own, because if the two mappings are not
+        // one memory then neither J1 nor J2 is a question about the GPU at all.
+        Ok(e) if !e.joined() => {
+            println!(
+                "FAIL  R32 cpu join       = mapping S read {:#010x} before and {:#010x} after \
+                 mapping I wrote {:#010x} — the two mappings are NOT one memory, so nothing \
+                 downstream is about the GPU. This run is VOID.",
+                e.join_before, e.join_after, e.join_want
+            );
+            false
+        }
+        // ★ Arm C next: a mapping that landed elsewhere makes every byte downstream a
+        // statement about a different address.
+        Ok(e) if !e.placed_as_asked() => {
+            println!(
+                "FAIL  R32 place          = asked {:#018x}, RM chose {:#018x} — address \
+                 identity does not extend to OS_DESCRIPTOR",
+                e.asked_va, e.got_va
+            );
+            false
+        }
+        Ok(e) => {
+            println!(
+                "ok    R32 cpu join       = mapping S read {:#010x} before and {:#010x} after \
+                 mapping I wrote it — ONE memory, measured with no GPU in the path",
+                e.join_before, e.join_after
+            );
+
+            // ── J1 ──────────────────────────────────────────────────────────────────
+            let fwd = if e.seeded {
+                if e.forward_reached() {
+                    println!(
+                        "ok    R32 forward (J1)   = placed at {:#018x} AS ASKED, CE retired \
+                         (sem {:#010x}), dst[0] {:#010x} -> {:#010x}, and {} of {} bytes \
+                         compared EQUAL — the GPU read what the OTHER mapping wrote",
+                        e.got_va,
+                        e.fwd_submit.semaphore,
+                        e.fwd_before,
+                        e.fwd_after,
+                        e.fwd_bytes_compared,
+                        e.bytes
+                    );
+                    true
+                } else {
+                    println!(
+                        "??    R32 forward (J1)   = sem {:#010x} (want {:#010x}) GP_GET {} \
+                         GP_PUT {}, before {:#010x} (sentinel {:#010x}), after {:#010x}, \
+                         compared {} of {}, mismatch {:?}",
+                        e.fwd_submit.semaphore,
+                        e.fwd_payload,
+                        e.fwd_submit.gp_get,
+                        e.fwd_submit.gp_put,
+                        e.fwd_before,
+                        e.fwd_sentinel,
+                        e.fwd_after,
+                        e.fwd_bytes_compared,
+                        e.bytes,
+                        e.fwd_mismatch
+                    );
+                    false
+                }
+            } else {
+                // ⊘ The negative control, judged by its own rule: everything up to the
+                // bytes must hold and the bytes must DISAGREE at word 0 with a ZERO, which
+                // is what an unwritten memfd holds. A `forward_reached()` here would mean
+                // the comparison is not reading what it claims to.
+                match e.fwd_mismatch {
+                    Some(m) if m.word == 0 && m.got == 0 => {
+                        println!(
+                            "ok    R32 neg control    = S was never written and the CE \
+                             delivered {:#010x} at word 0 where the pattern would have been \
+                             {:#010x} — the forward comparison CAN fail, so a seeded run's \
+                             agreement is a measurement",
+                            m.got, m.want
+                        );
+                        true
+                    }
+                    other => {
+                        println!(
+                            "FAIL  R32 neg control    = an unwritten memfd produced {other:?} \
+                             — the expected reading is a mismatch at word 0 with got=0. \
+                             Either the comparison is not reading S's pages, or something \
+                             wrote them."
+                        );
+                        false
+                    }
+                }
+            };
+
+            // ── J2 ──────────────────────────────────────────────────────────────────
+            // ★ Judged the same way in BOTH arms: the reverse copy does not depend on the
+            // seed, so the negative control must still produce it. A control that turned
+            // this arm off would be testing a different chain.
+            let expected_before = if e.seeded { e.rev_first } else { 0 };
+            let rev = if e.reverse_reached() {
+                println!(
+                    "ok    R32 reverse (J2)   = CE retired (sem {:#010x}); the memfd held \
+                     {:#010x} through S immediately before the copy and {} of {} bytes read \
+                     back through S EQUAL afterwards — ★ the GPU WROTE and the OTHER \
+                     mapping READ IT. This is the completion-semaphore direction.",
+                    e.rev_submit.semaphore, e.rev_before, e.rev_bytes_compared, e.bytes
+                );
+                true
+            } else {
+                let named = match e.rev_mismatch {
+                    Some(m) if m.got == 0 => "the copy never landed",
+                    Some(m) if m.got == expected_before => {
+                        "★ we are reading the memfd's PREVIOUS contents — the engine \
+                         retired and wrote nothing these pages can see"
+                    }
+                    Some(_) => "the bytes are neither the old contents nor the new ones",
+                    None => {
+                        "no mismatch was recorded, so the failure is upstream of the \
+                             comparison (semaphore, non-vacuity, or a short loop)"
+                    }
+                };
+                println!(
+                    "??    R32 reverse (J2)   = sem {:#010x} (want {:#010x}) GP_GET {} \
+                     GP_PUT {}, memfd-through-S before the copy {:#010x} (expected \
+                     {:#010x}), compared {} of {}, mismatch {:?} — {named}",
+                    e.rev_submit.semaphore,
+                    e.rev_payload,
+                    e.rev_submit.gp_get,
+                    e.rev_submit.gp_put,
+                    e.rev_before,
+                    expected_before,
+                    e.rev_bytes_compared,
+                    e.bytes,
+                    e.rev_mismatch
+                );
+                false
+            };
+            fwd && rev
+        }
+        // ★ R25's arm B, unchanged in meaning: "refused" and "refused with
+        // NV_ERR_INSUFFICIENT_PERMISSIONS" are different findings.
+        Err(e) => {
+            println!(
+                "FAIL  R32 osdesc         = alloc/map/copy refused {e:?} — if this is euid 0 \
+                 the framebuffer-memfd route needs another door; if it is not, the SANDBOX \
+                 POLICY is the subject and this is a FINDING, not a licence to relax it."
+            );
+            false
+        }
+    };
+    let _ = rm.free(vas);
+    verdict
+}
+
 /// ★★★ R26 — **will host RM build a channel whose GPFIFO ring is at an address WE
 /// dictate, and will the engine then FETCH from it?**
 ///
@@ -2595,6 +2797,7 @@ fn main() -> std::process::ExitCode {
     let mut want_atomics = false;
     let mut want_pce_mask = false;
     let mut want_osdesc: Option<OsDescSeed> = None;
+    let mut want_fb_join: Option<OsDescSeed> = None;
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
     let mut want_guest_pin = false;
@@ -2628,6 +2831,10 @@ fn main() -> std::process::ExitCode {
             "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
             // ⊘ The negative control. Same chain, unwritten memfd, inverted verdict.
             "--osdesc-negative" => want_osdesc = Some(OsDescSeed::Never),
+            "--fb-memfd-join" => want_fb_join = Some(OsDescSeed::BeforeDescribe),
+            // ⊘ The negative control. Same chain, `S` never written, forward verdict
+            // inverted — and the reverse arm must still hold.
+            "--fb-memfd-join-negative" => want_fb_join = Some(OsDescSeed::Never),
             "--dictated-ring" => want_dictated_ring = true,
             // ⊘ The negative control. Same address, occupied first, inverted verdict.
             "--dictated-ring-negative" => want_dictated_neg = true,
@@ -2811,6 +3018,23 @@ fn main() -> std::process::ExitCode {
         );
         let ok = dictated_ring_probe(&mut rm, gpu);
         println!("done — dictated-ring probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★ R32 runs here and RETURNS, for R25's reason exactly: it builds its own memfd, its
+    // own two mappings, its own descriptor and its own `Vas`, so every refusal attributes
+    // to the join and cannot be an earlier rung's channel or mapping.
+    if let Some(seed) = want_fb_join {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = fb_memfd_join_probe(&mut rm, gpu, seed);
+        println!("done — fb-memfd-join probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {

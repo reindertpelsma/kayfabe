@@ -389,6 +389,40 @@ pub fn channel_params(flags: u32, h_ctx_share: u32, h_vaspace: u32) -> Vec<u8> {
     channel_params_sized(flags, h_ctx_share, h_vaspace, 32)
 }
 
+/// ★★★★★ A channel's params **with `engineType` declared** — the field that separates a
+/// GR channel from a CE channel, since both are `AMPERE_CHANNEL_GPFIFO_A`.
+///
+/// `[src]` `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`. Continuing
+/// the map above for the **580** tree only:
+///
+/// ```text
+/// NvHandle hUserdMemory[8];   // +32   8 x NvU32 = 32 bytes, ends at +64
+/// NvU64    userdOffset[8];    // +64   8 x NvU64 = 64 bytes, ends at +128
+/// NvU32    engineType;        // +128  ★
+/// ```
+///
+/// ★★ **The literal `128` is hand-transcribed here on purpose, and that is this file's
+/// whole job.** `kayfabe_abi::notifier::ChannelEngineWire::V580` states the same offset;
+/// if this builder imported it, a test using both would assert only that the decoder can
+/// read what it wrote. Two independent transcriptions is the point (the same discipline
+/// the module header claims: *"a second pair of eyes"*).
+///
+/// ⊘ **580 only.** The 610 tree puts the field at +136, and a fixture that emitted one
+/// length while claiming to be version-neutral would be asserting one tree's opinion —
+/// exactly what [`channel_params_sized`]'s own note refuses. A 610 fixture needs its own
+/// builder, not a parameter on this one.
+#[must_use]
+pub fn channel_params_580_with_engine(
+    flags: u32,
+    h_ctx_share: u32,
+    h_vaspace: u32,
+    engine_type: u32,
+) -> Vec<u8> {
+    let mut p = channel_params_sized(flags, h_ctx_share, h_vaspace, 132);
+    put32(&mut p, 128, engine_type);
+    p
+}
+
 /// `rpc_gsp_rm_control_v03_00` — the `GSP_RM_CONTROL` body.
 ///
 /// `[src]` `ogkm-610: src/nvidia/generated/g_rpc-structures.h:1423-1435` and
@@ -1029,6 +1063,28 @@ impl RpcScript {
             h_object,
             AMPERE_CHANNEL_GPFIFO_A,
             &channel_params(flags, h_ctx_share, h_vaspace),
+        )
+    }
+
+    /// An `AMPERE_CHANNEL_GPFIFO_A` alloc that **declares its engine** — 580 params, with
+    /// `engineType` at +128. See [`channel_params_580_with_engine`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn channel_on_engine(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        flags: u32,
+        h_ctx_share: u32,
+        h_vaspace: u32,
+        engine_type: u32,
+    ) -> &mut RpcScript {
+        self.alloc(
+            h_client,
+            h_parent,
+            h_object,
+            AMPERE_CHANNEL_GPFIFO_A,
+            &channel_params_580_with_engine(flags, h_ctx_share, h_vaspace, engine_type),
         )
     }
 

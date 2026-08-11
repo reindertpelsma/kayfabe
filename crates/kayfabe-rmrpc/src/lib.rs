@@ -1395,6 +1395,15 @@ fn translate_alloc(
                     va: c.gp_fifo_offset,
                     entries: c.gp_fifo_entries,
                 }),
+                // ★★★★★ THE ENGINE THE GUEST DECLARED, decoded past the prefix for the
+                // notifier's reason and by the same mechanism
+                // (`kayfabe_abi::notifier::ChannelEngineWire`). Until this line the engine
+                // was **derived** — `Arch::classify` guesses `GrCompute` off a class id
+                // that every GPFIFO channel shares, and the engine-object refinement
+                // rewrites it afterwards — while the guest had already stated it, in this
+                // very message, four fields further down. ⊘ `Ok(None)` is honest ignorance
+                // and falls back to that derivation; see `AllocFacts::channel_engine`.
+                channel_engine: abi.decode_channel_engine(params)?,
                 ..Default::default()
             }
         }

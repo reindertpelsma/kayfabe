@@ -1642,11 +1642,19 @@ pub trait RingWorkingSet {
     /// Is `va` forward-populated in **this channel's own `Vas`** *and* host-published
     /// into that `Vas`'s own host VAS?
     ///
-    /// `false` is the total answer for *both* misses — no mapping at all, and a mapping
-    /// with no host publication. The caller (`kayfabe-fwd`) owns the exact fault
-    /// vocabulary and re-derives which one it was from the offending VA in
-    /// [`UngatedVa`], so this predicate stays a predicate and the two crates cannot
-    /// drift into two classifications of the same miss.
+    /// `false` is the total answer for *every* reason a ring may not name this VA — no
+    /// mapping at all; a mapping with no host publication; and (since 2026-08-11) a
+    /// mapping whose host object is a **second** memory shadowing one the guest already
+    /// reaches, which `kayfabe_mmu::BackingBytes::ShadowsGuestMemory` calls *"fatal for
+    /// anything the guest reads or polls, which is what a ring is"*. The caller
+    /// (`kayfabe-fwd`) owns the exact fault vocabulary and re-derives which one it was
+    /// from the offending VA in [`UngatedVa`], so this predicate stays a predicate and the
+    /// two crates cannot drift into two classifications of one refusal.
+    ///
+    /// ⚠ **The list is not closed here and must not be read as closed.** This trait says
+    /// only *"an address plane was consulted"*; what makes a VA admissible is
+    /// `kayfabe_fwd::ring_admits`, and a reader who takes this sentence as the definition
+    /// is reading the collapse instead of the authority.
     fn is_host_published(&self, va: GpuVa) -> bool;
 }
 
