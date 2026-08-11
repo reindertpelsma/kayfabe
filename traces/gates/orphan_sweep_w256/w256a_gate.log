@@ -1,0 +1,270 @@
+GATE_START 2026-08-11T08:47:16+00:00 rev=a517402 scope=abi
+== baseline: cargo check --workspace
+   baseline OK
+== candidates enumerated: 276  (inherent `pub fn` only; trait methods are out of scope)
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:163  scalar
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:173  scalar_with
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:267  align_up
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:301  lay_out
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:371  lay_out_union
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:404  snake_case
+   ORPHAN  crates/kayfabe-abi/gen/src/ctype.rs:436  pascal_case
+   ORPHAN  crates/kayfabe-abi/gen/src/emit.rs:20  module
+   ORPHAN  crates/kayfabe-abi/gen/src/parse.rs:72  strip_comments
+   ORPHAN  crates/kayfabe-abi/gen/src/parse.rs:124  find_aggregates
+   ORPHAN  crates/kayfabe-abi/gen/src/parse.rs:228  parse_fields
+   ORPHAN  crates/kayfabe-abi/gen/src/parse.rs:395  scan_defines
+   ORPHAN  crates/kayfabe-abi/gen/src/parse.rs:472  scan_drf_ranges
+   ORPHAN  crates/kayfabe-abi/gen/src/parse.rs:516  scan_macro_list
+   ORPHAN  crates/kayfabe-abi/src/businfo.rs:211  from_field
+   ORPHAN  crates/kayfabe-abi/src/businfo.rs:285  decode
+   ORPHAN  crates/kayfabe-abi/src/businfo.rs:395  decode
+   ORPHAN  crates/kayfabe-abi/src/businfo.rs:531  decode_bus_info_pairs
+   ORPHAN  crates/kayfabe-abi/src/businfo.rs:561  build_request
+   ORPHAN  crates/kayfabe-abi/src/capability.rs:539  all_controls
+   ORPHAN  crates/kayfabe-abi/src/capability.rs:547  all_classes
+   ORPHAN  crates/kayfabe-abi/src/capability.rs:556  all_denied_controls
+   ORPHAN  crates/kayfabe-abi/src/capability.rs:561  all_denied_classes
+   ORPHAN  crates/kayfabe-abi/src/cecaps.rs:358  caps_for
+   ORPHAN  crates/kayfabe-abi/src/cecaps.rs:631  decode_ce_get_all_physical_caps
+   ORPHAN  crates/kayfabe-abi/src/cepce.rs:250  decode_ce_pce_mask
+   ORPHAN  crates/kayfabe-abi/src/chipinfo.rs:272  packed_device_id
+   ORPHAN  crates/kayfabe-abi/src/chipinfo.rs:279  packed_sub_device_id
+   ORPHAN  crates/kayfabe-abi/src/deviceinfo.rs:361  pri_base_for
+   ORPHAN  crates/kayfabe-abi/src/eventnotify.rs:527  is_empty
+   ORPHAN  crates/kayfabe-abi/src/falconinfo.rs:250  count
+   ORPHAN  crates/kayfabe-abi/src/faultbuffer.rs:203  pages_for
+   ORPHAN  crates/kayfabe-abi/src/faultbuffer.rs:388  pages_for
+   ORPHAN  crates/kayfabe-abi/src/faultbuffer.rs:411  type_is_known
+   ORPHAN  crates/kayfabe-abi/src/faultbuffer.rs:531  pages_for
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:295  bus_width_bits
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:308  fbp_count
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:327  l2_cache_size_u32
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:344  ram_type_checked
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:383  fbp_mask
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:399  ltc_count_checked
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:420  lts_count
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:637  decode_fb_info_pairs
+   ORPHAN  crates/kayfabe-abi/src/fbinfo.rs:667  build_request
+   ORPHAN  crates/kayfabe-abi/src/fmbpromote.rs:189  is_destroy
+   ORPHAN  crates/kayfabe-abi/src/fmbpromote.rs:209  len
+   ORPHAN  crates/kayfabe-abi/src/fmbpromote.rs:218  is_empty
+   ORPHAN  crates/kayfabe-abi/src/fmbsize.rs:160  decode_fault_method_buffer_size
+   ORPHAN  crates/kayfabe-abi/src/generated/classes.rs:486  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/classes.rs:519  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/classes.rs:728  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/classes.rs:986  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/classes.rs:1176  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/classes.rs:1202  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/ctrl.rs:222  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/ctrl.rs:451  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/ctrl.rs:481  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/nvos.rs:1435  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/nvos.rs:1465  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/nvos.rs:1700  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/nvos.rs:1732  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/rpc.rs:298  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/rpc.rs:329  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/rpc.rs:564  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/rpc.rs:595  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/rpc.rs:881  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/rpc.rs:916  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:425  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:452  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:585  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:610  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:911  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:951  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:1296  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:1324  encode_into
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:1496  decode
+   ORPHAN  crates/kayfabe-abi/src/generated/vbios.rs:1524  encode_into
+   ORPHAN  crates/kayfabe-abi/src/gpuatomics.rs:232  decode_gpu_atomics
+   ORPHAN  crates/kayfabe-abi/src/gpuinfo.rs:324  decode_gpu_info_pairs
+   ORPHAN  crates/kayfabe-abi/src/gpuinfo.rs:354  build_request
+   ORPHAN  crates/kayfabe-abi/src/grfsinfo.rs:175  physical_gpc
+   ORPHAN  crates/kayfabe-abi/src/grfsinfo.rs:234  answer
+   ORPHAN  crates/kayfabe-abi/src/grfsinfo.rs:401  build_request
+   ORPHAN  crates/kayfabe-abi/src/grfsinfo.rs:420  decode_answers
+   ORPHAN  crates/kayfabe-abi/src/grinfo.rs:210  validate
+   ORPHAN  crates/kayfabe-abi/src/grstatic.rs:515  num_sm
+   ORPHAN  crates/kayfabe-abi/src/grstatic.rs:528  validate
+   ORPHAN  crates/kayfabe-abi/src/gspfeatures.rs:315  as_str
+   ORPHAN  crates/kayfabe-abi/src/gspfeatures.rs:414  decode_gsp_get_features
+   ORPHAN  crates/kayfabe-abi/src/gsslegacy.rs:206  params_size
+   ORPHAN  crates/kayfabe-abi/src/guest_os.rs:230  from_config_name
+   ORPHAN  crates/kayfabe-abi/src/host_driver.rs:140  parse
+   ORPHAN  crates/kayfabe-abi/src/host_driver.rs:167  is_encoded_for
+   ORPHAN  crates/kayfabe-abi/src/l2evict.rs:280  writes_back
+   ORPHAN  crates/kayfabe-abi/src/l2evict.rs:286  waits_for_fb_pull
+   ORPHAN  crates/kayfabe-abi/src/notifier.rs:243  decode
+   ORPHAN  crates/kayfabe-abi/src/notifier.rs:357  decode
+   ORPHAN  crates/kayfabe-abi/src/oracle.rs:490  truncated_row
+   ORPHAN  crates/kayfabe-abi/src/oracle.rs:652  capture_reliance
+   ORPHAN  crates/kayfabe-abi/src/oracle.rs:790  empty_capture_row
+   ORPHAN  crates/kayfabe-abi/src/rc.rs:167  encode_into
+   ORPHAN  crates/kayfabe-abi/src/regaccessmap.rs:284  publishes_map
+   ORPHAN  crates/kayfabe-abi/src/smcmode.rs:164  decode_smc_mode
+   ORPHAN  crates/kayfabe-abi/src/submit.rs:613  is_modelled
+   ORPHAN  crates/kayfabe-abi/src/submit.rs:902  encode_into
+   ORPHAN  crates/kayfabe-abi/src/submit.rs:2457  encode_into
+   ORPHAN  crates/kayfabe-abi/src/submit.rs:2698  encode_into
+   ORPHAN  crates/kayfabe-abi/src/transcribed.rs:228  decode
+   ORPHAN  crates/kayfabe-abi/src/transcribed.rs:255  encode_into
+   ORPHAN  crates/kayfabe-abi/src/transcribed.rs:510  decode
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:583  vbios_wire
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:620  gsp_element_size_min
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:635  map_dma_wire
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:642  map_dma_size
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:655  map_dma_status_offset
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:681  decode_alloc_v1
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:702  decode_alloc_v2
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:729  decode_alloc
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:744  decode_control
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:780  decode_map_memory_dma
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:825  write_map_memory_dma_result
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:872  decode_unmap_memory_dma
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:1490  is_client_root_class
+   ORPHAN  crates/kayfabe-abi/src/versions.rs:1530  rpc_payload
+   ORPHAN  crates/kayfabe-abi/src/view.rs:508  is_sysmem
+   ORPHAN  crates/kayfabe-abi/src/view.rs:711  classify_promote_entry
+   ORPHAN  crates/kayfabe-abi/src/view.rs:813  len
+   ORPHAN  crates/kayfabe-abi/src/view.rs:822  is_empty
+   ORPHAN  crates/kayfabe-abi/src/wire.rs:250  offset_of
+
+== orphan gate: 129 of 276 checked have no caller outside their own crate
+   crates/kayfabe-abi/gen/src/ctype.rs:163  scalar
+   crates/kayfabe-abi/gen/src/ctype.rs:173  scalar_with
+   crates/kayfabe-abi/gen/src/ctype.rs:267  align_up
+   crates/kayfabe-abi/gen/src/ctype.rs:301  lay_out
+   crates/kayfabe-abi/gen/src/ctype.rs:371  lay_out_union
+   crates/kayfabe-abi/gen/src/ctype.rs:404  snake_case
+   crates/kayfabe-abi/gen/src/ctype.rs:436  pascal_case
+   crates/kayfabe-abi/gen/src/emit.rs:20  module
+   crates/kayfabe-abi/gen/src/parse.rs:72  strip_comments
+   crates/kayfabe-abi/gen/src/parse.rs:124  find_aggregates
+   crates/kayfabe-abi/gen/src/parse.rs:228  parse_fields
+   crates/kayfabe-abi/gen/src/parse.rs:395  scan_defines
+   crates/kayfabe-abi/gen/src/parse.rs:472  scan_drf_ranges
+   crates/kayfabe-abi/gen/src/parse.rs:516  scan_macro_list
+   crates/kayfabe-abi/src/businfo.rs:211  from_field
+   crates/kayfabe-abi/src/businfo.rs:285  decode
+   crates/kayfabe-abi/src/businfo.rs:395  decode
+   crates/kayfabe-abi/src/businfo.rs:531  decode_bus_info_pairs
+   crates/kayfabe-abi/src/businfo.rs:561  build_request
+   crates/kayfabe-abi/src/capability.rs:539  all_controls
+   crates/kayfabe-abi/src/capability.rs:547  all_classes
+   crates/kayfabe-abi/src/capability.rs:556  all_denied_controls
+   crates/kayfabe-abi/src/capability.rs:561  all_denied_classes
+   crates/kayfabe-abi/src/cecaps.rs:358  caps_for
+   crates/kayfabe-abi/src/cecaps.rs:631  decode_ce_get_all_physical_caps
+   crates/kayfabe-abi/src/cepce.rs:250  decode_ce_pce_mask
+   crates/kayfabe-abi/src/chipinfo.rs:272  packed_device_id
+   crates/kayfabe-abi/src/chipinfo.rs:279  packed_sub_device_id
+   crates/kayfabe-abi/src/deviceinfo.rs:361  pri_base_for
+   crates/kayfabe-abi/src/eventnotify.rs:527  is_empty
+   crates/kayfabe-abi/src/falconinfo.rs:250  count
+   crates/kayfabe-abi/src/faultbuffer.rs:203  pages_for
+   crates/kayfabe-abi/src/faultbuffer.rs:388  pages_for
+   crates/kayfabe-abi/src/faultbuffer.rs:411  type_is_known
+   crates/kayfabe-abi/src/faultbuffer.rs:531  pages_for
+   crates/kayfabe-abi/src/fbinfo.rs:295  bus_width_bits
+   crates/kayfabe-abi/src/fbinfo.rs:308  fbp_count
+   crates/kayfabe-abi/src/fbinfo.rs:327  l2_cache_size_u32
+   crates/kayfabe-abi/src/fbinfo.rs:344  ram_type_checked
+   crates/kayfabe-abi/src/fbinfo.rs:383  fbp_mask
+   crates/kayfabe-abi/src/fbinfo.rs:399  ltc_count_checked
+   crates/kayfabe-abi/src/fbinfo.rs:420  lts_count
+   crates/kayfabe-abi/src/fbinfo.rs:637  decode_fb_info_pairs
+   crates/kayfabe-abi/src/fbinfo.rs:667  build_request
+   crates/kayfabe-abi/src/fmbpromote.rs:189  is_destroy
+   crates/kayfabe-abi/src/fmbpromote.rs:209  len
+   crates/kayfabe-abi/src/fmbpromote.rs:218  is_empty
+   crates/kayfabe-abi/src/fmbsize.rs:160  decode_fault_method_buffer_size
+   crates/kayfabe-abi/src/generated/classes.rs:486  decode
+   crates/kayfabe-abi/src/generated/classes.rs:519  encode_into
+   crates/kayfabe-abi/src/generated/classes.rs:728  decode
+   crates/kayfabe-abi/src/generated/classes.rs:986  decode
+   crates/kayfabe-abi/src/generated/classes.rs:1176  decode
+   crates/kayfabe-abi/src/generated/classes.rs:1202  encode_into
+   crates/kayfabe-abi/src/generated/ctrl.rs:222  encode_into
+   crates/kayfabe-abi/src/generated/ctrl.rs:451  decode
+   crates/kayfabe-abi/src/generated/ctrl.rs:481  encode_into
+   crates/kayfabe-abi/src/generated/nvos.rs:1435  decode
+   crates/kayfabe-abi/src/generated/nvos.rs:1465  encode_into
+   crates/kayfabe-abi/src/generated/nvos.rs:1700  decode
+   crates/kayfabe-abi/src/generated/nvos.rs:1732  encode_into
+   crates/kayfabe-abi/src/generated/rpc.rs:298  decode
+   crates/kayfabe-abi/src/generated/rpc.rs:329  encode_into
+   crates/kayfabe-abi/src/generated/rpc.rs:564  decode
+   crates/kayfabe-abi/src/generated/rpc.rs:595  encode_into
+   crates/kayfabe-abi/src/generated/rpc.rs:881  decode
+   crates/kayfabe-abi/src/generated/rpc.rs:916  encode_into
+   crates/kayfabe-abi/src/generated/vbios.rs:425  decode
+   crates/kayfabe-abi/src/generated/vbios.rs:452  encode_into
+   crates/kayfabe-abi/src/generated/vbios.rs:585  decode
+   crates/kayfabe-abi/src/generated/vbios.rs:610  encode_into
+   crates/kayfabe-abi/src/generated/vbios.rs:911  decode
+   crates/kayfabe-abi/src/generated/vbios.rs:951  encode_into
+   crates/kayfabe-abi/src/generated/vbios.rs:1296  decode
+   crates/kayfabe-abi/src/generated/vbios.rs:1324  encode_into
+   crates/kayfabe-abi/src/generated/vbios.rs:1496  decode
+   crates/kayfabe-abi/src/generated/vbios.rs:1524  encode_into
+   crates/kayfabe-abi/src/gpuatomics.rs:232  decode_gpu_atomics
+   crates/kayfabe-abi/src/gpuinfo.rs:324  decode_gpu_info_pairs
+   crates/kayfabe-abi/src/gpuinfo.rs:354  build_request
+   crates/kayfabe-abi/src/grfsinfo.rs:175  physical_gpc
+   crates/kayfabe-abi/src/grfsinfo.rs:234  answer
+   crates/kayfabe-abi/src/grfsinfo.rs:401  build_request
+   crates/kayfabe-abi/src/grfsinfo.rs:420  decode_answers
+   crates/kayfabe-abi/src/grinfo.rs:210  validate
+   crates/kayfabe-abi/src/grstatic.rs:515  num_sm
+   crates/kayfabe-abi/src/grstatic.rs:528  validate
+   crates/kayfabe-abi/src/gspfeatures.rs:315  as_str
+   crates/kayfabe-abi/src/gspfeatures.rs:414  decode_gsp_get_features
+   crates/kayfabe-abi/src/gsslegacy.rs:206  params_size
+   crates/kayfabe-abi/src/guest_os.rs:230  from_config_name
+   crates/kayfabe-abi/src/host_driver.rs:140  parse
+   crates/kayfabe-abi/src/host_driver.rs:167  is_encoded_for
+   crates/kayfabe-abi/src/l2evict.rs:280  writes_back
+   crates/kayfabe-abi/src/l2evict.rs:286  waits_for_fb_pull
+   crates/kayfabe-abi/src/notifier.rs:243  decode
+   crates/kayfabe-abi/src/notifier.rs:357  decode
+   crates/kayfabe-abi/src/oracle.rs:490  truncated_row
+   crates/kayfabe-abi/src/oracle.rs:652  capture_reliance
+   crates/kayfabe-abi/src/oracle.rs:790  empty_capture_row
+   crates/kayfabe-abi/src/rc.rs:167  encode_into
+   crates/kayfabe-abi/src/regaccessmap.rs:284  publishes_map
+   crates/kayfabe-abi/src/smcmode.rs:164  decode_smc_mode
+   crates/kayfabe-abi/src/submit.rs:613  is_modelled
+   crates/kayfabe-abi/src/submit.rs:902  encode_into
+   crates/kayfabe-abi/src/submit.rs:2457  encode_into
+   crates/kayfabe-abi/src/submit.rs:2698  encode_into
+   crates/kayfabe-abi/src/transcribed.rs:228  decode
+   crates/kayfabe-abi/src/transcribed.rs:255  encode_into
+   crates/kayfabe-abi/src/transcribed.rs:510  decode
+   crates/kayfabe-abi/src/versions.rs:583  vbios_wire
+   crates/kayfabe-abi/src/versions.rs:620  gsp_element_size_min
+   crates/kayfabe-abi/src/versions.rs:635  map_dma_wire
+   crates/kayfabe-abi/src/versions.rs:642  map_dma_size
+   crates/kayfabe-abi/src/versions.rs:655  map_dma_status_offset
+   crates/kayfabe-abi/src/versions.rs:681  decode_alloc_v1
+   crates/kayfabe-abi/src/versions.rs:702  decode_alloc_v2
+   crates/kayfabe-abi/src/versions.rs:729  decode_alloc
+   crates/kayfabe-abi/src/versions.rs:744  decode_control
+   crates/kayfabe-abi/src/versions.rs:780  decode_map_memory_dma
+   crates/kayfabe-abi/src/versions.rs:825  write_map_memory_dma_result
+   crates/kayfabe-abi/src/versions.rs:872  decode_unmap_memory_dma
+   crates/kayfabe-abi/src/versions.rs:1490  is_client_root_class
+   crates/kayfabe-abi/src/versions.rs:1530  rpc_payload
+   crates/kayfabe-abi/src/view.rs:508  is_sysmem
+   crates/kayfabe-abi/src/view.rs:711  classify_promote_entry
+   crates/kayfabe-abi/src/view.rs:813  len
+   crates/kayfabe-abi/src/view.rs:822  is_empty
+   crates/kayfabe-abi/src/wire.rs:250  offset_of
+
+⊘ This is a REPORT, not a verdict on any one of them: a verb may be a deliberate seam
+  awaiting its consumer, or a capability proven and never wired. Only a human knows
+  which, and that triage is what decides what this gate eventually enforces.
+GATE_EXIT_STATUS=0
+GATE_DONE 2026-08-11T09:50:23+00:00
