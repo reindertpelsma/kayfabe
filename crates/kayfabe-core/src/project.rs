@@ -887,6 +887,57 @@ fn resolve_channel_vas<'g>(
 /// considers no client dead" is a statement the call site makes, not one it omits.
 pub static NO_CONDEMNED: BTreeSet<ClientKey> = BTreeSet::new();
 
+/// ★★★★★ **WHICH ENGINE A CHANNEL IS ON — one authority, three sources, in order.**
+///
+/// # The principle, and it is §16.106's own sentence
+///
+/// The runlist repair that took engine-object refusals 14 → 0 put it this way: *"we never
+/// had to make it: the guest already did."* This function is that sentence applied to the
+/// engine itself. Every GPFIFO channel on an architecture shares ONE class
+/// (`AMPERE_CHANNEL_GPFIFO_A` on GA10x), so `Arch::classify` — which sees a class id and
+/// nothing else — cannot tell a GR channel from a CE channel and answers
+/// [`EngineKind::GrCompute`] for both. The guest stated the answer in the same alloc
+/// message, in `NV_CHANNEL_ALLOC_PARAMS.engineType`.
+///
+/// # The order, and why it is not simply "declaration wins"
+///
+/// 1. **`declared`** decides *which engine*. It is the guest's own word and it is available
+///    at the channel's alloc, i.e. **before** any engine object exists.
+/// 2. **`refined`** — the first engine object parented on the channel — decides *within GR*.
+///    ⚠ This is the case a naive "declaration wins" gets wrong: `engineType` is
+///    `NV2080_ENGINE_TYPE_GRAPHICS` for compute **and** 3D alike, so a declaration of
+///    [`EngineKind::GrCompute`] is UNDER-DETERMINED, and letting it overwrite an
+///    `AMPERE_B`-derived [`EngineKind::GrGraphics`] would replace a finer fact with a
+///    coarser one and call it an improvement.
+/// 3. **`class_default`** — `Arch::classify`'s answer — when there is neither.
+///
+/// ⊘ Outside GR the refinement does **not** get to override the declaration, and that is
+/// the correction this function carries: a channel the guest declared `GRAPHICS` whose
+/// first engine object happens to be `AMPERE_DMA_COPY_B` used to be re-labelled
+/// [`EngineKind::Ce`] and would have been materialized on a copy runlist. The refinement is
+/// a stand-in for a declaration; it does not outrank one.
+///
+/// ⚠ `[NOT MEASURED]` that any boot exercises that disagreement. It is closed here because
+/// the ordering that protects it — `.or_insert`, so the *first* engine object wins — is
+/// incidental rather than enforced, and nothing in the tree asserts a compute object is
+/// allocated first.
+fn channel_engine(
+    declared: Option<EngineKind>,
+    refined: Option<EngineKind>,
+    class_default: EngineKind,
+) -> EngineKind {
+    match (declared, refined) {
+        // GR is under-determined on the wire: only the object separates compute from 3D.
+        (
+            Some(EngineKind::GrCompute),
+            Some(r @ (EngineKind::GrCompute | EngineKind::GrGraphics)),
+        ) => r,
+        (Some(d), _) => d,
+        (None, Some(r)) => r,
+        (None, None) => class_default,
+    }
+}
+
 /// Derive the full boundary picture from the graph.
 ///
 /// A deterministic pure function of `(graph, condemned)` — order-independent by
@@ -1106,6 +1157,8 @@ pub fn project(
     let mut pdb_claims: BTreeMap<(Option<GpuId>, Pdb), ResourceKey> = BTreeMap::new();
     let mut vchid_claims: BTreeMap<(Option<GpuId>, VChid), ResourceKey> = BTreeMap::new();
 
+    // ★★★★★ Which engine a channel is on — see the free function `channel_engine` below.
+    //
     // Pre-pass: the engine-object refinement (channel origin → EngineKind). An
     // engine object's parent is its channel (same namespace, dup-aliases resolved).
     // `nodes()` iterates ascending origin-key order, so with several engine objects
@@ -1204,8 +1257,14 @@ pub fn project(
                     vas_pdb: vas.and_then(|v| g.pdb_of_resource(v.id())),
                     vas_device_default,
                     vas_route,
-                    // The engine-object refinement wins over the channel-class default.
-                    engine: engine_refine.get(&node.id()).copied().unwrap_or(engine),
+                    // ★★★★★ The guest's own declaration first; the engine-object
+                    // refinement second; the class default last. ONE authority — see
+                    // [`channel_engine`].
+                    engine: channel_engine(
+                        node.facts.channel_engine,
+                        engine_refine.get(&node.id()).copied(),
+                        engine,
+                    ),
                     // ★ Straight off the channel's OWN alloc facts, never refined and
                     // never inherited from the TSG. `NV_CHANNEL_ALLOC_PARAMS` carries
                     // `errorNotifierMem` per channel — CPU-RM has already applied the

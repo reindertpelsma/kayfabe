@@ -60,6 +60,7 @@
 //! data so the caller cannot get it wrong by writing sixteen bytes in one go.
 
 use kayfabe_arch::fault::ErrorNotifier;
+use kayfabe_arch::ids::EngineKind;
 
 use crate::wire::{AbiError, u32_at, u64_at};
 
@@ -365,6 +366,126 @@ impl ChannelUserdWire {
     }
 }
 
+/// ★★★★★ **WHICH ENGINE THE GUEST SAID THIS CHANNEL IS FOR** —
+/// `NV_CHANNEL_ALLOC_PARAMS.engineType`, the one wire field that separates a GR channel
+/// from a CE channel.
+///
+/// # ⊘ The framing this type corrects (2026-08-11)
+///
+/// `kayfabe_chips::ga10x`'s `classify` calls the engine *"a **params** fact
+/// `RmEvent::Alloc` has nowhere to carry"*. That sentence is true and **incomplete in the
+/// direction that decides the work**: the value does not merely lack a home in the core —
+/// it is **never decoded off the wire at all**. `DriverAbiTable::decode_channel_alloc_facts`
+/// stops at [`crate::versions::CHANNEL_ALLOC_PREFIX`] = 32, and `engineType` sits at **+128
+/// (580)** / **+136 (610)**, i.e. deep in the region the two vendored trees disagree about
+/// and which `crate::view::ChannelAllocFacts` has a standing ruling against reading blind.
+///
+/// ⇒ Giving `AllocFacts` a field would have carried **nothing**. The missing capability was
+/// a *version-keyed decode*, which is what this type is — and the shape is not invented
+/// here: it is exactly [`ChannelNotifierWire`]'s and [`ChannelUserdWire`]'s, the two fields
+/// that already bought the right to read past the prefix. A boundary whose tree nobody
+/// opened carries `None` rather than a guess.
+///
+/// # ★ The offsets are already twice-derived in this tree, and this type is the third
+///
+/// [`ChannelUserdWire::V580`]'s own doc derives `engineType` @ **+128** from
+/// `hUserdMemory[0]` @ +32 and `userdOffset[0]` @ +64 with `NV_MAX_SUBDEVICES = 8`, and
+/// notes the C artifact measured the same offset independently
+/// (`nvidia-gpu-passthrough/src/qemu/nvkvm_gpu_emul.c:6760`). [`ChannelUserdWire::V610`]
+/// derives **+136** the same way. `crate::submit::ChannelAllocParams::encode_into` writes
+/// the field at 128 on the 580 encoder. `engine_offsets_agree_with_the_userd_wire` below
+/// keeps this type from drifting away from that arithmetic.
+///
+/// ⚠ **The INSTANCE is on the wire here and is dropped one layer up, deliberately.**
+/// `engineType` is an `NV2080_ENGINE_TYPE_*` code, so a CE channel declares *which* copy
+/// engine (`COPY0`..`COPY9`), not merely "a copy engine". [`Self::decode`] returns the raw
+/// code so that fact survives this seam; `decode_declared_engine` narrows it to an
+/// [`EngineKind`] for the core, which speaks a vocabulary rather than NVIDIA's numbers
+/// (decision #2). See `kayfabe_isolate_host::rm::declared_copy_engine_type` for the one
+/// consumer that needs the instance and gets it from the CE *object* instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelEngineWire {
+    /// Offset of `NvU32 engineType`.
+    pub engine_type: usize,
+}
+
+impl ChannelEngineWire {
+    /// 580.159.04 — the bench driver. `engineType` @ +128, immediately after
+    /// `userdOffset[NV_MAX_SUBDEVICES]` ends at +128
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`).
+    pub const V580: Self = Self { engine_type: 128 };
+
+    /// 610.43.02 — eight bytes later, for [`ChannelUserdWire::V610`]'s reason:
+    /// `hHandleVASpace` @ +32 is four bytes and forces four more of re-alignment onto the
+    /// 8-aligned `userdOffset[]`
+    /// (`ogkm-610: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-347`).
+    pub const V610: Self = Self { engine_type: 136 };
+
+    /// The bytes a decode needs: through `engineType`, the only field it reads.
+    #[must_use]
+    pub const fn needs(&self) -> usize {
+        self.engine_type + 4
+    }
+
+    /// Decode the declared `NV2080_ENGINE_TYPE_*` code, raw.
+    ///
+    /// `Ok(None)` when the params stop before the field exists — **additive**, for
+    /// [`ChannelUserdWire::decode`]'s measured reason: making a past-prefix decode
+    /// mandatory turns legal short channel allocs into `AbiError::Truncated`. A field added
+    /// past a version-agreement prefix must be additive or it is not an addition.
+    ///
+    /// ⊘ Nothing is validated and nothing is folded. A code this port does not recognise
+    /// arrives as itself; [`Self::decode_kind`] is where "we do not know what that is"
+    /// becomes an answer, and it is `None` there rather than a guess.
+    ///
+    /// # Errors
+    /// [`AbiError`] only from the primitive reader, which the length check makes
+    /// unreachable; kept as a `Result` so that stays a total function.
+    pub fn decode(&self, bytes: &[u8]) -> Result<Option<u32>, AbiError> {
+        if bytes.len() < self.needs() {
+            return Ok(None);
+        }
+        Ok(Some(u32_at(bytes, self.engine_type)?))
+    }
+
+    /// The declared code narrowed to the vocabulary the core speaks.
+    ///
+    /// ⚠ **`ENGINE_TYPE_GRAPHICS` answers [`EngineKind::GrCompute`], and that is a
+    /// DELIBERATE under-determination rather than a reading of the wire.** GR runs both
+    /// compute and 3D contexts on one runlist and `engineType` cannot tell them apart —
+    /// only the engine *object* can (`AMPERE_COMPUTE_B` vs `AMPERE_B`). The consumer in
+    /// `kayfabe_core::project` therefore lets the engine-object refinement pick **within**
+    /// GR while the declaration decides **which engine**, which is the only split under
+    /// which the declaration cannot lose information it does not have.
+    ///
+    /// ⊘ `None` = *this port does not recognise the code*, never a default. The two engines
+    /// this port has never allocated a channel on (`NVENC`/`NVDEC`) land here with
+    /// everything else, because answering [`EngineKind::Other`] would be a claim about the
+    /// guest's declaration rather than about our ignorance of it.
+    ///
+    /// # Errors
+    /// [`AbiError`] from [`Self::decode`].
+    pub fn decode_kind(&self, bytes: &[u8]) -> Result<Option<EngineKind>, AbiError> {
+        Ok(self.decode(bytes)?.and_then(engine_kind_of_nv2080))
+    }
+}
+
+/// `NV2080_ENGINE_TYPE_*` → the core's [`EngineKind`], or `None` for a code this port does
+/// not recognise. The inverse direction is [`crate::rc::EngineRoute::for_engine`].
+///
+/// ⊘ Total on purpose, with no wildcard-to-`Other` arm: see
+/// [`ChannelEngineWire::decode_kind`] for why an unrecognised code must not become a kind.
+#[must_use]
+pub fn engine_kind_of_nv2080(code: u32) -> Option<EngineKind> {
+    if code == crate::submit::ENGINE_TYPE_GRAPHICS {
+        return Some(EngineKind::GrCompute);
+    }
+    if crate::submit::copy_index_of_engine_type(code).is_some() {
+        return Some(EngineKind::Ce);
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,5 +615,92 @@ mod tests {
             w.decode(&p),
             Ok(Some(ErrorNotifier::Sysmem { gpa: 0x9000 }))
         );
+    }
+}
+
+#[cfg(test)]
+mod engine_wire_tests {
+    use super::*;
+    use crate::submit::{ENGINE_TYPE_GRAPHICS, engine_type_copy};
+
+    /// ★★★ **The transcription check, and it is a SECOND derivation rather than a
+    /// restatement.**
+    ///
+    /// [`ChannelUserdWire`]'s doc derives `engineType` from the USERD layout:
+    /// `userdOffset[0]` starts the `NvU64[NV_MAX_SUBDEVICES]` array, eight of them fill
+    /// 64 bytes, and `engineType` follows. So `engine_type == userd_offset + 64` must hold
+    /// on every boundary that pins both — and if a future version reorders the tail, this
+    /// is the assertion that refuses to let the two wires drift apart silently.
+    ///
+    /// ⊘ It does not prove either offset is right. It proves they cannot disagree, which
+    /// is the failure a hand-written second wire actually has.
+    #[test]
+    fn engine_offsets_agree_with_the_userd_wire() {
+        assert_eq!(
+            ChannelEngineWire::V580.engine_type,
+            ChannelUserdWire::V580.userd_offset + 64,
+            "580: engineType follows userdOffset[NV_MAX_SUBDEVICES=8]"
+        );
+        assert_eq!(
+            ChannelEngineWire::V610.engine_type,
+            ChannelUserdWire::V610.userd_offset + 64,
+            "610: the same arithmetic, eight bytes later"
+        );
+        assert_eq!(
+            ChannelEngineWire::V610.engine_type - ChannelEngineWire::V580.engine_type,
+            8,
+            "the 610 skew is `hHandleVASpace`'s 4 bytes plus 4 of re-alignment"
+        );
+    }
+
+    /// ⊘ **A short params block is `Ok(None)`, never `Truncated`** — the additive rule a
+    /// past-prefix field must obey. `CHANNEL_ALLOC_PREFIX`-sized params are legal and must
+    /// stay legal after a reader was written for a field past them.
+    #[test]
+    fn a_short_params_block_reads_as_unknown_and_never_as_an_error() {
+        let short = vec![0u8; crate::versions::CHANNEL_ALLOC_PREFIX];
+        assert_eq!(ChannelEngineWire::V580.decode(&short), Ok(None));
+        assert_eq!(ChannelEngineWire::V580.decode_kind(&short), Ok(None));
+    }
+
+    /// The kinds this port recognises, and — the half that matters — the ones it refuses
+    /// to invent. A code we do not know is `None`, never `EngineKind::Other`: `Other` is a
+    /// claim about the guest's declaration, `None` is a statement about our reading of it.
+    #[test]
+    fn an_unrecognised_engine_code_is_unknown_and_never_other() {
+        assert_eq!(
+            engine_kind_of_nv2080(ENGINE_TYPE_GRAPHICS),
+            Some(EngineKind::GrCompute)
+        );
+        for i in 0..10 {
+            assert_eq!(
+                engine_kind_of_nv2080(engine_type_copy(i).expect("i < 10")),
+                Some(EngineKind::Ce),
+                "COPY{i} is a copy engine"
+            );
+        }
+        // `0x13` is NVDEC0 — inside the numeric gap between the two COPY blocks, which is
+        // exactly where a range check written as `>= COPY0` would wrongly say "copy".
+        assert_eq!(engine_kind_of_nv2080(0x13), None, "NVDEC0 is not a CE");
+        assert_eq!(engine_kind_of_nv2080(0), None, "and zero is not GRAPHICS");
+    }
+
+    /// Round-trip through a params block the ENCODER built, so the decoder is checked
+    /// against this crate's own statement of the layout rather than against itself.
+    #[test]
+    fn the_decoder_reads_back_what_the_580_encoder_wrote() {
+        let mut params = vec![0u8; ChannelEngineWire::V580.needs()];
+        let declared = engine_type_copy(2).expect("COPY2");
+        let n = params.len();
+        params[128..132].copy_from_slice(&declared.to_le_bytes());
+        assert_eq!(n, 132, "the 580 field ends the block this test builds");
+        assert_eq!(ChannelEngineWire::V580.decode(&params), Ok(Some(declared)));
+        assert_eq!(
+            ChannelEngineWire::V580.decode_kind(&params),
+            Ok(Some(EngineKind::Ce))
+        );
+        // ⊘ The 610 wire reads FOUR BYTES PAST this 580 block and must say so rather than
+        // decode the tail it can reach.
+        assert_eq!(ChannelEngineWire::V610.decode(&params), Ok(None));
     }
 }

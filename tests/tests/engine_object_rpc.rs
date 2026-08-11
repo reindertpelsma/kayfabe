@@ -389,3 +389,146 @@ fn each_parent_miss_is_named_separately() {
     assert_eq!((ce.gpu, ce.vchid), (GpuId::ZERO, CE_VCHID));
     assert_eq!(ce.engine, EngineKind::Ce);
 }
+
+// =================================================================================
+// §16.109 — the guest's OWN engine declaration, carried instead of re-derived
+// =================================================================================
+
+/// The channel `vchid` projects to, in `gpu`'s live core state.
+fn engine_of(gpu: &Gpu, vchid: VChid) -> EngineKind {
+    let (pid, cid) = *gpu
+        .spine
+        .by_vchid
+        .get(&(GpuId::ZERO, vchid))
+        .expect("the channel routes");
+    gpu.procs[&pid].channels[&cid].engine
+}
+
+/// ★★★★★ **A CE CHANNEL IS A CE CHANNEL BEFORE ITS ENGINE OBJECT EXISTS** — because the
+/// guest said so, in the alloc params, and we now read the field it said it in.
+///
+/// # ⊘ What was actually missing, and it is not what the comment said
+///
+/// `kayfabe_chips::ga10x`'s `classify` calls the engine *"a **params** fact
+/// `RmEvent::Alloc` has nowhere to carry"*, which reads as *"the value is in hand and has
+/// no home"*. `[measured 2026-08-11]` it was never in hand: `engineType` sits at **+128**
+/// (580) / **+136** (610) and `DriverAbiTable::decode_channel_alloc_facts` stops at
+/// `CHANNEL_ALLOC_PREFIX` = **32**, because everything past +32 is the region the two
+/// vendored trees disagree about. So the missing thing was a **version-keyed decode**
+/// (`kayfabe_abi::notifier::ChannelEngineWire`), not a struct field; a field alone would
+/// have carried nothing.
+///
+/// # What this asserts, and why the ABSENCE of engine objects is the whole point
+///
+/// The fixture is [`script`] minus its two `engine_object` allocs, plus a declared
+/// `engineType` on each channel. With no engine object there is nothing to refine with, so
+/// before this rung **both** channels projected as [`EngineKind::GrCompute`] — the
+/// class-id guess, since one class serves both. The CE channel's arm is therefore RED
+/// before and GREEN after, and the GR channel's arm is the known-positive that stops a
+/// "declare everything CE" fix from passing.
+#[test]
+fn a_declared_engine_decides_the_channel_before_any_engine_object_arrives() {
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, h::C, h::PID)
+        .device(h::C, h::C, h::DEV, h::DEVICE_INSTANCE)
+        .vaspace(h::C, h::DEV, h::VAS)
+        .set_page_dir(h::C, h::DEV, h::VAS, PDB, w::PDB_FLAGS_ALL_CHANNELS)
+        .tsg(h::C, h::DEV, h::TSG, h::VAS)
+        .ctxshare(h::C, h::VAS, h::CTXSHARE, h::VAS)
+        .channel_on_engine(
+            h::C,
+            h::TSG,
+            h::GR,
+            gr_flags(),
+            0,
+            h::VAS,
+            kayfabe_abi::submit::ENGINE_TYPE_GRAPHICS,
+        )
+        // ★ COPY**2**, not COPY0: an instance the `engine_type_for` fallback does not
+        // produce, so a decode that silently answered "the default copy engine" is
+        // distinguishable from one that read the guest's number.
+        .channel_on_engine(
+            h::C,
+            h::TSG,
+            h::CE,
+            ce_flags(),
+            h::CTXSHARE,
+            0,
+            kayfabe_abi::submit::engine_type_copy(2).expect("COPY2"),
+        );
+    let (policy, _rec) = drive(&s);
+    let gpu = policy.gpu().expect("a bare Gpu model");
+
+    assert_eq!(
+        engine_of(gpu, CE_VCHID),
+        EngineKind::Ce,
+        "★★★ the guest declared a copy engine and NO `AMPERE_DMA_COPY_B` exists yet — \
+         before this rung the only available answer was the class-id guess `GrCompute`, \
+         and the channel became a CE channel only when its engine object arrived"
+    );
+    assert_eq!(
+        engine_of(gpu, GR_VCHID),
+        EngineKind::GrCompute,
+        "★ the known-positive: a declared GR channel is still GR. Without this arm a fix \
+         that answered `Ce` for everything would pass the assertion above."
+    );
+}
+
+/// ⊘ **The declaration does not overwrite the FINER fact.** `engineType` is
+/// `NV2080_ENGINE_TYPE_GRAPHICS` for compute and 3D alike, so a declaration of GR is
+/// under-determined and the engine object is the only evidence that separates them.
+///
+/// ★ This is the arm a naive "declaration always wins" gets wrong, and it would be
+/// invisible: `kayfabe_chips::ga10x` records that every consumer treats the two GR variants
+/// identically, so the regression would change a label nothing reads — until something did.
+#[test]
+fn a_declared_gr_channel_still_takes_its_refinement_from_the_engine_object() {
+    let mut s = RpcScript::new();
+    s.client_root(w::NV01_ROOT, h::C, h::PID)
+        .device(h::C, h::C, h::DEV, h::DEVICE_INSTANCE)
+        .vaspace(h::C, h::DEV, h::VAS)
+        .set_page_dir(h::C, h::DEV, h::VAS, PDB, w::PDB_FLAGS_ALL_CHANNELS)
+        .tsg(h::C, h::DEV, h::TSG, h::VAS)
+        .ctxshare(h::C, h::VAS, h::CTXSHARE, h::VAS)
+        .channel_on_engine(
+            h::C,
+            h::TSG,
+            h::GR,
+            gr_flags(),
+            0,
+            h::VAS,
+            kayfabe_abi::submit::ENGINE_TYPE_GRAPHICS,
+        )
+        // The GA10x **3D** object, on the same engine as compute.
+        .engine_object(h::C, h::GR, h::GR_OBJ, w::AMPERE_B);
+    let (policy, _rec) = drive(&s);
+    let gpu = policy.gpu().expect("a bare Gpu model");
+    assert_eq!(
+        engine_of(gpu, GR_VCHID),
+        EngineKind::GrGraphics,
+        "★ within GR the OBJECT decides: `engineType` cannot tell 3D from compute, so a \
+         declaration that outranked the object here would replace a finer fact with a \
+         coarser one and call it an improvement"
+    );
+}
+
+/// ⊘ **A channel whose params stop at the agreed prefix declares nothing, and the
+/// pre-existing derivation is unchanged for it.**
+///
+/// ★ This is the non-regression arm and it is why the decode may be additive at all: a
+/// short params block is `Ok(None)` — *"we could not read it"* — never *"the guest said
+/// GR"*, and `None` falls back to exactly the refinement-then-class-default order that
+/// shipped before `ChannelEngineWire` existed. Every other test in this file uses
+/// [`RpcScript::channel`], which emits 32 bytes, so this arm is what says their greens
+/// still mean what they meant.
+#[test]
+fn a_channel_that_declares_no_engine_falls_back_to_the_refinement_unchanged() {
+    let (policy, _rec) = drive(&script());
+    let gpu = policy.gpu().expect("a bare Gpu model");
+    assert_eq!(
+        engine_of(gpu, CE_VCHID),
+        EngineKind::Ce,
+        "no declaration, but an `AMPERE_DMA_COPY_B` — the refinement still decides"
+    );
+    assert_eq!(engine_of(gpu, GR_VCHID), EngineKind::GrCompute);
+}

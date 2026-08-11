@@ -158,6 +158,18 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                             0x400 => Some(kayfabe_arch::VaSpaceRole::Own),
                             _ => Some(kayfabe_arch::VaSpaceRole::DeviceDefault),
                         },
+                        // ★★★★★ §16.109 — the guest's DECLARED engine, fuzzed across all
+                        // three shapes because the projection's precedence reads it:
+                        // absent (fall back to the engine-object refinement, the
+                        // pre-existing behaviour), a declared CE, and a declared GR — the
+                        // last of which is the under-determined one the refinement may
+                        // still narrow. A hostile guest can declare any of them on any
+                        // class, so the invariants below must hold across the mixture.
+                        channel_engine: match flags & 0x300 {
+                            0x000 => None,
+                            0x100 => Some(kayfabe_arch::ids::EngineKind::Ce),
+                            _ => Some(kayfabe_arch::ids::EngineKind::GrCompute),
+                        },
                         gp_fifo_ring: match flags & 0x300 {
                             0x000 => None,
                             0x100 => Some(GpFifoRing { va: 0, entries: 0 }),

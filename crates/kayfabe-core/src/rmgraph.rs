@@ -435,6 +435,40 @@ pub struct AllocFacts {
     /// class the field is ignored, exactly as [`Self::client_kind`] is everywhere but a
     /// client root.
     pub vaspace_role: Option<VaSpaceRole>,
+    /// ★★★★★ **WHICH ENGINE THE GUEST SAID THIS CHANNEL IS FOR** — `engineType` off
+    /// `NV_CHANNEL_ALLOC_PARAMS`, decoded past the version-agreement prefix
+    /// (`kayfabe_abi::notifier::ChannelEngineWire`).
+    ///
+    /// # ★★★ Why this field exists — *"we never had to make it: the guest already did"*
+    ///
+    /// There is exactly ONE GPFIFO channel class per architecture: a CUDA process's GR
+    /// channel and its CE channel are **both** `AMPERE_CHANNEL_GPFIFO_A`, separated only by
+    /// this field. So `Arch::classify`, which sees a class id and nothing else, cannot know
+    /// — it answers [`kayfabe_arch::ids::EngineKind::GrCompute`] for every channel and a CE
+    /// channel becomes one later, when its `AMPERE_DMA_COPY_B` object arrives and
+    /// [`crate::project`]'s refinement pass rewrites it. That is a **derivation standing in
+    /// for a declaration**, and the guest made the declaration in the same message.
+    ///
+    /// ⊘ **`None` is `"we could not read it"`, never `"the guest declared GR"`** — the
+    /// boundary's layout is unpinned, the params stopped short, or the code is one this port
+    /// does not recognise. The consumer's fallback for `None` is exactly the
+    /// pre-2026-08-11 behaviour (refinement, then the class default), so an unreadable
+    /// declaration costs the accuracy this field adds and nothing that worked before.
+    ///
+    /// ⚠ **`Some(GrCompute)` is UNDER-DETERMINED and the consumer must treat it so.**
+    /// `engineType` cannot distinguish compute from 3D — both are
+    /// `NV2080_ENGINE_TYPE_GRAPHICS` — so within GR the engine *object* is the finer
+    /// evidence and still wins. See `kayfabe_abi::notifier::ChannelEngineWire::decode_kind`.
+    ///
+    /// ⊘ **The copy-engine INSTANCE is dropped at the ABI seam** (`COPY2` arrives here as
+    /// `Ce`), because this crate speaks a vocabulary and not NVIDIA's numbers (decision #2).
+    /// The one consumer that needs the instance —
+    /// `kayfabe_isolate_host::rm::declared_copy_engine_type`, §16.106's runlist repair —
+    /// takes it from the CE **object**'s params instead, and does not go through here.
+    ///
+    /// Only meaningful on a channel alloc; on any other class the field is ignored, exactly
+    /// as [`Self::client_kind`] is everywhere but a client root.
+    pub channel_engine: Option<kayfabe_arch::ids::EngineKind>,
 }
 
 /// ★★★ **The GPFIFO ring a channel declared, verbatim** — `gpFifoOffset` /

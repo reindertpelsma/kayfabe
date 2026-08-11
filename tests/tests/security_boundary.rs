@@ -185,6 +185,17 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                         0x400 => Some(kayfabe_arch::VaSpaceRole::Own),
                         _ => Some(kayfabe_arch::VaSpaceRole::DeviceDefault),
                     },
+                    // ★★★★★ §16.109 — A also gets to declare **which engine** each of its
+                    // channels is on, on any class, truthfully or not. The declaration now
+                    // decides the channel's `EngineKind`, so it is a guest-controlled input
+                    // to a projection decision and belongs in this quantifier: B's
+                    // isolation must hold whatever A claims, because the engine names a
+                    // runlist and never a component.
+                    channel_engine: match flags & 0x300 {
+                        0x000 => None,
+                        0x100 => Some(kayfabe_arch::ids::EngineKind::Ce),
+                        _ => Some(kayfabe_arch::ids::EngineKind::GrCompute),
+                    },
                     // ★ §12.27 — A gets to try ALL THREE client declarations, including
                     // claiming **kernel** privilege (which only a compromised guest
                     // *kernel* could really do — see the access-model split) and
