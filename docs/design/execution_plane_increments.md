@@ -16155,3 +16155,73 @@ another latch.
 - ★ One of two blocking calls is out from under the lock, measured. The second is named, with
   its path and the argument for why it needs a different fix.
 - ⊘ Route A untouched.
+
+## §16.92 ★★★★ THE HOST-VERB CENSUS IS CLOSED — the set has size ONE; the relocation is NOT designed
+
+⚠ **STATUS (2026-08-11): CENSUS COMPLETE AND PROVEN. RELOCATION NOT ATTEMPTED — the crux could
+not be argued, and §16.91's own rule says a wrong answer here corrupts a state machine.** The
+bench still cannot boot.
+
+### 16.92.1 ★★★ The census, by the type system — and a boot found the WHOLE set, not the first
+
+*"A boot finds the first, never the set"* was the expectation. **Here it found the set**, and the
+proof is structural rather than hopeful:
+
+1. **One funnel.** Every host RM verb in `kayfabe-rt` goes through `SharedDevice::verb_op` →
+   `Worker::execute`. Attributing each `.execute(` call to its enclosing function yields
+   **exactly one**: `verb_op`. Its callers are eight: `back_fb_leaf`, `doorbell`, `forward_ce`,
+   `forward_engine_object`, `forward_engine_object_by_parent`, `pin_guest_ram`,
+   `publish_backing`, `route_control`.
+2. **One bridge.** The command policy can reach the device **only** through the `ObjectModel`
+   trait (§16.91's refutation #2), and the shell's implementor is `SharedObjectModel`. It
+   delegates to nine `SharedDevice` methods.
+3. **The intersection is ONE**: `forward_engine_object_by_parent`. The other five candidates
+   (`bind_channel`, `promote_ctx`, `schedule_channel`, `schedule_group`,
+   `set_ctxsw_preemption_mode`) reach **no** funnel member, transitively checked.
+
+⇒ **`forward_engine_object_by_parent` is the only host-verb path under rank 0**, so the
+relocation is one call site — not a rewrite of `RegPlane::write`.
+
+⊘ **My own greps failed TWICE while establishing this**, and both failures are the night's
+recurring shape: a 40-line window that missed the call, then a regex requiring `self.0.method(`
+on one line when the source wraps it across three. **Collapse whitespace before matching, and
+attribute by enclosing function rather than by proximity.** ★ The instruments that did not fail
+tonight were the **runtime assert + backtrace** and the **type system**; every text search did.
+
+### 16.92.2 ⊘ THE CRUX, NOT ARGUED — and that is the finding, not an omission
+
+Relocation means: **decode under the lock → run the verb outside it → commit under it again.**
+The window is the problem.
+
+- `GspFsm`'s methods take `&mut self`, so exclusion over the FSM *is* the plane mutex. Dropping
+  it across the verb permits **a second vCPU to enter `service_command_queue` on the same FSM**.
+- ★ **The `done`-equivalent, named as asked**: it is the **GSP message-queue consumer cursor**.
+  `forward_ring` re-reads `done` in phase 3 rather than carrying it; a commit here would have to
+  re-read the queue cursor and prove the command it is answering is still the one at that
+  position and has not already been answered.
+- ⚠ **But that is necessary, not sufficient.** The sticky-answer state, the control census and
+  the reply *ordering* all mutate inside the window, and the guest's msgq is a
+  single-producer/single-consumer ring that this design has never had two consumers on.
+
+⇒ **I cannot argue this correct tonight, so it is not built.** §16.91's rule cuts both ways: a
+boot that aborts by name is strictly better than a corrupted state machine that does not.
+
+### 16.92.3 ★★★ The direction worth evaluating first — my "cannot be deferred" was SCOPED, not absolute
+
+§16.91 concluded a forwarded RM verb *"can never be latched, because its result is the answer."*
+⊘ **That is true only of answering inside the register write.** GSP RPC replies are **posted into
+a message queue** and collected by the guest later — they are not the return value of the MMIO
+write. ⇒ if a command may legitimately be answered on a **later** queue service, then the verb
+*is* deferrable after all, and the fix is a latch again rather than a window.
+
+⚠ `[NOT MEASURED]` — whether `GSP_RM_ALLOC` tolerates a deferred reply is a **protocol** question
+about the stock driver's expectations, and nothing here establishes it. ★ It should be settled
+before anyone builds the window in §16.92.2, because it would make that window unnecessary.
+
+### 16.92.4 ⊘ Scope
+
+- ⊘ **`CE-SUBMIT` is 0.** Route B **wired and unmeasured**. The forbidden-#2 residency gate is
+  **proven offline only and has never fired on hardware**. Route A untouched.
+- ★ **Two shipping R1 violations found in one night by an instrument that did not exist the day
+  before** — one fixed and measured (§16.91), one named with its whole set bounded (here). That
+  is the rank paying for itself.
