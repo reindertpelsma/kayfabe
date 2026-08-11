@@ -17299,3 +17299,50 @@ per-refusal join can never close across a retry loop, and the 2 was never a miss
 
 ⊘ `CE-SUBMIT` **0**. ⊘ `w251` ran `ce_executor=local`, where `RING-PROJ` is 0 by construction, so
 it says **nothing** about route B and is not offered as if it did. Property 2 untouched.
+
+## §16.103 ★★★★ THE RETRY HYPOTHESIS IS REFUTED TOO — the count is ZERO, by control flow
+
+⚠ **STATUS (2026-08-11): ANSWERED, source-only, no boot.** ⊘ `CE-SUBMIT` **0**. **Both
+pre-registered hypotheses for the 12-vs-14 gap are now refuted, and the gap stands.**
+
+### 16.103.1 The number, measured where it lives
+
+§16.102 offered: *"`verb_op` retries and each retry re-issues the host alloc — 14 attempts, 12
+outcomes ⇒ 2 retries"*, labelled `[NOT MEASURED]`. **Counting it directly gives zero**, and the
+instrument is control flow — the right one for a control-flow question:
+
+- `SharedDevice::verb_op` has **three** `continue` sites. Two are **before** `worker.execute` (the
+  `IsolatePending` materialize, and the pool-full park) — nothing has been issued yet, so neither
+  can duplicate a host alloc. The third is on the **`Ok(reply)` commit path**: it fires when a
+  *successful* execute's commit was refused as stale.
+- After `let Ok(reply) = executed else { … }`, the failure arm ends in **`return Err(…)`**. There
+  is **no `continue`**. ⇒ **a host verb that FAILED is never re-issued by `verb_op`.**
+- One level down, `Worker::execute`'s `VerbPlan::EngineObject` arm calls
+  `rm.alloc_engine_object(..)` **exactly once** and on `Err` unwinds and returns. Its three loops
+  are in the `CeSplit` and unmap/free arms — **not** this one.
+
+⇒ **Retries on the failing engine-object path are 0 at both levels.** *A difference of two was
+never evidence of two retries*, which is precisely why this rung replaced the inference.
+
+### 16.103.2 ⊘ And the last named candidate is eliminated
+
+`probe_guest_reachability` — the only other caller of `alloc_ce_engine_object` — has **exactly one
+caller in the tree**: `kayfabe-isolate-host/src/bin/rmladder.rs`, a **binary**, not the boot path.
+It does not run during a boot.
+
+### 16.103.3 ⊘⊘ WHERE THIS LEAVES IT — narrowed, and honestly unexplained
+
+**Two host engine-object allocation attempts per boot are not accounted for by our census**, and
+they are **not** a retry, **not** the CE executor (measured, byte-identical across both arms), and
+**not** the reachability probe. Reproduced on three boots.
+
+★ **The next instrument is a KEY, not another hypothesis.** The host names **two** channels
+(`0x04`, `0x0c`); our census names **twelve** guest parents and never prints the host channel
+handle it forwarded onto. ⇒ **print the host channel in `report_engine_forward`** and the two sides
+share a join key; the question stops being inferable and becomes answerable. ⊘ Three hypotheses
+have now been paid for by inference; the fourth should be paid for by a key.
+
+⚠ **And the instruction that started this line of work was unachievable in principle.** *"Upgrade
+the correlation to a join"* cannot be done per-refusal when one side counts **attempts** and the
+other counts **outcomes** — §16.102's reframe. The correlation was never the weak part; the
+**unit** was.
