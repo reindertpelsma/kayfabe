@@ -17139,3 +17139,103 @@ census.** ⊘ `boot_capture.sh` captures the **guest's** dmesg only.
 ⊘ `CE-SUBMIT` **0**; nothing was forwarded and nothing executed — this rung ran no guest at all.
 ⊘ The bench is **healthy**: `nvidia-smi` answers, a fresh context computes correctly, no
 node-level escalation. ⊘ Property **2 (CLOSED)** is untouched and remains the owner's call.
+
+## §16.101 ★★★★★ THE HOST'S dmesg IS CAPTURED — the join is a SOURCE IDENTITY, and it does NOT close
+
+⚠ **STATUS (2026-08-11): harness landed, measured, `traces/boots/w250/`.** ⊘ `CE-SUBMIT` **0**;
+nothing executed. ⊘⊘ **My own prediction 3 was FALSIFIED and the gap is the finding.**
+
+### 16.101.1 ★★★★★ NOT A CORRELATION — the two dmesg lines and our status are ONE RETURN
+
+§16.100 offered `Rm(Other(64))` ↔ the host's runlist message as a **correlation**, paired by
+count. ⊘ **It is stronger than that, and the vendor source settles it without a single boot:**
+
+```c
+// kernel_fifo_gm107.c:407-418  — kfifoRunlistSetId_GM107
+if ((runlistId != kchannelGetRunlistId(pKernelChannel)) && kchannelIsRunlistSet(...)) {
+    NV_PRINTF(LEVEL_ERROR, "Channel has already been assigned a runlist incompatible "
+                           "with this engine (requested: 0x%x current: 0x%x).\n", ...);
+    return NV_ERR_INVALID_STATE;                      // ← 0x40 == 64
+}
+// channel_descendant.c:243-252 — chandesConstruct_IMPL, the constructor for ANY object on a channel
+status = kfifoRunlistSetIdByEngine_HAL(...);
+if (status != NV_OK) {
+    NV_PRINTF(LEVEL_ERROR, "Invalid object allocation request on " FMT_CHANNEL_DEBUG_TAG "\n", ...);
+    SLI_LOOP_RETURN(status);                          // ← the SAME status leaves for our ioctl
+}
+```
+
+with `NV_STATUS_CODE(NV_ERR_INVALID_STATE, 0x00000040, …)`
+(`ogkm-580: kernel-open/common/inc/nvstatuscodes.h:93`). ⇒ **the two log lines and the `64` we
+print are one failure at three levels of one call.** Not a timestamp coincidence — an identity.
+
+### 16.101.2 ⊘⊘ REFUTED: this is NOT the GR wall, and the two populations must not be merged
+
+The brief read the host's message as possibly *"the wall, in the driver's own words … the 8
+refused doorbells are graphics-family on channels we bind."* ⊘ **Measured, they are disjoint:**
+
+| population | count | class / engine | reaches the host? |
+|---|---|---|---|
+| `ENGINE-OBJECT … REFUSED Rm(Other(64))` | **12** | **`0xc7b5` — `AMPERE_DMA_COPY_B`, a COPY-ENGINE object. 12 of 12. ZERO graphics.** | **yes** — this is RM's refusal |
+| `DOORBELL-REFUSED [Route::NotACopyEngineChannel]` | **8** | `GrCompute` channels | **no** — **our own** router, locally, no host verb at all |
+
+⇒ **the driver has never said anything about the GR wall.** It is talking about our **copy-engine
+object allocations**. Merging the two would put words in the vendor's mouth.
+
+★ And the host names the engine, which our side never did:
+
+```text
+kfifoRunlistSetId_GM107: … (requested: 0x1 current: 0x0)   ×8
+kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2   ×8   → channel 0x0000000c
+kfifoRunlistSetId_GM107: … (requested: 0x2 current: 0x0)   ×6
+kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3   ×6   → channel 0x00000004
+```
+
+⇒ **we are allocating ASYNC copy-engine objects (`CE2`, `CE3` — runlists 1 and 2) on host
+channels already bound to runlist 0.** ★ That also explains the successes: the 8 channels that
+take a `0xc7c0` *and* a `0xc7b5` both succeed, because on a graphics channel a CE object binds as
+**GRCE** and does not change the runlist. `[HYPOTHESIS]` for the runlist↔engine numbering — the
+engine names are the driver's, the mapping to a cause is ours and is not yet sourced.
+
+### 16.101.3 ⊘⊘ THE JOIN DOES NOT CLOSE — 12 ours, 14 the host's, and the gap is real
+
+**Prediction 3, recorded before the boot, said `12 = 12`. It is wrong.**
+
+| | count |
+|---|---|
+| our engine-object refusals that **issued a host verb** (`Rm(Other(64))`) | **12** |
+| our refusals that issued **no** verb (`NoVas`) | 2 |
+| our census total (`seen=32 forwarded=18` ⇒ 14 refused) | 14 |
+| **host `chandesConstruct_IMPL` failures in this boot's delta** | **14** |
+| **host `kfifoRunlistSetId_GM107` failures** | **14** |
+
+⇒ **12 of our refusals reached the host; the host recorded 14.** Our own counters make the 12
+exact — the other two never issued a verb — so **two host-side engine-object failures came from a
+path that is not `forward_engine_object`.** ⊘ Named and unexplained. ★ A closed join would have
+confirmed what §16.100 already argued; **this gap is new information**, and the channel split
+(6 on `0x04`, 8 on `0x0c`) is the thread to pull: our 12 group 6/4/2 by parent family, so the
+6-group matches `0x04` exactly and the 8-group has **two more than we can account for**.
+
+### 16.101.4 ★★ The harness, and the placement defect its own validating boot caught
+
+`boot_capture.sh` now takes a **watermark** of the host's ring buffer before the boot (phase 0b)
+and persists the **delta** afterwards as `run_<tag>_hostdmesg.log`, carried into the repo.
+⊘ A watermark, not a snapshot: `dmesg` on a long-lived bench holds every boot the host ever
+served, which is exactly why *241 lines* was a campaign total nobody could attribute.
+
+⊘⊘ **NOT asserted non-empty, deliberately** — unlike every other capture here. Zero host lines is
+a legitimate result (the boot provoked no host diagnostic), so an emptiness assertion would fail a
+good boot and pressure the next reader into "fixing" a harness that was telling the truth. What is
+asserted is that the capture **ran**, and the count is **stated in the probe log either way**.
+
+★★★ **And the first placement was wrong: `[measured, w249]` it captured 3 of 53 lines**, because
+it sat *before* the workload hook and the host's diagnostics are provoked by the workload, not by
+the driver load. **The instrument was placed where it could not see the event** — the class this
+campaign has now hit seven times — and only the validating boot showed it. Moved to phase 3c,
+after the hook; `w250` is the re-validation.
+
+### 16.101.5 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**; no guest work was forwarded. Bootability unchanged. Property 2 untouched.
+⊘ The runlist→cause reading in §16.101.2 is a `[HYPOTHESIS]`; the engine names and the status
+identity are the vendor's and are sourced.

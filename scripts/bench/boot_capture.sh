@@ -5,6 +5,7 @@
 #   writes: /workspace/bench/run_<tag>_serial.log   (guest console — QEMU's -serial)
 #           /workspace/bench/run_<tag>_qemu.log     (the device's own stderr report)
 #           /workspace/bench/run_<tag>_dmesg.log    ★ the GUEST DRIVER'S OWN output
+#           /workspace/bench/run_<tag>_hostdmesg.log ★★ the HOST driver's output FOR THIS BOOT
 #           /workspace/bench/run_<tag>_probe.log    (nvidia-smi, /dev nodes, modinfo)
 #
 # ## ★★★ Why this script exists, and what was wrong before it
@@ -66,6 +67,7 @@ shift || true
 LOG=$BENCH/run_${TAG}
 DMESG=${LOG}_dmesg.log
 PROBE=${LOG}_probe.log
+HOSTD=${LOG}_hostdmesg.log
 BOOT_TIMEOUT=${BOOT_TIMEOUT:-150}
 
 say() { printf '[boot_capture:%s] %s\n' "$TAG" "$*"; }
@@ -106,7 +108,25 @@ GSSH=$(pick_helper gssh_nv)         || exit $?
 
 # ⊘ Delete the previous run's evidence FIRST. A stale file from an earlier tag reading as
 # this boot's output is the exact failure this script exists to prevent.
-rm -f "$DMESG" "$PROBE"
+rm -f "$DMESG" "$PROBE" "$HOSTD"
+
+# ---- phase 0b: ★★★ WATERMARK THE HOST'S RING BUFFER --------------------------------------
+#
+# `[measured 2026-08-11, §16.100]` the HOST driver has been diagnosing this port by name for
+# months and no rung ever read it. Our own census prints `REFUSED Rm(Other(64))`; on the same
+# box, at the same instant, `NVRM:` prints *why* — `kfifoRunlistSetId_GM107: Channel has
+# already been assigned a runlist incompatible with this engine`. **241 such pairs had
+# accumulated unread**, because this script captured the GUEST's `dmesg` and nothing else.
+#
+# ★★ A WATERMARK, not a snapshot, and that is the whole design. `dmesg` on a long-lived bench
+# holds every boot the host has ever served, so a raw capture is unattributable — exactly the
+# state that made 241 lines a campaign total rather than a per-boot number. Recording the line
+# count BEFORE the boot makes the delta *this boot's*.
+# ⊘ `dmesg -C` is deliberately NOT used: clearing the host's ring buffer would destroy
+# evidence belonging to whatever else shares this box, and this script is a guest harness with
+# no licence to do that.
+HOST_DMESG_MARK=$(dmesg 2>/dev/null | wc -l)
+say "host dmesg watermark: $HOST_DMESG_MARK lines"
 
 # ---- phase 1: boot ------------------------------------------------------------------
 say "booting (extra args: ${*:-none})"
@@ -236,6 +256,7 @@ if [ "$n_adapter" -eq 0 ] && ! grep -q 'SMI_RC=0' "$PROBE"; then
   DIE_RC=3 die capture "no adapter output; see $PROBE for MODPROBE_RC / SMI_RC / lsmod"
 fi
 say "captured $n_lines dmesg lines, $n_nvrm NVRM, $n_adapter adapter → $DMESG"
+
 say "--- the verdict lines ---"
 grep -E 'RmInitAdapter|Cannot (load state into|initialize) the device' "$DMESG" | tail -5
 
@@ -262,6 +283,46 @@ if [ -n "${POST_CAPTURE_HOOK:-}" ]; then
     echo "HOOK_RC=$?"
   } >> "$PROBE" 2>&1
   say "hook finished: $(grep -c '^HOOK_RC=0$' "$PROBE" >/dev/null && echo rc=0 || echo 'rc!=0 — see the probe log')"
+fi
+
+# ---- phase 3c: ★★★ THE HOST'S OWN dmesg, FOR THIS BOOT ------------------------------------
+#
+# Everything after the watermark taken in phase 0b. See there for why this exists.
+#
+# ⊘⊘ **AFTER THE HOOK, AND THAT PLACEMENT IS A MEASURED CORRECTION.** `[measured 2026-08-11,
+# boot `w249`]` this block first sat BEFORE phase 3b and captured **3 of 53** host lines: the
+# host driver's engine-object diagnostics are provoked by the WORKLOAD the hook runs, not by
+# the driver load, so a capture taken before the hook misses 94 % of exactly what it exists to
+# collect. ★ The instrument was placed where it could not see the event, and only the
+# validating boot showed it — which is why the validating boot is not optional.
+#
+# ⊘⊘ **THIS FILE IS NOT ASSERTED NON-EMPTY, AND THE DIVERGENCE IS DELIBERATE.** Every other
+# capture in this script is, because for those an empty file means the capture failed. Here
+# **zero host lines is a legitimate and interesting result** — it means this boot provoked no
+# host-driver diagnostic at all — so an emptiness assertion would fail a good boot and, worse,
+# would pressure the next reader into "fixing" a harness that was telling the truth.
+# ★ What IS asserted is that the capture RAN: the watermark exists, `dmesg` was readable, and
+# the line count is **stated in the probe log either way**. That is the same lesson one turn
+# on — *an empty artefact reads as benign, and only inspecting its content distinguishes
+# "nothing happened" from "nothing was recorded"* — answered by making the number explicit
+# rather than by demanding it be non-zero.
+if HOST_NOW=$(dmesg 2>/dev/null | wc -l); then
+  dmesg 2>/dev/null | tail -n +$(( HOST_DMESG_MARK + 1 )) > "$HOSTD"
+  n_host=$(wc -l < "$HOSTD" 2>/dev/null || echo 0)
+  n_hnvrm=$(grep -c NVRM "$HOSTD" 2>/dev/null || echo 0)
+  n_hxid=$(grep -ci xid "$HOSTD" 2>/dev/null || echo 0)
+  {
+    echo "=== HOST dmesg delta for this boot (watermark $HOST_DMESG_MARK → $HOST_NOW) ==="
+    echo "HOST_DMESG_LINES=$n_host"
+    echo "HOST_DMESG_NVRM=$n_hnvrm"
+    echo "HOST_DMESG_XID=$n_hxid"
+  } >> "$PROBE"
+  say "host dmesg delta: $n_host lines, $n_hnvrm NVRM, $n_hxid Xid → $HOSTD"
+else
+  echo "HOST_DMESG_LINES=UNREADABLE" >> "$PROBE"
+  say "★ the HOST's dmesg was UNREADABLE — this boot has no host-side evidence, and that is"
+  say "  a fact about the capture, not about the boot"
+  : > "$HOSTD"
 fi
 
 # ---- phase 4: fresh boot next time, AND THE CENSUS --------------------------------------
@@ -372,11 +433,15 @@ if [ -d "$BOOTS" ]; then
     [ -s "$f" ] || { say "★ refusing to carry an EMPTY $f into the repo"; continue; }
     cp -f "$f" "$BOOTS/$(basename "$f")" && copied=$(( copied + 1 ))
   done
+  # ★★ The host's dmesg delta is carried SEPARATELY and is allowed to be empty — see phase 3a
+  # for why zero host lines is a result rather than a failure. It is deliberately NOT part of
+  # the 3/3 count below: making it one would resurrect the emptiness assertion by the back door.
+  [ -f "$HOSTD" ] && cp -f "$HOSTD" "$BOOTS/$(basename "$HOSTD")"
   if [ "$copied" -ne 3 ]; then
     DIE_RC=5 die persist "only $copied/3 evidence files reached $BOOTS. ⊘ A BOOTED claim
    whose evidence is not in the tree is prose, not a measurement."
   fi
-  say "evidence carried into the repo: $BOOTS/run_${TAG}_{qemu,dmesg,probe}.log"
+  say "evidence carried into the repo: $BOOTS/run_${TAG}_{qemu,dmesg,probe,hostdmesg}.log"
   say "★ NOW COMMIT THEM. \`git commit -- <path>\` does NOT add untracked files;"
   say "  run scripts/bench/assert_boot_evidence.sh before claiming BOOTED."
 else
@@ -384,4 +449,4 @@ else
   say "  made from this run cannot be re-verified by anyone reading the repository."
 fi
 
-say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG probe=$PROBE"
+say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG probe=$PROBE hostdmesg=$HOSTD"
