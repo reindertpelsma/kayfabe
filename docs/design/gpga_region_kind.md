@@ -355,6 +355,52 @@ scratchpad"*; 4: the scratchpad goes through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`)
 
 ## 8.1 The type
 
+⊘⊘ **CORRECTED 2026-08-11 (branch `fb-join-port`) — RULING 4 IS NOW BUILT, AND IT REACHES
+THIS TABLE. Read this before §8.1 and §8.2.**
+
+The row *"`real_gpu_memory` … refuses `Vidmem`, or `ShadowsGuestMemory`"* is **no longer the
+whole rule**, and `PublishVidmem`'s *"★ REFUSED"* is now true of **one of two chains** rather
+than of the path. There is a **third** `BackingBytes`:
+
+| declaration | meaning | `Vidmem` aperture |
+|---|---|---|
+| `SoleBacking` | we invented the bytes, or they are the guest's own pages mapped through | **refused** |
+| `ShadowsGuestMemory` | a SECOND memory at an address the guest reaches another way | **refused, under every aperture** |
+| ★ `JoinsGuestWindow` | the guest's own framebuffer WINDOW has been re-pointed at these pages | **admitted** — this is ruling 4 |
+
+★★★ **This is the scratchpad carve-out arriving, not ruling 3 weakening.** The object is an
+`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over host pages — verbatim ruling 4. What §8.1's text (and
+`RegionKind::may_be_host_mapped`'s own doc) got wrong is one clause: *"…and therefore never
+asks this question about a `Vidmem` region"*. The object's class is sysmem; the **region's
+aperture is whatever the guest declared**, and the guest declares a framebuffer leaf `Vidmem`
+because its `phys` is a framebuffer offset. So the carve-out does arrive wearing that
+aperture.
+
+⊘ **The repair is NOT "correct the aperture to sysmem"**, and the two are not equivalent —
+`residency_of_aperture` sends them to different CPU planes:
+1. `Binding::is_guest_ram()` is `matches!(aperture, Sysmem*)` and its contract is *"may a
+   consumer hand `phys` to `Vmm::gpa_read`"*. A framebuffer offset may not.
+   `[measured 2026-08-11, boot w232c_6fcedac]` the two number spaces collide in one address
+   space (`V:0x1024000` / `S:0x41335000`).
+2. `DeclaredResidency::residency_of_aperture` sends sysmem to `CpuPlane::GuestRam`. The joined
+   bytes are reachable through the **framebuffer store and nowhere else** —
+   `FbStore::install_join` puts the shared region in the `FbStore` and *removes the local
+   pages*. Routing to guest RAM would read guest RAM at a framebuffer offset.
+
+⇒ **Consequence for `residency_of_aperture`: none.** `Vidmem → CpuPlane::Fb` stays right,
+because the join changes the **STORE**, not the row — which is the same reason the mechanism
+works at all. ★ The aperture test is **qualified, never deleted**: `Vidmem` + `SoleBacking` is
+still refused and `ShadowsGuestMemory` is still refused everywhere, so the admit is bought by a
+third distinct word rather than by making the guard aperture-blind. The swept test in
+`gpga_region_kind.rs` goes 4×2 → 4×3 cells, `(admitted, refused)` 2/6 → **5/7**, and
+`only_the_join_admits_a_vidmem_aperture_…` pins the three cells that separate the two designs.
+
+⚠ **`JoinsGuestWindow` is TRUE ONLY AFTER THE VIEW IS INSTALLED, and no type can check that.**
+The chain is therefore ordered install→bind (`kayfabe_fwd::adopt_joined_fb_leaf`), and every
+path that does not reach the bind releases instead. ⊘ **Unmeasured**: the mechanism's hardware
+result (`[measured 2026-08-11, vh2, GA106, 8eb8dcd]`) ran bind→install, so the ordering has
+never booted.
+
 `kayfabe_mmu::RegionKind{FakeFramebuffer, RealGpuMemory, GuestPhysDma}` + `RegionKindFault`.
 `Binding`'s fields are **private** and there are exactly **two** constructors:
 
@@ -384,7 +430,8 @@ deleted.
 | `core/promote.rs` — GR context promotion | `declared_by_guest(r.phys, r.aperture)` | new `PromoteFault::UndecidableKind`; ⚠ see §8.3 |
 | `core/gpu.rs` — RPC-declared mapping | `declared_by_guest(phys, SysmemCoherent)` | aperture is a literal ⇒ kind 4, unconditionally |
 | `fwd/lib.rs` — `VerbPlan::Publish` | `real_gpu_memory(gpa, SysmemCoherent, whole(.., SoleBacking))` | kind 3 |
-| `fwd/lib.rs` — `VerbPlan::PublishVidmem` | ★ **REFUSED** — `FwdFault::RegionKindRefused` | §8.4 |
+| `fwd/lib.rs` — `VerbPlan::PublishVidmem` (`FbLeafBacking::Vidmem`) | ★ **REFUSED** — `FwdFault::RegionKindRefused` | §8.4; no production caller |
+| `fwd/lib.rs` — `VerbPlan::JoinFbLeaf` (`FbLeafBacking::Joined`) | `real_gpu_memory(phys, Vidmem, whole(.., JoinsGuestWindow))` | kind 3, ruling 4 — see the correction at §8.1. ⊘ Bound by `adopt_joined_fb_leaf`, **after** the install |
 
 Plus ~45 field-read sites (`.phys`→`.phys()` etc.) and ~25 test fixtures.
 

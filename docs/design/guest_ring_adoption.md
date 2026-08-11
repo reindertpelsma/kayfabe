@@ -1,9 +1,16 @@
 # §5.11 — ADOPTING THE GUEST'S RING (`w230`)
 
 **STATUS: LIVE with ONE REFUTED PARAGRAPH, 2026-08-11.** Item (3b)'s *"no such object can be
-minted"* is **refuted** by branch `fb-join` (`2fe5f39`), which is not on `master`. The
-correction is folded in **above the paragraph it corrects**, in §2 — search for
-`CORRECTED 2026-08-11`. Everything else in this doc stands.
+minted"* is **refuted** by `RmBackend::join_fb_leaf`. The correction is folded in **above the
+paragraph it corrects**, in §2 — search for `CORRECTED 2026-08-11`. Everything else in this
+doc stands.
+
+⊘ **UPDATE, same day:** that correction says the verb lives on branch `fb-join` and is *"not
+on `master`"*. It is now forward-ported (branch `fb-join-port`), so the verb is **in this
+tree** and `git grep join_fb_leaf` finds it. ⚠ **This changes nothing about item (3b)'s
+FITNESS**, which the correction was already careful to disclaim: nothing has run
+`alloc_channel_over_guest_ring` over a joined object, and it still has exactly one caller, the
+R31 probe. The refutation was of *existence*, and existence is now local rather than remote.
 
 > Series note: §5.9 is `fb_cpu_view.md`, §5.10 is `executor_vas_separation.md`. This is the
 > rung after them, and it builds on §5.10's `ExecutorVas` without re-opening it.

@@ -1,5 +1,20 @@
 # §5.12 — ONE MEMORY for a framebuffer leaf (`w231`)
 
+**STATUS: LIVE, 2026-08-11 — FORWARD-PORTED, and TWO THINGS CHANGED.** This doc was written on
+branch `fb-join` (`2fe5f39`), 80 commits behind `origin/master`. It is now on `master`'s
+shapes, and its own text is out of date in exactly two places, each corrected in place below:
+- ★ **the bind now declares `kayfabe_mmu::BackingBytes::JoinsGuestWindow`** and is adjudicated
+  by ruling 3/4 at `Binding::real_gpu_memory`. That machinery did not exist when this was
+  written. See `gpga_region_kind.md` §8.1's `CORRECTED 2026-08-11` block for the decision and
+  why the aperture is **not** corrected to sysmem.
+- ⊘⊘ **the order in §"The order" below is WRONG as of the port.** It was join(+bind) → adopt
+  → install; it is now join → adopt+map → install → **bind**. See the correction at that
+  section.
+
+⊘ **The hardware result quoted here is CITED, not re-run, and it is not a measurement of this
+code**: `[measured 2026-08-11, vh2, GA106, 580.159.04, 8eb8dcd]` ran the old ordering over a
+`BackingBytes` variant that did not exist. **Nothing in this tree has booted.**
+
 **Rung:** `fb-join` / `257016e`, based on `2718c22` (`R30`, the CPU-view probe).
 **Question, from the brief:** close *"two memories"*. `w228` backed three framebuffer
 operands with real card memory at the guest's own addresses — **blank, and with no view the
@@ -103,6 +118,42 @@ other reply is still read with an `max_fds` allowance of **zero**, so the kernel
 — is what stops a child attaching a descriptor to an `Alloc`.
 
 ### 1.2 ★★★ The establishment copy, and why it is what makes the ordering safe
+
+⊘⊘ **CORRECTED 2026-08-11 (the forward-port) — THE ESTABLISHMENT COPY WAS NOT THE WHOLE OF
+THE ORDERING, AND THE HALF IT MISSED IS THE FAILURE PATH.** Read this before §1.2 and before
+the *"The order"* list in §1.
+
+Everything below about the copy is correct and is unchanged in the code. What it does **not**
+cover is the **bind**. As written, this rung's order was:
+
+> **1.** join (`back_fb_leaf`, *which also bound the row*) → **2.** adopt + `mmap` →
+> **3.** establish + install
+
+So between step 1 and step 3 the address table said the range was host-backed while the
+guest's window still pointed at the emulator's own page. ⚠ And the real problem is not the
+window's width: **if step 2 or step 3 REFUSED, the row stayed** — permanently declaring a join
+that never happened. This rung's own code logs that state as `⊘ Two memories, named` and
+leaves the row in place. Under the port the row's declaration is
+`BackingBytes::JoinsGuestWindow`, so it would be `w228`'s two memories under the one word that
+says they are one — strictly worse than `w228`, which at least declared the shadow.
+
+★ **The order is now:**
+
+> **1.** join (`back_fb_leaf`, which binds **nothing** and adopts only the host facts) →
+> **2.** adopt + `mmap` → **3.** establish + install → **4. bind**
+> (`SharedDevice::adopt_joined_fb_leaf`)
+
+and every path that does not reach step 4 calls `release_unadopted_fb_leaf` instead of
+binding. ⊘ The cost, stated: between 1 and 4 the isolate holds a fixed map at the guest's VA
+that core state does not name, so a re-ask in that gap re-plans as a **first** join and RM
+answers the second fixed map at an occupied address `0x51` — which cannot be told apart from
+exhaustion. The release is what closes it.
+
+★ A consequence rather than an incidental: **the adopt is what makes a replay a replay.**
+Idempotence is read off the row's host backing, so a join whose install never happened
+correctly re-asks as a first join instead of replaying onto a window that points elsewhere.
+
+⊘ **The bench measurement in §3.2 ran the OLD order.** It is not a measurement of this code.
 
 Bytes the guest wrote **before** the backing existed are already in `SparseFb`. At install, the
 store reads them **from its own pages** — never through the range it is installing, which by

@@ -1,5 +1,12 @@
 # R30 — THE CPU VIEW: which object can carry it, and why the named mechanism cannot
 
+**STATUS: LIVE, 2026-08-11 — forward-ported from branch `fb-join` (`2fe5f39`) unchanged.**
+This is a **probe report**: what it measured on a real GA106 is not affected by the port, and
+its conclusion (which object can carry a guest-reachable CPU view) still stands.
+⚠ Its successor `fb_join.md` §5.12 **has** changed — the bind moved after the install and now
+declares `kayfabe_mmu::BackingBytes::JoinsGuestWindow`. Read that doc's own STATUS block
+before building on this one. ⊘ Nothing here was re-run.
+
 **Rung:** `cpu-view` / `3437903`, based on `ae73f6b` (`w228`, the second crossing).
 **Question, from the brief:** close *"two memories"* before anything executes — route
 `Request::ExportBacking` to the framebuffer path and join the host object's CPU view to the
