@@ -295,18 +295,19 @@ fn a_gr_doorbell_rings_the_host_token_the_engine_object_path_already_minted() {
     dev.forward_engine_object_by_parent(CLIENT, CHAN, mc::COMPUTE, &[])
         .expect("the Case-1 engine-object forward lands on a GR channel");
 
-    let minted = dev.with_proc(pid, |proc| {
-        proc.channels
-            .get(&cid)
-            .expect("the channel is live")
-            .host_token
-            .expect(
-                "★★★ FACT 2 — `commit_engine_object` writes `Channel::host_token`. If this \
+    let minted = dev
+        .with_proc(pid, |proc| {
+            proc.channels
+                .get(&cid)
+                .expect("the channel is live")
+                .host_token
+                .expect(
+                    "★★★ FACT 2 — `commit_engine_object` writes `Channel::host_token`. If this \
                  is None the engine-object path did not materialize, and every assertion \
                  below would be about a channel the doorbell minted itself.",
-            )
-    })
-    .expect("the proc is live");
+                )
+        })
+        .expect("the proc is live");
     let after_engine_object = channels_allocated(&rec);
     assert_eq!(
         after_engine_object, 1,

@@ -66,8 +66,10 @@ None)` → `alloc_channel_in(range, ty, RingSource::Ours(None))`
    where `va` is a **host** ring object RM placed in the host VAS. The guest's ring
    (`0x2_0020_0000`, 1024 entries) is not named anywhere in that channel's declaration.
    The verb that *would* name it — `alloc_channel_over_guest_ring`
-   (`RingSource::Guest`) — exists, is hardware-verified (R31/`w230`), and has **exactly one
-   caller: the `kayfabe-rm-ladder` probe.**
+   (`RingSource::Guest`) — exists and has **exactly one caller: the `kayfabe-rm-ladder`
+   probe.** `[measured 2026-08-11, R31, real GA106 / 580.159.04, rev `b39f95f`;
+   `docs/reference/bench_evidence/w230_r31_b39f95f.out`, and the full ladder at
+   `w230_ladder_65d7532.out`]` host RM **accepts** a channel whose ring is the caller's.
 2. **The cursor is OURS.** `GP_PUT` lives in the USERD *we* handed RM, at
    `USERD_GP_PUT`, and the **only** writer in the tree is
    `HostRmBackend::submit_entry`, which refuses outright when the ring is not ours
@@ -82,6 +84,29 @@ state a routed GR doorbell reaches today:
 > nothing on this rung writes the guest's cursor into that word."*
 
 ⇒ **`GP_PUT == GP_GET` forever ⇒ the engine fetches nothing and reports no error.**
+
+#### 0.3.1 ⊘ CREDIT WHERE IT IS DUE — half of §0.3 was already pre-registered, and the
+#### lane that wrote it built NOTHING for exactly this reason
+
+`traces/boots/w259/predictions_recorded_before_the_boot.md` (commit `1040880`, 2026-08-11
+14:15) states the cursor half in advance:
+
+> *"Opening `Route::NotACopyEngineChannel` today rings a host GR channel whose USERD
+> `GP_PUT` is `0`. Hardware compares `GP_PUT` against `GP_GET`, finds them equal, and
+> fetches nothing — **correctly and forever**. The falsifier would return **C**, and C would
+> be **uninformative**, because it was determined before the boot by a line of code rather
+> than by the GPU. ⊘ **A run whose outcome is fixed in advance is not a measurement.**"*
+
+★ **That is a correct argument for not building it, and the owner has since ruled to build
+it anyway.** The two are not in conflict once the deliverable is named honestly: this rung
+delivers a **transport**, and the boot that follows is a transport check
+(*"did a GR host token ever get rung"*), **not** an execution measurement. §1's table grades
+it on that and pre-registers `CUP2_RC = 124`.
+
+What this rung adds to `w259`'s argument is the **second, independent** reason — the ring
+itself, not only the cursor — read off `alloc_channel_in`'s two `RingSource` arms. That
+matters because it is the one G8 cannot fix: a cursor bridge answers *"how many entries has
+the guest produced"*, and says nothing about **where those entries are**.
 
 ---
 
@@ -206,13 +231,31 @@ Stated before the boot, so a green cannot be read as more than it is.
 2. **That the guest's ring is reachable by the host engine.** That needs
    `alloc_channel_over_guest_ring` on a guest path, which needs a **host object over the
    guest's ring**. `b9025b4` measured the GR ring to be **in the emulated framebuffer**
-   (FB phys `0x1000000`), and at that revision no such object could be minted. ⚠ The
-   **w260 FB-leaf JOIN landed after that measurement** (`3159bfb`, 17:13, vs `b9025b4`,
-   14:36) and may have dissolved exactly that blocker — **that is INFERRED and not
-   measured, and it is the highest-value single question left on this path.**
+   (FB phys `0x1000000`, five boots, two independent resolvers), and at that revision no
+   such object could be minted — the FB crossing allocated a *blank twin*, *"two
+   memories"*.
+   ★★★ **AND THAT BLOCKER HAS MOVED — it is now a CALLER GAP, not a missing primitive.**
+   The w260 FB-leaf JOIN landed **after** that measurement (`3159bfb`, 17:13, vs `b9025b4`,
+   14:36) and makes one memory out of two, on hardware. ⊘ **But it cannot reach the ring's
+   leaf today**, and this is read off the code rather than inferred: the join is driven by
+   `back_census_framebuffer_leaves(facts, &observed.census)` in `shim.rs` — the **operand**
+   census recovered from the pushbuffer decode, i.e. the addresses the *methods*
+   dereference. `[measured 2026-08-11, w260]` the three leaves it joined were FB phys
+   `0x400000` / `0x600000` / `0x800000`. The **ring's** leaf is never presented to it,
+   because a ring is not an operand of the methods it carries.
+   ⇒ ★ **This is the highest-value single question left on this path**, and it is now
+   sharp enough to be a rung: *give the join a second source — the channel's own
+   `ring_va` — and mint a host object over the joined leaf.*
 3. **That the cursor bridge works.** G8. `b9025b4` measured the producer index is already
    trapped (`BAR1[2] WRITE off=0xa008c val=0x1` is `GP_PUT=1` at `USERD+0x8c`); the missing
-   piece is the join from a BAR1 offset to a channel.
+   piece is the join from a BAR1 offset to a channel — *"a JOIN question, not a plumbing
+   question"*.
+   ⚠ And the alternative to G8 — adopting the guest's own USERD — carries a measured,
+   `NV_OK`-returning hazard that must not be discovered at a boot: `[measured 2026-08-11,
+   R32/w233, real GA106 / 580.159.04]` **RM ZEROES all 512 bytes of a caller-supplied
+   USERD**, so a host channel born over the guest's *live* USERD wipes the guest's own
+   cursors — and *"born at the first doorbell"* means born **after** the guest wrote
+   `GP_PUT`. ⇒ Never lazily. (`RESUME_HERE_2026_08_11.md` §6 rung 2.)
 4. **Anything about ordering, completions, or interrupts.** The completion plane is
    untouched; `AWAKEN_ENABLE = 0` means the guest polls, so no vector is owed.
 5. **That the refusal removal is safe under a hostile guest.** The GR arm now reaches
@@ -220,3 +263,42 @@ Stated before the boot, so a green cannot be read as more than it is.
    address — the channel, its VAS and its host handles are all pre-existing — but it does
    let a guest cause `ring_doorbell` on a GR channel at a rate it chooses. That is the same
    exposure the CE route already has.
+
+---
+
+## 5. How to run the armed arm on the bench
+
+```sh
+# the CONTROL — identical to every prior boot; the arming line still prints
+KAYFABE_GR_ROUTE=refuse       ...boot_nvkvm.sh...
+# the ARMED arm
+KAYFABE_GR_ROUTE=passthrough  ...boot_nvkvm.sh...
+```
+
+Both arms print one line into `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries
+into the repository:
+
+```text
+kayfabe: GR-ROUTE arm=refuse      ⇒ a GrCompute doorbell is REFUSED by name …
+kayfabe: GR-ROUTE arm=passthrough ⇒ a GrCompute doorbell is HANDED TO THE CORE …
+```
+
+⚠ **A value that names no arm refuses to realize.** `KAYFABE_GR_ROUTE=on` is not a spelling
+and does not mean `passthrough`; the port will not build. That is deliberate — see
+§2's flag note.
+
+⚠ The route only *matters* on a plane that can issue host verbs, i.e. with `KAYFABE_ISOLATES`
+set. On the shipped stillborn plane the armed arm reaches the core and is refused there by a
+**core** fault instead of by the shell's routing fact — which is exactly what
+`crates/kayfabe-qemu-raw/tests/gr_route_passthrough.rs` asserts, and is a real observation of
+*where the doorbell went*, but is not a bench result.
+
+## 6. Evidence, by file
+
+| what | where |
+|---|---|
+| the route, end to end through a guest MMIO write, both arms | `crates/kayfabe-qemu-raw/tests/gr_route_passthrough.rs` |
+| the token verdict (§3), watched red two ways | `tests/tests/gr_doorbell_token_is_the_channels_own_field.rs` |
+| the selector + disposition, quantified over every route and engine | `crates/kayfabe-qemu-raw/tests/shim_logic.rs` (final block) |
+| the opacity property the route depends on | `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` |
+| the default arm still refused | `crates/kayfabe-qemu-raw/tests/e2_doorbell.rs::a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it` |

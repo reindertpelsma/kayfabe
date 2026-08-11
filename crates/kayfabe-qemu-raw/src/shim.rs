@@ -4303,8 +4303,24 @@ impl SharedDoorbell {
     /// # ⊘ What a green line here still does NOT mean
     ///
     /// - **Nothing executed.** No doorbell is routed and no engine is pointed at anything;
-    ///   `Route::NotACopyEngineChannel` refuses every `GrCompute` doorbell one function below,
-    ///   exactly as at `w228`. **The guest did not move.**
+    ///   ⊘ **CORRECTED 2026-08-11** — this used to read *"`Route::NotACopyEngineChannel`
+    ///   refuses every `GrCompute` doorbell one function below, exactly as at `w228`"*, and
+    ///   that is now true only of the **default** `KAYFABE_GR_ROUTE=refuse` arm. On
+    ///   `passthrough` the doorbell IS routed, and this join runs on the way past it — the
+    ///   two calls above `return None` are the same two the refusal arm makes, in the same
+    ///   order, precisely so the armed arm stays log-comparable to its control.
+    ///   ⇒ The claim that survives is the one that was load-bearing: **nothing executed.**
+    ///   `gr_doorbell_passthrough.md` §0.3 — the host GR channel's ring and its `GP_PUT` are
+    ///   both ours on either arm, so the host engine fetches nothing. **The guest did not
+    ///   move.**
+    ///
+    /// - ⚠ **And the leaf this join reaches is NOT the ring's.** It is driven off
+    ///   `observed.census`, the operand census recovered from the pushbuffer decode — the
+    ///   addresses the *methods* dereference. `[measured 2026-08-11, w260]` the three leaves
+    ///   it joined were `fb_phys 0x400000/0x600000/0x800000`; the GR **ring** lives at
+    ///   `fb_phys 0x1000000` (`guest_ring_adoption.md` §4, five boots, two resolvers) and
+    ///   nothing presents it here. ⇒ The blocker `b9025b4` named is now a **caller gap, not
+    ///   a missing primitive**, and it is the next question on this path.
     /// - **The leaf is host SYSMEM.** A named performance divergence from the C artifact,
     ///   with its reason on [`kayfabe_isolate::FbLeafJoined`]. Card memory is precisely what
     ///   cannot carry a guest-reachable CPU view.
@@ -8753,6 +8769,11 @@ pub enum GrRouteArm {
 }
 
 impl GrRouteArm {
+    /// Every arm, so a test can quantify over them rather than restate the list — the
+    /// property `every_ce_executor_round_trips_through_its_own_spelling` relies on one
+    /// selector over.
+    pub const ALL: [GrRouteArm; 2] = [GrRouteArm::Refuse, GrRouteArm::Passthrough];
+
     /// One word, for the boot's own log.
     #[must_use]
     pub fn as_str(self) -> &'static str {

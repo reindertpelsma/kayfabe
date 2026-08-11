@@ -2387,3 +2387,151 @@ fn the_gate_hands_over_exactly_the_kinds_a_shadow_host_channel_may_back() {
         );
     }
 }
+
+// =====================================================================================
+// ★★★★★ THE GR ROUTE selector — the PURE half, and the DISPOSITION it feeds
+// =====================================================================================
+//
+// ⊘ Same scope caveat as the two selector blocks above: these drive `gr_route_from` and
+// `kayfabe_rt::shell_disposition` and never read the process-global. The plumbing from the
+// variable to the routing decision is pinned end to end, through a real guest MMIO write,
+// by `tests/gr_route_passthrough.rs` — which has to be its own binary to write the global
+// safely, and says so.
+//
+// Why the selector exists at all: the arm it opens was CLOSED ON EVIDENCE at §16.65, and
+// the evidence still stands — `docs/design/gr_doorbell_passthrough.md` §0.2-§0.3.
+
+use kayfabe_qemu_raw::shim::{GrRouteArm, gr_route_from};
+use kayfabe_rt::{DoorbellRoute, ShellDisposition, shell_disposition};
+
+/// ⊘ **The default must leave every prior boot comparable.** `KAYFABE_GR_ROUTE` unset is
+/// `Refuse`, and `Refuse` disposes a `HostGr` doorbell exactly as the `!=  CpuCe` bool did.
+#[test]
+fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
+    assert_eq!(gr_route_from(None), Ok(GrRouteArm::Refuse));
+    assert!(
+        !GrRouteArm::Refuse.gr_passthrough(),
+        "★ the default arm opened the route"
+    );
+    assert_eq!(
+        shell_disposition(DoorbellRoute::HostGr, GrRouteArm::Refuse.gr_passthrough()),
+        ShellDisposition::RefuseByRoute,
+        "★ on the default arm a GR doorbell must still be refused by name, or every \
+         committed `ctl` boot in `traces/guest_boots/` stops being comparable to the next"
+    );
+}
+
+/// ★★★★★ **The arming is the ONLY thing that opens the route**, and it opens it for
+/// `HostGr` and for nothing else.
+///
+/// ⊘ The `Unserved` row is the one that matters: before this rung the shim's decision was
+/// `route != CpuCe`, which could not have opened one of the two without opening both.
+#[test]
+fn the_arming_opens_hostgr_and_only_hostgr() {
+    assert!(GrRouteArm::Passthrough.gr_passthrough());
+    assert_eq!(
+        shell_disposition(
+            DoorbellRoute::HostGr,
+            GrRouteArm::Passthrough.gr_passthrough()
+        ),
+        ShellDisposition::HandToCore,
+        "★★★★★ THE RUNG: armed, a GR doorbell is handed to the core"
+    );
+    for armed in [false, true] {
+        assert_eq!(
+            shell_disposition(DoorbellRoute::Unserved, armed),
+            ShellDisposition::RefuseByRoute,
+            "⊘ NVENC/NVDEC must be refused on BOTH arms — the GR arming is not a general \
+             `stop refusing` switch, and folding them into one bucket is exactly the defect \
+             `DoorbellRoute` exists to prevent (armed={armed})"
+        );
+        assert_eq!(
+            shell_disposition(DoorbellRoute::CpuCe, armed),
+            ShellDisposition::MayServeLocally,
+            "⊘ the copy-engine route is untouched by this rung on BOTH arms (armed={armed})"
+        );
+    }
+}
+
+/// ★★★ **The content forward follows the SAME authority as the route** — one rule, not two.
+///
+/// ⊘ This is the property that keeps `forward_ring`'s `Err` from turning a rung host
+/// doorbell into a `Refused` report. Quantified over every `EngineKind` so a new engine
+/// cannot slip in on the wrong side of it.
+#[test]
+fn ring_content_is_forwardable_exactly_where_the_cpu_ce_executor_owns_the_route() {
+    for engine in kayfabe_arch::ids::EngineKind::ALL {
+        assert_eq!(
+            kayfabe_rt::device::ring_content_is_forwardable(engine),
+            kayfabe_rt::device::route_of_engine(engine) == DoorbellRoute::CpuCe,
+            "★ {engine:?} disagrees between the content-forward predicate and the route \
+             classifier. Two tables for one question is §16.64's defect, and this one is \
+             load-bearing: a GR doorbell whose ring is parsed by the copy-engine codec can \
+             be reported `Refused` after its host channel was rung."
+        );
+    }
+    // Non-vacuity: the predicate is not constant in either direction.
+    assert!(kayfabe_rt::device::ring_content_is_forwardable(
+        kayfabe_arch::ids::EngineKind::Ce
+    ));
+    assert!(!kayfabe_rt::device::ring_content_is_forwardable(
+        kayfabe_arch::ids::EngineKind::GrCompute
+    ));
+}
+
+/// Every arm round-trips through its own spelling, with the same non-vacuity check the
+/// executor block uses.
+#[test]
+fn every_gr_route_arm_round_trips_through_its_own_spelling() {
+    for arm in GrRouteArm::ALL {
+        assert_eq!(
+            gr_route_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GrRouteArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), GrRouteArm::ALL.len(), "two arms share a name");
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly.
+///
+/// ★ The stakes here are higher than for the executor selector, and that is why `on` and
+/// `1` are in the list: the two arms of this experiment differ in **one routing decision**,
+/// so a disarmed evidence run and its control produce identical logs — no new lines, and a
+/// full census of `Route::NotACopyEngineChannel` — which is also exactly what a *correct*
+/// control produces.
+#[test]
+fn a_value_that_is_not_a_gr_route_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Refuse",
+        "REFUSE",
+        "refuse ",
+        " refuse",
+        "pass",
+        "passthru",
+        "hostgr",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = gr_route_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a GR route arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GrRouteArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}

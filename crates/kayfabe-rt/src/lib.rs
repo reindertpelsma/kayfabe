@@ -69,6 +69,12 @@ pub mod lock;
 /// manifest demands. The count and the labels come with it because a census that could not
 /// print an empty bucket would report a partition it had not measured.
 pub use device::{DoorbellRoute, ENGINE_KIND_COUNT, engine_kind_names};
+/// ★★★★★ §16.96 — the engine-object **deferral** vocabulary, re-exported for exactly the
+/// reason [`ClassId`] and [`FwdFault`] are: the QEMU shim is the frame that drains the latch
+/// (`Regs::write`, the outermost frame on the vCPU's MMIO trap holding no ranked lock), so it
+/// must be able to NAME both what was admitted and what the drain then did — including the
+/// bound's refusal, which is a fact about **us** and would otherwise be unprintable.
+pub use device::{EngineForwardRun, ForwardAdmission, MAX_PENDING_ENGINE_FORWARDS};
 /// ★★★★★ The GR passthrough route's decision half — what the shell's port DOES with a
 /// routing verdict, re-exported for [`DoorbellRoute`]'s own reason one step further along.
 ///
@@ -77,12 +83,6 @@ pub use device::{DoorbellRoute, ENGINE_KIND_COUNT, engine_kind_names};
 /// a `!=` against one variant — which is why `HostGr` and `Unserved` shared a bucket they do
 /// not belong in.
 pub use device::{ShellDisposition, shell_disposition};
-/// ★★★★★ §16.96 — the engine-object **deferral** vocabulary, re-exported for exactly the
-/// reason [`ClassId`] and [`FwdFault`] are: the QEMU shim is the frame that drains the latch
-/// (`Regs::write`, the outermost frame on the vCPU's MMIO trap holding no ranked lock), so it
-/// must be able to NAME both what was admitted and what the drain then did — including the
-/// bound's refusal, which is a fact about **us** and would otherwise be unprintable.
-pub use device::{EngineForwardRun, ForwardAdmission, MAX_PENDING_ENGINE_FORWARDS};
 /// ★★★★★ §16.80 — the class id and the two Case-1 engine-object types, re-exported for
 /// the same reason and under the same rule: `SharedDevice::forward_engine_object_by_parent`
 /// takes and returns them, and the QEMU shim implements `ObjectModel` over it. A
