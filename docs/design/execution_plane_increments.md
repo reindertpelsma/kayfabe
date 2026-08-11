@@ -17570,3 +17570,93 @@ checks are minutes; the three rungs were not.
 ⊘ The defect itself is **untouched**: we still allocate an async copy-engine object (`CE2`/`CE3`,
 runlists 1 and 2) on a host channel bound to runlist 0, and every one of the 14 still fails. This
 rung made the failure *countable and attributable*; it did not fix it.
+
+## §16.106 ★★★★★ THE CHANNEL FOLLOWS THE OBJECT'S DECLARED COPY ENGINE — all 14 refusals have ONE cause, and it is a constant of ours
+
+⚠ **STATUS (2026-08-11): BUILT; boot pending at the time of writing, scored in
+`traces/boots/w255/`.** ⊘ `CE-SUBMIT` **0**; no execution-plane rung is claimed.
+
+### 16.106.1 What decides the runlist — read from the driver, not from us
+
+1. **A channel's runlist comes from its GROUP.** `kchangrpapiConstruct_IMPL` stores
+   `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS.engineType`
+   (`ogkm-580.159.04: src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c:161-179`),
+   `engineDesc → runlistId` is translated at `:1251-1257`, and `kchannelConstruct_IMPL` stamps it
+   onto every channel that joins (`kernel_channel.c:885-897`).
+2. **An engine object's engine comes from its OWN alloc params.** `chandesConstruct_IMPL` calls
+   `pParamToEngDescFn` (`channel_descendant.c:159-166`); for every `*_DMA_COPY_*` class that is
+   `kceGetEngineDescFromAllocParams` (`src/nvidia/src/kernel/gpu/ce/kernel_ce_context.c:99-165`),
+   where **`VERSION_1` reads `NVB0B5_ALLOCATION_PARAMETERS.engineType` as an
+   `NV2080_ENGINE_TYPE_COPY(i)` ORDINAL** and **`VERSION_0` as a bare INSTANCE INDEX**; any other
+   version → `ENG_INVALID`.
+3. **The two must then agree.** `chandesConstruct_IMPL:243` → `kfifoRunlistSetIdByEngine_GM107` →
+   `kfifoRunlistSetId_GM107`, whose *first branch* returns `NV_ERR_INVALID_STATE` (`0x40` = 64)
+   and prints both numbers.
+
+⇒ **Checked against ours:** `HostRmBackend::alloc_channel` lowered `EngineKind::Ce` through
+`engine_type_for`, which hardcodes `engine_type_copy(0)` = `ENGINE_TYPE_COPY0`. That function's
+**own measured sweep** (RTX 3060 / 580.159.04, `--engines`) records `COPY(0)`/`COPY(1)` →
+**runlist 0**, `COPY(2)` → **1**, `COPY(3)` → **2**. The host log's `current: 0x0` is our
+`COPY0`; its `requested: 0x1` for `CE2` and `0x2` for `CE3` are the guest's. **Both ends of the
+message are accounted for by the table, and nothing is inferred from the symptom.**
+
+★★★ **The core cannot express the instance at all.** `EngineKind::Ce` names *a* copy engine and
+never *which*, so the adapter had to pick — and `engine_type_for`'s own closing paragraph says
+choosing CE2+ *"is a scheduling decision with a cost … which nothing at this rung is in a position
+to make. Recorded rather than guessed at."* ⊘ That sentence is still true, **and the decision was
+never ours to make: the guest already made it**, in the eight bytes it hands us. Third instance in
+this campaign of a doc that named a dependency and was never told the dependency was already met
+(§16.99.2's *"the doc that names the dependency was never told the dependency had been met"*).
+
+### 16.106.2 The repair, and the one that was rejected
+
+| | |
+|---|---|
+| **Chosen** | move the **channel** to the engine the object declares |
+| Rejected | rewrite the **object's** `engineType` to `COPY0` |
+
+1. **The declaration is not ours to edit.** The same ordinal leaves the guest again in
+   `NVA06F_CTRL_CMD_BIND` — `engineType = 11` = `COPY2`, measured on real hardware
+   (`traces/real_ga106/rpc_transcript_real_ga106.txt:63`). Rewriting leaves the guest believing
+   `COPY2` while the host runs `COPY0`: a disagreement with no error at any layer.
+2. **It is a wrong ANSWER, not a missing one.** `COPY0`/`COPY1` are the GRCE pair on the graphics
+   runlist, so forcing them serialises copies against GR work the guest expects to overlap.
+3. **It deliberately re-creates the C's `dma_copy_class_alloc_params` defect**, immediately after
+   measuring it.
+
+`RmBackend::alloc_channel` therefore gains `hosting: Option<HostedObject>` — *the engine object
+this channel is being materialized to host* — and the adapter reads the instance out of the
+guest's own blob through `CeAllocParams::declared_copy_engine_type`, which is
+`kceGetEngineDescFromAllocParams` transcribed with **both** versions. ⊘ `None` from it means
+*"declares no copy engine we can name"*, **never "copy engine 0"**: the fall-through reaches
+`COPY0` through the unchanged `engine_type_for` path, which is a different sentence.
+
+⊘ **Scope, narrow and deliberate:** only `EngineKind::Ce`, and only for a declaration RM itself
+would accept. The 8 forwards that already succeed are **GR** channels taking a CE object as
+**GRCE**, and keying on the class alone would break them by building a CE channel for a GR
+context.
+
+### 16.106.3 ⊘⊘ THE DECLARATION HAS TO CROSS THE ISOLATE WIRE
+
+`isolate_plane=real` puts the real adapter in the **child process**; `HostIsolate::alloc_channel`
+is an RPC (`Request::AllocChannel`). A version of this fix that widened only the trait would
+compile, pass every in-process test, and be **dead on the one path a boot exercises**. So the
+wire carries it, with an **explicit presence byte** — `class = 0` with empty params is a legal
+thing for a guest to send and must not read as *"no object"* — and an unrecognised presence byte
+is refused by name rather than defaulted, because a wrong-sized field decodes the **rest** of the
+frame at the wrong offset.
+
+### 16.106.4 The tests, and which failure each one catches
+
+- **The decision** (`kayfabe-isolate-host`, 3 tests): the declared ordinal reaches the channel;
+  `VERSION_0`'s index and `VERSION_1`'s ordinal are *not* read through one lens (the same `2`
+  means different things); and every fall-through arm — GR kinds, no object, short/absent params,
+  unknown version, a non-copy ordinal — returns `None`.
+- **The delivery** (`tests/tests/engine_context.rs`, 2 tests): the mock **records** what
+  `alloc_channel` was told, so `Worker::execute` passing `None` everywhere fails the suite. ★ A
+  trait parameter is an upper bound on what a caller *may* communicate; only the call site says
+  what it *does*, and that gap cost this campaign four rungs.
+- **The ABI** (2 tests): `declared_copy_engine_type` against RM's own two versions, plus an
+  encode→decode identity so a blob we forward and a blob we read cannot drift.
+- **The wire**: both `hosting` arms in the round-trip sample — the presence byte is exactly what a
+  one-arm round trip would never exercise.
