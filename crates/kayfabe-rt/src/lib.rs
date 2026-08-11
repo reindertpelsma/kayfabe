@@ -69,6 +69,14 @@ pub mod lock;
 /// manifest demands. The count and the labels come with it because a census that could not
 /// print an empty bucket would report a partition it had not measured.
 pub use device::{DoorbellRoute, ENGINE_KIND_COUNT, engine_kind_names};
+/// ★★★★★ The GR passthrough route's decision half — what the shell's port DOES with a
+/// routing verdict, re-exported for [`DoorbellRoute`]'s own reason one step further along.
+///
+/// ⊘ [`device::shell_disposition`] rather than the shim re-deriving it: §16.65's whole
+/// finding was that a routing rule written twice comes to disagree, and the shim's copy was
+/// a `!=` against one variant — which is why `HostGr` and `Unserved` shared a bucket they do
+/// not belong in.
+pub use device::{ShellDisposition, shell_disposition};
 /// ★★★★★ §16.96 — the engine-object **deferral** vocabulary, re-exported for exactly the
 /// reason [`ClassId`] and [`FwdFault`] are: the QEMU shim is the frame that drains the latch
 /// (`Regs::write`, the outermost frame on the vCPU's MMIO trap holding no ranked lock), so it

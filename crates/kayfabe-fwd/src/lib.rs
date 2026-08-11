@@ -2750,6 +2750,23 @@ pub struct DoorbellOutcome {
     pub host_token: u64,
     /// True if this dispatch had to schedule the channel first (first submission).
     pub scheduled_now: bool,
+    /// ★★★★ **The channel's engine**, off the same `Channel` every other field here came
+    /// from.
+    ///
+    /// # ⊘ Why the outcome carries it rather than the caller re-resolving it
+    ///
+    /// `kayfabe_rt::device::SharedDevice::doorbell` has to decide, *after* the ring has
+    /// been rung, whether the **copy-engine content forward** applies to this doorbell
+    /// (`kayfabe_rt::device::ring_content_is_forwardable`). Re-resolving the channel to ask
+    /// would be a second lock acquisition and — worse — a **second projection of one fact**,
+    /// which this project has measured disagreeing three times. It is read here, inside the
+    /// commit, off the same `chan` that yielded [`Self::host_token`], so the engine and the
+    /// token can never be attributed to different channels.
+    ///
+    /// ⊘ It is not a routing input. Nothing upstream of the commit branches on it; the
+    /// engine that decided which host runlist this channel lives on rode the *plan*
+    /// (`VerbPlan::Doorbell::engine`) and was consumed by `alloc_channel` long before here.
+    pub engine: EngineKind,
 }
 
 /// Check every VA in `working_set` is **ring-admissible** in `table` — the #14 gate
@@ -3226,11 +3243,15 @@ pub fn commit_doorbell(
     }
     poll.last_token = Some(plan.token);
     let host_token = chan.host_token.expect("materialized above");
+    // ★ Off the SAME `chan` binding as `host_token` one line up — see the field's doc for
+    // why the outcome carries this rather than the caller resolving it again.
+    let engine = chan.engine;
     Ok(DoorbellOutcome {
         proc: plan.proc,
         chan: plan.chan,
         host_token,
         scheduled_now: scheduled,
+        engine,
     })
 }
 

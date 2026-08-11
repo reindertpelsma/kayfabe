@@ -3155,6 +3155,15 @@ struct SharedDoorbell {
     /// (`fb_leaf_crossing.md` §0.2), so the feature-off arm is the one CI judges.
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
     exports: FbExportDir,
+    /// ★★★★★ **Which arm of the GR doorbell route this boot runs**, from the composition
+    /// root's own reading of [`GR_ROUTE_ENV`] — see that constant for why it is armed at all
+    /// and `docs/design/gr_doorbell_passthrough.md` for what each arm can and cannot prove.
+    ///
+    /// ★ Like `fb_join` above it is read ONCE, at the root, and carried. ⊘ Never re-read at
+    /// a doorbell: an arming flag consulted twice is a run that can change its mind halfway
+    /// through a boot, and the two arms of this experiment differ only in a routing
+    /// decision — the least visible thing that could drift.
+    gr_route: GrRouteArm,
 }
 
 /// ★★★★★ **§5.12 — a joined framebuffer range, as the device crate's port sees it.**
@@ -4822,8 +4831,67 @@ impl SharedDoorbell {
         // `OS_DESCRIPTOR` primitive, neither of which is built
         // (`ce_executor_tree.md:107-126`). A true refusal outranks a forwarded no-op.
         // ⊘ `Ce` is unaffected on both planes — it falls through to exactly today's gate.
+        // ★★★★★ **THE GR PASSTHROUGH ROUTE — three answers where there were two.**
+        //
+        // What stood here was `if route != DoorbellRoute::CpuCe`, which forced `HostGr` and
+        // `Unserved` into ONE bucket — the exact distinction `DoorbellRoute` exists to keep
+        // (*"GR is the destination the ladder is walking toward … `Unserved` is an engine
+        // nobody has designed a path for"*). The decision now goes through
+        // `kayfabe_rt::shell_disposition`, which is exhaustive over the route and so cannot
+        // silently acquire a fourth engine.
+        //
+        // ⚠ **THIS RE-OPENS A PATH THAT WAS CLOSED ON EVIDENCE**, and the evidence is the
+        // paragraph below, which stands unamended. Read `GR_ROUTE_ENV` and
+        // `docs/design/gr_doorbell_passthrough.md` §0.2-§0.3 before reading a boot that ran
+        // the armed arm: the host GR channel's ring **and** its `GP_PUT` are both ours, so
+        // the host engine fetches nothing on either arm. The armed arm buys the TRANSPORT —
+        // the first `ring_doorbell` ever issued for a GR host token — and nothing else.
+        //
+        // ⊘ The default is `Refuse` and is byte-identical to every boot before this one.
+        //
+        // ⊘ Computed ONCE into a binding and matched below, never asked twice: §16.64's
+        // finding is that two resolutions of one fact can disagree, and this one is read on
+        // both sides of a `return`.
         let route = facts.route();
-        if route != kayfabe_rt::DoorbellRoute::CpuCe {
+        let disposition = kayfabe_rt::shell_disposition(route, self.gr_route.gr_passthrough());
+        if disposition == kayfabe_rt::ShellDisposition::HandToCore {
+            // ★★★★★ **PASSTHROUGH, and the ORDER of these three statements is the ruling.**
+            //
+            // The two calls below are the SAME two the refusal arm makes, in the same order,
+            // and they are **DEBUG and OBSERVATION only**: `dump_gr_pushbuffer_once` is
+            // bounded and print-only (*"advances no cursor, writes no state"*), and
+            // `declare_gr_completion` declares a watch and — on the `KAYFABE_FB_JOIN` armed
+            // arm — drives the framebuffer-leaf join off the operand census it recovers.
+            //
+            // ⚠⚠ **NEITHER MAY GATE THE FORWARD, and neither can**: both return `()`. There
+            // is no `?`, no early return and no branch on their outcome between here and the
+            // `return None` below. That is the rung brief's requirement — *"ring resolution
+            // / pushbuffer reads / method decode are DEBUG: flag-gated, non-fatal, and they
+            // must never gate whether the doorbell is forwarded"* — held by the SHAPE of the
+            // code rather than by a reader checking. It is the same property
+            // `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` pins one crate
+            // down, and `gr_doorbell_route.rs` pins here.
+            //
+            // ⊘ They are kept rather than dropped because the armed arm must stay
+            // log-comparable to its control: a boot that stopped printing `GR-PUSHBUFFER`
+            // and `GR-ADDRESS-CENSUS` the moment the route opened could not be diffed
+            // against the refusing arm at all, and the FB join would silently disarm with
+            // it.
+            self.dump_gr_pushbuffer_once(token, &facts);
+            self.declare_gr_completion(token, &facts);
+            // ★★★ **HAND IT TO THE CORE.** `None` here is not *"not ours"* as a shrug — it
+            // is this port's one vocabulary for *"the core's ring path serves this"*, and it
+            // is the same answer the CE arm gives at `forwarding_plane_owns_ce` below.
+            // `SharedDoorbell::ring` then calls `SharedDevice::doorbell`, which routes the
+            // GUEST token, materializes and schedules the host channel if the engine-object
+            // path has not already, and rings the **HOST** token.
+            //
+            // ⊘ No lock is held across this return: `try_ce_submission` takes the census
+            // mutex and releases it, and `dump_gr_pushbuffer_once` takes and drops the
+            // memory-plane lock inside itself. The core's ranked locks are acquired after.
+            return None;
+        }
+        if disposition == kayfabe_rt::ShellDisposition::RefuseByRoute {
             // ★★★★★ §16.79 — READ THE PUSHBUFFER BEFORE REFUSING IT.
             //
             // The refusal below is true and stays. But it is refusing by ROUTE, and a route
@@ -6801,6 +6869,9 @@ impl Regs {
         // and carried into the doorbell port. ⊘ Never re-read at a doorbell: an arming
         // flag consulted twice is a run that can change its mind halfway through a boot.
         let fb_join = selected_fb_join()?;
+        // ★★★★★ The GR route's arm — read HERE, beside every other plane decision, exactly
+        // once, and carried into the doorbell port. See [`GR_ROUTE_ENV`].
+        let gr_route = selected_gr_route()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -6868,6 +6939,28 @@ impl Regs {
                      the two views must DISAGREE in both directions",
             },
         );
+        // ★★★★★ THE GR ROUTE'S ARMING, PRINTED, on every arm including the default.
+        //
+        // ⚠ For `FB-JOIN`'s reason, and one sharper here: the two arms of THIS experiment
+        // differ in a single routing decision, so a control boot and a disarmed evidence
+        // boot produce **identical** logs — no `GR-PASSTHROUGH` line, and a full census of
+        // `Route::NotACopyEngineChannel` refusals — unless the arming itself is on disk.
+        // `boot_nvkvm.sh` sends this stderr to `run_<tag>_qemu.log`, which `boot_capture.sh`
+        // phase 6 carries into the repository.
+        eprintln!(
+            "kayfabe: GR-ROUTE arm={} ⇒ a GrCompute doorbell is {}",
+            gr_route.as_str(),
+            match gr_route {
+                GrRouteArm::Refuse =>
+                    "REFUSED by name (Route::NotACopyEngineChannel) — the default and the \
+                     control",
+                GrRouteArm::Passthrough =>
+                    "HANDED TO THE CORE — routed, the host channel materialized/scheduled, \
+                     and its HOST token rung. ⊘ The host engine still fetches NOTHING: the \
+                     channel's ring and its GP_PUT are both ours (gr_doorbell_passthrough.md \
+                     §0.3)",
+            },
+        );
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
@@ -6881,6 +6974,7 @@ impl Regs {
             guest_ram_backing,
             fb_join,
             exports,
+            gr_route,
         }));
         Ok(Regs {
             plane,
@@ -8623,6 +8717,94 @@ fn selected_ce_executor() -> Result<CeExecutorChoice, (Status, &'static str)> {
 /// reason: a typo that silently disarmed the join would make an evidence run and its own
 /// control indistinguishable, and the symptom would appear at the first GR doorbell.
 pub const FB_JOIN_ENV: &str = "KAYFABE_FB_JOIN";
+
+/// ★★★★★ **Which arm of the GR doorbell route this boot runs** — the passthrough route's
+/// arming, and the ONLY thing standing between a `GrCompute` doorbell and the core's ring
+/// path (`docs/design/gr_doorbell_passthrough.md`).
+///
+/// | value | what it does |
+/// |---|---|
+/// | `refuse` (default) | today's behaviour, byte for byte: `Route::NotACopyEngineChannel` |
+/// | `passthrough` | ★ the doorbell is handed to `kayfabe_rt::device::SharedDevice::doorbell` |
+///
+/// # ⚠ Why this is armed and not simply switched on
+///
+/// The arm it opens was **closed on evidence**, at §16.65, and the reason is at the refusal
+/// site: a GR doorbell used to fall through to exactly this server and was measured to be
+/// *"a doorbell on a host channel into which the guest's methods were never copied"*. That
+/// measurement still stands — `gr_doorbell_passthrough.md` §0.3 shows at the code that the
+/// host GR channel's ring **and** its `GP_PUT` are both ours, so the engine fetches nothing
+/// on either arm. ⇒ The armed arm buys the **transport**, not execution, and the two arms
+/// exist so that a boot can say which one it ran from its own committed log.
+///
+/// ⚠ A value that names no arm is **refused**, not defaulted, for [`FB_JOIN_ENV`]'s reason:
+/// a typo that silently disarmed the route would make an evidence run and its own control
+/// indistinguishable, and the symptom — *"no GR doorbell was ever forwarded"* — is the
+/// control's expected result.
+pub const GR_ROUTE_ENV: &str = "KAYFABE_GR_ROUTE";
+
+/// Which arm of the GR doorbell route a boot is running. See [`GR_ROUTE_ENV`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrRouteArm {
+    /// The default and the control: refuse by name, exactly as every boot before this one.
+    Refuse,
+    /// ★ Passthrough: hand the doorbell to the core's ring path.
+    Passthrough,
+}
+
+impl GrRouteArm {
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GrRouteArm::Refuse => "refuse",
+            GrRouteArm::Passthrough => "passthrough",
+        }
+    }
+
+    /// Whether a `HostGr` doorbell is handed to the core on this arm — the bool
+    /// [`kayfabe_rt::shell_disposition`] takes. ⊘ Named rather than spelled
+    /// `== Passthrough` at the call site, so the two enums are joined in one place.
+    #[must_use]
+    pub fn gr_passthrough(self) -> bool {
+        self == GrRouteArm::Passthrough
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_gr_route`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`GrRouteArm::Refuse`].
+pub fn gr_route_from(value: Option<&str>) -> Result<GrRouteArm, (Status, &'static str)> {
+    match value {
+        None | Some("refuse") => Ok(GrRouteArm::Refuse),
+        Some("passthrough") => Ok(GrRouteArm::Passthrough),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_GR_ROUTE does not name an arm: the only values are `refuse` (the \
+             default and the control — `Route::NotACopyEngineChannel`, exactly as every \
+             boot before this one) and `passthrough` (the doorbell is handed to the core's \
+             ring path). It is not defaulted, because a typo that silently disarmed the \
+             route would make an evidence run and its own control indistinguishable — and \
+             the control's expected result is `no GR doorbell was ever forwarded`, which is \
+             precisely what a disarmed evidence run would also show. ⊘ `on`/`1` are not \
+             accepted: this is a two-arm experiment, not a boolean.",
+        )),
+    }
+}
+
+/// Which arm [`GR_ROUTE_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_gr_route() -> Result<GrRouteArm, (Status, &'static str)> {
+    match std::env::var_os(GR_ROUTE_ENV) {
+        None => Ok(GrRouteArm::Refuse),
+        Some(v) => gr_route_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
 
 /// Which arm of the framebuffer-leaf join a boot is running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -2111,7 +2111,25 @@ impl SharedDevice {
             },
             kayfabe_fwd::commit_doorbell,
         )?;
-        if let Some(vmm) = vmm {
+        // ★★★★★ **THE CONTENT FORWARD IS ASKED FOR BY ENGINE** — see
+        // [`ring_content_is_forwardable`], which carries the ruling and its reason.
+        //
+        // ⊘ Two conditions, and they are different questions. `vmm` is *"does this caller
+        // hold a guest-memory port at all"*; the predicate is *"is parsing this ring with
+        // the copy-engine codec the right verb for this engine"*. A GR doorbell answers
+        // **no** to the second, so `forward_ring`'s `?` can never turn a rung host doorbell
+        // into a `Refused` report — which is the property
+        // `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` pins and the GR
+        // route depends on.
+        //
+        // ⊘ It is checked HERE and not inside `forward_ring`, deliberately: that function's
+        // own doctrine is that *every* arm which forwards nothing must be NAMED, and it
+        // already has eight paths to `Ok(())`. A ninth, whose meaning is *"this was never
+        // this function's kind of work"*, belongs at the call site where the alternative is
+        // visible, not inside the thing being skipped.
+        if let Some(vmm) = vmm
+            && ring_content_is_forwardable(out.engine)
+        {
             self.forward_ring(vmm, out.proc, out.chan)?;
         }
         Ok(out)
@@ -4045,6 +4063,91 @@ pub fn route_of_engine(engine: EngineKind) -> DoorbellRoute {
         EngineKind::GrCompute | EngineKind::GrGraphics => DoorbellRoute::HostGr,
         EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => DoorbellRoute::Unserved,
     }
+}
+
+/// ★★★★★ **What the SHELL'S doorbell port does with a doorbell of a given route** — the
+/// pure half of the decision `kayfabe-qemu-raw`'s `SharedDoorbell::try_ce_submission`
+/// makes, split out here for [`route_of_engine`]'s stated reason: *"the half that can be
+/// quantified over should be."*
+///
+/// ⊘ **Three answers and not two.** Before the GR passthrough route existed the shim's
+/// decision was a `bool` spelled `route != DoorbellRoute::CpuCe`, which forced `HostGr` and
+/// `Unserved` into one bucket. They are not one bucket: `Unserved` is *"nobody has designed
+/// a path for this engine"*, and `HostGr` is *"the core's ring path serves this"* — the same
+/// distinction [`DoorbellRoute`] itself exists to preserve, and collapsing it one layer down
+/// was what made the route unopenable without touching the refusal's own name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellDisposition {
+    /// The shell's own CPU copy-engine executor (`kayfabe_rt::ceutils`) may serve it —
+    /// subject to the *other* gates the shim applies after this one. ⊘ Not *"it will be
+    /// served here"*: this answer only says the routing fact does not exclude it.
+    MayServeLocally,
+    /// ★★★ **PASSTHROUGH.** Hand the doorbell to the core — [`SharedDevice::doorbell`],
+    /// which routes the guest token, materializes/schedules the host channel and rings the
+    /// **host** token. ⊘ The shell runs no executor for it and interprets none of its
+    /// bytes.
+    HandToCore,
+    /// Refuse by name. Nothing in this process is an executor for this engine and the core
+    /// has no ring path for it either.
+    RefuseByRoute,
+}
+
+/// ★★★★★ **THE SHELL'S DISPOSITION**, over a [`DoorbellRoute`] and one arming flag.
+///
+/// # ⚠ `gr_passthrough` re-opens a path that was CLOSED ON EVIDENCE
+///
+/// §16.65 replaced a `HostGr` fall-through to the core with a named refusal, because
+/// `execution_plane_increments.md` §15.5 had measured what the fall-through achieved:
+/// *"we rang a doorbell on a host channel into which the guest's methods were never
+/// copied"*, and *"a true refusal outranks a forwarded no-op."* That measurement has not
+/// been overturned — see `docs/design/gr_doorbell_passthrough.md` §0.3, which states at the
+/// code why a routed GR doorbell **still** cannot make the host engine fetch the guest's
+/// ring (the host channel's ring and its `GP_PUT` are both ours).
+///
+/// ⇒ The flag exists so that re-opening it is a **deliberate, armed, printed, controlled**
+/// choice with a default that is byte-identical to today, rather than a silent flip. What
+/// the armed arm buys is the **transport**: the first `ring_doorbell` ever issued for a GR
+/// host token, which is the standing debt `RESUME_HERE_2026_08_11.md` §3 records.
+///
+/// ⊘ The `match` is exhaustive with no `_` arm, for [`route_of_engine`]'s reason: a new
+/// [`DoorbellRoute`] variant fails this build until somebody says what the shell does with
+/// it.
+#[must_use]
+pub fn shell_disposition(route: DoorbellRoute, gr_passthrough: bool) -> ShellDisposition {
+    match route {
+        DoorbellRoute::CpuCe => ShellDisposition::MayServeLocally,
+        DoorbellRoute::HostGr if gr_passthrough => ShellDisposition::HandToCore,
+        DoorbellRoute::HostGr | DoorbellRoute::Unserved => ShellDisposition::RefuseByRoute,
+    }
+}
+
+/// ★★★★ **Whether the guest's ring CONTENT may be forwarded for this engine** — i.e.
+/// whether [`SharedDevice::forward_ring`], which parses the ring with the **copy-engine**
+/// codec and plans `ce_copy`s, is the right verb for a doorbell on it.
+///
+/// # ⊘ Why this is derived from [`route_of_engine`] and is not a second table
+///
+/// It is the same question that decides the executor, asked one layer up, and this project
+/// has measured twice what two tables for one question cost (§16.64's probe contradicting
+/// the serving path beside it). ⇒ One authority, two callers.
+///
+/// # ⚠ Why a GR doorbell must not run it — this is a RULING, not an optimisation
+///
+/// The copy-engine codec is class-gated, so every span of a GR pushbuffer decodes `Opaque`
+/// and the forward moves nothing. But `forward_ring` can return `Err`, and
+/// [`SharedDevice::doorbell`] propagates it — so a GR doorbell that rang the host channel
+/// **successfully** would be reported `Refused`, and *whether the doorbell was forwarded*
+/// would depend on *whether its ring parsed*. That is exactly the property
+/// `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` exists to forbid, and
+/// the rung brief states it as a requirement: *"ring resolution / pushbuffer reads / method
+/// decode … must never gate whether the doorbell is forwarded."*
+///
+/// ⊘ **Not solved by passing `vmm: None` from the shim.** That parameter's own doc names
+/// that move: *"a caller that holds a port and passes `None` silently forwards nothing."*
+/// The decision belongs to the engine, by name, here.
+#[must_use]
+pub fn ring_content_is_forwardable(engine: EngineKind) -> bool {
+    matches!(route_of_engine(engine), DoorbellRoute::CpuCe)
 }
 
 impl CeChannelFacts {
