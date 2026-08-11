@@ -298,7 +298,7 @@ fn progress_under_pending_verb_intra_proc() {
             .resolve(GPU, PDB, GpuVa(VA.0 + 0x40))
             .expect("A's VA resolves after its commit");
         assert_eq!(
-            (binding.phys, binding.host_va(), off),
+            (binding.phys(), binding.host_va(), off),
             (a_pub.gpa, Some(a_pub.host_va), 0x40),
             "({mode:?}) A's commit wrote the binding it computed, not B's"
         );
@@ -1572,7 +1572,7 @@ struct ProcVas<'a>(&'a kayfabe_core::gpu::Proc, GpuId, Pdb);
 impl kayfabe_isolate::RingWorkingSet for ProcVas<'_> {
     fn is_host_published(&self, va: GpuVa) -> bool {
         kayfabe_fwd::resolve_in(self.0, self.1, self.2, va)
-            .is_ok_and(|(binding, _off)| binding.host.is_some())
+            .is_ok_and(|(binding, _off)| binding.host().is_some())
     }
 }
 

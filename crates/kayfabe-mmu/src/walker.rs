@@ -834,6 +834,24 @@ pub enum PopulateRefusal {
         /// The virtual address that would have been dropped.
         va: GpuVa,
     },
+    /// ★★★ **The leaf's aperture names no GPGA kind** — today only [`Aperture::Peer`]
+    /// ([`crate::RegionKindFault::PeerHasNoKind`]).
+    ///
+    /// ⊘ It gets a refusal rather than a [`DropReason`] deliberately: a drop is *"we
+    /// decoded it faithfully and policy declines to stand behind it"*, which is a decision;
+    /// this is *"the guest declared something no kind describes"*, which is a fact we cannot
+    /// represent. Before [`crate::RegionKind`] existed the leaf simply became a binding with
+    /// no host object and classified as `Fabricated` — fiction over another GPU's
+    /// framebuffer — and the contradiction only surfaced two layers later, when
+    /// `DeclaredResidency` had no CPU plane to give it.
+    ///
+    /// [`Aperture::Peer`]: kayfabe_arch::Aperture::Peer
+    UndecidableKind {
+        /// The leaf's virtual address.
+        va: GpuVa,
+        /// Why no kind could be decided.
+        fault: crate::RegionKindFault,
+    },
 }
 
 /// What forward-populating a set of leaves did.
@@ -879,10 +897,18 @@ pub fn populate(
             out.dropped.push((leaf.va, why));
             continue;
         }
-        let want = Binding {
-            phys: leaf.phys,
-            aperture: leaf.aperture,
-            host: None,
+        // ★★★ THE DECISION, at the bind site, from the only authority Mode 2 has: the
+        // guest's own leaf PTE. `Vidmem` → kind 2, sysmem → kind 4, `Peer` → refused by
+        // name. ⊘ This used to be `Binding { .., host: None }` — no kind at all — and the
+        // range acquired one by falling through `representability_of`'s unguarded arm at
+        // classify time, three crates away.
+        let want = match Binding::declared_by_guest(leaf.phys, leaf.aperture) {
+            Ok(b) => b,
+            Err(fault) => {
+                out.refusals
+                    .push(PopulateRefusal::UndecidableKind { va: leaf.va, fault });
+                continue;
+            }
         };
         match table.binding_at(leaf.va) {
             // Exactly this range is already bound.

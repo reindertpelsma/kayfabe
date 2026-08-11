@@ -109,6 +109,7 @@ impl Faulted for crate::promote::PromoteFault {
             F::ForeignContextObject { .. } => FaultTag("PromoteFault::ForeignContextObject"),
             F::TooManyRanges { .. } => FaultTag("PromoteFault::TooManyRanges"),
             F::Malformed { .. } => FaultTag("PromoteFault::Malformed"),
+            F::UndecidableKind { .. } => FaultTag("PromoteFault::UndecidableKind"),
             F::SelfOverlap { .. } => FaultTag("PromoteFault::SelfOverlap"),
             F::Collides { .. } => FaultTag("PromoteFault::Collides"),
             F::HalfConflict { .. } => FaultTag("PromoteFault::HalfConflict"),

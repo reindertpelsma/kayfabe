@@ -1118,7 +1118,8 @@ fn defer_an_rpc_mapping_with_no_pdb_populates_when_setpagedir_lands() {
         resolve(&gpu, GpuId::ZERO, PDB0, GpuVa(VA.0 + 0x40)).expect("★★ the mapping populated");
     assert_eq!(off, 0x40);
     assert_eq!(
-        binding.phys, MEM_PHYS,
+        binding.phys(),
+        MEM_PHYS,
         "★★ forward-populated to the guest-DECLARED backing — never a reverse resolve"
     );
 }
@@ -1174,7 +1175,7 @@ fn defer_an_rpc_mapping_with_no_gpu_target_populates_when_the_device_lands() {
     gpu.apply(device(C, H_ROOT, H_DEV))
         .expect("★ the Device finally arrives");
     let (binding, _) = resolve(&gpu, GpuId::ZERO, PDB0, VA).expect("★★ the mapping populated");
-    assert_eq!(binding.phys, MEM_PHYS);
+    assert_eq!(binding.phys(), MEM_PHYS);
 }
 
 /// ★★ The FAULT that sits between those two deferrals: a mapping whose memory resolved and

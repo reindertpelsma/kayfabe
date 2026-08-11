@@ -218,11 +218,8 @@ fn guest_with_a_ring(bind_ring: bool) -> (Gpu, MockVmm, ProcId, ChanId) {
                 PDB0,
                 RING_VA,
                 RING_LEN,
-                kayfabe_mmu::Binding {
-                    phys: RING_FB_PHYS,
-                    aperture: Aperture::Vidmem,
-                    host: None,
-                },
+                kayfabe_mmu::Binding::declared_by_guest(RING_FB_PHYS, Aperture::Vidmem)
+                    .expect("the fixture declares a kind the guest can declare"),
             )
             .expect("the vidmem ring binds");
     }

@@ -163,7 +163,7 @@ fn reclaim_plan(proc: &Proc, gpu: GpuId) -> Orphans {
         for (_va, _len, b) in vas.table.iter() {
             // ★ G1: BOTH halves come out of the binding. Before the fix `b` carried
             // only the VA, so this loop could unmap and never free.
-            if let Some(h) = b.host {
+            if let Some(h) = b.host() {
                 o.unmap.push((host_vas, h.host_va()));
                 // ★ §8.2: the free is per-OBJECT, the unmap per-binding. This mirrors
                 // `kayfabe_fwd::unpublish_backing`, so it must mirror its extent check
@@ -223,7 +223,7 @@ fn g1_a_published_backing_names_the_exact_host_object_that_allocated_it() {
     assert_eq!(minted.len(), 1, "exactly one sysmem object was allocated");
 
     let (binding, _off) = kayfabe_fwd::resolve(&gpu, GPU, PDB, VA).expect("resolves");
-    let backing = binding.host.expect("the range is host-published");
+    let backing = binding.host().expect("the range is host-published");
     assert_eq!(
         (backing.memory(), backing.host_va()),
         (minted[0], out.host_va),
@@ -1284,15 +1284,15 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
         for (pid, p) in &gpu.procs {
             for ((g, _pdb), vas) in &p.vases {
                 for (va, len, b) in vas.table.iter() {
-                    let Some(_) = b.host else { continue }; // RPC bindings are not arena GPAs
+                    let Some(_) = b.host() else { continue }; // RPC bindings are not arena GPAs
                     let arena = p
                         .arenas
                         .get(g)
                         .unwrap_or_else(|| panic!("{pid:?} published on {g:?} with no arena"));
                     assert!(
-                        b.phys >= arena.range.start && b.phys + len <= arena.range.end,
+                        b.phys() >= arena.range.start && b.phys() + len <= arena.range.end,
                         "{pid:?} VA {va:#x} is backed at GPA {:#x}, OUTSIDE its own arena {:?}",
-                        b.phys,
+                        b.phys(),
                         arena.range,
                     );
                 }
@@ -1459,10 +1459,10 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
     sweep(&gpu);
     for vas in gpu.procs[&pb].vases.values() {
         for (_va, len, b) in vas.table.iter() {
-            if b.host.is_some() {
+            if b.host().is_some() {
                 for released in [&a_range, &peer_range] {
                     assert!(
-                        b.phys + len <= released.start || b.phys >= released.end,
+                        b.phys() + len <= released.start || b.phys() >= released.end,
                         "the survivor holds a binding inside the RELEASED arena {released:?}"
                     );
                 }

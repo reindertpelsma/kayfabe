@@ -580,7 +580,7 @@ fn ctl_workload(device: &SharedDevice, pids: &[ProcId], i: usize) -> usize {
             .resolve(gpu, lane.pdb, GpuVa(va.0 + 0x40))
             .expect("a just-published VA resolves");
         assert_eq!(
-            (binding.phys, binding.host_va(), off),
+            (binding.phys(), binding.host_va(), off),
             (p.gpa, Some(p.host_va), 0x40),
             "another thread's commit landed in this thread's binding"
         );
@@ -1294,7 +1294,7 @@ fn mean_run(mode: LockMode) -> MeanReport {
             .resolve(GPU0, lane_of(P_WITNESS).pdb, GpuVa(va + 0x40))
             .expect("the released verb's VA resolves");
         witness_committed_exactly &=
-            (binding.phys, binding.host_va(), off) == (p.gpa, Some(p.host_va), 0x40);
+            (binding.phys(), binding.host_va(), off) == (p.gpa, Some(p.host_va), 0x40);
     }
     assert!(
         witness_committed_exactly,
@@ -1803,9 +1803,9 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], recycled: (ProcId, ProcId)
                     .map(|a| a.range.clone())
                     .expect("a published binding implies a materialized arena");
                 assert!(
-                    r.contains(&b.phys),
+                    r.contains(&b.phys()),
                     "({mode:?}) {pid:?} published GPA {:#x} outside its own {g:?} arena {r:?}",
-                    b.phys
+                    b.phys()
                 );
             }
         }
@@ -3111,7 +3111,7 @@ fn a_fresh_client_recovers_from_its_condemned_predecessor() {
         .expect("the recovered publication resolves")
         .0;
     assert!(
-        arena.contains(&published.phys),
+        arena.contains(&published.phys()),
         "the recovered publication came from its own arena"
     );
 
@@ -6566,12 +6566,12 @@ fn gpa_workload(
                 .resolve(gpu, pdb, GpuVa(va.0 + 0x40))
                 .unwrap_or_else(|e| panic!("{what}: a just-published VA must resolve: {e:?}"));
             assert_eq!(
-                (binding.phys, off),
+                (binding.phys(), off),
                 (p.gpa, 0x40),
                 "{what}: the address table answers with a different phys than the \
                  commit computed",
             );
-            let gpa = binding.phys;
+            let gpa = binding.phys();
 
             // ---- ALIGNMENT. `publish_backing` asks the arena for 0x1000; a misaligned
             // GPA goes straight into a guest page table.
@@ -6740,21 +6740,21 @@ fn gpa_sweep(dev: &SharedDevice, ram: &GuestRamMap, mode: LockMode) -> (usize, u
                     .range
                     .clone();
                 for (_va, len, b) in vas.table.iter() {
-                    if b.host.is_none() {
+                    if b.host().is_none() {
                         continue; // declared by RPC only — nothing was allocated for it
                     }
                     assert_eq!(
-                        ram.resolve(b.phys, len),
+                        ram.resolve(b.phys(), len),
                         Ok(RamSpan {
                             region: RamRegionId(arena.start),
-                            offset: b.phys - arena.start,
+                            offset: b.phys() - arena.start,
                             len,
                         }),
                         "({mode:?}) {pid:?}/{g:?} holds a binding at {:#x}+{len:#x} that \
                          does not prove out as RAM inside its OWN arena {arena:?}",
-                        b.phys,
+                        b.phys(),
                     );
-                    all.push((pid, g, b.phys, len));
+                    all.push((pid, g, b.phys(), len));
                 }
             }
         });
@@ -9306,7 +9306,7 @@ mod trace_arm {
                 va: GpuVa(va.0 + 0x40),
                 outcome: Resolved::Hit {
                     offset: off,
-                    host: b.host,
+                    host: b.host(),
                 },
             });
             tr.emit(|| TraceEvent::Doorbell {
@@ -10247,7 +10247,7 @@ fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolate
                         assert_eq!(
                             pub_dev
                                 .resolve(gpu, N3_PDB, GpuVa(va.0 + 0x40))
-                                .map(|(b, off)| (b.phys, b.host_va(), off)),
+                                .map(|(b, off)| (b.phys(), b.host_va(), off)),
                             Ok((p.gpa, Some(p.host_va), 0x40)),
                             "another target's commit landed in this one's binding"
                         );
@@ -11248,7 +11248,7 @@ fn a_verb_wedged_on_one_rm_client_blocks_its_sibling_and_no_other_client() {
                     .resolve(v_gpu, v_pdb, GpuVa(va + 0x40))
                     .unwrap_or_else(|e| panic!("({who}) {va:#x} must resolve: {e:?}"));
                 assert_eq!(
-                    (binding.phys, binding.host_va(), off),
+                    (binding.phys(), binding.host_va(), off),
                     (p.gpa, Some(p.host_va), 0x40),
                     "({who}) a serialised commit wrote a binding it did not compute"
                 );
@@ -11409,7 +11409,7 @@ fn a_wedged_verb_is_not_cancelled_and_still_holds_its_clients_lock() {
                     .resolve(v_gpu, v_pdb, GpuVa(va))
                     .unwrap_or_else(|e| panic!("({who}) {va:#x} must resolve: {e:?}"));
                 assert_eq!(
-                    (binding.phys, binding.host_va(), off),
+                    (binding.phys(), binding.host_va(), off),
                     (p.gpa, Some(p.host_va), 0),
                     "({who}) the uncancelled verb's commit"
                 );

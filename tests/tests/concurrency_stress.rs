@@ -362,9 +362,9 @@ fn assert_device_consistent(gpu: &Gpu) {
                 assert!(len > 0);
                 if b.host_va().is_some() {
                     assert!(
-                        p.arenas[&GpuId::ZERO].range.contains(&b.phys),
+                        p.arenas[&GpuId::ZERO].range.contains(&b.phys()),
                         "published phys {:#x} outside {:?}'s arena {:?}",
-                        b.phys,
+                        b.phys(),
                         p.id,
                         p.arenas[&GpuId::ZERO].range
                     );
@@ -439,7 +439,11 @@ fn stress_multi_vcpu_interleaved_ops() {
                                 let (b, off) = resolve(&g, GpuId::ZERO, pdb, GpuVa(va.0 + 0x40))
                                     .expect("published VA resolves");
                                 assert_eq!(off, 0x40);
-                                assert_eq!(b.phys, gpa, "resolve returned another proc's backing");
+                                assert_eq!(
+                                    b.phys(),
+                                    gpa,
+                                    "resolve returned another proc's backing"
+                                );
                                 assert_eq!(b.host_va(), Some(host_va));
                                 gate_working_set(
                                     &g,
@@ -872,7 +876,7 @@ fn same_proc_interleaving_is_exact() {
     let vas = &p.vases[&(GpuId::ZERO, pdb)];
     let total = THREADS * PER_THREAD;
     // The bump allocator is exact: every alloc distinct, cursor advanced exactly.
-    let gpas: BTreeSet<u64> = vas.table.iter().map(|(_, _, b)| b.phys).collect();
+    let gpas: BTreeSet<u64> = vas.table.iter().map(|(_, _, b)| b.phys()).collect();
     assert_eq!(gpas.len() as u64, total, "duplicate GPA under interleaving");
     assert_eq!(*gpas.iter().next().unwrap(), arena_start);
     assert_eq!(
@@ -943,7 +947,7 @@ fn lock_free_concurrent_reads_share_the_gpu() {
                     let (gpa, host_va) = truth[&(i, va)];
                     let (b, off) =
                         resolve(gpu_ref, GpuId::ZERO, pdb_of(i), GpuVa(va + 0x10)).expect("hit");
-                    assert_eq!((b.phys, b.host_va(), off), (gpa, Some(host_va), 0x10));
+                    assert_eq!((b.phys(), b.host_va(), off), (gpa, Some(host_va), 0x10));
                     let (pid, cid) = gpu_ref.spine.by_vchid[&(GpuId::ZERO, gr_vchid(i))];
                     assert_eq!(pid, pids[i]);
                     gate_working_set(gpu_ref, pid, cid, &[GpuVa(va)]).expect("gate passes");

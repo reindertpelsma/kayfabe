@@ -282,7 +282,7 @@ fn freeing_a_vaspace_queues_its_host_state_and_the_next_op_releases_it() {
             .resolve(GPU, SCRATCH_PDB, VA_SCRATCH)
             .expect("the publication resolves");
         assert_eq!(binding.host_va(), Some(published.host_va));
-        let memory = binding.host.expect("published").memory();
+        let memory = binding.host().expect("published").memory();
         assert_ne!(
             host_vas, memory,
             "({mode:?}) the two handles are distinct objects"

@@ -427,7 +427,7 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
     assert_eq!(
         table
             .resolve(A_PDB, GpuVa(CTX_VA.0 + 0x1000))
-            .map(|(b, off)| (b.phys + off, b.aperture)),
+            .map(|(b, off)| (b.phys() + off, b.aperture())),
         Ok((CTX_PHYS + 0x1000, Aperture::Vidmem)),
         "the promoted range resolves — and the offset is carried, not rounded to the base"
     );
@@ -661,7 +661,7 @@ fn a_ce_write_into_a_learned_leaf_table_is_witnessed_and_binds_its_leaf() {
         gpu.procs[&pid].vases[&(GPU, A_PDB)]
             .table
             .resolve(A_PDB, leaf_va)
-            .map(|(b, off)| (b.phys, off)),
+            .map(|(b, off)| (b.phys(), off)),
         Ok((LEAF_PHYS, 0)),
         "…and it resolves to the physical address the guest's OWN page table entry names, \
          at offset zero — not to a nearest binding and not to a reverse-resolve"

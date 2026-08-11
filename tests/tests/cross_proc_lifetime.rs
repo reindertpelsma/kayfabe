@@ -199,7 +199,7 @@ fn reclaim_plan(proc: &Proc, gpu: GpuId) -> Orphans {
             continue;
         };
         for (_va, _len, b) in vas.table.iter() {
-            if let Some(h) = b.host {
+            if let Some(h) = b.host() {
                 o.unmap.push((host_vas, h.host_va()));
                 // ★ §8.2: the free is per-OBJECT, the unmap per-binding. This mirrors
                 // `kayfabe_fwd::unpublish_backing`, so it must mirror its extent check
@@ -280,7 +280,10 @@ impl kayfabe_isolate::RingWorkingSet for NothingPublished {
 fn backing_of(gpu: &Gpu, pid: ProcId, pdb: Pdb, va: GpuVa) -> HostHandle {
     let (binding, _off) = kayfabe_fwd::resolve_in(&gpu.procs[&pid], GPU, pdb, va)
         .expect("the range resolves in its owner's Vas");
-    binding.host.expect("the range is host-published").memory()
+    binding
+        .host()
+        .expect("the range is host-published")
+        .memory()
 }
 
 /// The ledger, plus the two assertions every test in this file shares: **nothing was
@@ -396,7 +399,7 @@ fn c_2026_06_18_a_system_verb_on_a_user_procs_backing_is_refused_before_it_runs(
     let (binding, _off) =
         kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA).expect("the owner's range still resolves");
     assert_eq!(
-        binding.host.expect("still published").memory(),
+        binding.host().expect("still published").memory(),
         owned,
         "the owner's backing survived the foreign disposal attempt intact"
     );
@@ -742,7 +745,7 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
     // The bystander is completely unaffected: its binding still resolves, host-published.
     let (binding, _off) =
         kayfabe_fwd::resolve(&gpu, GPU, OTHER_PDB, VA).expect("the bystander still resolves");
-    assert_eq!(binding.host.expect("published").memory(), bystander);
+    assert_eq!(binding.host().expect("published").memory(), bystander);
 
     let l = ledger(&rec);
     let condemned_iso = IsolateId::new(owner.0, GPU);
@@ -1417,7 +1420,7 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
     let (binding, _off) = kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA)
         .expect("the published range still resolves through the surviving VASpace");
     assert_eq!(
-        binding.host.expect("still published").memory(),
+        binding.host().expect("still published").memory(),
         backing,
         "the published host backing survived the guest client's free"
     );
@@ -2199,7 +2202,7 @@ fn a_dup_of_a_dup_reference_stops_the_reaper_from_freeing_its_owners_host_memory
     let (binding, _off) = kayfabe_fwd::resolve(&gpu, GPU, OWNER_PDB, VA)
         .expect("the published range still resolves through the surviving VASpace");
     assert_eq!(
-        binding.host.expect("still published").memory(),
+        binding.host().expect("still published").memory(),
         backing,
         "the published host backing survived the guest client's free",
     );

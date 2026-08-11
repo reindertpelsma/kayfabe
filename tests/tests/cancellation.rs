@@ -484,7 +484,7 @@ fn a_cancel_that_loses_the_race_commits_normally() {
         .resolve(GPU, PDB, GpuVa(VA.0 + 0x40))
         .expect("the committed publication resolves");
     assert_eq!(
-        (binding.phys, binding.host_va(), off),
+        (binding.phys(), binding.host_va(), off),
         (published.gpa, Some(published.host_va), 0x40),
         "the reply named host objects that now exist; discarding it would leak them"
     );

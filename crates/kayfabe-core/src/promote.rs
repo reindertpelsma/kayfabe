@@ -71,7 +71,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
-use kayfabe_mmu::Binding;
 
 use crate::ProcId;
 use crate::gpu::{Proc, Spine};
@@ -646,6 +645,21 @@ pub enum PromoteFault {
         /// Its declared length.
         len: u64,
     },
+    /// ★★★ **The range's aperture names no GPGA kind** —
+    /// [`kayfabe_mmu::RegionKindFault::PeerHasNoKind`], i.e. the promotion declared
+    /// [`kayfabe_arch::Aperture::Peer`]: a second physical GPU's framebuffer, which this
+    /// device does not back.
+    ///
+    /// ⊘ Before [`kayfabe_mmu::RegionKind`] existed this bound silently and became
+    /// `Representability::Fabricated` at classify time — fiction over another GPU's memory,
+    /// handed to a CPU executor that then had no plane to put it in. The kind is decided
+    /// here now, and *"no kind describes this"* is a refusal rather than a fall-through.
+    UndecidableKind {
+        /// Start of the offending range.
+        va: GpuVa,
+        /// Why no kind could be decided.
+        fault: kayfabe_mmu::RegionKindFault,
+    },
     /// Two ranges **inside one promotion** overlap each other. Caught before anything is
     /// bound, so the control is refused whole rather than half-applied.
     SelfOverlap {
@@ -1125,9 +1139,9 @@ pub fn apply_promote_ctx(
             // start, same length, same contents, and previously bound by this source.
             let identical = start == r.va.0
                 && vas.promote_bound.contains(&r.va.0)
-                && b.phys == r.phys
-                && b.aperture == r.aperture
-                && b.host.is_none()
+                && b.phys() == r.phys
+                && b.aperture() == r.aperture
+                && b.host().is_none()
                 && vas
                     .table
                     .iter()
@@ -1156,21 +1170,24 @@ pub fn apply_promote_ctx(
         if already.contains(&r.va.0) {
             continue;
         }
+        // ★★★ THE DECISION, at the bind site. The promotion declares an aperture; for a
+        // range with nothing host-side reachable from the table that aperture IS the kind
+        // — `Vidmem` → kind 2, sysmem → kind 4 — and `Peer` is refused by name instead of
+        // becoming fiction over another GPU's framebuffer.
+        //
+        // ⚠ **A residual disagreement, named rather than papered over.** This chain's own
+        // comment says *the HOST allocated and mapped this GR context buffer for itself*,
+        // which is the owner's kind 3 — but no [`kayfabe_mmu::HostBacking`] reaches this
+        // site, and kind 3 without one is exactly the state
+        // [`kayfabe_mmu::Binding::real_gpu_memory`] refuses to let anyone write. So the
+        // truthful declaration here is the guest-declared one, and the *gap* is that the
+        // host object this range was allocated from is not carried to the bind. That is a
+        // supply-side change (`promote_ctx` would have to receive the backing), not a
+        // relabelling, and it is deliberately not made here.
+        let binding = kayfabe_mmu::Binding::declared_by_guest(r.phys, r.aperture)
+            .map_err(|fault| PromoteFault::UndecidableKind { va: r.va, fault })?;
         vas.table
-            .bind(
-                route.pdb,
-                r.va,
-                r.len,
-                Binding {
-                    phys: r.phys,
-                    aperture: r.aperture,
-                    // ★ `None`, and its own doc says why: *declared by the RPC/CE-capture
-                    // source only — nothing host-side exists yet, and nothing host-side
-                    // needs reclaiming*. Which is exactly the status of a GR context
-                    // buffer the HOST allocated and mapped for itself.
-                    host: None,
-                },
-            )
+            .bind(route.pdb, r.va, r.len, binding)
             .map_err(|_| PromoteFault::Collides {
                 va: r.va,
                 len: r.len,

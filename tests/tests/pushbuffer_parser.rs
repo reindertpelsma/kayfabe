@@ -699,8 +699,8 @@ mod fuzz {
                 let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, super::A_PDB)];
                 for (va, _len, b) in vas.table.iter() {
                     prop_assert_eq!(
-                        vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),
-                        Ok(b.phys),
+                        vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys()),
+                        Ok(b.phys()),
                         "a bound VA must resolve to its own binding (no torn state)"
                     );
                 }
@@ -859,11 +859,8 @@ fn declare_fb_alias(gpu: &mut Gpu, pid: kayfabe_core::ProcId, pdb: Pdb, at: GpuV
             pdb,
             at,
             0x2000_0000, // 512 MiB, the alias's page size
-            kayfabe_mmu::Binding {
-                phys,
-                aperture: kayfabe_arch::Aperture::Vidmem,
-                host: None,
-            },
+            kayfabe_mmu::Binding::declared_by_guest(phys, kayfabe_arch::Aperture::Vidmem)
+                .expect("the fixture declares a kind the guest can declare"),
         )
         .expect("the alias binds");
 }

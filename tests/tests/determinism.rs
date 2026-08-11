@@ -290,8 +290,8 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
                 resolutions.insert(
                     (gpu, pdb, GpuVa(va)),
                     ResolvedObs {
-                        phys_if_rpc: (!host_published).then_some(b.phys),
-                        aperture: b.aperture,
+                        phys_if_rpc: (!host_published).then_some(b.phys()),
+                        aperture: b.aperture(),
                         host_published,
                     },
                 );

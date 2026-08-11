@@ -225,12 +225,12 @@ proptest! {
 
         // THE property: each PDB resolves the shared VA to ITS OWN phys, never another's.
         for &(pdb, phys) in &oracle {
-            let got = resolve(&gpu, GpuId::ZERO, pdb, I1_VA).map(|(b, _)| b.phys);
+            let got = resolve(&gpu, GpuId::ZERO, pdb, I1_VA).map(|(b, _)| b.phys());
             prop_assert_eq!(got, Ok(phys), "PDB {:?} resolved the shared VA to the wrong backing", pdb);
         }
         // And injectivity, checked directly: no PDB resolves to a DIFFERENT proc's phys.
         for &(pdb, _) in &oracle {
-            let got = resolve(&gpu, GpuId::ZERO, pdb, I1_VA).map(|(b, _)| b.phys).unwrap();
+            let got = resolve(&gpu, GpuId::ZERO, pdb, I1_VA).map(|(b, _)| b.phys()).unwrap();
             for &(other_pdb, other_phys) in &oracle {
                 if other_pdb != pdb {
                     prop_assert_ne!(got, other_phys, "cross-proc backing leak: {:?} -> another proc's phys", pdb);
@@ -624,7 +624,7 @@ proptest! {
         for ev in bystander_events() {
             gpu.apply(ev).expect("benign bystander applies cleanly");
         }
-        let baseline = resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys);
+        let baseline = resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys());
         prop_assert_eq!(baseline, Ok(BY_PHYS), "bystander baseline resolution");
 
         // The storm: apply each hostile event; a loud typed refusal is fine, a panic is
@@ -642,7 +642,7 @@ proptest! {
         // was refused — first-declarer-wins — never honored over the bystander).
         prop_assert!(gpu.spine.by_pdb.contains_key(&(GpuId::ZERO, BY_PDB)), "bystander PDB stopped routing");
         prop_assert_eq!(
-            resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
+            resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys()),
             Ok(BY_PHYS),
             "bystander VA no longer resolves to its own backing"
         );
@@ -988,7 +988,7 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
     })
     .expect("a real memory maps cleanly");
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, pdb, va).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, pdb, va).map(|(b, _)| b.phys()),
         Ok(evil_phys),
         "a legitimate memory mapping must resolve"
     );
@@ -1076,7 +1076,7 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
     }
     // The victim keeps its PDB + backing; the attacker kept ITS own PDB (never the victim's).
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys()),
         Ok(BY_PHYS),
         "victim corrupted"
     );
@@ -1181,7 +1181,7 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
             .expect("device wedged: fresh benign proc refused after the parked-map attack");
     }
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, BY_PDB, BY_VA).map(|(b, _)| b.phys()),
         Ok(BY_PHYS),
         "victim corrupted"
     );

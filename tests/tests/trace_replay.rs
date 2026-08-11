@@ -198,7 +198,7 @@ fn tr_resolve(gpu: &Gpu, tr: &mut Trace<'_>, target: GpuId, pdb: Pdb, va: GpuVa)
     let outcome = match resolve(gpu, target, pdb, va) {
         Ok((binding, offset)) => Resolved::Hit {
             offset,
-            host: binding.host,
+            host: binding.host(),
         },
         // The plane's fault is an `FwdFault`; the address-plane arm is the one this
         // event can carry, and anything else is a routing failure, not a resolve.

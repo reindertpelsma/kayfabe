@@ -131,15 +131,17 @@ fn two_slices_of_one_arena(gpu: &mut Gpu, pid: ProcId) -> HostHandle {
                 PDB,
                 va,
                 LEN,
-                Binding {
-                    host: Some(HostBacking::slice(
+                Binding::real_gpu_memory(
+                    old.phys(),
+                    old.aperture(),
+                    HostBacking::slice(
                         arena,
                         old.host_va().expect("published"),
                         HostSlice::new(off, LEN).expect("a real range"),
                         BackingBytes::SoleBacking,
-                    )),
-                    ..old
-                },
+                    ),
+                )
+                .expect("a slice of host sysmem is kind 3"),
             )
             .expect("a slice binds at the VA it is mapped at");
     }
@@ -226,7 +228,7 @@ fn two_slices_of_one_arena_reclaim_independently_and_free_nothing() {
     // The sibling is untouched and still resolves through the same arena.
     let (b, off) = kayfabe_fwd::resolve(&gpu, GPU, PDB, GpuVa(VA_B.0 + 0x20)).expect("resolves");
     assert_eq!(off, 0x20);
-    let backing = b.host.expect("still published");
+    let backing = b.host().expect("still published");
     assert_eq!(backing.memory(), arena);
     assert_eq!(
         backing.extent(),
@@ -271,7 +273,7 @@ fn a_whole_object_backing_is_still_freed_by_its_own_release() {
     let binding = kayfabe_fwd::resolve(&gpu, GPU, PDB, VA_A)
         .expect("resolves")
         .0;
-    let backing = binding.host.expect("published");
+    let backing = binding.host().expect("published");
     assert_eq!(
         backing.extent(),
         HostExtent::Whole,
@@ -322,15 +324,12 @@ fn overlapping_slices_of_one_object_bind_resolve_and_reclaim() {
                 PDB,
                 VA_B,
                 LEN,
-                Binding {
-                    host: Some(HostBacking::slice(
-                        arena,
-                        VA_B.0,
-                        overlapping,
-                        BackingBytes::SoleBacking,
-                    )),
-                    ..old
-                },
+                Binding::real_gpu_memory(
+                    old.phys(),
+                    old.aperture(),
+                    HostBacking::slice(arena, VA_B.0, overlapping, BackingBytes::SoleBacking),
+                )
+                .expect("a slice of host sysmem is kind 3"),
             )
             .expect("an overlapping slice is a legitimate alias, not a collision");
     }
@@ -338,12 +337,12 @@ fn overlapping_slices_of_one_object_bind_resolve_and_reclaim() {
     let a = kayfabe_fwd::resolve(&gpu, GPU, PDB, VA_A)
         .expect("A resolves")
         .0
-        .host
+        .host()
         .expect("published");
     let b = kayfabe_fwd::resolve(&gpu, GPU, PDB, VA_B)
         .expect("B resolves")
         .0
-        .host
+        .host()
         .expect("published");
     assert_eq!((a.memory(), b.memory()), (arena, arena), "one object");
     assert_ne!(a.extent(), b.extent(), "…two different parts of it");
@@ -593,15 +592,17 @@ fn a_slice_that_disagrees_with_its_range_never_enters_a_live_vas() {
             PDB,
             VA_A,
             LEN,
-            Binding {
-                host: Some(HostBacking::slice(
+            Binding::real_gpu_memory(
+                old.phys(),
+                old.aperture(),
+                HostBacking::slice(
                     arena,
                     VA_A.0,
                     HostSlice::new(0, LEN / 2).expect("real"),
                     BackingBytes::SoleBacking,
-                )),
-                ..old
-            },
+                )
+            )
+            .expect("a slice of host sysmem is kind 3"),
         ),
         Err(AddressFault::SliceLenMismatch {
             pdb: PDB,
@@ -620,22 +621,24 @@ fn a_slice_that_disagrees_with_its_range_never_enters_a_live_vas() {
             PDB,
             VA_A,
             LEN,
-            Binding {
-                host: Some(HostBacking::slice(
+            Binding::real_gpu_memory(
+                old.phys(),
+                old.aperture(),
+                HostBacking::slice(
                     arena,
                     VA_A.0,
                     HostSlice::new(0, LEN).expect("real"),
                     BackingBytes::SoleBacking,
-                )),
-                ..old
-            },
+                ),
+            )
+            .expect("a slice of host sysmem is kind 3"),
         )
         .expect("an honest slice binds");
     assert_eq!(vas.table.audit_identity(PDB), Ok(()));
 
     // Aperture is untouched by any of this; assert it so a future `..old` refactor that
     // dropped it would be visible here rather than in a copy engine.
-    assert_eq!(old.aperture, Aperture::SysmemCoherent);
+    assert_eq!(old.aperture(), Aperture::SysmemCoherent);
 
     for va in [VA_A, VA_B] {
         let o =

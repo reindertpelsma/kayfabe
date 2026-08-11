@@ -104,10 +104,14 @@ fn guest_binds(
                     PDB,
                     va,
                     len,
-                    Binding {
-                        phys,
-                        aperture,
-                        host,
+                    match host {
+                        // ★ The fixture declares the kind, exactly as production does: a
+                        // host object means kind 3, its absence means the guest's own
+                        // declaration (kind 2 for `Vidmem`, kind 4 for sysmem).
+                        Some(h) => Binding::real_gpu_memory(phys, aperture, h)
+                            .expect("the fixture's host backing is kind 3"),
+                        None => Binding::declared_by_guest(phys, aperture)
+                            .expect("the fixture declares a kind the guest can declare"),
                     },
                 )
                 .expect("the fixture's own bind is well-formed");
@@ -149,17 +153,35 @@ fn tabled(device: &SharedDevice, pid: kayfabe_core::ProcId) -> Option<(u64, u64,
 // 1 — ★★★★★ THE CHAIN
 // ---------------------------------------------------------------------------------
 
-/// ★★★★★ **The whole rung, in one assertion set.** Backing a framebuffer leaf allocates
-/// host **vidmem** and maps it at the **guest's own VA**, and it allocates **no host sysmem
-/// at all**.
+/// ★★★★★ **RULING 3 (owner, 2026-08-11): THIS CROSSING IS REFUSED, and the guest's own row
+/// survives the refusal.**
 ///
-/// ★ That last clause is what distinguishes this chain from
-/// [`kayfabe_fwd::publish_backing`], and it is asserted rather than described. `publish`
-/// mints sysmem with `MAPPING_NO_MAP`; a leaf backed that way maps fine, passes every check
-/// and can never become the CPU-side half of the double mapping. If a future edit folded the
-/// two chains together, `sysmem` would appear in this list.
+/// > *"no fake FB ever can be mapped to a real GPU VA of an isolate except the scratchpad."*
+///
+/// # ⊘ What this test asserted BEFORE, and why the inversion is the rung
+///
+/// It asserted the crossing SUCCEEDS: *"backing a framebuffer leaf allocates host vidmem and
+/// maps it at the guest's own VA"*, and that the binding then *"carries its
+/// materialization"*. `[measured 2026-08-11, w228]` that object is `placed_as_asked=true`
+/// **and blank** — the guest's bytes stay in `kayfabe_device::SparseFb` and the guest goes on
+/// reading and writing them through BAR1/BAR2. The chain minted a SECOND memory at the
+/// guest's own address, which is the owner's forbidden #2 and the execution blocker this
+/// rung exists for.
+///
+/// ⇒ [`kayfabe_mmu::Binding::real_gpu_memory`] refuses the state, so `commit_back_fb_leaf`
+/// cannot bind it and refuses by name instead.
+///
+/// # ★★ The three things asserted, and the third is the one that is easy to get wrong
+///
+/// 1. **Refused by name**, carrying the address plane's own answer — not a generic error.
+/// 2. **Nothing is adopted**: the table does not name a host object for this leaf.
+/// 3. ★★★ **The guest's own row is UNTOUCHED.** Dropping it would leave the range with *no
+///    row at all*, and an absent row is `Representability::Untracked`, which routes to the
+///    **real host GPU**. ⊘ The two derived defaults point opposite ways, so a refusal that
+///    also unbinds would hand the range to hardware — a worse outcome than the state it
+///    refused. This arm is what stops that.
 #[test]
-fn backing_a_framebuffer_leaf_allocates_vidmem_and_places_it_at_the_guests_own_va() {
+fn backing_a_framebuffer_leaf_is_refused_by_name_and_the_guests_own_row_survives() {
     let _wd = watchdog(
         "fb_leaf_backing::the_chain",
         std::time::Duration::from_secs(60),
@@ -174,50 +196,70 @@ fn backing_a_framebuffer_leaf_allocates_vidmem_and_places_it_at_the_guests_own_v
         Aperture::Vidmem,
         None,
     );
-    let backed = device
+    let refused = device
         .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
-        .expect("the leaf backs");
-
-    assert!(!backed.already, "the first call did the work");
+        .expect_err("★ ruling 3: a fake-FB region may not be mapped to a real GPU VA");
     assert_eq!(
-        backed.host_va, LEAF_VA.0,
-        "address identity: the object is placed at the GUEST's VA, not wherever RM chose"
+        refused,
+        kayfabe_rt::FwdFault::RegionKindRefused {
+            va: LEAF_VA,
+            fault: kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
+                aperture: Aperture::Vidmem
+            },
+        },
+        "refused BY NAME, carrying the address plane's own answer — a generic error here \
+         would leave a reader unable to tell ruling 3 from an allocation failure"
     );
+
+    // ★★★ The guest's own row is exactly as it was: kind 2, no host object.
+    let (start, len, b) = tabled(&device, pid).expect(
+        "★★★ THE ROW MUST SURVIVE: no row at all is `Untracked`, which routes to the REAL \
+         HOST GPU. A refusal that unbinds is worse than the state it refused.",
+    );
+    assert_eq!((start, len), (LEAF_VA.0, LEAF_LEN), "same range");
+    assert_eq!(b.phys(), LEAF_PHYS, "the guest's own framebuffer address");
+    assert_eq!(b.aperture(), Aperture::Vidmem, "still vidmem");
+    assert_eq!(
+        b.kind(),
+        kayfabe_mmu::RegionKind::FakeFramebuffer,
+        "and it is still DECLARED fake framebuffer — the kind the guest's own leaf PTE named"
+    );
+    assert!(
+        b.host().is_none(),
+        "⊘ nothing was adopted: the binding names no host object"
+    );
+
+    // ⚠ The host verbs still RAN — the refusal is at the commit, so the execute phase had
+    // already allocated. Everything it allocated goes back as orphans; nothing is bound.
+    // ⊘ Moving the refusal into `plan_back_fb_leaf` so nothing is allocated at all is a
+    // separate change: it makes `commit_back_fb_leaf`'s fresh-publish arm unreachable.
     let v = verbs(&rec);
     assert!(
-        v.contains(&"vidmem"),
-        "the object must come out of DEVICE-LOCAL memory: {v:?}"
-    );
-    assert!(
         !v.contains(&"sysmem"),
-        "⊘ this chain must never mint host sysmem — that is `publish_backing`, and its \
-         `MAPPING_NO_MAP` object can never be double-mapped: {v:?}"
-    );
-    assert_eq!(
-        v.iter().filter(|x| **x == "map_gpu_va").count(),
-        1,
-        "exactly one fixed map: {v:?}"
-    );
-
-    // ★ The table now names the host object, and NOTHING ELSE about the leaf changed.
-    let (start, len, b) = tabled(&device, pid).expect("still bound");
-    assert_eq!((start, len), (LEAF_VA.0, LEAF_LEN), "same range");
-    assert_eq!(b.phys, LEAF_PHYS, "the guest's own framebuffer address");
-    assert_eq!(b.aperture, Aperture::Vidmem, "still vidmem");
-    let host = b.host.expect("the binding now carries its materialization");
-    assert_eq!(host.host_va(), LEAF_VA.0);
-    assert_eq!(host.memory(), backed.memory);
-    assert!(
-        host.frees_object(),
-        "a fresh object per leaf ⇒ the binding IS the object and its release frees it"
+        "⊘ this chain must never mint host sysmem — that is `publish_backing`: {v:?}"
     );
 }
 
-/// ★★★ A leaf the address table does **not** bind yet is still backable: the walk is the
-/// authority on the guest's own page tables, and the table is a mirror that may not have
-/// been populated for this range.
+/// ★★★★★ **THE HOLE (A) DOES NOT CLOSE, pinned as a test rather than left to a reader.**
+///
+/// ⊘ This test asserted that a leaf the address table has never seen *"is backed and
+/// bound"* — the crossing bound a row where none existed. Ruling 3 refuses the crossing, and
+/// the commit deliberately does not bind anything on its refusal path (the table is the
+/// walker's to populate, not the publish chain's).
+///
+/// ⇒ **A leaf with no prior row is left with no row**, and an absent row is
+/// [`kayfabe_fwd::Representability::Untracked`], which routes to the **real host GPU**.
+///
+/// ★★ That is the second derived default, and (A) does not remove it: deciding the kind at
+/// bind fixes what a BOUND range means and says nothing about a range nobody bound. The
+/// thing that closes it is the walker's forward-populate running over this leaf first —
+/// which is exactly what the sibling test above has (its `guest_binds` is that populate) and
+/// what this one deliberately does not.
+///
+/// ⚠ This test exists to make the gap **loud and located**. If a future rung closes it, this
+/// test is where the change will be seen.
 #[test]
-fn a_leaf_the_table_has_never_seen_is_backed_and_bound() {
+fn a_leaf_the_table_has_never_seen_is_refused_and_left_untracked() {
     let _wd = watchdog(
         "fb_leaf_backing::unbound",
         std::time::Duration::from_secs(60),
@@ -225,30 +267,41 @@ fn a_leaf_the_table_has_never_seen_is_backed_and_bound() {
     let (device, pid, _rec) = device();
     assert!(tabled(&device, pid).is_none(), "nothing bound to start");
 
-    let backed = device
+    let refused = device
         .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
-        .expect("the leaf backs");
-    let (_, _, b) = tabled(&device, pid).expect("now bound");
-    assert_eq!(b.phys, LEAF_PHYS);
-    assert_eq!(b.aperture, Aperture::Vidmem);
+        .expect_err("ruling 3 refuses the crossing whether or not a row exists");
     assert_eq!(
-        b.host.expect("materialized").memory(),
-        backed.memory,
-        "the bind names the object the publish returned"
+        refused,
+        kayfabe_rt::FwdFault::RegionKindRefused {
+            va: LEAF_VA,
+            fault: kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
+                aperture: Aperture::Vidmem
+            },
+        }
+    );
+    assert!(
+        tabled(&device, pid).is_none(),
+        "⚠ THE GAP: still unbound, i.e. `Untracked`, i.e. the host GPU arm. The publish \
+         chain does not populate the table — the walker does — so refusing here cannot \
+         invent the guest's declaration."
     );
 }
 
-/// ★★★ **Idempotence, and it must cost NO host verb.** A doorbell repeats; a caller that
-/// re-asked would demand the same host GPU VA twice, and RM answers a colliding fixed map
-/// with `0x51 NV_ERR_NO_MEMORY` — a status that ⊘ cannot be told apart from real
-/// exhaustion (the C's own R2). So the replay has to resolve entirely in the plan phase.
+/// ★★★ **The refusal is STABLE, and it is the same refusal every time.**
+///
+/// ⊘ This test asserted idempotence of the *success* path — a second ask replayed the first
+/// object and cost no host verb, because a colliding fixed map is answered `0x51
+/// NV_ERR_NO_MEMORY`, a status that cannot be told apart from real exhaustion (the C's own
+/// R2). Ruling 3 removes the success path, so what has to be pinned instead is that the
+/// refusal does not *drift*: a chain that refused once and succeeded on the retry would be
+/// worse than one that never refused, because the hazard would be intermittent.
 #[test]
-fn a_second_ask_replays_and_issues_no_host_verb_at_all() {
+fn a_second_ask_is_refused_identically_and_never_succeeds_on_retry() {
     let _wd = watchdog(
         "fb_leaf_backing::replay",
         std::time::Duration::from_secs(60),
     );
-    let (device, pid, rec) = device();
+    let (device, pid, _rec) = device();
     guest_binds(
         &device,
         pid,
@@ -260,24 +313,11 @@ fn a_second_ask_replays_and_issues_no_host_verb_at_all() {
     );
     let first = device
         .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
-        .expect("backs");
-    let after_first = verbs(&rec).len();
-
+        .expect_err("refused");
     let second = device
         .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
-        .expect("replays");
-    assert!(second.already, "the second call must report the replay");
-    assert_eq!(
-        (second.host_va, second.memory),
-        (first.host_va, first.memory),
-        "the replay reports the SAME object, never a fresh one"
-    );
-    assert_eq!(
-        verbs(&rec).len(),
-        after_first,
-        "⊘ a replay must issue not one host verb: {:?}",
-        verbs(&rec)
-    );
+        .expect_err("★ and refused AGAIN — a hazard that appears only on the retry is worse");
+    assert_eq!(first, second, "the same refusal, by the same name");
 }
 
 // ---------------------------------------------------------------------------------
@@ -325,7 +365,11 @@ fn the_walk_and_the_table_disagreeing_is_refused_by_name() {
         verbs(&rec)
     );
     assert!(
-        tabled(&device, pid).expect("still bound").2.host.is_none(),
+        tabled(&device, pid)
+            .expect("still bound")
+            .2
+            .host()
+            .is_none(),
         "nothing was materialized"
     );
 }

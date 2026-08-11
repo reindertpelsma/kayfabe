@@ -111,23 +111,35 @@ fn table_of(base: u64, runs: &[(u64, Kind)]) -> AddressTable {
     let mut at = base;
     for &(len, kind) in runs {
         assert!(len > 0, "a zero-length run is not a layout, it is a typo");
-        let binding = |host: bool| Binding {
-            // The emulated-framebuffer address behind the range. Distinct from the VA so
-            // nothing can pass by confusing the two (the `phys: dst.0` self-bind stage B
-            // deleted).
-            phys: 0x7000_0000 + (at - base),
-            aperture: Aperture::Vidmem,
-            // ★ Address identity: a host-backed binding's host VA IS the VA it is bound
-            // at, and `AddressTable::bind` refuses anything else.
-            host: host.then_some(HostBacking::whole(
-                HostHandle::NULL,
-                at,
-                BackingBytes::SoleBacking,
-            )),
+        // The backing address behind the range. Distinct from the VA so nothing can pass by
+        // confusing the two (the `phys: dst.0` self-bind stage B deleted).
+        let phys = 0x7000_0000 + (at - base);
+        // ★★★ **The two kinds are now DECLARED, and the aperture moved with the kind.**
+        // `Kind::Real` used to be `Aperture::Vidmem` + a host object — which is ruling 3's
+        // forbidden state (`RegionKindFault::FakeFbAtRealGpuVa`) and is no longer
+        // constructible. A kind-3 region is host memory published at the guest's VA, so it
+        // wears a sysmem aperture; a kind-2 region is the emulated framebuffer.
+        //
+        // ⊘ The aperture is unread on the `Real` path — `Representability::HostBacked`
+        // carries no `CpuOperand`, so nothing downstream asks `DeclaredResidency` about it
+        // — which is why this change moves the declaration and not the subject.
+        let real = || {
+            // ★ Address identity: a host-backed binding's host VA IS the VA it is bound at,
+            // and `AddressTable::bind` refuses anything else.
+            Binding::real_gpu_memory(
+                phys,
+                Aperture::SysmemCoherent,
+                HostBacking::whole(HostHandle::NULL, at, BackingBytes::SoleBacking),
+            )
+            .expect("host memory at the guest's own VA is kind 3")
+        };
+        let fake = || {
+            Binding::declared_by_guest(phys, Aperture::Vidmem)
+                .expect("a vidmem declaration is kind 2")
         };
         match kind {
-            Kind::Real => t.bind(A_PDB, GpuVa(at), len, binding(true)).expect("bind"),
-            Kind::Fake => t.bind(A_PDB, GpuVa(at), len, binding(false)).expect("bind"),
+            Kind::Real => t.bind(A_PDB, GpuVa(at), len, real()).expect("bind"),
+            Kind::Fake => t.bind(A_PDB, GpuVa(at), len, fake()).expect("bind"),
             Kind::Hole => {}
         }
         at += len;
@@ -341,11 +353,8 @@ fn a_wrapping_request_is_clipped_at_the_top_and_never_reaches_address_zero() {
         A_PDB,
         GpuVa(0),
         0x1000,
-        Binding {
-            phys: 0x7000_0000,
-            aperture: Aperture::Vidmem,
-            host: None,
-        },
+        Binding::declared_by_guest(0x7000_0000, Aperture::Vidmem)
+            .expect("the fixture declares a kind the guest can declare"),
     )
     .expect("bind at 0");
 
@@ -746,26 +755,24 @@ fn the_source_operand_splits_the_request_too_and_a_fabricated_source_is_never_ha
         A_PDB,
         GpuVa(src_base),
         0x1000,
-        Binding {
-            phys: 0x7100_0000,
-            aperture: Aperture::Vidmem,
-            host: Some(HostBacking::whole(
-                HostHandle::NULL,
-                src_base,
-                BackingBytes::SoleBacking,
-            )),
-        },
+        // ★ Sysmem, because kind 3 IS host memory: a `Vidmem` aperture with a host object
+        // is ruling 3's forbidden state and no longer constructible. The aperture is unread
+        // on the `HostBacked` path (no `CpuOperand`), so this moves the declaration, not the
+        // subject — which is the source operand's own cut.
+        Binding::real_gpu_memory(
+            0x7100_0000,
+            Aperture::SysmemCoherent,
+            HostBacking::whole(HostHandle::NULL, src_base, BackingBytes::SoleBacking),
+        )
+        .expect("host memory at the guest's own VA is kind 3"),
     )
     .expect("real source half");
     t.bind(
         A_PDB,
         GpuVa(src_base + 0x1000),
         0x1000,
-        Binding {
-            phys: 0x7101_0000,
-            aperture: Aperture::Vidmem,
-            host: None,
-        },
+        Binding::declared_by_guest(0x7101_0000, Aperture::Vidmem)
+            .expect("the fixture declares a kind the guest can declare"),
     )
     .expect("fabricated source half");
 
@@ -1079,22 +1086,16 @@ fn a_fabricated_virtual_operand_takes_its_plane_from_the_aperture() {
         A_PDB,
         GpuVa(base),
         0x1000,
-        Binding {
-            phys: 0xDEAD_0000,
-            aperture: Aperture::Vidmem,
-            host: None,
-        },
+        Binding::declared_by_guest(0xDEAD_0000, Aperture::Vidmem)
+            .expect("the fixture declares a kind the guest can declare"),
     )
     .expect("vidmem bind");
     t.bind(
         A_PDB,
         GpuVa(base + 0x1000),
         0x1000,
-        Binding {
-            phys: 0xBEEF_0000,
-            aperture: Aperture::SysmemCoherent,
-            host: None,
-        },
+        Binding::declared_by_guest(0xBEEF_0000, Aperture::SysmemCoherent)
+            .expect("the fixture declares a kind the guest can declare"),
     )
     .expect("sysmem bind");
     // A scrub across BOTH runs: the destination alone decides, and the two runs must carry
@@ -1371,79 +1372,83 @@ fn there_is_no_read_at_invalidate_and_the_table_is_unchanged_across_one() {
 /// ⊘ Everything else is held identical between the two arms — same VA, same length, same
 /// aperture, same host handle, same host VA. The **only** difference is
 /// [`BackingBytes`], which is the variable under test.
-fn classify_host_backed(bytes: BackingBytes) -> Result<Vec<CeSpan>, FwdFault> {
-    const VA: u64 = 0x2_0022_4000;
-    const LEN: u64 = 0x1000;
+const FORBIDDEN_VA: u64 = 0x2_0022_4000;
+const FORBIDDEN_LEN: u64 = 0x1000;
+
+/// Try to build the one binding at `FORBIDDEN_VA` that the arms differ over, and — if the
+/// address plane permits it at all — classify it.
+///
+/// ⊘ Everything else is held identical between the arms: same VA, same length, same host
+/// handle, same host VA, same physical address. The two variables are the **aperture** and
+/// the **[`BackingBytes`]**, which are the two independent spellings of *"this is fake
+/// framebuffer at a real GPU VA"*.
+fn classify_host_backed(
+    aperture: Aperture,
+    bytes: BackingBytes,
+) -> Result<Result<Vec<CeSpan>, FwdFault>, kayfabe_mmu::RegionKindFault> {
+    // Address identity: a host-backed binding's host VA IS the VA it is bound at.
+    let binding = Binding::real_gpu_memory(
+        0x0102_4000,
+        aperture,
+        HostBacking::whole(HostHandle::NULL, FORBIDDEN_VA, bytes),
+    )?;
     let mut t = AddressTable::new();
-    t.bind(
-        A_PDB,
-        GpuVa(VA),
-        LEN,
-        Binding {
-            phys: 0x0102_4000,
-            aperture: Aperture::Vidmem,
-            // Address identity: a host-backed binding's host VA IS the VA it is bound at.
-            host: Some(HostBacking::whole(HostHandle::NULL, VA, bytes)),
-        },
-    )
-    .expect("bind");
-    pc(
+    t.bind(A_PDB, GpuVa(FORBIDDEN_VA), FORBIDDEN_LEN, binding)
+        .expect("bind");
+    Ok(pc(
         Some(&t),
-        GpuVa(VA),
+        GpuVa(FORBIDDEN_VA),
         true,
         GpuVa(0),
         false,
-        LEN,
+        FORBIDDEN_LEN,
         CeWork::Scrub,
-    )
+    ))
 }
 
-/// ★★★★★ **A host object the guest cannot see into must NOT be handed to a real engine.**
+/// ★★★★★ **A host object the guest cannot see into can no longer BE BOUND, let alone
+/// handed to a real engine** — ruling 3 (owner, 2026-08-11), at its enforcement point.
 ///
-/// # ⊘ Why this test has TWO arms and asserts they DIFFER
+/// # ⊘ What moved, and why the assertion had to move with it
 ///
 /// `[measured 2026-08-11]` the classifier's whole test was `binding.host.is_some()` —
-/// *"does a host object exist at this address"*, never *"are the guest's bytes in it"*. In
-/// this tree those are **opposite** populations: `VerbPlan::Publish` and `PublishVidmem`
-/// write `Binding::host` and produce objects the guest never writes into, while
-/// `VerbPlan::PinGuestRam` — the one crossing that shares memory with the guest — records
-/// into `Vas::guest_ram_pins` and leaves `host` **`None`**. `w228` measured the vidmem case
-/// directly: `placed_as_asked=true` **and blank**.
+/// *"does a host object exist at this address"*, never *"are the guest's bytes in it"*. That
+/// was corrected to read [`BackingBytes`], and this test asserted the correction **at
+/// classify time**: `representability_of` returned `Err(BackingNotGuestVisible)`.
 ///
-/// ⚠ **A single-arm test here would prove nothing**, and that is the lesson this rung paid
-/// for one section over: a census that only ever reports *absence* cannot be told from a
-/// census that is incapable of reporting *presence*. (§16.82.9: a grep answered "zero" for
-/// `MapGuestRam`, which runs eight times a boot, exactly as it answered for `ExportBacking`,
-/// which never runs.) So the `GuestVisible` arm is the **known-positive**: it proves the
-/// predicate can still say `HostCe`, and the assertion that the two arms differ is what
-/// stops a fix that simply refuses everything from passing.
+/// ⚠ Refusing at classify time is refusing **late**. By then the host vidmem object has been
+/// allocated, mapped FIXED at the guest's own VA, and written into the address table, where
+/// every other reader — the #14 ring gate among them — saw a published range. The owner's
+/// ruling is stronger than the refusal was: *"no fake FB ever can be mapped to a real GPU VA
+/// of an isolate except the scratchpad."*
 ///
-/// # What each arm asserts
+/// ⇒ The state is now **unconstructible**: [`kayfabe_mmu::Binding::real_gpu_memory`] is the
+/// only way a [`HostBacking`] enters a binding and it refuses both spellings of the
+/// forbidden state. So the falsifier arms assert on the **constructor**, and the point of
+/// the test is that the classifier can never see the input the old arm fed it.
 ///
-/// - **known-positive** — `GuestVisible` ⇒ `Representability::HostBacked` ⇒
-///   `CeExecutor::HostCe`. Unchanged behaviour, and the proof the gate is not a blanket.
-/// - **the falsifier** — `HostAllocated` ⇒ refused by name. ⊘ Deliberately a *fault* and not
-///   a demotion to `Fabricated`: that would derive a CPU address from `Binding::phys`, which
-///   for the `Publish` chain is a GPA carved from our own arena, and nothing has established
-///   those bytes are reachable through `Vmm::gpa_read` either — trading forbidden #2 on the
-///   GPU for forbidden #2 on the CPU, silently.
+/// # ⚠ Why there are THREE arms and they must disagree
 ///
-/// ★ Before the fix this test is RED on the second arm: the classifier returned
-/// `HostBacked` for both, so a blank object was routed to the host engine — which reads
-/// zeros where the guest wrote and writes where the guest cannot look. That failure is
-/// **self-concealing in a boot** (a run over a blank pool logs identically to a correct
-/// one), which is why it has to be caught here.
+/// A census that only ever reports *absence* cannot be told from a census incapable of
+/// reporting *presence* (§16.82.9). The `SoleBacking` + sysmem arm is the **known-positive**:
+/// it proves the constructor still builds kind 3 and the classifier still answers `HostCe`.
+/// Without it, "refuses everything" would pass.
+///
+/// ★ **The two falsifiers fail independently**, which is why both are here: one caller is
+/// honest about the shadow over an innocent-looking aperture, the other is honest about the
+/// address and silent about the shadow. A single test would let either half be deleted.
 #[test]
-fn a_host_object_the_guest_cannot_see_into_is_never_handed_to_a_real_engine() {
-    // ---- known-positive: the predicate CAN still say "real engine" -------------------
-    let visible = classify_host_backed(BackingBytes::SoleBacking).expect("guest-visible");
+fn a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_table() {
+    // ---- known-positive: the constructor CAN still build kind 3 ----------------------
+    let visible = classify_host_backed(Aperture::SysmemCoherent, BackingBytes::SoleBacking)
+        .expect("★ the known-positive: host sysmem that is the range's only memory IS kind 3")
+        .expect("and it classifies");
     assert_eq!(visible.len(), 1, "one binding, one span");
     assert_eq!(
         visible[0].dst_kind,
         Representability::HostBacked,
         "★ the known-positive: a backing the guest CAN see into is still `HostBacked`. If \
-         this arm fails, the gate has become a blanket refusal and the other arm proves \
-         nothing."
+         this arm fails, the gate has become a blanket refusal and the others prove nothing."
     );
     assert_eq!(
         visible[0].sub.by,
@@ -1451,44 +1456,35 @@ fn a_host_object_the_guest_cannot_see_into_is_never_handed_to_a_real_engine() {
         "and `HostBacked` still selects the real engine"
     );
 
-    // ---- the falsifier: identical in every respect but the visibility ---------------
-    let blank = classify_host_backed(BackingBytes::ShadowsGuestMemory);
-    match blank {
-        Err(FwdFault::BackingNotGuestVisible { addr, aperture }) => {
-            assert_eq!(
-                addr, 0x2_0022_4000,
-                "the refusal names the address it refused"
-            );
-            assert_eq!(
-                aperture,
-                Aperture::Vidmem,
-                "and the aperture, so a reader can tell the `PublishVidmem` case from the \
-                 `Publish` one without opening the source"
-            );
-        }
-        Err(other) => panic!(
-            "refused, but for the wrong reason — a wrong-reason refusal masks the root \
-             cause with a symptom of it: {other:?}"
-        ),
-        Ok(spans) => panic!(
-            "★★★ FORBIDDEN #2: a host object the guest cannot see into was handed to \
-             {:?} as {:?}. The engine would read zeros where the guest wrote. \
-             (`ce_executor_tree.md`: \"Landing the data where the guest cannot see it.\")",
-            spans.first().map(|s| s.sub.by),
-            spans.first().map(|s| s.dst_kind),
-        ),
-    }
+    // ---- falsifier 1: the caller DECLARES the shadow ---------------------------------
+    assert_eq!(
+        classify_host_backed(Aperture::SysmemCoherent, BackingBytes::ShadowsGuestMemory).err(),
+        Some(kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
+            aperture: Aperture::SysmemCoherent
+        }),
+        "★★★ FORBIDDEN #2: a backing that declares itself a SECOND memory must not become a \
+         binding at all. If this is `Ok`, the object reaches the table and every later \
+         reader sees a published range."
+    );
 
-    // ---- and the two arms must DIFFER, or neither measured anything ------------------
+    // ---- falsifier 2: the caller is SILENT about it, and the aperture says it --------
+    assert_eq!(
+        classify_host_backed(Aperture::Vidmem, BackingBytes::SoleBacking).err(),
+        Some(kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
+            aperture: Aperture::Vidmem
+        }),
+        "★★★ RULING 3: `Vidmem` IS the emulated framebuffer in this design, so a host object \
+         at a vidmem address is fake FB at a real GPU VA whatever the caller believes about \
+         `BackingBytes`. Dropping this test would let the w228 chain back in by simply \
+         relabelling its backing."
+    );
+
+    // ---- and the arms must DIFFER, or neither measured anything ----------------------
     assert!(
-        visible.first().map(|s| s.dst_kind)
-            != blank
-                .as_ref()
-                .ok()
-                .and_then(|s| s.first())
-                .map(|s| s.dst_kind),
-        "★ the arms must disagree: a classifier that answers the same for both is not \
-         reading `BackingBytes` at all"
+        classify_host_backed(Aperture::SysmemCoherent, BackingBytes::SoleBacking).is_ok()
+            && classify_host_backed(Aperture::Vidmem, BackingBytes::SoleBacking).is_err(),
+        "★ the arms must disagree: a constructor that answers the same for both is not \
+         reading the region kind at all"
     );
 }
 
@@ -1525,9 +1521,25 @@ fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_g
         sole, 1,
         "exactly one production chain (`Publish`) may claim to be the range's only memory"
     );
+    // ★★★ **This assertion INVERTED on 2026-08-11, and the inversion is the rung.**
+    //
+    // It used to demand `shadow == 1` — *"exactly one production chain (`PublishVidmem`)
+    // shadows memory the guest already reaches"* — with the warning that a `0` would mean
+    // the w228 hazard had been *relabelled rather than fixed*. ⊘ That warning was right
+    // about relabelling and wrong as a permanent invariant: the owner's ruling 3 (*"no fake
+    // FB ever can be mapped to a real GPU VA of an isolate except the scratchpad"*) says the
+    // chain must not exist at all, and `commit_back_fb_leaf` now refuses instead of binding.
+    //
+    // ⚠ So the guard is kept, pointing the other way, and the thing it guards against is
+    // **the chain coming back**: a production line that constructs a shadowing backing is
+    // a production line that intends to bind one.
+    // ⊘ It is NOT the whole guard — a caller could relabel a shadow as `SoleBacking` and
+    // this count would stay 0. That half is
+    // `a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_table`'s second
+    // falsifier, which refuses on the `Vidmem` aperture whatever the label says.
     assert_eq!(
-        shadow, 1,
-        "exactly one production chain (`PublishVidmem`) shadows memory the guest already \
-         reaches — if this becomes 0, the w228 hazard has been relabelled rather than fixed"
+        shadow, 0,
+        "no production chain may construct a backing that shadows memory the guest already \
+         reaches — ruling 3. If this becomes non-zero, the w228 chain is being rebuilt"
     );
 }
