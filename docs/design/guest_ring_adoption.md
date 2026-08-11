@@ -1,5 +1,10 @@
 # §5.11 — ADOPTING THE GUEST'S RING (`w230`)
 
+**STATUS: LIVE with ONE REFUTED PARAGRAPH, 2026-08-11.** Item (3b)'s *"no such object can be
+minted"* is **refuted** by branch `fb-join` (`2fe5f39`), which is not on `master`. The
+correction is folded in **above the paragraph it corrects**, in §2 — search for
+`CORRECTED 2026-08-11`. Everything else in this doc stands.
+
 > Series note: §5.9 is `fb_cpu_view.md`, §5.10 is `executor_vas_separation.md`. This is the
 > rung after them, and it builds on §5.10's `ExecutorVas` without re-opening it.
 
@@ -255,6 +260,36 @@ failure mode the pin exists to prevent). ⇒ The ordering constraint that surviv
 > which `alloc_vidmem`'s own doc names as *"the whole point … a **double** mapping"* and which is
 > ⊘ **not on `origin/master`** (the R32 framebuffer-memfd join lives on another lane's branch).
 > ⇒ **That, not G8, is the load-bearing gap for the GR route.**
+>
+> ⊘⊘ **CORRECTED 2026-08-11 (integration) — THE CLAIM BELOW IS REFUTED, AND IT WAS BRANCH
+> DRIFT RATHER THAN A MEASUREMENT ERROR.** Read this before the paragraph it corrects.
+>
+> > *"…**for this ring no such object can be minted**"* is **false of the tree**. It is true
+> > only of the checkout this rung was written against. Branch **`fb-join` (`2fe5f39`)** —
+> > not on `master`, and ⊘ **not in this integration branch either** — carries
+> > `RmBackend::join_fb_leaf`, which mints exactly the object this paragraph says cannot
+> > exist: an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the isolate's own mapping of the
+> > leaf's pages, placed FIXED at the leaf's own guest VA.
+> >
+> > ⊘ **And it is NOT the "different, blank object" this paragraph correctly rejects** — that
+> > is `w228`'s chain, which `fb-join` keeps expressible as `FbLeafBacking::Vidmem` and
+> > describes in its own words as *"Two memories, silent in both directions"*. The join is
+> > the other arm, `FbLeafBacking::Joined`: *"★★★★★ **ONE memory** … a byte the guest writes
+> > through the emulated framebuffer and a byte the engine reads through the GPU MMU are the
+> > **same byte**"*. ⇒ The rejection was right about `w228` and wrong about the tree.
+> >
+> > `[measured 2026-08-11, bench vh2, GA106, host 580.159.04, commit 8eb8dcd]` (that lane's
+> > measurement, cited not reproduced here): all three of `cuCtxCreate`'s framebuffer leaves
+> > joined, `placed_as_asked=true`, both directions agreeing over 1024 words.
+> >
+> > ⚠ **What this correction does NOT establish.** ⊘ That the joined object *satisfies*
+> > `GuestRing::memory`'s contract — nothing in this tree has run `alloc_channel_over_guest_ring`
+> > over one, and `alloc_channel_over_guest_ring` still has exactly one caller, the R31 probe.
+> > The refutation is of *"no such object can be minted"*, which is a claim about
+> > **existence**, not about **fitness**. ★ And the joined leaf is host **SYSMEM**, which
+> > `FbLeafJoined` calls *"a named divergence … not optional"* — so an object over the guest's
+> > framebuffer page exists, but it is not card memory, and that cost belongs in any plan that
+> > builds on it.
 >
 > ★★★★★ **AND THE SHARPEST FORM OF IT: item (3b) — "a caller for
 > `alloc_channel_over_guest_ring` on a guest path" — CANNOT BE WRITTEN TODAY AT ALL.** Not for
