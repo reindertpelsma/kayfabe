@@ -15069,3 +15069,257 @@ doorbells where `w230a`–`w230d` reported 191 with `git diff 65d7532..11599d9 -
 the w230 boots ran user work that `boot_capture.sh` alone does not, which is why
 `scripts/bench/cup2_hook_w232.sh` now carries that workload into the repository instead of
 leaving it in whichever shell ran it.
+
+## §16.82 ★★★★★ `RING-VA-UNBOUND` — the witness transport covers 3.2 % of the writers
+
+### 16.82.1 ⊘⊘ Everything this rung was briefed with is refuted, and none of it needed a boot
+
+The brief named three candidate causes and a redirect replaced them with a fourth framing.
+All four are refuted by `w232c`'s **already committed** log plus this tree's own source.
+
+| proposed | refuted by |
+|---|---|
+| (1) *"the guest has not published that VA yet"* — an **ordering** problem | `run_w232c…_qemu.log:149` — the descent walks `L0@0x201000 → L1@0x202000 → L2@0x203000 → L3@0x204000 = LEAF@0x200200000->0x1000000/Vidmem/sz0x200000`, `walkend=LEAF`, and then **reads the ring's bytes**: `rng=V:0x1024000`, `fbRING[p0]@0x1024000=0000c00202220000 nz4/4096 resY byBAR1#157` |
+| (2) *"published but not walked"* — a **lookup/join** defect | `read_gpfifo_ring` reaches `RingVaUnbound` only **after** `proc.vases.get(&(gpu,pdb))` succeeded — a missing `Vas` is `FwdFault::UnknownPdb`, an `Err` (`kayfabe-fwd/src/lib.rs:4013-4027`). The `Vas` exists and the table genuinely holds no row |
+| (3) *"walked, but the wrong table"* | the walk's root **is** `pdb=0x201000`, the channel's own, and it reaches a leaf covering the VA |
+| ⊘ the redirect: *"`0x200224000` is not the ring; the ring is `0x202c00000` and this is a pushbuffer miss"* | see 16.82.2 |
+
+### 16.82.2 ⊘⊘ `0x200224000` IS the ring, and one field settles it
+
+`CeChannelFacts::ring_va` is `node.facts.gp_fifo_ring.map(|r| r.va)`
+(`kayfabe-rt/src/device.rs:1709`). `read_gpfifo_ring` reads **that same field** and prints
+**that same value** in `RingVaUnbound { va }` (`kayfabe-fwd/src/lib.rs:4003-4027`). They are not
+two projections that could disagree; they are one field read twice.
+
+And the log prints both roles **on one line**:
+
+```text
+ring=0x200224000 entries=1024 … rng=V:0x1024000 … gp[0]@0x200224000=0x202c00000+0x20
+pb=S:0x41335000 pbm[8w of 32B]: [0]sub4/m0x0/Incrementing/n1=0xc7b5
+                                [1]sub4/m0x240/Incrementing/n3=0x2
+                                [2]sub4/m0x300/Incrementing/n1=0x14
+```
+
+⇒ `0x200224000` is the **ring**; `0x202c00000` is the **pushbuffer** its entry 0 names; `+0x20`
+is 32 bytes, which is the `pbm[8w of 32B]` decoded two fields later. ⊘ And the eight walling
+addresses `0x200218000 … 0x20022d000` are **eight channels'** rings — `chan=8..15`, stride
+`0x3000`, matching the `userd` stride `0x1a000,0x1d000,…,0x2f000` exactly — one per `FWD-RING`
+line, **not** eight entries of one ring.
+
+★ Therefore `RING-VA-UNBOUND` is **not renamed**: the name is TRUE. The stale name in this area
+is `GUEST-RAM PIN … ring=…`, which asserts guest RAM about an object that is in the
+framebuffer — see 16.82.6.
+
+### 16.82.3 ★★★★★ THE VERDICT — a FOURTH cause: the witness covers 3.2 % of the writers
+
+`ReachShadow::settle` binds a leaf **only** if its page is in `witnessed`
+(`kayfabe-mmu/src/reach.rs:432-437` — hole 2, and the refusal is by design). `witnessed` is fed
+from `Vas::pt_pages`, which G1 fills from exactly **one** place: the framebuffer **window** write
+path, inside the `FbWriter::Window(w)` arm (`kayfabe-device/src/plane.rs:2982-3017`).
+
+The shell's CPU copy-engine executor writes the same store through
+`FbStore::write_tagged(.., FbWriter::Executor)` (`kayfabe-rt/src/cpu_ce.rs:124`) and is
+**structurally invisible** to that witness.
+
+`[measured 2026-08-11, boot w232c_6fcedac]`
+
+```text
+framebuffer FIRST-WRITER census: PRAMIN 21 / BAR1 41 / BAR2 88 / EXEC 4538 / UNATTRIBUTED 0
+```
+
+**4538 of 4688 resident pages (96.8 %) were created by our own executor** — and the four
+page-table pages of the walling channel's tree are four of them, with consecutive sequence
+numbers: `byEXEC#104`, `#105`, `#106`, `#107`. ⇒ every leaf under them is
+*reachable-but-unwitnessed*, `settle` declines it, and the table for that VAS stays empty.
+
+★ **The contrast is the attribution, not the reasoning.** `[measured 2026-08-10, boot
+w208_797a6bc_real]` the **system** proc's CeUtils tree reads `EXEC 0 / BAR2 50`, its leaves
+bound, and `w209` read that ring and printed this project's first `CE-SUBMIT`. One transport,
+two populations.
+
+⚠ `SharedDevice::decode_pt_writes_from`'s own doc cites that w208 census as if it settled which
+store *the* walling tree is in. That citation is now **scoped**: it was true of the system VAS
+and is the opposite for a user VAS. A correct citation, narrowed by the population it was taken
+from.
+
+### 16.82.4 ★★ A SECOND WALL BEHIND THE FIRST — the ring is in VIDMEM
+
+`push_range_gpas` refuses any non-sysmem aperture **by name** (`FwdFault::PushbufferAperture`,
+`kayfabe-fwd/src/lib.rs:4081-4092`) and the read itself is `Vmm::gpa_read`. So
+`read_gpfifo_ring` can only ever read a ring that lives in **guest RAM**.
+
+| object | VA | resolves to | aperture |
+|---|---|---|---|
+| GPFIFO ring (user proc 2) | `0x200224000` | `0x1024000` | ★ **Vidmem** — our emulated framebuffer |
+| pushbuffer it names | `0x202c00000` | `0x41335000` | Sysmem — guest RAM |
+| finish semaphore | (`fin`) | `0x102c004` | **Vidmem** |
+| GPFIFO ring (system proc, w209) | `0x420064000` | `0x768a000` | Sysmem — **and it was read** |
+
+⇒ Fixing the table alone **cannot** forward this work: it moves the wall to a **different
+named refusal**. That is precisely what the armed arm below must be watched for, and it is the
+rung's negative control rather than a disappointment.
+
+### 16.82.5 The doorbell class split, measured — and what it means for passthrough
+
+`[measured, w232c]` `by engine: GrCompute=8 GrGraphics=0 Ce=183 NvEnc=0 NvDec=0 Other=0
+unrouted=0`; `of the served: 175 local (CPU CE), 8 forwarded (host channel rung)`.
+
+| class | n | proc | outcome |
+|---|---|---|---|
+| `Ce`, SYSTEM proc | **136** | 0 | served by the shell's CPU CE; `CE-SYSPROC-KEPT`, forged by §12.26 |
+| `Ce`, other local | 39 | ⊘ not attributed per doorbell | served locally |
+| `Ce`, **user proc 2** | **8** | 2 | the fall-through — `RING-VA-UNBOUND`, and reported **SERVED** |
+| `GrCompute` | **8** | ⊘ not attributed per doorbell | **REFUSED** `Route::NotACopyEngineChannel` |
+
+⊘ **The eight that wall are not the eight that are refused.** The refused eight are
+`GrCompute`; the walling eight are `Ce` and are reported *served*.
+
+★ The walling eight are **user-proc CE with virtual addressing** — the ring VA and the
+pushbuffer VA both resolve in the channel's own VAS, and the pushbuffer's first method is
+`SET_OBJECT = 0xc7b5` (`AMPERE_DMA_COPY_B`). Under the owner's #231 ruling that is
+**passthrough class**. ⊘ And no *kernel* CE with physical addressing reaches the forwarding
+site at all: §12.26 excludes the system proc one gate earlier.
+
+★★ **This diagnosis does not change under passthrough — it becomes MORE load-bearing.** You
+cannot map a working set you have not enumerated, and enumerating it means reading the ring,
+which needs (a) the table row this section is about and (b) a reader that can reach a **vidmem**
+ring. What passthrough retires is *re-issuing the methods*, not *reading the ring*.
+
+⇒ **What passthrough would need here, concretely, and what is missing:**
+
+- **pushbuffers** — guest RAM (`S:`). Pinnable **today** by the existing `GuestRamGrant` path;
+  what is missing is the enumeration (`#233`/G7: *"pin every pushbuffer the ring's GP entries
+  name"* — neither built nor designed). The pin ran 8 times and ran on the **ring**.
+- **ring** and **finish semaphore** — `Vidmem`, i.e. our *emulated* framebuffer. There is no
+  guest-RAM page and no host memory object behind them at all unless the §5.9 second crossing
+  (`KAYFABE_FB_BACKING=on`) allocates one. ⚠ `w232c` did not arm it. ⇒ **half the working set
+  is in fabricated space**, and no `OS_DESCRIPTOR` over guest RAM can express it.
+- **USERD** — declared `h0x5c000014/off0x26000`; its aperture is not in this log. Unmeasured.
+
+### 16.82.6 ⚠ A latent defect the wall was hiding: a framebuffer address called a `gpa`
+
+`pin_ring_guest_ram` read `let gpa = binding.phys + off;` with **no aperture test**, while its
+name, its log tag and its `resolve_guest_ram` call all assert guest RAM.
+`kayfabe_mmu::Binding::phys` is documented as *"for sysmem this is a guest-physical address"*.
+
+⇒ The **first** doorbell that ever populated this table would have handed the hypervisor's
+guest-RAM layout a **framebuffer** address and pinned the guest RAM page that happens to share
+the number — silently. It has never fired only because the lookup above it has never succeeded.
+`Binding::is_guest_ram()` + a named refusal close it.
+
+### 16.82.7 ⚠ Two things this rung states and does not fix
+
+- **The doorbell reports `SERVED` while nothing ran.** `forward_ring` returns `Ok(())` on all
+  eight arms that forward nothing, and the census counts the doorbell as served. That is a
+  false statement to the guest, and it is why `8 forwarded (host channel rung)` in the teardown
+  census is not a claim about work.
+- **Two instruments in one boot contradict each other.** `GPFIFO forward search: swept 4688 of
+  4688 resident page(s), and NO page carries GPFIFO-entry-shaped bytes` — in the same log where
+  `fbRING[p0]@0x1024000` carries a decoded GPFIFO entry (`gp[0]…=0x202c00000+0x20`). One of
+  the two is wrong; the sweep's sieve is the suspect, and it is not this rung's subject.
+
+### 16.82.8 ★★★★★ THE TWO BOOTS — one variable, and BOTH walls moved to named refusals
+
+`[measured 2026-08-11, bench vh, real GA106 / 580.159.04 Open, rev `d7e4da8`. Archive rev ==
+qemu rev == source rev, asserted from the binary's own stamp AND by a content check
+(`strings … | grep -c VAS-BIND-CENSUS` = 3, `EXEC-WITNESS` = 3, `NOT IN GUEST RAM` = 1).
+Both: `KAYFABE_ISOLATES=real KAYFABE_CE_EXECUTOR=host NVKVM_RAM_BACKEND=memfd
+KAYFABE_GUEST_RAM=memfd`, `POST_CAPTURE_HOOK=scripts/bench/cup2_hook_w232.sh`. The **only**
+variable is `KAYFABE_PT_WITNESS_EXEC`.]`
+
+| | `w232c` (`b6c5442`) | `w234a` — witness `off` | `w234b` — witness `on` |
+|---|---|---|---|
+| doorbells | 191 / 183 / **8** | 191 / 183 / **8** | **191 / 175 / 16** |
+| `of the served: … forwarded` | **8** | **8** | **0** |
+| by engine | `GrCompute=8 Ce=183` | identical | identical |
+| FIRST-WRITER census | `PRAMIN 21 / BAR1 41 / BAR2 88 / EXEC 4538` | **identical** | **identical** |
+| `EXEC-WITNESS` | — | `DISARMED` | `ARMED resident=158 by-executor=39 refused-at-cap=0` |
+| `rows` for `pdb=0x201000` | — | **4** | **13348** |
+| `shadow` / `wit` | — | **0 / 0** | **37 / 37** |
+| `root_wit` (page `0x201000`) | — | **N** | **Y** |
+| `wit_sample` | — | **`[]`** | **`[0x201000,0x202000,0x203000,0x204000]`** |
+| `hit` for ring VA `0x200224000` | — | **NONE** | **`0x1024000/Vidmem/start0x200200000/len0x200000`** |
+| `FWD-RING … RING-VA-UNBOUND` | 8 | 8 | **0** |
+| `GUEST-RAM PIN` | `UNRESOLVED Miss` | `UNRESOLVED Miss` | **`NOT IN GUEST RAM … aperture Vidmem at 0x1024000`** |
+| `CE-SUBMIT` | 0 | 0 | **0** |
+| `SMI_RC` / `CUP2_RC` | 0 / 124 | 0 / 124 | **0 / 124** |
+
+★ **`w234a` reproduces `w232c` on every number**, including the four-way first-writer census
+and the byte-identical `GUEST-RAM PIN` line ⇒ the instruments are observationally neutral and
+the disarmed arm **is** `b6c5442`.
+
+★★ **The arms are guest-identical.** `diff` of the two `_dmesg.log` modulo timestamps is
+**empty**; 31 `NVRM` lines, **0** `RmInitAdapter failed`, `SMI_RC=0`, `CUP2_RC=124` on both.
+⇒ the variable moved the address plane and moved nothing the guest can see.
+
+★★★★★ **THE VERDICT, MEASURED RATHER THAN ARGUED.** `wit_sample` names **the four pages the
+descent had printed as `byEXEC#104..#107`**, in order, and `root_wit` flips `N → Y`. Then
+`hit` goes from `NONE` to `0x1024000` — **the address the descent independently reported as
+`rng=V:0x1024000`**, through the leaf it printed (`start0x200200000 len0x200000`). Two
+resolvers that disagreed for five rungs now agree, on one line, on one address.
+
+★★★ **AND THE SECOND WALL ARRIVED ON SCHEDULE, BY NAME:**
+
+```text
+first doorbell refusal [FwdFault::PushbufferAperture]
+  PushbufferAperture { va: GpuVa(8592179200), aperture: Vidmem }
+```
+
+`8592179200 = 0x200224000`. ⇒ 16.82.4's prediction, in the boot: a populated table does not
+forward this work, it **moves the wall to a different named refusal**. ⊘ `CE-SUBMIT` is
+therefore still **0**, and this rung does not claim otherwise.
+
+★★ **The negative control fired, and it fired the way `R30`'s did** — a proposition the target
+evaluates, whose fail-arm returns the *other direction's* pattern rather than zeros. The
+`NOT IN GUEST RAM` refusal added in 16.82.6 had **never had an opportunity to run**; on its
+first one it named the aperture and the framebuffer address. Without it that line would have
+handed `0x1024000` to the guest-RAM layout as a GPA.
+
+★ **A side effect worth its own line: the lie to the guest is gone.** Eight doorbells that
+reported `SERVED` while forwarding nothing now refuse by name (`183 → 175` served,
+`8 → 16` refused). That is a *more honest* device at the same guest outcome.
+
+⊘ **NEW AND UNEXPLAINED, stated rather than smoothed:** the armed pass reports
+`refusals=255 first=StraddlesLiveBinding { va: GpuVa(8655536128) }` (`0x208000000`) — decoded
+leaves overlapping bindings another populate source already owns. `w234a` reports `refusals=0`
+because it decoded nothing at all for this VAS. ⚠ 255 is `MAX` for that vector, so the true
+count may be larger and the list is a **prefix**. This is not diagnosed here.
+
+⊘ **The flag stays OFF by default.** It changes the doorbell census, and the choice of whether
+a doorbell that cannot be forwarded should refuse or lie belongs to the next rung, not to a
+diagnostic.
+
+### 16.82.9 ⊘ The crossing that would make this moot is BUILT and CALLED BY NOBODY
+
+Verified from the **consuming** side, which is the only direction that answers *"is it
+reachable?"* — `git grep` over `crates/kayfabe-fwd/src`, `crates/kayfabe-rt/src`,
+`crates/kayfabe-qemu-raw/src`:
+
+| wire verb (`isolate-host/src/proto.rs`) | named by a consuming crate |
+|---|---|
+| `ExportBacking` | **0** |
+| `ExportSurface` | **0** |
+| `DescribeGuestRam` | **0** |
+| `UnmapGuestRam` | **0** |
+| `FbRead` | 3 |
+
+`RmBackend::export_backing` is implemented on **all three** backends (`rm.rs:3379`,
+`loopback.rs:381`, mocks) and has a wire message and a proof harness. ⊘ Its only non-impl
+callers are `isolate-host`'s own child dispatcher and tests.
+
+★★ **The gap is one enum.** The forwarding plane reaches the isolate *only* through
+`kayfabe_isolate::VerbPlan`, which has exactly three variants — `Publish`, `PublishVidmem`,
+`PinGuestRam` — **and no export variant**. So no plan a doorbell can build is capable of
+asking for an fd. That is the distance between the doorbell path and the crossing, stated
+concretely.
+
+⊘ **`fd_table` / `FdTable` / `global_fd` / `fd_registry` match nothing in `crates/*/src`.**
+What exists is `ExportRegistry` and `ChildExports` (`isolate-host/src/export.rs`) — a
+per-child mint plus a parent-side adopt/dup keyed by token. Whether that is the C's
+per-isolate + global pair under another name is **not** settled here; `ExportRegistry::adopt`
+records an `IsolateId` origin, which is the shape sharing would need, but nothing shares.
+
+⊘ **WB is DOCUMENTED, not DONE.** `NVOS02_FLAGS_COHERENCY_CACHED` and the warning that
+`_CACHED (1)` is not `_WRITE_BACK (5)` live in `kayfabe-abi/src/bringup.rs:520-534`; no memslot
+install site sets a write-back attribute, because no memslot is installed from an exported fd
+at all.
