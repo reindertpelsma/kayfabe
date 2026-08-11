@@ -1,0 +1,48 @@
+=== boot_capture tag=w232b_6fcedac_sysproc_local at 2026-08-11T00:27:27+00:00 ===
+=== source revision: 6fcedac ===
+=== qemu binary: -rwxr-xr-x 1 root root 87335800 Aug 11 00:23 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:6fcedac96f34b722fbc7635917777e13ac7fb6e0 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w232/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w232/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Tue Aug 11 00:27:41 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 11 00:27 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 11 00:27 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 11 00:27 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 11 00:27 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 11 00:27 .
+drwxr-xr-x 18 root root   4000 Aug 11 00:27 ..
+cr--------  1 root root 240, 1 Aug 11 00:27 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 11 00:27 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia

@@ -14947,3 +14947,125 @@ unnecessary hop we chose because the C chooses it.
 and its ladder went green — but the C's green `cup2` ran with `m2cexec=OFF` and its own doorbell
 trigger, so *"the C does it this way"* is evidence that the shape is **acceptable**, never that
 the leaf is **enabled**. `citing_the_oracle_is_not_the_oracle_being_right`.
+
+---
+
+## §16.81 ★★★★★ WHOSE `Ce` DOORBELL IS IT? — the term the executor gate never asked, and the rule the tree already carried
+
+**Status:** `[measured 2026-08-11, rev `6fcedac`, bench `vh`, real GA106 / 580.159.04 Open]`,
+four boots, two arms, one variable.
+
+### 16.81.1 ⊘⊘ The premise this rung was handed, and it is REFUTED
+
+> *"There is no configuration in which the forwarding path is reachable AND the guest is alive."*
+
+There is now: `KAYFABE_CE_EXECUTOR=host`, boot `w232c`. The guest reaches `cuInit` → 1 device →
+`compute=8.6` → `totalMem=11959 MiB`, **and** eight doorbells reach the forwarding fall-through,
+**and** the guest-RAM pin runs on all eight. The `local` control at the same revision reaches the
+fall-through **zero** times with a byte-identical guest.
+
+### 16.81.2 ⊘⊘ And the two directions the brief proposed are both refuted, from the tree
+
+| brief's proposal | verdict | source |
+|---|---|---|
+| *"serve the scrubber in the scratchpad"* (`C: mode2_scratchpad_vas.md`, `f91396e`, 08-10) | ⊘ **does not apply** | `ce_executor_tree.md` (owner, **08-07**): *"★ It is NOT needed for the scrubber — the CPU branch reaches both operands."* |
+| *"is `ce_copy(Ours)`'s refusal a boundary, a gap, or a bug?"* | ★ **a deliberate SECURITY boundary that stays** | same doc, *"Where the executors can live"*: *"★★ `[measured]` E10, 2026-08-07: the CPU branch **cannot** execute in the isolate … So `ce_copy(Ours)` must keep refusing there, and the CPU executor belongs in the **shell**. ⊘ This **corrects** §12.4's standing claim that 'the executor is the isolate in both cases'. It is not a gap — it is the security boundary refusing to leak guest memory into the sandbox, working as designed."* |
+
+⇒ ★ **A ruling's date AND its architecture are both part of the citation** — and here the *older*
+document is the governing one, because the newer one never claimed this scope. §12.4 is still
+implemented by `VerbPlan::CeSplit`, which hands **every** sub-copy to `rm.ce_copy` including
+`CeExecutor::Ours` (`kayfabe-isolate/src/lib.rs:2403-2418`); and `cpu_ce.rs:151` / `:232` both
+document *"the divert in `SharedDevice::forward_ce`"* as the thing that keeps `HostCe` out of the
+CPU executor — **a divert that does not exist**. Neither is this rung's fix; both are named here
+because they are the standing residue of a superseded rule.
+
+### 16.81.3 ★★★★★ THE FINDING — the rule was written down, and printed, on the very doorbell
+
+`kayfabe_fwd::FwdFault::SystemDataPlane`'s own docs (`kayfabe-fwd/src/lib.rs:831-846`), citing
+`l1_concurrency.md` §12.26, name this exact workload:
+
+> *"The SYSTEM proc has no data plane … Guest-kernel work that would need a backing — **THE
+> CEUTILS SCRUB**, the GR golden capture — is **FORGED** to the system proc's completion queue,
+> **NEVER FORWARDED**, so the system proc never mints host memory."*
+
+`try_ce_submission`'s gate was `vas_pdb.is_some() && !local_ce_is_the_only_executor`: *"can the
+core address this channel?"* and *"is there another executor?"*. It never asked *"whose proc is
+this?"* — so under `host` it handed the guest **kernel's** CeUtils channel to a plane the tree
+forbids to have it.
+
+★ And `w231a_ad4ed3c_ceexec_host` printed the rule **on the same token, three lines later**:
+
+```text
+RING-PROJ     token=0x00010002 proc=0 chan=1 … pdb=0x2efa9c000
+GUEST-RAM PIN token=0x00010002 … proc=0 … ⊘ 0 of 1 run(s) pinned — REFUSED `SystemDataPlane`,
+              THE WALL, and it is a STANDING DESIGN RULE, not a defect
+kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0) → REFUSED
+doorbells: 1 arrived, 0 served, 1 REFUSED  →  NVRM: RmInitAdapter failed! (0x25:0x65:1249)
+```
+
+⇒ One instrument stated the rule; the other never asked it. `no_counter_fired_is_not_no_record_exists`,
+**inverted**: the record existed, was correct, was printed, and no code read it.
+
+### 16.81.4 The change
+
+`forwarding_plane_owns_ce(proc, has_vas_pdb, local_ce_is_the_only_executor)` — a pure predicate,
+extracted so it is assertable with no device — gains `proc != Gpu::SYSTEM_PROC`.
+⊘ Not conditional on the executor choice (§12.26 is a *lifetime* rule, not a preference).
+⊘ Not a repair of `ce_copy` (§16.81.2). ⊘ Not a narrowing: every **user** proc's `Ce` doorbell
+still falls through. `CE-SYSPROC-KEPT #N` prints once per doorbell the term actually changed the
+answer for, so the count is on disk and nothing is inferred from silence.
+
+### 16.81.5 ★★★ THE FOUR BOOTS — one variable, and the arms are guest-identical
+
+All four: `rev 6fcedac`, archive rev == qemu rev == source rev (asserted from the binary's own
+stamp **and** from `strings … | grep -c CE-SYSPROC-KEPT`), `KAYFABE_ISOLATES=real
+NVKVM_RAM_BACKEND=memfd KAYFABE_GUEST_RAM=memfd`.
+
+| boot | `ce_executor` | cup2 hook | doorbells | `CE-SYSPROC-KEPT` | `RING-PROJ` | `PT-DECODE` | `GUEST-RAM PIN` | `FWD-RING` | `CE-SUBMIT` |
+|---|---|---|---|---|---|---|---|---|---|
+| `w232a` | **host** | no | 2 / 2 / 0 | **2** | 0 | 0 | 0 | 0 | 0 |
+| `w232b` | local | no | 2 / 2 / 0 | **0** | 0 | 0 | 0 | 0 | 0 |
+| `w232c` | **host** | yes | 191 / 183 / 8 | **136** | **8** | **8** | **8** | **8** | 0 |
+| `w232d` | local | yes | 191 / 183 / 8 | **0** | 0 | 0 | 0 | 0 | 0 |
+
+★ **The guest is identical across all four.** `diff` of the four `_dmesg.log` files, modulo
+timestamps, is **empty** — and identical to `w230d`'s. `nvidia-smi` `SMI_RC=0` and enumerates the
+device on all four (`ERR!` in the Name column is `GPU_GET_NAME_STRING`'s standing 23 zero bytes,
+not a missing device). `cup2` reaches `compute=8.6` / `totalMem=11959 MiB` and then
+`CUP2_RC=124` on **both** `c` and `d`.
+
+⇒ The arms differ in the log by **exactly** the forwarding-plane instruments. That is the
+attribution: `KAYFABE_CE_EXECUTOR` is the only variable, and it moves `RING-PROJ` 0 → 8 while
+moving nothing the guest can see.
+
+★★ **Two axes, separated, and BOTH now positive** (`w226d` proved they were independent):
+*executor* decides whether the site is **reached** (`host` ⇒ 8, `local` ⇒ 0); *arming* decides
+whether it **prints** (`KAYFABE_GUEST_RAM=memfd` ⇒ 8 pin lines). Every earlier boot that had
+both had a **dead** guest.
+
+### 16.81.6 ★★★ WHAT DID NOT MOVE, and the wall that is now on top
+
+⊘ `cup2` still times out at `cuCtxCreate` (`CUP2_RC=124`), identically on both arms. Nothing
+about this rung was expected to move it.
+
+⊘ **`CE-SUBMIT` is 0**: the isolate's host CE was never asked, because nothing was forwarded. All
+eight fall-throughs read
+
+```text
+FWD-RING proc=2 chan=12 key=0xc1d0000c:0x5c00004b pdb=0x201000
+         RING-VA-UNBOUND va=0x200224000 → NOTHING FORWARDED (the doorbell still reports SERVED)
+GUEST-RAM PIN token=0x00020013 … proc=2 chan=12 pdb=0x201000 ring=0x200224000
+         → UNRESOLVED Address(Miss { pdb: Pdb(2101248), va: GpuVa(8592179200) })
+```
+
+⇒ ★ The pin is **no longer refused `SystemDataPlane`** — it is a user proc's channel now, so
+§12.26 does not apply to it — and it fails one step later, on a **different, named** wall: the
+address table does not bind the user proc's ring VA. That is §16.73/§16.74's `RING-VA-UNBOUND`,
+reached for the first time by a *user* proc on a *live* guest, and it is the next question.
+
+⊘ **Unexplained and bounded, stated rather than smoothed:** `w232a`/`w232b` report **2**
+doorbells where `w230a`–`w230d` reported 191 with `git diff 65d7532..11599d9 -- crates/` empty.
+`w232c`/`w232d` reproduce 191/183/8 exactly. ⇒ The difference is the **workload**, not the code:
+the w230 boots ran user work that `boot_capture.sh` alone does not, which is why
+`scripts/bench/cup2_hook_w232.sh` now carries that workload into the repository instead of
+leaving it in whichever shell ran it.
