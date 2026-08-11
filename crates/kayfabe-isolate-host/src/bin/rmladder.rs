@@ -2301,6 +2301,301 @@ fn guest_ring_channel_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     verdict
 }
 
+/// ★★★★★ R32 — **will host RM take a USERD block the caller supplied, and does RM's own
+/// internal write to that block LAND?**
+///
+/// # ★ Lead with the refutation: the commissioned decision rule cannot work
+///
+/// This rung was briefed as *"pass `hUserdMemory[0]` and observe whether the alloc returns
+/// `NV_OK`"*, with a failure expected to *"report through `NV_ASSERT_OK` at
+/// `kernel_fifo_gm107.c:787`"*. **[SOURCED] It cannot.** The residual touch — RM zeroing
+/// the 512 bytes of a **sysmem** USERD on a GSP-client GPU — happens in
+/// `kfifoSetupUserD_GM107`, which is `void` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:795-808`), wraps
+/// `memmgrMemSet` in `NV_ASSERT_OK` — defined as an assert with *"no other action"*
+/// (`ogkm-580: src/nvidia/inc/libraries/utils/nvassert.h:467-473`) — and is called for its
+/// side effect only, immediately before `return NV_OK` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2342-2358`).
+///
+/// ⇒ `NV_OK` is printed on **both** arms of the commissioned experiment. It answers the
+/// *ingest* question and is silent on the *residual*, which is the one the brief called the
+/// only unmeasured thing. So this rung poisons the bytes through pages we own and reads
+/// them back.
+///
+/// # ★★ And the second arm is deleted on source, before a run is spent on it
+///
+/// The brief proposes `NVOS32_DESCRIPTOR_TYPE_OS_FILE_HANDLE` as *"the named escape"* if
+/// arm A fails. **[SOURCED] It is unreachable from any Linux userspace client**, and it is
+/// not what its name suggests:
+///
+/// - the escape this port uses (`NV_ESC_RM_ALLOC_MEMORY`, class
+///   `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) hard-codes
+///   `descriptorType = NVOS32_DESCRIPTOR_TYPE_VIRTUAL_ADDRESS`
+///   (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:274`), which
+///   `osCreateMemFromOsDescriptor` refuses outright
+///   (`ogkm-580: …/osmemdesc.c:133-136`) — the kernel half rewrites it to
+///   `NVOS32_DESCRIPTOR_TYPE_OS_PAGE_ARRAY` after `os_lock_user_pages`
+///   (`ogkm-580: …/escape.c:164-167`). ⇒ **our descriptors are `OS_PAGE_ARRAY`**, not the
+///   `VIRTUAL_ADDRESS` this crate's own doc comment names;
+/// - `OS_FILE_HANDLE` is a **dma-buf import** — `nv_dma_import_from_fd(dma_dev, fd, …)`
+///   (`ogkm-580: …/osmemdesc.c`, `osCreateOsDescriptorFromFileHandle`). A `memfd` is not a
+///   dma-buf exporter, and guest RAM reaches this process as a `memfd`. Its only in-tree
+///   user is nvidia-modeset (`ogkm-580: src/nvidia-modeset/src/nvkms-surface.c:537`), a
+///   kernel client.
+///
+/// ⇒ the `0x56` on the ring's CPU map is not *"a descriptor-TYPE policy with a named
+/// escape"* we can take; it is a wall for every descriptor this process can build. Whether
+/// `udmabuf` could manufacture one is a **different** question, with a `/dev/udmabuf`
+/// permission cost, and it is not this rung.
+///
+/// # The five printed answers
+///
+/// ```text
+/// ★  R32 ingest      = RM built the channel over a caller-supplied OS_DESCRIPTOR USERD
+/// FAIL R32 ingest    = the alloc refused <RmError> — and the refusal NAMES the fix
+/// ★  R32 residual    = the 512 bytes were ZEROED / the poison SURVIVED
+/// ok  R32 control    = the zeroing moved with `userdOffset`, so it is attributable
+/// ★  R32 arm B nomap = the CPU map of the caller's USERD was attempted and refused
+/// ```
+///
+/// ⊘ **Nothing here schedules, rings or submits.** `cup2` is unaffected by this rung in
+/// either direction and no guest is booted for it.
+fn guest_userd_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    println!(
+        "info  R32 guest userd     = GPU {gpu}, euid {} — a sealed memfd → OS_DESCRIPTOR → \
+         hUserdMemory[0], with NO DMA map of it (USERD is ingested by physical address, \
+         `ogkm-580: kernel_channel_gv100.c:206-208`) and no CPU map of it",
+        kayfabe_linux_raw::geteuid(),
+    );
+    println!(
+        "info  R32 why not status  = the residual write is `kfifoSetupUserD_GM107`, a VOID \
+         function whose `NV_ASSERT_OK` is defined as `no other action` — so the alloc \
+         returns NV_OK whether it landed or not. This rung reads the BYTES"
+    );
+    let vas = match rm.alloc_vaspace() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R32 vaspace         = {e:?} (the rung needs its own address space)");
+            return false;
+        }
+    };
+    let e = match rm.prove_guest_userd(vas) {
+        Ok(e) => e,
+        Err(err) => {
+            println!(
+                "FAIL  R32 setup           = {err:?} (the memfd, the reservation, the \
+                 OS_DESCRIPTOR or a readback — none of which is the thing under test)"
+            );
+            let _ = rm.free(vas);
+            return false;
+        }
+    };
+
+    // ★★ THE ESTABLISHING READ, first and gating. A fresh memfd reads as ZERO, so
+    // "the block is zero afterwards" is true of a run in which RM did nothing at all.
+    // Every arm below is vacuous if this one does not hold.
+    let established = e.established.0.is_poison(0xA5D0_0000) && e.established.1.is_poison(0x5B0B_0000);
+    if established {
+        println!(
+            "ok    R32 establish       = both blocks read back the DICTATED poison before RM \
+             was told anything — USERD@{:#x} carries 0xa5d00000+i, control@{:#x} carries \
+             0x5b0b0000+i. ⇒ a later `all zero` is a statement about RM",
+            e.userd_at, e.control_at
+        );
+    } else {
+        println!(
+            "FAIL  R32 establish       = the poison did not read back ({:?} / {:?}). Every arm \
+             below would be about bytes this process cannot see, so none of them is reported \
+             as a result",
+            e.established.0, e.established.1
+        );
+        let _ = rm.free(vas);
+        return false;
+    }
+
+    // Arm A — the ingest question, which is the one the brief asked.
+    let ingest = match &e.channel {
+        Ok(token) => {
+            println!(
+                "★     R32 ingest          = HOST RM BUILT THE CHANNEL (token {token:#x}) over a \
+                 USERD block it did not allocate, described through \
+                 `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — the SAME descriptor type the guest's ring \
+                 reaches us as. ⇒ `hUserdMemory[0]` may be the caller's on real hardware"
+            );
+            true
+        }
+        Err(err) => {
+            println!(
+                "★     R32 ingest          = the alloc REFUSED {err:?} for a caller-supplied \
+                 OS_DESCRIPTOR USERD. ⊘ This is a RESULT, not a failure of the rung: it converts \
+                 the inference into a measurement and names the object to change. ⚠ Read it \
+                 against `ogkm-580: kernel_channel_gv100.c:152-277` — the alignment check \
+                 (`Alignment < 512`), `kchannelIsUserdAddrSizeValid` and the VPR flag are the \
+                 three named refusals on that path"
+            );
+            false
+        }
+    };
+
+    // ★★ THE RESIDUAL — measured, not inferred, and reported on BOTH arms because the
+    // alloc's status cannot carry it.
+    let zeroed = e.userd_after.all_zero;
+    let control_untouched = e.control_after.is_poison(0x5B0B_0000);
+    if zeroed {
+        println!(
+            "★     R32 residual        = RM ZEROED all 512 bytes at USERD@{:#x}. ⇒ the internal \
+             `memmgrMemSet` (kernel_channel.c:2342-2358 → kfifoSetupUserD_GM107) REACHES an \
+             OS_DESCRIPTOR in sysmem, and the client CPU map is a pure choice",
+            e.userd_at
+        );
+    } else if e.userd_after.is_poison(0xA5D0_0000) {
+        println!(
+            "★     R32 residual        = THE POISON SURVIVED at USERD@{:#x} — RM did NOT zero the \
+             block, and the alloc still answered {}. ⇒ two readings, and they are not the same: \
+             either the memset failed silently (look for an `NVRM` assert in the host dmesg \
+             captured beside this log) or the ADDR_SYSMEM gate was not taken. ⊘ Either way the \
+             guest's own cursors would SURVIVE a host channel alloc, which is what a shadow \
+             channel needs",
+            e.userd_at,
+            if e.channel.is_ok() { "NV_OK" } else { "a refusal" }
+        );
+    } else {
+        println!(
+            "??    R32 residual        = the block at USERD@{:#x} is neither zero nor its own \
+             poison: {:?}. A partial write is not a result either way",
+            e.userd_at, e.userd_after
+        );
+    }
+    if !control_untouched {
+        println!(
+            "FAIL  R32 spill           = the control block at {:#x} CHANGED while RM was told \
+             only about {:#x}: {:?}. ⇒ whatever was written is not scoped to the block we named",
+            e.control_at, e.userd_at, e.control_after
+        );
+    }
+
+    // ★★★ THE NEGATIVE CONTROL, and it is a proposition the target evaluates: the SAME
+    // call with the SAME object and ONE number changed must move the effect to the other
+    // block. The two propositions cannot both hold.
+    println!(
+        "info  R32 control re-est  = {:?} / {:?} (both blocks re-poisoned before arm C)",
+        e.reestablished.0.poison_base, e.reestablished.1.poison_base
+    );
+    let control_ok = if !(e.reestablished.0.is_poison(0xA5D0_0000)
+        && e.reestablished.1.is_poison(0x5B0B_0000))
+    {
+        println!(
+            "FAIL  R32 control         = the re-poisoning did not read back, so arm C is about \
+             unknown bytes"
+        );
+        false
+    } else {
+        match &e.control_arm {
+            Err(err) => {
+                println!(
+                    "??    R32 control         = the same alloc with `userdOffset` = {:#x} was \
+                     REFUSED {err:?} while arm A was {}. The control cannot speak to \
+                     attribution, but the DIFFERENCE between the two arms is itself a \
+                     measurement of what RM validates about the offset",
+                    e.control_at,
+                    if e.channel.is_ok() { "accepted" } else { "also refused" }
+                );
+                e.channel.is_err()
+            }
+            Ok(token) => {
+                let moved = e.control_after_arm.1.all_zero;
+                let stayed = e.control_after_arm.0.is_poison(0xA5D0_0000);
+                if zeroed && moved && stayed {
+                    println!(
+                        "ok    R32 control         = INVERTED and it followed: naming \
+                         `userdOffset` = {:#x} zeroed the block at {:#x} and left {:#x} carrying \
+                         its own poison (token {token:#x}). ⇒ arm A's zeroing is attributable to \
+                         the number we dictated, not to the readback",
+                        e.control_at, e.control_at, e.userd_at
+                    );
+                    true
+                } else if !zeroed && !moved {
+                    println!(
+                        "ok    R32 control         = INVERTED and it agreed with arm A: neither \
+                         offset was zeroed ({:?} / {:?}), so `RM does not touch a \
+                         caller-supplied USERD` holds for two different offsets rather than for \
+                         one",
+                        e.control_after_arm.0.poison_base, e.control_after_arm.1.poison_base
+                    );
+                    true
+                } else {
+                    println!(
+                        "FAIL  R32 control         = the effect did NOT track the number. arm A \
+                         zeroed={zeroed}; arm C left {:#x} as {:?} and {:#x} as {:?}. ⇒ the \
+                         readback is reporting on an address other than the one it names",
+                        e.userd_at,
+                        e.control_after_arm.0,
+                        e.control_at,
+                        e.control_after_arm.1
+                    );
+                    false
+                }
+            }
+        }
+    };
+
+    // The mapping arms. Reported either way; neither is a pass/fail of the rung.
+    let maps = e.cpu_maps.1 - e.cpu_maps.0;
+    if maps == 1 {
+        println!(
+            "ok    R32 no-cpu-map      = building the channel asked RM for exactly ONE CPU \
+             mapping — the RING, which is ours on this rung. The caller's USERD was not mapped"
+        );
+    } else {
+        println!(
+            "FAIL  R32 no-cpu-map      = building the channel asked RM for {maps} CPU mappings, \
+             not 1. ⊘ Exactly one is correct here: the ring. A second one is a mapping of the \
+             CALLER'S USERD"
+        );
+    }
+    match &e.cursor_read {
+        Err(RmError::Other(s)) if *s == kayfabe_isolate_host::rm::USERD_NOT_OURS => println!(
+            "★     R32 cursors         = `userd_cursors` REFUSED BY NAME (`USERD_NOT_OURS`) — the \
+             absence of a CPU view is a named answer to the call that would have used it, not a \
+             comment. ⇒ the cursor bridge does NOT collapse into a mapping; the party that can \
+             write GP_PUT is the one already holding the pages"
+        ),
+        other => println!(
+            "??    R32 cursors         = `userd_cursors` answered {other:?}, not \
+             `USERD_NOT_OURS`"
+        ),
+    }
+    match &e.cpu_map_of_userd {
+        Err(err) => println!(
+            "★     R32 arm B nomap     = the CPU map of the caller's USERD was ATTEMPTED and \
+             REFUSED {err:?} — `no CPU map` is the only available answer, exactly as \
+             `ogkm-580: mapping_cpu.c:170-191` says for an OS_DESCRIPTOR without \
+             MEMDESC_FLAGS_ALLOW_EXT_SYSMEM_USER_CPU_MAPPING"
+        ),
+        Ok(()) => println!(
+            "??    R32 arm B nomap     = the CPU map of the caller's USERD SUCCEEDED (dropped \
+             immediately). ⇒ the OS_DESCRIPTOR mapping policy does not bite this object, and the \
+             `0x56` on the ring has a cause other than the descriptor class"
+        ),
+    }
+
+    let _ = rm.free(vas);
+    // ★ The verdict is `established && control_ok`, and DELIBERATELY not `ingest`. A
+    // refusal that names the descriptor type is the passing result the bar asks for; what
+    // must not pass is a run whose instrument was not watched.
+    let verdict = established && control_ok && maps == 1;
+    println!(
+        "{}  R32 guest userd     = ingest={} residual={} — measured on real hardware, with the \
+         attribution control {}. ⊘ Nothing was scheduled, rung or submitted; cup2 is untouched \
+         by this rung",
+        if verdict { "★    " } else { "FAIL " },
+        if ingest { "ACCEPTED" } else { "REFUSED" },
+        if zeroed { "ZEROED" } else { "SURVIVED" },
+        if control_ok { "GREEN" } else { "BROKEN" },
+    );
+    verdict
+}
+
 /// ★★★ R19 — **task `#128`: can an unprivileged process read the host GPU's own
 /// nanosecond counter, and at WHICH page offset?**
 ///
@@ -2599,6 +2894,7 @@ fn main() -> std::process::ExitCode {
     let mut want_dictated_neg = false;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
+    let mut want_guest_userd = false;
     let mut want_executor_vas = false;
     let mut want_executor_alias = false;
     let mut args = std::env::args().skip(1);
@@ -2633,6 +2929,7 @@ fn main() -> std::process::ExitCode {
             "--dictated-ring-negative" => want_dictated_neg = true,
             "--guest-ram-pin" => want_guest_pin = true,
             "--guest-ring-channel" => want_guest_ring = true,
+            "--guest-userd" => want_guest_userd = true,
             "--executor-vas" => want_executor_vas = true,
             // ★ Arm C, opt-in: it provokes a real host fault when the boundary HOLDS.
             "--executor-vas-alias" => {
@@ -2839,6 +3136,24 @@ fn main() -> std::process::ExitCode {
     // its own memfd, its own descriptor and its own channels, and every address it names is
     // a constant no other rung uses — so nothing it observes can be an earlier rung's
     // leftover. ⊘ It schedules nothing and rings nothing, so unlike R30 it cannot fault.
+    // ★ R32 runs here and RETURNS, for R31's reason exactly: it allocates its own `Vas`,
+    // its own memfd, its own descriptor and its own channels, and every byte it inspects is
+    // one it wrote itself at an offset no other rung names — so nothing it observes can be
+    // an earlier rung's leftover. ⊘ It schedules nothing and rings nothing.
+    if want_guest_userd {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = guest_userd_probe(&mut rm, gpu);
+        println!("done — guest-USERD probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
     if want_guest_ring {
         println!(
             "REV_UNDER_TEST={}",

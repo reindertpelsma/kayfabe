@@ -505,18 +505,26 @@ struct ChannelRings {
     _ring_node: Option<CharDevice>,
     /// The pushbuffer / GPFIFO / semaphore object — `None` when the ring is the guest's.
     ring: Option<VolatileRegion>,
-    /// The node USERD's mmap context was registered against.
-    _userd_node: CharDevice,
+    /// The node USERD's mmap context was registered against. `None` for a
+    /// [`GuestUserd`] channel, for [`ChannelRings::_ring_node`]'s reason.
+    _userd_node: Option<CharDevice>,
     /// USERD — where `GP_GET` (hardware writes) and `GP_PUT` (we write) live.
     ///
-    /// ⊘ Always present, on both kinds of channel, and the asymmetry with the ring is the
-    /// design rather than an oversight: USERD is **ours** on every channel we allocate (we
-    /// hand RM `hUserdMemory[0]`), and `GP_PUT` is the one 32-bit cursor a shadow channel
-    /// exists to advance.
-    userd: VolatileRegion,
+    /// ★★★ **W233 — `None` for a channel over a [`GuestUserd`].** ⊘ The previous text here
+    /// said this was *"always present, on both kinds of channel"* and gave the reason as
+    /// *"USERD is ours on every channel we allocate"*. That was true of every channel this
+    /// file could build; it was never a fact about RM, and R32 is the rung that varies it.
+    /// See [`USERD_NOT_OURS`] for what a caller gets instead of a mapping.
+    userd: Option<VolatileRegion>,
 }
 
 /// Who allocated the object a channel's GPFIFO lives in, and therefore who must free it.
+///
+/// ⊘ **About the RING and nothing else**, and W233 is why that sentence is here. USERD
+/// became caller-suppliable on R32 and reusing this enum for it made
+/// `tests/guest_ring_census.rs`'s *"the five places provenance decides something"* silently
+/// quantify over eight — a ruling about the ring answering for a different object. See
+/// [`UserdOwner`].
 ///
 /// ★★★ It is recorded per channel rather than inferred, because the two arms differ in
 /// **three** places that are nowhere near each other: the alloc (we allocate, or we do
@@ -557,6 +565,25 @@ struct RingLayout {
     entries: u32,
 }
 
+/// Who allocated the object a channel's USERD lives in, and therefore who must free it.
+///
+/// ★★★ **A separate enum from [`RingOwner`], deliberately, and the reason was MEASURED.**
+/// The first cut of R32 reused `RingOwner` for both objects. Everything compiled, clippy was
+/// clean and the whole non-GPU suite passed except one row of `tests/guest_ring_census.rs`,
+/// which counts the sites where **ring** provenance decides something and pins the number
+/// at five. Reusing the enum took it to eight — a ruling about the GPFIFO answering for
+/// USERD, which is exactly the shape that census exists to refuse. ⇒ two objects that vary
+/// independently get two types, and each gets its own census row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UserdOwner {
+    /// The isolate's own device-local USERD block, allocated and CPU-mapped by
+    /// [`HostRmBackend::alloc_channel_in`] — every channel up to and including R31.
+    Ours,
+    /// The caller's, handed in as [`GuestUserd`]: not allocated here, not mapped here, not
+    /// freed here.
+    HandedIn,
+}
+
 /// Everything [`RmBackend::alloc_channel`] built, kept because the port hands back one
 /// handle and the later verbs need the rest.
 #[derive(Debug, Clone, Copy)]
@@ -570,8 +597,15 @@ struct ChannelParts {
     ring: u32,
     /// Whether [`ChannelParts::ring`] is this connection's to unmap and free.
     owner: RingOwner,
-    /// The device-local object holding USERD.
+    /// The object holding USERD — device-local and ours, or the caller's
+    /// ([`GuestUserd`]).
     userd: u32,
+    /// Whether [`ChannelParts::userd`] is this connection's to free.
+    ///
+    /// ★ Recorded rather than inferred, for [`RingOwner`]'s stated reason: the alloc, the
+    /// CPU map and the teardown are three sites far apart, and USERD varies independently
+    /// of the ring.
+    userd_owner: UserdOwner,
     /// The `NV01_MEMORY_VIRTUAL` range [`ChannelParts::ring`] is mapped through — the
     /// handle `NV_ESC_RM_UNMAP_MEMORY_DMA` needs, which is NOT the address space.
     range: u32,
@@ -684,6 +718,62 @@ enum RingSource {
     Ours(Option<GpuVa>),
     /// Adopt the guest's, already placed. See [`GuestRing`].
     Guest(GuestRing),
+}
+
+/// ★★★★★ **W233 / R32 — the guest's own USERD**, the 512-byte block holding the two ring
+/// cursors, handed to the channel alloc as `hUserdMemory[0]` instead of allocated here.
+///
+/// # What this exists to decide
+///
+/// Every channel this file has ever built allocates its own USERD in **vidmem**
+/// ([`HostRmBackend::alloc_channel_in`]'s `alloc_device_local`), CPU-maps it, and writes
+/// `GP_PUT` through that mapping. A shadow channel over a [`GuestRing`] therefore needs a
+/// **cursor bridge**: something that reads the guest's `GP_PUT` out of guest RAM and
+/// re-writes it into ours. If RM will instead take the guest's own USERD block, there is
+/// no second cursor to keep in step and the bridge collapses into a placement.
+///
+/// # ⊘ Nothing here is derived — the same invariant as [`GuestRing`]
+///
+/// | field | whose number it is | ⊘ what it must never be |
+/// |---|---|---|
+/// | [`Self::memory`] | the pinning party's — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the guest's pages | an object this file allocated |
+/// | [`Self::offset`] | the **guest's** `userdOffset[0]` | `0` assumed, when the guest put USERD at a non-zero offset inside its object |
+///
+/// # ⚠ Two facts about USERD that separate it from the ring, both SOURCED
+///
+/// 1. **It is ingested by PHYSICAL address, not by VA.**
+///    `memdescGetPhysAddr(pUserdMemDescForSubDev, AT_GPU, userdOffset)`
+///    (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_channel_gv100.c:206-208`).
+///    ⇒ unlike the ring, USERD needs **no** `raw_map_dma` and no address space at all, and
+///    R32 deliberately maps nothing.
+/// 2. **RM explicitly anticipates this object being an `OS_DESCRIPTOR`**:
+///    `if (dynamicCast(pUserdMemoryRef->pResource, OsDescMemory) != NULL) refAddDependant(...)`
+///    (`ogkm-580: …/kernel_channel_gv100.c:249-252`) — the channel is made to depend on the
+///    descriptor's lifetime. A driver that could not take one would have no reason to write
+///    that line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestUserd {
+    /// The memory object carrying the guest's USERD. Neither allocated nor freed here.
+    pub memory: HostHandle,
+    /// The guest's `userdOffset[0]` — a byte offset **inside** [`Self::memory`].
+    ///
+    /// ⚠ `0` is a value and not a blank, exactly as [`GuestRing::gp_fifo_va`]'s is.
+    pub offset: u64,
+}
+
+/// Where a channel's USERD comes from — R32's degree of freedom, and the mirror of
+/// [`RingSource`].
+///
+/// ⊘ Deliberately a separate enum from [`RingSource`] rather than a field on it: the two
+/// objects are independent in RM (a channel may take the guest's ring and our USERD, or
+/// ours and the guest's), and R32 is precisely the arm that varies **one** of them.
+#[derive(Debug, Clone, Copy)]
+enum UserdSource {
+    /// Allocate [`RING_OBJECT_BYTES`] of device-local memory and CPU-map it — every
+    /// channel this file has built up to and including R31.
+    Ours,
+    /// Hand RM an object we did not allocate. See [`GuestUserd`].
+    Guest(GuestUserd),
 }
 
 /// Everything that can go wrong bringing an RM connection up, with the rung it failed on.
@@ -825,6 +915,24 @@ pub const RING_NOT_OURS: u32 = 0x4B4C;
 /// `kayfabe_core::rmgraph::GpFifoRing`'s own docs record the driver declaring
 /// `gpFifoOffset = 0` for its golden-context channel. `0x4B4D` is `"KM"`.
 pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
+
+/// The opaque status **a USERD access on a channel whose USERD this process does not hold a
+/// CPU mapping of** reports — i.e. every channel built over a [`GuestUserd`].
+///
+/// ★★★ [`RING_NOT_OURS`]'s reason, one object over, and it is **not** cosmetic symmetry:
+/// `GP_PUT` is the single word the whole submission plane turns on, so a channel that
+/// cannot be written there is not a channel this process can submit on. Saying so by name
+/// at [`HostRmBackend::userd_store_u32`] is the difference between *"the doorbell did
+/// nothing"* three rungs later and *"this channel's cursor is not ours to write"* here.
+///
+/// ⊘ **And the refusal is the driver's, not a policy of ours.** `NV_ESC_RM_MAP_MEMORY` on
+/// an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` is answered `NV_ERR_NOT_SUPPORTED` unless the
+/// memdesc carries `MEMDESC_FLAGS_ALLOW_EXT_SYSMEM_USER_CPU_MAPPING`
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/mapping_cpu.c:170-191`), which is set only for
+/// `NVOS32_DESCRIPTOR_TYPE_OS_FILE_HANDLE`
+/// (`ogkm-580: src/nvidia/src/kernel/mem_mgr/os_desc_mem.c:137-141`) — a type the Linux
+/// escape interface never produces (see [`GuestUserdEvidence`]). `0x4B4E` is `"KN"`.
+pub const USERD_NOT_OURS: u32 = 0x4B4E;
 
 /// Classify a failure from a mapped region: a bounds refusal, or a syscall.
 ///
@@ -2480,6 +2588,140 @@ pub enum OsDescSeed {
     Never,
 }
 
+/// ★★★★★ **R32's evidence** — what a real GA106 did when a channel was handed a USERD
+/// block over host pages described through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, the same
+/// descriptor type the guest's ring reaches us as.
+///
+/// # ⚠ THE BRIEF'S DECISION RULE IS REFUTED, AND THAT IS WHY THIS TYPE HAS SIX FIELDS
+///
+/// The rung was commissioned as *"observe whether the alloc returns `NV_OK`"*, with
+/// `NV_OK` ⇒ the internal CPU touch is fine and failure ⇒ it *"reports through
+/// `NV_ASSERT_OK` at `kernel_fifo_gm107.c:787`"*. **[SOURCED, `ogkm-580`] It cannot
+/// report there.** `kfifoSetupUserD_GM107` is `void`
+/// (`src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:795-808`); it wraps
+/// `memmgrMemSet` in `NV_ASSERT_OK`, whose definition is explicitly *"no other action"*
+/// (`src/nvidia/inc/libraries/utils/nvassert.h:467-473`); and its one call site discards
+/// the void return and falls straight into `return NV_OK`
+/// (`src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2342-2358`).
+///
+/// ⇒ **Both arms of the commissioned experiment print `NV_OK`.** An alloc status is a
+/// silent instrument for the residual, and *"do not infer from a silent instrument"* is the
+/// brief's own first trap. So this rung measures the zeroing **directly**, by poisoning the
+/// 512 bytes through pages we own and reading them back.
+///
+/// # The four questions, kept separate for [`OsDescEvidence`]'s reason
+///
+/// | field | question |
+/// |---|---|
+/// | [`Self::channel`] | will RM **ingest** a caller-supplied `OS_DESCRIPTOR` as `hUserdMemory[0]`? |
+/// | [`Self::userd_after`] | did RM's internal `memmgrMemSet` **land** on those bytes? |
+/// | [`Self::control_after`] / [`Self::control_arm`] | is what landed **attributable to the offset we named**? |
+/// | [`Self::cpu_map_of_userd`] | can this process still see the cursors through RM? |
+///
+/// # ⊘ What no arm of this establishes
+///
+/// Nothing here schedules a channel, rings a doorbell or writes `GP_PUT`. `cup2` is not
+/// affected by this rung in either direction and no guest is booted for it.
+#[derive(Debug)]
+pub struct GuestUserdEvidence {
+    /// Byte offset inside the descriptor of the block handed to arm A as USERD.
+    pub userd_at: u64,
+    /// Byte offset inside the descriptor of the block arm A must **not** touch, and that
+    /// arm C hands over instead.
+    pub control_at: u64,
+    /// ★ **The establishing read.** Both blocks, read back through this process's own
+    /// mapping *before* RM is told anything, and required to carry the dictated poison.
+    ///
+    /// ⊘ Without it the rung is vacuous in the most ordinary way available: a fresh
+    /// `memfd` reads as **zero**, so *"the bytes are zero after the alloc"* would be true
+    /// of a run in which RM did nothing whatsoever — R25's `OsDescSeed::Never` trap, one
+    /// object over.
+    pub established: (UserdBlock, UserdBlock),
+    /// **Arm A** — what the channel alloc answered when handed the descriptor at
+    /// [`Self::userd_at`]. The ingest question, and the only one the brief asked.
+    pub channel: Result<u64, RmError>,
+    /// **The residual, MEASURED** — the USERD block read back after arm A.
+    pub userd_after: UserdBlock,
+    /// The control block read back after arm A. RM was never told about it, so it must
+    /// still carry its own poison — and a poison that is *the USERD block's* rather than
+    /// its own would mean the readback is not addressing what it claims to.
+    pub control_after: UserdBlock,
+    /// ★★ **The attribution control, re-poisoned and run in the opposite direction**: the
+    /// same alloc with `userdOffset` naming [`Self::control_at`]. Its answer, and the two
+    /// blocks after it.
+    ///
+    /// Both propositions cannot hold at once, which is what makes it a control rather than
+    /// a repetition: if arm A zeroes the block at [`Self::userd_at`] and arm C zeroes the
+    /// block at [`Self::control_at`], the zeroing tracks the number we dictated. If both
+    /// runs zero the same block, the instrument is reading one address and reporting
+    /// another.
+    pub control_arm: Result<u64, RmError>,
+    /// The two blocks after arm C, in `(userd_at, control_at)` order.
+    pub control_after_arm: (UserdBlock, UserdBlock),
+    /// The re-poisoning before arm C, read back — [`Self::established`] for the second run.
+    pub reestablished: (UserdBlock, UserdBlock),
+    /// [`RmConnection::map_cpu_windowed`] entries before and after arm A's alloc.
+    /// ★ The measurement behind *"the channel did not CPU-map the guest's USERD"*: the
+    /// difference must be exactly **1** — the ring, which is ours on this rung.
+    pub cpu_maps: (u64, u64),
+    /// What [`HostRmBackend::userd_cursors`] answered on the channel arm A built. Must be
+    /// [`USERD_NOT_OURS`]; an `Ok` would mean a CPU view of the caller's USERD exists.
+    pub cursor_read: Result<(u32, u32), RmError>,
+    /// **Arm B** — `NV_ESC_RM_MAP_MEMORY` issued deliberately against the USERD descriptor,
+    /// outside the alloc. Expected refused (`ogkm-580: mapping_cpu.c:170-191`); an `Ok` is a
+    /// finding, and the mapping is dropped immediately either way.
+    pub cpu_map_of_userd: Result<(), RmError>,
+}
+
+/// One 512-byte USERD-sized block, classified by what this process reads out of it.
+///
+/// ⊘ Deliberately not a `bool`. *"Zero"*, *"the poison we wrote"*, *"the OTHER block's
+/// poison"* and *"something else"* send a reader to four different places, and the
+/// three-valued distinction between them is the whole reason the control arm can fail
+/// visibly rather than silently agreeing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserdBlock {
+    /// Every one of the 128 words read `0`.
+    pub all_zero: bool,
+    /// The per-word pattern base this block matches over its whole length, if any — so a
+    /// block still carrying `0xA5D0_0000 + i` is distinguishable from one carrying
+    /// `0x5B0B_0000 + i`, and both from a partial write.
+    pub poison_base: Option<u32>,
+    /// The first word, verbatim, for the case where it is none of the above.
+    pub head: u32,
+    /// The index of the first word that is neither zero nor the expected poison, when the
+    /// block is neither cleanly zeroed nor cleanly poisoned.
+    pub first_odd: Option<usize>,
+}
+
+impl UserdBlock {
+    /// Classify `words` against the two dictated patterns.
+    fn classify(words: &[u32], bases: &[u32]) -> UserdBlock {
+        let all_zero = words.iter().all(|w| *w == 0);
+        let poison_base = bases
+            .iter()
+            .copied()
+            .find(|b| words.iter().enumerate().all(|(i, w)| *w == b.wrapping_add(i as u32)));
+        let first_odd = if all_zero || poison_base.is_some() {
+            None
+        } else {
+            words.iter().position(|w| *w != 0)
+        };
+        UserdBlock {
+            all_zero,
+            poison_base,
+            head: words.first().copied().unwrap_or(0),
+            first_odd,
+        }
+    }
+
+    /// This block still carries exactly the pattern `base` names.
+    #[must_use]
+    pub fn is_poison(&self, base: u32) -> bool {
+        self.poison_base == Some(base)
+    }
+}
+
 /// ★★★★★ **R31's evidence** — what happened when a host channel was created over memory
 /// shaped exactly like the guest's ring, with the guest's own numbers.
 ///
@@ -3135,7 +3377,12 @@ impl RmBackend for HostRmBackend {
                     keep(self.free_one(parts.tsg));
                 }
             }
-            keep(self.free_one(parts.userd));
+            // ★★★★★ **W233 — and a channel over a [`GuestUserd`] takes NOTHING of its
+            // USERD with it either**, for `parts.owner`'s reason exactly: the block holds
+            // the *guest's* two cursors, and the guest is still reading them.
+            if parts.userd_owner == UserdOwner::Ours {
+                keep(self.free_one(parts.userd));
+            }
             return first;
         }
         self.free_one(raw)
@@ -3563,7 +3810,40 @@ impl HostRmBackend {
         ring_at: Option<GpuVa>,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at))
+        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at), UserdSource::Ours)
+    }
+
+    /// ★★★★★ **W233 / R32 — a host channel whose USERD is the CALLER'S.**
+    ///
+    /// [`Self::alloc_channel_at`]'s body with `hUserdMemory[0]` handed in instead of
+    /// allocated. The ring stays ours, deliberately: R32 varies **one** object, so anything
+    /// RM refuses is attributable to USERD and cannot be R31's ring.
+    ///
+    /// # ⊘ What comes back cannot be submitted on by this process
+    ///
+    /// RM refuses `NV_ESC_RM_MAP_MEMORY` on an `OS_DESCRIPTOR`, so there is no CPU view of
+    /// this channel's cursors and [`Self::userd_store_u32`] answers [`USERD_NOT_OURS`]. That
+    /// is not a gap to fill later with a mapping — it is the measured shape of the object,
+    /// and the party that *can* write those bytes is whoever already holds the pages (on the
+    /// production path, the isolate's own `GuestRamPlane` view).
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` or a USERD handle this connection did not mint,
+    /// and otherwise whatever RM refused — after unwinding everything already built, and
+    /// **without** touching the handed-in USERD.
+    pub fn alloc_channel_over_guest_userd(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        userd: GuestUserd,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        self.alloc_channel_in(
+            range,
+            engine_type,
+            RingSource::Ours(None),
+            UserdSource::Guest(userd),
+        )
     }
 
     /// ★★★★★ **W230 — a host channel over the GUEST'S ring**: the same body, with the
@@ -3594,7 +3874,7 @@ impl HostRmBackend {
         ring: GuestRing,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring))
+        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), UserdSource::Ours)
     }
 
     /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
@@ -3613,7 +3893,12 @@ impl HostRmBackend {
         vas: ExecutorVas,
         engine_type: u32,
     ) -> Result<(HostHandle, u64), RmError> {
-        self.alloc_channel_in(vas.range, engine_type, RingSource::Ours(None))
+        self.alloc_channel_in(
+            vas.range,
+            engine_type,
+            RingSource::Ours(None),
+            UserdSource::Ours,
+        )
     }
 
     /// The body all of the above share, over a raw `NV01_MEMORY_VIRTUAL` range.
@@ -3622,6 +3907,7 @@ impl HostRmBackend {
         range: u32,
         engine_type: u32,
         ring: RingSource,
+        userd_src: UserdSource,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
@@ -3665,12 +3951,39 @@ impl HostRmBackend {
             RingOwner::HandedIn => &[],
         };
 
-        let userd = match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
-            Ok(h) => h,
-            Err(e) => {
-                unwind(self, ours);
-                return Err(e);
-            }
+        // ★★★★★ **W233 / R32 — WHERE USERD COMES FROM**, and it is now a question for
+        // [`RingSource`]'s reason exactly. `Ours` allocates 64 KiB of device-local memory
+        // and CPU-maps it below; `Guest` allocates **nothing** and maps **nothing** — the
+        // object is a handle handed in, over pages this connection neither made nor may
+        // unmake.
+        //
+        // ⊘ No mapping of any kind is needed for a handed-in USERD, and that is a fact
+        // about the driver rather than a shortcut: the ingest path takes only the PHYSICAL
+        // address (`memdescGetPhysAddr(…, AT_GPU, userdOffset)`, `ogkm-580:
+        // …/kernel_channel_gv100.c:206-208`), so unlike the ring there is no VA to bind.
+        let (userd, userd_offset, userd_owner) = match userd_src {
+            UserdSource::Ours => match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
+                Ok(h) => (h, 0, UserdOwner::Ours),
+                Err(e) => {
+                    unwind(self, ours);
+                    return Err(e);
+                }
+            },
+            UserdSource::Guest(g) => match self.narrow(g.memory) {
+                Ok(h) => (h, g.offset, UserdOwner::HandedIn),
+                Err(e) => {
+                    unwind(self, ours);
+                    return Err(e);
+                }
+            },
+        };
+        // What a later failure must give back. ⊘ A handed-in USERD is not in it, on any
+        // arm, for `owned_ring`'s reason: unwinding a channel must never free memory the
+        // guest is still reading its own cursors out of.
+        let owned_userd = [userd];
+        let userd_unwind: &[u32] = match userd_owner {
+            UserdOwner::Ours => &owned_userd,
+            UserdOwner::HandedIn => &[],
         };
 
         // The ring must be resolvable by hardware before a channel may name it.
@@ -3694,7 +4007,7 @@ impl HostRmBackend {
                 ) {
                     Ok(va) => va,
                     Err(e) => {
-                        unwind(self, &[ours, &[userd]].concat());
+                        unwind(self, &[ours, userd_unwind].concat());
                         return Err(e);
                     }
                 };
@@ -3713,7 +4026,7 @@ impl HostRmBackend {
                     && va != want.0
                 {
                     let _ = self.conn.raw_unmap_dma(range, va);
-                    unwind(self, &[ours, &[userd]].concat());
+                    unwind(self, &[ours, userd_unwind].concat());
                     return Err(RmError::PlacementRefused {
                         want: want.0,
                         got: va,
@@ -3762,7 +4075,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut tsg_params);
         if encoded.is_err() {
-            unwind(self, &[ours, &[userd]].concat());
+            unwind(self, &[ours, userd_unwind].concat());
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
@@ -3775,7 +4088,7 @@ impl HostRmBackend {
                 h
             }
             Err(e) => {
-                unwind(self, &[ours, &[userd]].concat());
+                unwind(self, &[ours, userd_unwind].concat());
                 return Err(e);
             }
         };
@@ -3805,12 +4118,18 @@ impl HostRmBackend {
             // on 2026-07-30 by setting it to `0x2000`: every ioctl still returned 0, the
             // channel scheduled, the doorbell rang, and R15 reported `sem 0x00000000
             // GP_GET 0 GP_PUT 1` with R17's destination byte-for-byte unchanged.
-            userd_offset_0: 0,
+            //
+            // ★★★ **W233 — still ZERO for every `UserdSource::Ours` channel**, bit for bit,
+            // because `alloc_device_local` hands the object's base. It is the GUEST'S
+            // number only on the `Guest` arm, where a wrong zero would be the same silent
+            // failure one party over: hardware would read cursors 512 bytes from where the
+            // guest writes them and report nothing at all.
+            userd_offset_0: userd_offset,
             engine_type,
         }
         .encode_into(&mut chan_params);
         if encoded.is_err() {
-            unwind(self, &[ours, &[userd, tsg]].concat());
+            unwind(self, &[ours, userd_unwind, &[tsg]].concat());
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
@@ -3825,7 +4144,7 @@ impl HostRmBackend {
                 h
             }
             Err(e) => {
-                unwind(self, &[ours, &[userd, tsg]].concat());
+                unwind(self, &[ours, userd_unwind, &[tsg]].concat());
                 return Err(e);
             }
         };
@@ -3834,7 +4153,7 @@ impl HostRmBackend {
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
         if let Err(e) = self.conn.raw_control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
-            unwind(self, &[ours, &[userd, tsg, chan]].concat());
+            unwind(self, &[ours, userd_unwind, &[tsg, chan]].concat());
             return Err(e);
         }
 
@@ -3844,7 +4163,7 @@ impl HostRmBackend {
             NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
             &mut token,
         ) {
-            unwind(self, &[ours, &[userd, tsg, chan]].concat());
+            unwind(self, &[ours, userd_unwind, &[tsg, chan]].concat());
             return Err(e);
         }
         let token = u32::from_le_bytes(token);
@@ -3885,31 +4204,42 @@ impl HostRmBackend {
             )),
             RingOwner::HandedIn => None,
         };
-        let rings = match (
-            ring_view,
-            self.conn
-                .map_cpu(userd, RING_OBJECT_BYTES, CachePolicy::WriteCombining),
-        ) {
-            (Some(Ok((ring_node, ring_map))), Ok((userd_node, userd_map))) => ChannelRings {
-                _ring_node: Some(ring_node),
-                ring: Some(ring_map),
-                _userd_node: userd_node,
-                userd: userd_map,
-            },
-            (None, Ok((userd_node, userd_map))) => ChannelRings {
-                _ring_node: None,
-                ring: None,
-                _userd_node: userd_node,
-                userd: userd_map,
-            },
-            (a, b) => {
-                let a = a.and_then(Result::err);
+        // ★★★★★ **W233 — and the SAME condition on USERD, for the same reason.** ⊘ It is
+        // not an omission: `NV_ESC_RM_MAP_MEMORY` on an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`
+        // is refused by the driver (`ogkm-580: mapping_cpu.c:170-191`), so a `Guest` arm
+        // that asked for it would tear the channel down on a call that cannot succeed. R32
+        // arm B attempts it deliberately, outside the alloc, and prints what RM answered.
+        let userd_view = match userd_owner {
+            UserdOwner::Ours => Some(self.conn.map_cpu(
+                userd,
+                RING_OBJECT_BYTES,
+                CachePolicy::WriteCombining,
+            )),
+            UserdOwner::HandedIn => None,
+        };
+        let rings = match (ring_view, userd_view) {
+            (Some(Err(e)), _) | (_, Some(Err(e))) => {
                 // Either half failing means the channel cannot be submitted to, so it is
                 // torn down here rather than handed back as a channel that silently is not
                 // one. The first error is the one reported.
-                let e = a.or(b.err()).unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
-                unwind(self, &[ours, &[userd, tsg, chan]].concat());
+                unwind(self, &[ours, userd_unwind, &[tsg, chan]].concat());
                 return Err(e);
+            }
+            (ring_ok, userd_ok) => {
+                let (ring_node, ring) = match ring_ok {
+                    Some(Ok((node, map))) => (Some(node), Some(map)),
+                    _ => (None, None),
+                };
+                let (userd_node, userd_map) = match userd_ok {
+                    Some(Ok((node, map))) => (Some(node), Some(map)),
+                    _ => (None, None),
+                };
+                ChannelRings {
+                    _ring_node: ring_node,
+                    ring,
+                    _userd_node: userd_node,
+                    userd: userd_map,
+                }
             }
         };
         self.conn.remember_rings(chan, rings);
@@ -3921,6 +4251,7 @@ impl HostRmBackend {
                 ring: ring_obj,
                 owner,
                 userd,
+                userd_owner,
                 range,
                 ring_va,
                 layout,
@@ -3937,18 +4268,18 @@ impl HostRmBackend {
     /// accessor rather than as an offset a caller has to know.
     ///
     /// # Errors
-    /// [`RmError::BadHandle`] if `chan` is not a channel of this connection, and whatever
-    /// the bounds check refuses with if USERD is somehow shorter than its own cursors.
+    /// [`RmError::BadHandle`] if `chan` is not a channel of this connection,
+    /// [`USERD_NOT_OURS`] if its USERD is the caller's ([`GuestUserd`]), and whatever the
+    /// bounds check refuses with if USERD is somehow shorter than its own cursors.
     pub fn userd_cursors(&self, chan: HostHandle) -> Result<(u32, u32), RmError> {
         let raw = self.narrow(chan)?;
         self.conn
             .with_rings(raw, |r| {
-                let get = r
-                    .userd
+                let userd = r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?;
+                let get = userd
                     .load_u32(HostOffset::new(USERD_GP_GET))
                     .map_err(|e| region_error(&e))?;
-                let put = r
-                    .userd
+                let put = userd
                     .load_u32(HostOffset::new(USERD_GP_PUT))
                     .map_err(|e| region_error(&e))?;
                 Ok((get, put))
@@ -4147,6 +4478,14 @@ impl HostRmBackend {
         // methods into a ring we do not own is the wrong verb, and it says so by name.
         if parts.owner == RingOwner::HandedIn {
             return Err(RmError::Other(RING_NOT_OURS));
+        }
+        // ★★★ **W233 — and refused HERE for USERD too, for the same reason made concrete.**
+        // `userd_store_u32` would refuse anyway, but it is called AFTER the two `GP_ENTRY`
+        // stores below have already landed — so a channel with a caller-supplied USERD
+        // would leave the ring MUTATED and the cursor unmoved. That is not a refusal, it is
+        // a half-submission, and the guest owns the other half.
+        if parts.userd_owner == UserdOwner::HandedIn {
+            return Err(RmError::Other(USERD_NOT_OURS));
         }
         let layout = parts.layout;
         let entry = gp_entry(pb_va, pb_len).ok_or(RmError::Other(BAD_ENCODE))?;
@@ -4361,11 +4700,17 @@ impl HostRmBackend {
     }
 
     /// Store one 32-bit word into the channel's USERD.
+    ///
+    /// ★★★ **W233** — [`USERD_NOT_OURS`] on a channel over a [`GuestUserd`], always, for
+    /// [`Self::ring_store_u32`]'s reason: the absence of the mapping is a named answer to
+    /// the call that would have used it, not a comment.
     fn userd_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
         let raw = self.narrow(chan)?;
         self.conn
             .with_rings(raw, |r| {
                 r.userd
+                    .as_ref()
+                    .ok_or(RmError::Other(USERD_NOT_OURS))?
                     .store_u32(HostOffset::new(offset), value)
                     .map_err(|e| region_error(&e))
             })
@@ -5010,6 +5355,192 @@ impl HostRmBackend {
         };
         let out = go();
         self.guest_ram = restore;
+        out
+    }
+
+    /// ★★★★★ **R32 — will host RM take a USERD block we did not allocate, and does its own
+    /// internal write to that block LAND?**
+    ///
+    /// See [`GuestUserdEvidence`] for why this measures the bytes rather than the alloc
+    /// status, and for the source refutation of the commissioned decision rule.
+    ///
+    /// # The shape, and every address in it is dictated by this function
+    ///
+    /// One 64 KiB `memfd`, described to RM once. Two 512-byte blocks inside it —
+    /// [`USERD_AT`] and [`CONTROL_AT`] — poisoned with two **different** per-word patterns
+    /// so that a block reading as the *other* block's pattern is distinguishable from a
+    /// block that was zeroed, from one left alone, and from a partial write. ⊘ Nothing is
+    /// DMA-mapped: USERD is ingested by physical address
+    /// (`ogkm-580: …/kernel_channel_gv100.c:206-208`), so a VA would be a variable this
+    /// rung does not need and could not attribute.
+    ///
+    /// Then, in order: establish → arm A at [`USERD_AT`] → read both → arm B → re-poison,
+    /// re-establish → arm C at [`CONTROL_AT`] → read both.
+    ///
+    /// # Errors
+    /// Whatever the memfd, the mapping, the descriptor alloc or a readback refuses with —
+    /// none of which is the thing under test. A refusal from the **channel alloc** is not
+    /// an error of this function: it is [`GuestUserdEvidence::channel`], and it is a
+    /// result.
+    pub fn prove_guest_userd(&mut self, vas: HostHandle) -> Result<GuestUserdEvidence, RmError> {
+        /// 64 KiB, the R25/R31 shape.
+        const BYTES: u64 = 0x1_0000;
+        /// `NV_RAMUSERD_CHAN_SIZE` — the block hardware reads the two cursors out of
+        /// (`ogkm-580: src/common/inc/swref/published/maxwell/gm107/dev_ram.h:50`).
+        const USERD_BYTES: usize = 512;
+        /// Where arm A's USERD sits inside the descriptor. ⊘ Zero on purpose: it is the
+        /// offset every existing channel in this file uses, so arm A differs from a normal
+        /// alloc in the *object*, not in the arithmetic.
+        const USERD_AT: u64 = 0;
+        /// Where the block RM is never told about sits. 512-aligned, a whole 32 KiB away,
+        /// and used by no other rung.
+        const CONTROL_AT: u64 = 0x8000;
+        /// Arm A's per-word poison base.
+        const PAT_USERD: u32 = 0xA5D0_0000;
+        /// The control block's per-word poison base — a different one, so a mix-up reads
+        /// as the *other* pattern rather than as agreement.
+        const PAT_CONTROL: u32 = 0x5B0B_0000;
+
+        let page = HostPageSize::query();
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        let mut reservation =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed = reservation
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let region = reservation
+            .placement(placed)
+            .map_err(|e| region_error(&e))?;
+
+        // Poison and read back, as two separate passes over the same mapping. ⊘ The read
+        // is not a formality: it is what makes a later "all zero" a statement about RM.
+        let poison = |at: u64, base: u32| -> Result<(), RmError> {
+            let mut image = [0u8; USERD_BYTES];
+            for i in 0..USERD_BYTES / 4 {
+                image[4 * i..4 * i + 4]
+                    .copy_from_slice(&base.wrapping_add(i as u32).to_le_bytes());
+            }
+            region
+                .write_from(HostOffset::new(at), &image)
+                .map_err(|e| region_error(&e))
+        };
+        let read = |at: u64| -> Result<UserdBlock, RmError> {
+            let mut image = [0u8; USERD_BYTES];
+            region
+                .read_into(HostOffset::new(at), &mut image)
+                .map_err(|e| region_error(&e))?;
+            let words: Vec<u32> = image
+                .chunks_exact(4)
+                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .collect();
+            Ok(UserdBlock::classify(&words, &[PAT_USERD, PAT_CONTROL]))
+        };
+
+        poison(USERD_AT, PAT_USERD)?;
+        poison(CONTROL_AT, PAT_CONTROL)?;
+        let established = (read(USERD_AT)?, read(CONTROL_AT)?);
+
+        // The one object RM is told about. ⊘ It is described ONCE and reused by both arms:
+        // a second descriptor would make "which object did RM touch?" a live question, and
+        // the answer to that question is not this rung.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(region, HostOffset::new(0), BYTES)?;
+
+        let go = |me: &mut Self| -> Result<GuestUserdEvidence, RmError> {
+            // Arm A. The counter is read on both sides of the ALLOC and of nothing else.
+            let cpu_before = me.cpu_map_calls();
+            let built = me.alloc_channel_over_guest_userd(
+                vas,
+                ENGINE_TYPE_COPY0,
+                GuestUserd {
+                    memory: me.stamp(desc),
+                    offset: USERD_AT,
+                },
+            );
+            let cpu_after = me.cpu_map_calls();
+
+            let (channel, cursor_read) = match built {
+                Ok((chan, token)) => {
+                    // ⊘ Read the cursors through the port's own accessor, which is what a
+                    // submitter would use. It must refuse BY NAME.
+                    let cursors = me.userd_cursors(chan);
+                    // Both blocks are read while the channel is still ALIVE — RM's
+                    // teardown also touches USERD, and a readback after the free could not
+                    // tell the two writers apart.
+                    let after = (read(USERD_AT)?, read(CONTROL_AT)?);
+                    let _ = me.free(chan);
+                    (Ok::<(u64, (UserdBlock, UserdBlock)), RmError>((token, after)), cursors)
+                }
+                Err(e) => (Err(e), Err(RmError::Other(NOT_ON_THIS_RUNG))),
+            };
+            let (token_a, after_a) = match channel {
+                Ok((t, after)) => (Ok(t), after),
+                Err(e) => (Err(e), (read(USERD_AT)?, read(CONTROL_AT)?)),
+            };
+
+            // Arm B — the mapping control, outside the alloc so a refusal is attributable
+            // to `NV_ESC_RM_MAP_MEMORY` on this object and not to the channel.
+            let cpu_map_of_userd = match me.conn.map_cpu(desc, BYTES, CachePolicy::WriteCombining) {
+                Ok((node, map)) => {
+                    drop(map);
+                    drop(node);
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            };
+
+            // Arm C — the attribution control. Re-poison BOTH blocks first: after arm A the
+            // state of the two is exactly what is under test, so running the control over
+            // it would confound the two runs.
+            poison(USERD_AT, PAT_USERD)?;
+            poison(CONTROL_AT, PAT_CONTROL)?;
+            let reestablished = (read(USERD_AT)?, read(CONTROL_AT)?);
+            let built_c = me.alloc_channel_over_guest_userd(
+                vas,
+                ENGINE_TYPE_COPY0,
+                GuestUserd {
+                    memory: me.stamp(desc),
+                    offset: CONTROL_AT,
+                },
+            );
+            let (control_arm, control_after_arm) = match built_c {
+                Ok((chan, token)) => {
+                    let after = (read(USERD_AT)?, read(CONTROL_AT)?);
+                    let _ = me.free(chan);
+                    (Ok(token), after)
+                }
+                Err(e) => (Err(e), (read(USERD_AT)?, read(CONTROL_AT)?)),
+            };
+
+            Ok(GuestUserdEvidence {
+                userd_at: USERD_AT,
+                control_at: CONTROL_AT,
+                established,
+                channel: token_a,
+                userd_after: after_a.0,
+                control_after: after_a.1,
+                control_arm,
+                control_after_arm,
+                reestablished,
+                cpu_maps: (cpu_before, cpu_after),
+                cursor_read,
+                cpu_map_of_userd,
+            })
+        };
+        let out = go(self);
+        let _ = self.free(self.stamp(desc));
+        drop(reservation);
+        drop(ram);
         out
     }
 

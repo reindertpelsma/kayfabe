@@ -118,6 +118,75 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     ),
 ];
 
+/// ★★★★★ **THE USERD SURFACE (W233 / R32)** — the ring census's twin, and it exists
+/// because the ring census caught the exact mistake it is named after.
+///
+/// R32 made `hUserdMemory[0]` caller-suppliable. The first cut expressed that with
+/// [`RingOwner`], and the only thing in the whole workspace that noticed was
+/// [`RING_SURFACE`]'s provenance row going from five to eight — a ruling about the GPFIFO
+/// silently answering for a different object. ⇒ USERD got its own type and its own rows.
+///
+/// ⊘ Each row is a RULING. The one that matters most is `userd_offset_0`: it is **zero for
+/// every channel this file allocates** and the guest's number on exactly one arm, so a
+/// re-spelled `0` there is invisible on every existing channel and makes hardware read the
+/// cursors 512 bytes from where the guest writes them — with no error anywhere, the C's
+/// M5.47 failure shape one object over.
+const USERD_SURFACE: &[(&str, &str, usize, &str)] = &[
+    (
+        "src/rm.rs",
+        "UserdOwner::HandedIn",
+        4,
+        "The four places USERD provenance decides something: the `Guest` arm's tag, the \
+         empty unwind set, the absent CPU map, and `submit_entry`'s early refusal. ⊘ The \
+         teardown is the FIFTH and is spelled as `== UserdOwner::Ours` rather than as \
+         `HandedIn`, because a channel whose USERD is not ours must not free it — there the \
+         negative is the safe default and the positive is the exception.",
+    ),
+    (
+        "src/rm.rs",
+        "userd_offset_0: userd_offset",
+        1,
+        "★★★ ONE construction of `ChannelAllocParams`, reading the per-channel value. A \
+         second site spelling `userd_offset_0: 0` would be correct on every channel this \
+         file allocates and wrong only on the guest's — and wrong SILENTLY, because \
+         hardware reports nothing when it reads the cursors from the wrong address.",
+    ),
+    (
+        "src/rm.rs",
+        "USERD_NOT_OURS",
+        4,
+        "The named status, the two accessors that answer it (`userd_cursors`, \
+         `userd_store_u32`), and `submit_entry`'s EARLY refusal. ⊘ The early one is not \
+         redundant with the accessor: `submit_entry` writes the two GPFIFO dwords BEFORE it \
+         touches the cursor, so refusing late would leave the ring mutated and the cursor \
+         unmoved — a half-submission whose other half the guest owns. ⚠ Comments are \
+         stripped before scanning, so a doc mention does not count toward this number; the \
+         first cut of this row said four and meant three plus a doc reference.",
+    ),
+];
+
+/// The USERD half of [`the_rings_geometry_is_per_channel_and_stays_that_way`].
+#[test]
+fn the_userd_provenance_is_per_channel_and_stays_that_way() {
+    let mut bad = Vec::new();
+    for (file, pat, want, why) in USERD_SURFACE {
+        let n = body_of(file).matches(pat).count();
+        if n != *want {
+            bad.push(format!(
+                "  {file}: `{pat}` appears {n}x, the ruling says {want}x\n      {why}"
+            ));
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "★★★ THE USERD SURFACE MOVED. `hUserdMemory[0]` and `userdOffset[0]` are the two \
+         numbers hardware uses to find a channel's cursors; a constant deciding either of \
+         them is a silent failure on a guest-supplied block and invisible on every other \
+         channel.\n{}",
+        bad.join("\n")
+    );
+}
+
 #[test]
 fn the_rings_geometry_is_per_channel_and_stays_that_way() {
     let mut bad = Vec::new();
