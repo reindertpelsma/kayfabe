@@ -1,5 +1,14 @@
 # The support-matrix seam audit — what is already admitted, and what is a retrofit
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE — and its own last commit is the de-staling**
+>
+> Checked from git history; nothing after `50647e8` (2026-08-09) names this doc. ★ That commit is
+> itself the model this hygiene pass is trying to generalise: it records that **§0.4 had been
+> committed on VOID evidence** — a `timeout … rg` invocation, where `rg` is a shell function and
+> not a binary, so the command returned **127** and the empty output read as *"no hits"*. It
+> re-ran with `grep -rn`, reports the conclusion **HOLDS**, and attributes the last unattributed
+> claim (§3.6). ⇒ Live, and its numbers were re-measured rather than assumed.
+
 > **Scope.** The owner's question, verbatim in intent: *"check if the last work/codebase is still
 > not conflicting with later supporting (so it does not become a retrofit)"*, plus *"check the
 > internal nvidia semantics — we did not creep in assumptions that break across versions."*

@@ -1,5 +1,31 @@
 # Crate maturity + dependency map — what can start, and what it is waiting on
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **STALE — the numbers below are a 2026-07-27 snapshot; do NOT plan from them**
+>
+> ⊘⊘ **The `kayfabe-gsp` row is WRONG BY TWO ORDERS OF MAGNITUDE, and it is the row most likely
+> to be acted on** — it is the one marked *"★ SKELETON — the critical path"*.
+>
+> | | this doc (row below) | measured at `d55187a`, 2026-08-11 |
+> |---|---|---|
+> | `kayfabe-gsp` | **34** lines, `SKELETON` | **5497** lines (`boot.rs` alone 1830) |
+>
+> ★★★ **How it survived, and why this is the doc-hygiene lesson rather than just a wrong number:**
+> `6ce8599` (2026-07-28, *one day* after this doc's last commit) is titled *"…and **'kayfabe-gsp
+> is a 34-line skeleton' was stale in 5 docs**"*. It repaired that exact claim in
+> `c_bug_regression_matrix.md`, `core_completeness_gate.md`, `core_state_and_consolidation.md`,
+> `gl11_region_arguments.md`, `l1_architecture_summary.md` and `docs/reference/qemu_bql_spike.md`
+> — and **missed this one**, the doc whose entire purpose is to carry that number.
+> ⇒ ⊘ **Nothing in the prose below flags itself as old.** This staleness is findable only from
+> commit messages, never by reading the file. A sweep that de-stales a claim must grep for the
+> claim, not fix the docs it happens to remember.
+>
+> ⚠ **Every other line count and maturity verdict below is from the same `d65eb75` snapshot and
+> is unverified at HEAD.** Treat the whole table as an artefact of 2026-07-27. Re-measure with
+> `find crates/<crate>/src -name '*.rs' | xargs wc -l` before using any row to schedule work.
+>
+> ⊘ **Not deleted, and not a mistake when written.** It was an accurate 2026-07-27 snapshot; only
+> its freshness lapsed. See `CLAUDE.md` DOC HYGIENE: stale ≠ wrong.
+
 Purpose: make the work queue **legible**, so nothing is started on a dependency that is not yet
 mature. Snapshot at `d65eb75` (496 tests green). Line counts are implementation only.
 

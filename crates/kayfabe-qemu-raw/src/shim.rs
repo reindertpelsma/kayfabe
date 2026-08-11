@@ -3433,6 +3433,40 @@ impl kayfabe_fwd::FbSource for PlaneFbSource {
 
 /// ★★★ **The environment variable that registers the source** — route B's only switch.
 ///
+/// # ★★ STATUS 2026-08-11 (w258) — **LIVE, and its premise has NOT lapsed.** Measured.
+///
+/// ⊘⊘ **A standing summary says route B "exists to remove a refusal whose count is now 0",
+/// i.e. that it is kept only for history. `traces/boots/w246/README.md` REFUTES that**, and the
+/// refutation is the whole point of the four-corner square that boot ran:
+///
+/// | corner | `KAYFABE_PT_WITNESS_EXEC` | `KAYFABE_RING_VIDMEM` | `PushbufferAperture` |
+/// |---|---|---|---|
+/// | A / B | off | off / **on** | 0 (unreachable — `RING-VA-UNBOUND` 8) |
+/// | **C** | **on** | off | **8** |
+/// | **D** | **on** | **on** | **0** |
+///
+/// ⇒ **the count is 0 BECAUSE route B is on, not despite it.** C vs D is one variable and it is
+/// this flag: the refusal it removes reads **8** with it off and **0** with it on. Removing the
+/// code would restore the 8. ★ The zero is route B's *output*, and reading an output as evidence
+/// the input is unnecessary is the same shape as `A DIAGNOSTIC gated on the failure`.
+///
+/// ★ **What DID lapse is the paragraph below's citation, not its content.** It cites `[w237]`
+/// and predates the square, so it never records (a) that route B has **fired**, or (b) the
+/// precondition that decides whether it can. Both, from `w246` corner D — all 8 `proc 2`
+/// doorbells, one line shape, `RING bytes=65536 cursor=0 live=1 spans=0`:
+/// - **64 KiB is read out of our own emulated framebuffer and decoded correctly.** `spans=0` is
+///   the RIGHT answer, not a failure: the pushbuffer is a semaphore-release-only `LAUNCH_DMA`
+///   (`0x14 & LAUNCH_TRANSFER_MASK == LAUNCH_TRANSFER_NONE`, `kayfabe-abi/src/submit.rs:2042`,
+///   `ogkm-580 clc7b5.h:86`) — a launch that moves **no bytes**. There is no copy to forward.
+/// - ⊘ **Route B is UNREACHABLE unless `KAYFABE_PT_WITNESS_EXEC` is armed.** With the witness
+///   off, `plan_gpfifo_ring` returns `RingVaUnbound` at `kayfabe-fwd/src/lib.rs:4258` — *before*
+///   `VidmemRoute` is computed (`:4277`). `w245` measured route B alone changing **nothing** and
+///   concluded "route B is unreachable"; `w246` scoped that within the hour to a **configuration,
+///   not the code**. ⇒ Never measure this flag with the witness disarmed.
+///
+/// ⚠ **`CE-SUBMIT` is 0 in all four corners and nothing executed.** Route B enumerates a ring;
+/// it does not submit work. No line above may be read as the first forwarded work.
+///
 /// ⊘ Unset ⇒ no source ⇒ `kayfabe_fwd::VidmemRoute::Refuse`, byte-identical to the tree
 /// before route B existed. `[w237]` This is a **MEASUREMENT** switch: the owner's 2026-08-07
 /// ruling scopes itself to kernel-originated copy-engine work and these doorbells are user

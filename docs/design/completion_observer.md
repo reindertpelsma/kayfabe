@@ -1,5 +1,13 @@
 # The completion observer — the two severance points, RE-READ at `d9136d7`, and what was built
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE — and ENFORCED, not merely unrefuted**
+>
+> Checked from git history. `184df5f` (2026-08-10, 41 min after this doc's last commit `6d57377`)
+> does **not** supersede it — it makes it structural: **11** separate citations to this doc's
+> §8/§8.4 in code and docs, plus `tests/tests/single_writer_census.rs` (+486) and a `compile_fail`
+> UI test that turn the **WRITER-CENSUS-ZERO** finding into something the compiler holds.
+> ⇒ Changing §8's rules now means changing tests that were written to guard them.
+
 **Rung:** `w226` / branch `completion-observer`, based on `master` at `d9136d7`.
 **Scope:** the observer and its wiring. ⊘ **Not** the memory crossing (#238 step 3, another
 agent's rung, another branch); where mapped guest RAM is needed it is asserted by name.

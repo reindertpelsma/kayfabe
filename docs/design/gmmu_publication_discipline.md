@@ -1,5 +1,16 @@
 # The GMMU publication discipline — what a real driver does while compute is running
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE — built TO, with one measured refinement it does not carry**
+>
+> Checked from git history. Three later commits build *to* this doc rather than past it, all
+> 2026-08-08: `5af87b9` (*"§6.3/§7 rule 1: walk-on-demand is safe"*), `8cdde02` (*"§7 rule 6 is
+> 'never cache the walk'"*), `754e393` (*"§7 rule 6 plus the measured vacuity of rule 7 on this
+> path"*) — four obstacles closed and the doorbell served.
+>
+> ⚠ **One refinement measured elsewhere and never written back here: `754e393` found §7's RULE 7
+> VACUOUS on that path.** The rule is not wrong; it simply had no members there. ⊘ Do not read
+> rule 7's presence below as evidence it fires — check the path before relying on it.
+
 **Question this answers (the owner's words):** *"How does a real GPU handle GMMU updates if compute
 is still running, as the page can look corrupted? Does it use a fence to sync, or rely only on TLB?
 Something safe must exist."*
