@@ -1,0 +1,160 @@
+# R32 — the guest's USERD: will host RM take an `hUserdMemory[0]` we did not allocate,
+#       and does RM's own internal write to that block LAND?
+#
+# host: ubuntu (bench vh2, vast instance 47373001)   2026-08-11T01:12:11Z
+# gpu:  NVIDIA GeForce RTX 3060, 580.159.04, GPU-45cf77eb-c44c-b28e-2059-cf997edecb5e, 00000000:00:07.0
+# kernel: 6.8.0-59-generic
+#
+# SOURCE REVISION: 25e24b140b8c92ddd4b23cb79d824a502869aa42  (branch `userd-guest`, off origin/master b6c5442)
+#   ★ Tree/stamp agreement ASSERTED THREE WAYS, because the bench has served a stale binary before:
+#     - sha256(crates/kayfabe-isolate-host/src/rm.rs)           = c095aad74cfb21229c55cd70a11659e25cf721171198baf4f3adfd2b5345b5e8   (local == bench)
+#     - sha256(crates/kayfabe-isolate-host/src/bin/rmladder.rs) = 3cd26a8c4d7a2ac22fb893abae7c62fe66ce265644fa4120b64b746a8a52c0a9   (local == bench)
+#     - ★ CONTENT check, not a stamp check: `strings kayfabe-rm-ladder | grep -c 'R32 guest userd'` = 2.
+#       The bench tree has no `.git`, so `KAYFABE_GIT_SHA` had to be HAND-PASSED — exactly the
+#       case CLAUDE.md's rev-stamp trap names — so the binary is also checked for strings that
+#       exist only in this rung, which a stale binary could not contain.
+#   - inner build status asserted: BUILD_RC=0 (the wrapper's exit status is not the build's).
+#   ⊘ An EARLIER identical run exists at 9273784 (the pre-`cargo fmt` source). It is not
+#     reported here: after `fmt` the source hashes changed, so citing it would attribute this
+#     evidence to bytes that were not built. The run below was taken again, from scratch.
+#
+# ★★★ WHAT THIS RUNG REFUTES — and the first thing it refutes is its own commissioned instrument
+#
+#   commissioned rule: "NV_OK ⇒ the internal map path is fine … Failure ⇒ it reports through
+#                       NV_ASSERT_OK at kernel_fifo_gm107.c:787"
+#
+#   [SOURCED, ogkm-580.159.04, the version this bench runs] It cannot report there:
+#     - kfifoSetupUserD_GM107 is VOID .... src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:795-808
+#     - NV_ASSERT_OK is "/* no other action */" ... src/nvidia/inc/libraries/utils/nvassert.h:467-473
+#     - its ONE call site discards the void return and falls into `return NV_OK`
+#                                          ... src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2342-2358
+#   ⇒ BOTH arms of the commissioned experiment print NV_OK. The alloc status answers the INGEST
+#     question and is SILENT on the RESIDUAL — the one thing the brief marked [INFERRED].
+#     So this rung POISONS the 512 bytes through pages we own and READS THEM BACK.
+#
+#   And the fallback arm is deleted ON SOURCE, before a run is spent on it:
+#     NVOS32_DESCRIPTOR_TYPE_OS_FILE_HANDLE is a DMA-BUF IMPORT (nv_dma_import_from_fd,
+#     arch/nvalloc/unix/src/osmemdesc.c), and the escape this port uses hard-codes
+#     descriptorType=VIRTUAL_ADDRESS (escape.c:274) which the kernel half then REWRITES to
+#     OS_PAGE_ARRAY (escape.c:164-167). ⇒ our descriptors are OS_PAGE_ARRAY, and no userspace
+#     client of this driver can ask for OS_FILE_HANDLE at all.
+#
+# ⊘ Nothing here schedules, rings or submits. No guest was booted. cup2 is irrelevant to this
+#   rung in BOTH directions.
+#
+[xid-watch] tag=r32_guest_userd  host=ubuntu  utc=2026-08-11T01:12:11Z
+[xid-watch] command: ./target/release/kayfabe-rm-ladder --guest-userd
+[xid-watch] host_dmesg_lines=923  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
+[xid-watch] xid_before=0
+[xid-watch] --- command output begins ---
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d016c8
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=25e24b140b8c92ddd4b23cb79d824a502869aa42
+info  R32 guest userd     = GPU 0, euid 0 — a sealed memfd → OS_DESCRIPTOR → hUserdMemory[0], with NO DMA map of it (USERD is ingested by physical address, `ogkm-580: kernel_channel_gv100.c:206-208`) and no CPU map of it
+info  R32 why not status  = the residual write is `kfifoSetupUserD_GM107`, a VOID function whose `NV_ASSERT_OK` is defined as `no other action` — so the alloc returns NV_OK whether it landed or not. This rung reads the BYTES
+ok    R32 establish       = both blocks read back the DICTATED poison before RM was told anything — USERD@0x0 carries 0xa5d00000+i, control@0x8000 carries 0x5b0b0000+i. ⇒ a later `all zero` is a statement about RM
+★     R32 ingest          = HOST RM BUILT THE CHANNEL (token 0x4) over a USERD block it did not allocate, described through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — the SAME descriptor type the guest's ring reaches us as. ⇒ `hUserdMemory[0]` may be the caller's on real hardware
+★     R32 residual        = RM ZEROED all 512 bytes at USERD@0x0. ⇒ the internal `memmgrMemSet` (kernel_channel.c:2342-2358 → kfifoSetupUserD_GM107) REACHES an OS_DESCRIPTOR in sysmem, and the client CPU map is a pure choice
+info  R32 control re-est  = Some(2781872128) / Some(1527447552) (both blocks re-poisoned before arm C)
+ok    R32 control         = INVERTED and it followed: naming `userdOffset` = 0x8000 zeroed the block at 0x8000 and left 0x0 carrying its own poison (token 0x4). ⇒ arm A's zeroing is attributable to the number we dictated, not to the readback
+ok    R32 no-cpu-map      = building the channel asked RM for exactly ONE CPU mapping — the RING, which is ours on this rung. The caller's USERD was not mapped
+★     R32 cursors         = `userd_cursors` REFUSED BY NAME (`USERD_NOT_OURS`) — the absence of a CPU view is a named answer to the call that would have used it, not a comment. ⇒ the cursor bridge does NOT collapse into a mapping; the party that can write GP_PUT is the one already holding the pages
+★     R32 arm B nomap     = the CPU map of the caller's USERD was ATTEMPTED and REFUSED Other(86) — `no CPU map` is the only available answer, exactly as `ogkm-580: mapping_cpu.c:170-191` says for an OS_DESCRIPTOR without MEMDESC_FLAGS_ALLOW_EXT_SYSMEM_USER_CPU_MAPPING
+★      R32 guest userd     = ingest=ACCEPTED residual=ZEROED — measured on real hardware, with the attribution control GREEN. ⊘ Nothing was scheduled, rung or submitted; cup2 is untouched by this rung
+done — guest-USERD probe only
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=0
+[xid-watch] ★ HOST Xid CLEAN across the command — 0 before, 0 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (923 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_r32_guest_userd.log
+
+
+### ★★★ THE HOST KERNEL'S OWN WORD ON ARM B — dmesg delta across the run
+#   Readability asserted POSITIVELY and FIRST: rc=0, 923 lines, 195 already containing NVRM.
+#   ⇒ "no new line" could not have been an unreadable instrument.
+
+  [42969.266386] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+
+# ⇒ EXACTLY ONE new host kernel line across the whole run, and it is the driver naming arm B's
+#   refusal itself — rmapi/mapping_cpu.c:187-188, the NV_ERR_NOT_SUPPORTED (0x56 = Other(86))
+#   branch for an NV01_MEMORY_SYSTEM_OS_DESCRIPTOR without
+#   MEMDESC_FLAGS_ALLOW_EXT_SYSMEM_USER_CPU_MAPPING. ★ The path was REACHED. This is not an
+#   inference from a silent instrument.
+# ⇒ And ZERO assert lines from kfifoSetupUserD_GM107's NV_ASSERT_OK — the corroborating half of
+#   `residual = ZEROED`: the memset did not merely appear to work, it also did not print the
+#   failure it would have printed.
+
+### THE FOUR VERDICTS
+
+  ingest    ACCEPTED   RM built the channel (token 0x4) over a caller-supplied OS_DESCRIPTOR USERD
+  residual  ZEROED     all 512 bytes — the brief's [INFERRED, not measured] row is now MEASURED
+  control   GREEN      naming userdOffset=0x8000 moved the zeroing to 0x8000 and left 0x0 still
+                       carrying 0xa5d00000+i; the two propositions cannot both hold
+  cpu map   REFUSED    0x56, with the driver's own dmesg line as corroboration
+
+### ★★★ THE CONSEQUENCE THE BRIEF PREDICTED BACKWARDS
+#
+#   brief:    "NV_OK ⇒ … the cursor-bridge step collapses into a mapping."
+#   MEASURED: the alloc returned NV_OK *and* the CPU map was refused 0x56 — IN THE SAME RUN.
+#
+# ⇒ the bridge does NOT collapse into a mapping. RM will never hand this process a CPU view of a
+#   guest-backed USERD; mapping_cpu.c:170-191 is a policy on the OBJECT, not on the use.
+# ★ What DOES collapse is the SECOND CURSOR: hUserdMemory[0] may be the guest's own block, so
+#   there is one GP_PUT in the system and the party that writes it is whoever already holds those
+#   pages (GuestRamPlane) — which needs no RM mapping. That is UVM's shape exactly: a channel
+#   allocated and run with NO CPU mapping of USERD (ogkm-580: rmapi/nv_gpu_ops.c:6089-6098, :6235-6236).
+# ⊘ And it is a place where diverging from the C is CORRECT: the C could map anything because it
+#   emulated the framebuffer and redirected the guest's view. That reason does not exist for us.
+
+### ⚠⚠ A HAZARD THIS RUNG DISCOVERED — invisible to the commissioned instrument
+#
+# `residual = ZEROED` is not only good news. If the object handed in is the guest's LIVE USERD,
+# RM WIPES THE GUEST'S OWN CURSORS at channel-alloc time — 512 bytes, silently, alloc still NV_OK.
+# guest_ring_adoption.md §3 puts the host channel's birth at the FIRST DOORBELL, which is by
+# definition after the guest wrote GP_PUT. ⇒ see guest_userd_adoption.md §3.1 for the three
+# shapes that resolve it. The commissioned decision rule would have scored this NV_OK as "fine".
+
+################################################################################
+### THE REGRESSION BAR — the existing ladder, SAME binary, SAME box, minutes later
+### ⊘ Not "it still compiles": every one allocates real host RM objects, and four of them make a
+###   real copy engine retire. All rc=0, all `xid_before=0 xid_after=0` from an instrument
+###   proved readable in its own phase 0.
+
+  R25  --osdesc-probe        ★ placed at 0x300400000 AS ASKED, CE retired (sem 0x1),
+                               dst[0] 0xa112fffe -> 0x5eed0001, 65536/65536 bytes EQUAL
+  R26  --dictated-ring       ★ ring at 0x411000000 AS ASKED, GP_GET 1 caught GP_PUT 1,
+                               sem 0x1dea0026 — the GPU FETCHED from an address we chose
+  R29  --guest-ram-pin       ★ placed at 0x301400000 AS ASKED, grant offset 0x10000,
+                               the isolate's mapping reads 0x9a114001
+  R30  --executor-vas        ★ the isolate's CE semaphore is NOT nameable from the guest-bound
+                               space; arm B REFUSES (NoMemory) where arm A found FREE
+  R31  --guest-ring-channel  ★ arm D refused by name with the CPU-map counter unmoved; RM built
+                               the channel over gpFifoOffset 0x900003000 / 4096 entries with ONE
+                               CPU mapping (USERD); arm B refused 0x56; arm C ACCEPTED (unchanged)
+  FULL (no flag)             ★ R13 two live channels; R14 independent-mapping read-back;
+                               R15 SEM LANDED 0xbeef5ea1; R17 CE COPY 4096 bytes;
+                               R16 sandboxed doorbell rung by the capability-less isolate
+
+  ⇒ R17 / R25 / R26 / R29 / R30 / R31 GREEN at 25e24b1.  Host Xid: 0 before, 0 after, on all six.
+
+### AND THE STATIC HALF
+  tests/tests/single_writer_census.rs                          7 passed, 0 failed   (SW_RC=0)
+  cargo clippy --workspace --all-targets
+       --features kayfabe-qemu-raw/host-isolates               RC=0
+  cargo fmt --check                                            clean
+  crates/kayfabe-isolate-host/tests/guest_ring_census.rs
+    the_rings_geometry_is_per_channel_and_stays_that_way       ok   (still 5, NOT bumped to 8)
+    the_userd_provenance_is_per_channel_and_stays_that_way     ok   (new, 3 rows)
+
+  ⚠ INHERITED RED, and NOT this branch's: `cargo test --workspace` fails ONE target,
+    `-p kayfabe-tests --test unranked_locks`, because `Mutex<u64>` in
+    crates/kayfabe-qemu-raw/src/shim.rs is unclassified. Bisected:
+        git show 11599d9:crates/kayfabe-qemu-raw/src/shim.rs | grep -c 'Mutex<u64>'   -> 0
+        git show 6fcedac:crates/kayfabe-qemu-raw/src/shim.rs | grep -c 'Mutex<u64>'   -> 1
+    ⇒ it arrived at 6fcedac (w232) and origin/master b6c5442 SHIPS IT RED — the third instance of
+    the shape that test's own docstring records. 2451 other tests pass. Deliberately NOT fixed
+    here: classifying it asserts whether a blocking call may run beneath that lock, which is the
+    w232 author's knowledge. Inventing that answer is how a green test comes to hold a wall in place.
