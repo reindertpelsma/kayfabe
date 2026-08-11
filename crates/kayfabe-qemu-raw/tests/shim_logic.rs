@@ -2162,24 +2162,124 @@ fn a_value_that_is_not_a_ce_executor_name_refuses_rather_than_defaulting() {
 // refused the same token by name (`REFUSED SystemDataPlane`); the isolate refused the copy
 // (`by=Ours src=Constant(0)`); `RmInitAdapter failed! (0x25:0x65:1249)`.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use kayfabe_core::ProcId;
+use kayfabe_core::channel_kind::{GuestChannelKind, HostChannelKind};
 use kayfabe_core::gpu::Gpu;
+use kayfabe_core::project::{ProcBoundary, SYSTEM_ANCHOR};
+use kayfabe_core::rmgraph::ClientKey;
 use kayfabe_qemu_raw::shim::forwarding_plane_owns_ce;
+
+/// ★★★ **The kind a channel of `proc` carries, obtained from the PRODUCTION derivation.**
+///
+/// ⊘ It deliberately does not restate the rule. `ProcBoundary::channel_kind` is the one
+/// derivation the projection itself uses (`Gpu::sync_proc_to_boundary` calls exactly this
+/// method to stamp `Channel::kind`), so a test that spelled `if proc == SYSTEM_PROC` would
+/// be asserting the gate against a private copy of the rule — the second projection this
+/// whole rung exists to delete.
+///
+/// The only thing restated here is the **routing** step the projection performs elsewhere:
+/// the system component's channels route to [`Gpu::SYSTEM_PROC`] and a user component's do
+/// not (`Spine::refresh`, `by_vchid`). That join is what
+/// `tests/tests/channel_kind_declaration.rs` asserts on a live device, over real RM events,
+/// which is the half a unit test cannot reach.
+fn kind_of(proc: ProcId) -> GuestChannelKind {
+    let anchor = if proc == Gpu::SYSTEM_PROC {
+        SYSTEM_ANCHOR
+    } else {
+        // A user component's anchor is the smallest client DECLARATION in it. Any
+        // non-reserved value will do; `RmGraph::apply` refuses `RESERVED_CLIENT` as guest
+        // input, so no user component can ever collide with `SYSTEM_ANCHOR`.
+        kayfabe_core::ProcAnchor(ClientKey {
+            client: kayfabe_arch::ids::HClient(0xc1d0_0000 | proc.0),
+            incarnation: 0,
+        })
+    };
+    ProcBoundary {
+        anchor,
+        clients: BTreeSet::new(),
+        vases: BTreeMap::new(),
+        channels: BTreeMap::new(),
+    }
+    .channel_kind()
+}
+
+/// ★★★★★ **THE NON-CHANGE PROOF — the predecessor, exhaustively, on every input.**
+///
+/// `[2026-08-11]` The third term stopped being `proc != Gpu::SYSTEM_PROC` computed inside
+/// this gate and became a read of the declared
+/// [`kayfabe_core::channel_kind::GuestChannelKind`]. That term is load-bearing and **12
+/// boots** of `RmInitAdapter failed! (0x25:0x65:1249)` paid for it, so the obligation is
+/// not *"the new gate is sensible"* — it is **the truth table did not move**.
+///
+/// ⊘ The predecessor is written out here as an oracle rather than cited, because a
+/// deleted function cannot be differentialled against. It is a verbatim transcription of
+/// `forwarding_plane_owns_ce`'s body at `6fcedac`:
+///
+/// ```text
+/// has_vas_pdb && !local_ce_is_the_only_executor && proc != Gpu::SYSTEM_PROC
+/// ```
+///
+/// ★ The quantifier is the whole point: **every** proc in the fixture × both values of
+/// `has_vas_pdb` × both values of `local_ce_is_the_only_executor` — the complete input
+/// space of the two boolean terms, and both sides of the one that changed.
+#[test]
+fn the_new_third_term_has_exactly_the_predecessors_truth_table() {
+    fn predecessor(proc: ProcId, has_vas_pdb: bool, local_only: bool) -> bool {
+        has_vas_pdb && !local_only && proc != Gpu::SYSTEM_PROC
+    }
+    let mut saw_true = 0usize;
+    let mut saw_false = 0usize;
+    for proc in [Gpu::SYSTEM_PROC, ProcId(1), ProcId(2), ProcId(4242)] {
+        for has_vas_pdb in [true, false] {
+            for local_only in [true, false] {
+                let was = predecessor(proc, has_vas_pdb, local_only);
+                let now = forwarding_plane_owns_ce(kind_of(proc), has_vas_pdb, local_only);
+                assert_eq!(
+                    now, was,
+                    "★ THE TRUTH TABLE MOVED at proc={proc:?} has_vas_pdb={has_vas_pdb} \
+                     local_only={local_only}: the predecessor said {was}, the declared-kind \
+                     gate says {now}. This term is what `w231a_ad4ed3c_ceexec_host` bought \
+                     with `1 arrived, 0 served, 1 REFUSED` → `RmInitAdapter failed! \
+                     (0x25:0x65:1249)`; naming the axis was not licensed to change it."
+                );
+                if was { saw_true += 1 } else { saw_false += 1 }
+            }
+        }
+    }
+    // ⊘ NON-VACUITY. A predicate that answered `false` everywhere would satisfy every
+    // assertion above, and it is exactly the cheap wrong fix the negative control below
+    // guards against — asserted here too, so the sweep cannot pass by being uniform.
+    assert!(
+        saw_true > 0 && saw_false > 0,
+        "★ the sweep never observed both answers ({saw_true} true / {saw_false} false), so \
+         agreeing with the predecessor proves nothing about the term."
+    );
+}
 
 /// ★★★ **THE PROPOSITION, and it is the one the target evaluates.** In the exact
 /// configuration `w231a` ran — a live plane (`local_ce_is_the_only_executor == false`) and a
-/// channel the core CAN address (`vas_pdb == Some`) — the SYSTEM proc's doorbell must stay
-/// the shell's.
+/// channel the core CAN address (`vas_pdb == Some`) — an **emulated** channel's doorbell
+/// (the guest kernel's; the system proc's) must stay the shell's.
 #[test]
-fn the_system_procs_ce_doorbell_is_never_the_forwarding_planes() {
+fn an_emulated_channels_ce_doorbell_is_never_the_forwarding_planes() {
     assert!(
-        !forwarding_plane_owns_ce(Gpu::SYSTEM_PROC, true, false),
-        "★ the system proc's `Ce` doorbell was handed to the forwarding plane. \
-         `l1_concurrency.md` §12.26 (carried in `FwdFault::SystemDataPlane`'s own docs) \
-         names the CeUtils scrub as work that is FORGED and NEVER FORWARDED, and \
+        !forwarding_plane_owns_ce(GuestChannelKind::Emulated, true, false),
+        "★ an emulated (guest-KERNEL) channel's `Ce` doorbell was handed to the forwarding \
+         plane. `l1_concurrency.md` §12.26 (carried in `FwdFault::SystemDataPlane`'s own \
+         docs) names the CeUtils scrub as work that is FORGED and NEVER FORWARDED, and \
          `w231a_ad4ed3c_ceexec_host` is what handing it away costs: `1 arrived, 0 served, \
          1 REFUSED` → `RmInitAdapter failed! (0x25:0x65:1249)`."
     );
+    // ★ And the same statement through the projection that produces the kind on the live
+    // path, so a change to `ProcBoundary::channel_kind` that broke the join would land
+    // here rather than only on a boot.
+    assert!(!forwarding_plane_owns_ce(
+        kind_of(Gpu::SYSTEM_PROC),
+        true,
+        false
+    ));
 }
 
 /// ★★★★ **THE NEGATIVE CONTROL — the fix must not be a wholesale disarm.**
@@ -2187,22 +2287,29 @@ fn the_system_procs_ce_doorbell_is_never_the_forwarding_planes() {
 /// ⊘ The cheap wrong fix is to stop handing `Ce` doorbells over at all, and it would make
 /// the assertion above pass, keep the guest alive, and quietly delete the forwarding plane's
 /// only reachable population. This is the proposition that fails if it did: **in the very
-/// same configuration, a USER proc's doorbell must still be the forwarding plane's.**
+/// same configuration, a PASSTHROUGH channel's doorbell must still be the forwarding
+/// plane's.**
 #[test]
-fn a_user_procs_ce_doorbell_is_still_the_forwarding_planes_in_the_same_configuration() {
+fn a_passthrough_channels_ce_doorbell_is_still_the_forwarding_planes_in_the_same_configuration() {
+    assert!(
+        forwarding_plane_owns_ce(GuestChannelKind::Passthrough, true, false),
+        "★ no passthrough channel reaches the forwarding plane. The emulated-channel term \
+         was supposed to remove ONE population from the hand-off, not the hand-off — and a \
+         build in which nothing falls through cannot answer whether the fall-through works, \
+         while still looking healthy because the guest boots."
+    );
     for pid in [ProcId(1), ProcId(2), ProcId(4242)] {
         assert_ne!(pid, Gpu::SYSTEM_PROC, "the fixture must use a USER proc");
         assert!(
-            forwarding_plane_owns_ce(pid, true, false),
-            "★ {pid:?} no longer reaches the forwarding plane. The system-proc term was \
-             supposed to remove ONE proc from the hand-off, not the hand-off — and a build \
-             in which nothing falls through cannot answer whether the fall-through works, \
-             while still looking healthy because the guest boots."
+            forwarding_plane_owns_ce(kind_of(pid), true, false),
+            "★ {pid:?}'s channel no longer reaches the forwarding plane through the \
+             production derivation of its kind."
         );
     }
 }
 
-/// ★★★ **The rule is keyed on the PROC, not on our ignorance of its address space.**
+/// ★★★ **The rule is keyed on the CHANNEL'S KIND, not on our ignorance of its address
+/// space.**
 ///
 /// ⚠ `accuracy_is_fatal_when_a_fallback_was_keyed_on_ignorance`, and §14.24 is this
 /// campaign's own instance: the gate used to read `vas_pdb.is_none()`, i.e. *"a channel the
@@ -2210,12 +2317,12 @@ fn a_user_procs_ce_doorbell_is_still_the_forwarding_planes_in_the_same_configura
 /// vanished. `w231a` prints `pdb=0x2efa9c000` for the system proc's channel, so **both**
 /// values of `has_vas_pdb` are reachable for it and the answer must not move.
 #[test]
-fn the_system_proc_term_does_not_depend_on_whether_we_can_address_its_vas() {
+fn the_emulated_term_does_not_depend_on_whether_we_can_address_its_vas() {
     for has_vas_pdb in [true, false] {
         for only_local in [true, false] {
             assert!(
-                !forwarding_plane_owns_ce(Gpu::SYSTEM_PROC, has_vas_pdb, only_local),
-                "★ the system proc changed hands at has_vas_pdb={has_vas_pdb} \
+                !forwarding_plane_owns_ce(GuestChannelKind::Emulated, has_vas_pdb, only_local),
+                "★ an emulated channel changed hands at has_vas_pdb={has_vas_pdb} \
                  local_only={only_local} — the rule is about the proc's LIFETIME REGIME \
                  (§12.26), not about what we happen to know about its address space."
             );
@@ -2229,15 +2336,54 @@ fn the_system_proc_term_does_not_depend_on_whether_we_can_address_its_vas() {
 /// in `traces/guest_boots/` comparable to the next one.
 #[test]
 fn the_shipped_arm_hands_over_nothing_at_all() {
-    for pid in [Gpu::SYSTEM_PROC, ProcId(1)] {
+    for kind in GuestChannelKind::ALL {
         for has_vas_pdb in [true, false] {
             assert!(
-                !forwarding_plane_owns_ce(pid, has_vas_pdb, true),
-                "★ {pid:?} changed hands on the arm where the shell's CPU executor is the \
-                 ONLY executor — there is nobody to hand it to."
+                !forwarding_plane_owns_ce(kind, has_vas_pdb, true),
+                "★ a {kind} channel changed hands on the arm where the shell's CPU executor \
+                 is the ONLY executor — there is nobody to hand it to."
             );
         }
     }
     // ★ And a channel the core cannot address is still nobody's to forward, on every arm.
-    assert!(!forwarding_plane_owns_ce(ProcId(1), false, false));
+    assert!(!forwarding_plane_owns_ce(
+        GuestChannelKind::Passthrough,
+        false,
+        false
+    ));
+}
+
+/// ★★★★★ **THE OWNER'S TWO KINDS BOTH APPEAR IN THE GATE, and the host one is what it
+/// branches on.**
+///
+/// ⊘ This is not a restatement of the tests above. They fix the gate's *answers*; this
+/// fixes *which question produces them*. §12.26's rule is about **whose channel would
+/// carry the work** — the forwarding plane owns a `Ce` doorbell exactly when the host
+/// channel permitted to back it is a
+/// [`kayfabe_core::channel_kind::HostChannelKind::Shadow`], i.e. one inside that guest
+/// process's own isolate. A gate that happened to agree while branching on something else
+/// would pass every assertion above.
+///
+/// ★ The property asserted is the biconditional over the whole guest-kind enum, in the one
+/// configuration where the other two terms are both satisfied: **owned ⟺ hosted by a
+/// Shadow**. Quantified over [`GuestChannelKind::ALL`] rather than over two literals, so a
+/// third kind cannot be added without landing here.
+#[test]
+fn the_gate_hands_over_exactly_the_kinds_a_shadow_host_channel_may_back() {
+    for kind in GuestChannelKind::ALL {
+        assert_eq!(
+            forwarding_plane_owns_ce(kind, true, false),
+            kind.hosted_by() == HostChannelKind::Shadow,
+            "★ a {kind} channel is {} by the gate but its permitted host backing is a {} \
+             — the gate and the owner's model disagree about which channel carries this \
+             doorbell's work. A `Scratchpad` backing is OURS (§12.26: forged, never \
+             forwarded); a `Shadow` backing lives in that guest process's own isolate.",
+            if forwarding_plane_owns_ce(kind, true, false) {
+                "handed away"
+            } else {
+                "kept"
+            },
+            kind.hosted_by(),
+        );
+    }
 }

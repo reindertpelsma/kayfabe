@@ -380,6 +380,30 @@ pub struct Channel {
     pub gpu: GpuId,
     /// The exec-plane identity the doorbell demuxes on (unique only WITHIN [`Self::gpu`]).
     pub vchid: VChid,
+    /// ★★★★★ **What this channel IS to the guest** — emulated (the guest's privileged
+    /// kernel drives it) or passthrough (unprivileged guest userspace does). The owner's
+    /// 2026-08-11 split; see [`crate::channel_kind`] for the whole model, the naming
+    /// collisions it had to avoid, and what it refutes about being "two axes".
+    ///
+    /// # ⊘ DECLARED here, never re-derived by a consumer — and the cost of the
+    /// re-derivation is on the record
+    ///
+    /// Synced from [`crate::project::ProcBoundary::channel_kind`], the one derivation,
+    /// on the same pass as every other declared fact below. Before it existed, the axis
+    /// was reachable **only** as `proc != Gpu::SYSTEM_PROC` recomputed at whichever
+    /// consumer needed it, and its absence from
+    /// `kayfabe_qemu_raw::shim::forwarding_plane_owns_ce` cost **12 boots** of
+    /// `RmInitAdapter failed! (0x25:0x65:1249)` before `6fcedac`.
+    ///
+    /// ⚠ **It is invariant for this channel's life in this `Proc`, and that is
+    /// structural rather than lucky**: a `Proc` *is* one [`crate::project::ProcBoundary`]
+    /// (`sync_proc_to_boundary` copies the boundary's `anchor` onto it on the same
+    /// pass), and a component cannot migrate between the reserved system anchor and a
+    /// user anchor — `RmGraph::apply` refuses `RESERVED_CLIENT` as guest input. It is
+    /// nonetheless re-assigned on every refresh with the other declared facts, for
+    /// `vas_origin`'s stated reason: a field refreshed on a different pass from the
+    /// resolution that produced it is how two projections of one fact come to disagree.
+    pub kind: crate::channel_kind::GuestChannelKind,
     /// The PDB of the VAS this channel is declared against (None = GSP-managed
     /// with no declared VAS — system-routed). Keyed under [`Self::gpu`] in the Vas
     /// map. Named for what it IS — a [`Pdb`] — matching the projection's
@@ -3061,6 +3085,11 @@ impl Spine {
         // — and tagging it `GpuId::ZERO` would be a default-target guess (the
         // no-GPU0-guess doctrine). Its ChanId is still minted, so its slot is
         // stable for when the Device fact lands and it materializes.
+        // ★★★★★ The guest-facing kind of EVERY channel this boundary owns, resolved ONCE
+        // for the whole component rather than per channel: it is a property of whose
+        // namespace allocated them, and this loop is the only place a `Channel` is built.
+        // See `crate::project::ProcBoundary::channel_kind`.
+        let kind = b.channel_kind();
         for (&key, facts) in &b.channels {
             let cid = *p.chan_ids.entry(key).or_insert_with(|| {
                 let c = ChanId(p.next_chan);
@@ -3078,6 +3107,7 @@ impl Spine {
                 key,
                 gpu,
                 vchid: facts.vchid,
+                kind,
                 vas_pdb: facts.vas_pdb,
                 vas_origin: facts.vas_origin,
                 vas_device_default: facts.vas_device_default,
@@ -3095,6 +3125,10 @@ impl Spine {
             });
             entry.gpu = gpu;
             entry.vchid = facts.vchid;
+            // ★★★★★ Re-assigned with the other declared facts, never on its own pass —
+            // see [`Channel::kind`] for why it cannot actually change, and for why it is
+            // assigned anyway.
+            entry.kind = kind;
             entry.vas_pdb = facts.vas_pdb;
             // ⊘ Refreshed with `vas_pdb`, never separately: the two are one resolution
             // (`project::resolve_channel_vas` produces both), and letting them refresh on
@@ -4737,16 +4771,29 @@ impl Gpu {
     /// not a `ChanId`).
     #[must_use]
     pub fn vas_census_string(&self, mark: Option<ChanId>) -> String {
-        // ⊘ The system proc is included: RM's own scrubber/CeUtils channels live there,
-        // and a census that showed only user procs would report "no channels" for a boot
-        // whose only channels are the kernel's.
+        format_vas_census(&self.vas_census(), mark)
+    }
+
+    /// ★★★ **The census's rows, unformatted** — every live channel of every proc,
+    /// including the system proc's.
+    ///
+    /// ⊘ The system proc is included: RM's own scrubber/CeUtils channels live there, and a
+    /// census that showed only user procs would report "no channels" for a boot whose only
+    /// channels are the kernel's.
+    ///
+    /// ★ Extracted from [`Self::vas_census_string`] rather than duplicated, so a test that
+    /// asks *"what does a channel declare"* reads the **same rows** the boot log prints. A
+    /// second enumeration would be the shape [`VasCensusRow`]'s own re-export doc warns
+    /// about: two computations that agree today are not corroboration.
+    #[must_use]
+    pub fn vas_census(&self) -> Vec<VasCensusRow> {
         let mut rows: Vec<VasCensusRow> = Vec::new();
         for (pid, p) in std::iter::once((Gpu::SYSTEM_PROC, &self.system))
             .chain(self.procs.iter().map(|(k, v)| (*k, v)))
         {
             rows.extend(p.channels.values().map(|c| VasCensusRow::of(pid, c)));
         }
-        format_vas_census(&rows, mark)
+        rows
     }
 
     /// ★★★ **#177 — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`.**
@@ -4963,6 +5010,15 @@ pub struct VasCensusRow {
     pub chan: ChanId,
     /// Its exec-plane demux identity.
     pub vchid: VChid,
+    /// ★★★★★ **What the channel is to the guest** — [`Channel::kind`], carried, not
+    /// re-derived from [`Self::proc`].
+    ///
+    /// ⊘ It is not redundant with `p0` meaning *"the system proc"*. That reading is
+    /// exactly the implicit re-derivation this field exists to delete: a human scanning a
+    /// census had to know that `ProcId(0)` is reserved and that reserved means *the guest
+    /// kernel's*, which is two facts about the projection that the row never stated. It
+    /// now states one fact about the channel.
+    pub kind: crate::channel_kind::GuestChannelKind,
     /// Its engine kind, refined by any engine object allocated on it.
     pub engine: EngineKind,
     /// The `hClient` of the channel's **own** origin declaration. ⚠ Not the VA space's
@@ -4986,6 +5042,7 @@ impl VasCensusRow {
             proc,
             chan: ch.id,
             vchid: ch.vchid,
+            kind: ch.kind,
             engine: ch.engine,
             client: ch.key.origin.client.0,
             handle: ch.key.origin.handle.0,
@@ -5031,8 +5088,8 @@ pub fn format_vas_census(rows: &[VasCensusRow], mark: Option<ChanId>) -> String 
         for r in v.iter().take(VAS_CENSUS_EXEMPLARS) {
             let m = if Some(r.chan) == mark { "*" } else { "" };
             out.push_str(&format!(
-                " p{}/c{}{m}:vc{} {:?} c0x{:x}/0x{:x}",
-                r.proc.0, r.chan.0, r.vchid.0, r.engine, r.client, r.handle
+                " p{}/c{}{m}:vc{} {} {:?} c0x{:x}/0x{:x}",
+                r.proc.0, r.chan.0, r.vchid.0, r.kind, r.engine, r.client, r.handle
             ));
         }
         if v.len() > VAS_CENSUS_EXEMPLARS {

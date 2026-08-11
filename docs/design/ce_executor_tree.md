@@ -1,5 +1,11 @@
 # The CE executor decision tree, and the trusted scratch VAS
 
+**STATUS: LIVE — owner's design 2026-08-07, EXTENDED by the owner 2026-08-11 (§Scope-2026-08-11
+below, which folds in above the §Scope paragraph it extends).** The 2026-08-07 rule about
+executor choice is unchanged and unqualified. What 2026-08-11 adds is a *second* axis — the
+same populations, now with a rule about **which thread** may do the work — and it is new
+normative content, not a restatement of anything already here.
+
 **Owner's design, 2026-08-07**, recorded here because it is load-bearing and was worked out in
 conversation. ⊘ This file is the *rule*; `execution_plane_increments.md` §14 (E10) is the
 increment that implements it. Where they disagree, this one states intent and that one states
@@ -48,6 +54,56 @@ STEP 3 — SIGNAL TRUTHFULLY
 
 ⚠ **Ordering between executors.** If some CE ops go to the host GPU and others to a CPU copy,
 overlapping regions need a fence between them. Stated now rather than discovered as a race.
+
+## ★★★★★ §Scope-2026-08-11 — THE SAME TWO POPULATIONS, NOW WITH A THREAD RULE (owner)
+
+> *"The emulated arm must not block the vCPU"* → owner: **"yes schedule work asynchronously not
+> during the trap"**
+
+This folds in **above** the §Scope paragraph below because it is that paragraph's second half:
+§Scope splits doorbells into *guest-userspace passthrough* and *kernel-originated*, and this says
+what the **doorbell trap** may do for each.
+
+| population | contract | what the trap does |
+|---|---|---|
+| **passthrough** (guest unprivileged userspace) | `RingAndReturn` | resolve the guest token to its host token, ring it, return to VM entry. **No inspection, no work.** Bounded by construction, so "non-blocking" needs no separate argument — it is the same fact as §Scope's *"we do not inspect them"*. |
+| **emulated** (guest privileged kernel) | `ScheduleAndReturn` | **schedule** the channel's handler and return. ⚠ The handler must **not** run on the vCPU thread. |
+
+★ Both contracts are now types: `kayfabe_core::channel_kind::{GuestChannelKind, TrapContract}`,
+with `GuestChannelKind::trap_contract()` total over the kinds and
+`TrapContract::may_run_on_the_vcpu_thread()` the one predicate. ⊘ **Declared and reported, not
+enforced** — Rust cannot see thread identity, and a witness token would have nothing to guard
+until the emulated handler is a separable object. That is stated at the type, not hidden.
+
+### ⊘ THREE THINGS MEASURED ON 2026-08-11 THAT CHANGE WHAT THIS RUNG IS
+
+1. **The trap is INLINE end to end today, and the whole emulated arm violates the new contract.**
+   QEMU BQL → `kayfabe_shim_regs_write` (`shim_unsafe.rs:1301`) → `RegPlane::write`
+   (`plane.rs:3107`) → `ring_doorbell` (`plane.rs:3328`, `RwLock` read **held across** the call)
+   → `SharedDoorbell::ring` (`shim.rs:3517`) → `try_ce_submission` → `ceutils::run_submission`,
+   under `ce_session_with_root`'s FSM mutex and a rank-0 device read. **No spawn, no channel
+   send, no queue push anywhere on that path.** `completion_wait_architecture.md` §0 already said
+   it in one sentence — *"The op finishes before the MMIO write returns"* — and this ruling is
+   what makes that a defect rather than a description.
+2. ⊘ **The mechanism the ruling asks for EXISTS, is NAMED, and must not be rebuilt** — but the
+   "reactor is unreached" citation is **STALE**. Audit `026374c` measured `Reactor::new`,
+   `register_source` and `arm_counter` at zero production call sites; `w226` built the composition
+   root and each now has **exactly one**: `Regs::start_completion_observer`
+   (`shim.rs:6576`) → thread `kayfabe-completion-observer`. `completion_observer.md` §2.4 already
+   recorded this. ⚠ Two live scope limits: the whole root is `#[cfg(feature = "host-isolates")]`,
+   so the **default archive has no observer thread at all**; and the reactor's output is dropped
+   at birth (`let (tx, _rx) = inbox()`), so `SourceRegistry::dispatch` is still unreached and the
+   inbox grows one `CoreEvent` per poke, unbounded.
+   ★ `Regs::spawn_completion_observer`, cited in `shim.rs`, **never existed** — one hit in the
+   whole repo, in the comment citing it. Fixed.
+3. ⊘ **Polled vs interrupt-announced is NOT a property of the channel** and must not be added to
+   its kind. It is `AWAKEN_ENABLE`, `D[20:20]` of the guest's own `SET_REPORT_SEMAPHORE_D`,
+   decoded **per submission** into `completion_watch::CompletionDecl::awaken`; one channel may
+   carry submissions with either value. ★ And the finding worth carrying: `awaken` is decoded,
+   printed, and **branched on by nothing** — one decode, two prints, one test assertion, zero
+   conditions. The split does not need inventing; it needs a **decision point**, one layer below
+   a channel's kind. ⇒ Async scheduling ships for the polled case with **no delivery path**, and
+   only the announced case waits on F6's masked leaf.
 
 ## ★ Scope: this governs KERNEL-originated CE only
 

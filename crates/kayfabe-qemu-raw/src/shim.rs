@@ -4552,7 +4552,21 @@ impl SharedDoorbell {
             // raises no vector — the payload is a literal immediate in the guest's own
             // bytes, so writing it here without running the work is precisely the
             // credit-shortcut the C artifact named and refused. The verdict is emitted on
-            // the reactor thread; see `Regs::spawn_completion_observer`.
+            // the reactor thread; see [`Regs::start_completion_observer`].
+            //
+            // ⊘ That name used to read `Regs::spawn_completion_observer`, which **does not
+            // exist and never did** — `[measured 2026-08-11, git grep over the whole repo]`
+            // one hit, this comment. A cross-reference nobody can follow is the cheapest
+            // possible instance of `a_correct_citation_narrowed_by_the_reading`: it looks
+            // like provenance and resolves to nothing.
+            //
+            // ★★★★★ **AND THIS BRANCH IS THE TREE'S ONE EXISTING INSTANCE OF THE OWNER'S
+            // 2026-08-11 TRAP CONTRACT** — `TrapContract::ScheduleAndReturn`. It declares
+            // on the vCPU (a decode, one resolution, a map insert), pokes an eventfd, and
+            // returns; the work of *looking* happens on the observer thread. ⚠ It is the
+            // shape, not the discharge: what is scheduled here is an OBSERVATION, and the
+            // emulated arm's actual work still runs inline further down this function
+            // (`kayfabe_rt::ceutils::run_submission`, under the FSM mutex and the BQL).
             //
             // ⚠ Runs on EVERY route-refused doorbell, unlike the bounded dump above: a
             // declaration is idempotent (first one wins) and a watch that was declared only
@@ -4575,7 +4589,7 @@ impl SharedDoorbell {
         // ★★★★★ §16.81 — and the THIRD term, which is [`forwarding_plane_owns_ce`]'s whole
         // subject: **whose proc is this?** See that function for the rule and the boot.
         if forwarding_plane_owns_ce(
-            facts.proc,
+            facts.kind,
             facts.vas_pdb.is_some(),
             self.local_ce_is_the_only_executor,
         ) {
@@ -4593,9 +4607,14 @@ impl SharedDoorbell {
         // ⇒ On `local` this prints **zero** times and the control stays byte-identical; on
         // `host` a non-zero count is the term doing the work, and `0` on `host` would mean
         // the fix never fired and any survival is somebody else's.
+        // ★★★★★ 2026-08-11 — the third conjunct reads the SAME declared kind the gate
+        // above does, rather than a second re-derivation of it. It was
+        // `facts.proc == Gpu::SYSTEM_PROC`: identical truth value (both come off one pass
+        // over one `ProcBoundary`), and a diagnostic that re-derives what the decision
+        // beside it was told is how a log comes to disagree with the branch it describes.
         if facts.vas_pdb.is_some()
             && !self.local_ce_is_the_only_executor
-            && facts.proc == kayfabe_core::gpu::Gpu::SYSTEM_PROC
+            && facts.kind == kayfabe_core::channel_kind::GuestChannelKind::Emulated
         {
             // ★★★★ `fetch_add`, NOT a mutex — see [`CeShellState::sysproc_kept`] for the
             // gate that found the lock and for why deleting it beats classifying it. The
@@ -4612,14 +4631,39 @@ impl SharedDoorbell {
             // `eprintln!` takes the process-global stderr lock and issues a `write(2)`, and
             // the `pdb` argument below allocates a `String`. R1 (`l1_concurrency.md` §3.3)
             // forbids every one of those beneath a lock, and this site used to do all three.
+            // ★★★★★ **THE OWNER'S 2026-08-11 TRAP CONTRACT, READ AND REPORTED AS VIOLATED
+            // — on the one line that fires exactly when it is.**
+            //
+            // This branch is reached only for a `GuestChannelKind::Emulated` channel whose
+            // doorbell the shell has just decided to keep, i.e. exactly when this thread is
+            // about to run the guest kernel's CE work itself. The kind's declared contract
+            // is `TrapContract::ScheduleAndReturn`, and `may_run_on_the_vcpu_thread()` is
+            // `false` — so the line below states the rule and states that we are breaking
+            // it, in the same breath, rather than leaving a reader to join two documents.
+            //
+            // ⊘ **Reported, not enforced, and the type says why**: nothing in Rust can see
+            // that this call is on a vCPU thread, and the emulated arm's handler is not yet
+            // a separable object for a witness token to guard. `[measured 2026-08-11]` the
+            // trap is inline end to end — QEMU BQL → `kayfabe_shim_regs_write` →
+            // `RegPlane::ring_doorbell` (RwLock read held across it) → here →
+            // `ceutils::run_submission` under the FSM mutex — with no spawn, no channel
+            // send and no queue push anywhere on it.
+            //
+            // ⚠ The contract's name is a `&'static str` and costs no allocation; this site
+            // is already deliberately beneath no guard, per the note above.
+            let contract = facts.kind.trap_contract();
             eprintln!(
                 "kayfabe: CE-SYSPROC-KEPT #{n} token={token:#010x} proc={} chan={} \
-                 pdb={} — `l1_concurrency.md` §12.26: the SYSTEM proc has no data plane and \
-                 its CeUtils scrub is FORGED, never forwarded, so this doorbell is the \
-                 shell's whatever KAYFABE_CE_EXECUTOR says. ⊘ The forwarding hand-off stays \
-                 armed for every USER proc.",
+                 kind={} contract={contract} pdb={} — `l1_concurrency.md` §12.26: the \
+                 SYSTEM proc has no data plane and its CeUtils scrub is FORGED, never \
+                 forwarded, so this doorbell is the shell's whatever KAYFABE_CE_EXECUTOR \
+                 says. ⊘ The forwarding hand-off stays armed for every USER proc. \
+                 ⚠ OWNER 2026-08-11: this channel's contract is `{contract}` and the work \
+                 below runs INLINE ON THIS THREAD — the rung that discharges it is a \
+                 scheduling seam, not a rename.",
                 facts.proc.0,
                 facts.chan.0,
+                facts.kind,
                 facts
                     .vas_pdb
                     .map_or_else(|| "NONE".to_string(), |p| format!("0x{:x}", p.0)),
@@ -8064,13 +8108,40 @@ pub const CE_EXECUTOR_ENV: &str = "KAYFABE_CE_EXECUTOR";
 /// - ⊘ **Not conditional on the executor choice**, deliberately. `local`, `host` and any
 ///   later value get the same answer for the system proc, because §12.26 is not a
 ///   performance preference.
+/// # ★★★★★ 2026-08-11 — THE THIRD TERM NOW READS A DECLARED KIND, AND BOTH OF THE
+/// OWNER'S AXES APPEAR IN IT
+///
+/// The term's subject never changed and its answer never changes: it is the same rule
+/// and the same truth table. What changed is that it is no longer this gate's private
+/// re-derivation of `proc != SYSTEM_PROC`. It reads
+/// [`kayfabe_core::channel_kind::GuestChannelKind`], **declared once** at
+/// `project::ProcBoundary::channel_kind` and carried on the channel — the fact this gate
+/// was inlining, given a name and one owner.
+///
+/// ⊘ **And it asks the question through the HOST kind, deliberately.** The rule §12.26
+/// states is not *"who is the guest"* but *"whose channel would carry this work"*: a
+/// `Ce` doorbell is the forwarding plane's exactly when the host channel that may back
+/// it is a [`kayfabe_core::channel_kind::HostChannelKind::Shadow`] — a channel in **that
+/// guest process's own isolate**. An emulated channel's permitted host backing is a
+/// `Scratchpad`, which is ours, which is why the shell keeps it *"whatever
+/// `KAYFABE_CE_EXECUTOR` says"*. `hosted_by` is total and injective
+/// (`channel_kind`'s own suite), so this is exactly as strong as
+/// `kind == Passthrough` and says why.
+///
+/// ⚠ **A `ProcId` is no longer accepted here, and that is the point.** The parameter that
+/// used to be a raw `ProcId` was one a caller could pass without ever asking this
+/// question — which is precisely the shape of the defect: for twelve boots the gate had
+/// the proc in hand and no term that read it. A caller now cannot supply anything but a
+/// kind, and a kind has exactly one derivation.
 #[must_use]
 pub fn forwarding_plane_owns_ce(
-    proc: kayfabe_core::ProcId,
+    kind: kayfabe_core::channel_kind::GuestChannelKind,
     has_vas_pdb: bool,
     local_ce_is_the_only_executor: bool,
 ) -> bool {
-    has_vas_pdb && !local_ce_is_the_only_executor && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
+    has_vas_pdb
+        && !local_ce_is_the_only_executor
+        && kind.hosted_by() == kayfabe_core::channel_kind::HostChannelKind::Shadow
 }
 
 /// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.

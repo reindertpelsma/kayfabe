@@ -523,6 +523,39 @@ struct ChannelRings {
 /// not), the CPU map (we map, or we must not), and the teardown (we unmap-and-free, or we
 /// must not touch it). A `bool` at any one of those sites would be a fact re-derived at
 /// the other two.
+///
+/// # ⊘⊘ THIS IS NOT THE HOST CHANNEL KIND, and collapsing them would rename a true
+/// statement into a false one
+///
+/// `[decided 2026-08-11, against the owner's two-kind brief]` — the owner's host-facing
+/// split (*"passthrough (unprivileged guest userspace channels, isolated)"* vs
+/// *"managed (usually scratchpad channels)"*) now has a type —
+/// `kayfabe_core::channel_kind::HostChannelKind` — and it lives in the **core**, which was
+/// the brief's ask: *"lift the host-side axis out of `rm.rs` so the core can name it"*.
+/// (⊘ Not linkable from here: this crate does not depend on `kayfabe-core`, and that edge
+/// is exactly what makes the core the right home for a vocabulary the core decides.)
+/// What the brief left open is whether this enum **becomes** that kind. It does not, and
+/// the reason is measured rather than stylistic:
+///
+/// - `RingOwner`'s **write set** is *"did this file allocate the object the GPFIFO lives
+///   in"* — three sites, all inside this file.
+/// - `HostChannelKind`'s write set is *"does this channel carry one guest process's
+///   work"* — decided in the core, one hop from the guest's own `NV01_ROOT` declaration.
+///
+/// `[measured 2026-08-11, `git grep` from every consuming crate]` **the two disagree
+/// today, on every channel that exists.** [`RmBackend::alloc_channel`] — the only channel
+/// verb the core can reach — lowers unconditionally to `RingSource::Ours(None)`, so every
+/// host channel is [`RingOwner::Ours`], *including every one that backs a guest userspace
+/// channel* (`HostChannelKind::Shadow`). The [`RingSource::Guest`] arm has exactly **one**
+/// caller in the workspace and it is `bin/rmladder.rs`'s R31 **diagnostic probe**, never
+/// the core. ⇒ Renaming `Ours` to *"scratchpad"* would be false of the majority of
+/// channels, and it is `same_flag_opposite_polarity` — a predicate is defined by its write
+/// set, not by the two arms happening to line up on the day somebody looks.
+///
+/// ★ Ring provenance is therefore a **detail beneath** the kind, on its way to agreeing
+/// with it: the day a `Shadow` channel adopts the guest's ring, `HandedIn` becomes
+/// *implied by* `Shadow` rather than equal to it, and this enum still answers the
+/// free-and-unmap question that `HostChannelKind` never will.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RingOwner {
     /// The isolate's own 64 KiB device-local ring object, allocated by
