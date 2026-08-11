@@ -7878,6 +7878,26 @@ pub fn selected_mc_service_budget() -> Option<u32> {
         .and_then(|s| s.trim().parse::<u32>().ok())
 }
 
+/// ★ What [`isolate_factory`] selected: the factory, and the guest-RAM block it adopted
+/// while selecting it.
+///
+/// ⊘ The two travel together **by type**, not by convention. The `BackingId` is the *same
+/// selection's* answer — the filesystem identity of the block whose descriptor the factory
+/// beside it is holding — and `isolate_factory`'s own docs already say it *"must never
+/// become a second one"*. A named pair says that where the signature is read; the anonymous
+/// tuple it replaces said it only in prose.
+///
+/// ⚠ Introduced to clear `clippy::type_complexity`, which `.github/workflows/ci.yml:452`
+/// runs as `-D warnings` and which has been failing on `origin/master` since `d95bc10`
+/// (2026-08-10) — the commit that added the second element. `[measured 2026-08-11]` a
+/// `cargo clippy --workspace --all-targets` with no `-D` reports it as one warning among
+/// the build-script notes, which is how it survived: the CI form is the only one that
+/// makes it visible.
+pub type SelectedIsolateFactory = (
+    Box<dyn kayfabe_isolate::IsolateFactory>,
+    Option<kayfabe_vmm_qemu::layout::BackingId>,
+);
+
 /// Build the factory for `plane`.
 ///
 /// ★★ **Both non-default arms are `Err` in a build without the `host-isolates` feature**,
@@ -7894,13 +7914,7 @@ pub fn selected_mc_service_budget() -> Option<u32> {
 pub fn isolate_factory(
     plane: IsolatePlane,
     guest_ram: GuestRamSource,
-) -> Result<
-    (
-        Box<dyn kayfabe_isolate::IsolateFactory>,
-        Option<kayfabe_vmm_qemu::layout::BackingId>,
-    ),
-    (Status, &'static str),
-> {
+) -> Result<SelectedIsolateFactory, (Status, &'static str)> {
     guest_ram_is_reachable_on(plane, guest_ram)?;
     match plane {
         IsolatePlane::Stillborn => Ok((
