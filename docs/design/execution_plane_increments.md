@@ -17239,3 +17239,63 @@ after the hook; `w250` is the re-validation.
 ⊘ `CE-SUBMIT` **0**; no guest work was forwarded. Bootability unchanged. Property 2 untouched.
 ⊘ The runlist→cause reading in §16.101.2 is a `[HYPOTHESIS]`; the engine names and the status
 identity are the vendor's and are sourced.
+
+## §16.102 ★★★★ THE SECOND PATH IS **NOT** THE CE EXECUTOR — hypothesis refuted, and the gap is 2 ATTEMPTS not 2 OBJECTS
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w251/`. THE HYPOTHESIS IS REFUTED.** ⊘
+`CE-SUBMIT` **0**; nothing executed.
+
+### 16.102.1 ⊘ First, the coordinator's item 2 — NEITHER branch is right
+
+The brief offered: *"either the funnel census is stale, or the second path does not go through
+`Worker::execute` at all. Both are findings; the second is bigger."*
+
+⊘ **Neither.** From source: `HostRmBackend::ce_channel` (`rm.rs:4298`) allocates the isolate's
+**own** CE engine object — *"the one call site in the tree that allocates an engine object from a
+`HostClasses` rather than from guest intent"* (`:3472-3482`) — and it is reached by
+`forward_ce → verb_op → Worker::execute → VerbPlan::CeSplit → ce_copy → ce_copy_outcome →
+ce_channel`. **`forward_ce` is one of the eight the §16.92 census already enumerated.**
+
+⇒ The census is **not stale**, and the path **is** under `Worker::execute`. It is a *different
+verb* whose **side effect two layers down, inside the isolate, is an engine-object allocation the
+core never asked for.** ★★ `ENGINE-OBJECT` is a census of the **core's intent**, not of engine
+objects allocated — `forwarded_counts_intent_not_work`, one layer lower.
+
+### 16.102.2 ⊘⊘ AND THE HYPOTHESIS BUILT ON IT IS WRONG
+
+`forward_ce` runs only under `KAYFABE_CE_EXECUTOR=host`. Prediction 2, recorded before the boot:
+*"the host's failure count drops from 14 to 12 under `local`."*
+
+| | `w250` (`ce=host`) | `w251` (`ce=local`) |
+|---|---|---|
+| ours `REFUSED Rm(Other(64))` | 12 | **12** |
+| host `chandesConstruct_IMPL` | 14 | **14** |
+| host `kfifoRunlistSetId_GM107` | 14 | **14** |
+| engines | 8×`CE2`, 6×`CE3` | **8×`CE2`, 6×`CE3`** |
+| channels | 6×`0x04`, 8×`0x0c` | **6×`0x04`, 8×`0x0c`** |
+| `RING-PROJ` (the executor really did change) | 8 | **0** |
+
+**Byte-identical host-side failures across both executors**, while `RING-PROJ` 8→0 proves the arms
+genuinely differed. ⇒ **the second path is invariant to the CE executor, so it is not
+`ce_channel`.** The hypothesis is refuted by its own discriminator.
+
+### 16.102.3 ★★★ WHAT THE NUMBERS ACTUALLY SAY — the gap is 2 ATTEMPTS, not 2 OBJECTS
+
+The host's 14 failures land on **exactly two host channels** (`0x04`, `0x0c`) while our 12
+refusals name **twelve distinct guest parents**. ⇒ **a 1:1 refusal↔object model was never right**:
+many guest channels resolve to few host channels, and the host is counting **attempts on two
+channels**, not fourteen objects.
+
+★ **Leading hypothesis, and it is labelled**: `SharedDevice::verb_op` **retries** — on converging
+staleness and on `FwdFault::IsolatePending`, bounded by `MAX_COMMIT_RETRIES` — and each retry
+**re-issues the host alloc** while the core reports **one** outcome. 14 attempts, 12 reported
+outcomes ⇒ **2 retries**. ⊘ `[HYPOTHESIS — NOT MEASURED]`. The next discriminator is to count
+retries directly rather than infer them from a difference.
+
+⇒ ★★ **The class, if it holds: our census counts OUTCOMES; the driver counts ATTEMPTS.** A
+per-refusal join can never close across a retry loop, and the 2 was never a missing caller.
+
+### 16.102.4 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**. ⊘ `w251` ran `ce_executor=local`, where `RING-PROJ` is 0 by construction, so
+it says **nothing** about route B and is not offered as if it did. Property 2 untouched.
