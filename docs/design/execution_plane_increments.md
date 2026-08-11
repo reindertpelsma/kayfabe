@@ -16947,3 +16947,111 @@ carries a real `LAUNCH_DMA` with a data-transfer type has not arrived**, because
 `cuCtxCreate` (`CUP2_RC=124`) before issuing one. ⇒ the next measurement needs either a workload
 that reaches a copy, or the `cuCtxCreate` wall cleared first. ⊘ **Route B is no longer the
 blocker; it is now instrumentation waiting for traffic.**
+
+## §16.99 ★★★★★ ALL THREE PRECONDITIONS ARMED AT ONCE — the address plane is COMPLETE, and the wall is a DELIBERATE REFUSAL
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w247/`.** ⊘⊘ **`CE-SUBMIT` is 0 and nothing
+executed.** ⊘ **THE SEMAPHORE'S VA WAS NEVER THE PROBLEM** — see §16.99.1.
+
+### 16.99.1 ⊘ REFUTED FIRST: the semaphore VA resolves, and always did
+
+The brief asked whether `0x2_0440fff0` *"resolves now that the witness is armed"*. ⊘ **It
+resolved in every boot this campaign has**, witness on and off, from committed evidence:
+
+| corner | witness | vidmem | `COMPLETION-DECLARE` | `COMPLETION-WATCH` | site |
+|---|---|---|---|---|---|
+| `w245off` | off | off | 8 | 8 | `GuestRam { gpa: … }` |
+| `w245on` | off | on | 8 | 8 | `GuestRam { gpa: … }` |
+| `w246c` | **on** | off | 8 | 8 | `GuestRam { gpa: … }` |
+| `w246d` | **on** | **on** | 8 | 8 | `GuestRam { gpa: … }` |
+
+and every one ends `NOT-OBSERVED samples=88 … the address WAS readable and the declared payload
+never appeared — a statement about the completion plane, not about the observer`. ⇒ **the
+witness is orthogonal to it**: the witness populates the **CE channels'** VAS (`pdb=0x201000`);
+`SET_REPORT_SEMAPHORE` resolves through the **guest-RAM** plane and always has.
+
+★ Likewise `GR-ADDRESS-CENSUS` is **invariant across all four corners** —
+`operands=5 bound=4 unbound=1 mme_dwords=39` — and identical to `w227c`'s reading at `537894e`
+under `ce_executor=local`. **Neither flag touches the GR address plane.**
+
+⊘ And `unbound=1` **is not a gap**: `gr_execution_boundary.md` §3.4 already established that
+`SET_SHADER_SHARED_MEMORY_WINDOW` is a **window base** (`clc7c0.h:424` names the field
+`BASE_ADDRESS_UPPER`) whose value is ASLR'd and varies per boot, so *"nothing is expected to be
+mapped at a window base, and a walk that faults there is the table being right."*
+⇒ **5 of 5 accounted for.**
+
+### 16.99.2 ★★★★★ THE FIFTH INSTANCE — the crossing that *would* matter also landed behind an unarmed flag
+
+§3.4's real finding is that **3 of the 5 GR operands live in the emulated framebuffer**, which
+the host GPU cannot address, and `gr_execution_boundary.md` §4 records that crossing as
+*"⊘ **does not exist.** `mode2_fb_crossing_question.md` — asserted by name here and **not
+built**."*
+
+⊘⊘ **It was built the very next rung.** `fb_leaf_crossing.md` (w228, `82f9aa5`) — *"Answer:
+built, and it lands on a real GA106"* — behind **`KAYFABE_FB_BACKING=on`**, whose own doc gives
+the now-familiar reason for defaulting off: *"a typo that silently disarmed the crossing would
+make an evidence run and its own negative control indistinguishable."*
+
+⚠ **None of this campaign's nine boots armed it** — `GR-FB-BACKING` count **0** in every one.
+⇒ **fifth instance in one night** of a capability proven on hardware and not carried forward,
+and the third whose cause is *sound engineering upstream*. ★ The doc that names the dependency
+was never told the dependency had been met.
+
+### 16.99.3 ★★★★★ MEASURED — the first boot with ALL THREE armed, on a tree that boots
+
+`w247_acbb9a3_all3` vs its control `w246d_acbb9a3_witon_rbon` (identical but `FB_BACKING` unset).
+⊘ w228's own armed boot predates the bootability regression at `5626939`; **this is the first
+time the three have been armed together on a tree that reaches `RmInitAdapter` at all.**
+
+| | control `w246d` | **`w247` all three** |
+|---|---|---|
+| `GR-FB-BACKING` | 0 | **32** |
+| `HostBackedFb` | 0 | **24** |
+| `placed_as_asked=true` / `false` | 0 / 0 | **24** / **0** |
+| `RING-VA-UNBOUND` / `PushbufferAperture` | 0 / 0 | 0 / 0 |
+| `RingFbNeverWritten` | 0 | 0 |
+| `GR-ADDRESS-CENSUS` | `5/4/1/39` | **`5/4/1/39`** |
+| `SET_REPORT_SEMAPHORE` | `→ GuestRam` | **`→ GuestRam`** |
+| **`CE-SUBMIT`** | **0** | **0** |
+| `COMPLETION-WATCH NOT-OBSERVED` | 8 | **8** |
+| `no-blocking-under-lock` | 0 | 0 |
+| doorbells | 191/183/8 | **191/183/8** |
+| `SMI_RC` / `CUP2_RC` | 0 / 124 | **0 / 124** |
+
+**All five pre-recorded predictions confirmed** (scratchpad `w247_prediction.md`, written before
+the boot): the crossing arms; the three FB operands become `HostBackedFb` mapped **FIXED** at the
+guest's own VAs; the semaphore stays `GuestRam`; the census is unchanged because it counts
+**binding**, not **backing**; and **nothing executes**.
+
+⇒ ★★★ **Every address plane this workload needs is now armed simultaneously and correct**: the
+CE ring binds (witness), route B reads it out of our own framebuffer, and 3 of 5 GR operands are
+**real host `NV01_MEMORY_LOCAL_USER` objects mapped at the guest's own VAs**. ⊘ **And the
+semaphore is still `NOT-OBSERVED`, because nothing points an engine at any of it.**
+
+### 16.99.4 ★★★ THE WALL IS A DELIBERATE REFUSAL, NOT A GAP — and it is already argued
+
+The GR doorbell is refused at `Route::NotACopyEngineChannel` before any execution.
+`gr_execution_boundary.md` (w227) asked exactly the brief's question — *"open the refusal so the
+real host GR engine runs `cuCtxCreate`'s pushbuffer and writes `0x2_0440fff0` itself"* — and
+answered **NO**, naming four properties the GR VA space must have first. §16.99.2 discharges the
+addressing half of property 1. The two that remain are **not** addressing:
+
+- **Property 2 — CLOSED.** *Nothing that is not this guest's memory may be mapped in it*: the
+  isolate's own ring, USERD and semaphore objects must be unreachable, so `alloc_channel_at`'s
+  *"put our control structures in the VAS we were handed"* shape has to change for GR channels.
+  ⚠ **A subtraction, and an architecture change** — the isolate's present value is partly that
+  our objects and the guest's share one space. ⊘ This is the one that leads.
+- **Property 3 — FAULTING/CONTAINED.** ⊘ `[NOT MEASURED]` whether a GR MMU fault on this bench
+  is contained to one channel or takes the host GPU context with it.
+  ★ **`scripts/bench/gpu_fault_containment.sh` exists and has never been asked this question** —
+  the cheapest open item on the board, and it needs no new code.
+
+⊘ **Forbidden #1 holds throughout**: nothing here writes the semaphore. The observer's own line
+says so — *"the observer WATCHES this address; it will never write it"* — and `NOT-OBSERVED` is
+the honest report of a completion plane with no executor behind it.
+
+### 16.99.5 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**; nothing executed; prohibition checks do not arise. Bootability unchanged
+(`no-blocking-under-lock` 0, `RmInitAdapter failed` 0, `SMI_RC=0`, `CUP2_RC=124`). Route A
+untouched. ⚠ §16.86.4's owner question remains live and unanswered.
