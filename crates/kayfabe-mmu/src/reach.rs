@@ -285,6 +285,28 @@ impl ReachShadow {
         self.pages.len()
     }
 
+    /// ★★★ How many pages the guest has been **seen to write**.
+    ///
+    /// ⊘ Reported because [`Settlement::unwitnessed`] is a *count of leaves*, and a leaf count
+    /// cannot say whether the witness set is empty (nothing ever reached this shadow) or merely
+    /// missing the one page in question. Those are different defects with different fixes:
+    /// the first is a transport that does not cover this writer, the second is an ordering gap.
+    #[must_use]
+    pub fn witnessed_len(&self) -> usize {
+        self.witnessed.len()
+    }
+
+    /// ★★ Up to `n` witnessed pages, ascending — **so a report can show this predicate
+    /// answering YES about something.**
+    ///
+    /// ⊘ The whole reason it exists: `is_witnessed(p) == false` printed alone is
+    /// indistinguishable from an instrument that cannot say `true`. A sample from the same
+    /// set turns the negative into a measurement (`a_test_can_be_correct_and_unable_to_fail`).
+    #[must_use]
+    pub fn witnessed_sample(&self, n: usize) -> Vec<u64> {
+        self.witnessed.iter().copied().take(n).collect()
+    }
+
     /// Is the shadow empty? (A fresh address space's is.)
     #[must_use]
     pub fn is_empty(&self) -> bool {

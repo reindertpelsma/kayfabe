@@ -83,6 +83,12 @@ use kayfabe_util::Instant;
 
 use crate::lock::{BlockingSection, LockRank, RankedMutex, RankedRwLock};
 
+/// `Y`/`N` for a report. ⊘ Two characters and not `true`/`false`: a census line packs a
+/// dozen predicates and a reader scanning a column wants them the same width.
+fn yn(b: bool) -> &'static str {
+    if b { "Y" } else { "N" }
+}
+
 /// Which lock configuration a [`SharedDevice`] runs (§8.2 / P5: BOTH are tested
 /// from day one; the mode must never be observable through the API).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2239,6 +2245,119 @@ impl SharedDevice {
         // source, which this body does not own; the caller that chose the source sets it.
         out.transport = results.1;
         Some(out)
+    }
+
+    /// ★★★★★ **§16.82 — WHY one VA is not bound, asked of the VAS that would have to bind
+    /// it, on the same line as the key.**
+    ///
+    /// # ⊘ The question this exists to make un-guessable
+    ///
+    /// `[measured 2026-08-11, boot `w232c_6fcedac`]` eight doorbells read
+    /// `RING-VA-UNBOUND va=0x200224000 → NOTHING FORWARDED` while, **in the same string**,
+    /// the published-root descent resolved that exact VA (`rng=V:0x1024000`) and read its
+    /// bytes. Two resolvers, one address, opposite answers — and nothing printed said which
+    /// of the four possible causes it was:
+    ///
+    /// | cause | the field that shows it |
+    /// |---|---|
+    /// | the VAS does not exist for this `(gpu, pdb)` | `vas=ABSENT` |
+    /// | it exists and **nothing was ever decoded into it** | `rows=0 shadow=0 wit=0 meta=0` |
+    /// | it was decoded and this page was **never witnessed** | `root_wit=N` with `wit>0` |
+    /// | it is bound, and the *reader* refused it | `hit=0x…/<aperture>` |
+    ///
+    /// ⊘ **It computes no verdict and prints no adjective.** Every field is a structure's own
+    /// answer about itself; the reader does the classifying. That is deliberate — `RingLook`'s
+    /// own doc states the rule (*"the tag is the variant, never a derived judgement"*), and
+    /// this rung exists because a *name* (`RING-VA-UNBOUND`) was read as a diagnosis.
+    ///
+    /// ★★ **`wit_sample` is the negative control, and it is why the line is trustworthy.**
+    /// `root_wit=N` printed alone cannot be told from a predicate that is incapable of
+    /// answering `Y`. The sample comes out of the **same** `BTreeSet` the predicate reads, so
+    /// a non-empty sample beside a `N` is the set saying *no, about this page* — the fail-arm
+    /// returning the other direction's pattern rather than zeros.
+    ///
+    /// # ⚠ Locks
+    ///
+    /// One [`SharedDevice::route_act`]: device-read (rank 0) and this proc's mutex (rank 1),
+    /// in that order, both released on return. `Spine::pt_page_owner` is asked **inside** the
+    /// same acquisition, so the ownership answer and the `Vas`'s own state cannot come from
+    /// two different instants — the join rule §16.71 states.
+    ///
+    /// Returns a `vas=NO-PROC` line rather than `None` when `pid` is not live: a pass that
+    /// found nothing and a pass that did not run are different facts about the boot.
+    #[must_use]
+    pub fn vas_bind_census(&self, pid: ProcId, gpu: GpuId, pdb: Pdb, va: GpuVa) -> String {
+        /// How many witnessed pages to name. Enough to prove the set is non-empty and to
+        /// let a reader recognise the family; not a dump of a guest-sized structure.
+        const SAMPLE: usize = 4;
+        let root = pdb.0 & !0xfff;
+        let out = self.with_proc(pid, |p| {
+            let Some(vas) = p.vases.get(&(gpu, pdb)) else {
+                // ⊘ Which address spaces this proc DOES have, because "absent" without the
+                // population it is absent from is the `an_absence_from_a_filtered_view` shape.
+                let have: Vec<String> = p
+                    .vases
+                    .keys()
+                    .take(SAMPLE)
+                    .map(|(g, d)| format!("g{}:0x{:x}", g.0, d.0))
+                    .collect();
+                return format!(
+                    " vas=ABSENT proc_vases={} sample=[{}]",
+                    p.vases.len(),
+                    have.join(",")
+                );
+            };
+            let rows = vas.table.iter().count();
+            let hit = vas.table.binding_at(va).map_or_else(
+                || "NONE".to_string(),
+                |(start, len, b)| {
+                    format!(
+                        "0x{:x}/{:?}/start0x{start:x}/len0x{len:x}",
+                        b.phys.wrapping_add(va.0 - start),
+                        b.aperture
+                    )
+                },
+            );
+            let wit = vas.reach.witnessed_sample(SAMPLE);
+            let wit_s = wit
+                .iter()
+                .map(|p| format!("0x{p:x}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                " vas=PRESENT rows={rows} hit={hit} root=0x{root:x} \
+                 root_dirty={} root_wit={} root_meta={} dirty={} meta={} shadow={} wit={} \
+                 published={} wit_sample=[{wit_s}]",
+                yn(vas.pt_pages.contains(&root)),
+                yn(vas.reach.is_witnessed(root)),
+                yn(vas.pt_meta.contains_key(&root)),
+                vas.pt_pages.len(),
+                vas.pt_meta.len(),
+                vas.reach.len(),
+                vas.reach.witnessed_len(),
+                vas.reach.published_len(),
+            )
+        });
+        // ⊘ The owner index is device-global (rank 0) and is asked in its own acquisition
+        // **after** the proc lock has been released — never beneath it.
+        let owner = {
+            let g = self.state.read();
+            g.spine.pt_page_owner(gpu, root).map_or_else(
+                || "NONE".to_string(),
+                |(o, d)| format!("p{}:0x{:x}", o.0, d.0),
+            )
+        };
+        match out {
+            Some(s) => format!(
+                "VAS-BIND-CENSUS proc={} gpu={} pdb=0x{:x} va=0x{:x}{s} root_owner={owner}",
+                pid.0, gpu.0, pdb.0, va.0
+            ),
+            None => format!(
+                "VAS-BIND-CENSUS proc={} gpu={} pdb=0x{:x} va=0x{:x} vas=NO-PROC \
+                 (the proc is retired or never existed) root_owner={owner}",
+                pid.0, gpu.0, pdb.0, va.0
+            ),
+        }
     }
 
     /// ★★★★ **G1's consumer side — attribute the pages the guest's CPU wrote, and latch

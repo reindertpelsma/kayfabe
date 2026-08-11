@@ -3341,10 +3341,50 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // ⚠ Printed unconditionally on this path, including `drained=0`. A populate pass
         // that ran and found nothing and a populate pass that did not run are different
         // facts, and only one of them is about the guest.
+        //
+        // ★★★★★ **§16.82 — and BEFORE it, the transport G1 does not have.** The order is the
+        // same argument one comment up: a page witnessed after the pass that would have
+        // decoded it is a page that binds a doorbell too late. See
+        // [`Self::witness_executor_fb_pages`] for the census that says why this is 96.8 % of
+        // the pages in this boot, and why the disarmed arm is the control.
         eprintln!(
-            "kayfabe: PT-DECODE token={token:#010x}{}",
+            "kayfabe: PT-DECODE token={token:#010x}{}{}",
+            self.witness_executor_fb_pages(),
             self.decode_cpu_pt_writes()
         );
+        // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
+        // to bind it, on the same doorbell and joined by `proc`/`pdb`/`va`.**
+        //
+        // ⊘ Printed BEFORE the pin and before `forward_ring`, and unconditionally on this
+        // path, so the state it reports is the state those two are about to consult — not the
+        // state they left behind. ⚠ It runs after the populate pass above deliberately: the
+        // question is *"did the pass bind it?"*, and asking before the pass would answer a
+        // question nobody has.
+        if let Some(f) = &seen {
+            if let (Some(pdb), Some(ring_va)) = (f.vas_pdb, f.ring_va) {
+                eprintln!(
+                    "kayfabe: {}",
+                    self.device.vas_bind_census(
+                        f.proc,
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        kayfabe_rt::GpuVa(ring_va)
+                    )
+                );
+            } else {
+                // ⊘ An absence with a name: the census needs both a table to look in and an
+                // address to look up, and which one is missing is a different fact.
+                eprintln!(
+                    "kayfabe: VAS-BIND-CENSUS token={token:#010x} proc={} chan={} \
+                     NOT-ASKED pdb={} ring_va={} (no address space and/or no declared ring \
+                     — there is nothing to ask this table about)",
+                    f.proc.0,
+                    f.chan.0,
+                    f.vas_pdb.map_or("NONE".into(), |p| format!("0x{:x}", p.0)),
+                    f.ring_va.map_or("NONE".into(), |v| format!("0x{v:x}")),
+                );
+            }
+        }
         // ★★★★★ **§5.8 — THE FIRST GUEST BYTE.** Ordered HERE, and the order is the whole
         // argument: the pin resolves the ring's VA through the address table, and the
         // table only carries that binding because the populate pass one line up has just
@@ -4648,6 +4688,34 @@ impl SharedDoorbell {
                 ));
             }
         };
+        // ★★★★★ **§16.82 — THE APERTURE, ASKED BEFORE THE NUMBER IS CALLED A `gpa`.**
+        //
+        // ⊘ Until this rung the next line read `let gpa = binding.phys + off;` with **no
+        // aperture test**, and the whole function — its name, its log tag `GUEST-RAM PIN`,
+        // its `resolve_guest_ram` call — asserts guest RAM about whatever came back.
+        // `kayfabe_mmu::Binding::phys` is documented as *"interpretation depends on
+        // `aperture`; for sysmem this is a guest-physical address"*, so a **vidmem** binding
+        // would have handed the hypervisor's layout a **framebuffer** address and pinned the
+        // guest RAM page that happens to share the number.
+        //
+        // ⚠ **It has never fired only because the lookup above has never succeeded.** The
+        // same boot that walls here (`w232c`) resolves this exact VA through the descent and
+        // reports `rng=V:0x1024000` — `V` is *this device's framebuffer*
+        // (`kayfabe_device::ceresolve::CeResolve::tag`). ⇒ the first doorbell that populates
+        // this table takes this branch, and without the check it would take the other one
+        // silently. `kayfabe_fwd::push_range_gpas` already refuses exactly this, by name,
+        // eleven lines of a different file away; this is the same refusal at the second
+        // consumer of the same table.
+        if !binding.is_guest_ram() {
+            return Some(format!(
+                "{who} → NOT IN GUEST RAM (the table binds this VA in aperture {:?} at \
+                 0x{:x}; `Binding::phys` is a guest-physical address ONLY for sysmem, so \
+                 there is no file offset to ask the layout for. ⊘ Refused by name — nothing \
+                 here reinterprets a framebuffer address as a GPA)",
+                binding.aperture,
+                binding.phys.saturating_add(off)
+            ));
+        }
         let gpa = binding.phys.saturating_add(off);
         // ★★★★★ **G6 — HOW MUCH OF THE RING, and it is DERIVED from the guest's own
         // declaration rather than chosen.**
@@ -4939,6 +5007,83 @@ impl SharedDoorbell {
     /// LOOP over runs, not a bigger number — and that loop belongs with the consumer that
     /// needs the whole ring, which does not exist yet.
     const RING_PIN_BYTES: u64 = 4096;
+
+    /// ★★★★★ **§16.82 — WITNESS THE PAGES *OUR OWN EXECUTOR* WROTE**, which G1's transport
+    /// cannot see. ⊘ Armed by [`PT_WITNESS_EXEC_ENV`]; **off by default**, so an unarmed boot
+    /// is byte-identical to `b6c5442`'s and is this rung's own negative control.
+    ///
+    /// # ★★★ The gap, MEASURED, and it is a transport gap and not an ordering one
+    ///
+    /// G1 takes its witness inside the framebuffer **window** write path
+    /// (`kayfabe_device::plane`, the `FbWriter::Window(w)` arm) — PRAMIN, BAR1, BAR2 and
+    /// nothing else. The shell's CPU copy-engine executor writes the same store through
+    /// `FbStore::write_tagged(.., FbWriter::Executor)` (`kayfabe_rt::cpu_ce`) and is
+    /// **structurally invisible** to it.
+    ///
+    /// `[measured 2026-08-11, boot `w232c_6fcedac`]` that is not a corner:
+    ///
+    /// > `framebuffer FIRST-WRITER census: PRAMIN 21 / BAR1 41 / BAR2 88 / EXEC 4538 /
+    /// > UNATTRIBUTED 0 page(s)`
+    ///
+    /// **4538 of 4688 resident pages (96.8 %) were created by the executor**, and the four
+    /// page-table pages of the walling channel's own tree are four of them
+    /// (`L0@0x201000/byEXEC#104 … L3@0x204000/byEXEC#107`). So every leaf under them is
+    /// `reachable-but-unwitnessed`, which `kayfabe_mmu::reach::ReachShadow::settle` refuses to
+    /// bind **by design** (hole 2) — and the address table stays empty for that VAS.
+    ///
+    /// ⊘ **The contrast is the attribution, not the reasoning.** `[measured 2026-08-10, boot
+    /// `w208_797a6bc_real`]` the *system* proc's CeUtils tree reads `EXEC 0 / BAR2 50`, its
+    /// leaves bound, and `w209` read that ring. One transport, two populations.
+    ///
+    /// # ⊘ Why witnessing these is CORRECT and not a widening of the trust rule
+    ///
+    /// §6.1's rule is *"a leaf binds only if the guest was **seen** to write its page"*. A page
+    /// our executor wrote is a page the guest asked us to write, at an address the guest chose,
+    /// with bytes the guest supplied — it is *more* directly witnessed than a window write, not
+    /// less. What the rule excludes is **residue**: pages nobody was seen to write. Those are
+    /// exactly the pages this does **not** add, because a non-resident frame has no origin.
+    ///
+    /// ⊘ It claims nothing about a page being a page table. `Spine::pt_page_owner` decides that
+    /// at the drain and a page nothing owns is requeued, unchanged from G1.
+    ///
+    /// ⚠ **First-writer, so a page created by a window and later rewritten by the executor is
+    /// NOT added here** — it was already witnessed at its creation. The two transports overlap
+    /// only where they should.
+    ///
+    /// Returns the line to print. ⊘ It prints on the disarmed arm too, saying so: an
+    /// instrument that is silent when off cannot be told from one that is not wired.
+    fn witness_executor_fb_pages(&self) -> String {
+        let armed = selected_pt_witness_exec();
+        let Some(plane) = self.plane.upgrade() else {
+            return " | EXEC-WITNESS no-plane".to_string();
+        };
+        if !armed {
+            return format!(
+                " | EXEC-WITNESS DISARMED ({PT_WITNESS_EXEC_ENV} unset or `off`) — the \
+                 executor's pages are NOT witnessed, which is `b6c5442`'s behaviour exactly"
+            );
+        }
+        let Some(frames) = plane.fb_resident_frames() else {
+            return " | EXEC-WITNESS ARMED but the store cannot enumerate frames".to_string();
+        };
+        let total = frames.len();
+        let pages: Vec<u64> = frames
+            .into_iter()
+            .filter(|&p| {
+                plane
+                    .fb_page_origin(p)
+                    .is_some_and(|o| o.by == kayfabe_device::fbwin::FbWriter::Executor)
+            })
+            .collect();
+        let exec = pages.len();
+        // ⊘ The SAME queue G1's window writes go into, so the drain, the attribution, the
+        // requeue and the cap are one mechanism with one set of counters — never a second
+        // path that could be right about a page the first is wrong about.
+        let refused = plane.requeue_pt_witness(pages);
+        format!(
+            " | EXEC-WITNESS ARMED resident={total} by-executor={exec} refused-at-cap={refused}"
+        )
+    }
 
     fn decode_cpu_pt_writes(&self) -> String {
         let Some(plane) = self.plane.upgrade() else {
@@ -7617,6 +7762,48 @@ fn selected_fb_backing() -> Result<bool, (Status, &'static str)> {
     match std::env::var_os(FB_BACKING_ENV) {
         None => Ok(false),
         Some(v) => fb_backing_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// ★★★★★ **§16.82** — the environment variable that arms
+/// [`SharedDoorbell::witness_executor_fb_pages`]: witness the framebuffer pages the shell's
+/// **own CPU copy-engine executor** created, which G1's window-only transport cannot see.
+///
+/// ⊘ **Off by default, and refusing an unknown value**, for [`FB_BACKING_ENV`]'s stated
+/// reason: with it unset this port witnesses exactly what `b6c5442` witnessed, so the
+/// disarmed boot **is** the negative control and a typo cannot silently produce one.
+pub const PT_WITNESS_EXEC_ENV: &str = "KAYFABE_PT_WITNESS_EXEC";
+
+/// Whether `value` arms the executor witness — the pure half of [`selected_pt_witness_exec`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it
+/// is `false`.
+pub fn pt_witness_exec_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_PT_WITNESS_EXEC does not name a state: the only values are `off` (the \
+             default) and `on`. It is not defaulted, because the disarmed arm IS this \
+             rung's negative control and a typo that silently disarmed it would make the \
+             evidence run and the control indistinguishable.",
+        )),
+    }
+}
+
+/// Whether [`PT_WITNESS_EXEC_ENV`] arms the executor witness.
+///
+/// ⊘ A value that names neither state reads as **disarmed** here rather than aborting the
+/// device: this is a diagnostic-plus-populate flag consulted per doorbell, not a
+/// composition-root decision, and the line it prints states the arm it took either way.
+#[must_use]
+fn selected_pt_witness_exec() -> bool {
+    match std::env::var_os(PT_WITNESS_EXEC_ENV) {
+        None => false,
+        Some(v) => pt_witness_exec_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
+            .unwrap_or(false),
     }
 }
 

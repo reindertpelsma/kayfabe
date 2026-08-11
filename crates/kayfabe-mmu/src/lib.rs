@@ -309,6 +309,28 @@ impl Binding {
     pub fn host_memory(&self) -> Option<HostHandle> {
         self.host.map(HostBacking::memory)
     }
+
+    /// ★★★ **Is [`Binding::phys`] a GUEST-PHYSICAL address?** — i.e. may a consumer hand it
+    /// to `Vmm::gpa_read`, or to a hypervisor layout that turns a GPA into a file offset?
+    ///
+    /// ⊘ **Only for sysmem.** For [`Aperture::Vidmem`] the number is an offset into this
+    /// device's own framebuffer and for [`Aperture::Peer`] it is another device's; both share
+    /// the number space with guest RAM and neither is reachable through the `Vmm`. That
+    /// collision is not hypothetical — `[measured 2026-08-11, boot `w232c_6fcedac`]` the
+    /// user proc's GPFIFO rings resolve `V:0x1024000` while its pushbuffers resolve
+    /// `S:0x41335000`, in **one** address space, on **one** channel.
+    ///
+    /// ★ It is a method rather than a `match` at each consumer because the consumers live in
+    /// crates that may not name [`kayfabe_arch::Aperture`] at all
+    /// (`kayfabe-qemu-raw`'s manifest: *"the shim names no architecture"*), and a predicate
+    /// they cannot express is a predicate they will skip.
+    #[must_use]
+    pub fn is_guest_ram(&self) -> bool {
+        matches!(
+            self.aperture,
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent
+        )
+    }
 }
 
 /// One run of [`AddressTable::spans`]' partition: `(va, len, answer)`, where the answer is
