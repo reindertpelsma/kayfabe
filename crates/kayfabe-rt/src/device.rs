@@ -1193,17 +1193,22 @@ impl SharedDevice {
         let mut out = Vec::new();
         for pid in self.live_pids() {
             self.with_proc(pid, |p| {
-                for (cid, ch) in &p.channels {
-                    out.push(ChannelVasRow {
-                        proc: pid,
-                        chan: *cid,
-                        vchid: ch.vchid,
-                        engine: ch.engine,
-                        client: ch.key.origin.client.0,
-                        handle: ch.key.origin.handle.0,
-                        has_pdb: ch.vas_pdb.is_some(),
-                        route: ch.vas_route,
-                    });
+                for ch in p.channels.values() {
+                    // ⊘ **THROUGH `of`, not hand-built.** This site used to construct the
+                    // row field by field beside `VasCensusRow::of`, which builds the same
+                    // row from the same `Channel` — the second computation
+                    // [`ChannelVasRow`]'s own re-export doc says was deleted (*"Two
+                    // computations that agree today are not corroboration; they are a
+                    // drift waiting for somebody to read a formatting difference as a fact
+                    // about the guest"*). It was deleted for the FORMATTER and not for the
+                    // ROW. `[measured 2026-08-11]` the two agreed on all eight fields; the
+                    // ninth (`kind`) is what made the duplication cost something, because
+                    // one of the two would have had to re-derive it from `proc`.
+                    //
+                    // ★ `ch.id` is the `ChanId` the map is keyed by — `of` reads it off the
+                    // channel, which is the same value, from the object rather than from
+                    // the index.
+                    out.push(ChannelVasRow::of(pid, ch));
                 }
             });
         }
@@ -1964,6 +1969,10 @@ impl SharedDevice {
                     proc: route.proc,
                     chan: route.chan,
                     vchid: route.vchid,
+                    // ★★★★★ Off the SAME resolved `Channel` as `vas_pdb` and `engine`
+                    // below — the declared kind, never `route.proc == SYSTEM_PROC`
+                    // recomputed here. See [`CeChannelFacts::kind`].
+                    kind: chan.kind,
                     // ★★★★ §16.25 — carried off the channel, where the projection put it.
                     // ⊘ NOT re-derived here: this whole struct exists because a second
                     // derivation of the VA space disagreed with the first one and lost the
@@ -3619,6 +3628,22 @@ pub struct CeChannelFacts {
     pub chan: ChanId,
     /// The decoded vChid.
     pub vchid: VChid,
+    /// ★★★★★ **What this channel IS to the guest** — carried off the same resolved
+    /// [`kayfabe_core::gpu::Channel`] that produced [`Self::vas_pdb`] and
+    /// [`Self::engine`], so the kind and the address space can never be attributed to
+    /// different channels. See [`kayfabe_core::channel_kind`] for the model.
+    ///
+    /// # ⊘ It is the CARRIED fact, and it deliberately replaces a re-derivation
+    ///
+    /// [`Self::proc`] is still here and still correct, and `proc == Gpu::SYSTEM_PROC`
+    /// still computes the same answer — the projection that assigns a channel's `ProcId`
+    /// and the one that assigns its kind are the **same pass over the same
+    /// `ProcBoundary`** (`Gpu::sync_proc_to_boundary`), so they cannot disagree. What
+    /// changed is which of the two the load-bearing gate reads: a consumer that reaches
+    /// for `proc` and compares it to a reserved constant is re-deriving a declared fact,
+    /// and this tree has paid for that shape more than once
+    /// (`two_projections_of_one_fact_disagreeing`; and for this exact axis, 12 boots).
+    pub kind: kayfabe_core::channel_kind::GuestChannelKind,
     /// ★★★★ **§16.25 — which of the three declared-fact routes resolved (or failed to
     /// resolve) this channel's VA space, and what each route that ran actually hit.**
     ///

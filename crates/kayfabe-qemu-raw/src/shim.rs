@@ -4541,7 +4541,7 @@ impl SharedDoorbell {
         // ★★★★★ §16.81 — and the THIRD term, which is [`forwarding_plane_owns_ce`]'s whole
         // subject: **whose proc is this?** See that function for the rule and the boot.
         if forwarding_plane_owns_ce(
-            facts.proc,
+            facts.kind,
             facts.vas_pdb.is_some(),
             self.local_ce_is_the_only_executor,
         ) {
@@ -4559,9 +4559,14 @@ impl SharedDoorbell {
         // ⇒ On `local` this prints **zero** times and the control stays byte-identical; on
         // `host` a non-zero count is the term doing the work, and `0` on `host` would mean
         // the fix never fired and any survival is somebody else's.
+        // ★★★★★ 2026-08-11 — the third conjunct reads the SAME declared kind the gate
+        // above does, rather than a second re-derivation of it. It was
+        // `facts.proc == Gpu::SYSTEM_PROC`: identical truth value (both come off one pass
+        // over one `ProcBoundary`), and a diagnostic that re-derives what the decision
+        // beside it was told is how a log comes to disagree with the branch it describes.
         if facts.vas_pdb.is_some()
             && !self.local_ce_is_the_only_executor
-            && facts.proc == kayfabe_core::gpu::Gpu::SYSTEM_PROC
+            && facts.kind == kayfabe_core::channel_kind::GuestChannelKind::Emulated
         {
             // ★★★★ `fetch_add`, NOT a mutex — see [`CeShellState::sysproc_kept`] for the
             // gate that found the lock and for why deleting it beats classifying it. The
@@ -8030,13 +8035,40 @@ pub const CE_EXECUTOR_ENV: &str = "KAYFABE_CE_EXECUTOR";
 /// - ⊘ **Not conditional on the executor choice**, deliberately. `local`, `host` and any
 ///   later value get the same answer for the system proc, because §12.26 is not a
 ///   performance preference.
+/// # ★★★★★ 2026-08-11 — THE THIRD TERM NOW READS A DECLARED KIND, AND BOTH OF THE
+/// OWNER'S AXES APPEAR IN IT
+///
+/// The term's subject never changed and its answer never changes: it is the same rule
+/// and the same truth table. What changed is that it is no longer this gate's private
+/// re-derivation of `proc != SYSTEM_PROC`. It reads
+/// [`kayfabe_core::channel_kind::GuestChannelKind`], **declared once** at
+/// `project::ProcBoundary::channel_kind` and carried on the channel — the fact this gate
+/// was inlining, given a name and one owner.
+///
+/// ⊘ **And it asks the question through the HOST kind, deliberately.** The rule §12.26
+/// states is not *"who is the guest"* but *"whose channel would carry this work"*: a
+/// `Ce` doorbell is the forwarding plane's exactly when the host channel that may back
+/// it is a [`kayfabe_core::channel_kind::HostChannelKind::Shadow`] — a channel in **that
+/// guest process's own isolate**. An emulated channel's permitted host backing is a
+/// `Scratchpad`, which is ours, which is why the shell keeps it *"whatever
+/// `KAYFABE_CE_EXECUTOR` says"*. `hosted_by` is total and injective
+/// (`channel_kind`'s own suite), so this is exactly as strong as
+/// `kind == Passthrough` and says why.
+///
+/// ⚠ **A `ProcId` is no longer accepted here, and that is the point.** The parameter that
+/// used to be a raw `ProcId` was one a caller could pass without ever asking this
+/// question — which is precisely the shape of the defect: for twelve boots the gate had
+/// the proc in hand and no term that read it. A caller now cannot supply anything but a
+/// kind, and a kind has exactly one derivation.
 #[must_use]
 pub fn forwarding_plane_owns_ce(
-    proc: kayfabe_core::ProcId,
+    kind: kayfabe_core::channel_kind::GuestChannelKind,
     has_vas_pdb: bool,
     local_ce_is_the_only_executor: bool,
 ) -> bool {
-    has_vas_pdb && !local_ce_is_the_only_executor && proc != kayfabe_core::gpu::Gpu::SYSTEM_PROC
+    has_vas_pdb
+        && !local_ce_is_the_only_executor
+        && kind.hosted_by() == kayfabe_core::channel_kind::HostChannelKind::Shadow
 }
 
 /// Which executor owns `Ce` doorbells — [`CE_EXECUTOR_ENV`]'s vocabulary.

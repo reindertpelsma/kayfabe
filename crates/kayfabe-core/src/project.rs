@@ -286,6 +286,36 @@ impl ProcBoundary {
         self.clients.iter().map(|k| k.client).collect()
     }
 
+    /// ★★★★★ **THE ONE DERIVATION of a channel's guest-facing kind** — the owner's
+    /// 2026-08-11 split, resolved here and nowhere else (see
+    /// [`crate::channel_kind`] for the whole model and for what it refutes).
+    ///
+    /// Every channel in [`Self::channels`] is presented to whatever privilege level owns
+    /// this component, so the kind is a property of the **boundary** and not of the
+    /// channel's own `RM_ALLOC` — which is exactly why it is not a field of
+    /// [`ChannelFacts`]. That struct's fields are read off the channel's own alloc; this
+    /// one is read off *whose namespace allocated it*, one hop away, and putting it there
+    /// would have made the two look like the same kind of fact.
+    ///
+    /// # ⊘ Why the ANCHOR and not a `ClientKind` scan over [`Self::clients`]
+    ///
+    /// They cannot disagree — [`SYSTEM_ANCHOR`] is [`RESERVED_CLIENT`], which
+    /// [`RmGraph::apply`] refuses as guest input, so no user component can anchor there
+    /// (`:107`) and a user boundary *"never carries `SYSTEM_ANCHOR`"* (`Boundaries::procs`)
+    /// — but only one of them is a **total** function of one field. A scan has to decide
+    /// what an empty client set, or a mixed one, means; §12.27's rule is that every
+    /// declared [`ClientKind::Kernel`] client is already folded into the ONE system
+    /// component before this is asked, so the fold has happened and re-doing it here would
+    /// be a second projection of one fact.
+    #[must_use]
+    pub fn channel_kind(&self) -> crate::channel_kind::GuestChannelKind {
+        if self.anchor == SYSTEM_ANCHOR {
+            crate::channel_kind::GuestChannelKind::Emulated
+        } else {
+            crate::channel_kind::GuestChannelKind::Passthrough
+        }
+    }
+
     /// An empty boundary for `anchor` (no clients, no vases, no channels).
     #[must_use]
     fn empty(anchor: ProcAnchor) -> Self {
