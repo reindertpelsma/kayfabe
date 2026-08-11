@@ -1,0 +1,86 @@
+2026-08-11T03:03:15.123293Z qemu-system-x86_64: -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0: info: nvkvm: presenting 10de:2504 class 030000 rev a1 subsys 1462:397d (8 interrupt vectors)
+kayfabe: memfd census — name="memory-backend-memfd" bytes=2147483648 shared_mapped=true (listed at fd 15, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: memfd census — name="displaysurface" bytes=1228800 shared_mapped=true (listed at fd 23, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: memfd census — name="kayfabe-isolate" bytes=721568 shared_mapped=false (listed at fd 24, reported only: this number MOVED between two physical benches and is never matched on)
+kayfabe: ★★★ GUEST-RAM CROSSING ARMED — adopted the hypervisor's memory-backend-memfd block, 2147483648 bytes, dev=1 ino=18054. Every isolate this factory spawns is granted a view of it at a fixed descriptor number; nothing is mapped until a grant says so. ⊘ The size is an EXTENT, not a LAYOUT — where in the guest's physical space these bytes appear is stated separately, by the hypervisor's own topology callbacks, and is reported when the memory plane attaches.
+kayfabe: EXECUTORS isolate_plane=real ce_executor=host ⇒ local_ce_is_the_only_executor=false
+kayfabe: ★★★ GUEST-RAM LAYOUT AT MEMORY PLANE ATTACH, AS THE HYPERVISOR STATED IT — dev=1 ino=18054: 0 contiguous run(s) totalling 0 bytes, out of 0 stated section(s) LIVE over all backing files (0 live run(s) for this block). Section funnel: 0 reported -> 0 classified RAM -> 0 carried a backing file, 0 later withdrawn. ⊘ Every run below arrived on a topology callback; NOTHING here is derived from the machine type or from `-m`, and a guest-physical address outside these runs is refused by name rather than assumed to be its own file offset. ⚠ This is ONE INSTANT: the listener is registered on the device's bus-master address space, which is empty until the guest enables bus mastering, so an empty report here is a statement about WHEN it was taken and not about the machine.
+kayfabe: ⊘⊘ ZERO RUNS, and the crossing IS armed — the descriptor was adopted and 0 section(s) stated a run, but none named this block. ★ Where it broke: nothing yet, and at THIS instant that is expected rather than broken — the guest has not enabled bus mastering, so the address space this device listens on is still empty. Read the END OF RUN report instead. Nothing can be mapped until this joins; an empty layout refuses every address, which is correct and is not progress.
+kayfabe:   (no backing file stated any run at all, so there is nothing to have matched against)
+kayfabe: COMPLETION-OBSERVER started — one thread, one epoll, one armed counter source. ⊘ It READS the addresses the guest declared and can write none of them.
+2026-08-11T03:03:15.277478Z qemu-system-x86_64: info: nvkvm: memory plane realized (bar0=0xfd000000 bar1=0xe0000000 bar2=0xf0000000, register plane has guest memory=yes)
+2026-08-11T03:04:02.388096Z qemu-system-x86_64: warning: nvkvm: the emulated GSP asked for its STATUS-QUEUE interrupt and this device does not deliver that one. It is the archive's own service cadence, not a guest waiting on anything: delivering it would send one message per doorbell with nothing pending behind it. A guest that BLOCKS on a REGISTERED os-event IS woken — that path latches the GSP engine's stall vector and delivers; see the "os-events" lines in this report for whether it fired.
+
+thread '<unnamed>' (2089834) panicked at crates/kayfabe-util/src/lockwitness.rs:152:5:
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): spawning a sandboxed child process while holding rank(s) [0] — a blocking call may only be made with ZERO ranked locks held; drop every guard, round-trip on the checked-out worker, then re-acquire and RE-VALIDATE (R5).
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' (2089834) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:225:5:
+panic in a function that cannot unwind
+stack backtrace:
+   0:     0x6120c777afb8 - std[1e3c4ec04c5261a9]::backtrace_rs::backtrace::libunwind::trace
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/../../backtrace/src/backtrace/libunwind.rs:117:9
+   1:     0x6120c777afb8 - std[1e3c4ec04c5261a9]::backtrace_rs::backtrace::trace_unsynchronized::<std[1e3c4ec04c5261a9]::sys::backtrace::_print_fmt::{closure#1}>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/../../backtrace/src/backtrace/mod.rs:66:14
+   2:     0x6120c777afb8 - std[1e3c4ec04c5261a9]::sys::backtrace::_print_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:74:9
+   3:     0x6120c777afb8 - <<std[1e3c4ec04c5261a9]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[37f591cfbe66b0b1]::fmt::Display>::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:44:26
+   4:     0x6120c77bc0fa - <core[37f591cfbe66b0b1]::fmt::rt::Argument>::fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/fmt/rt.rs:152:76
+   5:     0x6120c77bc0fa - core[37f591cfbe66b0b1]::fmt::write
+   6:     0x6120c778cf92 - std[1e3c4ec04c5261a9]::io::default_write_fmt::<std[1e3c4ec04c5261a9]::sys::stdio::unix::Stderr>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/mod.rs:622:11
+   7:     0x6120c778cf92 - <std[1e3c4ec04c5261a9]::sys::stdio::unix::Stderr as std[1e3c4ec04c5261a9]::io::Write>::write_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/mod.rs:1977:13
+   8:     0x6120c774bcaa - <std[1e3c4ec04c5261a9]::sys::backtrace::BacktraceLock>::print
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:47:9
+   9:     0x6120c774bcaa - std[1e3c4ec04c5261a9]::panicking::default_hook::{closure#0}
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:292:27
+  10:     0x6120c776d67c - std[1e3c4ec04c5261a9]::panicking::default_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:319:9
+  11:     0x6120c776d83b - std[1e3c4ec04c5261a9]::panicking::panic_with_hook
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:825:13
+  12:     0x6120c774bd94 - std[1e3c4ec04c5261a9]::panicking::panic_handler::{closure#0}
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:691:13
+  13:     0x6120c77404c9 - std[1e3c4ec04c5261a9]::sys::backtrace::__rust_end_short_backtrace::<std[1e3c4ec04c5261a9]::panicking::panic_handler::{closure#0}, !>
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/sys/backtrace.rs:182:18
+  14:     0x6120c774d2dd - __rustc[6ef78fba13ac776c]::rust_begin_unwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:689:5
+  15:     0x6120c70b39ad - core[37f591cfbe66b0b1]::panicking::panic_nounwind_fmt::runtime
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:122:22
+  16:     0x6120c70b39ad - core[37f591cfbe66b0b1]::panicking::panic_nounwind_fmt
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/intrinsics/mod.rs:2450:9
+  17:     0x6120c70b38eb - core[37f591cfbe66b0b1]::panicking::panic_nounwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:225:5
+  18:     0x6120c70b3ab7 - core[37f591cfbe66b0b1]::panicking::panic_cannot_unwind
+                               at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:337:5
+  19:     0x6120c7636aa5 - kayfabe_shim_regs_write
+  20:     0x6120c71bd177 - nvkvm_trap_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:387:5
+  21:     0x6120c72e158f - memory_region_write_accessor
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:491:5
+  22:     0x6120c72e2f2b - access_with_adjusted_size
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:567:18
+  23:     0x6120c72e3e5c - memory_region_dispatch_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/memory.c:1554:13
+  24:     0x6120c72ec07d - flatview_write_continue_step
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3269:18
+  25:     0x6120c72ec28b - flatview_write_continue
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3299:19
+  26:     0x6120c72ec28b - flatview_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3330:12
+  27:     0x6120c72ef8f9 - address_space_write
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3450:18
+  28:     0x6120c72ef8f9 - address_space_rw
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/system/physmem.c:3460:16
+  29:     0x6120c74a0406 - kvm_cpu_exec
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/accel/kvm/kvm-all.c:3248:13
+  30:     0x6120c74a16a5 - kvm_vcpu_thread_fn
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/accel/kvm/kvm-accel-ops.c:53:17
+  31:     0x6120c7604f71 - qemu_thread_start
+                               at /workspace/bench/qemu-build/../qemu-10.2.4/util/qemu-thread-posix.c:393:9
+  32:     0x773df0294a83 - <unknown>
+  33:     0x773df0326890 - <unknown>
+  34:                0x0 - <unknown>
+thread caused non-unwinding panic. aborting.

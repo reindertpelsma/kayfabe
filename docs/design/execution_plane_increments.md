@@ -15848,3 +15848,78 @@ carries only a review obligation: **ranking one lock does not rank the rest.**
   under a core lock, which given the ring and the completion word both live there is likely
   everything.
 - ⊘ Route A untouched; `alloc_channel_at` and the allocation path not modified.
+
+## §16.88 ★★★★★ ROUTE B WIRED — and the first boot found a SHIPPING R1 VIOLATION instead
+
+⚠ **STATUS (2026-08-11): route B is wired, DEFAULT-OFF, and UNMEASURED.** Both boot arms
+aborted before the doorbell, on a defect that predates this rung.
+
+⚠⚠ **This is a MEASUREMENT rung behind a default-off switch. It is NOT a ruling on the
+shipping design.** The owner's 2026-08-07 ruling scopes itself to *kernel-originated* copy-engine
+work; these 8 doorbells are user `proc 2`. **Enumerating the ring is agreed; what may happen
+after enumeration is the owner's call.**
+
+### 16.88.1 What was wired
+
+- `forward_ring` is now **three phases** — PLAN (locked, resolves the ring's runs, touches no
+  byte) → **FETCH (every ranked guard dropped)** → ACT (locked). Forced by §16.87: the plane
+  mutex is rank 0 and `route_act` holds ranks 1-2, so reading the framebuffer inside it is the
+  `core → plane` inversion `check_acquire` now refuses by name.
+  ⚠ `done` is **re-read** in phase 3, never carried across the unlocked window (R5).
+- `SharedDevice::set_fb_source` — ★★★ **the switch is a PRESENCE, not a boolean.** A device
+  with no source refuses vidmem ranges byte-identically to the pre-route-B tree, because
+  `read_gpfifo_ring` derives its route from whether it was handed a reader. ⊘ 96 `.doorbell(`
+  call sites made a threaded parameter the wrong shape; a registered source needs no call-site
+  cooperation at all.
+- Four controls through the **real** `SharedDevice::doorbell`, negative control watched RED.
+
+### 16.88.2 ★★★★★ THE FINDING — a `fork` beneath the vCPU's register lock, and it SHIPPED
+
+Both arms aborted at `RmInitAdapter` with:
+
+```
+R1 no-blocking-under-lock violation: spawning a sandboxed child process while holding rank(s) [0]
+```
+
+Rank 0 is `LockRank::Plane`. ⇒ **the plane's policy chain spawns a sandboxed child process —
+`fork`/`exec` — while holding the mutex every vCPU takes for every register access.**
+
+★★★ **This is `unranked_locks.rs`' own 2026-08-06 paragraph, except it is not a near-miss.**
+That doc records a control-path host call *"being designed against"* `assert_lock_free` while
+the caller held this mutex, and says it *"would have compiled, passed every assertion, and
+stalled every vCPU's MMIO for the duration of a host round trip."* ⇒ **It did not almost
+happen. It shipped, and it was invisible for exactly as long as the lock was unranked.**
+
+⊘ **Route B did not cause it, and the control proves it rather than arguing it.** The w236
+binary (`5626939`, rank change only) contains **zero** `RING-VIDMEM` strings — route B's code is
+not in it — and it aborts **identically**. Evidence: `traces/boots/w237/`.
+
+⊘ **The rt-side spawn was already correct.** `materialize_one` spawns with zero locks held and
+says so in its own doc. The rank held is the **plane's**, taken further out, so a
+lock-free-by-construction spawn still runs beneath a lock its own crate cannot see.
+
+### 16.88.3 ⊘ What was NOT done, and why masking was refused
+
+The assert is **right** and the code is **wrong**. Three ways to make the boot green were
+available and all three were refused:
+
+| | why refused |
+|---|---|
+| Downgrade the assert | Re-blinds the gate built one rung earlier. This is the night's whole anti-pattern. |
+| An `assert_only_ranks` exception for `Plane` | The tree's own rule: *"widen the declared mask only with the argument for why the call cannot block under that rank."* A `fork` **can** block. There is no such argument, so the exception would be a lie with a mechanism around it. |
+| Revert the rank | Trades a **named, reproducible abort** for an **unwitnessed** violation that was already shipping. |
+
+⇒ **The fix is to lift the spawn out of the plane's policy chain**, which is a rung of its own.
+
+⚠⚠ **OPERATIONAL CONSEQUENCE, stated plainly: the bench cannot boot at `5626939` or later
+until that lands.** Not a regression in behaviour — the violation was always there — but a
+regression in **bootability**, and anyone picking up a bench lane needs to know before they
+spend a cycle on it.
+
+### 16.88.4 ⊘ Scope
+
+- ⊘ **`CE-SUBMIT` is still 0, and route B is UNMEASURED.** No claim is made about it in either
+  direction; the arms never reached a doorbell.
+- ⊘ The forbidden-#2 residency gate is proven **offline only** (4 tests, negative control
+  watched red). It has **never fired on hardware**, and this rung does not claim it has.
+- ⊘ Route A untouched.
