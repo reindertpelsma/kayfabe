@@ -17401,3 +17401,104 @@ The brief called it one line. It is not: **the refusal path carries no host chan
 `exec_engine_object`'s failure path — a typed change across `kayfabe-fwd`.
 ⊘ **Not attempted at the end of a long session**, where a rushed edit to the forwarding plane is
 the worst available trade. The shape is named so the next rung starts from it.
+
+## §16.105 ★★★★★ THE REFUSAL NAMES ITS HOST CHANNEL — and the join key the brief asked for DOES NOT EXIST
+
+⚠ **STATUS (2026-08-11): BUILT; boot pending at the time of writing, scored in
+`traces/boots/w254/`.** ⊘ `CE-SUBMIT` **0**; nothing here executes guest work.
+
+### 16.105.1 ⊘⊘ REFUTED FIRST — `chandesConstruct_IMPL` DOES NOT PRINT A HANDLE
+
+§16.103 ended: *"print the host channel in `report_engine_forward` and the two sides share a join
+key."* ⊘ **They cannot.** The value the driver prints is not an RM handle:
+
+```c
+NV_PRINTF(LEVEL_ERROR, "Invalid object allocation request on " FMT_CHANNEL_DEBUG_TAG "\n",
+          kchannelGetDebugTag(pKernelChannel));
+/* ogkm-580.159.04: src/nvidia/src/kernel/gpu/fifo/channel_descendant.c:246-250 */
+
+#define FMT_CHANNEL_DEBUG_TAG "channel 0x%08x"
+static inline NvU32 kchannelGetDebugTag(const struct KernelChannel *pKernelChannel) {
+    if (pKernelChannel == NULL) return 4294967295U;
+    return (pKernelChannel->runlistId << 24) | pKernelChannel->ChID;
+}
+/* ogkm-580.159.04: src/nvidia/generated/g_kernel_channel_nvoc.h:206-207, 1493-1497
+   identical in research_clones/ogkm (610.43.02) */
+```
+
+⇒ `channel 0x00000004` and `channel 0x0000000c` are **`runlistId = 0` with `ChID = 4` and
+`ChID = 12`** — a *hardware channel id*, drawn from a per-runlist pool and **recycled on free**.
+Our side's identity is an RM handle: `FIRST_HANDLE = 0xCAFE_0001`
+(`kayfabe-isolate-host/src/rm.rs:166`) minted by `Conn::mint` (`:1286`), which is
+`next.wrapping_add(1)` — **monotone, never recycled**. The two number spaces are disjoint by
+construction, and the bench runs exactly the tree cited (**open 580.159.04**, verified in
+`/proc/driver/nvidia/version`).
+
+★★ **This changes what §16.102's headline finding can mean.** *"The host's 14 land on exactly two
+host channels"* is not a statement about two channels. Two identical debug tags are equally
+consistent with **one long-lived channel** and with **N channels each created, refused, freed, and
+handed the same chid straight back** — which is exactly the shape a Case-1 forward whose channel
+is materialized in-chain produces, because its unwind frees the channel it just built. ⇒ the join
+is by **grouping and cardinality**, never by equality, and the interesting number is *how many
+distinct host channels OUR side attempted on*.
+
+⇒ ★ **A citation to a driver's log LINE is not a citation to its VALUE.** Three rungs read `0x04`
+/ `0x0c` as handles because they are printed in the same place a handle would be. Nobody opened
+`kchannelGetDebugTag` until the key was being built.
+
+### 16.105.2 ⊘⊘ REFUTED SECOND — "ours 12" IS READ OFF A SATURATED COUNTER
+
+`ENGINE_FWD_REPORT_MAX = 32` (`kayfabe-qemu-raw/src/shim.rs`) was a **shared** budget over
+forwards and refusals. Decompose the printed lines of the two committed boots:
+
+| | `w250` | `w251` |
+|---|---|---|
+| `FORWARDED` | 18 | 18 |
+| `REFUSED NoVas(..)` (no host verb issued) | 2 | 2 |
+| `REFUSED Rm(Other(64))` | 12 | 12 |
+| **sum** | **32** | **32** |
+
+⇒ **the instrument stopped exactly at its own limit**, on the last refusal, in both boots.
+§16.101.3's row *"our census total (`seen=32 forwarded=18` ⇒ 14 refused)"* reads `seen` off the
+**last line the bound allowed**: it is the last *observable* value, not a total. Outcomes 33 and
+34 would be invisible — and `18 + 2 + 14 = 34` is precisely what closes 14-vs-12 with **no second
+allocator, no retry, and no missing caller.**
+
+⊘ **Truncation was never excluded**, and it is now the cheapest surviving explanation of a gap
+that has cost three refuted hypotheses. ⇒ the budget is now **per outcome class**: a hostile guest
+is still bounded (2 × 32 lines), the real workload's whole shape (18 + 16) prints, and the marker
+names *which class* saturated. ⚠ The old comment claimed *"the bound costs detail, never the
+count"* — true of `[seen=…]`, which nothing downstream ever read; **the numbers people counted
+were the lines.**
+
+★★ Same family as the oracle's `dlen=0` rows and the zero-byte job artefact: **a saturated
+instrument reports its own limit, and the reading looks like data.**
+
+### 16.105.3 The change — where the handle exists, and why nowhere else
+
+| layer | before | after |
+|---|---|---|
+| `kayfabe_isolate::VerbFailure` | `{ err, orphans }` | `{ err, orphans, on: Option<HostHandle> }` |
+| `kayfabe_fwd::FwdFault` | `Rm(RmError)` | `Rm { err, on }` |
+| `verb_fault` | `(proc, err, reason)` | `(proc, err, reason, on)` |
+| census | `REFUSED {e:?}` | `REFUSED host_chan=0x… {e:?}` |
+
+⊘ **It could not be threaded from the plan**, which is what the brief offered as the alternative.
+`EngineObjectPlan::channel` is `None` for a first forward — the host channel is built **inside the
+same verb chain** — and the chain's unwind then **frees** it. So the identity is in the plan (no),
+in core state (no), and in `VerbFailure::orphans` (no: that enumerates what the unwind could
+**not** dispose of, i.e. is empty exactly when the unwind worked). `Worker::execute`'s
+`alloc_engine_object` arm is the one instant it is knowable. Two tests in
+`tests/tests/engine_context.rs` pin both halves — the in-chain channel is named **and** freed, and
+a pre-existing channel is named **and not** freed, so `on` cannot degenerate into "whatever this
+chain just allocated".
+
+★ `Rm` became a **struct variant** rather than gaining a sibling `RmOn`: two variants meaning
+*"RM refused"* is the `two_projections_of_one_fact_disagreeing` shape, and every matcher testing
+for one would silently miss the other. The compiler enumerated all 19 sites; none was found by
+text search.
+
+⊘ **`on` is an identity for a report, never a live handle** — on the path that matters the object
+is already freed when the caller reads it. It is dropped on the `Cancelled` arm of `verb_fault`,
+because naming a host object in a fact about the *requester* invites exactly the misattribution
+§12.10 records.
