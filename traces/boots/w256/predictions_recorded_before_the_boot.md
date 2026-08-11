@@ -55,4 +55,26 @@ rather than assumed away.
 
 # SCORING (added after the run — the predictions above are unedited)
 
-<!-- filled in after the boot -->
+**Boot `w256_ce36a5b_cel_unbounded`, rev `ce36a5b` (stamped in the binary), real GA106,
+`CAPTURE_RC=0`.**
+
+| # | prediction | outcome |
+|---|---|---|
+| 1 | ★★★ `FORWARDED` = **32 exactly** | ✅ **32** |
+| 2 | ★★★ no `REPORT BOUND REACHED`, no `ENGINE-OBJECT CENSUS` totals line | ✅ **0 of each** |
+| 3 | 34 lines, last `[seen=34 forwarded=32 refused=2]` | ✅ verbatim |
+| 4 | 2 refusals, both `NoVas`, both `host_chan=NONE`; host `chandesConstruct_IMPL` 0 | ✅ (host dmesg delta **0 lines**, `HOST_DMESG_LINES=0`) |
+| 5 | `CE-SUBMIT` 0, doorbells `191/183/8`, guest `dmesg` byte-identical | ✅ all three (identical to **`w255`**) |
+
+**5 of 5.**
+
+## ⇒ `forwarded=32` was CORRECT AND UNVERIFIABLE. It is now correct and verified.
+
+Nothing in §16.106.5 rests on a saturated number any more, and **no claim needed re-checking** —
+which is the outcome the pre-registration named as the boring one. ★ The value of the boot was
+never the number; it was that **the number stopped being a lower bound**, and `w254`'s unsaturated
+control is what made the prediction sharp enough to be worth testing rather than assumed.
+
+⊘ Note what this does NOT show: the totals-past-the-bound line never fired, because nothing came
+near 256. Its behaviour is covered by unit tests (`past_the_row_budget_the_totals_keep_coming`,
+`the_totals_schedule_does_not_stall_on_one_class`), not by this boot.

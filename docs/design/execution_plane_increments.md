@@ -17698,3 +17698,89 @@ refusal class (2) is far below its bound and *is* exact, which is what the 14 �
 fix. But note the shape — **§16.105's lesson reappearing one rung later on the other class**, in a
 census this rung's author had just rewritten. A saturated instrument does not become safe because
 you know about the last one.
+
+## §16.107 ★★★★★ THE ROWS ARE CAPPED; THE COUNTS ARE NOT — and the sweep for the rest of the class
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w256/`. 5 of 5.** `forwarded=32` is now
+**verified** rather than correct-and-unverifiable. ⊘ `CE-SUBMIT` **0**; instrument change only,
+no execution-plane rung claimed.
+
+### 16.107.1 ⊘⊘ 32 SATURATED AGAIN, ONE RUNG LATER, ON THE OTHER CLASS
+
+§16.105 split the shared budget per outcome class. §16.106's fix then turned 14 refusals into
+forwards, and `w255`'s **forward** class printed exactly 32 with the bound marker — *"a saturated
+instrument does not become safe because its author knows about the last one."*
+
+⇒ Raising the number alone fixes an **instance** and leaves the **class**. So:
+
+- the **row** budget is `32 → 256` per class (8× the largest shape ever observed, a `const`
+  assertion so it cannot silently shrink back);
+- past the budget the **three totals** keep printing, on a **doubling schedule** — a guest
+  issuing `n` allocations buys silence for the *detail* at ~`log2(n)` lines and can **never**
+  buy silence for the *count*;
+- the policy is a pure `engine_fwd_report_action(nth, seen)` so it is testable at all.
+
+★ The schedule is keyed on `seen`, **not** the per-class `nth`: a workload that saturates one
+class and then feeds only that class leaves the other class's index frozen, so an `nth`-keyed
+schedule could stall in exactly the case that needs reporting. Pinned by a test.
+
+⇒ This gives the census the property every other bounded census in this tree already had — an
+**uncapped count printed beside a capped sample** — and its absence here is what made §16.105
+possible.
+
+### 16.107.2 MEASURED — the answer was already bounded by `w254`, and it holds
+
+`w256_ce36a5b_cel_unbounded`: **`forwarded=32` exactly**, `[seen=34 forwarded=32 refused=2]`,
+**zero** bound markers, **zero** totals lines, 34 rows, host `chandesConstruct_IMPL` 0, doorbells
+`191/183/8`, guest `dmesg` byte-identical to `w255`.
+
+★ The prediction was sharp because **`w254` was not saturated**: both its classes sat under their
+budgets, so its `seen=34` was a true total (`18 + 14 + 2`), and `w255` ran the same guest program
+to the same place. ⇒ **nothing in §16.106.5 rested on a saturated number after all, and no claim
+needed re-checking.** ⊘ That is the boring outcome, and it was worth a boot precisely because the
+other outcome would have invalidated the previous rung.
+
+⊘ The totals-past-the-bound line **never fired** — nothing came near 256. Its behaviour is
+covered by unit tests, not by this boot, and must not be reported as measured.
+
+### 16.107.3 ★★★★ THE SWEEP — four MORE live instances, and one INVERSE defect
+
+Technique: enumerate the **bound constants**, then read their **print sites** (including the C
+side, `qemu/hw/misc/nvkvm/nvkvm.c`, where several are actually printed) — never grep the domain
+word. All five findings below were **re-verified by hand** against source before being written
+down.
+
+★ **The discipline mostly holds**: `served_len`, `arming_len`, `bind_len`, `unserviced_len`,
+`bridge_refusal_len`, `gvas_pub_len`, `promote_diag_len`, `probe_arm_len` are sourced from
+counters rather than array fills; `VAS_CENSUS_EXEMPLARS` prints `+N more`; `RING_PAGE_DUMPS`
+prints `{take} of {want}`; `FB_DUMP_CENSUS` prints its own denominator; `UNSERVICED_SAMPLE_MAX`
+and `SERVED_SAMPLE_MAX` emit explicit TRUNCATED lines.
+
+**⊘ Four places where a capped number is currently printed as a total:**
+
+| # | where | what is wrong |
+|---|---|---|
+| 1 | `fault_buffers_malformed` (`shim.rs`, `nvkvm.c:2631/2664/2689`) | computed as `fault_buffer_sample.iter().filter(..).count()` over a **shared 8-slot** sample, printed beside `fault_buffers_registered`, which **is** a real atomic. ⊘ Sharper: the 8 slots are shared across all three buffer types, so 8 replayable registrations starve the shadow rows and `shadow_fault_buffer_size = 0x0 B = 0 pages` reads as *"the guest asked in a shape we could not read"* — the exact thing that number exists to distinguish |
+| 2 | `UNCLAIMED-CENSUS … {} distinct (bar, offset) pair(s)` (`shim.rs:7149`) | the argument is literally `sample.len()` of a `UNCLAIMED_SAMPLE_MAX`-capped Vec, labelled **distinct**, with no distinct counter and no drop counter anywhere. At saturation it prints exactly `64 distinct`. Its parenthetical redirects to *"the `registers:` line's UNCLAIMED counts"*, which are **access** totals — a different denominator |
+| 3 | `nonzero=` in the ring scan (`shim.rs`, `RING_SCAN_REPORT = 4`) | `if raw != 0 && nonzero.len() < RING_SCAN_REPORT { push }` and nothing counts the rest. A ring with 500 non-zero entries prints four and **no marker** — on a line whose own docs record it already being read as a claim about the whole ring |
+| 4 | `" (+more, count is not capped)"` (`nvkvm.c:2226`) | **unreachable**. `nid = min(ids_len, IDS_PER_TAG)` and the marker fires on `ids_len > nid`, but `ids_len` is `k` from a `zip` over an `IDS_PER_TAG`-long array, so `ids_len <= IDS_PER_TAG` and `nid == ids_len` **always**. The truncation is real and happens twice upstream; the marker for it can never print |
+
+**⊘⊘ And the INVERSE defect, in the pattern this repo treats as the safe one.** Every
+`*_distinct` counter runs its membership test **against the capped Vec**
+(`census.rs::note_served` `s.served.iter_mut().find(..)`; `unserviced.rs::note` `s.contains(..)`;
+same shape in `gvaspub`), so **past the cap every repeat of a dropped row increments `distinct`
+again** and it drifts monotonically toward `*_total`. `census.rs`'s own header promises *"the
+distinct counts keep counting past the cap, so a full array is never mistaken for a complete
+list."* They do keep counting — **but not distinctly**.
+
+★★ `unserviced.rs` is the sharp one: its doc reasons explicitly about ordering the increment
+*"before the capacity test"*, because *"counting after the `push` is what made the old length
+agree with the sample instead of with reality."* That correction was right and **incomplete** —
+it fixed the **ordering** and left the **set**. ⇒ *A correction that fixes the ordering of a test
+does not fix what the test is run against.*
+
+⊘ **None of the five is fixed here, deliberately.** Changing five instruments unmeasured, at the
+end of a session, in the same commit as a boot that validated a sixth, is the trade this branch
+exists to refuse. They are named with their file:line so the next rung starts from the list
+instead of from the sweep. ⊘ The C's TRUNCATED warnings still fire correctly in every case (an
+overcount only makes them fire), so the damage is confined to the numeral.
