@@ -27,7 +27,21 @@ RegPlane::write                    ★ state.lock() = rank 0
  → Worker::execute                 ★ host RM ioctl round-trip
 ```
 
-## ⊘ Why deferral does NOT generalize to this one
+## ⊘⊘⊘ REFUTED 2026-08-11 (§16.96) — the section below is WRONG
+
+`forward_engine_object`'s result is **discarded** at its only production call site
+(`kayfabe_rmrpc::Bridge::deliver`: `let _ = gpu.forward_engine_object(…)`), deliberately, under
+a paragraph that says *"the guest's answer does NOT change, and that is a decision, not an
+oversight"*. ⇒ **nothing in the guest's reply depends on it**, it IS fire-and-forget, and it
+was latched with §16.91's own pull pattern — no relocation, no reply memo, no third
+`CommandPolicy` outcome. See `docs/design/execution_plane_increments.md` §16.96 and
+`traces/boots/w244/`.
+
+★ The error class: the ruling below was reached by reading a **signature**. A signature bounds
+what a function *can* return; only the **call site** says what is read, and the type system
+cannot see a `let _ =`.
+
+## ⊘ Why deferral does NOT generalize to this one — ⊘ SUPERSEDED, see above
 
 `forward_engine_object` returns `Result<EngineObjectForwarded, FwdFault>` — **a value the
 guest's reply is built from**. The spawn was **fire-and-forget**: nothing in the response

@@ -2701,6 +2701,59 @@ fn report_engine_forward(
     );
 }
 
+/// ★★ **§16.96 — the drain's own budget, and it is a fraction of the guest's.**
+///
+/// The verb runs inside the vCPU's MMIO trap, so its duration is time the guest spends
+/// *not* polling — it is charged directly against `_kgspRpcRecvPoll`'s deadline, which is
+/// `defaultus + defaultus/2` = **6 s** (`ogkm-580: kernel_gsp.c:2379` over
+/// `arch/nvalloc/unix/src/os.c:1978`). ⚠ Three consecutive RPC timeouts mark the GPU **for
+/// reset** (`RPC_TIMEOUT_GPU_RESET_THRESHOLD`, `kernel_gsp.c:2455`), so overrunning is
+/// terminal rather than slow.
+///
+/// ⊘ **One second, not six**, deliberately: a warning that only fires *at* the deadline
+/// fires when the guest has already timed out, which is a post-mortem, not an instrument. A
+/// host RM round-trip that takes a second has already gone wrong.
+const ENGINE_FWD_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// ★★★ **§16.96 — run the latched engine-object forwards and REPORT, lock-free.**
+///
+/// Called from `Regs::write` after `RegPlane::write` has returned. Separate from the
+/// `ObjectModel` impl on purpose: that impl runs under the plane's rank-0 mutex and may only
+/// *admit*; this runs with no lock and is the only place a forward's real outcome exists.
+fn report_engine_forward_drain(device: &kayfabe_rt::device::SharedDevice) {
+    let t0 = Instant::now();
+    let runs = device.run_pending_engine_forwards();
+    if runs.is_empty() {
+        // ⊘ The overwhelmingly common case, and it must cost nothing beyond the one rank-1
+        // acquisition `run_pending_engine_forwards` already paid — the same cost
+        // `materialize_pending` pays on every register write.
+        return;
+    }
+    let elapsed = t0.elapsed();
+    for r in &runs {
+        report_engine_forward(r.client, r.parent, r.class, r.params_len, &r.out);
+    }
+    if elapsed >= ENGINE_FWD_DRAIN_BUDGET {
+        // ★★ LOUD, and NOT subject to `ENGINE_FWD_REPORT_MAX`. The report cap exists so a
+        // chatty census cannot drown a serial log; an overrun is the opposite — it is the
+        // one line whose absence would be read as health. See [`ENGINE_FWD_DRAIN_BUDGET`]
+        // for the 6 s clock this is a fraction of, and for why three of them reset the GPU.
+        eprintln!(
+            "kayfabe: ⚠⚠⚠ ENGINE-FORWARD DRAIN OVERRUN — {} forward(s) took {:?}, over the \
+             {:?} budget. ⚠ This time is charged against the guest's `_kgspRpcRecvPoll` \
+             deadline of 6 s (ogkm-580 kernel_gsp.c:2379 over os.c:1978); THREE consecutive \
+             RPC timeouts mark the GPU for reset (:2455). classes=[{}]",
+            runs.len(),
+            elapsed,
+            ENGINE_FWD_DRAIN_BUDGET,
+            runs.iter()
+                .map(|r| format!("{:#06x}", r.class.0))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+    }
+}
+
 impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
     fn apply(
         &mut self,
@@ -2782,14 +2835,56 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         parent: kayfabe_rt::HObject,
         class: kayfabe_rt::ClassId,
         params: &[u8],
-    ) -> Result<kayfabe_rt::EngineObjectForwarded, kayfabe_rt::FwdFault> {
-        let out = self
+    ) -> kayfabe_rmrpc::EngineObjectOutcome {
+        // ⊘⊘ `forward_engine_object_deferring`, NEVER `forward_engine_object_by_parent`.
+        // `[measured 2026-08-11, §16.91, `traces/boots/w239/`]` every production call
+        // reaching here arrives from `RegPlane::write` with the plane's **rank-0** mutex
+        // held, six crates up — the direct call issues a host RM ioctl there and aborts
+        // QEMU on the guest's first engine-object `GSP_RM_ALLOC`:
+        //   `R1 no-blocking-under-lock violation: issuing a host RM verb while holding
+        //    rank(s) [0]`
+        // ★ The request stays LATCHED in the device; `Regs::write` runs it once the plane's
+        // guard is down and reports the outcome there. See
+        // `SharedDevice::forward_engine_object_deferring` for why THIS verb may be latched
+        // at all when the spawn's sibling argument said it could not.
+        match self
             .0
-            .forward_engine_object_by_parent(client, parent, class, params);
-        if !matches!(out, Err(kayfabe_rt::FwdFault::NotAnEngine(_))) {
-            report_engine_forward(client, parent, class, params.len(), &out);
+            .forward_engine_object_deferring(client, parent, class, params)
+        {
+            // ⊘ Silent by design: it is the gate, not an event. Every alloc the guest makes
+            // passes through here and all but a handful are clients, devices, memory and VA
+            // spaces. Reported as `Served` because it is genuinely resolved — no host
+            // round-trip is owed and none will happen.
+            kayfabe_rt::ForwardAdmission::NotAnEngine(c) => {
+                kayfabe_rmrpc::EngineObjectOutcome::Served(Err(kayfabe_rt::FwdFault::NotAnEngine(
+                    c,
+                )))
+            }
+            // ★ ADMITTED ONLY. ⊘ Deliberately NOT reported here: a line printed now would
+            // say *"forwarded"* about a verb that has not run, which is
+            // `forwarded_counts_intent_not_work` reproduced exactly. The drain reports.
+            kayfabe_rt::ForwardAdmission::Latched { .. } => {
+                kayfabe_rmrpc::EngineObjectOutcome::Deferred
+            }
+            // ★★ THE BOUND, and it is LOUD and unbounded-by-the-report-cap: an engine
+            // object the guest asked for and we never even attempted is a hole in the
+            // census, and a hole that only shows up as a missing line is the shape
+            // `no_counter_fired_is_not_no_record_exists` warns about.
+            kayfabe_rt::ForwardAdmission::LatchFull { pending, bound } => {
+                eprintln!(
+                    "kayfabe: ⚠⚠⚠ ENGINE-FORWARD LATCH FULL — REFUSED BY NAME. \
+                     class={:#06x} client={:#x} parent={:#x} params={}B pending={pending} \
+                     bound={bound}. ⊘ This forward was NEVER ATTEMPTED. The guest's alloc \
+                     was still answered locally, so the guest sees no error and this line \
+                     is the only record.",
+                    class.0,
+                    client.0,
+                    parent.0,
+                    params.len(),
+                );
+                kayfabe_rmrpc::EngineObjectOutcome::DeferralFull { pending, bound }
+            }
         }
-        out
     }
 
     /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
@@ -6662,6 +6757,28 @@ impl Regs {
         // ⊘ `materialize_pending` asserts lock-freedom, so if any of the above is wrong this
         // is refused **by name, here**, rather than by a spawn six crates away.
         self.device.materialize_pending();
+        // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
+        //
+        // The spawn was one of *two* blocking calls the plane's rank-0 mutex was held
+        // across; this is the other (`[measured 2026-08-11, §16.91,
+        // `traces/boots/w239/`]` — `issuing a host RM verb while holding rank(s) [0]`, via
+        // `Bridge::deliver → SharedObjectModel::forward_engine_object → … →
+        // Worker::execute`). Everything the block above says about this frame holds
+        // verbatim: `RegPlane::write` has returned, its guard is a dropped local, and this
+        // is the outermost frame on the vCPU's MMIO trap that still holds the device.
+        //
+        // ⊘ **AFTER `materialize_pending`, and the order is load-bearing.** A forward routes
+        // through an isolate; if this same register write also decided that isolate's spawn,
+        // draining the spawn first means the forward finds it installed. Reversed, it would
+        // meet `FwdFault::IsolatePending` and pay `verb_op`'s retry.
+        //
+        // ⚠ **The guest cannot observe anything before this runs** — the vCPU is halted
+        // inside its own MMIO trap for the whole of `kayfabe_shim_regs_write`. ⊘ And this
+        // drain posts NOTHING into the message queue: it issues a host verb and prints. The
+        // driver's `bPollingForRpcResponse` assert (`kernel_gsp.c:2345`) fires on an
+        // *induced second RPC* while it polls; a drain that emits no event and no reply
+        // cannot induce one. That obligation is discharged by construction, not by care.
+        report_engine_forward_drain(&self.device);
         out
     }
 

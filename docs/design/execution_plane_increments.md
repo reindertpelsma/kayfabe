@@ -16136,6 +16136,14 @@ RegPlane::write → … → Bridge::deliver → SharedObjectModel::forward_engin
   → SharedDevice::forward_engine_object_by_parent → Worker::execute   ★ host RM ioctl
 ```
 
+⊘⊘⊘ **REFUTED 2026-08-11 BY §16.96 — the paragraph below is WRONG, and everything §16.92
+through §16.95 built on it was designing for a constraint that does not exist.** The verb's
+result is **discarded** at its only production call site (`Bridge::deliver`, `let _ = …`),
+deliberately and with a paragraph saying so. ⇒ nothing in the guest's reply depends on it, it
+**is** fire-and-forget, and §16.91's own rule admits it. ★ The error was reading a
+**signature** where the authority is the **call site**: a signature bounds what a function
+*can* return and cannot see a `let _ =`. Read §16.96.1 before acting on anything below.
+
 ⊘⊘ **AND DEFERRAL CANNOT FIX THIS ONE.** `forward_engine_object` returns
 `Result<EngineObjectForwarded, FwdFault>` — **a value the guest's reply is built from**. The
 spawn was **fire-and-forget**, which is precisely why it could be latched and drained later.
@@ -16158,9 +16166,16 @@ another latch.
 
 ## §16.92 ★★★★ THE HOST-VERB CENSUS IS CLOSED — the set has size ONE; the relocation is NOT designed
 
-⚠ **STATUS (2026-08-11): CENSUS COMPLETE AND PROVEN. RELOCATION NOT ATTEMPTED — the crux could
-not be argued, and §16.91's own rule says a wrong answer here corrupts a state machine.** The
-bench still cannot boot.
+⚠ **STATUS (2026-08-11): SUPERSEDED-BY §16.96 for the RELOCATION half; the CENSUS half still
+holds and is load-bearing.** ⊘⊘ §16.92.2's *"crux"* and §16.92.3's *"latch the reply"* were both
+answers to a question that did not have to be posed: the verb's result is **discarded** at its
+only call site, so it needs neither a window nor a reply latch — only §16.91's pull. ★ The
+census (§16.92.1) is what MADE that checkable, because it proved the call-site set has size
+one. Original text below, unchanged.
+
+⚠ **STATUS (2026-08-11, as written): CENSUS COMPLETE AND PROVEN. RELOCATION NOT ATTEMPTED — the
+crux could not be argued, and §16.91's own rule says a wrong answer here corrupts a state
+machine.** The bench still cannot boot.
 
 ### 16.92.1 ★★★ The census, by the type system — and a boot found the WHOLE set, not the first
 
@@ -16228,9 +16243,16 @@ before anyone builds the window in §16.92.2, because it would make that window 
 
 ## §16.93 ★★★★★ PROTOCOL FACT — the stock driver POLLS for GSP replies, so deferral IS legal
 
-⚠ **STATUS (2026-08-11): ANSWERED from source.** `research_clones/ogkm-580.159.04`, the version
-the bench runs. ⊘ Read-only; no boot, no bench. ⇒ §16.92.2's concurrency crux **dissolves**: the
-fix is a latch, not a window.
+⚠ **STATUS (2026-08-11): ANSWERED from source, and STILL TRUE — but §16.96 made it
+UNNECESSARY.** ⊘ The driver-protocol facts here (the poll loop, the 6 s budget, the
+`(function, sequence)` match, the `bPollingForRpcResponse` assert) are cited and stand; §16.96.2
+still inherits the 6 s clock from §16.93.2. ⊘⊘ What is *moot* is the conclusion that a **reply**
+must be deferred at all: the verb whose result nobody reads does not need the guest to be
+patient. Read §16.96.1 first.
+
+⚠ **STATUS (2026-08-11, as written): ANSWERED from source.** `research_clones/ogkm-580.159.04`,
+the version the bench runs. ⊘ Read-only; no boot, no bench. ⇒ §16.92.2's concurrency crux
+**dissolves**: the fix is a latch, not a window.
 
 ⊘ **Our emulator answering synchronously today is evidence about US, not about the driver** — the
 stock driver has never had the chance to demonstrate patience. Everything below is cited.
@@ -16329,8 +16351,17 @@ between RUN and COMMIT?* — **does not arise**, because nothing is mid-flight a
 
 ## §16.94 ★★★★★ THE LATCH AS BRIEFED WOULD REINTRODUCE `PC-D1` — and not consuming the command dissolves that too
 
-⚠ **STATUS (2026-08-11): DESIGN CORRECTED BEFORE BUILDING. NOT BUILT.** The bench still cannot
-boot. ⊘ The correction came from **this tree's own prior art**, found before a line was written.
+⊘⊘⊘ **STATUS (2026-08-11): SUPERSEDED-BY §16.96 — NEVER BUILT, AND CORRECTLY SO.** The whole
+design below (do not consume the command; memoise the verb's result by `(function, sequence)`;
+re-enter and answer on a second pass) exists to carry a **result** the guest never sees.
+§16.96.1 shows the result is discarded at its only call site, so there is nothing to memoise:
+the command is answered normally, in position, on the FIRST pass, and the verb runs after the
+lock drops. ⚠ **Do not build this.** The `PC-D1` analysis it contains is still correct and
+still worth reading — it is the reason nobody built the *worse* version.
+
+⚠ **STATUS (2026-08-11, as written): DESIGN CORRECTED BEFORE BUILDING. NOT BUILT.** The bench
+still cannot boot. ⊘ The correction came from **this tree's own prior art**, found before a line
+was written.
 
 ### 16.94.1 The friction that appeared immediately
 
@@ -16399,8 +16430,16 @@ same as fixing it. Route A untouched.
 
 ## §16.95 ★★★★ OBLIGATION 1 DISCHARGED — the decode path is side-effect-free, proven by SIGNATURE
 
-⚠ **STATUS (2026-08-11): the design's precondition is ESTABLISHED. The latch is NOT BUILT.**
-Bench still cannot boot.
+⊘⊘ **STATUS (2026-08-11): TRUE AND UNUSED — SUPERSEDED-BY §16.96.** The proof below (decode is
+side-effect-free, by signature) is correct and cost one rung. ⊘ It is a precondition of
+§16.94's double-decode design, and **there is no second decode**: §16.96 answers the command on
+the first pass. ★ Kept because the property is worth knowing and the technique is the tree's
+best — but note that the SAME technique, applied to `forward_engine_object`'s signature one
+rung earlier, produced §16.91's wrong ruling. A signature proves what a function does; it
+cannot prove what its caller reads.
+
+⚠ **STATUS (2026-08-11, as written): the design's precondition is ESTABLISHED. The latch is NOT
+BUILT.** Bench still cannot boot.
 
 ### 16.95.1 The question, and why it had to be answered first
 
@@ -16456,3 +16495,136 @@ overrun that is loud.
 
 ⊘ **`CE-SUBMIT` is 0.** Route B **wired and unmeasured**. The forbidden-#2 residency gate is
 **proven offline only and has never fired on hardware**. Route A untouched.
+
+## §16.96 ★★★★★ THE VERB WAS FIRE-AND-FORGET ALL ALONG — the design of §16.94/§16.95 solved a harder problem than the tree has
+
+⚠ **STATUS (2026-08-11): BUILT. Falsifier watched RED, negative control watched RED, gates
+green.** The bench boot is recorded in §16.96.6.
+
+⊘⊘ **This section REFUTES its own brief, and the refutation is the finding.** §16.91 through
+§16.95 designed a reply memo, a third `CommandPolicy` outcome, a re-service door and an
+idempotent double decode. **None of it is needed.** Read §16.96.1 before building anything on
+those sections.
+
+### 16.96.1 ★★★★★ THE REFUTATION — a signature bounds what a function CAN return; only the call site says what is READ
+
+§16.91.3 ruled:
+
+> ⊘⊘ **AND DEFERRAL CANNOT FIX THIS ONE.** `forward_engine_object` returns
+> `Result<EngineObjectForwarded, FwdFault>` — **a value the guest's reply is built from**. …
+> This verb's result *is* the answer.
+
+★★★ **It is not.** The verb has exactly one production call site —
+`kayfabe_rmrpc::Bridge::deliver`, the one §16.92's census proved is the whole set — and that
+site **discards the result on purpose**, under a paragraph that has been in the tree since
+§16.80 explaining why:
+
+> ⚠ **The guest's answer does NOT change**, and that is a decision, not an oversight. The
+> local model has already answered `NV_OK` + echo; turning a host-side refusal into an alloc
+> failure would fail `cuCtxCreate` outright (`kernel_graphics_object.c:224-225` →
+> `kgrobjConstruct_IMPL:353-360`, no retry, no degradation) and a boot measuring the forward
+> would silently be measuring that instead.
+
+```rust
+let _ = gpu.forward_engine_object(client, parent, class, params);   // ← the whole argument
+```
+
+⇒ **nothing in the guest's reply depends on this verb.** §16.91's own general rule — *work
+decided under a lock can be deferred only if nothing in the response depends on it* —
+**admits** it. The verb is `fire-and-forget`, exactly like the spawn, and the fix is §16.91's
+own pull pattern applied a second time, unchanged.
+
+★★★ **The instrument-failure class, and it is a new one.** §16.91 reached its ruling by
+reading a **signature** — the same technique that was right three rungs running (§16.91 #2,
+§16.92, §16.95) and is celebrated in those sections as *"the type system proves it, not a
+grep"*. Here it was **wrong**, because a signature is an upper bound on what a function may
+communicate and says nothing about what its caller **reads**. ⊘ The type system cannot see a
+`let _ =`. ⇒ *for a "can this be deferred?" question, the authority is the CALL SITE, never
+the signature* — and the call-site check is one `git grep` away in a census §16.92 had already
+closed and proven to have size one.
+
+⚠ And the cost is legible: **four rungs (§16.92-§16.95) designed a mechanism for a constraint
+that did not exist.** Each was individually careful and each cited the one before.
+
+### 16.96.2 ⊘ What that dissolves, obligation by obligation
+
+The brief this rung was given carried five obligations. Three **vanish** rather than being
+discharged, and saying which is which is the point:
+
+| obligation | disposition |
+|---|---|
+| 1. Idempotent decode | ⊘ **MOOT.** The command is decoded **once**. §16.95's proof stands and is now unused. |
+| 2. A third `CommandPolicy` outcome ("the known obstacle", "the bulk of the work") | ⊘ **NOT NEEDED.** The policy answers the command **normally, in position, on the first pass**. `respond() -> None` keeps its one meaning. **Zero `CommandPolicy` implementations changed** (there are 14). |
+| 3. A bounded memo that refuses by name | ✅ **BUILT, transposed onto the latch.** `MAX_PENDING_ENGINE_FORWARDS = 64`; past it `ForwardAdmission::LatchFull { pending, bound }`, and the shim prints it as *"REFUSED BY NAME … NEVER ATTEMPTED"*. |
+| 4. A loud overrun | ✅ **BUILT**, and re-derived rather than inherited: the verb no longer runs *between* two services, it runs *after* the only one — but it still runs inside the vCPU's MMIO trap, so its duration is still charged against `_kgspRpcRecvPoll`'s 6 s. Budget **1 s**, not 6, because a warning that fires at the deadline is a post-mortem. |
+| 5. No induced RPC while the guest polls | ✅ **BY CONSTRUCTION.** The drain issues a host verb and prints. It posts **nothing** into the message queue — no reply, no event — so `bPollingForRpcResponse` (`kernel_gsp.c:2345`) cannot be tripped by it. |
+
+★ **A third outcome on the trait surface DID land — just not that trait.**
+`ObjectModel::forward_engine_object` now returns `EngineObjectOutcome`
+(`Served` / `Deferred` / `DeferralFull`) instead of a `Result`, because an implementation that
+latches has **no honest `Ok` and no honest `Err`**: both would claim a host round-trip that has
+not happened, which is `forwarded_counts_intent_not_work` exactly. **ADMITTED and SERVED are
+different gates**, and the enum is the discriminator. Two implementors, both updated.
+
+### 16.96.3 What was built
+
+- `SharedDevice::forward_engine_object_deferring` — class gate first (the same gate in the
+  same position `route_engine_object_by_parent` opens with, which is also what keeps the latch
+  bounded in practice), then bound, then latch. **Issues nothing.**
+- `SharedDevice::run_pending_engine_forwards` — the pull half; drains the latch and runs each
+  request through the unchanged `forward_engine_object_by_parent`, returning one row per
+  request in the guest's own order.
+- `Regs::write` — one added call, **after `materialize_pending`**. ⊘ The order is
+  load-bearing: a forward routes through an isolate, so draining the spawn first means a
+  forward whose isolate this same register write decided finds it installed. That is strictly
+  better than the direct call, which could only have met `FwdFault::IsolatePending`.
+- `report_engine_forward_drain` — the only place a forward's real outcome exists, and the
+  overrun.
+
+⊘ **`Bridge::deliver`'s ordering is preserved exactly**: `apply` still runs before the forward
+is decided, under the lock, because the forward routes through the channel the alloc names and
+`Spine::by_vchid` is rebuilt by the projection `apply` runs. Latching moves the *verb*, never
+the *decision*.
+
+★ **The bound is also the missing-drain detector.** If `Regs::write` ever stopped draining, the
+latch would fill and start printing `LATCH FULL — REFUSED BY NAME` rather than silently doing
+nothing — the one failure mode a pull-model fix can have, made loud by the obligation that was
+written for a different reason.
+
+### 16.96.4 ★★★ The falsifier, watched RED — and a second control for the opposite failure
+
+`tests/tests/engine_forward_is_deferred_out_of_the_plane_lock.rs`, 5 tests.
+
+**Arm A** (`forward_engine_object_deferring` reverted to the direct
+`forward_engine_object_by_parent`, i.e. the shipping bug): **4 of 5 fail**, three of them with
+**the bench's own message**, offline, in 0.00 s:
+
+```
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): issuing a host RM verb while
+holding rank(s) [0]
+```
+
+**Arm B** (the drain returns empty without running — a "fix" that stops forwarding under the
+lock and never forwards at all): **2 of 5 fail**, and ★ **the arm-A falsifier stays GREEN**,
+which is what proves the two tests measure different things. Arm B is the failure a naive pull
+fix produces: a loud abort traded for a host context that silently never exists.
+
+★★ **The measurement is the RECORDER, not the return value.** *"It returned `Latched`"* is a
+claim about our own bookkeeping; *"the host was asked for nothing"* is a claim about the
+boundary, and only the second is what the bench aborted over. The known-positive asserts the
+host received the **guest's own params bytes** — a latch that copied the request but not its
+bytes would pass every other assertion in the file.
+
+### 16.96.5 ⊘ Scope — read this before quoting the boot
+
+- ⊘⊘ **THIS IS BOOTABILITY, NOT FORWARDING PROGRESS.** The bench could not boot at `5626939`
+  or later; it can now. That is the entire claim.
+- ⊘ **`CE-SUBMIT` is 0 and will stay 0.** Nothing here submits work. **No line of this rung
+  may be read as the first forwarded compute.**
+- ⊘ Route B **wired and still unmeasured**. The forbidden-#2 residency gate is still **proven
+  offline only and has never fired on hardware**. Route A untouched.
+
+### 16.96.6 ★★★★★ MEASURED
+
+`[measured 2026-08-11, `traces/boots/w244/`]` — see that directory's README for the source
+revision, the stamp check on both artifacts, and the violation counts before and after.

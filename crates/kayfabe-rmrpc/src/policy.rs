@@ -550,6 +550,39 @@ impl SharedRingCensus {
     }
 }
 
+/// ★★★★★ **§16.96 — what an [`ObjectModel`] did with a Case-1 engine-object forward.**
+///
+/// ⊘ **Three variants and not a `Result`**, and the distinction is the one this port has
+/// paid for twice (`admitted_and_served_are_different_gates`,
+/// `forwarded_counts_intent_not_work`): *"the request was accepted"* and *"the host did the
+/// work"* are different facts, and a `Result` can only spell the second. An implementation
+/// that must defer the verb out from under a caller's lock has no honest `Ok` and no honest
+/// `Err` to return — both would be a claim about a host round-trip that has not happened.
+///
+/// ⚠ **Whoever returns [`Self::Deferred`] owes the census the outcome later.** The reply is
+/// already on its way to the guest either way (see
+/// [`ObjectModel::forward_engine_object`]), so the *only* thing a deferred forward can
+/// still lose is the observation — which is precisely
+/// `a_diagnostic_gated_on_the_failure` in advance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EngineObjectOutcome {
+    /// The host verb ran **here**, synchronously, and this is what it did — including
+    /// [`kayfabe_fwd::FwdFault::NotAnEngine`], the class gate, which is not an event.
+    Served(Result<kayfabe_fwd::EngineObjectForwarded, kayfabe_fwd::FwdFault>),
+    /// ★ **ADMITTED, NOT SERVED.** The request was latched for a lock-free drain and the
+    /// host verb has **not** run. Nothing here is a claim about the host.
+    Deferred,
+    /// ★★ The implementation's deferral latch is **full** and refused **by name** rather
+    /// than growing. ⊘ Not folded into `Served(Err(..))`: it is a fact about *us* running
+    /// out of room, not about anything the host said.
+    DeferralFull {
+        /// How many requests were already latched.
+        pending: usize,
+        /// The bound that refused.
+        bound: usize,
+    },
+}
+
 /// ★★★ **The object model, as the two mutations a delivered command can make** — the seam
 /// that lets one bridge declare into a bare [`Gpu`] *or* into a shell that owns it behind
 /// ranked locks.
@@ -678,15 +711,27 @@ pub trait ObjectModel: Send {
     /// experiment from the host context not existing, and the boot that measures one must
     /// not silently be measuring the other. It is a **census** fact, named and counted.
     ///
-    /// # Errors
-    /// [`kayfabe_fwd::FwdFault`], by variant.
+    /// # ★★★★★ §16.96 — why the return type is an [`EngineObjectOutcome`], not a `Result`
+    ///
+    /// Because **nothing in the guest's reply depends on this verb**, an implementation is
+    /// free to *admit* the request here and *serve* it later, on a frame that holds no
+    /// lock. `[measured 2026-08-11, §16.91, `traces/boots/w239/`]` the shipped
+    /// implementation reaches here **six crates inside `RegPlane::write`**, under the
+    /// register plane's **rank-0** mutex, and issuing a host RM ioctl there aborts QEMU on
+    /// R1 — so it latches and the shim's register-write frame drains it.
+    ///
+    /// ⊘ A `Result` cannot say that. `Ok(EngineObjectForwarded { .. })` would be a
+    /// fabricated host object and `Err(..)` a refusal that never happened — the exact
+    /// `forwarded_counts_intent_not_work` shape, in which every path to a value reports
+    /// *Served*. **ADMITTED and SERVED are different gates**, and this type is the
+    /// discriminator.
     fn forward_engine_object(
         &mut self,
         client: kayfabe_arch::ids::HClient,
         parent: kayfabe_arch::ids::HObject,
         class: kayfabe_arch::ids::ClassId,
         params: &[u8],
-    ) -> Result<kayfabe_fwd::EngineObjectForwarded, kayfabe_fwd::FwdFault>;
+    ) -> EngineObjectOutcome;
 
     /// ★★★ **E9/§13.6** — perform the guest's `NVA06F_CTRL_CMD_BIND`.
     ///
@@ -794,8 +839,15 @@ impl ObjectModel for Gpu {
         parent: kayfabe_arch::ids::HObject,
         class: kayfabe_arch::ids::ClassId,
         params: &[u8],
-    ) -> Result<kayfabe_fwd::EngineObjectForwarded, kayfabe_fwd::FwdFault> {
-        kayfabe_fwd::forward_engine_object_by_parent(self, client, parent, class, params)
+    ) -> EngineObjectOutcome {
+        // ⊘ **A bare `Gpu` never defers**, and that is not an omission: deferral exists to
+        // get a host verb out from under a lock the *caller* took, and a bare `Gpu` is the
+        // single-threaded, lock-free form — there is no outer lock and no drain frame. So
+        // this arm is always `Served`, which is exactly what makes it the differential's
+        // reference behaviour.
+        EngineObjectOutcome::Served(kayfabe_fwd::forward_engine_object_by_parent(
+            self, client, parent, class, params,
+        ))
     }
 
     fn vas_census(&self, mark: Option<kayfabe_core::ChanId>) -> String {
@@ -1167,6 +1219,16 @@ impl Bridge {
                 // measuring the forward would silently be measuring that instead. The
                 // outcome is reported by the model's own implementation — see
                 // `ObjectModel::forward_engine_object`.
+                //
+                // ★★★★★ **§16.96 — and THIS discarded value is what makes the verb
+                // DEFERRABLE.** §16.91 read `forward_engine_object`'s signature and
+                // concluded *"its result IS the answer, so it can only be relocated, never
+                // latched"*. ⊘ Refuted right here: the result is dropped **on purpose**, by
+                // the paragraph above, so nothing in the guest's reply depends on it — the
+                // fire-and-forget shape §16.91's own rule admits. ⇒ the shell latches it and
+                // `Regs::write` drains it, with no third `CommandPolicy` outcome, no reply
+                // memo and no second decode. ★ *A signature bounds what a function CAN
+                // return; only the call site says what is READ.*
                 if let kayfabe_core::rmgraph::RmEvent::Alloc {
                     client,
                     parent,
@@ -1175,7 +1237,11 @@ impl Bridge {
                 } = ev
                 {
                     let params = engine_params.as_deref().unwrap_or(&[]);
-                    let _ = gpu.forward_engine_object(client, parent, class, params);
+                    // ⊘ Deliberately unread — see above. Bound to a name rather than `_` so
+                    // that "the bridge does not look at this" stays a sentence a reader
+                    // meets, not an inference from a wildcard.
+                    let _outcome_is_the_models_to_report =
+                        gpu.forward_engine_object(client, parent, class, params);
                 }
                 Ok(Translation::Event(ev))
             }
