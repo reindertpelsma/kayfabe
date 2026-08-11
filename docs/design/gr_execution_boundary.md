@@ -13,8 +13,10 @@ addressing problem.** ★ Property 3 is the cheapest open item on the board and
 before acting on §4.1's list.** Property 3 is now **DISCHARGED** (`traces/boots/w248/`, §16.100).
 And **property 2 is dissolved BY the GR execution rung rather than being a prerequisite of it**:
 its entire residual is the materialized channel's own ring in the guest's `host_vas`, and
-`RingOwner::HandedIn` maps nothing of ours there. ⇒ The blocker that actually remains is **G8,
-the cursor bridge** — nothing propagates the guest's `GP_PUT` into the host channel's USERD.
+`RingOwner::HandedIn` maps nothing of ours there. ⇒ The blockers that actually remain are **(i)**
+the ring's own plane — `[measured 2026-08-11]` the GR ring is in the **emulated framebuffer**, whose
+crossing produces a **blank** host object, so the entries are not where hardware can read them — and
+**(ii)** G8, the cursor bridge. ⊘ **(i) is the larger one and G8 cannot fix it.**
 
 **Rung:** `w227` / `master`, based on the merge of `origin/completion-observer` (`c5f251d`).
 **Question, from the brief:** open `shim.rs`'s `Route::NotACopyEngineChannel` refusal so the
@@ -388,6 +390,21 @@ in one place. GR execution requires them not to.
 > channel's USERD, so a channel born this way is accepted by RM, schedulable, and **fetches
 > nothing**. ⊘ Inverting item 3 does not make item 4 ready; it removes one blocker and leaves
 > that one standing.
+>
+> ⊘⊘⊘ **AND A SECOND BLOCKER WAS MEASURED THE SAME DAY, larger than G8 — item 2 is discharged
+> for the OPERANDS and NOT for the RING.** `[measured, five committed boots]` the GR channel's
+> own GPFIFO ring at guest VA `0x200200000` sits at offset 0 of a 2 MiB leaf that resolves to
+> **`Vidmem`, FB phys `0x1000000`** — the emulated framebuffer, not guest RAM
+> (`LEAF@0x200200000->0x1000000/Vidmem/sz0x200000`, five boots; and the guest-RAM pin refuses a
+> sibling ring in that same leaf **by name**, `→ NOT IN GUEST RAM`). ⚠ Exact scoping of what was
+> measured *on the GR ring* versus *on its leaf* is in the fold cited below — do not restate this
+> row without it. Item 2's crossing allocates a **BLANK** host vidmem
+> object at the guest's VA and copies nothing — *"Two memories"*, in `Site::HostBackedFb`'s own
+> words — so a host GR channel born over that ring fetches entries out of a page nothing ever
+> wrote. ⇒ **Opening the route today returns outcome C by construction even with G8 built**, and
+> the load-bearing gap is a framebuffer crossing that **shares** the page (the memfd
+> double-mapping, `C: mode2_fb_crossing_question.md` §5 GEN-2) rather than one that blanks it.
+> Full chain, with every citation, in `guest_ring_adoption.md` §4's STATUS block.
 >
 > **Provenance.** Found by the w259 rung-preparation pass (`hostgr-route-over-guest-ring`
 > `1040880` §1.2), independently reached by the property-2 adjudication pass. The C-side parent

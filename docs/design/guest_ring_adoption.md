@@ -181,9 +181,145 @@ failure mode the pin exists to prevent). ⇒ The ordering constraint that surviv
 
 ## 4. ⊘ What is NOT built, said plainly
 
+> ### ⊘⊘⊘ STATUS — 2026-08-11: **THE PLANE BEHIND THE GR RING IS SETTLED, AND IT MOVES THE**
+> ### **BLOCKER OFF G8.** Read this before building the cursor bridge.
+>
+> The w259 pre-registration (`hostgr-route-over-guest-ring` `1040880`, §2 item 9) recorded the
+> GR ring's plane as **UNDETERMINED** and said it *"decides whether the ring is pinned with the
+> guest-RAM primitive or with the FB one, i.e. which of two already-built primitives a
+> production caller of `alloc_channel_over_guest_ring` uses"*. It is now determined, from
+> committed evidence alone, and **the answer is that neither primitive does the job** — which
+> is a bigger correction than the choice it was asked to make.
+>
+> #### 1. ★★ The GR ring at guest VA `0x200200000` is in the EMULATED FRAMEBUFFER
+>
+> `[measured, committed traces, five independent boots]`. Not `GuestRam`. The chain, each link
+> verbatim from a committed file:
+>
+> | # | fact | file |
+> |---|---|---|
+> | a | the GR channel `0xc1d0000c:0x5c000019` declares `ring=0x200200000 entries=1024` — **45 byte-identical `RING-ROSTER` rows over 45 boots** since `w206` | `traces/guest_boots/run_w256_ce36a5b_cel_unbounded_qemu.log:401` and 44 others |
+> | b | that channel's VAS is `0x5c000007`, whose `pdb` is `0x201000` | `run_s48_4f5b357_cwait_qemu.log:234`; `run_w246c_acbb9a3_witon_rboff_qemu.log:388` |
+> | c | in that page directory the L3 leaf **based at `0x200200000`** reads `LEAF@0x200200000->0x1000000/Vidmem/sz0x200000` | `run_w234b…:149`, `run_w232c…:149`, `run_w246c…:388`, `run_w247…`, `run_w250…` |
+> | d | a second, independent resolver agrees: `hit=0x1024000/Vidmem/start0x200200000/len0x200000` | `run_w234b_d7e4da8_execwit_on_qemu.log:151` (`VAS-BIND-CENSUS`) |
+> | e | the guest-RAM primitive **refuses that leaf by name** — for a *sibling* ring inside the same 2 MiB leaf | `run_w246c…:391` — `GUEST-RAM PIN … ring=0x200224000 → NOT IN GUEST RAM (the table binds this VA in aperture Vidmem at 0x1024000 …)` |
+> | f | the bytes are in **our** `SparseFb`, written through BAR1 | `fbRING[p0]@0x1024000=… byBAR1#173` (same sibling) |
+>
+> ⚠ **Precision, because the neat version would be wrong.** (e) and (f) are about
+> `0x200224000`, not `0x200200000` — the GR ring's doorbell is refused upstream of both
+> instruments, so neither has ever run *on it*. What (e)/(f) establish is that the **2 MiB leaf
+> based at `0x200200000`** is `Vidmem` and refuses the guest-RAM pin, and (c)/(d) establish that
+> the GR ring's first byte is at that leaf's offset 0. Nine rings share the leaf: the GR ring at
+> `0x200200000` and eight UVM CE rings at `0x200218000`…`0x20022d000` on a `0x3000` stride.
+>
+> ⊘ **And the plane is a property of the RING FAMILY, not of the ENGINE** — the tidy
+> *"GR is vidmem, CE is guest RAM"* reading is false and worth refuting explicitly, because the
+> eight rings above are **CE** rings and they are in the same vidmem leaf. What *is* true is that
+> a **different** CE ring family is sysmem: `run_w226a_qemu.log:14,16` measures
+> `LEAF@0x420064000->0x23092000/SysmemCoherent` and `GUEST-RAM PIN … ring=0x420064000
+> gpa=0x23092000` — served. ⇒ **Both planes occur, in one boot family, and which one a ring is in
+> cannot be inferred from its engine.** §1's warning against generalising from a CE ring was
+> right, and generalising the other way would be the same mistake.
+> ⚠ **One inferred link, labelled:** no single line prints *"ring `0x200200000` → Vidmem"* for
+> the GR channel, because `RING-PROJ` / `GUEST-RAM PIN` run only on the CE forwarding path and
+> the GR doorbell is refused upstream of them. (c)+(d) print the leaf whose base **is** the ring
+> VA, so the ring's first byte is at leaf offset 0. That is arithmetic on verbatim fields, across
+> two lines rather than one.
+>
+> #### 2. ⊘⊘⊘ ⇒ AND THAT REFUTES THE RUNG: THE FB CROSSING IS A **BLANK** OBJECT, NOT A SHARED ONE
+>
+> The two "pin primitives" are not interchangeable and the difference is exactly the one that
+> matters here:
+>
+> - the **guest-RAM pin** (`VerbPlan::PinGuestRam`, `OS_DESCRIPTOR` over the guest's own pages)
+>   makes the host GPU address **the same bytes** the guest wrote. One memory.
+> - the **FB crossing** (`KAYFABE_FB_BACKING=on`, `back_fb_leaf` → `alloc_vidmem` + FIXED map)
+>   allocates a **fresh, blank** host `NV01_MEMORY_LOCAL_USER` object at the guest's VA. The
+>   guest's bytes stay in `kayfabe_device::SparseFb`, a `HashMap<u64, Box<[u8;4096]>>` on the
+>   QEMU heap (`ring_write_path_map.md` §1, store **S1**). The code says so at the site:
+>   *"⊘ It is **BLANK**, nothing consumes it, and the guest's own CPU accesses at `fb_phys` still
+>   go to the fabricated aperture"* (`crates/kayfabe-qemu-raw/src/shim.rs`,
+>   `back_census_framebuffer_leaves`), and the `Site::HostBackedFb` doc calls it **"Two
+>   memories."** ⊘ `RmBackend::alloc_vidmem`'s own contract: *"This verb allocates. It does not
+>   map, does not seed and does not copy."*
+>
+> ⇒ ★★★★★ **A host GR channel born over this ring would fetch GPFIFO entries out of a page
+> nothing ever wrote.** Zero entries decode to nothing (`gp_entry_decode` returns `None` for a
+> zero-length entry), so `GP_GET` never advances — **outcome C, fixed before the boot by the
+> shape of the crossing rather than by the GPU.** ⚠ **Building G8 does not change this.** The
+> cursor bridge answers *"how many entries has the guest produced"*; it does not put the entries
+> anywhere hardware can read them.
+>
+> ⊘ **What would**: a crossing that **shares** the framebuffer page rather than allocating a
+> blank twin — the memfd/double-mapping shape (`C: mode2_fb_crossing_question.md` §5, GEN-2),
+> which `alloc_vidmem`'s own doc names as *"the whole point … a **double** mapping"* and which is
+> ⊘ **not on `origin/master`** (the R32 framebuffer-memfd join lives on another lane's branch).
+> ⇒ **That, not G8, is the load-bearing gap for the GR route.**
+>
+> ★★★★★ **AND THE SHARPEST FORM OF IT: item (3b) — "a caller for
+> `alloc_channel_over_guest_ring` on a guest path" — CANNOT BE WRITTEN TODAY AT ALL.** Not for
+> an ordering reason and not for a plumbing reason: the verb's first argument is
+> `GuestRing::memory`, *"the pinning party's … already placed"* host memory object carrying the
+> guest's GPFIFO, and **for this ring no such object can be minted**. The guest-RAM pin refuses
+> it **by name** (`NOT IN GUEST RAM`, measured); the FB crossing mints a *different, blank*
+> object, which is not the guest's ring and would make `GuestRing` a lie in the one field whose
+> doc says *"⊘ Every field is HANDED IN. Nothing here is derived, and that is the invariant."*
+> ⇒ The unbuilt piece is **an object over the guest's framebuffer page**, and everything else on
+> the list is downstream of it.
+>
+> #### 3. ★★ WHERE THE CURSOR ACTUALLY COMES FROM — one route refuted, one route measured
+>
+> ⊘ **REFUTED — resolving the guest's declared USERD object.** `CeChannelFacts::userd` carries
+> `DeclaredUserd { handle, offset }` from the guest's own channel alloc `[measured]`
+> (`userd=h0x5c000014/off0x2000` on the GR channel's own refusal line,
+> `run_s48_4f5b357_cwait_qemu.log:234`), and `RmGraph::backing_of(NodeKey)` is exactly the
+> handle→address function one would reach for. **It always returns `None`**:
+> `AllocFacts::mem_phys` has **no producer anywhere in the tree** — repo-wide it appears only in
+> two struct definitions and one propagation — and `kayfabe-rmrpc`'s own docs explain why it is
+> unbuildable twice over (the address fields are `[OUT]` in the guest→GSP direction, and
+> `MAP_MEMORY_DMA` is a HAL stub on every GSP-client part, so `RmEvent::MapMemoryDma` has no
+> producer). `[measured]` the guest's USERD alloc itself carries **no params at all**:
+> `ALLOC hClass=0x00000040 … hObject=0x5c000014 size=0 … params=-`.
+>
+> ★★ **MEASURED — the guest's `GP_PUT` store is already TRAPPED, on a path we own.** USERD is a
+> `NV01_MEMORY_LOCAL_USER` (vidmem) object, so the guest CPU-maps it through **BAR1**, and BAR1
+> is a trapping region (`qemu/hw/misc/nvkvm/nvkvm.c`, `NVKVM_KIND_TRAP`) whose accesses
+> `RegPlane::bar1_phys` GMMU-walks into an FB-physical address served by our own `SparseFb`.
+> `[measured, boot s17_e8fde62, and the same shape in ~78 committed boots]`:
+>
+> ```
+> BAR1[0] WRITE off=0x90000 size=4 val=0x20000000   ← a GPFIFO entry, low dword
+> BAR1[1] WRITE off=0x90004 size=4 val=0x2801       ← …high dword
+> BAR1[2] WRITE off=0xa008c size=4 val=0x1          ← GP_PUT = 1, at USERD + 0x8c
+> ```
+>
+> `0x8c` is `kayfabe_abi::submit::USERD_GP_PUT` exactly. ⇒ **The producer index arrives at a
+> trap we control, at the instant the guest produces it, and reading it is a USERD-word read —
+> not a ring parse.** Opacity is preserved.
+> ⊘ **The one missing link, stated plainly:** nothing joins a BAR1 offset to a *channel*. That
+> join is the guest's `NV04_MAP_MEMORY`, which never reaches this port. Inferring it from the
+> `0x3000` USERD stride would be reverse-resolution by address, which `kayfabe-mmu`'s
+> `gpga.rs` forbids in as many words (*"there is no `fn owner_of(addr)` and there never will
+> be"*). ⇒ **G8's supply question is a JOIN question, not a plumbing question**, and it is the
+> next thing to design.
+>
+> #### 4. ✔ What DID land this rung
+>
+> `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` — the **opacity pin**. A
+> `GrCompute` channel whose ring has no binding and no bytes still reaches
+> `RmBackend::ring_doorbell`, and forwards no work; and the #14 ring-gate is shown **vacuous on
+> an empty working set and live on a non-empty one**. Watched RED in both directions before
+> landing (the file records the two breaks and their exact failures).
+> ⊘ **The brief's feared entanglement does not exist**: the only production caller already
+> passes `&[]` and `SharedDevice::doorbell` already parses the ring *after* the verb. There was
+> nothing to bypass — only nothing testing it.
+
 - **The cursor bridge (G8).** Nothing writes the guest's `GP_PUT` into the host channel's
   USERD, so a channel built this way is accepted by RM, schedulable, and **fetches
   nothing**. `alloc_channel_over_guest_ring`'s own docs say so at the call site.
+  ⚠ **And it is no longer the blocker** — see the STATUS block above: the ring's own plane is
+  the emulated framebuffer, whose crossing produces a **blank** host object, so the entries are
+  not where hardware can read them regardless of the cursor.
 - **Any guest path.** `alloc_channel_over_guest_ring` has exactly one caller, the R31 probe.
   `plan_doorbell` and `commit_engine_object` are byte-for-byte unchanged, and the doorbell
   census is the invariant that says so.
