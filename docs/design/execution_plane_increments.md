@@ -16669,11 +16669,29 @@ Doorbells **191 arrived / 183 served / 8 REFUSED by name**, reproducing the `w22
 population exactly. `CE-SUBMIT` **0**. This rung removed a **bootability regression** introduced
 by ranking the plane's lock at `5626939`; it did not move the wall and was not meant to.
 
-## §16.97 ★★★★★ ROUTE B MEASURED — and it is UNREACHABLE: the wall is the ADDRESS TABLE, not the aperture
+## §16.97 ★★★★★ ROUTE B MEASURED — and it is UNREACHABLE **WITH THE EXECUTOR WITNESS DISARMED**
 
-⚠ **STATUS (2026-08-11): MEASURED, two arms, `traces/boots/w245/`.** Route B is **wired,
-functional and unreachable on the bench population.** ⊘ `CE-SUBMIT` is **0** and nothing
-executed. The named wall is the deliverable.
+⊘⊘⊘ **SCOPED 2026-08-11 by §16.98, WITHIN THE HOUR, AND THE SCOPING IS MINE TO OWN.** The
+measurements below are correct and reproduce. **Two conclusions drawn from them are not:**
+
+- ⊘ *"§16.86's premise no longer holds"* — **it holds.** §16.86 was measured with
+  `KAYFABE_PT_WITNESS_EXEC=on`; both boots below had it **unset**, i.e. disarmed. `w234b`
+  (committed, `traces/guest_boots/run_w234b_d7e4da8_execwit_on_qemu.log`) reports
+  `PushbufferAperture` **9** and `RING-VA-UNBOUND` **0** on the same 8 doorbells and the same
+  `pdb=0x201000`. My `rows=4 hit=NONE` is `w234a`'s **OFF arm, byte for byte**.
+- ⊘ *"the wall moved earlier and route B is behind it"* — **the wall did not move; my boot did
+  not arm the flag that binds the ring.** With the witness on, `hit=0x1024000/Vidmem` and
+  `rows=13348`.
+
+★★★ **The class is the one this rung itself documented, turned on its author**: I varied ONE
+flag and concluded about the SYSTEM, while a **second, unvaried** flag was the precondition —
+the same shape as the fixture's hand-installed `bind(..)`, except here the hand-installed
+precondition is an environment variable that no rung carried forward. ⇒ **"unreachable" was
+true of a CONFIGURATION and I wrote it about the CODE.**
+
+⚠ **STATUS (2026-08-11): MEASURED, two arms, `traces/boots/w245/` — VALID AND SCOPED TO
+`KAYFABE_PT_WITNESS_EXEC` UNSET.** Route B is wired, functional, and unreachable **in that
+configuration**. ⊘ `CE-SUBMIT` is **0** and nothing executed. Read §16.98 for the armed square.
 
 ### 16.97.1 ★★★ The result — two boots whose logs differ by ONE LINE
 
@@ -16730,8 +16748,15 @@ FWD-RING proc=2 chan=12 … RING-VA-UNBOUND va=0x200224000 → NOTHING FORWARDED
 
 ⇒ **`§16.86.1`'s premise no longer holds.** It says route B exists to remove a
 `FwdFault::PushbufferAperture` refusal on these 8 doorbells. That refusal count is **0**: the
-lookup never gets far enough to have an aperture to object to. **The wall moved earlier, and
-route B is behind it.**
+lookup never gets far enough to have an aperture to object to.
+
+⊘⊘ **AND THE CONCLUSION I DREW FROM THAT IS WRONG — see this section's header.** What stood
+here: *"The wall moved earlier, and route B is behind it."* The wall did **not** move. §16.86
+measured its `PushbufferAperture` refusal with `KAYFABE_PT_WITNESS_EXEC=on`; these two boots had
+it **unset**, so the ring never bound and the miss exit ran first. Arm the witness and
+`PushbufferAperture` returns (`w234b`: **9**, with `RING-VA-UNBOUND` **0**). ⇒ the correct
+sentence is: **with the executor witness disarmed, route B sits behind an exit that the witness
+is what removes.**
 
 ### 16.97.3 ★★★★★ THE INSTRUMENT FAILURE — seven green tests on a HAND-INSTALLED precondition
 
@@ -16766,12 +16791,13 @@ bytes, reached. ⇒ route B is **live code**; only its precondition is missing.
 
 1. **`CE-SUBMIT > 0`?** **No. It is 0 on both arms and nothing executed.** No partial is being
    reported as forwarded work.
-2. **Did the forbidden-#2 residency gate fire on hardware?** ⊘ **NO — and it could not have.**
-   `RingFbNeverWritten` is raised in `fetch_ring_bytes`, downstream of the `RingVaUnbound` exit
-   that all 8 candidates take. After **seven** reports of *"proven offline only, never fired on
-   hardware"*, the honest update is not *"still not"* but *"it is unreachable until the ring VA
-   binds, and that is a different rung's work."* ⇒ **outstanding debt, with its cause now
-   named.** It remains proven offline (4 arms, negative control red).
+2. **Did the forbidden-#2 residency gate fire on hardware?** ⊘ **NO — and in THIS
+   CONFIGURATION it could not have.** `RingFbNeverWritten` is raised in `fetch_ring_bytes`,
+   downstream of the `RingVaUnbound` exit that all 8 candidates take **when the executor witness
+   is disarmed**. ⊘⊘ **CORRECTED by §16.98**: *"it is unreachable until the ring VA binds"* is
+   right, and **the ring VA binds when `KAYFABE_PT_WITNESS_EXEC=on`** — which is not "a different
+   rung's work", it is a flag `w234` already measured. It remains proven offline (4 arms,
+   negative control red).
 3. **Both prohibitions, if anything executed?** ⊘ **Does not arise — nothing executed.**
 
 ### 16.97.5 ⊘ Why `ce_executor=host`, and the trap avoided
@@ -16799,3 +16825,125 @@ allocation time) is being measured on another bench and may reframe this entirel
 
 ⊘ **Scope**: `CE-SUBMIT` 0. Route A untouched. Bootability unchanged from §16.96 — both arms
 boot, `SMI_RC=0`, `CUP2_RC=124`, the standing wall.
+
+## §16.98 ★★★★★ ROUTE B FIRES — the missing precondition was a FLAG NOBODY CARRIED FORWARD, and the wall is now the RING'S CONTENT
+
+⚠ **STATUS (2026-08-11): MEASURED, four corners, `traces/boots/w246/` + `traces/boots/w245/`.**
+⊘⊘ **`CE-SUBMIT` is 0 in ALL FOUR corners and nothing executed.** No line here may be read as
+the first forwarded work.
+
+⊘⊘⊘ **§16.97's "route B is unreachable" was TRUE OF A CONFIGURATION AND I WROTE IT ABOUT THE
+CODE.** The correction is folded into §16.97 above the sentences it corrects. It came from the
+coordinator within the hour, and it was right.
+
+### 16.98.1 ★★★★★ The finding — a capability measured four rungs ago, not carried forward
+
+`KAYFABE_PT_WITNESS_EXEC` is what binds the ring's VA. `w234` measured **both arms** and
+committed both logs. Same `pdb=0x201000`, same 8 doorbells:
+
+| | `w234a` (witness **off**) | `w234b` (witness **on**) |
+|---|---|---|
+| `rows` / `shadow` / `wit` | 4 / 0 / 0 | **13348 / 37 / 37** |
+| `hit` for the ring VA | **NONE** | **`0x1024000/Vidmem/start0x200200000/len0x200000`** |
+| `RING-VA-UNBOUND` | 8 | **0** |
+| `PushbufferAperture` | 0 | **9** |
+
+⇒ §16.97's `rows=4 hit=NONE` is **`w234a`'s OFF arm, byte for byte**, and §16.86's
+`PushbufferAperture` premise is exactly `w234b`. **The wall never moved. The flag was never
+armed.**
+
+★★★ **Third occurrence of one shape in one night**: a capability *proven on hardware*, then not
+applied by the rung that needed it (the FB-leaf crossing; `apply_deferring`; now this).
+⚠ **And the flag defaults off for a GOOD reason** — its own doc says *"the disarmed arm IS this
+rung's negative control and a typo that silently disarmed it would make the evidence run and the
+control indistinguishable."* That reasoning is correct and is **exactly** how route B inherited a
+disarmed precondition. ⇒ **a correct default is not a handoff.** A flag that must be armed for a
+capability to exist needs to be named in the *consumer's* preconditions, not only in the
+producer's rationale.
+
+### 16.98.2 ★★★★★ THE SQUARE — and only the full square separates the three explanations
+
+All four at revision `acbb9a3`, `ce_executor=host`, one boot each.
+
+| corner | `PT_WITNESS_EXEC` | `RING_VIDMEM` | `RING-VA-UNBOUND` | `PushbufferAperture` | `RingFbNeverWritten` | **`CE-SUBMIT`** | doorbells |
+|---|---|---|---|---|---|---|---|
+| **A** `w245off` | off | off | **8** | 0 | 0 | **0** | 183 srv / 8 ref |
+| **B** `w245on` | off | **on** | **8** | 0 | 0 | **0** | 183 srv / 8 ref |
+| **C** `w246c` | **on** | off | 0 | **8** | 0 | **0** | 175 srv / **16 ref** |
+| **D** `w246d` | **on** | **on** | 0 | **0** | **0** | **0** | 183 srv / 8 ref |
+
+- **A vs B** — the vidmem flag alone changes **nothing** (§16.97, and it stands).
+- **A vs C** — ★ **the witness is the variable**: `RING-VA-UNBOUND` 8 → 0, and the wall becomes
+  `PushbufferAperture` 8. **§16.86's premise restored, at the current revision.** The 8 doorbells
+  that used to serve-with-nothing-forwarded now **refuse by name** (`16 REFUSED`).
+- **C vs D** — ★★★ **route B removes that refusal**: `PushbufferAperture` 8 → **0**.
+
+⊘ **Neither flag alone gets there. That is why the square was needed** — with only the B/D pair
+one could have concluded *"route B works"*, and with only the A/C pair *"the witness was all it
+needed"*. Both would have been wrong.
+
+### 16.98.3 ★★★★★ ROUTE B WORKS — and the wall is now the RING'S CONTENT
+
+Corner D, all 8 doorbells, one line shape:
+
+```text
+FWD-RING proc=2 chan=N key=K pdb=0x201000
+    RING bytes=65536 cursor=0 live=1 spans=0
+  → NOTHING FORWARDED (the ring decoded to no CE span; the doorbell still reports SERVED)
+```
+
+**64 KiB read out of our own emulated framebuffer**, one live GPFIFO entry found, and the entry
+decoded to **zero copy-engine spans**. Its pushbuffer, from the same boot's descent
+(`gp[0]@0x200224000 = 0x202c00000 + 0x20`, 8 dwords):
+
+```text
+pbm[8w of 32B]: [0] sub4 m0x0    n1 = 0xc7b5      SET_OBJECT  = AMPERE_DMA_COPY_B
+                [1] sub4 m0x240  n3 = 0x2         SET_SEMAPHORE_A/B/PAYLOAD
+                [2] sub4 m0x300  n1 = 0x14        LAUNCH_DMA
+```
+
+★★ **`0x14 & LAUNCH_TRANSFER_MASK(0x3) == 0 == LAUNCH_TRANSFER_NONE`**, and this port's own ABI
+says what that means, cited to the driver header
+(`kayfabe-abi/src/submit.rs:2042`, `ogkm-580: clc7b5.h:86`):
+
+> *"A launch with this moves **no bytes**; it exists to release a semaphore. Decoding one as a
+> copy would report a transfer the engine never performs."*
+
+⇒ **`spans=0` is the CORRECT decode, not a failure.** These 8 doorbells carry a
+**semaphore-release-only** `LAUNCH_DMA` — the CE channel's initialisation fence. **There is no
+copy in them to forward.** ⊘ `CE-SUBMIT` 0 is therefore the *true content* of this population,
+not route B falling short of it.
+
+### 16.98.4 ⊘ The forbidden-#2 residency gate — REACHABLE for the first time, and SILENT
+
+After **eight** reports of *"proven offline only, never fired on hardware"*:
+
+- ⊘ In corners A/B it was **unreachable** (downstream of the `RingVaUnbound` exit).
+- ★★ In corner **D** the path is **live** — `fetch_ring_bytes` ran and returned 65536 bytes — and
+  `RingFbNeverWritten` is **0**. **The gate was reached and did not fire**, because the pages
+  *had* been written. That is the correct outcome and it is the first time the gate has been on a
+  live hardware path at all.
+- ⊘ **Stated as asked, in both directions**: it did not fire, the path was live, and the reason
+  it did not fire is residency being satisfied — not the gate being absent. It remains proven
+  offline (4 arms, negative control watched red).
+
+### 16.98.5 ⊘ Scope, and what did NOT change
+
+- ⊘⊘ **`CE-SUBMIT` 0 in all four corners.** Nothing executed; **prohibition checks do not
+  arise.**
+- Bootability holds in every corner: `no-blocking-under-lock` **0**, `RmInitAdapter failed` **0**,
+  `SMI_RC=0`, `CUP2_RC=124` — the standing `cuCtxCreate` wall, unmoved.
+- ⊘ Route A untouched, and it may still reframe all of this: if the ring can be placed in sysmem
+  at allocation time, route B is a stepping stone rather than the answer.
+- ⚠ **The owner's scope question from §16.86.4 is now LIVE and unanswered**: enumerating the ring
+  is agreed; these are user `proc 2` doorbells, and what may happen *after* enumeration is the
+  owner's call. This rung enumerated and stopped — correctly, and because there was nothing in
+  them to do.
+
+### 16.98.6 ★ The next question
+
+The first CE submission on these channels is a bare semaphore release. **The doorbell that
+carries a real `LAUNCH_DMA` with a data-transfer type has not arrived**, because `cup2` walls at
+`cuCtxCreate` (`CUP2_RC=124`) before issuing one. ⇒ the next measurement needs either a workload
+that reaches a copy, or the `cuCtxCreate` wall cleared first. ⊘ **Route B is no longer the
+blocker; it is now instrumentation waiting for traffic.**

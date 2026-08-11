@@ -1,4 +1,11 @@
-# w245 boots — route B MEASURED, and it is UNREACHABLE
+# w245 boots — route B MEASURED, and it is UNREACHABLE **WITH THE EXECUTOR WITNESS DISARMED**
+
+⊘⊘⊘ **SCOPED within the hour by `traces/boots/w246/` (§16.98) — and the scoping is mine to own.**
+Both boots below ran with **`KAYFABE_PT_WITNESS_EXEC` unset**. That flag is what binds the ring's
+VA: `w234a` (off) reports `rows=4 hit=NONE` — **byte-identical to these two** — and `w234b` (on)
+reports `rows=13348 hit=0x1024000/Vidmem`, `RING-VA-UNBOUND` **0**, `PushbufferAperture` **9**.
+⇒ **"route B is unreachable" is true of a CONFIGURATION; I wrote it about the CODE.** The wall did
+not move — §16.86 measured it with the witness armed and I did not arm it. Read `w246`'s README.
 
 ⚠ **`CE-SUBMIT` is 0 on both arms and nothing executed.** ⊘ No line here may be read as the
 first forwarded work. **The named wall is the deliverable.**
