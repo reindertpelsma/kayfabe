@@ -54,6 +54,12 @@ const LEAF_PHYS: u64 = 0x80_0000;
 /// 2 MiB apart in the framebuffer (`0x400000`, `0x600000`, `0x800000`), which is the
 /// evidence that they are consecutive leaves of that size.
 const LEAF_LEN: u64 = 0x20_0000;
+/// The same three numbers as one value — what [`SharedDevice::adopt_joined_fb_leaf`] takes.
+const LEAF: kayfabe_fwd::FbLeafRange = kayfabe_fwd::FbLeafRange {
+    va: LEAF_VA,
+    len: LEAF_LEN,
+    phys: LEAF_PHYS,
+};
 
 /// One guest proc on GPU0.
 fn device() -> (
@@ -648,9 +654,34 @@ fn joining_a_framebuffer_leaf_mints_no_vidmem_and_hands_a_backing_to_the_vmm() {
         "exactly one join, carrying the walk's own framebuffer address"
     );
 
-    // ★ And the address table records it exactly as the vidmem chain does — same range, same
-    // aperture, same materialization. ⊘ The two chains differ in what backs the leaf, NOT in
-    // what the core believes about it.
+    // ★★★★★ **AND NOTHING IS BOUND YET.** The join call adopts the HOST facts and stops;
+    // the row is the guest's own un-backed declaration until the shell has installed the
+    // view. ⊘ This is the ordering fix asserted, not described: `fb-join` bound here, three
+    // steps before the guest's window was re-pointed.
+    let before = tabled(&device, pid).expect("the guest's own row survives");
+    assert!(
+        before.2.host().is_none(),
+        "⊘ the leaf must NOT be host-backed before the install — a row declaring \
+         `JoinsGuestWindow` over a window nobody has re-pointed is `w228`'s two memories \
+         wearing the one word that says they are one. Got {before:?}"
+    );
+    assert_eq!(
+        before.2.kind(),
+        kayfabe_mmu::RegionKind::FakeFramebuffer,
+        "★ and it is still kind 2, because it still is: the emulated framebuffer is still \
+         this range's store"
+    );
+
+    // ---- THE SHELL INSTALLS THE VIEW HERE. This suite has no `RegPlane`, so the install is
+    // the thing it cannot perform; what it CAN judge is that the bind is a separate call the
+    // shell has to reach, which is the whole content of the ordering fix.
+    device
+        .adopt_joined_fb_leaf(GPU, PDB, LEAF, &joined)
+        .expect("the adopt binds");
+
+    // ★ And now the address table records it exactly as the vidmem chain would — same range,
+    // same aperture, same materialization. ⊘ The two chains differ in what backs the leaf and
+    // in WHEN the row appears, NOT in what the core believes about it afterwards.
     let (start, len, b) = tabled(&device, pid).expect("still bound");
     assert_eq!((start, len), (LEAF_VA.0, LEAF_LEN), "same range");
     assert_eq!(b.phys(), LEAF_PHYS);
@@ -712,6 +743,15 @@ fn a_joined_leaf_replayed_hands_back_no_second_backing() {
             FbLeafBacking::Joined,
         )
         .expect("joins");
+    // ⊘ **The adopt is what makes the replay a replay**, and that is a consequence of the
+    // ordering fix rather than an incidental. `plan_back_fb_leaf` reads idempotence off the
+    // table row's host backing, and the row does not carry one until the view is installed.
+    // ⇒ A join whose install never happened is released by the shell and re-asks as a FIRST
+    // join, which is the correct answer — the alternative is replaying onto a window that
+    // points somewhere else.
+    device
+        .adopt_joined_fb_leaf(GPU, PDB, LEAF, &first)
+        .expect("the adopt binds");
     let second = device
         .back_fb_leaf(
             GPU,
@@ -728,4 +768,89 @@ fn a_joined_leaf_replayed_hands_back_no_second_backing() {
         "a replay is a replay: no work, no second descriptor — got {second:?}"
     );
     assert_eq!(second.memory, first.memory, "the same host object");
+}
+
+/// ★★★★★ **A JOIN WHOSE VIEW NEVER GOT INSTALLED LEAVES NO ROW, AND RE-ASKS AS A FIRST
+/// JOIN** — the failure path of the ordering fix, which is the half that matters.
+///
+/// ⊘ The happy path of *"bind after install"* and the happy path of *"bind before install"*
+/// are indistinguishable; the difference is entirely in what a **refused** install leaves
+/// behind. `fb-join` left a row asserting `BackingBytes::JoinsGuestWindow` over a
+/// framebuffer window still pointing at the emulator's own page — permanently, with no
+/// fault and no status, which is `w228`'s *"two memories, silent in both directions"* under
+/// the one name that claims they are one.
+///
+/// ⇒ Here the shell simply never calls the adopt (this suite has no `RegPlane` to refuse an
+/// install, and it does not need one — *not reaching* the adopt is exactly what a refused
+/// install produces). The assertions are that the guest's own row is untouched, and that the
+/// next ask is a FIRST join rather than a replay onto a window that points elsewhere.
+#[test]
+fn a_join_that_was_never_installed_leaves_the_guests_row_alone_and_re_asks_as_a_first_join() {
+    let _wd = watchdog(
+        "fb_leaf_backing::join_uninstalled",
+        std::time::Duration::from_secs(60),
+    );
+    let (device, pid, _rec) = device();
+    guest_binds(
+        &device,
+        pid,
+        LEAF_VA,
+        LEAF_LEN,
+        LEAF_PHYS,
+        Aperture::Vidmem,
+        None,
+    );
+    let first = device
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Joined,
+        )
+        .expect("joins");
+    assert!(first.backing.is_some(), "the backing crossed");
+
+    // ---- The shell's install fails here, so it releases and never adopts.
+    device.release_unadopted_fb_leaf(GPU, PDB, first.host_va, first.memory);
+
+    let (start, len, b) = tabled(&device, pid).expect("the guest's own row survives");
+    assert_eq!((start, len), (LEAF_VA.0, LEAF_LEN), "the same range");
+    assert!(
+        b.host().is_none(),
+        "★★★★★ THE WHOLE POINT: no host backing is recorded for a join nobody installed"
+    );
+    assert_eq!(
+        b.kind(),
+        kayfabe_mmu::RegionKind::FakeFramebuffer,
+        "⊘ and the kind is not quietly promoted either — this range's store really is still \
+         the emulated framebuffer"
+    );
+
+    // ★ And the re-ask is a FIRST join, not a replay: there is nothing to replay onto.
+    let again = device
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Joined,
+        )
+        .expect("re-joins");
+    assert!(
+        !again.already && again.backing.is_some(),
+        "⊘ a replay here would hand the shell no descriptor and it would install nothing, so \
+         the leaf would stay two memories forever — got {again:?}"
+    );
+
+    // ★★★★★ **AND THE TEARDOWN AUDIT IS THE ASSERTION THAT THE RELEASE IS REAL.** Both joins
+    // are released and neither is ever bound, so at teardown §12.35 must be able to account
+    // for **every** host object this test made. ⊘ Watched: with only this second release
+    // missing the audit failed naming exactly **one** unaccounted object and one mapping —
+    // *one*, not two, which is the first release having genuinely been disposed rather than
+    // merely enqueued. A `release_unadopted_fb_leaf` that dropped its orphans on the floor
+    // would have named two, and no assertion written by hand in this file would have noticed.
+    device.release_unadopted_fb_leaf(GPU, PDB, again.host_va, again.memory);
 }

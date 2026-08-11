@@ -3037,6 +3037,123 @@ impl SharedDevice {
         )
     }
 
+    /// ★★★★★ **§5.12 — BIND a joined leaf, AFTER its view is installed.** The second half of
+    /// [`SharedDevice::back_fb_leaf`]'s `Joined` arm; see [`kayfabe_fwd::adopt_joined_fb_leaf`]
+    /// for why the two halves exist and what sits between them.
+    ///
+    /// ⊘ **Not a [`SharedDevice::verb_op`]**, and for the same reason `fb_join_peek` is not:
+    /// it issues no host verb, so there is no plan to stage, no worker to check out and
+    /// nothing to execute. What it *does* need is `verb_op`'s disposal discipline on the
+    /// refusal path, which it gets explicitly — a refused adopt has host objects nobody else
+    /// can name, and dropping them is `§12.35`'s UNACCOUNTED class.
+    ///
+    /// # ⚠ The caller's obligation, and it is not optional
+    ///
+    /// `host_va` and `memory` must be the ones [`SharedDevice::back_fb_leaf`] answered with,
+    /// carried across the install. A caller that never reaches this call — because the
+    /// descriptor did not cross, or the `mmap` failed, or the plane refused the install —
+    /// still holds a fixed host mapping at the guest's own VA. It must be released, or the
+    /// next ask re-plans as a first join and RM answers the second fixed map with `0x51`.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::FwdFault`] — the R5 vocabulary, at this later instant. ★ The refusal's
+    /// orphans are STAGED on the proc here, so the caller is told what happened without also
+    /// being made responsible for the unmap.
+    pub fn adopt_joined_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        leaf: kayfabe_fwd::FbLeafRange,
+        backed: &kayfabe_fwd::FbLeafBacked,
+    ) -> Result<(), FwdFault> {
+        let kayfabe_fwd::FbLeafRange { va, len, phys } = leaf;
+        let (host_va, memory) = (backed.host_va, backed.memory);
+        let pid = self.route_act(
+            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |_spine, proc, ()| proc.id,
+        )?;
+        let plan = kayfabe_fwd::BackFbLeafPlan {
+            proc: pid,
+            gpu,
+            pdb,
+            va,
+            len,
+            phys,
+            // ⊘ Re-read inside the adopt from the `Vas`, never from this field — see the
+            // core function. Carried only because the plan type has it.
+            host_vas: None,
+            existing: None,
+            how: kayfabe_fwd::FbLeafBacking::Joined,
+        };
+        let adopted = self.route_act(
+            |_| Ok((pid, ())),
+            |_spine, proc, ()| kayfabe_fwd::adopt_joined_fb_leaf(proc, &plan, host_va, memory),
+        )?;
+        match adopted {
+            Ok(()) => Ok(()),
+            Err(r) => {
+                self.stage_orphans(pid, gpu, r.orphans);
+                Err(r.fault)
+            }
+        }
+    }
+
+    /// ★★★★★ **GIVE BACK a join whose view never got installed** — the obligation
+    /// [`SharedDevice::adopt_joined_fb_leaf`] names, as a call.
+    ///
+    /// Between `back_fb_leaf(Joined)` and the adopt there are three places the shell can
+    /// fail — the descriptor may not cross, the `mmap` may fail, the plane may refuse the
+    /// install — and at every one of them the isolate is holding a **fixed mapping at the
+    /// guest's own VA** that no core state names. ⊘ Binding it anyway is not an option: the
+    /// row would declare `JoinsGuestWindow` over a window that was never re-pointed, which
+    /// is the exact falsehood the two-call split exists to prevent.
+    ///
+    /// ⇒ So the mapping is **released**, and the next ask re-plans as a first join rather
+    /// than colliding with half of one (RM answers a second fixed map at an occupied address
+    /// `0x51`, which ⊘ cannot be told apart from real exhaustion).
+    ///
+    /// ★ The unmap is staged rather than performed: this thread holds no worker, and
+    /// [`kayfabe_fwd::checkout_and_drain`] runs the queue on the next verb that does. That is
+    /// T0's own mechanism, not a new one.
+    ///
+    /// ⊘ **Nothing to report.** A proc that has gone in the gap took its isolate with it and
+    /// §7.0's process boundary freed the lot; there is no failure this can surface that the
+    /// caller could act on.
+    pub fn release_unadopted_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        host_va: u64,
+        memory: kayfabe_isolate::HostHandle,
+    ) {
+        let Ok(pid) = self.route_act(
+            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |_spine, proc, ()| proc.id,
+        ) else {
+            return;
+        };
+        // The host VAS the mapping lives in — read from the `Vas`, the same authority the
+        // adopt reads it from, so an unmap can never name a VAS the map was not made in.
+        let host_vas = self.route_act(
+            |_| Ok((pid, ())),
+            |_spine, proc, ()| proc.vases.get(&(gpu, pdb)).and_then(|v| v.host_vas),
+        );
+        let orphans = match host_vas {
+            Ok(Some(vas)) => kayfabe_isolate::Orphans {
+                unmap: vec![(vas, host_va)],
+                free: vec![memory],
+            },
+            // ⊘ No VAS means no mapping to unmap — but the OBJECT still exists and is still
+            // ours to free. Freeing it without the unmap is correct here and not a shortcut:
+            // RM tears the mapping down with the address space it was made in.
+            _ => kayfabe_isolate::Orphans {
+                unmap: Vec::new(),
+                free: vec![memory],
+            },
+        };
+        self.stage_orphans(pid, gpu, orphans);
+    }
+
     /// ★★★ **The joined-leaf instrument, through the core** — [`kayfabe_isolate::Worker`]'s
     /// `fb_join_peek`, routed to the isolate that owns `(pid, gpu)`.
     ///

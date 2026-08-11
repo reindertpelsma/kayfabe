@@ -2305,6 +2305,165 @@ pub fn commit_back_fb_leaf(
         }
         _ => unreachable!("the vidmem publish chain allocates a host VAS iff the plan had none"),
     }
+    // ★★★★★ **THE JOINED ARM STOPS HERE, AND THE STOP IS THE ORDERING FIX.**
+    //
+    // ⚠ `fb-join` bound the row here, and the shell installed the guest's view three steps
+    // later — `bind` → `exports.dup` → `mmap` → `RegPlane::join_fb`. That leaves a window in
+    // which the address table says `RegionKind::RealGpuMemory` +
+    // `BackingBytes::JoinsGuestWindow` while the guest's framebuffer window still points at
+    // the old `SparseFb` page. ⊘ And the window does not merely open and close: if the dup,
+    // the `mmap` or the install REFUSES, the row stays, permanently, declaring a join that
+    // never happened. That is `w228`'s two memories under the one name that says they are
+    // one — strictly worse than `w228`, which at least declared the shadow.
+    //
+    // ⇒ **The commit adopts the HOST facts and binds nothing.** The caller installs the
+    // view, and only then calls [`adopt_joined_fb_leaf`], which binds. The declaration is
+    // then backed by an install that has already succeeded, which is the closest a type
+    // whose truth-maker lives in another process can be brought to being checked.
+    //
+    // ★ What IS still done above, and must be: `vas.host_vas` adoption. The execute phase
+    // may have allocated a host VAS, and a commit that returned without recording it would
+    // leak the one object nothing else can name.
+    //
+    // ⊘ THE COST, STATED. Between here and `adopt_joined_fb_leaf` the isolate holds a fixed
+    // mapping at the leaf's VA that core state does not know about, so a re-ask in that gap
+    // re-plans as a FIRST join and RM answers the second fixed map at an occupied address
+    // with `0x51` — collision-or-exhaustion, which cannot be told apart. The caller closes
+    // it by releasing on any failure (`SharedDevice::adopt_joined_fb_leaf` stages the
+    // orphans), so a retry starts from nothing rather than from half a join.
+    if matches!(plan.how, FbLeafBacking::Joined) {
+        return Ok(FbLeafBacked {
+            host_va,
+            memory,
+            already: false,
+            backing,
+        });
+    }
+    bind_backed_fb_leaf(vas, plan, host_va, memory, vas_used)?;
+    Ok(FbLeafBacked {
+        host_va,
+        memory,
+        already: false,
+        backing,
+    })
+}
+
+/// ★★ **One framebuffer leaf's identity, whole** — the guest VA it is bound at, its length,
+/// and the framebuffer-physical base the guest's **own page-table walk** produced for it.
+///
+/// ⊘ A type rather than three parameters because the three are re-validated **together**:
+/// [`adopt_joined_fb_leaf`] runs at a later instant than the plan that named them and must
+/// establish that it is looking at the same leaf, and a caller that could pass two of the
+/// three from one reading and the third from another is the `FbLeafDisagrees` class one
+/// level up. ⚠ Not retrofitted onto [`plan_back_fb_leaf`] here: that is a wide, purely
+/// mechanical change across every caller and test, and mixing it into the ordering fix would
+/// bury the fix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeafRange {
+    /// The leaf's base guest VA — where the host object is placed.
+    pub va: GpuVa,
+    /// Its length in bytes.
+    pub len: u64,
+    /// Its framebuffer-physical base, from the walk.
+    pub phys: u64,
+}
+
+/// ★★★★★ **BIND A JOINED LEAF, ONCE THE GUEST'S VIEW IS ALREADY INSTALLED** — the second
+/// half of the join, and the half that may only run after the first has been made true.
+///
+/// # ⊘ Why this is a separate call and not the tail of [`commit_back_fb_leaf`]
+///
+/// [`kayfabe_mmu::BackingBytes::JoinsGuestWindow`] asserts something no type can check: that
+/// the guest's own framebuffer window for this range now maps the very pages
+/// [`kayfabe_isolate::VerbPlan::JoinFbLeaf`] described to RM. Only the shell can make that
+/// true, and it needs the reply's backing to do it. So the commit adopts the host facts and
+/// stops; the shell installs; and the bind — the moment the declaration enters core state —
+/// happens **here**, with the install already behind it.
+///
+/// ★ The alternative that was rejected: bind first and install after. That is what `fb-join`
+/// did, and it is not merely racy — a refused install leaves the row asserting a join that
+/// never happened, **permanently**. `w228`'s two memories under the one word that says they
+/// are one.
+///
+/// ⚠ **This verb issues NO host work.** It is core-state bookkeeping over facts the caller
+/// already holds, so it takes them as arguments rather than re-deriving them: `host_va` and
+/// `memory` are the execute phase's own answers, carried by the caller across the install.
+/// ⊘ They are re-checked, not trusted — `memory.belongs_to` was checked in the commit and the
+/// leaf's R5 identity is re-checked below, at this later instant.
+///
+/// # Errors
+/// [`Refusal`] — the same R5 vocabulary [`commit_back_fb_leaf`] refuses with, carrying the
+/// orphans the caller must release. ★ A caller that ignores them leaves a fixed mapping at
+/// the guest's VA that no core state names.
+pub fn adopt_joined_fb_leaf(
+    proc: &mut Proc,
+    plan: &BackFbLeafPlan,
+    host_va: u64,
+    memory: HostHandle,
+) -> Result<(), Refusal> {
+    let orphans = |vas_used: HostHandle| Orphans {
+        unmap: vec![(vas_used, host_va)],
+        free: vec![memory],
+    };
+    // ⊘ R5 again, at this instant rather than the commit's: the install is a round trip
+    // through another process and a `mmap`, so the proc can have retired inside it.
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Proc(plan.proc)),
+            orphans: plan.host_vas.map_or_else(Orphans::default, orphans),
+            retry: false,
+        });
+    }
+    let Some(vas) = proc.vases.get_mut(&(plan.gpu, plan.pdb)) else {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Vas {
+                gpu: plan.gpu,
+                pdb: plan.pdb,
+            }),
+            orphans: plan.host_vas.map_or_else(Orphans::default, orphans),
+            retry: false,
+        });
+    };
+    // ★ The host VAS the commit adopted. ⊘ Read from the `Vas` and not from `plan.host_vas`:
+    // the plan's copy is what was true at plan time, and the commit may have written a
+    // freshly-allocated one over it — an unmap aimed at the stale value would miss.
+    let Some(vas_used) = vas.host_vas else {
+        return Err(Refusal {
+            fault: FwdFault::Stale(Stale::Rebound),
+            orphans: Orphans::default(),
+            retry: false,
+        });
+    };
+    bind_backed_fb_leaf(vas, plan, host_va, memory, vas_used)
+}
+
+/// ★★★ **R5 re-validation of the leaf, and the bind** — the tail both framebuffer-leaf
+/// chains end on, factored out because they now reach it at **different times**.
+///
+/// [`commit_back_fb_leaf`] calls it inline for [`FbLeafBacking::Vidmem`] (where ruling 3
+/// refuses it, every time); [`adopt_joined_fb_leaf`] calls it after the caller has installed
+/// the guest's view. ⊘ One body rather than two: the R5 checks and the unwind-on-overlap are
+/// the part that is easy to get subtly wrong, and a second copy of them would be a second
+/// reading of what "this leaf is still the leaf we planned" means.
+///
+/// `vas_used` is the host VAS every refusal's `Orphans` unmaps from; `host_va`/`memory` are
+/// what the execute phase produced.
+///
+/// # Errors
+/// [`Refusal`] — carrying the orphans the caller must release. ★ The `BackingBytes` is
+/// derived from `plan.how` and from nothing else, so ruling 3 adjudicates the chain that
+/// actually ran.
+fn bind_backed_fb_leaf(
+    vas: &mut kayfabe_core::gpu::Vas,
+    plan: &BackFbLeafPlan,
+    host_va: u64,
+    memory: HostHandle,
+    vas_used: HostHandle,
+) -> Result<(), Refusal> {
+    let orphans = || Orphans {
+        unmap: vec![(vas_used, host_va)],
+        free: vec![memory],
+    };
     // ★★★ R5 ON THE LEAF ITSELF. The plan read the table; a sibling thread may have bound,
     // re-bound or backed this range in the gap. Every disagreement is refused with the
     // orphans attached — ⊘ never resolved by overwriting, because the map entry is the
@@ -2319,7 +2478,7 @@ pub fn commit_back_fb_leaf(
                         len: plan.len,
                         tabled: (start, tlen),
                     },
-                    orphans: orphans(vas_used, None),
+                    orphans: orphans(),
                     retry: false,
                 });
             }
@@ -2330,7 +2489,7 @@ pub fn commit_back_fb_leaf(
                         walked: (plan.phys, Aperture::Vidmem),
                         tabled: (b.phys(), b.aperture()),
                     },
-                    orphans: orphans(vas_used, None),
+                    orphans: orphans(),
                     retry: false,
                 });
             }
@@ -2343,7 +2502,7 @@ pub fn commit_back_fb_leaf(
                         va: plan.va,
                         host_va: h.host_va(),
                     },
-                    orphans: orphans(vas_used, None),
+                    orphans: orphans(),
                     retry: true,
                 });
             }
@@ -2426,7 +2585,7 @@ pub fn commit_back_fb_leaf(
         Err(fault) => {
             return Err(Refusal {
                 fault: FwdFault::RegionKindRefused { va: plan.va, fault },
-                orphans: orphans(vas_used, None),
+                orphans: orphans(),
                 retry: false,
             });
         }
@@ -2455,16 +2614,11 @@ pub fn commit_back_fb_leaf(
         }
         return Err(Refusal {
             fault: FwdFault::Address(e),
-            orphans: orphans(vas_used, None),
+            orphans: orphans(),
             retry: false,
         });
     }
-    Ok(FbLeafBacked {
-        host_va,
-        memory,
-        already: false,
-        backing,
-    })
+    Ok(())
 }
 
 /// ★ G6 — reclaim ONE published backing (`l1_concurrency.md` §12.20): unbind the range,

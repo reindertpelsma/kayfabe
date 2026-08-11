@@ -4396,9 +4396,16 @@ impl SharedDoorbell {
                 eprintln!(
                     "{head} {} leaf va=0x{:x} → ⚠ THE BACKING CROSSED AND THE VMM COULD NOT \
                      CLAIM IT: token={} is not in {isolate:?}'s export registry. The host \
-                     object EXISTS and is placed; the guest's view does not. ⊘ That is two \
-                     memories again and it is said out loud rather than logged as a join",
+                     object EXISTS and is placed; the guest's view does not. ⊘ RELEASED and \
+                     NOT bound — the row would otherwise declare a join that never happened",
                     op.name, leaf.va, backing.token
+                );
+                joined.remove(&leaf.va);
+                self.device.release_unadopted_fb_leaf(
+                    DOORBELL_TARGET_GPU,
+                    pdb,
+                    backed.host_va,
+                    backed.memory,
                 );
                 continue;
             };
@@ -4421,13 +4428,26 @@ impl SharedDoorbell {
                 Err(e) => {
                     eprintln!(
                         "{head} {} leaf va=0x{:x} → ⚠ THE VMM'S OWN MAPPING FAILED {e:?} — \
-                         the host object exists and is placed and the guest's view does not",
+                         the host object exists and is placed and the guest's view does not. \
+                         ⊘ RELEASED and NOT bound",
                         op.name, leaf.va
+                    );
+                    joined.remove(&leaf.va);
+                    self.device.release_unadopted_fb_leaf(
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        backed.host_va,
+                        backed.memory,
                     );
                     continue;
                 }
             };
             // ---- 3. ESTABLISH + INSTALL, in ONE hold of the plane lock.
+            //
+            // ★★★★★ **AND NOTHING IS BOUND UNTIL THIS RETURNS `Ok`.** `fb-join` bound the
+            // row back at step 1, three steps before the guest's window was re-pointed. See
+            // `kayfabe_fwd::adopt_joined_fb_leaf`: the bind is step 4, below, and every path
+            // that does not reach it RELEASES instead.
             match plane.join_fb(leaf.phys, Box::new(MappedFb(region))) {
                 Ok(est) => {
                     live.push((leaf.phys, backing.len));
@@ -4458,14 +4478,49 @@ impl SharedDoorbell {
                              and it is NOT evidence that the copy works"
                         );
                     }
+                    // ---- 4. BIND, and only now. The address table learns the leaf is host
+                    // memory AFTER the window that reads it points at that memory, so
+                    // `BackingBytes::JoinsGuestWindow` is a fact when it is written down
+                    // rather than a promise. ⊘ A refusal here does NOT unwind the install:
+                    // the join is real and the guest's window is correct either way — what
+                    // is lost is the core's record of it, which the release names.
+                    if let Err(e) = self.device.adopt_joined_fb_leaf(
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        kayfabe_rt::FbLeafRange {
+                            va: kayfabe_rt::GpuVa(leaf.va),
+                            len: leaf.len,
+                            phys: leaf.phys,
+                        },
+                        &backed,
+                    ) {
+                        joined.remove(&leaf.va);
+                        eprintln!(
+                            "{head} {} leaf va=0x{:x} → ⚠ THE VIEW IS INSTALLED AND THE BIND \
+                             REFUSED `{e:?}` — the guest's window and the host object are ONE \
+                             memory and the address table does not say so, so nothing will \
+                             point an engine here. ⊘ The host mapping is released; the \
+                             install stands",
+                            op.name, leaf.va
+                        );
+                    }
                 }
-                Err(e) => eprintln!(
-                    "{head} {} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
-                     phys=0x{:x} len={} why=`{}` — the host object exists and is placed, and \
-                     this device still serves that range from its own pages. ⊘ Two memories, \
-                     named",
-                    op.name, leaf.va, leaf.phys, e.phys, e.len, e.why
-                ),
+                Err(e) => {
+                    eprintln!(
+                        "{head} {} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
+                         phys=0x{:x} len={} why=`{}` — this device still serves that range \
+                         from its own pages. ⊘ RELEASED and NOT bound: `fb-join` would have \
+                         left a row here declaring a join that was just refused",
+                        op.name, leaf.va, leaf.phys, e.phys, e.len, e.why
+                    );
+                    joined.remove(&leaf.va);
+                    self.device.release_unadopted_fb_leaf(
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        backed.host_va,
+                        backed.memory,
+                    );
+                }
             }
         }
         self.probe_joined_leaves(&head, facts, &live, &plane);
