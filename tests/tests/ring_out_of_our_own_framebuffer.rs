@@ -3,8 +3,18 @@
 //!
 //! # ⊘ This file measures a ROUTE; it does not endorse one
 //!
-//! `[w235, 2026-08-11]` The 8 `proc 2` doorbells the boot reports have their ring in the
-//! **emulated framebuffer**, not guest RAM — the descent already prints its bytes
+//! ⊘⊘⊘ **CORRECTED 2026-08-11 (w245, `traces/boots/w245/`, §16.97) — THE PARAGRAPH BELOW
+//! DESCRIBES A WALL THE BENCH NO LONGER HITS.** `read_gpfifo_ring` does **not** refuse those
+//! 8 doorbells with `FwdFault::PushbufferAperture`; that count is **0**. All 8 stop earlier,
+//! at `RingLook::RingVaUnbound` — **the address table does not bind the ring's VA at all** —
+//! which is *before* the vidmem route is computed and long before `fetch_ring_bytes`, where
+//! this file's residency gate lives. ⇒ **every test here is conditioned on a binding
+//! `guest_with_a_ring` installs BY HAND**, and the bench never installs it. Two boots
+//! differing only in `KAYFABE_RING_VIDMEM` produced logs whose sole distinct line is the
+//! flag's own announcement.
+//!
+//! `[w235, 2026-08-11, as written]` The 8 `proc 2` doorbells the boot reports have their ring
+//! in the **emulated framebuffer**, not guest RAM — the descent already prints its bytes
 //! (`fbRING[p0]@0x1024000=0000c002…`) while `read_gpfifo_ring` refuses them by name
 //! (`FwdFault::PushbufferAperture`). Route B reads them from the store we already serve.
 //! Route A — influencing the ring's aperture at allocation time so it lands in sysmem — is
@@ -99,8 +109,22 @@ impl FbBytes for FakeFb {
 }
 
 /// A guest whose channel declares its ring at [`RING_VA`], bound to **`Aperture::Vidmem`**
-/// at [`RING_FB_PHYS`] — the shape the boot's `proc 2` channels actually have.
-fn guest_with_a_vidmem_ring() -> (Gpu, MockVmm, ProcId, ChanId) {
+/// at [`RING_FB_PHYS`].
+///
+/// ⊘⊘⊘ **CORRECTED 2026-08-11 (w245, `traces/boots/w245/`) — this fixture is NOT the shape
+/// the bench's `proc 2` channels have, and its doc used to say it was.** On the bench those
+/// channels' ring VAs are **not bound at all**: all 8 exit `plan_gpfifo_ring` at
+/// [`RingLook::RingVaUnbound`], *before* the vidmem route is even computed. The
+/// `vas.table.bind(..)` at the bottom of this function is the step the guest never performs
+/// for us — it is **hand-installed here**, and it is the precondition every other test in
+/// this file inherits.
+///
+/// ⇒ ★ These tests prove route B works **given a bound vidmem ring**. They say nothing about
+/// whether the bench ever produces one, and measured on hardware it does not. See
+/// [`an_unbound_ring_va_never_reaches_the_vidmem_route_or_its_gate`], which pins the bench's
+/// actual shape beside this one so the two cannot be confused again.
+/// `a_green_test_can_hold_a_wall_in_place`: real citation, right scope, wrong quantifier.
+fn guest_with_a_ring(bind_ring: bool) -> (Gpu, MockVmm, ProcId, ChanId) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
@@ -180,7 +204,13 @@ fn guest_with_a_vidmem_ring() -> (Gpu, MockVmm, ProcId, ChanId) {
 
     // ★★★ THE SUBJECT: the ring's binding names VIDMEM, so `phys` is a framebuffer offset
     // and not a GPA. This is the arm every production call site refuses today.
-    {
+    //
+    // ⊘⊘ **AND IT IS THE STEP THE GUEST NEVER PERFORMS FOR US.** `bind_ring == false`
+    // reproduces the bench exactly (`traces/boots/w245/`): the VA is absent from the table,
+    // so `plan_gpfifo_ring` stops at `RingVaUnbound` and neither the vidmem route nor
+    // forbidden #2's residency gate is reached. That arm is the measured shape; this one is
+    // the hypothesis every other test in this file is conditioned on.
+    if bind_ring {
         let proc = gpu.procs.get_mut(&pid).expect("live");
         let vas = proc.vases.get_mut(&(GPU, PDB0)).expect("the VAS exists");
         vas.table
@@ -198,6 +228,95 @@ fn guest_with_a_vidmem_ring() -> (Gpu, MockVmm, ProcId, ChanId) {
     }
 
     (gpu, MockVmm::new(), pid, cid)
+}
+
+/// The fixture **with** the hand-installed vidmem binding — the hypothesis.
+fn guest_with_a_vidmem_ring() -> (Gpu, MockVmm, ProcId, ChanId) {
+    guest_with_a_ring(true)
+}
+
+/// ★★★ The fixture **without** it — `[measured 2026-08-11, `traces/boots/w245/`]` the shape
+/// the bench's 8 `proc 2` channels actually have. Identical in every other respect, so the
+/// difference between the two is exactly one `vas.table.bind(..)` and nothing else.
+fn guest_with_an_unbound_ring() -> (Gpu, MockVmm, ProcId, ChanId) {
+    guest_with_a_ring(false)
+}
+
+/// ★★★★★ **THE BENCH'S ACTUAL SHAPE — an UNBOUND ring VA never reaches the route at all.**
+///
+/// `[measured 2026-08-11, `traces/boots/w245/`, revision `acbb9a3`]` two boots that differ
+/// **only** in `KAYFABE_RING_VIDMEM` produced logs whose sole distinct line is the flag's own
+/// announcement. On both, all 8 candidate `proc 2` doorbells report:
+///
+/// ```text
+/// FWD-RING proc=2 chan=12 … RING-VA-UNBOUND va=0x200224000 → NOTHING FORWARDED
+/// PushbufferAperture 0     RingFbNeverWritten 0     CE-SUBMIT 0
+/// ```
+///
+/// ⇒ **Route B is unreachable on the bench population, and this test is why.**
+/// `plan_gpfifo_ring` returns [`RingLook::RingVaUnbound`] at its `binding_at` miss —
+/// *before* `VidmemRoute` is computed and long before `fetch_ring_bytes` (where forbidden
+/// #2's residency gate lives). The address table, not the aperture, is the wall.
+///
+/// # ⊘ Why this test exists rather than a note
+///
+/// Every other test in this file inherits [`guest_with_a_vidmem_ring`]'s **hand-installed**
+/// `vas.table.bind(..)`. Seven of them are green, and that green is what would let the next
+/// reader conclude *"route B is ready, just switch it on"*. It is ready; the guest is not.
+/// ★ **This arm is identical to the fixture except for the one line it omits**, so the
+/// difference between the two is exactly the missing precondition and nothing else.
+#[test]
+fn an_unbound_ring_va_never_reaches_the_vidmem_route_or_its_gate() {
+    let (gpu, mut vmm, pid, cid) = guest_with_an_unbound_ring();
+    // ⊘ A framebuffer with the page WRITTEN, so residency cannot be what refuses: if the
+    // plan reached the fetch, this fixture would hand back the ring. It must not get there.
+    let mut fb = FakeFb::default();
+    fb.page(RING_FB_PHYS, &[0x00u8, 0x00, 0xc0, 0x02]);
+
+    let got =
+        kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, Some(&mut fb));
+
+    assert_eq!(
+        got,
+        Ok(RingLook::RingVaUnbound { va: RING_VA.0 }),
+        "★★★★★ THE MEASURED BENCH WALL. With the ring VA absent from the address table the \
+         lookup must stop at `RingVaUnbound` — NOT reach the vidmem route, NOT reach \
+         `RingFbNeverWritten`, and NOT read the framebuffer. ⊘ The route is registered and \
+         the page is written here, so anything other than this answer would mean route B \
+         can fire without a binding, which would make the 8 bench doorbells reachable and \
+         `traces/boots/w245/` wrong. Got {got:?}"
+    );
+}
+
+/// ★★★ **The known-positive for the arm above: the SAME guest, with the binding installed,
+/// DOES reach the route.**
+///
+/// ⊘ Without this, *"an unbound ring is refused"* is indistinguishable from *"this fixture
+/// refuses everything"*, and the w245 conclusion — *route B is wired and functional but
+/// unreachable* — would collapse into the much weaker *route B does nothing*. Those two have
+/// completely different next moves: the first says fix the address table, the second says fix
+/// route B.
+#[test]
+fn the_only_difference_is_the_binding_and_it_is_what_reaches_the_route() {
+    let mut fb = FakeFb::default();
+    fb.page(RING_FB_PHYS, &[0x00u8, 0x00, 0xc0, 0x02]);
+
+    let (gpu, mut vmm, pid, cid) = guest_with_an_unbound_ring();
+    let unbound =
+        kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, Some(&mut fb));
+
+    let (gpu, mut vmm, pid, cid) = guest_with_a_vidmem_ring();
+    let bound =
+        kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, Some(&mut fb));
+
+    assert_eq!(unbound, Ok(RingLook::RingVaUnbound { va: RING_VA.0 }));
+    assert!(
+        matches!(bound, Ok(RingLook::Ring(_))),
+        "★★★ the SAME call, the SAME route, the SAME written page — and the only difference \
+         between the two fixtures is one `vas.table.bind(..)`. If this arm did not reach the \
+         ring, route B would be dead code rather than unreachable code, and w245's reading of \
+         the bench would be wrong. Got {bound:?}"
+    );
 }
 
 /// ★★★★★ **THE NEGATIVE CONTROL, and it is the reason the route is safe to attempt.**

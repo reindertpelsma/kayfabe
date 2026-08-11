@@ -15671,8 +15671,17 @@ unanswerable residency question does not defer the executor choice — **it make
 
 ## §16.86 ★★★★★ ROUTE B, BUILT AND DEFAULT-OFF — and the WALL is a LOCK-ORDER INVERSION no gate can see
 
-⚠ **STATUS (2026-08-11): MEASUREMENT, not a ruling.** Nothing here decides the shipping
-design. §16.86.4 states the scope question that is the owner's to answer.
+⊘⊘⊘ **CORRECTED 2026-08-11 by §16.97 — §16.86.1's PREMISE NO LONGER HOLDS.** This section says
+route B exists to remove a `FwdFault::PushbufferAperture` refusal on the boot's 8 `proc 2`
+doorbells. `[measured, `traces/boots/w245/`]` that refusal count is **0**: all 8 exit
+`plan_gpfifo_ring` at `RingLook::RingVaUnbound` — the address table does not bind the ring's VA
+— **before** the vidmem route is computed and long before `fetch_ring_bytes`, where the
+residency gate §16.86.2 describes lives. ⇒ route B is **wired, functional and unreachable**;
+turning it on changes exactly one log line. Read §16.97 first. Everything below is otherwise
+accurate about what was *built*.
+
+⚠ **STATUS (2026-08-11, as written): MEASUREMENT, not a ruling.** Nothing here decides the
+shipping design. §16.86.4 states the scope question that is the owner's to answer.
 
 ### 16.86.1 What was built
 
@@ -16659,3 +16668,134 @@ that `scripts/bench/cup2_hook_w232.sh` documents as the standing wall on both ex
 Doorbells **191 arrived / 183 served / 8 REFUSED by name**, reproducing the `w229`/`w230`
 population exactly. `CE-SUBMIT` **0**. This rung removed a **bootability regression** introduced
 by ranking the plane's lock at `5626939`; it did not move the wall and was not meant to.
+
+## §16.97 ★★★★★ ROUTE B MEASURED — and it is UNREACHABLE: the wall is the ADDRESS TABLE, not the aperture
+
+⚠ **STATUS (2026-08-11): MEASURED, two arms, `traces/boots/w245/`.** Route B is **wired,
+functional and unreachable on the bench population.** ⊘ `CE-SUBMIT` is **0** and nothing
+executed. The named wall is the deliverable.
+
+### 16.97.1 ★★★ The result — two boots whose logs differ by ONE LINE
+
+`[measured 2026-08-11, revision `acbb9a3`]` — ⊘ **the binary is stamped `acbb9a3` and HEAD is
+`30f7900`, and that is correct, not stale**: `git rev-parse` on `crates`, `tests` and
+`Cargo.lock` gives **identical tree hashes** at both commits (`30f7900` is docs + evidence
+only), so `acbb9a3` is the complete attribution.
+
+| | `w245off` (`KAYFABE_RING_VIDMEM=0`) | `w245on` (`=1`) |
+|---|---|---|
+| `RING-PROJ` (fall-through entered) | 8 | 8 |
+| **`RING-VA-UNBOUND`** | **8** | **8** |
+| `PushbufferAperture` | 0 | 0 |
+| `RingFbNeverWritten` (forbidden #2) | **0** | **0** |
+| `CE-SUBMIT` | **0** | **0** |
+| doorbells | 191 / 183 / 8 | 191 / 183 / 8 |
+| `CUP2_RC` | 124 | 124 |
+
+★★ **Normalised whole-log diff: 808 lines each, and the ONLY distinct line is the flag's own
+announcement.** Timestamps, hex and integers normalised; `sort -u`'d; one line of output:
+
+```
+< kayfabe: RING-VIDMEM KAYFABE_RING_VIDMEM=N ⇒ route B OFF (default)
+> kayfabe: RING-VIDMEM KAYFABE_RING_VIDMEM=N ⇒ route B ON
+```
+
+⇒ **The flag-off arm reproduces the wall exactly** (and matches `w244a`, a different boot at
+the same revision), and the flag changes **nothing else**.
+
+### 16.97.2 ★★★★★ WHY — route B lives entirely downstream of a step the bench never reaches
+
+`plan_gpfifo_ring` (`kayfabe-fwd/src/lib.rs:4220`):
+
+```rust
+4258   let Some((start, b_len, _)) = table.binding_at(base) else {
+4259       return Ok(RingPlanLook::Absent(RingLook::RingVaUnbound { va: ring.va }));   // ← EXIT
+4260   };
+...
+4277       VidmemRoute::OwnFramebuffer     // ← the route is not even COMPUTED until here
+```
+
+and the route is consumed only inside `push_range_gpas` (`:4394`), while forbidden #2's
+residency gate `FwdFault::RingFbNeverWritten` (`:4316`) lives in `fetch_ring_bytes`, which can
+only be reached through a `RingPlan` the success arm produces.
+
+The boot says the bench takes the exit, 8 times out of 8:
+
+```text
+GUEST-RAM PIN token=0x00020013 … ring=0x200224000 → UNRESOLVED
+    Address(Miss { pdb: Pdb(2101248), va: GpuVa(8592179200) })
+    (the address table does not bind this VA; ⊘ MISS = FAULT)
+FWD-RING proc=2 chan=12 … RING-VA-UNBOUND va=0x200224000 → NOTHING FORWARDED
+```
+
+⇒ **`§16.86.1`'s premise no longer holds.** It says route B exists to remove a
+`FwdFault::PushbufferAperture` refusal on these 8 doorbells. That refusal count is **0**: the
+lookup never gets far enough to have an aperture to object to. **The wall moved earlier, and
+route B is behind it.**
+
+### 16.97.3 ★★★★★ THE INSTRUMENT FAILURE — seven green tests on a HAND-INSTALLED precondition
+
+`tests/tests/ring_out_of_our_own_framebuffer.rs` had 7 passing arms, a real citation and the
+right scope. Its fixture's doc read:
+
+> *A guest whose channel declares its ring at `RING_VA`, bound to **`Aperture::Vidmem`** at
+> `RING_FB_PHYS` — **the shape the boot's `proc 2` channels actually have**.*
+
+⊘ The last clause is **false**, and the fixture's own body is the proof: it reaches into the
+address table and calls `vas.table.bind(..)` **by hand**. That is precisely the step the guest
+never performs for us. ⇒ the seven greens prove *route B works given a bound vidmem ring*; they
+say nothing about whether the bench produces one, and it does not.
+★ `a_green_test_can_hold_a_wall_in_place` — real citation, right scope, **wrong quantifier** —
+and the doc sentence is what would stop anyone checking.
+
+**Fixed rather than noted**: the fixture is now parameterised (`guest_with_a_ring(bind_ring)`),
+the correction is folded **into** its doc above the claim it corrects, and two arms were added:
+
+- `an_unbound_ring_va_never_reaches_the_vidmem_route_or_its_gate` — the **bench's measured
+  shape**, asserting `RingVaUnbound` with the route registered *and* the framebuffer page
+  written, so neither the route nor the residency gate can be what refused.
+- `the_only_difference_is_the_binding_and_it_is_what_reaches_the_route` — ★ the discriminator.
+  Without it, *"the arms are identical"* cannot be told from *"the flag is dead code"*, and
+  those have opposite next moves: **fix the address table** vs **fix route B**.
+
+★★★ **Negative control watched RED**: with `guest_with_an_unbound_ring` flipped to install the
+binding, the bench-shape arm fails with `Ok(Ring([0, 0, 192, 2, …]))` — the framebuffer's own
+bytes, reached. ⇒ route B is **live code**; only its precondition is missing.
+
+### 16.97.4 ⊘ The three questions the coordinator asked, answered plainly
+
+1. **`CE-SUBMIT > 0`?** **No. It is 0 on both arms and nothing executed.** No partial is being
+   reported as forwarded work.
+2. **Did the forbidden-#2 residency gate fire on hardware?** ⊘ **NO — and it could not have.**
+   `RingFbNeverWritten` is raised in `fetch_ring_bytes`, downstream of the `RingVaUnbound` exit
+   that all 8 candidates take. After **seven** reports of *"proven offline only, never fired on
+   hardware"*, the honest update is not *"still not"* but *"it is unreachable until the ring VA
+   binds, and that is a different rung's work."* ⇒ **outstanding debt, with its cause now
+   named.** It remains proven offline (4 arms, negative control red).
+3. **Both prohibitions, if anything executed?** ⊘ **Does not arise — nothing executed.**
+
+### 16.97.5 ⊘ Why `ce_executor=host`, and the trap avoided
+
+`[measured at `acbb9a3`]` `RING-PROJ` is **8** on `host` and **0** on `local`: with the default
+`local`, `try_ce_submission` claims every routed doorbell terminally and the forwarding
+fall-through is dead code. ⇒ running this experiment on the default would have produced
+*"the arms are identical"* for a **second, unrelated reason** — the right answer for the wrong
+cause, and unfalsifiable.
+
+### 16.97.6 ★ The next question, stated with its numbers
+
+**Why is the ring VA absent from the address table?** From `w245off`, for all 8 doorbells,
+`pdb=0x201000`:
+
+- `VAS-BIND-CENSUS … vas=PRESENT rows=4 hit=NONE` — the VAS exists and has **4 rows**; the
+  ring's VA is in none of them.
+- `PT-DECODE` → `bound=6275 … unwitnessed=6275 learned=39 published=39/0` on the **first**
+  doorbell and `bound=0` on the other **seven**.
+
+⇒ 6275 bindings were decoded, and the ring's own VA is still not among the 4 rows its VAS
+holds. That gap — **not** the aperture, and **not** route B — is what stands between this bench
+and a forwarded doorbell. ⚠ Route A (whether the ring's placement is influenceable at
+allocation time) is being measured on another bench and may reframe this entirely.
+
+⊘ **Scope**: `CE-SUBMIT` 0. Route A untouched. Bootability unchanged from §16.96 — both arms
+boot, `SMI_RC=0`, `CUP2_RC=124`, the standing wall.
