@@ -16225,3 +16225,104 @@ before anyone builds the window in §16.92.2, because it would make that window 
 - ★ **Two shipping R1 violations found in one night by an instrument that did not exist the day
   before** — one fixed and measured (§16.91), one named with its whole set bounded (here). That
   is the rank paying for itself.
+
+## §16.93 ★★★★★ PROTOCOL FACT — the stock driver POLLS for GSP replies, so deferral IS legal
+
+⚠ **STATUS (2026-08-11): ANSWERED from source.** `research_clones/ogkm-580.159.04`, the version
+the bench runs. ⊘ Read-only; no boot, no bench. ⇒ §16.92.2's concurrency crux **dissolves**: the
+fix is a latch, not a window.
+
+⊘ **Our emulator answering synchronously today is evidence about US, not about the driver** — the
+stock driver has never had the chance to demonstrate patience. Everything below is cited.
+
+### 16.93.1 The wait path — a poll loop, not a return value
+
+`_kgspRpcRecvPoll` (`src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:2299`) is a bare `for (;;)`
+(`:2391`) that calls `_kgspRpcDrainEvents` and loops until the awaited reply appears or the
+timeout expires:
+
+```c
+case NV_WARN_MORE_PROCESSING_REQUIRED:
+    // The synchronous RPC response we were waiting for is here          // :2402-2403
+```
+
+⇒ ★★★ **The reply does not have to exist when the MMIO write returns.** The driver spins on the
+**message queue**. A reply posted on a later queue service is indistinguishable, to the driver,
+from one posted immediately.
+
+### 16.93.2 The budget — 6 seconds, and a latch is only legal inside it
+
+`timeoutUs = defaultus + defaultus / 2` (`kernel_gsp.c:2379`), and on Unix
+`osGetTimeoutParams` sets `*pTimeoutUs = 4 * 1000000` (`arch/nvalloc/unix/src/os.c:1978`).
+
+⇒ **4 s × 1.5 = 6 s.** ★ This is the same 6 s already recorded as *"the one real clock"*; it now
+has a citation instead of a memory.
+
+⚠ Three consecutive RPC timeouts mark the GPU for reset
+(`RPC_TIMEOUT_GPU_RESET_THRESHOLD`, `kernel_gsp.c:2455`), so overrunning the budget is not
+merely slow — it is terminal.
+
+### 16.93.3 ★★★ Ordering — other traffic in between is EXPLICITLY tolerated
+
+`_kgspRpcDrainOneEvent` (`kernel_gsp.c:1754`) matches the awaited reply on **both** fields:
+
+```c
+if (pMsgHdr->function == expectedFunc &&
+    pMsgHdr->sequence == expectedSequence)          // :1776-1777
+    return NV_WARN_MORE_PROCESSING_REQUIRED;
+_kgspProcessRpcEvent(pGpu, pRpc, rpcHandlerContext); // :1782 — anything else is HANDLED
+```
+
+and the function's own doc says it (`:1796-1804`): *"Handle RPC events from GSP until the event
+is [an RPC return for] expectedFunc … (Zero or more preceding events were successfully
+handled.)"*
+
+⇒ **Out-of-order delivery of other messages is legal.** The one hard requirement is that the
+deferred reply carry the **correct `(function, sequence)` pair** — §16.92.2 worried about reply
+*ordering* mutating in a window, and the protocol simply does not care, provided the pair matches.
+
+### 16.93.4 Uniform, not special-cased
+
+The poll takes `expectedFunc`/`expectedSequence` as **parameters** and the match at `:1776` is
+generic. There is no per-command arm. ⇒ **the answer is uniform across commands**;
+`GSP_RM_ALLOC` is not special, and a latch does not need a per-command allowlist.
+
+### 16.93.5 ⚠ The constraint a latch DOES inherit — no induced second RPC
+
+`kernel_gsp.c:2345`: `NV_ASSERT_OR_RETURN(!pKernelGsp->bPollingForRpcResponse, NV_ERR_INVALID_STATE)`,
+and the comment above it (`:2334-2344`) names the exact hazard:
+
+> *"1. CPU-RM issues RPC-A to GSP and polls waiting for it to finish 2. While servicing RPC-A,
+> GSP emits an async event back to CPU-RM 3. CPU-RM services the async event and sends another
+> synchronous RPC-B 4. RPC-A response will come first, but CPU-RM is now waiting on RPC-B"*
+
+⇒ **While the guest polls, we must not post an event that induces a new synchronous RPC.** A
+latch that posts only the awaited reply is safe; one that also emits events is not automatically
+so, and inherits this as a design rule.
+
+### 16.93.6 ★★★★ THE CATCH THE PLAN DID NOT ANTICIPATE — and its resolution
+
+*"Answer on a later queue service"* presumes a later service will happen. ⊘ **Ours only services
+the queue on an MMIO write** (§16.91's refutation #2: `mmio_write_with` is the sole entry point
+carrying a policy). A guest spinning in `_kgspRpcRecvPoll` is reading the **queue**, not writing
+registers — so **nothing would trigger the service that posts the deferred reply**, and the latch
+would deadlock into the 6 s timeout.
+
+★★★ **The resolution is what makes the crux vanish rather than move.** The drain point already
+exists and is already lock-free — `Regs::write`, after `RegPlane::write` returns (§16.91). There,
+with no lock held: **run the verb, then re-enter the plane to post the reply.** The commit is a
+**fresh, top-level FSM entry**, not a resumption of a half-executed service.
+
+⇒ **There is no window inside a partially-executed service at all.** The first service *completes*
+(consuming the command, answering nothing), the lock drops, the verb runs, the lock is retaken,
+and the reply is posted as a new operation. §16.92.2's unanswerable question — *what may change
+between RUN and COMMIT?* — **does not arise**, because nothing is mid-flight across the gap.
+
+⊘ `[NOT BUILT]` This rung answers the protocol question and names the shape; it writes no code.
+
+### 16.93.7 ⊘ Scope
+
+- ⊘ **`CE-SUBMIT` is 0.** Bench still cannot boot. Route B **wired and unmeasured**. The
+  forbidden-#2 residency gate **proven offline only, never fired on hardware**. Route A untouched.
+- ★ **Second wall in a row that dissolved rather than being climbed** (the pull model was the
+  first). ⇒ *when the crux looks unarguable, check whether the question had to be posed.*
