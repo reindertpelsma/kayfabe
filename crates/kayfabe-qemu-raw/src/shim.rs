@@ -4963,8 +4963,30 @@ impl SharedDoorbell {
                     "this channel's engine is {} (route {route:?}), so its pushbuffer is \
                      not copy-engine work and the shell's CPU copy-engine executor is the \
                      wrong executor for it; refused by the ROUTING fact rather than \
-                     decoded by a codec that can only decline",
+                     decoded by a codec that can only decline{}",
                     facts.engine_name(),
+                    // ★★★ **WHICH refusal this is** — added with the GR route, because
+                    // from here on the same tag covers two different situations and a boot
+                    // log could not tell them apart: *"GR, and the route is DISARMED on
+                    // this run"* is a configuration, while *"NVENC, and no path exists"* is
+                    // a gap. ⊘ A refusal whose name is true of both is the shape §16.65's
+                    // own comment records as costly — a name that is true of the bytes and
+                    // silent about the cause.
+                    match route {
+                        kayfabe_rt::DoorbellRoute::HostGr => format!(
+                            ". ⊘ THE GR ROUTE EXISTS AND IS DISARMED ON THIS RUN: \
+                             {}={} (default `refuse`). Set it to `passthrough` to hand this \
+                             doorbell to the core — and read \
+                             `docs/design/gr_doorbell_passthrough.md` §0.3 first, because \
+                             the host engine fetches nothing on either arm",
+                            GR_ROUTE_ENV,
+                            self.gr_route.as_str(),
+                        ),
+                        kayfabe_rt::DoorbellRoute::CpuCe | kayfabe_rt::DoorbellRoute::Unserved =>
+                            ". ⊘ No executor and no core ring path has been designed for \
+                             this engine at all — this is a GAP, not a disarmed flag"
+                                .to_string(),
+                    },
                 ),
             ));
         }
