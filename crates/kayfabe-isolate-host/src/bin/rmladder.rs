@@ -1683,8 +1683,10 @@ fn fb_memfd_join_probe(rm: &mut HostRmBackend, gpu: u32, seed: OsDescSeed) -> bo
                          retired and wrote nothing these pages can see"
                     }
                     Some(_) => "the bytes are neither the old contents nor the new ones",
-                    None => "no mismatch was recorded, so the failure is upstream of the \
-                             comparison (semaphore, non-vacuity, or a short loop)",
+                    None => {
+                        "no mismatch was recorded, so the failure is upstream of the \
+                             comparison (semaphore, non-vacuity, or a short loop)"
+                    }
                 };
                 println!(
                     "??    R32 reverse (J2)   = sem {:#010x} (want {:#010x}) GP_GET {} \

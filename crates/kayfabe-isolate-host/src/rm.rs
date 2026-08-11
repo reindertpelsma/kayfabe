@@ -5720,12 +5720,16 @@ impl HostRmBackend {
         // 3 — the CPU join, before RM exists in this story at all. If these two mappings
         // were not one memory, nothing downstream could be.
         let mut w = [0u8; 4];
-        shell.read_into(join_off, &mut w).map_err(|e| region_error(&e))?;
+        shell
+            .read_into(join_off, &mut w)
+            .map_err(|e| region_error(&e))?;
         let join_before = u32::from_le_bytes(w);
         described
             .write_from(join_off, &JOIN.to_le_bytes())
             .map_err(|e| region_error(&e))?;
-        shell.read_into(join_off, &mut w).map_err(|e| region_error(&e))?;
+        shell
+            .read_into(join_off, &mut w)
+            .map_err(|e| region_error(&e))?;
         let join_after = u32::from_le_bytes(w);
 
         // 4 — the forward seed, through **S**, per word.
