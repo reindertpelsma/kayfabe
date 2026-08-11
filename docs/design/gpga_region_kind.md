@@ -441,6 +441,47 @@ Both are pinned as tests (`fb_leaf_backing.rs`), the second one explicitly as **
    makes each fake-FB page individually descriptor-able **today, on master** — 16 descriptors
    for a 64 KiB ring, and one-descriptor-per-page is already the established pattern (R29,
    because the GR ring is not physically contiguous).
+
+   ★★★ **The alignment requirement is CONFIRMED FROM THE DRIVER, not inferred from our own
+   notes** (verified 2026-08-11 against both vendored trees; `ogkm` = 610.43.02, and
+   `ogkm-580.159.04` is identical on the load-bearing lines):
+
+   ```c
+   // ogkm: src/nvidia/arch/nvalloc/unix/src/escape.c:142-147, RmCreateOsDescriptor()
+   pDescriptor = NvP64_VALUE(pApi->data.AllocOsDesc.descriptor);
+   if (((NvUPtr)pDescriptor & ~os_page_mask) != 0)
+   {
+       rmStatus = NV_ERR_NOT_SUPPORTED;
+       goto done;
+   }
+   ```
+
+   `os_page_mask = NV_PAGE_MASK` = Linux `PAGE_MASK` (`kernel-open/nvidia/os-interface.c:67`,
+   `kernel-open/common/inc/nv-linux.h:743`), so the test is literally
+   `if (addr & (PAGE_SIZE - 1)) return NV_ERR_NOT_SUPPORTED`. And on anything but aarch64 RM
+   additionally refuses the whole path unless `os_page_size == NV_RM_PAGE_SIZE`
+   (`osmemdesc.c:90-94`), and `NV_RM_PAGE_SIZE` is `1 << 12` (`kernel-open/common/inc/nv.h:312`)
+   ⇒ **on x86_64 the requirement is exactly 4096.**
+
+   Four consequences worth carrying:
+   - ⊘ **Refused by name, before anything is pinned** — `NV_ERR_NOT_SUPPORTED`, raised ahead
+     of `os_lock_user_pages`. So an unaligned page would fail loudly, not silently
+     misattribute bytes. ⚠ But it fails **at the descriptor**, i.e. per page, at run time.
+   - ✔ **LENGTH needs no alignment** — it is rounded UP to a whole page
+     (`escape.c:156-157`, `osmemdesc.c:194-200` `NV_ALIGN_UP64(size, os_page_size)`). A
+     4 KiB page is exactly one page, so the round-up is a no-op for this use.
+   - ⚠ The round-up means **whole pages are pinned and GPU-addressable**. For a
+     `#[repr(align(4096))] [u8; 4096]` that is precisely the page and nothing else — which is
+     the reason to make the page its own aligned allocation rather than sub-slicing a larger
+     buffer.
+   - ★ **Our path already goes through the checking shim.** `RmConnection` issues this as
+     `NV_ESC_RM_ALLOC_MEMORY` (`kayfabe-isolate-host/src/rm.rs:1805`), which reaches
+     `RmCreateOsDescriptor` (`escape.c:401`) and therefore the check above. ⊘ The other
+     door — a raw `NV_ESC_RM_ALLOC` of class 0x71 — would be refused anyway, because
+     `NVOS32_DESCRIPTOR_TYPE_VIRTUAL_ADDRESS` is `NV_ERR_NOT_SUPPORTED` in
+     `osCreateMemFromOsDescriptor` (`osmemdesc.c:135-137`). There is no way to hand RM an
+     unaligned user VA and have it accepted.
+
    ⚠ `SPARSE_FB_RESIDENT_CAP` is `1 GiB`; a per-page alignment change alters the footprint
    per resident page and that budget should be re-checked with it.
    ⊘ `SparseFb` was **not** touched in this rung.
