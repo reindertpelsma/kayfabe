@@ -16014,3 +16014,62 @@ the child is spawned before the next trap is serviced. ⇒ **A timing change on 
 path**, and this tree has repeatedly found those to matter. ⚠ Anything that read the isolate's
 existence *during* the same command's response would break — that must be checked, not assumed,
 and it is the first falsifier the fix owes.
+
+## §16.90 ★★★★ OPTION (1) ATTEMPTED — and it is blocked on an ARCHITECTURE question, not on effort
+
+⚠ **STATUS (2026-08-11): DESIGN COMPLETE, IMPLEMENTATION REVERTED, OWNER DECISION NEEDED.**
+The bench still cannot boot at `5626939` or later. ⊘ This section exists because §16.89 chose
+option (1) and building it surfaced a constraint the design did not anticipate.
+
+### 16.90.1 What was built and what it proved
+
+Threading the deferral outward is **two additive trait methods with defaults**, not a signature
+change — `respond` and `apply` both take `&mut self`, so a policy can accumulate. Built and
+compiling before the revert:
+
+- `SharedDevice::apply_deferring(&self, ev) -> (Result<(), GpuError>, PendingSpawns)` — `apply`'s
+  twin for a caller under an outer lock. ⊘ `apply` kept unchanged: lock-free callers exist and
+  for them the direct call is correct. Both take the same guard and the same pending sets.
+- `ObjectModel::take_deferred_spawns` + `CommandPolicy::take_deferred_spawns`, defaulted empty.
+- Forwarding in `PolicyChain` (fan-in over links), `StickyAnswerGuard`, `ControlCensus`;
+  `ObjectPolicy` as the source; `SharedObjectModel` accumulating and building the batch from the
+  `Arc<SharedDevice>` it already holds.
+
+⊘ Two dead ends were paid for and are worth recording. **(a)** A `DeferredWork` of boxed
+`FnOnce`s in `kayfabe-util` — rejected because `ServiceReport` **and** `GspFsm` derive
+`Clone + PartialEq + Eq` (tests compare whole reports) and closures satisfy none of them.
+**(b)** Riding `ServiceReport` — same reason. ⇒ the carried thing must be **plain data**.
+
+### 16.90.2 ★★★★★ THE BLOCKER — `kayfabe-gsp` cannot see `kayfabe-core`, and that is deliberate
+
+`CommandPolicy` lives in `kayfabe-gsp`, whose dependencies are `util`, `arch`, `abi`, `trace`.
+**It does not depend on `kayfabe-core`, and `core` does not depend on it** — so there is no
+cycle, but there is a **design intent**: the trait's own doc calls it *"the seam the forwarding
+plane implements"*, i.e. a **port**. `PendingSpawns` is `kayfabe-core` vocabulary.
+
+⇒ Carrying the spawn batch through `CommandPolicy` requires one of:
+
+| option | cost |
+|---|---|
+| **A new `gsp → core` edge** | The faked-GSP FSM gains visibility of the RM **object-graph** vocabulary. Cheapest in lines, largest in architecture: it makes a port know its consumer's domain. |
+| **A neutral id type in `kayfabe-util`** | No new edge. Cost: a **second identity vocabulary** for `(Proc, GpuId)`, and `two projections of one fact` is a failure class this tree has already paid for. |
+| **A new leaf crate** for the deferral vocabulary | Cleanest layering, most ceremony; and it is still a second name for the same pair unless `core` adopts it too. |
+
+⊘ **None of these is an implementation detail, so none was taken.** The revert is clean: the
+tree builds at `33c5123` + docs, and nothing half-threaded was left behind.
+
+### 16.90.3 ⊘ Why stopping here rather than landing part of it
+
+`SharedDevice::apply_deferring` is self-contained, additive, and architecturally uncontroversial
+— it could have shipped alone. ⊘ It was reverted with the rest **because nothing would call
+it**: a tested, documented door with no consumer is exactly the *"land P0/P1 and bank the rest
+as complete"* shape, and it would read in the log as progress on a bench-blocker that is still
+blocking.
+
+### 16.90.4 ⚠ Still owed by whichever option wins
+
+- ★★ **The timing falsifier.** The `GSP_RM_ALLOC` register write currently returns only after
+  `clone`+`execveat`+handshake; afterwards it returns first. **Check — do not assume — that
+  nothing reads the isolate's existence during that same command's response.**
+- ★★ **The boot falsifier**: `R1 … rank(s) [0]` → past `RmInitAdapter`. ⊘ **A bootability
+  result, not progress on `CE-SUBMIT`.**
