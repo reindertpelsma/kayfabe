@@ -17242,6 +17242,14 @@ identity are the vendor's and are sourced.
 
 ## §16.102 ★★★★ THE SECOND PATH IS **NOT** THE CE EXECUTOR — hypothesis refuted, and the gap is 2 ATTEMPTS not 2 OBJECTS
 
+⊘⊘ **SUPERSEDED IN PART (2026-08-11) BY §16.105 — MEASURED, `traces/boots/w254/`.** The CE-executor
+refutation below **stands**. Its *reframe* does not: **there was no gap.** Our census was
+**truncated** by a shared 32-line print budget (`18 + 2 + 12 = 32`, exactly, in both boots), and
+with a per-class budget the count is **14**, matching the host's 14 one-for-one. ⊘ And *"the
+host's 14 land on two host channels"* is not a statement about two channels: the driver prints
+`(runlistId << 24) | ChID`, a **recycled chid**, and the two values are **our two isolates** over
+**fourteen** distinct host channels. Read §16.105 before using any number below.
+
 ⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w251/`. THE HYPOTHESIS IS REFUTED.** ⊘
 `CE-SUBMIT` **0**; nothing executed.
 
@@ -17301,6 +17309,15 @@ per-refusal join can never close across a retry loop, and the 2 was never a miss
 it says **nothing** about route B and is not offered as if it did. Property 2 untouched.
 
 ## §16.103 ★★★★ THE RETRY HYPOTHESIS IS REFUTED TOO — the count is ZERO, by control flow
+
+⊘⊘ **SUPERSEDED IN PART (2026-08-11) BY §16.105 — MEASURED, `traces/boots/w254/`.** The retry
+refutation below **stands** (the count really is zero). ⊘ But **the gap it was refuting does not
+exist**: the 12 was a **truncated** census (a shared 32-line print budget; `18 + 2 + 12 = 32`
+exactly), and with a per-class budget our count is **14 = 14**, matching the host one-for-one and
+in the same order. §16.103.3's *"two host engine-object allocation attempts per boot are not
+accounted for by our census"* is **CLOSED — they were always ours, and the log stopped before
+them.** ⊘ §16.103.3's closing call for a KEY was right and the key was built; its diagnosis
+(*"the unit was the weak part"*) was not.
 
 ⚠ **STATUS (2026-08-11): ANSWERED, source-only, no boot.** ⊘ `CE-SUBMIT` **0**. **Both
 pre-registered hypotheses for the 12-vs-14 gap are now refuted, and the gap stands.**
@@ -17404,8 +17421,9 @@ the worst available trade. The shape is named so the next rung starts from it.
 
 ## §16.105 ★★★★★ THE REFUSAL NAMES ITS HOST CHANNEL — and the join key the brief asked for DOES NOT EXIST
 
-⚠ **STATUS (2026-08-11): BUILT; boot pending at the time of writing, scored in
-`traces/boots/w254/`.** ⊘ `CE-SUBMIT` **0**; nothing here executes guest work.
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w254/`. THE JOIN CLOSES, 14 : 14, and BOTH
+of this rung's own pre-boot refutations HELD.** ⊘ `CE-SUBMIT` **0**; nothing here executes guest
+work, and the underlying defect is untouched.
 
 ### 16.105.1 ⊘⊘ REFUTED FIRST — `chandesConstruct_IMPL` DOES NOT PRINT A HANDLE
 
@@ -17502,3 +17520,53 @@ text search.
 is already freed when the caller reads it. It is dropped on the `Cancelled` arm of `verb_fault`,
 because naming a host object in a fact about the *requester* invites exactly the misattribution
 §12.10 records.
+
+### 16.105.4 ★★★★★ MEASURED — 14 : 14, positionally, and the "two channels" are our two ISOLATES
+
+`w254_e2b6c86_cel_hostdmesg` vs its control `w251_acbb9a3_cel_hostdmesg`. ⊘ `git diff acbb9a3
+e2b6c86 -- crates/` is empty apart from this rung's change, so the two boots differ by **exactly
+the instrument**.
+
+| | `w251` | **`w254`** |
+|---|---|---|
+| `ENGINE-OBJECT` lines printed | 32 (**the bound**) | **34** |
+| `REFUSED Rm(Other(64))` | 12 | **14** |
+| `REFUSED NoVas(..)` (no verb issued) | 2 | 2 |
+| `FORWARDED` | 18 | 18 |
+| distinct host channels named on the refusal path | *unprintable* | **14** |
+| host `chandesConstruct_IMPL` / `kfifoRunlistSetId_GM107` | 14 / 14 | 14 / 14 |
+| host channels named | `6 × 0x04`, `8 × 0x0c` | `6 × 0x04`, `8 × 0x0c` |
+| doorbells | 191/183/8 | 191/183/8 |
+
+Ours, **in order**: 6 refusals from **isolate 0** (`0xcafe0009, 0017, 0025, 002c, 0033, 003a`),
+then 8 from **isolate 2** (`0xcafe0039, 003e, 0043, 0048, 004d, 0052, 0057, 005c`). The host's, in
+order: **6 × chid `0x04`**, then **8 × chid `0x0c`**. Fourteen against fourteen, 1:1, same order,
+same 6/8 split. Both `NoVas` refusals print `host_chan=NONE` — correctly: they issue no verb.
+
+★★★ **The host's "two channels" are our two ISOLATES.** Fourteen *distinct* host channel objects —
+`mint()` is monotone, no handle repeats — each built inside its own failing chain, refused, and
+freed, which returns the chid to the pool so the next attempt **in the same isolate** is handed it
+straight back.
+
+⇒ ⊘⊘ **No second allocator, no retry, no missing caller.** §16.102's *"the gap is 2 ATTEMPTS, not
+2 OBJECTS"* is **superseded**: the gap was **2 LOG LINES**, and §16.103's *"two host engine-object
+allocation attempts per boot are not accounted for"* is closed — they were always ours.
+
+### 16.105.5 ⊘ What this cost, and the lesson that is not about the port
+
+Three rungs (§16.101–§16.103) refuted three hypotheses about a gap that had two causes, **both
+legible from artifacts already committed and neither requiring a boot**: `18 + 2 + 12 = 32`
+exactly, and `kchannelGetDebugTag`. §16.103's closing line — *"the correlation was never the weak
+part; the **unit** was"* — was wrong in an instructive way. The unit was fine. What failed was
+
+- ★★ **an instrument reporting its own limit as data** (the shared print budget), and
+- ★★ **a value read as the kind of thing printed next to it** (a chid read as a handle, because
+  `chandesConstruct_IMPL` is where a handle would be).
+
+⇒ ★ **Before hypothesising about a difference between two counts, decompose each count against its
+own instrument's bounds, and open the source of every number you did not print yourself.** Both
+checks are minutes; the three rungs were not.
+
+⊘ The defect itself is **untouched**: we still allocate an async copy-engine object (`CE2`/`CE3`,
+runlists 1 and 2) on a host channel bound to runlist 0, and every one of the 14 still fails. This
+rung made the failure *countable and attributable*; it did not fix it.
