@@ -42,7 +42,13 @@ const APERTURES: [Aperture; 4] = [
     Aperture::Peer,
 ];
 
-const BYTES: [BackingBytes; 2] = [BackingBytes::SoleBacking, BackingBytes::ShadowsGuestMemory];
+/// Every `BackingBytes` the tree has, swept for the same reason [`APERTURES`] is: a guard
+/// that widens to admit one more declaration must fail here.
+const BYTES: [BackingBytes; 3] = [
+    BackingBytes::SoleBacking,
+    BackingBytes::ShadowsGuestMemory,
+    BackingBytes::JoinsGuestWindow,
+];
 
 fn backing(bytes: BackingBytes) -> HostBacking {
     HostBacking::whole(
@@ -101,6 +107,15 @@ fn the_guests_declared_aperture_decides_the_kind_and_peer_is_refused() {
 /// `[measured 2026-08-11, w228]` the chain that used to build this state produced
 /// `placed_as_asked=true` **and blank** — self-concealing in a boot, which is why it must be
 /// caught at construction.
+///
+/// # ★★★ THE CARVE-OUT, and why it does not weaken either spelling
+///
+/// [`BackingBytes::JoinsGuestWindow`] is ruling **4** — the scratchpad — and it is the only
+/// cell of this sweep that admits [`Aperture::Vidmem`]. It changes neither test above:
+/// `Vidmem` + `SoleBacking` is still refused (a silent caller gains nothing) and
+/// `ShadowsGuestMemory` is still refused under every aperture (an honest shadow gains
+/// nothing). ⇒ The admit is bought by a **third, distinct declaration**, not by relaxing the
+/// aperture test — which is the shape that would re-open `w228`'s *"two memories"* chain.
 #[test]
 fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() {
     let mut admitted = 0;
@@ -110,9 +125,13 @@ fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() 
             let got = Binding::real_gpu_memory(0x1000_0000, aperture, backing(bytes));
             let expected: Result<RegionKind, RegionKindFault> = match (aperture, bytes) {
                 (Aperture::Peer, _) => Err(RegionKindFault::PeerHasNoKind),
-                (Aperture::Vidmem, _) | (_, BackingBytes::ShadowsGuestMemory) => {
+                (_, BackingBytes::ShadowsGuestMemory) => {
                     Err(RegionKindFault::FakeFbAtRealGpuVa { aperture })
                 }
+                // ★★★ The carve-out, and it is the ONLY cell in which a `Vidmem` aperture is
+                // admitted. See `BackingBytes::JoinsGuestWindow`.
+                (_, BackingBytes::JoinsGuestWindow) => Ok(RegionKind::RealGpuMemory),
+                (Aperture::Vidmem, _) => Err(RegionKindFault::FakeFbAtRealGpuVa { aperture }),
                 _ => Ok(RegionKind::RealGpuMemory),
             };
             assert_eq!(
@@ -131,10 +150,62 @@ fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() 
     // refused nothing would each satisfy a one-sided sweep.
     assert_eq!(
         (admitted, refused),
-        (2, 6),
-        "★ the sweep must observe BOTH answers — two admitted cells (the sysmem apertures \
-         with a sole backing) and six refused"
+        (5, 7),
+        "★ the sweep must observe BOTH answers — five admitted cells (the two sysmem \
+         apertures with a sole backing, and the three non-`Peer` apertures with a joined \
+         one) and seven refused"
     );
+}
+
+/// ★★★★★ **THE CARVE-OUT IS BOUGHT BY THE DECLARATION, NOT BY THE APERTURE** — the mutant
+/// this file exists to kill.
+///
+/// ⊘ The tempting repair for the framebuffer join was *"stop refusing on the aperture"*, and
+/// it is the one repair that must not be made: it would re-admit `Vidmem` +
+/// [`BackingBytes::SoleBacking`], which is `w228`'s chain wearing an innocent word, and
+/// `Vidmem` + [`BackingBytes::ShadowsGuestMemory`], which is that chain saying so out loud.
+/// The sweep above would still pass an aperture-blind guard on nine of its twelve cells, so
+/// the three that separate the two designs are asserted here **by name**.
+#[test]
+fn only_the_join_admits_a_vidmem_aperture_and_the_other_two_declarations_still_refuse() {
+    for bytes in [BackingBytes::SoleBacking, BackingBytes::ShadowsGuestMemory] {
+        assert_eq!(
+            Binding::real_gpu_memory(0x1000_0000, Aperture::Vidmem, backing(bytes)).err(),
+            Some(RegionKindFault::FakeFbAtRealGpuVa {
+                aperture: Aperture::Vidmem
+            }),
+            "★ ruling 3 stands for {bytes:?}: the emulated framebuffer is the only video \
+             memory in this design, so a host object at a `Vidmem` address is a SECOND \
+             memory unless the caller declares the window itself was re-pointed"
+        );
+    }
+    let joined = Binding::real_gpu_memory(
+        0x1000_0000,
+        Aperture::Vidmem,
+        backing(BackingBytes::JoinsGuestWindow),
+    )
+    .expect("★ ruling 4 — an OS_DESCRIPTOR over host pages the guest's own window now maps");
+    assert_eq!(joined.kind(), RegionKind::RealGpuMemory);
+    assert_eq!(
+        joined.aperture(),
+        Aperture::Vidmem,
+        "⊘ the aperture is NOT corrected to sysmem. It records what the GUEST declared, and \
+         `Binding::phys` is a framebuffer offset — calling it sysmem would make \
+         `is_guest_ram()` true of a number `Vmm::gpa_read` must never be handed, and would \
+         route the CPU plane to `GuestRam` when the joined bytes are reached through the \
+         framebuffer store"
+    );
+    assert!(
+        !joined.is_guest_ram(),
+        "★ the consequence, asserted rather than assumed"
+    );
+    assert!(
+        BackingBytes::JoinsGuestWindow.dissolves_fake_framebuffer(),
+        "and the carve-out is read from ONE place"
+    );
+    for bytes in [BackingBytes::SoleBacking, BackingBytes::ShadowsGuestMemory] {
+        assert!(!bytes.dissolves_fake_framebuffer(), "{bytes:?}");
+    }
 }
 
 /// ★★★ **A kind-3 binding cannot exist without its object, and a kind-2 binding cannot

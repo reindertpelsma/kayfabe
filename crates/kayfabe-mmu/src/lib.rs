@@ -269,6 +269,57 @@ pub enum BackingBytes {
     /// `kayfabe_fwd::FwdFault::RegionKindRefused` and hands its host objects back as
     /// orphans instead of binding them.
     ShadowsGuestMemory,
+    /// ★★★★★ **ONE memory, at an address the guest already reaches — because the guest's own
+    /// WINDOW for this range has been re-pointed at THESE pages.**
+    ///
+    /// ⊘ **Not a softer [`BackingBytes::ShadowsGuestMemory`], and not a wider
+    /// [`BackingBytes::SoleBacking`].** The difference from the shadow is not one of degree:
+    /// there is no second memory left to diverge into, because the store that held the other
+    /// one no longer holds it. `kayfabe_device::FbStore::install_join` copies what the guest
+    /// had already written into these pages, **removes the local pages for the range**, and
+    /// serves every later framebuffer access out of the joined mapping — all in one hold of
+    /// the plane lock, so there is no instant at which both exist.
+    ///
+    /// ★★★ **This is the one declaration that admits [`kayfabe_arch::Aperture::Vidmem`] to
+    /// [`Binding::real_gpu_memory`], and it is RULING 4 rather than a relaxation of ruling
+    /// 3.** The object handed to RM is an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over host pages
+    /// — precisely the scratchpad carve-out the owner granted. See
+    /// [`RegionKind::may_be_host_mapped`], whose own text is corrected there: the carve-out
+    /// *does* arrive wearing a `Vidmem` aperture, because the leaf's [`Binding::phys`] is a
+    /// framebuffer offset and the guest's own page table is what declared it.
+    ///
+    /// ⚠ **The declaration is only TRUE ONCE THE VIEW IS INSTALLED, and no type can check
+    /// that.** It is a distinct, deliberate word rather than a widening of `SoleBacking`
+    /// exactly because it can be written down falsely: a caller that names it over a window
+    /// it has not installed has re-created the two-memories state under a name that says the
+    /// opposite. The chain is therefore ordered so the bind happens **after** the install and
+    /// is skipped entirely if the install refused — `kayfabe_fwd::adopt_joined_fb_leaf`.
+    ///
+    /// ⊘ **CITED, NOT REPRODUCED.** The mechanism's hardware result — all three of
+    /// `cuCtxCreate`'s framebuffer leaves joined, `placed_as_asked=true`, both directions
+    /// agreeing over 1024 words — is `[measured 2026-08-11, bench vh2, GA106, host
+    /// 580.159.04, commit 8eb8dcd]` on branch `fb-join`. **Nothing in this tree has booted
+    /// it**, and the two chains are not byte-identical to that one: the bind moved after the
+    /// install. Treat the ordering as unmeasured until a boot says otherwise.
+    JoinsGuestWindow,
+}
+
+impl BackingBytes {
+    /// ★★★ **Does this backing DISSOLVE the fake framebuffer for its range** — i.e. is the
+    /// device's emulated framebuffer no longer the store those bytes are served from?
+    ///
+    /// ⊘ **Read by exactly one site**, [`Binding::real_gpu_memory`], so that ruling 3 and its
+    /// carve-out stay ONE derivation. It is a method for the same reason
+    /// [`RegionKind::may_be_host_mapped`] is one: the ruling and its exception are a single
+    /// sentence, and a `matches!` at the decision site would be a second reading of it that
+    /// agrees today and can drift tomorrow.
+    #[must_use]
+    pub const fn dissolves_fake_framebuffer(self) -> bool {
+        match self {
+            BackingBytes::JoinsGuestWindow => true,
+            BackingBytes::SoleBacking | BackingBytes::ShadowsGuestMemory => false,
+        }
+    }
 }
 
 impl HostBacking {
@@ -417,8 +468,17 @@ impl HostBacking {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RegionKind {
     /// **Kind 2 — the fake framebuffer.** The bytes live in the device's emulated
-    /// framebuffer (`kayfabe_device::SparseFb`, a map on the VMM's heap). No host object
-    /// exists and none may: see [`RegionKindFault::FakeFbAtRealGpuVa`].
+    /// framebuffer (`kayfabe_device::SparseFb`, a map on the VMM's heap).
+    ///
+    /// ⊘⊘ **CORRECTED 2026-08-11 — read this before the sentence it corrects.** *"No host
+    /// object exists and none may"* is true of a region that **is** kind 2, and it is not a
+    /// statement about the [`kayfabe_arch::Aperture::Vidmem`] aperture. A range whose guest
+    /// window has been re-pointed at host pages is **not kind 2 any more** — the emulated
+    /// framebuffer is no longer its store — even though the guest's own page table still
+    /// declares it `Vidmem`. That range is kind 3, and the declaration that says so is
+    /// [`BackingBytes::JoinsGuestWindow`].
+    ///
+    /// No host object exists and none may: see [`RegionKindFault::FakeFbAtRealGpuVa`].
     ///
     /// ⊘ Ruling 2 scopes what this kind is *for*: **guest-KERNEL channels we emulate**,
     /// where we manage the pushbuffer / USERD / ring / semaphore. A guest **userspace**
@@ -440,6 +500,24 @@ impl RegionKind {
     /// ⊘ **This is ruling 3 as a total function**, and it is consulted by the one
     /// constructor that can attach a backing, so it is not advice: *"no fake FB ever can be
     /// mapped to a real GPU VA of an isolate except the scratchpad"* (owner, 2026-08-11).
+    ///
+    /// ⊘⊘ **CORRECTED 2026-08-11 — the clause below is WRONG about where ruling 4 arrives,
+    /// and the ruling itself is untouched.** Read this before it.
+    ///
+    /// > *"…mints a **sysmem** object over host pages and therefore never asks this question
+    /// > about a `Vidmem` region"* — the first half is right and the *"therefore"* does not
+    /// > follow. The object's class is sysmem; the **region's aperture is whatever the guest
+    /// > declared**, and the guest declares a framebuffer leaf `Vidmem` because
+    /// > [`Binding::phys`] is a framebuffer offset. So the carve-out arrives here wearing a
+    /// > `Vidmem` aperture and this question *is* asked about it.
+    /// >
+    /// > ⊘ The repair is **not** to correct the aperture to sysmem. That would make
+    /// > [`Binding::is_guest_ram`] true of a number `Vmm::gpa_read` must never be handed —
+    /// > `[measured 2026-08-11, boot w232c_6fcedac]` the two number spaces collide in one
+    /// > address space — and would route the CPU plane to guest RAM when the joined bytes are
+    /// > reachable through the framebuffer store and nowhere else. The repair is a third
+    /// > [`BackingBytes`] declaration; this function is unchanged.
+    ///
     /// The scratchpad carve-out is ruling 4 — `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — which
     /// mints a **sysmem** object over host pages and therefore never asks this question
     /// about a `Vidmem` region.
@@ -458,6 +536,12 @@ impl RegionKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionKindFault {
     /// ★★★ **Owner ruling, 2026-08-11: fake framebuffer at a real GPU VA of an isolate.**
+    ///
+    /// ⊘⊘ **CORRECTED 2026-08-11 — the aperture arm below is now QUALIFIED, and only that
+    /// arm.** Read this before it. An [`Aperture::Vidmem`] region is refused *unless* the
+    /// backing declares [`BackingBytes::JoinsGuestWindow`], which says the emulated
+    /// framebuffer is no longer this range's store (ruling 4, the scratchpad). The
+    /// `ShadowsGuestMemory` arm is unqualified and refuses under **every** aperture.
     ///
     /// A [`HostBacking`] was offered for a region that is kind 2 — either because its
     /// aperture is [`Aperture::Vidmem`] (there is no *other* video memory in this design;
@@ -574,7 +658,18 @@ impl Binding {
         // fabricate, so a host object at it is a second memory by definition); the
         // `BackingBytes` test catches a caller honest about the shadow over an aperture that
         // looks innocent. They fail independently.
-        if !declared.kind.may_be_host_mapped()
+        //
+        // ★★★ **AND RULING 4, the scratchpad carve-out, which is why the aperture test is
+        // qualified and not deleted.** `BackingBytes::JoinsGuestWindow` says the emulated
+        // framebuffer is no longer the store for this range — the guest's own window has been
+        // re-pointed at the very pages the `OS_DESCRIPTOR` describes — so the premise the
+        // aperture test rests on ("`Vidmem` means there is another memory") is false *for
+        // that declaration and only for it*. ⊘ Note what is deliberately NOT done: the
+        // `ShadowsGuestMemory` test below is not qualified at all, and a caller that stays
+        // silent (`SoleBacking`) over `Vidmem` is refused exactly as before. The carve-out is
+        // bought by a third word, never by making the guard aperture-blind — which would
+        // re-open `w228`'s chain under an innocent name.
+        if (!declared.kind.may_be_host_mapped() && !host.bytes().dissolves_fake_framebuffer())
             || matches!(host.bytes(), BackingBytes::ShadowsGuestMemory)
         {
             return Err(RegionKindFault::FakeFbAtRealGpuVa { aperture });
