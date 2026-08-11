@@ -4346,6 +4346,14 @@ impl SharedDoorbell {
         // status that ⊘ cannot be told apart from real exhaustion.
         let mut joined: std::collections::BTreeMap<u64, (u64, u64)> =
             std::collections::BTreeMap::new();
+        // ★★ Leaves whose chain refused ANYWHERE, kept apart from `joined` because the two
+        // answer different questions. `joined` is *"is this leaf host-backed"* and feeds the
+        // re-stated census, which must NOT render a refused leaf as `HostBackedFb`. This is
+        // *"has this leaf already been attempted"*, and it is what stops a second census
+        // operand in the same leaf re-attempting: `release_unadopted_fb_leaf` STAGES the
+        // unmap rather than performing it, so the address is still occupied and RM would
+        // answer the second FIXED map `0x51` — collision-or-exhaustion, ⊘ indistinguishable.
+        let mut refused: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
         // Which leaves reached step 3, so the both-directions probe below has a range it
         // knows the isolate is holding rather than one it hopes it is.
         let mut live: Vec<(u64, u64)> = Vec::new();
@@ -4354,7 +4362,7 @@ impl SharedDoorbell {
             let Site::Framebuffer { leaf, .. } = site else {
                 continue;
             };
-            if joined.contains_key(&leaf.va) {
+            if joined.contains_key(&leaf.va) || refused.contains(&leaf.va) {
                 continue;
             }
             // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
@@ -4401,6 +4409,7 @@ impl SharedDoorbell {
                     op.name, leaf.va, backing.token
                 );
                 joined.remove(&leaf.va);
+                refused.insert(leaf.va);
                 self.device.release_unadopted_fb_leaf(
                     DOORBELL_TARGET_GPU,
                     pdb,
@@ -4433,6 +4442,7 @@ impl SharedDoorbell {
                         op.name, leaf.va
                     );
                     joined.remove(&leaf.va);
+                    refused.insert(leaf.va);
                     self.device.release_unadopted_fb_leaf(
                         DOORBELL_TARGET_GPU,
                         pdb,
@@ -4495,6 +4505,7 @@ impl SharedDoorbell {
                         &backed,
                     ) {
                         joined.remove(&leaf.va);
+                        refused.insert(leaf.va);
                         eprintln!(
                             "{head} {} leaf va=0x{:x} → ⚠ THE VIEW IS INSTALLED AND THE BIND \
                              REFUSED `{e:?}` — the guest's window and the host object are ONE \
@@ -4514,6 +4525,7 @@ impl SharedDoorbell {
                         op.name, leaf.va, leaf.phys, e.phys, e.len, e.why
                     );
                     joined.remove(&leaf.va);
+                    refused.insert(leaf.va);
                     self.device.release_unadopted_fb_leaf(
                         DOORBELL_TARGET_GPU,
                         pdb,
