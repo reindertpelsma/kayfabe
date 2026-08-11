@@ -244,7 +244,10 @@ fn a_leaf_the_table_has_never_seen_is_backed_and_bound() {
 /// exhaustion (the C's own R2). So the replay has to resolve entirely in the plan phase.
 #[test]
 fn a_second_ask_replays_and_issues_no_host_verb_at_all() {
-    let _wd = watchdog("fb_leaf_backing::replay", std::time::Duration::from_secs(60));
+    let _wd = watchdog(
+        "fb_leaf_backing::replay",
+        std::time::Duration::from_secs(60),
+    );
     let (device, pid, rec) = device();
     guest_binds(
         &device,
@@ -322,11 +325,7 @@ fn the_walk_and_the_table_disagreeing_is_refused_by_name() {
         verbs(&rec)
     );
     assert!(
-        tabled(&device, pid)
-            .expect("still bound")
-            .2
-            .host
-            .is_none(),
+        tabled(&device, pid).expect("still bound").2.host.is_none(),
         "nothing was materialized"
     );
 }
@@ -371,7 +370,10 @@ fn a_table_that_calls_the_leaf_sysmem_is_refused_on_the_aperture_alone() {
 /// this site can decide — so it decides neither.
 #[test]
 fn a_table_range_that_is_not_the_leaf_is_refused_by_extent() {
-    let _wd = watchdog("fb_leaf_backing::extent", std::time::Duration::from_secs(60));
+    let _wd = watchdog(
+        "fb_leaf_backing::extent",
+        std::time::Duration::from_secs(60),
+    );
     let (device, pid, rec) = device();
     guest_binds(
         &device,
@@ -428,10 +430,7 @@ fn a_leaf_base_that_is_not_granule_aligned_is_refused() {
     let e = device
         .back_fb_leaf(GPU, PDB, GpuVa(LEAF_VA.0 + 0x1000), LEAF_LEN, LEAF_PHYS)
         .expect_err("refused");
-    assert!(
-        matches!(e, FwdFault::FbLeafGranularity { .. }),
-        "got {e:?}"
-    );
+    assert!(matches!(e, FwdFault::FbLeafGranularity { .. }), "got {e:?}");
 }
 
 // ---------------------------------------------------------------------------------
@@ -445,7 +444,10 @@ fn a_leaf_base_that_is_not_granule_aligned_is_refused() {
 /// that a future edit which relaxes it has to delete a test rather than a comment.
 #[test]
 fn the_system_proc_may_not_back_a_framebuffer_leaf() {
-    let _wd = watchdog("fb_leaf_backing::system", std::time::Duration::from_secs(60));
+    let _wd = watchdog(
+        "fb_leaf_backing::system",
+        std::time::Duration::from_secs(60),
+    );
     let (device, _pid, rec) = device();
     let sys = kayfabe_core::gpu::Gpu::SYSTEM_PROC;
     let refused = device.with_proc_mut(sys, |p| {
