@@ -17784,3 +17784,139 @@ end of a session, in the same commit as a boot that validated a sixth, is the tr
 exists to refuse. They are named with their file:line so the next rung starts from the list
 instead of from the sweep. ⊘ The C's TRUNCATED warnings still fire correctly in every case (an
 overcount only makes them fire), so the damage is confined to the numeral.
+
+---
+
+## §16.108 ★★★★★ THE MASKED LEAF IS **NOT** THE WALL — refuted twice from NVIDIA's source, once from the guest's own words, and once by a boot taken at HEAD's own revision
+
+**Status:** `[ANSWERED 2026-08-11]`. **No boot was spent.** The question was already answered by
+(a) `ogkm-580.159.04`, (b) `b0df550`'s committed reasoning, and (c) boot `w256` — taken **today**
+at `ce36a5b`, which is HEAD's source *exactly* (`git diff --name-only ce36a5b 814b225` touches
+only `docs/` and `traces/`). Re-booting would have reproduced `w256` and cost 150 s of bench.
+
+### 16.108.1 ⊘⊘ THE PREMISE, AND WHY IT CANNOT BE TRUE
+
+The brief this rung was handed:
+
+> *"the stall vector is RAISED INTO A MASKED LEAF … if a completion is raised into a leaf the
+> guest has masked, the guest waits forever — and 'waits forever' is exactly `RC=124`."*
+
+**⊘ REFUTED. The guest's stall scan does not consult `LEAF_EN` at all, and says so inline.**
+
+- `intrGetPendingStallEngines_TU102` — *"Check if interrupt is pending. **We skip checking if it
+  is enabled in the leaf register** since we mess around with the leaf enables in the interrupt
+  disable path"* (`ogkm-580: src/nvidia/src/kernel/gpu/intr/arch/turing/intr_tu102.c:895-899`).
+  The test it actually runs is `leaf = intrLeafValues[leafIndex] & NVBIT(leafBit)` — the raw
+  latch, ANDed with nothing.
+- `intrGetLeafStatus_TU102` (`intr_tu102.c:1108-1141`) fills that array with
+  `intrReadRegLeaf_HAL` and **never** reads `intrReadRegLeafEnSet`.
+
+⇒ **A GSP stall vector cannot be masked out of the guest's ISR.** `gsp_event_masked = 1` is a
+TRUE reading of a predicate the guest never evaluates. The counter was right; the *question* was
+wrong.
+
+★★ **And the adjacent counter is NOT the same measurement.** `nonstall_masked` sits one line away
+and means something genuinely different: the non-stall scan **does** AND with `LEAF_EN_SET`
+(`ogkm-580: intr_nonstall_tu102.c:254-255`, `:305-306`, `:455-456`, `:486-487`), and only that
+path calls `intrClearLeafVector_HAL` (`:383`). ⇒ *Adjacent counters sharing a word are not
+adjacent facts.* The brief merged two report lines into one claim (§16.108.3).
+
+### 16.108.2 ★★★ THE SECOND REFUTATION IS IN THE GUEST'S OWN WORDS — and it is a before/after
+
+Reaching `kgspService` at all proves the interrupt-tree scan **attributed our vector** to
+`MC_ENGINE_IDX_GSP`. The guest printed exactly that, and then stopped printing it the moment
+`b0df550` landed:
+
+| boot | rev | `KGSP service called when no KGSP interrupt pending` | `Stuck interrupt detected` | `IRQSCLR cleared` | `cup2` |
+|---|---|---|---|---|---|
+| `w211` | `eaf025f` | **1** | 0 | **0** | TIMEOUT |
+| `w212` | `e309a85` | **1** | 0 | **0** | TIMEOUT |
+| `w213` | `b0df550` (the RISC-V AND fix) | **0** | **110** | 125 250 | TIMEOUT |
+| `w214` | `9b65664` (the trigger fix) | 0 | **0** | 46 | TIMEOUT |
+| `w254`/`w255`/`w256` | …`ce36a5b` | 0 | 0 | 4 | **`RC=124`** |
+
+`[grep counts over traces/guest_boots/run_<tag>_probe.log, 2026-08-11]`. The real defect was the
+**RISC-V AND** — `IRQSTAT & NV_PRISCV_RISCV_IRQMASK & NV_PRISCV_RISCV_IRQDEST`
+(`ogkm-580: kernel_falcon_ga102.c:311-321`) with `0x111528`/`0x11152c` undecoded and therefore
+read as an unclaimed zero. Already found, already fixed, already committed.
+
+⇒ ★★★★★ **The notification plane really was broken; both bugs are really fixed; and NEITHER
+MOVED THE WALL.** `cup2` times out identically across all seven boots. This is the second
+instance of `the-forwarding-plane-was-not-on-the-path`.
+
+### 16.108.3 ★★★ THE BRIEF'S THREE NUMBERS, CHECKED AGAINST THEIR PRINT BOUNDS AND THEIR AGE
+
+`[measured, w256 at ce36a5b, real GA106, `isolate_plane=real ce_executor=local
+KAYFABE_RING_VIDMEM=on`]`:
+
+```text
+os-events:      3 registered / 3 retired / 0 live; 15 POST_EVENT in 5 batch(es);
+                gate: 96 gated, 0 not-running, 0 failed, 4 IRQSCLR cleared
+os-event announce: 5 GSP stall vector(s) raised, 0 UNVECTORED, 1 would be masked;
+                0 batch(es) WOKE WITH NOTHING
+completions:    4 announced (non-stall vector raised), 179 UNVECTORED, 4 would be masked
+interrupts:     194 vectors delivered, 0 undeliverable (guest had not enabled the table)
+```
+
+| the brief said | at `w256` | verdict |
+|---|---|---|
+| `348 gated` | **96**, with **4 `IRQSCLR` cleared** (was 0) | **STALE** — that is `w212`, ~99 commits back. The gate is *open*; `gated` is documented as healthy flow control |
+| `179 completions UNVECTORED`, `1 raised / 1 masked` | 179 is on the **`completions`** line; `1 raised / 1 masked` is on the **`os-event announce`** line | **TWO LINES, MERGED.** Only the first is on a plane where `LEAF_EN` matters |
+| `CE-SUBMIT is 0; nothing has ever been forwarded` | `[seen=34 forwarded=32 refused=2]`, incl. 8 × `0xc7c0` `GrCompute` | **FALSE at HEAD** |
+
+★ **Print-bound check (the brief's own item 4), and both pass.** `gated` and `nonstall_unvectored`
+are unbounded `AtomicU64::fetch_add` with no saturation, and both vary across the archive
+(`gated`: 347/348/237/54/96; `nonstall_unvectored`: 358/179/166/120/20/5/4/2). **Neither number is
+an instrument artefact** — unlike §16.105's `12` and §16.107's capped rows.
+
+### 16.108.4 ⇒ THE ANSWER TO *"WHO MASKS THAT LEAF"*: **NONE OF THE THREE**
+
+The question presupposes masking is load-bearing on the plane it names. It is not. The nearest
+*true* statement is about a different plane: **179 of 183 locally-served completions could be
+given no non-stall vector at all**, and the 4 that could were **4-for-4 masked** —
+`announce_completion` (`crates/kayfabe-device/src/plane.rs:3546-3570`) counts three distinct
+causes into one number, and nothing yet says which fires. That is a real live defect on a plane
+where `LEAF_EN` genuinely gates both service *and* clearing. It is **not** shown to be the wall,
+and it is not what the brief asked about.
+
+### 16.108.5 ⊘ AND MY OWN FOLLOW-ON HYPOTHESIS DIED ON ITS OWN DISCRIMINATOR, BEFORE A LINE WAS WRITTEN
+
+The trailing poll is `control 0x20801702 result 0x00000000 x165` — and the LIVE oracle records
+that **hardware calls that id ZERO times in the whole program**. So it is a genuine divergence and
+worth naming its source. Tracing it in RM gives **exactly two** routes into
+`MC_SERVICE_INTERRUPTS`, both in UVM (`kernel-open/nvidia-uvm/uvm_gpu.c:1355`, `:1382`), both
+behind `service_interrupts()`. **Both are CLOSED in our guest:**
+
+- **ECC route.** `uvm_gpu_check_ecc_error_no_rm` early-outs at `if (!gpu->ecc.enabled) return
+  NV_OK;` (`uvm_gpu.c:2134-2135`). `gpu->ecc.enabled` comes from `nvGpuOpsGetEccInfo`
+  (`nv_gpu_ops.c:9066-9086`) ← `rmSubDevice->bEccEnabled`, which
+  `gpuDeviceRmSubDeviceInitEcc` sets **FALSE** whenever `NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS`
+  (`0x2080012f`) fails — then takes `status = NV_OK; goto done;` and still stamps
+  `bEccInitialized = NV_TRUE` (`:1385`), so registration succeeds with ECC off.
+  ⇒ **`w256` marks `0x2080012f` `unserviced`**, and `0x90e6` (`GF100_SUBDEVICE_MASTER`) and
+  `0x90e60102` (`…GET_VIRTUAL_FUNCTION_ERROR_CONT_INTR_MASK`, the call that would populate
+  `eccMask`/`eccOffset`) appear **zero times in the whole boot log**. ECC is off; the route is
+  unreachable. ★ And this makes our refusal of `0x2080012f` **hardware-matching**, not a
+  divergence — the oracle's five-GPU reference rig returns non-OK there exactly once too.
+- **NVLink route.** `uvm_gpu_check_nvlink_error_no_rm` early-outs at
+  `if (!gpu->nvlink_status.enabled)` (`uvm_gpu.c:2194-2195`). GA106 has no NVLink.
+
+⇒ ⊘ **The 165 calls come from NEITHER UVM route**, so they are issued by a userspace RM client
+(libcuda) or by RM-internal code not yet found. **Naming that caller is the next question**, and
+it is now a *narrow* one. ★ Recorded because the eliminated half is the reusable part: I had a
+coherent, driver-cited, oracle-corroborated chain — *"we leave a top-level `ERR_CONT` bit latched
+that nothing clears, so UVM polls forever"* — and it was **wrong at its first checkable step**,
+because an unmodelled `ERR_CONT` reads as a defaulted **zero** and a zero is the *benign* answer
+to `(*tree_location & mask) == 0`. The same "unclaimed register defaults to zero" fact that
+**caused** §16.77 **exonerates** the port here. `an-and-with-an-unmodelled-register-is-always-zero`
+cuts both ways, and only checking told me which way.
+
+### 16.108.6 ⊘ THE DOC-HYGIENE FAILURE THIS RUNG IS AN INSTANCE OF
+
+Everything in §16.108.1-2 was committed at `b0df550` on **2026-08-10** — in the commit message, in
+`kayfabe-arch/src/gsp.rs`'s doc for `GspRiscvIrqmask`, and in `plane.rs`'s counter docs. A brief
+written the next day still carried the refuted premise **and its refuted numbers**, because the
+refutation lived in a commit message and a doc-comment rather than anywhere a reader of the claim
+would pass. ⇒ **This is the fifth instance of the class**, and it argues for the standing rule:
+*a correction folds into the parent, above the thing it corrects.* The `w212` report line is the
+parent here, and §16.108.3's table is the fold.
