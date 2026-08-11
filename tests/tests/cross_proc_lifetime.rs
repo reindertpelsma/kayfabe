@@ -381,6 +381,7 @@ fn c_2026_06_18_a_system_verb_on_a_user_procs_backing_is_refused_before_it_runs(
                 worker_isolate: SYSTEM_ISOLATE,
             },
             orphans: Orphans::default(),
+            on: None,
         }),
         "the system worker must refuse a foreign handle, with nothing attempted and \
          nothing orphaned"
@@ -441,6 +442,7 @@ fn a_foreign_unmap_is_refused_as_loudly_as_a_foreign_free() {
                 worker_isolate: SYSTEM_ISOLATE,
             },
             orphans: Orphans::default(),
+            on: None,
         }),
         "a foreign host VAS is refused before the unmap is issued"
     );
@@ -491,7 +493,8 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
         ),
         Err(VerbFailure {
             err: foreign,
-            orphans: Orphans::default()
+            orphans: Orphans::default(),
+            on: None
         }),
         "publishing into another proc's host VAS is refused"
     );
@@ -509,7 +512,8 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
                 handle: owned,
                 worker_isolate: SYSTEM_ISOLATE,
             },
-            orphans: Orphans::default()
+            orphans: Orphans::default(),
+            on: None
         }),
         "controlling another proc's object is refused"
     );
@@ -541,7 +545,8 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
                 handle: owned,
                 worker_isolate: SYSTEM_ISOLATE,
             },
-            orphans: Orphans::default()
+            orphans: Orphans::default(),
+            on: None
         }),
         "ringing another proc's channel is refused"
     );
@@ -625,6 +630,7 @@ fn the_owner_dying_cleanly_cannot_dangle_a_system_reference() {
                 worker_isolate: SYSTEM_ISOLATE,
             },
             orphans: Orphans::default(),
+            on: None,
         }),
         "a handle whose isolate is DEAD is refused for exactly the same reason — the \
          namespace is a property of the value, so there is nothing to go stale"
@@ -726,6 +732,7 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
                     worker_isolate: SYSTEM_ISOLATE,
                 },
                 orphans: Orphans::default(),
+                on: None,
             }),
             "the system isolate reaches neither the dead owner's objects nor a live \
              bystander's"
@@ -801,6 +808,7 @@ fn a_reference_taken_during_the_owners_teardown_is_refused_too() {
                 worker_isolate: SYSTEM_ISOLATE,
             },
             orphans: Orphans::default(),
+            on: None,
         }),
         "mid-teardown is not a special case: the refusal is the same one"
     );
@@ -1104,6 +1112,7 @@ fn the_ledger_balances_across_every_teardown_ordering() {
                             worker_isolate: SYSTEM_ISOLATE,
                         },
                         orphans: Orphans::default(),
+                        on: None,
                     }),
                     "({ord:?}) the mid-teardown reach is refused like any other"
                 );

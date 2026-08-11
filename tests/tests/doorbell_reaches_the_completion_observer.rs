@@ -396,7 +396,10 @@ fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
     // THIS verb's error, carried out unchanged, and not some earlier gate's.
     assert_eq!(
         got.map(|o| o.chan),
-        Err(FwdFault::Rm(RmError::Other(CE_NEVER_RETIRED))),
+        Err(FwdFault::Rm {
+            err: RmError::Other(CE_NEVER_RETIRED),
+            on: None
+        }),
         "★ the refusal must be the OBSERVER's, by name — an upstream refusal (an unrouted \
          token, the #177 schedule gate, a dead isolate) would also make `is_err()` true \
          while the copy was never issued at all"

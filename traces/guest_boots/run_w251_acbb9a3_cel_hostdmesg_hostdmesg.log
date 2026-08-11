@@ -1,0 +1,42 @@
+[225810.022043] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225810.022059] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225810.022064] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225826.339257] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225826.339272] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225826.339277] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.452397] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225830.452464] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225830.452470] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.540727] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225830.540741] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225830.540746] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.625446] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225830.625461] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225830.625466] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.707308] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225830.707321] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225830.707326] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225832.029490] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.029506] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.029511] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.090774] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.090790] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.090794] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.150503] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.150517] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.150522] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.210417] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.210430] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.210435] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.291292] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.291306] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.291310] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.351969] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.351980] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.351985] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.411935] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.411946] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.411950] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.471473] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.471484] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.471489] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c

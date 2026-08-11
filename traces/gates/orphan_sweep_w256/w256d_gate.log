@@ -1,0 +1,320 @@
+GATE_START 2026-08-11T08:47:18+00:00 rev=a517402 scope=midlayer
+== baseline: cargo check --workspace
+   baseline OK
+== candidates enumerated: 281  (inherent `pub fn` only; trait methods are out of scope)
+   ORPHAN  crates/kayfabe-arch/src/gsp.rs:378  kind
+   ORPHAN  crates/kayfabe-arch/src/gsp.rs:468  len
+   ORPHAN  crates/kayfabe-arch/src/gsp.rs:474  is_empty
+   ORPHAN  crates/kayfabe-arch/src/gsp.rs:479  iter
+   ORPHAN  crates/kayfabe-arch/src/gsp.rs:610  window_len
+   ORPHAN  crates/kayfabe-arch/src/lib.rs:333  name
+   ORPHAN  crates/kayfabe-arch/src/lib.rs:1359  reset
+   ORPHAN  crates/kayfabe-chips/src/ad10x.rs:153  new
+   ORPHAN  crates/kayfabe-chips/src/ad10x.rs:162  at
+   ORPHAN  crates/kayfabe-chips/src/ad10x.rs:339  new
+   ORPHAN  crates/kayfabe-chips/src/ga10x.rs:419  decode_userd_index_chid
+   ORPHAN  crates/kayfabe-chips/src/ga10x.rs:470  decode_work_submit_token
+   ORPHAN  crates/kayfabe-chips/src/ga10x.rs:525  encode_work_submit_token
+   ORPHAN  crates/kayfabe-chips/src/gh100.rs:358  new
+   ORPHAN  crates/kayfabe-chips/src/gh100.rs:515  new
+   ORPHAN  crates/kayfabe-chips/src/gh100.rs:524  at
+   ORPHAN  crates/kayfabe-chips/src/gh100.rs:721  new
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:139  outstanding_len
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:145  has_outstanding
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:151  compose_into
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:158  drained
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:171  ack
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:179  take_unacked
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:230  armed_len
+   ORPHAN  crates/kayfabe-completion/src/lib.rs:345  batch_outstanding
+   ORPHAN  crates/kayfabe-core/src/fault.rs:111  attribution_note
+   ORPHAN  crates/kayfabe-core/src/fault.rs:277  verdict
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:79  owned_by
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:86  owner
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:94  carve
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:134  window
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:140  arena_len
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:204  release
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:261  arena
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:316  owner
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:322  id
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:444  live_bytes
+   ORPHAN  crates/kayfabe-core/src/gpa.rs:458  is_untouched
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:311  promote_orphans
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1273  new
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1285  len
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1431  client_values
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1550  pending_release_len
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1582  is_quiesced
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1628  vacate
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1654  retire
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1822  is_empty
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1831  deferred
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:1842  orphaned
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4162  is_condemned
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4200  condemned_len
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4514  realize
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4598  apply
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4680  promote_ctx
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4781  schedule_channel
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4830  schedule_group
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4862  set_ctxsw_preemption_mode
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4881  bind_channel
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4905  reap_retired
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4912  retire_proc
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4919  retired_len
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4936  completions_drained
+   ORPHAN  crates/kayfabe-core/src/gpu.rs:4984  of
+   ORPHAN  crates/kayfabe-core/src/project.rs:285  client_values
+   ORPHAN  crates/kayfabe-core/src/project.rs:900  project
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:175  owner
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:189  belongs_to
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:338  new
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:363  deregister
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:381  deregister_proc
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:388  kind
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:409  iter
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:415  len
+   ORPHAN  crates/kayfabe-core/src/reactor.rs:421  is_empty
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:153  first
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:268  first
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:279  last_for
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1022  new
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1060  entitle
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1176  client_kinds
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1285  client_declarations
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1298  nodes_with_owner
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1310  owner_key_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:1449  apply
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2305  origin_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2345  origin_of_kind
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2380  references
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2388  references_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2405  pdb_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2474  device_default_vas
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2486  mappings
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2504  backing_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2519  map_ref_count
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2526  map_ref_count_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2533  events_of
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2543  dups
+   ORPHAN  crates/kayfabe-core/src/rmgraph.rs:2583  gpu_of
+   ORPHAN  crates/kayfabe-crec/src/format.rs:68  from_wire
+   ORPHAN  crates/kayfabe-crec/src/format.rs:84  name
+   ORPHAN  crates/kayfabe-crec/src/format.rs:125  to_event
+   ORPHAN  crates/kayfabe-crec/src/format.rs:205  hermetic
+   ORPHAN  crates/kayfabe-crec/src/format.rs:212  rom_overlay
+   ORPHAN  crates/kayfabe-crec/src/format.rs:293  parse
+   ORPHAN  crates/kayfabe-crec/src/format.rs:383  header
+   ORPHAN  crates/kayfabe-crec/src/format.rs:389  records
+   ORPHAN  crates/kayfabe-crec/src/format.rs:397  closed_cleanly
+   ORPHAN  crates/kayfabe-crec/src/format.rs:404  census
+   ORPHAN  crates/kayfabe-crec/src/format.rs:427  to_records
+   ORPHAN  crates/kayfabe-crec/src/format.rs:444  has_overlay
+   ORPHAN  crates/kayfabe-crec/src/ga10x.rs:49  new
+   ORPHAN  crates/kayfabe-crec/src/ledger.rs:38  id
+   ORPHAN  crates/kayfabe-crec/src/ledger.rs:174  by_id
+   ORPHAN  crates/kayfabe-crec/src/ledger.rs:189  unexplained
+   ORPHAN  crates/kayfabe-crec/src/ledger.rs:199  beyond_closure
+   ORPHAN  crates/kayfabe-crec/src/lib.rs:132  bench_abi
+   ORPHAN  crates/kayfabe-crec/src/lib.rs:194  served_policy
+   ORPHAN  crates/kayfabe-crec/src/lib.rs:231  cap1_path
+   ORPHAN  crates/kayfabe-crec/src/lib.rs:244  load_cap1
+   ORPHAN  crates/kayfabe-crec/src/lib.rs:269  cap1b_path
+   ORPHAN  crates/kayfabe-crec/src/lib.rs:282  load_cap1b
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:170  new
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:193  reconstruct
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:201  reconstructions
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:207  bind_pointers
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:213  observe
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:219  seek
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:226  max_lookahead
+   ORPHAN  crates/kayfabe-crec/src/oracle.rs:232  answer_census
+   ORPHAN  crates/kayfabe-crec/src/replay.rs:100  census
+   ORPHAN  crates/kayfabe-crec/src/replay.rs:241  new
+   ORPHAN  crates/kayfabe-crec/src/replay.rs:259  with_policy
+   ORPHAN  crates/kayfabe-crec/src/replay.rs:265  run
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:206  intersect
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:603  fan_out
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:609  deliveries_for
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:658  new
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:671  object_count
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:679  add_view
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:713  map_into_view
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:789  remove_view
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:801  viewer_kind
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:823  pending_len
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:831  viewers
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:879  contents
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:1025  plan
+   ORPHAN  crates/kayfabe-mmu/src/gpga.rs:1091  apply
+   ORPHAN  crates/kayfabe-mmu/src/lib.rs:675  audit_identity
+   ORPHAN  crates/kayfabe-mmu/src/reach.rs:246  root
+   ORPHAN  crates/kayfabe-mmu/src/reach.rs:312  is_empty
+   ORPHAN  crates/kayfabe-mmu/src/reach.rs:324  sparse_at
+   ORPHAN  crates/kayfabe-mmu/src/reach.rs:515  confirm_bind
+   ORPHAN  crates/kayfabe-mmu/src/reach.rs:520  confirm_unbind
+   ORPHAN  crates/kayfabe-mmu/src/walker.rs:780  leaf_disposition
+   ORPHAN  crates/kayfabe-mmu/src/walker.rs:870  populate
+
+== orphan gate: 154 of 281 checked have no caller outside their own crate
+   crates/kayfabe-arch/src/gsp.rs:378  kind
+   crates/kayfabe-arch/src/gsp.rs:468  len
+   crates/kayfabe-arch/src/gsp.rs:474  is_empty
+   crates/kayfabe-arch/src/gsp.rs:479  iter
+   crates/kayfabe-arch/src/gsp.rs:610  window_len
+   crates/kayfabe-arch/src/lib.rs:333  name
+   crates/kayfabe-arch/src/lib.rs:1359  reset
+   crates/kayfabe-chips/src/ad10x.rs:153  new
+   crates/kayfabe-chips/src/ad10x.rs:162  at
+   crates/kayfabe-chips/src/ad10x.rs:339  new
+   crates/kayfabe-chips/src/ga10x.rs:419  decode_userd_index_chid
+   crates/kayfabe-chips/src/ga10x.rs:470  decode_work_submit_token
+   crates/kayfabe-chips/src/ga10x.rs:525  encode_work_submit_token
+   crates/kayfabe-chips/src/gh100.rs:358  new
+   crates/kayfabe-chips/src/gh100.rs:515  new
+   crates/kayfabe-chips/src/gh100.rs:524  at
+   crates/kayfabe-chips/src/gh100.rs:721  new
+   crates/kayfabe-completion/src/lib.rs:139  outstanding_len
+   crates/kayfabe-completion/src/lib.rs:145  has_outstanding
+   crates/kayfabe-completion/src/lib.rs:151  compose_into
+   crates/kayfabe-completion/src/lib.rs:158  drained
+   crates/kayfabe-completion/src/lib.rs:171  ack
+   crates/kayfabe-completion/src/lib.rs:179  take_unacked
+   crates/kayfabe-completion/src/lib.rs:230  armed_len
+   crates/kayfabe-completion/src/lib.rs:345  batch_outstanding
+   crates/kayfabe-core/src/fault.rs:111  attribution_note
+   crates/kayfabe-core/src/fault.rs:277  verdict
+   crates/kayfabe-core/src/gpa.rs:79  owned_by
+   crates/kayfabe-core/src/gpa.rs:86  owner
+   crates/kayfabe-core/src/gpa.rs:94  carve
+   crates/kayfabe-core/src/gpa.rs:134  window
+   crates/kayfabe-core/src/gpa.rs:140  arena_len
+   crates/kayfabe-core/src/gpa.rs:204  release
+   crates/kayfabe-core/src/gpa.rs:261  arena
+   crates/kayfabe-core/src/gpa.rs:316  owner
+   crates/kayfabe-core/src/gpa.rs:322  id
+   crates/kayfabe-core/src/gpa.rs:444  live_bytes
+   crates/kayfabe-core/src/gpa.rs:458  is_untouched
+   crates/kayfabe-core/src/gpu.rs:311  promote_orphans
+   crates/kayfabe-core/src/gpu.rs:1273  new
+   crates/kayfabe-core/src/gpu.rs:1285  len
+   crates/kayfabe-core/src/gpu.rs:1431  client_values
+   crates/kayfabe-core/src/gpu.rs:1550  pending_release_len
+   crates/kayfabe-core/src/gpu.rs:1582  is_quiesced
+   crates/kayfabe-core/src/gpu.rs:1628  vacate
+   crates/kayfabe-core/src/gpu.rs:1654  retire
+   crates/kayfabe-core/src/gpu.rs:1822  is_empty
+   crates/kayfabe-core/src/gpu.rs:1831  deferred
+   crates/kayfabe-core/src/gpu.rs:1842  orphaned
+   crates/kayfabe-core/src/gpu.rs:4162  is_condemned
+   crates/kayfabe-core/src/gpu.rs:4200  condemned_len
+   crates/kayfabe-core/src/gpu.rs:4514  realize
+   crates/kayfabe-core/src/gpu.rs:4598  apply
+   crates/kayfabe-core/src/gpu.rs:4680  promote_ctx
+   crates/kayfabe-core/src/gpu.rs:4781  schedule_channel
+   crates/kayfabe-core/src/gpu.rs:4830  schedule_group
+   crates/kayfabe-core/src/gpu.rs:4862  set_ctxsw_preemption_mode
+   crates/kayfabe-core/src/gpu.rs:4881  bind_channel
+   crates/kayfabe-core/src/gpu.rs:4905  reap_retired
+   crates/kayfabe-core/src/gpu.rs:4912  retire_proc
+   crates/kayfabe-core/src/gpu.rs:4919  retired_len
+   crates/kayfabe-core/src/gpu.rs:4936  completions_drained
+   crates/kayfabe-core/src/gpu.rs:4984  of
+   crates/kayfabe-core/src/project.rs:285  client_values
+   crates/kayfabe-core/src/project.rs:900  project
+   crates/kayfabe-core/src/reactor.rs:175  owner
+   crates/kayfabe-core/src/reactor.rs:189  belongs_to
+   crates/kayfabe-core/src/reactor.rs:338  new
+   crates/kayfabe-core/src/reactor.rs:363  deregister
+   crates/kayfabe-core/src/reactor.rs:381  deregister_proc
+   crates/kayfabe-core/src/reactor.rs:388  kind
+   crates/kayfabe-core/src/reactor.rs:409  iter
+   crates/kayfabe-core/src/reactor.rs:415  len
+   crates/kayfabe-core/src/reactor.rs:421  is_empty
+   crates/kayfabe-core/src/rmgraph.rs:153  first
+   crates/kayfabe-core/src/rmgraph.rs:268  first
+   crates/kayfabe-core/src/rmgraph.rs:279  last_for
+   crates/kayfabe-core/src/rmgraph.rs:1022  new
+   crates/kayfabe-core/src/rmgraph.rs:1060  entitle
+   crates/kayfabe-core/src/rmgraph.rs:1176  client_kinds
+   crates/kayfabe-core/src/rmgraph.rs:1285  client_declarations
+   crates/kayfabe-core/src/rmgraph.rs:1298  nodes_with_owner
+   crates/kayfabe-core/src/rmgraph.rs:1310  owner_key_of
+   crates/kayfabe-core/src/rmgraph.rs:1449  apply
+   crates/kayfabe-core/src/rmgraph.rs:2305  origin_of
+   crates/kayfabe-core/src/rmgraph.rs:2345  origin_of_kind
+   crates/kayfabe-core/src/rmgraph.rs:2380  references
+   crates/kayfabe-core/src/rmgraph.rs:2388  references_of
+   crates/kayfabe-core/src/rmgraph.rs:2405  pdb_of
+   crates/kayfabe-core/src/rmgraph.rs:2474  device_default_vas
+   crates/kayfabe-core/src/rmgraph.rs:2486  mappings
+   crates/kayfabe-core/src/rmgraph.rs:2504  backing_of
+   crates/kayfabe-core/src/rmgraph.rs:2519  map_ref_count
+   crates/kayfabe-core/src/rmgraph.rs:2526  map_ref_count_of
+   crates/kayfabe-core/src/rmgraph.rs:2533  events_of
+   crates/kayfabe-core/src/rmgraph.rs:2543  dups
+   crates/kayfabe-core/src/rmgraph.rs:2583  gpu_of
+   crates/kayfabe-crec/src/format.rs:68  from_wire
+   crates/kayfabe-crec/src/format.rs:84  name
+   crates/kayfabe-crec/src/format.rs:125  to_event
+   crates/kayfabe-crec/src/format.rs:205  hermetic
+   crates/kayfabe-crec/src/format.rs:212  rom_overlay
+   crates/kayfabe-crec/src/format.rs:293  parse
+   crates/kayfabe-crec/src/format.rs:383  header
+   crates/kayfabe-crec/src/format.rs:389  records
+   crates/kayfabe-crec/src/format.rs:397  closed_cleanly
+   crates/kayfabe-crec/src/format.rs:404  census
+   crates/kayfabe-crec/src/format.rs:427  to_records
+   crates/kayfabe-crec/src/format.rs:444  has_overlay
+   crates/kayfabe-crec/src/ga10x.rs:49  new
+   crates/kayfabe-crec/src/ledger.rs:38  id
+   crates/kayfabe-crec/src/ledger.rs:174  by_id
+   crates/kayfabe-crec/src/ledger.rs:189  unexplained
+   crates/kayfabe-crec/src/ledger.rs:199  beyond_closure
+   crates/kayfabe-crec/src/lib.rs:132  bench_abi
+   crates/kayfabe-crec/src/lib.rs:194  served_policy
+   crates/kayfabe-crec/src/lib.rs:231  cap1_path
+   crates/kayfabe-crec/src/lib.rs:244  load_cap1
+   crates/kayfabe-crec/src/lib.rs:269  cap1b_path
+   crates/kayfabe-crec/src/lib.rs:282  load_cap1b
+   crates/kayfabe-crec/src/oracle.rs:170  new
+   crates/kayfabe-crec/src/oracle.rs:193  reconstruct
+   crates/kayfabe-crec/src/oracle.rs:201  reconstructions
+   crates/kayfabe-crec/src/oracle.rs:207  bind_pointers
+   crates/kayfabe-crec/src/oracle.rs:213  observe
+   crates/kayfabe-crec/src/oracle.rs:219  seek
+   crates/kayfabe-crec/src/oracle.rs:226  max_lookahead
+   crates/kayfabe-crec/src/oracle.rs:232  answer_census
+   crates/kayfabe-crec/src/replay.rs:100  census
+   crates/kayfabe-crec/src/replay.rs:241  new
+   crates/kayfabe-crec/src/replay.rs:259  with_policy
+   crates/kayfabe-crec/src/replay.rs:265  run
+   crates/kayfabe-mmu/src/gpga.rs:206  intersect
+   crates/kayfabe-mmu/src/gpga.rs:603  fan_out
+   crates/kayfabe-mmu/src/gpga.rs:609  deliveries_for
+   crates/kayfabe-mmu/src/gpga.rs:658  new
+   crates/kayfabe-mmu/src/gpga.rs:671  object_count
+   crates/kayfabe-mmu/src/gpga.rs:679  add_view
+   crates/kayfabe-mmu/src/gpga.rs:713  map_into_view
+   crates/kayfabe-mmu/src/gpga.rs:789  remove_view
+   crates/kayfabe-mmu/src/gpga.rs:801  viewer_kind
+   crates/kayfabe-mmu/src/gpga.rs:823  pending_len
+   crates/kayfabe-mmu/src/gpga.rs:831  viewers
+   crates/kayfabe-mmu/src/gpga.rs:879  contents
+   crates/kayfabe-mmu/src/gpga.rs:1025  plan
+   crates/kayfabe-mmu/src/gpga.rs:1091  apply
+   crates/kayfabe-mmu/src/lib.rs:675  audit_identity
+   crates/kayfabe-mmu/src/reach.rs:246  root
+   crates/kayfabe-mmu/src/reach.rs:312  is_empty
+   crates/kayfabe-mmu/src/reach.rs:324  sparse_at
+   crates/kayfabe-mmu/src/reach.rs:515  confirm_bind
+   crates/kayfabe-mmu/src/reach.rs:520  confirm_unbind
+   crates/kayfabe-mmu/src/walker.rs:780  leaf_disposition
+   crates/kayfabe-mmu/src/walker.rs:870  populate
+
+⊘ This is a REPORT, not a verdict on any one of them: a verb may be a deliberate seam
+  awaiting its consumer, or a capability proven and never wired. Only a human knows
+  which, and that triage is what decides what this gate eventually enforces.
+GATE_EXIT_STATUS=0
+GATE_DONE 2026-08-11T09:04:45+00:00

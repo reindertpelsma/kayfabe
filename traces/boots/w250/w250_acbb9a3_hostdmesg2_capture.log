@@ -1,0 +1,23 @@
+START 2026-08-11T06:21:11+00:00 tag=w250_acbb9a3_hostdmesg2 ALL-THREE-ARMED + host-dmesg capture rev=acbb9a3
+[boot_capture:w250_acbb9a3_hostdmesg2] host dmesg watermark: 794 lines
+[boot_capture:w250_acbb9a3_hostdmesg2] booting (extra args: none)
+[boot_capture:w250_acbb9a3_hostdmesg2] guest is up after 38s
+[boot_capture:w250_acbb9a3_hostdmesg2] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w250_acbb9a3_hostdmesg2] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w250_acbb9a3_hostdmesg2] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w250_acbb9a3_hostdmesg2_dmesg.log
+[boot_capture:w250_acbb9a3_hostdmesg2] --- the verdict lines ---
+[boot_capture:w250_acbb9a3_hostdmesg2] running POST_CAPTURE_HOOK: /workspace/kayfabe_w244/scripts/bench/cup2_hook_w232.sh
+[boot_capture:w250_acbb9a3_hostdmesg2] hook finished: rc=0
+[boot_capture:w250_acbb9a3_hostdmesg2] host dmesg delta: 42 lines, 42 NVRM, 0
+0 Xid → /workspace/bench/run_w250_acbb9a3_hostdmesg2_hostdmesg.log
+[boot_capture:w250_acbb9a3_hostdmesg2] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w250_acbb9a3_hostdmesg2] census present:
+    2026-08-11T06:25:21.185635Z qemu-system-x86_64: info: nvkvm: doorbells: 191 arrived, 183 served, 8 REFUSED by name; last token 0x00010001 (16 logged)
+    2026-08-11T06:25:21.185723Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [Route::NotACopyEngineChannel] this channel's engine is GrCompute (route HostGr), so its pushbuffer is not copy-engine work and the shell's CPU copy-engine executor is the wrong executor for it; refused by the ROUTING fact rather than decoded by a codec that can only decline
+[boot_capture:w250_acbb9a3_hostdmesg2] evidence carried into the repo: /workspace/kayfabe_w244/traces/guest_boots/run_w250_acbb9a3_hostdmesg2_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:w250_acbb9a3_hostdmesg2] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w250_acbb9a3_hostdmesg2]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w250_acbb9a3_hostdmesg2] done. serial=/workspace/bench/run_w250_acbb9a3_hostdmesg2_serial.log qemu=/workspace/bench/run_w250_acbb9a3_hostdmesg2_qemu.log dmesg=/workspace/bench/run_w250_acbb9a3_hostdmesg2_dmesg.log probe=/workspace/bench/run_w250_acbb9a3_hostdmesg2_probe.log hostdmesg=/workspace/bench/run_w250_acbb9a3_hostdmesg2_hostdmesg.log
+CAPTURE_RC=0
+EXIT_STATUS=0
+BOOTDONE

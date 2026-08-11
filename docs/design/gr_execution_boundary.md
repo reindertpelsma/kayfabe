@@ -1,5 +1,14 @@
 # S1 — may the host GR engine execute the guest's pushbuffer?
 
+⊘⊘⊘ **STATUS (2026-08-11): the DIAGNOSIS below is LIVE and still correct; ONE DEPENDENCY IT
+NAMES HAS SINCE BEEN MET.** §4's table records the emulated-framebuffer crossing as *"does not
+exist … not built"*. **It was built one rung later** (w228, `fb_leaf_crossing.md`, flag
+`KAYFABE_FB_BACKING=on`), and `traces/boots/w247/` measures all three preconditions armed at
+once: every address plane this workload needs now resolves to something the host GPU can address.
+⇒ **The remaining blockers are properties 2 (CLOSED) and 3 (FAULTING/CONTAINED) — neither is an
+addressing problem.** ★ Property 3 is the cheapest open item on the board and
+`scripts/bench/gpu_fault_containment.sh` has never been asked it. See §16.99.
+
 **Rung:** `w227` / `master`, based on the merge of `origin/completion-observer` (`c5f251d`).
 **Question, from the brief:** open `shim.rs`'s `Route::NotACopyEngineChannel` refusal so the
 real host GR engine runs `cuCtxCreate`'s pushbuffer and writes `0x2_0440fff0` itself.
@@ -307,9 +316,14 @@ which exists today:
    means `alloc_channel_at`'s "put our control structures in the VAS we were handed" shape has
    to change for GR channels.
 3. **Faulting** — an unmapped VA raises an MMU fault rather than aliasing anything, and that
-   fault is contained to this channel's TSG. ⊘ **`[NOT MEASURED]`** whether a GR MMU fault on
-   this bench is contained to one channel or takes the host GPU context with it;
-   `scripts/bench/gpu_fault_containment.sh` exists and this question has not been asked of it.
+   fault is contained to this channel's TSG. ⊘⊘ **MEASURED 2026-08-11 — CONTAINED**
+   (`traces/boots/w248/`, §16.100): a bystander context ran **2 675 519 verified iterations
+   across the attacker's fault, 0 errors 0 wrong bytes**; the faulting context went sticky
+   (`CUDA_ERROR_ILLEGAL_ADDRESS`); Xid 31 named **`ENGINE GRAPHICS … FAULT_PDE`** — so the
+   unmapped VA aliased nothing — and none of §7's escalations occurred. ⚠ Scoped: the attacker
+   was a host CUDA process in its own context, not guest methods on our GR channel; the residual
+   is a **property-2** question. ★ The text below was true when written and the script had simply
+   never been run.
 4. **Per-guest** — one such space per guest process, never shared, or §2.1's write primitive
    crosses tenants.
 
@@ -319,7 +333,7 @@ crossings, not one:
 | plane | operands | crossing |
 |---|---|---|
 | guest RAM | 1 of 5 (`SET_REPORT_SEMAPHORE`) | ★ **exists** — `map_guest_ram` arm B (`isolate-host/src/rm.rs:2816-2840`) builds an `OS_DESCRIPTOR` over guest pages, and `GuestRamGrant` landed at `28b7bb2` (R29: placed at `0x301400000` as asked, isolate mapping reads `0x9a114001`) |
-| the **emulated framebuffer** | ★★★ **3 of 5** (`SET_TEX_HEADER_POOL`, `SET_TEX_SAMPLER_POOL`, `SET_VALID_SPAN_OVERFLOW_AREA`) | ⊘ **does not exist.** `mode2_fb_crossing_question.md` — asserted by name here and **not built** |
+| the **emulated framebuffer** | ★★★ **3 of 5** (`SET_TEX_HEADER_POOL`, `SET_TEX_SAMPLER_POOL`, `SET_VALID_SPAN_OVERFLOW_AREA`) | ⊘⊘⊘ **CORRECTED — IT WAS BUILT THE NEXT RUNG.** `fb_leaf_crossing.md` (w228, `82f9aa5`): real host `NV01_MEMORY_LOCAL_USER` vidmem per leaf, mapped **FIXED** at the guest's own VA, behind **`KAYFABE_FB_BACKING=on`** (default off). `[measured 2026-08-11, `traces/boots/w247/`]` `placed_as_asked=true` ×24, `HostBackedFb` ×24. ⚠ The text below — *"does not exist … not built"* — was true only at `c5f251d`. |
 
 ⇒ **The primitive that exists covers the minority of the surface.** The FB crossing was
 carried as a successor question; the census makes it the load-bearing one, because a GR

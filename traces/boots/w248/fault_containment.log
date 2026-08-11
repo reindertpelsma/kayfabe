@@ -1,0 +1,64 @@
+START 2026-08-11T06:01:14+00:00 host=ubuntu rev=acbb9a3(scripts)
+### gpu: NVIDIA GeForce RTX 3060, 580.159.04
+### 2026-08-11T06:01:14Z  Xid before: 4
+
+=== A. BASELINE — victim on an idle GPU
+[victim] ctx-create t=0.17
+[victim] ctx-ok t=0.54
+[victim] OK bad=0 kernel_ms=0.5 total_s=1.01
+   rc=0
+
+=== B. the attacker FAULTS, alone
+[fault] ctx-create t=0.07
+[fault] ctx-ok t=0.36
+[fault] LAUNCH wild store t=0.36
+[fault] launch rc=0 (CUDA_SUCCESS) sync rc=700 (CUDA_ERROR_ILLEGAL_ADDRESS) t=0.37
+[fault] context reusable? rc=700 NO (sticky, as expected)
+   attacker rc=0
+   Xid after the fault: 5
+[223100.432287] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[223100.485027] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[223100.485042] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[223100.535942] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[223100.535957] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[223896.305009] NVRM: Xid (PCI:0000:00:07): 31, pid=2112687, name=gpu_wedge_probe, channel 0x00000008, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7000_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+
+=== B2. a FRESH victim after the fault (weak arm — fresh context)
+[victim] ctx-create t=0.14
+[victim] ctx-ok t=0.47
+[victim] OK bad=0 kernel_ms=0.0 total_s=0.47
+   rc=0
+
+=== C. ★ THE ARM THAT MATTERS — victim holds a LIVE context across the fault
+   victim is live and looping; faulting now
+[fault] ctx-create t=0.03
+[fault] ctx-ok t=0.28
+[fault] LAUNCH wild store t=0.28
+[fault] launch rc=0 (CUDA_SUCCESS) sync rc=700 (CUDA_ERROR_ILLEGAL_ADDRESS) t=0.29
+[fault] context reusable? rc=700 NO (sticky, as expected)
+   attacker rc=0
+   --- victim log ---
+[loop] ctx-create t=0.07
+[loop] ctx-ok t=0.35
+[loop] holding one context for 40 s t=0.35
+[loop] DONE iters=2675519 ok=2675519 wrong=0 errors=0 t=40.00
+   victim exit=0   (0=all correct, 3=wrong bytes, 4=context died)
+
+=== D. AFTERMATH
+   Xid total: 6
+   util: 3 %
+   a brand-new victim:
+[victim] ctx-create t=0.08
+[victim] ctx-ok t=0.43
+[victim] OK bad=0 kernel_ms=0.1 total_s=0.43
+   rc=0
+[194412.714850] NVRM: Xid (PCI:0000:00:07): 31, pid=1269486, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x1_20022000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[194594.000753] NVRM: Xid (PCI:0000:00:07): 31, pid=1297561, name=a_guests_ring_m, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x2_01000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[198563.758231] NVRM: Xid (PCI:0000:00:07): 31, pid=1493701, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x1_20022000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[199281.030583] NVRM: Xid (PCI:0000:00:07): 31, pid=1603720, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x1_20022000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[223896.305009] NVRM: Xid (PCI:0000:00:07): 31, pid=2112687, name=gpu_wedge_probe, channel 0x00000008, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7000_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[223910.260281] NVRM: Xid (PCI:0000:00:07): 31, pid=2112766, name=gpu_wedge_probe, channel 0x00000018, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7000_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+### done 2026-08-11T06:02:03Z
+SCRIPT_RC=0
+EXIT_STATUS=0
+RUNDONE

@@ -563,6 +563,26 @@ pub struct ExportedBacking {
     pub prot: Prot,
 }
 
+/// ★★★★★ **§16.106 — the engine object a channel is being materialized to HOST.**
+///
+/// Handed to [`RmBackend::alloc_channel`] so the adapter can honour a declaration the
+/// core's [`EngineKind`] cannot carry: **which** copy engine. See that method for the 14
+/// measured refusals this exists to stop.
+///
+/// ⊘ Borrowed, never owned: it is read during the one call and nothing may retain it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostedObject<'a> {
+    /// The engine-object class the guest asked for.
+    pub class: ClassId,
+    /// The guest's own ABI-lowered alloc blob for it, verbatim — the same bytes
+    /// [`RmBackend::alloc_engine_object`] will be given.
+    ///
+    /// ⊘ **Read, never rewritten.** The declaration inside it is the guest's intent and
+    /// the guest's own driver acts on it too (`NVA06F_CTRL_CMD_BIND` carries the same
+    /// ordinal); a channel that disagrees with it is the bug, not the blob.
+    pub params: &'a [u8],
+}
+
 /// # The unprivileged host-RM verb surface
 ///
 /// The complete vocabulary of host operations the forwarding plane may request.
@@ -638,10 +658,30 @@ pub trait RmBackend: Send + Sync {
     /// (`dma_copy_class_alloc_params`: `engineType=0` → wrong runlist →
     /// cuCtxCreate 401 — seam audit GR-1). Returns
     /// `(channel_handle, host_work_submit_token)`.
+    ///
+    /// # ★★★★★ §16.106 — `hosting`, and why an [`EngineKind`] alone was not enough
+    ///
+    /// [`EngineKind::Ce`] names *a* copy engine and never *which one*, so the adapter had
+    /// to pick, and it picked index 0 — the number the C used. `[measured 2026-08-11,
+    /// boots w250/w251/w254]` **all 14** of this port's engine-object refusals are exactly
+    /// that mismatch: the guest's own `NVB0B5_ALLOCATION_PARAMETERS` declare `COPY2`/
+    /// `COPY3` (runlists 1 and 2) while we built the channel on `COPY0` (runlist 0), and
+    /// the host driver refuses with `NV_ERR_INVALID_STATE` naming both numbers.
+    ///
+    /// ⇒ `hosting` carries **the engine object this channel is being materialized to
+    /// host**, so the adapter can read the instance out of the guest's own declaration
+    /// instead of inventing it. ⊘ It is `None` for every materialization that is not for
+    /// an object (the doorbell path), and the adapter's behaviour there is unchanged.
+    ///
+    /// ⊘ **Not "the params", and not a second engine argument.** The `EngineKind` still
+    /// decides *which kind of engine*; `hosting` only ever refines an instance the kind
+    /// cannot express. An adapter that ignored it entirely would be exactly as correct as
+    /// this trait was before — which is the property that keeps this additive.
     fn alloc_channel(
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
     ) -> Result<(HostHandle, u64), RmError>;
 
     /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
@@ -1871,6 +1911,27 @@ pub struct VerbFailure {
     /// Host objects this execution allocated and could not dispose of (see above for
     /// exactly what this can and cannot cover).
     pub orphans: Orphans,
+    /// ★★★ **§16.105 — the host object the failing verb was ISSUED AGAINST**, when the
+    /// verb had one. `Some(channel)` for an engine-object alloc that reached
+    /// [`RmBackend::alloc_engine_object`]; `None` everywhere else, including when the
+    /// chain failed *before* that verb (the channel alloc itself, a foreign handle, a
+    /// plan with no such target).
+    ///
+    /// # ⊘ Why it is not derivable at the caller, and why `orphans` is not it
+    ///
+    /// A Case-1 engine-object forward whose channel is not yet materialized builds the
+    /// channel **inside this same chain** (`kayfabe_fwd::EngineObjectPlan::channel` is
+    /// `None` at plan time, by construction). When the object alloc then fails, the
+    /// unwind **frees that channel**, so the handle exists nowhere afterwards: not in
+    /// the plan, not in core state, and not in [`Self::orphans`] — which enumerates only
+    /// what the unwind could NOT dispose of, i.e. is empty exactly when the unwind
+    /// worked. Reporting it is therefore impossible without carrying it out of here.
+    ///
+    /// ⊘ **It is an IDENTITY for a report, never a live handle.** By the time a caller
+    /// reads it the object is gone; using it as an argument to any verb is a
+    /// use-after-free of a host handle. It exists so a refusal can be *joined* against
+    /// what the host driver printed about the same attempt.
+    pub on: Option<HostHandle>,
 }
 
 impl VerbFailure {
@@ -1880,6 +1941,7 @@ impl VerbFailure {
         VerbFailure {
             err,
             orphans: Orphans::default(),
+            on: None,
         }
     }
 }
@@ -2326,7 +2388,9 @@ impl Worker {
                                 (h, Some(h))
                             }
                         };
-                        match rm.alloc_channel(vas, *engine) {
+                        // ⊘ `None`: a doorbell materialization hosts no object, so
+                        // there is no declaration to refine the engine with (§16.106).
+                        match rm.alloc_channel(vas, *engine, None) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
@@ -2371,7 +2435,16 @@ impl Worker {
                                 (h, Some(h))
                             }
                         };
-                        match rm.alloc_channel(vas, *engine) {
+                        // ★★★ §16.106 — the guest's OWN declaration reaches the channel
+                        // alloc, so a CE object's instance is honoured instead of invented.
+                        match rm.alloc_channel(
+                            vas,
+                            *engine,
+                            Some(HostedObject {
+                                class: *class,
+                                params,
+                            }),
+                        ) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
@@ -2391,7 +2464,12 @@ impl Worker {
                             orphans.push(h);
                         }
                         orphans.extend(fresh_vas);
-                        Err(unwind(rm, orphans, e))
+                        // ★★★ §16.105 — the ONE place the attempted host channel exists.
+                        // `chan.0` is either the plan's already-materialized channel or the
+                        // one built four lines up; the unwind below frees the latter, so
+                        // this is the last instant its identity is knowable. See
+                        // [`VerbFailure::on`].
+                        Err(unwind_on(rm, orphans, e, Some(chan.0)))
                     }
                 }
             }
@@ -2447,6 +2525,7 @@ impl Worker {
                             return Err(VerbFailure {
                                 err: RmError::Wedged,
                                 orphans: residue,
+                                on: None,
                             });
                         }
                         Err(e) => {
@@ -2463,6 +2542,7 @@ impl Worker {
                             return Err(VerbFailure {
                                 err: RmError::Wedged,
                                 orphans: residue,
+                                on: None,
                             });
                         }
                         Err(e) => {
@@ -2476,6 +2556,7 @@ impl Worker {
                     Some(err) => Err(VerbFailure {
                         err,
                         orphans: residue,
+                        on: None,
                     }),
                 }
             }
@@ -2507,6 +2588,21 @@ impl Worker {
 /// `-EINTR` and keeps serving (`C: src/stub/nvkvm_stub.c:1276-1281`) — and any verb
 /// that fails during it lands in the residue.
 fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> VerbFailure {
+    unwind_on(rm, orphans, err, None)
+}
+
+/// [`unwind`], naming the host object the failing verb was **issued against** — see
+/// [`VerbFailure::on`] for why that identity cannot be recovered anywhere else once
+/// this function has run.
+///
+/// ⊘ `on` is passed **through the unwind unchanged**, including when the unwind then
+/// frees that very object. The field is an identity for a report, not a live handle.
+fn unwind_on(
+    rm: &mut dyn RmBackend,
+    orphans: Vec<HostHandle>,
+    err: RmError,
+    on: Option<HostHandle>,
+) -> VerbFailure {
     // ★★ §7.5 — a WEDGED worker cannot run its own unwind. It is still inside the host
     // ioctl that wedged it; issuing a `free` on it would either block forever behind the
     // same uninterruptible wait or desynchronise a channel whose reply was abandoned.
@@ -2521,6 +2617,7 @@ fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> Ver
                 unmap: Vec::new(),
                 free: orphans,
             },
+            on,
         };
     }
     let mut residue = Orphans::default();
@@ -2532,6 +2629,7 @@ fn unwind(rm: &mut dyn RmBackend, orphans: Vec<HostHandle>, err: RmError) -> Ver
     VerbFailure {
         err,
         orphans: residue,
+        on,
     }
 }
 

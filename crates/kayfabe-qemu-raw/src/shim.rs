@@ -2638,20 +2638,128 @@ impl core::fmt::Debug for SharedObjectModel {
     }
 }
 
-/// ★★★★★ §16.80 — how many engine-object forward outcomes get printed per process life.
+/// ★★★★★ §16.80 — how many engine-object forward outcomes get printed per process life,
+/// **PER OUTCOME CLASS** (forwards and refusals have separate budgets).
 ///
 /// ⊘ Bounded, because a hostile guest can issue allocs in a loop and a diagnostic that a
 /// guest can turn into unbounded host output is a denial-of-service with a log format.
 /// 32 is effectively unbounded for the real workload — `cuCtxCreate` allocs **one**
 /// `AMPERE_COMPUTE_B` and one `AMPERE_DMA_COPY_B` — and the running totals on every line
 /// mean the bound costs detail, never the count.
-const ENGINE_FWD_REPORT_MAX: u64 = 32;
+///
+/// # ⊘⊘ §16.105 — IT USED TO BE ONE SHARED BUDGET, AND THAT BUDGET IS WHY "12" EXISTS
+///
+/// `[measured 2026-08-11, boots `w250_acbb9a3_hostdmesg2` and `w251_acbb9a3_cel_hostdmesg`,
+/// both committed under `traces/guest_boots/`]` — the two boots printed **18 forwards and
+/// 12 refusals**, the 12th refusal is `seen=32`, and it carries the bound marker. The host
+/// driver logged **14** `chandesConstruct_IMPL` failures in the same boots. Three separate
+/// hypotheses were raised and refuted for that 14-vs-12 gap (§16.102, §16.103) while the
+/// difference was **the last two refusals falling off the end of a shared 32-line budget**:
+/// 18 + 14 = 32 + 2.
+///
+/// ⇒ ★★ **A count read off a TRUNCATED census is a count of what was printed.** The old
+/// wording — *"the bound costs detail, never the count"* — was true only of `[seen=…]`,
+/// which nothing downstream ever read; the numbers people actually counted were the lines.
+/// Splitting the budget per class makes the real workload's whole shape (18 + 14) printable
+/// while leaving a hostile guest bounded at 2 × 32 lines.
+///
+/// ⊘ It does not make truncation impossible — it makes it **visible per class**, because
+/// the marker is now emitted for whichever class hits its own bound.
+///
+/// # ⊘⊘ §16.107 — 32 WAS STILL TOO SMALL, AND IT SATURATED IN THE VERY NEXT BOOT
+///
+/// `[measured 2026-08-11, boot `w255_76477ab_cel_runlist`]` — with §16.106's fix the 14
+/// refusals became forwards, and the forward class printed **exactly 32** with the bound
+/// marker on its last line. ⇒ the same defect, one rung later, **on the other class, in a
+/// census this file had just rewritten**: `forwarded=32` was a lower bound wearing the
+/// shape of a total. ★ A saturated instrument does not become safe because its author
+/// knows about the last one.
+///
+/// So the bound is **256 per class** — eight times the largest shape ever observed — and,
+/// more importantly, the *rows* are what it caps. See [`report_engine_forward`]: past the
+/// bound the three **totals** keep being printed on a doubling schedule, so a guest can
+/// buy silence for the detail and never for the count. That is the same shape every other
+/// bounded census in this tree already had (`kayfabe_device::census`'s `*_total` /
+/// `*_distinct` beside a capped `Vec`), and its absence here is what made §16.105
+/// possible.
+const ENGINE_FWD_REPORT_MAX: u64 = 256;
 
-/// Outcomes seen / of those, forwarded / of those, reported. Process-global for
+/// Outcomes seen / of those, forwarded / of those, refused. Process-global for
 /// [`ISOLATE_PLANE_ENV`]'s stated reason: this is bench instrumentation on a
 /// one-device-per-process bench, and a per-device home costs a shim-ABI change.
 static ENGINE_FWD_SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static ENGINE_FWD_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★ §16.105 — counted in its OWN atomic rather than derived as `seen - ok`, so the
+/// per-class budget below is exact under the concurrent `Relaxed` increments rather than
+/// approximately right (`no_instant_at_which_it_is_live_and_complete`).
+static ENGINE_FWD_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ §16.105 — how a refusal names **the host channel the alloc was attempted on**.
+///
+/// The identity comes out of [`kayfabe_isolate::VerbFailure::on`], through
+/// `kayfabe_fwd::FwdFault::Rm { on, .. }`; see that field for why nothing on this side can
+/// re-derive it (the channel is materialized inside the failing chain and freed by its
+/// unwind).
+///
+/// ⊘ **`NONE` is printed, never omitted.** A missing field reads as "no channel involved";
+/// an explicit `NONE` says the fault carried no target, which is a different fact and is
+/// the one that distinguishes *"the object alloc failed on a channel"* from *"the chain
+/// never got as far as a channel"*.
+fn refusal_host_chan(fault: &kayfabe_rt::FwdFault) -> String {
+    match fault {
+        kayfabe_rt::FwdFault::Rm { on: Some(h), .. } => format!("{:#x}", h.raw()),
+        _ => "NONE".to_string(),
+    }
+}
+
+/// What [`report_engine_forward`] emits for one outcome — the decision, separated from the
+/// printing so the whole policy is testable (the same shape `host_version_gate` uses one
+/// crate over).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EngineFwdReport {
+    /// The full row: class, handles, verdict, and the running counts.
+    Row,
+    /// ★ Past the per-class row budget — the three **totals** only.
+    TotalsOnly,
+    /// Nothing. The counts are still advancing and a later `TotalsOnly` will say so.
+    Silent,
+}
+
+/// ★★★★★ **§16.107 — THE ROWS ARE CAPPED; THE COUNTS ARE NOT.**
+///
+/// `nth` is this outcome's index **within its own class** (forwards and refusals have
+/// separate row budgets); `seen` is the index across **all** outcomes.
+///
+/// - `nth <= ENGINE_FWD_REPORT_MAX` ⇒ [`EngineFwdReport::Row`].
+/// - past it, [`EngineFwdReport::TotalsOnly`] whenever `seen` is a power of two ⇒ a guest
+///   issuing `n` allocations buys silence for the *detail* at a cost of ~`log2(n)` lines,
+///   and can never buy silence for the *count*.
+///
+/// # ⊘ Why the totals schedule is keyed on `seen` and not on `nth`
+///
+/// `nth` advances only within one class. A workload that saturates the forward budget and
+/// then issues nothing but forwards would never advance the refusal `nth`, so a schedule
+/// keyed on `nth` could stall in exactly the case that needs reporting. `seen` advances on
+/// every outcome, so the totals keep coming whatever the mix is.
+///
+/// # ⊘⊘ What this exists to prevent, twice measured
+///
+/// `[w250/w251]` a **shared** 32-row budget made `18 + 2 + 12 = 32` read as a total; three
+/// rungs were spent explaining a 14-vs-12 gap that was two unprinted lines (§16.105).
+/// `[w255]` the per-class split then saturated the OTHER class at exactly 32 forwards, in
+/// this same census, one rung later (§16.106.6). ⇒ raising the number alone would fix an
+/// instance and leave the class. **This function is the fix for the class**: past the
+/// bound the census keeps stating what it saw, so a number printed here can be read as a
+/// total by construction rather than by luck.
+fn engine_fwd_report_action(nth: u64, seen: u64) -> EngineFwdReport {
+    if nth <= ENGINE_FWD_REPORT_MAX {
+        EngineFwdReport::Row
+    } else if seen.is_power_of_two() {
+        EngineFwdReport::TotalsOnly
+    } else {
+        EngineFwdReport::Silent
+    }
+}
 
 /// Print one engine-object forward outcome into the boot's own `run_<tag>_qemu.log`.
 ///
@@ -2668,13 +2776,29 @@ fn report_engine_forward(
 ) {
     use std::sync::atomic::Ordering::Relaxed;
     let seen = ENGINE_FWD_SEEN.fetch_add(1, Relaxed) + 1;
-    let ok = if out.is_ok() {
-        ENGINE_FWD_OK.fetch_add(1, Relaxed) + 1
-    } else {
-        ENGINE_FWD_OK.load(Relaxed)
+    // ★ `nth` is this outcome's index WITHIN ITS OWN CLASS — the number the per-class
+    // budget is spent against. See `ENGINE_FWD_REPORT_MAX`.
+    let (ok, refused, nth) = match out {
+        Ok(_) => {
+            let ok = ENGINE_FWD_OK.fetch_add(1, Relaxed) + 1;
+            (ok, ENGINE_FWD_REFUSED.load(Relaxed), ok)
+        }
+        Err(_) => {
+            let refused = ENGINE_FWD_REFUSED.fetch_add(1, Relaxed) + 1;
+            (ENGINE_FWD_OK.load(Relaxed), refused, refused)
+        }
     };
-    if seen > ENGINE_FWD_REPORT_MAX {
-        return;
+    match engine_fwd_report_action(nth, seen) {
+        EngineFwdReport::Row => {}
+        EngineFwdReport::TotalsOnly => {
+            eprintln!(
+                "kayfabe: ENGINE-OBJECT CENSUS [seen={seen} forwarded={ok} refused={refused}] \
+                 ⊘ ROWS are capped at {ENGINE_FWD_REPORT_MAX} per outcome class; THESE THREE \
+                 COUNTS ARE NOT, and are the only numbers here that may be read as totals"
+            );
+            return;
+        }
+        EngineFwdReport::Silent => return,
     }
     let verdict = match out {
         Ok(f) => format!(
@@ -2684,21 +2808,77 @@ fn report_engine_forward(
             f.materialized_channel,
             f.reused,
         ),
-        Err(e) => format!("REFUSED {e:?}"),
+        // ★★★ §16.105 — `host_chan=` is the JOIN KEY, printed beside the variant rather
+        // than only inside its `Debug`, so a reader can group refusals by the channel they
+        // were attempted on without parsing a derive.
+        Err(e) => format!("REFUSED host_chan={} {e:?}", refusal_host_chan(e)),
     };
     eprintln!(
         "kayfabe: ENGINE-OBJECT class={:#06x} client={:#x} parent={:#x} params={}B \
-         → {verdict} [seen={seen} forwarded={ok}]{}",
+         → {verdict} [seen={seen} forwarded={ok} refused={refused}]{}",
         class.0,
         client.0,
         parent.0,
         params_len,
-        if seen == ENGINE_FWD_REPORT_MAX {
-            " ⊘ REPORT BOUND REACHED — later outcomes are counted, not printed"
+        if nth == ENGINE_FWD_REPORT_MAX {
+            " ⊘ REPORT BOUND REACHED for this outcome class — later ones are counted, not printed"
         } else {
             ""
         },
     );
+}
+
+/// ★★ **§16.96 — the drain's own budget, and it is a fraction of the guest's.**
+///
+/// The verb runs inside the vCPU's MMIO trap, so its duration is time the guest spends
+/// *not* polling — it is charged directly against `_kgspRpcRecvPoll`'s deadline, which is
+/// `defaultus + defaultus/2` = **6 s** (`ogkm-580: kernel_gsp.c:2379` over
+/// `arch/nvalloc/unix/src/os.c:1978`). ⚠ Three consecutive RPC timeouts mark the GPU **for
+/// reset** (`RPC_TIMEOUT_GPU_RESET_THRESHOLD`, `kernel_gsp.c:2455`), so overrunning is
+/// terminal rather than slow.
+///
+/// ⊘ **One second, not six**, deliberately: a warning that only fires *at* the deadline
+/// fires when the guest has already timed out, which is a post-mortem, not an instrument. A
+/// host RM round-trip that takes a second has already gone wrong.
+const ENGINE_FWD_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// ★★★ **§16.96 — run the latched engine-object forwards and REPORT, lock-free.**
+///
+/// Called from `Regs::write` after `RegPlane::write` has returned. Separate from the
+/// `ObjectModel` impl on purpose: that impl runs under the plane's rank-0 mutex and may only
+/// *admit*; this runs with no lock and is the only place a forward's real outcome exists.
+fn report_engine_forward_drain(device: &kayfabe_rt::device::SharedDevice) {
+    let t0 = Instant::now();
+    let runs = device.run_pending_engine_forwards();
+    if runs.is_empty() {
+        // ⊘ The overwhelmingly common case, and it must cost nothing beyond the one rank-1
+        // acquisition `run_pending_engine_forwards` already paid — the same cost
+        // `materialize_pending` pays on every register write.
+        return;
+    }
+    let elapsed = t0.elapsed();
+    for r in &runs {
+        report_engine_forward(r.client, r.parent, r.class, r.params_len, &r.out);
+    }
+    if elapsed >= ENGINE_FWD_DRAIN_BUDGET {
+        // ★★ LOUD, and NOT subject to `ENGINE_FWD_REPORT_MAX`. The report cap exists so a
+        // chatty census cannot drown a serial log; an overrun is the opposite — it is the
+        // one line whose absence would be read as health. See [`ENGINE_FWD_DRAIN_BUDGET`]
+        // for the 6 s clock this is a fraction of, and for why three of them reset the GPU.
+        eprintln!(
+            "kayfabe: ⚠⚠⚠ ENGINE-FORWARD DRAIN OVERRUN — {} forward(s) took {:?}, over the \
+             {:?} budget. ⚠ This time is charged against the guest's `_kgspRpcRecvPoll` \
+             deadline of 6 s (ogkm-580 kernel_gsp.c:2379 over os.c:1978); THREE consecutive \
+             RPC timeouts mark the GPU for reset (:2455). classes=[{}]",
+            runs.len(),
+            elapsed,
+            ENGINE_FWD_DRAIN_BUDGET,
+            runs.iter()
+                .map(|r| format!("{:#06x}", r.class.0))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+    }
 }
 
 impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
@@ -2782,14 +2962,56 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         parent: kayfabe_rt::HObject,
         class: kayfabe_rt::ClassId,
         params: &[u8],
-    ) -> Result<kayfabe_rt::EngineObjectForwarded, kayfabe_rt::FwdFault> {
-        let out = self
+    ) -> kayfabe_rmrpc::EngineObjectOutcome {
+        // ⊘⊘ `forward_engine_object_deferring`, NEVER `forward_engine_object_by_parent`.
+        // `[measured 2026-08-11, §16.91, `traces/boots/w239/`]` every production call
+        // reaching here arrives from `RegPlane::write` with the plane's **rank-0** mutex
+        // held, six crates up — the direct call issues a host RM ioctl there and aborts
+        // QEMU on the guest's first engine-object `GSP_RM_ALLOC`:
+        //   `R1 no-blocking-under-lock violation: issuing a host RM verb while holding
+        //    rank(s) [0]`
+        // ★ The request stays LATCHED in the device; `Regs::write` runs it once the plane's
+        // guard is down and reports the outcome there. See
+        // `SharedDevice::forward_engine_object_deferring` for why THIS verb may be latched
+        // at all when the spawn's sibling argument said it could not.
+        match self
             .0
-            .forward_engine_object_by_parent(client, parent, class, params);
-        if !matches!(out, Err(kayfabe_rt::FwdFault::NotAnEngine(_))) {
-            report_engine_forward(client, parent, class, params.len(), &out);
+            .forward_engine_object_deferring(client, parent, class, params)
+        {
+            // ⊘ Silent by design: it is the gate, not an event. Every alloc the guest makes
+            // passes through here and all but a handful are clients, devices, memory and VA
+            // spaces. Reported as `Served` because it is genuinely resolved — no host
+            // round-trip is owed and none will happen.
+            kayfabe_rt::ForwardAdmission::NotAnEngine(c) => {
+                kayfabe_rmrpc::EngineObjectOutcome::Served(Err(kayfabe_rt::FwdFault::NotAnEngine(
+                    c,
+                )))
+            }
+            // ★ ADMITTED ONLY. ⊘ Deliberately NOT reported here: a line printed now would
+            // say *"forwarded"* about a verb that has not run, which is
+            // `forwarded_counts_intent_not_work` reproduced exactly. The drain reports.
+            kayfabe_rt::ForwardAdmission::Latched { .. } => {
+                kayfabe_rmrpc::EngineObjectOutcome::Deferred
+            }
+            // ★★ THE BOUND, and it is LOUD and unbounded-by-the-report-cap: an engine
+            // object the guest asked for and we never even attempted is a hole in the
+            // census, and a hole that only shows up as a missing line is the shape
+            // `no_counter_fired_is_not_no_record_exists` warns about.
+            kayfabe_rt::ForwardAdmission::LatchFull { pending, bound } => {
+                eprintln!(
+                    "kayfabe: ⚠⚠⚠ ENGINE-FORWARD LATCH FULL — REFUSED BY NAME. \
+                     class={:#06x} client={:#x} parent={:#x} params={}B pending={pending} \
+                     bound={bound}. ⊘ This forward was NEVER ATTEMPTED. The guest's alloc \
+                     was still answered locally, so the guest sees no error and this line \
+                     is the only record.",
+                    class.0,
+                    client.0,
+                    parent.0,
+                    params.len(),
+                );
+                kayfabe_rmrpc::EngineObjectOutcome::DeferralFull { pending, bound }
+            }
         }
-        out
     }
 
     /// `None`, and that is the whole of what a sharded shell can honestly say: the graph
@@ -3210,6 +3432,40 @@ impl kayfabe_fwd::FbSource for PlaneFbSource {
 }
 
 /// ★★★ **The environment variable that registers the source** — route B's only switch.
+///
+/// # ★★ STATUS 2026-08-11 (w258) — **LIVE, and its premise has NOT lapsed.** Measured.
+///
+/// ⊘⊘ **A standing summary says route B "exists to remove a refusal whose count is now 0",
+/// i.e. that it is kept only for history. `traces/boots/w246/README.md` REFUTES that**, and the
+/// refutation is the whole point of the four-corner square that boot ran:
+///
+/// | corner | `KAYFABE_PT_WITNESS_EXEC` | `KAYFABE_RING_VIDMEM` | `PushbufferAperture` |
+/// |---|---|---|---|
+/// | A / B | off | off / **on** | 0 (unreachable — `RING-VA-UNBOUND` 8) |
+/// | **C** | **on** | off | **8** |
+/// | **D** | **on** | **on** | **0** |
+///
+/// ⇒ **the count is 0 BECAUSE route B is on, not despite it.** C vs D is one variable and it is
+/// this flag: the refusal it removes reads **8** with it off and **0** with it on. Removing the
+/// code would restore the 8. ★ The zero is route B's *output*, and reading an output as evidence
+/// the input is unnecessary is the same shape as `A DIAGNOSTIC gated on the failure`.
+///
+/// ★ **What DID lapse is the paragraph below's citation, not its content.** It cites `[w237]`
+/// and predates the square, so it never records (a) that route B has **fired**, or (b) the
+/// precondition that decides whether it can. Both, from `w246` corner D — all 8 `proc 2`
+/// doorbells, one line shape, `RING bytes=65536 cursor=0 live=1 spans=0`:
+/// - **64 KiB is read out of our own emulated framebuffer and decoded correctly.** `spans=0` is
+///   the RIGHT answer, not a failure: the pushbuffer is a semaphore-release-only `LAUNCH_DMA`
+///   (`0x14 & LAUNCH_TRANSFER_MASK == LAUNCH_TRANSFER_NONE`, `kayfabe-abi/src/submit.rs:2042`,
+///   `ogkm-580 clc7b5.h:86`) — a launch that moves **no bytes**. There is no copy to forward.
+/// - ⊘ **Route B is UNREACHABLE unless `KAYFABE_PT_WITNESS_EXEC` is armed.** With the witness
+///   off, `plan_gpfifo_ring` returns `RingVaUnbound` at `kayfabe-fwd/src/lib.rs:4258` — *before*
+///   `VidmemRoute` is computed (`:4277`). `w245` measured route B alone changing **nothing** and
+///   concluded "route B is unreachable"; `w246` scoped that within the hour to a **configuration,
+///   not the code**. ⇒ Never measure this flag with the witness disarmed.
+///
+/// ⚠ **`CE-SUBMIT` is 0 in all four corners and nothing executed.** Route B enumerates a ring;
+/// it does not submit work. No line above may be read as the first forwarded work.
 ///
 /// ⊘ Unset ⇒ no source ⇒ `kayfabe_fwd::VidmemRoute::Refuse`, byte-identical to the tree
 /// before route B existed. `[w237]` This is a **MEASUREMENT** switch: the owner's 2026-08-07
@@ -6662,6 +6918,28 @@ impl Regs {
         // ⊘ `materialize_pending` asserts lock-freedom, so if any of the above is wrong this
         // is refused **by name, here**, rather than by a spawn six crates away.
         self.device.materialize_pending();
+        // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
+        //
+        // The spawn was one of *two* blocking calls the plane's rank-0 mutex was held
+        // across; this is the other (`[measured 2026-08-11, §16.91,
+        // `traces/boots/w239/`]` — `issuing a host RM verb while holding rank(s) [0]`, via
+        // `Bridge::deliver → SharedObjectModel::forward_engine_object → … →
+        // Worker::execute`). Everything the block above says about this frame holds
+        // verbatim: `RegPlane::write` has returned, its guard is a dropped local, and this
+        // is the outermost frame on the vCPU's MMIO trap that still holds the device.
+        //
+        // ⊘ **AFTER `materialize_pending`, and the order is load-bearing.** A forward routes
+        // through an isolate; if this same register write also decided that isolate's spawn,
+        // draining the spawn first means the forward finds it installed. Reversed, it would
+        // meet `FwdFault::IsolatePending` and pay `verb_op`'s retry.
+        //
+        // ⚠ **The guest cannot observe anything before this runs** — the vCPU is halted
+        // inside its own MMIO trap for the whole of `kayfabe_shim_regs_write`. ⊘ And this
+        // drain posts NOTHING into the message queue: it issues a host verb and prints. The
+        // driver's `bPollingForRpcResponse` assert (`kernel_gsp.c:2345`) fires on an
+        // *induced second RPC* while it polls; a drain that emits no event and no reply
+        // cannot induce one. That obligation is discharged by construction, not by care.
+        report_engine_forward_drain(&self.device);
         out
     }
 
@@ -8181,7 +8459,9 @@ fn clamp_size(size: u32) -> u8 {
 
 #[cfg(test)]
 mod ring_scan_sentence_tests {
-    use super::ring_scan_sentence;
+    use super::{
+        ENGINE_FWD_REPORT_MAX, EngineFwdReport, engine_fwd_report_action, ring_scan_sentence,
+    };
 
     /// ★★★★★ **The regression this function was extracted for.** A scan in which *nothing
     /// resolved* must not claim completeness and must not claim the entries were zero.
@@ -8232,5 +8512,60 @@ mod ring_scan_sentence_tests {
         let s = ring_scan_sentence(64, 1024, 60, &["[7]=0x00000000deadbeef".to_string()]);
         assert!(s.contains("deadbeef"), "{s}");
         assert!(s.contains("BOUNDED-READING"), "{s}");
+    }
+
+    /// ★★★★★ **§16.107 — the whole real workload fits in a row budget now**, so the shape
+    /// that saturated twice cannot saturate a third time at the same size.
+    ///
+    /// ⊘ 32 forwards is what `w255` measured with §16.106's fix; 34 outcomes is the whole
+    /// census. Both must be **rows**, with room to spare.
+    #[test]
+    fn the_measured_workload_prints_every_row() {
+        for nth in 1..=34 {
+            assert_eq!(
+                engine_fwd_report_action(nth, nth),
+                EngineFwdReport::Row,
+                "outcome {nth} of the w255 shape must be a full row"
+            );
+        }
+        // ⊘ A `const` assertion: the bound must clear the largest observed shape by an
+        // order of magnitude, not by one, or the next workload saturates it again.
+        const { assert!(ENGINE_FWD_REPORT_MAX >= 32 * 8) };
+    }
+
+    /// ★★★ **The count can never go silent**, which is the property `forwarded=32` lacked
+    /// and the reason this rung exists at all.
+    #[test]
+    fn past_the_row_budget_the_totals_keep_coming() {
+        let over = ENGINE_FWD_REPORT_MAX + 1;
+        // Rows stop…
+        assert_ne!(engine_fwd_report_action(over, over), EngineFwdReport::Row);
+        // …and the totals do not: every power of two still speaks, forever.
+        for p in 9..=40 {
+            let seen = 1u64 << p;
+            assert_eq!(
+                engine_fwd_report_action(over, seen),
+                EngineFwdReport::TotalsOnly,
+                "seen={seen} must still state the totals"
+            );
+        }
+        // ⊘ …and in between it is silent, which is what bounds a hostile guest to ~log2(n).
+        assert_eq!(
+            engine_fwd_report_action(over, (1u64 << 20) + 1),
+            EngineFwdReport::Silent
+        );
+    }
+
+    /// ⊘ The schedule is keyed on `seen`, not on the per-class `nth` — a workload that
+    /// saturates one class and then feeds only that class must not be able to stall the
+    /// totals by leaving the other class's index frozen.
+    #[test]
+    fn the_totals_schedule_does_not_stall_on_one_class() {
+        let frozen_other_class = ENGINE_FWD_REPORT_MAX + 1;
+        assert_eq!(
+            engine_fwd_report_action(frozen_other_class, 4096),
+            EngineFwdReport::TotalsOnly,
+            "seen advanced, so the census speaks regardless of which class is saturated"
+        );
     }
 }

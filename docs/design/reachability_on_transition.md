@@ -1,5 +1,22 @@
 # Reachability-on-transition — the address plane's populate discipline
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE — discipline stands; §7 RESIDUE ITEM 7 is STALE**
+>
+> ⊘ **STALE, one item only.** §7's residue item 7 says: *"None of this ran against a guest. Every
+> `[test]` above is a mock-level test in this workspace."* **That has since run on real hardware,
+> twice:**
+> - `d864d86` (2026-08-11, w246) — *"ROUTE B FIRES … §16.97's 'unreachable' was true of a
+>   CONFIGURATION, not the code"*. The A/C pair isolates `KAYFABE_PT_WITNESS_EXEC`, the flag that
+>   binds the ring's VA: **`RING-VA-UNBOUND` 8 → 0**.
+> - `0fff2ce` (2026-08-11, w247) — *"ALL THREE preconditions armed at once — the address plane is
+>   COMPLETE"*, across four boot corners, recording that the witness populates the CE channels'
+>   VAS (`pdb=0x201000`).
+>
+> ⇒ The populate discipline this doc specifies is no longer mock-only; it is **measured on a real
+> GA106**. ★ Note *how* item 7 went stale: it was a correct statement about **coverage**, and
+> coverage is exactly the kind of claim a later boot silently falsifies without touching the doc.
+> Everything else here is unrefuted.
+
 **What this is.** `resume_from_fault.md` §7 **step 4**, built. §6 of that note put the owner's
 *trap-on-transition* instinct to seven ways a mapping becomes reachable or unreachable without
 crossing the edge as stated, and §6.1 returned the verdict this document implements:

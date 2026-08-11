@@ -1330,7 +1330,10 @@ fn mean_run(mode: LockMode) -> MeanReport {
         });
         assert_eq!(
             out,
-            Err(FwdFault::Rm(RmError::Other(0x5EED))),
+            Err(FwdFault::Rm {
+                err: RmError::Other(0x5EED),
+                on: None
+            }),
             "({mode:?}) a LIVE proc's host failure must surface as the RM error itself"
         );
         assert_eq!(
@@ -2190,7 +2193,10 @@ fn mean_multiproc_multithread_multigpu_multiworkload() {
         );
         assert_eq!(
             r.mid_chain_failure,
-            Err(FwdFault::Rm(RmError::Other(0x5EED))),
+            Err(FwdFault::Rm {
+                err: RmError::Other(0x5EED),
+                on: None
+            }),
             "({name}) the scripted mid-chain host failure surfaces as itself"
         );
 
@@ -9994,10 +10000,13 @@ fn n3_a_cross_gpu_handle_is_refused_by_the_foreign_handle_gate() {
                 mock_ctrl::FORWARDABLE,
                 &mut payload
             ),
-            Err(FwdFault::Rm(RmError::ForeignHandle {
-                handle: on0.host_object,
-                worker_isolate: IsolateId::new(s.0, GPU1),
-            })),
+            Err(FwdFault::Rm {
+                err: RmError::ForeignHandle {
+                    handle: on0.host_object,
+                    worker_isolate: IsolateId::new(s.0, GPU1),
+                },
+                on: None
+            }),
             "★★ ({mode:?}) a GPU0 handle reached the SAME proc's GPU1 isolate — on a real \
              host that raw value names a different LIVE object in that isolate's client"
         );
@@ -10009,10 +10018,13 @@ fn n3_a_cross_gpu_handle_is_refused_by_the_foreign_handle_gate() {
                 mock_ctrl::FORWARDABLE,
                 &mut payload
             ),
-            Err(FwdFault::Rm(RmError::ForeignHandle {
-                handle: on1.host_object,
-                worker_isolate: IsolateId::new(s.0, GPU0),
-            })),
+            Err(FwdFault::Rm {
+                err: RmError::ForeignHandle {
+                    handle: on1.host_object,
+                    worker_isolate: IsolateId::new(s.0, GPU0),
+                },
+                on: None
+            }),
             "★★ ({mode:?}) …and symmetrically in the other direction"
         );
 
@@ -10062,10 +10074,13 @@ fn n3_a_cross_gpu_handle_is_refused_by_the_foreign_handle_gate() {
             .host_object;
         assert_eq!(
             device.route_control(GPU0, s, by0_obj, mock_ctrl::FORWARDABLE, &mut payload),
-            Err(FwdFault::Rm(RmError::ForeignHandle {
-                handle: by0_obj,
-                worker_isolate: IsolateId::new(s.0, GPU0),
-            })),
+            Err(FwdFault::Rm {
+                err: RmError::ForeignHandle {
+                    handle: by0_obj,
+                    worker_isolate: IsolateId::new(s.0, GPU0),
+                },
+                on: None
+            }),
             "({mode:?}) another PROC's handle on this proc's isolate stays refused"
         );
         assert_eq!(
@@ -10305,18 +10320,24 @@ fn n3_c_the_mean_two_gpu_straddler_progresses_under_pending_work_on_both_isolate
             let mut payload = [0u8; 4];
             assert_eq!(
                 device.route_control(GPU1, s, on0, mock_ctrl::FORWARDABLE, &mut payload),
-                Err(FwdFault::Rm(RmError::ForeignHandle {
-                    handle: on0,
-                    worker_isolate: IsolateId::new(s.0, GPU1),
-                })),
+                Err(FwdFault::Rm {
+                    err: RmError::ForeignHandle {
+                        handle: on0,
+                        worker_isolate: IsolateId::new(s.0, GPU1),
+                    },
+                    on: None
+                }),
                 "★★ ({mode:?}) the cross-GPU gate must hold under contention too"
             );
             assert_eq!(
                 device.route_control(GPU0, s, on1, mock_ctrl::FORWARDABLE, &mut payload),
-                Err(FwdFault::Rm(RmError::ForeignHandle {
-                    handle: on1,
-                    worker_isolate: IsolateId::new(s.0, GPU0),
-                })),
+                Err(FwdFault::Rm {
+                    err: RmError::ForeignHandle {
+                        handle: on1,
+                        worker_isolate: IsolateId::new(s.0, GPU0),
+                    },
+                    on: None
+                }),
                 "★★ ({mode:?}) …in both directions"
             );
             assert_eq!(

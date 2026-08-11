@@ -1,5 +1,19 @@
 # The post-`cuInit` wall map — from the CE copy to a 2048² matmul
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE — thesis unrefuted; ONE ROW (D2) is STALE**
+>
+> ★ **The doc's central claim stands** and was acted on across w220–w247: *the critical path to
+> compute is not the next driver wall, it is the executor plane.* Keep planning from it.
+>
+> ⊘ **STALE, D2 only (`MC_SERVICE_INTERRUPTS`, `0x20801702`, §D2 below).** That row's *kayfabe*
+> cell reads *"allowlisted (`crates/kayfabe-abi/src/capability.rs:745`), **unmodelled ⇒ refused by
+> name**"*. **We now SERVE it**: `8574466` (2026-08-10) — *"§16.75 SERVE `0x20801702`
+> MC_SERVICE_INTERRUPTS"* — adds `crates/kayfabe-rmrpc/src/policy.rs` (+128) and
+> `tests/tests/mc_service_interrupts.rs` (+285).
+> ⚠ **Only the kayfabe-status half of D2 moved.** The same commit *cites this doc approvingly* on
+> D2's other half — the C's fix is still **DO-NOT-PORT**. Do not read "we serve it now" as
+> "port the C's credit maze"; those are different claims and D2 makes both.
+
 **Purpose.** Pre-solve, on paper, every wall between where kayfabe stands today and `cup8`, so the
 bench never stalls on analysis. For each wall: the guest **function** (not the control id), every
 demand it makes before its next hard exit, how the C served it, whether kayfabe has it, and the

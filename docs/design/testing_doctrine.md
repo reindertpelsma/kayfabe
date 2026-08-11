@@ -1,5 +1,12 @@
 # Testing doctrine — the rules this suite earned by being wrong
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE**
+>
+> Checked from git history, not asserted from the prose: no commit after `3fd1455` (2026-07-27)
+> names this doc, and none contradicts a rule in it. Positive corroboration that it still governs
+> — `50647e8` (2026-08-09) applies **§6.1**'s *name-the-run / cite-by-symbol* rule to void one of
+> another doc's own claims. ⇒ Still binding on new tests.
+
 **What this file is.** The handful of rules about *how to write a test here* that this project
 did not know at the start and paid to learn. Each one is a generalisation of a specific
 incident, and each incident is cited so the rule can be attacked rather than obeyed.

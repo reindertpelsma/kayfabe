@@ -15671,8 +15671,17 @@ unanswerable residency question does not defer the executor choice — **it make
 
 ## §16.86 ★★★★★ ROUTE B, BUILT AND DEFAULT-OFF — and the WALL is a LOCK-ORDER INVERSION no gate can see
 
-⚠ **STATUS (2026-08-11): MEASUREMENT, not a ruling.** Nothing here decides the shipping
-design. §16.86.4 states the scope question that is the owner's to answer.
+⊘⊘⊘ **CORRECTED 2026-08-11 by §16.97 — §16.86.1's PREMISE NO LONGER HOLDS.** This section says
+route B exists to remove a `FwdFault::PushbufferAperture` refusal on the boot's 8 `proc 2`
+doorbells. `[measured, `traces/boots/w245/`]` that refusal count is **0**: all 8 exit
+`plan_gpfifo_ring` at `RingLook::RingVaUnbound` — the address table does not bind the ring's VA
+— **before** the vidmem route is computed and long before `fetch_ring_bytes`, where the
+residency gate §16.86.2 describes lives. ⇒ route B is **wired, functional and unreachable**;
+turning it on changes exactly one log line. Read §16.97 first. Everything below is otherwise
+accurate about what was *built*.
+
+⚠ **STATUS (2026-08-11, as written): MEASUREMENT, not a ruling.** Nothing here decides the
+shipping design. §16.86.4 states the scope question that is the owner's to answer.
 
 ### 16.86.1 What was built
 
@@ -16136,6 +16145,14 @@ RegPlane::write → … → Bridge::deliver → SharedObjectModel::forward_engin
   → SharedDevice::forward_engine_object_by_parent → Worker::execute   ★ host RM ioctl
 ```
 
+⊘⊘⊘ **REFUTED 2026-08-11 BY §16.96 — the paragraph below is WRONG, and everything §16.92
+through §16.95 built on it was designing for a constraint that does not exist.** The verb's
+result is **discarded** at its only production call site (`Bridge::deliver`, `let _ = …`),
+deliberately and with a paragraph saying so. ⇒ nothing in the guest's reply depends on it, it
+**is** fire-and-forget, and §16.91's own rule admits it. ★ The error was reading a
+**signature** where the authority is the **call site**: a signature bounds what a function
+*can* return and cannot see a `let _ =`. Read §16.96.1 before acting on anything below.
+
 ⊘⊘ **AND DEFERRAL CANNOT FIX THIS ONE.** `forward_engine_object` returns
 `Result<EngineObjectForwarded, FwdFault>` — **a value the guest's reply is built from**. The
 spawn was **fire-and-forget**, which is precisely why it could be latched and drained later.
@@ -16158,9 +16175,16 @@ another latch.
 
 ## §16.92 ★★★★ THE HOST-VERB CENSUS IS CLOSED — the set has size ONE; the relocation is NOT designed
 
-⚠ **STATUS (2026-08-11): CENSUS COMPLETE AND PROVEN. RELOCATION NOT ATTEMPTED — the crux could
-not be argued, and §16.91's own rule says a wrong answer here corrupts a state machine.** The
-bench still cannot boot.
+⚠ **STATUS (2026-08-11): SUPERSEDED-BY §16.96 for the RELOCATION half; the CENSUS half still
+holds and is load-bearing.** ⊘⊘ §16.92.2's *"crux"* and §16.92.3's *"latch the reply"* were both
+answers to a question that did not have to be posed: the verb's result is **discarded** at its
+only call site, so it needs neither a window nor a reply latch — only §16.91's pull. ★ The
+census (§16.92.1) is what MADE that checkable, because it proved the call-site set has size
+one. Original text below, unchanged.
+
+⚠ **STATUS (2026-08-11, as written): CENSUS COMPLETE AND PROVEN. RELOCATION NOT ATTEMPTED — the
+crux could not be argued, and §16.91's own rule says a wrong answer here corrupts a state
+machine.** The bench still cannot boot.
 
 ### 16.92.1 ★★★ The census, by the type system — and a boot found the WHOLE set, not the first
 
@@ -16228,9 +16252,16 @@ before anyone builds the window in §16.92.2, because it would make that window 
 
 ## §16.93 ★★★★★ PROTOCOL FACT — the stock driver POLLS for GSP replies, so deferral IS legal
 
-⚠ **STATUS (2026-08-11): ANSWERED from source.** `research_clones/ogkm-580.159.04`, the version
-the bench runs. ⊘ Read-only; no boot, no bench. ⇒ §16.92.2's concurrency crux **dissolves**: the
-fix is a latch, not a window.
+⚠ **STATUS (2026-08-11): ANSWERED from source, and STILL TRUE — but §16.96 made it
+UNNECESSARY.** ⊘ The driver-protocol facts here (the poll loop, the 6 s budget, the
+`(function, sequence)` match, the `bPollingForRpcResponse` assert) are cited and stand; §16.96.2
+still inherits the 6 s clock from §16.93.2. ⊘⊘ What is *moot* is the conclusion that a **reply**
+must be deferred at all: the verb whose result nobody reads does not need the guest to be
+patient. Read §16.96.1 first.
+
+⚠ **STATUS (2026-08-11, as written): ANSWERED from source.** `research_clones/ogkm-580.159.04`,
+the version the bench runs. ⊘ Read-only; no boot, no bench. ⇒ §16.92.2's concurrency crux
+**dissolves**: the fix is a latch, not a window.
 
 ⊘ **Our emulator answering synchronously today is evidence about US, not about the driver** — the
 stock driver has never had the chance to demonstrate patience. Everything below is cited.
@@ -16329,8 +16360,17 @@ between RUN and COMMIT?* — **does not arise**, because nothing is mid-flight a
 
 ## §16.94 ★★★★★ THE LATCH AS BRIEFED WOULD REINTRODUCE `PC-D1` — and not consuming the command dissolves that too
 
-⚠ **STATUS (2026-08-11): DESIGN CORRECTED BEFORE BUILDING. NOT BUILT.** The bench still cannot
-boot. ⊘ The correction came from **this tree's own prior art**, found before a line was written.
+⊘⊘⊘ **STATUS (2026-08-11): SUPERSEDED-BY §16.96 — NEVER BUILT, AND CORRECTLY SO.** The whole
+design below (do not consume the command; memoise the verb's result by `(function, sequence)`;
+re-enter and answer on a second pass) exists to carry a **result** the guest never sees.
+§16.96.1 shows the result is discarded at its only call site, so there is nothing to memoise:
+the command is answered normally, in position, on the FIRST pass, and the verb runs after the
+lock drops. ⚠ **Do not build this.** The `PC-D1` analysis it contains is still correct and
+still worth reading — it is the reason nobody built the *worse* version.
+
+⚠ **STATUS (2026-08-11, as written): DESIGN CORRECTED BEFORE BUILDING. NOT BUILT.** The bench
+still cannot boot. ⊘ The correction came from **this tree's own prior art**, found before a line
+was written.
 
 ### 16.94.1 The friction that appeared immediately
 
@@ -16399,8 +16439,16 @@ same as fixing it. Route A untouched.
 
 ## §16.95 ★★★★ OBLIGATION 1 DISCHARGED — the decode path is side-effect-free, proven by SIGNATURE
 
-⚠ **STATUS (2026-08-11): the design's precondition is ESTABLISHED. The latch is NOT BUILT.**
-Bench still cannot boot.
+⊘⊘ **STATUS (2026-08-11): TRUE AND UNUSED — SUPERSEDED-BY §16.96.** The proof below (decode is
+side-effect-free, by signature) is correct and cost one rung. ⊘ It is a precondition of
+§16.94's double-decode design, and **there is no second decode**: §16.96 answers the command on
+the first pass. ★ Kept because the property is worth knowing and the technique is the tree's
+best — but note that the SAME technique, applied to `forward_engine_object`'s signature one
+rung earlier, produced §16.91's wrong ruling. A signature proves what a function does; it
+cannot prove what its caller reads.
+
+⚠ **STATUS (2026-08-11, as written): the design's precondition is ESTABLISHED. The latch is NOT
+BUILT.** Bench still cannot boot.
 
 ### 16.95.1 The question, and why it had to be answered first
 
@@ -16456,3 +16504,1464 @@ overrun that is loud.
 
 ⊘ **`CE-SUBMIT` is 0.** Route B **wired and unmeasured**. The forbidden-#2 residency gate is
 **proven offline only and has never fired on hardware**. Route A untouched.
+
+## §16.96 ★★★★★ THE VERB WAS FIRE-AND-FORGET ALL ALONG — the design of §16.94/§16.95 solved a harder problem than the tree has
+
+⚠ **STATUS (2026-08-11): BUILT. Falsifier watched RED, negative control watched RED, gates
+green.** The bench boot is recorded in §16.96.6.
+
+⊘⊘ **This section REFUTES its own brief, and the refutation is the finding.** §16.91 through
+§16.95 designed a reply memo, a third `CommandPolicy` outcome, a re-service door and an
+idempotent double decode. **None of it is needed.** Read §16.96.1 before building anything on
+those sections.
+
+### 16.96.1 ★★★★★ THE REFUTATION — a signature bounds what a function CAN return; only the call site says what is READ
+
+§16.91.3 ruled:
+
+> ⊘⊘ **AND DEFERRAL CANNOT FIX THIS ONE.** `forward_engine_object` returns
+> `Result<EngineObjectForwarded, FwdFault>` — **a value the guest's reply is built from**. …
+> This verb's result *is* the answer.
+
+★★★ **It is not.** The verb has exactly one production call site —
+`kayfabe_rmrpc::Bridge::deliver`, the one §16.92's census proved is the whole set — and that
+site **discards the result on purpose**, under a paragraph that has been in the tree since
+§16.80 explaining why:
+
+> ⚠ **The guest's answer does NOT change**, and that is a decision, not an oversight. The
+> local model has already answered `NV_OK` + echo; turning a host-side refusal into an alloc
+> failure would fail `cuCtxCreate` outright (`kernel_graphics_object.c:224-225` →
+> `kgrobjConstruct_IMPL:353-360`, no retry, no degradation) and a boot measuring the forward
+> would silently be measuring that instead.
+
+```rust
+let _ = gpu.forward_engine_object(client, parent, class, params);   // ← the whole argument
+```
+
+⇒ **nothing in the guest's reply depends on this verb.** §16.91's own general rule — *work
+decided under a lock can be deferred only if nothing in the response depends on it* —
+**admits** it. The verb is `fire-and-forget`, exactly like the spawn, and the fix is §16.91's
+own pull pattern applied a second time, unchanged.
+
+★★★ **The instrument-failure class, and it is a new one.** §16.91 reached its ruling by
+reading a **signature** — the same technique that was right three rungs running (§16.91 #2,
+§16.92, §16.95) and is celebrated in those sections as *"the type system proves it, not a
+grep"*. Here it was **wrong**, because a signature is an upper bound on what a function may
+communicate and says nothing about what its caller **reads**. ⊘ The type system cannot see a
+`let _ =`. ⇒ *for a "can this be deferred?" question, the authority is the CALL SITE, never
+the signature* — and the call-site check is one `git grep` away in a census §16.92 had already
+closed and proven to have size one.
+
+⚠ And the cost is legible: **four rungs (§16.92-§16.95) designed a mechanism for a constraint
+that did not exist.** Each was individually careful and each cited the one before.
+
+### 16.96.2 ⊘ What that dissolves, obligation by obligation
+
+The brief this rung was given carried five obligations. Three **vanish** rather than being
+discharged, and saying which is which is the point:
+
+| obligation | disposition |
+|---|---|
+| 1. Idempotent decode | ⊘ **MOOT.** The command is decoded **once**. §16.95's proof stands and is now unused. |
+| 2. A third `CommandPolicy` outcome ("the known obstacle", "the bulk of the work") | ⊘ **NOT NEEDED.** The policy answers the command **normally, in position, on the first pass**. `respond() -> None` keeps its one meaning. **Zero `CommandPolicy` implementations changed** (there are 14). |
+| 3. A bounded memo that refuses by name | ✅ **BUILT, transposed onto the latch.** `MAX_PENDING_ENGINE_FORWARDS = 64`; past it `ForwardAdmission::LatchFull { pending, bound }`, and the shim prints it as *"REFUSED BY NAME … NEVER ATTEMPTED"*. |
+| 4. A loud overrun | ✅ **BUILT**, and re-derived rather than inherited: the verb no longer runs *between* two services, it runs *after* the only one — but it still runs inside the vCPU's MMIO trap, so its duration is still charged against `_kgspRpcRecvPoll`'s 6 s. Budget **1 s**, not 6, because a warning that fires at the deadline is a post-mortem. |
+| 5. No induced RPC while the guest polls | ✅ **BY CONSTRUCTION.** The drain issues a host verb and prints. It posts **nothing** into the message queue — no reply, no event — so `bPollingForRpcResponse` (`kernel_gsp.c:2345`) cannot be tripped by it. |
+
+★ **A third outcome on the trait surface DID land — just not that trait.**
+`ObjectModel::forward_engine_object` now returns `EngineObjectOutcome`
+(`Served` / `Deferred` / `DeferralFull`) instead of a `Result`, because an implementation that
+latches has **no honest `Ok` and no honest `Err`**: both would claim a host round-trip that has
+not happened, which is `forwarded_counts_intent_not_work` exactly. **ADMITTED and SERVED are
+different gates**, and the enum is the discriminator. Two implementors, both updated.
+
+### 16.96.3 What was built
+
+- `SharedDevice::forward_engine_object_deferring` — class gate first (the same gate in the
+  same position `route_engine_object_by_parent` opens with, which is also what keeps the latch
+  bounded in practice), then bound, then latch. **Issues nothing.**
+- `SharedDevice::run_pending_engine_forwards` — the pull half; drains the latch and runs each
+  request through the unchanged `forward_engine_object_by_parent`, returning one row per
+  request in the guest's own order.
+- `Regs::write` — one added call, **after `materialize_pending`**. ⊘ The order is
+  load-bearing: a forward routes through an isolate, so draining the spawn first means a
+  forward whose isolate this same register write decided finds it installed. That is strictly
+  better than the direct call, which could only have met `FwdFault::IsolatePending`.
+- `report_engine_forward_drain` — the only place a forward's real outcome exists, and the
+  overrun.
+
+⊘ **`Bridge::deliver`'s ordering is preserved exactly**: `apply` still runs before the forward
+is decided, under the lock, because the forward routes through the channel the alloc names and
+`Spine::by_vchid` is rebuilt by the projection `apply` runs. Latching moves the *verb*, never
+the *decision*.
+
+★ **The bound is also the missing-drain detector.** If `Regs::write` ever stopped draining, the
+latch would fill and start printing `LATCH FULL — REFUSED BY NAME` rather than silently doing
+nothing — the one failure mode a pull-model fix can have, made loud by the obligation that was
+written for a different reason.
+
+### 16.96.4 ★★★ The falsifier, watched RED — and a second control for the opposite failure
+
+`tests/tests/engine_forward_is_deferred_out_of_the_plane_lock.rs`, 5 tests.
+
+**Arm A** (`forward_engine_object_deferring` reverted to the direct
+`forward_engine_object_by_parent`, i.e. the shipping bug): **4 of 5 fail**, three of them with
+**the bench's own message**, offline, in 0.00 s:
+
+```
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): issuing a host RM verb while
+holding rank(s) [0]
+```
+
+**Arm B** (the drain returns empty without running — a "fix" that stops forwarding under the
+lock and never forwards at all): **2 of 5 fail**, and ★ **the arm-A falsifier stays GREEN**,
+which is what proves the two tests measure different things. Arm B is the failure a naive pull
+fix produces: a loud abort traded for a host context that silently never exists.
+
+★★ **The measurement is the RECORDER, not the return value.** *"It returned `Latched`"* is a
+claim about our own bookkeeping; *"the host was asked for nothing"* is a claim about the
+boundary, and only the second is what the bench aborted over. The known-positive asserts the
+host received the **guest's own params bytes** — a latch that copied the request but not its
+bytes would pass every other assertion in the file.
+
+### 16.96.5 ⊘ Scope — read this before quoting the boot
+
+- ⊘⊘ **THIS IS BOOTABILITY, NOT FORWARDING PROGRESS.** The bench could not boot at `5626939`
+  or later; it can now. That is the entire claim.
+- ⊘ **`CE-SUBMIT` is 0 and will stay 0.** Nothing here submits work. **No line of this rung
+  may be read as the first forwarded compute.**
+- ⊘ Route B **wired and still unmeasured**. The forbidden-#2 residency gate is still **proven
+  offline only and has never fired on hardware**. Route A untouched.
+
+### 16.96.6 ★★★★★ MEASURED — THE BENCH BOOTS
+
+`[measured 2026-08-11, `traces/boots/w244/` + `traces/guest_boots/run_w244*`, revision
+`acbb9a39579a0c796b19318fe9b4c3508f2367d9`]`, stamped **inside** the archive and the QEMU
+binary and quoted in each probe log.
+
+| | `sandbox spawn` | `issuing a host RM verb` | `RmInitAdapter failed` |
+|---|---|---|---|
+| `810368b` (w238) | **1** | — | — |
+| `842c5c4` (w239) | 0 | **1** → QEMU aborts | — |
+| **`acbb9a3` (w244)** | **0** | **0** | **0** |
+
+Two arms, because one of them is a differential and the other is the default:
+`w244a_acbb9a3_ceh` uses `KAYFABE_CE_EXECUTOR=host`, **byte-identical to w239's configuration**,
+so the only variable is the code; `w244b_acbb9a3_cel` uses the bench default `local`, so *"the
+bench boots"* is not a claim about one exotic switch. Both carry `RUST_BACKTRACE=full` in
+**QEMU's own** environment, leaving the instrument that found the violation armed for a new one.
+
+★★★ **What proves the drain is on the path — a claim no signature could make.**
+`report_engine_forward` has exactly one caller (`report_engine_forward_drain`), which has
+exactly one caller (`Regs::write`, after the guard drops); the admission path prints nothing but
+the latch-full refusal. ⇒ **every `ENGINE-OBJECT … → FORWARDED/REFUSED` line in these logs came
+from the lock-free drain.** `w244a` has **32** (`[seen=32 forwarded=18]`); `842c5c4` has **one**,
+and the abort follows it.
+
+⊘ **What did not fire is also the measurement**: `LATCH FULL` **0** (population stayed at the
+predicted one entry) and `DRAIN OVERRUN` **0** (no drain reached the 1 s budget, so no guest wait
+went anywhere near the 6 s clock).
+
+⊘ **The standing wall is unmoved, and that is correct.** `cuInit` ok, `devices=1`,
+`compute=8.6`, `totalMem=11959 MiB`, then `CUP2_RC=124` — the 180 s timeout at `cuCtxCreate`
+that `scripts/bench/cup2_hook_w232.sh` documents as the standing wall on both executor arms.
+Doorbells **191 arrived / 183 served / 8 REFUSED by name**, reproducing the `w229`/`w230`
+population exactly. `CE-SUBMIT` **0**. This rung removed a **bootability regression** introduced
+by ranking the plane's lock at `5626939`; it did not move the wall and was not meant to.
+
+## §16.97 ★★★★★ ROUTE B MEASURED — and it is UNREACHABLE **WITH THE EXECUTOR WITNESS DISARMED**
+
+⊘⊘⊘ **SCOPED 2026-08-11 by §16.98, WITHIN THE HOUR, AND THE SCOPING IS MINE TO OWN.** The
+measurements below are correct and reproduce. **Two conclusions drawn from them are not:**
+
+- ⊘ *"§16.86's premise no longer holds"* — **it holds.** §16.86 was measured with
+  `KAYFABE_PT_WITNESS_EXEC=on`; both boots below had it **unset**, i.e. disarmed. `w234b`
+  (committed, `traces/guest_boots/run_w234b_d7e4da8_execwit_on_qemu.log`) reports
+  `PushbufferAperture` **9** and `RING-VA-UNBOUND` **0** on the same 8 doorbells and the same
+  `pdb=0x201000`. My `rows=4 hit=NONE` is `w234a`'s **OFF arm, byte for byte**.
+- ⊘ *"the wall moved earlier and route B is behind it"* — **the wall did not move; my boot did
+  not arm the flag that binds the ring.** With the witness on, `hit=0x1024000/Vidmem` and
+  `rows=13348`.
+
+★★★ **The class is the one this rung itself documented, turned on its author**: I varied ONE
+flag and concluded about the SYSTEM, while a **second, unvaried** flag was the precondition —
+the same shape as the fixture's hand-installed `bind(..)`, except here the hand-installed
+precondition is an environment variable that no rung carried forward. ⇒ **"unreachable" was
+true of a CONFIGURATION and I wrote it about the CODE.**
+
+⚠ **STATUS (2026-08-11): MEASURED, two arms, `traces/boots/w245/` — VALID AND SCOPED TO
+`KAYFABE_PT_WITNESS_EXEC` UNSET.** Route B is wired, functional, and unreachable **in that
+configuration**. ⊘ `CE-SUBMIT` is **0** and nothing executed. Read §16.98 for the armed square.
+
+### 16.97.1 ★★★ The result — two boots whose logs differ by ONE LINE
+
+`[measured 2026-08-11, revision `acbb9a3`]` — ⊘ **the binary is stamped `acbb9a3` and HEAD is
+`30f7900`, and that is correct, not stale**: `git rev-parse` on `crates`, `tests` and
+`Cargo.lock` gives **identical tree hashes** at both commits (`30f7900` is docs + evidence
+only), so `acbb9a3` is the complete attribution.
+
+| | `w245off` (`KAYFABE_RING_VIDMEM=0`) | `w245on` (`=1`) |
+|---|---|---|
+| `RING-PROJ` (fall-through entered) | 8 | 8 |
+| **`RING-VA-UNBOUND`** | **8** | **8** |
+| `PushbufferAperture` | 0 | 0 |
+| `RingFbNeverWritten` (forbidden #2) | **0** | **0** |
+| `CE-SUBMIT` | **0** | **0** |
+| doorbells | 191 / 183 / 8 | 191 / 183 / 8 |
+| `CUP2_RC` | 124 | 124 |
+
+★★ **Normalised whole-log diff: 808 lines each, and the ONLY distinct line is the flag's own
+announcement.** Timestamps, hex and integers normalised; `sort -u`'d; one line of output:
+
+```
+< kayfabe: RING-VIDMEM KAYFABE_RING_VIDMEM=N ⇒ route B OFF (default)
+> kayfabe: RING-VIDMEM KAYFABE_RING_VIDMEM=N ⇒ route B ON
+```
+
+⇒ **The flag-off arm reproduces the wall exactly** (and matches `w244a`, a different boot at
+the same revision), and the flag changes **nothing else**.
+
+### 16.97.2 ★★★★★ WHY — route B lives entirely downstream of a step the bench never reaches
+
+`plan_gpfifo_ring` (`kayfabe-fwd/src/lib.rs:4220`):
+
+```rust
+4258   let Some((start, b_len, _)) = table.binding_at(base) else {
+4259       return Ok(RingPlanLook::Absent(RingLook::RingVaUnbound { va: ring.va }));   // ← EXIT
+4260   };
+...
+4277       VidmemRoute::OwnFramebuffer     // ← the route is not even COMPUTED until here
+```
+
+and the route is consumed only inside `push_range_gpas` (`:4394`), while forbidden #2's
+residency gate `FwdFault::RingFbNeverWritten` (`:4316`) lives in `fetch_ring_bytes`, which can
+only be reached through a `RingPlan` the success arm produces.
+
+The boot says the bench takes the exit, 8 times out of 8:
+
+```text
+GUEST-RAM PIN token=0x00020013 … ring=0x200224000 → UNRESOLVED
+    Address(Miss { pdb: Pdb(2101248), va: GpuVa(8592179200) })
+    (the address table does not bind this VA; ⊘ MISS = FAULT)
+FWD-RING proc=2 chan=12 … RING-VA-UNBOUND va=0x200224000 → NOTHING FORWARDED
+```
+
+⇒ **`§16.86.1`'s premise no longer holds.** It says route B exists to remove a
+`FwdFault::PushbufferAperture` refusal on these 8 doorbells. That refusal count is **0**: the
+lookup never gets far enough to have an aperture to object to.
+
+⊘⊘ **AND THE CONCLUSION I DREW FROM THAT IS WRONG — see this section's header.** What stood
+here: *"The wall moved earlier, and route B is behind it."* The wall did **not** move. §16.86
+measured its `PushbufferAperture` refusal with `KAYFABE_PT_WITNESS_EXEC=on`; these two boots had
+it **unset**, so the ring never bound and the miss exit ran first. Arm the witness and
+`PushbufferAperture` returns (`w234b`: **9**, with `RING-VA-UNBOUND` **0**). ⇒ the correct
+sentence is: **with the executor witness disarmed, route B sits behind an exit that the witness
+is what removes.**
+
+### 16.97.3 ★★★★★ THE INSTRUMENT FAILURE — seven green tests on a HAND-INSTALLED precondition
+
+`tests/tests/ring_out_of_our_own_framebuffer.rs` had 7 passing arms, a real citation and the
+right scope. Its fixture's doc read:
+
+> *A guest whose channel declares its ring at `RING_VA`, bound to **`Aperture::Vidmem`** at
+> `RING_FB_PHYS` — **the shape the boot's `proc 2` channels actually have**.*
+
+⊘ The last clause is **false**, and the fixture's own body is the proof: it reaches into the
+address table and calls `vas.table.bind(..)` **by hand**. That is precisely the step the guest
+never performs for us. ⇒ the seven greens prove *route B works given a bound vidmem ring*; they
+say nothing about whether the bench produces one, and it does not.
+★ `a_green_test_can_hold_a_wall_in_place` — real citation, right scope, **wrong quantifier** —
+and the doc sentence is what would stop anyone checking.
+
+**Fixed rather than noted**: the fixture is now parameterised (`guest_with_a_ring(bind_ring)`),
+the correction is folded **into** its doc above the claim it corrects, and two arms were added:
+
+- `an_unbound_ring_va_never_reaches_the_vidmem_route_or_its_gate` — the **bench's measured
+  shape**, asserting `RingVaUnbound` with the route registered *and* the framebuffer page
+  written, so neither the route nor the residency gate can be what refused.
+- `the_only_difference_is_the_binding_and_it_is_what_reaches_the_route` — ★ the discriminator.
+  Without it, *"the arms are identical"* cannot be told from *"the flag is dead code"*, and
+  those have opposite next moves: **fix the address table** vs **fix route B**.
+
+★★★ **Negative control watched RED**: with `guest_with_an_unbound_ring` flipped to install the
+binding, the bench-shape arm fails with `Ok(Ring([0, 0, 192, 2, …]))` — the framebuffer's own
+bytes, reached. ⇒ route B is **live code**; only its precondition is missing.
+
+### 16.97.4 ⊘ The three questions the coordinator asked, answered plainly
+
+1. **`CE-SUBMIT > 0`?** **No. It is 0 on both arms and nothing executed.** No partial is being
+   reported as forwarded work.
+2. **Did the forbidden-#2 residency gate fire on hardware?** ⊘ **NO — and in THIS
+   CONFIGURATION it could not have.** `RingFbNeverWritten` is raised in `fetch_ring_bytes`,
+   downstream of the `RingVaUnbound` exit that all 8 candidates take **when the executor witness
+   is disarmed**. ⊘⊘ **CORRECTED by §16.98**: *"it is unreachable until the ring VA binds"* is
+   right, and **the ring VA binds when `KAYFABE_PT_WITNESS_EXEC=on`** — which is not "a different
+   rung's work", it is a flag `w234` already measured. It remains proven offline (4 arms,
+   negative control red).
+3. **Both prohibitions, if anything executed?** ⊘ **Does not arise — nothing executed.**
+
+### 16.97.5 ⊘ Why `ce_executor=host`, and the trap avoided
+
+`[measured at `acbb9a3`]` `RING-PROJ` is **8** on `host` and **0** on `local`: with the default
+`local`, `try_ce_submission` claims every routed doorbell terminally and the forwarding
+fall-through is dead code. ⇒ running this experiment on the default would have produced
+*"the arms are identical"* for a **second, unrelated reason** — the right answer for the wrong
+cause, and unfalsifiable.
+
+### 16.97.6 ★ The next question, stated with its numbers
+
+**Why is the ring VA absent from the address table?** From `w245off`, for all 8 doorbells,
+`pdb=0x201000`:
+
+- `VAS-BIND-CENSUS … vas=PRESENT rows=4 hit=NONE` — the VAS exists and has **4 rows**; the
+  ring's VA is in none of them.
+- `PT-DECODE` → `bound=6275 … unwitnessed=6275 learned=39 published=39/0` on the **first**
+  doorbell and `bound=0` on the other **seven**.
+
+⇒ 6275 bindings were decoded, and the ring's own VA is still not among the 4 rows its VAS
+holds. That gap — **not** the aperture, and **not** route B — is what stands between this bench
+and a forwarded doorbell. ⚠ Route A (whether the ring's placement is influenceable at
+allocation time) is being measured on another bench and may reframe this entirely.
+
+⊘ **Scope**: `CE-SUBMIT` 0. Route A untouched. Bootability unchanged from §16.96 — both arms
+boot, `SMI_RC=0`, `CUP2_RC=124`, the standing wall.
+
+## §16.98 ★★★★★ ROUTE B FIRES — the missing precondition was a FLAG NOBODY CARRIED FORWARD, and the wall is now the RING'S CONTENT
+
+⚠ **STATUS (2026-08-11): MEASURED, four corners, `traces/boots/w246/` + `traces/boots/w245/`.**
+⊘⊘ **`CE-SUBMIT` is 0 in ALL FOUR corners and nothing executed.** No line here may be read as
+the first forwarded work.
+
+⊘⊘⊘ **§16.97's "route B is unreachable" was TRUE OF A CONFIGURATION AND I WROTE IT ABOUT THE
+CODE.** The correction is folded into §16.97 above the sentences it corrects. It came from the
+coordinator within the hour, and it was right.
+
+### 16.98.1 ★★★★★ The finding — a capability measured four rungs ago, not carried forward
+
+`KAYFABE_PT_WITNESS_EXEC` is what binds the ring's VA. `w234` measured **both arms** and
+committed both logs. Same `pdb=0x201000`, same 8 doorbells:
+
+| | `w234a` (witness **off**) | `w234b` (witness **on**) |
+|---|---|---|
+| `rows` / `shadow` / `wit` | 4 / 0 / 0 | **13348 / 37 / 37** |
+| `hit` for the ring VA | **NONE** | **`0x1024000/Vidmem/start0x200200000/len0x200000`** |
+| `RING-VA-UNBOUND` | 8 | **0** |
+| `PushbufferAperture` | 0 | **9** |
+
+⇒ §16.97's `rows=4 hit=NONE` is **`w234a`'s OFF arm, byte for byte**, and §16.86's
+`PushbufferAperture` premise is exactly `w234b`. **The wall never moved. The flag was never
+armed.**
+
+★★★ **Third occurrence of one shape in one night**: a capability *proven on hardware*, then not
+applied by the rung that needed it (the FB-leaf crossing; `apply_deferring`; now this).
+⚠ **And the flag defaults off for a GOOD reason** — its own doc says *"the disarmed arm IS this
+rung's negative control and a typo that silently disarmed it would make the evidence run and the
+control indistinguishable."* That reasoning is correct and is **exactly** how route B inherited a
+disarmed precondition. ⇒ **a correct default is not a handoff.** A flag that must be armed for a
+capability to exist needs to be named in the *consumer's* preconditions, not only in the
+producer's rationale.
+
+### 16.98.2 ★★★★★ THE SQUARE — and only the full square separates the three explanations
+
+All four at revision `acbb9a3`, `ce_executor=host`, one boot each.
+
+| corner | `PT_WITNESS_EXEC` | `RING_VIDMEM` | `RING-VA-UNBOUND` | `PushbufferAperture` | `RingFbNeverWritten` | **`CE-SUBMIT`** | doorbells |
+|---|---|---|---|---|---|---|---|
+| **A** `w245off` | off | off | **8** | 0 | 0 | **0** | 183 srv / 8 ref |
+| **B** `w245on` | off | **on** | **8** | 0 | 0 | **0** | 183 srv / 8 ref |
+| **C** `w246c` | **on** | off | 0 | **8** | 0 | **0** | 175 srv / **16 ref** |
+| **D** `w246d` | **on** | **on** | 0 | **0** | **0** | **0** | 183 srv / 8 ref |
+
+- **A vs B** — the vidmem flag alone changes **nothing** (§16.97, and it stands).
+- **A vs C** — ★ **the witness is the variable**: `RING-VA-UNBOUND` 8 → 0, and the wall becomes
+  `PushbufferAperture` 8. **§16.86's premise restored, at the current revision.** The 8 doorbells
+  that used to serve-with-nothing-forwarded now **refuse by name** (`16 REFUSED`).
+- **C vs D** — ★★★ **route B removes that refusal**: `PushbufferAperture` 8 → **0**.
+
+⊘ **Neither flag alone gets there. That is why the square was needed** — with only the B/D pair
+one could have concluded *"route B works"*, and with only the A/C pair *"the witness was all it
+needed"*. Both would have been wrong.
+
+### 16.98.3 ★★★★★ ROUTE B WORKS — and the wall is now the RING'S CONTENT
+
+Corner D, all 8 doorbells, one line shape:
+
+```text
+FWD-RING proc=2 chan=N key=K pdb=0x201000
+    RING bytes=65536 cursor=0 live=1 spans=0
+  → NOTHING FORWARDED (the ring decoded to no CE span; the doorbell still reports SERVED)
+```
+
+**64 KiB read out of our own emulated framebuffer**, one live GPFIFO entry found, and the entry
+decoded to **zero copy-engine spans**. Its pushbuffer, from the same boot's descent
+(`gp[0]@0x200224000 = 0x202c00000 + 0x20`, 8 dwords):
+
+```text
+pbm[8w of 32B]: [0] sub4 m0x0    n1 = 0xc7b5      SET_OBJECT  = AMPERE_DMA_COPY_B
+                [1] sub4 m0x240  n3 = 0x2         SET_SEMAPHORE_A/B/PAYLOAD
+                [2] sub4 m0x300  n1 = 0x14        LAUNCH_DMA
+```
+
+★★ **`0x14 & LAUNCH_TRANSFER_MASK(0x3) == 0 == LAUNCH_TRANSFER_NONE`**, and this port's own ABI
+says what that means, cited to the driver header
+(`kayfabe-abi/src/submit.rs:2042`, `ogkm-580: clc7b5.h:86`):
+
+> *"A launch with this moves **no bytes**; it exists to release a semaphore. Decoding one as a
+> copy would report a transfer the engine never performs."*
+
+⇒ **`spans=0` is the CORRECT decode, not a failure.** These 8 doorbells carry a
+**semaphore-release-only** `LAUNCH_DMA` — the CE channel's initialisation fence. **There is no
+copy in them to forward.** ⊘ `CE-SUBMIT` 0 is therefore the *true content* of this population,
+not route B falling short of it.
+
+### 16.98.4 ⊘ The forbidden-#2 residency gate — REACHABLE for the first time, and SILENT
+
+After **eight** reports of *"proven offline only, never fired on hardware"*:
+
+- ⊘ In corners A/B it was **unreachable** (downstream of the `RingVaUnbound` exit).
+- ★★ In corner **D** the path is **live** — `fetch_ring_bytes` ran and returned 65536 bytes — and
+  `RingFbNeverWritten` is **0**. **The gate was reached and did not fire**, because the pages
+  *had* been written. That is the correct outcome and it is the first time the gate has been on a
+  live hardware path at all.
+- ⊘ **Stated as asked, in both directions**: it did not fire, the path was live, and the reason
+  it did not fire is residency being satisfied — not the gate being absent. It remains proven
+  offline (4 arms, negative control watched red).
+
+### 16.98.5 ⊘ Scope, and what did NOT change
+
+- ⊘⊘ **`CE-SUBMIT` 0 in all four corners.** Nothing executed; **prohibition checks do not
+  arise.**
+- Bootability holds in every corner: `no-blocking-under-lock` **0**, `RmInitAdapter failed` **0**,
+  `SMI_RC=0`, `CUP2_RC=124` — the standing `cuCtxCreate` wall, unmoved.
+- ⊘ Route A untouched, and it may still reframe all of this: if the ring can be placed in sysmem
+  at allocation time, route B is a stepping stone rather than the answer.
+- ⚠ **The owner's scope question from §16.86.4 is now LIVE and unanswered**: enumerating the ring
+  is agreed; these are user `proc 2` doorbells, and what may happen *after* enumeration is the
+  owner's call. This rung enumerated and stopped — correctly, and because there was nothing in
+  them to do.
+
+### 16.98.6 ★ The next question
+
+The first CE submission on these channels is a bare semaphore release. **The doorbell that
+carries a real `LAUNCH_DMA` with a data-transfer type has not arrived**, because `cup2` walls at
+`cuCtxCreate` (`CUP2_RC=124`) before issuing one. ⇒ the next measurement needs either a workload
+that reaches a copy, or the `cuCtxCreate` wall cleared first. ⊘ **Route B is no longer the
+blocker; it is now instrumentation waiting for traffic.**
+
+## §16.99 ★★★★★ ALL THREE PRECONDITIONS ARMED AT ONCE — the address plane is COMPLETE, and the wall is a DELIBERATE REFUSAL
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w247/`.** ⊘⊘ **`CE-SUBMIT` is 0 and nothing
+executed.** ⊘ **THE SEMAPHORE'S VA WAS NEVER THE PROBLEM** — see §16.99.1.
+
+### 16.99.1 ⊘ REFUTED FIRST: the semaphore VA resolves, and always did
+
+The brief asked whether `0x2_0440fff0` *"resolves now that the witness is armed"*. ⊘ **It
+resolved in every boot this campaign has**, witness on and off, from committed evidence:
+
+| corner | witness | vidmem | `COMPLETION-DECLARE` | `COMPLETION-WATCH` | site |
+|---|---|---|---|---|---|
+| `w245off` | off | off | 8 | 8 | `GuestRam { gpa: … }` |
+| `w245on` | off | on | 8 | 8 | `GuestRam { gpa: … }` |
+| `w246c` | **on** | off | 8 | 8 | `GuestRam { gpa: … }` |
+| `w246d` | **on** | **on** | 8 | 8 | `GuestRam { gpa: … }` |
+
+and every one ends `NOT-OBSERVED samples=88 … the address WAS readable and the declared payload
+never appeared — a statement about the completion plane, not about the observer`. ⇒ **the
+witness is orthogonal to it**: the witness populates the **CE channels'** VAS (`pdb=0x201000`);
+`SET_REPORT_SEMAPHORE` resolves through the **guest-RAM** plane and always has.
+
+★ Likewise `GR-ADDRESS-CENSUS` is **invariant across all four corners** —
+`operands=5 bound=4 unbound=1 mme_dwords=39` — and identical to `w227c`'s reading at `537894e`
+under `ce_executor=local`. **Neither flag touches the GR address plane.**
+
+⊘ And `unbound=1` **is not a gap**: `gr_execution_boundary.md` §3.4 already established that
+`SET_SHADER_SHARED_MEMORY_WINDOW` is a **window base** (`clc7c0.h:424` names the field
+`BASE_ADDRESS_UPPER`) whose value is ASLR'd and varies per boot, so *"nothing is expected to be
+mapped at a window base, and a walk that faults there is the table being right."*
+⇒ **5 of 5 accounted for.**
+
+### 16.99.2 ★★★★★ THE FIFTH INSTANCE — the crossing that *would* matter also landed behind an unarmed flag
+
+§3.4's real finding is that **3 of the 5 GR operands live in the emulated framebuffer**, which
+the host GPU cannot address, and `gr_execution_boundary.md` §4 records that crossing as
+*"⊘ **does not exist.** `mode2_fb_crossing_question.md` — asserted by name here and **not
+built**."*
+
+⊘⊘ **It was built the very next rung.** `fb_leaf_crossing.md` (w228, `82f9aa5`) — *"Answer:
+built, and it lands on a real GA106"* — behind **`KAYFABE_FB_BACKING=on`**, whose own doc gives
+the now-familiar reason for defaulting off: *"a typo that silently disarmed the crossing would
+make an evidence run and its own negative control indistinguishable."*
+
+⚠ **None of this campaign's nine boots armed it** — `GR-FB-BACKING` count **0** in every one.
+⇒ **fifth instance in one night** of a capability proven on hardware and not carried forward,
+and the third whose cause is *sound engineering upstream*. ★ The doc that names the dependency
+was never told the dependency had been met.
+
+### 16.99.3 ★★★★★ MEASURED — the first boot with ALL THREE armed, on a tree that boots
+
+`w247_acbb9a3_all3` vs its control `w246d_acbb9a3_witon_rbon` (identical but `FB_BACKING` unset).
+⊘ w228's own armed boot predates the bootability regression at `5626939`; **this is the first
+time the three have been armed together on a tree that reaches `RmInitAdapter` at all.**
+
+| | control `w246d` | **`w247` all three** |
+|---|---|---|
+| `GR-FB-BACKING` | 0 | **32** |
+| `HostBackedFb` | 0 | **24** |
+| `placed_as_asked=true` / `false` | 0 / 0 | **24** / **0** |
+| `RING-VA-UNBOUND` / `PushbufferAperture` | 0 / 0 | 0 / 0 |
+| `RingFbNeverWritten` | 0 | 0 |
+| `GR-ADDRESS-CENSUS` | `5/4/1/39` | **`5/4/1/39`** |
+| `SET_REPORT_SEMAPHORE` | `→ GuestRam` | **`→ GuestRam`** |
+| **`CE-SUBMIT`** | **0** | **0** |
+| `COMPLETION-WATCH NOT-OBSERVED` | 8 | **8** |
+| `no-blocking-under-lock` | 0 | 0 |
+| doorbells | 191/183/8 | **191/183/8** |
+| `SMI_RC` / `CUP2_RC` | 0 / 124 | **0 / 124** |
+
+**All five pre-recorded predictions confirmed** (scratchpad `w247_prediction.md`, written before
+the boot): the crossing arms; the three FB operands become `HostBackedFb` mapped **FIXED** at the
+guest's own VAs; the semaphore stays `GuestRam`; the census is unchanged because it counts
+**binding**, not **backing**; and **nothing executes**.
+
+⇒ ★★★ **Every address plane this workload needs is now armed simultaneously and correct**: the
+CE ring binds (witness), route B reads it out of our own framebuffer, and 3 of 5 GR operands are
+**real host `NV01_MEMORY_LOCAL_USER` objects mapped at the guest's own VAs**. ⊘ **And the
+semaphore is still `NOT-OBSERVED`, because nothing points an engine at any of it.**
+
+### 16.99.4 ★★★ THE WALL IS A DELIBERATE REFUSAL, NOT A GAP — and it is already argued
+
+The GR doorbell is refused at `Route::NotACopyEngineChannel` before any execution.
+`gr_execution_boundary.md` (w227) asked exactly the brief's question — *"open the refusal so the
+real host GR engine runs `cuCtxCreate`'s pushbuffer and writes `0x2_0440fff0` itself"* — and
+answered **NO**, naming four properties the GR VA space must have first. §16.99.2 discharges the
+addressing half of property 1. The two that remain are **not** addressing:
+
+- **Property 2 — CLOSED.** *Nothing that is not this guest's memory may be mapped in it*: the
+  isolate's own ring, USERD and semaphore objects must be unreachable, so `alloc_channel_at`'s
+  *"put our control structures in the VAS we were handed"* shape has to change for GR channels.
+  ⚠ **A subtraction, and an architecture change** — the isolate's present value is partly that
+  our objects and the guest's share one space. ⊘ This is the one that leads.
+- **Property 3 — FAULTING/CONTAINED.** ⊘ `[NOT MEASURED]` whether a GR MMU fault on this bench
+  is contained to one channel or takes the host GPU context with it.
+  ★ **`scripts/bench/gpu_fault_containment.sh` exists and has never been asked this question** —
+  the cheapest open item on the board, and it needs no new code.
+
+⊘ **Forbidden #1 holds throughout**: nothing here writes the semaphore. The observer's own line
+says so — *"the observer WATCHES this address; it will never write it"* — and `NOT-OBSERVED` is
+the honest report of a completion plane with no executor behind it.
+
+### 16.99.5 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**; nothing executed; prohibition checks do not arise. Bootability unchanged
+(`no-blocking-under-lock` 0, `RmInitAdapter failed` 0, `SMI_RC=0`, `CUP2_RC=124`). Route A
+untouched. ⚠ §16.86.4's owner question remains live and unanswered.
+
+## §16.100 ★★★★★ PROPERTY 3 IS MEASURED — a guest-reachable GPU fault IS CONTAINED
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w248/`.** `gr_execution_boundary.md` property 3
+carried `[NOT MEASURED]` for four rungs. It is now measured, on the bench, with the instrument
+that already existed. ⊘ No code was written for this.
+
+### 16.100.1 The result — CONTAINED, and the arm that matters is unambiguous
+
+`scripts/bench/gpu_fault_containment.sh` on `vh` (RTX 3060 GA106, host driver 580.159.04),
+`SCRIPT_RC=0`. **All five pre-registered predictions confirmed**
+(`traces/boots/w248/predictions_recorded_before_the_run.md`, committed beside the log).
+
+| arm | result |
+|---|---|
+| **A** baseline victim, idle GPU | `[victim] OK bad=0` rc=0 |
+| **B** attacker faults alone | `sync rc=700 (CUDA_ERROR_ILLEGAL_ADDRESS)`; `context reusable? rc=700 NO (sticky)`; **Xid 4 → 5** |
+| **B2** fresh victim after the fault | rc=0 (⊘ weak arm, fresh context) |
+| ★★★ **C** victim holds a **LIVE context** across the fault | `[loop] DONE iters=2675519 ok=2675519 wrong=0 errors=0` — **victim exit=0** |
+| **D** aftermath | Xid total 6; brand-new victim rc=0; **no** `fell off the bus`, **no** reboot-required |
+
+★★★ **2 675 519 verified iterations of a bystander context, spanning the attacker's MMU fault,
+with zero errors and zero wrong bytes.** ⇒ **the fault is scoped to the offending context; it
+does not take a live bystander with it.**
+
+★★ **And the Xid is exactly the shape property 3 asks about** — the GR engine, not a copy engine:
+
+```text
+NVRM: Xid (PCI:0000:00:07): 31, pid=…, name=gpu_wedge_probe, channel 0x00000008,
+  MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7000_00000000.
+  Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+```
+
+⇒ **`FAULT_PDE`** — the unmapped VA raised a page-directory fault and **aliased nothing**, which
+is property 3's first clause, and the recovery was channel-scoped, which is its second.
+
+### 16.100.2 ⚠ SCOPE, recorded BEFORE the result so it could not be fitted to it
+
+The attacker is a **host CUDA process faulting in its own context on its own channel** — not
+guest-authored methods on our isolate's GR channel. The script says so itself: *"⊘ It is NOT a
+malformed pushbuffer … what it shares with that shape is that it produces a REAL MMU fault and a
+REAL Xid, so the escalation path is entered."*
+
+⇒ **Established**: the blast radius of a GR MMU fault + Xid 31 on this GPU and driver is the
+faulting context. The `guest_blast_radius.md` §7 escalations — whole-runlist preempt, node-level
+reboot latch, GSP death — **did not occur**.
+⊘ **Not established**: that a fault raised *from our isolate's GR channel, in a VAS we built, by
+guest methods* has the same radius. That needs GR execution, which property **2** blocks. ⇒
+property 3 is **discharged for the hazard it names**, and the residual is a property-2 question.
+
+★ **Corroboration from our own code, unlooked-for**: the same host's `dmesg` carries **four
+earlier Xid 31 MMU faults raised by kayfabe itself** — `name=kayfabe-rm-ladd` ×3 and
+`name=a_guests_ring_m` ×1, all `ENGINE CE0 HUBCLIENT_CE1 … FAULT_PDE ACCESS_TYPE_VIRT_READ`. The
+bench has been booting normally ever since. **We have already faulted this GPU four times and it
+survived every one.**
+
+### 16.100.3 ★★★★★ THE SIXTH INSTANCE — the host's own dmesg has been diagnosing us by name
+
+Our engine-object census prints `REFUSED Rm(Other(64))` — **12 of them in `w247` alone**. On the
+**same machine, at the same instant**, the host driver prints the sentence:
+
+```text
+NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible
+  with this engine (requested: 0x2 current: 0x0).
+NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+```
+
+**241 of each, paired 1:1**, accumulated across this campaign's boots. And `Rm(Other(64))`
+decodes: `NV_STATUS_CODE(NV_ERR_INVALID_STATE, 0x00000040, "Generic Error: Invalid state")`
+(`ogkm-580.159.04: kernel-open/common/inc/nvstatuscodes.h:93`) — **`64 == 0x40`**.
+
+⇒ ★★ **We print a number; the driver on the same box prints the cause; no rung has ever read
+it.** Sixth instance tonight of *an instrument that exists and was never consulted* — and the
+first where the instrument is **not ours**.
+⚠ `[CORRELATION, not causation]` The pairing is by timestamp and count, not by a join on a
+channel id. What is certain is that the host driver has a named diagnosis for engine-object
+allocation failures and it is one `ssh vh dmesg` away. **Read the host's dmesg beside our own
+census.** ⊘ `boot_capture.sh` captures the **guest's** dmesg only.
+
+### 16.100.4 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**; nothing was forwarded and nothing executed — this rung ran no guest at all.
+⊘ The bench is **healthy**: `nvidia-smi` answers, a fresh context computes correctly, no
+node-level escalation. ⊘ Property **2 (CLOSED)** is untouched and remains the owner's call.
+
+## §16.101 ★★★★★ THE HOST'S dmesg IS CAPTURED — the join is a SOURCE IDENTITY, and it does NOT close
+
+⚠ **STATUS (2026-08-11): harness landed, measured, `traces/boots/w250/`.** ⊘ `CE-SUBMIT` **0**;
+nothing executed. ⊘⊘ **My own prediction 3 was FALSIFIED and the gap is the finding.**
+
+### 16.101.1 ★★★★★ NOT A CORRELATION — the two dmesg lines and our status are ONE RETURN
+
+§16.100 offered `Rm(Other(64))` ↔ the host's runlist message as a **correlation**, paired by
+count. ⊘ **It is stronger than that, and the vendor source settles it without a single boot:**
+
+```c
+// kernel_fifo_gm107.c:407-418  — kfifoRunlistSetId_GM107
+if ((runlistId != kchannelGetRunlistId(pKernelChannel)) && kchannelIsRunlistSet(...)) {
+    NV_PRINTF(LEVEL_ERROR, "Channel has already been assigned a runlist incompatible "
+                           "with this engine (requested: 0x%x current: 0x%x).\n", ...);
+    return NV_ERR_INVALID_STATE;                      // ← 0x40 == 64
+}
+// channel_descendant.c:243-252 — chandesConstruct_IMPL, the constructor for ANY object on a channel
+status = kfifoRunlistSetIdByEngine_HAL(...);
+if (status != NV_OK) {
+    NV_PRINTF(LEVEL_ERROR, "Invalid object allocation request on " FMT_CHANNEL_DEBUG_TAG "\n", ...);
+    SLI_LOOP_RETURN(status);                          // ← the SAME status leaves for our ioctl
+}
+```
+
+with `NV_STATUS_CODE(NV_ERR_INVALID_STATE, 0x00000040, …)`
+(`ogkm-580: kernel-open/common/inc/nvstatuscodes.h:93`). ⇒ **the two log lines and the `64` we
+print are one failure at three levels of one call.** Not a timestamp coincidence — an identity.
+
+### 16.101.2 ⊘⊘ REFUTED: this is NOT the GR wall, and the two populations must not be merged
+
+The brief read the host's message as possibly *"the wall, in the driver's own words … the 8
+refused doorbells are graphics-family on channels we bind."* ⊘ **Measured, they are disjoint:**
+
+| population | count | class / engine | reaches the host? |
+|---|---|---|---|
+| `ENGINE-OBJECT … REFUSED Rm(Other(64))` | **12** | **`0xc7b5` — `AMPERE_DMA_COPY_B`, a COPY-ENGINE object. 12 of 12. ZERO graphics.** | **yes** — this is RM's refusal |
+| `DOORBELL-REFUSED [Route::NotACopyEngineChannel]` | **8** | `GrCompute` channels | **no** — **our own** router, locally, no host verb at all |
+
+⇒ **the driver has never said anything about the GR wall.** It is talking about our **copy-engine
+object allocations**. Merging the two would put words in the vendor's mouth.
+
+★ And the host names the engine, which our side never did:
+
+```text
+kfifoRunlistSetId_GM107: … (requested: 0x1 current: 0x0)   ×8
+kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2   ×8   → channel 0x0000000c
+kfifoRunlistSetId_GM107: … (requested: 0x2 current: 0x0)   ×6
+kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3   ×6   → channel 0x00000004
+```
+
+⇒ **we are allocating ASYNC copy-engine objects (`CE2`, `CE3` — runlists 1 and 2) on host
+channels already bound to runlist 0.** ★ That also explains the successes: the 8 channels that
+take a `0xc7c0` *and* a `0xc7b5` both succeed, because on a graphics channel a CE object binds as
+**GRCE** and does not change the runlist. `[HYPOTHESIS]` for the runlist↔engine numbering — the
+engine names are the driver's, the mapping to a cause is ours and is not yet sourced.
+
+### 16.101.3 ⊘⊘ THE JOIN DOES NOT CLOSE — 12 ours, 14 the host's, and the gap is real
+
+**Prediction 3, recorded before the boot, said `12 = 12`. It is wrong.**
+
+| | count |
+|---|---|
+| our engine-object refusals that **issued a host verb** (`Rm(Other(64))`) | **12** |
+| our refusals that issued **no** verb (`NoVas`) | 2 |
+| our census total (`seen=32 forwarded=18` ⇒ 14 refused) | 14 |
+| **host `chandesConstruct_IMPL` failures in this boot's delta** | **14** |
+| **host `kfifoRunlistSetId_GM107` failures** | **14** |
+
+⇒ **12 of our refusals reached the host; the host recorded 14.** Our own counters make the 12
+exact — the other two never issued a verb — so **two host-side engine-object failures came from a
+path that is not `forward_engine_object`.** ⊘ Named and unexplained. ★ A closed join would have
+confirmed what §16.100 already argued; **this gap is new information**, and the channel split
+(6 on `0x04`, 8 on `0x0c`) is the thread to pull: our 12 group 6/4/2 by parent family, so the
+6-group matches `0x04` exactly and the 8-group has **two more than we can account for**.
+
+### 16.101.4 ★★ The harness, and the placement defect its own validating boot caught
+
+`boot_capture.sh` now takes a **watermark** of the host's ring buffer before the boot (phase 0b)
+and persists the **delta** afterwards as `run_<tag>_hostdmesg.log`, carried into the repo.
+⊘ A watermark, not a snapshot: `dmesg` on a long-lived bench holds every boot the host ever
+served, which is exactly why *241 lines* was a campaign total nobody could attribute.
+
+⊘⊘ **NOT asserted non-empty, deliberately** — unlike every other capture here. Zero host lines is
+a legitimate result (the boot provoked no host diagnostic), so an emptiness assertion would fail a
+good boot and pressure the next reader into "fixing" a harness that was telling the truth. What is
+asserted is that the capture **ran**, and the count is **stated in the probe log either way**.
+
+★★★ **And the first placement was wrong: `[measured, w249]` it captured 3 of 53 lines**, because
+it sat *before* the workload hook and the host's diagnostics are provoked by the workload, not by
+the driver load. **The instrument was placed where it could not see the event** — the class this
+campaign has now hit seven times — and only the validating boot showed it. Moved to phase 3c,
+after the hook; `w250` is the re-validation.
+
+### 16.101.5 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**; no guest work was forwarded. Bootability unchanged. Property 2 untouched.
+⊘ The runlist→cause reading in §16.101.2 is a `[HYPOTHESIS]`; the engine names and the status
+identity are the vendor's and are sourced.
+
+## §16.102 ★★★★ THE SECOND PATH IS **NOT** THE CE EXECUTOR — hypothesis refuted, and the gap is 2 ATTEMPTS not 2 OBJECTS
+
+⊘⊘ **SUPERSEDED IN PART (2026-08-11) BY §16.105 — MEASURED, `traces/boots/w254/`.** The CE-executor
+refutation below **stands**. Its *reframe* does not: **there was no gap.** Our census was
+**truncated** by a shared 32-line print budget (`18 + 2 + 12 = 32`, exactly, in both boots), and
+with a per-class budget the count is **14**, matching the host's 14 one-for-one. ⊘ And *"the
+host's 14 land on two host channels"* is not a statement about two channels: the driver prints
+`(runlistId << 24) | ChID`, a **recycled chid**, and the two values are **our two isolates** over
+**fourteen** distinct host channels. Read §16.105 before using any number below.
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w251/`. THE HYPOTHESIS IS REFUTED.** ⊘
+`CE-SUBMIT` **0**; nothing executed.
+
+### 16.102.1 ⊘ First, the coordinator's item 2 — NEITHER branch is right
+
+The brief offered: *"either the funnel census is stale, or the second path does not go through
+`Worker::execute` at all. Both are findings; the second is bigger."*
+
+⊘ **Neither.** From source: `HostRmBackend::ce_channel` (`rm.rs:4298`) allocates the isolate's
+**own** CE engine object — *"the one call site in the tree that allocates an engine object from a
+`HostClasses` rather than from guest intent"* (`:3472-3482`) — and it is reached by
+`forward_ce → verb_op → Worker::execute → VerbPlan::CeSplit → ce_copy → ce_copy_outcome →
+ce_channel`. **`forward_ce` is one of the eight the §16.92 census already enumerated.**
+
+⇒ The census is **not stale**, and the path **is** under `Worker::execute`. It is a *different
+verb* whose **side effect two layers down, inside the isolate, is an engine-object allocation the
+core never asked for.** ★★ `ENGINE-OBJECT` is a census of the **core's intent**, not of engine
+objects allocated — `forwarded_counts_intent_not_work`, one layer lower.
+
+### 16.102.2 ⊘⊘ AND THE HYPOTHESIS BUILT ON IT IS WRONG
+
+`forward_ce` runs only under `KAYFABE_CE_EXECUTOR=host`. Prediction 2, recorded before the boot:
+*"the host's failure count drops from 14 to 12 under `local`."*
+
+| | `w250` (`ce=host`) | `w251` (`ce=local`) |
+|---|---|---|
+| ours `REFUSED Rm(Other(64))` | 12 | **12** |
+| host `chandesConstruct_IMPL` | 14 | **14** |
+| host `kfifoRunlistSetId_GM107` | 14 | **14** |
+| engines | 8×`CE2`, 6×`CE3` | **8×`CE2`, 6×`CE3`** |
+| channels | 6×`0x04`, 8×`0x0c` | **6×`0x04`, 8×`0x0c`** |
+| `RING-PROJ` (the executor really did change) | 8 | **0** |
+
+**Byte-identical host-side failures across both executors**, while `RING-PROJ` 8→0 proves the arms
+genuinely differed. ⇒ **the second path is invariant to the CE executor, so it is not
+`ce_channel`.** The hypothesis is refuted by its own discriminator.
+
+### 16.102.3 ★★★ WHAT THE NUMBERS ACTUALLY SAY — the gap is 2 ATTEMPTS, not 2 OBJECTS
+
+The host's 14 failures land on **exactly two host channels** (`0x04`, `0x0c`) while our 12
+refusals name **twelve distinct guest parents**. ⇒ **a 1:1 refusal↔object model was never right**:
+many guest channels resolve to few host channels, and the host is counting **attempts on two
+channels**, not fourteen objects.
+
+★ **Leading hypothesis, and it is labelled**: `SharedDevice::verb_op` **retries** — on converging
+staleness and on `FwdFault::IsolatePending`, bounded by `MAX_COMMIT_RETRIES` — and each retry
+**re-issues the host alloc** while the core reports **one** outcome. 14 attempts, 12 reported
+outcomes ⇒ **2 retries**. ⊘ `[HYPOTHESIS — NOT MEASURED]`. The next discriminator is to count
+retries directly rather than infer them from a difference.
+
+⇒ ★★ **The class, if it holds: our census counts OUTCOMES; the driver counts ATTEMPTS.** A
+per-refusal join can never close across a retry loop, and the 2 was never a missing caller.
+
+### 16.102.4 ⊘ Scope
+
+⊘ `CE-SUBMIT` **0**. ⊘ `w251` ran `ce_executor=local`, where `RING-PROJ` is 0 by construction, so
+it says **nothing** about route B and is not offered as if it did. Property 2 untouched.
+
+## §16.103 ★★★★ THE RETRY HYPOTHESIS IS REFUTED TOO — the count is ZERO, by control flow
+
+⊘⊘ **SUPERSEDED IN PART (2026-08-11) BY §16.105 — MEASURED, `traces/boots/w254/`.** The retry
+refutation below **stands** (the count really is zero). ⊘ But **the gap it was refuting does not
+exist**: the 12 was a **truncated** census (a shared 32-line print budget; `18 + 2 + 12 = 32`
+exactly), and with a per-class budget our count is **14 = 14**, matching the host one-for-one and
+in the same order. §16.103.3's *"two host engine-object allocation attempts per boot are not
+accounted for by our census"* is **CLOSED — they were always ours, and the log stopped before
+them.** ⊘ §16.103.3's closing call for a KEY was right and the key was built; its diagnosis
+(*"the unit was the weak part"*) was not.
+
+⚠ **STATUS (2026-08-11): ANSWERED, source-only, no boot.** ⊘ `CE-SUBMIT` **0**. **Both
+pre-registered hypotheses for the 12-vs-14 gap are now refuted, and the gap stands.**
+
+### 16.103.1 The number, measured where it lives
+
+§16.102 offered: *"`verb_op` retries and each retry re-issues the host alloc — 14 attempts, 12
+outcomes ⇒ 2 retries"*, labelled `[NOT MEASURED]`. **Counting it directly gives zero**, and the
+instrument is control flow — the right one for a control-flow question:
+
+- `SharedDevice::verb_op` has **three** `continue` sites. Two are **before** `worker.execute` (the
+  `IsolatePending` materialize, and the pool-full park) — nothing has been issued yet, so neither
+  can duplicate a host alloc. The third is on the **`Ok(reply)` commit path**: it fires when a
+  *successful* execute's commit was refused as stale.
+- After `let Ok(reply) = executed else { … }`, the failure arm ends in **`return Err(…)`**. There
+  is **no `continue`**. ⇒ **a host verb that FAILED is never re-issued by `verb_op`.**
+- One level down, `Worker::execute`'s `VerbPlan::EngineObject` arm calls
+  `rm.alloc_engine_object(..)` **exactly once** and on `Err` unwinds and returns. Its three loops
+  are in the `CeSplit` and unmap/free arms — **not** this one.
+
+⇒ **Retries on the failing engine-object path are 0 at both levels.** *A difference of two was
+never evidence of two retries*, which is precisely why this rung replaced the inference.
+
+### 16.103.2 ⊘ And the last named candidate is eliminated
+
+`probe_guest_reachability` — the only other caller of `alloc_ce_engine_object` — has **exactly one
+caller in the tree**: `kayfabe-isolate-host/src/bin/rmladder.rs`, a **binary**, not the boot path.
+It does not run during a boot.
+
+### 16.103.3 ⊘⊘ WHERE THIS LEAVES IT — narrowed, and honestly unexplained
+
+**Two host engine-object allocation attempts per boot are not accounted for by our census**, and
+they are **not** a retry, **not** the CE executor (measured, byte-identical across both arms), and
+**not** the reachability probe. Reproduced on three boots.
+
+★ **The next instrument is a KEY, not another hypothesis.** The host names **two** channels
+(`0x04`, `0x0c`); our census names **twelve** guest parents and never prints the host channel
+handle it forwarded onto. ⇒ **print the host channel in `report_engine_forward`** and the two sides
+share a join key; the question stops being inferable and becomes answerable. ⊘ Three hypotheses
+have now been paid for by inference; the fourth should be paid for by a key.
+
+⚠ **And the instruction that started this line of work was unachievable in principle.** *"Upgrade
+the correlation to a join"* cannot be done per-refusal when one side counts **attempts** and the
+other counts **outcomes** — §16.102's reframe. The correlation was never the weak part; the
+**unit** was.
+
+## §16.104 ★★★★★ THE ORPHAN GATE — built on the compiler, and it refuted both of its own known-positives
+
+⚠ **STATUS (2026-08-11): BUILT and VALIDATED.** `scripts/orphan_gate.sh`. ⊘ `CE-SUBMIT` **0**.
+
+### 16.104.1 ⊘⊘ REFUTED FIRST — the two known-positives are not both orphans, and the difference IS the design
+
+| verb | one-hop *"has a caller"*? | reachable from production? | orphan today? |
+|---|---|---|---|
+| `SharedDevice::apply_deferring` | yes | **YES** — `shim.rs:2768` → `Bridge::deliver` → policy chain → `RegPlane::write` → the vCPU trap | ⊘ **NO — wired in w244** |
+| `Worker::export_backing` | yes (`child.rs`, its own tests) | **NO** — zero references in `kayfabe-rt`/`-core`/`-qemu-raw`/`-fwd` | ✅ **YES** |
+
+★★★ A one-hop caller check returns **the same answer for both** — the `MapGuestRam` trap one
+level up. ⇒ **the gate must ask reachability, not caller count**, and *"a gate that cannot find
+those two"* had to become *"a gate that finds the one and clears the other."* It does both.
+
+### 16.104.2 The instrument — enumeration by text, VERDICT by compiler
+
+For each candidate `pub fn`: rewrite to `pub(crate) fn`, run **`cargo check --workspace`**,
+restore. **Compiles ⇒ no caller outside its crate ⇒ orphan.** `MapGuestRam` cannot pass: removing
+its visibility does not compile.
+⊘ **`--all-targets` deliberately omitted** — integration tests are external crates, so including
+them would report a verb exercised *only by its own harness* as wired, which is precisely the
+shape being hunted.
+⚠ **Stated, not implied**: trait methods inherit the trait's visibility and are **out of scope**;
+so is a verb reachable only from another orphan (the gate reports the outermost).
+⊘ **Exits 0 always.** A gate that goes red on day one is disabled on day two.
+
+### 16.104.3 ⊘⊘ THE GATE'S OWN BASELINE CHECK CAUGHT A DEFECT IN THE GATE
+
+First run: *"the tree does not compile before any mutation"* — with `pub fn` on disk and `git
+status` clean, yet `method 'apply_deferring' is private`. **`cp`/`mv` restore hands the file the
+backup's mtime**, older than the mutated build's fingerprint, so **cargo served the mutated
+compilation.** Every verdict after the first would have been confident nonsense.
+⇒ every restore now `touch`es. ★ **The baseline check was written for an unrelated reason and
+caught this instead** — a check earns its keep by failing for a reason its author did not have.
+
+### 16.104.4 First list, triaged
+
+127 candidates across two crates; **6 of the first 18** flagged, all in `kayfabe-fwd`:
+`checkout`, `verb_fault`, `publish_backing`, `pin_guest_ram`, `back_fb_leaf`, `resolve`.
+★ **One coherent family**: `kayfabe-rt` calls `kayfabe_fwd::plan_*`/`commit_*` (the sharded split)
+and never the **composed** single-threaded form — the same shape §16.80 recorded for
+`forward_engine_object`. ⊘ A triage list, not a bug list.
+
+### 16.104.5 ⊘ The channel KEY is NOT "a line of logging" — scoped out with its shape
+
+The brief called it one line. It is not: **the refusal path carries no host channel.**
+`EngineObjectForwarded` (`kayfabe-fwd/src/lib.rs:2905`) has `engine`, `host_object`,
+`materialized_channel`, `reused` — **no channel** — and it exists only on success;
+`FwdFault::Rm(RmError)` (`:740`) carries only the RM error. ⇒ printing the host channel beside a
+**refusal** requires widening the fault or threading `plan.channel` out of
+`exec_engine_object`'s failure path — a typed change across `kayfabe-fwd`.
+⊘ **Not attempted at the end of a long session**, where a rushed edit to the forwarding plane is
+the worst available trade. The shape is named so the next rung starts from it.
+
+## §16.105 ★★★★★ THE REFUSAL NAMES ITS HOST CHANNEL — and the join key the brief asked for DOES NOT EXIST
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w254/`. THE JOIN CLOSES, 14 : 14, and BOTH
+of this rung's own pre-boot refutations HELD.** ⊘ `CE-SUBMIT` **0**; nothing here executes guest
+work, and the underlying defect is untouched.
+
+### 16.105.1 ⊘⊘ REFUTED FIRST — `chandesConstruct_IMPL` DOES NOT PRINT A HANDLE
+
+§16.103 ended: *"print the host channel in `report_engine_forward` and the two sides share a join
+key."* ⊘ **They cannot.** The value the driver prints is not an RM handle:
+
+```c
+NV_PRINTF(LEVEL_ERROR, "Invalid object allocation request on " FMT_CHANNEL_DEBUG_TAG "\n",
+          kchannelGetDebugTag(pKernelChannel));
+/* ogkm-580.159.04: src/nvidia/src/kernel/gpu/fifo/channel_descendant.c:246-250 */
+
+#define FMT_CHANNEL_DEBUG_TAG "channel 0x%08x"
+static inline NvU32 kchannelGetDebugTag(const struct KernelChannel *pKernelChannel) {
+    if (pKernelChannel == NULL) return 4294967295U;
+    return (pKernelChannel->runlistId << 24) | pKernelChannel->ChID;
+}
+/* ogkm-580.159.04: src/nvidia/generated/g_kernel_channel_nvoc.h:206-207, 1493-1497
+   identical in research_clones/ogkm (610.43.02) */
+```
+
+⇒ `channel 0x00000004` and `channel 0x0000000c` are **`runlistId = 0` with `ChID = 4` and
+`ChID = 12`** — a *hardware channel id*, drawn from a per-runlist pool and **recycled on free**.
+Our side's identity is an RM handle: `FIRST_HANDLE = 0xCAFE_0001`
+(`kayfabe-isolate-host/src/rm.rs:166`) minted by `Conn::mint` (`:1286`), which is
+`next.wrapping_add(1)` — **monotone, never recycled**. The two number spaces are disjoint by
+construction, and the bench runs exactly the tree cited (**open 580.159.04**, verified in
+`/proc/driver/nvidia/version`).
+
+★★ **This changes what §16.102's headline finding can mean.** *"The host's 14 land on exactly two
+host channels"* is not a statement about two channels. Two identical debug tags are equally
+consistent with **one long-lived channel** and with **N channels each created, refused, freed, and
+handed the same chid straight back** — which is exactly the shape a Case-1 forward whose channel
+is materialized in-chain produces, because its unwind frees the channel it just built. ⇒ the join
+is by **grouping and cardinality**, never by equality, and the interesting number is *how many
+distinct host channels OUR side attempted on*.
+
+⇒ ★ **A citation to a driver's log LINE is not a citation to its VALUE.** Three rungs read `0x04`
+/ `0x0c` as handles because they are printed in the same place a handle would be. Nobody opened
+`kchannelGetDebugTag` until the key was being built.
+
+### 16.105.2 ⊘⊘ REFUTED SECOND — "ours 12" IS READ OFF A SATURATED COUNTER
+
+`ENGINE_FWD_REPORT_MAX = 32` (`kayfabe-qemu-raw/src/shim.rs`) was a **shared** budget over
+forwards and refusals. Decompose the printed lines of the two committed boots:
+
+| | `w250` | `w251` |
+|---|---|---|
+| `FORWARDED` | 18 | 18 |
+| `REFUSED NoVas(..)` (no host verb issued) | 2 | 2 |
+| `REFUSED Rm(Other(64))` | 12 | 12 |
+| **sum** | **32** | **32** |
+
+⇒ **the instrument stopped exactly at its own limit**, on the last refusal, in both boots.
+§16.101.3's row *"our census total (`seen=32 forwarded=18` ⇒ 14 refused)"* reads `seen` off the
+**last line the bound allowed**: it is the last *observable* value, not a total. Outcomes 33 and
+34 would be invisible — and `18 + 2 + 14 = 34` is precisely what closes 14-vs-12 with **no second
+allocator, no retry, and no missing caller.**
+
+⊘ **Truncation was never excluded**, and it is now the cheapest surviving explanation of a gap
+that has cost three refuted hypotheses. ⇒ the budget is now **per outcome class**: a hostile guest
+is still bounded (2 × 32 lines), the real workload's whole shape (18 + 16) prints, and the marker
+names *which class* saturated. ⚠ The old comment claimed *"the bound costs detail, never the
+count"* — true of `[seen=…]`, which nothing downstream ever read; **the numbers people counted
+were the lines.**
+
+★★ Same family as the oracle's `dlen=0` rows and the zero-byte job artefact: **a saturated
+instrument reports its own limit, and the reading looks like data.**
+
+### 16.105.3 The change — where the handle exists, and why nowhere else
+
+| layer | before | after |
+|---|---|---|
+| `kayfabe_isolate::VerbFailure` | `{ err, orphans }` | `{ err, orphans, on: Option<HostHandle> }` |
+| `kayfabe_fwd::FwdFault` | `Rm(RmError)` | `Rm { err, on }` |
+| `verb_fault` | `(proc, err, reason)` | `(proc, err, reason, on)` |
+| census | `REFUSED {e:?}` | `REFUSED host_chan=0x… {e:?}` |
+
+⊘ **It could not be threaded from the plan**, which is what the brief offered as the alternative.
+`EngineObjectPlan::channel` is `None` for a first forward — the host channel is built **inside the
+same verb chain** — and the chain's unwind then **frees** it. So the identity is in the plan (no),
+in core state (no), and in `VerbFailure::orphans` (no: that enumerates what the unwind could
+**not** dispose of, i.e. is empty exactly when the unwind worked). `Worker::execute`'s
+`alloc_engine_object` arm is the one instant it is knowable. Two tests in
+`tests/tests/engine_context.rs` pin both halves — the in-chain channel is named **and** freed, and
+a pre-existing channel is named **and not** freed, so `on` cannot degenerate into "whatever this
+chain just allocated".
+
+★ `Rm` became a **struct variant** rather than gaining a sibling `RmOn`: two variants meaning
+*"RM refused"* is the `two_projections_of_one_fact_disagreeing` shape, and every matcher testing
+for one would silently miss the other. The compiler enumerated all 19 sites; none was found by
+text search.
+
+⊘ **`on` is an identity for a report, never a live handle** — on the path that matters the object
+is already freed when the caller reads it. It is dropped on the `Cancelled` arm of `verb_fault`,
+because naming a host object in a fact about the *requester* invites exactly the misattribution
+§12.10 records.
+
+### 16.105.4 ★★★★★ MEASURED — 14 : 14, positionally, and the "two channels" are our two ISOLATES
+
+`w254_e2b6c86_cel_hostdmesg` vs its control `w251_acbb9a3_cel_hostdmesg`. ⊘ `git diff acbb9a3
+e2b6c86 -- crates/` is empty apart from this rung's change, so the two boots differ by **exactly
+the instrument**.
+
+| | `w251` | **`w254`** |
+|---|---|---|
+| `ENGINE-OBJECT` lines printed | 32 (**the bound**) | **34** |
+| `REFUSED Rm(Other(64))` | 12 | **14** |
+| `REFUSED NoVas(..)` (no verb issued) | 2 | 2 |
+| `FORWARDED` | 18 | 18 |
+| distinct host channels named on the refusal path | *unprintable* | **14** |
+| host `chandesConstruct_IMPL` / `kfifoRunlistSetId_GM107` | 14 / 14 | 14 / 14 |
+| host channels named | `6 × 0x04`, `8 × 0x0c` | `6 × 0x04`, `8 × 0x0c` |
+| doorbells | 191/183/8 | 191/183/8 |
+
+Ours, **in order**: 6 refusals from **isolate 0** (`0xcafe0009, 0017, 0025, 002c, 0033, 003a`),
+then 8 from **isolate 2** (`0xcafe0039, 003e, 0043, 0048, 004d, 0052, 0057, 005c`). The host's, in
+order: **6 × chid `0x04`**, then **8 × chid `0x0c`**. Fourteen against fourteen, 1:1, same order,
+same 6/8 split. Both `NoVas` refusals print `host_chan=NONE` — correctly: they issue no verb.
+
+★★★ **The host's "two channels" are our two ISOLATES.** Fourteen *distinct* host channel objects —
+`mint()` is monotone, no handle repeats — each built inside its own failing chain, refused, and
+freed, which returns the chid to the pool so the next attempt **in the same isolate** is handed it
+straight back.
+
+⇒ ⊘⊘ **No second allocator, no retry, no missing caller.** §16.102's *"the gap is 2 ATTEMPTS, not
+2 OBJECTS"* is **superseded**: the gap was **2 LOG LINES**, and §16.103's *"two host engine-object
+allocation attempts per boot are not accounted for"* is closed — they were always ours.
+
+### 16.105.5 ⊘ What this cost, and the lesson that is not about the port
+
+Three rungs (§16.101–§16.103) refuted three hypotheses about a gap that had two causes, **both
+legible from artifacts already committed and neither requiring a boot**: `18 + 2 + 12 = 32`
+exactly, and `kchannelGetDebugTag`. §16.103's closing line — *"the correlation was never the weak
+part; the **unit** was"* — was wrong in an instructive way. The unit was fine. What failed was
+
+- ★★ **an instrument reporting its own limit as data** (the shared print budget), and
+- ★★ **a value read as the kind of thing printed next to it** (a chid read as a handle, because
+  `chandesConstruct_IMPL` is where a handle would be).
+
+⇒ ★ **Before hypothesising about a difference between two counts, decompose each count against its
+own instrument's bounds, and open the source of every number you did not print yourself.** Both
+checks are minutes; the three rungs were not.
+
+⊘ The defect itself is **untouched**: we still allocate an async copy-engine object (`CE2`/`CE3`,
+runlists 1 and 2) on a host channel bound to runlist 0, and every one of the 14 still fails. This
+rung made the failure *countable and attributable*; it did not fix it.
+
+## §16.106 ★★★★★ THE CHANNEL FOLLOWS THE OBJECT'S DECLARED COPY ENGINE — all 14 refusals have ONE cause, and it is a constant of ours
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w255/`. 14 → 0, ON BOTH SIDES.** 8 of 8
+predictions. ⊘ `CE-SUBMIT` **0**, the guest's own `dmesg` is byte-identical to `w254`, and **no
+execution-plane rung is claimed**.
+
+### 16.106.1 What decides the runlist — read from the driver, not from us
+
+1. **A channel's runlist comes from its GROUP.** `kchangrpapiConstruct_IMPL` stores
+   `NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS.engineType`
+   (`ogkm-580.159.04: src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c:161-179`),
+   `engineDesc → runlistId` is translated at `:1251-1257`, and `kchannelConstruct_IMPL` stamps it
+   onto every channel that joins (`kernel_channel.c:885-897`).
+2. **An engine object's engine comes from its OWN alloc params.** `chandesConstruct_IMPL` calls
+   `pParamToEngDescFn` (`channel_descendant.c:159-166`); for every `*_DMA_COPY_*` class that is
+   `kceGetEngineDescFromAllocParams` (`src/nvidia/src/kernel/gpu/ce/kernel_ce_context.c:99-165`),
+   where **`VERSION_1` reads `NVB0B5_ALLOCATION_PARAMETERS.engineType` as an
+   `NV2080_ENGINE_TYPE_COPY(i)` ORDINAL** and **`VERSION_0` as a bare INSTANCE INDEX**; any other
+   version → `ENG_INVALID`.
+3. **The two must then agree.** `chandesConstruct_IMPL:243` → `kfifoRunlistSetIdByEngine_GM107` →
+   `kfifoRunlistSetId_GM107`, whose *first branch* returns `NV_ERR_INVALID_STATE` (`0x40` = 64)
+   and prints both numbers.
+
+⇒ **Checked against ours:** `HostRmBackend::alloc_channel` lowered `EngineKind::Ce` through
+`engine_type_for`, which hardcodes `engine_type_copy(0)` = `ENGINE_TYPE_COPY0`. That function's
+**own measured sweep** (RTX 3060 / 580.159.04, `--engines`) records `COPY(0)`/`COPY(1)` →
+**runlist 0**, `COPY(2)` → **1**, `COPY(3)` → **2**. The host log's `current: 0x0` is our
+`COPY0`; its `requested: 0x1` for `CE2` and `0x2` for `CE3` are the guest's. **Both ends of the
+message are accounted for by the table, and nothing is inferred from the symptom.**
+
+★★★ **The core cannot express the instance at all.** `EngineKind::Ce` names *a* copy engine and
+never *which*, so the adapter had to pick — and `engine_type_for`'s own closing paragraph says
+choosing CE2+ *"is a scheduling decision with a cost … which nothing at this rung is in a position
+to make. Recorded rather than guessed at."* ⊘ That sentence is still true, **and the decision was
+never ours to make: the guest already made it**, in the eight bytes it hands us. Third instance in
+this campaign of a doc that named a dependency and was never told the dependency was already met
+(§16.99.2's *"the doc that names the dependency was never told the dependency had been met"*).
+
+### 16.106.2 The repair, and the one that was rejected
+
+| | |
+|---|---|
+| **Chosen** | move the **channel** to the engine the object declares |
+| Rejected | rewrite the **object's** `engineType` to `COPY0` |
+
+1. **The declaration is not ours to edit.** The same ordinal leaves the guest again in
+   `NVA06F_CTRL_CMD_BIND` — `engineType = 11` = `COPY2`, measured on real hardware
+   (`traces/real_ga106/rpc_transcript_real_ga106.txt:63`). Rewriting leaves the guest believing
+   `COPY2` while the host runs `COPY0`: a disagreement with no error at any layer.
+2. **It is a wrong ANSWER, not a missing one.** `COPY0`/`COPY1` are the GRCE pair on the graphics
+   runlist, so forcing them serialises copies against GR work the guest expects to overlap.
+3. **It deliberately re-creates the C's `dma_copy_class_alloc_params` defect**, immediately after
+   measuring it.
+
+`RmBackend::alloc_channel` therefore gains `hosting: Option<HostedObject>` — *the engine object
+this channel is being materialized to host* — and the adapter reads the instance out of the
+guest's own blob through `CeAllocParams::declared_copy_engine_type`, which is
+`kceGetEngineDescFromAllocParams` transcribed with **both** versions. ⊘ `None` from it means
+*"declares no copy engine we can name"*, **never "copy engine 0"**: the fall-through reaches
+`COPY0` through the unchanged `engine_type_for` path, which is a different sentence.
+
+⊘ **Scope, narrow and deliberate:** only `EngineKind::Ce`, and only for a declaration RM itself
+would accept. The 8 forwards that already succeed are **GR** channels taking a CE object as
+**GRCE**, and keying on the class alone would break them by building a CE channel for a GR
+context.
+
+### 16.106.3 ⊘⊘ THE DECLARATION HAS TO CROSS THE ISOLATE WIRE
+
+`isolate_plane=real` puts the real adapter in the **child process**; `HostIsolate::alloc_channel`
+is an RPC (`Request::AllocChannel`). A version of this fix that widened only the trait would
+compile, pass every in-process test, and be **dead on the one path a boot exercises**. So the
+wire carries it, with an **explicit presence byte** — `class = 0` with empty params is a legal
+thing for a guest to send and must not read as *"no object"* — and an unrecognised presence byte
+is refused by name rather than defaulted, because a wrong-sized field decodes the **rest** of the
+frame at the wrong offset.
+
+### 16.106.4 The tests, and which failure each one catches
+
+- **The decision** (`kayfabe-isolate-host`, 3 tests): the declared ordinal reaches the channel;
+  `VERSION_0`'s index and `VERSION_1`'s ordinal are *not* read through one lens (the same `2`
+  means different things); and every fall-through arm — GR kinds, no object, short/absent params,
+  unknown version, a non-copy ordinal — returns `None`.
+- **The delivery** (`tests/tests/engine_context.rs`, 2 tests): the mock **records** what
+  `alloc_channel` was told, so `Worker::execute` passing `None` everywhere fails the suite. ★ A
+  trait parameter is an upper bound on what a caller *may* communicate; only the call site says
+  what it *does*, and that gap cost this campaign four rungs.
+- **The ABI** (2 tests): `declared_copy_engine_type` against RM's own two versions, plus an
+  encode→decode identity so a blob we forward and a blob we read cannot drift.
+- **The wire**: both `hosting` arms in the round-trip sample — the presence byte is exactly what a
+  one-arm round trip would never exercise.
+
+### 16.106.5 ★★★★★ MEASURED — the refusals are gone, and the host driver logged NOTHING
+
+`w255_76477ab_cel_runlist` vs its control `w254_e2b6c86_cel_hostdmesg`, identical configuration.
+
+| | `w254` | **`w255`** |
+|---|---|---|
+| our `REFUSED … Rm(Other(64))` | 14 | **0** |
+| our `REFUSED … Rm(..)`, **any** status | 14 | **0** |
+| host `chandesConstruct_IMPL` / `kfifoRunlistSetId_GM107` | 14 / 14 | **0 / 0** |
+| host dmesg delta | 42 lines | **0 lines** (watermark 921; the capture ran and reported zero) |
+| `FORWARDED` | 18 | **32** |
+| `engine=Ce` forwards | 8 | **22**, of which **14** `materialized_channel=true` |
+| remaining refusals | 2 × `NoVas`, `host_chan=NONE` | **2 × `NoVas`, `host_chan=NONE`** |
+| doorbells | 191 / 183 / 8 | 191 / 183 / 8 |
+
+★ **The decomposition is exact**: the 8 CE forwards that already worked are GRCE objects on GR
+channels that already existed (`materialized_channel=false`) and are untouched; the **14** that
+used to be refused now materialize their own channel on the engine the guest declared and
+succeed. `8 + 14 = 22`, and it is the same 14. ⊘ **The failure did not move** — no refusal of any
+other status appeared, which was pre-registered as the way this repair could have been wrong
+while the diagnosis stayed right.
+
+### 16.106.6 ⊘ WHAT DID NOT CHANGE, and one honest qualification
+
+**The guest's own `dmesg` is byte-identical to `w254`.** The guest is not one step further along;
+`CE-SUBMIT` is 0; nothing executed. This rung removed a real, vendor-named defect and made 14 host
+allocations succeed that used to fail — **it did not move the wall**, and no execution-plane
+progress is claimed for it.
+
+⚠ **`forwarded=32` sits exactly on the per-class print bound**, and the last line carries
+`⊘ REPORT BOUND REACHED for this outcome class`. ⇒ it is a **lower bound, not a total**. The
+refusal class (2) is far below its bound and *is* exact, which is what the 14 → 0 result rests on.
+★ Recorded, not fixed: raising the bound would change the instrument in the boot that measures the
+fix. But note the shape — **§16.105's lesson reappearing one rung later on the other class**, in a
+census this rung's author had just rewritten. A saturated instrument does not become safe because
+you know about the last one.
+
+## §16.107 ★★★★★ THE ROWS ARE CAPPED; THE COUNTS ARE NOT — and the sweep for the rest of the class
+
+⚠ **STATUS (2026-08-11): MEASURED, `traces/boots/w256/`. 5 of 5.** `forwarded=32` is now
+**verified** rather than correct-and-unverifiable. ⊘ `CE-SUBMIT` **0**; instrument change only,
+no execution-plane rung claimed.
+
+### 16.107.1 ⊘⊘ 32 SATURATED AGAIN, ONE RUNG LATER, ON THE OTHER CLASS
+
+§16.105 split the shared budget per outcome class. §16.106's fix then turned 14 refusals into
+forwards, and `w255`'s **forward** class printed exactly 32 with the bound marker — *"a saturated
+instrument does not become safe because its author knows about the last one."*
+
+⇒ Raising the number alone fixes an **instance** and leaves the **class**. So:
+
+- the **row** budget is `32 → 256` per class (8× the largest shape ever observed, a `const`
+  assertion so it cannot silently shrink back);
+- past the budget the **three totals** keep printing, on a **doubling schedule** — a guest
+  issuing `n` allocations buys silence for the *detail* at ~`log2(n)` lines and can **never**
+  buy silence for the *count*;
+- the policy is a pure `engine_fwd_report_action(nth, seen)` so it is testable at all.
+
+★ The schedule is keyed on `seen`, **not** the per-class `nth`: a workload that saturates one
+class and then feeds only that class leaves the other class's index frozen, so an `nth`-keyed
+schedule could stall in exactly the case that needs reporting. Pinned by a test.
+
+⇒ This gives the census the property every other bounded census in this tree already had — an
+**uncapped count printed beside a capped sample** — and its absence here is what made §16.105
+possible.
+
+### 16.107.2 MEASURED — the answer was already bounded by `w254`, and it holds
+
+`w256_ce36a5b_cel_unbounded`: **`forwarded=32` exactly**, `[seen=34 forwarded=32 refused=2]`,
+**zero** bound markers, **zero** totals lines, 34 rows, host `chandesConstruct_IMPL` 0, doorbells
+`191/183/8`, guest `dmesg` byte-identical to `w255`.
+
+★ The prediction was sharp because **`w254` was not saturated**: both its classes sat under their
+budgets, so its `seen=34` was a true total (`18 + 14 + 2`), and `w255` ran the same guest program
+to the same place. ⇒ **nothing in §16.106.5 rested on a saturated number after all, and no claim
+needed re-checking.** ⊘ That is the boring outcome, and it was worth a boot precisely because the
+other outcome would have invalidated the previous rung.
+
+⊘ The totals-past-the-bound line **never fired** — nothing came near 256. Its behaviour is
+covered by unit tests, not by this boot, and must not be reported as measured.
+
+### 16.107.3 ★★★★ THE SWEEP — four MORE live instances, and one INVERSE defect
+
+Technique: enumerate the **bound constants**, then read their **print sites** (including the C
+side, `qemu/hw/misc/nvkvm/nvkvm.c`, where several are actually printed) — never grep the domain
+word. All five findings below were **re-verified by hand** against source before being written
+down.
+
+★ **The discipline mostly holds**: `served_len`, `arming_len`, `bind_len`, `unserviced_len`,
+`bridge_refusal_len`, `gvas_pub_len`, `promote_diag_len`, `probe_arm_len` are sourced from
+counters rather than array fills; `VAS_CENSUS_EXEMPLARS` prints `+N more`; `RING_PAGE_DUMPS`
+prints `{take} of {want}`; `FB_DUMP_CENSUS` prints its own denominator; `UNSERVICED_SAMPLE_MAX`
+and `SERVED_SAMPLE_MAX` emit explicit TRUNCATED lines.
+
+**⊘ Four places where a capped number is currently printed as a total:**
+
+| # | where | what is wrong |
+|---|---|---|
+| 1 | `fault_buffers_malformed` (`shim.rs`, `nvkvm.c:2631/2664/2689`) | computed as `fault_buffer_sample.iter().filter(..).count()` over a **shared 8-slot** sample, printed beside `fault_buffers_registered`, which **is** a real atomic. ⊘ Sharper: the 8 slots are shared across all three buffer types, so 8 replayable registrations starve the shadow rows and `shadow_fault_buffer_size = 0x0 B = 0 pages` reads as *"the guest asked in a shape we could not read"* — the exact thing that number exists to distinguish |
+| 2 | `UNCLAIMED-CENSUS … {} distinct (bar, offset) pair(s)` (`shim.rs:7149`) | the argument is literally `sample.len()` of a `UNCLAIMED_SAMPLE_MAX`-capped Vec, labelled **distinct**, with no distinct counter and no drop counter anywhere. At saturation it prints exactly `64 distinct`. Its parenthetical redirects to *"the `registers:` line's UNCLAIMED counts"*, which are **access** totals — a different denominator |
+| 3 | `nonzero=` in the ring scan (`shim.rs`, `RING_SCAN_REPORT = 4`) | `if raw != 0 && nonzero.len() < RING_SCAN_REPORT { push }` and nothing counts the rest. A ring with 500 non-zero entries prints four and **no marker** — on a line whose own docs record it already being read as a claim about the whole ring |
+| 4 | `" (+more, count is not capped)"` (`nvkvm.c:2226`) | **unreachable**. `nid = min(ids_len, IDS_PER_TAG)` and the marker fires on `ids_len > nid`, but `ids_len` is `k` from a `zip` over an `IDS_PER_TAG`-long array, so `ids_len <= IDS_PER_TAG` and `nid == ids_len` **always**. The truncation is real and happens twice upstream; the marker for it can never print |
+
+**⊘⊘ And the INVERSE defect, in the pattern this repo treats as the safe one.** Every
+`*_distinct` counter runs its membership test **against the capped Vec**
+(`census.rs::note_served` `s.served.iter_mut().find(..)`; `unserviced.rs::note` `s.contains(..)`;
+same shape in `gvaspub`), so **past the cap every repeat of a dropped row increments `distinct`
+again** and it drifts monotonically toward `*_total`. `census.rs`'s own header promises *"the
+distinct counts keep counting past the cap, so a full array is never mistaken for a complete
+list."* They do keep counting — **but not distinctly**.
+
+★★ `unserviced.rs` is the sharp one: its doc reasons explicitly about ordering the increment
+*"before the capacity test"*, because *"counting after the `push` is what made the old length
+agree with the sample instead of with reality."* That correction was right and **incomplete** —
+it fixed the **ordering** and left the **set**. ⇒ *A correction that fixes the ordering of a test
+does not fix what the test is run against.*
+
+⊘ **None of the five is fixed here, deliberately.** Changing five instruments unmeasured, at the
+end of a session, in the same commit as a boot that validated a sixth, is the trade this branch
+exists to refuse. They are named with their file:line so the next rung starts from the list
+instead of from the sweep. ⊘ The C's TRUNCATED warnings still fire correctly in every case (an
+overcount only makes them fire), so the damage is confined to the numeral.
+
+---
+
+## §16.108 ★★★★★ THE MASKED LEAF IS **NOT** THE WALL — refuted twice from NVIDIA's source, once from the guest's own words, and once by a boot taken at HEAD's own revision
+
+**Status:** `[ANSWERED 2026-08-11]`. **No boot was spent.** The question was already answered by
+(a) `ogkm-580.159.04`, (b) `b0df550`'s committed reasoning, and (c) boot `w256` — taken **today**
+at `ce36a5b`, which is HEAD's source *exactly* (`git diff --name-only ce36a5b 814b225` touches
+only `docs/` and `traces/`). Re-booting would have reproduced `w256` and cost 150 s of bench.
+
+### 16.108.1 ⊘⊘ THE PREMISE, AND WHY IT CANNOT BE TRUE
+
+The brief this rung was handed:
+
+> *"the stall vector is RAISED INTO A MASKED LEAF … if a completion is raised into a leaf the
+> guest has masked, the guest waits forever — and 'waits forever' is exactly `RC=124`."*
+
+**⊘ REFUTED. The guest's stall scan does not consult `LEAF_EN` at all, and says so inline.**
+
+- `intrGetPendingStallEngines_TU102` — *"Check if interrupt is pending. **We skip checking if it
+  is enabled in the leaf register** since we mess around with the leaf enables in the interrupt
+  disable path"* (`ogkm-580: src/nvidia/src/kernel/gpu/intr/arch/turing/intr_tu102.c:895-899`).
+  The test it actually runs is `leaf = intrLeafValues[leafIndex] & NVBIT(leafBit)` — the raw
+  latch, ANDed with nothing.
+- `intrGetLeafStatus_TU102` (`intr_tu102.c:1108-1141`) fills that array with
+  `intrReadRegLeaf_HAL` and **never** reads `intrReadRegLeafEnSet`.
+
+⇒ **A GSP stall vector cannot be masked out of the guest's ISR.** `gsp_event_masked = 1` is a
+TRUE reading of a predicate the guest never evaluates. The counter was right; the *question* was
+wrong.
+
+★★ **And the adjacent counter is NOT the same measurement.** `nonstall_masked` sits one line away
+and means something genuinely different: the non-stall scan **does** AND with `LEAF_EN_SET`
+(`ogkm-580: intr_nonstall_tu102.c:254-255`, `:305-306`, `:455-456`, `:486-487`), and only that
+path calls `intrClearLeafVector_HAL` (`:383`). ⇒ *Adjacent counters sharing a word are not
+adjacent facts.* The brief merged two report lines into one claim (§16.108.3).
+
+### 16.108.2 ★★★ THE SECOND REFUTATION IS IN THE GUEST'S OWN WORDS — and it is a before/after
+
+Reaching `kgspService` at all proves the interrupt-tree scan **attributed our vector** to
+`MC_ENGINE_IDX_GSP`. The guest printed exactly that, and then stopped printing it the moment
+`b0df550` landed:
+
+| boot | rev | `KGSP service called when no KGSP interrupt pending` | `Stuck interrupt detected` | `IRQSCLR cleared` | `cup2` |
+|---|---|---|---|---|---|
+| `w211` | `eaf025f` | **1** | 0 | **0** | TIMEOUT |
+| `w212` | `e309a85` | **1** | 0 | **0** | TIMEOUT |
+| `w213` | `b0df550` (the RISC-V AND fix) | **0** | **110** | 125 250 | TIMEOUT |
+| `w214` | `9b65664` (the trigger fix) | 0 | **0** | 46 | TIMEOUT |
+| `w254`/`w255`/`w256` | …`ce36a5b` | 0 | 0 | 4 | **`RC=124`** |
+
+`[grep counts over traces/guest_boots/run_<tag>_probe.log, 2026-08-11]`. The real defect was the
+**RISC-V AND** — `IRQSTAT & NV_PRISCV_RISCV_IRQMASK & NV_PRISCV_RISCV_IRQDEST`
+(`ogkm-580: kernel_falcon_ga102.c:311-321`) with `0x111528`/`0x11152c` undecoded and therefore
+read as an unclaimed zero. Already found, already fixed, already committed.
+
+⇒ ★★★★★ **The notification plane really was broken; both bugs are really fixed; and NEITHER
+MOVED THE WALL.** `cup2` times out identically across all seven boots. This is the second
+instance of `the-forwarding-plane-was-not-on-the-path`.
+
+### 16.108.3 ★★★ THE BRIEF'S THREE NUMBERS, CHECKED AGAINST THEIR PRINT BOUNDS AND THEIR AGE
+
+`[measured, w256 at ce36a5b, real GA106, `isolate_plane=real ce_executor=local
+KAYFABE_RING_VIDMEM=on`]`:
+
+```text
+os-events:      3 registered / 3 retired / 0 live; 15 POST_EVENT in 5 batch(es);
+                gate: 96 gated, 0 not-running, 0 failed, 4 IRQSCLR cleared
+os-event announce: 5 GSP stall vector(s) raised, 0 UNVECTORED, 1 would be masked;
+                0 batch(es) WOKE WITH NOTHING
+completions:    4 announced (non-stall vector raised), 179 UNVECTORED, 4 would be masked
+interrupts:     194 vectors delivered, 0 undeliverable (guest had not enabled the table)
+```
+
+| the brief said | at `w256` | verdict |
+|---|---|---|
+| `348 gated` | **96**, with **4 `IRQSCLR` cleared** (was 0) | **STALE** — that is `w212`, ~99 commits back. The gate is *open*; `gated` is documented as healthy flow control |
+| `179 completions UNVECTORED`, `1 raised / 1 masked` | 179 is on the **`completions`** line; `1 raised / 1 masked` is on the **`os-event announce`** line | **TWO LINES, MERGED.** Only the first is on a plane where `LEAF_EN` matters |
+| `CE-SUBMIT is 0; nothing has ever been forwarded` | `forwarded=32`, but **`CE-SUBMIT` is 0** | ⊘ **HALF TRUE — see §16.108.3a. My first draft of this row was WRONG.** |
+
+### 16.108.3a ⊘⊘ CORRECTION, CAUGHT BY THE COORDINATOR — `forwarded` AND `CE-SUBMIT` ARE DIFFERENT PLANES
+
+**My first draft of the last row above said the brief was "FALSE at HEAD" and cited
+`forwarded=32`. That was wrong, and it is the same defect as §16.108.1's:** *a value read as
+the kind of thing printed next to it.* The two counters answer different questions:
+
+| | `forwarded` | `CE-SUBMIT` |
+|---|---|---|
+| **emitted by** | `kayfabe-device`, the `ENGINE-OBJECT` census | `kayfabe-isolate-host/src/rm.rs:3342` (refusal) and `:3359` (submission) |
+| **counts** | guest **object allocations** (`0xc7b5`/`0xc7c0`/`0xc797`) forwarded to host RM and given a host object handle | one **copy-engine WORK submission** to a real host engine — ring store, doorbell, semaphore |
+| **plane** | **control** | **data** |
+| **at `w256`** | **32** (`[seen=34 forwarded=32 refused=2]`) | **0 — the string does not occur in the log at all** |
+
+⇒ **The two are not in contradiction; they are different questions.** An object can be
+forwarded and given a host handle without one byte of work ever being submitted through it —
+which is exactly the state this port is in, and exactly what `w255` meant when it printed
+*"`CE-SUBMIT` 0"* and *"`engine=Ce` forwards 8 → 22"* on adjacent lines.
+
+★★★ **AND THE ARCHIVE-WIDE ANSWER IS STRONGER THAN "0 AT w256".** `[measured 2026-08-11, grep
+over all **124** `*_qemu.log` in `traces/guest_boots/` (417 artefacts total)]`: `CE-SUBMIT`
+occurs in **6** of them
+(`w209`, `w219`, `w226a/c/d`, `w231a`), **10 occurrences, of which non-refusal lines: ZERO** — every
+single one is the REFUSAL line, byte-identical:
+
+```text
+kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0) → REFUSED BEFORE
+SUBMISSION Other(19270) (no ring store, no doorbell, no semaphore)
+```
+
+`19270` = `0x4B46` = `"KF"` = `NOT_ON_THIS_RUNG` (`rm.rs:156-157`) — **our own deliberate
+not-implemented sentinel**, refused by `ce_copy_outcome` (`:4296`) before any ring store, for
+the documented reason that `CeExecutor::Ours` + `CeSource::Constant` (a scrubber fill) is
+refused by design.
+
+⇒ ⊘ **The success-path line at `rm.rs:3359` — the one that would print `gp_get=… gp_put=…
+sem=… → RETIRED` — HAS NEVER BEEN PRINTED IN THIS PROJECT'S HISTORY.** Not `RETIRED`, not
+even `NEVER-RETIRED`. **No copy-engine work has ever reached a host engine.** The brief's
+*"nothing has ever been forwarded"* is **correct about the data plane**, and it is the
+milestone still outstanding.
+
+⚠ **And `w256` cannot speak to it either way**: it ran `ce_executor=local`
+(`local_ce_is_the_only_executor=true`), so the host isolate's submit path was **never
+engaged**. `CE-SUBMIT` is absent there **by configuration, not by failure** — which is its
+own instance of the class: *an absent line means "not asked", not "asked and got nothing".*
+
+★ **Print-bound check (the brief's own item 4), and both pass.** `gated` and `nonstall_unvectored`
+are unbounded `AtomicU64::fetch_add` with no saturation, and both vary across the archive
+(`gated`: 347/348/237/54/96; `nonstall_unvectored`: 358/179/166/120/20/5/4/2). **Neither number is
+an instrument artefact** — unlike §16.105's `12` and §16.107's capped rows.
+
+### 16.108.4 ⇒ THE ANSWER TO *"WHO MASKS THAT LEAF"*: **NONE OF THE THREE**
+
+The question presupposes masking is load-bearing on the plane it names. It is not. The nearest
+*true* statement is about a different plane: **179 of 183 locally-served completions could be
+given no non-stall vector at all**, and the 4 that could were **4-for-4 masked** —
+`announce_completion` (`crates/kayfabe-device/src/plane.rs:3546-3570`) counts three distinct
+causes into one number, and nothing yet says which fires. That is a real live defect on a plane
+where `LEAF_EN` genuinely gates both service *and* clearing. It is **not** shown to be the wall,
+and it is not what the brief asked about.
+
+### 16.108.5 ⊘ AND MY OWN FOLLOW-ON HYPOTHESIS DIED ON ITS OWN DISCRIMINATOR, BEFORE A LINE WAS WRITTEN
+
+The trailing poll is `control 0x20801702 result 0x00000000 x165` — and the LIVE oracle records
+that **hardware calls that id ZERO times in the whole program**. So it is a genuine divergence and
+worth naming its source. Tracing it in RM gives **exactly two** routes into
+`MC_SERVICE_INTERRUPTS`, both in UVM (`kernel-open/nvidia-uvm/uvm_gpu.c:1355`, `:1382`), both
+behind `service_interrupts()`. **Both are CLOSED in our guest:**
+
+- **ECC route.** `uvm_gpu_check_ecc_error_no_rm` early-outs at `if (!gpu->ecc.enabled) return
+  NV_OK;` (`uvm_gpu.c:2134-2135`). `gpu->ecc.enabled` comes from `nvGpuOpsGetEccInfo`
+  (`nv_gpu_ops.c:9066-9086`) ← `rmSubDevice->bEccEnabled`, which
+  `gpuDeviceRmSubDeviceInitEcc` sets **FALSE** whenever `NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS`
+  (`0x2080012f`) fails — then takes `status = NV_OK; goto done;` and still stamps
+  `bEccInitialized = NV_TRUE` (`:1385`), so registration succeeds with ECC off.
+  ⇒ **`w256` marks `0x2080012f` `unserviced`**, and `0x90e6` (`GF100_SUBDEVICE_MASTER`) and
+  `0x90e60102` (`…GET_VIRTUAL_FUNCTION_ERROR_CONT_INTR_MASK`, the call that would populate
+  `eccMask`/`eccOffset`) appear **zero times in the whole boot log**. ECC is off; the route is
+  unreachable. ★ And this makes our refusal of `0x2080012f` **hardware-matching**, not a
+  divergence — the oracle's five-GPU reference rig returns non-OK there exactly once too.
+- **NVLink route.** `uvm_gpu_check_nvlink_error_no_rm` early-outs at
+  `if (!gpu->nvlink_status.enabled)` (`uvm_gpu.c:2194-2195`). GA106 has no NVLink.
+
+⇒ ⊘ **The 165 calls come from NEITHER UVM route**, so they are issued by a userspace RM client
+(libcuda) or by RM-internal code not yet found. **Naming that caller is the next question**, and
+it is now a *narrow* one. ★ Recorded because the eliminated half is the reusable part: I had a
+coherent, driver-cited, oracle-corroborated chain — *"we leave a top-level `ERR_CONT` bit latched
+that nothing clears, so UVM polls forever"* — and it was **wrong at its first checkable step**,
+because an unmodelled `ERR_CONT` reads as a defaulted **zero** and a zero is the *benign* answer
+to `(*tree_location & mask) == 0`. The same "unclaimed register defaults to zero" fact that
+**caused** §16.77 **exonerates** the port here. `an-and-with-an-unmodelled-register-is-always-zero`
+cuts both ways, and only checking told me which way.
+
+### 16.108.6 ⊘ THE DOC-HYGIENE FAILURE THIS RUNG IS AN INSTANCE OF
+
+Everything in §16.108.1-2 was committed at `b0df550` on **2026-08-10** — in the commit message, in
+`kayfabe-arch/src/gsp.rs`'s doc for `GspRiscvIrqmask`, and in `plane.rs`'s counter docs. A brief
+written the next day still carried the refuted premise **and its refuted numbers**, because the
+refutation lived in a commit message and a doc-comment rather than anywhere a reader of the claim
+would pass. ⇒ **This is the fifth instance of the class**, and it argues for the standing rule:
+*a correction folds into the parent, above the thing it corrects.* The `w212` report line is the
+parent here, and §16.108.3's table is the fold.

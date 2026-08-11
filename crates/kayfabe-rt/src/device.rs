@@ -110,6 +110,95 @@ struct DeviceState {
     system: RankedMutex<Proc>,
     /// One rank-1 cell per derived user proc.
     procs: BTreeMap<ProcId, RankedMutex<Proc>>,
+    /// ★★★★★ **§16.96 — the engine-object forward latch.** See
+    /// [`SharedDevice::forward_engine_object_deferring`].
+    ///
+    /// ⊘ It lives HERE, beside the spine, rather than travelling through
+    /// `CommandPolicy`: the frame that can safely issue the verb (`Regs::write`) already
+    /// holds an `Arc<SharedDevice>`, so nothing has to cross the `kayfabe-gsp` port
+    /// (§16.90's blocker, dissolved the same way §16.91 dissolved it for spawns).
+    ///
+    /// ⚠ **Bounded** by [`MAX_PENDING_ENGINE_FORWARDS`], and the bound REFUSES BY NAME.
+    pending_engine_forwards: Vec<PendingEngineForward>,
+}
+
+/// ★★★★★ **§16.96** — one Case-1 engine-object alloc the plane decided under its **rank-0**
+/// mutex and therefore could not forward there.
+///
+/// Plain data, by value: a latch outlives the guard that made it, so it may not borrow.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingEngineForward {
+    /// The alloc's `hClient`.
+    client: HClient,
+    /// The alloc's `hParent` — the channel the object is created on.
+    parent: HObject,
+    /// The engine-object class.
+    class: ClassId,
+    /// The guest's own declared params window, already bounded by the decode.
+    params: Vec<u8>,
+}
+
+/// ★★ **§16.96 — the latch's bound**, and it exists because the population being 1 is *"a
+/// property of the guest, not of the protocol"* (`kayfabe-gsp/src/boot.rs:1291-1294`).
+///
+/// The guest is synchronous under the GPU lock, so today exactly one command is in flight
+/// per register write and the latch holds at most one entry. ⊘ That is an observation about
+/// **this** guest. `cap1b` reaches a real queue-full at txn 1028, which is the same shape of
+/// assumption failing on the status ring. ⇒ the latch **refuses by name** at the bound
+/// ([`ForwardAdmission::LatchFull`]) instead of growing without limit on a guest that
+/// batches.
+///
+/// The number is generous rather than tight on purpose: a bound that fires in normal
+/// operation would be a second failure mode, and a bound that never fires is still the
+/// difference between a named refusal and an unbounded `Vec` fed by guest traffic.
+pub const MAX_PENDING_ENGINE_FORWARDS: usize = 64;
+
+/// ★★★★★ **§16.96 — what [`SharedDevice::forward_engine_object_deferring`] did with a
+/// request.** ⊘ Three outcomes and not a `Result<(), _>`, because ADMITTED and SERVED are
+/// different gates and this call can only ever report the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForwardAdmission {
+    /// ★ **ADMITTED, NOT SERVED.** The request is latched; the host verb has **not** run
+    /// and its outcome is not known here. [`SharedDevice::run_pending_engine_forwards`]
+    /// runs it, lock-free, and reports.
+    Latched {
+        /// How many requests are now latched, this one included.
+        pending: usize,
+    },
+    /// The class gate refused: the arch does not know this class as an engine object.
+    /// **Nothing was latched and nothing will run** — the same silent, cheap exit
+    /// `kayfabe_fwd::route_engine_object_by_parent` takes first, kept first here so the
+    /// overwhelming majority of allocs (clients, devices, memory, VA spaces) never touch
+    /// the latch at all.
+    NotAnEngine(ClassId),
+    /// ★★ The latch is **full** and this request was **refused by name** rather than
+    /// growing it. See [`MAX_PENDING_ENGINE_FORWARDS`].
+    LatchFull {
+        /// How many requests were already latched.
+        pending: usize,
+        /// The bound that refused.
+        bound: usize,
+    },
+}
+
+/// ★★★ **§16.96 — one latched forward, RUN.** What
+/// [`SharedDevice::run_pending_engine_forwards`] reports per request.
+///
+/// ⊘ The request's own identifying fields travel back with the outcome because the caller
+/// that reports them (`Regs::write`, six crates out) never saw the request: it did not
+/// decide the forward, it only owns the frame that may issue it.
+#[derive(Debug, Clone)]
+pub struct EngineForwardRun {
+    /// The alloc's `hClient`.
+    pub client: HClient,
+    /// The alloc's `hParent`.
+    pub parent: HObject,
+    /// The engine-object class.
+    pub class: ClassId,
+    /// How many bytes of params the guest declared (the bytes themselves are consumed).
+    pub params_len: usize,
+    /// What the host verb did.
+    pub out: Result<EngineObjectForwarded, FwdFault>,
 }
 
 impl DeviceState {
@@ -641,6 +730,7 @@ impl SharedDevice {
                         .into_iter()
                         .map(|(id, p)| (id, RankedMutex::new(LockRank::Proc, p)))
                         .collect(),
+                    pending_engine_forwards: Vec::new(),
                 },
             ),
         }
@@ -676,6 +766,12 @@ impl SharedDevice {
             spine,
             system,
             procs,
+            // ⊘ NAMED rather than swallowed by a `..`: a bare [`Gpu`] has no register plane,
+            // so it has no lock to defer out of and nowhere for a latched forward to go. Any
+            // request still latched here was decided by a plane that is being dismantled.
+            // ⚠ Dropping it is correct and is NOT silent: [`EngineForwardRun`] never
+            // existed for it, so no census row claims the verb ran.
+            pending_engine_forwards: _dismantled,
         } = state.into_inner();
         Gpu {
             spine,
@@ -791,6 +887,122 @@ impl SharedDevice {
         self.materialize(spawns);
     }
 
+    /// ★★★★★ **§16.96 — [`Self::forward_engine_object_by_parent`], for a caller that is
+    /// UNDER A LOCK IT DID NOT TAKE.** Decides nothing, issues nothing, **latches**.
+    ///
+    /// # ⊘ Why this exists, measured
+    ///
+    /// `[measured 2026-08-11, §16.91, `traces/boots/w239/`]` the guest's first
+    /// `GSP_RM_ALLOC` for an engine object reaches `ObjectModel::forward_engine_object`
+    /// **six crates inside `RegPlane::write`**, which holds `LockRank::Plane` (rank 0), and
+    /// the direct call issues a host RM ioctl there. QEMU aborts:
+    ///
+    /// ```text
+    /// R1 no-blocking-under-lock violation: issuing a host RM verb while holding rank(s) [0]
+    /// ```
+    ///
+    /// # ★★★ Why LATCHING is legal here, and the claim it corrects
+    ///
+    /// §16.91 concluded a forwarded RM verb *"can never be latched, because its result is
+    /// the answer"*. ⊘ **That is false of this verb**, and the refutation is at its only
+    /// production call site: `kayfabe_rmrpc::Bridge::deliver` **discards the result on
+    /// purpose**, with the sentence *"⚠ the guest's answer does NOT change, and that is a
+    /// decision, not an oversight"* — turning a host-side refusal into an alloc failure
+    /// would fail `cuCtxCreate` outright and a boot measuring the forward would silently be
+    /// measuring that instead. ⇒ **nothing in the guest's reply depends on this verb**, so
+    /// it is exactly the *fire-and-forget* shape the spawn deferral already handles, and
+    /// §16.91's own general rule — *work decided under a lock can be deferred only if
+    /// nothing in the response depends on it* — **admits it**.
+    ///
+    /// ⇒ no third `CommandPolicy` outcome, no reply memo, no re-service door and no second
+    /// decode of the command are needed (§16.94/§16.95's design solved a harder problem than
+    /// the tree has).
+    ///
+    /// # ⊘ Ordering, which IS load-bearing
+    ///
+    /// `Bridge::deliver` runs `apply` **before** this, because the forward routes through
+    /// the channel the alloc names and `Spine::by_vchid` is rebuilt by the projection
+    /// `apply` runs. Latching preserves that: the apply still happens first, under the lock,
+    /// and the verb happens strictly later. ⚠ The drain also runs **after**
+    /// [`Self::materialize_pending`], so an isolate this same register write decided is
+    /// installed before a forward that needs it — strictly better than the direct call,
+    /// which could only meet a `FwdFault::IsolatePending`.
+    ///
+    /// ⚠ The caller **must** drain with [`Self::run_pending_engine_forwards`] once its own
+    /// locks are down, or the forward waits for the next register write that does.
+    pub fn forward_engine_object_deferring(
+        &self,
+        client: HClient,
+        parent: HObject,
+        class: ClassId,
+        params: &[u8],
+    ) -> ForwardAdmission {
+        let mut g = self.state.write();
+        // ★ THE CLASS GATE RUNS FIRST — the same gate, in the same position, that
+        // `kayfabe_fwd::route_engine_object_by_parent` opens with, and for the reason its
+        // own `[measured 2026-08-10]` comment gives: every non-engine alloc must exit
+        // before anything else happens to it. Here it has a second job — it is what keeps
+        // the latch bounded in practice, because client/device/memory/VASpace allocs are
+        // the overwhelming majority and none of them is ever latched.
+        //
+        // ⊘ The result is discarded: the route asks the same question again and remains
+        // the one authority for the ANSWER. This call is the GATE.
+        if g.spine.arch().engine_of_object(class).is_none() {
+            return ForwardAdmission::NotAnEngine(class);
+        }
+        let pending = g.pending_engine_forwards.len();
+        if pending >= MAX_PENDING_ENGINE_FORWARDS {
+            // ★★ REFUSE BY NAME. See [`MAX_PENDING_ENGINE_FORWARDS`] for why a bound is
+            // owed at all when the observed population is one.
+            return ForwardAdmission::LatchFull {
+                pending,
+                bound: MAX_PENDING_ENGINE_FORWARDS,
+            };
+        }
+        g.pending_engine_forwards.push(PendingEngineForward {
+            client,
+            parent,
+            class,
+            params: params.to_vec(),
+        });
+        ForwardAdmission::Latched {
+            pending: pending + 1,
+        }
+    }
+
+    /// ★★★ **§16.96 — drain and run whatever [`Self::forward_engine_object_deferring`]
+    /// latched** — the pull half, and the mirror of [`Self::materialize_pending`].
+    ///
+    /// Idempotent and cheap when there is nothing latched: one rank-1 acquisition that
+    /// moves an empty `Vec` and returns — the same cost `materialize_pending` already pays
+    /// on every register write.
+    ///
+    /// ⚠ **Call with every ranked lock down.** `Worker::execute` asserts exactly that
+    /// (`assert_lock_free("issuing a host RM verb")`), so a caller that is wrong about
+    /// itself is refused **by name, at the drain**, rather than six crates away.
+    ///
+    /// ⊘ Returns one row per request **in the order the guest declared them**, so the
+    /// caller can report outcomes it never saw the requests for. A refusal is a row like
+    /// any other: this drain never swallows one, because the census of what the host said
+    /// is the only reason the forward is observable at all.
+    #[must_use]
+    pub fn run_pending_engine_forwards(&self) -> Vec<EngineForwardRun> {
+        let batch = {
+            let mut g = self.state.write();
+            core::mem::take(&mut g.pending_engine_forwards)
+        };
+        batch
+            .into_iter()
+            .map(|p| EngineForwardRun {
+                client: p.client,
+                parent: p.parent,
+                class: p.class,
+                params_len: p.params.len(),
+                out: self.forward_engine_object_by_parent(p.client, p.parent, p.class, &p.params),
+            })
+            .collect()
+    }
+
     /// ★★★ **The DRAIN half of R1's spawn deferral: spawn lock-free, then re-acquire and
     /// RE-VALIDATE (R5).**
     ///
@@ -831,6 +1043,9 @@ impl SharedDevice {
                 spine,
                 system,
                 procs,
+                // ⊘ Not this op's business; named because the destructure is exhaustive
+                // by design (a field added and not considered is a compile error here).
+                pending_engine_forwards: _,
             } = &mut *g;
             let p = if pid == Gpu::SYSTEM_PROC {
                 Some(system.get_mut())
@@ -1244,6 +1459,8 @@ impl SharedDevice {
                     spine,
                     system,
                     procs,
+                    // ⊘ Not this op's business; see `materialize`'s destructure.
+                    pending_engine_forwards: _,
                 } = &mut *g;
                 let (pid, t) = route(spine)?;
                 let p = if pid == Gpu::SYSTEM_PROC {
@@ -1292,6 +1509,8 @@ impl SharedDevice {
                     spine,
                     system,
                     procs,
+                    // ⊘ Not this op's business; see `materialize`'s destructure.
+                    pending_engine_forwards: _,
                 } = &mut *g;
                 let p = if pid == Gpu::SYSTEM_PROC {
                     system.get_mut()
@@ -1578,6 +1797,10 @@ impl SharedDevice {
             let Ok(reply) = executed else {
                 let failure = executed.expect_err("matched Err");
                 let err = failure.err;
+                // ★ §16.105 — read BEFORE `failure.orphans` is moved out below. See
+                // [`kayfabe_isolate::VerbFailure::on`] for why nothing downstream can
+                // re-derive it.
+                let on = failure.on;
                 // ★ What the worker's own cancel seam OBSERVED, read here — lock-free,
                 // on the thread that ran the verb — so `FwdFault::Cancelled` can name
                 // the truth (§7.3) without `RmError::Interrupted` growing a payload the
@@ -1626,7 +1849,7 @@ impl SharedDevice {
                         gpu,
                         worker: wid,
                     },
-                    e if self.proc_is_live(staged.proc) => FwdFault::Rm(e),
+                    e if self.proc_is_live(staged.proc) => FwdFault::Rm { err: e, on },
                     _ => FwdFault::Stale(kayfabe_fwd::Stale::Proc(staged.proc)),
                 });
             };

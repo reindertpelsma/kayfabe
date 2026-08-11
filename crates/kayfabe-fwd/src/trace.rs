@@ -79,7 +79,9 @@ impl Faulted for FwdFault {
                 FaultTag("FwdFault::UvmFaultMethodWithoutFaultDelivery")
             }
             FwdFault::PushTooFragmented { .. } => FaultTag("FwdFault::PushTooFragmented"),
-            FwdFault::Rm(e) => e.fault_tag(),
+            // ⊘ The tag stays the RM error's own: `on` names WHERE, never WHY, and a
+            // census keyed on it would split one cause across two rows.
+            FwdFault::Rm { err, .. } => err.fault_tag(),
             FwdFault::NotAnEngine(_) => FaultTag("FwdFault::NotAnEngine"),
             // ★ The HOP is in the tag, not only in the variant: "the parent was not a
             // channel" and "the parent's Device has not resolved yet" are a permanent

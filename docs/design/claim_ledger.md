@@ -1,5 +1,24 @@
 # The claim ledger — what we MEASURED, what we INFERRED, and what we merely ASSUMED
 
+> ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE doctrine, STALE CENSUS — the gate still runs; the numbers below do not**
+>
+> ★ **The doctrine and the gate are intact.** `scripts/claim_ledger.py` is still run and still
+> enforced; nothing below about *what the categories mean* has been superseded.
+>
+> ⊘ **Every count below is a 2026-08-01 snapshot and all three have moved since.** §2's census
+> pins master `0ad4c95` at **UNATTRIBUTED 383 / CONFLATED 66 / BARE-HW 17**, and §4 sets the
+> ceiling at **382**. Committed drift, none of it written back here:
+>
+> | date | commit | reported |
+> |---|---|---|
+> | 2026-08-07 | `63cc812` | `UNATTRIBUTED_BAR` moved **382 → 381** in `scripts/claim_ledger.py:477` — doc untouched |
+> | 2026-08-08 | `b354f46` | *"claim_ledger.py at `c2e2946` reports **UNATTRIBUTED 384 / CONFLATED 67 / BARE-HW 17**"*, flagging `CONFLATED 67 > 66` as a standing red |
+> | 2026-08-09 | `9ae1740` | *"claim_ledger unchanged at baseline **446 / 72 / 18**"* |
+>
+> ⇒ **Read the numbers from `scripts/claim_ledger.py`, never from this file.** ★ A ledger whose
+> purpose is to stop unattributed claims is itself the sharpest place for an unattributed number
+> to sit: the bars below still *look* like the enforced baseline and have not been for ten days.
+
 > *"tests are one piece, not proof. things like self reflection `SET_OBJECT's data was not
 > observed to matter, and the code now says so instead of claiming a measurement it does not
 > have` is really important especially for this project. **the only real proof are live boots
