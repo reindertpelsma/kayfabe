@@ -1,8 +1,14 @@
 # PRE-REGISTRATION — R32, the framebuffer memfd JOIN
 
-**STATUS: PRE-REGISTERED 2026-08-11. LIVE until scored.** Written and committed **before**
-the probe was built and before any hardware ran it. Scored unedited: the scoring section is
-appended below the line, and nothing above the line is touched afterwards.
+**STATUS: ★ SCORED ON HARDWARE 2026-08-11 (w260) — P1–P5, P7, P8 ALL HELD, P6 refuted as an
+instrument fact. See §5.0.** Written and committed **before** the probe was built and before
+any hardware ran it. Scored unedited: the scoring section is appended below the line, and
+nothing above the line is touched afterwards.
+⊘ **This STATUS line is the ONE exception, and it is edited on purpose.** It read *"LIVE
+until scored"* for the whole of the day on which the probe stayed unrun, and `[measured
+2026-08-11]` a research lane read this doc and concluded *"nobody has run it"* **after it had
+been run**. A status block that cannot be corrected is the stale-doc failure `CLAUDE.md`
+names, one level up. No prediction, confidence or refuter in §1–§4 has been touched.
 
 Branch `fb-memfd-join`, based on `4428b6b`. Bench: `vh`, RTX 3060 GA106, host driver
 580.159.04. Rung: `rmladder --fb-memfd-join` / `--fb-memfd-join-negative`. **No VM boot** —
@@ -99,12 +105,57 @@ while leaving the vidmem + `map_cpu` route (which is measured, §4) standing.
 
 ## 5. SCORING — 2026-08-11
 
+### 5.0 ★★★★★ CORRECTION, 2026-08-11 (w260) — THE PROBE HAS NOW RUN, AND EVERY OPEN ROW HELD
+
+⊘⊘ **The paragraph in §5.1 below is SUPERSEDED and is kept only so the reader meets the
+correction before the claim.** It says *"the probe was never run on hardware"*. That was true
+when written and is **false as of 2026-08-11T16:11:44+00:00**.
+
+`[measured 2026-08-11T16:11:44+00:00, bench `vh`, RTX 3060 GA106, host driver 580.159.04,
+`REV_UNDER_TEST=62ab8755245b3c320de8365b08e3da4f1031292a`, stamp asserted equal to
+`git rev-parse HEAD` before the probe was allowed to run, `PROBE_RC=0`]`
+Evidence, committed: `traces/real_ga106/rmladder_r32_fb_memfd_join_real_ga106.txt` and
+`…_negative_real_ga106.txt`.
+
+| # | prediction | conf | verdict | the line that decides it |
+|---|---|---|---|---|
+| **P1** | OS_DESCRIPTOR alloc succeeds over `I` | 0.97 | ✅ **HELD** | the forward arm reached `placed at 0x0000000301400000` — the alloc is upstream of it |
+| **P2** | `placed_as_asked` (`DMA_OFFSET_FIXED` honoured) | 0.95 | ✅ **HELD** | `placed at 0x0000000301400000 AS ASKED` |
+| **P3** | **J1** — the GPU reads what mapping **S** wrote | 0.93 | ✅ **HELD** | `CE retired (sem 0x00000001), dst[0] 0xa112fffe -> 0x5eed0001, and 65536 of 65536 bytes compared EQUAL` |
+| **P4** | ★ **J2** — **S** reads back what the GPU wrote | **0.85** | ✅ **HELD** | `CE retired (sem 0x00000002); … 65536 of 65536 bytes read back through S EQUAL — the GPU WROTE and the OTHER mapping READ IT` |
+| **P5** | non-vacuity: `reverse_before == P1` | 0.95 | ✅ **HELD** | `the memfd held 0x5eed0001 through S immediately before the copy` — i.e. `P1`, ⊘ neither `0` nor already `P2` |
+| **P6** | two mappings at different host VAs, *and the probe says so* | 0.99 | ⊘ **REFUTED** | unchanged — see §5.2; an instrument fact, not a system fact |
+| **P7** | negative control mismatches at **word 0** with `got == 0` | 0.9 | ✅ **HELD** | `S was never written and the CE delivered 0x00000000 at word 0 where the pattern would have been 0x5eed0001` |
+| **P8** | no host `Xid`, no CE timeout | 0.9 | ✅ **HELD** | both CEs retired (`sem` `0x1`/`0x2`), `PROBE_RC=0`, and **zero `Xid` in the run's window** |
+
+★★★ **P4 is the row that carried the rung, and it is the one that matters beyond it.** The
+doc's own §3 says *"this is the direction `cuCtxCreate` is stuck on … Every byte of evidence
+this tree has for OS_DESCRIPTOR runs the other way."* It no longer does. **GPU-write →
+CPU-read through a described memfd is measured**, 65 536/65 536 bytes, with a negative control
+that fired. Both named risks — L2 not flushed to sysmem by semaphore retire, and a wrong
+`COHERENCY_CACHED` for a GPU-written buffer — are **refuted by measurement** rather than
+argued away.
+
+⚠ **How P8 was scored, because the obvious way is wrong.** `dmesg | grep -ci xid` on this box
+returns **6** — and all six predate this run by **≥10 hours** (latest at kernel `223896`,
+against a run at ≈`260526`; the two most recent are `gpu_wedge_probe`'s, and three older ones
+are earlier `kayfabe-rm-ladd` rungs). A raw count over a long-lived ring buffer is a **campaign
+total, not this run's**, which is `boot_capture.sh`'s own watermark lesson applied to a probe
+that does not use it. ⊘ A `Xid` count is not attributable without a time window.
+
+⊘ **What this still does NOT establish** — §4's four limits are untouched by this measurement.
+In particular it remains **one process, two mappings**: the cross-process case is still
+reasoned (`SCM_RIGHTS`, two `mmap`s of one fd are the same folios), not measured. The `w260`
+boot is where that gets exercised.
+
+### 5.1 ⊘ SUPERSEDED by §5.0 — the state before the probe ran
+
 ⊘ **P1–P5, P7, P8: UNSCORED. The probe was never run on hardware.** The rung was reframed
 mid-flight (the owner's four-kind GPGA taxonomy, `gpga_region_kind.md`) and the bench sync
 was cut short by a timeout. There is no measurement, and none of these rows may be filled in
 from reasoning. They stay open.
 
-### ★★★ P6 is scored, and it FAILED — as a fact about my instrument, not about the system
+### 5.2 ★★★ P6 is scored, and it FAILED — as a fact about my instrument, not about the system
 
 > **P6** — *"The two mappings land at different host VAs (`s_addr != i_addr`) **and the probe
 > says so**"*, confidence 0.99.
