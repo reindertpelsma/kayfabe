@@ -17862,7 +17862,52 @@ interrupts:     194 vectors delivered, 0 undeliverable (guest had not enabled th
 |---|---|---|
 | `348 gated` | **96**, with **4 `IRQSCLR` cleared** (was 0) | **STALE** — that is `w212`, ~99 commits back. The gate is *open*; `gated` is documented as healthy flow control |
 | `179 completions UNVECTORED`, `1 raised / 1 masked` | 179 is on the **`completions`** line; `1 raised / 1 masked` is on the **`os-event announce`** line | **TWO LINES, MERGED.** Only the first is on a plane where `LEAF_EN` matters |
-| `CE-SUBMIT is 0; nothing has ever been forwarded` | `[seen=34 forwarded=32 refused=2]`, incl. 8 × `0xc7c0` `GrCompute` | **FALSE at HEAD** |
+| `CE-SUBMIT is 0; nothing has ever been forwarded` | `forwarded=32`, but **`CE-SUBMIT` is 0** | ⊘ **HALF TRUE — see §16.108.3a. My first draft of this row was WRONG.** |
+
+### 16.108.3a ⊘⊘ CORRECTION, CAUGHT BY THE COORDINATOR — `forwarded` AND `CE-SUBMIT` ARE DIFFERENT PLANES
+
+**My first draft of the last row above said the brief was "FALSE at HEAD" and cited
+`forwarded=32`. That was wrong, and it is the same defect as §16.108.1's:** *a value read as
+the kind of thing printed next to it.* The two counters answer different questions:
+
+| | `forwarded` | `CE-SUBMIT` |
+|---|---|---|
+| **emitted by** | `kayfabe-device`, the `ENGINE-OBJECT` census | `kayfabe-isolate-host/src/rm.rs:3342` (refusal) and `:3359` (submission) |
+| **counts** | guest **object allocations** (`0xc7b5`/`0xc7c0`/`0xc797`) forwarded to host RM and given a host object handle | one **copy-engine WORK submission** to a real host engine — ring store, doorbell, semaphore |
+| **plane** | **control** | **data** |
+| **at `w256`** | **32** (`[seen=34 forwarded=32 refused=2]`) | **0 — the string does not occur in the log at all** |
+
+⇒ **The two are not in contradiction; they are different questions.** An object can be
+forwarded and given a host handle without one byte of work ever being submitted through it —
+which is exactly the state this port is in, and exactly what `w255` meant when it printed
+*"`CE-SUBMIT` 0"* and *"`engine=Ce` forwards 8 → 22"* on adjacent lines.
+
+★★★ **AND THE ARCHIVE-WIDE ANSWER IS STRONGER THAN "0 AT w256".** `[measured 2026-08-11, grep
+over all **124** `*_qemu.log` in `traces/guest_boots/` (417 artefacts total)]`: `CE-SUBMIT`
+occurs in **6** of them
+(`w209`, `w219`, `w226a/c/d`, `w231a`), **10 occurrences, of which non-refusal lines: ZERO** — every
+single one is the REFUSAL line, byte-identical:
+
+```text
+kayfabe-isolate: CE-SUBMIT dst=0x40fa7c000 len=4 by=Ours src=Constant(0) → REFUSED BEFORE
+SUBMISSION Other(19270) (no ring store, no doorbell, no semaphore)
+```
+
+`19270` = `0x4B46` = `"KF"` = `NOT_ON_THIS_RUNG` (`rm.rs:156-157`) — **our own deliberate
+not-implemented sentinel**, refused by `ce_copy_outcome` (`:4296`) before any ring store, for
+the documented reason that `CeExecutor::Ours` + `CeSource::Constant` (a scrubber fill) is
+refused by design.
+
+⇒ ⊘ **The success-path line at `rm.rs:3359` — the one that would print `gp_get=… gp_put=…
+sem=… → RETIRED` — HAS NEVER BEEN PRINTED IN THIS PROJECT'S HISTORY.** Not `RETIRED`, not
+even `NEVER-RETIRED`. **No copy-engine work has ever reached a host engine.** The brief's
+*"nothing has ever been forwarded"* is **correct about the data plane**, and it is the
+milestone still outstanding.
+
+⚠ **And `w256` cannot speak to it either way**: it ran `ce_executor=local`
+(`local_ce_is_the_only_executor=true`), so the host isolate's submit path was **never
+engaged**. `CE-SUBMIT` is absent there **by configuration, not by failure** — which is its
+own instance of the class: *an absent line means "not asked", not "asked and got nothing".*
 
 ★ **Print-bound check (the brief's own item 4), and both pass.** `gated` and `nonstall_unvectored`
 are unbounded `AtomicU64::fetch_add` with no saturation, and both vary across the archive
