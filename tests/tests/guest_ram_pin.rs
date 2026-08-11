@@ -420,8 +420,9 @@ impl kayfabe_isolate::RmBackend for Relocating {
         &mut self,
         vas: HostHandle,
         engine: kayfabe_arch::ids::EngineKind,
+        hosting: Option<kayfabe_isolate::HostedObject<'_>>,
     ) -> Result<kayfabe_isolate::ChannelHandles, RmError> {
-        self.0.alloc_channel(vas, engine)
+        self.0.alloc_channel(vas, engine, hosting)
     }
     fn alloc_engine_object(
         &mut self,

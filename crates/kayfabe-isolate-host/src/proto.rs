@@ -83,6 +83,19 @@ pub enum Request {
         vas: u64,
         /// The channel's engine, as [`engine_code`].
         engine: u8,
+        /// ★★★★★ **§16.106 — [`kayfabe_isolate::HostedObject`], across the wire.**
+        ///
+        /// `(class, params)` of the engine object this channel is being materialized to
+        /// host, or `None` for a doorbell materialization.
+        ///
+        /// ⊘⊘ **It has to cross.** The real adapter runs in the CHILD process; the
+        /// decision that reads this — `declared_channel_engine_type` — lives there. A
+        /// version of §16.106 that widened only the trait would compile, pass every
+        /// in-process test, and be **dead on the one path a boot exercises**
+        /// (`isolate_plane=real`). Presence is an explicit byte, never an in-band
+        /// sentinel: `class = 0` with empty params is a legal thing for a guest to send
+        /// and must not read as "no object".
+        hosting: Option<(u32, Vec<u8>)>,
     },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
@@ -561,10 +574,22 @@ impl Envelope {
                 out.push(19);
                 out.extend_from_slice(&len.to_le_bytes());
             }
-            Request::AllocChannel { vas, engine } => {
+            Request::AllocChannel {
+                vas,
+                engine,
+                hosting,
+            } => {
                 out.push(4);
                 out.extend_from_slice(&vas.to_le_bytes());
                 out.push(*engine);
+                match hosting {
+                    None => out.push(0),
+                    Some((class, params)) => {
+                        out.push(1);
+                        out.extend_from_slice(&class.to_le_bytes());
+                        put_blob(&mut out, params);
+                    }
+                }
             }
             Request::AllocEngineObject {
                 chan,
@@ -691,6 +716,22 @@ impl Envelope {
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
                 engine: c.u8("channel engine")?,
+                hosting: match c.u8("channel hosting presence")? {
+                    0 => None,
+                    1 => Some((
+                        c.u32("channel hosting class")?,
+                        c.blob("channel hosting params")?,
+                    )),
+                    // ⊘ Refused by name rather than defaulted to `None`: a byte we do not
+                    // understand means the two sides disagree about the frame, and
+                    // continuing would decode the REST of the message at the wrong offset.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel hosting presence",
+                            tag,
+                        });
+                    }
+                },
             },
             5 => Request::AllocEngineObject {
                 chan: c.u64("engine chan")?,
@@ -998,6 +1039,14 @@ mod tests {
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
+                hosting: None,
+            },
+            // ★ §16.106 — BOTH arms of `hosting` are sampled, because the presence byte is
+            // the part a one-arm round trip would never exercise.
+            Request::AllocChannel {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
             },
             Request::AllocEngineObject {
                 chan: 9,

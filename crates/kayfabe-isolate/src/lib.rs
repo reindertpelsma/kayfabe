@@ -563,6 +563,26 @@ pub struct ExportedBacking {
     pub prot: Prot,
 }
 
+/// ★★★★★ **§16.106 — the engine object a channel is being materialized to HOST.**
+///
+/// Handed to [`RmBackend::alloc_channel`] so the adapter can honour a declaration the
+/// core's [`EngineKind`] cannot carry: **which** copy engine. See that method for the 14
+/// measured refusals this exists to stop.
+///
+/// ⊘ Borrowed, never owned: it is read during the one call and nothing may retain it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostedObject<'a> {
+    /// The engine-object class the guest asked for.
+    pub class: ClassId,
+    /// The guest's own ABI-lowered alloc blob for it, verbatim — the same bytes
+    /// [`RmBackend::alloc_engine_object`] will be given.
+    ///
+    /// ⊘ **Read, never rewritten.** The declaration inside it is the guest's intent and
+    /// the guest's own driver acts on it too (`NVA06F_CTRL_CMD_BIND` carries the same
+    /// ordinal); a channel that disagrees with it is the bug, not the blob.
+    pub params: &'a [u8],
+}
+
 /// # The unprivileged host-RM verb surface
 ///
 /// The complete vocabulary of host operations the forwarding plane may request.
@@ -638,10 +658,30 @@ pub trait RmBackend: Send + Sync {
     /// (`dma_copy_class_alloc_params`: `engineType=0` → wrong runlist →
     /// cuCtxCreate 401 — seam audit GR-1). Returns
     /// `(channel_handle, host_work_submit_token)`.
+    ///
+    /// # ★★★★★ §16.106 — `hosting`, and why an [`EngineKind`] alone was not enough
+    ///
+    /// [`EngineKind::Ce`] names *a* copy engine and never *which one*, so the adapter had
+    /// to pick, and it picked index 0 — the number the C used. `[measured 2026-08-11,
+    /// boots w250/w251/w254]` **all 14** of this port's engine-object refusals are exactly
+    /// that mismatch: the guest's own `NVB0B5_ALLOCATION_PARAMETERS` declare `COPY2`/
+    /// `COPY3` (runlists 1 and 2) while we built the channel on `COPY0` (runlist 0), and
+    /// the host driver refuses with `NV_ERR_INVALID_STATE` naming both numbers.
+    ///
+    /// ⇒ `hosting` carries **the engine object this channel is being materialized to
+    /// host**, so the adapter can read the instance out of the guest's own declaration
+    /// instead of inventing it. ⊘ It is `None` for every materialization that is not for
+    /// an object (the doorbell path), and the adapter's behaviour there is unchanged.
+    ///
+    /// ⊘ **Not "the params", and not a second engine argument.** The `EngineKind` still
+    /// decides *which kind of engine*; `hosting` only ever refines an instance the kind
+    /// cannot express. An adapter that ignored it entirely would be exactly as correct as
+    /// this trait was before — which is the property that keeps this additive.
     fn alloc_channel(
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
     ) -> Result<(HostHandle, u64), RmError>;
 
     /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
@@ -2348,7 +2388,9 @@ impl Worker {
                                 (h, Some(h))
                             }
                         };
-                        match rm.alloc_channel(vas, *engine) {
+                        // ⊘ `None`: a doorbell materialization hosts no object, so
+                        // there is no declaration to refine the engine with (§16.106).
+                        match rm.alloc_channel(vas, *engine, None) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
@@ -2393,7 +2435,16 @@ impl Worker {
                                 (h, Some(h))
                             }
                         };
-                        match rm.alloc_channel(vas, *engine) {
+                        // ★★★ §16.106 — the guest's OWN declaration reaches the channel
+                        // alloc, so a CE object's instance is honoured instead of invented.
+                        match rm.alloc_channel(
+                            vas,
+                            *engine,
+                            Some(HostedObject {
+                                class: *class,
+                                params,
+                            }),
+                        ) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), e));

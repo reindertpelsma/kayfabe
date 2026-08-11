@@ -2998,7 +2998,7 @@ fn main() -> std::process::ExitCode {
                 break;
             }
         };
-        match rm.alloc_channel(vas, engine) {
+        match rm.alloc_channel(vas, engine, None) {
             Ok((chan, token)) => {
                 println!(
                     "ok    R13.{n} channel      = {:#010x}, engine {engine:?}, \
@@ -3032,7 +3032,11 @@ fn main() -> std::process::ExitCode {
     }
     // An engine the port cannot place on a runlist must be REFUSED, not sent as zero —
     // `engineType = 0` is the C's proven wrong-runlist bug and it fails three steps later.
-    match rm.alloc_channel(channels.first().map_or(vas, |c| c.1), EngineKind::Other) {
+    match rm.alloc_channel(
+        channels.first().map_or(vas, |c| c.1),
+        EngineKind::Other,
+        None,
+    ) {
         Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::NOT_ON_THIS_RUNG => {
             println!("ok    R13 unknown engine  = refused before any object was allocated");
         }

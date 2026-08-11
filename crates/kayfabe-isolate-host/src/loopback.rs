@@ -38,7 +38,7 @@ use crate::export::ChildExports;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CeSubCopy, ExportRequest, ExportSource, ExportedBacking, GuestRamGrant, GuestRamMapped,
-    HostHandle, IsolateId, RmBackend, RmError,
+    HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
@@ -266,6 +266,7 @@ impl RmBackend for LoopbackRm {
         &mut self,
         vas: HostHandle,
         _engine: EngineKind,
+        _hosting: Option<HostedObject<'_>>,
     ) -> Result<(HostHandle, u64), RmError> {
         self.known(vas)?;
         let h = self.verb(false)?;

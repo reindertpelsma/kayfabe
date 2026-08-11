@@ -2279,6 +2279,56 @@ impl CeAllocParams {
             &self.engine_type.to_le_bytes(),
         )
     }
+
+    /// `NVB0B5_ALLOCATION_PARAMETERS_VERSION_0` —
+    /// `ogkm-580: src/common/sdk/nvidia/inc/class/clb0b5sw.h:40`. Under this version the
+    /// `engineType` field is a bare **CE instance index**, not an ordinal.
+    pub const VERSION_0: u32 = 0;
+
+    /// Decode a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        Ok(CeAllocParams {
+            version: u32_at(bytes, 0)?,
+            engine_type: u32_at(bytes, 4)?,
+        })
+    }
+
+    /// ★★★★★ **§16.106 — WHICH COPY ENGINE THIS OBJECT DECLARES**, as an
+    /// `NV2080_ENGINE_TYPE_*` ordinal: RM's own `kceGetEngineDescFromAllocParams`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce_context.c:60-175`), transcribed.
+    ///
+    /// | version | what `engine_type` is | this returns |
+    /// |---|---|---|
+    /// | [`Self::VERSION_0`] | a bare CE **instance index** (`engineIndex = engineType`) | [`engine_type_copy`] of it |
+    /// | [`Self::VERSION_1`] | an `NV2080_ENGINE_TYPE_COPY(i)` **ordinal** | the ordinal, once [`copy_index_of_engine_type`] confirms it is one |
+    /// | anything else | — | `None` (RM returns `ENG_INVALID`, `:157-161`) |
+    ///
+    /// ⊘ **`None` means "this object declares no copy engine we can name", never
+    /// "copy engine 0".** RM refuses the unknown-version and unknown-ordinal cases by
+    /// name; a zero here would silently become CE0 — which is the C's proven
+    /// `dma_copy_class_alloc_params` defect, i.e. exactly the failure this function
+    /// exists to stop reproducing. See the struct doc.
+    ///
+    /// ★★★ **Why a caller wants this**: the number returned is the SAME number the
+    /// channel group hosting the object must be allocated with
+    /// ([`crate::generated::classes::NvChannelGroupAllocationParameters::engine_type`]).
+    /// If the two disagree, `chandesConstruct_IMPL` refuses the object with
+    /// `NV_ERR_INVALID_STATE` (`0x40`) and the host driver prints
+    /// *"Channel has already been assigned a runlist incompatible with this engine"*
+    /// (`ogkm-580: kernel_fifo_gm107.c` `kfifoRunlistSetId_GM107`).
+    #[must_use]
+    pub fn declared_copy_engine_type(&self) -> Option<u32> {
+        match self.version {
+            Self::VERSION_0 => engine_type_copy(self.engine_type),
+            Self::VERSION_1 => {
+                copy_index_of_engine_type(self.engine_type).map(|_| self.engine_type)
+            }
+            _ => None,
+        }
+    }
 }
 
 // =====================================================================================
@@ -3680,6 +3730,61 @@ mod tests {
         let mut z = [0xEEu8; CeAllocParams::SIZE];
         CeAllocParams::default().encode_into(&mut z).expect("enc");
         assert_eq!(z, [0u8; 8], "a defaulted CE alloc IS engineType 0");
+    }
+
+    /// ★★★★★ **§16.106 — `declared_copy_engine_type` IS `kceGetEngineDescFromAllocParams`**
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce_context.c:99-165`), including the
+    /// two things a lazier transcription would get wrong.
+    #[test]
+    fn the_declared_copy_engine_follows_rms_own_two_versions() {
+        let of = |version, engine_type| {
+            CeAllocParams {
+                version,
+                engine_type,
+            }
+            .declared_copy_engine_type()
+        };
+        let copy2 = engine_type_copy(2).expect("COPY2");
+
+        // VERSION_1: the field IS the ordinal, and comes back untouched.
+        assert_eq!(of(CeAllocParams::VERSION_1, copy2), Some(copy2));
+        // VERSION_0: the field is an INDEX, so the same `2` names the same engine by a
+        // different route — and reading one as the other is off by `ENGINE_TYPE_COPY0`.
+        assert_eq!(of(CeAllocParams::VERSION_0, 2), Some(copy2));
+        assert_ne!(
+            of(CeAllocParams::VERSION_0, 2),
+            of(CeAllocParams::VERSION_1, 2)
+        );
+
+        // ⊘ `None` means "declares no copy engine", NEVER "copy engine 0".
+        assert_eq!(of(CeAllocParams::VERSION_1, ENGINE_TYPE_GRAPHICS), None);
+        assert_eq!(
+            of(7, copy2),
+            None,
+            "RM answers ENG_INVALID for an unknown version"
+        );
+        // …and the defaulted struct, which is the C's proven bug, names CE0 through
+        // VERSION_0's index arm — exactly as RM does, so this port cannot disagree with
+        // the driver about what a zeroed blob means.
+        assert_eq!(
+            CeAllocParams::default().declared_copy_engine_type(),
+            Some(ENGINE_TYPE_COPY0)
+        );
+    }
+
+    /// Encode → decode is the identity, so a blob this port forwards and a blob it reads
+    /// cannot drift apart.
+    #[test]
+    fn the_ce_alloc_params_round_trip() {
+        let want = CeAllocParams {
+            version: CeAllocParams::VERSION_1,
+            engine_type: engine_type_copy(3).expect("COPY3"),
+        };
+        let mut b = [0xEEu8; CeAllocParams::SIZE];
+        want.encode_into(&mut b).expect("encodable");
+        assert_eq!(CeAllocParams::decode(&b).expect("decodable"), want);
+        // A short image is refused rather than half-read.
+        assert!(CeAllocParams::decode(&b[..7]).is_err());
     }
 
     /// A short buffer is refused, never truncated — the same rule as every other encoder

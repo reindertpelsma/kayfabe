@@ -137,7 +137,7 @@ use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
     CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, GuestRamGrant,
-    GuestRamMapped, HostHandle, IsolateId, RmBackend, RmError,
+    GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
@@ -2007,6 +2007,74 @@ fn engine_type_for(engine: EngineKind) -> Option<u32> {
     }
 }
 
+/// ★★★★★ **§16.106 — WHICH copy engine the channel must be built on, taken from the
+/// object the guest is putting on it.**
+///
+/// [`engine_type_for`] answers *which kind of engine*; it cannot answer *which instance*,
+/// because [`EngineKind::Ce`] does not carry one. So it picked index 0, and its own
+/// closing paragraph said choosing CE2+ *"is a scheduling decision with a cost which
+/// nothing at this rung is in a position to make."* ⊘ That is still true — **and we do not
+/// have to make it. The guest already did**, in the eight bytes it hands us.
+///
+/// # ★★★ The 14 refusals this exists to remove, and both ends of the number
+///
+/// `[measured 2026-08-11, boots w250 / w251 / w254, real GA106, host driver open
+/// 580.159.04]` every one of this port's engine-object refusals is this mismatch:
+///
+/// ```text
+/// NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist
+///       incompatible with this engine (requested: 0x1 current: 0x0).
+/// NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+/// NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+/// ```
+///
+/// - **`current: 0x0`** is OURS: the TSG was allocated with `ENGINE_TYPE_COPY0`, and
+///   `engine_type_for`'s own measured sweep records `COPY(0)`/`COPY(1)` → **runlist 0**.
+/// - **`requested: 0x1` for `CE2` / `0x2` for `CE3`** is the GUEST'S, read out of the
+///   object's `NVB0B5_ALLOCATION_PARAMETERS` by RM's `kceGetEngineDescFromAllocParams`
+///   (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce_context.c:60-175`) — and the same
+///   sweep records `COPY(2)` → runlist **1**, `COPY(3)` → runlist **2**. Both ends agree
+///   with the table; nothing here is inferred from the symptom.
+///
+/// The refusal is `kfifoRunlistSetId_GM107`'s first branch (`NV_ERR_INVALID_STATE`, `0x40`),
+/// reached from `chandesConstruct_IMPL` (`ogkm-580: channel_descendant.c:243-250`), whose
+/// status returns out to our `alloc_engine_object`.
+///
+/// # ⊘ Why the CHANNEL moves and not the OBJECT
+///
+/// The other repair — rewrite the guest's `engineType` to `COPY0` — is refused on three
+/// counts. **(1)** The declaration is not ours to edit: the same ordinal goes out again in
+/// the guest's own `NVA06F_CTRL_CMD_BIND` (`engineType = 11` = `COPY2`, measured on real
+/// hardware, `traces/real_ga106/rpc_transcript_real_ga106.txt:63`), so the guest would
+/// believe `COPY2` while the host ran `COPY0` — a disagreement invisible until a copy runs
+/// on an engine nobody asked for. **(2)** It is a *wrong answer* rather than a missing one:
+/// `COPY0`/`COPY1` are the GRCE pair and share the graphics runlist, so forcing them
+/// serialises copies against GR work the guest expects to overlap. **(3)** It re-creates
+/// the C's `dma_copy_class_alloc_params` defect deliberately, having just measured it.
+///
+/// # ⊘ Scope, stated narrowly
+///
+/// - **Only [`EngineKind::Ce`].** A GR channel that later takes a CE object binds it as
+///   GRCE and needs no move — that is the 8 forwards that already succeed, and keying on
+///   the class alone would break them by building a CE channel for a GR context.
+/// - **Only a declaration RM itself would accept.** `None` from
+///   [`CeAllocParams::declared_copy_engine_type`] falls through to `engine_type_for`, so
+///   absent/short/unknown-version params leave behaviour **byte-identical to before**.
+///   ⊘ `None` is never read as "copy engine 0"; the fall-through arrives at `COPY0`
+///   through the unchanged path, which is a different sentence.
+fn declared_channel_engine_type(
+    engine: EngineKind,
+    hosting: Option<HostedObject<'_>>,
+) -> Option<u32> {
+    if engine != EngineKind::Ce {
+        return None;
+    }
+    let hosting = hosting?;
+    CeAllocParams::decode(hosting.params)
+        .ok()?
+        .declared_copy_engine_type()
+}
+
 /// ★★★ R2's **decision**, separated from R2's ioctl so the whole gate is testable.
 ///
 /// The argument is `Option<&str>` — *"what the frontend said, if it said anything"* — and
@@ -3010,10 +3078,14 @@ impl RmBackend for HostRmBackend {
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
     ) -> Result<(HostHandle, u64), RmError> {
+        // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
         // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
         // no engine type is not a channel with a default one, it is a channel on runlist 0.
-        let engine_type = engine_type_for(engine).ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+        let engine_type = declared_channel_engine_type(engine, hosting)
+            .or_else(|| engine_type_for(engine))
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         self.alloc_channel_on(vas, engine_type)
     }
 
@@ -5864,5 +5936,106 @@ mod tests {
     fn the_first_handle_is_the_same_for_every_isolate() {
         assert_eq!(FIRST_HANDLE, 0xCAFE_0001);
         assert_ne!(FIRST_HANDLE, REQUESTED_CLIENT_HANDLE);
+    }
+
+    /// The eight bytes a CE object declares, as the guest sends them.
+    fn ce_params(version: u32, engine_type: u32) -> Vec<u8> {
+        let mut b = vec![0u8; CeAllocParams::SIZE];
+        CeAllocParams {
+            version,
+            engine_type,
+        }
+        .encode_into(&mut b)
+        .expect("encode");
+        b
+    }
+
+    /// ★★★★★ **§16.106 — the channel follows the OBJECT'S declared copy engine.**
+    ///
+    /// The 14 refusals of `w250`/`w251`/`w254` are `COPY0` (ours, runlist 0) against
+    /// `COPY2`/`COPY3` (the guest's, runlists 1 and 2). This is the decision that removes
+    /// them, tested where it is made.
+    #[test]
+    fn a_ce_channel_takes_the_engine_the_guest_declared() {
+        let copy2 = engine_type_copy(2).expect("COPY2");
+        let copy3 = engine_type_copy(3).expect("COPY3");
+        for (declared, want) in [(copy2, copy2), (copy3, copy3)] {
+            let params = ce_params(CeAllocParams::VERSION_1, declared);
+            let hosting = HostedObject {
+                class: ClassId(0xc7b5),
+                params: &params,
+            };
+            assert_eq!(
+                declared_channel_engine_type(EngineKind::Ce, Some(hosting)),
+                Some(want),
+                "the declared ordinal reaches the channel unchanged"
+            );
+            // ⊘ …and the number it replaces is the one the host driver called `current`.
+            assert_eq!(engine_type_for(EngineKind::Ce), Some(ENGINE_TYPE_COPY0));
+            assert_ne!(want, ENGINE_TYPE_COPY0);
+        }
+    }
+
+    /// ★★ VERSION_0 numbers the same field as a bare **instance index**, so the two
+    /// versions must not be read through one lens
+    /// (`ogkm-580: kernel_ce_context.c:115-125`).
+    #[test]
+    fn version_zero_is_an_index_and_version_one_is_an_ordinal() {
+        let by_index = ce_params(CeAllocParams::VERSION_0, 2);
+        let by_ordinal = ce_params(
+            CeAllocParams::VERSION_1,
+            engine_type_copy(2).expect("COPY2"),
+        );
+        let of = |p: &[u8]| {
+            declared_channel_engine_type(
+                EngineKind::Ce,
+                Some(HostedObject {
+                    class: ClassId(0xc7b5),
+                    params: p,
+                }),
+            )
+        };
+        assert_eq!(of(&by_index), of(&by_ordinal), "both name COPY2");
+        // ⊘ And the same bytes under the other version name a DIFFERENT engine — which is
+        // why the version is decoded rather than assumed.
+        assert_eq!(of(&ce_params(CeAllocParams::VERSION_1, 2)), None);
+    }
+
+    /// ★★★ **The fall-through is byte-identical to the old behaviour**, and it must be:
+    /// every arm that cannot name an engine from the guest's own declaration returns
+    /// `None` so `alloc_channel` reaches `engine_type_for` exactly as before.
+    ///
+    /// ⊘ `None` here is *"nothing was declared"*, never *"copy engine 0"* — the two
+    /// arrive at the same ordinal by different routes and only one of them is a claim.
+    #[test]
+    fn nothing_declarable_falls_through_untouched() {
+        let good = ce_params(
+            CeAllocParams::VERSION_1,
+            engine_type_copy(2).expect("COPY2"),
+        );
+        let host = |engine, params: &[u8]| {
+            declared_channel_engine_type(
+                engine,
+                Some(HostedObject {
+                    class: ClassId(0xc7b5),
+                    params,
+                }),
+            )
+        };
+        // A GR channel that later takes a CE object binds it as GRCE and must NOT move —
+        // these are the 8 forwards that already succeed.
+        assert_eq!(host(EngineKind::GrCompute, &good), None);
+        assert_eq!(host(EngineKind::GrGraphics, &good), None);
+        // No object at all (the doorbell materialization).
+        assert_eq!(declared_channel_engine_type(EngineKind::Ce, None), None);
+        // Short, absent, unknown-version, and not-a-copy-ordinal params.
+        assert_eq!(host(EngineKind::Ce, &[]), None);
+        assert_eq!(host(EngineKind::Ce, &[1, 0, 0]), None);
+        assert_eq!(host(EngineKind::Ce, &ce_params(7, 11)), None);
+        assert_eq!(
+            host(EngineKind::Ce, &ce_params(CeAllocParams::VERSION_1, 1)),
+            None,
+            "ENGINE_TYPE_GRAPHICS is not a copy engine and is never read as one"
+        );
     }
 }

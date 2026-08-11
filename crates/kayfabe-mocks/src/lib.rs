@@ -56,8 +56,8 @@ use kayfabe_arch::{
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
-    ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle, Isolate, IsolateFactory, IsolateId,
-    RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, Isolate,
+    IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
@@ -1361,6 +1361,14 @@ pub enum RmVerb {
         /// The engine/runlist the channel was declared for (GR-1: the wrong-runlist
         /// class is pinned by asserting THIS field, per channel).
         engine: EngineKind,
+        /// ★★★ **§16.106 — the engine object this channel was materialized to HOST**, as
+        /// `(class, params)`, or `None` for a doorbell materialization.
+        ///
+        /// ⊘ Recorded because a trait parameter is an upper bound on what a caller *may*
+        /// communicate and says nothing about what it *does*: without this field
+        /// `Worker::execute` could pass `None` on every path and every other assertion in
+        /// the suite would still pass. It is the call site, made assertable.
+        hosting: Option<(ClassId, Vec<u8>)>,
         /// Returned channel handle.
         handle: HostHandle,
         /// Returned host work-submit token.
@@ -2954,6 +2962,7 @@ impl RmBackend for MockRmBackend {
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
     ) -> Result<(HostHandle, u64), RmError> {
         let _client = self.gate(VerbKind::AllocChannel)?;
         self.check(vas)?;
@@ -2967,6 +2976,7 @@ impl RmBackend for MockRmBackend {
         self.record(RmVerb::AllocChannel {
             vas,
             engine,
+            hosting: hosting.map(|h| (h.class, h.params.to_vec())),
             handle,
             token,
         });

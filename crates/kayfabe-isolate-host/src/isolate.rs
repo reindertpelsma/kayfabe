@@ -57,7 +57,7 @@ use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
     ExportRequest, ExportSource, ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle,
-    Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
@@ -495,10 +495,14 @@ impl RmBackend for ProxyRmBackend {
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
     ) -> Result<(HostHandle, u64), RmError> {
         let reply = self.call(Request::AllocChannel {
             vas: vas.raw(),
             engine: engine_code(engine),
+            // ★★★ §16.106 — carried to the CHILD, which is where the adapter that reads it
+            // runs. See `Request::AllocChannel::hosting`.
+            hosting: hosting.map(|h| (h.class.0, h.params.to_vec())),
         })?;
         match self.lift(reply)? {
             Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),

@@ -228,6 +228,70 @@ fn case1_second_forward_reuses_channel() {
     );
 }
 
+/// ★★★★★ **§16.106 — THE GUEST'S OWN CE DECLARATION REACHES THE CHANNEL ALLOC.**
+///
+/// The whole fix is that `alloc_channel` can read *which* copy engine the object names,
+/// because [`kayfabe_arch::ids::EngineKind::Ce`] cannot carry an instance and the adapter
+/// therefore invented one (`COPY0`, runlist 0) while the guest declared `COPY2`/`COPY3`
+/// (runlists 1 and 2) — all 14 refusals of `w250`/`w251`/`w254`.
+///
+/// # ⊘ Why this test exists SEPARATELY from the adapter's own unit tests
+///
+/// Those test the *decision*. This tests the *delivery*: a trait parameter is an upper
+/// bound on what a caller MAY communicate and says nothing about what it does. Without
+/// this, `Worker::execute` could pass `None` on every path, `declared_channel_engine_type`
+/// would still be perfectly correct, and the fix would be dead — the exact shape that cost
+/// this campaign four rungs (`a signature is an upper bound; only the CALL SITE says what
+/// is READ`).
+#[test]
+fn the_guests_ce_alloc_params_reach_the_channel_alloc() {
+    let (mut gpu, recorder) = compute_gpu();
+    // Eight bytes shaped like `NVB0B5_ALLOCATION_PARAMETERS { version = 1, engineType }`.
+    // ⊘ Spelled as bytes here on purpose: this test is about the blob ARRIVING verbatim,
+    // not about anyone's decode of it.
+    let declared: [u8; 8] = [1, 0, 0, 0, 11, 0, 0, 0];
+
+    forward_engine_object(&mut gpu, GpuId::ZERO, CE_VCHID, mc::DMA_COPY, &declared)
+        .expect("the CE object forwards");
+
+    let log = recorder.lock().expect("recorder");
+    let hosting = log
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, .. } => Some(hosting.clone()),
+            _ => None,
+        })
+        .expect("the channel was materialized");
+    assert_eq!(
+        hosting,
+        Some((mc::DMA_COPY, declared.to_vec())),
+        "the channel alloc was told which object it is hosting, byte for byte"
+    );
+}
+
+/// ⊘ The other arm: a channel materialized by a **doorbell** hosts no object, so it names
+/// none. Without this, `hosting` could be filled in from something ambient and the test
+/// above would still pass.
+#[test]
+fn a_doorbell_materialized_channel_names_no_hosted_object() {
+    let (mut gpu, recorder) = compute_gpu();
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
+        .expect("CE doorbell materializes + rings");
+
+    let log = recorder.lock().expect("recorder");
+    let hosting = log
+        .log
+        .iter()
+        .find_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, .. } => Some(hosting.clone()),
+            _ => None,
+        })
+        .expect("the channel was materialized");
+    assert_eq!(hosting, None, "a doorbell materialization hosts no object");
+}
+
 /// ★ Engine-object forward idempotency (§2.2: "re-sends are idempotent"): a REPLAYED
 /// Case-1 engine-object alloc — same channel, same declared class, re-sent any number
 /// of times (the protocol is order-/repeat-independent) — yields exactly ONE host

@@ -239,6 +239,7 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
             handle,
             token,
             engine: _,
+            hosting: _,
         } => {
             own(vas);
             own(handle);

@@ -42,7 +42,7 @@ use crate::rm::{HostRmBackend, RmConnection};
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
 use kayfabe_isolate::{
     CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, GuestRamGrant, GuestRamMapped,
-    HostHandle, IsolateId, RmBackend, RmError,
+    HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
 use kayfabe_linux_raw::sandbox::{self, SandboxPolicy};
 use kayfabe_linux_raw::{
@@ -528,11 +528,25 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         Request::AllocVaSpace => handle(rm.alloc_vaspace()),
         Request::AllocSysmem { len } => handle(rm.alloc_sysmem(len)),
         Request::AllocVidmem { len } => handle(rm.alloc_vidmem(len)),
-        Request::AllocChannel { vas, engine } => match engine_from_code(engine) {
+        Request::AllocChannel {
+            vas,
+            engine,
+            hosting,
+        } => match engine_from_code(engine) {
             // An engine code we do not recognise is a refusal, never a default — the GR-1
             // wrong-runlist class.
             None => Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            Some(engine) => match rm.alloc_channel(raw(vas), engine) {
+            // ★★★ §16.106 — the guest's own declaration, rebuilt on THIS side of the wire
+            // and handed to the adapter that reads it. Borrowed from `hosting`, which the
+            // decode owns for exactly this call.
+            Some(engine) => match rm.alloc_channel(
+                raw(vas),
+                engine,
+                hosting.as_ref().map(|(class, params)| HostedObject {
+                    class: ClassId(*class),
+                    params,
+                }),
+            ) {
                 Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),
                 Err(e) => failed(e),
             },
