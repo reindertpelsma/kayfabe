@@ -1,0 +1,44 @@
+START 2026-08-11T17:52:21+02:00
+/dev/sda1        90G   66G   24G  74% /
+ADJ|crates/kayfabe-completion/src/lib.rs:345|batch_outstanding|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:1407|publish_backing|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:1472|pin_guest_ram|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:2035|back_fb_leaf|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:3015|handle_doorbell|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:3032|deliver_completions|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:3045|poll_completions|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:3467|forward_engine_object|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:3622|route_control|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:4353|read_gpfifo_ring|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:5821|submit_ring|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:5896|gate_working_set|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:5975|arm_fence|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-fwd/src/lib.rs:6064|present_scanout|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-isolate/src/lib.rs:2127|export_backing|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-isolate/src/lib.rs:2158|map_guest_ram|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-isolate/src/lib.rs:2178|unmap_guest_ram|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:713|map_into_view|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:1025|plan|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:1091|apply|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/ceutils.rs:1037|census_gr_addresses|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/completion_watch.rs:706|sweep|LIVE|failing_axis=--features kayfabe-qemu-raw/host-isolates
+ADJ|crates/kayfabe-rt/src/cpu_ce.rs:543|write_completion|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:808|apply|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:1082|completion_poll|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:1370|drain_pending_releases|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:1654|request_cancel|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:1701|declare_wedged|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:2521|submit_ring|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:2558|decode_pt_writes|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:2946|publish_backing|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:2979|pin_guest_ram|LIVE|failing_axis=default
+ADJ|crates/kayfabe-rt/src/device.rs:3014|back_fb_leaf|LIVE|failing_axis=--features kayfabe-qemu-raw/host-isolates
+ADJ|crates/kayfabe-rt/src/device.rs:3040|forward_engine_object|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:3317|route_control|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/device.rs:3405|gate_working_set|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rt/src/executor.rs:228|run_until_stopped|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-shell/src/reactor.rs:164|registrar|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-shell/src/reactor.rs:289|run|ORPHAN|failing_axis=
+TERMINATOR_OK 2026-08-11T17:54:27+02:00
+/dev/sda1        90G   66G   24G  74% /
+tree: []

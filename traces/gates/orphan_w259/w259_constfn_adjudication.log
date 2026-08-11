@@ -1,0 +1,46 @@
+START 2026-08-11T17:49:56+02:00
+/dev/sda1        90G   66G   24G  74% /
+ADJ|crates/kayfabe-core/src/channel_kind.rs:249|may_run_on_the_vcpu_thread|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-core/src/channel_kind.rs:261|name|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-core/src/channel_kind.rs:285|trap_contract|LIVE|failing_axis=default
+ADJ|crates/kayfabe-core/src/channel_kind.rs:307|hosted_by|LIVE|failing_axis=default
+ADJ|crates/kayfabe-core/src/channel_kind.rs:316|name|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-core/src/channel_kind.rs:330|name|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-core/src/promote.rs:156|buffer_id|LIVE|failing_axis=default
+ADJ|crates/kayfabe-core/src/promote.rs:251|phys_half_scope|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-core/src/promote.rs:281|is_global_ctx_buffer|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:135|new|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:175|new|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:191|end|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:197|start|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:338|isolate|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:590|change|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:596|planned_at|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/gpga.rs:665|generation|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:85|new|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:97|offset|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:110|len|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:116|end|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:281|whole|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:293|slice|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:309|bytes|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:315|memory|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:321|host_va|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:327|extent|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:333|as_slice|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:348|frees_object|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:355|owner|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:363|belongs_to|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:447|may_be_host_mapped|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-mmu/src/lib.rs:526|declared_by_guest|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:558|real_gpu_memory|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:592|kind|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:600|phys|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:606|aperture|LIVE|failing_axis=default
+ADJ|crates/kayfabe-mmu/src/lib.rs:613|host|LIVE|failing_axis=default
+ADJ|crates/kayfabe-qemu-raw/src/shim.rs:7931|as_str|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-qemu-raw/src/shim.rs:8168|as_str|ORPHAN|failing_axis=
+ADJ|crates/kayfabe-rmrpc/src/lib.rs:894|rpc_result|ORPHAN|failing_axis=
+TERMINATOR_OK 2026-08-11T17:51:50+02:00
+/dev/sda1        90G   66G   24G  74% /
+tree: []
