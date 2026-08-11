@@ -15441,3 +15441,116 @@ leaf (`start0x200200000 len0x200000`).
 vector's `MAX`, so the list is a **prefix** and the count is a lower bound. The instrument that
 would settle it is a size histogram of the refused leaves beside the binding they straddle —
 one line, and it belongs to whoever takes this next.
+
+## §16.84 ⊘ CORRECTIONS TO §16.83, and the forbidden-#2 gate named at its line
+
+### 16.84.1 ⊘⊘ MY OWN ORPHAN MEASUREMENT HAD NO DISCRIMINATING POWER — retracted
+
+§16.82.9 reported that `ExportBacking`, `ExportSurface`, `DescribeGuestRam` and `UnmapGuestRam`
+are *"named by ZERO lines of kayfabe-fwd/kayfabe-rt/kayfabe-qemu-raw"*. **True, and worthless.**
+
+Re-run with `kayfabe-isolate` (the plan executor) included, the same grep returns **zero for all
+five verbs including `MapGuestRam`** — which demonstrably *runs*, eight times, in `w232c`.
+The wire enum variants live only in `kayfabe-isolate-host`; consuming crates name the **trait
+methods**. ⇒ **The predicate returned the same answer for the working verb and the broken one.**
+That is this tree's own `a_test_can_be_correct_and_unable_to_fail` class, committed by me in a
+message and two reports.
+
+★ The **correct** discriminator, re-measured — trait-method call sites:
+
+| verb | called from | reachable from a doorbell? |
+|---|---|---|
+| `map_guest_ram` / `describe_guest_ram` / `unmap_guest_ram` | `kayfabe-isolate/src/lib.rs` | **yes** — `VerbPlan::PinGuestRam`, production caller `shim.rs:4898` |
+| `export_backing` | `kayfabe-isolate/src/lib.rs` | **no** — no `VerbPlan` variant reaches it |
+
+⇒ **Two crossings, opposite directions**: guest-RAM-**in** is wired and is the *correctness*
+half; object-fd-**out** is orphaned and is the *performance* half. §16.83's conclusion is
+unchanged — §16.83.2's three doors are what make the fd-out half unbuildable here — but the
+reachability claim behind it was measured wrong and is restated above.
+
+### 16.84.2 ★★ The owner ruling is REAL, CURRENT — and its SCOPE excludes our population
+
+Verified verbatim at `ce_executor_tree.md:9-23` and confirmed **not superseded**:
+`git log -- docs/design/ce_executor_tree.md` shows two commits, the later (`c525a11`,
+2026-08-08) an attribution fix only.
+
+> *"The executor is chosen by where the bytes actually LIVE, not by what the guest asked for."*
+> *"Forbidden, and these are the only two things forbidden: 1. Signalling completion for work
+> that did not happen. 2. Landing the data where the guest cannot see it."*
+
+⇒ **Reading a ring is not forbidden.** Neither prohibition mentions inspection.
+
+⚠ **But the same file scopes itself, four sections down:**
+
+> *"## ★ Scope: this governs KERNEL-originated CE only. Guest **userspace** pushbuffers are
+> mapped straight into the GPU and are **passthrough** — we do not inspect them."*
+
+§16.82.5 measured that the eight walling doorbells are **user proc 2, virtually addressed** —
+i.e. exactly the userspace population this scope sentence excludes. ⇒ The ruling's
+*executor-by-residency* permission is **not** a licence to read-and-reissue userspace CE; it
+describes the destination state (userspace CE is passthrough) rather than authorising a detour
+around it. ★ What survives, and it is the distinction §16.82.5 already drew:
+
+- **read to ENUMERATE** (what must be mapped) — a *prerequisite* for passthrough, no prohibition
+  engaged;
+- **read to RE-ENCODE and reissue** — the C's shape, and for userspace CE it is outside this
+  ruling's stated scope.
+
+### 16.84.3 ★★★★★ FORBIDDEN #2, NAMED AT ITS LINE — and it is NOT this rung's flag
+
+`kayfabe_fwd::representability_of` (`lib.rs:4403-4422`) is the whole gate:
+
+```rust
+Some(b) if b.host.is_some() => HostBacked      // → CeExecutor::HostCe
+Some(b)                     => Fabricated      // → CeExecutor::Ours  (+ CpuOperand into OUR store)
+None                        => Untracked       // → CeExecutor::HostCe
+```
+
+⊘ **`HostBacked`'s only test is "does a host object exist at this address" — never "are the
+guest's bytes in it."** For a `PublishVidmem`/`KAYFABE_FB_BACKING=on` object those are different
+facts: `w228` measured `placed_as_asked=true` **and blank**, because the guest's writes land in
+the device's `SparseFb`. Such a range classifies `HostBacked` → the host engine is pointed at it
+→ **it reads zeros where the guest wrote and writes where the guest cannot see.** That is
+forbidden #2 exactly, it is the C's `#12`, and it is self-concealing — a run over a blank pool
+logs identically to a correct one.
+
+⇒ **The gate that must exist before anything executes against those operands:** `HostBacked`
+must additionally require that the host object *is* the memory the guest's writes land in.
+Nothing in the tree expresses that today.
+
+★★★ **AND THE INVERSION THAT MATTERS FOR THIS RUNG: `KAYFABE_PT_WITNESS_EXEC=on` moves these
+operands OFF the hardware arm.** Before it, the user proc's framebuffer ranges had **no binding**
+⇒ `Untracked` ⇒ **`HostCe`** — the host-GPU arm, held back only by the #14 ring gate. After it
+they have a binding with `host: None` ⇒ **`Fabricated`** ⇒ **`Ours`**, with a `CpuOperand`
+addressing our own `SparseFb`, which is where the guest's bytes are and where the guest can see
+them. ⇒ On the forbidden-#2 axis the flag is a **strict improvement**, and it is the owner's
+STEP 1 working: the table now knows the residency, so STEP 2 can be decided on it.
+
+⊘ **Measured, not argued, that nothing executed in this rung:** `KAYFABE_FB_BACKING` was **unset**
+in both `w234a` and `w234b`; `CE-SUBMIT` is **0** in both; and the armed arm refuses at
+`PushbufferAperture` inside `read_gpfifo_ring`, which is **before** `parse_pushbuffer`, so no
+`CeSpan` was ever constructed. ⇒ No operand of any kind was classified, and no engine was pointed
+anywhere.
+
+### 16.84.4 The two routes, judged on merit, with the measurement each needs
+
+| | **A — `NVOS32_ATTR_LOCATION`: put the ring in sysmem** | **B — teach the reader our own `SparseFb`** |
+|---|---|---|
+| uses a built path | ★ **yes** — `PinGuestRam`, and `w209` is the measured precedent | no — a new FB byte source in `read_gpfifo_ring` |
+| byte source proven | not yet | ★ **yes** — the descent already prints `fbRING[p0]@0x1024000=0000c002…` and decodes `gp[0]` |
+| depends on RM honouring us | ★ **yes**, and it is guest-visible | **no** |
+| prohibition #1 risk | none | none *if* the completion stays the guest's |
+| prohibition #2 risk | none — guest polls its own pages | ⊘ none for the **read**; the write side is already `Ours` → `SparseFb` |
+| scope under `ce_executor_tree` | fully inside it | ⚠ only as *enumeration*; re-issue is outside the userspace scope |
+
+★ **Evidence bearing on A, from `w232c`'s `RING-ROSTER`:** the kernel/CeUtils rings are
+`0x120064000` / `0x420064000` (sysmem) while every user ring is `0x2002xx000` (vidmem) — **one
+guest RM, one emulated device, two placements**. ⇒ The split is the guest's own allocation
+attributes per channel class, not something we are currently choosing. Whether it is influenceable
+at all is **UNMEASURED**, and the decisive lookup is on the channel-alloc path
+(`alloc_channel_at`), which another lane owns tonight.
+
+⇒ **Recommendation: A stays primary, B is the fallback, and the next measurement is A's
+feasibility lookup** — one read of the channel-alloc path to see whether a location attribute is
+ours to answer. ⊘ If it is not, B is correct and its byte source is already proven. **Neither is
+started here.**
