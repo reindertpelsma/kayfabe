@@ -17346,3 +17346,58 @@ have now been paid for by inference; the fourth should be paid for by a key.
 the correlation to a join"* cannot be done per-refusal when one side counts **attempts** and the
 other counts **outcomes** — §16.102's reframe. The correlation was never the weak part; the
 **unit** was.
+
+## §16.104 ★★★★★ THE ORPHAN GATE — built on the compiler, and it refuted both of its own known-positives
+
+⚠ **STATUS (2026-08-11): BUILT and VALIDATED.** `scripts/orphan_gate.sh`. ⊘ `CE-SUBMIT` **0**.
+
+### 16.104.1 ⊘⊘ REFUTED FIRST — the two known-positives are not both orphans, and the difference IS the design
+
+| verb | one-hop *"has a caller"*? | reachable from production? | orphan today? |
+|---|---|---|---|
+| `SharedDevice::apply_deferring` | yes | **YES** — `shim.rs:2768` → `Bridge::deliver` → policy chain → `RegPlane::write` → the vCPU trap | ⊘ **NO — wired in w244** |
+| `Worker::export_backing` | yes (`child.rs`, its own tests) | **NO** — zero references in `kayfabe-rt`/`-core`/`-qemu-raw`/`-fwd` | ✅ **YES** |
+
+★★★ A one-hop caller check returns **the same answer for both** — the `MapGuestRam` trap one
+level up. ⇒ **the gate must ask reachability, not caller count**, and *"a gate that cannot find
+those two"* had to become *"a gate that finds the one and clears the other."* It does both.
+
+### 16.104.2 The instrument — enumeration by text, VERDICT by compiler
+
+For each candidate `pub fn`: rewrite to `pub(crate) fn`, run **`cargo check --workspace`**,
+restore. **Compiles ⇒ no caller outside its crate ⇒ orphan.** `MapGuestRam` cannot pass: removing
+its visibility does not compile.
+⊘ **`--all-targets` deliberately omitted** — integration tests are external crates, so including
+them would report a verb exercised *only by its own harness* as wired, which is precisely the
+shape being hunted.
+⚠ **Stated, not implied**: trait methods inherit the trait's visibility and are **out of scope**;
+so is a verb reachable only from another orphan (the gate reports the outermost).
+⊘ **Exits 0 always.** A gate that goes red on day one is disabled on day two.
+
+### 16.104.3 ⊘⊘ THE GATE'S OWN BASELINE CHECK CAUGHT A DEFECT IN THE GATE
+
+First run: *"the tree does not compile before any mutation"* — with `pub fn` on disk and `git
+status` clean, yet `method 'apply_deferring' is private`. **`cp`/`mv` restore hands the file the
+backup's mtime**, older than the mutated build's fingerprint, so **cargo served the mutated
+compilation.** Every verdict after the first would have been confident nonsense.
+⇒ every restore now `touch`es. ★ **The baseline check was written for an unrelated reason and
+caught this instead** — a check earns its keep by failing for a reason its author did not have.
+
+### 16.104.4 First list, triaged
+
+127 candidates across two crates; **6 of the first 18** flagged, all in `kayfabe-fwd`:
+`checkout`, `verb_fault`, `publish_backing`, `pin_guest_ram`, `back_fb_leaf`, `resolve`.
+★ **One coherent family**: `kayfabe-rt` calls `kayfabe_fwd::plan_*`/`commit_*` (the sharded split)
+and never the **composed** single-threaded form — the same shape §16.80 recorded for
+`forward_engine_object`. ⊘ A triage list, not a bug list.
+
+### 16.104.5 ⊘ The channel KEY is NOT "a line of logging" — scoped out with its shape
+
+The brief called it one line. It is not: **the refusal path carries no host channel.**
+`EngineObjectForwarded` (`kayfabe-fwd/src/lib.rs:2905`) has `engine`, `host_object`,
+`materialized_channel`, `reused` — **no channel** — and it exists only on success;
+`FwdFault::Rm(RmError)` (`:740`) carries only the RM error. ⇒ printing the host channel beside a
+**refusal** requires widening the fault or threading `plan.channel` out of
+`exec_engine_object`'s failure path — a typed change across `kayfabe-fwd`.
+⊘ **Not attempted at the end of a long session**, where a rushed edit to the forwarding plane is
+the worst available trade. The shape is named so the next rung starts from it.
