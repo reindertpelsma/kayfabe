@@ -97,6 +97,36 @@ while leaving the vidmem + `map_cpu` route (which is measured, §4) standing.
 ---
 <!-- SCORING GOES BELOW THIS LINE. NOTHING ABOVE IT IS EDITED AFTER THE FIRST BOOT. -->
 
-## 5. SCORING
+## 5. SCORING — 2026-08-11
 
-*(to be filled from the bench run)*
+⊘ **P1–P5, P7, P8: UNSCORED. The probe was never run on hardware.** The rung was reframed
+mid-flight (the owner's four-kind GPGA taxonomy, `gpga_region_kind.md`) and the bench sync
+was cut short by a timeout. There is no measurement, and none of these rows may be filled in
+from reasoning. They stay open.
+
+### ★★★ P6 is scored, and it FAILED — as a fact about my instrument, not about the system
+
+> **P6** — *"The two mappings land at different host VAs (`s_addr != i_addr`) **and the probe
+> says so**"*, confidence 0.99.
+
+⊘ **The probe cannot say so, and no probe in this crate ever can.**
+`MappedRegion::addr_at` is **`pub(crate)`** by a deliberate refusal
+(`kayfabe-linux-raw/src/mapping_unsafe.rs:549`, *"refusal 3 of §4.2.1 holding … No
+representation of it crosses the crate boundary"*). The address is patched into an ioctl
+argument by `Indirect` and **scrubbed back out** before the caller sees it again. A probe in
+`kayfabe-isolate-host` has no way to obtain either mapping's address.
+
+★ **I predicted an observation the architecture forbids**, at 0.99, and only writing the code
+revealed it. Had P6 been a step rather than a prediction, the natural repair would have been
+to widen `addr_at`'s visibility — deleting a refusal in order to satisfy a control.
+
+**What replaced it**, and it is stronger than an address comparison: `FbJoinEvidence::joined()`
+— write a probe word through `I`, read it through `S`, **before RM is in the path at all**.
+That measures *sharing*, which is the property J1 and J2 actually need; distinctness stays
+structural (two `Reservation::new` calls are two independent `mmap`s). ⊘ An address
+comparison would have shown the mappings were *different* and said nothing about whether they
+were the *same memory*.
+
+⚠ Note which way the error ran: a comparison of two addresses is the kind of check that reads
+as rigorous and would have been reported as a passed control. The property it tests is not the
+property the rung needs.

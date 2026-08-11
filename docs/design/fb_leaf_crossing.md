@@ -72,6 +72,15 @@ alloc_vidmem(len)                    ← NEW intent verb over the EXISTING alloc
   LOCATION_VIDMEM`. The same class the C issues (`C: nvkvm_gpu_emul.c:7286-7294`), and
   `RmConnection::alloc_device_local` has issued it since the channel work; this rung only
   gives it an intent name.
+  ⊘⊘ **CORRECTION 2026-08-11 (`gpga_region_kind.md` §6.1) — the bullet below INVERTS over a
+  memfd, and the inversion is the interesting half.** `MAPPING_NO_MAP` says *RM will not give
+  you a CPU view of this object*. Over a `memfd` you never ask RM for one: the CPU view is the
+  **input**, not the output, and the "double mapping" this bullet says sysmem cannot reach is
+  simply two `mmap`s of one descriptor. ⇒ `OS_DESCRIPTOR` is the **one** backing whose CPU view
+  is guaranteed by construction, precisely because of the flag named here as disqualifying.
+  The bullet is correct for `alloc_sysmem` over memory RM allocated; it does not generalize to
+  memory **we** allocated and described.
+
   ⊘ **Not `alloc_sysmem` with a flag.** That verb asks for `MAPPING_NO_MAP`, so its object is
   deliberately un-CPU-mappable — correct for a describe-only range and fatal for this one,
   because GEN-2's mature form is a *double* mapping. A leaf backed with sysmem allocates,
@@ -135,6 +144,17 @@ there is nothing to orphan.
 
 - **The object is BLANK.** Nothing seeds it, nothing copies into it. The C's `copy_content`
   (`C: :8281-8290`) is a separate one-time establishment bridge and needs a CPU view.
+- ⊘⊘ **CORRECTION 2026-08-11 (`gpga_region_kind.md` §6.2) — "there is NO CPU view" is true of
+  THIS PATH and false as a CAPABILITY, and the difference sent a later rung hunting for a door
+  that was already open.** `RmConnection::map_cpu` — `NV_ESC_RM_MAP_MEMORY` on the control node
+  plus `mmap` on the per-GPU node (`rm.rs:1582-1611`) — CPU-maps a real `NV01_MEMORY_LOCAL_USER`
+  vidmem object, and **R25 exercises it on this exact GA106**: the trace's
+  `dst[0] 0xa112fffe -> 0x5eed0001` is one CPU write and two CPU reads of host vidmem, through
+  that mapping, in the same probe that proved `OS_DESCRIPTOR`. ⇒ The two-memories gap never
+  required a blocked `dma-buf` door. What the bullet below correctly records is that **this
+  chain** does not take the CPU view — for the BAR1-budget reason the C gives and the
+  isolate/shell split reason given here — not that one cannot be had.
+
 - **There is NO CPU view, so there are TWO MEMORIES.** The guest's own framebuffer accesses at
   that physical address still go to the shell's fabricated aperture; the host object is
   reachable only by the host GPU. ★ This is the C's own `gpu_only` shape
