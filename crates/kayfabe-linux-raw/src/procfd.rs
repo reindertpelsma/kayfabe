@@ -462,18 +462,69 @@ mod tests {
     /// ★★★★ **The bite that a name-only probe fails, and that "take the first" fails
     /// too.**
     ///
-    /// Two `memfd`s carry the *same creation name*; only the second is mapped shared. The
-    /// decoy is created **first**, so the kernel gives it the **lower** descriptor number
-    /// — which is precisely what "the first `memfd`" and any hardcoded number would
-    /// select. §4.5 measured that number moving between two physical boxes, so this test
-    /// asserts the selection is not merely correct but correct *for the property*: the
-    /// chosen candidate is the mapped one, and its number is the higher of the two.
+    /// Two `memfd`s carry the *same creation name*; only one is mapped shared, and the
+    /// **unmapped decoy is the lower-numbered of the two** — which is precisely what "the
+    /// first `memfd`" and any hardcoded number would select. §4.5 measured that number
+    /// moving between two physical boxes, so this test asserts the selection is not merely
+    /// correct but correct *for the property*: the chosen candidate is the mapped one, and
+    /// its number is the higher of the two.
+    ///
+    /// # ★★★★ ⊘ CORRECTED 2026-08-11 — this test used to ASSUME the ordering it needs
+    ///
+    /// It created the decoy first and the real block second, then asserted the selection
+    /// was not `both.iter().min()` — i.e. it **assumed** "created first ⇒ lower descriptor
+    /// number". The kernel promises only *lowest FREE descriptor*, and the doc on
+    /// [`named`] four screens up already names why that is not the same thing here: **this
+    /// crate's test binary runs its threads in parallel.** A sibling thread closing a lower
+    /// descriptor between the two creations inverts the order, and the assertion fires with
+    /// `left: 3, right: 3` — the "real" block having landed at descriptor 3.
+    ///
+    /// `[measured 2026-08-11]` **7 failures in 300 runs of one unmodified binary** (2.3 %).
+    /// It is a sibling of the exact instrument failure [`named`] documents — that one was
+    /// about descriptor *names*, this one about descriptor *numbers* — and it made a
+    /// merge-integration run read as a regression when nothing had changed: the crate's
+    /// tree hash was byte-identical across the merge and the test binary was not even
+    /// rebuilt.
+    ///
+    /// ⇒ **The ordering is now ESTABLISHED, not assumed.** Both blocks are created, the
+    /// kernel is asked which numbers it actually handed out, and the **higher-numbered** one
+    /// is the one mapped shared. The two blocks are given different lengths so the size
+    /// check still discriminates, and the expected length is derived from whichever block
+    /// won rather than hardcoded. Nothing the test asserted was weakened.
     #[test]
     fn the_unmapped_decoy_at_a_lower_number_is_not_selected() {
+        use std::os::fd::AsRawFd;
+
         let tag = "decoy";
-        let decoy = block(tag, 1);
-        let real = block(tag, 4);
-        let _m = map_shared(&real, 4 * page());
+        // ⊘ Different lengths, so `found.bytes()` still tells the two apart. Which one is
+        // the decoy is NOT decided here — it is decided by the numbers the kernel hands out.
+        let first = block(tag, 1);
+        let second = block(tag, 4);
+        let (first_fd, second_fd) = (
+            first.as_backing_fd().as_raw_fd(),
+            second.as_backing_fd().as_raw_fd(),
+        );
+        assert_ne!(
+            first_fd, second_fd,
+            "two live blocks are two live descriptors"
+        );
+        // ★ THE ESTABLISHED PREMISE: map the HIGHER-numbered block, so the unmapped decoy
+        // is at the lower number whatever order the kernel chose.
+        let (real, real_len, decoy) = if second_fd > first_fd {
+            (&second, 4 * page(), &first)
+        } else {
+            (&first, page(), &second)
+        };
+        let (real_fd, decoy_fd) = (
+            real.as_backing_fd().as_raw_fd(),
+            decoy.as_backing_fd().as_raw_fd(),
+        );
+        assert!(
+            decoy_fd < real_fd,
+            "the premise this test rests on, established rather than assumed: \
+             decoy={decoy_fd} < real={real_fd}"
+        );
+        let _m = map_shared(real, real_len);
 
         let census = MemfdCensus::take_of_this_process().expect("a census");
         let both: Vec<i32> = census
@@ -487,23 +538,26 @@ mod tests {
             2,
             "the census sees BOTH, decoy included: {both:?}"
         );
-        let lowest = *both.iter().min().expect("two entries");
 
         let found = census
             .the_only_shared_memfd_named(&format!("kf-census-{tag}"))
             .expect("exactly one is mapped shared");
         assert_eq!(
             found.bytes(),
-            4 * page(),
+            real_len,
             "★ the MAPPED block was selected, not the decoy"
+        );
+        assert_eq!(
+            found.listed_as(),
+            real_fd,
+            "★ …and it is that block's own descriptor, not merely one of the right size"
         );
         assert_ne!(
             found.listed_as(),
-            lowest,
+            decoy_fd,
             "★★ and it is NOT the lowest-numbered match — a probe keyed on position \
              would have taken the decoy"
         );
-        drop(decoy);
     }
 
     /// ★★★ **One block held at TWO descriptor numbers is ONE candidate.**
