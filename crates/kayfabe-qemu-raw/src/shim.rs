@@ -2665,7 +2665,24 @@ impl core::fmt::Debug for SharedObjectModel {
 ///
 /// ⊘ It does not make truncation impossible — it makes it **visible per class**, because
 /// the marker is now emitted for whichever class hits its own bound.
-const ENGINE_FWD_REPORT_MAX: u64 = 32;
+///
+/// # ⊘⊘ §16.107 — 32 WAS STILL TOO SMALL, AND IT SATURATED IN THE VERY NEXT BOOT
+///
+/// `[measured 2026-08-11, boot `w255_76477ab_cel_runlist`]` — with §16.106's fix the 14
+/// refusals became forwards, and the forward class printed **exactly 32** with the bound
+/// marker on its last line. ⇒ the same defect, one rung later, **on the other class, in a
+/// census this file had just rewritten**: `forwarded=32` was a lower bound wearing the
+/// shape of a total. ★ A saturated instrument does not become safe because its author
+/// knows about the last one.
+///
+/// So the bound is **256 per class** — eight times the largest shape ever observed — and,
+/// more importantly, the *rows* are what it caps. See [`report_engine_forward`]: past the
+/// bound the three **totals** keep being printed on a doubling schedule, so a guest can
+/// buy silence for the detail and never for the count. That is the same shape every other
+/// bounded census in this tree already had (`kayfabe_device::census`'s `*_total` /
+/// `*_distinct` beside a capped `Vec`), and its absence here is what made §16.105
+/// possible.
+const ENGINE_FWD_REPORT_MAX: u64 = 256;
 
 /// Outcomes seen / of those, forwarded / of those, refused. Process-global for
 /// [`ISOLATE_PLANE_ENV`]'s stated reason: this is bench instrumentation on a
@@ -2692,6 +2709,55 @@ fn refusal_host_chan(fault: &kayfabe_rt::FwdFault) -> String {
     match fault {
         kayfabe_rt::FwdFault::Rm { on: Some(h), .. } => format!("{:#x}", h.raw()),
         _ => "NONE".to_string(),
+    }
+}
+
+/// What [`report_engine_forward`] emits for one outcome — the decision, separated from the
+/// printing so the whole policy is testable (the same shape `host_version_gate` uses one
+/// crate over).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EngineFwdReport {
+    /// The full row: class, handles, verdict, and the running counts.
+    Row,
+    /// ★ Past the per-class row budget — the three **totals** only.
+    TotalsOnly,
+    /// Nothing. The counts are still advancing and a later `TotalsOnly` will say so.
+    Silent,
+}
+
+/// ★★★★★ **§16.107 — THE ROWS ARE CAPPED; THE COUNTS ARE NOT.**
+///
+/// `nth` is this outcome's index **within its own class** (forwards and refusals have
+/// separate row budgets); `seen` is the index across **all** outcomes.
+///
+/// - `nth <= ENGINE_FWD_REPORT_MAX` ⇒ [`EngineFwdReport::Row`].
+/// - past it, [`EngineFwdReport::TotalsOnly`] whenever `seen` is a power of two ⇒ a guest
+///   issuing `n` allocations buys silence for the *detail* at a cost of ~`log2(n)` lines,
+///   and can never buy silence for the *count*.
+///
+/// # ⊘ Why the totals schedule is keyed on `seen` and not on `nth`
+///
+/// `nth` advances only within one class. A workload that saturates the forward budget and
+/// then issues nothing but forwards would never advance the refusal `nth`, so a schedule
+/// keyed on `nth` could stall in exactly the case that needs reporting. `seen` advances on
+/// every outcome, so the totals keep coming whatever the mix is.
+///
+/// # ⊘⊘ What this exists to prevent, twice measured
+///
+/// `[w250/w251]` a **shared** 32-row budget made `18 + 2 + 12 = 32` read as a total; three
+/// rungs were spent explaining a 14-vs-12 gap that was two unprinted lines (§16.105).
+/// `[w255]` the per-class split then saturated the OTHER class at exactly 32 forwards, in
+/// this same census, one rung later (§16.106.6). ⇒ raising the number alone would fix an
+/// instance and leave the class. **This function is the fix for the class**: past the
+/// bound the census keeps stating what it saw, so a number printed here can be read as a
+/// total by construction rather than by luck.
+fn engine_fwd_report_action(nth: u64, seen: u64) -> EngineFwdReport {
+    if nth <= ENGINE_FWD_REPORT_MAX {
+        EngineFwdReport::Row
+    } else if seen.is_power_of_two() {
+        EngineFwdReport::TotalsOnly
+    } else {
+        EngineFwdReport::Silent
     }
 }
 
@@ -2722,8 +2788,17 @@ fn report_engine_forward(
             (ENGINE_FWD_OK.load(Relaxed), refused, refused)
         }
     };
-    if nth > ENGINE_FWD_REPORT_MAX {
-        return;
+    match engine_fwd_report_action(nth, seen) {
+        EngineFwdReport::Row => {}
+        EngineFwdReport::TotalsOnly => {
+            eprintln!(
+                "kayfabe: ENGINE-OBJECT CENSUS [seen={seen} forwarded={ok} refused={refused}] \
+                 ⊘ ROWS are capped at {ENGINE_FWD_REPORT_MAX} per outcome class; THESE THREE \
+                 COUNTS ARE NOT, and are the only numbers here that may be read as totals"
+            );
+            return;
+        }
+        EngineFwdReport::Silent => return,
     }
     let verdict = match out {
         Ok(f) => format!(
@@ -8350,7 +8425,9 @@ fn clamp_size(size: u32) -> u8 {
 
 #[cfg(test)]
 mod ring_scan_sentence_tests {
-    use super::ring_scan_sentence;
+    use super::{
+        ENGINE_FWD_REPORT_MAX, EngineFwdReport, engine_fwd_report_action, ring_scan_sentence,
+    };
 
     /// ★★★★★ **The regression this function was extracted for.** A scan in which *nothing
     /// resolved* must not claim completeness and must not claim the entries were zero.
@@ -8401,5 +8478,60 @@ mod ring_scan_sentence_tests {
         let s = ring_scan_sentence(64, 1024, 60, &["[7]=0x00000000deadbeef".to_string()]);
         assert!(s.contains("deadbeef"), "{s}");
         assert!(s.contains("BOUNDED-READING"), "{s}");
+    }
+
+    /// ★★★★★ **§16.107 — the whole real workload fits in a row budget now**, so the shape
+    /// that saturated twice cannot saturate a third time at the same size.
+    ///
+    /// ⊘ 32 forwards is what `w255` measured with §16.106's fix; 34 outcomes is the whole
+    /// census. Both must be **rows**, with room to spare.
+    #[test]
+    fn the_measured_workload_prints_every_row() {
+        for nth in 1..=34 {
+            assert_eq!(
+                engine_fwd_report_action(nth, nth),
+                EngineFwdReport::Row,
+                "outcome {nth} of the w255 shape must be a full row"
+            );
+        }
+        // ⊘ A `const` assertion: the bound must clear the largest observed shape by an
+        // order of magnitude, not by one, or the next workload saturates it again.
+        const { assert!(ENGINE_FWD_REPORT_MAX >= 32 * 8) };
+    }
+
+    /// ★★★ **The count can never go silent**, which is the property `forwarded=32` lacked
+    /// and the reason this rung exists at all.
+    #[test]
+    fn past_the_row_budget_the_totals_keep_coming() {
+        let over = ENGINE_FWD_REPORT_MAX + 1;
+        // Rows stop…
+        assert_ne!(engine_fwd_report_action(over, over), EngineFwdReport::Row);
+        // …and the totals do not: every power of two still speaks, forever.
+        for p in 9..=40 {
+            let seen = 1u64 << p;
+            assert_eq!(
+                engine_fwd_report_action(over, seen),
+                EngineFwdReport::TotalsOnly,
+                "seen={seen} must still state the totals"
+            );
+        }
+        // ⊘ …and in between it is silent, which is what bounds a hostile guest to ~log2(n).
+        assert_eq!(
+            engine_fwd_report_action(over, (1u64 << 20) + 1),
+            EngineFwdReport::Silent
+        );
+    }
+
+    /// ⊘ The schedule is keyed on `seen`, not on the per-class `nth` — a workload that
+    /// saturates one class and then feeds only that class must not be able to stall the
+    /// totals by leaving the other class's index frozen.
+    #[test]
+    fn the_totals_schedule_does_not_stall_on_one_class() {
+        let frozen_other_class = ENGINE_FWD_REPORT_MAX + 1;
+        assert_eq!(
+            engine_fwd_report_action(frozen_other_class, 4096),
+            EngineFwdReport::TotalsOnly,
+            "seen advanced, so the census speaks regardless of which class is saturated"
+        );
     }
 }
