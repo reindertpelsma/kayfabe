@@ -15323,3 +15323,121 @@ records an `IsolateId` origin, which is the shape sharing would need, but nothin
 `_CACHED (1)` is not `_WRITE_BACK (5)` live in `kayfabe-abi/src/bringup.rs:520-534`; no memslot
 install site sets a write-back attribute, because no memslot is installed from an exported fd
 at all.
+
+## §16.83 ★★★★★ Is a Vidmem ring exportable as an fd? — **NO**, and the split is the finding
+
+Asked because §16.82 left `PushbufferAperture { va: 0x200224000, aperture: Vidmem }` as the
+standing wall, and the proposed next rung was *"export the Vidmem object as an fd, `mmap` it in
+the VMM, install it."* ⊘ **This section builds nothing.** It is the measurement that says the
+increment must not be built in that shape.
+
+★★ **The question conflates two different objects, and they have different answers.** Keeping
+them apart is the whole of this section — collapsing them is the same error class §16.82.2
+already cost this rung once.
+
+### 16.83.1 (A) The guest's ring in OUR emulated framebuffer — soft-blocked, and BACKWARDS
+
+The bytes at `V:0x1024000` live in `kayfabe_device::fbwin::SparseFb` —
+`pages: HashMap<u64, Box<[u8; 4096]>>`, in the **VMM/QEMU process**. It is not a file, has no
+descriptor, and is not shareable.
+
+`ExportSource::Fabricated` *is* the exportable arm — but it exports **the isolate's** fabricated
+aperture, not ours. That seam is already measured: `SharedDevice::decode_pt_writes_from`'s doc
+records that the Mode-2 emulated plane's page tables live in the **device's** `FbStore`, and that
+`kayfabe_fwd::IsolateFb`'s production backend is `Err(NOT_ON_THIS_RUNG)` — *"a self-consistent
+wrong store"*, in its own words.
+
+⊘ **And the direction is wrong anyway.** `ExportedBacking`'s doc says so explicitly: *"the
+mirror image of `kayfabe_vmm::RamHandle`, which carries the VMM → isolate direction"*. Export is
+**isolate → VMM**. The VMM **already has** these bytes; the party that cannot see them is the
+isolate/host GPU. Exporting them to the VMM answers a question nobody asked.
+
+### 16.83.2 (B) A host `NV01_MEMORY_LOCAL_USER` object — HARD-blocked, by NVIDIA's own driver
+
+`ExportSource::HostDeviceMemory`'s doc names our exact object: *"The real device's own pages —
+host framebuffer, **a channel's ring/USERD**, a BAR0 register window"*. It is **always**
+`RmError::NotExportableAsMemory`, with three independent, cited doors:
+
+1. The only `mmap` yielding a host GPU BAR page is `/dev/nvidia<N>` with a registered mapping
+   context — a **character device**, and RM assigns `secInfo.privLevel` from
+   `osIsAdministrator()` on **every** escape (`ogkm-580: escape.c:304`), so the same descriptor
+   is unprivileged in the isolate and **privileged in a root VMM**.
+2. ★★★ NVIDIA's **dma-buf** — the one route crossing a non-RM descriptor — hard-gates CPU
+   mapping to **integrated** parts:
+   `*pbCanMmap = pGpu->getProperty(pGpu, PDB_PROP_GPU_ZERO_FB)` (`ogkm-580: osapi.c:5609`), and
+   `nv_dma_buf_mmap` refuses outright when false (`ogkm-580: nv-dmabuf.c:1246-1250`).
+   **A GA106 is discrete.** ⇒ *"a dma-buf of device memory cannot be `mmap`ped by the CPU at
+   all."*
+3. Our own memory plane refuses it independently: `GuestWindow::place` rejects
+   `Backing::DeviceFile` with `RawError::DeviceBackingNotPlaceable`.
+
+⇒ **The proposed verb would have to refuse case (B) always.** Adding a `VerbPlan::Export`
+variant to reach it builds a plan whose only outcome on this hardware is a named refusal.
+⊘ `rm.rs:3376` also forecloses the obvious workaround: *"Do not 'fix' this by copying the device
+pages into a `memfd`. A copy is not a mapping: the guest would read a snapshot of a live
+aperture, which is the forged-completion class with a longer fuse."*
+
+### 16.83.3 ★★★★★ And `PublishVidmem` is ALREADY NAMED as the wrong answer for a RING
+
+`VerbPlan::PinGuestRam`'s own doc, comparing itself to `Publish`:
+
+> *"`Publish` allocates **host** sysmem and maps it at the guest's VA: the address is the
+> guest's and the bytes are not. That is correct for a range the guest has never written and
+> **wrong for a ring the guest is polling** — the guest advances `GP_PUT` in its own pages, and
+> a host allocation at the same address is a different buffer that will never change."*
+
+`PublishVidmem` is the vidmem sibling of exactly that chain. ⇒ w228's measured outcome —
+*"3 of 4 operands host-backed, `placed_as_asked=true`, **blank, no CPU view (TWO MEMORIES)**"* —
+is not an unfinished rung. It is this paragraph, observed. **The ring is precisely the polled
+object the doc excludes.**
+
+### 16.83.4 ⇒ THE VERDICT, and it retires a design assumption rather than a rung
+
+**There is no crossing — existing or planned — that can put the guest's emulated-framebuffer
+ring where the host GPU reads it.**
+
+| direction | crossing | covers |
+|---|---|---|
+| VMM → isolate | `RamHandle` / `MapGuestRam` / `PinGuestRam` | **guest RAM only**, and only under `memory-backend-memfd,share=on` |
+| isolate → VMM | `export_backing(Fabricated)` | the **isolate's** fabricated aperture — not ours, and the wrong direction |
+| isolate → VMM | `export_backing(HostDeviceMemory)` | **always refuses** (16.83.2) |
+| — | *the device's `SparseFb` → anywhere* | ⊘ **does not exist**; the store is an in-process `HashMap` |
+
+★★★ **The assumption this retires:** *"guest-RAM export gets us to passthrough."* §16.82 measured
+that the working set **splits by aperture** — pushbuffers `S:` (guest RAM, pinnable today),
+ring and finish semaphore `V:` (emulated framebuffer). ⇒ **Every plan built on
+`OS_DESCRIPTOR`-over-guest-RAM is structurally incapable of reaching the ring**, and no amount
+of `VerbPlan` wiring changes that.
+
+### 16.83.5 ★★ The lever is the APERTURE, not the crossing
+
+⊘ Stated as the next **question**, not built here, and it touches
+`alloc_channel_at`, which another lane owns tonight.
+
+If the ring were in **sysmem**, `PinGuestRam` already does exactly the right thing and is
+already built: the guest's own pages, at the guest's own VA, which the guest polls and we never
+copy. **That is not hypothetical** — the system proc's CeUtils ring *is* sysmem (`S:0x768a000`)
+and `w209` read it and printed this project's only `CE-SUBMIT` lines. One code path; the only
+difference is where RM placed the buffer.
+
+⇒ The question to put to the owner is **"can a user channel's GPFIFO ring be placed in
+sysmem?"** — an RM allocation-attribute question (`NVOS32_ATTR_LOCATION`) on the channel-alloc
+path — and it is a far smaller lever than building a framebuffer crossing that NVIDIA's driver
+forecloses. ⚠ Whether the guest's RM lets that be influenced is **unmeasured**; do not assume it.
+
+### 16.83.6 ⊘ `refusals=255 first=StraddlesLiveBinding{va:0x208000000}` — mechanism INFERRED
+
+`StraddlesLiveBinding` is *"the leaf's range overlaps a differently shaped live binding — it
+starts inside one, or is a different length"* (`kayfabe-mmu/src/walker.rs:816`).
+
+★ **INFERRED, not measured:** the likely producer is the **dual page-directory slot** §16.73
+already documented — *"a dual slot contributes **two** children with an equal `vabase`"*, one
+big-page and one small-page table. A subtree decode that descends both emits a 2 MiB leaf and
+4 KiB leaves over the same VA range; whichever lands second straddles the first. Consistent with
+`0x208000000` being exactly 2 MiB-aligned, and with the ring's own binding being a **2 MiB**
+leaf (`start0x200200000 len0x200000`).
+
+⚠ **Not settled, and it cannot be from this boot**: only `first=` is printed and `255` is the
+vector's `MAX`, so the list is a **prefix** and the count is a lower bound. The instrument that
+would settle it is a size histogram of the refused leaves beside the binding they straddle —
+one line, and it belongs to whoever takes this next.
