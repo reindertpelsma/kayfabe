@@ -32,8 +32,10 @@ use kayfabe_core::rmgraph::{AllocFacts, GpFifoRing, RmEvent};
 use kayfabe_core::{ChanId, ProcId};
 use kayfabe_fwd::{FbBytes, FwdFault, RingLook};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockVmm, mock_classes as mc};
+use kayfabe_rt::device::{LockMode, SharedDevice};
 use kayfabe_tests::Scenario;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 const GPU: GpuId = GpuId::ZERO;
 const PDB0: Pdb = Pdb(0x4002_0000);
@@ -310,4 +312,105 @@ fn the_default_route_still_refuses_vidmem() {
          before this rung existed. A default-off flag that is not off by construction is a \
          default-on flag with a comment. Got {got:?}"
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ w237 — THE WIRING, driven through the REAL doorbell, not through the reader.
+//
+// ⊘ These go through `SharedDevice::doorbell`, the same entry point the shim's port calls,
+// so they exercise the three-phase plan/fetch/act split and the `set_fb_source` switch
+// together. A test that called `read_gpfifo_ring` directly would pass even if the device
+// never consulted the source at all — which is precisely the wiring under test.
+// ---------------------------------------------------------------------------------------
+
+/// A `SharedDevice` over the vidmem-ring guest, scheduled and ready to be rung.
+fn wired(fb: Option<Arc<dyn kayfabe_fwd::FbSource>>) -> (Arc<SharedDevice>, MockVmm) {
+    let (mut gpu, vmm, _pid, _cid) = guest_with_a_vidmem_ring();
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
+    if let Some(src) = fb {
+        dev.set_fb_source(src).expect("first registration");
+    }
+    (dev, vmm)
+}
+
+/// ★★★★★ **THE CONTROL ARM, asserted offline — no source ⇒ the pre-route-B refusal.**
+///
+/// ⊘ This is exactly what the flag-OFF boot must reproduce. If a device with no source ever
+/// stopped refusing, the boot's two arms would not be distinguishable and **neither** result
+/// would mean anything.
+#[test]
+fn a_device_with_no_fb_source_refuses_the_vidmem_ring() {
+    let (dev, mut vmm) = wired(None);
+    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    assert!(
+        matches!(
+            got,
+            Err(FwdFault::PushbufferAperture {
+                aperture: Aperture::Vidmem,
+                ..
+            })
+        ),
+        "★★★★★ with NO framebuffer source the device must refuse a vidmem ring exactly as it \
+         did before route B existed — the switch is the REGISTRATION, and an unregistered \
+         device must be byte-identical to the old tree. Got {got:?}"
+    );
+}
+
+/// ★★★★★ **THE NEGATIVE CONTROL — source registered, page never written ⇒ REFUSED by name.**
+///
+/// ⊘ Watched RED before the gate existed: without it this returns the blank ring, forwards
+/// nothing, and reports `Served` — a boot line indistinguishable from a correct quiet
+/// channel. **The gate must fire through the wiring, not merely inside the reader.**
+#[test]
+fn a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote() {
+    let (dev, mut vmm) = wired(Some(Arc::new(SharedFb::default())));
+    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    assert!(
+        matches!(got, Err(FwdFault::RingFbNeverWritten { .. })),
+        "★★★★★ FORBIDDEN #2 must be refused THROUGH THE WIRING. A device that consults its \
+         source but ignores residency reads 4 KiB of zeros and reports SERVED. Got {got:?}"
+    );
+}
+
+/// ★★★★ **THE KNOWN-POSITIVE for the wiring — a written page reaches the ring.**
+///
+/// ⊘ Without this, both arms above are satisfied by a device that simply never reads a
+/// framebuffer byte, and the whole rung would be untested. §16.85.3.
+#[test]
+fn a_wired_device_with_a_written_page_reads_the_ring() {
+    let fb = SharedFb::default();
+    fb.write(
+        RING_FB_PHYS,
+        &[0x00, 0x00, 0xc0, 0x02, 0x00, 0x00, 0x00, 0x00],
+    );
+    let (dev, mut vmm) = wired(Some(Arc::new(fb)));
+    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    assert!(
+        !matches!(
+            got,
+            Err(FwdFault::RingFbNeverWritten { .. }) | Err(FwdFault::PushbufferAperture { .. })
+        ),
+        "★★★★ the wired device must REACH the framebuffer's bytes; if this still refuses, \
+         the two arms above prove only that we refuse everything. Got {got:?}"
+    );
+}
+
+/// [`FakeFb`] behind a lock, so it can be an `Arc<dyn FbSource>` (`&self`, `Send + Sync`).
+#[derive(Debug, Default)]
+struct SharedFb(std::sync::Mutex<FakeFb>);
+
+impl SharedFb {
+    fn write(&self, phys: u64, bytes: &[u8]) {
+        self.0.lock().expect("uncontended").page(phys, bytes);
+    }
+}
+
+impl kayfabe_fwd::FbSource for SharedFb {
+    fn read(&self, phys: u64, buf: &mut [u8]) -> bool {
+        FbBytes::read(&mut *self.0.lock().expect("uncontended"), phys, buf)
+    }
+    fn page_written(&self, phys: u64) -> Option<bool> {
+        self.0.lock().expect("uncontended").page_written(phys)
+    }
 }

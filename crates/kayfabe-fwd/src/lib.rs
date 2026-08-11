@@ -4032,6 +4032,44 @@ pub trait FbBytes {
     fn page_written(&self, phys: u64) -> Option<bool>;
 }
 
+/// ★★★★ **A SHARED, long-lived source of our own framebuffer's bytes** — what a device
+/// holds, as opposed to [`FbBytes`], which is what one read borrows.
+///
+/// # ⊘ Why this exists as well as [`FbBytes`]
+///
+/// `FbBytes` takes `&mut self` because a *borrowed* reader may be a connection. A device that
+/// wants to answer framebuffer reads for the whole of its life needs something `Send + Sync`
+/// it can keep in an `Arc`, and `&mut self` cannot be handed out from an `Arc` without
+/// interior mutability. So the stored form takes `&self` and the borrowed form is derived
+/// from it ([`FbSourceRef`]).
+///
+/// ★★★ **Registering one is what turns route B ON.** There is no boolean anywhere: a device
+/// with no source refuses vidmem ranges exactly as it did before route B existed
+/// ([`VidmemRoute::Refuse`]), because [`read_gpfifo_ring`] derives the route from whether it
+/// was handed a reader. ⇒ *A default-off flag that is not off by construction is a
+/// default-on flag with a comment.*
+pub trait FbSource: Send + Sync + core::fmt::Debug {
+    /// Fill `buf` from framebuffer-physical address `phys`; `false` if unbacked.
+    fn read(&self, phys: u64, buf: &mut [u8]) -> bool;
+
+    /// ★★★ Was the page containing `phys` ever written? [`None`] = **cannot tell**, which is
+    /// *unmeasured* and must never be read as *no*. See [`FbBytes::page_written`].
+    fn page_written(&self, phys: u64) -> Option<bool>;
+}
+
+/// One read's borrow of a [`FbSource`] — the adapter that makes the stored form usable.
+#[derive(Debug)]
+pub struct FbSourceRef<'a>(pub &'a dyn FbSource);
+
+impl FbBytes for FbSourceRef<'_> {
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.0.read(phys, buf)
+    }
+    fn page_written(&self, phys: u64) -> Option<bool> {
+        self.0.page_written(phys)
+    }
+}
+
 /// ★★★★ **What [`read_gpfifo_ring`] found — the ring, or the NAMED reason there is none.**
 ///
 /// # ⊘ Why this is an enum and not an `Option`

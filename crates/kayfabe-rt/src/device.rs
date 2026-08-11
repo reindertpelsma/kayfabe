@@ -271,6 +271,18 @@ pub enum SignalOutcome {
 /// ★ The L1 shared device: the core behind the two ranked locks, in either
 /// [`LockMode`]. All entry points take `&self` — the locks inside provide the
 /// exclusivity the core's `&mut` signatures demand. Each method documents which
+/// [`SharedDevice::forward_ring`]'s phase-1 result: a plan to fetch, or a named absence.
+///
+/// ⊘ Boxed: a `RingPlan` carries the ring's translated runs and this crosses a closure
+/// boundary on the doorbell's hot path.
+#[derive(Debug)]
+enum RingPlanned {
+    /// The ring resolved; phase 2 fetches its bytes with **no** lock held.
+    Plan(Box<kayfabe_fwd::RingPlan>),
+    /// One of the six named absences — nothing to fetch.
+    NoRing(kayfabe_fwd::RingLook),
+}
+
 /// phase holds which lock.
 pub struct SharedDevice {
     mode: LockMode,
@@ -287,6 +299,17 @@ pub struct SharedDevice {
     /// a path `rt_shell::spine_ops_acquire_no_proc_lock_via_get_mut` counts, in service of
     /// nothing.
     spawner: Arc<dyn IsolateFactory>,
+    /// ★★★★★ **Route B's switch, and it is a PRESENCE, not a boolean** — the framebuffer
+    /// source this device answers vidmem ring reads from.
+    ///
+    /// ⊘ Unset by default and unset in every existing constructor, so a device that nobody
+    /// registers a source with refuses vidmem ranges **exactly** as it did before route B
+    /// existed. There is no flag to get wrong: `kayfabe_fwd::read_gpfifo_ring` derives its
+    /// route from whether it was handed a reader.
+    ///
+    /// ⚠ **Read outside the ranked locks only** (§16.87): the production source takes the
+    /// plane's rank-0 mutex, which may not be acquired beneath ranks 1-2.
+    fb: std::sync::OnceLock<Arc<dyn kayfabe_fwd::FbSource>>,
 }
 
 /// ★ **Pool-saturation counters for ONE GPU target** (`l1_concurrency.md` §7.2, §12.29).
@@ -605,6 +628,7 @@ impl SharedDevice {
         // cost a rank-0 acquisition (see [`SharedDevice::spawner`]).
         let spawner = spine.isolate_factory();
         SharedDevice {
+            fb: std::sync::OnceLock::new(),
             mode,
             pool: PoolGate::default(),
             spawner,
@@ -1748,6 +1772,32 @@ impl SharedDevice {
     /// a "skip the ring" switch: a caller that holds a port and passes `None` silently
     /// forwards nothing, which is `a_fallback_keyed_on_our_own_ignorance` waiting to happen.
     /// The one production caller (`kayfabe-qemu-raw`'s `SharedDoorbell::ring`) passes its
+    /// ★★★★★ **Register the framebuffer source that turns route B on** — once, and only
+    /// once, for this device's life.
+    ///
+    /// # ⊘ This is the ENTIRE switch, and it is a presence rather than a boolean
+    ///
+    /// `kayfabe_fwd::read_gpfifo_ring` derives its route from whether it was handed a
+    /// reader, so a device nobody calls this on refuses vidmem ring ranges **exactly** as it
+    /// did before route B existed. ⇒ *A default-off flag that is not off by construction is
+    /// a default-on flag with a comment.* There is no boolean to read the wrong way, and no
+    /// call site that can forget to check one.
+    ///
+    /// ⚠ **The source is consulted with NO ranked lock held** (§16.87). The production one
+    /// takes the plane's rank-0 mutex, which may not be acquired beneath the core's ranks
+    /// 1-2 — that inversion is what `check_acquire` now refuses by name.
+    ///
+    /// # Errors
+    /// Returns the source back if one was already registered. ⊘ Not a panic and not a
+    /// silent overwrite: a second registration means two subsystems each believe they own
+    /// the framebuffer answer, and the caller is the only one who can say which.
+    pub fn set_fb_source(
+        &self,
+        src: Arc<dyn kayfabe_fwd::FbSource>,
+    ) -> Result<(), Arc<dyn kayfabe_fwd::FbSource>> {
+        self.fb.set(src)
+    }
+
     /// attached port whenever it has one.
     pub fn doorbell(
         &self,
@@ -1853,9 +1903,22 @@ impl SharedDevice {
         // completion"* from *"the channel was rung with nothing in it"*
         // (`execution_plane_increments.md` §16.69.5). ⊘ `3 forwarded` counts the doorbells
         // the PORT rang; it has never counted work.
-        let look = self.route_act(
+        // ★★★★★ **THREE PHASES, and the split is FORCED by the lock order (§16.87).**
+        //
+        // The ring may live in the **emulated framebuffer** (the 8 `proc 2` doorbells do),
+        // and the only seam that serves those bytes takes the plane's mutex — now
+        // `LockRank::Plane`, rank 0. `route_act` holds ranks 1 and 2, so reading the
+        // framebuffer inside it is `core → plane`, which `check_acquire` refuses **by name**.
+        // ⇒ PLAN under the locks, FETCH with every guard dropped, ACT under them again.
+        //
+        // ⚠ **`done` is deliberately re-read in phase 3, not carried from phase 1.** Carrying
+        // it would make the cursor a value from an instant before an unlocked window — R5's
+        // "re-acquire and RE-VALIDATE" is the rule, and the widened window is exactly what
+        // makes it load-bearing here rather than pedantic.
+        let fb_on = self.fb.get().is_some();
+        let planned = self.route_act(
             |_spine| Ok((pid, ())),
-            |spine, proc, ()| -> Result<(RingRead, RingWho), FwdFault> {
+            |spine, proc, ()| -> Result<(RingPlanned, RingWho), FwdFault> {
                 // ★★★★ §16.71 — **WHO the forwarding path resolved**, taken in the SAME
                 // locked look, from the SAME two lookups `read_gpfifo_ring` performs
                 // (`proc.channels[cid]` → `rmgraph.node_of_resource(chan.key)`), so the
@@ -1898,10 +1961,48 @@ impl SharedDevice {
                 // and wiring them is a `forward_ring` restructure plus an `FbRead` threaded
                 // from the shim through `DoorbellPort::ring` — a separate increment, and
                 // one the owner's open scope question should be answered before, not after.
-                let ring = match kayfabe_fwd::read_gpfifo_ring(spine, proc, cid, vmm, None)? {
-                    kayfabe_fwd::RingLook::Ring(bytes) => bytes,
-                    absent => return Ok((RingRead::NoRing(absent), who)),
-                };
+                match kayfabe_fwd::plan_gpfifo_ring(spine, proc, cid, fb_on)? {
+                    kayfabe_fwd::RingPlanLook::Planned(plan) => {
+                        Ok((RingPlanned::Plan(Box::new(plan)), who))
+                    }
+                    kayfabe_fwd::RingPlanLook::Absent(a) => Ok((RingPlanned::NoRing(a), who)),
+                }
+            },
+        )?;
+        let (planned, who) = planned?;
+        let plan = match planned {
+            RingPlanned::Plan(p) => p,
+            RingPlanned::NoRing(a) => {
+                // ⊘ The SAME line the fall-through below prints, for the same reason: the
+                // arm that forwards nothing is the arm a counter cannot see.
+                let look = RingRead::NoRing(a);
+                eprintln!(
+                    "kayfabe: FWD-RING proc={} chan={} {who} {} → NOTHING FORWARDED (the \
+                     doorbell still reports SERVED)",
+                    pid.0,
+                    cid.0,
+                    look.tag(),
+                );
+                return Ok(());
+            }
+        };
+
+        // ---- FETCH. ⊘ NO ranked lock is held here, and that is the whole point: this is
+        // where the plane's rank-0 mutex may be taken, above the core's ranks in the order.
+        let ring = {
+            let src = self.fb.get().cloned();
+            let mut borrowed = src.as_deref().map(kayfabe_fwd::FbSourceRef);
+            let dynref: Option<&mut dyn kayfabe_fwd::FbBytes> = match borrowed.as_mut() {
+                Some(b) => Some(b),
+                None => None,
+            };
+            kayfabe_fwd::fetch_ring_bytes(&plan, vmm, dynref)?
+        };
+
+        // ---- ACT. Back under the locks, with the cursor RE-READ.
+        let look = self.route_act(
+            |_spine| Ok((pid, ())),
+            |spine, proc, ()| -> Result<(RingRead, RingWho), FwdFault> {
                 let done = proc.exec.forwarded.get(&cid).copied().unwrap_or(0);
                 let pb = spine.arch().pushbuffer();
                 let at = (done as usize).saturating_mul(pb.gpfifo_entry_stride());

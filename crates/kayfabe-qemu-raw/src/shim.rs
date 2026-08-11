@@ -3167,6 +3167,50 @@ struct DoorbellCensus {
     unrouted: u64,
 }
 
+/// ★★★★★ **Route B's framebuffer source** — the emulated framebuffer, answered for the
+/// forwarding path's vidmem ring reads.
+///
+/// # ⊘ Weak, and the `false`/`None` on a dead plane is deliberate
+///
+/// The plane owns the doorbell port which owns this, so a strong handle would be a cycle.
+/// A plane that is gone answers *"this source cannot serve the range"* (`false`) and
+/// *"cannot tell you"* (`None`) — never *"the page was never written"*, which is a positive
+/// claim about the guest that a dead plane is in no position to make.
+///
+/// ⚠ **Consulted with NO ranked core lock held** — `kayfabe_rt::device::forward_ring` fetches
+/// in its unlocked phase, because these calls take the plane's rank-0 mutex and `core → plane`
+/// is the inversion `check_acquire` refuses (§16.87).
+#[derive(Debug)]
+struct PlaneFbSource {
+    plane: std::sync::Weak<RegPlane>,
+}
+
+impl kayfabe_fwd::FbSource for PlaneFbSource {
+    fn read(&self, phys: u64, buf: &mut [u8]) -> bool {
+        match self.plane.upgrade() {
+            Some(p) => kayfabe_mmu::walker::FbRead::read(&mut p.pt_bytes(), phys, buf),
+            None => false,
+        }
+    }
+
+    fn page_written(&self, phys: u64) -> Option<bool> {
+        let p = self.plane.upgrade()?;
+        // ★★★ RESIDENCY, not bytes. `page_writer` answers `Some` only for a page the store
+        // has a first-writer record for; `None` from the store means nothing ever wrote it.
+        // ⊘ The store CAN answer, so this returns `Some(..)` either way — the `None` arm
+        // above is reserved for "there is no store to ask", which is a different fact.
+        Some(kayfabe_mmu::walker::FbRead::page_writer(&p.pt_bytes(), phys).is_some())
+    }
+}
+
+/// ★★★ **The environment variable that registers the source** — route B's only switch.
+///
+/// ⊘ Unset ⇒ no source ⇒ `kayfabe_fwd::VidmemRoute::Refuse`, byte-identical to the tree
+/// before route B existed. `[w237]` This is a **MEASUREMENT** switch: the owner's 2026-08-07
+/// ruling scopes itself to kernel-originated copy-engine work and these doorbells are user
+/// `proc 2`, so what may happen *after* the ring is enumerated is not settled here.
+const RING_VIDMEM_ENV: &str = "KAYFABE_RING_VIDMEM";
+
 impl core::fmt::Debug for SharedDoorbell {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("SharedDoorbell")
@@ -6162,6 +6206,28 @@ impl Regs {
             ce_executor.as_str(),
             isolate_plane == IsolatePlane::Stillborn || ce_executor == CeExecutorChoice::Local,
         );
+        // ★★★★★ w237 — ROUTE B, and it is OFF unless this variable says otherwise.
+        // ⊘ The registration IS the switch (`SharedDevice::set_fb_source`): with no source,
+        // `read_gpfifo_ring` refuses vidmem ranges exactly as before. Printed unconditionally
+        // and on BOTH arms, because a configuration that only announces itself when enabled
+        // makes the control arm's log indistinguishable from an older binary's.
+        let ring_vidmem = std::env::var(RING_VIDMEM_ENV)
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("on"))
+            .unwrap_or(false);
+        eprintln!(
+            "kayfabe: RING-VIDMEM {}={} ⇒ route B {}",
+            RING_VIDMEM_ENV,
+            std::env::var(RING_VIDMEM_ENV).unwrap_or_else(|_| "<unset>".to_string()),
+            if ring_vidmem { "ON" } else { "OFF (default)" },
+        );
+        if ring_vidmem {
+            let src: Arc<dyn kayfabe_fwd::FbSource> = Arc::new(PlaneFbSource {
+                plane: Arc::downgrade(&plane),
+            });
+            if device.set_fb_source(src).is_err() {
+                eprintln!("kayfabe: RING-VIDMEM ⊘ a framebuffer source was ALREADY registered");
+            }
+        }
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),

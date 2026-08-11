@@ -47,6 +47,11 @@ kayfabe-chips.workspace = true
 # ★★★ E2 — the L1 shell (`SharedDevice`). The object model now lives behind its ranked
 # locks because TWO paths reach it: the object bridge and the doorbell port. See
 # `shim::SharedObjectModel`.
+# ★ w237 route B: `FbSource`/`FbBytes` — the seam the forwarding path reads our own
+# framebuffer through. A vocabulary edge only; the shim implements the trait, rt consumes it.
+# `walker::FbRead` — the trait `RegPlane::pt_bytes` returns.
+kayfabe-mmu.workspace = true
+kayfabe-fwd.workspace = true
 kayfabe-rt.workspace = true
 # `CommandPolicy` — the trait the object-model link crosses as.
 kayfabe-gsp.workspace = true
