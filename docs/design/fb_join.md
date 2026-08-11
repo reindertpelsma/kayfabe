@@ -258,6 +258,39 @@ submission plane did not, which is what a rung touching only the address plane m
 `GrCompute` doorbell is still refused by name. If those numbers had moved, something here would
 be doing more than it says.
 
+### 3.5 ★★★★★ THE NEGATIVE CONTROL — `w231b_257016e_control`, watched to fail
+
+**Same binary, same tree, same stamp, `KAYFABE_FB_JOIN=private`.** One property changes: the
+VMM maps the isolate's backing `MAP_PRIVATE|MAP_ANONYMOUS` instead of `MAP_SHARED` —
+`kayfabe_linux_raw::Backing::PrivateAnonymous`'s arm of the `mmap` argument computation
+(`crates/kayfabe-linux-raw/src/mapping_unsafe.rs:344-347`). The isolate chain, the join table,
+the establishment copy and both probes either side of it are the **same code**. ⊘ Not "a second
+memfd", which would be a tautology.
+
+```
+kayfabe: FB-JOIN arm=private exports_directory=true ⇒ leaves are the NEGATIVE CONTROL …
+GR-FB-JOIN ⊘ DIRECTION 1 (guest view → isolate view) DISAGREES at word 0 (got 0x00000000, want 0x5a1a5a5b) of 1024
+GR-FB-JOIN ⊘ DIRECTION 2 (isolate view → guest view) DISAGREES at word 0 (got 0x5a1a5a5b, want 0xa5e5a5a4) of 1024
+GR-FB-JOIN   ★★ AND THE VALUE READ BACK IS DIRECTION 1'S OWN PATTERN, not zeros …
+```
+
+★★ **Read the second line — it is the strongest single signal in this rung.** The control's
+guest-side read did not return zeros. It returned `0x5a1a5a5b`: the **direction-1 pattern**,
+still sitting in the private pages this run wrote it into, because direction 2's write went to
+the shared `memfd` and never reached them. A control that merely returned zeros would be
+consistent with a mapping that was never written at all; this one demonstrates both views are
+live, hold different bytes, and are read by the same loop.
+
+⊘ And `fb_cpu_view.md` §3.2 measured the *identical shape* on this bench three hours earlier,
+against `R30`'s standalone ladder rung. The same control, now over a real framebuffer leaf
+inside a real boot.
+
+★ **Which line did I expect this to execute?** The `Backing::PrivateAnonymous` arm named above,
+and nothing else — every other line in the join path is shared with the armed run. That is the
+question `w228`'s first control failed (it asked `back_fb_leaf` about an address it never
+walks, and would have printed `✅ REFUSED` **while allocating a real object**) and `w229`'s
+failed (its probe was handed the address its own ring had just been freed from).
+
 ---
 
 ## 4. THE COSTS, NAMED
