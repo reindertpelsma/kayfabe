@@ -38,7 +38,7 @@ use kayfabe_fwd::{
     Representability, ce_executor_c, partition_ce, plan_ce_split, publish_backing,
 };
 use kayfabe_isolate::{HostHandle, IsolateFactory, IsolateId, VerbPlan, VerbReply, Worker};
-use kayfabe_mmu::{AddressTable, Binding, HostBacking};
+use kayfabe_mmu::{AddressTable, BackingBytes, Binding, HostBacking};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, SharedRecorder};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
@@ -119,7 +119,11 @@ fn table_of(base: u64, runs: &[(u64, Kind)]) -> AddressTable {
             aperture: Aperture::Vidmem,
             // ★ Address identity: a host-backed binding's host VA IS the VA it is bound
             // at, and `AddressTable::bind` refuses anything else.
-            host: host.then_some(HostBacking::whole(HostHandle::NULL, at)),
+            host: host.then_some(HostBacking::whole(
+                HostHandle::NULL,
+                at,
+                BackingBytes::SoleBacking,
+            )),
         };
         match kind {
             Kind::Real => t.bind(A_PDB, GpuVa(at), len, binding(true)).expect("bind"),
@@ -745,7 +749,11 @@ fn the_source_operand_splits_the_request_too_and_a_fabricated_source_is_never_ha
         Binding {
             phys: 0x7100_0000,
             aperture: Aperture::Vidmem,
-            host: Some(HostBacking::whole(HostHandle::NULL, src_base)),
+            host: Some(HostBacking::whole(
+                HostHandle::NULL,
+                src_base,
+                BackingBytes::SoleBacking,
+            )),
         },
     )
     .expect("real source half");
@@ -1350,5 +1358,176 @@ fn there_is_no_read_at_invalidate_and_the_table_is_unchanged_across_one() {
         "…and nothing re-read the page directory. This is the finding: the address plane \
          is populated by RPC bindings and by WITNESSED CE page-table writes, and by \
          nothing else — there is no read-at-invalidate to fall back on."
+    );
+}
+
+// =====================================================================================
+// ★★★★★ FORBIDDEN #2 — "landing the data where the guest cannot see it"
+// (`ce_executor_tree.md`, owner 2026-08-07), as a test that FAILS FIRST.
+// =====================================================================================
+
+/// One binding at `VA`, host-backed with the stated byte-visibility, classified.
+///
+/// ⊘ Everything else is held identical between the two arms — same VA, same length, same
+/// aperture, same host handle, same host VA. The **only** difference is
+/// [`BackingBytes`], which is the variable under test.
+fn classify_host_backed(bytes: BackingBytes) -> Result<Vec<CeSpan>, FwdFault> {
+    const VA: u64 = 0x2_0022_4000;
+    const LEN: u64 = 0x1000;
+    let mut t = AddressTable::new();
+    t.bind(
+        A_PDB,
+        GpuVa(VA),
+        LEN,
+        Binding {
+            phys: 0x0102_4000,
+            aperture: Aperture::Vidmem,
+            // Address identity: a host-backed binding's host VA IS the VA it is bound at.
+            host: Some(HostBacking::whole(HostHandle::NULL, VA, bytes)),
+        },
+    )
+    .expect("bind");
+    pc(
+        Some(&t),
+        GpuVa(VA),
+        true,
+        GpuVa(0),
+        false,
+        LEN,
+        CeWork::Scrub,
+    )
+}
+
+/// ★★★★★ **A host object the guest cannot see into must NOT be handed to a real engine.**
+///
+/// # ⊘ Why this test has TWO arms and asserts they DIFFER
+///
+/// `[measured 2026-08-11]` the classifier's whole test was `binding.host.is_some()` —
+/// *"does a host object exist at this address"*, never *"are the guest's bytes in it"*. In
+/// this tree those are **opposite** populations: `VerbPlan::Publish` and `PublishVidmem`
+/// write `Binding::host` and produce objects the guest never writes into, while
+/// `VerbPlan::PinGuestRam` — the one crossing that shares memory with the guest — records
+/// into `Vas::guest_ram_pins` and leaves `host` **`None`**. `w228` measured the vidmem case
+/// directly: `placed_as_asked=true` **and blank**.
+///
+/// ⚠ **A single-arm test here would prove nothing**, and that is the lesson this rung paid
+/// for one section over: a census that only ever reports *absence* cannot be told from a
+/// census that is incapable of reporting *presence*. (§16.82.9: a grep answered "zero" for
+/// `MapGuestRam`, which runs eight times a boot, exactly as it answered for `ExportBacking`,
+/// which never runs.) So the `GuestVisible` arm is the **known-positive**: it proves the
+/// predicate can still say `HostCe`, and the assertion that the two arms differ is what
+/// stops a fix that simply refuses everything from passing.
+///
+/// # What each arm asserts
+///
+/// - **known-positive** — `GuestVisible` ⇒ `Representability::HostBacked` ⇒
+///   `CeExecutor::HostCe`. Unchanged behaviour, and the proof the gate is not a blanket.
+/// - **the falsifier** — `HostAllocated` ⇒ refused by name. ⊘ Deliberately a *fault* and not
+///   a demotion to `Fabricated`: that would derive a CPU address from `Binding::phys`, which
+///   for the `Publish` chain is a GPA carved from our own arena, and nothing has established
+///   those bytes are reachable through `Vmm::gpa_read` either — trading forbidden #2 on the
+///   GPU for forbidden #2 on the CPU, silently.
+///
+/// ★ Before the fix this test is RED on the second arm: the classifier returned
+/// `HostBacked` for both, so a blank object was routed to the host engine — which reads
+/// zeros where the guest wrote and writes where the guest cannot look. That failure is
+/// **self-concealing in a boot** (a run over a blank pool logs identically to a correct
+/// one), which is why it has to be caught here.
+#[test]
+fn a_host_object_the_guest_cannot_see_into_is_never_handed_to_a_real_engine() {
+    // ---- known-positive: the predicate CAN still say "real engine" -------------------
+    let visible = classify_host_backed(BackingBytes::SoleBacking).expect("guest-visible");
+    assert_eq!(visible.len(), 1, "one binding, one span");
+    assert_eq!(
+        visible[0].dst_kind,
+        Representability::HostBacked,
+        "★ the known-positive: a backing the guest CAN see into is still `HostBacked`. If \
+         this arm fails, the gate has become a blanket refusal and the other arm proves \
+         nothing."
+    );
+    assert_eq!(
+        visible[0].sub.by,
+        CeExecutor::HostCe,
+        "and `HostBacked` still selects the real engine"
+    );
+
+    // ---- the falsifier: identical in every respect but the visibility ---------------
+    let blank = classify_host_backed(BackingBytes::ShadowsGuestMemory);
+    match blank {
+        Err(FwdFault::BackingNotGuestVisible { addr, aperture }) => {
+            assert_eq!(
+                addr, 0x2_0022_4000,
+                "the refusal names the address it refused"
+            );
+            assert_eq!(
+                aperture,
+                Aperture::Vidmem,
+                "and the aperture, so a reader can tell the `PublishVidmem` case from the \
+                 `Publish` one without opening the source"
+            );
+        }
+        Err(other) => panic!(
+            "refused, but for the wrong reason — a wrong-reason refusal masks the root \
+             cause with a symptom of it: {other:?}"
+        ),
+        Ok(spans) => panic!(
+            "★★★ FORBIDDEN #2: a host object the guest cannot see into was handed to \
+             {:?} as {:?}. The engine would read zeros where the guest wrote. \
+             (`ce_executor_tree.md`: \"Landing the data where the guest cannot see it.\")",
+            spans.first().map(|s| s.sub.by),
+            spans.first().map(|s| s.dst_kind),
+        ),
+    }
+
+    // ---- and the two arms must DIFFER, or neither measured anything ------------------
+    assert!(
+        visible.first().map(|s| s.dst_kind)
+            != blank
+                .as_ref()
+                .ok()
+                .and_then(|s| s.first())
+                .map(|s| s.dst_kind),
+        "★ the arms must disagree: a classifier that answers the same for both is not \
+         reading `BackingBytes` at all"
+    );
+}
+
+/// ⊘ **The population statement, as a test rather than a comment.**
+///
+/// `[measured 2026-08-11]` the two production `HostBacking::whole` call sites in
+/// `kayfabe-fwd` declare **different** values, and the difference is the whole gate:
+/// `Publish` binds a GPA carved from our own arena and is [`BackingBytes::SoleBacking`];
+/// `PublishVidmem` binds the **guest's own framebuffer offset** while allocating a separate
+/// host object, and is [`BackingBytes::ShadowsGuestMemory`].
+///
+/// ⇒ This test pins that split so a future edit cannot quietly relabel one as the other —
+/// which is the only way the gate can be disarmed without anything looking wrong.
+#[test]
+fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_gate() {
+    // ⊘ **Non-comment lines only, and that filter is the test's own scar.** The first
+    // version counted raw `str::matches` over the whole file and went RED the moment the
+    // `Representability::HostBacked` doc *mentioned* `BackingBytes::SoleBacking` by name —
+    // it could not tell a DECLARATION from a MENTION. That is §16.85.3's class (a census
+    // whose instrument cannot return the other answer) caught in the act, by the census
+    // I wrote to demonstrate it. It failed loudly, which is the only reason it was cheap.
+    let src = include_str!("../../crates/kayfabe-fwd/src/lib.rs");
+    let code = |needle: &str| {
+        src.lines()
+            .filter(|l| {
+                let t = l.trim_start();
+                !t.starts_with("//") && t.contains(needle)
+            })
+            .count()
+    };
+    let sole = code("BackingBytes::SoleBacking");
+    let shadow = code("BackingBytes::ShadowsGuestMemory");
+    assert_eq!(
+        sole, 1,
+        "exactly one production chain (`Publish`) may claim to be the range's only memory"
+    );
+    assert_eq!(
+        shadow, 1,
+        "exactly one production chain (`PublishVidmem`) shadows memory the guest already \
+         reaches — if this becomes 0, the w228 hazard has been relabelled rather than fixed"
     );
 }

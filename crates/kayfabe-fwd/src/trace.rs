@@ -68,6 +68,7 @@ impl Faulted for FwdFault {
             FwdFault::GpaRead { .. } => FaultTag("FwdFault::GpaRead"),
             FwdFault::NonRamGpa { .. } => FaultTag("FwdFault::NonRamGpa"),
             FwdFault::PushbufferAperture { .. } => FaultTag("FwdFault::PushbufferAperture"),
+            FwdFault::BackingNotGuestVisible { .. } => FaultTag("FwdFault::BackingNotGuestVisible"),
             FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
             FwdFault::SubmissionDecodedNoWork { .. } => {
                 FaultTag("FwdFault::SubmissionDecodedNoWork")

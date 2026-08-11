@@ -47,7 +47,7 @@ use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_fwd::{FwdFault, publish_backing, resolve, unpublish_backing};
 use kayfabe_isolate::{IsolateFactory, RmError, VerbPlan, VerbReply};
-use kayfabe_mmu::{AddressFault, AddressTable, Binding, HostBacking};
+use kayfabe_mmu::{AddressFault, AddressTable, BackingBytes, Binding, HostBacking};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
@@ -383,6 +383,7 @@ fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
         host: Some(HostBacking::whole(
             kayfabe_isolate::HostHandle::new(kayfabe_isolate::IsolateId::new(1, GPU), 9),
             va.0 + 0x1000,
+            BackingBytes::SoleBacking,
         )),
     };
     assert_eq!(
@@ -405,6 +406,7 @@ fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
         host: Some(HostBacking::whole(
             lying.host.expect("set above").memory(),
             va.0,
+            BackingBytes::SoleBacking,
         )),
         ..lying
     };

@@ -192,6 +192,10 @@ pub enum HostExtent {
 /// adding a second, separately-maintained notion of who owns what.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostBacking {
+    /// ★★★★★ **Is this object the range's ONLY memory, or a second one shadowing memory the
+    /// guest already reaches?** — the owner's forbidden #2, as a field. See
+    /// [`BackingBytes`]; it has no default and no inference.
+    bytes: BackingBytes,
     /// The host object this range is backed by, in the OWNING isolate's handle
     /// namespace (`(Proc, GpuId)`-scoped — a handle from another isolate is a different
     /// object, boundary 2). For [`HostExtent::Slice`] this is the **arena**.
@@ -203,11 +207,72 @@ pub struct HostBacking {
     extent: HostExtent,
 }
 
+/// ★★★★★ **Is this host object the ONLY memory for the range, or a SECOND memory
+/// shadowing one the guest already reaches?** — `ce_executor_tree.md`'s **forbidden #2**
+/// (*"landing the data where the guest cannot see it"*), as a fact a classifier can read.
+///
+/// # ⊘ The measurement that forced this field into existence
+///
+/// `[measured 2026-08-11]` `kayfabe_fwd::representability_of` classified a range as
+/// `Representability::HostBacked` — *"a real engine may be pointed at it"* — on the sole
+/// test `binding.host.is_some()`. That asks **"does a host object exist here"**, and the
+/// question that decides correctness is **"does the guest reach these bytes some other
+/// way"**. The two production chains differ on exactly that, and nothing recorded it:
+///
+/// | chain | `Binding::phys` | the guest's other path to those bytes | this field |
+/// |---|---|---|---|
+/// | `VerbPlan::Publish` (host sysmem) | a GPA carved from **our own arena** | **none** — we invented the memory | [`BackingBytes::SoleBacking`] |
+/// | `VerbPlan::PublishVidmem` (host vidmem) | the **guest's own framebuffer offset** | **BAR1/BAR2 into the device's `SparseFb`**, continuously | [`BackingBytes::ShadowsGuestMemory`] |
+///
+/// ⇒ `w228` measured the second row directly: `placed_as_asked=true` **and blank**. An
+/// engine pointed at that object reads zeros where the guest wrote and writes where the
+/// guest cannot look — `#12` in the C artifact, which cost weeks — and it is
+/// **self-concealing**: a run over a blank object logs identically to a correct one.
+///
+/// ⊘ **And a third chain is invisible here entirely.** `VerbPlan::PinGuestRam`, the one
+/// crossing that genuinely shares memory with the guest, records into `Vas::guest_ram_pins`
+/// and never writes `Binding::host` at all — so the classifier has never seen it.
+///
+/// ★ It is a **constructor argument with no default**, deliberately: the fact is knowable
+/// only at the instant the backing is created, by the chain that created it, and is
+/// unrecoverable afterwards. A field that could be filled in later would be filled in by a
+/// guess.
+///
+/// ⚠ **What this does NOT claim.** `SoleBacking` does not assert the guest can read the
+/// object; it asserts there is no *competing* memory for the range. That is the property
+/// the executor choice actually needs — `Publish`'s own doc scopes it the same way
+/// (*"correct for a range the guest has never written"*) — and conflating it with
+/// "guest-visible" is what made an earlier draft of this gate refuse `Publish` too, in
+/// contradiction of a green test that was right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackingBytes {
+    /// ★ **This object is the ONLY memory the range has.** Either we invented the bytes
+    /// (`Publish`'s arena-carved GPA, which the guest has no independent path to) or they
+    /// are the guest's own pages mapped through — the shape `PinGuestRam` would declare if
+    /// its result ever became a `Binding`. Either way there is no second memory for a
+    /// writer to diverge into, so a real engine pointed here produces an end-state that is
+    /// **the** end-state.
+    SoleBacking,
+    /// ★★★ **A SECOND memory, at an address the guest already reaches another way.** The
+    /// address is the guest's, the bytes are ours, and the guest's own accesses go on
+    /// landing in the *other* one — the emulated framebuffer, or guest RAM. The two diverge
+    /// from the first write and nothing reconciles them.
+    ///
+    /// ⊘ **Fatal for anything the guest reads or polls, which is what a ring is.** No
+    /// executor may be pointed at it — `kayfabe_fwd::FwdFault::BackingNotGuestVisible`.
+    ShadowsGuestMemory,
+}
+
 impl HostBacking {
     /// A backing that owns its whole object: reclaiming this binding frees `memory`.
+    ///
+    /// `bytes` states whether this object is the range's only memory or a second one
+    /// shadowing memory the guest already reaches — see [`BackingBytes`]. It is an argument
+    /// rather than a field to be set later, because only this caller knows.
     #[must_use]
-    pub const fn whole(memory: HostHandle, host_va: u64) -> Self {
+    pub const fn whole(memory: HostHandle, host_va: u64, bytes: BackingBytes) -> Self {
         HostBacking {
+            bytes,
             memory,
             host_va,
             extent: HostExtent::Whole,
@@ -217,12 +282,32 @@ impl HostBacking {
     /// A backing over `slice` of the arena object `arena`, which **outlives** this
     /// binding: reclaiming this binding must not free `arena`.
     #[must_use]
-    pub const fn slice(arena: HostHandle, host_va: u64, slice: HostSlice) -> Self {
+    pub const fn slice(
+        arena: HostHandle,
+        host_va: u64,
+        slice: HostSlice,
+        bytes: BackingBytes,
+    ) -> Self {
         HostBacking {
+            bytes,
             memory: arena,
             host_va,
             extent: HostExtent::Slice(slice),
         }
+    }
+
+    /// ★★★★★ Whether this object is the range's only memory — the forbidden-#2 predicate.
+    #[must_use]
+    pub const fn bytes(self) -> BackingBytes {
+        self.bytes
+    }
+
+    /// ★★★ Shorthand for the one question an executor choice may ask: **may a real engine
+    /// be pointed at this backing and produce an end-state the guest can observe?** False
+    /// exactly when a second memory exists that the guest is reading instead.
+    #[must_use]
+    pub const fn is_sole_backing(self) -> bool {
+        matches!(self.bytes, BackingBytes::SoleBacking)
     }
 
     /// The host object — the whole object, or the arena a slice was cut from.
@@ -722,7 +807,7 @@ mod tests {
         let honest = |va: u64| Binding {
             phys: 0x8000_0000 + va,
             aperture: Aperture::SysmemCoherent,
-            host: Some(HostBacking::whole(mem, va)),
+            host: Some(HostBacking::whole(mem, va, BackingBytes::SoleBacking)),
         };
 
         let mut t = AddressTable::new();
@@ -744,7 +829,11 @@ mod tests {
                     // Published one page away from where it is bound — the exact
                     // state that reads as "mapped" everywhere in core state and
                     // resolves to nothing on the host GPU.
-                    host: Some(HostBacking::whole(mem, rogue_va + 0x1000)),
+                    host: Some(HostBacking::whole(
+                        mem,
+                        rogue_va + 0x1000,
+                        BackingBytes::SoleBacking,
+                    )),
                 },
             )
             .expect("the private map takes it — that is the whole premise");
@@ -820,7 +909,12 @@ mod tests {
                 Binding {
                     phys: 0x8000_0000,
                     aperture: Aperture::Vidmem,
-                    host: Some(HostBacking::slice(arena, va.0, short)),
+                    host: Some(HostBacking::slice(
+                        arena,
+                        va.0,
+                        short,
+                        BackingBytes::SoleBacking
+                    )),
                 },
             ),
             Err(AddressFault::SliceLenMismatch {
@@ -841,7 +935,12 @@ mod tests {
                 Binding {
                     phys: 0x8000_0000,
                     aperture: Aperture::Vidmem,
-                    host: Some(HostBacking::slice(arena, va.0, honest)),
+                    host: Some(HostBacking::slice(
+                        arena,
+                        va.0,
+                        honest,
+                        BackingBytes::SoleBacking
+                    )),
                 },
             ),
             Ok(())
@@ -878,6 +977,7 @@ mod tests {
                         mem(9),
                         va,
                         HostSlice::new(0, 0x2000).expect("real"),
+                        BackingBytes::SoleBacking,
                     )),
                 },
             )
@@ -901,13 +1001,13 @@ mod tests {
         let b = kayfabe_isolate::IsolateId::new(2, kayfabe_arch::ids::GpuId::ZERO);
         let arena = kayfabe_isolate::HostHandle::new(a, 0x5c00_0001);
 
-        let whole = HostBacking::whole(arena, 0x1000);
+        let whole = HostBacking::whole(arena, 0x1000, BackingBytes::SoleBacking);
         assert!(whole.frees_object(), "sole owner: its release frees it");
         assert_eq!(whole.as_slice(), None);
         assert_eq!(whole.extent(), HostExtent::Whole);
 
         let s = HostSlice::new(0x4000, 0x1000).expect("real");
-        let slice = HostBacking::slice(arena, 0x1000, s);
+        let slice = HostBacking::slice(arena, 0x1000, s, BackingBytes::SoleBacking);
         assert!(
             !slice.frees_object(),
             "a slice never frees the arena it was cut from"

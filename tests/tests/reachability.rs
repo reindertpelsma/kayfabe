@@ -795,6 +795,7 @@ fn an_unbind_of_a_host_published_range_is_refused_not_performed() {
                 host: Some(HostBacking::whole(
                     HostHandle::new(IsolateId::new(1, GPU), 7),
                     va.0,
+                    kayfabe_mmu::BackingBytes::SoleBacking,
                 )),
             },
         )

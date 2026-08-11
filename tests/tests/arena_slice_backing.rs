@@ -49,7 +49,7 @@ use kayfabe_fwd::{
     FwdFault, Published, commit_publish, plan_publish, publish_backing, unpublish_backing,
 };
 use kayfabe_isolate::{HostHandle, IsolateId, VerbPlan, VerbReply};
-use kayfabe_mmu::{AddressFault, Binding, HostBacking, HostExtent, HostSlice};
+use kayfabe_mmu::{AddressFault, BackingBytes, Binding, HostBacking, HostExtent, HostSlice};
 use kayfabe_mocks::{MockArch, MockIsolateFactory, SharedRecorder, VerbKind};
 use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
 
@@ -136,6 +136,7 @@ fn two_slices_of_one_arena(gpu: &mut Gpu, pid: ProcId) -> HostHandle {
                         arena,
                         old.host_va().expect("published"),
                         HostSlice::new(off, LEN).expect("a real range"),
+                        BackingBytes::SoleBacking,
                     )),
                     ..old
                 },
@@ -322,7 +323,12 @@ fn overlapping_slices_of_one_object_bind_resolve_and_reclaim() {
                 VA_B,
                 LEN,
                 Binding {
-                    host: Some(HostBacking::slice(arena, VA_B.0, overlapping)),
+                    host: Some(HostBacking::slice(
+                        arena,
+                        VA_B.0,
+                        overlapping,
+                        BackingBytes::SoleBacking,
+                    )),
                     ..old
                 },
             )
@@ -592,6 +598,7 @@ fn a_slice_that_disagrees_with_its_range_never_enters_a_live_vas() {
                     arena,
                     VA_A.0,
                     HostSlice::new(0, LEN / 2).expect("real"),
+                    BackingBytes::SoleBacking,
                 )),
                 ..old
             },
@@ -618,6 +625,7 @@ fn a_slice_that_disagrees_with_its_range_never_enters_a_live_vas() {
                     arena,
                     VA_A.0,
                     HostSlice::new(0, LEN).expect("real"),
+                    BackingBytes::SoleBacking,
                 )),
                 ..old
             },

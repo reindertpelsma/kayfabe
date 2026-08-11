@@ -2291,62 +2291,136 @@ impl SharedDevice {
         /// let a reader recognise the family; not a dump of a guest-sized structure.
         const SAMPLE: usize = 4;
         let root = pdb.0 & !0xfff;
+        // ★★★★★ **R1 — NOTHING IS FORMATTED UNDER THE LOCK.** The closure returns plain
+        // `Copy` scalars and one fixed-size array; every `format!` runs after the guard is
+        // dropped.
+        //
+        // ⊘ **This was not the shape it was written in**, and the correction is the point:
+        // it built its `String` *inside* `with_proc`, i.e. it ran a heap allocation beneath
+        // a rank-1 guard on the vCPU's own MMIO trap path. `[measured 2026-08-11, r33]` the
+        // sibling instance of exactly that — a guard alive inside an `eprintln!` — was a
+        // real R1 violation, not a lock awaiting a ruling, because the *global stderr lock*
+        // and an allocation both ran under it. ⚠ And this tree's lock witness masks only
+        // **ranked** locks, so the process-global ones are invisible to it: the assertion
+        // that would have caught this does not exist and cannot be relied on.
+        //
+        // ★ The rule this encodes, general and cheap: **gather scalars under the lock,
+        // render outside it.** It costs one struct and removes a whole class.
+        struct Row {
+            present: bool,
+            rows: usize,
+            hit: Option<(u64, kayfabe_arch::Aperture, u64, u64)>,
+            root_dirty: bool,
+            root_wit: bool,
+            root_meta: bool,
+            dirty: usize,
+            meta: usize,
+            shadow: usize,
+            wit: usize,
+            published: usize,
+            wit_sample: [Option<u64>; SAMPLE],
+            proc_vases: usize,
+            vas_sample: [Option<(u32, u64)>; SAMPLE],
+        }
         let out = self.with_proc(pid, |p| {
+            let mut r = Row {
+                present: false,
+                rows: 0,
+                hit: None,
+                root_dirty: false,
+                root_wit: false,
+                root_meta: false,
+                dirty: 0,
+                meta: 0,
+                shadow: 0,
+                wit: 0,
+                published: 0,
+                wit_sample: [None; SAMPLE],
+                proc_vases: p.vases.len(),
+                vas_sample: [None; SAMPLE],
+            };
             let Some(vas) = p.vases.get(&(gpu, pdb)) else {
                 // ⊘ Which address spaces this proc DOES have, because "absent" without the
                 // population it is absent from is the `an_absence_from_a_filtered_view` shape.
-                let have: Vec<String> = p
-                    .vases
-                    .keys()
-                    .take(SAMPLE)
-                    .map(|(g, d)| format!("g{}:0x{:x}", g.0, d.0))
-                    .collect();
-                return format!(
-                    " vas=ABSENT proc_vases={} sample=[{}]",
-                    p.vases.len(),
-                    have.join(",")
-                );
+                for (slot, (g, d)) in r.vas_sample.iter_mut().zip(p.vases.keys()) {
+                    *slot = Some((g.0, d.0));
+                }
+                return r;
             };
-            let rows = vas.table.iter().count();
-            let hit = vas.table.binding_at(va).map_or_else(
-                || "NONE".to_string(),
-                |(start, len, b)| {
-                    format!(
-                        "0x{:x}/{:?}/start0x{start:x}/len0x{len:x}",
-                        b.phys.wrapping_add(va.0 - start),
-                        b.aperture
-                    )
-                },
-            );
-            let wit = vas.reach.witnessed_sample(SAMPLE);
-            let wit_s = wit
-                .iter()
-                .map(|p| format!("0x{p:x}"))
+            r.present = true;
+            r.rows = vas.table.iter().count();
+            r.hit = vas
+                .table
+                .binding_at(va)
+                .map(|(start, len, b)| (b.phys.wrapping_add(va.0 - start), b.aperture, start, len));
+            r.root_dirty = vas.pt_pages.contains(&root);
+            r.root_wit = vas.reach.is_witnessed(root);
+            r.root_meta = vas.pt_meta.contains_key(&root);
+            r.dirty = vas.pt_pages.len();
+            r.meta = vas.pt_meta.len();
+            r.shadow = vas.reach.len();
+            r.wit = vas.reach.witnessed_len();
+            r.published = vas.reach.published_len();
+            for (slot, page) in r
+                .wit_sample
+                .iter_mut()
+                .zip(vas.reach.witnessed_sample(SAMPLE))
+            {
+                *slot = Some(page);
+            }
+            r
+        });
+        // ---- RENDER, with no guard held ------------------------------------------------
+        let list = |xs: &[Option<u64>]| {
+            xs.iter()
+                .flatten()
+                .map(|v| format!("0x{v:x}"))
                 .collect::<Vec<_>>()
-                .join(",");
+                .join(",")
+        };
+        let out = out.map(|r| {
+            if !r.present {
+                let sample = r
+                    .vas_sample
+                    .iter()
+                    .flatten()
+                    .map(|(g, d)| format!("g{g}:0x{d:x}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                return format!(" vas=ABSENT proc_vases={} sample=[{sample}]", r.proc_vases);
+            }
+            let hit = r.hit.map_or_else(
+                || "NONE".to_string(),
+                |(phys, ap, start, len)| format!("0x{phys:x}/{ap:?}/start0x{start:x}/len0x{len:x}"),
+            );
             format!(
-                " vas=PRESENT rows={rows} hit={hit} root=0x{root:x} \
-                 root_dirty={} root_wit={} root_meta={} dirty={} meta={} shadow={} wit={} \
-                 published={} wit_sample=[{wit_s}]",
-                yn(vas.pt_pages.contains(&root)),
-                yn(vas.reach.is_witnessed(root)),
-                yn(vas.pt_meta.contains_key(&root)),
-                vas.pt_pages.len(),
-                vas.pt_meta.len(),
-                vas.reach.len(),
-                vas.reach.witnessed_len(),
-                vas.reach.published_len(),
+                " vas=PRESENT rows={} hit={hit} root=0x{root:x} root_dirty={} root_wit={} \
+                 root_meta={} dirty={} meta={} shadow={} wit={} published={} \
+                 wit_sample=[{}]",
+                r.rows,
+                yn(r.root_dirty),
+                yn(r.root_wit),
+                yn(r.root_meta),
+                r.dirty,
+                r.meta,
+                r.shadow,
+                r.wit,
+                r.published,
+                list(&r.wit_sample),
             )
         });
         // ⊘ The owner index is device-global (rank 0) and is asked in its own acquisition
         // **after** the proc lock has been released — never beneath it.
-        let owner = {
+        // ⊘ R1 again: the guard's scope ends with the `let`, and the `format!` is outside
+        // it. Same rule as the block above, applied to the rank-0 read.
+        let owner_ids = {
             let g = self.state.read();
-            g.spine.pt_page_owner(gpu, root).map_or_else(
-                || "NONE".to_string(),
-                |(o, d)| format!("p{}:0x{:x}", o.0, d.0),
-            )
+            g.spine.pt_page_owner(gpu, root)
         };
+        let owner = owner_ids.map_or_else(
+            || "NONE".to_string(),
+            |(o, d)| format!("p{}:0x{:x}", o.0, d.0),
+        );
         match out {
             Some(s) => format!(
                 "VAS-BIND-CENSUS proc={} gpu={} pdb=0x{:x} va=0x{:x}{s} root_owner={owner}",

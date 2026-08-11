@@ -534,6 +534,27 @@ pub enum FwdFault {
         /// The aperture the binding named.
         aperture: Aperture,
     },
+    /// ★★★★★ **The range has a host object, and the guest's writes do not land in it** —
+    /// `ce_executor_tree.md`'s **forbidden #2**, refused rather than executed.
+    ///
+    /// See [`kayfabe_mmu::BackingBytes`] for the measurement: `Publish`/`PublishVidmem`
+    /// allocate a fresh host object *at the guest's VA* whose bytes the guest never sees,
+    /// while the guest goes on reading and writing guest RAM or the emulated framebuffer.
+    /// Pointing a real engine at it reads zeros where the guest wrote and writes where the
+    /// guest cannot look.
+    ///
+    /// ⊘ **It is a fault and not a demotion.** The obvious alternative — call it
+    /// `Fabricated` and let the CPU executor have it — derives a CPU address from
+    /// `Binding::phys`, which for the `Publish` chain is a GPA carved from our own arena.
+    /// Nothing has established those bytes are reachable through `Vmm::gpa_read`, so the
+    /// demotion would move the same prohibition one plane over and stop being visible.
+    BackingNotGuestVisible {
+        /// The address whose binding carries the non-guest-visible host object.
+        addr: u64,
+        /// The aperture that binding named — `Vidmem` for the `PublishVidmem` chain,
+        /// `SysmemCoherent` for `Publish`.
+        aperture: Aperture,
+    },
     /// ★★★ **The doorbell's ring brought NO decodable GPFIFO entry** — the guest rang for
     /// work and the entry at the cursor read back as nothing.
     ///
@@ -1827,7 +1848,16 @@ pub fn commit_publish(
             // object and its release frees it. Arena sub-allocation is the OTHER
             // constructor, and nothing mints it yet — `VerbReply::Published` has no
             // offset to carry one, and that reply lives on the isolate seam.
-            host: Some(kayfabe_mmu::HostBacking::whole(memory, host_va)),
+            // ★★★★★ **SOLE, and the distinction is measured — see `BackingBytes`.** This
+            // chain allocates host sysmem and binds it at a GPA carved from *our own*
+            // arena: the guest has no independent path to those bytes, so this object is
+            // not a shadow of anything. `Publish`'s own doc scopes it — *"correct for a
+            // range the guest has never written"* — and that is exactly the sole case.
+            host: Some(kayfabe_mmu::HostBacking::whole(
+                memory,
+                host_va,
+                kayfabe_mmu::BackingBytes::SoleBacking,
+            )),
         },
     ) {
         // ★ G6: the bind refused, so the GPA is owed straight back. Before the arena
@@ -2187,7 +2217,17 @@ pub fn commit_back_fb_leaf(
         aperture: Aperture::Vidmem,
         // ★ `whole`: this chain allocates a fresh host object per leaf, so the binding IS
         // the object and its release frees it.
-        host: Some(kayfabe_mmu::HostBacking::whole(memory, host_va)),
+        // ★★★★★ **SHADOW — this is the w228 case, and it is forbidden #2 in waiting.**
+        // The binding's `phys` is `plan.phys`: the GUEST's own framebuffer offset, whose
+        // bytes live in the device's `SparseFb` and which the guest goes on reading and
+        // writing through BAR1/BAR2. The host vidmem object allocated here is a SECOND,
+        // separate memory at the same address. `[measured 2026-08-11, w228]`
+        // `placed_as_asked=true` **and blank**.
+        host: Some(kayfabe_mmu::HostBacking::whole(
+            memory,
+            host_va,
+            kayfabe_mmu::BackingBytes::ShadowsGuestMemory,
+        )),
     };
     if let Err(e) = vas.table.bind(plan.pdb, plan.va, plan.len, binding) {
         // ⊘ Put back exactly what was there. A refusal that left the range unbound would
@@ -4204,6 +4244,13 @@ pub enum Representability {
     /// memory, mapped into that `Vas`'s own host VAS **at the identical address**
     /// (address identity, `#102` stage A). A real engine can be pointed at the guest's
     /// own number, because that is the number the host MMU walks for.
+    ///
+    /// ⚠ **AND the object must be the range's ONLY memory** —
+    /// [`kayfabe_mmu::BackingBytes::SoleBacking`]. A host object that merely *exists* at
+    /// the address is not enough: `PublishVidmem` puts one at a VA whose bytes the guest
+    /// goes on reading and writing through the emulated framebuffer, and aiming an engine
+    /// at that is the owner's forbidden #2. See
+    /// [`FwdFault::BackingNotGuestVisible`] and [`representability_of`].
     HostBacked,
     /// ★★★ **Fabricated.** The range is *declared* in the address table and nothing
     /// host-side exists behind it: it lives in the emulated framebuffer, which is memory
@@ -4229,6 +4276,26 @@ pub enum Representability {
     /// ([`VerbPlan::gated_doorbell`]), which refuses to ring a channel whose working set
     /// is not host-published. So "forward it" cannot degrade into "hardware dereferences
     /// something that was never mapped" — that submission does not reach a doorbell.
+    ///
+    /// # ★★★★★ AN ABSENT TABLE ROW IS NOT NEUTRAL — it routes guest work to the host GPU
+    ///
+    /// ⚠ Read the arm above and this one together, because the pairing is counter-intuitive
+    /// and was measured rather than reasoned. A range **we know nothing about** lands here
+    /// and goes to `HostCe`; the *same* range, once a binding exists for it with no host
+    /// object, becomes [`Representability::Fabricated`] and goes to `CeExecutor::Ours`.
+    ///
+    /// ⇒ **Populating the address table moves work OFF the hardware arm, not onto it.**
+    /// `[measured 2026-08-11, boots w234a/w234b]` the user proc's framebuffer ranges had no
+    /// binding at all — this arm — until the executor-write witness
+    /// (`KAYFABE_PT_WITNESS_EXEC`) gave them one; arming it took them to `Fabricated`, i.e.
+    /// to the CPU executor addressing the emulated framebuffer the guest actually reads.
+    ///
+    /// ★ So *"the table is incomplete"* is never merely a missing diagnostic. Every VA the
+    /// table does not bind is a VA this classifier will hand to a real engine on the
+    /// strength of knowing nothing about it, and the only thing standing behind that is the
+    /// #14 gate. That is the owner's **STEP 1 residency before STEP 2 executor**
+    /// (`ce_executor_tree.md`) stated from the other side: an unanswerable residency
+    /// question does not defer the executor choice, it *makes* it.
     Untracked,
 }
 
@@ -4406,7 +4473,40 @@ fn representability_of(
     addr: u64,
 ) -> Result<(Representability, Option<CpuOperand>), FwdFault> {
     match binding {
-        Some(b) if b.host.is_some() => Ok((Representability::HostBacked, None)),
+        // ★★★★★ **FORBIDDEN #2, AT THE LINE IT USED TO BE VIOLATED ON.**
+        //
+        // ⊘ This arm read `Some(b) if b.host.is_some() => HostBacked` — *"a host object
+        // exists here, so point a real engine at it."* `[measured 2026-08-11]` that test and
+        // the question it stands for are **opposite** populations in this tree:
+        // `VerbPlan::Publish` and `PublishVidmem` write `Binding::host` and produce objects
+        // the guest cannot see into (`Publish`'s own doc: *"the address is the guest's and
+        // the bytes are not"*; `w228` measured `PublishVidmem` `placed_as_asked=true` **and
+        // blank**), while `PinGuestRam` — the one crossing that shares memory with the guest
+        // — records into `Vas::guest_ram_pins` and leaves `host` **`None`**.
+        // ⇒ `HostBacked` was exactly the set of ranges a real engine must NOT be aimed at.
+        //
+        // `ce_executor_tree.md` (owner, 2026-08-07): *"Forbidden … 2. Landing the data where
+        // the guest cannot see it."* ★ And it is **self-concealing** — an engine that
+        // dereferenced a blank object logs identically to one that did the work — so it is
+        // refused **by name, before anything is aimed**, rather than rerouted quietly.
+        Some(b)
+            if b.host
+                .is_some_and(kayfabe_mmu::HostBacking::is_sole_backing) =>
+        {
+            Ok((Representability::HostBacked, None))
+        }
+        // ⊘ **Refused, and deliberately NOT demoted to `Fabricated`.** `Fabricated` would
+        // send it to the CPU executor with a `CpuOperand` derived from `b.phys` — which for
+        // the `Publish` chain is a GPA carved from *our own arena*, and nothing has shown
+        // those bytes are reachable through `Vmm::gpa_read` either. That would trade
+        // forbidden #2 on the GPU for forbidden #2 on the CPU, silently. A named fault
+        // costs nothing measured: `by=HostCe` appears **zero** times in every committed boot
+        // trace in this campaign (10 × `by=Ours`, 0 × `by=HostCe`), so no green depends on
+        // the old answer.
+        Some(b) if b.host.is_some() => Err(FwdFault::BackingNotGuestVisible {
+            addr,
+            aperture: b.aperture,
+        }),
         Some(b) => {
             let residency = residency_of_aperture(b.aperture, addr)?;
             Ok((

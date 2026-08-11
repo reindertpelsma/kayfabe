@@ -15554,3 +15554,117 @@ at all is **UNMEASURED**, and the decisive lookup is on the channel-alloc path
 feasibility lookup** — one read of the channel-alloc path to see whether a location attribute is
 ours to answer. ⊘ If it is not, B is correct and its byte source is already proven. **Neither is
 started here.**
+
+## §16.85 ★★★★★ FORBIDDEN #2, CLOSED AT ITS LINE — and a new instrument-failure class
+
+### 16.85.1 The predicate, named before it was built
+
+`kayfabe_fwd::representability_of` chose an executor on `binding.host.is_some()` — *"does a
+host object exist at this address"*. The question that decides correctness is **"does the
+guest reach these bytes some other way"**, and `[measured 2026-08-11]` the two pro
+## §16.85 ★★★★★ FORBIDDEN #2, CLOSED AT ITS LINE — and a new instrument-failure class
+
+### 16.85.1 The predicate, named before it was built
+
+`kayfabe_fwd::representability_of` chose an executor on `binding.host.is_some()` — *"does a
+host object exist at this address"*. The question that decides correctness is **"does the
+guest reach these bytes some other way"**, and `[measured 2026-08-11]` the two production
+chains differ on exactly that while nothing recorded it:
+
+| chain | `Binding::phys` | the guest's other path to those bytes | verdict |
+|---|---|---|---|
+| `VerbPlan::Publish` (host sysmem) | a GPA carved from **our own arena** | **none** — we invented the memory | `SoleBacking` ⇒ `HostCe` |
+| `VerbPlan::PublishVidmem` (host vidmem) | the **guest's own framebuffer offset** | **BAR1/BAR2 into the device's `SparseFb`**, continuously | `ShadowsGuestMemory` ⇒ **refused** |
+| `VerbPlan::PinGuestRam` | — | records into `Vas::guest_ram_pins`, **never writes `Binding::host`** | invisible to the classifier |
+
+⇒ `w228` measured row 2 directly: `placed_as_asked=true` **and blank**. An engine aimed there
+reads zeros where the guest wrote — `ce_executor_tree.md`'s **forbidden #2**, the C's `#12`,
+and self-concealing.
+
+★★ **The predicate is `SoleBacking`, not "guest-visible", and the difference was forced by a
+green test.** An earlier draft gated on *"are the guest's bytes in it"* and refused `Publish`
+too — colliding with `fabricated_vram_in_a_userspace_va_becomes_representable_by_being_backed`,
+which asserts `backed ⇒ representable ⇒ real engine` and **is right**: `Publish`'s own doc
+scopes it to *"a range the guest has never written"*, where the host object is the only memory
+there is. ⊘ The test was not edited to agree with the gate. **The gate was corrected to agree
+with the test**, and the name changed to what it actually discriminates.
+
+**The change:** `kayfabe_mmu::BackingBytes` (a constructor argument with no default, because
+the fact is knowable only at creation); `HostBacking::is_sole_backing`;
+`FwdFault::BackingNotGuestVisible`, a **fault** rather than a demotion to `Fabricated` —
+demoting would derive a CPU address from `Binding::phys`, which for `Publish` is an
+arena-carved GPA nothing has shown is reachable through `Vmm::gpa_read`, i.e. it would trade
+forbidden #2 on the GPU for forbidden #2 on the CPU, silently.
+
+### 16.85.2 ★★★ The falsifier, watched RED first
+
+`a_host_object_the_guest_cannot_see_into_is_never_handed_to_a_real_engine`, with the predicate
+arm temporarily reverted and **all** `BackingBytes` plumbing left in place, so the only
+variable is the gate:
+
+```text
+test a_host_object_the_guest_cannot_see_into_is_never_handed_to_a_real_engine ... FAILED
+★★★ FORBIDDEN #2: a host object the guest cannot see into was handed to Some(HostCe)
+    as Some(HostBacked). The engine would read zeros where the guest wrote.
+test result: FAILED. 16 passed; 1 failed
+```
+
+Then green, 17/17, with `fabricated_vram_…_by_being_backed` **still passing**.
+
+★★ **Two arms, and an assertion that they DIFFER.** The `SoleBacking` arm is the
+**known-positive**: it proves the gate is not a blanket refusal. Without it, a fix that refused
+everything would pass — which is precisely §16.85.3's class.
+
+### 16.85.3 ★★★★★ NEW INSTRUMENT-FAILURE CLASS — *a census with no known-positive*
+
+⊘ **Mine, this rung, and it reached a commit message and two reports.** §16.82.9 reported four
+isolate verbs *"named by ZERO lines of the consuming crates"* and read that as **orphaned**.
+Re-run including `kayfabe-isolate`, the same grep returns **zero for `MapGuestRam` too** — a
+verb that runs **eight times per boot**. The wire enum variants live only in
+`kayfabe-isolate-host`; consumers name the **trait methods**.
+
+⇒ **The predicate returned the same answer for the working case and the broken one.** A zero
+from it was not evidence of absence; it was evidence of nothing.
+
+★ **The rule, and it is cheap:** *a census's zero means nothing until the census has been shown
+to produce a non-zero for a known-positive.* Name the known-positive, run it through the **same**
+predicate, show it lands — **then** report the negatives. ⚠ I had one available
+(`MapGuestRam`, demonstrably running in the very boot I was citing) and did not run it through.
+
+⊘ Distinct from `a_test_can_be_correct_and_unable_to_fail`, which is about a *test* whose
+assertion cannot go red. This is about a **measurement** whose instrument cannot return the
+other answer — and it is more dangerous, because a measurement carries no expectation of
+failing and therefore no habit of checking.
+
+### 16.85.4 ⚠ R1 — nothing this rung adds formats under a lock
+
+`vas_bind_census` originally built its `String` **inside** `with_proc`, i.e. ran a heap
+allocation beneath a rank-1 guard on the vCPU's own MMIO trap path — the sibling of the
+`Mutex<u64>`-alive-inside-`eprintln!` violation `r33` found and fixed at master. It now returns
+plain `Copy` scalars and a fixed-size array from the closure and renders after the guard drops;
+the rank-0 owner lookup does the same.
+
+⚠ **The lock witness masks only *ranked* locks**, so the process-global stderr lock and the
+allocator are invisible to it. There is no assertion that would have caught this; the discipline
+— **gather scalars under the lock, render outside it** — is the whole mechanism.
+
+### 16.85.5 ★★★ The inversion, recorded IN THE CODE
+
+[`Representability::Untracked`]'s doc now carries it, because a commit message is not where a
+counter-intuitive fact survives:
+
+> **An absent table row is not neutral — it routes guest work to the host GPU.** A range we know
+> nothing about is `Untracked` ⇒ `HostCe`; the *same* range with a binding and no host object is
+> `Fabricated` ⇒ `Ours`. ⇒ **Populating the address table moves work OFF the hardware arm.**
+
+★ That is the owner's *STEP 1 residency before STEP 2 executor* stated from the other side: an
+unanswerable residency question does not defer the executor choice — **it makes it.**
+
+### 16.85.6 ⊘ What this does NOT do
+
+- ⊘ **`CE-SUBMIT` is still 0.** Nothing was forwarded and nothing executed. This rung removes a
+  way to execute *wrongly*; it adds no way to execute at all.
+- ⊘ **No boot, and a boot would not have caught it** — the audit's own point is that a run over
+  a blank object logs identically to a correct one. The violation and its fix are both decidable
+  offline, and the falsifier is GPU-free by construction.
+- ⊘ **Neither ring route started.** §16.83/§16.84 stand unchanged.
