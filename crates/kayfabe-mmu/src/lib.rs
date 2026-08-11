@@ -258,8 +258,16 @@ pub enum BackingBytes {
     /// landing in the *other* one — the emulated framebuffer, or guest RAM. The two diverge
     /// from the first write and nothing reconciles them.
     ///
-    /// ⊘ **Fatal for anything the guest reads or polls, which is what a ring is.** No
-    /// executor may be pointed at it — `kayfabe_fwd::FwdFault::BackingNotGuestVisible`.
+    /// ⊘ **Fatal for anything the guest reads or polls, which is what a ring is.**
+    ///
+    /// ★★★ **It has NO production producer any more, and that is the fix rather than a
+    /// gap.** This variant is the *name of the state ruling 3 forbids*, and it exists so
+    /// that [`Binding::real_gpu_memory`] has something to refuse: a caller honest enough to
+    /// declare a shadow is refused by that declaration, and a caller silent about it is
+    /// refused by the [`Aperture::Vidmem`] test beside it. `commit_back_fb_leaf` — the one
+    /// chain that used to construct it — now raises
+    /// `kayfabe_fwd::FwdFault::RegionKindRefused` and hands its host objects back as
+    /// orphans instead of binding them.
     ShadowsGuestMemory,
 }
 
@@ -300,14 +308,6 @@ impl HostBacking {
     #[must_use]
     pub const fn bytes(self) -> BackingBytes {
         self.bytes
-    }
-
-    /// ★★★ Shorthand for the one question an executor choice may ask: **may a real engine
-    /// be pointed at this backing and produce an end-state the guest can observe?** False
-    /// exactly when a second memory exists that the guest is reading instead.
-    #[must_use]
-    pub const fn is_sole_backing(self) -> bool {
-        matches!(self.bytes, BackingBytes::SoleBacking)
     }
 
     /// The host object — the whole object, or the arena a slice was cut from.
@@ -365,22 +365,255 @@ impl HostBacking {
     }
 }
 
-/// Where a bound VA range points, in core terms.
+/// ★★★★★ **WHICH OF THE FOUR KINDS A GPGA REGION IS — decided where the mapping is BOUND,
+/// never derived at a consumer** (owner ruling, 2026-08-11).
+///
+/// > *"A GPGA region is exactly ONE of four kinds: unallocated / fake framebuffer / real GPU
+/// > memory / DMA-to-guest-physical."*
+///
+/// # ⊘ The defect this replaces
+///
+/// `[measured 2026-08-11, `docs/design/gpga_region_kind.md` §1.1]` nothing in the tree
+/// carried a kind. `kayfabe_fwd::Representability` was recomputed per operand by a four-arm
+/// match with **two unguarded arms pointing in opposite directions**:
+///
+/// | reached because | answered | routed to |
+/// |---|---|---|
+/// | `Binding::host == None` — i.e. **nobody decided** | `Fabricated` | our CPU executor |
+/// | **no row at all** | `Untracked` | ⚠ **the real host GPU** |
+///
+/// ⇒ *"the guest's GR ring is fake framebuffer"* was never a decision anyone took; it was
+/// what a range **fell through to**. Nothing distinguished *"we determined this is emulated
+/// framebuffer"* from *"nothing has been said about this range"*.
+///
+/// # Kind 1 is the ABSENCE of a row, and that is why it is not a variant here
+///
+/// ⊘ A row reading *"unallocated"* would be a second spelling of *"no row"*, and the two
+/// would drift the first time one of them was reachable and the other was not.
+/// [`AddressTable::kind_at`] answers `None` for kind 1, and that `None` is the same `None`
+/// [`AddressTable::binding_at`] gives — one fact, one representation.
+///
+/// ⚠ **Kind 1 is not neutral.** An absent row is what `Representability::Untracked` reads,
+/// and `Untracked` routes to the **host GPU**. So *"we never decided"* is not a safe default
+/// at either end: it is fiction at one and hardware at the other.
+///
+/// # ★ What decides, given that we are not present at allocation
+///
+/// ⊘ The owner's model says the kind is *"decided at allocation/bind"*. `[measured
+/// 2026-08-11, `gpga_region_kind.md` §0.1]` **the allocation half has no transport in Mode 2**
+/// — the guest's stock RM allocates video memory out of its own heap over the framebuffer we
+/// advertise, and `NV01_MEMORY_SYSTEM` (0x003e) / `NV01_MEMORY_LOCAL_USER` (0x0040) reach us
+/// **zero** times across every committed boot while a real-hardware interposer shows 24 per
+/// CUDA run. So **bind is the only event we have**, and the decision has exactly two shapes,
+/// which is exactly the two constructors of [`Binding`]:
+///
+/// - [`Binding::declared_by_guest`] — the guest's own page table (or its own RPC-declared
+///   mapping) named an **aperture**, and for an unpublished region that aperture IS the
+///   declaration: `Vidmem` is the framebuffer we fabricate, sysmem is the guest's own
+///   physical pages. ⊘ `Peer` is neither, and is refused by name rather than fabricated.
+/// - [`Binding::real_gpu_memory`] — *we* allocated a host object and mapped it at the guest's
+///   own VA. Kind 3 is the only kind that can carry a [`HostBacking`], and it cannot exist
+///   without one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RegionKind {
+    /// **Kind 2 — the fake framebuffer.** The bytes live in the device's emulated
+    /// framebuffer (`kayfabe_device::SparseFb`, a map on the VMM's heap). No host object
+    /// exists and none may: see [`RegionKindFault::FakeFbAtRealGpuVa`].
+    ///
+    /// ⊘ Ruling 2 scopes what this kind is *for*: **guest-KERNEL channels we emulate**,
+    /// where we manage the pushbuffer / USERD / ring / semaphore. A guest **userspace**
+    /// mapping landing here is the execution blocker, not the design.
+    FakeFramebuffer,
+    /// **Kind 3 — real GPU memory.** A host memory object, mapped into the owning `Vas`'s
+    /// own host VAS at the identical address, and it is the range's ONLY memory. A real
+    /// engine may be pointed at it.
+    RealGpuMemory,
+    /// **Kind 4 — DMA to guest-physical.** The guest's own physical pages. The number in
+    /// [`Binding::phys`] is a GPA and [`Binding::is_guest_ram`] is true.
+    GuestPhysDma,
+}
+
+impl RegionKind {
+    /// ★ Can a region of this kind carry a [`HostBacking`] — i.e. be mapped to a real GPU
+    /// VA of an isolate?
+    ///
+    /// ⊘ **This is ruling 3 as a total function**, and it is consulted by the one
+    /// constructor that can attach a backing, so it is not advice: *"no fake FB ever can be
+    /// mapped to a real GPU VA of an isolate except the scratchpad"* (owner, 2026-08-11).
+    /// The scratchpad carve-out is ruling 4 — `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — which
+    /// mints a **sysmem** object over host pages and therefore never asks this question
+    /// about a `Vidmem` region.
+    #[must_use]
+    pub const fn may_be_host_mapped(self) -> bool {
+        match self {
+            RegionKind::FakeFramebuffer => false,
+            RegionKind::RealGpuMemory | RegionKind::GuestPhysDma => true,
+        }
+    }
+}
+
+/// Why a [`Binding`] could not be constructed with the kind its caller asked for. Every
+/// variant is a **decision that could not be taken truthfully**, never a malformed input —
+/// [`AddressFault`] owns those.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionKindFault {
+    /// ★★★ **Owner ruling, 2026-08-11: fake framebuffer at a real GPU VA of an isolate.**
+    ///
+    /// A [`HostBacking`] was offered for a region that is kind 2 — either because its
+    /// aperture is [`Aperture::Vidmem`] (there is no *other* video memory in this design;
+    /// `no_real_phys_only_gpga_or_gpa`), or because the backing itself declares
+    /// [`BackingBytes::ShadowsGuestMemory`], i.e. a SECOND memory at an address the guest
+    /// goes on reading somewhere else.
+    ///
+    /// ⊘ **Both tests are here rather than one**, because they fail independently: the
+    /// aperture catches a caller that is honest about the address and silent about the
+    /// shadow, and `BackingBytes` catches a caller that is honest about the shadow over an
+    /// aperture that looks innocent. `[measured 2026-08-11, `w228`]` the `PublishVidmem`
+    /// chain is both at once — `placed_as_asked=true` **and blank**.
+    FakeFbAtRealGpuVa {
+        /// The aperture the caller named.
+        aperture: Aperture,
+    },
+    /// [`Aperture::Peer`] — a second physical GPU's framebuffer, which this device does not
+    /// back and no kind describes.
+    ///
+    /// ⊘ Refused rather than fabricated. Fabricating it is what the old fall-through did:
+    /// a `Peer` binding with no host object became `Representability::Fabricated` and was
+    /// handed to a CPU executor that then had to ask `DeclaredResidency` for a plane it
+    /// answers `None` for. The refusal now happens at the decision, not two layers later.
+    PeerHasNoKind,
+}
+
+/// Where a bound VA range points, in core terms — **and which of the four kinds it is**.
+///
+/// ★★ **The fields are private and there are exactly two constructors**, and that is the
+/// point of the type: see [`RegionKind`]. A `Binding` that exists has had its kind decided
+/// by the site that bound it, and the states ruling 3 forbids cannot be written down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Binding {
+    /// ★★★★★ Which of the four kinds this region is. Decided at construction; no default.
+    kind: RegionKind,
     /// Physical/backing address (interpretation depends on `aperture`; for sysmem
     /// this is a guest-physical address).
-    pub phys: u64,
+    phys: u64,
     /// Aperture of the backing.
-    pub aperture: Aperture,
+    aperture: Aperture,
     /// The host materialization, once the fwd plane has published this range
     /// (`None` = declared by the RPC/CE-capture source only — nothing host-side
     /// exists yet, and nothing host-side needs reclaiming). See [`HostBacking`] for
     /// why this is one `Option` over a pair and not a pair of `Option`s.
-    pub host: Option<HostBacking>,
+    ///
+    /// ⊘ `Some` **only** for [`RegionKind::RealGpuMemory`] — [`RegionKind::may_be_host_mapped`]
+    /// is checked by the one constructor that can set it.
+    host: Option<HostBacking>,
 }
 
 impl Binding {
+    /// ★★★ **The guest declared this range and nothing host-side exists behind it** — kinds
+    /// 2 and 4, chosen by the aperture the guest's own page table (or its own RPC-declared
+    /// mapping) named.
+    ///
+    /// ⊘ **This is a decision, not the old fall-through**, and the difference is worth
+    /// stating because they produce the same answer for the two common apertures. The
+    /// fall-through was *"a binding exists and it has no host object, therefore fiction"* —
+    /// asked at **classify** time, over an address, by a consumer with no idea who bound it,
+    /// and it swallowed [`Aperture::Peer`] silently. This is asked at **bind** time, of the
+    /// only authority that exists in Mode 2 (§0.1: we are not present at allocation), and it
+    /// **refuses** the aperture no kind describes.
+    ///
+    /// # Errors
+    /// [`RegionKindFault::PeerHasNoKind`] — `aperture` is [`Aperture::Peer`].
+    pub const fn declared_by_guest(phys: u64, aperture: Aperture) -> Result<Self, RegionKindFault> {
+        let kind = match aperture {
+            // The framebuffer this device advertises. `SparseFb` fabricates a zero page for
+            // every address below `ChipProfile::fb_length`, so this is kind 2 by
+            // construction — there is no "unallocated but vidmem" state to be in
+            // (`gpga_region_kind.md` §2, established).
+            Aperture::Vidmem => RegionKind::FakeFramebuffer,
+            // `phys` is a guest-physical address; the guest's own pages.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => RegionKind::GuestPhysDma,
+            Aperture::Peer => return Err(RegionKindFault::PeerHasNoKind),
+        };
+        Ok(Binding {
+            kind,
+            phys,
+            aperture,
+            host: None,
+        })
+    }
+
+    /// ★★★ **We allocated a host memory object and mapped it at the guest's own VA** — kind
+    /// 3, and the only kind that carries a [`HostBacking`].
+    ///
+    /// ⊘ The backing is a parameter and not a later assignment: kind 3 **without** an object
+    /// is precisely the state the old fall-through called fiction, so a `RealGpuMemory`
+    /// binding with `host: None` must not be writable at all.
+    ///
+    /// # Errors
+    /// [`RegionKindFault::FakeFbAtRealGpuVa`] — ruling 3. `aperture` is [`Aperture::Vidmem`]
+    /// (the emulated framebuffer is the only video memory in this design), or `host` declares
+    /// [`BackingBytes::ShadowsGuestMemory`].
+    ///
+    /// [`RegionKindFault::PeerHasNoKind`] — `aperture` is [`Aperture::Peer`].
+    pub const fn real_gpu_memory(
+        phys: u64,
+        aperture: Aperture,
+        host: HostBacking,
+    ) -> Result<Self, RegionKindFault> {
+        // ⊘ **ONE derivation of the aperture's kind, not a second one here.** The aperture
+        // is put through the same [`Binding::declared_by_guest`] the guest-declared path
+        // uses, so `Peer` is refused by exactly the same rule and a `Vidmem` aperture is
+        // recognised as kind 2 by exactly the same rule. A private `match aperture` on this
+        // line would be a second reading that can drift from the first.
+        let declared = match Binding::declared_by_guest(phys, aperture) {
+            Ok(d) => d,
+            Err(e) => return Err(e),
+        };
+        // ★★★ RULING 3, and both spellings of it. The aperture test catches a caller honest
+        // about the address and silent about the shadow (`Vidmem` IS the framebuffer we
+        // fabricate, so a host object at it is a second memory by definition); the
+        // `BackingBytes` test catches a caller honest about the shadow over an aperture that
+        // looks innocent. They fail independently.
+        if !declared.kind.may_be_host_mapped()
+            || matches!(host.bytes(), BackingBytes::ShadowsGuestMemory)
+        {
+            return Err(RegionKindFault::FakeFbAtRealGpuVa { aperture });
+        }
+        Ok(Binding {
+            kind: RegionKind::RealGpuMemory,
+            phys,
+            aperture,
+            host: Some(host),
+        })
+    }
+
+    /// ★★★★★ Which of the four kinds this region is — **read, never derived**.
+    #[must_use]
+    pub const fn kind(self) -> RegionKind {
+        self.kind
+    }
+
+    /// Physical/backing address; interpretation depends on [`Binding::aperture`]. For
+    /// sysmem ([`RegionKind::GuestPhysDma`]) this is a guest-physical address — see
+    /// [`Binding::is_guest_ram`].
+    #[must_use]
+    pub const fn phys(self) -> u64 {
+        self.phys
+    }
+
+    /// Aperture of the backing, as the guest declared it.
+    #[must_use]
+    pub const fn aperture(self) -> Aperture {
+        self.aperture
+    }
+
+    /// The host materialization, if this range is published at all. `None` for every
+    /// [`RegionKind::FakeFramebuffer`] region, always.
+    #[must_use]
+    pub const fn host(self) -> Option<HostBacking> {
+        self.host
+    }
+
     /// The host GPU VA this range is published at, if it is published at all.
     /// (Convenience over [`Binding::host`]; the #14 gate's predicate.)
     #[must_use]
@@ -603,6 +836,18 @@ impl AddressTable {
         self.map.lookup(va.0).map(|(s, l, b)| (s, l, *b))
     }
 
+    /// ★★★ **Which of the owner's four kinds the region at `va` is** — `None` is **kind 1,
+    /// unallocated**, and it is the same `None` [`AddressTable::binding_at`] gives.
+    ///
+    /// ⊘ There is deliberately no `RegionKind::Unallocated` variant to return here: a row
+    /// saying *"nothing is here"* and the absence of a row are two spellings of one fact,
+    /// and the pair drifts the moment one of them is reachable and the other is not. See
+    /// [`RegionKind`].
+    #[must_use]
+    pub fn kind_at(&self, va: GpuVa) -> Option<RegionKind> {
+        self.map.lookup(va.0).map(|(_, _, b)| b.kind())
+    }
+
     /// ★★★ **The range algebra's one primitive** (`#102` stage C2,
     /// `eight_blockers_resolved.md` §12.3): partition `[va, va+len)` into the maximal
     /// runs over which this table's answer is CONSTANT — each either covered by exactly
@@ -735,16 +980,13 @@ mod tests {
             PDB,
             GpuVa(0x2_0020_0000),
             0x10000,
-            Binding {
-                phys: 0x8000_0000,
-                aperture: Aperture::SysmemCoherent,
-                host: None,
-            },
+            Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+                .expect("sysmem is kind 4"),
         )
         .unwrap();
         // In range: resolves with offset.
         let (b, off) = t.resolve(PDB, GpuVa(0x2_0020_4000)).unwrap();
-        assert_eq!((b.phys, off), (0x8000_0000, 0x4000));
+        assert_eq!((b.phys(), off), (0x8000_0000, 0x4000));
         // Out of range: FAULT, carrying the identity needed for a loud diagnostic.
         assert_eq!(
             t.resolve(PDB, GpuVa(0x2_0030_0000)),
@@ -760,11 +1002,7 @@ mod tests {
     #[test]
     fn taddr_unmap_eager_and_overlap_loud() {
         let mut t = AddressTable::new();
-        let bind = Binding {
-            phys: 0x1000,
-            aperture: Aperture::Vidmem,
-            host: None,
-        };
+        let bind = Binding::declared_by_guest(0x1000, Aperture::Vidmem).expect("vidmem is kind 2");
         t.bind(PDB, GpuVa(0x1000), 0x1000, bind).unwrap();
         assert_eq!(
             t.bind(PDB, GpuVa(0x1800), 0x1000, bind),
@@ -804,10 +1042,13 @@ mod tests {
             kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId::ZERO),
             9,
         );
-        let honest = |va: u64| Binding {
-            phys: 0x8000_0000 + va,
-            aperture: Aperture::SysmemCoherent,
-            host: Some(HostBacking::whole(mem, va, BackingBytes::SoleBacking)),
+        let honest = |va: u64| {
+            Binding::real_gpu_memory(
+                0x8000_0000 + va,
+                Aperture::SysmemCoherent,
+                HostBacking::whole(mem, va, BackingBytes::SoleBacking),
+            )
+            .expect("host sysmem is kind 3")
         };
 
         let mut t = AddressTable::new();
@@ -824,6 +1065,10 @@ mod tests {
                 rogue_va,
                 0x1000,
                 Binding {
+                    // ⊘ A literal, not a constructor, and that is the premise: this row
+                    // bypasses BOTH entrances. `Binding::real_gpu_memory` would refuse the
+                    // `Vidmem` aperture (ruling 3) and `bind` would refuse the host VA.
+                    kind: RegionKind::RealGpuMemory,
                     phys: 0x1234_0000,
                     aperture: Aperture::Vidmem,
                     // Published one page away from where it is bound — the exact
@@ -906,16 +1151,12 @@ mod tests {
                 PDB,
                 va,
                 0x10000,
-                Binding {
-                    phys: 0x8000_0000,
-                    aperture: Aperture::Vidmem,
-                    host: Some(HostBacking::slice(
-                        arena,
-                        va.0,
-                        short,
-                        BackingBytes::SoleBacking
-                    )),
-                },
+                Binding::real_gpu_memory(
+                    0x8000_0000,
+                    Aperture::SysmemCoherent,
+                    HostBacking::slice(arena, va.0, short, BackingBytes::SoleBacking),
+                )
+                .expect("host sysmem is kind 3"),
             ),
             Err(AddressFault::SliceLenMismatch {
                 pdb: PDB,
@@ -932,16 +1173,12 @@ mod tests {
                 PDB,
                 va,
                 0x10000,
-                Binding {
-                    phys: 0x8000_0000,
-                    aperture: Aperture::Vidmem,
-                    host: Some(HostBacking::slice(
-                        arena,
-                        va.0,
-                        honest,
-                        BackingBytes::SoleBacking
-                    )),
-                },
+                Binding::real_gpu_memory(
+                    0x8000_0000,
+                    Aperture::SysmemCoherent,
+                    HostBacking::slice(arena, va.0, honest, BackingBytes::SoleBacking),
+                )
+                .expect("host sysmem is kind 3"),
             ),
             Ok(())
         );
@@ -971,6 +1208,9 @@ mod tests {
                 va,
                 0x1000,
                 Binding {
+                    // ⊘ A literal for the same reason as the `#102` arm above: the row must
+                    // bypass the entrance, and both entrances now refuse it.
+                    kind: RegionKind::RealGpuMemory,
                     phys: 0x1234_0000,
                     aperture: Aperture::Vidmem,
                     host: Some(HostBacking::slice(

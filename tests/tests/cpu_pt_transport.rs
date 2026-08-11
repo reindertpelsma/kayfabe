@@ -430,7 +430,7 @@ fn the_cpu_written_tree_binds_the_rings_va_in_the_cores_address_table() {
                 proc.vases[&(GPU, PDB)]
                     .table
                     .binding_at(GpuVa(RING_VA))
-                    .map(|(start, len, b)| (start, len, b.phys, b.aperture))
+                    .map(|(start, len, b)| (start, len, b.phys(), b.aperture()))
             })
             .expect("the proc is live");
         assert_eq!(

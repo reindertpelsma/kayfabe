@@ -5115,11 +5115,11 @@ impl SharedDoorbell {
                  0x{:x}; `Binding::phys` is a guest-physical address ONLY for sysmem, so \
                  there is no file offset to ask the layout for. ⊘ Refused by name — nothing \
                  here reinterprets a framebuffer address as a GPA)",
-                binding.aperture,
-                binding.phys.saturating_add(off)
+                binding.aperture(),
+                binding.phys().saturating_add(off)
             ));
         }
-        let gpa = binding.phys.saturating_add(off);
+        let gpa = binding.phys().saturating_add(off);
         // ★★★★★ **G6 — HOW MUCH OF THE RING, and it is DERIVED from the guest's own
         // declaration rather than chosen.**
         //
@@ -5170,7 +5170,7 @@ impl SharedDoorbell {
                 unresolved = Some((pva, format!("page {i} of {pages}")));
                 break;
             };
-            let pgpa = b.phys.saturating_add(o);
+            let pgpa = b.phys().saturating_add(o);
             match runs.last_mut() {
                 Some((_, rgpa, rlen)) if *rgpa + *rlen == pgpa => *rlen += Self::RING_PIN_BYTES,
                 _ => runs.push((pva, pgpa, Self::RING_PIN_BYTES)),

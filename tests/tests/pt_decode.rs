@@ -503,11 +503,8 @@ fn the_alias_leaf_is_dropped_by_policy_at_the_binding_site_and_a_smaller_leaf_is
         Some((
             ordinary.va.0,
             1 << gd.shift,
-            Binding {
-                phys: 0x5000_0000,
-                aperture: Aperture::Vidmem,
-                host: None,
-            }
+            Binding::declared_by_guest(0x5000_0000, Aperture::Vidmem)
+                .expect("the fixture declares a kind the guest can declare")
         )),
         "and a decode DECLARES — it never claims a host publication it did not make"
     );
@@ -693,7 +690,10 @@ fn a_page_rewritten_between_two_decodes_repoints_the_binding_rather_than_restati
         assert_eq!((out.bound, out.repointed, out.unchanged), (1, 0, 0));
         reads_before = fb.reads();
     }
-    assert_eq!(t.binding_at(va).map(|(_, _, b)| b.phys), Some(0xA000_0000));
+    assert_eq!(
+        t.binding_at(va).map(|(_, _, b)| b.phys()),
+        Some(0xA000_0000)
+    );
 
     // Re-decoding UNCHANGED content must not churn the table — otherwise every pass
     // would unbind and rebind the whole address space.
@@ -717,7 +717,7 @@ fn a_page_rewritten_between_two_decodes_repoints_the_binding_rather_than_restati
     let out = populate(fmt, &mut t, A_PDB, &d.leaves);
     assert_eq!((out.bound, out.repointed, out.unchanged), (0, 1, 0));
     assert_eq!(
-        t.binding_at(va).map(|(_, _, b)| b.phys),
+        t.binding_at(va).map(|(_, _, b)| b.phys()),
         Some(0xB000_0000),
         "the table follows the guest's own page table"
     );
@@ -766,11 +766,11 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
         let t = &only_proc(g).vases[&(GPU, A_PDB)].table;
         let k = t.binding_at(kept).expect("published").2;
         (
-            (k.phys, k.aperture),
+            (k.phys(), k.aperture()),
             t.binding_at(moved)
                 .expect("published")
                 .2
-                .host
+                .host()
                 .expect("published"),
         )
     });
@@ -815,17 +815,17 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
     with_gpu(&mut gpu, |g| {
         let t = &only_proc(g).vases[&(GPU, A_PDB)].table;
         assert!(
-            t.binding_at(kept).expect("still there").2.host.is_some(),
+            t.binding_at(kept).expect("still there").2.host().is_some(),
             "an unchanged declaration must not strip the publication"
         );
         assert_eq!(
-            t.binding_at(moved).expect("still there").2.host,
+            t.binding_at(moved).expect("still there").2.host(),
             Some(moved_backing),
             "and a refused re-point must leave it exactly as it was"
         );
         assert_eq!(
             t.binding_at(fresh)
-                .map(|(_, _, b)| (b.phys, b.host.is_some())),
+                .map(|(_, _, b)| (b.phys(), b.host().is_some())),
             Some((0xC000_0000, false)),
             "a fresh declaration is a declaration, not a publication"
         );
@@ -1375,7 +1375,7 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
         let t = &only_proc(g).vases[&(GPU, A_PDB)].table;
         assert_eq!(
             t.binding_at(GpuVa(9 << small.shift))
-                .map(|(_, _, b)| b.phys),
+                .map(|(_, _, b)| b.phys()),
             Some(0xF000_0000),
             "the orphan's mapping is in the table"
         );
@@ -1674,7 +1674,7 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
                 p.vases[&(GPU, A_PDB)]
                     .table
                     .binding_at(GpuVa(2 << small.shift))
-                    .map(|(_, _, b)| (b.phys, b.host.is_some())),
+                    .map(|(_, _, b)| (b.phys(), b.host().is_some())),
                 Some((0x7700_0000, false)),
                 "{mode:?}: declared by the decode, not published by it"
             );

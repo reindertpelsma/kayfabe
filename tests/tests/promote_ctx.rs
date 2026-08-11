@@ -686,7 +686,7 @@ fn resolve_in(gpu: &Gpu, pdb: Pdb, va: GpuVa) -> Result<u64, AddressFault> {
     gpu.procs[&pid].vases[&(GpuId::ZERO, pdb)]
         .table
         .resolve(pdb, va)
-        .map(|(b, off)| b.phys + off)
+        .map(|(b, off)| b.phys() + off)
 }
 
 /// The base case, stated as MISS-then-HIT so the binding is what changed.
@@ -726,8 +726,8 @@ fn a_promotion_binds_into_the_address_space_its_object_names() {
         .table
         .resolve(A_PDB, GR_VA)
         .expect("bound");
-    assert_eq!(b.host, None);
-    assert_eq!(b.aperture, Aperture::Vidmem);
+    assert_eq!(b.host(), None);
+    assert_eq!(b.aperture(), Aperture::Vidmem);
     // …and it is in the PROMOTE idempotence set, not the RPC one.
     let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)];
     assert!(vas.promote_bound.contains(&GR_VA.0));
@@ -1389,7 +1389,7 @@ fn mean_promote_through_the_shell() {
         // the shell's own route+resolve, i.e. the same path a doorbell takes.
         let read = |pdb: Pdb, va: GpuVa| {
             dev.resolve(GpuId::ZERO, pdb, va)
-                .map(|(b, off)| b.phys + off)
+                .map(|(b, off)| b.phys() + off)
         };
         assert_eq!(read(A_PDB, GR_VA), Ok(0xA000_0000));
         assert_eq!(read(B_PDB, GR_VA), Ok(0xB000_0000));

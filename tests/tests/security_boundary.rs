@@ -338,7 +338,7 @@ proptest! {
         prop_assert_eq!(b_ref, b_now, "B's boundary changed under A's hostility");
 
         // B's address plane is unchanged: its mapped VA resolves to ITS backing.
-        let got = resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(bind, _)| bind.phys);
+        let got = resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(bind, _)| bind.phys());
         prop_assert_eq!(got, Ok(B_MEM_PHYS), "B's VA no longer resolves to its own backing");
 
         // B's arena is disjoint from every A arena (no shared GPA — #14 isolation).
@@ -597,7 +597,7 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
     );
     // B keeps its PDB and its mapping — the victim is not corrupted.
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys()),
         Ok(B_MEM_PHYS)
     );
     assert_eq!(
@@ -1115,7 +1115,7 @@ fn b4_miss_is_fault_never_silent_wrong_resolve() {
     }
     // In-range: resolves to B's backing.
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys()),
         Ok(B_MEM_PHYS)
     );
     // Just past the mapping: LOUD miss, not a wrap-around into the next range.
@@ -1161,11 +1161,11 @@ fn b4_identical_va_distinct_pdb_never_cross_leaks() {
 
     // Each PDB resolves the identical VA to its OWN backing — never crossed.
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys()),
         Ok(B_MEM_PHYS)
     );
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, A_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, A_PDB, B_MAP_VA).map(|(b, _)| b.phys()),
         Ok(A_MEM_PHYS)
     );
     assert_ne!(
@@ -1762,7 +1762,7 @@ fn a_refused_merge_leaves_the_victim_it_reached_first_bit_identical() {
     // And the touched proc's host state survived its own refusal.
     let (binding, _) = resolve(&gpu, GPU0, PDB3, GpuVa(0x2_0000_0000)).expect("p3 still resolves");
     assert_eq!(
-        binding.host.expect("still published").host_va(),
+        binding.host().expect("still published").host_va(),
         published.host_va,
         "the refused event must not disturb the backing that earned the refusal either"
     );
@@ -2282,7 +2282,7 @@ fn g10_condemnation_is_capped_and_refuses_new_procs_never_the_condemnation() {
     );
     // The bystander is untouched and still serves.
     assert_eq!(
-        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys),
+        resolve(&gpu, GpuId::ZERO, B_PDB, B_MAP_VA).map(|(b, _)| b.phys()),
         Ok(B_MEM_PHYS)
     );
 

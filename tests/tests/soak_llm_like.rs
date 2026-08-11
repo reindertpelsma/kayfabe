@@ -147,7 +147,7 @@ fn assert_soak_invariants(gpu: &Gpu, infs: &[Inference], pids: &[kayfabe_core::P
     for inf in infs {
         if let Ok((bind, _)) = resolve(gpu, GpuId::ZERO, inf.pdb, shared) {
             assert!(
-                seen_phys.insert(bind.phys),
+                seen_phys.insert(bind.phys()),
                 "two procs' identical VA share a GPA backing"
             );
             if let Some(mem) = bind.host_memory() {

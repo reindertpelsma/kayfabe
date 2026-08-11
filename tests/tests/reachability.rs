@@ -325,7 +325,7 @@ fn a_pde_clear_retires_the_whole_subtree_and_an_orphan_is_not_retired_with_it() 
     apply_settlement(fmt, &mut table, &mut s, A_PDB, &up);
     let mapped = small_va(fmt, 4);
     assert_eq!(
-        table.binding_at(mapped).map(|(_, _, b)| b.phys),
+        table.binding_at(mapped).map(|(_, _, b)| b.phys()),
         Some(0x4000_0000)
     );
 
@@ -367,7 +367,7 @@ fn a_pde_clear_retires_the_whole_subtree_and_an_orphan_is_not_retired_with_it() 
             .binding_at(GpuVa(
                 orphan_base | (5 << fmt.level_shift(small_leaf_level()).expect("small").shift)
             ))
-            .map(|(_, _, b)| b.phys),
+            .map(|(_, _, b)| b.phys()),
         Some(0x5000_0000),
         "the orphan was still in the shadow, which is the whole point of not retiring it"
     );
@@ -417,7 +417,7 @@ fn a_remap_that_never_passes_through_invalid_still_fires() {
     assert_eq!(second.binds.len(), 1);
     apply_settlement(fmt, &mut table, &mut s, A_PDB, &second);
     assert_eq!(
-        table.binding_at(small_va(fmt, 4)).map(|(_, _, b)| b.phys),
+        table.binding_at(small_va(fmt, 4)).map(|(_, _, b)| b.phys()),
         Some(0xB000_0000),
         "the table follows the guest's own page table across a valid→valid change"
     );
@@ -610,7 +610,7 @@ fn sparse_is_a_third_state_and_the_three_transitions_differ() {
     assert!(!s.sparse_at(small_va(fmt, 4)));
     apply_settlement(fmt, &mut table, &mut s, A_PDB, &third);
     assert_eq!(
-        table.binding_at(small_va(fmt, 4)).map(|(_, _, b)| b.phys),
+        table.binding_at(small_va(fmt, 4)).map(|(_, _, b)| b.phys()),
         Some(0xC000_0000)
     );
 }
@@ -743,7 +743,9 @@ fn a_directory_slot_that_becomes_a_leaf_retires_the_subtree_it_used_to_name() {
         "the 4 KiB mapping is gone; what covers that address now is the big leaf at 0"
     );
     assert_eq!(
-        table.binding_at(GpuVa(0)).map(|(_, len, b)| (len, b.phys)),
+        table
+            .binding_at(GpuVa(0))
+            .map(|(_, len, b)| (len, b.phys())),
         Some((
             1 << fmt.level_shift(MOCK_DUAL_LEVEL).expect("dual").shift,
             0x7000_0000
@@ -789,15 +791,19 @@ fn an_unbind_of_a_host_published_range_is_refused_not_performed() {
             A_PDB,
             va,
             len,
-            Binding {
-                phys: 0x3000_0000,
-                aperture: Aperture::Vidmem,
-                host: Some(HostBacking::whole(
+            // ★ Sysmem: kind 3 IS host memory, and a `Vidmem` aperture with a host object
+            // is ruling 3's forbidden state. The subject here is the UNBIND refusal, which
+            // reads `host`, not the aperture.
+            Binding::real_gpu_memory(
+                0x3000_0000,
+                Aperture::SysmemCoherent,
+                HostBacking::whole(
                     HostHandle::new(IsolateId::new(1, GPU), 7),
                     va.0,
                     kayfabe_mmu::BackingBytes::SoleBacking,
-                )),
-            },
+                ),
+            )
+            .expect("host memory at the guest's own VA is kind 3"),
         )
         .expect("a published binding at its own VA");
 
@@ -817,7 +823,7 @@ fn an_unbind_of_a_host_published_range_is_refused_not_performed() {
     assert!(
         table
             .binding_at(va)
-            .is_some_and(|(_, _, b)| b.host.is_some()),
+            .is_some_and(|(_, _, b)| b.host().is_some()),
         "the published binding SURVIVES — dropping it would strand a live host mapping"
     );
 }

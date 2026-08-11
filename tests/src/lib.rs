@@ -1031,7 +1031,7 @@ pub fn bind_ring_in(vas: &mut kayfabe_core::gpu::Vas, va: GpuVa, gpa: u64, len: 
     if let Some((start, l, b)) = vas.table.binding_at(va)
         && start == va.0
         && l == len
-        && b.phys == gpa
+        && b.phys() == gpa
     {
         return; // already exactly this binding
     }
@@ -1053,11 +1053,8 @@ pub fn bind_ring_in(vas: &mut kayfabe_core::gpu::Vas, va: GpuVa, gpa: u64, len: 
             pdb,
             va,
             len,
-            kayfabe_mmu::Binding {
-                phys: gpa,
-                aperture: kayfabe_arch::Aperture::SysmemCoherent,
-                host: None,
-            },
+            kayfabe_mmu::Binding::declared_by_guest(gpa, kayfabe_arch::Aperture::SysmemCoherent)
+                .expect("the fixture declares a kind the guest can declare"),
         )
         .expect("the ring range binds");
 }

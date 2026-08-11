@@ -180,7 +180,7 @@ fn snap_proc(p: &kayfabe_core::gpu::Proc) -> ProcSnap {
                 let entries: Vec<_> = v
                     .table
                     .iter()
-                    .map(|(va, len, b)| (va, len, b.phys, b.host_va()))
+                    .map(|(va, len, b)| (va, len, b.phys(), b.host_va()))
                     .collect();
                 (k, (v.host_vas, entries))
             })
@@ -789,7 +789,7 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
                                             .resolve(gpu_of(i), pdb_of(i), GpuVa(va.0 + 0x40))
                                             .expect("own published VA resolves");
                                         assert_eq!(
-                                            (b.phys, b.host_va(), off),
+                                            (b.phys(), b.host_va(), off),
                                             (gpa, Some(host_va), 0x40)
                                         );
                                     }

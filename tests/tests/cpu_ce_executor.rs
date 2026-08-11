@@ -308,11 +308,8 @@ fn table_binding(va: u64, len: u64, phys: u64, aperture: Aperture) -> AddressTab
         VDST_PDB,
         GpuVa(va),
         len,
-        Binding {
-            phys,
-            aperture,
-            host: None,
-        },
+        Binding::declared_by_guest(phys, aperture)
+            .expect("the fixture declares a kind the guest can declare"),
     )
     .expect("bind");
     t
@@ -545,11 +542,8 @@ fn sem_table_in_sysmem(sem_va: u64, sem_phys: u64) -> AddressTable {
         SEM_PDB,
         GpuVa(sem_va),
         0x1000,
-        Binding {
-            phys: sem_phys,
-            aperture: Aperture::SysmemCoherent,
-            host: None,
-        },
+        Binding::declared_by_guest(sem_phys, Aperture::SysmemCoherent)
+            .expect("the fixture declares a kind the guest can declare"),
     )
     .expect("bind the semaphore page");
     t
@@ -659,11 +653,8 @@ fn a_finish_payload_in_vidmem_lands_in_the_framebuffer_store() {
             SEM_PDB,
             GpuVa(SEM_VA),
             0x1000,
-            Binding {
-                phys: SEM_PHYS,
-                aperture: Aperture::Vidmem,
-                host: None,
-            },
+            Binding::declared_by_guest(SEM_PHYS, Aperture::Vidmem)
+                .expect("the fixture declares a kind the guest can declare"),
         )
         .unwrap();
     write_completion(

@@ -36,7 +36,7 @@ use kayfabe_isolate::{
     GuestRamGrant, GuestRamMapped, HostHandle, IsolateId, RmError, VerbPlan, VerbReply, Worker,
     WorkerId,
 };
-use kayfabe_mmu::{AddressFault, Binding, HostBacking};
+use kayfabe_mmu::{AddressFault, Binding};
 use kayfabe_mocks::watchdog;
 use kayfabe_mocks::{MockArch, MockIsolateFactory, MockRmBackend, RmVerb, SharedRecorder};
 use kayfabe_rt::device::{LockMode, SharedDevice};
@@ -109,12 +109,7 @@ fn device(
 /// ⊘ This is the fixture standing in for the **populate pass**, not for the resolver. The
 /// production caller reads exactly this table, and the reason it can is that
 /// `SharedDoorbell::pin_ring_guest_ram` runs after `PT-DECODE` has committed the binding.
-fn guest_binds(
-    device: &SharedDevice,
-    pid: kayfabe_core::ProcId,
-    aperture: Aperture,
-    host: Option<HostBacking>,
-) {
+fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId, aperture: Aperture) {
     device
         .with_proc_mut(pid, |p| {
             let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
@@ -123,11 +118,12 @@ fn guest_binds(
                     PDB,
                     RING_VA,
                     PIN_LEN,
-                    Binding {
-                        phys: RING_GPA,
-                        aperture,
-                        host,
-                    },
+                    // ⊘ The `host: Option<HostBacking>` parameter this helper used to take
+                    // was `None` at all four call sites; `Binding::declared_by_guest` is
+                    // that fact as a type. A host-backed fixture would be a different
+                    // question (kind 3), and the pin's subject is what the GUEST declared.
+                    Binding::declared_by_guest(RING_GPA, aperture)
+                        .expect("the fixture declares a kind the guest can declare"),
                 )
                 .expect("the fixture's own bind is well-formed");
         })
@@ -172,7 +168,7 @@ fn a_pin_maps_describes_and_places_the_guests_own_pages_at_the_guests_own_va() {
         std::time::Duration::from_secs(60),
     );
     let (device, pid, rec) = device(Some(GUEST_RAM_BYTES));
-    guest_binds(&device, pid, Aperture::SysmemCoherent, None);
+    guest_binds(&device, pid, Aperture::SysmemCoherent);
 
     let p = device
         .pin_guest_ram(GPU, PDB, RING_VA, grant())
@@ -232,7 +228,7 @@ fn a_second_pin_at_the_same_va_is_an_idempotent_replay_and_issues_no_verbs() {
         std::time::Duration::from_secs(60),
     );
     let (device, pid, rec) = device(Some(GUEST_RAM_BYTES));
-    guest_binds(&device, pid, Aperture::SysmemCoherent, None);
+    guest_binds(&device, pid, Aperture::SysmemCoherent);
 
     let first = device
         .pin_guest_ram(GPU, PDB, RING_VA, grant())
@@ -270,7 +266,7 @@ fn a_second_pin_at_the_same_va_is_an_idempotent_replay_and_issues_no_verbs() {
 fn a_vidmem_binding_is_refused_by_name_and_nothing_is_built() {
     let _wd = watchdog("guest_ram_pin::vidmem", std::time::Duration::from_secs(60));
     let (device, pid, rec) = device(Some(GUEST_RAM_BYTES));
-    guest_binds(&device, pid, Aperture::Vidmem, None);
+    guest_binds(&device, pid, Aperture::Vidmem);
 
     let e = device
         .pin_guest_ram(GPU, PDB, RING_VA, grant())
@@ -359,7 +355,7 @@ fn an_isolate_with_no_guest_ram_refuses_by_name_and_unwinds_what_it_built() {
         std::time::Duration::from_secs(60),
     );
     let (device, pid, rec) = device(None);
-    guest_binds(&device, pid, Aperture::SysmemCoherent, None);
+    guest_binds(&device, pid, Aperture::SysmemCoherent);
 
     let e = device
         .pin_guest_ram(GPU, PDB, RING_VA, grant())

@@ -69,7 +69,18 @@ impl Faulted for FwdFault {
             FwdFault::NonRamGpa { .. } => FaultTag("FwdFault::NonRamGpa"),
             FwdFault::PushbufferAperture { .. } => FaultTag("FwdFault::PushbufferAperture"),
             FwdFault::RingFbNeverWritten { .. } => FaultTag("FwdFault::RingFbNeverWritten"),
-            FwdFault::BackingNotGuestVisible { .. } => FaultTag("FwdFault::BackingNotGuestVisible"),
+            // ★ Delegated, for the same reason `FwdFault::Address` is: *"the region kind
+            // could not be decided"* and *"a fake framebuffer was offered a real GPU VA"*
+            // are different findings, and a census counting one number could not tell them
+            // apart.
+            FwdFault::RegionKindRefused { fault, .. } => match fault {
+                kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa { .. } => {
+                    FaultTag("RegionKindFault::FakeFbAtRealGpuVa")
+                }
+                kayfabe_mmu::RegionKindFault::PeerHasNoKind => {
+                    FaultTag("RegionKindFault::PeerHasNoKind")
+                }
+            },
             FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
             FwdFault::SubmissionDecodedNoWork { .. } => {
                 FaultTag("FwdFault::SubmissionDecodedNoWork")

@@ -154,7 +154,7 @@ fn t14_identical_va_disjoint_backing() {
     assert_eq!(off_a, 0x40);
     assert_eq!(bind_a.host_va(), Some(pub_a.host_va));
     assert_eq!(bind_b.host_va(), Some(pub_b.host_va));
-    assert_ne!(bind_a.phys, bind_b.phys);
+    assert_ne!(bind_a.phys(), bind_b.phys());
     // The separation that IS load-bearing: the host memory objects are different, and
     // they name different isolates (boundary 2 — a handle is `(Proc, GpuId)`-scoped).
     let (mem_a, mem_b) = (

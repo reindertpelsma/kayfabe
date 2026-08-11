@@ -1740,7 +1740,7 @@ impl Proc {
             && self
                 .vases
                 .values()
-                .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host.is_none()))
+                .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host().is_none()))
     }
 }
 
@@ -3022,17 +3022,16 @@ impl Spine {
                 if mgpu != gpu || mpdb != pdb.0 || vas.rpc_bound.contains(&va) {
                     continue;
                 }
+                // ★★★ THE DECISION, at the bind site: an RPC-declared mapping is SYSMEM,
+                // so `phys` is a guest-physical address and the bytes are the guest's own
+                // pages — the owner's **kind 4, DMA-to-guest-physical**. ⊘ The aperture is
+                // a literal and not data here, so the one refusal
+                // `declared_by_guest` can raise (`Aperture::Peer`) is unreachable from this
+                // site; it is stated rather than swallowed.
+                let binding = Binding::declared_by_guest(phys, Aperture::SysmemCoherent)
+                    .expect("a sysmem aperture literal is kind 4 — `Peer` is not reachable here");
                 vas.table
-                    .bind(
-                        pdb,
-                        GpuVa(va),
-                        len,
-                        Binding {
-                            phys,
-                            aperture: Aperture::SysmemCoherent,
-                            host: None,
-                        },
-                    )
+                    .bind(pdb, GpuVa(va), len, binding)
                     .map_err(GpuError::Address)?;
                 vas.rpc_bound.insert(va);
             }
@@ -3204,7 +3203,7 @@ impl Spine {
             for (_va, _len, binding) in vas.table.iter() {
                 // `Binding::host == None` is an RPC-declared binding: nothing host-side
                 // exists, so nothing host-side needs reclaiming.
-                let Some(h) = binding.host else { continue };
+                let Some(h) = binding.host() else { continue };
                 // The unmap is conditional on the VAS and the free is not, deliberately:
                 // a published binding implies its `Vas` materialized a host VAS, but if
                 // that ever stopped holding, the memory object must still be freed rather

@@ -60,7 +60,8 @@ fn map_populates_the_address_table() {
         resolve(&gpu, GpuId::ZERO, PDB, GpuVa(MAP_VA.0 + 0x40)).expect("mapped VA resolves");
     assert_eq!(off, 0x40, "offset within the mapping");
     assert_eq!(
-        bind.phys, MEM_PHYS,
+        bind.phys(),
+        MEM_PHYS,
         "resolves to the memory object's declared backing"
     );
 
@@ -1816,7 +1817,8 @@ fn map_before_backing_and_pdb_resolves() {
     let (bind, _off) =
         resolve(&gpu, GpuId::ZERO, PDB, MAP_VA).expect("map resolves once facts land");
     assert_eq!(
-        bind.phys, MEM_PHYS,
+        bind.phys(),
+        MEM_PHYS,
         "forward-populated from the late-arriving facts"
     );
 }

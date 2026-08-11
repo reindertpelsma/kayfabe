@@ -381,16 +381,14 @@ fn the_worker_itself_refuses_a_drifted_placement() {
 fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
     let mut t = AddressTable::new();
     let va = SHARED_VA;
-    let lying = Binding {
-        phys: 0x8000_0000,
-        aperture: Aperture::SysmemCoherent,
+    let mem = kayfabe_isolate::HostHandle::new(kayfabe_isolate::IsolateId::new(1, GPU), 9);
+    let lying = Binding::real_gpu_memory(
+        0x8000_0000,
+        Aperture::SysmemCoherent,
         // one page off — the whole bug, in one argument
-        host: Some(HostBacking::whole(
-            kayfabe_isolate::HostHandle::new(kayfabe_isolate::IsolateId::new(1, GPU), 9),
-            va.0 + 0x1000,
-            BackingBytes::SoleBacking,
-        )),
-    };
+        HostBacking::whole(mem, va.0 + 0x1000, BackingBytes::SoleBacking),
+    )
+    .expect("kind 3 — the address identity law is `bind`'s, not the kind's");
     assert_eq!(
         t.bind(A_PDB, va, 0x10000, lying),
         Err(AddressFault::HostVaMismatch {
@@ -407,14 +405,16 @@ fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
 
     // The honest form of the same binding is accepted, so the guard is not simply
     // rejecting everything (the failure mode a negative-only test cannot see).
-    let honest = Binding {
-        host: Some(HostBacking::whole(
-            lying.host.expect("set above").memory(),
+    let honest = Binding::real_gpu_memory(
+        lying.phys(),
+        lying.aperture(),
+        HostBacking::whole(
+            lying.host().expect("set above").memory(),
             va.0,
             BackingBytes::SoleBacking,
-        )),
-        ..lying
-    };
+        ),
+    )
+    .expect("kind 3");
     t.bind(A_PDB, va, 0x10000, honest)
         .expect("an honest binding binds");
     assert_eq!(
@@ -424,11 +424,8 @@ fn a_binding_published_at_the_wrong_address_cannot_enter_the_table() {
 
     // A binding with NO host backing is unconstrained by the law — it is a declaration,
     // not a publication, and there is nothing yet to be at the wrong address.
-    let declared = Binding {
-        phys: 0x9000_0000,
-        aperture: Aperture::Vidmem,
-        host: None,
-    };
+    let declared = Binding::declared_by_guest(0x9000_0000, Aperture::Vidmem)
+        .expect("the fixture declares a kind the guest can declare");
     t.bind(A_PDB, GpuVa(va.0 + 0x10000), 0x1000, declared)
         .expect("an unpublished declaration is legal");
 }

@@ -2761,10 +2761,14 @@ impl SharedDevice {
             };
             r.present = true;
             r.rows = vas.table.iter().count();
-            r.hit = vas
-                .table
-                .binding_at(va)
-                .map(|(start, len, b)| (b.phys.wrapping_add(va.0 - start), b.aperture, start, len));
+            r.hit = vas.table.binding_at(va).map(|(start, len, b)| {
+                (
+                    b.phys().wrapping_add(va.0 - start),
+                    b.aperture(),
+                    start,
+                    len,
+                )
+            });
             r.root_dirty = vas.pt_pages.contains(&root);
             r.root_wit = vas.reach.is_witnessed(root);
             r.root_meta = vas.pt_meta.contains_key(&root);

@@ -173,7 +173,8 @@ fn cb11_ce_write_never_clobbers_live_binding() {
     let (b, off) = resolve(&gpu, GpuId::ZERO, A_PDB, GpuVa(VA.0 + 0x20)).unwrap();
     assert_eq!(off, 0x20);
     assert_eq!(
-        b.phys, live.gpa,
+        b.phys(),
+        live.gpa,
         "live binding's phys survives the CE write"
     );
     assert_eq!(
@@ -669,7 +670,7 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
     // A's pre-existing state is untouched by B's arrival: same resolution, and its
     // already-scheduled channel rings again WITHOUT rescheduling (state preserved).
     let (ba, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
-    assert_eq!(ba.phys, pub_a.gpa, "A resolves ITS backing after B armed");
+    assert_eq!(ba.phys(), pub_a.gpa, "A resolves ITS backing after B armed");
     let again =
         handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).unwrap();
     assert!(
@@ -720,8 +721,8 @@ fn cb14_late_merge_after_touch_is_loud_and_atomic() {
     assert_eq!(gpu.procs.len(), 2, "rollback kept both procs live");
     let (ba, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
     let (bb, _) = resolve(&gpu, GpuId::ZERO, B_PDB, VA).unwrap();
-    assert_eq!(ba.phys, pub_a.gpa);
-    assert_eq!(bb.phys, pub_b.gpa);
+    assert_eq!(ba.phys(), pub_a.gpa);
+    assert_eq!(bb.phys(), pub_b.gpa);
     assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x10)), &[]).is_ok());
     assert!(handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(VChid(0x20)), &[]).is_ok());
 }
@@ -1118,7 +1119,8 @@ fn cb_lifecycle_process_churn_never_exhausts_the_window() {
         );
         let (b, _) = resolve(&gpu, GpuId::ZERO, A_PDB, VA).unwrap();
         assert_eq!(
-            b.phys, p.gpa,
+            b.phys(),
+            p.gpa,
             "generation {generation}: resolves its OWN backing"
         );
 

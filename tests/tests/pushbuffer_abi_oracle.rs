@@ -1902,11 +1902,8 @@ fn the_decoded_fill_writes_the_bytes_the_engine_writes() {
                         pdb,
                         dst,
                         len,
-                        Binding {
-                            phys: dst.0,
-                            aperture: Aperture::Vidmem,
-                            host: None,
-                        },
+                        Binding::declared_by_guest(dst.0, Aperture::Vidmem)
+                            .expect("the fixture declares a kind the guest can declare"),
                     )
                     .expect("bind the fill's destination");
             }

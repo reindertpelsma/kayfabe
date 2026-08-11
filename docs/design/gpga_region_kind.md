@@ -1,12 +1,22 @@
 # The four-kind GPGA taxonomy — is a region's kind DECLARED or DERIVED?
 
-**STATUS: LIVE, 2026-08-11.** Answers the owner's four-kind model as a question about this
-code. Branch `fb-memfd-join`, based on `4428b6b`. ⊘ **Nothing here is built.** The one thing
-that was built this rung (`R32`, §7) is a *measurement* instrument, is gated but **unrun**,
-and is separable.
+**STATUS: LIVE, 2026-08-11 — ★ §1.3's recommendation is now BUILT.** The analysis half
+(§0–§7) was written on branch `fb-memfd-join` at `b3ecda4` and is unchanged below except
+where a correction is folded in above the text it corrects. The build is on branch
+`gpga-region-kind-decision`, and §8 (added at the bottom) records what landed, what it
+refuted, and the hole it does **not** close.
 
 Supersedes nothing. **Corrects** `fb_leaf_crossing.md` §1 and §3 (folded in there, above the
 text they correct).
+
+★★★ **READ §8 BEFORE §0–§7.** Three statements in the analysis are now out of date as
+*descriptions of the code*, and each is corrected in place below:
+- §1.1's table of two unguarded arms — the first arm is **gone** (§8.1).
+- §1.3's *"the mechanical change is well-shaped"* — it was taken, **but not by the mechanism
+  it proposed** (§8.2 — a `Kind` parameter beside a `Binding` would have been a second source
+  of truth, which is the thing the rule it cites forbids).
+- §7's *"R32 … built, gated, UNRUN"* — still true, and ⊘ **it is NOT a prerequisite for
+  anything here**; the brief that commissioned §8 asserted the opposite (§8.5).
 
 ---
 
@@ -82,6 +92,14 @@ candidates exist, and two are already refuted:
 
 ### 1.1 Confirmed — `Representability` is derived, and `Fabricated` is the fall-through
 
+> ⊘ ★ **CORRECTION (2026-08-11, folded in above the text it corrects — branch
+> `gpga-region-kind-decision`).** Everything below was true when it was written and **the
+> first row of the table is now false**: `kayfabe_mmu::Binding` carries a
+> `RegionKind`, decided by one of its two constructors, and `representability_of` reads it.
+> The `Binding::host == None ⇒ Fabricated` fall-through **no longer exists**.
+> ⚠ **The SECOND row survives unchanged and is the standing hazard**: a range with no row at
+> all is still `Untracked` and still routes to the real host GPU. See §8.4.
+
 No struct anywhere carries a kind field. `Representability` is recomputed per operand by a
 four-arm match, `kayfabe-fwd/src/lib.rs:4780-4832`. **Two arms are defaults, and they point
 in opposite directions:**
@@ -137,6 +155,15 @@ was not updated when `BackingBytes` landed.
 decode), `promote.rs:1160` (GR context promotion — ⚠ its own comment says *the host allocated
 and mapped it for itself*, yet it records `host: None`, so it classifies as fiction),
 `gpu.rs:3002` (RPC-declared mappings).
+
+> ⊘ ★★ **CORRECTION (2026-08-11).** The recommendation below was **taken in substance and
+> refused in mechanism**, and the refusal is on this doc's own grounds. A `kind` parameter
+> *beside* a fully-formed `Binding` would be a **second source of truth** that `bind` could
+> only reconcile with a runtime check — which is exactly what §1.2 says `BackingBytes` exists
+> to avoid. The kind went **on `Binding`**, whose fields are now private with two
+> constructors; the struct literal stopped compiling at every site, so the compiler named
+> them anyway, and the forbidden combinations became unwritable rather than checked. See §8.2
+> for the five sites and what each decided.
 
 ⇒ **The mechanical change is well-shaped: put the kind in `AddressTable::bind`'s signature.**
 That is the one funnel every row passes through, it currently requires a fully-formed
@@ -292,6 +319,15 @@ That is one boot to find out, and it is a cheaper question than the taxonomy por
 
 ## 7. R32 — built, gated, **UNRUN**
 
+> ⊘ ★★★ **CORRECTION (2026-08-11): R32 IS NOT A PREREQUISITE FOR THE DECISION POINT, AND A
+> BRIEF SAID IT WAS.** A brief commissioning §8 asserted that fake-FB → real-GPU promotion
+> *"presupposes a GPU-reachable fake FB, i.e. the memfd-backed framebuffer, which is on
+> branch `fb-memfd-join` (`b3ecda4`)"*. Two things wrong, both checkable from `git log`:
+> `b3ecda4` is **this document**, not a framebuffer; the memfd work is `2624798`, and it is
+> the `rmladder` **probe** below — an instrument, not a framebuffer. Nothing on any branch
+> makes `SparseFb` GPU-reachable. See §8.5 for what the real blocker is.
+
+
 `prove_fb_memfd_join` + `rmladder --fb-memfd-join[-negative]`. It measures the two properties
 R25 does not: **J1** two independent mappings of one sealed memfd are one memory across an
 `OS_DESCRIPTOR`, and **J2** GPU-write → CPU-read — the direction the stuck completion
@@ -306,3 +342,162 @@ precondition of two of the four kinds rather than one.
 are green at `2624798`; the bench sync was cut short by a timeout and no measurement exists.
 **Predictions in `fb_memfd_join_prereg.md` remain unscored, and must stay that way until a run
 produces them.**
+
+
+---
+
+# 8. ★★★★★ WHAT WAS BUILT — the decision point, and ruling 3 enforced
+
+**Branch `gpga-region-kind-decision`, based on `d55187a` (`origin/master`).** Owner rulings of
+2026-08-11 (1: four kinds decided at allocation/bind; 2: fake FB is for guest-KERNEL channels
+we emulate; 3: *"no fake FB ever can be mapped to a real GPU VA of an isolate except the
+scratchpad"*; 4: the scratchpad goes through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`).
+
+## 8.1 The type
+
+`kayfabe_mmu::RegionKind{FakeFramebuffer, RealGpuMemory, GuestPhysDma}` + `RegionKindFault`.
+`Binding`'s fields are **private** and there are exactly **two** constructors:
+
+| constructor | kinds | host object | refuses |
+|---|---|---|---|
+| `declared_by_guest(phys, aperture)` | 2 (`Vidmem`), 4 (sysmem) | never | `Peer` → `PeerHasNoKind` |
+| `real_gpu_memory(phys, aperture, HostBacking)` | 3 | **mandatory** | `Vidmem`, or `ShadowsGuestMemory` → `FakeFbAtRealGpuVa` |
+
+⇒ Two states become **unwritable**, and they are the two the old code got wrong:
+*"real GPU memory backed by nothing"* (the `Fabricated` fall-through) and *"fake framebuffer
+mapped to a real GPU VA"* (ruling 3).
+
+★ **Kind 1 is the absence of a row**, not a variant. `AddressTable::kind_at` answers `None`,
+the same `None` `binding_at` gives. A variant would be a second spelling of one fact.
+
+⊘ **`BackingBytes` was kept, and §1.2 was right about why.** It is not the casualty of
+`RegionKind`; it is one of the two independent tests `real_gpu_memory` performs. The two fail
+independently — the aperture catches a caller honest about the address and silent about the
+shadow, `BackingBytes` catches the reverse — and a single test would let either half be
+deleted.
+
+## 8.2 The five production bind sites, each named by the compiler
+
+| site | decided | note |
+|---|---|---|
+| `mmu/walker.rs:882` — guest PTE decode | `declared_by_guest(leaf.phys, leaf.aperture)` | new `PopulateRefusal::UndecidableKind` for `Peer` |
+| `core/promote.rs` — GR context promotion | `declared_by_guest(r.phys, r.aperture)` | new `PromoteFault::UndecidableKind`; ⚠ see §8.3 |
+| `core/gpu.rs` — RPC-declared mapping | `declared_by_guest(phys, SysmemCoherent)` | aperture is a literal ⇒ kind 4, unconditionally |
+| `fwd/lib.rs` — `VerbPlan::Publish` | `real_gpu_memory(gpa, SysmemCoherent, whole(.., SoleBacking))` | kind 3 |
+| `fwd/lib.rs` — `VerbPlan::PublishVidmem` | ★ **REFUSED** — `FwdFault::RegionKindRefused` | §8.4 |
+
+Plus ~45 field-read sites (`.phys`→`.phys()` etc.) and ~25 test fixtures.
+
+★ `representability_of` now **reads** `b.kind()`. The #14 ring gate reads the same authority
+— ⊘ and that change is **behaviour-equivalent, not a fix**: with the shadow unconstructible,
+`host.is_some()` and `kind() == RealGpuMemory` agree on every binding that can exist. Proved
+by mutant M6 (revert the gate to `host.is_some()` → the suite stays **green**).
+
+## 8.3 ⚠ A residual disagreement, named rather than papered over
+
+`promote.rs`'s own comment says *the HOST allocated and mapped this GR context buffer for
+itself*, which is ruling 1's kind 3 — but **no `HostBacking` reaches that site**, and kind 3
+without one is exactly what `real_gpu_memory` refuses to let anyone write. So the truthful
+declaration there is the guest-declared one, and the gap is a **supply-side** one:
+`promote_ctx` would have to receive the backing. That is a change to what the promotion
+carries, not a relabelling, and it was deliberately not made.
+
+## 8.4 ★★★★★ THE HOLE (A) DOES NOT CLOSE — and it is the second derived default
+
+Deciding the kind at bind settles what a **bound** range means. It says nothing about a range
+**nobody bound**, and §1.1's second row is unchanged: no row ⇒ `Untracked` ⇒ the **real host
+GPU**.
+
+This is visible at the refused FB crossing. `commit_back_fb_leaf` asks
+`Binding::real_gpu_memory`, is refused, and hands its host objects back as orphans:
+
+- ✔ **when a row already exists** (the walker forward-populated the leaf), the row is **left
+  untouched** — still `FakeFramebuffer`, still no host object — so the range classifies as
+  `Fabricated` and goes to our CPU executor over the bytes the guest actually reads. ★ The
+  refusal deliberately does **not** unbind: dropping the row would hand the range to
+  hardware, which is worse than the state it refused.
+- ⚠ **when no row exists**, the range stays `Untracked`. The publish chain does not populate
+  the table — the walker does — so refusing here cannot invent the guest's declaration.
+
+Both are pinned as tests (`fb_leaf_backing.rs`), the second one explicitly as **the gap**.
+
+## 8.5 ⊘ PROMOTION — the verdict, and the blocker is NOT what the brief said
+
+**Promotion is not needed to make the decision point correct, and it is not memfd-blocked.**
+
+1. **A region whose kind is decided at bind has nothing to promote.** The guest writes ring
+   contents *after* the mapping exists, so at bind time the page is empty; a copy would copy
+   nothing. Promotion is only ever a remedy for regions **already** fabricated.
+2. ⇒ It is therefore a remedy for **§8.4's hole and for the pre-existing population**, not
+   for the mechanism. Nothing in §8 creates a new need for it.
+3. ⊘ **The memfd claim is refuted** (§7's correction). Fake FB **is** host memory already —
+   it is a `HashMap` on the VMM's heap — and `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` is precisely
+   the verb for making already-CPU-mapped host memory GPU-reachable, measured working on this
+   GA106 at `CapEff = 0` (R25). **No new mechanism is required.**
+4. ✔ **The real obstacle is ALLOCATION ALIGNMENT**, and it is small. `SparseFb`'s page type
+   is `Box<[u8; FB_PAGE]>` (`kayfabe-device/src/fbwin.rs:573`); `[u8; 4096]` has **alignment
+   1**, so `Box` allocates with align 1 and an allocator that happens to return an aligned
+   block is luck, not a guarantee. A `#[repr(align(4096))]` newtype (or an explicit `Layout`)
+   makes each fake-FB page individually descriptor-able **today, on master** — 16 descriptors
+   for a 64 KiB ring, and one-descriptor-per-page is already the established pattern (R29,
+   because the GR ring is not physically contiguous).
+
+   ★★★ **The alignment requirement is CONFIRMED FROM THE DRIVER, not inferred from our own
+   notes** (verified 2026-08-11 against both vendored trees; `ogkm` = 610.43.02, and
+   `ogkm-580.159.04` is identical on the load-bearing lines):
+
+   ```c
+   // ogkm: src/nvidia/arch/nvalloc/unix/src/escape.c:142-147, RmCreateOsDescriptor()
+   pDescriptor = NvP64_VALUE(pApi->data.AllocOsDesc.descriptor);
+   if (((NvUPtr)pDescriptor & ~os_page_mask) != 0)
+   {
+       rmStatus = NV_ERR_NOT_SUPPORTED;
+       goto done;
+   }
+   ```
+
+   `os_page_mask = NV_PAGE_MASK` = Linux `PAGE_MASK` (`kernel-open/nvidia/os-interface.c:67`,
+   `kernel-open/common/inc/nv-linux.h:743`), so the test is literally
+   `if (addr & (PAGE_SIZE - 1)) return NV_ERR_NOT_SUPPORTED`. And on anything but aarch64 RM
+   additionally refuses the whole path unless `os_page_size == NV_RM_PAGE_SIZE`
+   (`osmemdesc.c:90-94`), and `NV_RM_PAGE_SIZE` is `1 << 12` (`kernel-open/common/inc/nv.h:312`)
+   ⇒ **on x86_64 the requirement is exactly 4096.**
+
+   Four consequences worth carrying:
+   - ⊘ **Refused by name, before anything is pinned** — `NV_ERR_NOT_SUPPORTED`, raised ahead
+     of `os_lock_user_pages`. So an unaligned page would fail loudly, not silently
+     misattribute bytes. ⚠ But it fails **at the descriptor**, i.e. per page, at run time.
+   - ✔ **LENGTH needs no alignment** — it is rounded UP to a whole page
+     (`escape.c:156-157`, `osmemdesc.c:194-200` `NV_ALIGN_UP64(size, os_page_size)`). A
+     4 KiB page is exactly one page, so the round-up is a no-op for this use.
+   - ⚠ The round-up means **whole pages are pinned and GPU-addressable**. For a
+     `#[repr(align(4096))] [u8; 4096]` that is precisely the page and nothing else — which is
+     the reason to make the page its own aligned allocation rather than sub-slicing a larger
+     buffer.
+   - ★ **Our path already goes through the checking shim.** `RmConnection` issues this as
+     `NV_ESC_RM_ALLOC_MEMORY` (`kayfabe-isolate-host/src/rm.rs:1805`), which reaches
+     `RmCreateOsDescriptor` (`escape.c:401`) and therefore the check above. ⊘ The other
+     door — a raw `NV_ESC_RM_ALLOC` of class 0x71 — would be refused anyway, because
+     `NVOS32_DESCRIPTOR_TYPE_VIRTUAL_ADDRESS` is `NV_ERR_NOT_SUPPORTED` in
+     `osCreateMemFromOsDescriptor` (`osmemdesc.c:135-137`). There is no way to hand RM an
+     unaligned user VA and have it accepted.
+
+   ⚠ `SPARSE_FB_RESIDENT_CAP` is `1 GiB`; a per-page alignment change alters the footprint
+   per resident page and that budget should be re-checked with it.
+   ⊘ `SparseFb` was **not** touched in this rung.
+5. ★ **Scoping rule for whenever promotion is built**: it is safe **before** a channel is
+   scheduled and unsafe after. Trapping CPU access does not stop an in-flight GPU engine, and
+   a mutex over the CPU path does not cover one.
+
+## 8.6 What is deliberately NOT done
+
+- The promotion path (§8.5), and `SparseFb` page alignment.
+- Moving the refusal from `commit_back_fb_leaf` into `plan_back_fb_leaf`. It would stop the
+  execute phase allocating an object that is then orphaned — a real waste — but it makes the
+  commit's fresh-publish arm unreachable, and that arm is where ruling 4's scratchpad case
+  arrives once a fake-FB page can be an `OS_DESCRIPTOR`. Deleting it now would delete the
+  landing site.
+- §3.1's finding is untouched and still stands: *"unprivileged guest userspace must never see
+  the fake framebuffer"* remains **unstateable**, because the BAR1 trap path carries `(bar,
+  off, size, val)` and no principal at all. `RegionKind` is a design property here, **not** a
+  security one, and §8 does not change that.

@@ -480,22 +480,31 @@ fn t14_per_vas_publication_gates_the_ring() {
     );
 }
 
-/// Publish `SHARED_VA` in proc A's Vas, then **restate its backing kind** as `bytes`,
-/// holding everything else byte-identical — same phys, same aperture, same host object,
-/// same host VA (address identity, which `AddressTable::bind` enforces at its entrance).
+/// Publish `SHARED_VA` in proc A's Vas and hand back the resulting **host backing** — the
+/// real object, at the guest's own VA, that the publication produced.
 ///
-/// ⊘ Everything but [`kayfabe_mmu::BackingBytes`] is held constant on purpose: it is the
-/// variable under test, and a two-arm test whose arms differ in more than one place
-/// measures nothing. Same discipline as
-/// `ce_representability_split::classify_host_backed`, which is the *classifier's* half of
-/// the identical question.
-fn published_with_backing(
-    bytes: kayfabe_mmu::BackingBytes,
-) -> (
+/// # ⊘ REWRITTEN 2026-08-11 (integration) — what this used to be, and why it could not stay
+///
+/// This was `published_with_backing(bytes: BackingBytes)`: it published, then **unbound and
+/// rebound** `SHARED_VA` with the same phys / aperture / host object but a caller-chosen
+/// [`kayfabe_mmu::BackingBytes`], so the ring-gate test could feed it a
+/// `ShadowsGuestMemory` binding. It did that with a struct literal —
+/// `kayfabe_mmu::Binding { host: Some(..), ..b }` — over what were then public fields.
+///
+/// ⊘ **That fixture is now unconstructible, and deliberately so.** `Binding`'s fields are
+/// private and its only two constructors are
+/// [`kayfabe_mmu::Binding::declared_by_guest`] (always `host: None`) and
+/// [`kayfabe_mmu::Binding::real_gpu_memory`], which **refuses** `ShadowsGuestMemory` by
+/// ruling 3. The refusal the test was checking moved from the ring gate to the address
+/// plane's entrance; the fixture that injected the forbidden state moved with it. The
+/// falsifier below therefore asserts the *constructor* refuses, which is where the
+/// prohibition now lives — see `tests/tests/gpga_region_kind.rs` for its exhaustive form.
+fn published_sole() -> (
     Guarded<Gpu>,
     kayfabe_core::ProcId,
     kayfabe_core::ChanId,
     u64,
+    kayfabe_mmu::HostBacking,
 ) {
     let (mut gpu, _vmm, _rec) = two_proc_gpu();
     let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, A_PDB)).unwrap();
@@ -518,31 +527,18 @@ fn published_with_backing(
         .unwrap();
     let (start, len, b) = vas.table.binding_at(SHARED_VA).expect("published");
     assert_eq!(start, SHARED_VA.0, "the publication is the whole range");
-    let h = b.host.expect("`publish_backing` writes a host backing");
+    assert_eq!(
+        b.kind(),
+        kayfabe_mmu::RegionKind::RealGpuMemory,
+        "★ the publication decided kind 3 — the only kind that carries a host object"
+    );
+    let h = b.host().expect("`publish_backing` writes a host backing");
     assert_eq!(
         h.host_va(),
         SHARED_VA.0,
-        "address identity — the rebind below relies on it and `bind` enforces it"
+        "address identity — `bind` enforces it at its entrance"
     );
-    vas.table
-        .unbind(SHARED_VA)
-        .expect("it was there to replace");
-    vas.table
-        .bind(
-            A_PDB,
-            SHARED_VA,
-            len,
-            kayfabe_mmu::Binding {
-                host: Some(kayfabe_mmu::HostBacking::whole(
-                    h.memory(),
-                    h.host_va(),
-                    bytes,
-                )),
-                ..b
-            },
-        )
-        .expect("rebinds at the same identity");
-    (gpu, pid, cid, len)
+    (gpu, pid, cid, len, h)
 }
 
 /// ★★★★★ **A RING NEVER NAMES A BACKING THE GUEST READS SOMEWHERE ELSE** — the #14 gate
@@ -567,6 +563,26 @@ fn published_with_backing(
 /// settle which site was wrong: *"⊘ Fatal for anything the guest reads or polls, **which is
 /// what a ring is**"*.
 ///
+/// # ★★★★★ ⊘ REWRITTEN 2026-08-11 (integration) — THE REFUSAL MOVED, SO THE TEST MOVED
+///
+/// **What this test used to assert, verbatim in effect:** publish `SHARED_VA`, rebind it
+/// with `BackingBytes::ShadowsGuestMemory` holding everything else identical, then assert
+/// that **both** forms of the gate answer
+/// `Err(FwdFault::BackingNotGuestVisible { addr: SHARED_VA.0, aperture: SysmemCoherent })`.
+///
+/// **Why that can no longer be asserted, and why that is the fix rather than a loss:** the
+/// region-kind lane moved the identical prohibition from the gate to the address plane's
+/// **entrance**. `kayfabe_mmu::Binding::real_gpu_memory` is the only constructor that can
+/// attach a host object and it refuses `ShadowsGuestMemory` outright (ruling 3);
+/// `Binding::declared_by_guest` always leaves `host: None`. ⇒ A shadowing backing can no
+/// longer **enter the table**, so no gate can be shown refusing one — the state is
+/// unconstructible, and `FwdFault::BackingNotGuestVisible` was deleted with its last
+/// producer. Asserting a gate's answer over a binding the type system forbids is a test
+/// pinning a state, not a behaviour.
+///
+/// ⇒ The falsifier now targets **the site that actually refuses**. The property is
+/// unchanged and its name is still true.
+///
 /// # Why TWO arms, and why they must differ
 ///
 /// The known-positive is the half that makes the falsifier mean anything: a gate that
@@ -574,17 +590,17 @@ fn published_with_backing(
 /// is this campaign's §16.85.3 class — a census whose instrument cannot return the other
 /// answer — and it is cheap to close here.
 ///
-/// ★ Both **forms** of the gate are asserted, because they are different code paths onto
-/// one predicate: the read-only `gate_working_set` query, and the enforcing form inside
-/// `VerbPlan::gated_doorbell` reached through `handle_doorbell`. A fix to one only would
-/// leave the ring itself open while the query reported it closed — which is strictly worse
-/// than the defect, because it manufactures evidence of a repair.
+/// ★ Both **forms** of the gate are asserted on the positive arm, because they are
+/// different code paths onto one predicate: the read-only `gate_working_set` query, and the
+/// enforcing form inside `VerbPlan::gated_doorbell` reached through `handle_doorbell`. A
+/// fix to one only would leave the ring itself open while the query reported it closed —
+/// which is strictly worse than the defect, because it manufactures evidence of a repair.
 #[test]
 fn a_ring_never_names_a_backing_the_guest_reads_somewhere_else() {
     let a_token = MockArch::token_for(VChid(0x10));
 
     // ---- known-positive: the gate CAN still say yes -----------------------------------
-    let (mut gpu, pid, cid, _len) = published_with_backing(kayfabe_mmu::BackingBytes::SoleBacking);
+    let (mut gpu, pid, cid, _len, sole) = published_sole();
     let sole_query = gate_working_set(&gpu, pid, cid, &[SHARED_VA]);
     assert_eq!(
         sole_query,
@@ -596,39 +612,41 @@ fn a_ring_never_names_a_backing_the_guest_reads_somewhere_else() {
         handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]).is_ok(),
         "…through the ENFORCING form too — the query is not the thing that rings"
     );
-    drop(gpu);
 
-    // ---- the falsifier: identical in every respect but the backing kind ---------------
-    let (mut gpu, pid, cid, _len) =
-        published_with_backing(kayfabe_mmu::BackingBytes::ShadowsGuestMemory);
-    let shadow_query = gate_working_set(&gpu, pid, cid, &[SHARED_VA]);
-    assert_eq!(
-        shadow_query,
-        Err(FwdFault::BackingNotGuestVisible {
-            addr: SHARED_VA.0,
-            aperture: kayfabe_arch::Aperture::SysmemCoherent,
-        }),
-        "★★★ FORBIDDEN #2 AT THE RING: a second memory at an address the guest reads \
-         through the emulated framebuffer must not be handed to a doorbell. And by NAME — \
-         reporting it as `AddressFault::Miss` would send a reader hunting a mapping that \
-         is present, which is the wrong-name-refusal class §16.108 paid for."
+    // ---- the falsifier: the SAME object, restated as a shadow, at the SAME identity ----
+    // Everything but `BackingBytes` is held byte-identical — same host handle, same host
+    // VA, same aperture — because it is the variable under test and a two-arm test whose
+    // arms differ in more than one place measures nothing.
+    let shadow = kayfabe_mmu::Binding::real_gpu_memory(
+        SHARED_VA.0,
+        kayfabe_arch::Aperture::SysmemCoherent,
+        kayfabe_mmu::HostBacking::whole(
+            sole.memory(),
+            sole.host_va(),
+            kayfabe_mmu::BackingBytes::ShadowsGuestMemory,
+        ),
     );
     assert_eq!(
-        handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),
-        Err(FwdFault::BackingNotGuestVisible {
-            addr: SHARED_VA.0,
+        shadow,
+        Err(kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
             aperture: kayfabe_arch::Aperture::SysmemCoherent,
         }),
-        "…and the ENFORCING form refuses with the SAME name — one authority \
-         (`ring_admits`), re-derived across the isolate seam's bare-bool collapse, so the \
-         query and the ring can never disagree about why"
+        "★★★ FORBIDDEN #2, AT THE ENTRANCE: a second memory at an address the guest reads \
+         somewhere else cannot be bound at all, so it can never reach a doorbell. And by \
+         NAME — `RegionKindFault::FakeFbAtRealGpuVa` says which decision could not be taken \
+         truthfully, which is the wrong-name-refusal class §16.108 paid for."
     );
 
     // ---- and the arms must DIFFER, or neither measured anything -----------------------
-    assert_ne!(
-        sole_query, shadow_query,
-        "★ the arms must disagree: a gate that answers the same for both is not reading \
-         `BackingBytes` at all"
+    // ⊘ The same three inputs that the positive arm bound successfully differ from these in
+    // exactly one field, so this is the arms-disagree check the old `assert_ne!` was: the
+    // constructor said yes to `SoleBacking` (the binding `published_sole` asserted is kind
+    // 3) and no to `ShadowsGuestMemory`.
+    assert_eq!(
+        sole.bytes(),
+        kayfabe_mmu::BackingBytes::SoleBacking,
+        "★ the arms differ in exactly one field: the positive arm's object IS the range's \
+         only memory, and the constructor admitted it"
     );
 }
 
@@ -851,8 +869,8 @@ mod fuzz {
                 let vas = &gpu.procs[&pid].vases[&(GpuId::ZERO, super::A_PDB)];
                 for (va, _len, b) in vas.table.iter() {
                     prop_assert_eq!(
-                        vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys),
-                        Ok(b.phys),
+                        vas.table.resolve(super::A_PDB, kayfabe_arch::ids::GpuVa(va)).map(|(x, _)| x.phys()),
+                        Ok(b.phys()),
                         "a bound VA must resolve to its own binding (no torn state)"
                     );
                 }
@@ -1011,11 +1029,8 @@ fn declare_fb_alias(gpu: &mut Gpu, pid: kayfabe_core::ProcId, pdb: Pdb, at: GpuV
             pdb,
             at,
             0x2000_0000, // 512 MiB, the alias's page size
-            kayfabe_mmu::Binding {
-                phys,
-                aperture: kayfabe_arch::Aperture::Vidmem,
-                host: None,
-            },
+            kayfabe_mmu::Binding::declared_by_guest(phys, kayfabe_arch::Aperture::Vidmem)
+                .expect("the fixture declares a kind the guest can declare"),
         )
         .expect("the alias binds");
 }

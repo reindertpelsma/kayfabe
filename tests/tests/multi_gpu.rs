@@ -135,8 +135,8 @@ fn correct_gpu_routing() {
 
     // Address resolution is likewise per target: the SAME PDB+VA resolves to each
     // GPU's OWN backing (declared distinct per instance), never the other's.
-    let phys0 = resolve(&gpu, GpuId(0), SHARED_PDB, SHARED_VA).map(|(b, _)| b.phys);
-    let phys1 = resolve(&gpu, GpuId(1), SHARED_PDB, SHARED_VA).map(|(b, _)| b.phys);
+    let phys0 = resolve(&gpu, GpuId(0), SHARED_PDB, SHARED_VA).map(|(b, _)| b.phys());
+    let phys1 = resolve(&gpu, GpuId(1), SHARED_PDB, SHARED_VA).map(|(b, _)| b.phys());
     assert_eq!(phys0, Ok(0x9_0000_0000), "GPU0 VA → GPU0 backing");
     assert_eq!(phys1, Ok(0xA_0000_0000), "GPU1 VA → GPU1 backing");
 }
@@ -279,7 +279,7 @@ fn hash14_across_gpu() {
     let (bb, _) = resolve(&gpu, GpuId(1), SHARED_PDB, ident_va).unwrap();
     assert_eq!(ba.host_va(), Some(pa.host_va));
     assert_eq!(bb.host_va(), Some(pb.host_va));
-    assert_ne!(ba.phys, bb.phys, "disjoint backing across the GPU axis");
+    assert_ne!(ba.phys(), bb.phys(), "disjoint backing across the GPU axis");
 }
 
 // =================================================================================

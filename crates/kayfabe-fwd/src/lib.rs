@@ -561,26 +561,31 @@ pub enum FwdFault {
         /// The framebuffer-physical address that has no page.
         phys: u64,
     },
-    /// ★★★★★ **The range has a host object, and the guest's writes do not land in it** —
-    /// `ce_executor_tree.md`'s **forbidden #2**, refused rather than executed.
+    /// ★★★★★ **A GPGA region's KIND could not be decided truthfully at the bind** —
+    /// [`kayfabe_mmu::RegionKindFault`], raised where the mapping is bound rather than
+    /// where an operand is classified.
     ///
-    /// See [`kayfabe_mmu::BackingBytes`] for the measurement: `Publish`/`PublishVidmem`
-    /// allocate a fresh host object *at the guest's VA* whose bytes the guest never sees,
-    /// while the guest goes on reading and writing guest RAM or the emulated framebuffer.
-    /// Pointing a real engine at it reads zeros where the guest wrote and writes where the
-    /// guest cannot look.
+    /// ⊘ **This replaces `FwdFault::BackingNotGuestVisible`**, and the move is the point.
+    /// That fault refused a shadowing backing at *classify* time — after the host object had
+    /// been allocated, mapped FIXED at the guest's own VA, and written into the address
+    /// table, where every other reader saw a published range. `RegionKind` makes the same
+    /// state unconstructible, so the refusal now happens **before** anything is adopted and
+    /// the orphans go straight back. ⊘ The old variant is **deleted**, not deprecated: it had
+    /// no producer left, and a fault nothing raises is a name a reader will look for in a
+    /// census that can never print it.
     ///
-    /// ⊘ **It is a fault and not a demotion.** The obvious alternative — call it
-    /// `Fabricated` and let the CPU executor have it — derives a CPU address from
-    /// `Binding::phys`, which for the `Publish` chain is a GPA carved from our own arena.
-    /// Nothing has established those bytes are reachable through `Vmm::gpa_read`, so the
-    /// demotion would move the same prohibition one plane over and stop being visible.
-    BackingNotGuestVisible {
-        /// The address whose binding carries the non-guest-visible host object.
-        addr: u64,
-        /// The aperture that binding named — `Vidmem` for the `PublishVidmem` chain,
-        /// `SysmemCoherent` for `Publish`.
-        aperture: Aperture,
+    /// Two producers, both decisions:
+    /// - `commit_back_fb_leaf` — ruling 3
+    ///   ([`kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa`]): the FB crossing mints a
+    ///   fresh **blank** host vidmem object at a guest framebuffer address whose bytes stay
+    ///   in `SparseFb`. `[measured 2026-08-11, w228]` `placed_as_asked=true` **and blank**.
+    /// - a bind whose aperture is [`Aperture::Peer`]
+    ///   ([`kayfabe_mmu::RegionKindFault::PeerHasNoKind`]).
+    RegionKindRefused {
+        /// The VA whose region kind could not be decided.
+        va: GpuVa,
+        /// The address plane's own answer — one vocabulary, not a second one here.
+        fault: kayfabe_mmu::RegionKindFault,
     },
     /// ★★★ **The doorbell's ring brought NO decodable GPFIFO entry** — the guest rang for
     /// work and the entry at the cursor read back as nothing.
@@ -1540,7 +1545,7 @@ pub fn plan_pin_guest_ram(
     // is where their answer is consulted. MISS = FAULT: an unbound VA is refused rather
     // than pinned speculatively.
     let (binding, _off) = vas.table.resolve(pdb, va)?;
-    match binding.aperture {
+    match binding.aperture() {
         Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {}
         aperture => return Err(FwdFault::GuestRamNotSysmem { va, aperture }),
     }
@@ -1894,35 +1899,37 @@ pub fn commit_publish(
         retry: false,
     })?;
     let gpa = block.gpa;
-    if let Err(e) = vas.table.bind(
-        plan.pdb,
-        plan.va,
-        plan.len,
-        Binding {
-            phys: gpa.0,
-            aperture: Aperture::SysmemCoherent,
-            // ★ G1 (§12.16): the ALLOCATION travels with the PLACEMENT. Storing
-            // only `host_va` here is what made the host memory object
-            // unreachable from core state — a bound range no reclaim path could
-            // ever free. `HostBacking` makes that omission untypeable.
-            //
-            // ★ `whole` and not `slice` (`gpga_address_space.md` §8.2): this chain
-            // allocates a fresh host object per publication, so the binding IS the
-            // object and its release frees it. Arena sub-allocation is the OTHER
-            // constructor, and nothing mints it yet — `VerbReply::Published` has no
-            // offset to carry one, and that reply lives on the isolate seam.
-            // ★★★★★ **SOLE, and the distinction is measured — see `BackingBytes`.** This
-            // chain allocates host sysmem and binds it at a GPA carved from *our own*
-            // arena: the guest has no independent path to those bytes, so this object is
-            // not a shadow of anything. `Publish`'s own doc scopes it — *"correct for a
-            // range the guest has never written"* — and that is exactly the sole case.
-            host: Some(kayfabe_mmu::HostBacking::whole(
-                memory,
-                host_va,
-                kayfabe_mmu::BackingBytes::SoleBacking,
-            )),
-        },
-    ) {
+    // ★★★ THE DECISION, at the bind site: the owner's **kind 3, real GPU memory**. We
+    // allocated a host object and mapped it at the guest's own VA, and it is the range's
+    // only memory.
+    //
+    // ★ G1 (§12.16): the ALLOCATION travels with the PLACEMENT. Storing only `host_va`
+    // here is what made the host memory object unreachable from core state — a bound range
+    // no reclaim path could ever free. `HostBacking` makes that omission untypeable, and
+    // `Binding::real_gpu_memory` now makes *kind 3 without an object* untypeable too.
+    //
+    // ★ `whole` and not `slice` (`gpga_address_space.md` §8.2): this chain allocates a
+    // fresh host object per publication, so the binding IS the object and its release frees
+    // it. Arena sub-allocation is the OTHER constructor, and nothing mints it yet —
+    // `VerbReply::Published` has no offset to carry one, and that reply lives on the isolate
+    // seam.
+    //
+    // ★★★★★ **SOLE, and the distinction is measured — see `BackingBytes`.** This chain
+    // allocates host sysmem and binds it at a GPA carved from *our own* arena: the guest has
+    // no independent path to those bytes, so this object is not a shadow of anything.
+    // `Publish`'s own doc scopes it — *"correct for a range the guest has never written"* —
+    // and that is exactly the sole case.
+    //
+    // ⊘ Both arguments that could make `real_gpu_memory` refuse are **literals on this
+    // line** — a sysmem aperture and `SoleBacking` — so ruling 3 cannot fire here. Stated,
+    // not swallowed.
+    let binding = Binding::real_gpu_memory(
+        gpa.0,
+        Aperture::SysmemCoherent,
+        kayfabe_mmu::HostBacking::whole(memory, host_va, kayfabe_mmu::BackingBytes::SoleBacking),
+    )
+    .expect("host sysmem carved from our own arena is kind 3 — both refusals are literals here");
+    if let Err(e) = vas.table.bind(plan.pdb, plan.va, plan.len, binding) {
         // ★ G6: the bind refused, so the GPA is owed straight back. Before the arena
         // had a `free` this range simply leaked for the life of the proc.
         let returned = arena.free(block).is_ok();
@@ -2094,18 +2101,18 @@ pub fn plan_back_fb_leaf(
                     tabled: (start, tlen),
                 });
             }
-            if b.aperture != Aperture::Vidmem || b.phys != phys {
+            if b.aperture() != Aperture::Vidmem || b.phys() != phys {
                 return Err(FwdFault::FbLeafDisagrees {
                     va,
                     walked: (phys, Aperture::Vidmem),
-                    tabled: (b.phys, b.aperture),
+                    tabled: (b.phys(), b.aperture()),
                 });
             }
             // ★ Already backed — the idempotent replay. No host verb at all, so there is
             // nothing to orphan and no second fixed map to collide with the first (which
             // RM would answer `0x51`, a status that cannot be told apart from real
             // exhaustion).
-            b.host.map(|h| (h.host_va(), h.memory()))
+            b.host().map(|h| (h.host_va(), h.memory()))
         }
     };
     let host_vas = vas.host_vas;
@@ -2242,18 +2249,18 @@ pub fn commit_back_fb_leaf(
                     retry: false,
                 });
             }
-            if b.aperture != Aperture::Vidmem || b.phys != plan.phys {
+            if b.aperture() != Aperture::Vidmem || b.phys() != plan.phys {
                 return Err(Refusal {
                     fault: FwdFault::FbLeafDisagrees {
                         va: plan.va,
                         walked: (plan.phys, Aperture::Vidmem),
-                        tabled: (b.phys, b.aperture),
+                        tabled: (b.phys(), b.aperture()),
                     },
                     orphans: orphans(vas_used, None),
                     retry: false,
                 });
             }
-            if let Some(h) = b.host {
+            if let Some(h) = b.host() {
                 // A sibling won the race. Ours is an orphan; theirs is the answer, and it
                 // is a *retry* rather than a failure because re-planning finds it and
                 // replays.
@@ -2269,29 +2276,72 @@ pub fn commit_back_fb_leaf(
             Some(b)
         }
     };
-    // ★ Drop the un-backed binding and re-insert it WITH its materialization. `bind`
-    // refuses an overlap, so the unbind is not optional — and it is done only after every
-    // refusal above, so the table is never left with a hole by a path that then declines.
-    if previous.is_some() {
-        vas.table.unbind(plan.va);
-    }
-    let binding = Binding {
-        phys: plan.phys,
-        aperture: Aperture::Vidmem,
-        // ★ `whole`: this chain allocates a fresh host object per leaf, so the binding IS
-        // the object and its release frees it.
-        // ★★★★★ **SHADOW — this is the w228 case, and it is forbidden #2 in waiting.**
-        // The binding's `phys` is `plan.phys`: the GUEST's own framebuffer offset, whose
-        // bytes live in the device's `SparseFb` and which the guest goes on reading and
-        // writing through BAR1/BAR2. The host vidmem object allocated here is a SECOND,
-        // separate memory at the same address. `[measured 2026-08-11, w228]`
-        // `placed_as_asked=true` **and blank**.
-        host: Some(kayfabe_mmu::HostBacking::whole(
+    // ★★★★★ **RULING 3, ENFORCED AT THE DECISION — and it refuses this chain outright.**
+    //
+    // > *"no fake FB ever can be mapped to a real GPU VA of an isolate except the
+    // > scratchpad"* — owner, 2026-08-11.
+    //
+    // This is that sentence's one and only production violator. The binding's `phys` is
+    // `plan.phys`: the GUEST's own framebuffer offset, whose bytes live in the device's
+    // `SparseFb` and which the guest goes on reading and writing through BAR1/BAR2. The
+    // host vidmem object the execute phase just allocated is a SECOND, separate memory at
+    // the same address. `[measured 2026-08-11, w228]` `placed_as_asked=true` **and blank**.
+    //
+    // ⊘ **The enforcement is `Binding::real_gpu_memory` refusing to be constructed**, not a
+    // test here: `Aperture::Vidmem` IS the emulated framebuffer in this design, and
+    // `BackingBytes::ShadowsGuestMemory` says the same thing a second way. There is no
+    // spelling of this state that reaches [`AddressTable::bind`].
+    //
+    // ★★ **What is deliberately NOT done: the table is left alone.** The `previous` row —
+    // the guest-declared `RegionKind::FakeFramebuffer` binding a page-table decode put
+    // there — stays exactly as it was. Unbinding it and failing would drop the range to
+    // *no row at all*, and an absent row is `Representability::Untracked`, which routes to
+    // the **real host GPU**. ⇒ Refusing this crossing must not be allowed to hand the range
+    // to hardware; the two derived defaults point opposite ways and this is the seam where
+    // that matters.
+    //
+    // ⊘ The host objects the execute phase allocated go back as ORPHANS. Nothing leaks, and
+    // nothing is adopted.
+    //
+    // ★ The scratchpad carve-out (ruling 4) is not this path: it goes through
+    // `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over host pages, which never presents a `Vidmem`
+    // aperture here.
+    //
+    // ★★ **The refusal is ASKED FOR, not restated.** This site calls the constructor and
+    // propagates its answer rather than raising `FakeFbAtRealGpuVa` from a literal — a
+    // literal here would be a second computation of ruling 3 that agrees with the first
+    // today and can drift from it tomorrow, and a mutant weakening the constructor would
+    // leave this chain's own tests green.
+    let binding = match kayfabe_mmu::Binding::real_gpu_memory(
+        plan.phys,
+        Aperture::Vidmem,
+        kayfabe_mmu::HostBacking::whole(
             memory,
             host_va,
             kayfabe_mmu::BackingBytes::ShadowsGuestMemory,
-        )),
+        ),
+    ) {
+        Ok(b) => b,
+        Err(fault) => {
+            return Err(Refusal {
+                fault: FwdFault::RegionKindRefused { va: plan.va, fault },
+                orphans: orphans(vas_used, None),
+                retry: false,
+            });
+        }
     };
+    // ⊘ **Unreached while ruling 3 stands** — every construction this chain can attempt is
+    // refused above. It is kept, rather than replaced by an `unreachable!`, because it is
+    // the adopt path the scratchpad case (ruling 4) will arrive on once a fake-FB page can
+    // be made GPU-reachable as an `OS_DESCRIPTOR`, and because a panic here would turn a
+    // future widening of the authority into a crash rather than a bind.
+    //
+    // ★ Drop the un-backed binding and re-insert it WITH its materialization. `bind` refuses
+    // an overlap, so the unbind is not optional — and it is done only after every refusal
+    // above, so the table is never left with a hole by a path that then declines.
+    if previous.is_some() {
+        vas.table.unbind(plan.va);
+    }
     if let Err(e) = vas.table.bind(plan.pdb, plan.va, plan.len, binding) {
         // ⊘ Put back exactly what was there. A refusal that left the range unbound would
         // turn a failed *addition* into a removal of something that was working.
@@ -2359,7 +2409,7 @@ pub fn unpublish_backing(
     }
     let block = vas.blocks.remove(&va.0).expect("checked above");
     let host_vas = vas.host_vas;
-    let backing = vas.table.unbind(va).and_then(|(_len, b)| b.host);
+    let backing = vas.table.unbind(va).and_then(|(_len, b)| b.host());
     let arena = arenas.get_mut(&gpu).expect("checked above");
     if arena.free(block).is_err() {
         // Unreachable while a live proc keeps its arena: the block names the arena that
@@ -2465,7 +2515,7 @@ fn gate_vas(
 }
 
 /// ★★★★★ **THE ring-gate authority — may a real engine be pointed at `va` for the
-/// duration of a submission?** Three answers, each with its own name.
+/// duration of a submission?** ⊘ **TWO answers, not three** — see the integration note.
 ///
 /// # ⊘ The correction this carries (2026-08-11)
 ///
@@ -2485,32 +2535,49 @@ fn gate_vas(
 /// (`kayfabe-qemu-raw/src/shim.rs`, which states the emptiness and its reason —
 /// recovering the touched VAs means parsing the ring, increment E4/E5),
 /// [`gate_working_set`] has test callers only, and [`arm_fence`] has no production caller
-/// at all. So no boot has ever run this predicate over a VA. It is **latent**, and it is
-/// fixed here because the working set is what E4/E5 fill — the disagreement becomes live
-/// the moment it is populated, on a plane where being wrong is self-concealing.
+/// at all. So no boot has ever run this predicate over a VA. It is **latent**.
 ///
-/// # The three answers
+/// # ★★★★★ INTEGRATION, 2026-08-11 — the third answer is UNCONSTRUCTIBLE, so it is gone
+///
+/// Two lanes corrected this same predicate on the same day, and their fixes are **not
+/// additive**. This function shipped a three-answer shape whose third answer was
+/// *"resolved, host object, but a SECOND memory shadowing what the guest reads"* ⇒
+/// `FwdFault::BackingNotGuestVisible`. The region-kind lane then moved that same refusal
+/// **to the entrance**: [`kayfabe_mmu::Binding::real_gpu_memory`] is the only constructor
+/// that can set `host: Some(..)`, and it refuses [`kayfabe_mmu::BackingBytes`]'s
+/// `ShadowsGuestMemory` outright (ruling 3). [`kayfabe_mmu::Binding::declared_by_guest`],
+/// the other and only remaining constructor, always sets `host: None`.
+///
+/// ⇒ **`host().is_some()` ⟺ `kind() == RegionKind::RealGpuMemory`, by construction**, and
+/// there is no longer any state for a third arm to name. `FwdFault::BackingNotGuestVisible`
+/// was deleted with its last producer. Keeping a three-answer shape would have meant
+/// *fabricating* a [`kayfabe_mmu::RegionKindFault`] the address plane never raised —
+/// refusing by a name that is not true.
+///
+/// ★ What survives from each lane, deliberately: the **authority consolidation** (one
+/// predicate, [`gate_vas`] and [`host_published`] both derived from it, no second reading
+/// of the table) and the **kind reading** (`b.kind()` is literally the same question
+/// [`representability_of`] asks, which is what the consolidation was *for*).
+///
+/// # The two answers
 ///
 /// - **unresolved** ⇒ [`AddressFault::Miss`] — the table IS the guest's TLB, and a TLB has
 ///   no "later".
-/// - **resolved, no host publication** ⇒ the same [`AddressFault::Miss`], deliberately: to
-///   a ring these are one thing, an address the host VAS cannot translate. This is the #14
-///   EXECUTION fault (the shadow had it, the host VAS did not).
-/// - **resolved, host object, but a SECOND memory shadowing what the guest reads** ⇒
-///   [`FwdFault::BackingNotGuestVisible`], the same fault [`representability_of`] raises,
-///   because it is the same prohibition (`ce_executor_tree.md` forbidden #2).
+/// - **resolved, but not [`kayfabe_mmu::RegionKind::RealGpuMemory`]** ⇒ the same
+///   [`AddressFault::Miss`], deliberately: to a ring these are one thing, an address the
+///   host VAS cannot translate. This is the #14 EXECUTION fault (the shadow had it, the
+///   host VAS did not), and it now also covers the fake framebuffer (kind 2) and the
+///   guest's own physical pages (kind 4), neither of which a real engine may be pointed at.
 fn ring_admits(table: &AddressTable, pdb: Pdb, va: GpuVa) -> Result<(), FwdFault> {
     let miss = || FwdFault::Address(AddressFault::Miss { pdb, va });
     let Ok((binding, _off)) = table.resolve(pdb, va) else {
         return Err(miss());
     };
-    match binding.host {
-        Some(h) if h.is_sole_backing() => Ok(()),
-        Some(_) => Err(FwdFault::BackingNotGuestVisible {
-            addr: va.0,
-            aperture: binding.aperture,
-        }),
-        None => Err(miss()),
+    match binding.kind() {
+        kayfabe_mmu::RegionKind::RealGpuMemory => Ok(()),
+        kayfabe_mmu::RegionKind::FakeFramebuffer | kayfabe_mmu::RegionKind::GuestPhysDma => {
+            Err(miss())
+        }
     }
 }
 
@@ -2518,10 +2585,16 @@ fn ring_admits(table: &AddressTable, pdb: Pdb, va: GpuVa) -> Result<(), FwdFault
 /// **derived from [`ring_admits`]**, never a second reading of the table.
 ///
 /// ★ The derivation is the point: the isolate seam cannot name `FwdFault` (it cannot even
-/// name `AddressTable`), so the enforcing form must collapse three answers into one. It
-/// collapses the *authority's* answers rather than re-asking a weaker question, and
-/// `plan_doorbell` re-derives the exact fault from the offending VA — which is the
-/// division of labour [`kayfabe_isolate::RingWorkingSet`]'s own doc specifies.
+/// name `AddressTable`), so the enforcing form must collapse the authority's answers into
+/// one rather than re-asking a weaker question, and `plan_doorbell` re-derives the exact
+/// fault from the offending VA — which is the division of labour
+/// [`kayfabe_isolate::RingWorkingSet`]'s own doc specifies.
+///
+/// ⊘ **Both lanes rewrote this same body on 2026-08-11 and they agree**, which is why this
+/// is a derivation and not a choice between them: the region-kind lane's
+/// `binding.kind() == RegionKind::RealGpuMemory` is exactly what [`ring_admits`] now reads,
+/// so spelling it a second time here would reintroduce the second definition
+/// [`ring_admits`] exists to prevent.
 fn host_published(table: &AddressTable, pdb: Pdb, va: GpuVa) -> bool {
     ring_admits(table, pdb, va).is_ok()
 }
@@ -2759,11 +2832,20 @@ pub fn plan_doorbell(
         VerbPlan::gated_doorbell(gate, working_set, host_vas, channel, chan.engine, schedule)
             // ★ Re-derive the EXACT fault from the offending VA, which is the division of
             // labour `RingWorkingSet`'s doc specifies: the seam carries a bare bool, this
-            // crate owns the vocabulary. Since 2026-08-11 there are three answers, not two
-            // — a `ShadowsGuestMemory` backing is `BackingNotGuestVisible`, not a `Miss`,
-            // and reporting it as a miss would send a reader hunting a mapping that is
-            // present. `ring_admits` is the same authority the gate just ran, so the
-            // re-derivation cannot disagree with the refusal it is naming.
+            // crate owns the vocabulary. `ring_admits` is the same authority the gate just
+            // ran, so the re-derivation cannot disagree with the refusal it is naming.
+            //
+            // ⊘ CORRECTED 2026-08-11 (integration): this comment used to say *"there are
+            // three answers, not two — a `ShadowsGuestMemory` backing is
+            // `BackingNotGuestVisible`, not a `Miss`"*. There are **two**. Ruling 3 made a
+            // shadowing backing unbindable, so `ring_admits` now yields only `Miss` and
+            // `FwdFault::BackingNotGuestVisible` no longer exists — see `ring_admits`.
+            //
+            // ★ The re-derivation is kept even though every arm currently answers `Miss`:
+            // it is the SHAPE that matters. The bare-bool collapse at the seam is lossy by
+            // construction, so the day the authority grows a second refusal this site
+            // carries it without being touched. Asking the authority is never wrong;
+            // hardcoding `Miss` here would be right today and silently wrong later.
             .map_err(|kayfabe_isolate::UngatedVa(va)| {
                 match (vas, chan.vas_pdb) {
                     (Some(v), Some(pdb)) => ring_admits(&v.table, pdb, va)
@@ -4479,7 +4561,7 @@ fn push_range_gpas(
         // ★★★ Which STORE owns these bytes. Sysmem `phys` is a GPA; vidmem `phys` is a
         // framebuffer offset into our own `SparseFb`. They are different address spaces
         // that share a number, so the aperture picks the reader — it is never a cast.
-        let vid = match b.aperture {
+        let vid = match b.aperture() {
             Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => false,
             // ⊘ **Default-off, and the default is this arm.** `VidmemRoute::Refuse` keeps
             // the pre-w235 behaviour byte for byte: vidmem `phys` is not a guest-physical
@@ -4495,7 +4577,7 @@ fn push_range_gpas(
         };
         let off = va.0 - start;
         let phys = b
-            .phys
+            .phys()
             .checked_add(off)
             .ok_or(FwdFault::Address(AddressFault::Malformed { pdb, va }))?;
         let gpa = if vid {
@@ -4550,7 +4632,7 @@ fn classify_ce(
             .get(&(cgpu, pdb))
             .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
         match vas.table.resolve(pdb, dst) {
-            Ok((b, off)) => (b.phys.wrapping_add(off), b.aperture),
+            Ok((b, off)) => (b.phys().wrapping_add(off), b.aperture()),
             // ★ A virtual destination we cannot resolve is NOT a fault here, and that is
             // deliberate. The overwhelming majority of virtual-destination copies are
             // ordinary data writes into a user address space we never had to model — the
@@ -4615,10 +4697,12 @@ pub enum Representability {
     ///
     /// ⚠ **AND the object must be the range's ONLY memory** —
     /// [`kayfabe_mmu::BackingBytes::SoleBacking`]. A host object that merely *exists* at
-    /// the address is not enough: `PublishVidmem` puts one at a VA whose bytes the guest
-    /// goes on reading and writing through the emulated framebuffer, and aiming an engine
-    /// at that is the owner's forbidden #2. See
-    /// [`FwdFault::BackingNotGuestVisible`] and [`representability_of`].
+    /// the address is not enough: `PublishVidmem` used to put one at a VA whose bytes the
+    /// guest goes on reading and writing through the emulated framebuffer, and aiming an
+    /// engine at that is the owner's forbidden #2. ⊘ That is now enforced **at the bind**
+    /// rather than here — [`kayfabe_mmu::Binding::real_gpu_memory`] refuses it, so this arm
+    /// reads a kind that could only have been declared truthfully. See
+    /// [`FwdFault::RegionKindRefused`].
     HostBacked,
     /// ★★★ **Fabricated.** The range is *declared* in the address table and nothing
     /// host-side exists behind it: it lives in the emulated framebuffer, which is memory
@@ -4841,50 +4925,59 @@ fn representability_of(
     addr: u64,
 ) -> Result<(Representability, Option<CpuOperand>), FwdFault> {
     match binding {
-        // ★★★★★ **FORBIDDEN #2, AT THE LINE IT USED TO BE VIOLATED ON.**
+        // ★★★★★ **THE KIND IS READ, NOT DERIVED.**
         //
-        // ⊘ This arm read `Some(b) if b.host.is_some() => HostBacked` — *"a host object
-        // exists here, so point a real engine at it."* `[measured 2026-08-11]` that test and
-        // the question it stands for are **opposite** populations in this tree:
-        // `VerbPlan::Publish` and `PublishVidmem` write `Binding::host` and produce objects
-        // the guest cannot see into (`Publish`'s own doc: *"the address is the guest's and
-        // the bytes are not"*; `w228` measured `PublishVidmem` `placed_as_asked=true` **and
-        // blank**), while `PinGuestRam` — the one crossing that shares memory with the guest
-        // — records into `Vas::guest_ram_pins` and leaves `host` **`None`**.
-        // ⇒ `HostBacked` was exactly the set of ranges a real engine must NOT be aimed at.
+        // ⊘ This match used to be the tree's ONLY answer to *"what kind of region is this"*,
+        // and two of its arms were **unguarded fall-throughs pointing in opposite
+        // directions**: `Some(b)` with no host object meant `Fabricated` (our CPU executor)
+        // and `None` meant `Untracked` (**the real host GPU**). Neither was a decision
+        // anyone took. `[measured 2026-08-11, gpga_region_kind.md §1.1]`
         //
-        // `ce_executor_tree.md` (owner, 2026-08-07): *"Forbidden … 2. Landing the data where
-        // the guest cannot see it."* ★ And it is **self-concealing** — an engine that
-        // dereferenced a blank object logs identically to one that did the work — so it is
-        // refused **by name, before anything is aimed**, rather than rerouted quietly.
-        Some(b)
-            if b.host
-                .is_some_and(kayfabe_mmu::HostBacking::is_sole_backing) =>
-        {
-            Ok((Representability::HostBacked, None))
-        }
-        // ⊘ **Refused, and deliberately NOT demoted to `Fabricated`.** `Fabricated` would
-        // send it to the CPU executor with a `CpuOperand` derived from `b.phys` — which for
-        // the `Publish` chain is a GPA carved from *our own arena*, and nothing has shown
-        // those bytes are reachable through `Vmm::gpa_read` either. That would trade
-        // forbidden #2 on the GPU for forbidden #2 on the CPU, silently. A named fault
-        // costs nothing measured: `by=HostCe` appears **zero** times in every committed boot
-        // trace in this campaign (10 × `by=Ours`, 0 × `by=HostCe`), so no green depends on
-        // the old answer.
-        Some(b) if b.host.is_some() => Err(FwdFault::BackingNotGuestVisible {
-            addr,
-            aperture: b.aperture,
-        }),
-        Some(b) => {
-            let residency = residency_of_aperture(b.aperture, addr)?;
-            Ok((
-                Representability::Fabricated,
-                Some(CpuOperand {
-                    residency,
-                    addr: PlaneAddr(b.phys).offset(within),
-                }),
-            ))
-        }
+        // ⇒ The kind is now decided at [`kayfabe_mmu::AddressTable::bind`], by the site that
+        // knows, and this function **reads** it. Everything the old arms encoded survives as
+        // a property of `RegionKind`, and the two states they encoded WRONGLY —
+        // a `Peer` binding classified as fiction, and a shadowing backing classified as
+        // pointable — are now unconstructible (`RegionKindFault`).
+        Some(b) => match b.kind() {
+            // ★ Kind 3. A host object, mapped at the identical address in the owning
+            // `Vas`'s own host VAS, and it is the range's ONLY memory —
+            // `kayfabe_mmu::Binding::real_gpu_memory` refuses to be built any other way. A
+            // real engine may be pointed at the guest's own number.
+            //
+            // ⊘ **Forbidden #2 has not been dropped; it MOVED to the entrance.** This arm
+            // used to be `b.host.is_some_and(is_sole_backing)`, with a second arm raising
+            // [`FwdFault::BackingNotGuestVisible`] for a shadowing backing. The shadow can
+            // no longer enter the address table at all — ruling 3, enforced at the
+            // constructor — so the refusal happens before the host object is adopted rather
+            // than after every reader has seen a published range.
+            // `ce_executor_tree.md` (owner, 2026-08-07): *"Forbidden … 2. Landing the data
+            // where the guest cannot see it."*
+            kayfabe_mmu::RegionKind::RealGpuMemory => Ok((Representability::HostBacked, None)),
+            // ★ Kinds 2 and 4 — the emulated framebuffer, and the guest's own physical
+            // pages. Both are ours to execute and they live in **different stores**, which
+            // is what the `CpuOperand`'s residency carries: `Vidmem` → `CpuPlane::Fb`,
+            // sysmem → `CpuPlane::GuestRam`.
+            //
+            // ⊘ They are ONE arm here and TWO kinds in the table deliberately. The executor
+            // choice does not distinguish them; the owner's taxonomy does, because kind 2 is
+            // memory we invented and kind 4 is the guest's own — and *that* is the
+            // distinction ruling 2 scopes (*"fake framebuffer exists ONLY for guest-KERNEL
+            // channels we emulate"*). Collapsing them in the table is what made the question
+            // unanswerable.
+            kayfabe_mmu::RegionKind::FakeFramebuffer | kayfabe_mmu::RegionKind::GuestPhysDma => {
+                let residency = residency_of_aperture(b.aperture(), addr)?;
+                Ok((
+                    Representability::Fabricated,
+                    Some(CpuOperand {
+                        residency,
+                        addr: PlaneAddr(b.phys()).offset(within),
+                    }),
+                ))
+            }
+        },
+        // ★★★ **Kind 1 — unallocated, i.e. NO ROW.** ⚠ Not neutral: it routes to the host
+        // GPU. See [`Representability::Untracked`], and [`kayfabe_mmu::RegionKind`] for why
+        // this is the absence of a row rather than a fourth variant.
         None => Ok((Representability::Untracked, None)),
     }
 }
@@ -5016,8 +5109,8 @@ impl OperandResolver for TableOperands<'_> {
         match self {
             TableOperands::Table { table, pdb } => {
                 let (binding, off) = table.resolve(*pdb, addr).map_err(FwdFault::Address)?;
-                let phys = PlaneAddr(binding.phys).offset(off);
-                let residency = residency_of_aperture(binding.aperture, phys.0)?;
+                let phys = PlaneAddr(binding.phys()).offset(off);
+                let residency = residency_of_aperture(binding.aperture(), phys.0)?;
                 Ok(CpuOperand {
                     residency,
                     addr: phys,

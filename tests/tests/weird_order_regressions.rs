@@ -246,7 +246,8 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
         // Resolution returns THIS iteration's current backing, not a stale one.
         let (bind, _) = resolve(&gpu, GpuId::ZERO, PDB, VA).unwrap();
         assert_eq!(
-            bind.phys, published.gpa,
+            bind.phys(),
+            published.gpa,
             "iter {iter}: resolves its own current backing"
         );
         last_gpa = Some(published.gpa);
