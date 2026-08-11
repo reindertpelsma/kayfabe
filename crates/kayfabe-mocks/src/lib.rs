@@ -56,8 +56,8 @@ use kayfabe_arch::{
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
-    ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, Isolate,
-    IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportedBacking, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
+    Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
@@ -1445,6 +1445,31 @@ pub enum RmVerb {
         /// The token minted, or `None` when the request was refused.
         token: Option<u64>,
     },
+    /// ★★★★★ One framebuffer leaf joined — [`RmBackend::join_fb_leaf`].
+    ///
+    /// ⊘ Records `phys` as well as `at`: the two are the join's whole content, and a witness
+    /// that carried only the VA could not tell a leaf joined at the right guest address but
+    /// standing for the wrong framebuffer range from a correct one.
+    JoinFbLeaf {
+        /// The host VAS it was placed in.
+        vas: HostHandle,
+        /// Bytes.
+        len: u64,
+        /// The guest VA asked for.
+        at: GpuVa,
+        /// The emulated framebuffer address the leaf occupies.
+        phys: u64,
+        /// The backing token minted, or `None` when the request was refused.
+        token: Option<u64>,
+        /// ★★ The `OS_DESCRIPTOR` the chain built, or `None` when it refused.
+        ///
+        /// ⊘ Recorded because this verb is an **acquisition and a mapping in one**, and the
+        /// ledger cannot see either without it. That trap has now been hit twice — see
+        /// [`RmRecorder::fold`]'s note on `DescribeGuestRam`, whose object was reported
+        /// DANGLING purely because the ledger's mint arm quantified over a naming
+        /// convention. This verb would have been the third.
+        memory: Option<HostHandle>,
+    },
     /// Object freed.
     Free {
         /// The handle.
@@ -1495,6 +1520,10 @@ pub enum VerbKind {
     ExportSurface,
     /// [`RmBackend::export_backing`].
     ExportBacking,
+    /// [`RmBackend::join_fb_leaf`].
+    JoinFbLeaf,
+    /// [`RmBackend::fb_join_peek`].
+    FbJoinPeek,
     /// [`RmBackend::map_guest_ram`].
     MapGuestRam,
     /// [`RmBackend::unmap_guest_ram`].
@@ -2526,6 +2555,25 @@ impl RmRecorder {
                 RmVerb::DescribeGuestRam { memory, .. } => Some(*memory),
                 _ => None,
             };
+            // ★★★★★ A join is an acquisition AND a fixed mapping in ONE verb, so it cannot
+            // ride the `minted` path above (which `continue`s) — it has to do both. ⊘ Written
+            // as its own arm rather than as a second entry in `minted`, because a reader who
+            // saw it only there would conclude the mapping is untracked, which is the exact
+            // half that would go unnoticed: an unfreed object is loud at teardown, an
+            // un-unmapped GPU VA is not.
+            if let RmVerb::JoinFbLeaf {
+                vas,
+                at,
+                memory: Some(memory),
+                ..
+            } = verb
+            {
+                if !live.insert(*memory) {
+                    l.double_free.push((*iso, *memory));
+                }
+                l.leaked_maps.entry(*iso).or_default().insert((*vas, at.0));
+                continue;
+            }
             if let Some(h) = minted {
                 if !live.insert(h) {
                     l.double_free.push((*iso, h)); // a re-mint of a live handle
@@ -3231,6 +3279,75 @@ impl RmBackend for MockRmBackend {
             len: want.len,
             prot: want.prot,
         })
+    }
+
+    /// ★★★★★ The join in the double — **and the double does not pretend to hold bytes.**
+    ///
+    /// It records the request, mints a namespaced token and answers `host_va == at`, which
+    /// is what lets every core-side consumer of [`kayfabe_isolate::VerbPlan::JoinFbLeaf`] be
+    /// tested with no OS. ⊘ What it deliberately does **not** do is back the token with
+    /// memory: there is no `memfd` here, so [`RmBackend::fb_join_peek`] answers `Ok(false)`
+    /// — *"nothing covers that range"* — and never a page of zeros. A mock that served zeros
+    /// would let a two-directions check pass against a double that holds no memory at all,
+    /// which is the mock-wall shape this file already records for `export_backing`.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError> {
+        let _client = self.gate(VerbKind::JoinFbLeaf)?;
+        self.check(vas)?;
+        if len == 0 {
+            self.record(RmVerb::JoinFbLeaf {
+                vas,
+                len,
+                at,
+                phys,
+                token: None,
+                memory: None,
+            });
+            return Err(RmError::NoMemory);
+        }
+        let n = {
+            let mut ns = self.ns.lock().expect("ns");
+            let n = ns.next;
+            ns.next += 1;
+            n
+        };
+        let token = self.handle_hi() | n;
+        let memory = self.mint();
+        self.record(RmVerb::JoinFbLeaf {
+            vas,
+            len,
+            at,
+            phys,
+            token: Some(token),
+            memory: Some(memory),
+        });
+        Ok(FbLeafJoined {
+            backing: ExportedBacking {
+                token,
+                offset: 0,
+                len,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+            memory,
+            host_va: at.0,
+        })
+    }
+
+    /// ⊘ Always `Ok(false)`. See [`MockRmBackend::join_fb_leaf`]: this double holds no
+    /// memory, and *"nothing covers that range"* is the true answer rather than a stub.
+    fn fb_join_peek(
+        &mut self,
+        _phys: u64,
+        _buf: &mut [u8],
+        _poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        let _client = self.gate(VerbKind::FbJoinPeek)?;
+        Ok(false)
     }
 
     /// ★★★ The double's guest-RAM door — and by default it is **CLOSED**, because that is

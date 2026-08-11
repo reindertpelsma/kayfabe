@@ -73,6 +73,7 @@
 
 pub mod child;
 pub mod export;
+pub mod fbjoin;
 pub mod fdcross;
 pub mod guestram;
 pub mod isolate;
@@ -81,6 +82,7 @@ pub mod proto;
 pub mod rm;
 
 pub use export::{ChildExports, ExportRegistry};
+pub use fbjoin::FbJoinTable;
 pub use fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
 pub use isolate::{HostIsolate, HostIsolateFactory, RmMode, embedded_isolate_bytes};
 pub use loopback::ParkVerb;

@@ -37,8 +37,8 @@
 use crate::export::ChildExports;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
-    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, GuestRamGrant, GuestRamMapped,
-    HostHandle, HostedObject, IsolateId, RmBackend, RmError,
+    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafJoined, GuestRamGrant,
+    GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
@@ -150,6 +150,11 @@ pub struct LoopbackRm {
     /// a model of one: `mmap`ping a `memfd` needs no GPU, so faking it here would be a
     /// second implementation of the one thing this fixture could have honestly run.
     guest_ram: Option<Arc<crate::guestram::GuestRamPlane>>,
+    /// ★★★★★ This isolate's joined framebuffer leaves, shared with every sibling worker.
+    /// ⊘ The **real** table for the same reason `guest_ram` is real: mapping a `memfd` and
+    /// remembering which framebuffer range it stands for needs no GPU, so a model of it here
+    /// would be a second implementation of the one half this fixture can honestly run.
+    fb_joins: Option<Arc<crate::fbjoin::FbJoinTable>>,
 }
 
 impl LoopbackRm {
@@ -169,6 +174,7 @@ impl LoopbackRm {
             park,
             exports,
             guest_ram: None,
+            fb_joins: None,
         })
     }
 
@@ -176,6 +182,13 @@ impl LoopbackRm {
     #[must_use]
     pub fn with_guest_ram(mut self, plane: Option<Arc<crate::guestram::GuestRamPlane>>) -> Self {
         self.guest_ram = plane;
+        self
+    }
+
+    /// Install this isolate's shared framebuffer-join table. See `crate::fbjoin`.
+    #[must_use]
+    pub fn with_fb_joins(mut self, joins: Arc<crate::fbjoin::FbJoinTable>) -> Self {
+        self.fb_joins = Some(joins);
         self
     }
 
@@ -388,6 +401,83 @@ impl RmBackend for LoopbackRm {
         // serialised path RM would serialise, so a parked sibling blocks this too.
         self.verb(false)?;
         crate::rm::mint_fabricated(&self.exports, want)
+    }
+
+    /// ★★★★★ The join, through the fixture — **half real, and the half that is modelled is
+    /// named**.
+    ///
+    /// Real: the `memfd`, the isolate's `mmap` of it, the join table entry, and therefore the
+    /// whole of the two-views property. That half needs no GPU, so it is not modelled and the
+    /// crossing can be exercised end to end through a real child on a box with no card.
+    ///
+    /// ⊘ **Modelled: the RM half.** There is no `OS_DESCRIPTOR` and no GPU MMU here, so
+    /// `memory` is a fixture handle and `host_va` is `at` **by fiat**. ⇒ A green line from
+    /// this backend says the VMM's plumbing works; it says **nothing** about whether RM would
+    /// place the mapping, which is exactly what `fb_cpu_view.md` §3 had to measure on real
+    /// hardware. Reading it as more is the fixture-shaped lie this file's header refuses.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError> {
+        // ★ The pool gate FIRST, in the same order `HostRmBackend::join_fb_leaf` checks it.
+        // ⊘ Deliberately before the handle check: a backend with no shared table cannot serve
+        // this verb for ANY argument, and answering `BadHandle` would name the caller for a
+        // fault that is entirely ours.
+        let table = Arc::clone(
+            self.fb_joins
+                .as_ref()
+                .ok_or(RmError::Other(crate::rm::FB_JOIN_NO_TABLE))?,
+        );
+        self.known(vas)?;
+        let h = self.verb(false)?;
+        let backing = crate::rm::mint_fabricated(
+            &self.exports,
+            ExportRequest {
+                source: ExportSource::Fabricated,
+                len,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        )?;
+        let fd = self
+            .exports
+            .lend(backing.token)
+            .map_err(|_| RmError::NoMemory)?;
+        let region = kayfabe_linux_raw::MappedRegion::map(
+            kayfabe_linux_raw::Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            len,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            kayfabe_linux_raw::CachePolicy::WriteBack,
+            kayfabe_linux_raw::HostPageSize::query(),
+        )
+        .map_err(|_| RmError::NoMemory)?;
+        drop(fd);
+        table.install(phys, len, at.0, region);
+        Ok(FbLeafJoined {
+            backing,
+            memory: HostHandle::new(self.id, h),
+            host_va: at.0,
+        })
+    }
+
+    /// The instrument, through the fixture — and here it is **entirely** real: it reads and
+    /// writes the same `mmap` the production backend describes to RM.
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        let table = self
+            .fb_joins
+            .as_ref()
+            .ok_or(RmError::Other(crate::rm::FB_JOIN_NO_TABLE))?;
+        table.peek(phys, buf, poke).map_err(|_| RmError::NoMemory)
     }
 
     fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {

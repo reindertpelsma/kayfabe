@@ -299,6 +299,17 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
             own(region);
             own(memory);
         }
+        // ★★★★★ A join names the host VAS it places into, and mints a namespaced backing
+        // token. ⊘ `at` and `phys` are NOT checked and must not be: the first is a guest VA
+        // by address identity and the second is an emulated-framebuffer address the VMM
+        // derived — neither is namespace-scoped, and two isolates legitimately naming one
+        // guest address is the VMM's decision, exactly as for `MapGuestRam`.
+        RmVerb::JoinFbLeaf { vas, token, .. } => {
+            own(vas);
+            if let Some(token) = token {
+                assert_eq!(token >> 32, ns, "a join token leaked across isolates");
+            }
+        }
     }
 }
 

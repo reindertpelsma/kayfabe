@@ -338,6 +338,66 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// from. See [`FbStore::residency`].
     fn is_resident(&self, phys: u64) -> Option<bool>;
 
+    /// ★★★★★ **Install a JOINED range** — `[phys, phys+region.len())` is served from now on
+    /// by memory a second party also maps (`fb_cpu_view.md` §4).
+    ///
+    /// # ⊘ Why this is a MAPPING and not a connection — the tree contradicted itself here
+    ///
+    /// [`FbStore`]'s own docs nominate the convergence as *"an implementation of this trait
+    /// that delegates to the isolate … a **connection** … and every access is a round trip"*.
+    /// **That implementation cannot be installed.** Every call site of this trait holds the
+    /// register plane's FSM mutex, which `tests/tests/unranked_locks.rs:56-59` classifies as
+    /// *"★★★ THE HAZARD … ⊘ NOTHING may block beneath it, and the R1 witness will not say
+    /// so"*. A round trip to another process beneath that lock stalls every vCPU's register
+    /// access, and the one instrument that would normally catch it is blind to this lock.
+    ///
+    /// ⇒ The join replaces the store's **pages**, never its lookup. A `memcpy` into an
+    /// `mmap` blocks on nothing, so this is the only shape that is installable at all.
+    ///
+    /// # ★★★ The establishment copy, and why it belongs INSIDE this call
+    ///
+    /// Bytes the guest wrote before the backing existed are already in this store. The
+    /// implementation must copy them into `region` **before** the range goes live, and it
+    /// must read them from its **own** pages rather than through the range it is installing.
+    ///
+    /// ⊘ That is not tidiness — it is what makes the ordering safe by construction. The
+    /// owner's objection was *"mapping after execution seems racy to me"*, and it is correct:
+    /// once the engine has written the real object and the guest has written the fabricated
+    /// one, there is **no correct merge** — a merge is a choice about which writes to lose.
+    /// With the copy here, after this call there is ONE memory and there is never a merge.
+    ///
+    /// ★ It follows that this call must be **atomic against guest access**, which it is: the
+    /// caller holds the plane lock across it, so no framebuffer read or write can land
+    /// between the copy and the install.
+    ///
+    /// # Errors
+    /// [`FbRefused`] when this store does not back the range, when the range is already
+    /// joined, or when the establishment copy cannot be performed. ⊘ There is deliberately no
+    /// success-shaped answer for a join that did not take: a store that reported `Ok` and
+    /// kept serving its own pages would be the two-memories defect, re-created by the very
+    /// call that exists to end it.
+    fn install_join(
+        &mut self,
+        phys: u64,
+        region: Box<dyn FbJoined>,
+    ) -> Result<FbJoinInstalled, FbRefused> {
+        let _ = region;
+        Err(FbRefused {
+            phys,
+            len: 0,
+            why: NO_JOIN_SUPPORT,
+        })
+    }
+
+    /// Every joined range, ascending by address — `(phys, len)`.
+    ///
+    /// ⊘ Empty is a real answer and means *"this store holds no joined range"*; it is not the
+    /// *"cannot say"* [`FbStore::residency`] uses [`None`] for, because a store that cannot
+    /// join is a store with no joins, and those are the same fact here.
+    fn joined_ranges(&self) -> Vec<(u64, u64)> {
+        Vec::new()
+    }
+
     /// Power-on: forget every byte.
     ///
     /// ★★ **Not optional, and the reason is not tidiness.** Framebuffer content that
@@ -348,6 +408,79 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// is quantified over **all** of the device's state.
     fn device_reset(&mut self);
 }
+
+/// ★★★★★ **Bytes a SECOND party also maps** — the isolate's half of a joined framebuffer
+/// leaf, as a port (`fb_cpu_view.md` §4).
+///
+/// # ⊘ Why a trait and not a mapping type
+///
+/// This crate is pure: it holds no descriptor, performs no `mmap` and names no OS. The
+/// memory behind a join is a shared file the isolate minted and the VMM adopted, and both of
+/// those are facts of `kayfabe-linux-raw` and the composition root. What this crate needs is
+/// exactly two verbs over a bounded extent, which is what this is.
+///
+/// ⊘ It is **not** [`FbStore`] with fewer methods. An `FbStore` answers for a whole
+/// framebuffer and decides what an unwritten address means; this answers for one range that
+/// somebody else is also holding, and has no opinions at all.
+///
+/// ★ `Send` because the register plane is behind a mutex reached from every vCPU thread. ⊘
+/// No `Sync` bound: the store owns it exclusively, which is what makes `&mut self` on
+/// [`FbJoined::write`] a true statement rather than a lock in disguise.
+pub trait FbJoined: Send + core::fmt::Debug {
+    /// How many bytes this join covers. ⊘ Read once at install and never again — a length
+    /// that could change under a live mapping is `SIGBUS`, which is why the backing carries
+    /// `F_SEAL_SHRINK`.
+    fn len(&self) -> u64;
+
+    /// Whether it covers none. (Clippy's companion to [`FbJoined::len`].)
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Fill `buf` from byte `off` of this join.
+    ///
+    /// # Errors
+    /// One sentence, when the access is out of the join's own extent.
+    fn read(&self, off: u64, buf: &mut [u8]) -> Result<(), &'static str>;
+
+    /// Write `bytes` at byte `off` of this join.
+    ///
+    /// # Errors
+    /// As [`FbJoined::read`].
+    fn write(&mut self, off: u64, bytes: &[u8]) -> Result<(), &'static str>;
+}
+
+/// ★★★ What [`FbStore::install_join`] did — **the establishment copy, counted**.
+///
+/// ⊘ Two numbers and not a `bool`, because *"the join is live"* and *"the bytes the guest had
+/// already written came with it"* are different facts and only the second one can be
+/// vacuous. A leaf whose pages were never resident copies zero bytes and the join is still
+/// correct; a leaf with 90 resident pages that copied zero is a bug. A caller that could not
+/// tell those apart would report both as success.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FbJoinInstalled {
+    /// How many bytes were copied out of this store's own pages into the join.
+    pub copied: u64,
+    /// ★ How many of those bytes were **non-zero** — the non-vacuity term. An establishment
+    /// copy of an all-zero range is correct and proves nothing, and a report that omitted
+    /// this would let it read as evidence.
+    pub nonzero: u64,
+    /// How many 4 KiB pages of this store the copy read from — i.e. were resident.
+    pub pages: u64,
+}
+
+/// [`FbStore::install_join`]'s refusal from a store that cannot join at all.
+pub const NO_JOIN_SUPPORT: &str = "this framebuffer store cannot hold a joined range; it has no pages of its own to \
+     establish from and nothing to install into";
+
+/// [`SparseFb::install_join`]'s refusal for a range that already carries a join.
+pub const ALREADY_JOINED: &str = "that framebuffer range is already joined; installing a second backing over it \
+     would give one leaf two memories again, which is the defect the join exists to end";
+
+/// [`SparseFb::install_join`]'s refusal for a join whose bytes could not be established.
+pub const ESTABLISH_FAILED: &str = "the establishment copy into the joined backing failed, so the join was NOT \
+     installed: a live join whose pre-existing bytes never arrived would present the engine \
+     a blank pool for a leaf the guest has already written";
 
 /// ★★★★ **What a framebuffer store holds, as a census rather than a total.**
 ///
@@ -578,6 +711,14 @@ pub struct SparseFb {
     /// is created, not on every write: it orders origins, and a per-write counter would
     /// order traffic instead — a different and much noisier fact.
     seq: u64,
+    /// ★★★★★ Framebuffer ranges served from memory a **second party also maps** — the joined
+    /// leaves (`fb_cpu_view.md` §4). Ascending by address and non-overlapping, both
+    /// maintained by [`SparseFb::install_join`].
+    ///
+    /// ⊘ **Not a second store.** A joined range's pages are `mmap`ed by the isolate too, so
+    /// the guest's write through this window and the engine's read through the GPU MMU are
+    /// the same byte. Everything outside these ranges is still [`SparseFb::pages`].
+    joined: Vec<(u64, Box<dyn FbJoined>)>,
 }
 
 impl SparseFb {
@@ -596,6 +737,7 @@ impl SparseFb {
             pages: HashMap::new(),
             origin: HashMap::new(),
             seq: 0,
+            joined: Vec::new(),
         }
     }
 
@@ -616,6 +758,27 @@ impl SparseFb {
     /// ★ Checked as a **unit**, and with no wrapping arithmetic: an access that starts
     /// inside and ends outside is refused whole rather than truncated, because a truncated
     /// write is a dropped write wearing a partial-success costume.
+    /// The joined range wholly containing `[phys, phys+len)`, as `(index, offset)`.
+    ///
+    /// ⊘ **Wholly, or not at all.** An access that straddles the edge of a join is not split
+    /// between the two stores: a read half-served from a joined mapping and half from a local
+    /// page is two memories inside one access, which is the defect with a smaller blast
+    /// radius rather than a fix. It falls through to the sparse path, where the joined half
+    /// reads as this store's own bytes — wrong, and *loudly* wrong at the first comparison,
+    /// rather than subtly right. ★ It cannot arise in practice: joins are whole leaves and
+    /// the window's accesses are dwords.
+    fn joined_at(&self, phys: u64, len: usize) -> Option<(usize, u64)> {
+        let len = u64::try_from(len).ok()?;
+        let end = phys.checked_add(len)?;
+        self.joined
+            .iter()
+            .position(|(base, r)| {
+                let jend = base.saturating_add(r.len());
+                phys >= *base && end <= jend
+            })
+            .map(|i| (i, phys - self.joined[i].0))
+    }
+
     fn covers(&self, phys: u64, len: usize) -> bool {
         let Ok(len) = u64::try_from(len) else {
             return false;
@@ -659,6 +822,16 @@ impl FbStore for SparseFb {
                 why: OUTSIDE_FRAMEBUFFER,
             });
         }
+        // ★★★★★ THE JOIN, checked FIRST. A joined range's bytes are held by memory the
+        // isolate also maps; this store's own pages for that range were copied in at install
+        // and are dead from that instant. Serving them would be answering with a snapshot.
+        if let Some((i, off)) = self.joined_at(phys, buf.len()) {
+            return self.joined[i].1.read(off, buf).map_err(|why| FbRefused {
+                phys,
+                len: buf.len(),
+                why,
+            });
+        }
         let mut done = 0usize;
         for (frame, off, take) in SparseFb::runs(phys, buf.len()) {
             match self.pages.get(&frame) {
@@ -684,6 +857,19 @@ impl FbStore for SparseFb {
                 phys,
                 len: bytes.len(),
                 why: OUTSIDE_FRAMEBUFFER,
+            });
+        }
+        // ★★★★★ THE JOIN, checked FIRST and BEFORE the residency ceiling — a joined range
+        // costs this store no page at all, so charging it against the budget would refuse a
+        // guest write to memory that is already allocated. ⊘ The write does not touch
+        // `origin` either: a page that does not exist has no first writer, and inventing one
+        // would put a joined leaf in the by-writer census as though it were resident.
+        if let Some((i, off)) = self.joined_at(phys, bytes.len()) {
+            let _ = by;
+            return self.joined[i].1.write(off, bytes).map_err(|why| FbRefused {
+                phys,
+                len: bytes.len(),
+                why,
             });
         }
         // ★★ The ceiling is checked for the WHOLE access before a single byte lands, so a
@@ -758,7 +944,94 @@ impl FbStore for SparseFb {
         Some(self.pages.contains_key(&(phys / FB_PAGE)))
     }
 
+    fn install_join(
+        &mut self,
+        phys: u64,
+        region: Box<dyn FbJoined>,
+    ) -> Result<FbJoinInstalled, FbRefused> {
+        let len = region.len();
+        let refuse = |why| FbRefused {
+            phys,
+            len: usize::try_from(len).unwrap_or(usize::MAX),
+            why,
+        };
+        if !self.covers(
+            phys,
+            usize::try_from(len).map_err(|_| refuse(OUTSIDE_FRAMEBUFFER))?,
+        ) {
+            return Err(refuse(OUTSIDE_FRAMEBUFFER));
+        }
+        // ⊘ Any overlap at all, not just an exact repeat: two joins sharing one byte is two
+        // memories for that byte, which is what this whole mechanism removes.
+        let end = phys.saturating_add(len);
+        if self
+            .joined
+            .iter()
+            .any(|(b, r)| phys < b.saturating_add(r.len()) && *b < end)
+        {
+            return Err(refuse(ALREADY_JOINED));
+        }
+        // ★★★ THE ESTABLISHMENT COPY. Read from this store's OWN pages — never through
+        // `FbStore::read`, which would answer from the join the moment it is installed — and
+        // performed BEFORE the range goes live. After this there is one memory and there is
+        // never a merge.
+        let mut region = region;
+        let mut copied = 0u64;
+        let mut nonzero = 0u64;
+        let mut pages = 0u64;
+        for (frame, off, take) in SparseFb::runs(phys, usize::try_from(len).unwrap_or(usize::MAX)) {
+            // ⊘ Only RESIDENT pages are copied. A page this store never held is a page
+            // nothing ever wrote, and the fabricated backing is already zero-filled by its
+            // own `ftruncate` — so copying zeros over it would be work, and *counting* those
+            // zeros as copied bytes would make every establishment report non-vacuous.
+            let Some(page) = self.pages.get(&frame) else {
+                continue;
+            };
+            let src = &page[off..off + take];
+            let at = frame * FB_PAGE + off as u64 - phys;
+            if region.write(at, src).is_err() {
+                return Err(refuse(ESTABLISH_FAILED));
+            }
+            pages += 1;
+            copied += take as u64;
+            nonzero += src.iter().filter(|b| **b != 0).count() as u64;
+        }
+        // ★ The local pages go, and they go AFTER the copy: they are now a stale second copy
+        // of memory that has one authoritative holder, and a store that kept them would have
+        // exactly the two memories this call removes, one layer down. ⊘ Their `origin` rows go
+        // with them — a first-writer record for a page that no longer exists would attribute
+        // a resident-page census entry to memory the census can no longer see.
+        for (frame, _, _) in SparseFb::runs(phys, usize::try_from(len).unwrap_or(usize::MAX)) {
+            self.pages.remove(&frame);
+            self.origin.remove(&frame);
+        }
+        self.joined.push((phys, region));
+        self.joined.sort_unstable_by_key(|(b, _)| *b);
+        Ok(FbJoinInstalled {
+            copied,
+            nonzero,
+            pages,
+        })
+    }
+
+    fn joined_ranges(&self) -> Vec<(u64, u64)> {
+        // ⊘ Already ascending — `install_join` sorts — but stated rather than relied on: a
+        // future insert that forgot to sort would make two boots of one binary produce
+        // differently-ordered evidence.
+        let mut v: Vec<(u64, u64)> = self.joined.iter().map(|(b, r)| (*b, r.len())).collect();
+        v.sort_unstable();
+        v
+    }
+
     fn device_reset(&mut self) {
+        // ★★★★★ THE JOINS GO TOO, and this is the arm `fb_cpu_view.md` §4.3 names as a
+        // cross-life leak if it is missed. A joined range that survived a device life would
+        // be the PREVIOUS guest's framebuffer content, still mapped by an isolate, readable
+        // by the next guest through this very window — and unlike a stale local page it is
+        // not even this process's memory to have kept. ⊘ Dropping the boxes releases this
+        // side's mapping; the isolate's own half dies with the isolate, which is the same
+        // lifetime `#130` quantifies over.
+        self.joined.clear();
         // ★ `clear()` keeps the map's capacity, which is a host allocation that survived
         // the guest that caused it — but not any of its BYTES. The leak this guards is a
         // content leak; a retained bucket array carries no guest data.

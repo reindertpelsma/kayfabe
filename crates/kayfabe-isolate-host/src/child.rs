@@ -199,7 +199,11 @@ pub fn serve(args: &ChildArgs) -> i32 {
 
     // ★ Build the backends BEFORE announcing readiness, so a bring-up failure is reported
     // on the hello frame rather than on the first guest operation.
-    let backends = match build_backends(args, id, &exports, guest_ram.as_ref()) {
+    // ★★★★★ ONE join table per isolate, built HERE and cloned into every worker's backend.
+    // See `crate::fbjoin`: an isolate is a pool, and a per-worker table is a bug no
+    // single-worker test can see.
+    let fb_joins = Arc::new(crate::fbjoin::FbJoinTable::new());
+    let backends = match build_backends(args, id, &exports, guest_ram.as_ref(), &fb_joins) {
         Ok(b) => b,
         Err(why) => {
             eprintln!("kayfabe-isolate: {why}");
@@ -248,6 +252,7 @@ fn build_backends(
     id: IsolateId,
     exports: &Arc<ChildExports>,
     guest_ram: Option<&Arc<GuestRamPlane>>,
+    fb_joins: &Arc<crate::fbjoin::FbJoinTable>,
 ) -> Result<Vec<Box<dyn RmBackend>>, String> {
     match args.rm {
         RmMode::Real => {
@@ -285,7 +290,8 @@ fn build_backends(
                 .map(|_| {
                     Box::new(
                         HostRmBackend::new(id, Arc::clone(&conn), Arc::clone(exports))
-                            .with_guest_ram(guest_ram.map(Arc::clone)),
+                            .with_guest_ram(guest_ram.map(Arc::clone))
+                            .with_fb_joins(Arc::clone(fb_joins)),
                     ) as Box<dyn RmBackend>
                 })
                 .collect())
@@ -308,7 +314,8 @@ fn build_backends(
                 out.push(Box::new(
                     LoopbackRm::new(id, Arc::clone(&shared), Arc::clone(exports))
                         .map_err(|e| format!("park pipe dup: {e}"))?
-                        .with_guest_ram(guest_ram.map(Arc::clone)),
+                        .with_guest_ram(guest_ram.map(Arc::clone))
+                        .with_fb_joins(Arc::clone(fb_joins)),
                 ));
             }
             Ok(out)
@@ -423,6 +430,16 @@ fn serve_one(
             len,
             prot,
         } => export_backing(rm, source, memory, len, prot, exports),
+        // ★★★★★ The SECOND request whose reply carries a descriptor. It is intercepted here
+        // for `export_backing`'s reason exactly — `execute` is a pure `Request -> Reply`
+        // function and a resource has no place in nineteen of its arms.
+        Request::JoinFbLeaf {
+            vas,
+            len,
+            at,
+            phys,
+            prot,
+        } => join_fb_leaf(rm, vas, len, at, phys, prot, exports),
         other => (execute(rm, other), None),
     }
 }
@@ -485,6 +502,66 @@ fn export_backing(
         // not the parent's. Reported as a failure rather than as a reply with no
         // descriptor: a `Backing` frame carrying nothing would have the parent adopt
         // whatever descriptor arrived next.
+        Err(_) => (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        ),
+    }
+}
+
+/// ★★★★★ The join arm: run the chain, and attach the backing it minted.
+///
+/// [`export_backing`]'s twin one function up, and every refusal before the backend is
+/// reached is the same value it refuses: an unknown `prot` code is never defaulted, and
+/// specifically never to read-write.
+///
+/// ⊘ **The two arms are deliberately not merged.** They differ in what a wrong answer costs:
+/// an export hands the VMM a page it may install wherever it likes, while a join has already
+/// placed a host GPU mapping at an address the guest's own page tables bind. Sharing a body
+/// would put one `if` between those two facts.
+fn join_fb_leaf(
+    rm: &mut dyn RmBackend,
+    vas: u64,
+    len: u64,
+    at: u64,
+    phys: u64,
+    prot: u8,
+    exports: &ChildExports,
+) -> (Reply, Option<OwnedFd>) {
+    let Some(prot) = prot_from_code(prot) else {
+        return (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        );
+    };
+    // ⊘ Decoded and then IGNORED, on purpose, and it is not dead: the join's backing is
+    // minted read-write because the guest writes its own framebuffer through it. Refusing an
+    // unrecognised code above is what stops a wire byte we do not understand from arriving as
+    // a permission — the code being unused downstream does not make its validation optional.
+    let _ = prot;
+    let joined = match rm.join_fb_leaf(raw(vas), len, GpuVa(at), phys) {
+        Ok(j) => j,
+        Err(e) => return (failed(e), None),
+    };
+    // ★ `joined.backing.token` is the CHILD's index into its own table and does not go on the
+    // wire; here it is what says which descriptor to attach. See `crate::export`.
+    match exports.lend(joined.backing.token) {
+        Ok(fd) => (
+            Reply::JoinedBacking {
+                offset: joined.backing.offset,
+                len: joined.backing.len,
+                prot: prot_code(joined.backing.prot),
+                memory: joined.memory.raw(),
+                host_va: joined.host_va,
+            },
+            Some(fd),
+        ),
+        // The backend minted a token this table does not know — our own bug, not the
+        // parent's. Reported as a failure rather than as a reply with no descriptor: a
+        // `JoinedBacking` frame carrying nothing would have the parent adopt whatever
+        // descriptor arrived next. ⚠ The RM objects the chain built are LEAKED on this path
+        // and that is stated rather than hidden: they are named only by a handle the parent
+        // will never receive, so there is nothing left that can free them by name.
         Err(_) => (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
             None,
@@ -607,9 +684,35 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // explicitly rather than caught by a wildcard so that a future verb which also
         // carries a descriptor cannot be silently routed here and answered with bytes and
         // no fd — which the parent would read as a `Backing` naming nothing.
-        Request::ExportBacking { .. } => {
+        Request::ExportBacking { .. } | Request::JoinFbLeaf { .. } => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
+        // ★★★ The instrument. `len` arrives on the wire, so it is bounded HERE, before a
+        // buffer exists — `FbRead`'s argument, and it applies for the same reason: the fact
+        // that the peer is our own parent is not a reason to write code that trusts a length.
+        Request::FbJoinPeek {
+            phys,
+            len,
+            poke,
+            pattern,
+        } => match usize::try_from(len) {
+            Ok(n) if n <= FB_READ_MAX => {
+                let mut buf = vec![0u8; n];
+                let poke = (poke != 0).then_some(pattern);
+                match rm.fb_join_peek(phys, &mut buf, poke) {
+                    Ok(true) => Reply::FbBytes {
+                        covered: true,
+                        bytes: buf,
+                    },
+                    Ok(false) => Reply::FbBytes {
+                        covered: false,
+                        bytes: Vec::new(),
+                    },
+                    Err(e) => failed(e),
+                }
+            }
+            _ => failed(RmError::Other(FB_READ_TOO_LARGE)),
+        },
         Request::CeCopy {
             vas,
             dst,

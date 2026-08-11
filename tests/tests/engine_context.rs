@@ -509,6 +509,7 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::MapGuestRam { .. } => "MapGuestRam",
             RmVerb::UnmapGuestRam { .. } => "UnmapGuestRam",
             RmVerb::DescribeGuestRam { .. } => "DescribeGuestRam",
+            RmVerb::JoinFbLeaf { .. } => "JoinFbLeaf",
         }
     };
 

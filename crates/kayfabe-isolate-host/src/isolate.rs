@@ -56,8 +56,9 @@ use crate::proto::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
-    ExportRequest, ExportSource, ExportedBacking, GuestRamGrant, GuestRamMapped, HostHandle,
-    HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportRequest, ExportSource, ExportedBacking, FbLeafJoined, GuestRamGrant, GuestRamMapped,
+    HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker,
+    WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
@@ -463,6 +464,68 @@ impl ProxyRmBackend {
             prot,
         })
     }
+
+    /// ★★★★★ The **second** call that reads with a descriptor allowance — the join
+    /// (`fb_cpu_view.md` §4).
+    ///
+    /// ⊘ A sibling of [`ProxyRmBackend::call_for_backing`] and not a mode of it. Sharing a
+    /// body would have to branch on the reply shape, and the two shapes differ in exactly the
+    /// fact that matters: a `Backing` is memory the VMM may install anywhere, a
+    /// `JoinedBacking` is memory that has **already** been placed in the host GPU's MMU at an
+    /// address the guest binds. Every check below is the same check, made about a different
+    /// promise.
+    ///
+    /// ⚠ **The frame is refused whole if the count is wrong**, and a reply of any other shape
+    /// leaves `fds` owned so `Drop` closes whatever arrived.
+    fn call_for_joined(&mut self, request: Request) -> Result<FbLeafJoined, RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope { txn, request }.encode();
+        let mut sock = &*self.sock;
+        if write_frame(&mut sock, &body).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut fds = Vec::new();
+        let Ok(true) = read_frame_with_fds(self.sock.as_fd(), &mut self.buf, &mut fds, 1) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(reply) = Reply::decode(&self.buf) else {
+            return Err(RmError::Wedged);
+        };
+        let (offset, len, prot, memory, host_va) = match self.lift(reply)? {
+            Reply::JoinedBacking {
+                offset,
+                len,
+                prot,
+                memory,
+                host_va,
+            } => (offset, len, prot, memory, host_va),
+            _ => return Err(RmError::Wedged),
+        };
+        let Ok([fd]) = <[_; 1]>::try_from(fds) else {
+            return Err(RmError::Wedged);
+        };
+        let Some(prot) = prot_from_code(prot) else {
+            return Err(RmError::Wedged);
+        };
+        // ★★★ The kind check, unchanged and deliberately independent of the child's own
+        // refusal: a compromised isolate is inside the threat model, and `adopt` takes the
+        // descriptor by value so a character device is refused AND closed here.
+        let Ok(token) = self.exports.adopt(fd, self.isolate) else {
+            return Err(RmError::Wedged);
+        };
+        Ok(FbLeafJoined {
+            backing: ExportedBacking {
+                token,
+                offset,
+                len,
+                prot,
+            },
+            // ★ Stamped with THIS connection's isolate, never taken from the wire — the same
+            // rule `WireError::into_rm_error` applies to a `BadHandle`.
+            memory: HostHandle::new(self.isolate, memory),
+            host_va,
+        })
+    }
 }
 
 impl RmBackend for ProxyRmBackend {
@@ -650,6 +713,55 @@ impl RmBackend for ProxyRmBackend {
             len: want.len,
             prot: prot_code(want.prot),
         })
+    }
+
+    /// ★★★★★ The join, on the wire (`fb_cpu_view.md` §4). One request, one reply, one
+    /// descriptor — and the RM object it names was placed before the reply was written.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError> {
+        self.call_for_joined(Request::JoinFbLeaf {
+            vas: vas.raw(),
+            len,
+            at: at.0,
+            phys,
+            prot: prot_code(kayfabe_vmm::Prot::ReadWrite),
+        })
+    }
+
+    /// ★★★ The instrument, on the wire. Shares [`Reply::FbBytes`] with
+    /// [`RmBackend::fb_read`] because it carries the identical pair of facts — bytes, and
+    /// whether anything covered the range at all.
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        let reply = self.call(Request::FbJoinPeek {
+            phys,
+            len: buf.len() as u64,
+            poke: u8::from(poke.is_some()),
+            pattern: poke.unwrap_or(0),
+        })?;
+        match self.lift(reply)? {
+            Reply::FbBytes {
+                covered: false,
+                bytes,
+            } if bytes.is_empty() => Ok(false),
+            Reply::FbBytes {
+                covered: true,
+                bytes,
+            } if bytes.len() == buf.len() => {
+                buf.copy_from_slice(&bytes);
+                Ok(true)
+            }
+            _ => Err(RmError::Wedged),
+        }
     }
 
     fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
@@ -1047,6 +1159,75 @@ pub struct HostIsolateFactory {
     /// an isolate that re-derived it with an `lseek` would give the one number the whole
     /// authorization is bounded by a second source of truth.
     guest_ram: Option<(std::sync::Arc<OwnedFd>, u64)>,
+    /// ★★★★★ Every isolate's [`ExportRegistry`], by id — the VMM's route to a descriptor an
+    /// isolate handed up (`fb_cpu_view.md` §4).
+    ///
+    /// # ⊘ Why a directory exists at all, rather than an accessor on the isolate
+    ///
+    /// The core holds `Box<dyn Isolate>` and must: it has no business knowing an isolate is a
+    /// process, let alone that it owns file descriptors. So a shell that has just been told
+    /// *"leaf X is joined, its backing is token T"* has no path from the core back to the
+    /// registry T indexes. This is that path, and it is on the **factory** because the
+    /// factory is the one object the composition root keeps a handle to on its own side of
+    /// the port.
+    ///
+    /// ⊘ It is a directory of registries and **not** a registry: tokens stay isolate-scoped,
+    /// so one isolate can never name another's backing even by arithmetic.
+    exports: ExportDirectory,
+}
+
+/// ★★★ The VMM-side directory of per-isolate [`ExportRegistry`]s. Cloneable, so the
+/// composition root can keep one after the factory is boxed into the core.
+#[derive(Debug, Clone, Default)]
+pub struct ExportDirectory {
+    by_isolate: Arc<std::sync::Mutex<std::collections::BTreeMap<IsolateId, Arc<ExportRegistry>>>>,
+}
+
+impl ExportDirectory {
+    /// An empty directory.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Remember `isolate`'s registry. ⊘ Called at spawn, so a lookup can never race ahead of
+    /// the isolate that would answer it.
+    pub fn record(&self, isolate: IsolateId, exports: &Arc<ExportRegistry>) {
+        let mut t = self.by_isolate.lock().unwrap_or_else(|e| e.into_inner());
+        t.insert(isolate, Arc::clone(exports));
+    }
+
+    /// A duplicate of `token`'s descriptor in `isolate`'s registry.
+    ///
+    /// ⊘ Two lookups and not one: an unknown isolate and an unknown token are different
+    /// findings — the first says the shell asked about something that was never spawned, the
+    /// second says the isolate answered with a token it did not hand over.
+    ///
+    /// # Errors
+    /// `None` when either the isolate or the token is unknown.
+    #[must_use]
+    pub fn dup(&self, isolate: IsolateId, token: u64) -> Option<OwnedFd> {
+        let registry = {
+            let t = self.by_isolate.lock().unwrap_or_else(|e| e.into_inner());
+            Arc::clone(t.get(&isolate)?)
+        };
+        registry.dup(token).ok()
+    }
+
+    /// How many isolates have registered. Diagnostics only.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.by_isolate
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
+    }
+
+    /// Whether none have.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl HostIsolateFactory {
@@ -1063,6 +1244,7 @@ impl HostIsolateFactory {
             // guest RAM would be granting it on every deployment that never asked, and the
             // grant is the whole boundary.
             guest_ram: None,
+            exports: ExportDirectory::new(),
         }
     }
 
@@ -1150,7 +1332,20 @@ impl HostIsolateFactory {
                 self.guest_ram.as_ref(),
             )
         });
-        built.unwrap_or_else(|why| HostIsolate::stillborn(id, self.pool, why))
+        let isolate = built.unwrap_or_else(|why| HostIsolate::stillborn(id, self.pool, why));
+        // ★ Recorded at spawn, including for a STILLBORN isolate: its registry is empty and
+        // will stay empty, and a lookup that answered "unknown isolate" for one that was
+        // spawned-and-failed would report the wrong fault.
+        self.exports.record(id, isolate.exports());
+        isolate
+    }
+
+    /// ★★★★★ This factory's [`ExportDirectory`] — the composition root's route from a
+    /// backing token to a descriptor it can `mmap`. Clone it **before** boxing the factory
+    /// into the core.
+    #[must_use]
+    pub fn export_directory(&self) -> ExportDirectory {
+        self.exports.clone()
     }
 }
 
@@ -1379,6 +1574,7 @@ mod tests {
             park: crate::loopback::ParkVerb::Nothing,
             spawned: std::sync::Mutex::new(Vec::new()),
             guest_ram: None,
+            exports: ExportDirectory::new(),
         };
         assert_eq!(f.embedded(), Err("no image in this build".to_owned()));
         let id = IsolateId::new(1, GpuId(0));

@@ -1561,6 +1561,45 @@ impl RegPlane {
         s.fb = fb;
     }
 
+    /// ★★★★★ **Join one framebuffer range to memory a second party also maps**
+    /// (`fb_cpu_view.md` §4) — the establishment copy and the install, in **one** hold of the
+    /// plane lock.
+    ///
+    /// # ★★★ Why the two halves share this critical section
+    ///
+    /// The copy reads the store's own pages; the install makes the joined mapping
+    /// authoritative for the same range. Between them the store holds bytes in two places,
+    /// and a guest framebuffer write landing in that window would be written to the copy that
+    /// is about to be discarded — silently, with no fault and no status, which is the exact
+    /// failure mode the join exists to remove. Holding the lock across both makes the window
+    /// **not exist**, so the safety is by construction rather than by discipline.
+    ///
+    /// ⊘ This is also why the caller must arrive here having **already** done the isolate
+    /// round trip. Nothing under this lock may block ([`crate::fbwin::FbStore::install_join`]
+    /// records why, and that the R1 witness would not say so); the `memcpy` this performs
+    /// blocks on nothing.
+    ///
+    /// ★ Takes `&self` and the lock, like [`RegPlane::set_fb`] — a plane already answering
+    /// registers acquires a join without being rebuilt.
+    ///
+    /// # Errors
+    /// Whatever the store refused with, whole — the address, the length and the reason.
+    pub fn join_fb(
+        &self,
+        phys: u64,
+        region: Box<dyn crate::fbwin::FbJoined>,
+    ) -> Result<crate::fbwin::FbJoinInstalled, FbRefused> {
+        let mut s = self.state.lock();
+        s.fb.install_join(phys, region)
+    }
+
+    /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
+    #[must_use]
+    pub fn joined_fb_ranges(&self) -> Vec<(u64, u64)> {
+        let s = self.state.lock();
+        s.fb.joined_ranges()
+    }
+
     /// ★★★ Install the chip's **page-table format**, replacing the refusal.
     ///
     /// # Why a port and not a [`ChipProfile`] row
@@ -1983,6 +2022,27 @@ impl RegPlane {
     pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
         let mut s = self.state.lock();
         s.fb.read(phys, buf).map_err(|e| e.why)
+    }
+
+    /// ★★★ [`RegPlane::fb_peek`]'s write twin — **for an instrument, and it is written as
+    /// one** (`fb_cpu_view.md` §5.12's both-directions probe).
+    ///
+    /// It is the same `write` the BAR0 moving window serves, addressed directly, so bytes put
+    /// here take **exactly** the path a guest PRAMIN store takes — which is the whole reason
+    /// the probe uses it rather than reaching into the store: a check that wrote through some
+    /// other door would be measuring a door the guest does not use.
+    ///
+    /// ⚠ **It changes device memory.** [`RegPlane::fb_peek`]'s docs can say *"it changes
+    /// nothing"*; this one cannot, and the caller owes a reason for every byte. ⊘ Attributed
+    /// [`FbWriter::Unattributed`] deliberately — *"nobody said which window"* is the truth
+    /// here, and claiming a window would put an instrument's bytes in the by-writer census as
+    /// though the guest had put them there.
+    ///
+    /// # Errors
+    /// The store's own sentence when it does not back the range at all.
+    pub fn fb_poke(&self, phys: u64, bytes: &[u8]) -> Result<(), &'static str> {
+        let mut s = self.state.lock();
+        s.fb.write(phys, bytes).map_err(|e| e.why)
     }
 
     /// The published page-directory root of one `(hClient, hVASpace)` pair, for a report

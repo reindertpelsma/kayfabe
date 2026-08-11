@@ -477,6 +477,29 @@ impl kayfabe_isolate::RmBackend for Relocating {
     ) -> Result<kayfabe_isolate::ExportedBacking, RmError> {
         self.0.export_backing(want)
     }
+    /// ★★★ Relocating too, and deliberately: `join_fb_leaf` is the second chain whose whole
+    /// claim is address identity, so a double that relocated `map_gpu_va` and NOT this one
+    /// would leave the join's placement check unexercised by the very fixture written to
+    /// exercise placement.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: kayfabe_arch::ids::GpuVa,
+        phys: u64,
+    ) -> Result<kayfabe_isolate::FbLeafJoined, RmError> {
+        let mut joined = self.0.join_fb_leaf(vas, len, at, phys)?;
+        joined.host_va = at.0 + 0x1000;
+        Ok(joined)
+    }
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        self.0.fb_join_peek(phys, buf, poke)
+    }
     fn map_guest_ram(&mut self, g: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
         self.0.map_guest_ram(g)
     }

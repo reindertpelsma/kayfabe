@@ -21,7 +21,9 @@
 
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{IsolateId, RmBackend, RmError};
-use kayfabe_isolate_host::rm::{HostRmBackend, OsDescSeed, RmConnection};
+use kayfabe_isolate_host::rm::{
+    DeviceExportOutcome, FbViewJoin, HostRmBackend, OsDescSeed, RmConnection, ViewCompare,
+};
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
 
@@ -1313,6 +1315,173 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                  which by its payload.",
             );
             false
+        }
+    }
+}
+
+/// ★★★★★ **R30 — THE CPU VIEW.** `docs/design/fb_cpu_view.md`.
+///
+/// `w228` backed three of `cuCtxCreate`'s framebuffer operands with real host vidmem and
+/// left them with **no CPU view**, so the engine and the guest address two different
+/// memories. This rung measures, on real hardware, which object can carry the missing view
+/// — and it is deliberately a **host-side** ladder rung rather than a guest boot, because
+/// every question it asks is about RM and none of them is about the guest.
+fn fb_view_probe(rm: &mut HostRmBackend, gpu: u32, join: FbViewJoin) -> bool {
+    // ⊘ A VA in the same band the other ladder rungs use, and one this process's own VAS
+    // demonstrably does not already bind — the point is `DMA_OFFSET_FIXED_TRUE`, not the
+    // number.
+    const AT: GpuVa = GpuVa(0x0000_7f00_0000_0000);
+    const PATTERN: u32 = 0xfbc0_0001;
+
+    println!(
+        "==    R30 fb-cpu-view    = gpu {gpu}, euid {}, join {join:?}, FIXED at {:#018x}{}",
+        kayfabe_linux_raw::geteuid(),
+        AT.0,
+        match join {
+            FbViewJoin::Shared => "",
+            FbViewJoin::Private =>
+                "  [NEGATIVE CONTROL: the guest-side view is PRIVATE ANONYMOUS, so it is \
+                 NOT the same pages — BOTH directions must MISMATCH, and that is the PASS]",
+        }
+    );
+
+    let vas = match rm.alloc_vaspace() {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  R30 vaspace        = {e:?} (the rung needs its own address space)");
+            return false;
+        }
+    };
+
+    let ev = match rm.prove_fb_view(vas, AT, PATTERN, join) {
+        Ok(e) => e,
+        Err(e) => {
+            println!("FAIL  R30 fb-cpu-view    = {e:?}");
+            return false;
+        }
+    };
+
+    // ---- 1. THE PREMISE. Printed first and judged on its own, because every later line is
+    // about a different object and a reader must not have to infer which.
+    match (ev.vidmem_cpu_view, ev.vidmem_cpu_refusal) {
+        (Some(v), _) if v.agrees() => println!(
+            "★     R30 premise        = the vidmem object `alloc_vidmem` mints IS \
+             CPU-MAPPABLE: NV_ESC_RM_MAP_MEMORY succeeded and {} words round-tripped \
+             through that mapping. ⊘ Through the SAME mapping, so this says the view takes \
+             stores and loads — NOT that the card holds them.",
+            v.words_compared
+        ),
+        (Some(v), _) => println!(
+            "FAIL  R30 premise        = the mapping succeeded but word {} read {:#010x} \
+             where {:#010x} was stored — a CPU view that does not hold its own writes",
+            v.mismatch.map_or(0, |m| m.word),
+            v.read_back,
+            v.wrote
+        ),
+        (None, Some(st)) => println!(
+            "⊘     R30 premise REFUTED= NV_ESC_RM_MAP_MEMORY REFUSED the vidmem object \
+             (status {st:#x}). The brief's premise is FALSE and the successor rung cannot \
+             be built on it.",
+        ),
+        (None, None) => println!("FAIL  R30 premise        = neither a view nor a refusal"),
+    }
+
+    // ---- 2. THE NEGATIVE CONTROL on the crossing.
+    let control_ok = match ev.device_export {
+        DeviceExportOutcome::RefusedByName => {
+            println!(
+                "ok    R30 neg control    = export_backing(HostDeviceMemory) on that SAME \
+                 live object → NotExportableAsMemory, BY NAME. ⇒ the CPU view exists and \
+                 CANNOT cross to the VMM as memory, which is the whole of why `w228`'s \
+                 objects have no guest-reachable view."
+            );
+            true
+        }
+        DeviceExportOutcome::RefusedOtherwise => {
+            println!(
+                "FAIL  R30 neg control    = it refused, but NOT by name. The named boundary \
+                 decision (b) rests on is arriving as an opaque status."
+            );
+            false
+        }
+        DeviceExportOutcome::Succeeded => {
+            println!(
+                "★★    R30 neg control    = it SUCCEEDED. Three cited driver facts say a \
+                 host GPU page cannot cross as memory; one of them is wrong, and THAT is \
+                 this run's finding."
+            );
+            false
+        }
+    };
+
+    // ---- 3. THE JOIN, both directions, judged by the arm this run is.
+    let say = |name: &str, v: ViewCompare| match v.mismatch {
+        None if v.words_compared > 0 => println!(
+            "      R30 {name:<14}= all {} words AGREE ({:#010x} → {:#010x})",
+            v.words_compared, v.wrote, v.read_back
+        ),
+        None => println!("      R30 {name:<14}= ⊘ the loop compared ZERO words — VOID"),
+        Some(m) => println!(
+            "      R30 {name:<14}= DISAGREE at word {} (got {:#010x}, want {:#010x}) of {} \
+             compared",
+            m.word, m.got, m.want, v.words_compared
+        ),
+    };
+    say("guest→host", ev.guest_to_host);
+    say("host→guest", ev.host_to_guest);
+
+    match join {
+        // ⊘ The control is judged by its OWN rule, and it must fail in BOTH directions at
+        // word 0: private pages are zero-filled, and the pattern's word 0 is non-zero.
+        // A control that failed in only one direction would mean the two mappings are
+        // partially shared, which is not a state this code can produce — so it would be a
+        // fact about the instrument.
+        FbViewJoin::Private => {
+            let g = ev.guest_to_host.mismatch;
+            let h = ev.host_to_guest.mismatch;
+            let both_at_zero =
+                matches!(g, Some(m) if m.word == 0) && matches!(h, Some(m) if m.word == 0);
+            if both_at_zero {
+                println!(
+                    "ok    R30 CONTROL FIRED  = with the guest-side view on PRIVATE pages the \
+                     differential fails at word 0 in BOTH directions. ⇒ the comparison CAN \
+                     fail, so the shared run's agreement is a measurement and not a tautology."
+                );
+                control_ok
+            } else {
+                println!(
+                    "FAIL  R30 CONTROL        = private pages compared EQUAL (or failed \
+                     late). The differential is not reading what it claims to, and every \
+                     green this rung prints is void."
+                );
+                false
+            }
+        }
+        FbViewJoin::Shared => {
+            if !ev.placed_as_asked() {
+                println!(
+                    "FAIL  R30 placement      = asked {:#018x}, RM gave {:#018x} — every byte \
+                     above is about a different address",
+                    ev.asked_va, ev.got_va
+                );
+                return false;
+            }
+            if ev.joined() {
+                println!(
+                    "★     R30 JOINED         = ONE fabricated backing, TWO independent \
+                     mappings, {} bytes agreeing in BOTH directions, described to RM as an \
+                     OS_DESCRIPTOR and placed at {:#018x} AS ASKED. ⇒ this is the shape the \
+                     framebuffer join must take; the vidmem object's view cannot cross and \
+                     this one needs no crossing at all.",
+                    ev.bytes, ev.got_va
+                );
+                true
+            } else {
+                println!(
+                    "FAIL  R30 JOINED         = not all four facts hold (see the lines above)"
+                );
+                false
+            }
         }
     }
 }
@@ -2804,6 +2973,7 @@ fn main() -> std::process::ExitCode {
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
     let mut want_executor_alias = false;
+    let mut want_fb_view: Option<FbViewJoin> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -2846,6 +3016,9 @@ fn main() -> std::process::ExitCode {
                 want_executor_vas = true;
                 want_executor_alias = true;
             }
+            "--fb-view-probe" => want_fb_view = Some(FbViewJoin::Shared),
+            // ⊘ The negative control. Same chain, private guest-side pages, inverted verdict.
+            "--fb-view-negative" => want_fb_view = Some(FbViewJoin::Private),
             "--probe-ctrl" => {
                 let Some(v) = args.next() else {
                     eprintln!("--probe-ctrl needs a `cmd[:size],...` list");
@@ -3070,6 +3243,23 @@ fn main() -> std::process::ExitCode {
         );
         let ok = guest_ring_channel_probe(&mut rm, gpu);
         println!("done — guest-ring channel probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★ R30 (the CPU-view arm) runs here and RETURNS, for R25's reason: it allocates its own
+    // address space, its own objects and its own memfd, and leaving the rest of the ladder
+    // unrun keeps every refusal attributable to the CPU-view chain alone.
+    if let Some(join) = want_fb_view {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = fb_view_probe(&mut rm, gpu, join);
+        println!("done \u{2014} fb-cpu-view probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {

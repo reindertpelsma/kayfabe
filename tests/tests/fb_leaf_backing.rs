@@ -30,7 +30,7 @@ use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
-use kayfabe_fwd::FwdFault;
+use kayfabe_fwd::{FbLeafBacking, FwdFault};
 use kayfabe_mmu::{Binding, HostBacking};
 use kayfabe_mocks::watchdog;
 use kayfabe_mocks::{MockArch, MockIsolateFactory, RmVerb, SharedRecorder};
@@ -197,7 +197,14 @@ fn backing_a_framebuffer_leaf_is_refused_by_name_and_the_guests_own_row_survives
         None,
     );
     let refused = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("★ ruling 3: a fake-FB region may not be mapped to a real GPU VA");
     assert_eq!(
         refused,
@@ -268,7 +275,14 @@ fn a_leaf_the_table_has_never_seen_is_refused_and_left_untracked() {
     assert!(tabled(&device, pid).is_none(), "nothing bound to start");
 
     let refused = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("ruling 3 refuses the crossing whether or not a row exists");
     assert_eq!(
         refused,
@@ -312,10 +326,24 @@ fn a_second_ask_is_refused_identically_and_never_succeeds_on_retry() {
         None,
     );
     let first = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("refused");
     let second = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("★ and refused AGAIN — a hazard that appears only on the retry is worse");
     assert_eq!(first, second, "the same refusal, by the same name");
 }
@@ -349,7 +377,14 @@ fn the_walk_and_the_table_disagreeing_is_refused_by_name() {
         None,
     );
     let e = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("the disagreement is refused");
     match e {
         FwdFault::FbLeafDisagrees { va, walked, tabled } => {
@@ -394,7 +429,14 @@ fn a_table_that_calls_the_leaf_sysmem_is_refused_on_the_aperture_alone() {
         None,
     );
     let e = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("refused");
     assert!(
         matches!(
@@ -429,7 +471,14 @@ fn a_table_range_that_is_not_the_leaf_is_refused_by_extent() {
         None,
     );
     let e = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("refused");
     match e {
         FwdFault::FbLeafExtent { va, len, tabled } => {
@@ -456,7 +505,7 @@ fn a_leaf_below_the_fixed_map_granule_is_refused_and_not_rounded_up() {
     let _wd = watchdog("fb_leaf_backing::gran", std::time::Duration::from_secs(60));
     let (device, _pid, rec) = device();
     let e = device
-        .back_fb_leaf(GPU, PDB, LEAF_VA, 0x1000, LEAF_PHYS)
+        .back_fb_leaf(GPU, PDB, LEAF_VA, 0x1000, LEAF_PHYS, FbLeafBacking::Vidmem)
         .expect_err("refused");
     assert!(
         matches!(e, FwdFault::FbLeafGranularity { len: 0x1000, .. }),
@@ -472,7 +521,14 @@ fn a_leaf_base_that_is_not_granule_aligned_is_refused() {
     let _wd = watchdog("fb_leaf_backing::align", std::time::Duration::from_secs(60));
     let (device, _pid, _rec) = device();
     let e = device
-        .back_fb_leaf(GPU, PDB, GpuVa(LEAF_VA.0 + 0x1000), LEAF_LEN, LEAF_PHYS)
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            GpuVa(LEAF_VA.0 + 0x1000),
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
         .expect_err("refused");
     assert!(matches!(e, FwdFault::FbLeafGranularity { .. }), "got {e:?}");
 }
@@ -495,12 +551,181 @@ fn the_system_proc_may_not_back_a_framebuffer_leaf() {
     let (device, _pid, rec) = device();
     let sys = kayfabe_core::gpu::Gpu::SYSTEM_PROC;
     let refused = device.with_proc_mut(sys, |p| {
-        kayfabe_fwd::plan_back_fb_leaf(p, GPU, PDB, LEAF_VA, LEAF_LEN, LEAF_PHYS)
-            .expect_err("the system proc is refused")
+        kayfabe_fwd::plan_back_fb_leaf(
+            p,
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Vidmem,
+        )
+        .expect_err("the system proc is refused")
     });
     assert!(
         matches!(refused, Some(FwdFault::SystemDataPlane)),
         "must refuse by name, got {refused:?}"
     );
     assert!(verbs(&rec).is_empty(), "nothing was built");
+}
+
+/// ★★★★★ **§5.11 — THE CHAIN THAT REPLACES THE ONE ABOVE.** The same leaf, joined: the
+/// object is **not** vidmem, and the reply carries a **backing the VMM can map**.
+///
+/// ⊘ The two assertions are the whole difference and they are asserted as a pair. A join
+/// that minted vidmem would be `w228` wearing a new name; a join that placed the object
+/// correctly and handed back no backing would be `w228` exactly — the leaf would be
+/// materialized on the host and the guest would still be reading the emulator's own copy,
+/// silently, which is the state this rung exists to end.
+///
+/// ⚠ `[SOURCED, not MEASURED]` — this runs against `MockRmBackend`, which mints no memory.
+/// It proves the *plumbing*: that the plan emits the join chain, that the commit adopts it,
+/// and that a token comes back. It says **nothing** about whether the two views hold the same
+/// bytes; that is `fb_cpu_view.md` §3's hardware measurement and this rung's boot.
+#[test]
+fn joining_a_framebuffer_leaf_mints_no_vidmem_and_hands_a_backing_to_the_vmm() {
+    let _wd = watchdog("fb_leaf_backing::join", std::time::Duration::from_secs(60));
+    let (device, pid, rec) = device();
+    guest_binds(
+        &device,
+        pid,
+        LEAF_VA,
+        LEAF_LEN,
+        LEAF_PHYS,
+        Aperture::Vidmem,
+        None,
+    );
+    let joined = device
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Joined,
+        )
+        .expect("the leaf joins");
+
+    assert!(!joined.already, "the first call did the work");
+    assert_eq!(
+        joined.host_va, LEAF_VA.0,
+        "address identity: placed at the GUEST's VA, exactly as the vidmem chain is"
+    );
+    let backing = joined
+        .backing
+        .expect("★ the join's whole point: a backing the VMM can map");
+    assert_eq!(
+        backing.len, LEAF_LEN,
+        "the backing covers the whole leaf — a short one would leave part of the leaf in          two memories, which is the defect with a smaller blast radius rather than a fix"
+    );
+
+    let v = verbs(&rec);
+    assert!(
+        !v.contains(&"vidmem"),
+        "⊘ the joined chain must mint NO device-local memory: card memory is exactly what          cannot carry a guest-reachable CPU view. {v:?}"
+    );
+    assert!(
+        !v.contains(&"sysmem"),
+        "⊘ nor `publish_backing`'s MAPPING_NO_MAP sysmem: {v:?}"
+    );
+
+    // ★★ The join was recorded against the leaf's own FRAMEBUFFER address, not only its VA.
+    // A join placed at the right guest VA but standing for the wrong framebuffer range would
+    // pass every assertion above and answer the instrument about someone else's bytes.
+    let phys_seen: Vec<u64> = rec
+        .lock()
+        .unwrap()
+        .log
+        .iter()
+        .filter_map(|(_, verb)| match verb {
+            RmVerb::JoinFbLeaf { phys, at, .. } if *at == LEAF_VA => Some(*phys),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        phys_seen,
+        vec![LEAF_PHYS],
+        "exactly one join, carrying the walk's own framebuffer address"
+    );
+
+    // ★ And the address table records it exactly as the vidmem chain does — same range, same
+    // aperture, same materialization. ⊘ The two chains differ in what backs the leaf, NOT in
+    // what the core believes about it.
+    let (start, len, b) = tabled(&device, pid).expect("still bound");
+    assert_eq!((start, len), (LEAF_VA.0, LEAF_LEN), "same range");
+    assert_eq!(b.phys(), LEAF_PHYS);
+    assert_eq!(
+        b.aperture(),
+        Aperture::Vidmem,
+        "⊘ the aperture is NOT corrected to sysmem by the join. It records the GUEST's own \
+         declaration, and `phys` is a framebuffer offset — see `BackingBytes::JoinsGuestWindow`"
+    );
+    assert_eq!(
+        b.kind(),
+        kayfabe_mmu::RegionKind::RealGpuMemory,
+        "★★★ ruling 4: a joined leaf IS kind 3. The emulated framebuffer is no longer its \
+         store, so it is no longer kind 2 — even though the guest still declares it `Vidmem`"
+    );
+    assert!(
+        !b.is_guest_ram(),
+        "⊘ and `phys` must stay un-handable to `Vmm::gpa_read`"
+    );
+    let host = b.host().expect("the binding carries its materialization");
+    assert_eq!(
+        host.bytes(),
+        kayfabe_mmu::BackingBytes::JoinsGuestWindow,
+        "★★★★★ ONE memory, declared. ⊘ NOT `SoleBacking` — that would have been admitted by \
+         an aperture-blind guard and is the word `w228`'s chain could also have used"
+    );
+    assert_eq!(host.host_va(), LEAF_VA.0);
+    assert_eq!(host.memory(), joined.memory);
+}
+
+/// ★★★ **Idempotence hands back NO second backing**, and that is not tidiness.
+///
+/// A doorbell repeats. A replay that handed the caller a second descriptor for the same
+/// pages would be a second lifetime for one file, and a VMM that installed it would map the
+/// same memory at the same framebuffer address twice.
+#[test]
+fn a_joined_leaf_replayed_hands_back_no_second_backing() {
+    let _wd = watchdog(
+        "fb_leaf_backing::join_replay",
+        std::time::Duration::from_secs(60),
+    );
+    let (device, pid, _rec) = device();
+    guest_binds(
+        &device,
+        pid,
+        LEAF_VA,
+        LEAF_LEN,
+        LEAF_PHYS,
+        Aperture::Vidmem,
+        None,
+    );
+    let first = device
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Joined,
+        )
+        .expect("joins");
+    let second = device
+        .back_fb_leaf(
+            GPU,
+            PDB,
+            LEAF_VA,
+            LEAF_LEN,
+            LEAF_PHYS,
+            FbLeafBacking::Joined,
+        )
+        .expect("replays");
+    assert!(first.backing.is_some() && !first.already);
+    assert!(
+        second.already && second.backing.is_none(),
+        "a replay is a replay: no work, no second descriptor — got {second:?}"
+    );
+    assert_eq!(second.memory, first.memory, "the same host object");
 }

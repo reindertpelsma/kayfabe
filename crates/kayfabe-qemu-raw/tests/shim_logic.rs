@@ -1522,7 +1522,7 @@ fn the_stillborn_factory_retires_every_isolate_at_birth() {
     use kayfabe_arch::ids::GpuId;
     use kayfabe_isolate::IsolateId;
 
-    let (f, backing) = isolate_factory(IsolatePlane::Stillborn, GuestRamSource::None)
+    let (f, backing, _exports) = isolate_factory(IsolatePlane::Stillborn, GuestRamSource::None)
         .expect("the default plane builds");
     // ★ §5.7 — a plane that adopted no guest-RAM block claims no backing identity. `None`
     // here is what makes the stated-layout report silent on an unarmed boot, which is what
