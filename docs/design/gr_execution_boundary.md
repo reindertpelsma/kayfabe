@@ -9,6 +9,13 @@ once: every address plane this workload needs now resolves to something the host
 addressing problem.** ★ Property 3 is the cheapest open item on the board and
 `scripts/bench/gpu_fault_containment.sh` has never been asked it. See §16.99.
 
+⊘⊘⊘ **SECOND CORRECTION (2026-08-11) — and it inverts an ORDERING, so read §4.1's STATUS block
+before acting on §4.1's list.** Property 3 is now **DISCHARGED** (`traces/boots/w248/`, §16.100).
+And **property 2 is dissolved BY the GR execution rung rather than being a prerequisite of it**:
+its entire residual is the materialized channel's own ring in the guest's `host_vas`, and
+`RingOwner::HandedIn` maps nothing of ours there. ⇒ The blocker that actually remains is **G8,
+the cursor bridge** — nothing propagates the guest's `GP_PUT` into the host channel's USERD.
+
 **Rung:** `w227` / `master`, based on the merge of `origin/completion-observer` (`c5f251d`).
 **Question, from the brief:** open `shim.rs`'s `Route::NotACopyEngineChannel` refusal so the
 real host GR engine runs `cuCtxCreate`'s pushbuffer and writes `0x2_0440fff0` itself.
@@ -351,7 +358,47 @@ in one place. GR execution requires them not to.
 
 ### 4.1 ⇒ THE NEXT RUNG, ORDERED — and none of these is "open the route"
 
+> ### ⊘⊘⊘ STATUS — 2026-08-11: **ITEM 3'S ORDERING IS INVERTED. READ THIS BEFORE THE LIST.**
+>
+> **Property 2 is DISSOLVED BY the GR execution rung, not a PREREQUISITE of it.** The list
+> below orders closure (item 3) *before* opening the route (item 4). That is backwards, and a
+> lane that reads the list as current is sent at a prerequisite its own successor supplies.
+>
+> **Why, in one step.** §2.5's objection is that `alloc_channel_at` places *our* ring, USERD and
+> semaphore inside the VA space the channel is handed. Two of those three objects have since
+> moved out on their own:
+>
+> - the isolate's CE ring / pushbuffer / release word live in `ExecutorVas` only
+>   (`executor_vas_separation.md` §2; R30 arm C re-measured and **REFUSED** —
+>   `NVRM: Xid 31 … CE0 faulted @ 0x1_20022000, FAULT_PDE ACCESS_TYPE_VIRT_READ`, re-confirmed
+>   at `b39f95f`, `guest_ring_adoption.md` §1);
+> - **USERD is in no GPU address space at all** — it is handed to RM as `hUserdMemory[0]` and is
+>   only ever CPU-mapped (`isolate-host/src/rm.rs`, `alloc_channel_in`'s G4 arm).
+>
+> ⇒ **The entire residual of property 2 is one object: the materialized channel's own 64 KiB
+> ring, `raw_map_dma`'d into the guest's `Vas::host_vas`.** And `RingOwner::HandedIn`
+> (`alloc_channel_over_guest_ring`, `rm.rs`) allocates and maps **nothing of ours** there —
+> the channel is born over the *guest's* ring. ⇒ **Promoting `alloc_channel_over_guest_ring`
+> to the doorbell path removes the last non-guest object from the guest's VA space as a side
+> effect of the execution work.** The route's own mechanism **is** the subtraction.
+>
+> ⚠ **What does NOT change.** Items 1 and 2 are discharged on their own evidence and item 4's
+> *other* preconditions are untouched — in particular **G8, the cursor bridge**
+> (`guest_ring_adoption.md` §4): nothing propagates the guest's `GP_PUT` into the host
+> channel's USERD, so a channel born this way is accepted by RM, schedulable, and **fetches
+> nothing**. ⊘ Inverting item 3 does not make item 4 ready; it removes one blocker and leaves
+> that one standing.
+>
+> **Provenance.** Found by the w259 rung-preparation pass (`hostgr-route-over-guest-ring`
+> `1040880` §1.2), independently reached by the property-2 adjudication pass. The C-side parent
+> is already corrected at `/workspace/nvidia-gpu-passthrough` `70cbfca`
+> (`docs/design/property_2_the_subtraction.md`). **Inferred from code**, at high confidence;
+> ⊘ **no boot has run a host GR channel over a handed-in ring** — `alloc_channel_over_guest_ring`
+> has one caller, the R31 probe.
+
 The census reorders the work. In dependency order, cheapest and most falsifiable first:
+⚠ **as corrected by the STATUS block immediately above — item 3 is a consequence of item 4,
+not its prerequisite.**
 
 1. ★★ **Ask the fault-containment question** (property 3). `scripts/bench/gpu_fault_containment.sh`
    exists. Until it is answered, *every* plan above is conditional on a `[NOT MEASURED]`, and
@@ -360,11 +407,18 @@ The census reorders the work. In dependency order, cheapest and most falsifiable
    surface. The question is not *"can we OS_DESCRIPTOR the FbStore"* but *"what is the
    framebuffer, such that a host GPU can address it"* — today it is a process-local store with
    no fd and a first-writer census that assumes a single writer.
-3. **Then** property 2 (closure): move the isolate's ring/USERD/semaphore out of any VAS a
+3. ⊘⊘ **INVERTED 2026-08-11 — see the STATUS block above; this item is a CONSEQUENCE of item 4,
+   not a prerequisite.** *(Original text, kept so the correction can be read against it:)*
+   **Then** property 2 (closure): move the isolate's ring/USERD/semaphore out of any VAS a
    guest channel is bound to. ⊘ This is a change to `alloc_channel_at` that has nothing to do
    with GR and can be done, and tested, on the CE path where there is already a working
    executor to regress against.
+   ⇒ Two of the three objects moved out on their own (`ExecutorVas`, and USERD is in no GPU VA
+   space at all); the residual is the materialized channel's own ring, which
+   `RingOwner::HandedIn` never places. **The route removes it.**
 4. ⊘ **Only then** is *"open S1"* a question with a defensible answer.
+   ⚠ **Corrected:** *"only then"* no longer names property 2. What it still names is **G8, the
+   cursor bridge** — see the STATUS block above.
 
 ⚠ **And the instrument is already in the tree for step 2's falsifier**: `GR-ADDRESS-CENSUS`
 prints the plane of every operand, so *"the FB crossing works"* has an existing, measured
