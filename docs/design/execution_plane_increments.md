@@ -16396,3 +16396,63 @@ entry**, not a resumption. The first service completed; it simply answered nothi
 unmeasured**. Forbidden-#2 gate **proven offline only, never fired on hardware** — ★ still exactly
 the *"capability that exists, is tested, and is never called"* shape, and saying so is not the
 same as fixing it. Route A untouched.
+
+## §16.95 ★★★★ OBLIGATION 1 DISCHARGED — the decode path is side-effect-free, proven by SIGNATURE
+
+⚠ **STATUS (2026-08-11): the design's precondition is ESTABLISHED. The latch is NOT BUILT.**
+Bench still cannot boot.
+
+### 16.95.1 The question, and why it had to be answered first
+
+§16.94's design re-reads and **re-decodes** the same command on a second service pass. The old
+path decoded exactly once, so *"decode has no side effects"* was never a requirement and could
+have been false without anyone noticing. A decode that mutated would corrupt on the second pass
+**silently** — the worst available failure.
+
+### 16.95.2 ★★★ The answer: every step before `answer` takes `&self` or is a free function
+
+Reading `drain_commands` (`kayfabe-gsp/src/boot.rs:1318-1400`), the per-command sequence is
+**decode → answer → consume**, and the decode half is:
+
+| step | signature | mutates FSM? |
+|---|---|---|
+| `available_elements` | `fn(u32, u32, MsgCount)` — free (`ring.rs:328`) | no |
+| `peek_len` / `peek_elem_count` | free fns over `&[u8]` (`element.rs:582,624`) | no |
+| `GspFsm::read_run` | **`&self`** (`boot.rs:1410-1417`) | **no** |
+| `decode_message` | free fn, all `&` params (`element.rs:650`) | no |
+| `RpcCommand::from_incoming` | `fn(&RpcAbi, &IncomingRpc)` (`rpc.rs:435`) | no |
+| `GspFsm::answer` | **`&mut self`** (`boot.rs:1482`) | **yes — and it is the only one** |
+
+⇒ ★★ **The compiler is the proof, not a reading.** `read_run` takes `&self`; if it mutated FSM
+state it would not compile. Every other decode step is a free function over shared references.
+**The single `&mut self` in the loop is `answer`, which the design does not call on the first
+pass.**
+
+### 16.95.3 ⚠ The second half of idempotence — the BYTES, not just our state
+
+Decode also re-reads **guest RAM** (`read_run` takes `ram: &mut dyn GuestRam`). Re-reading is only
+idempotent if the bytes cannot change between passes.
+
+★ **They cannot, and it is the same argument that dissolved §16.93's ordering worry:** the vCPU is
+halted inside its own MMIO trap for the whole of `kayfabe_shim_regs_write`, and the drain plus
+re-entry happen inside that call (§16.91). **A guest that is not running cannot rewrite the
+command it is waiting on.**
+
+⊘ **Scope, stated rather than assumed**: this holds for the *single-vCPU-in-this-trap* case, which
+is the whole of the design. A second vCPU writing the same msgq region concurrently is **not**
+covered — but that is already excluded, because the msgq is single-producer and the producer is
+the polling thread itself.
+
+⚠ `expect_seq` is also unchanged across the passes, because it is committed by
+`commit_command_cursor` **only** on the consuming path, which the first pass does not reach.
+
+### 16.95.4 ⊘ What remains, unbuilt and unstarted
+
+Obligation 1 is discharged. **Obligations 2-4 and the boot are not.** The remaining build needs,
+at minimum: a third `respond` outcome distinct from today's `None` (which **already means**
+*"post the FSM's own acknowledgement"* — `boot.rs:350-354` — so it cannot be reused for *"do not
+answer and do not consume"*); a re-service door; a bounded memo that refuses by name; and an
+overrun that is loud.
+
+⊘ **`CE-SUBMIT` is 0.** Route B **wired and unmeasured**. The forbidden-#2 residency gate is
+**proven offline only and has never fired on hardware**. Route A untouched.
