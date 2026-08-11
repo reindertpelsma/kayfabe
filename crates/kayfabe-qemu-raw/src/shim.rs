@@ -2706,7 +2706,13 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         &mut self,
         ev: kayfabe_core::rmgraph::RmEvent,
     ) -> Result<(), kayfabe_core::gpu::GpuError> {
-        self.0.apply(ev)
+        // ⊘⊘ `apply_deferring`, NEVER `apply`. `[measured 2026-08-11, §16.88]` every
+        // production call reaching here arrives from `RegPlane::write` with the plane's
+        // **rank-0** mutex held, six crates up — `apply` would `clone`+`execveat` a sandboxed
+        // child under it and abort QEMU on the guest's first `GSP_RM_ALLOC`.
+        // ★ The spawn stays LATCHED in the spine; `Regs::write` drains it once the plane's
+        // guard is down. See `SharedDevice::apply_deferring`.
+        self.0.apply_deferring(ev)
     }
 
     fn promote_ctx(
@@ -6633,7 +6639,30 @@ impl Regs {
     /// every other structure in this crate that holds an address.
     #[must_use]
     pub fn write(&self, bar: u32, off: u64, size: u32, val: u64) -> kayfabe_device::WriteOutcome {
-        self.plane.write(clamp_bar(bar), off, clamp_size(size), val)
+        let out = self.plane.write(clamp_bar(bar), off, clamp_size(size), val);
+        // ★★★★★ **THE DRAIN, and this line is the whole fix (§16.91).**
+        //
+        // `RegPlane::write` has returned, so the plane's rank-0 guard is a dropped local and
+        // this frame holds **no ranked lock at all** — it is the outermost frame on the vCPU's
+        // MMIO trap that still has an `Arc<SharedDevice>`. An isolate spawn decided anywhere
+        // inside that call is latched in the spine and runs **here**, lock-free.
+        //
+        // ⊘ **PULL, not push.** Carrying the batch outward through `CommandPolicy` would force
+        // `kayfabe-core` vocabulary across a `kayfabe-gsp` port and cost either a new crate
+        // edge or a second identity vocabulary for `(Proc, GpuId)` (§16.90). The latch already
+        // lives in `core` and this frame already holds the device, so nothing has to travel.
+        //
+        // ⚠ **The guest cannot observe anything before this runs.** The vCPU is halted inside
+        // its own MMIO trap for the whole of `kayfabe_shim_regs_write`; replies written into
+        // guest RAM above are not yet readable by the guest, because the guest is not running.
+        // ⇒ the reply-before-spawn window the fix appeared to open does not exist on this
+        // thread. A *second* vCPU racing the same proc is the pre-existing
+        // `FwdFault::IsolatePending` compare-and-swap, unchanged by this rung.
+        //
+        // ⊘ `materialize_pending` asserts lock-freedom, so if any of the above is wrong this
+        // is refused **by name, here**, rather than by a spawn six crates away.
+        self.device.materialize_pending();
+        out
     }
 
     /// Power-on reset.

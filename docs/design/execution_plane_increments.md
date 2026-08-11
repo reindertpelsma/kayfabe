@@ -16073,3 +16073,85 @@ blocking.
   nothing reads the isolate's existence during that same command's response.**
 - ★★ **The boot falsifier**: `R1 … rank(s) [0]` → past `RmInitAdapter`. ⊘ **A bootability
   result, not progress on `CE-SUBMIT`.**
+
+## §16.91 ★★★★★ PULL, NOT PUSH — the spawn violation is GONE, and the wall behind it is a DIFFERENT KIND
+
+⚠ **STATUS (2026-08-11): the spawn fix is LANDED and MEASURED. The bench still cannot boot**,
+on a second violation that **deferral cannot fix**. §16.90's owner question is **withdrawn** —
+it was answered by dissolving it.
+
+### 16.91.1 ★★★ The fourth option, and why it needs no vocabulary at all
+
+§16.90 stalled because all three designs carried the spawn batch **outward through
+`CommandPolicy`**, forcing `kayfabe-core` vocabulary across a `kayfabe-gsp` **port**. The
+resolution is to **not carry it**:
+
+- `SharedDevice::apply_deferring` decides the spawn and **leaves it latched in the spine**,
+  where `Spine::take_pending_spawns` already keeps it.
+- `SharedDevice::materialize_pending` drains it.
+- `Regs::write` (`kayfabe-qemu-raw`) calls the drain **after `RegPlane::write` returns**, where
+  the plane's guard is a dropped local and the frame still holds an `Arc<SharedDevice>`.
+
+⇒ **Nothing travels. No crate edge, no second identity vocabulary, no trait change.** ★ The
+batch stays in the crate that already owns it and the outermost frame **asks**. §16.90's three
+options were all answers to a question that did not have to be posed.
+
+### 16.91.2 ⊘ The four refutations, each checked before building
+
+1. **Is the drain frame outside rank 0?** `Regs::write` is pure delegation and `RegPlane::write`
+   scopes its guard to a local. ★ And it is **self-falsifying**: `materialize` asserts
+   lock-freedom, so being wrong aborts *at the drain*, by name.
+2. **Is the register write the only enqueuer?** ★★★ **Yes, and the type system proves it, not a
+   grep**: `service_command_queue` requires `&mut dyn CommandPolicy`, and of the plane's FSM
+   entry points (`mmio_write_with`, `mmio_read_with`, `deliver_events`, `device_reset`, `phase`)
+   **only `mmio_write_with` has one**. A path with no policy cannot reach `ObjectModel::apply`.
+3. **Can the guest observe the reply before the spawn?** ⊘ **No, and the reason is the thread**:
+   the vCPU is halted inside its own MMIO trap for the whole of `kayfabe_shim_regs_write`.
+   Replies written into guest RAM are not readable by a guest that is not running. A *second*
+   vCPU racing the same proc is the pre-existing `FwdFault::IsolatePending` compare-and-swap.
+   ⇒ the timing falsifier §16.89.5 owed **has no window on this thread**.
+4. **Re-entrancy?** `materialize_one` spawns, then installs under rank 1; it never touches the
+   plane.
+
+**Falsifier watched RED** (`apply_deferring` reverted to `apply`, all else intact): 2 of 3 fail
+with the bench's own message — *"materializing an isolate … while holding rank(s) [0]"*. ★ The
+bench abort is now reproducible **offline, in 0.00s**.
+★★ The known-positive (`the_lock_free_drain_runs_what_was_latched`) is load-bearing: a fix that
+merely stopped spawning under the lock and never spawned at all would turn an abort into a hang.
+
+### 16.91.3 ★★★★★ MEASURED — and the next wall is a different animal
+
+`[measured, `traces/boots/w239/`, revision `842c5c4`]`
+
+| | `sandbox spawn` violations | `host RM verb` violations |
+|---|---|---|
+| `810368b` (before) | **1** | — |
+| `842c5c4` (after) | **0** | **1** |
+
+The boot still aborts, on a different blocking call at the same rank:
+
+```
+R1 no-blocking-under-lock violation: issuing a host RM verb while holding rank(s) [0]
+RegPlane::write → … → Bridge::deliver → SharedObjectModel::forward_engine_object
+  → SharedDevice::forward_engine_object_by_parent → Worker::execute   ★ host RM ioctl
+```
+
+⊘⊘ **AND DEFERRAL CANNOT FIX THIS ONE.** `forward_engine_object` returns
+`Result<EngineObjectForwarded, FwdFault>` — **a value the guest's reply is built from**. The
+spawn was **fire-and-forget**, which is precisely why it could be latched and drained later.
+This verb's result *is* the answer.
+
+★★★ **The distinction is the finding, and it is general**: *work decided under a lock can be
+deferred only if nothing in the response depends on it.* The spawn qualifies; a forwarded RM
+verb never can. ⇒ the remaining fix is **relocation, not deferral**: the plane's mutex must not
+be held across the command policy at all — which is a restructure of `RegPlane::write`, not
+another latch.
+
+### 16.91.4 ⊘ Scope
+
+- ⊘ **This is a BOOTABILITY rung and it is not finished.** `CE-SUBMIT` is **0**; route B is
+  **wired and still unmeasured**; the forbidden-#2 residency gate is still **proven offline only
+  and has never fired on hardware**.
+- ★ One of two blocking calls is out from under the lock, measured. The second is named, with
+  its path and the argument for why it needs a different fix.
+- ⊘ Route A untouched.

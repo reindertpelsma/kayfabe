@@ -729,8 +729,66 @@ impl SharedDevice {
         // Guards dropped (R1): firing one is a syscall.
         cancels.discharge_all();
         // Guards dropped (R1): spawning a sandbox is many syscalls.
+        //
+        // ⚠ **"Guards dropped" here means THIS FUNCTION'S guards.** `[measured 2026-08-11,
+        // §16.88]` a caller six crates up (`RegPlane::write`, holding the plane's rank-0
+        // mutex) reaches this through the GSP command policy, and for that caller this line
+        // is an R1 violation that aborts QEMU on the guest's first `GSP_RM_ALLOC`.
+        // ★ A correctness claim scoped to *my* locks reads exactly like one scoped to *all*
+        // locks, and only the second is R1. ⇒ such a caller must use
+        // [`SharedDevice::apply_deferring`] and drain with [`SharedDevice::materialize_pending`].
+        // ⊘ This door is kept, unchanged, because lock-free callers exist and are correct;
+        // `materialize` asserts, so a caller that is wrong about itself is refused by name.
         self.materialize(spawns);
         out
+    }
+
+    /// ★★★★★ **`apply`, for a caller that is UNDER A LOCK IT DID NOT TAKE** — decides the
+    /// spawns and **leaves them latched** instead of running them.
+    ///
+    /// # ⊘ Why this leaves the queue where it is rather than handing it back
+    ///
+    /// The latch already lives in the spine (`Spine::take_pending_spawns`), and the frame that
+    /// can safely spawn — the shim's register-write path — already holds an
+    /// `Arc<SharedDevice>`. ⇒ **nothing needs to travel.** An earlier design carried the batch
+    /// outward through `CommandPolicy`, which forced `kayfabe-core` vocabulary across a
+    /// `kayfabe-gsp` **port** and needed either a new crate edge or a second identity
+    /// vocabulary for `(Proc, GpuId)` (§16.90). Leaving the batch in `core` and letting the
+    /// outermost frame **ask** costs neither.
+    ///
+    /// ⊘ Cancels still discharge here: firing an eventfd is a syscall but a **non-blocking**
+    /// one, and `l1_os_shell.md` §4.5 enumerates it as the permitted exception. A `clone` +
+    /// `execveat` is not on that list and cannot be added to it.
+    ///
+    /// ⚠ The caller **must** drain with [`Self::materialize_pending`] once its own locks are
+    /// down, or the spawn waits for the next register write that does.
+    pub fn apply_deferring(&self, ev: RmEvent) -> Result<(), GpuError> {
+        let (out, cancels) = {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let out = st
+                .spine
+                .apply(st.system.get_mut(), &mut ExclusiveProcs(&mut st.procs), ev);
+            (out, st.spine.take_pending_cancels())
+        };
+        cancels.discharge_all();
+        out
+    }
+
+    /// ★★★ **Drain and run whatever [`Self::apply_deferring`] latched** — the pull half.
+    ///
+    /// Idempotent and cheap when there is nothing latched: one rank-1 acquisition that moves a
+    /// `Vec` and returns. ⚠ **Call with every ranked lock down.** `materialize` asserts it, so
+    /// a caller that is wrong is refused by name rather than spawning under a lock.
+    pub fn materialize_pending(&self) {
+        let spawns = {
+            let mut g = self.state.write();
+            g.spine.take_pending_spawns()
+        };
+        if spawns.is_empty() {
+            return;
+        }
+        self.materialize(spawns);
     }
 
     /// ★★★ **The DRAIN half of R1's spawn deferral: spawn lock-free, then re-acquire and
