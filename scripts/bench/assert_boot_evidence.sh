@@ -54,8 +54,35 @@ fi
 # ---- every committed file must actually contain something ---------------------------
 # ★ An empty file's existence reads as capture; that is the bench-rebuild lesson stated one
 # directory over. Checked over all of them, so an old zero-byte file cannot hide.
+#
+# ★★★ §16.106 — ONE EXCEPTION, and it is not a weakening: the HOST dmesg delta.
+#
+# `boot_capture.sh` §16.101.4 states plainly that zero host lines is a LEGITIMATE result — the
+# boot provoked no host diagnostic — and deliberately does not assert that file non-empty,
+# "so an emptiness assertion would fail a good boot and pressure the next reader into
+# 'fixing' a harness that was telling the truth." ⊘ This gate asserted it anyway, and the
+# two only disagreed once a boot actually produced zero: `w255`, the boot where the fix
+# removed all 14 host refusals. **The gate would have marked the best result on this branch
+# as a failed capture.**
+#
+# ⊘ The exception is NOT "empty host dmesg is fine". It is *"empty is fine when the capture
+# ITSELF says the delta was zero"* — `HOST_DMESG_LINES=0` in this run's own probe log, which
+# `boot_capture.sh` writes beside `HOST_DMESG_LINES=UNREADABLE` for the case where the ring
+# buffer could not be read at all. A zero-byte host log with no such line, or with
+# `UNREADABLE`, is still a failed capture and still fails here. ⇒ the emptiness is checked
+# against a SECOND, independent statement rather than excused.
+host_delta_declared_zero() {
+  case "$1" in
+    *_hostdmesg.log) : ;;
+    *) return 1 ;;
+  esac
+  probe="${1%_hostdmesg.log}_probe.log"
+  [ -s "$REPO/$probe" ] && grep -qx 'HOST_DMESG_LINES=0' "$REPO/$probe"
+}
 while IFS= read -r f; do
-  [ -s "$REPO/$f" ] || fail "$f is EMPTY — its existence reads as a capture and is not one"
+  [ -s "$REPO/$f" ] && continue
+  host_delta_declared_zero "$f" && continue
+  fail "$f is EMPTY — its existence reads as a capture and is not one"
 done < <(cd "$REPO" && git ls-files -- traces/guest_boots)
 
 # ---- and, with a tag, that THIS boot's three files are all there and say so ----------
