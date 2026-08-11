@@ -1,5 +1,40 @@
 # §5.9 — THE SECOND CROSSING: real host vidmem under the guest's framebuffer leaves
 
+> ## ⊘⊘ **STATUS: SUPERSEDED AS A ROUTE, 2026-08-11 — THIS CROSSING IS NOW REFUSED BY NAME.**
+>
+> **Read this before anything below.** Everything in this document is still an accurate
+> account of what was built and measured. What changed is the **verdict on whether it may
+> run**, and the verdict is the owner's:
+>
+> > *"no fake FB ever can be mapped to a real GPU VA of an isolate except the scratchpad."*
+> > — owner, ruling 3, 2026-08-11
+>
+> This crossing is that sentence's one and only production violator. §2's own honest note —
+> the object *"is BLANK, nothing consumes it, and the guest's own CPU accesses at `fb_phys`
+> still go to the fabricated aperture"* — is not a limitation to be closed later; it is the
+> **defect**. `[measured 2026-08-11, `w228`]` `placed_as_asked=true` **and blank**: the
+> guest's bytes stay in `kayfabe_device::SparseFb` and the guest goes on reading and writing
+> them through BAR1/BAR2, so an engine pointed at the host object reads zeros where the guest
+> wrote and writes where the guest cannot look.
+>
+> ⇒ On branch `gpga-region-kind-decision`, `kayfabe_mmu::Binding::real_gpu_memory` refuses to
+> be constructed for a `Vidmem` aperture or a `ShadowsGuestMemory` backing, so
+> `commit_back_fb_leaf` **cannot bind** what this rung built. It raises
+> `FwdFault::RegionKindRefused` and hands its host objects back as orphans.
+> ★ And it **leaves the guest's own row in the address table untouched** — dropping it would
+> leave the range with no row at all, which is `Representability::Untracked`, which routes to
+> the **real host GPU**.
+>
+> ★ **What survives, and it is not nothing:** the plan-phase machinery (`FbLeafDisagrees`,
+> `FbLeafExtent`, `FbLeafGranularity`, the two-source check and its negative control) is
+> untouched and still correct, and the commit's adopt path is deliberately **kept** — it is
+> where ruling 4's scratchpad case will arrive once a fake-FB page can be handed to
+> `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`.
+>
+> **Full account:** `gpga_region_kind.md` §8, in particular §8.4 (the hole this does not
+> close) and §8.5 (why the successor is a **page-alignment** change in `SparseFb`, not a
+> memfd branch).
+
 **Rung:** `w228` / `master`, based on `3db634f` (the `w227c` census).
 **Question, from the brief:** make `cuCtxCreate`'s three **framebuffer** operands resolve to
 real host-visible backing, so the host GR engine *could* dereference them. Port the C's

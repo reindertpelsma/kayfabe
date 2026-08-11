@@ -1521,25 +1521,26 @@ fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_g
         sole, 1,
         "exactly one production chain (`Publish`) may claim to be the range's only memory"
     );
-    // ★★★ **This assertion INVERTED on 2026-08-11, and the inversion is the rung.**
+    // ★★★ **THE COUNT IS UNCHANGED AND ITS MEANING IS NOT — read the note before trusting
+    // it.** `[watched RED 2026-08-11]` an earlier draft of this rung asserted `shadow == 0`,
+    // reasoning that ruling 3 abolishes the chain. That was **wrong as a census**:
+    // `commit_back_fb_leaf` still *constructs* the shadowing `HostBacking` — and hands it
+    // straight to [`kayfabe_mmu::Binding::real_gpu_memory`], which REFUSES it. The line
+    // survives; what died is the bind behind it.
     //
-    // It used to demand `shadow == 1` — *"exactly one production chain (`PublishVidmem`)
-    // shadows memory the guest already reaches"* — with the warning that a `0` would mean
-    // the w228 hazard had been *relabelled rather than fixed*. ⊘ That warning was right
-    // about relabelling and wrong as a permanent invariant: the owner's ruling 3 (*"no fake
-    // FB ever can be mapped to a real GPU VA of an isolate except the scratchpad"*) says the
-    // chain must not exist at all, and `commit_back_fb_leaf` now refuses instead of binding.
-    //
-    // ⚠ So the guard is kept, pointing the other way, and the thing it guards against is
-    // **the chain coming back**: a production line that constructs a shadowing backing is
-    // a production line that intends to bind one.
-    // ⊘ It is NOT the whole guard — a caller could relabel a shadow as `SoleBacking` and
-    // this count would stay 0. That half is
-    // `a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_table`'s second
-    // falsifier, which refuses on the `Vidmem` aperture whatever the label says.
+    // ⇒ This census can only see that the declaration exists, never what happens to it. The
+    // half it cannot check — that the construction is refused and the guest's own row
+    // survives — is `fb_leaf_backing::backing_a_framebuffer_leaf_is_refused_by_name_and_\
+    // the_guests_own_row_survives`, and the half about a caller RELABELLING a shadow as
+    // `SoleBacking` is `a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_\
+    // table`'s second falsifier, which refuses on the `Vidmem` aperture whatever the label
+    // says. ⊘ Three tests, three different things; none of them is the others.
     assert_eq!(
-        shadow, 0,
-        "no production chain may construct a backing that shadows memory the guest already \
-         reaches — ruling 3. If this becomes non-zero, the w228 chain is being rebuilt"
+        shadow, 1,
+        "exactly one production chain (`PublishVidmem`) still DECLARES that it would shadow \
+         memory the guest already reaches — and that declaration is the input ruling 3 \
+         refuses. If this becomes 0 the declaration has been relabelled, which is how the \
+         w228 hazard comes back wearing an innocent name; if it becomes 2 a second chain is \
+         being built"
     );
 }
