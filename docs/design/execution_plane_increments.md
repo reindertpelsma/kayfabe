@@ -15923,3 +15923,94 @@ spend a cycle on it.
 - ⊘ The forbidden-#2 residency gate is proven **offline only** (4 tests, negative control
   watched red). It has **never fired on hardware**, and this rung does not claim it has.
 - ⊘ Route A untouched.
+
+## §16.89 ★★★★★ THE TRANSITIVE PATH, MEASURED — and the same defect, one level further out
+
+⚠ **STATUS (2026-08-11): DIAGNOSIS COMPLETE, FIX NOT LANDED.** The bench still cannot boot at
+`5626939` or later. §16.88's abort is fully explained here; §16.89.4 is the argued fix.
+
+### 16.89.1 ★★★ The instrument — a grep CANNOT find this, and one already failed
+
+The coordinator grepped `plane.rs` for a spawn and found **nothing**, because the call is
+**transitive across six crates**. The instrument that works is the assert's own backtrace, with
+`RUST_BACKTRACE=full` exported into QEMU's environment:
+
+```
+nvkvm_trap_write                                   QEMU vCPU MMIO trap
+ → kayfabe_shim_regs_write                         kayfabe-qemu-raw
+ → RegPlane::write                                 kayfabe-device  ★ TAKES state.lock() = rank 0
+ → GspFsm::mmio_write_with                         kayfabe-gsp
+ → GspFsm::service_command_queue                   kayfabe-gsp
+ → ControlCensus::respond                          kayfabe-device
+ → StickyAnswerGuard::respond                      kayfabe-device
+ → PolicyChain::respond                            kayfabe-gsp
+ → ObjectPolicy::respond                           kayfabe-rmrpc
+ → Bridge::deliver                                 kayfabe-rmrpc
+ → SharedDevice::apply                             kayfabe-rt
+ → SharedDevice::materialize_one                   kayfabe-rt
+ → HostIsolateFactory::spawn → spawn_host          kayfabe-isolate-host
+ → SandboxChild::spawn                             kayfabe-linux-raw  ★ clone + execveat
+ → assert_lock_free → PANIC
+```
+
+⇒ **The guest's first `GSP_RM_ALLOC` reaching the object policy spawns a sandboxed child, from
+inside a register write, under the plane's mutex.**
+
+### 16.89.2 ★★★★★ THE SAME BUG, ALREADY FIXED ONCE, AT THE LEVEL BELOW
+
+`SharedDevice::apply` is **already correct about its own locks** and says so at length. It takes
+the rank-1 write guard, collects `take_pending_spawns()`, **drops the guard**, and only then
+materializes — with this doc, verbatim:
+
+> *"Doing it in place aborted QEMU on the guest's first register write that reached a
+> `GSP_RM_ALLOC` — `docs/reference/bench_evidence/f0b7efa_run_basereal_qemu.log`."*
+
+⇒ **The deferral mechanism exists, is deliberate, and is cited to a prior QEMU abort with
+committed evidence.** And it is still violated, because the **plane** holds rank 0 across the
+whole call and `apply` cannot see it.
+
+★★★ **This is `a lock-free-by-construction spawn still runs beneath a lock its own crate cannot
+see`, promoted from an aphorism to a measurement.** The comment *"Guards dropped (R1)"* is
+**true about `apply`'s guards and false about the thread's**. A correctness claim scoped to
+*"my* locks" reads exactly like one scoped to *"all* locks", and only the second is R1.
+
+⊘ Note the two discoveries' instruments: the first occurrence was found by **QEMU aborting**;
+this one by **a rank**. Neither was found by reading the code, and the second could not have
+been — the code that violates R1 is the code that documents having fixed it.
+
+### 16.89.3 ⊘ Three placements, judged
+
+| placement | verdict |
+|---|---|
+| **Eager at init** | ⊘ **Infeasible, not merely against a prior ruling.** Isolates are per-`(Proc, GpuId)` and a `Proc` is created *by the guest*. There is no init-time set to spawn. |
+| **Deferred "not ready"** | ⊘ The guest is blocked on a **GSP command response**; `GSP_RM_ALLOC` has no retry semantic we may invent, and *"refusing is indistinguishable from a hang to the guest"* is already on the record. |
+| ★ **Extend the EXISTING deferral one level out** | ✅ **Taken.** Not a new mechanism: `PendingSpawns` already exists for exactly this and is already used one level down. The spawn set must travel from `apply` up to the outermost frame that holds no lock. |
+
+★ **It is the same shape as §16.88's `forward_ring` split** (PLAN under the lock → act with every
+guard dropped), which is evidence the shape is the tree's answer to this class rather than a
+one-off: *decide under the lock, do the syscalls outside it.*
+
+### 16.89.4 ⚠ The two implementations, and the honest cost of each
+
+1. **Thread the spawn set up the return path** — `apply` returns `PendingSpawns`, and it travels
+   `Bridge::deliver` → `CommandPolicy::respond` → `service_command_queue` → `mmio_write_with` →
+   `RegPlane::write` → the shim, which materializes after the lock drops. ★ Explicit and
+   type-checked. ⚠ Cost: a signature change through the **`CommandPolicy` trait**, across
+   `kayfabe-rmrpc`, `kayfabe-gsp` and `kayfabe-device`.
+2. **A thread-local deferred-spawn queue** drained at the shim's register-write exit, where
+   provably no lock is held. ⚠ Cost: the deferral becomes **implicit** — and an implicit
+   deferral is the shape that made this bug invisible in the first place. ⊘ It is *not* barred
+   by §4.2's "no hand-rolled synchronization": a thread-local is not synchronization, and
+   `lockwitness` itself is precedent. But the honest objection is legibility, not legality.
+
+⇒ **Recommend (1)**, on this rung's own evidence: the defect being fixed *is* an invisible
+deferral boundary, and (2) adds a second one.
+
+### 16.89.5 ⚠ Does the fix change GUEST-VISIBLE behaviour? — yes, and it must be measured
+
+**The spawn moves later on the register-write path.** The guest's `GSP_RM_ALLOC` write currently
+returns only after a `clone` + `execveat` + handshake completes; afterwards it returns first and
+the child is spawned before the next trap is serviced. ⇒ **A timing change on the register
+path**, and this tree has repeatedly found those to matter. ⚠ Anything that read the isolate's
+existence *during* the same command's response would break — that must be checked, not assumed,
+and it is the first falsifier the fix owes.
