@@ -5,6 +5,50 @@
 
 ---
 
+## ⊘⊘⊘ CORRECTION 2026-08-12, BEFORE THE BOOT — **I WAS WRONG ABOUT `cup2`, AND IT IS THE BIGGER FINDING**
+
+The closing section below says *"the evidence available says it is NOT `cup2`'s wall"*, on the
+grounds that the kernel's rings are `GuestRam`. **That reasoning checked the wrong channels.**
+Measured from `traces/boots/w277/run_w277_off_qemu.log.gz` (a `cup2` boot, opened this session):
+
+```text
+GR-RING-JOIN RING(chan=0 entries=1024 engine=GrCompute) leaf va=0x200200000 len=0x200000
+             fb_phys=0x1000000 → JOINED
+```
+
+⇒ **`cup2`'s own compute channel ring is a JOINED FRAMEBUFFER LEAF** — the same shape as the
+raw client's. The `GuestRam` rings are chans 1 and 4, the kernel's UVM/CeUtils channels, and
+those are what I looked at.
+
+And `cup2`'s **refusing** channel carries the identical self-contradicting row:
+
+```text
+first doorbell refusal [FwdFault::PushbufferAperture] … c=0xc1d0000c vas=0x5c000007
+  ring=0x200224000 rng=V:0x1024000
+  fbRING[p0]@0x1024000=0000c00202220000 nz4/4096 resN-NEVER-WRITTEN
+```
+
+`nz4` again, and the four bytes decode as a GPFIFO entry (`0x0000_2202_02c0_0000` ⇒
+`va 0x2_02c00000`, 8 dwords). ⇒ **The same defect is present on `cup2`'s walling channel, and
+has been in every one of six boots** (`w268`, `w270`, `w274`–`w277`).
+
+★ **Why `RingFbNeverWritten` nonetheless reads 0 in all six:** it sits **downstream** of the
+aperture check, and every one of those boots ran **route B OFF** (`w277`: `route B OFF`), so
+they stop at `PushbufferAperture` first and never reach the guard. **The defect was LATENT for
+`cup2`, not absent.** ⊘ A count of zero for a refusal that is unreachable is not evidence.
+
+⇒ Revised claim, and it replaces the one at the bottom of this file: **the raw client's ring
+and `cup2`'s compute ring are the same shape and carry the same false residency label.**
+Whether they are the same *wall* is still open — `cup2` is not run on this boot — but *"it is
+not `cup2`'s wall"* is now **unsupported**, and the opposite is the live hypothesis. Arm
+**H11** is added for it:
+
+| # | prediction | how it is read |
+|---|---|---|
+| **H11** ★★ | the fix is **not `cup2`-specific**: `cup2`'s ring page would take the same `JOINED-one-memory` standing | ⊘ not measurable on this boot (no `cup2`); named here so the next rung inherits it as a hypothesis and not as a result |
+
+---
+
 ## ⊘⊘ THE BRIEF IS CONTRADICTED BEFORE THE BOOT — from `w278`'s own artefacts
 
 The rung was set as *"a BAR1/vidmem write census — where did those CPU stores go?"*, over
@@ -97,10 +141,16 @@ a guard alive is inventing a fact about the guest.
 
 ## ⊘ WHAT THIS BOOT CANNOT DECIDE, stated before it runs
 
-- **It cannot say this is `cup2`'s wall — and the evidence available says it is NOT.** In the
-  same `w278b` log the kernel's GR/CE channels report
-  `GR-RING-JOIN … → ⊘ NOT A FRAMEBUFFER LEAF: GuestRam { gpa: 629026816 }`. A guest-RAM ring
-  takes `PushSrc::Gpa` in `fetch_ring_bytes`, where the `page_written` guard **cannot fire at
-  all**. `cup2` is not run on this boot and there is no `CUP2_RC`.
+- ⊘⊘ **SUPERSEDED BY THE CORRECTION AT THE TOP OF THIS FILE — read that instead.** The
+  paragraph below checked the kernel's channels (`GuestRam` rings) and generalised from them
+  to `cup2`; `cup2`'s **own** compute channel ring is a joined framebuffer leaf and carries
+  the same false `resN-NEVER-WRITTEN` label. Kept, struck, because a ruling deleted is a
+  ruling nobody can see was wrong.
+  > ~~**It cannot say this is `cup2`'s wall — and the evidence available says it is NOT.** In
+  > the same `w278b` log the kernel's GR/CE channels report
+  > `GR-RING-JOIN … → ⊘ NOT A FRAMEBUFFER LEAF: GuestRam { gpa: 629026816 }`. A guest-RAM ring
+  > takes `PushSrc::Gpa` in `fetch_ring_bytes`, where the `page_written` guard **cannot fire at
+  > all**.~~ ★ What survives: `cup2` is **not run** on this boot and there is **no `CUP2_RC`**,
+  > so this rung cannot say the two walls are the same — only that they share a defect.
 - **It cannot prove the crossing works in the other direction** (engine → guest).
 - One workload, one chip (GA106), one driver (`580.159.04`), one boot.
