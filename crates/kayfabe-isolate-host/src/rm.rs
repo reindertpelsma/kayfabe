@@ -7763,7 +7763,6 @@ mod tests {
             bytes: 4096,
             submit: landed,
             payload: 3,
-            guest_release: None,
         };
         assert!(good.copied());
         assert!(
