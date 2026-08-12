@@ -190,7 +190,7 @@ grade() {
          grep -o 'OPERAND-JOIN arm=.\{0,120\}' "$Q" 2>/dev/null | head -1 | sed 's/^/       saw: /'; }
   echo "      the flag's own startup line, verbatim (carries fb_join= AND host_isolates=):"
   grep -o 'kayfabe: OPERAND-JOIN arm=.\{0,240\}' "$Q" 2>/dev/null | head -1 | sed 's/^/        /'
-  echo "      ⊘ NO LINE ABOVE ⇒ this binary predates leg 7 — NOT `armed and nothing moved`."
+  echo "      ⊘ NO LINE ABOVE ⇒ this binary predates leg 7 — NOT 'armed and nothing moved'."
   # ⊘ PT_SWEEP is ON on ALL arms this rung: leg 7's candidate selection reads the address
   #   table, and w281 measured the operand VAs `2 MISS` without it.
   echo "    ★ PT-SWEEP wanted ON (carried on every arm); the device's own line:"
