@@ -77,7 +77,12 @@ CC_RC=0
 #   measure a binary in which the reader under test does not exist, and every `SEMA-PAGE` row
 #   would be absent BY CONSTRUCTION — indistinguishable, in the log, from a page nobody looked
 #   at. That is the zero-byte-artefact trap wearing a different hat.
-for s in "GR-CURSOR token=" "GR-CURSOR-READER stopped" "why=doorbell" "why=CHANGED" \
+# ⊘⊘ NOT "why=first"/"why=CHANGED": those words reach the log through a `{}` PLACEHOLDER, so
+#    they are not literals in `.rodata` and a `strings` check for them is UNSATISFIABLE — it
+#    would fail on a correct binary forever. Measured 2026-08-12: this gate refused a good build
+#    on its first run. ★ A gate's PROSE is not its assertion; the assertion is the exact bytes.
+for s in "GR-CURSOR token=" "GR-CURSOR-READER stopped" "why=doorbell" "rows_printed=" \
+         "NO FRAMEBUFFER USERD" \
          "SEMA-SOURCE-CE" "SEMA-SOURCES:" \
          "KAYFABE_GR_ROUTE" "GR-ROUTE arm=" \
          "SEMA-PAGE seq=" "SEMA-PAGE-SLOT" "SEMA-PAGE-ZERO" "SEMA-PAGE-READER stopped" \
