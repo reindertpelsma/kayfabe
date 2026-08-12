@@ -81,6 +81,22 @@ export KAYFABE_GR_ROUTE=passthrough
 export KAYFABE_GUEST_OPERAND=pin
 unset KAYFABE_PT_SWEEP
 
+# ★★★★★ THE SECOND ARM'S ONE VARIABLE — `route B`, and it is ALREADY CALIBRATED.
+#
+# `[measured, w246, the four-corner square in shim.rs's RING_VIDMEM_ENV docs]`
+#   witness=on RING_VIDMEM=off -> PushbufferAperture = 8
+#   witness=on RING_VIDMEM=ON  -> PushbufferAperture = 0
+# ⊘ And route B is UNREACHABLE with the witness disarmed (`plan_gpfifo_ring` returns
+#   `RingVaUnbound` BEFORE `VidmemRoute` is computed) — this rung carries `witness=on`, so the
+#   flag is the only variable. Never measure it with the witness off.
+#
+# ⚠ `w246` also recorded that route B **enumerates a ring; it does not submit work** — its
+#   `CE-SUBMIT` was 0 in all four corners. So a green pushbuffer read here is NOT the first
+#   forwarded work, and this arm must not be read as one.
+unset KAYFABE_RING_VIDMEM
+[ "${W278_RING_VIDMEM:-off}" = "on" ] && export KAYFABE_RING_VIDMEM=on
+echo "=== ARM: KAYFABE_RING_VIDMEM=[${KAYFABE_RING_VIDMEM:-unset}] (route B) ==="
+
 TAG=${PFX}_guest
 echo "=== BOOT $TAG START $(date -Is) ==="
 timeout 1200 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
@@ -138,6 +154,28 @@ echo "--- guest dmesg NVRM lines captured to the boot's own file:"
 echo "      run_${TAG}_dmesg.log = $(stat -c %s /workspace/bench/run_${TAG}_dmesg.log 2>/dev/null || echo MISSING) bytes, NVRM lines = $(grep -ci nvrm /workspace/bench/run_${TAG}_dmesg.log 2>/dev/null)"
 echo "--- HOST dmesg delta across the boot (a host Xid is OURS, not the guest's):"
 cat "$D" 2>/dev/null | sed 's/^/      /' | head -20
+
+# =========================================================================================
+# ★★★★★ WHAT OUR DEVICE DID WITH THE CLIENT'S DOORBELL — the half the client cannot see
+# =========================================================================================
+echo "=== ★★★★★ THE DEVICE'S OWN VIEW OF THE CLIENT'S SUBMISSION ==="
+echo "--- ⊘ ATTRIBUTION FIRST: the client's ring, in the device's own roster (its hClient and"
+echo "    its 64-entry GPFIFO are what identify it — a token alone would not):"
+grep -E 'RING-ROSTER' "$Q" 2>/dev/null | grep 'entries=64' | sed 's/^/      /'
+echo "--- DOORBELL-XLATE (how many doorbells our device translated at all): $(grep -c 'DOORBELL-XLATE' "$Q" 2>/dev/null)"
+grep -E 'DOORBELL-XLATE' "$Q" 2>/dev/null | sed 's/^/      /'
+echo "--- ★★★ DID OUR CHIP CODEC DECODE THE CLIENT'S PUSHBUFFER? (the operand and semaphore"
+echo "    addresses below are the CLIENT'S OWN — compare them against the arm-1 line):"
+grep -E 'SEMA-SOURCE-CE|OPERAND-SOURCE-CE' "$Q" 2>/dev/null | cut -c1-320 | sed 's/^/      /'
+echo "--- and what the address table answered for them:"
+grep -E 'SEMA-TABLE:|OPERAND-TABLE:' "$Q" 2>/dev/null | cut -c1-320 | sed 's/^/      /'
+echo "--- ★★★★★ THE FORWARD'S VERDICT:"
+echo "      DOORBELL-REFUSED   = $(grep -c 'DOORBELL-REFUSED' "$Q" 2>/dev/null)"
+echo "      PushbufferAperture = $(grep -c 'PushbufferAperture' "$Q" 2>/dev/null)   (w246: 8 with route B off, 0 with it ON)"
+echo "      SERVED-LOCAL       = $(grep -c 'SERVED-LOCAL' "$Q" 2>/dev/null)   (⊘ these are the KERNEL's CeUtils channels, not ours)"
+grep -E 'DOORBELL.*(REFUSED|SERVED-REMOTE|FORWARDED)' "$Q" 2>/dev/null | cut -c1-240 | tail -6 | sed 's/^/      /'
+echo "      ⚠ w246: route B ENUMERATES a ring; it does not submit work (CE-SUBMIT was 0 in all"
+echo "        four corners). A green pushbuffer read is NOT the first forwarded work."
 
 echo "=== ARTEFACT SIZES ==="
 ls -l /workspace/bench/run_${PFX}_* /workspace/bench/xid_${PFX}_* 2>/dev/null
