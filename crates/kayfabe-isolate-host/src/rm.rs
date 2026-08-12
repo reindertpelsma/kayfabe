@@ -4244,7 +4244,7 @@ impl RmBackend for HostRmBackend {
         // it fetched nothing at all, and one of those numbers alone cannot say either.
         eprintln!(
             "kayfabe-isolate: CE-SUBMIT dst={:#x} len={} by={:?} gp_get={} gp_put={} \
-             sem={:#010x} want={:#010x} → {}",
+             sem={:#010x} want={:#010x} → {}{}",
             sub.dst,
             sub.len,
             sub.by,
@@ -4256,6 +4256,26 @@ impl RmBackend for HostRmBackend {
                 "RETIRED"
             } else {
                 "NEVER-RETIRED"
+            },
+            // ★★★★★ w283 — WHETHER THE GUEST'S OWN RELEASE WAS CARRIED, printed BY ADDRESS
+            // on the same line as the verdict it depends on.
+            //
+            // ⊘⊘ It is a statement about what we PUT IN THE PUSHBUFFER, and nothing more.
+            // The engine wrote the guest's semaphore **iff** the address was reachable in
+            // the executor VAS; this line cannot see that, and a reader who takes
+            // `guest_rel=…` for *"the guest's semaphore now holds the payload"* is reading
+            // the intent for the outcome — `forwarded_counts_intent_not_work`, one plane
+            // over. Only the guest's own read says the other thing.
+            match sub.guest_release {
+                Some(r) => format!(
+                    " guest_rel=CARRIED@{:#x} payload={:#010x} (⊘ CARRIED means EMITTED, \
+                     not OBSERVED — hardware wrote it iff that VA resolves in the executor \
+                     VAS; only the guest's own read is the witness)",
+                    r.va, r.payload
+                ),
+                None => " guest_rel=NONE (this launch declared no completion, or its last \
+                         span is not HostCe, or the payload exceeds one word)"
+                    .to_string(),
             },
         );
         if outcome.semaphore == payload {
