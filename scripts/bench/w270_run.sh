@@ -212,7 +212,21 @@ boot() {
   echo "    --- ★★★★★ THE PROBE'S OWN HEADLINES (does 0x20440ff70 reach 2?):"
   grep -E 'POLLED ADDRESS|SLOT-JOIN|N items =|KIND=|SNAPSHOT at|NO SNAPSHOT|steps actually taken|reached-cuCtxCreate|CUP2_RC=|SPINPROBE_RC=|VALUE AT IT|limit  =|cached =' \
     "$P" 2>/dev/null | sed 's/^/      /' | head -70
-  echo "    --- ★★★★★ CUP2_RC = [$(grep -o 'CUP2_RC=[0-9]*' "$P" 2>/dev/null | tail -1)]"
+  # ⚠ The line above deliberately shows `GCC_CUP2_RC` too, unfiltered — so a reader can SEE
+  #   the two rows that a single unanchored pattern would have collapsed into one.
+  # ⊘⊘ **ANCHORED, AND THE ANCHOR IS THE WHOLE POINT.** `grep -o 'CUP2_RC=[0-9]*'` ALSO
+  #    matches `GCC_CUP2_RC=0` — the guest COMPILER's exit status, which is `0` on every
+  #    healthy boot. `[measured 2026-08-12, w270_off, caught before it reached a RESULT]` the
+  #    unanchored form reported `CUP2_RC=0` — THE CAMPAIGN'S HEADLINE SUCCESS VALUE — on an
+  #    arm that was hanging exactly as `w269b_pass` did, because cup2's own line had not been
+  #    written yet. ⇒ On a boot where the measurement did NOT happen, the naive grader reports
+  #    SUCCESS. Same class as the zero-byte artefact: an absent measurement reading as a
+  #    favourable one, in the single most consequential direction this campaign has.
+  #    ⚠ `tail -1` does not save it: it is only right while the real line happens to come last.
+  local rc
+  rc=$(grep -oE '(^|[^A-Z_])CUP2_RC=[0-9]+' "$P" 2>/dev/null | grep -oE 'CUP2_RC=[0-9]+' | tail -1)
+  echo "    --- ★★★★★ CUP2_RC = [${rc:-⊘ NO cup2 EXIT LINE — THE MEASUREMENT DID NOT HAPPEN. ⊘ This is NOT 0 and must never be read as one}]"
+  echo "        (⊘ disambiguated from GCC_CUP2_RC, the compiler's status: $(grep -c 'GCC_CUP2_RC' "$P" 2>/dev/null) such line(s) present)"
   echo "    --- cup2's own last prints:"
   grep -E '^ok |^CUP2_RC|totalMem' "$P" 2>/dev/null | tail -12 | sed 's/^/      /'
 }

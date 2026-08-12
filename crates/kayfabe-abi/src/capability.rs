@@ -544,7 +544,7 @@ impl CapabilityTable {
     }
 
     /// Every permitted class at this boundary — the resolved set.
-    pub(crate) fn all_classes(&'static self) -> impl Iterator<Item = &'static ClassEntry> {
+    pub fn all_classes(&'static self) -> impl Iterator<Item = &'static ClassEntry> {
         self.own_classes
             .iter()
             .flat_map(|b| b.iter())

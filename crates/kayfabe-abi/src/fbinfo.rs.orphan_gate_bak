@@ -634,7 +634,7 @@ pub fn answer_fb_get_info_v2(
 /// # Errors
 ///
 /// [`FbInfoError::ShortParams`] or [`FbInfoError::ListSize`].
-pub(crate) fn decode_fb_info_pairs(params: &[u8]) -> Result<Vec<(u32, u32)>, FbInfoError> {
+pub fn decode_fb_info_pairs(params: &[u8]) -> Result<Vec<(u32, u32)>, FbInfoError> {
     let Some(body) = params.get(..FB_GET_INFO_V2_PARAMS_SIZE) else {
         return Err(FbInfoError::ShortParams {
             len: params.len(),
