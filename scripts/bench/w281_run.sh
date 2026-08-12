@@ -110,6 +110,7 @@ export KAYFABE_PT_WITNESS_EXEC=on
 export KAYFABE_GUEST_SEMA=pin
 export KAYFABE_GR_ROUTE=passthrough
 export KAYFABE_GUEST_OPERAND=pin
+# ⊘ PT_SWEEP is set PER ARM below (the `clientsweep` arm), never globally.
 unset KAYFABE_PT_SWEEP
 
 # ★★★★★ ROUTE B — ON for BOTH arms. It is the SUPPLY (an `FbSource` registration), not this
@@ -163,6 +164,9 @@ grade() {
     && echo "    ★★★ PUSHBUF-VIDMEM: PASS (pushbuffer route $wantpb — this arm wanted $wantpb)" \
     || { echo "    ★★★ PUSHBUF-VIDMEM: FAIL — wanted 'pushbuffer route $wantpb'. ⊘ VOID for this rung."; \
          grep -o 'PUSHBUF-VIDMEM.\{0,160\}' "$Q" 2>/dev/null | head -1 | sed 's/^/       saw: /'; }
+  local wantsw='OFF'; [ "$kind" = clientsweep ] && wantsw='ON'
+  echo "    ★ PT-SWEEP wanted $wantsw; the device's own line:"
+  grep -o 'PT-SWEEP arm=.\{0,60\}' "$Q" 2>/dev/null | head -1 | sed 's/^/        /'
   echo "      the flag's own line, verbatim (carries armed= AND reachable=):"
   grep -o 'PUSHBUF-VIDMEM.\{0,200\}' "$Q" 2>/dev/null | head -1 | sed 's/^/        /'
   for pair in "FB-JOIN arm=shared" "GUEST-RING arm=ring" "GUEST-PUSHBUF arm=pin" \
@@ -259,6 +263,18 @@ PY
   echo "      the pushbuffer's APERTURE and decoded methods (⊘ `pb=S:` = sysmem ⇒ lib.rs:4752's"
   echo "      hard-coded VidmemRoute::Refuse is NOT on this path; `pb=V:` = vidmem ⇒ it IS):"
   grep -oE 'pb=[SV]:0x[0-9a-f]+ pbm\[[0-9]+w of [0-9]+B\]' "$Q" 2>/dev/null | sort -u | sed 's/^/      /'
+  # =========================================================================================
+  # ★★★★★ w281b — THE OPERAND TABLE. THE NAMED BLOCKER, graded by VA.
+  # =========================================================================================
+  echo "--- ★★★★★ THE OPERAND TABLE — w281 walled here (2 page(s) asked, 2 MISS):"
+  grep -o 'OPERAND-TABLE.\{0,300\}' "$Q" 2>/dev/null | sort -u | sed 's/^/      /' | head -4
+  echo "      ⊘ NO ROW ⇒ the CE operand decode never happened — NOT MEASURED, not 'resolved'."
+  grep -o 'OPERAND-SOURCE-CE.\{0,200\}' "$Q" 2>/dev/null | sort -u | sed 's/^/      /' | head -3
+  echo "      OPERAND-PIN lines = $(grep -c 'OPERAND-PIN' "$Q" 2>/dev/null)"
+  grep -o 'OPERAND-PIN.\{0,180\}' "$Q" 2>/dev/null | sort -u | sed 's/^/      /' | head -3
+  echo "--- ★★★★★ THE SWEEP's own numbers (w276: bound=0 swept_binds=0 on ALL 88 rows, on a GR"
+  echo "    arm where parse_pushbuffer never ran. This arm is CE and it DOES run):"
+  grep -oE 'bound=[0-9]+ swept_binds=[0-9]+[^ ]*' "$Q" 2>/dev/null | sort | uniq -c | sed 's/^/      /' | head -6
   echo "--- ★★★★ H4: DID THE METHODS DECODE? The client independently printed SET_OBJECT 0xc7b5"
   echo "    and the semaphore 0x120022000; w280_client's descent decoded pbm[16w of 64B]. A"
   echo "    pushbuffer READ THROUGH THE NEW ROUTE must decode to the SAME words:"
@@ -316,7 +332,7 @@ echo "=== ARMS TO RUN: [$ARMS] $([ "$ARMS" = "client clientoff" ] || echo '⚠ N
 
 for a in $ARMS; do
   TAG=${PFX}_${a}
-  unset POST_CAPTURE_HOOK KAYFABE_R33_BIN GQ_TIMEOUT KAYFABE_RING_VIDMEM KAYFABE_PUSHBUF_VIDMEM
+  unset POST_CAPTURE_HOOK KAYFABE_R33_BIN GQ_TIMEOUT KAYFABE_RING_VIDMEM KAYFABE_PUSHBUF_VIDMEM KAYFABE_PT_SWEEP
   case "$a" in
     # ★★★★★ THE RUNG. Route B ON (the supply) + PUSHBUF_VIDMEM ON (the route).
     client)    export KAYFABE_RING_VIDMEM=on
@@ -330,9 +346,23 @@ for a in $ARMS; do
                # KAYFABE_PUSHBUF_VIDMEM deliberately UNSET.
                export POST_CAPTURE_HOOK=$REPO/scripts/bench/r33_hook_ce_client.sh
                export KAYFABE_R33_BIN=$CLIENT; export GQ_TIMEOUT=240 ;;
+    # ★★★★★ w281b — THE OPERAND ARM. Identical to `client` PLUS the whole-VAS sweep.
+    #   w281 walled at `Xid 31 CE0 @ 0x1_20010000` because the CE OPERAND VAs are MISS in our
+    #   address table (`OPERAND-TABLE: 2 page(s) asked, 0 resolved, 2 MISS`). The sweep is the
+    #   BUILT mechanism for exactly that populate gap.
+    # ⊘ w276 measured the sweep binds NOTHING — but on a **GR** arm where `parse_pushbuffer`
+    #   NEVER RAN (`FWD-RING = 0` on both its boots; a GR doorbell answers
+    #   `ring_content_is_forwardable` = no). This arm is CE, `parse_pushbuffer` runs, and the
+    #   operand decode happens. ⇒ w276's null does NOT cover this case, and saying so is the
+    #   whole reason this arm exists rather than being skipped as already-answered.
+    clientsweep) export KAYFABE_RING_VIDMEM=on
+               export KAYFABE_PUSHBUF_VIDMEM=on
+               export KAYFABE_PT_SWEEP=on
+               export POST_CAPTURE_HOOK=$REPO/scripts/bench/r33_hook_ce_client.sh
+               export KAYFABE_R33_BIN=$CLIENT; export GQ_TIMEOUT=240 ;;
     *)         echo "=== ★★★ UNKNOWN ARM '$a' ==="; finish 99 ;;
   esac
-  echo "=== BOOT $TAG START $(date -Is) — workload=$a hook=$POST_CAPTURE_HOOK RING_VIDMEM=[${KAYFABE_RING_VIDMEM:-unset}] PUSHBUF_VIDMEM=[${KAYFABE_PUSHBUF_VIDMEM:-unset}] ==="
+  echo "=== BOOT $TAG START $(date -Is) — workload=$a hook=$POST_CAPTURE_HOOK RING_VIDMEM=[${KAYFABE_RING_VIDMEM:-unset}] PUSHBUF_VIDMEM=[${KAYFABE_PUSHBUF_VIDMEM:-unset}] PT_SWEEP=[${KAYFABE_PT_SWEEP:-unset}] ==="
   timeout 1500 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
   echo "=== BOOT $TAG RC=$? $(date -Is) ==="
   echo "=== ★★★★★ GRADE $TAG ($a) ==="
