@@ -739,6 +739,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             len,
             src_is_const,
             by_ours,
+            rel_present,
+            rel_va,
+            rel_payload,
         } => unit(rm.ce_copy(
             raw(vas),
             CeSubCopy {
@@ -758,6 +761,14 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 } else {
                     CeExecutor::Ours
                 },
+                // ★★★★★ w283 — rebuilt from the two fields only when the PRESENCE field
+                // says so. ⊘ Never inferred from `rel_va != 0`: `0` is a legal GPU VA, and
+                // this project has already paid once for reading a legal value as a blank
+                // (`gpFifoOffset = 0`, `AdoptedGuestRing::gp_fifo_va`).
+                guest_release: (rel_present != 0).then_some(kayfabe_isolate::CeGuestRelease {
+                    va: rel_va,
+                    payload: rel_payload,
+                }),
             },
         )),
         // ★★★★★ The guest-RAM door. The child does not decide WHICH guest bytes it maps —

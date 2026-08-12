@@ -2314,6 +2314,27 @@ struct CePush {
     sem_va: u64,
     /// The payload it releases.
     payload: u32,
+    /// ★★★★★ **w283 — the GUEST's own declared release, appended BEHIND ours.**
+    ///
+    /// `Some((va, payload))` ⇒ three extra methods after our own `LAUNCH_DMA`: a second
+    /// `SET_SEMAPHORE_A/B/PAYLOAD` naming the guest's address and the guest's literal, and a
+    /// second `LAUNCH_DMA` with [`ce::LAUNCH_TRANSFER_NONE`] — a **release-only** launch,
+    /// which is the same shape the guest's own driver uses for a bare completion
+    /// (`kayfabe_arch::PushMethod::CeRelease`, UVM's `channel_init` push).
+    ///
+    /// # ★★★ THE ORDER IS THE WHOLE SAFETY ARGUMENT
+    ///
+    /// It goes **after** the copy's own `LAUNCH_DMA` and **before** ours is waited on. A
+    /// copy engine executes a pushbuffer in submission order, so the guest's payload cannot
+    /// land before the guest's bytes have. And because our own release is emitted **last**,
+    /// `await_semaphore` returning means both have retired — so the caller's `RETIRED`
+    /// verdict covers the guest's release too, rather than racing it.
+    ///
+    /// ⊘ **Nothing here is a CPU store.** The payload is the guest's literal, written by the
+    /// engine, at the address the guest named, after the work. `ce_executor_tree.md`'s rule
+    /// 1 forbids *"signalling completion for work that did not happen"*; there is no ordering
+    /// of these methods in which that is expressible.
+    guest_release: Option<(u64, u32)>,
 }
 
 /// ★★ Build the pushbuffer for one copy-engine copy — **pure**, so it is testable with no
@@ -2344,6 +2365,15 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
     if !p.sem_va.is_multiple_of(4) {
         return Err(bad());
     }
+    // ★★★★★ w283 — the guest's release gets the SAME two checks as ours, and they are
+    // applied to the GUEST's number. ⊘ Refused, never clamped and never dropped: a guest
+    // release we silently skipped would leave the guest polling forever with every one of
+    // our own rows green, which is the exact shape of a wall nobody can attribute.
+    if let Some((va, _)) = p.guest_release {
+        if va >> 49 != 0 || !va.is_multiple_of(4) {
+            return Err(bad());
+        }
+    }
     let flags = ce::LAUNCH_TRANSFER_NON_PIPELINED
         | ce::LAUNCH_FLUSH_ENABLE
         | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
@@ -2352,8 +2382,13 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
         | ce::LAUNCH_MULTI_LINE_DISABLE
         | ce::LAUNCH_SRC_VIRTUAL
         | ce::LAUNCH_DST_VIRTUAL;
+    // ★ A release-only launch: same semaphore/flush semantics, `TRANSFER_TYPE_NONE`, and
+    // no pitch/line flags because there is no transfer for them to describe.
+    let release_only_flags = ce::LAUNCH_TRANSFER_NONE
+        | ce::LAUNCH_FLUSH_ENABLE
+        | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD;
     let sub = CE_SUBCHANNEL;
-    Ok(vec![
+    let mut out = vec![
         method_header_inc(sub, SET_OBJECT, 1).ok_or_else(bad)?,
         p.class_id.ce_object_id().0,
         method_header_inc(sub, ce::OFFSET_IN_UPPER, 4).ok_or_else(bad)?,
@@ -2370,7 +2405,23 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
         p.payload,
         method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
         flags,
-    ])
+    ];
+    // ★★★★★ w283 — THE GUEST'S OWN RELEASE, appended behind ours. See `CePush::guest_release`
+    // for why the order is the safety argument and why this is not a CPU store.
+    if let Some((va, payload)) = p.guest_release {
+        out.extend_from_slice(&[
+            method_header_inc(sub, ce::SET_SEMAPHORE_A, 3).ok_or_else(bad)?,
+            (va >> 32) as u32,
+            (va & 0xFFFF_FFFF) as u32,
+            payload,
+            method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
+            // ⊘ `LAUNCH_TRANSFER_NONE`, so this launch moves NO bytes and only releases.
+            // Re-using the copy's flags would re-run the copy — idempotent here and a
+            // silent doubling of every transfer, which is not a property to rely on.
+            release_only_flags,
+        ]);
+    }
+    Ok(out)
 }
 
 /// The runlist an [`EngineKind`] channel belongs on, as an `NV2080_ENGINE_TYPE_*`.

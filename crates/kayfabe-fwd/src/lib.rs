@@ -6517,6 +6517,12 @@ pub fn apply_pushbuffer(
                 if out.ce_spans.len() + spans.len() > MAX_CE_SPANS_PER_PARSE {
                     return Err(FwdFault::CeTooFragmented { dst, len });
                 }
+                // ★★★★★ w283 — where THIS launch's spans begin, latched before the extend so
+                // its own declared release can be attached to its OWN last span and to no
+                // other launch's. ⊘ `ce_spans.last_mut()` alone would attach a release to
+                // whatever the previous launch left there when this one partitioned to zero
+                // spans — which is exactly the `PhysOperand` / release-only case.
+                let spans_from = out.ce_spans.len();
                 out.ce_spans.extend(spans);
                 // ★★★ DECISION 2 of 2 — CAPTURE. Reads the RESOLVED PHYSICAL destination
                 // and nothing else. Independent of the above by construction: it is not
@@ -6562,6 +6568,31 @@ pub fn apply_pushbuffer(
                 if let Some(c) = completion {
                     proc.completion.observe(OsEventRef(c.addr.0 ^ c.payload))?;
                     out.sem_releases.push((c.addr, c.payload));
+                    // ★★★★★ **w283 — HAND THE GUEST'S OWN RELEASE TO THE ENGINE.**
+                    //
+                    // Attached to the LAST span of THIS launch, so the engine writes the
+                    // guest's payload after it has moved the guest's bytes — submission
+                    // order in one pushbuffer, not an ordering we impose afterwards.
+                    //
+                    // ⊘ **`HostCe` only, and that is not a policy choice.** A span running
+                    // on `CeExecutor::Ours` is served by the shell's CPU executor, whose
+                    // completions are `kayfabe_rt::cpu_ce::write_completion`'s and are
+                    // unchanged. Attaching here as well would make TWO writers for one
+                    // payload — the shape `a_second_source_of_truth_beside_a_complete_value`
+                    // names — and the two would disagree the first time one of them refused.
+                    //
+                    // ⊘ And nothing is attached when this launch produced no span of its
+                    // own (`spans_from == len()`): a release with no bytes behind it is a
+                    // `CeRelease`, handled by its own arm, and inventing a carrier for it
+                    // here would put the guest's payload on a copy it never asked for.
+                    if let Some(last) = out.ce_spans.get_mut(spans_from..).and_then(<[_]>::last_mut)
+                        && last.sub.by == CeExecutor::HostCe
+                    {
+                        last.sub.guest_release = Some(kayfabe_isolate::CeGuestRelease {
+                            va: c.addr.0,
+                            payload: c.payload,
+                        });
+                    }
                 }
             }
             // ★★★ **A launch that moves no bytes and exists only to release** — see

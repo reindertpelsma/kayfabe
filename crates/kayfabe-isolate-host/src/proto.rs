@@ -188,6 +188,18 @@ pub enum Request {
         /// `0` = [`kayfabe_isolate::CeExecutor::HostCe`], `1` =
         /// [`kayfabe_isolate::CeExecutor::Ours`].
         by_ours: u8,
+        /// ★★★★★ **w283** — `1` when this sub-copy carries the guest's own declared
+        /// release ([`kayfabe_isolate::CeSubCopy::guest_release`]), `0` when it does not.
+        ///
+        /// ⊘ A separate flag rather than a sentinel address: `0` is a legal GPU VA (the
+        /// driver declares `gpFifoOffset = 0` for its golden-context channel, and this
+        /// project has already paid once for reading a value as a blank), so *"is there a
+        /// release"* and *"what is its address"* are two facts and cross as two fields.
+        rel_present: u8,
+        /// The guest's declared release address. ⊘ Meaningless unless `rel_present == 1`.
+        rel_va: u64,
+        /// The guest's declared payload. ⊘ Meaningless unless `rel_present == 1`.
+        rel_payload: u32,
     },
     /// [`kayfabe_isolate::RmBackend::fb_read`] — read the fabricated aperture (`#102`
     /// stage C3). The reply carries the bytes **and** whether the aperture covered the
@@ -747,6 +759,9 @@ impl Envelope {
                 len,
                 src_is_const,
                 by_ours,
+                rel_present,
+                rel_va,
+                rel_payload,
             } => {
                 out.push(13);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -755,6 +770,9 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*src_is_const);
                 out.push(*by_ours);
+                out.push(*rel_present);
+                out.extend_from_slice(&rel_va.to_le_bytes());
+                out.extend_from_slice(&rel_payload.to_le_bytes());
             }
             Request::FbRead { phys, len } => {
                 out.push(14);
@@ -924,6 +942,9 @@ impl Envelope {
                 len: c.u64("ce len")?,
                 src_is_const: c.u8("ce src kind")?,
                 by_ours: c.u8("ce engine")?,
+                rel_present: c.u8("ce release present")?,
+                rel_va: c.u64("ce release va")?,
+                rel_payload: c.u32("ce release payload")?,
             },
             14 => Request::FbRead {
                 phys: c.u64("fb phys")?,

@@ -1904,6 +1904,57 @@ pub struct CeSubCopy {
     pub len: u64,
     /// ★ Which engine performs it — chosen by the PLAN, obeyed by the backend.
     pub by: CeExecutor,
+    /// ★★★★★ **w283 — THE GUEST'S OWN DECLARED RELEASE, carried so HARDWARE writes it.**
+    ///
+    /// `Some((va, payload))` exactly when this sub-copy is the **last** one of a guest
+    /// `LAUNCH_DMA` that declared a completion, and that launch's spans went to
+    /// [`CeExecutor::HostCe`]. The backend appends a second `SET_SEMAPHORE_A/B/PAYLOAD` +
+    /// `LAUNCH_DMA` to the very same pushbuffer, so the **real copy engine** writes the
+    /// guest's declared payload at the guest's declared address, **after** it has moved the
+    /// bytes.
+    ///
+    /// # ⊘⊘ WHY THIS AND NOT A CPU WRITE — the standing refusal's own wording
+    ///
+    /// `kayfabe_rt::completion_watch` refuses to write a completion, and the sentence is
+    /// **conditional**: *"the payload is a literal immediate in the guest's own bytes, so
+    /// writing it here **without running the work** is precisely the credit-shortcut the C
+    /// artifact named and refused."* ⇒ the refusal is about **signalling work that did not
+    /// happen**, and this field cannot express that: the release is a method in the same
+    /// pushbuffer as the copy, behind the copy's own `LAUNCH_DMA`, executed by the same
+    /// engine in submission order. There is **no code path** on which the payload lands and
+    /// the bytes did not. ⊘ Nothing here is a CPU store, and nothing here is ours to forge.
+    ///
+    /// # ⚠ WHAT IT STILL DOES NOT REACH
+    ///
+    /// The guest's **`GP_GET`**. That cursor lives in the guest's own USERD, on the guest's
+    /// own channel, and only that channel's PBDMA advances it — see
+    /// [`AdoptedGuestUserd`] and `traces/boots/w283/RESULT.md` for why our forwarding
+    /// channel structurally cannot.
+    ///
+    /// ⊘ `None` for every sub-copy that is not the last of its launch, for every launch
+    /// that declared no completion, and for every span running on [`CeExecutor::Ours`]
+    /// (whose completions are `kayfabe_rt::cpu_ce::write_completion`'s, unchanged).
+    pub guest_release: Option<CeGuestRelease>,
+}
+
+/// ★★★ One guest-declared copy-engine completion, as [`CeSubCopy::guest_release`] carries it.
+///
+/// A struct rather than a `(u64, u32)` for [`CeSubCopy`]'s own reason: an address and a
+/// payload next to each other are exactly the pair that gets swapped, and this one crosses
+/// an IPC boundary where a swap would be a store of an address into the guest's semaphore.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeGuestRelease {
+    /// The GPU VA the guest's own `SET_REPORT_SEMAPHORE`/`SET_SEMAPHORE_A/B` named.
+    ///
+    /// ⚠ **It must be reachable in the EXECUTOR VAS**, not merely in the guest-facing one —
+    /// `w282b`'s whole finding. Since that fix every join goes through `map_dma_both`, so a
+    /// release target inside a joined leaf is reachable; one that is not simply faults, which
+    /// is the honest outcome and is visible as an `Xid` at that address.
+    pub va: u64,
+    /// The payload the guest declared. ⊘ **The guest's literal**, carried unchanged — we
+    /// never choose it, and a value of our own here would be the forgery this design exists
+    /// to avoid.
+    pub payload: u32,
 }
 
 /// ★★ The #14 ring-gate's view of **one channel's `Vas`** — the address-plane

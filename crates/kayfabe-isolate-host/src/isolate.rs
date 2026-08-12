@@ -666,6 +666,12 @@ impl RmBackend for ProxyRmBackend {
             CeSource::Address(a) => (a, 0u8),
             CeSource::Constant(c) => (u64::from(c), 1u8),
         };
+        // ★★★★★ w283 — the guest's declared release crosses as THREE fields, never as a
+        // sentinel address: `0` is a legal GPU VA, so presence and value are two facts.
+        let (rel_present, rel_va, rel_payload) = match sub.guest_release {
+            Some(r) => (1u8, r.va, r.payload),
+            None => (0u8, 0, 0),
+        };
         self.unit(Request::CeCopy {
             vas: vas.raw(),
             dst: sub.dst,
@@ -676,6 +682,9 @@ impl RmBackend for ProxyRmBackend {
                 CeExecutor::HostCe => 0,
                 CeExecutor::Ours => 1,
             },
+            rel_present,
+            rel_va,
+            rel_payload,
         })
     }
 
