@@ -7293,7 +7293,7 @@ mod tests {
     #[test]
     fn every_push_this_encoder_can_emit_fits_one_pushbuffer_slot() {
         let base = CePush {
-            class_id: kayfabe_chips::pinned_host_classes().ce_object(),
+            class_id: probe_ce_class(),
             src: 0x1_2000_0000,
             dst: 0x1_2001_0000,
             len: 4096,
@@ -7331,7 +7331,7 @@ mod tests {
         let ours = 0x2000u64;
         let theirs = 0x1_2002_2000u64;
         let p = CePush {
-            class_id: kayfabe_chips::pinned_host_classes().ce_object(),
+            class_id: probe_ce_class(),
             src: 0x1_2000_0000,
             dst: 0x1_2001_0000,
             len: 4096,
@@ -7628,6 +7628,7 @@ mod tests {
             len: 4096,
             sem_va: 0x7_0000_2000,
             payload: 7,
+            guest_release: None,
         })
         .expect("encodable");
 
@@ -7679,6 +7680,7 @@ mod tests {
             len: 4,
             sem_va: 0,
             payload: 1,
+            guest_release: None,
         };
         for bad in [
             CePush {
@@ -7761,6 +7763,7 @@ mod tests {
             bytes: 4096,
             submit: landed,
             payload: 3,
+            guest_release: None,
         };
         assert!(good.copied());
         assert!(

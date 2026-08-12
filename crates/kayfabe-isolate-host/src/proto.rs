@@ -1310,6 +1310,9 @@ mod tests {
                 len: 0x1000,
                 src_is_const: 0,
                 by_ours: 0,
+                rel_present: 0,
+                rel_va: 0,
+                rel_payload: 0,
             },
             Request::CeCopy {
                 vas: 7,
@@ -1318,6 +1321,9 @@ mod tests {
                 len: 4,
                 src_is_const: 1,
                 by_ours: 1,
+                rel_present: 0,
+                rel_va: 0,
+                rel_payload: 0,
             },
             Request::FbRead {
                 phys: 0x1000_4000,
