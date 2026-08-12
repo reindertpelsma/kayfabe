@@ -2659,3 +2659,134 @@ fn the_ring_arm_and_the_route_arm_are_four_independent_cells() {
          the supply side and the transport would stop being separately measurable"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ LEG 4 — `KAYFABE_GUEST_PUSHBUF`, the arm that gives the guest-RAM PIN a second
+// source: the pushbuffer VAs this channel's own GPFIFO entries name.
+//
+// ⊘⊘ Why the PIN and not the JOIN, since the rung brief said the join: the eight
+// `Xid`-faulting pushbuffer VAs of `w263` resolve `pb=S:…` — **guest RAM** — on both arms,
+// and `resolve_leaf_of` hands a sysmem resolution back as `(Site::GuestRam, None)` by
+// construction. `docs/design/w264_pushbuffer_pin_prereg.md` §0.
+//
+// ⊘ Why a THIRD selector and not a rider on `KAYFABE_GUEST_RING`: `w263`'s own RESULT §3.1
+// records the cost of the alternative — its harness exported `KAYFABE_FB_JOIN=shared` on
+// both arms, so its control was not its predecessor's and six rows compared across boots.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestPushbufArm, guest_pushbuf_from};
+
+/// ⊘ **The default must leave every prior boot comparable.** The pin pass runs on the
+/// doorbell fall-through and reads up to 4096 GPFIFO entries; a default that armed would
+/// change the shape — and the cost — of every log ever taken.
+#[test]
+fn the_default_guest_pushbuf_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_pushbuf_from(None), Ok(GuestPushbufArm::Off));
+    assert!(
+        !GuestPushbufArm::Off.pins(),
+        "★ the default arm presented the pushbuffer VAs to the pin"
+    );
+}
+
+/// ★★★★★ THE RUNG: `pin` is the only arm that pins, through one predicate the shim and this
+/// test both read — never through `== Pin` spelled at a call site.
+#[test]
+fn only_the_pin_arm_pins_and_the_predicate_is_the_gate() {
+    assert!(GuestPushbufArm::Pin.pins());
+    let pinning: Vec<GuestPushbufArm> = GuestPushbufArm::ALL
+        .into_iter()
+        .filter(|a| a.pins())
+        .collect();
+    assert_eq!(
+        pinning,
+        vec![GuestPushbufArm::Pin],
+        "★ exactly one arm may present the pushbuffer VAs; a second is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_pushbuf_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestPushbufArm::ALL {
+        assert_eq!(
+            guest_pushbuf_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestPushbufArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestPushbufArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly — and the stakes are the
+/// route's, quieter: a disarmed evidence run prints **no `PB-PIN` line at all**, which is
+/// exactly what a correct control prints. Absence cannot distinguish them, so the spelling
+/// must.
+#[test]
+fn a_value_that_is_not_a_guest_pushbuf_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Pin",
+        "pins",
+        "pushbuf",
+        "pushbuffer",
+        "ring",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_pushbuf_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-pushbuf arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestPushbufArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **THE THREE LEGS ARE INDEPENDENT, and that is asserted rather than assumed.**
+///
+/// ⊘ Nothing in the shim may make one arm imply another. `w264` runs three boots whose arms
+/// differ in **one** variable each — `off/off`, `ring/off`, `ring/pin` — and that experiment
+/// is only expressible if all eight cells of the product are reachable. ⚠ `w263`'s arms did
+/// not have this property and its own RESULT §3.1 says so; this test is what stops the next
+/// selector from quietly re-creating it.
+#[test]
+fn the_pushbuf_arm_is_independent_of_the_ring_arm_and_the_route_arm() {
+    let mut cells = Vec::new();
+    for pb in GuestPushbufArm::ALL {
+        for ring in GuestRingArm::ALL {
+            for route in GrRouteArm::ALL {
+                cells.push((pb.pins(), ring.adopts_ring(), route.gr_passthrough()));
+            }
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        8,
+        "★ the three selectors do not span eight cells — one constrains another, and the \
+         supply side, the pushbuffer plane and the transport stop being separately measurable"
+    );
+}
