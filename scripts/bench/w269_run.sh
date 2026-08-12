@@ -18,7 +18,11 @@
 # binary than its predecessor could not be compared to it, which is the whole point.
 # ★ Corollary: this rung is structurally immune to the "bench silently served a binary built
 #   from 862c7c2" trap, because it never invokes a compiler.
-OUT=/workspace/w269_run.log
+# ★ TAG PREFIX so a SECOND pass (a deeper decode of the same question) does not overwrite the
+#   first pass's artefacts. ⊘ Overwriting them would destroy the only evidence that the first
+#   decode stopped where it said it did.
+PFX=${W269_TAG_PREFIX:-w269}
+OUT=/workspace/${PFX}_run.log
 exec >"$OUT" 2>&1
 finish() { echo "=== W269 EXIT rc=$1 at $(date -Is) ==="; exit "$1"; }
 echo "=== W269 START $(date -Is) pid=$$ ==="
@@ -142,9 +146,9 @@ boot() {
 }
 
 #     tag           FB_JOIN  GUEST_RING  GUEST_PUSHBUF  PT_WITNESS_EXEC  GUEST_SEMA  GR_ROUTE
-boot w269_refuse  shared   ring        pin            on               pin         -
-boot w269_pass    shared   ring        pin            on               pin         passthrough
+boot ${PFX}_refuse  shared   ring        pin            on               pin         -
+boot ${PFX}_pass    shared   ring        pin            on               pin         passthrough
 
 echo "=== ARTEFACT SIZES ==="
-ls -l /workspace/bench/run_w269_* 2>/dev/null
+ls -l /workspace/bench/run_${PFX}_* 2>/dev/null
 finish 0

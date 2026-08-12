@@ -41,12 +41,23 @@
  *   kind 3     f9e1b0         v = *(u32*)( *(u64*)( *(u64*)(item[0x08]+0x18) + 0x10 ) )
  *                             done when (int32)(v - (4*item[0x10] + 2)) >= 0
  *                             caches v at item[0x08]+0x20; 64-bit mirror at item[0x18]+0x9428
- *   kind 4     f9e190         call 4029e0(item[0x08]+0x18,   item[0x10])   -- NESTED wait
- *   kind 1     f9e320         call 4029e0(item[0x08]+0x9410, item[0x10])   -- NESTED wait
+ *   kind 4     f9e190         call 4029e0(S = item[0x08]+0x18)    -- nested, DECODED below
+ *   kind 1     f9e320         call 4029e0(S = item[0x08]+0x9410)  -- nested, DECODED below
  *   others     f9e0d0         "not this one" -> next item
  *
- * ⊘ For kinds 1 and 4 this program stops at the handler and SAYS SO. A nested wait is a
- * PARTIAL answer and must not be reported as the polled address.
+ * ★★★★★ `4029e0(S, wanted)` — decoded 2026-08-12, AFTER this probe's first live run measured
+ * every item as KIND=1 and correctly refused to name an address it had not decoded:
+ *
+ *     4029e5  if wanted > S[0x10]  -> return 3        (out of range; reads nothing)
+ *     402a0d  if wanted <= S[0x18] -> return 5/1      (★ ALREADY SATISFIED from the cache)
+ *     402a53  desc = S[0x20]
+ *     402a88  addr = *(u64*)(desc + 0x10)             ; ★ THE POLLED ADDRESS
+ *     402a8c  v    = *(u32*)addr                      ; ★ THE READ
+ *     402aa9  lock cmpxchg composes v into S[0x18]; done when wanted <= composed
+ *
+ * ★ Cross-check that this decode is right: kind 3's handler independently reads
+ * `obj[0x9420]`, `obj[0x9428]`, `obj[0x9430]` — exactly `S+0x10`, `S+0x18`, `S+0x20` for
+ * `S = obj+0x9410`. Two handlers, disassembled separately, agree on the same three fields.
  *
  * ## ⊘ What it deliberately does not do
  *
@@ -72,12 +83,15 @@
 
 #define MAX_MAPS 1024
 #define MAX_TIDS 64
-#define MAX_BUCKETS 96
+/* ★ 96 was too small: `[measured, w269 pass 1]` the cap filled and 5250 of 6000 hits fell
+ * outside it, so the "top 24" was really "the first 96 distinct RIPs, all at 24 hits" — a
+ * biased sample presented as a ranking. One loop iteration is ~250 instructions. 512 holds it. */
+#define MAX_BUCKETS 512
 #define MAX_WANT 8
 #define MAX_ITEMS 16
 
 struct maprow {
-    uint64_t lo, hi;
+    uint64_t lo, hi, modbase;
     int exec;
     char perm[8];
     char name[192];
@@ -131,6 +145,29 @@ static void load_maps(pid_t pid)
         g_nmaps++;
     }
     fclose(f);
+
+    /* ★★ MODULE BASE, not segment base. `[measured, w269 pass 1]` the first version resolved
+     * against the containing map ROW, so an address at file offset 0x22be1f printed as
+     * `libcuda+0xc5e1f` — the `.text` segment starts 0x166000 into the file, and EVERY
+     * histogram offset was therefore 0x166000 short of what `objdump` uses. An offset that
+     * cannot be joined to a disassembly is not an offset. Base = the lowest mapping with the
+     * same pathname. */
+    {
+        int i, j;
+
+        for (i = 0; i < g_nmaps; i++) {
+            g_maps[i].modbase = g_maps[i].lo;
+            if (!g_maps[i].name[0] || g_maps[i].name[0] == '[') {
+                continue;
+            }
+            for (j = 0; j < g_nmaps; j++) {
+                if (!strcmp(g_maps[i].name, g_maps[j].name) &&
+                    g_maps[j].lo < g_maps[i].modbase) {
+                    g_maps[i].modbase = g_maps[j].lo;
+                }
+            }
+        }
+    }
 }
 
 /* module+offset, or the bare address when it falls in no mapping. */
@@ -143,8 +180,9 @@ static const char *resolve(uint64_t a, char *buf, size_t n)
             const char *nm = g_maps[i].name[0] ? g_maps[i].name : "[anon]";
             const char *base = strrchr(nm, '/');
 
+            /* ★ file offset (module base), which is what `objdump` addresses use. */
             snprintf(buf, n, "%s+0x%llx  <%s %s>", base ? base + 1 : nm,
-                     (unsigned long long)(a - g_maps[i].lo), g_maps[i].perm, nm);
+                     (unsigned long long)(a - g_maps[i].modbase), g_maps[i].perm, nm);
             return buf;
         }
     }
@@ -235,7 +273,7 @@ struct bucket {
 };
 static struct bucket g_buckets[MAX_BUCKETS];
 static int g_nbuckets;
-static unsigned long g_dropped_hits, g_dropped_buckets;
+static unsigned long g_dropped_hits;
 
 static void hist_add(uint64_t rip)
 {
@@ -253,9 +291,10 @@ static void hist_add(uint64_t rip)
         g_nbuckets++;
         return;
     }
-    /* ★ Capped. Say so with a number rather than losing it silently. */
+    /* ★ Capped. Say so with a number rather than losing it silently. ⊘ And note what this
+     * number is NOT: it counts HITS that found no bucket, not distinct addresses, because a
+     * distinct count of things never stored is not knowable. */
     g_dropped_hits++;
-    g_dropped_buckets = 1; /* refined below: we cannot count distinct we never stored */
 }
 
 static int bucket_cmp(const void *a, const void *b)
@@ -384,15 +423,52 @@ static void decode_items(pid_t pid, uint64_t waitobj)
                     }
                 }
             }
-        } else if (kind == 4) {
-            printf("      handler f9e190 — ⊘ NESTED WAIT: call 4029e0(0x%llx, 0x%llx). "
-                   "This probe stops here; the polled address is one level deeper and is "
-                   "NOT reported. A partial answer, said as one.\n",
-                   (unsigned long long)(w08 + 0x18), (unsigned long long)w10);
-        } else if (kind == 1) {
-            printf("      handler f9e320 — ⊘ NESTED WAIT: call 4029e0(0x%llx, 0x%llx). "
-                   "Same caveat as kind 4.\n",
-                   (unsigned long long)(w08 + 0x9410), (unsigned long long)w10);
+        } else if (kind == 4 || kind == 1) {
+            /* ★★★★★ `4029e0` DECODED (2026-08-12, after w269 pass 1 measured every item as
+             * KIND=1 and this probe correctly REFUSED to name an address it had not decoded):
+             *
+             *   4029e0(rdi = S, rsi = wanted)
+             *     4029e5  rdx = S[0x10]           ; the limit
+             *     4029e9  if wanted > limit -> return 3            (out of range)
+             *     4029fc  r13 = S + 0x18          ; the 64-bit monotonic cell (lock cmpxchg)
+             *     402a0d  rax = S[0x18]           ; the CACHED progress
+             *     402a11  if wanted <= cached -> return 5/1        (★ DONE, no read at all)
+             *     402a53  rdx = S[0x20]           ; the semaphore DESCRIPTOR
+             *     402a88  rdx = *(u64*)(rdx+0x10) ; ★ THE POLLED ADDRESS
+             *     402a8c  edx = *(u32*)rdx        ; ★ THE READ
+             *     402ab6  if wanted <= composed -> return 4        (DONE)
+             *
+             * ⇒ S = item[0x08] + (kind==1 ? 0x9410 : 0x18).
+             * ★ Cross-check: kind 3's handler reads `obj[0x9420]`, `obj[0x9428]`, `obj[0x9430]`
+             *   — which are exactly S+0x10, S+0x18, S+0x20 for S = obj+0x9410. The two decodes
+             *   agree on the same three fields, derived independently. */
+            uint64_t S = w08 + (kind == 1 ? 0x9410 : 0x18);
+            uint64_t limit = 0, cached = 0, desc = 0, addr = 0;
+
+            printf("      handler %s — nested wait 4029e0(S=0x%llx, wanted=0x%llx)\n",
+                   kind == 1 ? "f9e320" : "f9e190", (unsigned long long)S,
+                   (unsigned long long)w10);
+            peek64(pid, S + 0x10, &limit);
+            peek64(pid, S + 0x18, &cached);
+            peek64(pid, S + 0x20, &desc);
+            printf("        S[0x10] limit    = 0x%llx   %s\n", (unsigned long long)limit,
+                   w10 > limit ? "★ wanted > limit ⇒ 4029e0 returns 3 WITHOUT reading anything"
+                               : "(wanted is within the limit)");
+            printf("        S[0x18] cached   = 0x%llx   %s\n", (unsigned long long)cached,
+                   w10 <= cached ? "★★★ wanted <= cached ⇒ THIS ITEM IS ALREADY SATISFIED"
+                                 : "★ wanted > cached ⇒ this item is NOT satisfied; it reads");
+            printf("        S[0x20] desc     = 0x%llx\n", (unsigned long long)desc);
+            if (desc && peek64(pid, desc + 0x10, &addr) == 0 && addr) {
+                report_address(pid, "POLLED ADDRESS", addr);
+                printf("        chain            : item[0x08]=0x%llx +0x%x -> S +0x20 -> "
+                       "0x%llx +0x10 -> 0x%llx\n", (unsigned long long)w08,
+                       kind == 1 ? 0x9410 : 0x18, (unsigned long long)desc,
+                       (unsigned long long)addr);
+            } else {
+                printf("        ⊘ the chain S+0x20 -> +0x10 is UNREADABLE or NULL "
+                       "(desc=0x%llx) — no polled address for this item\n",
+                       (unsigned long long)desc);
+            }
         } else {
             printf("      handler f9e0d0 — this kind is the DEFAULT continue: it waits on "
                    "nothing and cannot be what holds the loop.\n");
