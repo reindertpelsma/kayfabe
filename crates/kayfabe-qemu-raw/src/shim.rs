@@ -3192,6 +3192,16 @@ struct SharedDoorbell {
     /// its own **fifth** selector rather than a rider on [`GUEST_SEMA_ENV`] — so `w270`'s two
     /// arms differ in one variable while every leg `w268` measured stays armed on both.
     guest_operand: GuestOperandArm,
+    /// ★★★★★ **w282's arm** — whether a CE operand page that lands in the emulated
+    /// framebuffer has its leaf JOINED, so the executor stays `HostCe`. See
+    /// [`OPERAND_JOIN_ENV`] and [`SharedDoorbell::join_operand_fb_leaves`].
+    ///
+    /// ★ Read ONCE at the composition root and carried, for `gr_route`'s reason exactly, and
+    /// its own **sixth** selector rather than a rider on [`GUEST_OPERAND_ENV`] — the pin and
+    /// the join serve **disjoint** operand populations (guest RAM vs framebuffer) and a boot
+    /// must be able to arm either alone.
+    #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
+    operand_join: OperandJoinArm,
 }
 
 /// ★★★★★ **§5.12 — a joined framebuffer range, as the device crate's port sees it.**
@@ -4636,6 +4646,30 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::guest_operand`.
         if let Some(line) = self.pin_operand_guest_ram(token, seen.as_ref()) {
+            eprintln!("kayfabe: {line}");
+        }
+        // ★★★★★ **LEG 7 (w282) — AND IT IS HERE FOR LEG 4's REASON, THREE PLANES ON.**
+        //
+        // `[measured 2026-08-12, w281_client]` with the pushbuffer route armed a real host copy
+        // engine fetched the guest's methods and faulted `FAULT_PTE ACCESS_TYPE_VIRT` at the
+        // destination operand the guest's own pushbuffer declared; `[w281b_clientsweep]` binding
+        // that operand made it resolve to our EMULATED FRAMEBUFFER, which routes the copy to
+        // `CeExecutor::Ours` and is refused before submission. Both walls are one missing thing:
+        // **the operand is not memory a real engine can be pointed at.** A mapping installed
+        // after the ring has been rung is a mapping installed after the engine has already
+        // faulted for it, so this runs **above** `SharedDevice::doorbell` exactly as legs 4, 5
+        // and 6 do.
+        //
+        // ⊘ It returns a `String` and gates nothing — same shape, same opacity property.
+        //
+        // ⚠ It is ordered **after** leg 6 deliberately, and the two are disjoint by
+        // construction: leg 6 serves the operand pages that bind in GUEST RAM and refuses a
+        // framebuffer binding by name; this serves exactly the ones it refused. Running it
+        // first would not change what either does — they partition the same page set — but the
+        // order makes the two lines readable as a partition rather than as a race.
+        //
+        // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::operand_join`.
+        if let Some(line) = self.join_operand_fb_leaves(token, seen.as_ref()) {
             eprintln!("kayfabe: {line}");
         }
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
@@ -8192,6 +8226,419 @@ impl SharedDoorbell {
         ))
     }
 
+    /// ★★★★★ **w282 — LEG 7: JOIN the framebuffer leaves this channel's own CE operands
+    /// name**, so the executor stays `HostCe` and a real host engine can be pointed at the
+    /// guest's own address.
+    ///
+    /// # ★★★ It is a CALLER, not a mechanism — and that is the whole finding
+    ///
+    /// Every step below already existed. [`join_one_fb_leaf`] is the four-step join
+    /// (`join → adopt+map → establish+install → bind`) that `w260` built and that
+    /// [`Regs::back_census_framebuffer_leaves`] and [`Regs::adopt_pending_channel_rings`]
+    /// both use. `[measured 2026-08-12]` the reason a CE operand never reached it is that
+    /// the census caller hangs off [`Self::declare_gr_completion`], which [`Self::ring`]
+    /// calls on the **GR** dispositions only — so **no CE doorbell has ever presented a
+    /// leaf to the join.** This presents them.
+    ///
+    /// # ★★★★★ PER-VAS, STRUCTURALLY — the owner's *"not denied, simply not found"*
+    ///
+    /// Three independent per-VAS keyings, and **none of them is a policy check**:
+    ///
+    /// 1. The operand VAs come from [`Self::ce_operand_pages`], which reads **this
+    ///    channel's own ring** through **this channel's own** [`DoorbellRoot`].
+    /// 2. Each VA is resolved through [`kayfabe_rt::device::SharedDevice::resolve`] keyed by
+    ///    **this channel's `Pdb`** — `mode2_address_table.md` §3, *"keyed by VAS … NOT a
+    ///    global VA space"*. A VA bound only in another address space is a
+    ///    `Miss`, which is §6's `miss = fault`: **not found**, never "found elsewhere".
+    /// 3. The leaf is walked by [`kayfabe_rt::ceutils::resolve_leaf_of`] from **the same
+    ///    root**, and bound by `join_one_fb_leaf` into **the same `Pdb`**.
+    ///
+    /// ⊘ There is no arm here that searches other address spaces, and none that falls back to
+    /// one on a miss. A miss is reported and the page is skipped. `[asserted]`
+    /// `tests/tests/operand_join_is_per_vas.rs`.
+    ///
+    /// # ★★ CLEANUP — named now, because a join without a release is a leak
+    ///
+    /// Every join this pass performs has an owner and an end, and both are *stated* so the
+    /// release path is a wiring job rather than a redesign:
+    ///
+    /// | | |
+    /// |---|---|
+    /// | **owner** | the `(proc, Pdb)` whose table carries the `JoinsGuestWindow` binding — never the channel, which may die while its VAS lives |
+    /// | **unit** | one 64 KiB framebuffer leaf, keyed by `leaf.phys`; two operands in one leaf are **one** join and the second replays |
+    /// | **lifetime** | from `adopt_joined_fb_leaf` until the binding is dropped from that `Pdb`'s table |
+    /// | **the event that ends it** | the guest's own free/unmap of the range, seen as the page-table leaf ceasing to bind — **and a `Pdb`-scoped sweep at address-space teardown as the backstop**, because the free is not guaranteed to cross (see the module's `RESULT` doc) |
+    /// | **the primitive** | [`kayfabe_rt::device::SharedDevice::release_unadopted_fb_leaf`] already stages the unmap; the missing half is the *trigger*, not the mechanism |
+    ///
+    /// ⊘ **Not wired this rung, and the shape admits it rather than assuming it away.** What
+    /// is wired is the idempotence that makes a later release correct: this pass never joins
+    /// one leaf twice, so a release is a release of one thing.
+    ///
+    /// # ⊘ It returns a `String` and gates NOTHING
+    ///
+    /// Same shape as legs 4/5/6: no `?`, no early return and no branch on its outcome between
+    /// it and `SharedDevice::doorbell`. Whether the doorbell is forwarded cannot depend on
+    /// whether a leaf joined.
+    #[cfg(feature = "host-isolates")]
+    #[allow(clippy::too_many_lines)]
+    fn join_operand_fb_leaves(
+        &self,
+        token: u64,
+        facts: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<String> {
+        // ⊘ SILENT when disarmed, for `pin_operand_guest_ram`'s reason: the control's log must
+        // not contain a line the armed run's does not.
+        if !self.operand_join.joins() {
+            return None;
+        }
+        let head = format!("OPERAND-JOIN token={token:#010x}");
+        let Some(f) = facts else {
+            return Some(format!(
+                "{head} → NO CHANNEL (the token routed to no channel, so there is no VA space \
+                 to join INTO)"
+            ));
+        };
+        let Some(pdb) = f.vas_pdb else {
+            return Some(format!(
+                "{head} proc={} chan={} → NO PDB (this channel's VA space did not resolve, so \
+                 there is no address space to join into; ⊘ not a miss — nothing was asked)",
+                f.proc.0, f.chan.0
+            ));
+        };
+        let who = format!(
+            "{head} proc={} chan={} pdb=0x{:x}",
+            f.proc.0, f.chan.0, pdb.0
+        );
+        // ⚠ NECESSARY-NOT-SUFFICIENT, and said out loud rather than left as an absence: the
+        // join's own arm (`KAYFABE_FB_JOIN`) selects `Shared` vs `Private` vs `Off`, and with
+        // it `Off` this pass would map PRIVATE ANONYMOUS pages — two memories under a name
+        // that says one. ⊘ Refused rather than downgraded.
+        if !self.fb_join.armed() {
+            return Some(format!(
+                "{who} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. The join's mapping arm is what \
+                 makes the guest's window and the host object ONE memory; with it disarmed this \
+                 pass could only map PRIVATE ANONYMOUS pages, which is the two-memories state \
+                 under a name that says the opposite. ⊘ Nothing was asked of the host",
+                self.fb_join.as_str()
+            ));
+        }
+        let (Some(exports), Some(plane)) = (self.exports.as_ref(), self.plane.upgrade()) else {
+            return Some(format!(
+                "{who} → ⊘ NOT ARMABLE: exports_directory={} plane={} — this build has no route \
+                 from a backing token to a descriptor, or the register plane is gone. ⊘ Nothing \
+                 was asked of the host and no leaf was touched",
+                self.exports.is_some(),
+                self.plane.upgrade().is_some(),
+            ));
+        };
+        let Some(vaspace) = f.vaspace else {
+            return Some(format!(
+                "{who} → NO VASPACE (there is no address space handle to root the walk at)"
+            ));
+        };
+        // ★★★ PER-VAS KEYING #1 and #3's root: THIS channel's own installed page-directory
+        // base. ⊘ Nothing below may resolve against any other.
+        let root = match SharedDoorbell::doorbell_root(&plane, f.client, vaspace, Some(pdb.0)) {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+            DoorbellRoot::Absent => {
+                return Some(format!(
+                    "{who} → NO ROOT (this channel has no VA space root, so no operand VA can \
+                     be walked to a leaf)"
+                ));
+            }
+            DoorbellRoot::Underivable(p, why) => {
+                return Some(format!(
+                    "{who} → ROOT UNDERIVABLE from pdb 0x{p:x}: {}",
+                    why.kind()
+                ));
+            }
+        };
+        // ★ THE SAME SOURCE the pin uses, at THIS doorbell — never a remembered address and
+        // never another pass's read. `ce_operand_pages` takes and releases the memory-plane
+        // lock and the plane session inside itself, before anything below runs.
+        let page = Self::RING_PIN_BYTES;
+        let (source, pages) = self.ce_operand_pages(token, f, page);
+        let source = format!("{who}\n    {source}");
+        if pages.is_empty() {
+            return Some(format!(
+                "{source}\n    ⊘ NO OPERAND PAGE TO JOIN. ⚠ Read the counters on the line above \
+                 before reading this as an absence — `release_only = launches`, `physical > 0` \
+                 and `opaque = methods` are three different facts and none of them is *the \
+                 decode failed*"
+            ));
+        }
+        // ---- PHASE 1: CLASSIFY, per-VAS, and pick the candidates ---------------------------
+        //
+        // ⊘ Three populations, kept apart because they are three different findings and a
+        // single count would hide two of them:
+        //   * `Miss`            — §6's `miss = fault`. NOT FOUND in this VAS. Skipped, loudly.
+        //   * guest RAM         — leg 6's population. Already served; not this pass's to touch.
+        //   * framebuffer       — THIS pass's population.
+        // ★ And within the framebuffer population, one already carrying a host object is
+        //   ALREADY JOINED and must not be asked for a second fixed map at an occupied
+        //   address (RM answers `0x51`, which ⊘ cannot be told apart from real exhaustion).
+        let mut candidates: Vec<u64> = Vec::new();
+        let mut n_miss = 0usize;
+        let mut n_guest_ram = 0usize;
+        let mut n_already = 0usize;
+        let mut misses: Vec<String> = Vec::new();
+        let mut fb: Vec<String> = Vec::new();
+        for &pva in &pages {
+            // ★★★ PER-VAS KEYING #2 — `pdb` is this channel's, and `resolve` has no arm that
+            // consults another. A VA bound only elsewhere lands in the `Err` below.
+            match self
+                .device
+                .resolve(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(pva))
+            {
+                Err(e) => {
+                    n_miss += 1;
+                    if misses.len() < PUSHBUF_REPORT {
+                        misses.push(format!("va=0x{pva:x}:{e:?}"));
+                    }
+                }
+                Ok((b, _)) if b.is_guest_ram() => n_guest_ram += 1,
+                // ⊘ `host().is_some()` is the JOINED test and it is read, never derived: a
+                // framebuffer range that carries a host materialization is one whose window
+                // has already been re-pointed (`BackingBytes::JoinsGuestWindow`), and asking
+                // for it again is the `0x51` collision above.
+                Ok((b, _)) if b.host().is_some() => {
+                    n_already += 1;
+                    if fb.len() < PUSHBUF_REPORT {
+                        fb.push(format!("va=0x{pva:x}:ALREADY-JOINED"));
+                    }
+                }
+                Ok((b, _)) => {
+                    if fb.len() < PUSHBUF_REPORT {
+                        fb.push(format!(
+                            "va=0x{pva:x}:{:?}@0x{:x}/{:?}",
+                            b.aperture(),
+                            b.phys(),
+                            b.kind()
+                        ));
+                    }
+                    candidates.push(pva);
+                }
+            }
+        }
+        let table = format!(
+            "{source}\n    OPERAND-JOIN-TABLE: {} page(s) asked, {n_miss} MISS{}, {n_guest_ram} \
+             in guest RAM (leg 6's population, untouched here), {n_already} ALREADY JOINED, {} \
+             CANDIDATE(S) in the emulated framebuffer{}",
+            pages.len(),
+            pushbuffer_sample(&misses, n_miss),
+            candidates.len(),
+            pushbuffer_sample(&fb, n_already + candidates.len()),
+        );
+        if candidates.is_empty() {
+            return Some(format!(
+                "{table}\n    ⊘ NOTHING TO JOIN. ⚠ The four counts above are FOUR DIFFERENT \
+                 FACTS: a `MISS` says this VAS does not bind that VA at all (§6 — not found, \
+                 never denied); `in guest RAM` says leg 6 owns it; `ALREADY JOINED` says a \
+                 previous doorbell did this work; and only a zero in ALL of them would mean \
+                 the decode found nothing"
+            ));
+        }
+        // ---- PHASE 2: WALK each candidate to its leaf, per-VAS, sessions dropped ------------
+        //
+        // ⚠ The session is scoped to the closure and released before any host verb, because
+        // `join_one_fb_leaf` re-takes the plane lock at its step 3 and checks a worker out of
+        // the isolate pool at its step 1. Holding a session across it is a deadlock, not a
+        // slowdown.
+        //
+        // ★ Keyed by `leaf.phys` and de-duplicated HERE rather than inside the join: two
+        // operands in one 64 KiB leaf are ONE join, and the second must not be attempted.
+        let mut leaves: std::collections::BTreeMap<u64, kayfabe_rt::completion_watch::FbLeaf> =
+            std::collections::BTreeMap::new();
+        let mut walk_lines: Vec<String> = Vec::new();
+        for &pva in &candidates {
+            let (site, leaf) = plane.ce_session_with_root(
+                &root,
+                kayfabe_device::ceresolve::Demand::from_doorbell(),
+                |ce| kayfabe_rt::ceutils::resolve_leaf_of(ce, pva),
+            );
+            match leaf {
+                Some(l) => {
+                    if leaves.insert(l.phys, l).is_some() {
+                        walk_lines.push(format!(
+                            "va=0x{pva:x} → leaf fb_phys=0x{:x} (SAME LEAF as an earlier \
+                             operand — one join, not two)",
+                            l.phys
+                        ));
+                    } else {
+                        walk_lines.push(format!(
+                            "va=0x{pva:x} → leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x}",
+                            l.va, l.len, l.phys
+                        ));
+                    }
+                }
+                // ⊘ `GuestRam` here contradicts the table read one phase up and is REPORTED
+                // rather than reconciled: two resolutions of one fact disagreeing is a finding,
+                // and preferring either reading is what §16.64 measured costing a week.
+                None => walk_lines.push(format!(
+                    "va=0x{pva:x} → ⊘ NO FRAMEBUFFER LEAF: {site:?}. ⚠ If this says `GuestRam` \
+                     it DISAGREES with this pass's own table read above — do not reconcile it, \
+                     read it as the two-sources finding it is"
+                )),
+            }
+        }
+        // ---- PHASE 3: JOIN, one leaf at a time, nothing held -------------------------------
+        let isolate = kayfabe_isolate::IsolateId::new(f.proc.0, DOORBELL_TARGET_GPU);
+        let mut joined = 0usize;
+        let mut refused = 0usize;
+        for (phys, leaf) in &leaves {
+            let what = format!("CE-OPERAND(chan={} fb_phys=0x{phys:x})", f.chan.0);
+            match join_one_fb_leaf(
+                &head,
+                &what,
+                &self.device,
+                &plane,
+                exports,
+                self.fb_join,
+                isolate,
+                pdb,
+                *leaf,
+            ) {
+                Some(_) => joined += 1,
+                None => refused += 1,
+            }
+        }
+        // ---- PHASE 4: THE RE-STATEMENT, and it is the FALSIFIER ------------------------------
+        //
+        // ★★★★★ Same pages, same table, same `Pdb` — re-read AFTER the joins, so the column
+        // that changed can only have changed because of the replies above. ⊘ This is graded on
+        // IDENTITY (`still_fabricated` is a LIST of VAs, not a count): `w281b`'s pre-registered
+        // falsifier fired on a count while the thing counted was substituted underneath it, and
+        // that is the third instance in three rungs.
+        let mut still_fabricated: Vec<String> = Vec::new();
+        let mut now_host_backed: Vec<String> = Vec::new();
+        for &pva in &pages {
+            match self
+                .device
+                .resolve(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(pva))
+            {
+                Ok((b, _)) if b.is_guest_ram() => {}
+                Ok((b, _)) => match b.host_va() {
+                    Some(hva) => now_host_backed.push(format!(
+                        "va=0x{pva:x}→host_va=0x{hva:x}{}",
+                        if hva == pva { "" } else { " ⚠ NOT-AT-THE-GUEST'S-OWN-VA" }
+                    )),
+                    None => still_fabricated
+                        .push(format!("va=0x{pva:x}:{:?}@0x{:x}", b.aperture(), b.phys())),
+                },
+                Err(_) => {}
+            }
+        }
+        Some(format!(
+            "{table}\n    WALK: {}\n    JOINED {joined} leaf/leaves, {refused} REFUSED, over {} \
+             distinct leaf/leaves\n    {}",
+            walk_lines.join("\n          "),
+            leaves.len(),
+            Self::fake_fb_in_userspace_vas(f, &now_host_backed, &still_fabricated),
+        ))
+    }
+
+    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `adopt_pending_channel_rings`'
+    /// twin's reason, which that function's own docs record as a shape that cost a rung: an
+    /// archive built without the feature prints nothing, exits 0, and every other signal says
+    /// the boot happened.
+    #[cfg(not(feature = "host-isolates"))]
+    fn join_operand_fb_leaves(
+        &self,
+        token: u64,
+        _facts: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<String> {
+        if !self.operand_join.joins() {
+            return None;
+        }
+        Some(format!(
+            "OPERAND-JOIN token={token:#010x} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT JOIN A \
+             LEAF AT ALL. The arm was requested and this build has no isolate plane, so leg 7 \
+             is a no-op — ⚠ do NOT grade a boot from this binary as `armed and nothing moved`"
+        ))
+    }
+
+    /// ★★★★★ **#255 — THE OWNER'S ASSERTION: fake framebuffer must never be what a guest
+    /// USERSPACE channel's engine is pointed at.**
+    ///
+    /// > *"no fake framebuffer at a real GPU VA of an isolate except the scratchpad"* —
+    /// > owner, 2026-08-11, and `kayfabe_mmu::RegionKind::FakeFramebuffer`'s own text:
+    /// > *"Ruling 2 scopes what this kind is for: **guest-KERNEL channels we emulate** …
+    /// > A guest **userspace** mapping landing here is the execution blocker, not the design."*
+    ///
+    /// # ⊘⊘ WHY IT REPORTS IN EVERY BUILD AND PANICS IN NONE OF THE ONES WE SHIP
+    ///
+    /// The owner's constraint is explicit: **never asserted in production.** The guest can
+    /// drive this condition, and panicking on guest-reachable state hands it a DoS. But a
+    /// `#[cfg(debug_assertions)]` body with an **empty sibling** is exactly the shape that
+    /// makes *"the check never ran"* indistinguishable from *"the check ran and found
+    /// nothing"* — measured, at `shim.rs`'s own `#[cfg(not(host-isolates))]` twin, and it
+    /// cost a rung. ⊘ And the bench builds **`--release`** (`scripts/build_qom_shim.sh:37`),
+    /// so a debug-only instrument would never execute on the only machine that can run it.
+    ///
+    /// ⇒ **The verdict is a sentence in every build, and it names which build it is.** The
+    /// `debug_assertions` arm adds a panic on top of the same sentence; it does not replace it.
+    ///
+    /// # ★★★ It has a GUARANTEED KNOWN-POSITIVE, today
+    ///
+    /// `[measured 2026-08-12, w281b_clientsweep]` the raw CE client's two operands resolve
+    /// `Vidmem@0x10000` and `Vidmem@0x20000` with no host object — so on the **`off`** arm this
+    /// must print `FIRED`, naming both VAs. ⊘ A zero on that arm means the instrument did not
+    /// run, not that the condition is absent: `a census ZERO needs a KNOWN-POSITIVE`.
+    fn fake_fb_in_userspace_vas(
+        f: &kayfabe_rt::device::CeChannelFacts,
+        now_host_backed: &[String],
+        still_fabricated: &[String],
+    ) -> String {
+        // ★ `ProcId(0)` is `kayfabe_core::gpu::Gpu::SYSTEM_PROC` — the forged system plane,
+        // which holds no host state by construction. Every other proc is a **guest process**,
+        // and its channels are the userspace population ruling 2 scopes this to.
+        let userspace = f.proc.0 != 0;
+        let build = if cfg!(debug_assertions) {
+            "debug (this sentence is followed by a PANIC when it fires)"
+        } else {
+            "release (REPORTS ONLY — the owner's ruling: a guest can drive this, so \
+             panicking on it is a DoS we hand them)"
+        };
+        let verdict = if !userspace {
+            format!(
+                "⊘ NOT ASKED: proc={} is the SYSTEM plane, and ruling 2 scopes kind-2 \
+                 framebuffer to the guest-KERNEL channels we emulate. This assertion is about \
+                 guest USERSPACE VASes only",
+                f.proc.0
+            )
+        } else if still_fabricated.is_empty() {
+            format!(
+                "★★★★★ QUIET: not one operand of this guest-userspace channel resolves to \
+                 unpublished emulated framebuffer. {} operand page(s) now carry a host object \
+                 [{}]. ⊘ QUIET IS NOT PROOF THE ENGINE RAN — it is proof of what the table \
+                 says, and only an Xid or a completion says the other thing",
+                now_host_backed.len(),
+                now_host_backed.join(" ")
+            )
+        } else {
+            format!(
+                "★★★ FIRED — {} operand page(s) of a GUEST USERSPACE channel (proc={} chan={}) \
+                 resolve to EMULATED FRAMEBUFFER with no host object behind them, which is the \
+                 owner's forbidden state and is what routes this copy to CeExecutor::Ours: [{}] \
+                 (⊘ graded by ADDRESS, never by count — a count cannot see a substitution)",
+                still_fabricated.len(),
+                f.proc.0,
+                f.chan.0,
+                still_fabricated.join(" ")
+            )
+        };
+        let line = format!("★★★★★ #255 FAKE-FB-IN-USERSPACE-VAS build={build} → {verdict}");
+        // ⊘ The panic is ADDITIVE and is never on the shipped path. `debug_assert!` rather
+        // than `assert!` so the shape cannot be mistaken for a production check by a reader,
+        // and the same sentence is already printed either way — so the release build is
+        // distinguishable from a positive signal, which is the trap this shape exists to avoid.
+        debug_assert!(
+            still_fabricated.is_empty() || !userspace,
+            "{line}"
+        );
+        line
+    }
+
     /// One GPFIFO entry, in bytes. ⊘ Not a tunable: it is the width of the hardware
     /// structure `gpFifoEntries` counts, and the multiplier that turns the guest's declared
     /// count into an extent.
@@ -9909,6 +10356,11 @@ impl Regs {
         // leg 5's, so this rung's two arms differ in one while every leg w268 measured stays
         // armed on both. See [`GUEST_OPERAND_ENV`].
         let guest_operand = selected_guest_operand()?;
+        // ★★★★★ w282's arm (LEG 7) — read ONCE, here, and its own variable rather than a rider
+        // on w270's: the pin and the join serve DISJOINT operand populations (guest RAM vs
+        // emulated framebuffer), so a boot must be able to arm either alone. See
+        // [`OPERAND_JOIN_ENV`].
+        let operand_join = selected_operand_join()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -10133,6 +10585,31 @@ impl Regs {
                      facts, and only the second can advance the slot the guest polls",
             },
         );
+        // ★★★★★ w282's arm (LEG 7) — printed on BOTH arms and for `GUEST-OPERAND`'s exact
+        // reason. `fb_join=` and `host_isolates=` are printed BESIDE it because the arm alone
+        // is necessary and not sufficient: leg 7 refuses when the join's mapping arm is `off`
+        // (it could then only map private anonymous pages) and it is a compiled no-op without
+        // the feature.
+        eprintln!(
+            "kayfabe: OPERAND-JOIN arm={} fb_join={} host_isolates={} ⇒ a CE operand page that \
+             lands in OUR EMULATED FRAMEBUFFER is {}",
+            operand_join.as_str(),
+            fb_join.as_str(),
+            cfg!(feature = "host-isolates"),
+            match operand_join {
+                OperandJoinArm::Off =>
+                    "LEFT THERE (the control — exactly as at w281b_clientsweep, where both \
+                     operands resolved to Vidmem with no host object, the partitioner answered \
+                     CeExecutor::Ours and HostRmBackend::ce_copy refused the submission by name \
+                     under the standing owner ruling)",
+                OperandJoinArm::Join =>
+                    "WALKED to its framebuffer leaf and that leaf is JOINED — the same four \
+                     steps the ring source and the GR operand census already use — so the \
+                     guest's window and a real host object are ONE memory and the executor \
+                     stays HostCe. ⊘ Supply side only: `the operand is host-backed` and `the \
+                     submission retired` are different facts",
+            },
+        );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
         // exactly this reason: two ports need the same registry, and a second
         // `export_directory()` call would be a SECOND selection of "which registry".
@@ -10162,6 +10639,7 @@ impl Regs {
             guest_pushbuf,
             guest_sema,
             guest_operand,
+            operand_join,
         }));
         Ok(Regs {
             plane,
@@ -12615,6 +13093,118 @@ fn selected_guest_operand() -> Result<GuestOperandArm, (Status, &'static str)> {
     match std::env::var_os(GUEST_OPERAND_ENV) {
         None => Ok(GuestOperandArm::Off),
         Some(v) => guest_operand_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// ★★★★★ **w282 — whether a CE operand page that lands in OUR EMULATED FRAMEBUFFER has its
+/// leaf JOINED, so a real host engine can be pointed at the guest's own number.**
+///
+/// | value | what it does |
+/// |---|---|
+/// | `off` (default) | today's behaviour, byte for byte. Not one `OPERAND-JOIN` line |
+/// | `join` | ★ every operand page [`SharedDoorbell::ce_operand_pages`] decodes that resolves to a **framebuffer** binding has its 64 KiB leaf put through `join_one_fb_leaf` — the SAME four steps the ring source and the GR operand census already use |
+///
+/// # ★★★ WHY, and it is a CALLER GAP rather than a missing primitive
+///
+/// `[measured 2026-08-12, w281_client, real GA106]` with the pushbuffer route on, a real host
+/// copy engine **fetched and executed** the guest's own methods and faulted
+/// `Xid 31 ENGINE CE0 HUBCLIENT_CE1 … FAULT_PTE ACCESS_TYPE_VIRT` at the destination operand
+/// the guest's own pushbuffer declared. `[measured, w281b_clientsweep]` arming the whole-VAS
+/// sweep bound both operand VAs — `2 MISS → 0 MISS` — and they resolved to **`Vidmem`**, our
+/// fabricated framebuffer, which [`kayfabe_fwd::Representability::Fabricated`] routes to
+/// `CeExecutor::Ours`, which `HostRmBackend::ce_copy` refuses by name under a standing owner
+/// ruling. ⇒ **Both reachable configurations are walls**, and both are the same missing thing:
+/// the operand lives in memory no real engine can resolve.
+///
+/// ⊘ **The join that fixes it is already built and is simply not called here.**
+/// `Regs::back_census_framebuffer_leaves` joins exactly these leaves off the **operand
+/// census** — but it is reached only from `SharedDoorbell::declare_gr_completion`, which
+/// `SharedDoorbell::ring` calls on the two **GR** dispositions (`HandToCore` and
+/// `RefuseByRoute`) and on **no CE path at all**. A CE doorbell's operands therefore reach
+/// `Self::pin_operand_guest_ram`, which refuses a framebuffer binding by name with the
+/// sentence *"that memory is ours already and needs no descriptor"* — true of the CPU
+/// executor and, since `w281`, **measured false of a host engine**.
+///
+/// ★ So this arm adds **no primitive, no verb and no new authority**: it presents the CE
+/// plane's operand leaves to the join the GR plane has been using since `w260`.
+///
+/// # ⊘ WHAT AN ARMED LINE STILL DOES NOT MEAN
+///
+/// *"The operand leaf is one memory with a real host object"* and *"the submission retired"*
+/// are different facts. This arm produces the first. ⚠ And the join's own scope is unchanged:
+/// it is per-VAS by construction — the leaf is walked from **this channel's own installed PDB
+/// root** and bound into **this `Pdb`'s** table — so an operand can never name a page reachable
+/// only from another address space's root. That is `mode2_address_table.md` §3/§6 and it is
+/// asserted rather than assumed; see [`SharedDoorbell::join_operand_fb_leaves`].
+pub const OPERAND_JOIN_ENV: &str = "KAYFABE_OPERAND_JOIN";
+
+/// Which arm of the CE operand-leaf join a boot is running. See [`OPERAND_JOIN_ENV`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperandJoinArm {
+    /// The default and the control: a CE operand that binds in the framebuffer is left in
+    /// the framebuffer — exactly the configuration `w281b_clientsweep` measured, where the
+    /// operands resolved `Vidmem@0x10000`/`Vidmem@0x20000` and the executor became `Ours`
+    /// and the submission was refused before it reached hardware.
+    Off,
+    /// ★ Every framebuffer leaf a CE operand names is joined.
+    Join,
+}
+
+impl OperandJoinArm {
+    /// Every arm, so a test can quantify rather than restate.
+    pub const ALL: [OperandJoinArm; 2] = [OperandJoinArm::Off, OperandJoinArm::Join];
+
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OperandJoinArm::Off => "off",
+            OperandJoinArm::Join => "join",
+        }
+    }
+
+    /// Whether a framebuffer-resident CE operand leaf is joined on this arm.
+    #[must_use]
+    pub fn joins(self) -> bool {
+        self == OperandJoinArm::Join
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_operand_join`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`OperandJoinArm::Off`].
+pub fn operand_join_from(value: Option<&str>) -> Result<OperandJoinArm, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(OperandJoinArm::Off),
+        Some("join") => Ok(OperandJoinArm::Join),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_OPERAND_JOIN does not name an arm: the only values are `off` (the default \
+             and the control — a CE operand that binds in the emulated framebuffer stays there, \
+             exactly as at w281b_clientsweep, where both operands resolved to Vidmem, the \
+             partitioner answered CeExecutor::Ours and the copy was refused before it reached \
+             hardware) and `join` (that leaf goes through the same four-step join the ring \
+             source and the GR operand census already use, so the guest's window and a real \
+             host object are ONE memory and the executor stays HostCe). It is not defaulted, \
+             because a typo that silently disarmed the join would make an evidence run and its \
+             own control indistinguishable — the control's expected result is `no OPERAND-JOIN \
+             line was ever printed`, which is exactly what a disarmed evidence run also shows. \
+             ⊘ `on`/`1` are not accepted: this is a two-arm experiment, not a boolean.",
+        )),
+    }
+}
+
+/// Which arm [`OPERAND_JOIN_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_operand_join() -> Result<OperandJoinArm, (Status, &'static str)> {
+    match std::env::var_os(OPERAND_JOIN_ENV) {
+        None => Ok(OperandJoinArm::Off),
+        Some(v) => operand_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 
