@@ -171,6 +171,27 @@ typedef struct NvkvmRegionSpec {
 #define NVKVM_USERD_GP_PUT 0x8cu
 #define NVKVM_GP_PUT_LIVE  8u
 
+/* ★★★★★ w262 MEASURED, AND IT IS WHY THIS SECOND INSTRUMENT EXISTS.
+ *
+ * `[measured 2026-08-12, boots w262_off and w262_ring, GA106 / 580.159.04]` the flat cap above
+ * printed **8** live cursor advances out of **188**.  The 8 are enough to answer *"when is the
+ * guest's FIRST cursor advance"* — they all precede every host channel birth of the walling GR
+ * client — and they are **not** enough to answer the question leg B actually needs, which is
+ * whether the **GR channel's own** USERD page ever advances, and when.  180 advances were
+ * counted and not placed.
+ *
+ * ⊘ Raising the flat cap to 188 would be the wrong fix: it makes the log 180 lines longer and
+ * still answers by eyeball.  The question is about **pages**, because one page is one channel's
+ * USERD — so this records the FIRST advance on each distinct page, and counts the rest per
+ * page.  `[measured]` the whole workload uses four pages (0xa0000 / 0xc0000 / 0xe0000 /
+ * 0x100000, `0x20000` apart, nvidia-uvm's internal channel pool), so 16 is four times the
+ * observed need and a fifth page appearing is itself the news.
+ *
+ * ⚠ AND THE OVERFLOW IS COUNTED SEPARATELY, because the page this table drops is exactly the
+ * page a reader would most want: a table that silently stopped recording new pages would answer
+ * *"only these four channels ever advanced a cursor"* when it meant *"only these four fit"*. */
+#define NVKVM_GP_PUT_PAGES 16u
+
 struct NvkvmState {
     PCIDevice parent_obj;
 
@@ -280,6 +301,17 @@ struct NvkvmState {
      * cap was already spent" are the same absence in a log otherwise. */
     uint64_t gp_put_writes;
     unsigned gp_put_printed;
+    /* ★★★★★ w262 — ONE ROW PER USERD PAGE, i.e. per channel.  See NVKVM_GP_PUT_PAGES. */
+    struct {
+        uint64_t page;      /* the BAR1 aperture page, addr & ~0xfff */
+        uint64_t first_val; /* the value of the FIRST advance on it */
+        uint64_t writes;    /* how many advances landed on it, uncapped */
+    } gp_put_pages[NVKVM_GP_PUT_PAGES];
+    unsigned gp_put_pages_used;
+    /* Advances on a page the table had no room for.  ⊘ A separate number, never folded into
+     * the totals: "no fifth page appeared" and "a fifth page appeared and was dropped" are
+     * the two readings a full table cannot otherwise be told apart. */
+    uint64_t gp_put_pages_dropped;
     uint64_t irq_requests_dropped;
     /* ★★★ #151.  Message-signalled vectors this device actually delivered, and the ones it
      * could not because the guest had not enabled the table.  TWO numbers, because they are
@@ -699,6 +731,34 @@ static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, u
         return;
     }
     s->gp_put_writes++;
+    /* ★★★★★ w262 — PER-PAGE FIRST TOUCH, printed live and uncapped in its count. */
+    {
+        uint64_t page = addr & ~(uint64_t)0xfff;
+        unsigned pi;
+
+        for (pi = 0; pi < s->gp_put_pages_used; pi++) {
+            if (s->gp_put_pages[pi].page == page) {
+                s->gp_put_pages[pi].writes++;
+                break;
+            }
+        }
+        if (pi == s->gp_put_pages_used) {
+            if (s->gp_put_pages_used < NVKVM_GP_PUT_PAGES) {
+                s->gp_put_pages[pi].page      = page;
+                s->gp_put_pages[pi].first_val = val;
+                s->gp_put_pages[pi].writes    = 1;
+                s->gp_put_pages_used++;
+                info_report("nvkvm: BAR1 GP_PUT — FIRST advance on USERD page +0x%" PRIx64
+                            " (val=0x%" PRIx64 "), page %u of at most %u. ⊘ ONE PAGE IS ONE "
+                            "CHANNEL'S USERD, and this line is the instant it first moved — "
+                            "order it against the ENGINE-OBJECT births above. ⚠ WHICH channel "
+                            "is still not known here: nothing joins a BAR1 offset to a channel.",
+                            page, val, s->gp_put_pages_used, NVKVM_GP_PUT_PAGES);
+            } else {
+                s->gp_put_pages_dropped++;
+            }
+        }
+    }
     if (s->gp_put_printed >= NVKVM_GP_PUT_LIVE) {
         return;
     }
@@ -2057,6 +2117,21 @@ static void nvkvm_report_registers(NvkvmState *s)
                 "the ONLY rows here that may be ordered against anything; this total is "
                 "uncapped and the per-row cap never touches it.",
                 s->gp_put_writes, NVKVM_USERD_GP_PUT, s->gp_put_printed, NVKVM_GP_PUT_LIVE);
+    {
+        unsigned pi;
+
+        info_report("nvkvm: BAR1 GP_PUT pages: %u distinct USERD page(s) ever advanced a "
+                    "cursor, %" PRIu64 " advance(s) DROPPED because the table was full "
+                    "(cap %u). ⊘ A dropped page is the one you would most want; it is counted "
+                    "here and nowhere else.",
+                    s->gp_put_pages_used, s->gp_put_pages_dropped, NVKVM_GP_PUT_PAGES);
+        for (pi = 0; pi < s->gp_put_pages_used; pi++) {
+            info_report("nvkvm:   GP_PUT page[%u] +0x%" PRIx64 " first_val=0x%" PRIx64
+                        " advances=%" PRIu64,
+                        pi, s->gp_put_pages[pi].page, s->gp_put_pages[pi].first_val,
+                        s->gp_put_pages[pi].writes);
+        }
+    }
 
     /*
      * ★★★ #149 — THE TRANSLATED WINDOW.  Printed unconditionally, all-zeros included, for

@@ -3552,6 +3552,11 @@ impl RmBackend for HostRmBackend {
         // for why two states would not have closed `w261`'s hole, and why the discriminator is
         // `hosting` rather than a new field.
         let offer = BirthOffer::read(hosting.is_some(), adopt.is_some());
+        // ⊘ Captured, not re-read at each print: an isolate is a POOL and the census below is
+        // PER PROCESS, so two children interleave their own `#1, #2, …` into one log.
+        // `[measured 2026-08-12, w262_ring]` the log carries `#1..#8` and `#1..#16` from two
+        // children and NOTHING on the line said which was which.
+        let iso = self.id;
         let engine_type = declared_channel_engine_type(engine, hosting)
             .or_else(|| engine_type_for(engine))
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
@@ -3574,8 +3579,9 @@ impl RmBackend for HostRmBackend {
         // `RingSource::Ours(None)`.
         let Some(ring) = adopt else {
             eprintln!(
-                "kayfabe-isolate: GR-BIRTH #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} → \
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} → \
                  RingSource::Ours(None) {census}",
+                iso,
                 vas.raw(),
                 offer.as_str(),
                 offer.because(),
@@ -3602,9 +3608,10 @@ impl RmBackend for HostRmBackend {
         if !joined {
             let n = birth_census::refuse();
             eprintln!(
-                "kayfabe-isolate: GR-BIRTH #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
                  joined=NO → REFUSED RING_NOT_A_JOINED_WINDOW (this isolate did not mint that \
                  object by joining a framebuffer leaf; refused={n}) {census}",
+                iso,
                 vas.raw(),
                 offer.as_str(),
             );
@@ -3616,8 +3623,9 @@ impl RmBackend for HostRmBackend {
         // allocate. ⇒ The `off`/`ring` differential IS this line, against the `DECLINED` line
         // it replaces.
         eprintln!(
-            "kayfabe-isolate: GR-BIRTH #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+            "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
              joined=YES ⇒ {} → alloc_channel_over_guest_ring {census}",
+            iso,
             vas.raw(),
             offer.as_str(),
             offer.because(),
