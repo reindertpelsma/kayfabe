@@ -173,6 +173,10 @@ pub trait Faulted {
 impl Faulted for AddressFault {
     fn fault_tag(&self) -> FaultTag {
         match self {
+            // ⊘ Its own tag, never folded into `Miss`. A foreign VA and a foreign TABLE are
+            // opposite findings: the first is the owner's guarantee working (*not found*),
+            // the second is a bug in us that would make the guarantee untrue.
+            AddressFault::TableIdentity { .. } => FaultTag("AddressFault::TableIdentity"),
             AddressFault::Miss { .. } => FaultTag("AddressFault::Miss"),
             AddressFault::Overlap { .. } => FaultTag("AddressFault::Overlap"),
             AddressFault::Malformed { .. } => FaultTag("AddressFault::Malformed"),
