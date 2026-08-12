@@ -4585,11 +4585,23 @@ struct PinnedRun {
     described: u64,
     /// How many of those bytes this call newly described.
     fresh_bytes: u64,
-    /// The first segment's `OS_DESCRIPTOR` handle — what the old single-pin line printed.
+    /// ⊘⊘ **The `OS_DESCRIPTOR` handle ONLY when this run is one segment.** `0` means *"more
+    /// than one descriptor covers this run"*, never *"no descriptor"* — read
+    /// [`PinnedRun::segments`], which names each one.
+    ///
+    /// ⚠ `[measured 2026-08-12, w271_pin]` the first cut of this struct filled `memory`,
+    /// `host_va` and `placed_as_asked` from *the first segment only, and only when that
+    /// segment did host work* — so every `GREW` row printed `memory=0x0
+    /// placed_as_asked=false` beside four descriptors that had all landed exactly as asked.
+    /// ⇒ **A false report in the same class this rung exists to close, pointed the other
+    /// way**: a green situation summarised as red. The per-segment detail was right
+    /// throughout; the summary was not.
     memory: u64,
-    /// The first segment's host GPU VA.
+    /// The run's base host GPU VA.
     host_va: u64,
-    /// Whether the first segment landed where it was asked.
+    /// ★ Whether **every segment this call placed** landed where it was asked — vacuously
+    /// true when it placed none, because a step-past segment was placed by an earlier call
+    /// that made its own assertion.
     placed_as_asked: bool,
     /// ★ Whether the WHOLE requested extent is now described. ⊘ A caller counting placements
     /// must read this and not `verdict`: a run stopped part-way is not a placement.
@@ -4609,13 +4621,20 @@ impl PinnedRun {
     /// The tail of the log line, after `→ file offset 0x…  → `.
     fn line(&self) -> String {
         format!(
-            "{} requested={} described={} fresh={} memory={:#x} host_va=0x{:x} \
+            "{} requested={} described={} fresh={} segs={} memory={} host_va=0x{:x} \
              placed_as_asked={} {}",
             self.verdict,
             self.requested,
             self.described,
             self.fresh_bytes,
-            self.memory,
+            self.segments.len(),
+            // ⊘ `(several)` rather than `0x0`: a zero handle READS as a failure, and on a
+            //   grown run every descriptor in it landed. See the field's own doc.
+            if self.segments.len() > 1 {
+                "(several — see the per-segment list)".to_string()
+            } else {
+                format!("{:#x}", self.memory)
+            },
             self.host_va,
             self.placed_as_asked,
             self.segments.join(" "),
@@ -6145,7 +6164,7 @@ impl SharedDoorbell {
             fresh_bytes: 0,
             memory: 0,
             host_va: va,
-            placed_as_asked: false,
+            placed_as_asked: true,
             covered: len == 0,
             grew: false,
             segments: Vec::new(),
@@ -6183,11 +6202,8 @@ impl SharedDoorbell {
                         p.host_va,
                         p.host_va == seg_va,
                     ));
-                    if covered == 0 {
-                        out.memory = p.memory.raw();
-                        out.host_va = p.host_va;
-                        out.placed_as_asked = p.host_va == seg_va;
-                    }
+                    out.memory = p.memory.raw();
+                    out.placed_as_asked &= p.host_va == seg_va;
                     // ★ A replay's live pin covers AT LEAST what was asked (a shorter one
                     // refuses above), and a fresh pin described exactly what was asked. Both
                     // finish the run.
@@ -6231,11 +6247,8 @@ impl SharedDoorbell {
                         p.memory.raw(),
                         p.host_va == seg_va,
                     ));
-                    if covered == 0 {
-                        out.memory = p.memory.raw();
-                        out.host_va = p.host_va;
-                        out.placed_as_asked = p.host_va == seg_va;
-                    }
+                    out.memory = p.memory.raw();
+                    out.placed_as_asked &= p.host_va == seg_va;
                     covered += prefix;
                 }
                 Err(e) => return Err(e),
@@ -6246,6 +6259,12 @@ impl SharedDoorbell {
         // ⚠⚠ THREE WORDS, NEVER SHARED. `w270` printed one green word over both "we did the
         // work" and "it was already complete", and the partial case wore it too. A reader
         // must be able to see growth without inferring it from two numbers.
+        // ⊘ ONE descriptor or none is nameable at run level; several are not. Zeroing it is
+        //   deliberate and its meaning is documented on the field — a summary that named one
+        //   of four descriptors would be worse than one that names none.
+        if out.segments.len() > 1 {
+            out.memory = 0;
+        }
         out.grew = fresh_segments > 0 && replay_segments > 0;
         out.verdict = match (fresh_segments, replay_segments) {
             (0, 0) => "⊘ NOTHING ASKED",

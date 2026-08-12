@@ -216,7 +216,20 @@ boot() {
   #   three named sources are counted first and the RING is the remainder. A naive loop over
   #   the four patterns would have reported the ring's count as the total, on every arm.
   echo "    --- ★★★★★ w271 WHICH SOURCES GREW (the brief asked whether all four benefit):"
-  cnt() { grep -cE "$1" "$Q" 2>/dev/null || echo 0; }
+  # ⊘⊘ `grep -c` EXITS 1 WHEN THE COUNT IS ZERO — it is not an error, it is the answer. So
+  #    `grep -c … || echo 0` prints "0" AND THEN "0" again, and `$(( ))` on a two-line string
+  #    is a syntax error. `[measured 2026-08-12, w271_off, in this very script]`:
+  #        w271_run.sh: line 225: 0
+  #        0: syntax error in expression (error token is "0")
+  #    ★ It failed LOUDLY, which is the only reason it is a footnote and not a wrong table.
+  #    ⚠ The tempting `$(… | head -1)` would have SILENTLY reported the right number — and
+  #    the same idiom in a place where grep's zero was the interesting answer would have
+  #    reported a real count as 0. ⇒ Never defend `grep -c` with `||`; it does not need it.
+  #    ⊘ And the MISSING-FILE case is different again and needs its own default: grep prints
+  #      NOTHING and exits 2, so `$(( ))` on the empty string fails too. `${n:-0}` covers it —
+  #      ⚠ which means a missing log now reads as "0 of everything", so the artefact-size line
+  #      above is what distinguishes it. That is the `hostdmesg` trap, one file over.
+  cnt() { local n; n=$(grep -cE "$1" "$Q" 2>/dev/null); echo "${n:-0}"; }
   ALLG=$(cnt ' run [0-9]+/[0-9]+ .*GREW'); ALLP=$(cnt ' run [0-9]+/[0-9]+ .* PINNED requested='); ALLA=$(cnt ' run [0-9]+/[0-9]+ .*fully covered')
   SUMG=0; SUMP=0; SUMA=0
   for src in 'pb run' 'sema run' 'operand run'; do
