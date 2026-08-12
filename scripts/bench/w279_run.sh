@@ -42,9 +42,29 @@ cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder
 CRC=$?
 echo "=== CLIENT BUILD RC=$CRC ==="
 [ $CRC -eq 0 ] || finish 95
-CLIENT=$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
+# ★★★★★ w279 MEASURED — THE PATH WAS WRONG AND `RC=0` HID IT, FOR A WHOLE BOOT.
+#
+# `[measured 2026-08-12, /workspace/w279_run.log, first attempt]` `cargo build` returned 0,
+# `CLIENT BUILD RC=0` printed, and the very next line was `CLIENT md5=` — EMPTY. The binary
+# is written under $CARGO_TARGET_DIR (exported above), not $REPO/target, so `$CLIENT` named
+# a file that does not exist. The native arm died `rc=127` and `KAYFABE_R33_BIN` pointed at
+# nothing, so the guest ran NO CLIENT AT ALL — and the boot still reported
+# `RingFbNeverWritten = 0`, which is this rung's PREDICTED SUCCESS. ⊘ An absent artefact
+# reads as favourable; only the `fbRING rows = [0] ⇒ VOID` known-positive separated them.
+#
+# ⇒ Resolve against CARGO_TARGET_DIR, and ASSERT THE FILE, not the exit status. A build
+# system's `0` means "I had nothing to do", which is also what it says when it built
+# somewhere else.
+CLIENT=${CARGO_TARGET_DIR:-$REPO/target}/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
+if [ ! -s "$CLIENT" ]; then
+  echo "=== ★★★ CLIENT MISSING OR EMPTY at $CLIENT — the build's RC=0 said nothing about it ==="
+  ls -l "${CARGO_TARGET_DIR:-$REPO/target}/x86_64-unknown-linux-musl/release/" 2>&1 | head -20
+  finish 97
+fi
 file "$CLIENT"
-echo "=== CLIENT md5=$(md5sum < "$CLIENT" | cut -d' ' -f1) ==="
+CLIENT_MD5=$(md5sum < "$CLIENT" | cut -d' ' -f1)
+echo "=== CLIENT md5=$CLIENT_MD5 ==="
+[ -n "$CLIENT_MD5" ] || { echo "=== ★★★ EMPTY md5 — refusing to boot over an unidentified binary ==="; finish 98; }
 
 # ★★★★★ THE NATIVE ARM RUNS FROM THIS EXACT BINARY, HERE, IMMEDIATELY BEFORE THE BOOT.
 #     ⊘ Not carried from an earlier session: a differential whose reference is a number in a
@@ -132,7 +152,7 @@ echo "=== ★★★★★ R33 IN THE GUEST — THE VERDICT ==="
 echo "--- did the binary reach the guest at all (⊘ a DIFFERENT failure from 'it did not work'):"
 grep -E 'GUEST_MD5=|GUEST_EXECUTABLE=|GUEST_NVIDIA_DEVS=|GUEST_NVRM_LOADED=|GUEST_UNAME=' "$P" 2>/dev/null | sed 's/^/      /'
 echo "--- ⊘ the two md5s MUST match, or the arms are not the same program:"
-echo "      NATIVE md5 = $(md5sum < "$CLIENT" | cut -d' ' -f1)"
+echo "      NATIVE md5 = $CLIENT_MD5"
 
 echo "--- ★★★★★ THE VERDICT LINE, ANCHORED (an unanchored 'R33' matches the info banner that"
 echo "    CONTAINS the words of the success line — the CUP2_RC/GCC_CUP2_RC class):"
