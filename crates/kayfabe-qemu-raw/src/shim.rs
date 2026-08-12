@@ -9609,7 +9609,8 @@ fn clamp_size(size: u32) -> u8 {
 /// |---|---|
 /// | *(absent)* | the params carried no framebuffer USERD — there is no address to read |
 /// | `fbuserd@0x…=REFUSED(…)` | the store would not serve those bytes |
-/// | `fbuserd@0x… GET=0 PUT=0 resN-NEVER-WRITTEN` | ⚠ **nobody has written this page at all** — including RM's own zeroing at channel creation, so the channel was never born over it |
+/// | `fbuserd@0x… GET=0 PUT=0 resN-NEVER-WRITTEN` | ⚠ **nobody has written this page at all** — including RM's own zeroing at channel creation, so the channel was never born over it. ⊘ Only meaningful on an **unjoined** page; see below |
+/// | `fbuserd@0x… … JOINED-one-memory` | the page is inside a joined leaf, so residency is not a question this store can answer — its local pages for that range were removed at install. The **values** are still live and correct |
 /// | `fbuserd@0x… GET=n PUT=m resY` | the live cursors. ★★★★★ `GET == PUT != 0` is the engine having **fetched**; `GET == 0 PUT != 0` is the wall this campaign is on |
 ///
 /// ⚠⚠ **`GET = 0, PUT = 0` is the ambiguous null and is reported with its residency for
@@ -9634,10 +9635,32 @@ fn fb_userd_cursors(
     match plane.fb_peek(at, &mut w) {
         Err(why) => format!(" fbuserd@0x{at:x}=REFUSED({why})"),
         Ok(()) => {
-            let res = match plane.fb_is_resident(at) {
-                None => "res?",
-                Some(true) => "resY",
-                Some(false) => "resN-NEVER-WRITTEN",
+            // ⊘⊘ **THE JOIN IS CHECKED FIRST, AND FINDING THAT OUT BEFORE THE BOOT IS THE
+            // POINT.** `SparseFb::install_join` **removes the local pages** for a joined
+            // range — that is what makes the join one memory rather than two — so
+            // `is_resident` (which asks `self.pages.contains_key`) answers `Some(false)` for
+            // every joined address. ⇒ On the ARMED arm, where the USERD page is inside the
+            // joined leaf, an unqualified residency token would print
+            // `resN-NEVER-WRITTEN` on a page whose bytes are live and correctly read.
+            //
+            // ⚠ That is precisely the reading this rung's pre-registration flagged as *"looks
+            // exactly like the wall and would actually mean the instrument is at the wrong
+            // address"* — and it would have fired on **every** armed row, systematically, in
+            // the favourable-looking direction for a wrong conclusion. `FbStore::read` gets
+            // this right (the join is checked first there too); `is_resident` was never
+            // widened to match, and no caller had asked it about a joined address before.
+            let joined = plane
+                .joined_fb_ranges()
+                .into_iter()
+                .any(|(phys, len)| at >= phys && at - phys < len);
+            let res = if joined {
+                "JOINED-one-memory"
+            } else {
+                match plane.fb_is_resident(at) {
+                    None => "res?",
+                    Some(true) => "resY",
+                    Some(false) => "resN-NEVER-WRITTEN",
+                }
             };
             format!(
                 " fbuserd@0x{at:x} GET={} PUT={} {res}",
