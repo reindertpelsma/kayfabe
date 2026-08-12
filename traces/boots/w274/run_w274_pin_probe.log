@@ -1,0 +1,691 @@
+=== boot_capture tag=w274_pin at 2026-08-12T13:50:56+00:00 ===
+=== source revision: 4fd4cf3 ===
+=== qemu binary: -rwxr-xr-x 1 root root 87751480 Aug 12 13:50 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:4fd4cf329c796ecc6e6547b1d9ab60a33aa806f6 
+=== BUILD_REV.txt says (informational, NOT authoritative): kayfabe-rev:5feac9090bc58129c9906e2222f3934ae313a980
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w274/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w274/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Aug 12 13:51:10 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 12 13:51 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 12 13:51 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 12 13:50 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 12 13:50 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 12 13:51 .
+drwxr-xr-x 18 root root   4000 Aug 12 13:51 ..
+cr--------  1 root root 240, 1 Aug 12 13:51 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 12 13:51 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kayfabe_w274/scripts/bench/cup2_hook_procspin.sh at 2026-08-12T13:51:15+00:00 ===
+=== sources (md5 — a run cannot silently be a different copy) ===
+    /workspace/bench/cup2.c                                     27 lines  md5 d9f82375ebd54de500aeb7f85ef71efc
+=== push + build cup2 in the guest ===
+GCC_CUP2_RC=0
+=== launch cup2 DETACHED under its own 180 s timeout (rc stays comparable to w232..w271) ===
+LAUNCHED pid=1552
+=== waiting for cup2 to reach cuCtxCreate (its last print is `totalMem=`) ===
+    reached-cuCtxCreate = yes after ~15s
+=== ★ CLAIM 1: WHICH CALL IS IT? (cup2's own stdout — the print is post-return) ===
+--- cup2 stdout so far ---
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+--- last line ---
+totalMem=11959 MiB
+--- did any line announce cuCtxCreate completing? ---
+0
+=== ★★★★★ /proc SAMPLING: 24 samples, 1s apart, EVERY thread ===
+PID=1552
+--- the semaphore page mapping we will read from ---
+3:200400000-203400000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+5:204400000-204600000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+6:204600000-204800000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+17:746ddc400000-746ddc600000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+21:746ddd000000-746ddd200000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+23:746ddeddf000-746ddede0000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+24:746ddede0000-746ddede1000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+25:746ddede1000-746ddede2000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+26:746ddede2000-746ddede3000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+27:746ddede3000-746ddede4000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+28:746ddede4000-746ddede5000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+29:746ddede5000-746ddede6000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+30:746ddede6000-746ddede7000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+31:746ddede7000-746ddede8000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+32:746ddede8000-746ddede9000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+33:746ddede9000-746ddedea000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+34:746ddedea000-746ddedeb000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+35:746ddedeb000-746ddedec000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+36:746ddedec000-746ddeded000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+37:746ddeded000-746ddedee000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+SEMBASE=8661303040 (0x20440ff00)
+--- BASELINE per-thread counters ---
+BASE tid=1552 comm=cup2 stat=R utime=550 stime=1591 vctx=66 nvctx=91
+BASE tid=1553 comm=cuda00001400006 stat=S utime=0 stime=0 vctx=3 nvctx=0
+BASE tid=1772 comm=cup2 stat=S utime=0 stime=1 vctx=119 nvctx=0
+--- SAMPLES ---
+S i=1 t=69.91 tid=1552 state=R wchan=[0] syscall=[running]
+S i=1 t=69.91 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=1 t=69.91 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=1 t=69.91  00000001 00000000 e72f2ae0 18cb131d
+SEM i=1 t=69.91  00000001 00000000 e61c86c0 18cb131d
+SEM i=1 t=69.91  00000001 00000000 e508abc0 18cb131d
+SEM i=1 t=69.91  00000001 00000000 e3d5aee0 18cb131d
+SEM i=1 t=69.91  00000001 00000000 f7d25500 18cb131d
+SEM i=1 t=69.91  00000001 00000000 f67c7e20 18cb131d
+SEM i=1 t=69.91  00000001 00000000 f524ea60 18cb131d
+SEM i=1 t=69.91  00000005 00000000 00e25340 18cb131e
+SEM i=1 t=69.91  00000001 00000000 f295e400 18cb131d
+SEM i=1 t=69.91  00000001 00000000 f1289c00 18cb131d
+SEM i=1 t=69.91  00000001 00000000 efc63000 18cb131d
+SEM i=1 t=69.91  00000001 00000000 ee652c00 18cb131d
+SEM i=1 t=69.91  00000001 00000000 ed035800 18cb131d
+SEM i=1 t=69.91  00000001 00000000 eba3a400 18cb131d
+SEM i=1 t=69.91  00000001 00000000 ea42c400 18cb131d
+SEM i=1 t=69.91  00000002 00000000 07fb4c00 18cb131e
+S i=2 t=71.00 tid=1552 state=R wchan=[0] syscall=[running]
+S i=2 t=71.00 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=2 t=71.00 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=2 t=71.00  00000001 00000000 e72f2ae0 18cb131d
+SEM i=2 t=71.00  00000001 00000000 e61c86c0 18cb131d
+SEM i=2 t=71.00  00000001 00000000 e508abc0 18cb131d
+SEM i=2 t=71.00  00000001 00000000 e3d5aee0 18cb131d
+SEM i=2 t=71.00  00000001 00000000 f7d25500 18cb131d
+SEM i=2 t=71.00  00000001 00000000 f67c7e20 18cb131d
+SEM i=2 t=71.00  00000001 00000000 f524ea60 18cb131d
+SEM i=2 t=71.00  00000005 00000000 00e25340 18cb131e
+SEM i=2 t=71.00  00000001 00000000 f295e400 18cb131d
+SEM i=2 t=71.00  00000001 00000000 f1289c00 18cb131d
+SEM i=2 t=71.00  00000001 00000000 efc63000 18cb131d
+SEM i=2 t=71.00  00000001 00000000 ee652c00 18cb131d
+SEM i=2 t=71.00  00000001 00000000 ed035800 18cb131d
+SEM i=2 t=71.00  00000001 00000000 eba3a400 18cb131d
+SEM i=2 t=71.00  00000001 00000000 ea42c400 18cb131d
+SEM i=2 t=71.00  00000002 00000000 07fb4c00 18cb131e
+S i=3 t=72.11 tid=1552 state=R wchan=[0] syscall=[running]
+S i=3 t=72.11 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=3 t=72.11 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=3 t=72.11  00000001 00000000 e72f2ae0 18cb131d
+SEM i=3 t=72.11  00000001 00000000 e61c86c0 18cb131d
+SEM i=3 t=72.11  00000001 00000000 e508abc0 18cb131d
+SEM i=3 t=72.11  00000001 00000000 e3d5aee0 18cb131d
+SEM i=3 t=72.11  00000001 00000000 f7d25500 18cb131d
+SEM i=3 t=72.11  00000001 00000000 f67c7e20 18cb131d
+SEM i=3 t=72.11  00000001 00000000 f524ea60 18cb131d
+SEM i=3 t=72.11  00000005 00000000 00e25340 18cb131e
+SEM i=3 t=72.11  00000001 00000000 f295e400 18cb131d
+SEM i=3 t=72.11  00000001 00000000 f1289c00 18cb131d
+SEM i=3 t=72.11  00000001 00000000 efc63000 18cb131d
+SEM i=3 t=72.11  00000001 00000000 ee652c00 18cb131d
+SEM i=3 t=72.11  00000001 00000000 ed035800 18cb131d
+SEM i=3 t=72.11  00000001 00000000 eba3a400 18cb131d
+SEM i=3 t=72.11  00000001 00000000 ea42c400 18cb131d
+SEM i=3 t=72.11  00000002 00000000 07fb4c00 18cb131e
+S i=4 t=73.22 tid=1552 state=R wchan=[0] syscall=[running]
+S i=4 t=73.22 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=4 t=73.22 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=4 t=73.22  00000001 00000000 e72f2ae0 18cb131d
+SEM i=4 t=73.22  00000001 00000000 e61c86c0 18cb131d
+SEM i=4 t=73.22  00000001 00000000 e508abc0 18cb131d
+SEM i=4 t=73.22  00000001 00000000 e3d5aee0 18cb131d
+SEM i=4 t=73.22  00000001 00000000 f7d25500 18cb131d
+SEM i=4 t=73.22  00000001 00000000 f67c7e20 18cb131d
+SEM i=4 t=73.22  00000001 00000000 f524ea60 18cb131d
+SEM i=4 t=73.22  00000005 00000000 00e25340 18cb131e
+SEM i=4 t=73.22  00000001 00000000 f295e400 18cb131d
+SEM i=4 t=73.22  00000001 00000000 f1289c00 18cb131d
+SEM i=4 t=73.22  00000001 00000000 efc63000 18cb131d
+SEM i=4 t=73.22  00000001 00000000 ee652c00 18cb131d
+SEM i=4 t=73.22  00000001 00000000 ed035800 18cb131d
+SEM i=4 t=73.22  00000001 00000000 eba3a400 18cb131d
+SEM i=4 t=73.22  00000001 00000000 ea42c400 18cb131d
+SEM i=4 t=73.22  00000002 00000000 07fb4c00 18cb131e
+S i=5 t=74.34 tid=1552 state=R wchan=[0] syscall=[running]
+S i=5 t=74.34 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=5 t=74.34 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=5 t=74.34  00000001 00000000 e72f2ae0 18cb131d
+SEM i=5 t=74.34  00000001 00000000 e61c86c0 18cb131d
+SEM i=5 t=74.34  00000001 00000000 e508abc0 18cb131d
+SEM i=5 t=74.34  00000001 00000000 e3d5aee0 18cb131d
+SEM i=5 t=74.34  00000001 00000000 f7d25500 18cb131d
+SEM i=5 t=74.34  00000001 00000000 f67c7e20 18cb131d
+SEM i=5 t=74.34  00000001 00000000 f524ea60 18cb131d
+SEM i=5 t=74.34  00000005 00000000 00e25340 18cb131e
+SEM i=5 t=74.34  00000001 00000000 f295e400 18cb131d
+SEM i=5 t=74.34  00000001 00000000 f1289c00 18cb131d
+SEM i=5 t=74.34  00000001 00000000 efc63000 18cb131d
+SEM i=5 t=74.34  00000001 00000000 ee652c00 18cb131d
+SEM i=5 t=74.34  00000001 00000000 ed035800 18cb131d
+SEM i=5 t=74.34  00000001 00000000 eba3a400 18cb131d
+SEM i=5 t=74.34  00000001 00000000 ea42c400 18cb131d
+SEM i=5 t=74.34  00000002 00000000 07fb4c00 18cb131e
+S i=6 t=75.45 tid=1552 state=R wchan=[0] syscall=[running]
+S i=6 t=75.45 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=6 t=75.45 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=6 t=75.45  00000001 00000000 e72f2ae0 18cb131d
+SEM i=6 t=75.45  00000001 00000000 e61c86c0 18cb131d
+SEM i=6 t=75.45  00000001 00000000 e508abc0 18cb131d
+SEM i=6 t=75.45  00000001 00000000 e3d5aee0 18cb131d
+SEM i=6 t=75.45  00000001 00000000 f7d25500 18cb131d
+SEM i=6 t=75.45  00000001 00000000 f67c7e20 18cb131d
+SEM i=6 t=75.45  00000001 00000000 f524ea60 18cb131d
+SEM i=6 t=75.45  00000005 00000000 00e25340 18cb131e
+SEM i=6 t=75.45  00000001 00000000 f295e400 18cb131d
+SEM i=6 t=75.45  00000001 00000000 f1289c00 18cb131d
+SEM i=6 t=75.45  00000001 00000000 efc63000 18cb131d
+SEM i=6 t=75.45  00000001 00000000 ee652c00 18cb131d
+SEM i=6 t=75.45  00000001 00000000 ed035800 18cb131d
+SEM i=6 t=75.45  00000001 00000000 eba3a400 18cb131d
+SEM i=6 t=75.45  00000001 00000000 ea42c400 18cb131d
+SEM i=6 t=75.45  00000002 00000000 07fb4c00 18cb131e
+S i=7 t=76.56 tid=1552 state=R wchan=[0] syscall=[running]
+S i=7 t=76.56 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=7 t=76.56 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=7 t=76.56  00000001 00000000 e72f2ae0 18cb131d
+SEM i=7 t=76.56  00000001 00000000 e61c86c0 18cb131d
+SEM i=7 t=76.56  00000001 00000000 e508abc0 18cb131d
+SEM i=7 t=76.56  00000001 00000000 e3d5aee0 18cb131d
+SEM i=7 t=76.56  00000001 00000000 f7d25500 18cb131d
+SEM i=7 t=76.56  00000001 00000000 f67c7e20 18cb131d
+SEM i=7 t=76.56  00000001 00000000 f524ea60 18cb131d
+SEM i=7 t=76.56  00000005 00000000 00e25340 18cb131e
+SEM i=7 t=76.56  00000001 00000000 f295e400 18cb131d
+SEM i=7 t=76.56  00000001 00000000 f1289c00 18cb131d
+SEM i=7 t=76.56  00000001 00000000 efc63000 18cb131d
+SEM i=7 t=76.56  00000001 00000000 ee652c00 18cb131d
+SEM i=7 t=76.56  00000001 00000000 ed035800 18cb131d
+SEM i=7 t=76.56  00000001 00000000 eba3a400 18cb131d
+SEM i=7 t=76.56  00000001 00000000 ea42c400 18cb131d
+SEM i=7 t=76.56  00000002 00000000 07fb4c00 18cb131e
+S i=8 t=77.67 tid=1552 state=R wchan=[0] syscall=[running]
+S i=8 t=77.67 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=8 t=77.67 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=8 t=77.67  00000001 00000000 e72f2ae0 18cb131d
+SEM i=8 t=77.67  00000001 00000000 e61c86c0 18cb131d
+SEM i=8 t=77.67  00000001 00000000 e508abc0 18cb131d
+SEM i=8 t=77.67  00000001 00000000 e3d5aee0 18cb131d
+SEM i=8 t=77.67  00000001 00000000 f7d25500 18cb131d
+SEM i=8 t=77.67  00000001 00000000 f67c7e20 18cb131d
+SEM i=8 t=77.67  00000001 00000000 f524ea60 18cb131d
+SEM i=8 t=77.67  00000005 00000000 00e25340 18cb131e
+SEM i=8 t=77.67  00000001 00000000 f295e400 18cb131d
+SEM i=8 t=77.67  00000001 00000000 f1289c00 18cb131d
+SEM i=8 t=77.67  00000001 00000000 efc63000 18cb131d
+SEM i=8 t=77.67  00000001 00000000 ee652c00 18cb131d
+SEM i=8 t=77.67  00000001 00000000 ed035800 18cb131d
+SEM i=8 t=77.67  00000001 00000000 eba3a400 18cb131d
+SEM i=8 t=77.67  00000001 00000000 ea42c400 18cb131d
+SEM i=8 t=77.67  00000002 00000000 07fb4c00 18cb131e
+S i=9 t=78.79 tid=1552 state=R wchan=[0] syscall=[running]
+S i=9 t=78.79 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=9 t=78.79 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=9 t=78.79  00000001 00000000 e72f2ae0 18cb131d
+SEM i=9 t=78.79  00000001 00000000 e61c86c0 18cb131d
+SEM i=9 t=78.79  00000001 00000000 e508abc0 18cb131d
+SEM i=9 t=78.79  00000001 00000000 e3d5aee0 18cb131d
+SEM i=9 t=78.79  00000001 00000000 f7d25500 18cb131d
+SEM i=9 t=78.79  00000001 00000000 f67c7e20 18cb131d
+SEM i=9 t=78.79  00000001 00000000 f524ea60 18cb131d
+SEM i=9 t=78.79  00000005 00000000 00e25340 18cb131e
+SEM i=9 t=78.79  00000001 00000000 f295e400 18cb131d
+SEM i=9 t=78.79  00000001 00000000 f1289c00 18cb131d
+SEM i=9 t=78.79  00000001 00000000 efc63000 18cb131d
+SEM i=9 t=78.79  00000001 00000000 ee652c00 18cb131d
+SEM i=9 t=78.79  00000001 00000000 ed035800 18cb131d
+SEM i=9 t=78.79  00000001 00000000 eba3a400 18cb131d
+SEM i=9 t=78.79  00000001 00000000 ea42c400 18cb131d
+SEM i=9 t=78.79  00000002 00000000 07fb4c00 18cb131e
+S i=10 t=79.90 tid=1552 state=R wchan=[0] syscall=[running]
+S i=10 t=79.90 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=10 t=79.90 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=10 t=79.90  00000001 00000000 e72f2ae0 18cb131d
+SEM i=10 t=79.90  00000001 00000000 e61c86c0 18cb131d
+SEM i=10 t=79.90  00000001 00000000 e508abc0 18cb131d
+SEM i=10 t=79.90  00000001 00000000 e3d5aee0 18cb131d
+SEM i=10 t=79.90  00000001 00000000 f7d25500 18cb131d
+SEM i=10 t=79.90  00000001 00000000 f67c7e20 18cb131d
+SEM i=10 t=79.90  00000001 00000000 f524ea60 18cb131d
+SEM i=10 t=79.90  00000005 00000000 00e25340 18cb131e
+SEM i=10 t=79.90  00000001 00000000 f295e400 18cb131d
+SEM i=10 t=79.90  00000001 00000000 f1289c00 18cb131d
+SEM i=10 t=79.90  00000001 00000000 efc63000 18cb131d
+SEM i=10 t=79.90  00000001 00000000 ee652c00 18cb131d
+SEM i=10 t=79.90  00000001 00000000 ed035800 18cb131d
+SEM i=10 t=79.90  00000001 00000000 eba3a400 18cb131d
+SEM i=10 t=79.90  00000001 00000000 ea42c400 18cb131d
+SEM i=10 t=79.90  00000002 00000000 07fb4c00 18cb131e
+S i=11 t=81.02 tid=1552 state=R wchan=[0] syscall=[running]
+S i=11 t=81.02 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=11 t=81.02 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=11 t=81.02  00000001 00000000 e72f2ae0 18cb131d
+SEM i=11 t=81.02  00000001 00000000 e61c86c0 18cb131d
+SEM i=11 t=81.02  00000001 00000000 e508abc0 18cb131d
+SEM i=11 t=81.02  00000001 00000000 e3d5aee0 18cb131d
+SEM i=11 t=81.02  00000001 00000000 f7d25500 18cb131d
+SEM i=11 t=81.02  00000001 00000000 f67c7e20 18cb131d
+SEM i=11 t=81.02  00000001 00000000 f524ea60 18cb131d
+SEM i=11 t=81.02  00000005 00000000 00e25340 18cb131e
+SEM i=11 t=81.02  00000001 00000000 f295e400 18cb131d
+SEM i=11 t=81.02  00000001 00000000 f1289c00 18cb131d
+SEM i=11 t=81.02  00000001 00000000 efc63000 18cb131d
+SEM i=11 t=81.02  00000001 00000000 ee652c00 18cb131d
+SEM i=11 t=81.02  00000001 00000000 ed035800 18cb131d
+SEM i=11 t=81.02  00000001 00000000 eba3a400 18cb131d
+SEM i=11 t=81.02  00000001 00000000 ea42c400 18cb131d
+SEM i=11 t=81.02  00000002 00000000 07fb4c00 18cb131e
+S i=12 t=82.14 tid=1552 state=R wchan=[0] syscall=[running]
+S i=12 t=82.14 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=12 t=82.14 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=12 t=82.14  00000001 00000000 e72f2ae0 18cb131d
+SEM i=12 t=82.14  00000001 00000000 e61c86c0 18cb131d
+SEM i=12 t=82.14  00000001 00000000 e508abc0 18cb131d
+SEM i=12 t=82.14  00000001 00000000 e3d5aee0 18cb131d
+SEM i=12 t=82.14  00000001 00000000 f7d25500 18cb131d
+SEM i=12 t=82.14  00000001 00000000 f67c7e20 18cb131d
+SEM i=12 t=82.14  00000001 00000000 f524ea60 18cb131d
+SEM i=12 t=82.14  00000005 00000000 00e25340 18cb131e
+SEM i=12 t=82.14  00000001 00000000 f295e400 18cb131d
+SEM i=12 t=82.14  00000001 00000000 f1289c00 18cb131d
+SEM i=12 t=82.14  00000001 00000000 efc63000 18cb131d
+SEM i=12 t=82.14  00000001 00000000 ee652c00 18cb131d
+SEM i=12 t=82.14  00000001 00000000 ed035800 18cb131d
+SEM i=12 t=82.14  00000001 00000000 eba3a400 18cb131d
+SEM i=12 t=82.14  00000001 00000000 ea42c400 18cb131d
+SEM i=12 t=82.14  00000002 00000000 07fb4c00 18cb131e
+S i=13 t=83.26 tid=1552 state=R wchan=[0] syscall=[running]
+S i=13 t=83.26 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=13 t=83.26 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=13 t=83.26  00000001 00000000 e72f2ae0 18cb131d
+SEM i=13 t=83.26  00000001 00000000 e61c86c0 18cb131d
+SEM i=13 t=83.26  00000001 00000000 e508abc0 18cb131d
+SEM i=13 t=83.26  00000001 00000000 e3d5aee0 18cb131d
+SEM i=13 t=83.26  00000001 00000000 f7d25500 18cb131d
+SEM i=13 t=83.26  00000001 00000000 f67c7e20 18cb131d
+SEM i=13 t=83.26  00000001 00000000 f524ea60 18cb131d
+SEM i=13 t=83.26  00000005 00000000 00e25340 18cb131e
+SEM i=13 t=83.26  00000001 00000000 f295e400 18cb131d
+SEM i=13 t=83.26  00000001 00000000 f1289c00 18cb131d
+SEM i=13 t=83.26  00000001 00000000 efc63000 18cb131d
+SEM i=13 t=83.26  00000001 00000000 ee652c00 18cb131d
+SEM i=13 t=83.26  00000001 00000000 ed035800 18cb131d
+SEM i=13 t=83.26  00000001 00000000 eba3a400 18cb131d
+SEM i=13 t=83.26  00000001 00000000 ea42c400 18cb131d
+SEM i=13 t=83.26  00000002 00000000 07fb4c00 18cb131e
+S i=14 t=84.38 tid=1552 state=R wchan=[0] syscall=[running]
+S i=14 t=84.38 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=14 t=84.38 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=14 t=84.38  00000001 00000000 e72f2ae0 18cb131d
+SEM i=14 t=84.38  00000001 00000000 e61c86c0 18cb131d
+SEM i=14 t=84.38  00000001 00000000 e508abc0 18cb131d
+SEM i=14 t=84.38  00000001 00000000 e3d5aee0 18cb131d
+SEM i=14 t=84.38  00000001 00000000 f7d25500 18cb131d
+SEM i=14 t=84.38  00000001 00000000 f67c7e20 18cb131d
+SEM i=14 t=84.38  00000001 00000000 f524ea60 18cb131d
+SEM i=14 t=84.38  00000005 00000000 00e25340 18cb131e
+SEM i=14 t=84.38  00000001 00000000 f295e400 18cb131d
+SEM i=14 t=84.38  00000001 00000000 f1289c00 18cb131d
+SEM i=14 t=84.38  00000001 00000000 efc63000 18cb131d
+SEM i=14 t=84.38  00000001 00000000 ee652c00 18cb131d
+SEM i=14 t=84.38  00000001 00000000 ed035800 18cb131d
+SEM i=14 t=84.38  00000001 00000000 eba3a400 18cb131d
+SEM i=14 t=84.38  00000001 00000000 ea42c400 18cb131d
+SEM i=14 t=84.38  00000002 00000000 07fb4c00 18cb131e
+S i=15 t=85.50 tid=1552 state=R wchan=[0] syscall=[running]
+S i=15 t=85.50 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=15 t=85.50 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=15 t=85.50  00000001 00000000 e72f2ae0 18cb131d
+SEM i=15 t=85.50  00000001 00000000 e61c86c0 18cb131d
+SEM i=15 t=85.50  00000001 00000000 e508abc0 18cb131d
+SEM i=15 t=85.50  00000001 00000000 e3d5aee0 18cb131d
+SEM i=15 t=85.50  00000001 00000000 f7d25500 18cb131d
+SEM i=15 t=85.50  00000001 00000000 f67c7e20 18cb131d
+SEM i=15 t=85.50  00000001 00000000 f524ea60 18cb131d
+SEM i=15 t=85.50  00000005 00000000 00e25340 18cb131e
+SEM i=15 t=85.50  00000001 00000000 f295e400 18cb131d
+SEM i=15 t=85.50  00000001 00000000 f1289c00 18cb131d
+SEM i=15 t=85.50  00000001 00000000 efc63000 18cb131d
+SEM i=15 t=85.50  00000001 00000000 ee652c00 18cb131d
+SEM i=15 t=85.50  00000001 00000000 ed035800 18cb131d
+SEM i=15 t=85.50  00000001 00000000 eba3a400 18cb131d
+SEM i=15 t=85.50  00000001 00000000 ea42c400 18cb131d
+SEM i=15 t=85.50  00000002 00000000 07fb4c00 18cb131e
+S i=16 t=86.61 tid=1552 state=R wchan=[0] syscall=[running]
+S i=16 t=86.61 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=16 t=86.61 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=16 t=86.61  00000001 00000000 e72f2ae0 18cb131d
+SEM i=16 t=86.61  00000001 00000000 e61c86c0 18cb131d
+SEM i=16 t=86.61  00000001 00000000 e508abc0 18cb131d
+SEM i=16 t=86.61  00000001 00000000 e3d5aee0 18cb131d
+SEM i=16 t=86.61  00000001 00000000 f7d25500 18cb131d
+SEM i=16 t=86.61  00000001 00000000 f67c7e20 18cb131d
+SEM i=16 t=86.61  00000001 00000000 f524ea60 18cb131d
+SEM i=16 t=86.61  00000005 00000000 00e25340 18cb131e
+SEM i=16 t=86.61  00000001 00000000 f295e400 18cb131d
+SEM i=16 t=86.61  00000001 00000000 f1289c00 18cb131d
+SEM i=16 t=86.61  00000001 00000000 efc63000 18cb131d
+SEM i=16 t=86.61  00000001 00000000 ee652c00 18cb131d
+SEM i=16 t=86.61  00000001 00000000 ed035800 18cb131d
+SEM i=16 t=86.61  00000001 00000000 eba3a400 18cb131d
+SEM i=16 t=86.61  00000001 00000000 ea42c400 18cb131d
+SEM i=16 t=86.61  00000002 00000000 07fb4c00 18cb131e
+S i=17 t=87.73 tid=1552 state=R wchan=[0] syscall=[running]
+S i=17 t=87.73 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=17 t=87.73 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=17 t=87.73  00000001 00000000 e72f2ae0 18cb131d
+SEM i=17 t=87.73  00000001 00000000 e61c86c0 18cb131d
+SEM i=17 t=87.73  00000001 00000000 e508abc0 18cb131d
+SEM i=17 t=87.73  00000001 00000000 e3d5aee0 18cb131d
+SEM i=17 t=87.73  00000001 00000000 f7d25500 18cb131d
+SEM i=17 t=87.73  00000001 00000000 f67c7e20 18cb131d
+SEM i=17 t=87.73  00000001 00000000 f524ea60 18cb131d
+SEM i=17 t=87.73  00000005 00000000 00e25340 18cb131e
+SEM i=17 t=87.73  00000001 00000000 f295e400 18cb131d
+SEM i=17 t=87.73  00000001 00000000 f1289c00 18cb131d
+SEM i=17 t=87.73  00000001 00000000 efc63000 18cb131d
+SEM i=17 t=87.73  00000001 00000000 ee652c00 18cb131d
+SEM i=17 t=87.73  00000001 00000000 ed035800 18cb131d
+SEM i=17 t=87.73  00000001 00000000 eba3a400 18cb131d
+SEM i=17 t=87.73  00000001 00000000 ea42c400 18cb131d
+SEM i=17 t=87.73  00000002 00000000 07fb4c00 18cb131e
+S i=18 t=88.85 tid=1552 state=R wchan=[0] syscall=[running]
+S i=18 t=88.85 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=18 t=88.85 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=18 t=88.85  00000001 00000000 e72f2ae0 18cb131d
+SEM i=18 t=88.85  00000001 00000000 e61c86c0 18cb131d
+SEM i=18 t=88.85  00000001 00000000 e508abc0 18cb131d
+SEM i=18 t=88.85  00000001 00000000 e3d5aee0 18cb131d
+SEM i=18 t=88.85  00000001 00000000 f7d25500 18cb131d
+SEM i=18 t=88.85  00000001 00000000 f67c7e20 18cb131d
+SEM i=18 t=88.85  00000001 00000000 f524ea60 18cb131d
+SEM i=18 t=88.85  00000005 00000000 00e25340 18cb131e
+SEM i=18 t=88.85  00000001 00000000 f295e400 18cb131d
+SEM i=18 t=88.85  00000001 00000000 f1289c00 18cb131d
+SEM i=18 t=88.85  00000001 00000000 efc63000 18cb131d
+SEM i=18 t=88.85  00000001 00000000 ee652c00 18cb131d
+SEM i=18 t=88.85  00000001 00000000 ed035800 18cb131d
+SEM i=18 t=88.85  00000001 00000000 eba3a400 18cb131d
+SEM i=18 t=88.85  00000001 00000000 ea42c400 18cb131d
+SEM i=18 t=88.85  00000002 00000000 07fb4c00 18cb131e
+S i=19 t=89.97 tid=1552 state=R wchan=[0] syscall=[running]
+S i=19 t=89.97 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=19 t=89.97 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=19 t=89.97  00000001 00000000 e72f2ae0 18cb131d
+SEM i=19 t=89.97  00000001 00000000 e61c86c0 18cb131d
+SEM i=19 t=89.97  00000001 00000000 e508abc0 18cb131d
+SEM i=19 t=89.97  00000001 00000000 e3d5aee0 18cb131d
+SEM i=19 t=89.97  00000001 00000000 f7d25500 18cb131d
+SEM i=19 t=89.97  00000001 00000000 f67c7e20 18cb131d
+SEM i=19 t=89.97  00000001 00000000 f524ea60 18cb131d
+SEM i=19 t=89.97  00000005 00000000 00e25340 18cb131e
+SEM i=19 t=89.97  00000001 00000000 f295e400 18cb131d
+SEM i=19 t=89.97  00000001 00000000 f1289c00 18cb131d
+SEM i=19 t=89.97  00000001 00000000 efc63000 18cb131d
+SEM i=19 t=89.97  00000001 00000000 ee652c00 18cb131d
+SEM i=19 t=89.97  00000001 00000000 ed035800 18cb131d
+SEM i=19 t=89.97  00000001 00000000 eba3a400 18cb131d
+SEM i=19 t=89.97  00000001 00000000 ea42c400 18cb131d
+SEM i=19 t=89.97  00000002 00000000 07fb4c00 18cb131e
+S i=20 t=91.06 tid=1552 state=R wchan=[0] syscall=[running]
+S i=20 t=91.06 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=20 t=91.06 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=20 t=91.06  00000001 00000000 e72f2ae0 18cb131d
+SEM i=20 t=91.06  00000001 00000000 e61c86c0 18cb131d
+SEM i=20 t=91.06  00000001 00000000 e508abc0 18cb131d
+SEM i=20 t=91.06  00000001 00000000 e3d5aee0 18cb131d
+SEM i=20 t=91.06  00000001 00000000 f7d25500 18cb131d
+SEM i=20 t=91.06  00000001 00000000 f67c7e20 18cb131d
+SEM i=20 t=91.06  00000001 00000000 f524ea60 18cb131d
+SEM i=20 t=91.06  00000005 00000000 00e25340 18cb131e
+SEM i=20 t=91.06  00000001 00000000 f295e400 18cb131d
+SEM i=20 t=91.06  00000001 00000000 f1289c00 18cb131d
+SEM i=20 t=91.06  00000001 00000000 efc63000 18cb131d
+SEM i=20 t=91.06  00000001 00000000 ee652c00 18cb131d
+SEM i=20 t=91.06  00000001 00000000 ed035800 18cb131d
+SEM i=20 t=91.06  00000001 00000000 eba3a400 18cb131d
+SEM i=20 t=91.06  00000001 00000000 ea42c400 18cb131d
+SEM i=20 t=91.06  00000002 00000000 07fb4c00 18cb131e
+S i=21 t=92.17 tid=1552 state=R wchan=[0] syscall=[running]
+S i=21 t=92.17 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=21 t=92.17 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=21 t=92.17  00000001 00000000 e72f2ae0 18cb131d
+SEM i=21 t=92.17  00000001 00000000 e61c86c0 18cb131d
+SEM i=21 t=92.17  00000001 00000000 e508abc0 18cb131d
+SEM i=21 t=92.17  00000001 00000000 e3d5aee0 18cb131d
+SEM i=21 t=92.17  00000001 00000000 f7d25500 18cb131d
+SEM i=21 t=92.17  00000001 00000000 f67c7e20 18cb131d
+SEM i=21 t=92.17  00000001 00000000 f524ea60 18cb131d
+SEM i=21 t=92.17  00000005 00000000 00e25340 18cb131e
+SEM i=21 t=92.17  00000001 00000000 f295e400 18cb131d
+SEM i=21 t=92.17  00000001 00000000 f1289c00 18cb131d
+SEM i=21 t=92.17  00000001 00000000 efc63000 18cb131d
+SEM i=21 t=92.17  00000001 00000000 ee652c00 18cb131d
+SEM i=21 t=92.17  00000001 00000000 ed035800 18cb131d
+SEM i=21 t=92.17  00000001 00000000 eba3a400 18cb131d
+SEM i=21 t=92.17  00000001 00000000 ea42c400 18cb131d
+SEM i=21 t=92.17  00000002 00000000 07fb4c00 18cb131e
+S i=22 t=93.29 tid=1552 state=R wchan=[0] syscall=[running]
+S i=22 t=93.29 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=22 t=93.29 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=22 t=93.29  00000001 00000000 e72f2ae0 18cb131d
+SEM i=22 t=93.29  00000001 00000000 e61c86c0 18cb131d
+SEM i=22 t=93.29  00000001 00000000 e508abc0 18cb131d
+SEM i=22 t=93.29  00000001 00000000 e3d5aee0 18cb131d
+SEM i=22 t=93.29  00000001 00000000 f7d25500 18cb131d
+SEM i=22 t=93.29  00000001 00000000 f67c7e20 18cb131d
+SEM i=22 t=93.29  00000001 00000000 f524ea60 18cb131d
+SEM i=22 t=93.29  00000005 00000000 00e25340 18cb131e
+SEM i=22 t=93.29  00000001 00000000 f295e400 18cb131d
+SEM i=22 t=93.29  00000001 00000000 f1289c00 18cb131d
+SEM i=22 t=93.29  00000001 00000000 efc63000 18cb131d
+SEM i=22 t=93.29  00000001 00000000 ee652c00 18cb131d
+SEM i=22 t=93.29  00000001 00000000 ed035800 18cb131d
+SEM i=22 t=93.29  00000001 00000000 eba3a400 18cb131d
+SEM i=22 t=93.29  00000001 00000000 ea42c400 18cb131d
+SEM i=22 t=93.29  00000002 00000000 07fb4c00 18cb131e
+S i=23 t=94.41 tid=1552 state=R wchan=[0] syscall=[running]
+S i=23 t=94.41 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=23 t=94.41 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=23 t=94.41  00000001 00000000 e72f2ae0 18cb131d
+SEM i=23 t=94.41  00000001 00000000 e61c86c0 18cb131d
+SEM i=23 t=94.41  00000001 00000000 e508abc0 18cb131d
+SEM i=23 t=94.41  00000001 00000000 e3d5aee0 18cb131d
+SEM i=23 t=94.41  00000001 00000000 f7d25500 18cb131d
+SEM i=23 t=94.41  00000001 00000000 f67c7e20 18cb131d
+SEM i=23 t=94.41  00000001 00000000 f524ea60 18cb131d
+SEM i=23 t=94.41  00000005 00000000 00e25340 18cb131e
+SEM i=23 t=94.41  00000001 00000000 f295e400 18cb131d
+SEM i=23 t=94.41  00000001 00000000 f1289c00 18cb131d
+SEM i=23 t=94.41  00000001 00000000 efc63000 18cb131d
+SEM i=23 t=94.41  00000001 00000000 ee652c00 18cb131d
+SEM i=23 t=94.41  00000001 00000000 ed035800 18cb131d
+SEM i=23 t=94.41  00000001 00000000 eba3a400 18cb131d
+SEM i=23 t=94.41  00000001 00000000 ea42c400 18cb131d
+SEM i=23 t=94.41  00000002 00000000 07fb4c00 18cb131e
+S i=24 t=95.53 tid=1552 state=R wchan=[0] syscall=[running]
+S i=24 t=95.53 tid=1553 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601e59950 0x3 0xffffffff 0x5b8601e87cc0 0x0 0x7 0x746df15fed40 0x746df171b5fd]
+S i=24 t=95.53 tid=1772 state=S wchan=[do_poll.constprop.0] syscall=[7 0x5b8601fcf570 0x5 0x64 0x0 0x0 0x0 0x746df0b6ad40 0x746df171b5fd]
+SEM i=24 t=95.53  00000001 00000000 e72f2ae0 18cb131d
+SEM i=24 t=95.53  00000001 00000000 e61c86c0 18cb131d
+SEM i=24 t=95.53  00000001 00000000 e508abc0 18cb131d
+SEM i=24 t=95.53  00000001 00000000 e3d5aee0 18cb131d
+SEM i=24 t=95.53  00000001 00000000 f7d25500 18cb131d
+SEM i=24 t=95.53  00000001 00000000 f67c7e20 18cb131d
+SEM i=24 t=95.53  00000001 00000000 f524ea60 18cb131d
+SEM i=24 t=95.53  00000005 00000000 00e25340 18cb131e
+SEM i=24 t=95.53  00000001 00000000 f295e400 18cb131d
+SEM i=24 t=95.53  00000001 00000000 f1289c00 18cb131d
+SEM i=24 t=95.53  00000001 00000000 efc63000 18cb131d
+SEM i=24 t=95.53  00000001 00000000 ee652c00 18cb131d
+SEM i=24 t=95.53  00000001 00000000 ed035800 18cb131d
+SEM i=24 t=95.53  00000001 00000000 eba3a400 18cb131d
+SEM i=24 t=95.53  00000001 00000000 ea42c400 18cb131d
+SEM i=24 t=95.53  00000002 00000000 07fb4c00 18cb131e
+--- FINAL per-thread counters ---
+FIN tid=1552 comm=cup2 stat=R utime=2499 stime=2331 vctx=66 nvctx=162
+FIN tid=1553 comm=cuda00001400006 stat=S utime=0 stime=0 vctx=3 nvctx=0
+FIN tid=1772 comm=cup2 stat=S utime=1 stime=4 vctx=387 nvctx=0
+--- maps (for resolving any PC the syscall lines carried) ---
+200000000-200200000 ---p 00000000 00:00 0 
+200200000-200400000 rw-s 00000000 00:05 628                              /dev/nvidia0
+200400000-203400000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+203400000-204400000 ---p 00000000 00:00 0 
+204400000-204600000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+204600000-204800000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+204800000-204a00000 rw-s 204800000 00:05 635                             /dev/nvidia-uvm
+204a00000-300200000 ---p 00000000 00:00 0 
+10000000000-10004000000 ---p 00000000 00:00 0 
+5b85f80fc000-5b85f80fd000 r--p 00000000 fd:01 86416                      /tmp/cup2
+5b85f80fd000-5b85f80fe000 r-xp 00001000 fd:01 86416                      /tmp/cup2
+5b85f80fe000-5b85f80ff000 r--p 00002000 fd:01 86416                      /tmp/cup2
+5b85f80ff000-5b85f8100000 r--p 00002000 fd:01 86416                      /tmp/cup2
+5b85f8100000-5b85f8101000 rw-p 00003000 fd:01 86416                      /tmp/cup2
+5b8601e45000-5b8602141000 rw-p 00000000 00:00 0                          [heap]
+746ddc000000-746ddc400000 ---p 00000000 00:00 0 
+746ddc400000-746ddc600000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddc600000-746ddc800000 rw-s 00000000 00:01 1037                       /dev/zero (deleted)
+746ddc800000-746ddca00000 rw-s 00000000 00:01 1038                       /dev/zero (deleted)
+746ddca00000-746ddd000000 ---p 00000000 00:00 0 
+746ddd000000-746ddd200000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddd200000-746dde000000 ---p 00000000 00:00 0 
+746ddeddf000-746ddede0000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede0000-746ddede1000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede1000-746ddede2000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede2000-746ddede3000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede3000-746ddede4000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede4000-746ddede5000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede5000-746ddede6000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede6000-746ddede7000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede7000-746ddede8000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede8000-746ddede9000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddede9000-746ddedea000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddedea000-746ddedeb000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddedeb000-746ddedec000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddedec000-746ddeded000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddeded000-746ddedee000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddedee000-746ddedef000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+746ddedef000-746de0000000 ---p 00000000 00:00 0 
+746de0000000-746de0021000 rw-p 00000000 00:00 0 
+746de0021000-746de4000000 ---p 00000000 00:00 0 
+746de4bdf000-746de4ddf000 rw-s 00000000 00:01 1039                       /dev/zero (deleted)
+746de4ddf000-746dec000000 ---p 00000000 00:00 0 
+746dec000000-746dec021000 rw-p 00000000 00:00 0 
+746dec021000-746df0000000 ---p 00000000 00:00 0 
+746df0033000-746df036b000 rw-p 00000000 00:00 0 
+746df036b000-746df036c000 ---p 00000000 00:00 0 
+746df036c000-746df0b6c000 rw-p 00000000 00:00 0 
+746df0b6c000-746df0dff000 rw-p 00000000 00:00 0 
+746df0dff000-746df0e00000 ---p 00000000 00:00 0 
+746df0e00000-746df1600000 rw-p 00000000 00:00 0 
+746df1600000-746df1628000 r--p 00000000 fd:01 6456                       /usr/lib/x86_64-linux-gnu/libc.so.6
+746df1628000-746df17b0000 r-xp 00028000 fd:01 6456                       /usr/lib/x86_64-linux-gnu/libc.so.6
+746df17b0000-746df17ff000 r--p 001b0000 fd:01 6456                       /usr/lib/x86_64-linux-gnu/libc.so.6
+746df17ff000-746df1803000 r--p 001fe000 fd:01 6456                       /usr/lib/x86_64-linux-gnu/libc.so.6
+746df1803000-746df1805000 rw-p 00202000 fd:01 6456                       /usr/lib/x86_64-linux-gnu/libc.so.6
+746df1805000-746df1812000 rw-p 00000000 00:00 0 
+746df181b000-746df19e6000 rw-p 00000000 00:00 0 
+746df19e6000-746df19f6000 -w-s 00000000 00:05 628                        /dev/nvidia0
+746df19f6000-746df19f9000 rw-p 00000000 00:00 0 
+746df19f9000-746df19fa000 r--p 00000000 fd:01 6470                       /usr/lib/x86_64-linux-gnu/librt.so.1
+746df19fa000-746df19fb000 r-xp 00001000 fd:01 6470                       /usr/lib/x86_64-linux-gnu/librt.so.1
+746df19fb000-746df19fc000 r--p 00002000 fd:01 6470                       /usr/lib/x86_64-linux-gnu/librt.so.1
+746df19fc000-746df19fd000 r--p 00002000 fd:01 6470                       /usr/lib/x86_64-linux-gnu/librt.so.1
+746df19fd000-746df19fe000 rw-p 00003000 fd:01 6470                       /usr/lib/x86_64-linux-gnu/librt.so.1
+746df19fe000-746df1a00000 rw-p 00000000 00:00 0 
+746df1a00000-746df1b66000 r--p 00000000 fd:01 85428                      /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+746df1b66000-746df2aea000 r-xp 00166000 fd:01 85428                      /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+746df2aea000-746df7495000 r--p 010ea000 fd:01 85428                      /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+746df7495000-746df7496000 ---p 05a95000 fd:01 85428                      /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+746df7496000-746df75cb000 r--p 05a95000 fd:01 85428                      /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+746df75cb000-746df75d4000 rw-p 05bca000 fd:01 85428                      /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+746df75d4000-746df764c000 rw-p 00000000 00:00 0 
+746df764d000-746df764e000 r--p 00000000 fd:01 6468                       /usr/lib/x86_64-linux-gnu/libpthread.so.0
+746df764e000-746df764f000 r-xp 00001000 fd:01 6468                       /usr/lib/x86_64-linux-gnu/libpthread.so.0
+746df764f000-746df7650000 r--p 00002000 fd:01 6468                       /usr/lib/x86_64-linux-gnu/libpthread.so.0
+746df7650000-746df7651000 r--p 00002000 fd:01 6468                       /usr/lib/x86_64-linux-gnu/libpthread.so.0
+746df7651000-746df7652000 rw-p 00003000 fd:01 6468                       /usr/lib/x86_64-linux-gnu/libpthread.so.0
+746df7652000-746df7653000 r--p 00000000 fd:01 6458                       /usr/lib/x86_64-linux-gnu/libdl.so.2
+746df7653000-746df7654000 r-xp 00001000 fd:01 6458                       /usr/lib/x86_64-linux-gnu/libdl.so.2
+746df7654000-746df7655000 r--p 00002000 fd:01 6458                       /usr/lib/x86_64-linux-gnu/libdl.so.2
+746df7655000-746df7656000 r--p 00002000 fd:01 6458                       /usr/lib/x86_64-linux-gnu/libdl.so.2
+746df7656000-746df7657000 rw-p 00003000 fd:01 6458                       /usr/lib/x86_64-linux-gnu/libdl.so.2
+746df7657000-746df7667000 r--p 00000000 fd:01 6459                       /usr/lib/x86_64-linux-gnu/libm.so.6
+746df7667000-746df76e6000 r-xp 00010000 fd:01 6459                       /usr/lib/x86_64-linux-gnu/libm.so.6
+746df76e6000-746df773e000 r--p 0008f000 fd:01 6459                       /usr/lib/x86_64-linux-gnu/libm.so.6
+746df773e000-746df773f000 r--p 000e7000 fd:01 6459                       /usr/lib/x86_64-linux-gnu/libm.so.6
+746df773f000-746df7740000 rw-p 000e8000 fd:01 6459                       /usr/lib/x86_64-linux-gnu/libm.so.6
+746df7746000-746df7747000 r--s 00000000 00:05 626                        /dev/nvidiactl
+746df7747000-746df7749000 rw-p 00000000 00:00 0 
+746df7749000-746df774a000 r--p 00000000 fd:01 6453                       /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+746df774a000-746df7775000 r-xp 00001000 fd:01 6453                       /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+746df7775000-746df777f000 r--p 0002c000 fd:01 6453                       /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+746df777f000-746df7781000 r--p 00036000 fd:01 6453                       /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+746df7781000-746df7783000 rw-p 00038000 fd:01 6453                       /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7ffcd3bb9000-7ffcd3bda000 rw-p 00000000 00:00 0                          [stack]
+7ffcd3bf9000-7ffcd3bfd000 r--p 00000000 00:00 0                          [vvar]
+7ffcd3bfd000-7ffcd3bff000 r-xp 00000000 00:00 0                          [vdso]
+ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0                  [vsyscall]
+PROCSPIN_DONE rc=0
+=== cup2 final state ===
+--- cup2 stdout ---
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+CUP2_RC=124
+=== ★★★ PHASE 2: nvdiff GUEST capture (stage=ce) ===
+cup2 is gone; the GPU is free for the capture
+=== pulling the guest capture out ===
+ssh: connect to host 192.168.77.2 port 22: No route to host
+ssh: connect to host 192.168.77.2 port 22: No route to host
+ssh: connect to host 192.168.77.2 port 22: No route to host
+    guest jsonl lines = 0
+/workspace/kayfabe_w274/scripts/bench/boot_capture.sh: line 286: 2256349 Aborted                 (core dumped) "$BOOTER" "$TAG" "$@"
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 988 → 989) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=1
