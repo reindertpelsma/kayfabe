@@ -3411,6 +3411,7 @@ fn observer_loop(
     mut vmm: kayfabe_vmm_qemu::QemuVmm,
 ) {
     use kayfabe_vmm::Vmm as _;
+    let mut pages = SemaPageReader::new();
     while !stop.load(std::sync::atomic::Ordering::Acquire) {
         // ⊘ ONE wait per iteration, so the sweep below runs between every pair of waits.
         // `run_with` returns `Ok(())` when the budget is spent OR when shutdown was
@@ -3422,6 +3423,18 @@ fn observer_loop(
         for v in &verdicts {
             eprintln!("kayfabe: {}", v.line());
         }
+        // ★★★★★ THE PAGE, not the word. ⊘ Deliberately AFTER the verdicts, so a dump that
+        // shares a `why=verdict` with a `NOT-OBSERVED` line above it is a statement about the
+        // same instant that verdict was decided at — the ordering IS the timestamp's meaning.
+        pages.look(
+            watch,
+            &mut vmm,
+            if verdicts.is_empty() {
+                "tick"
+            } else {
+                "verdict"
+            },
+        );
         match outcome {
             Ok(()) => {}
             // ★ The F1 refusal is LOUD and stops the loop rather than spinning. It cannot
@@ -3431,9 +3444,380 @@ fn observer_loop(
                     "kayfabe: COMPLETION-OBSERVER ⊘ REACTOR FAULT {fault:?} — the loop \
                      STOPPED. Every later COMPLETION-WATCH line is absent by construction."
                 );
+                // ⊘ One last look before giving up. A loop that stops on a reactor fault
+                // still holds the only reader of these pages, and the state at the moment it
+                // stopped is evidence nobody else can produce.
+                pages.look(watch, &mut vmm, "reactor-fault");
+                pages.close();
                 return;
             }
         }
+    }
+    // ★ The teardown dump. ⚠ It is the LAST state, not the state during the guest's poll —
+    // `stop` is set from `detach_ram`, long after `cup2` has given up. The dumps that answer
+    // *"what was in the page while the guest was spinning"* are the `why=tick` /
+    // `why=verdict` ones above, and that is why every dump carries `t=+Nms`.
+    pages.look(watch, &mut vmm, "final");
+    pages.close();
+}
+
+/// How many bytes one dumped page is. ⊘ 4 KiB because that is the unit
+/// `SharedDoorbell::pin_completion_guest_ram` pins (`RING_PIN_BYTES`), so the dump's extent and
+/// the pin's extent are the same fact and cannot drift apart.
+#[cfg(feature = "host-isolates")]
+const SEMA_PAGE_BYTES: usize = 4096;
+
+/// How many non-zero slots one dump LISTS. ⊘ The TOTAL is always exact and printed first; only
+/// the enumeration is bounded, and a bounded enumeration says so by name.
+///
+/// ⚠ Spelled `LISTING-BOUND` in the output and **not** `CAPPED`, deliberately: `CAPPED` is a
+/// live regex in `w266_grade.sh` (`R10b`) scoped to leg 4's pin, and `w266`'s own most
+/// expensive instrument lesson was a new producer silently re-scoping three consumers that
+/// were implicitly scoped by being the only one.
+#[cfg(feature = "host-isolates")]
+const SEMA_PAGE_SLOTS_LISTED: usize = 192;
+
+/// How many dumps are PRINTED before the reader falls silent. Suppressed dumps are counted
+/// exactly and the count is printed at `close`, so silence is never mistaken for stillness.
+#[cfg(feature = "host-isolates")]
+const SEMA_PAGE_DUMPS_MAX: u64 = 128;
+
+/// Ticks between heartbeat dumps of an UNCHANGED page — 40 × 250 ms = 10 s.
+///
+/// ⊘ A heartbeat exists because *"the content did not change"* and *"the reader stopped
+/// running"* produce the same log otherwise, and only one of them is about the guest.
+#[cfg(feature = "host-isolates")]
+const SEMA_PAGE_HEARTBEAT_TICKS: u64 = 40;
+
+/// ★★★★★ **THE 4 KiB READER — the rung `w266` could not take, and the capability it needed
+/// already existed.**
+///
+/// # What this answers
+///
+/// `[measured, w266, real GA106, both arms]` pinning the completion page took the host GPU's
+/// eight `Xid 31 … @ 0x2_0440f000 ACCESS_TYPE_VIRT_WRITE` to **zero**, while
+/// `COMPLETION-WATCH` stayed `NOT-OBSERVED` on all eight declared addresses. *"No fault"* is
+/// consistent with **(a)** a write that landed at a slot nobody watches and **(b)** a write
+/// that was never attempted, and `w266` could not separate them **because nothing in the tree
+/// read more than four bytes of guest RAM**.
+///
+/// ⊘ **No new capability.** `Vmm::gpa_read` has always taken a `&mut [u8]` of any length and
+/// this thread has always held a `QemuVmm`; `WatchList::declared_sites` has handed out every
+/// declared address since leg 5. `[verified 2026-08-12]` the observer's `&mut [u8; 4]` closure
+/// was the **only** production `gpa_read` call site in the tree. What was missing was a
+/// consumer, and this is it.
+///
+/// # ⊘ Three things it deliberately does not do
+///
+/// 1. ⊘ **It never writes.** It holds a `&mut QemuVmm` and therefore *could*, which is exactly
+///    why this sentence is here: the payload is a literal immediate in the guest's own bytes,
+///    and a VMM that writes it fakes the completion without running the work — the C
+///    artifact's named dead end. There is no `gpa_write` in this type; grep it.
+/// 2. ⊘ **It resolves nothing.** Every address comes from `declared_sites`, resolved once by
+///    the declaring thread under the locks it already held. A second resolver here would be
+///    two projections of one fact, this campaign's most expensive failure class.
+/// 3. ⊘ **It reports STATE, never EVENTS.** A write of the same bytes is invisible to a
+///    content signature, and two writes between two samples are one change. The dump can say
+///    *"these bytes are here now"*; it can never say *"nothing was written"*.
+#[cfg(feature = "host-isolates")]
+#[derive(Debug)]
+struct SemaPageReader {
+    started: std::time::Instant,
+    seq: u64,
+    ticks: u64,
+    printed: u64,
+    suppressed: u64,
+    /// Per page-gpa: the last content signature printed. ★ Keyed by the page's guest-physical
+    /// address, because that is the identity the pin used and the identity the reader reads.
+    seen: std::collections::BTreeMap<u64, u64>,
+}
+
+#[cfg(feature = "host-isolates")]
+impl SemaPageReader {
+    fn new() -> Self {
+        Self {
+            started: std::time::Instant::now(),
+            seq: 0,
+            ticks: 0,
+            printed: 0,
+            suppressed: 0,
+            seen: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// FNV-1a over the page. ⊘ A signature only — it decides whether to PRINT, and never
+    /// whether a slot is interesting. Every printed dump enumerates the bytes themselves.
+    fn signature(buf: &[u8]) -> u64 {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in buf {
+            h ^= u64::from(*b);
+            h = h.wrapping_mul(0x1000_0000_01b3);
+        }
+        h
+    }
+
+    /// One look at every 4 KiB page holding a declared completion.
+    fn look(
+        &mut self,
+        watch: &kayfabe_rt::completion_watch::WatchList,
+        vmm: &mut kayfabe_vmm_qemu::QemuVmm,
+        why: &str,
+    ) {
+        use kayfabe_vmm::Vmm as _;
+        self.ticks += 1;
+        let declared = watch.declared_sites();
+        // ⊘ Page → the declarations inside it, so a slot can be attributed to the channel that
+        // named it rather than reported as a bare number. Attribution is the whole question:
+        // *"whose target is this offset"* is what separates the copy engine's own
+        // `SET_SEMAPHORE` from the compute class's `SET_REPORT_SEMAPHORE`.
+        let mut by_page: std::collections::BTreeMap<u64, Vec<(u64, u64, u32, u32)>> =
+            std::collections::BTreeMap::new();
+        for (key, site) in &declared {
+            if let kayfabe_rt::completion_watch::Site::GuestRam { gpa } = site {
+                let page = gpa & !(SEMA_PAGE_BYTES as u64 - 1);
+                by_page.entry(page).or_default().push((
+                    gpa & (SEMA_PAGE_BYTES as u64 - 1),
+                    key.va,
+                    key.proc.0,
+                    key.chan.0,
+                ));
+            }
+        }
+        for (page_gpa, mut here) in by_page {
+            here.sort_unstable();
+            let mut buf = vec![0u8; SEMA_PAGE_BYTES];
+            let read = vmm.gpa_read(page_gpa, &mut buf);
+            self.seq += 1;
+            let t = self.started.elapsed().as_millis();
+            let head = format!(
+                "kayfabe: SEMA-PAGE seq={} why={why} t=+{t}ms gpa=0x{page_gpa:x} \
+                 len={SEMA_PAGE_BYTES} declares={}",
+                self.seq,
+                here.len(),
+            );
+            let Ok(()) = read else {
+                // ⚠ A refusal is about the INSTRUMENT and gets its own word. It is never
+                // folded into "the page is empty" — *"we could not look"* and *"we looked and
+                // there was nothing"* are the two answers this whole rung exists to separate,
+                // and an empty artefact reading as benign is the trap that named itself.
+                eprintln!(
+                    "{head} → READ-REFUSED ({:?}) ⚠ NOTHING WAS READ. ⊘ This row says nothing \
+                     about the completion plane; it is a statement about this reader.",
+                    read.unwrap_err()
+                );
+                self.printed += 1;
+                continue;
+            };
+            let words: Vec<u32> = buf
+                .chunks_exact(4)
+                .map(|w| u32::from_le_bytes(w.try_into().unwrap_or([0; 4])))
+                .collect();
+            let nonzero: Vec<usize> = words
+                .iter()
+                .enumerate()
+                .filter(|(_, w)| **w != 0)
+                .map(|(i, _)| i)
+                .collect();
+            let sig = Self::signature(&buf);
+            let first = !self.seen.contains_key(&page_gpa);
+            let changed = self.seen.get(&page_gpa) != Some(&sig);
+            self.seen.insert(page_gpa, sig);
+            // ★ PRINT on: first sight, any content change, any non-tick reason, or the
+            // heartbeat. ⊘ The heartbeat is not decoration — without it, "unchanged" and "the
+            // reader died" are the same log.
+            let due = first
+                || changed
+                || why != "tick"
+                || self.ticks.is_multiple_of(SEMA_PAGE_HEARTBEAT_TICKS);
+            if !due || (self.printed >= SEMA_PAGE_DUMPS_MAX && why != "final") {
+                if due {
+                    self.suppressed += 1;
+                }
+                continue;
+            }
+            self.printed += 1;
+            eprintln!(
+                "{head} nonzero={}/{} sig=0x{sig:016x} first={} changed={}",
+                nonzero.len(),
+                words.len(),
+                u8::from(first),
+                u8::from(changed),
+            );
+            // ---- the declared slots, printed WHETHER OR NOT they are zero ------------------
+            //
+            // ★★★ A zero here is the answer, not a missing row. `w266`'s eight watches all
+            // read `last_seen=0x00000000`; this prints the same word beside the whole 16-byte
+            // report the guest asked for (`STRUCTURE_SIZE = FOUR_WORDS`), so *"the payload
+            // slot is zero"* and *"the report was never written"* stop being one fact.
+            for &(off, va, proc, chan) in &here {
+                let i = (off / 4) as usize;
+                let body: Vec<String> = (0..4)
+                    .map(|k| match words.get(i + k) {
+                        Some(w) => format!("0x{w:08x}"),
+                        None => "PAST-END".into(),
+                    })
+                    .collect();
+                eprintln!(
+                    "    SEMA-PAGE-SLOT gpa=0x{page_gpa:x}+0x{off:03x} va=0x{va:x} proc={proc} \
+                     chan={chan} kind=GR-REPORT-SEMAPHORE report16=[{}]",
+                    body.join(","),
+                );
+            }
+            // ---- every non-zero slot, with its offset and whose target it is ---------------
+            if nonzero.is_empty() {
+                // ⊘⊘ SAID IN FULL, because this is a RESULT and it will be read as a failure
+                // otherwise. An all-zero page refutes *"the write landed somewhere nobody
+                // watches"* outright.
+                eprintln!(
+                    "    SEMA-PAGE-ZERO gpa=0x{page_gpa:x} ⊘ ALL {} SLOTS ARE ZERO. This is a \
+                     MEASUREMENT, not a failed read: {} bytes were read successfully and every \
+                     one of them is 0. ⇒ nothing observable has been written to this page.",
+                    words.len(),
+                    SEMA_PAGE_BYTES,
+                );
+            } else {
+                let shown = nonzero.len().min(SEMA_PAGE_SLOTS_LISTED);
+                let mut line = String::new();
+                for (n, &i) in nonzero.iter().take(shown).enumerate() {
+                    let off = i * 4;
+                    let tag = Self::whose(off as u64, &here);
+                    line.push_str(&format!(" +0x{off:03x}=0x{:08x}{tag}", words[i]));
+                    if n % 6 == 5 || n + 1 == shown {
+                        eprintln!("    SEMA-PAGE-NZ gpa=0x{page_gpa:x}{line}");
+                        line.clear();
+                    }
+                }
+                if shown < nonzero.len() {
+                    eprintln!(
+                        "    SEMA-PAGE-NZ gpa=0x{page_gpa:x} ⚠ LISTING-BOUND: {shown} of {} \
+                         non-zero slots enumerated. ⊘ The TOTAL above is exact; only this \
+                         enumeration is bounded.",
+                        nonzero.len(),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Whose target an offset is — attributed **only** from declarations this device holds.
+    ///
+    /// ⊘ `[UNCLAIMED]` is the honest answer for everything else and it is not a synonym for
+    /// *"the copy engine's"*. `[measured, w266]` the eight `Xid` belong to `engine=Ce`
+    /// channels whose `SET_SEMAPHORE_A/B` operand this device has never decoded into a watch,
+    /// so an offset outside the declared set is *"nobody we can name"* — and naming it anyway
+    /// would be the census counting our own intent instead of the guest's bytes.
+    fn whose(off: u64, here: &[(u64, u64, u32, u32)]) -> String {
+        for &(d, _, proc, chan) in here {
+            if off == d {
+                return format!("[GR-REPORT p{proc}c{chan}]");
+            }
+            // The other three words of a `FOUR_WORDS` report — a timestamp the engine writes,
+            // not a payload. Attributed, because a non-zero timestamp beside a zero payload is
+            // a completely different finding from a non-zero payload.
+            if off > d && off < d + 16 {
+                return format!("[GR-REPORT-BODY+{} p{proc}c{chan}]", off - d);
+            }
+        }
+        "[UNCLAIMED]".into()
+    }
+
+    /// The reader's own numbers, so silence is legible.
+    fn close(&self) {
+        eprintln!(
+            "kayfabe: SEMA-PAGE-READER stopped — looks={} dumps_printed={} \
+             dumps_suppressed={} pages={} (⊘ `dumps_printed=0` with `pages>0` means the \
+             reader ran and never found a reason to print; `pages=0` means NOTHING WAS EVER \
+             DECLARED IN GUEST RAM and every SEMA-PAGE row is absent by construction, which \
+             is a statement about the declare path and not about the page)",
+            self.ticks,
+            self.printed,
+            self.suppressed,
+            self.seen.len(),
+        );
+    }
+}
+
+#[cfg(all(test, feature = "host-isolates"))]
+mod sema_page_reader_tests {
+    use super::SemaPageReader;
+
+    /// The eight `w266` declarations, as `look` builds them: `(offset, va, proc, chan)`.
+    /// `[measured, w266_on, `run_w266_on_qemu.log`]` — `0x20440ff80 … 0x20440fff0`, 16-byte
+    /// stride, `gpa 0x2197ef80 … 0x2197eff0`, all `proc=2`, `chan=0..7`.
+    fn w266_declares() -> Vec<(u64, u64, u32, u32)> {
+        (0..8u64)
+            .map(|c| {
+                let off = 0xff0 - c * 0x10;
+                (off, 0x2_0440_f000 + off, 2, u32::try_from(c).unwrap())
+            })
+            .collect()
+    }
+
+    /// ★★★★★ **THE ROW THE WHOLE RUNG TURNS ON.** An offset outside every declared report
+    /// must come back `[UNCLAIMED]` and **must not** be attributed to the copy engine.
+    ///
+    /// `[measured, w266]` the eight `Xid` belong to `engine=Ce` channels whose
+    /// `SET_SEMAPHORE_A/B` operand this device has never decoded into a watch. If a payload
+    /// turns up at, say, `+0x000`, the honest answer is *"nobody we can name"* — writing
+    /// `[CE-SEMAPHORE]` there would be the census counting **our inference** instead of the
+    /// guest's bytes, which is the failure class `our_census_counts_intent` is named for.
+    #[test]
+    fn an_offset_no_declaration_names_is_unclaimed_and_is_not_guessed_to_be_the_copy_engines() {
+        let d = w266_declares();
+        for off in [0x000u64, 0x010, 0x080, 0x400, 0xf70, 0xf7c] {
+            let t = SemaPageReader::whose(off, &d);
+            assert_eq!(
+                t, "[UNCLAIMED]",
+                "offset 0x{off:x} is nobody's that we can name"
+            );
+            assert!(!t.contains("CE"), "★ never guessed: {t}");
+        }
+    }
+
+    /// Every declared payload slot is attributed to the channel that declared it — by
+    /// `proc`/`chan`, so a slot in a shared page is never anonymous.
+    #[test]
+    fn every_declared_payload_slot_names_its_own_channel() {
+        let d = w266_declares();
+        assert_eq!(SemaPageReader::whose(0xff0, &d), "[GR-REPORT p2c0]");
+        assert_eq!(SemaPageReader::whose(0xf80, &d), "[GR-REPORT p2c7]");
+        assert_eq!(SemaPageReader::whose(0xfe0, &d), "[GR-REPORT p2c1]");
+    }
+
+    /// ★★★ **The other three words of a `FOUR_WORDS` report are the TIMESTAMP, not the
+    /// payload, and conflating them would invert a finding.** A non-zero timestamp beside a
+    /// zero payload says *"the engine wrote and the payload is not what the guest waits for"*;
+    /// a non-zero payload says the wait is satisfied. They must not render the same.
+    #[test]
+    fn the_report_body_is_distinguished_from_the_payload_word() {
+        let d = w266_declares();
+        assert_eq!(SemaPageReader::whose(0xff4, &d), "[GR-REPORT-BODY+4 p2c0]");
+        assert_eq!(SemaPageReader::whose(0xff8, &d), "[GR-REPORT-BODY+8 p2c0]");
+        assert_eq!(SemaPageReader::whose(0xffc, &d), "[GR-REPORT-BODY+12 p2c0]");
+        // ⊘ And the word one past the end of chan 0's report is NOT chan 0's — the reports
+        // abut at a 16-byte stride, so an off-by-one here would silently re-label a whole
+        // neighbouring channel's slot.
+        assert_eq!(SemaPageReader::whose(0xfe0, &d), "[GR-REPORT p2c1]");
+    }
+
+    /// ⊘ A signature that cannot tell a written page from a blank one would make every
+    /// heartbeat print and every change invisible — the instrument failing in the direction
+    /// that looks like data.
+    #[test]
+    fn the_signature_separates_a_written_page_from_a_blank_one() {
+        let blank = vec![0u8; super::SEMA_PAGE_BYTES];
+        let mut one = blank.clone();
+        one[0xff0] = 1;
+        assert_ne!(
+            SemaPageReader::signature(&blank),
+            SemaPageReader::signature(&one),
+            "★ a single byte at the declared offset must change the signature"
+        );
+        assert_eq!(
+            SemaPageReader::signature(&blank),
+            SemaPageReader::signature(&vec![0u8; super::SEMA_PAGE_BYTES]),
+            "and an unchanged page must not"
+        );
     }
 }
 
@@ -7038,10 +7422,38 @@ impl SharedDoorbell {
                 " [{shown}]sub{}/m0x{:x}/{:?}/n{}",
                 d.subchannel, d.method, d.form, d.arg_words
             ));
-            // ⊘ The first argument, for the runs where it is the whole fact (a `SET_OBJECT`'s
-            // class, a semaphore's address half). Printed as itself, never interpreted here.
+            // ★★★★★ **EVERY argument word, not the first.** Printed as itself, never
+            // interpreted here — the interpretation belongs to whoever reads the class header.
+            //
+            // ⊘⊘ **This line used to print `words[i + 1]` and stop, and the truncation cost a
+            // whole rung.** `[measured, w266, `run_w266_on_qemu.log`, all 8 CE channels]` the
+            // copy engine's submission is three methods —
+            // `sub4/m0x0/n1=0xc7b5` (`SET_OBJECT`, `AMPERE_DMA_COPY_B`),
+            // `sub4/m0x240/n3` (`SET_SEMAPHORE_A`/`_B`/`_PAYLOAD`, `clc7b5.h:47-52`) and
+            // `sub4/m0x300/n1=0x14` (`LAUNCH_DMA`, `clc7b5.h:84-105`) — and the eight host
+            // `Xid 31 … ACCESS_TYPE_VIRT_WRITE` are that semaphore release faulting. The run
+            // that names the faulting address rendered as **`=0x2`**: the `_A` half alone,
+            // with `_B` (the low 32 bits, i.e. the entire offset within the page) and the
+            // payload dropped. ⇒ The address hardware faulted on was **already read, already
+            // in this buffer, and thrown away at the print**.
+            //
+            // ★ The comment this replaces called `words[i + 1]` *"a semaphore's address
+            // half"* — it named the defect and kept it. A dump that prints one of three
+            // arguments is not a smaller dump; for a multi-word operand it is a **wrong** one,
+            // because the half it keeps is the half that carries the least information.
             if d.arg_words > 0 && i + 1 < words.len() {
-                out.push_str(&format!("=0x{:x}", words[i + 1]));
+                let end = (i + 1 + d.arg_words).min(words.len());
+                let args: Vec<String> = words[i + 1..end]
+                    .iter()
+                    .map(|w| format!("0x{w:x}"))
+                    .collect();
+                out.push_str(&format!("=[{}]", args.join(",")));
+                // ⊘ A run whose arguments run past the bytes read is SAID, never silently
+                // short — `PROBE_PUSH_BYTES` is a bound and a bound that hides itself is the
+                // `dlen=0` class.
+                if end < i + 1 + d.arg_words {
+                    out.push_str(&format!("/SHORT-{}of{}", end - (i + 1), d.arg_words));
+                }
             }
             i += 1 + d.arg_words;
             shown += 1;
