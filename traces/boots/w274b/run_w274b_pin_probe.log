@@ -1,0 +1,102 @@
+=== boot_capture tag=w274b_pin at 2026-08-12T13:59:23+00:00 ===
+=== source revision: 8dc28ee ===
+=== qemu binary: -rwxr-xr-x 1 root root 87751480 Aug 12 13:58 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:8dc28ee56a4e18d9b7c925ea610ac1b4c62e955b 
+=== BUILD_REV.txt says (informational, NOT authoritative): kayfabe-rev:5feac9090bc58129c9906e2222f3934ae313a980
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w274/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w274/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Aug 12 13:59:39 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 12 13:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 12 13:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 12 13:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 12 13:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 12 13:59 .
+drwxr-xr-x 18 root root   4000 Aug 12 13:59 ..
+cr--------  1 root root 240, 1 Aug 12 13:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 12 13:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kayfabe_w274/scripts/bench/nvdiff_hook.sh at 2026-08-12T13:59:44+00:00 ===
+=== sources (md5 — a run cannot silently be a different copy) ===
+    nvdiff_shim.c        md5 480e45c41de971910918438fb582f167
+    nvd_prog.c           md5 e4cdbde0f718fee2a9717228718c8b75
+    nvd_capture.sh       md5 d69b2f16dfc849a97461d2f4b764d40b
+    nvd_cuda_min.h       md5 63ecd789351a3043a42c36aaa83fc26b
+    uvm_sizes.h          md5 c9a0c5da3aabe32f8852f15e72405b63
+=== push + build the shim and the workload IN THE GUEST ===
+BUILD_PHASE_RC=0
+--- ENOSPC check from the SAME invocation ---
+0
+--- symbol-binding gate ---
+== build (⊘ no real cuda.h — using the bundled nvd_cuda_min.h stand-in)
+   ok   cuDeviceTotalMem_v2
+   ok   cuCtxCreate_v2
+   ok   cuCtxDestroy_v2
+   ok   cuMemAlloc_v2
+   ok   cuMemFree_v2
+   ok   cuMemcpyHtoD_v2
+   ok   cuMemcpyDtoH_v2
+=== run nvd_prog DETACHED under the shim (it will hang at cuCtxCreate; that is the point) ===
+LAUNCHED pid=1849
+=== waiting 90s, then EXTRACTING WHILE IT IS STILL HUNG ===
+    ⊘ the extraction does NOT wait for the process to exit: a torn-down CUDA process
+      takes the whole VM down with it (R1 witness, measured this boot).
+--- is it still running? (bracket trick; a bare pgrep -f matches the asker) ---
+1849 
+--- did it finish early? ---
+NO RC — still in flight
+--- record count so far ---
+436
+--- stdout so far (the last ok line names the last call that COMPLETED) ---
+STAGE ce
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11959 MiB
+=== pulling the capture out ===
+    guest jsonl lines = 437
+    ★ capture looks real: 437 records, and it contains RM_CONTROL:
+233
+=== NVDIFF_HOOK_DONE ===
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 989 → 990) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=1
