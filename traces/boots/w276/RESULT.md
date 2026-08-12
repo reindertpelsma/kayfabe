@@ -1,6 +1,16 @@
 # w276 — RESULT: the sweep is AIMED RIGHT and BINDS NOTHING, and the completion plane is CLEARED
 
-**STATUS: LIVE — 2026-08-12.** Branch `w276-port-the-whole-vas-sweep`, base `fffde60`.
+**STATUS: SUPERSEDED IN THREE PLACES BY `w277` (`traces/boots/w277/RESULT.md`), 2026-08-12.**
+The measurements below are sound; three *readings* of them are not, and each correction is
+folded in **above** the text it corrects rather than left here as a footnote:
+1. the `first=StraddlesLiveBinding` address is glossed with the **wrong hexadecimal** (§"the
+   interesting residue");
+2. *"the sweep added 255 mappings the dirty-driven pass never publishes"* is **refuted by
+   `w277_off`**, which produces the same 255 with the sweep disarmed (§LEAD 1);
+3. *"the faulting address is neither bound nor refused ⇒ the desired set never contained it"*
+   is **wrong**: it is **BOUND** (§"WHAT THIS RUN CANNOT PROVE").
+
+**Original status: LIVE — 2026-08-12.** Branch `w276-port-the-whole-vas-sweep`, base `fffde60`.
 Two boots at `b637d2e` (`w276_on` / `w276_off`), one confirming boot at `67025ca` (`w276b_on`).
 Arming asserted from each boot's own log. Every number below was read from an artefact opened
 in this session.
@@ -39,6 +49,14 @@ PT-SWEEP tasks=4 skipped=0 ran=4 truncated=0 pages=79 reasons={NeverSwept: 4}
 ```
 
 Three numbers change the reading:
+
+> ### ⊘⊘ CORRECTED BY `w277_off` — THE SWEEP DID NOT ADD THEM
+> `[measured, w277_off]` with `PT-SWEEP arm=off` and **zero** `PT-SWEEP` lines, the log still
+> reports `straddles=255 contradicting=0` with the same nine signatures. Both passes call the
+> same `ReachShadow::settle`, so both report the same **standing** refusal set. ⇒ the bullet
+> below — *"the sweep genuinely added 255 mappings … that pass had never published"* — is
+> **false**: the **dirty-driven pass proposes them itself, and is refused itself**, with the
+> sweep never running. The sweep neither creates nor removes them.
 
 - **`unchanged=0`** ⇒ the 255 leaves are **not** re-statements of bindings we already held.
   The sweep genuinely **added 255 mappings to the desired set** that the witness-driven pass
@@ -126,6 +144,18 @@ sweep 88 reads `+0x400000`. The dirty-driven re-sweep is tracking the guest live
 identical `Xid 31 / ENGINE GRAPHICS HUBCLIENT_FE / FAULT_PDE / channel 0x00000009`, identical
 `CUP2_RC=124`. ⇒ the fault is **unmoved**, graded by identity and by relative position rather
 than by a count.
+
+> ### ⊘⊘ CORRECTED BY `w277` — THE HEX BELOW IS ARITHMETIC AND IT IS WRONG
+> `GpuVa(8655536128)` is **`0x2_03E9_0000`**, not `0x2_0440_0000` (which is `8661237760`).
+> The refusals are **nowhere near** the completion-semaphore page; this boot's own
+> `refused_vas` list opens with `0x203e90000`, matching the decimal exactly. ⇒ a rendered
+> address printed beside a decimal one is a **second source of truth for a value that was
+> already complete**, and the derived copy is what everyone read for eleven rungs.
+> ★ The *substance* of the paragraph survives and `w277` measured it: the collision is a
+> **granularity** one — but between an **allocation extent** (`0xea000`, `0x8600`, `0x80000`,
+> `0x4000`, none of them a page size) and the guest's page-sized leaves, and with
+> `contradicting=0` — the two sources agree about every byte. Nothing is wrong; the table
+> simply holds one shape per range.
 
 ⊘ **The 255 refusals are the interesting residue.** `StraddlesLiveBinding` at
 `GpuVa(8655536128)` = `0x2_0440_0000` — the 2 MiB region containing the completion-semaphore
@@ -298,6 +328,15 @@ It is recorded as a gap in `PREREGISTRATION.md` rather than back-filled as a pre
 - **It does not test the C's ordering** — decode-at-release vs decode-at-doorbell. That is the
   one half of the C's `#13` fix this port does not have, and on a passthrough arm there is no
   interposition point for it.
+- ⊘⊘ **CORRECTED BY `w277` — THE PREMISE OF THE NEXT BULLET IS FALSE. THE ADDRESS IS BOUND.**
+  `[measured, w277_on]` the address table's own coalesced runs (`TABLE-DESCRIBES`, an
+  instrument this boot did not have) join against that boot's fault as
+  `0x7f58_4ce00000 → BOUND — our table holds 0x7f584ce00000+0x400000 covering it`. ⇒ *"the
+  sweep's desired set never contained it"* is wrong; it is in the **table**, and a refusal list
+  can only ever answer *"was it refused"*. ★ This retires the reading that `LEAF-PRESENT` meant
+  *"the guest describes it, we do not, so publish it"* — **we already publish it**, and the GR
+  `FAULT_PDE` is not a missing address-table entry.
+
 - **`LEAF-PRESENT` does not say why nothing backs the address — and the confirming boot shows
   it is not the refusals either.** `[measured, w276b_on]` the join reads
   `0x7e6b_42e00000 in a refused_vas list? 0 row(s)` while the same boot reports
