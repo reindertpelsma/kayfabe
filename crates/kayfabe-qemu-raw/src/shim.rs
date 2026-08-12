@@ -9766,6 +9766,29 @@ impl Regs {
                 eprintln!("kayfabe: RING-VIDMEM ⊘ a framebuffer source was ALREADY registered");
             }
         }
+        // ★★★★★ **THE SWEEP'S ARM, PRINTED ON BOTH ARMS** — for §5.12's reason below, plus
+        // one this arm has and the others do not: it is the only flag in this file that
+        // relaxes a **correctness gate** rather than adding a supply or an observation. A boot
+        // whose on-disk evidence does not state whether that gate was relaxed cannot be
+        // graded, and its control cannot be told apart from an older binary's.
+        //
+        // ⊘ Read here for the print and re-read per doorbell for the act. That is the one
+        // place this file's *"an arming flag consulted twice is a run that can change its
+        // mind"* rule is bent, and it is bent the safe way: `selected_pt_sweep` is a pure
+        // function of one environment variable that nothing in this process ever sets, so the
+        // two readings cannot disagree — and the printed line is what a grader asserts on.
+        eprintln!(
+            "kayfabe: PT-SWEEP arm={} ⇒ the whole-VAS sweep is {} (⊘ when `on`, a leaf may \
+             bind because a descent from the address space's OWN INSTALLED ROOT reached it, \
+             rather than because the guest was seen to write its page — owner ruling \
+             2026-08-12, residual recorded in mode2_address_table.md §6)",
+            if selected_pt_sweep() { "on" } else { "off" },
+            if selected_pt_sweep() {
+                "ARMED"
+            } else {
+                "DISARMED (the default, and this boot IS the negative control)"
+            },
+        );
         // ★★★★★ §5.12 — THE ARMING, PRINTED, on every arm including `off`.
         //
         // ⚠ `[measured, this campaign]` a boot can run with a plane **off** and still produce
