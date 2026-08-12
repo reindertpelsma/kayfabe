@@ -339,7 +339,10 @@ PY
   echo "    --- every SEMA-WRITE transition, in order (this is the artefact; no cap):"
   grep -o 'SEMA-WRITE t=.*' "$Q" 2>/dev/null | cut -c1-220 | sed 's/^/      /' | head -60
   echo "    --- ★★★ BACKWARDS transitions (the M5.38 second-writer signature) = $(grep -c 'BACKWARDS' "$Q" 2>/dev/null)"
-  echo "    --- carried: SEMA-PAGE-SLOT=$(grep -c 'SEMA-PAGE-SLOT' "$Q" 2>/dev/null) SEMA-PAGE-ZERO=$(grep -c 'SEMA-PAGE-ZERO' "$Q" 2>/dev/null) COMPLETION-WATCH OBSERVED=$(grep -c 'COMPLETION-WATCH.*OBSERVED' "$Q" 2>/dev/null)"
+  echo "    --- carried: SEMA-PAGE-SLOT=$(grep -c 'SEMA-PAGE-SLOT' "$Q" 2>/dev/null) SEMA-PAGE-ZERO=$(grep -c 'SEMA-PAGE-ZERO' "$Q" 2>/dev/null) COMPLETION-WATCH →OBSERVED=$(grep -c 'COMPLETION-WATCH.*→ OBSERVED' "$Q" 2>/dev/null) →NOT-OBSERVED=$(grep -c 'COMPLETION-WATCH.*→ NOT-OBSERVED' "$Q" 2>/dev/null)"
+  echo "      ⊘ ANCHORED ON THE ARROW. \`grep -c 'COMPLETION-WATCH.*OBSERVED'\` reads 97 on a boot"
+  echo "        with EIGHT completions: it also matches two long prose lines carrying both words"
+  echo "        and no verdict. An unanchored count of a verdict is not a count of that verdict."
 
   # =========================================================================================
   # ★★★★★ THE CE-PT-WRITE PRODUCER'S LIVENESS — the coordinator's question, as a count
