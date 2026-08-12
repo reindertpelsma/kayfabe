@@ -3130,6 +3130,32 @@ pub fn plan_doorbell(
                 }
             })?;
 
+    // ★★★★★ THE TRANSLATION WITNESS (owner directive, 2026-08-12). The store witness in
+    // `RmConnection::doorbell` proves the write instruction executes; it cannot say WHAT was
+    // translated into WHICH host token, nor on which engine, because by then only a bare
+    // `u32` remains. This is the only site that holds both halves at once.
+    //
+    // ⚠ It settles a standing claim by measurement rather than by reading: task #243 records
+    // *"user-proc `GrCompute` doorbells never reach it at all"*, which has been UNTESTED since
+    // legs A2/B landed at `w261`/`w262`. `engine=GrCompute` beside `proc=2` on this line
+    // refutes it; its absence across a whole boot confirms it.
+    //
+    // ⊘ `host_token=NONE-YET` is not a failure: it is the lazy-materialization path, where
+    // the channel (and therefore its token) is allocated by the verbs this function is about
+    // to return. The pairing then appears in `DOORBELL-VERB`.
+    eprintln!(
+        "kayfabe: DOORBELL-XLATE proc={} chan={} vchid={} engine={:?} guest_token={:#010x} \
+         host_token={} schedule={schedule}",
+        pid.0,
+        cid.0,
+        route.vchid,
+        chan.engine,
+        route.token,
+        chan.host_token
+            .map_or_else(|| "NONE-YET(materializes in these verbs)".to_string(), |t| format!(
+                "{t:#x}"
+            )),
+    );
     Ok(Planned {
         plan: DoorbellPlan {
             proc: pid,

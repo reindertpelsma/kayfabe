@@ -28,9 +28,26 @@ finish() { echo "=== W269 EXIT rc=$1 at $(date -Is) ==="; exit "$1"; }
 echo "=== W269 START $(date -Is) pid=$$ ==="
 
 REPO=${KAYFABE_REPO:-/workspace/kayfabe_w269}
-WANT_BIN_REV=70463ae329adac543de59b36da38112a4044fdeb
+# ⊘ Pass 1 measured the w268 binary with NO rebuild (`WANT_BIN_REV` pinned to `70463ae`).
+# Pass 2 carries the owner's DOORBELL-STORE witness, which is a Rust change, so it MUST build —
+# and the requirement then becomes "the binary is THIS checkout", which is the ordinary stamp
+# gate. ⚠ Set `W269_REBUILD=1` deliberately; the default stays the no-build pin, because a
+# rung that rebuilds by accident cannot be compared to the one it claims to extend.
 cd "$REPO" || finish 90
 HEAD=$(git rev-parse HEAD)
+WANT_BIN_REV=${W269_WANT_BIN_REV:-70463ae329adac543de59b36da38112a4044fdeb}
+if [ "${W269_REBUILD:-0}" = 1 ]; then
+  export PATH=/root/.cargo/bin:$PATH
+  export CARGO_TARGET_DIR=/workspace/bench/cargo-target-w268
+  export KAYFABE_SHIM_FEATURES=host-isolates
+  echo "=== BUILD START $(date -Is) (W269_REBUILD=1) ==="
+  scripts/build_qom_shim.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build
+  BRC=$?
+  echo "=== BUILD RC=$BRC $(date -Is) ==="
+  [ $BRC -eq 0 ] || finish 92
+  WANT_BIN_REV=$HEAD
+  echo "kayfabe-rev:$HEAD" > /workspace/bench/BUILD_REV.txt
+fi
 echo "=== SCRIPTS HEAD=$HEAD (scripts only; the BINARY's revision is asserted separately) ==="
 DIRT=$(git status --porcelain --untracked-files=no)
 [ -z "$DIRT" ] || { echo "=== ★ TREE IS DIRTY ==="; echo "$DIRT"; finish 91; }
@@ -62,8 +79,14 @@ echo "=== STAMP REQUIREMENT: PASS (no build was performed, and none was needed) 
 #   — that gate refused a correct build on 2026-08-12. A gate's prose is not its assertion.
 echo "=== CONTENT CHECK ==="
 CC_RC=0
+CC_EXTRA=""
+# ★★★ When the owner's store witness is built in, its OWN literals are asserted — otherwise a
+#     boot that printed no `DOORBELL-STORE` line would be read as "the store never ran" when it
+#     means "the witness is not in this binary". Those are opposite conclusions.
+[ "${W269_REBUILD:-0}" = 1 ] && CC_EXTRA="DOORBELL-STORE DOORBELL-XLATE DOORBELL-VERB NOT_REACHED_PLACEHOLDER"
+CC_EXTRA=${CC_EXTRA/ NOT_REACHED_PLACEHOLDER/}
 for s in "KAYFABE_GR_ROUTE" "GR-ROUTE arm=" "GUEST-SEMA arm=" "SEMA-PIN" "PB-PIN" \
-         "EXEC-WITNESS ARMED" "GR-CURSOR token=" "SEMA-PAGE-SLOT" "COMPLETION-WATCH"; do
+         "EXEC-WITNESS ARMED" "GR-CURSOR token=" "SEMA-PAGE-SLOT" "COMPLETION-WATCH" $CC_EXTRA; do
   n=$(strings /workspace/bench/qemu-build/qemu-system-x86_64 | grep -c -- "$s")
   printf '  %-38s = %s\n' "$s" "$n"
   [ "$n" -gt 0 ] || { echo "  ★★★ ZERO — the code under test is NOT in this binary"; CC_RC=1; }
@@ -140,6 +163,12 @@ boot() {
     | grep -o 'va=0x[0-9a-f]*' | sort -u | tr '\n' ' ' | sed 's/^/      /'; echo
   echo "    --- Xid (IDENTITY, never a count — w265's lesson):"
   grep -o 'Xid.*' /workspace/bench/run_${tag}_hostdmesg.log 2>/dev/null | cut -c1-200 | sort -u | sed 's/^/      /'
+  # ★★★★★ THE OWNER'S ITEM 0 — did the store instruction execute at all?
+  echo "    --- DOORBELL WITNESS (owner directive): XLATE=$(grep -c 'DOORBELL-XLATE' /workspace/bench/run_${tag}_qemu.log 2>/dev/null) VERB=$(grep -c 'DOORBELL-VERB' /workspace/bench/run_${tag}_qemu.log 2>/dev/null) STORE-WROTE=$(grep -c 'DOORBELL-STORE.*WROTE' /workspace/bench/run_${tag}_qemu.log 2>/dev/null) STORE-NOT-REACHED=$(grep -c 'DOORBELL-STORE.*NOT REACHED' /workspace/bench/run_${tag}_qemu.log 2>/dev/null) STORE-REFUSED=$(grep -c 'DOORBELL-STORE.*STORE ITSELF WAS REFUSED' /workspace/bench/run_${tag}_qemu.log 2>/dev/null)"
+  echo "    --- ★★★ XLATE by ENGINE (task #243: \"user-proc GrCompute doorbells never reach it\" — UNTESTED since w261/w262):"
+  grep -o 'DOORBELL-XLATE proc=[0-9]* chan=[0-9]* vchid=[0-9]* engine=[A-Za-z]*' /workspace/bench/run_${tag}_qemu.log 2>/dev/null | sed 's/.*\(proc=[0-9]*\).*\(engine=[A-Za-z]*\)/      \1 \2/' | sort | uniq -c | head -12
+  echo "    --- ★★★ VERB engine -> host_token (the join between XLATE and STORE):"
+  grep -o 'DOORBELL-VERB engine=[A-Za-z]* host_token=0x[0-9a-f]*' /workspace/bench/run_${tag}_qemu.log 2>/dev/null | sort | uniq -c | head -20
   echo "    --- THE PROBE'S OWN HEADLINES:"
   grep -E 'POLLED ADDRESS|SLOT-JOIN|N items =|KIND=|SNAPSHOT at|NO SNAPSHOT|steps actually taken|reached-cuCtxCreate|CUP2_RC=|SPINPROBE_RC=|VALUE AT IT' \
     /workspace/bench/run_${tag}_probe.log 2>/dev/null | sed 's/^/      /' | head -60

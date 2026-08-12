@@ -147,6 +147,7 @@ use kayfabe_util::leafwitness;
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeMap;
 use std::ffi::CString;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -322,6 +323,17 @@ mod own_client {
 }
 
 use own_client::OwnClient;
+
+/// ★ How many [`RmConnection::doorbell`] stores print in full before the witness falls back
+/// to a periodic tally. `cup2` rings a few hundred doorbells in total (448 at `w202`), so at
+/// this workload nothing is suppressed — the cap exists so that a *spinning* workload can
+/// never turn this witness into the million-line read trap the owner's brief rules out.
+/// ⊘ Refusals are never counted against it.
+const DOORBELL_WITNESS_MAX: usize = 512;
+
+/// The store counter behind [`DOORBELL_WITNESS_MAX`]. ⊘ Process-wide, not per-connection:
+/// the bound being defended is the LOG's size, which is process-wide too.
+static DOORBELL_WITNESS_N: AtomicUsize = AtomicUsize::new(0);
 
 /// The shared RM connection: **one per isolate, shared by its whole worker pool**.
 ///
@@ -1364,13 +1376,83 @@ impl RmConnection {
     /// There is no completion to check and no status to read: the store either happened or
     /// the process took a fault. Everything that can be *known* about a submission is
     /// downstream of it — the semaphore and `GP_GET`.
+    /// ## ★★★★★ THE WITNESS (owner directive, 2026-08-12) — *"do you have proof this piece
+    /// of write instruction is hit for unprivileged guest passthrough channel"*
+    ///
+    /// ⊘ **We did not.** Every *"the doorbell forwarded"* statement in this campaign rested
+    /// on **reading call order in source**, never on an observation, while every doorbell
+    /// line in `w268` reads `DOORBELL-REFUSED` and no positive line exists anywhere in the
+    /// run. `w268` §1.3 then showed that refusal is **post-hoc** — but that too was a code
+    /// reading. This makes the store itself say so.
+    ///
+    /// ⚠ **The `Err` arm is the load-bearing half.** `self.usermode.as_ref()` can return
+    /// early and the store never happens; a silent early return is exactly the shape that
+    /// reads as success. *"We did not reach the store"* is a printed line here, never an
+    /// absence.
+    ///
+    /// ⚠ **Volume, bounded by construction.** `cup2` produces a few hundred doorbells (448 at
+    /// `w202`, 8–16 of them `GrCompute`), so per-doorbell printing is not a spam risk at this
+    /// workload — but this function must never become one if a *spinning* workload reaches
+    /// it. So: the first [`DOORBELL_WITNESS_MAX`] stores print in full; after that only a
+    /// periodic tally prints, and the tally **says how many it suppressed**. ⊘ Refusals are
+    /// **never** suppressed: they are rare by hypothesis, and suppressing the rare event to
+    /// save room for the common one inverts the purpose.
     fn doorbell(&self, token: u32) -> Result<(), RmError> {
-        let window = self.usermode.as_ref().map_err(|e| *e)?;
+        let nth = DOORBELL_WITNESS_N.fetch_add(1, Ordering::Relaxed) + 1;
+        let loud = nth <= DOORBELL_WITNESS_MAX;
+        let window = match self.usermode.as_ref() {
+            Ok(w) => w,
+            Err(e) => {
+                // ⊘ ALWAYS printed, whatever the tally: this is the outcome that would
+                // otherwise be indistinguishable from a successful store.
+                eprintln!(
+                    "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} \
+                     runlist={} chid={} ⊘⊘ NOT REACHED — the usermode window is Err({e:?}), \
+                     so NO STORE HAPPENED and nothing was rung",
+                    token >> 16,
+                    token & 0xffff,
+                );
+                return Err(*e);
+            }
+        };
         release_fence();
-        window
+        if loud {
+            eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} runlist={} \
+                 chid={} → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING={:#x} in the \
+                 mapped usermode window",
+                token >> 16,
+                token & 0xffff,
+                USERMODE_NOTIFY_CHANNEL_PENDING,
+            );
+        } else if nth % DOORBELL_WITNESS_MAX == 0 {
+            eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE tally: {nth} stores attempted; the last {} \
+                 were NOT printed individually (cap {DOORBELL_WITNESS_MAX}) — ⊘ this is a \
+                 statement about the log, not about the stores",
+                nth - DOORBELL_WITNESS_MAX,
+            );
+        }
+        let out = window
             .region
             .store_u32(HostOffset::new(USERMODE_NOTIFY_CHANNEL_PENDING), token)
-            .map_err(|e| region_error(&e))
+            .map_err(|e| region_error(&e));
+        match &out {
+            Ok(()) => {
+                if loud {
+                    eprintln!(
+                        "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} \
+                         ★★★ WROTE — the store instruction executed",
+                    );
+                }
+            }
+            // ⊘ Never suppressed, same argument as the window refusal above.
+            Err(e) => eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} ⊘⊘ THE STORE \
+                 ITSELF WAS REFUSED: {e:?} — the token was never written",
+            ),
+        }
+        out
     }
 
     /// ★★★ `#128` T3 — the host GPU's PTIMER, read through the **usermode window this

@@ -2787,7 +2787,24 @@ impl Worker {
                 if *schedule && let Err(e) = rm.schedule(chan.0) {
                     return Err(unwind(rm, unwind_set(), e));
                 }
+                // ★★★★★ THE CALL-SITE WITNESS (owner directive, 2026-08-12). `DOORBELL-XLATE`
+                // says what was translated; `DOORBELL-STORE` says the write executed. This
+                // line is the JOIN between them — it is the only place that holds the host
+                // token beside the `EngineKind`, and it is what makes a `GrCompute` store
+                // distinguishable from a `Ce` one in the log.
+                // ⊘ Both arms print. A `ring_doorbell` that returns `Err` unwinds and leaves
+                // no trace otherwise, which is the shape that reads as "it rang".
+                eprintln!(
+                    "kayfabe-isolate: DOORBELL-VERB engine={engine:?} host_token={:#x} \
+                     scheduled={schedule} → calling ring_doorbell",
+                    chan.1,
+                );
                 if let Err(e) = rm.ring_doorbell(chan.1) {
+                    eprintln!(
+                        "kayfabe-isolate: DOORBELL-VERB engine={engine:?} host_token={:#x} \
+                         ⊘⊘ ring_doorbell REFUSED: {e:?} — nothing was rung and the verb unwinds",
+                        chan.1,
+                    );
                     return Err(unwind(rm, unwind_set(), e));
                 }
                 Ok(VerbReply::Doorbell {
