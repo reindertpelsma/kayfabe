@@ -4865,12 +4865,24 @@ pub struct PushBytes {
 /// [`FwdFault::PushbufferAperture`] naming the guest's own VA, exactly as the unwidened
 /// path did.
 ///
-/// ⚠ **No `RingFbNeverWritten` equivalent is raised here, and that is deliberate.** That
-/// guard exists because an unwritten ring page is byte-identical to a quiet one and would
-/// decode to `NoLiveEntries` — self-concealing. A pushbuffer has no such degenerate
-/// reading: an unwritten page decodes to **zero methods**, which is visible as a method
-/// count of 0 rather than as a plausible quiet channel. ⇒ The discriminator is not needed
-/// and inventing one would refuse traffic on a reading.
+/// ⚠ **No `RingFbNeverWritten` equivalent is raised here.** The ring needs that guard
+/// because an unwritten ring page is byte-identical to a quiet one and decodes to
+/// `NoLiveEntries` — self-concealing. The pushbuffer's blank case is **not** self-concealing,
+/// but ⊘⊘ **NOT for the reason first written here, which was FALSE and a test caught it.**
+///
+/// `[w281, measured]` The claim was *"an unwritten page decodes to zero methods, visible as
+/// a count of 0"*. It does **not**. A 64-byte zero page decodes to **16 `(0, [])` pairs**, a
+/// non-zero count. On GA10x a zero header is `sec_op = GRP0_USE_TERT`, `tert_op =
+/// TERT_OP_METHOD` ⇒ `MethodForm::Legacy` with `arg_words = 0`
+/// (`kayfabe_abi::submit::method_header_decode`), and `Ga10xPushbuffer::decode_method`
+/// answers [`kayfabe_arch::PushMethod::Opaque`] because the form is not `Incrementing`.
+///
+/// ⇒ The real property, and the one
+/// `tests/tests/pushbuffer_out_of_our_own_framebuffer.rs` asserts, is stronger and is about
+/// **facts, not counts**: every method a blank page decodes to is `Opaque`, so a blank
+/// pushbuffer yields **no `SetObject`, no CE span and no semaphore release** — it cannot
+/// imitate work. That is forbidden #2's actual requirement. ⚠ A method *count* would have
+/// been a useless discriminator here, which is exactly what the false claim asserted it was.
 ///
 /// # Errors
 /// [`FwdFault::PushbufferAperture`] for a vidmem run with no store, or a store that does
