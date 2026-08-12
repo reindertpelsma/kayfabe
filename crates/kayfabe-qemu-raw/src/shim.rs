@@ -6005,6 +6005,8 @@ impl SharedDoorbell {
         // ★★★★ §16.8's rung: what does OUR framebuffer actually hold at the addresses this
         // row published, and at a WORKING row's? See [`fb_level_dump`].
         let fbdump = fb_dump_pair(&plane, &pubs, facts.client, vaspace);
+        // ★★★★★ **LEG B — GP_GET, READ WHERE HARDWARE WRITES IT.** See `fb_userd_cursors`.
+        let fbuserd = fb_userd_cursors(&plane, facts.userd);
         // ★★★★ §16.10's rung: which SLOT the descent consumes at every level, and what that
         // slot says. §16.9 dumped entry 0 of each level, and entry 0 is not the entry this
         // walk looks at. See `kayfabe_device::ceresolve::walk_trace` — the same decoder,
@@ -6099,7 +6101,7 @@ impl SharedDoorbell {
             },
         };
         format!(
-            " | c=0x{:x} vas=0x{vaspace:x} dec={declared}{userd} root={}{rootsrc} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
+            " | c=0x{:x} vas=0x{vaspace:x} dec={declared}{userd}{fbuserd} root={}{rootsrc} ring=0x{ring_va:x} rng={} fin={} {pb}{}{row}{fbdump}{ringpage} walk:{walk}",
             facts.client,
             root.map_or_else(
                 || "none".to_string(),
@@ -9584,6 +9586,66 @@ fn clamp_bar(bar: u32) -> u8 {
 /// An access width the plane can express. Anything wider than 8 bytes is 8.
 fn clamp_size(size: u32) -> u8 {
     u8::try_from(size).unwrap_or(8)
+}
+
+/// ★★★★★ **LEG B's COMPLETION READ — `GP_GET` and `GP_PUT` out of the guest's OWN USERD.**
+///
+/// # ⊘⊘ Why this exists at all, and why it is HERE and not in the isolate
+///
+/// `traces/boots/w262/RESULT.md` §3.3 names the hole: *"the line says RM was **told** the
+/// guest's ring at channel creation. Nothing here reads `GP_GET`."*
+/// `admitted_and_served_are_different_gates`.
+///
+/// And after leg B the isolate **cannot** close it. `[measured, R31 arm B]` a guest-backed
+/// `OS_DESCRIPTOR` cannot be CPU-mapped, so `HostRmBackend::userd_cursors` refuses by name
+/// (`USERD_NOT_OURS`) on exactly the channels this rung cares about. ⇒ The read has to happen
+/// on the side that owns the framebuffer store — here — through the same `fb_peek` the ring
+/// dumps use. ★ That is R32's **J2** shape (GPU-write → CPU-read through the *other* mapping
+/// of a described memfd), which `[measured 2026-08-11, f58473f]` holds.
+///
+/// # ★★★ What each answer means, and none of them may be merged
+///
+/// | token | reading |
+/// |---|---|
+/// | *(absent)* | the params carried no framebuffer USERD — there is no address to read |
+/// | `fbuserd@0x…=REFUSED(…)` | the store would not serve those bytes |
+/// | `fbuserd@0x… GET=0 PUT=0 resN-NEVER-WRITTEN` | ⚠ **nobody has written this page at all** — including RM's own zeroing at channel creation, so the channel was never born over it |
+/// | `fbuserd@0x… GET=n PUT=m resY` | the live cursors. ★★★★★ `GET == PUT != 0` is the engine having **fetched**; `GET == 0 PUT != 0` is the wall this campaign is on |
+///
+/// ⚠⚠ **`GET = 0, PUT = 0` is the ambiguous null and is reported with its residency for
+/// exactly that reason.** A channel that never ran, a page RM zeroed and nobody advanced, and
+/// a page we are reading at the wrong address all produce it. Residency separates the third.
+///
+/// ⊘ **It reads and it decides nothing.** No branch anywhere consumes this string.
+fn fb_userd_cursors(
+    plane: &kayfabe_device::plane::RegPlane,
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> String {
+    // ⊘ Only the framebuffer arm has an address this store can serve. A `Sysmem` USERD is a
+    // real and legal case whose bytes live in guest RAM, and reading its guest-physical
+    // address out of the framebuffer would produce a confident wrong number.
+    let Some(base) = userd.and_then(|u| u.framebuffer_base()) else {
+        return String::new();
+    };
+    // `GP_GET` and `GP_PUT` are one dword apart at the head of the 512-byte slot; eight bytes
+    // is the whole read. ⊘ The offsets are `kayfabe_abi::submit`'s, never spelled here.
+    let mut w = [0u8; 8];
+    let at = base + kayfabe_abi::submit::USERD_GP_GET;
+    match plane.fb_peek(at, &mut w) {
+        Err(why) => format!(" fbuserd@0x{at:x}=REFUSED({why})"),
+        Ok(()) => {
+            let res = match plane.fb_is_resident(at) {
+                None => "res?",
+                Some(true) => "resY",
+                Some(false) => "resN-NEVER-WRITTEN",
+            };
+            format!(
+                " fbuserd@0x{at:x} GET={} PUT={} {res}",
+                u32::from_le_bytes([w[0], w[1], w[2], w[3]]),
+                u32::from_le_bytes([w[4], w[5], w[6], w[7]]),
+            )
+        }
+    }
 }
 
 #[cfg(test)]

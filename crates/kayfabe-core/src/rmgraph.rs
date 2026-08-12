@@ -561,6 +561,25 @@ impl DeclaredUserd {
     /// ⊘ It is a method here rather than a `format!` at the print site because there are
     /// two print sites already and a third is one rung away; a second spelling of this
     /// table would agree today and drift on the day a variant is added.
+    /// ★★★★★ **The FRAMEBUFFER address of this channel's 512-byte USERD slot, and `None`
+    /// for every other reading.**
+    ///
+    /// ⊘ The narrowing is the point, and it is why this is a method rather than callers
+    /// matching: a `Sysmem` USERD's `base` is a **guest-physical** address, and a consumer
+    /// that read it out of the framebuffer would get a confident wrong number rather than an
+    /// error. `kayfabe_arch::Aperture`'s own docs name the class — *"vidmem offset X and
+    /// sysmem offset X are different bytes on different devices"*.
+    #[must_use]
+    pub fn framebuffer_base(&self) -> Option<u64> {
+        match self.resolved {
+            Some(kayfabe_arch::UserdMem::Framebuffer { base, .. }) => Some(base),
+            Some(
+                kayfabe_arch::UserdMem::Sysmem { .. } | kayfabe_arch::UserdMem::Undeclared { .. },
+            )
+            | None => None,
+        }
+    }
+
     #[must_use]
     pub fn resolved_tag(&self) -> String {
         match self.resolved {
