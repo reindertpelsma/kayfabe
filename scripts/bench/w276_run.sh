@@ -231,7 +231,21 @@ PY
     done
   fi
   echo "    --- ⚠ CAPPED markers on the range lists (a capped list makes ABSENT unreadable):"
-  echo "        $(grep -c 'CAPPED at 48' "$Q" 2>/dev/null) row(s)"
+  echo "        ranges: $(grep -c 'CAPPED at 48' "$Q" 2>/dev/null) row(s) | refused_vas: $(grep -c 'CAPPED at 24' "$Q" 2>/dev/null) row(s)"
+  # ⊘⊘ THE SECOND HALF OF ARM 2.1, and without it the first half is only half an answer.
+  #    LEAF-PRESENT says the guest describes the address. It does NOT say why nothing backs
+  #    it. `refused_vas` is the table's own answer, and joining it against the fault address
+  #    is what turns "the sweep is aimed right" into "and here is what stopped it".
+  echo "    --- ★★★★★ WAS THE FAULTING ADDRESS ONE THE TABLE REFUSED?"
+  echo "        refusal kinds, summed over the boot:"
+  grep -oE 'by_kind=\{[^}]*\}' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -6 | sed 's/^/          /'
+  for fa in $FAULTS; do
+    fah=$(echo "$fa" | tr -d '_')
+    echo "        $fa in a refused_vas list? $(grep -c "refused_vas=\[[^]]*${fah#0x}" "$Q" 2>/dev/null) row(s)"
+  done
+  echo "        distinct refused VAs seen anywhere this boot:"
+  grep -oE 'refused_vas=\[[^]]*\]' "$Q" 2>/dev/null | tr ',[]' '\n\n\n' | grep -oE '0x[0-9a-f]+' \
+    | sort -u | tr '\n' ' ' | fold -w 160 | sed 's/^/          /'
 
   # =========================================================================================
   # ★★★★★ ARM 2.2 — THE LIVE WRITE CENSUS ON THE COMPLETION PAGE

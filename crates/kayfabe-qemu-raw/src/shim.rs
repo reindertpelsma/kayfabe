@@ -8389,6 +8389,9 @@ impl SharedDoorbell {
             std::collections::BTreeMap::new();
         let mut first_fault: Option<String> = None;
         let mut ranges: Vec<String> = Vec::new();
+        let mut refusal_kinds: std::collections::BTreeMap<&'static str, usize> =
+            std::collections::BTreeMap::new();
+        let mut refusal_vas: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
         for pid in pids {
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
@@ -8427,6 +8430,27 @@ impl SharedDoorbell {
                     first_fault = Some(format!("{r:?}"));
                 }
             }
+            // ★★★★★ **WHICH ADDRESSES THE TABLE REFUSED — by KIND and by VA, not just the
+            // first one.**
+            //
+            // `[measured, w276_on]` the sweep read `refusals=255 first=StraddlesLiveBinding{
+            // va: 0x2_0440_0000 }` while hardware faulted at `0x7461_86e00000` — an address
+            // the guest's own tables DO describe (`GUEST-DESCRIBES` names the run
+            // `0x746186e00000+0x400000`). ⇒ the decisive question is whether the refusal set
+            // CONTAINS THE FAULTING VA, and a count plus one example cannot answer it. A
+            // `first=` that names a different address than the fault reads as *"unrelated"*
+            // and is the exact shape of `a_count_cannot_see_a_substitution`.
+            //
+            // ⊘ Deduped and capped, and the cap SAYS SO. ⚠ Sorted, so the join against a fault
+            // address is a search over a stated set rather than over whatever order the walk
+            // happened to take.
+            for r in &out.refusals {
+                let (kind, va) = refusal_kind_va(r);
+                *refusal_kinds.entry(kind).or_default() += 1;
+                if let Some(v) = va {
+                    refusal_vas.insert(v);
+                }
+            }
             // ★★★ ARM 2.1's raw material — WHAT THE GUEST DESCRIBES, coalesced.
             //
             // ⊘ Printed only when the sweep for this proc actually walked something, so the
@@ -8443,7 +8467,23 @@ impl SharedDoorbell {
              repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
-             refusals={refusals} first={} | GUEST-DESCRIBES {}",
+             refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} first={} \
+             | GUEST-DESCRIBES {}",
+            refusal_vas
+                .iter()
+                .take(PT_SWEEP_REFUSAL_CAP)
+                .map(|v| format!("0x{v:x}"))
+                .collect::<Vec<_>>()
+                .join(","),
+            if refusal_vas.len() > PT_SWEEP_REFUSAL_CAP {
+                format!(
+                    " ⚠⚠ CAPPED at {PT_SWEEP_REFUSAL_CAP} of {} distinct — an address ABSENT \
+                     from this list is NOT thereby un-refused",
+                    refusal_vas.len()
+                )
+            } else {
+                String::new()
+            },
             first_fault.as_deref().unwrap_or("NONE"),
             if ranges.is_empty() {
                 "(no completed sweep this doorbell — ⊘ NOT 'the guest describes nothing')"
@@ -12579,6 +12619,27 @@ pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
 /// [`kayfabe_rt::device::SharedDevice::vas_reachable_ranges`] — exceeding it is announced, never
 /// silent.
 const PT_SWEEP_RANGE_CAP: usize = 48;
+
+/// How many DISTINCT refused virtual addresses one sweep line may list. See the refusal block
+/// in [`SharedDoorbell::sweep_cpu_pt_tables`] — an address absent from a capped list is not
+/// thereby un-refused, and the line says so when it truncates.
+const PT_SWEEP_REFUSAL_CAP: usize = 24;
+
+/// The refusal's kind as a stable word, and the address it is about.
+///
+/// ⊘ A `&'static str` rather than `format!("{r:?}")` because the kinds are what a histogram is
+/// over, and `Debug` embeds the payload — every refusal would be its own bucket and the
+/// histogram would be a list. The *addresses* are collected separately, so nothing is lost.
+fn refusal_kind_va(r: &kayfabe_mmu::walker::PopulateRefusal) -> (&'static str, Option<u64>) {
+    use kayfabe_mmu::walker::PopulateRefusal as P;
+    match r {
+        P::Refused { va, .. } => ("Refused", Some(va.0)),
+        P::RepointsPublished { va, .. } => ("RepointsPublished", Some(va.0)),
+        P::StraddlesLiveBinding { va } => ("StraddlesLiveBinding", Some(va.0)),
+        P::UnbindsPublished { va } => ("UnbindsPublished", Some(va.0)),
+        P::UndecidableKind { va, .. } => ("UndecidableKind", Some(va.0)),
+    }
+}
 
 /// Whether `value` arms the whole-VAS sweep — the pure half of [`selected_pt_sweep`].
 ///
