@@ -508,6 +508,28 @@ pub struct DeclaredUserd {
     /// different fact from this port being unable to read the field — which is the
     /// surrounding `Option`.
     pub handle: u32,
+    /// ★★★★★ **WHERE THE GUEST'S OWN KERNEL SAID THAT OBJECT PHYSICALLY IS** — `userdMem`
+    /// off the same `NV_CHANNEL_ALLOC_PARAMS`, with [`Self::offset`] already folded in.
+    ///
+    /// # ⊘⊘ THIS FIELD REFUTES A CLAIM THREE DOCUMENTS REACHED INDEPENDENTLY
+    ///
+    /// `traces/boots/w262/RESULT.md` §5, `docs/design/leg_b_userd_adoption_blocker.md` §1 and
+    /// `nvidia-gpu-passthrough/docs/design/userd_is_not_the_ring.md` §3 all conclude that the
+    /// guest's USERD address is **unobtainable**, for one shared reason: *"USERD is named by
+    /// handle+offset, never by a VA, so the page-table walk that gave the ring its join
+    /// source cannot be pointed at USERD"*. ⇒ Three lanes then looked for a **VA**.
+    ///
+    /// **There was never a VA to find, and there did not need to be.** The guest's CPU-RM
+    /// resolves the handle **itself, locally, before the RPC** — GSP has no client handle
+    /// namespace to look one up in — and ships the physical address in the same buffer
+    /// [`Self::handle`] comes out of. See `kayfabe_abi::notifier::ChannelUserdMemWire` for
+    /// the driver source.
+    ///
+    /// `None` = this port could not read the descriptor (short params, or an unpinned
+    /// boundary). ⊘ Never *"the channel has no USERD"* — that is
+    /// [`kayfabe_arch::UserdMem::Undeclared`], a different fact, and collapsing the two is
+    /// the `dlen=0` error.
+    pub resolved: Option<kayfabe_arch::UserdMem>,
     /// `userdOffset[0]` — the byte offset of this channel's USERD **inside** that object.
     ///
     /// ⚠★ **A non-zero value here is a documented SILENT-STALL mechanism.**
@@ -517,6 +539,43 @@ pub struct DeclaredUserd {
     /// zero — an assumption that would be invisible in exactly the symptom under
     /// investigation.
     pub offset: u64,
+}
+
+impl DeclaredUserd {
+    /// ★★★★★ **LEG B's SUPPLY SIDE, in one token** — how the guest's own kernel resolved
+    /// this channel's USERD, as a boot log states it.
+    ///
+    /// ⊘ **Four strings for four facts, and none of them may be merged.**
+    ///
+    /// | token | what it means | what it costs |
+    /// |---|---|---|
+    /// | `phys=fb:0x…/0x…` | `ADDR_FBMEM` — an offset in the **emulated** framebuffer | leg B's only consumable case |
+    /// | `phys=sys:0x…/0x…` | `ADDR_SYSMEM` — guest RAM; legal, served by the guest-RAM pin and by no framebuffer join | refusable **by name** rather than by absence |
+    /// | `phys=UNDECLARED(as=…)` | the descriptor was zero, or named an aperture we have no word for | the guest let RM allocate USERD, **or** we mis-located the params |
+    /// | `phys=UNREADABLE` | the params stopped before the descriptor exists | *"too short to say"* |
+    ///
+    /// ⚠ The last two are the pair this tree has paid for collapsing (the `dlen=0` lesson):
+    /// `UNDECLARED` is a statement the **guest** made, `UNREADABLE` is a statement about
+    /// **us**, and a reader who cannot tell them apart looks in the wrong file.
+    ///
+    /// ⊘ It is a method here rather than a `format!` at the print site because there are
+    /// two print sites already and a third is one rung away; a second spelling of this
+    /// table would agree today and drift on the day a variant is added.
+    #[must_use]
+    pub fn resolved_tag(&self) -> String {
+        match self.resolved {
+            None => "phys=UNREADABLE".to_string(),
+            Some(kayfabe_arch::UserdMem::Framebuffer { base, size }) => {
+                format!("phys=fb:0x{base:x}/0x{size:x}")
+            }
+            Some(kayfabe_arch::UserdMem::Sysmem { base, size }) => {
+                format!("phys=sys:0x{base:x}/0x{size:x}")
+            }
+            Some(kayfabe_arch::UserdMem::Undeclared { address_space }) => {
+                format!("phys=UNDECLARED(as={address_space})")
+            }
+        }
+    }
 }
 
 /// ⊘ Nothing in the core reads it.

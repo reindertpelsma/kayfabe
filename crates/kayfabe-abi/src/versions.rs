@@ -35,7 +35,11 @@ use crate::capability::{
 };
 use crate::generated::{classes, ctrl, nvos, rpc};
 use crate::guestsysinfo::VgxVersion;
-use crate::notifier::{ChannelEngineWire, ChannelNotifierWire, ChannelUserdWire};
+use kayfabe_arch::UserdMem;
+
+use crate::notifier::{
+    ChannelEngineWire, ChannelNotifierWire, ChannelUserdMemWire, ChannelUserdWire,
+};
 use crate::transcribed::{Nv2080CtrlGpuPromoteCtxParamsHeader, Nvos46ParametersPre580};
 use crate::vbios::VbiosWire;
 use crate::view::{
@@ -320,6 +324,14 @@ pub struct DriverAbiTable {
     /// an unopened boundary carries `None` rather than a guess. See
     /// [`ChannelUserdWire`] for why USERD is the canary the ring cannot be.
     channel_userd: Option<ChannelUserdWire>,
+    /// ★★★★★ Where this boundary's `NV_CHANNEL_ALLOC_PARAMS` puts **`userdMem`** — the
+    /// descriptor the guest's own CPU-RM fills with the **resolved physical address** of
+    /// this channel's USERD before it RPCs the GSP.
+    ///
+    /// Same seam and same rule as the three above. See [`ChannelUserdMemWire`] for the
+    /// driver source, and for the three documents whose *"the guest's USERD address is
+    /// unobtainable"* this field refutes.
+    channel_userd_mem: Option<ChannelUserdMemWire>,
     /// ★★★★★ Where this boundary's `NV_CHANNEL_ALLOC_PARAMS` puts **`engineType`** — the
     /// only wire field that separates a GR channel from a CE channel, since both are
     /// `AMPERE_CHANNEL_GPFIFO_A`.
@@ -357,6 +369,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_userd_mem: None,
         channel_engine: None,
         note: "oldest supported: NVOS47 gained `size` here \
                (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
@@ -388,6 +401,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_userd_mem: None,
         channel_engine: None,
         note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
                _STATE, no layout change \
@@ -409,6 +423,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_userd_mem: None,
         channel_engine: None,
         note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
                NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
@@ -430,6 +445,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_userd_mem: None,
         channel_engine: None,
         note: "capability-only boundary: +8 allocation classes and \
                +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
@@ -451,6 +467,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_userd_mem: None,
         channel_engine: None,
         note: "capability-only boundary: +6 allocation classes and the two \
                DRAM-encryption controls at their PRE-575 numbers, no layout change \
@@ -490,6 +507,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
         channel_notifier: None,
         channel_userd: None,
+        channel_userd_mem: None,
         channel_engine: None,
         note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
                here and re-adds them one number lower, and adds \
@@ -518,6 +536,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         }),
         channel_notifier: Some(ChannelNotifierWire::V580),
         channel_userd: Some(ChannelUserdWire::V580),
+        channel_userd_mem: Some(ChannelUserdMemWire::V580),
         channel_engine: Some(ChannelEngineWire::V580),
         note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
                (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
@@ -542,6 +561,7 @@ pub const TABLES: &[DriverAbiTable] = &[
         }),
         channel_notifier: Some(ChannelNotifierWire::V610),
         channel_userd: Some(ChannelUserdWire::V610),
+        channel_userd_mem: Some(ChannelUserdMemWire::V610),
         channel_engine: Some(ChannelEngineWire::V610),
         note: "★ the GSP element header changes shape here: 48 bytes with an \
                elemCount become 16 with MCTP/NVDM transport words, and \
@@ -1063,6 +1083,29 @@ impl DriverAbiTable {
     /// check makes unreachable.
     pub fn decode_channel_userd(&self, bytes: &[u8]) -> Result<Option<(u32, u64)>, AbiError> {
         match self.channel_userd {
+            Some(wire) => wire.decode(bytes),
+            None => Ok(None),
+        }
+    }
+
+    /// ★★★★★ Decode the channel's **resolved** USERD descriptor — `userdMem`, the physical
+    /// address the guest's own CPU-RM put on the wire for the GSP.
+    ///
+    /// Separate from [`Self::decode_channel_userd`] because the two answer different
+    /// questions about different parties' numbers: that one reports what the guest's
+    /// *client* declared (a handle in a namespace we cannot resolve), this one reports what
+    /// the guest's *kernel* resolved it to. ⊘ They are not two projections of one fact and
+    /// must not be folded: a channel can declare `hUserdMemory[0] = 0` and still carry a
+    /// filled `userdMem`, and a channel whose params stop short carries neither.
+    ///
+    /// `Ok(None)` = *this port cannot learn a resolved USERD for this channel*. See
+    /// [`ChannelUserdMemWire`].
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] from the primitive readers, which the wire's own length
+    /// check makes unreachable.
+    pub fn decode_channel_userd_mem(&self, bytes: &[u8]) -> Result<Option<UserdMem>, AbiError> {
+        match self.channel_userd_mem {
             Some(wire) => wire.decode(bytes),
             None => Ok(None),
         }

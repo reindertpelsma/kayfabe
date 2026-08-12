@@ -59,6 +59,7 @@
 //! exception type. [`ErrorNotification::PUBLISH_SPLIT`] is that ordering, expressed as
 //! data so the caller cannot get it wrong by writing sixteen bytes in one go.
 
+use kayfabe_arch::UserdMem;
 use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::EngineKind;
 
@@ -366,6 +367,115 @@ impl ChannelUserdWire {
     }
 }
 
+/// ★★★★★ **WHERE THE GUEST'S OWN CPU-RM SAID ITS USERD PHYSICALLY IS** —
+/// `NV_CHANNEL_ALLOC_PARAMS.userdMem`, an `NV_MEMORY_DESC_PARAMS` the guest's kernel fills
+/// in **for the GSP** and which therefore arrives at this port on every channel alloc.
+///
+/// # ⊘⊘ THE THREE-TIMES-REPEATED CLAIM THIS TYPE REFUTES
+///
+/// Three separate documents concluded, independently, that the guest's USERD address is
+/// **unobtainable**, and all three named the same reason — *"USERD is named by
+/// handle+offset (and, in the runlist entry, by raw physical address), never by a VA, so
+/// the page-table walk that gave the ring its join source cannot be pointed at USERD"*
+/// (`traces/boots/w262/RESULT.md` §5; `docs/design/leg_b_userd_adoption_blocker.md` §1;
+/// `nvidia-gpu-passthrough/docs/design/userd_is_not_the_ring.md` §3).
+///
+/// **All three are looking at the wrong message.** The premise they share is that the only
+/// USERD facts on the wire are [`ChannelUserdWire`]'s two — a handle in the *guest's* client
+/// namespace, and an offset into it. That is true of the **client's** `NV_CHANNEL_ALLOC_PARAMS`
+/// and false of the **RPC's**, and it is the RPC that reaches us:
+///
+/// > `pRpcParams->userdMem.base = memdescGetPhysAddr(pKernelChannel->pUserdSubDeviceMemDesc[subdevInst], AT_GPU, 0);`
+/// > — `ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2747-2757`
+///
+/// `_kchannelSendChannelAllocRpc` builds a **fresh** `NV_CHANNEL_ALLOC_PARAMS` and resolves
+/// the client's `hUserdMemory[0]`/`userdOffset[0]` **locally, CPU-side, before the RPC**,
+/// because GSP has no access to a client handle namespace. So the guest hands us the answer
+/// in the same buffer we already decode twice.
+///
+/// ★★★ **And `userdOffset` is ALREADY APPLIED.** `pUserdSubDeviceMemDesc` is a *sub*-memdesc
+/// created at the offset — `memdescCreateSubMem(&pUserdSubMemDesc, pUserdMemDescForSubDev,
+/// pGpu, userdOffset, userdSize)`, `ogkm-580: kernel_channel_gv100.c:234-237` — and
+/// [`Self::decode`] reads `memdescGetPhysAddr(..., 0)` of *that*. ⇒ [`UserdMem::base`] is the
+/// address of **this channel's own 512-byte USERD slot**, not of the object containing it.
+/// Nothing has to be added to it and nothing may be.
+///
+/// # The offsets, and they are pinned by two fields this tree already reads
+///
+/// `NV_MEMORY_DESC_PARAMS` is 24 bytes (`base`, `size`, `addressSpace`, `cacheAttrib` —
+/// `ogkm-580: alloc_channel.h:37-42`) and the four descriptors run
+/// `instanceMem`, `userdMem`, `ramfcMem`, `mthdbufMem` from +144 (580).
+/// ⊘ That is **not** an independent derivation to be trusted on its own: it is checked
+/// against [`ChannelNotifierWire::V580`]'s already-pinned `internal_flags: 244`, which sits
+/// exactly `24 * 3 + 4` past `userdMem`. `userd_mem_is_where_the_notifier_wire_says_it_is`
+/// refuses to let the two drift.
+///
+/// # ⚠ What this type does NOT establish
+///
+/// The address is the **guest's** and this decode validates nothing about it. It is a
+/// framebuffer offset in an *emulated* framebuffer, so it means nothing to host RM; the only
+/// legitimate consumer is one that already holds a host object over that framebuffer range
+/// and can express the address as an offset **into that object**. A consumer that hands the
+/// number to hardware unqualified has handed hardware a guest-controlled physical address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelUserdMemWire {
+    /// Offset of the `NV_MEMORY_DESC_PARAMS userdMem` sub-struct. `base` is at +0 within
+    /// it, `size` at +8, `addressSpace` at +16, `cacheAttrib` at +20.
+    pub userd_mem: usize,
+}
+
+impl ChannelUserdMemWire {
+    /// 580.159.04 — the bench driver. `userdMem` @ **+168**.
+    ///
+    /// From `ogkm-580: src/common/sdk/nvidia/inc/alloc/alloc_channel.h:296-342`:
+    /// `engineType` @ +128 (which [`ChannelUserdWire::V580`] derives and the C artifact
+    /// measured), then `cid` +132, `subDeviceId` +136, `hObjectEccError` +140,
+    /// `instanceMem` +144, **`userdMem` +168**, `ramfcMem` +192, `mthdbufMem` +216,
+    /// `hPhysChannelGroup` +240, `internalFlags` +244.
+    ///
+    /// ★ The last of those is [`ChannelNotifierWire::V580::internal_flags`], already pinned
+    /// in this file at **244**, so this offset is not a fresh derivation — it is `244 - 76`.
+    pub const V580: Self = Self { userd_mem: 168 };
+
+    /// 610.43.02 — eight bytes later, for [`ChannelNotifierWire::V610`]'s reason, and
+    /// checked the same way against its `internal_flags: 252`.
+    pub const V610: Self = Self { userd_mem: 176 };
+
+    /// The bytes a decode needs: through `addressSpace`, the last field it reads.
+    ///
+    /// ⊘ `cacheAttrib` follows and is deliberately not read. It describes how the guest's
+    /// **CPU** should map its own USERD; the only consumer here hands the range to host RM
+    /// as part of an object whose cache attribute the host driver decides.
+    #[must_use]
+    pub const fn needs(&self) -> usize {
+        self.userd_mem + 20
+    }
+
+    /// Decode the channel's resolved USERD descriptor.
+    ///
+    /// `Ok(None)` when the params stop before the fields exist — **additive**, for
+    /// [`ChannelNotifierWire::decode`]'s measured reason. ⊘ It is never
+    /// [`UserdMem::Undeclared`]: *"the params were too short to say"* and *"the params said
+    /// zero"* are the `dlen=0` distinction, and this tree has paid for collapsing it.
+    ///
+    /// # Errors
+    /// [`AbiError`] only from the primitive readers, which the length check makes
+    /// unreachable.
+    pub fn decode(&self, bytes: &[u8]) -> Result<Option<UserdMem>, AbiError> {
+        if bytes.len() < self.needs() {
+            return Ok(None);
+        }
+        let base = u64_at(bytes, self.userd_mem)?;
+        let size = u64_at(bytes, self.userd_mem + 8)?;
+        let address_space = u32_at(bytes, self.userd_mem + 16)?;
+        Ok(Some(match address_space {
+            crate::fmbpromote::ADDR_FBMEM => UserdMem::Framebuffer { base, size },
+            crate::fmbpromote::ADDR_SYSMEM => UserdMem::Sysmem { base, size },
+            _ => UserdMem::Undeclared { address_space },
+        }))
+    }
+}
+
 /// ★★★★★ **WHICH ENGINE THE GUEST SAID THIS CHANNEL IS FOR** —
 /// `NV_CHANNEL_ALLOC_PARAMS.engineType`, the one wire field that separates a GR channel
 /// from a CE channel.
@@ -650,6 +760,82 @@ mod engine_wire_tests {
             ChannelEngineWire::V610.engine_type - ChannelEngineWire::V580.engine_type,
             8,
             "the 610 skew is `hHandleVASpace`'s 4 bytes plus 4 of re-alignment"
+        );
+    }
+
+    /// ★★★ **`userdMem` is pinned by a field this tree ALREADY reads, not by a fresh count.**
+    ///
+    /// The tail of `NV_CHANNEL_ALLOC_PARAMS` runs `instanceMem`, `userdMem`, `ramfcMem`,
+    /// `mthdbufMem` (24 bytes each), then `hPhysChannelGroup` (4) and `internalFlags` (4).
+    /// So `internal_flags == userd_mem + 24*3 + 4` must hold, and
+    /// [`ChannelNotifierWire`]'s `internal_flags` was pinned long before this wire existed
+    /// and is exercised on the bench by the error-notifier decode.
+    ///
+    /// ⊘ It does not prove `userd_mem` is right — it proves it cannot disagree with a
+    /// number that has already been booted, which is the failure a third hand-written
+    /// offset actually has.
+    #[test]
+    fn userd_mem_is_where_the_notifier_wire_says_it_is() {
+        assert_eq!(
+            ChannelNotifierWire::V580.internal_flags,
+            ChannelUserdMemWire::V580.userd_mem + 24 * 3 + 4,
+            "580: userdMem, ramfcMem, mthdbufMem, hPhysChannelGroup, internalFlags"
+        );
+        assert_eq!(
+            ChannelNotifierWire::V610.internal_flags,
+            ChannelUserdMemWire::V610.userd_mem + 24 * 3 + 4,
+            "610: the same tail, eight bytes later"
+        );
+        // And the head: `instanceMem` is the descriptor before `userdMem`, and it follows
+        // `engineType`, `cid`, `subDeviceId`, `hObjectEccError` — four `NvU32`.
+        assert_eq!(
+            ChannelUserdMemWire::V580.userd_mem,
+            ChannelEngineWire::V580.engine_type + 16 + 24,
+            "580: engineType, cid, subDeviceId, hObjectEccError, instanceMem"
+        );
+        assert_eq!(
+            ChannelUserdMemWire::V610.userd_mem,
+            ChannelEngineWire::V610.engine_type + 16 + 24,
+            "610: the same head"
+        );
+    }
+
+    /// ⊘ The three readings a `userdMem` descriptor can have, and that a zero descriptor is
+    /// [`UserdMem::Undeclared`] rather than a framebuffer address of zero — which is a real
+    /// address in an emulated framebuffer and would resolve.
+    #[test]
+    fn a_userd_descriptor_carries_its_aperture_on_the_value() {
+        let mut p = vec![0u8; ChannelUserdMemWire::V580.needs()];
+        assert_eq!(
+            ChannelUserdMemWire::V580.decode(&p),
+            Ok(Some(UserdMem::Undeclared { address_space: 0 })),
+            "an all-zero descriptor is UNDECLARED, never a framebuffer address of zero"
+        );
+        let at = ChannelUserdMemWire::V580.userd_mem;
+        p[at..at + 8].copy_from_slice(&0x0102_3000u64.to_le_bytes());
+        p[at + 8..at + 16].copy_from_slice(&512u64.to_le_bytes());
+        p[at + 16..at + 20].copy_from_slice(&crate::fmbpromote::ADDR_FBMEM.to_le_bytes());
+        assert_eq!(
+            ChannelUserdMemWire::V580.decode(&p),
+            Ok(Some(UserdMem::Framebuffer {
+                base: 0x0102_3000,
+                size: 512
+            }))
+        );
+        p[at + 16..at + 20].copy_from_slice(&crate::fmbpromote::ADDR_SYSMEM.to_le_bytes());
+        assert_eq!(
+            ChannelUserdMemWire::V580.decode(&p),
+            Ok(Some(UserdMem::Sysmem {
+                base: 0x0102_3000,
+                size: 512
+            })),
+            "guest RAM is a legal USERD location and must be refusable BY NAME"
+        );
+        // ⊘ Short params are UNKNOWN, and that is a different fact from Undeclared.
+        assert_eq!(
+            ChannelUserdMemWire::V580.decode(&p[..at + 4]),
+            Ok(None),
+            "too short to say is never `the guest said zero`"
         );
     }
 

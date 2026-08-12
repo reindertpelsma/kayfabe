@@ -1,6 +1,32 @@
 # LEG B — the guest's USERD: the blocker is an ADDRESS WITH NO PRODUCER, not a missing alloc arm
 
-> ### STATUS — 2026-08-12 / **LIVE — ANSWERED, and the answer REFUTES the rung's framing.**
+> ### STATUS — 2026-08-12 / ⊘⊘ **SUPERSEDED IN §1 AND §2 BY
+> `userd_mem_is_on_the_wire.md`. The REFUSAL below is right; the DIAGNOSIS is wrong.**
+>
+> ★★★ **The blocker named below does not exist.** §1 says *"to hand RM the guest's USERD we
+> need a host memory object over the guest's USERD pages; to mint one we need that object's
+> **address**. We do not have it"* — and §2.2 concludes the join is unobtainable because
+> *"there is no page-table walk that can find it"*.
+>
+> **There never had to be one.** The guest's own CPU-RM resolves `hUserdMemory[0]` +
+> `userdOffset[0]` to a **physical address** before it RPCs the GSP — it must, because GSP has
+> no client handle namespace — and ships it in `NV_CHANNEL_ALLOC_PARAMS.userdMem` @ **+168
+> (580)**, in the very buffer §1.1 reads the handle out of
+> (`ogkm-580: kernel_channel.c:2747-2757`; sub-memdesc at `kernel_channel_gv100.c:234-237`, so
+> the offset is already folded in).
+>
+> ⇒ §1.2's `mem_phys` census is **correct and irrelevant**, exactly as
+> `userd_is_not_the_ring.md` §0.2 said the day before this was written — and §1.3's *refusal*
+> to build `UserdSource::Guest(handle)` stands, for that document's reason and not for this
+> one's. §2.2's *"nothing joins a BAR1 offset to a channel"* is also still true; it is simply
+> not on the path, because nothing needs to start from a BAR1 offset.
+>
+> ⚠ **Read the original text below as the record of a wrong turn that three lanes took.** Its
+> shared step was to look for a **VA**. Everything it says about VAs is right.
+>
+> ---
+>
+> ### (superseded) STATUS — 2026-08-12 / **LIVE — ANSWERED, and the answer REFUTES the rung's framing.**
 > Leg B was commissioned as *"if B turns out to need a primitive that does not exist (an
 > `hUserdMemory` hand-in arm in `alloc_channel_in`), build it."* That primitive is **not** what
 > is missing. Read §1 before writing any code against this leg.

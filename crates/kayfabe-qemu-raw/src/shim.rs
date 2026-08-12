@@ -5894,9 +5894,22 @@ impl SharedDoorbell {
         // printed unconditionally because a NON-ZERO offset that a consumer ignores makes
         // hardware see `GP_PUT == GP_GET` forever with no error anywhere — a silent stall
         // indistinguishable from the symptom under investigation.
+        // ★★★★★ LEG B — and the fourth string is the one that changes what is buildable:
+        // `phys=` is the address the guest's OWN KERNEL resolved this channel's USERD to,
+        // off the same params, with `off=` already folded in. ⊘ Printed beside `h`/`off`
+        // and never instead of them: the declaration and the resolution are two parties'
+        // numbers about one object, and a boot that shows only the second cannot tell a
+        // mis-located params block from a channel that declared no USERD.
         let userd = facts.userd.map_or_else(
             || " userd=UNREADABLE-AT-THIS-BOUNDARY".to_string(),
-            |u| format!(" userd=h0x{:x}/off0x{:x}", u.handle, u.offset),
+            |u| {
+                format!(
+                    " userd=h0x{:x}/off0x{:x}/{}",
+                    u.handle,
+                    u.offset,
+                    u.resolved_tag()
+                )
+            },
         );
         // ★★★★ §16.25 — THE ROUTES, and the CENSUS TO READ THEM AGAINST.
         //

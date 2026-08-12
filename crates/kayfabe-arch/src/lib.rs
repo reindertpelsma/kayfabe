@@ -265,6 +265,61 @@ pub enum Aperture {
     Peer,
 }
 
+/// ★★★★★ **WHERE A CHANNEL'S USERD PHYSICALLY IS, as the guest's own kernel resolved it.**
+///
+/// The guest's CPU-RM resolves its client's `hUserdMemory[0]`/`userdOffset[0]` into a
+/// physical descriptor **before** it RPCs the GSP, because GSP has no access to a client
+/// handle namespace. This is that descriptor's vocabulary. The wire decode lives in
+/// `kayfabe_abi::notifier::ChannelUserdMemWire`, which carries the driver citation and the
+/// three documents this refutes.
+///
+/// # ⊘ The aperture is ON the value, and that is the whole point of the type
+///
+/// A framebuffer offset and a guest-physical address are both `u64`, they are meaningful to
+/// completely different consumers, and a consumer handed the wrong one **resolves
+/// successfully against the wrong memory**. `a_second_source_of_truth_beside_a_complete_value`.
+///
+/// # ⚠ The address is the GUEST'S and nothing here validates it
+///
+/// [`Self::Framebuffer`] is an offset in an **emulated** framebuffer: it means nothing to
+/// host RM and must never be handed to hardware unqualified. The only legitimate consumer is
+/// one that already holds a host object over that framebuffer range and can express the
+/// address as an offset **into that object**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum UserdMem {
+    /// `ADDR_FBMEM` — an offset into the emulated framebuffer.
+    Framebuffer {
+        /// This channel's 512-byte USERD slot. ★ `userdOffset[0]` is **already applied**:
+        /// the descriptor describes a *sub*-memdesc created at that offset, so nothing may
+        /// be added to this number.
+        base: u64,
+        /// The sub-memdesc's size — the USERD slot, **not** the containing object.
+        size: u64,
+    },
+    /// `ADDR_SYSMEM` — guest RAM. A real and legal USERD location, served by the guest-RAM
+    /// pin and by no framebuffer join. Carried so it can be **refused by name** rather than
+    /// by absence.
+    Sysmem {
+        /// Guest-physical address of the 512-byte slot.
+        base: u64,
+        /// The sub-memdesc's size.
+        size: u64,
+    },
+    /// The descriptor was present and named an aperture this port has no vocabulary for —
+    /// including `ADDR_UNKNOWN` (`0`), which is what an all-zero descriptor reads as.
+    ///
+    /// ⚠ **This is not "the channel has no USERD".** The guest fills the descriptor only
+    /// when its client supplied a USERD object; a channel that let RM allocate one
+    /// legitimately sends zeros. That is a different fact from a channel whose params we
+    /// mis-located, and this variant deliberately does not tell them apart — the declared
+    /// handle is what separates them.
+    Undeclared {
+        /// The raw `addressSpace` word, so a boot can state what it actually saw rather
+        /// than only that it did not recognise it.
+        address_space: u32,
+    },
+}
+
 /// ★★★ **A framebuffer window — an aperture whose accesses are DEVICE MEMORY, not
 /// registers.**
 ///
