@@ -5438,6 +5438,10 @@ impl HostRmBackend {
             len,
             sem_va,
             payload,
+            // ★★★★★ w283 — THE GUEST'S OWN RELEASE, carried into the SAME pushbuffer,
+            // behind our own LAUNCH_DMA. ⊘ Ours stays last, so `await_semaphore` below
+            // returning means the guest's release has retired too rather than racing it.
+            guest_release: sub.guest_release.map(|r| (r.va, r.payload)),
         })?;
         if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
             return Err(RmError::Other(BAD_ENCODE));
@@ -5900,6 +5904,9 @@ impl HostRmBackend {
             len: 4,
             sem_va,
             payload,
+            // ⊘ `None` — this is the self-contained hardware probe, which has no guest and
+            // therefore no guest-declared release to carry.
+            guest_release: None,
         })?;
         if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
             return Err(RmError::Other(BAD_ENCODE));
@@ -6041,6 +6048,8 @@ impl HostRmBackend {
                     src: CeSource::Address(src_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -6549,6 +6558,8 @@ impl HostRmBackend {
                     src: CeSource::Address(got_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -6793,6 +6804,8 @@ impl HostRmBackend {
                     src: CeSource::Address(got_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -6842,6 +6855,8 @@ impl HostRmBackend {
                     src: CeSource::Address(dst_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
