@@ -4279,6 +4279,20 @@ impl kayfabe_fwd::FbSource for PlaneFbSource {
 /// `proc 2`, so what may happen *after* the ring is enumerated is not settled here.
 const RING_VIDMEM_ENV: &str = "KAYFABE_RING_VIDMEM";
 
+/// ★★★★★ `[w281]` **Read the PUSHBUFFER out of our own framebuffer too — its OWN flag.**
+///
+/// `w279` ended at `FwdFault::PushbufferAperture { va: 0x1_2002_0000 }`: the ring was read
+/// through the join, and the pushbuffer the ring *points at* was refused by a hard-coded
+/// `VidmemRoute::Refuse` placed there so that boot could attribute the ring's bytes. This
+/// is that widening, and it is deliberately **not** `RING_VIDMEM_ENV`: that rung's own
+/// result ruled *"as its own flag, never folded into route B"*, because a single flag makes
+/// a boot unable to say which of the two reads produced a byte.
+///
+/// ⊘ **Necessary-not-sufficient alone.** The bytes still come from the `FbSource` route B
+/// registers, so `KAYFABE_RING_VIDMEM` must ALSO be on or a vidmem pushbuffer run refuses
+/// exactly as before. Both are printed unconditionally, on both arms.
+const PUSHBUF_VIDMEM_ENV: &str = "KAYFABE_PUSHBUF_VIDMEM";
+
 impl core::fmt::Debug for SharedDoorbell {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("SharedDoorbell")
@@ -9929,6 +9943,24 @@ impl Regs {
                 eprintln!("kayfabe: RING-VIDMEM ⊘ a framebuffer source was ALREADY registered");
             }
         }
+        // ★★★★★ `[w281]` THE PUSHBUFFER'S OWN ROUTE — see `PUSHBUF_VIDMEM_ENV`. Printed
+        // unconditionally and on BOTH arms, and printed WITH its dependency on route B, so
+        // a log says not just "armed" but "armed and reachable".
+        let pushbuf_vidmem = std::env::var(PUSHBUF_VIDMEM_ENV)
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("on"))
+            .unwrap_or(false);
+        device.set_pushbuffer_vidmem(pushbuf_vidmem);
+        eprintln!(
+            "kayfabe: PUSHBUF-VIDMEM {}={} ⇒ pushbuffer route {} (⊘ REACHABLE only with \
+             route B ON, which is {}: the bytes come from route B's FbSource. armed={} \
+             reachable={})",
+            PUSHBUF_VIDMEM_ENV,
+            std::env::var(PUSHBUF_VIDMEM_ENV).unwrap_or_else(|_| "<unset>".to_string()),
+            if pushbuf_vidmem { "ON" } else { "OFF (default)" },
+            if ring_vidmem { "ON" } else { "OFF" },
+            pushbuf_vidmem,
+            pushbuf_vidmem && ring_vidmem,
+        );
         // ★★★★★ **THE SWEEP'S ARM, PRINTED ON BOTH ARMS** — for §5.12's reason below, plus
         // one this arm has and the others do not: it is the only flag in this file that
         // relaxes a **correctness gate** rather than adding a supply or an observation. A boot

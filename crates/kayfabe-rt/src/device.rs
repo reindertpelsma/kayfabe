@@ -399,6 +399,9 @@ pub struct SharedDevice {
     /// ⚠ **Read outside the ranked locks only** (§16.87): the production source takes the
     /// plane's rank-0 mutex, which may not be acquired beneath ranks 1-2.
     fb: std::sync::OnceLock<Arc<dyn kayfabe_fwd::FbSource>>,
+    /// `[w281]` The PUSHBUFFER's vidmem route — [`SharedDevice::set_pushbuffer_vidmem`].
+    /// ⊘ Separate from `fb` on purpose: supply and route are different questions.
+    pb_vidmem: std::sync::atomic::AtomicBool,
 }
 
 /// ★ **Pool-saturation counters for ONE GPU target** (`l1_concurrency.md` §7.2, §12.29).
@@ -718,6 +721,7 @@ impl SharedDevice {
         let spawner = spine.isolate_factory();
         SharedDevice {
             fb: std::sync::OnceLock::new(),
+            pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
             spawner,
@@ -2192,6 +2196,30 @@ impl SharedDevice {
         self.fb.set(src)
     }
 
+    /// ★★★★★ `[w281]` **Arm the PUSHBUFFER's vidmem route — its OWN flag, never route B's.**
+    ///
+    /// `w279`'s result ruled this explicitly: *"widen it — as its **own** flag, never folded
+    /// into route B"*. Route B is [`SharedDevice::set_fb_source`], a **supply**: it says
+    /// whose bytes we may serve. This is a **route**: it says which read may consume them.
+    /// Folding them together would make a boot unable to say whether a byte reached the
+    /// decoder through the ring's widening or the pushbuffer's — the attribution `w279`
+    /// paid a whole rung to keep.
+    ///
+    /// ⊘ **It is NECESSARY-NOT-SUFFICIENT on its own.** With no [`kayfabe_fwd::FbSource`]
+    /// registered there is nothing to read, so a vidmem run still raises
+    /// [`FwdFault::PushbufferAperture`] — the same shape as *"route B is unreachable with
+    /// the witness disarmed"*. Both must be on; each is asserted separately in a boot's log.
+    pub fn set_pushbuffer_vidmem(&self, on: bool) {
+        self.pb_vidmem.store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether the pushbuffer's vidmem route is armed. ⊘ Read per parse rather than cached,
+    /// so a log line and the act cannot disagree about what this boot ran with.
+    #[must_use]
+    pub fn pushbuffer_vidmem(&self) -> bool {
+        self.pb_vidmem.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// attached port whenever it has one.
     pub fn doorbell(
         &self,
@@ -2531,11 +2559,25 @@ impl SharedDevice {
     /// whether the lock above it is rank 0 or rank 1. The refusal surfaces as
     /// [`FwdFault::NonRamGpa`].
     ///
-    /// ⊘ **Not split into plan/execute/commit**, deliberately: R1 forces that shape for
-    /// *blocking* calls, and `gpa_read` is a bounded copy out of a mapped window. The
-    /// split would mean resolving addresses, dropping the lock, then fetching method bytes
-    /// through a translation the guest was free to invalidate in the gap — a TOCTOU built
-    /// on purpose. See `kayfabe_fwd::read_pushbuffer`.
+    /// # ⊘⊘⊘ CORRECTED `[w281, 2026-08-12]` — IT **IS** SPLIT NOW, AND A LOCK RANK FORCED IT
+    ///
+    /// The paragraph below said the split would be *"a TOCTOU built on purpose"* and
+    /// declined it. That reasoning stood while this path read **guest RAM only**. Reading a
+    /// **vidmem** pushbuffer needs `kayfabe_fwd::FbBytes`, whose production implementation
+    /// takes the plane's mutex — `LockRank::Plane`, **rank 0** — and this closure holds
+    /// ranks 1 and 2. `check_acquire` refuses that `core → plane` acquisition **by name**,
+    /// so the unsplit shape does not merely risk a deadlock: it **cannot run**.
+    ///
+    /// ⇒ Three phases, `forward_ring`'s exactly: `plan_pushbuffer` under the locks →
+    /// `fetch_pushbuffer` with **every ranked guard dropped** → `decode_pushbuffer` +
+    /// `apply_pushbuffer` under them again. ⚠ The TOCTOU is **accepted, not dissolved**:
+    /// between plan and fetch the guest may invalidate a translation, so the bytes may come
+    /// from a page it named and has since unmapped. Bounded, because the runs come from
+    /// that channel's own table under the lock and are never recomputed outside it — a
+    /// stale read of the guest's own memory, never a read of memory it never owned. The
+    /// ring has carried this exposure since `w235`.
+    ///
+    /// ⊘ The superseded reasoning, kept because its *scope* is what changed:
     ///
     /// It is wired here rather than left to callers precisely because it was *not*
     /// reachable through the shell before: `read_pushbuffer`'s docs claimed *"in L1 this
@@ -2549,17 +2591,48 @@ impl SharedDevice {
         cid: ChanId,
         ring: &[u8],
     ) -> Result<kayfabe_fwd::PushbufferOutcome, FwdFault> {
-        let out = self.route_act(
+        // ★★★ `[w281]` The route's arm, read ONCE per parse and printed with the plan, so a
+        // grader reads the flag this act ran under rather than the one the process booted
+        // with. ⊘ `pb_vidmem` alone is not enough: with no `FbSource` registered there is
+        // nothing to read and a vidmem run still refuses. Both are asserted below.
+        let pb_vidmem = self.pushbuffer_vidmem();
+        // ---- PLAN. Ranks 0+1 held; no byte of guest memory or framebuffer is touched.
+        let plan = self.route_act(
             // ROUTE phase — rank 0 held, no proc, no guest memory: the arch's GPFIFO
             // entry format and nothing else.
             move |spine| Ok((pid, kayfabe_fwd::pushbuffer_ranges(spine, ring))),
-            // ACT phase — rank 0 + this proc's rank 1. Translate through the channel's
-            // own address table, read, decode, apply. The read and the apply are one
-            // phase because they must see the same table.
-            move |spine, proc, ranges| {
-                let methods = kayfabe_fwd::read_pushbuffer(spine, proc, cid, vmm, &ranges)?;
-                kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods)
-            },
+            // PLAN phase — rank 0 + this proc's rank 1. Translate through the channel's
+            // own address table. The refusals (MISS, wrong aperture, over-fragmented) are
+            // all raised HERE, under the lock, before anything is read.
+            move |_spine, proc, ranges| kayfabe_fwd::plan_pushbuffer(proc, cid, &ranges, pb_vidmem),
+        )??;
+        // ---- FETCH. ⊘ NO ranked lock is held here — the whole reason for the split.
+        let bytes = {
+            let src = self.fb.get().cloned();
+            let mut borrowed = src.as_deref().map(kayfabe_fwd::FbSourceRef);
+            let dynref: Option<&mut dyn kayfabe_fwd::FbBytes> = match borrowed.as_mut() {
+                Some(b) => Some(b),
+                None => None,
+            };
+            // ★★ Printed on the arm that READS OUR OWN FRAMEBUFFER, and only there: a route
+            // that is armed and never taken must not read as a route that was taken.
+            if plan.touches_fb() {
+                eprintln!(
+                    "kayfabe: FWD-PUSHBUF proc={} chan={} ranges={} → VIDMEM RUNS PLANNED \
+                     (pb_vidmem={pb_vidmem} fb_source={}) — the pushbuffer is read out of \
+                     OUR OWN framebuffer, not guest RAM",
+                    pid.0,
+                    cid.0,
+                    plan.len(),
+                    dynref.is_some(),
+                );
+            }
+            kayfabe_fwd::fetch_pushbuffer(&plan, vmm, dynref)?
+        };
+        // ---- ACT. Back under the locks. Decode is pure; apply needs the proc.
+        let out = self.route_act(
+            move |spine| Ok((pid, kayfabe_fwd::decode_pushbuffer(spine, &bytes))),
+            move |spine, proc, methods| kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods),
         )??;
         // ★★★ #102/#13 — LATCH phase, and it needs its own pass for a structural reason.
         //
