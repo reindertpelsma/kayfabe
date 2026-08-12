@@ -677,9 +677,32 @@ const GPFIFO_ENTRIES: u32 = 64;
 const PUSHBUFFER_OFFSET: u64 = 0;
 
 /// One pushbuffer slot per GPFIFO entry, so a submission never overwrites methods a
-/// previous one may still be being fetched. 64 slots × 64 bytes fits in the page before
-/// [`GPFIFO_OFFSET`].
-const PUSHBUFFER_SLOT_BYTES: u64 = 64;
+/// previous one may still be being fetched.
+///
+/// ⊘⊘ **WAS 64, AND 64 IS EXACTLY WHAT OUR OWN PUSH FILLS** — 16 words, to the byte.
+/// `[measured 2026-08-13, boot `w283_client`, real GA106]` adding the guest's own release
+/// (six more words, 88 bytes total) made every forwarded copy refuse
+/// `RmError::Other(BAD_ENCODE)` **before submission**, which regressed `w282b`'s
+/// hardware-retired copy to nothing. ⚠ And note how it presented: the length check answers
+/// with a constant named `BAD_ENCODE`, so a boot log said *"the encoding is wrong"* when the
+/// encoding was right and the **slot** was too small. A refusal whose name is true of a
+/// different cause is the shape this campaign has paid for repeatedly.
+///
+/// ★ 128 bytes leaves room for the copy's own five method runs **and** a guest-declared
+/// release, with 44 bytes spare. [`PUSHBUFFER_SLOTS`] is derived from it rather than
+/// assumed, so the region bound holds whatever this number becomes.
+const PUSHBUFFER_SLOT_BYTES: u64 = 128;
+
+/// ★★★ How many pushbuffer slots actually FIT before [`GPFIFO_OFFSET`] — **derived**, never
+/// a second spelling of a slot count.
+///
+/// ⊘ [`HostRmBackend::next_slot`] used to take the slot index modulo the ring's **entry
+/// count** alone, which is only safe while `entries × PUSHBUFFER_SLOT_BYTES` happens to fit
+/// — true at 64 × 64 and false at 64 × 128. The modulus is now clamped by this, so a slot
+/// can never be written over the GPFIFO that indexes it. ★ That was a latent bug at the old
+/// numbers too: nothing tied [`GPFIFO_ENTRIES`] to the region size, so a larger ring would
+/// have scribbled on its own queue with no check anywhere.
+const PUSHBUFFER_SLOTS: u64 = (GPFIFO_OFFSET - PUSHBUFFER_OFFSET) / PUSHBUFFER_SLOT_BYTES;
 
 /// Offset of the semaphore word **hardware writes** within the ring object.
 ///
@@ -5463,7 +5486,17 @@ impl HostRmBackend {
             // returning means the guest's release has retired too rather than racing it.
             guest_release: sub.guest_release.map(|r| (r.va, r.payload)),
         })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name. `[measured, w283_client]` this fired
+        // on a correctly-encoded push that was six words longer than the slot, and the boot
+        // log could only say `BAD_ENCODE`. The numbers are printed so the next reader does
+        // not have to re-derive which of the two it was.
         if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: CE-SUBMIT ⊘ REFUSED — the push is {} bytes and the slot is \
+                 {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an encoding one; \
+                 `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
             return Err(RmError::Other(BAD_ENCODE));
         }
         self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
@@ -5558,7 +5591,11 @@ impl HostRmBackend {
             return Err(RmError::Other(RING_ENTRIES_REFUSED));
         }
         let n = self.slots.entry(chan).or_insert(0);
-        let slot = *n % u64::from(entries);
+        // ★★★ CLAMPED BY THE REGION, not by the entry count alone — see [`PUSHBUFFER_SLOTS`].
+        // A slot index that fits the ring's queue but not the ring's pushbuffer area writes
+        // methods over the GPFIFO that points at them, and the symptom is a submission that
+        // fetches garbage rather than an error anyone can attribute.
+        let slot = *n % u64::from(entries).min(PUSHBUFFER_SLOTS).max(1);
         *n += 1;
         Ok(slot)
     }
@@ -5928,7 +5965,17 @@ impl HostRmBackend {
             // therefore no guest-declared release to carry.
             guest_release: None,
         })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name. `[measured, w283_client]` this fired
+        // on a correctly-encoded push that was six words longer than the slot, and the boot
+        // log could only say `BAD_ENCODE`. The numbers are printed so the next reader does
+        // not have to re-derive which of the two it was.
         if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: CE-SUBMIT ⊘ REFUSED — the push is {} bytes and the slot is \
+                 {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an encoding one; \
+                 `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
             return Err(RmError::Other(BAD_ENCODE));
         }
         self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
