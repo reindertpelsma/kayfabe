@@ -203,6 +203,13 @@ pub struct Settlement {
     pub dropped: Vec<(GpuVa, DropReason)>,
     /// Slots the guest declared sparse, across every reachable-and-witnessed page.
     pub sparse: usize,
+    /// ★★★★★ Leaves in [`Self::binds`]-or-already-published that are desired **only because a
+    /// sweep admitted their page** — i.e. the page was never witnessed being written.
+    ///
+    /// ⊘ This is the price of [`ReachShadow::witness_swept`] as a number. A rung that turns the
+    /// sweep on and cannot say how much of its published set came from the relaxation has not
+    /// measured the relaxation, only its side effects.
+    pub swept_binds: usize,
 }
 
 /// ★★★ **The reachability shadow of ONE address space.**
@@ -220,6 +227,16 @@ pub struct ReachShadow {
     /// that feeds it is *drained*: a page witnessed in one pass and linked in the next would
     /// otherwise bind nothing.
     witnessed: BTreeSet<u64>,
+    /// ★★★★★ **Pages admitted by a whole-VAS SWEEP** — the C's `enum_gr_sysmem`
+    /// (`C: nvkvm_gpu_emul.c:583-591`), and the ONE relaxation of the witness rule this port
+    /// carries. See [`ReachShadow::witness_swept`] for what it costs and what pays for it.
+    ///
+    /// ⊘ Held **apart** from [`Self::witnessed`] and never merged into it, for the reason the
+    /// campaign keeps re-learning: a relaxation folded into the thing it relaxes is a
+    /// relaxation nobody can measure afterwards. [`Settlement::swept_binds`] is the number
+    /// that says how much of the published set exists **only** because of it, and it can only
+    /// exist while the two sets are two sets.
+    swept: BTreeSet<u64>,
     /// What this shadow last told the address table, keyed by virtual address. The diff is
     /// against this and not against the table, because the table also holds bindings from other
     /// populate sources (`Vas::rpc_bound`, `Vas::promote_bound`) that are not ours to unbind.
@@ -236,6 +253,7 @@ impl ReachShadow {
             root,
             pages: BTreeMap::new(),
             witnessed: BTreeSet::new(),
+            swept: BTreeSet::new(),
             published: BTreeMap::new(),
             slots: 0,
         }
@@ -277,6 +295,70 @@ impl ReachShadow {
     #[must_use]
     pub fn is_witnessed(&self, phys: u64) -> bool {
         self.witnessed.contains(&phys)
+    }
+
+    /// ★★★★★ **SWEPT** — admit `phys` because a **whole-VAS walk descended to it from this
+    /// address space's own installed page-directory root**.
+    ///
+    /// # ⊘⊘ This is a DELIBERATE RELAXATION of the witness rule. Read why before calling it.
+    ///
+    /// [`Settlement::unwitnessed`] is not a defect: a reachable-but-unwitnessed leaf is a MISS
+    /// on purpose, and the refusal is *"the whole of hole 2's resolution and the reason residue
+    /// cannot bind"*. A sweep cannot satisfy it — every page a root descent reaches was, by
+    /// construction, never seen being written — so a root-seeded pass **publishes nothing**
+    /// unless the gate moves (`[measured, w275]`, from this file's own source).
+    ///
+    /// ## What the relaxation is, stated as narrowly as it is implemented
+    ///
+    /// > A page is `swept` iff a walk **starting at `self.root`**, over **the guest's own page
+    /// > directories**, reached it. Nothing else may call this.
+    ///
+    /// It is *not* "read whatever the guest points at": the seed is the address space's own
+    /// installed PDB, the descent is bounded ([`crate::walker::MAX_WALK_DEPTH`], the decode
+    /// budget), and every byte still comes through the same aperture-checked reader, whose
+    /// failures stay [`crate::walker::WalkFault`]s and are never decoded to zeros.
+    ///
+    /// ## What it costs, and what pays for it — do not paper this over
+    ///
+    /// `mode2_address_table.md` §6 refuses a miss-walk because the state may be **mid-update**
+    /// (a torn multi-level walk resolves to the wrong physical page). A doorbell is the guest's
+    /// own commit point for the work it submits, so the hazard does not apply to *that
+    /// submission's* reachable set — but it **does** still apply to unrelated regions of the
+    /// same address space, which another guest thread may be rewriting right now. That residual
+    /// is accepted knowingly (owner ruling, 2026-08-12) and is bounded by the other half of the
+    /// C's design, which is why this function is useless on its own:
+    ///
+    /// > A page that was mid-update when swept was **by definition being written**, so it lands
+    /// > in the dirty set, so the next doorbell re-sweeps it. The torn window is bounded and
+    /// > self-healing.
+    ///
+    /// ⇒ **A one-shot sweep without the dirty-driven re-sweep does not carry this argument.**
+    /// The re-sweep half lives in `kayfabe_fwd::plan_pt_sweep`; build both or neither.
+    ///
+    /// ⚠ Residue is the price. Hole 2's guarantee — *"a directory entry read out of allocator
+    /// residue can only make some other page reachable, and that page is unwitnessed, so
+    /// nothing in it binds"* — is exactly what this trades away: a sweep marks the residue page
+    /// swept and its leaves become bindable. The mitigation is the same self-healing loop, plus
+    /// the fact that every such leaf must still pass [`crate::walker::leaf_disposition`] and
+    /// the address table's own refusals.
+    pub fn witness_swept(&mut self, phys: u64) {
+        self.swept.insert(phys);
+    }
+
+    /// Was this page admitted by a sweep (and not by a witnessed guest write)?
+    #[must_use]
+    pub fn is_swept(&self, phys: u64) -> bool {
+        self.swept.contains(&phys)
+    }
+
+    /// ★★ How many pages are admitted **only** by the sweep relaxation.
+    ///
+    /// ⊘ Reported for [`ReachShadow::witnessed_len`]'s reason, one plane over: *"the sweep
+    /// published N bindings"* and *"the sweep is the ONLY reason N bindings exist"* are
+    /// different claims, and a single total cannot carry the second.
+    #[must_use]
+    pub fn swept_only_len(&self) -> usize {
+        self.swept.difference(&self.witnessed).count()
     }
 
     /// How many page-table pages this shadow holds.
@@ -325,6 +407,68 @@ impl ReachShadow {
         self.pages
             .values()
             .any(|p| matches!(p.slots.get(&(va.0, 0)), Some(Slot::Sparse)))
+    }
+
+    /// ★★★★★ **ARM 2.1 — does THE GUEST describe a mapping covering `va`?**
+    ///
+    /// Searches the **reachable** pages only, because reachability from the address space's own
+    /// installed page-directory root is what makes a decoded leaf the guest's description rather
+    /// than our residue. A leaf sitting in an orphan table is deliberately not a hit: the guest
+    /// has not linked it, so at this instant the guest does not describe that address.
+    ///
+    /// ⊘ **What a `None` is and is not.** It says *this shadow holds no reachable leaf covering
+    /// `va`*. That is only a statement about the guest to the extent the shadow is a complete
+    /// picture of the guest — i.e. after a **completed** whole-VAS sweep. Read beside a
+    /// truncated or never-run sweep it says nothing at all, which is why every caller must print
+    /// the sweep's state on the same line.
+    ///
+    /// ⚠ Linear in the shadow. It is a diagnostic, asked once per fault, never on a hot path.
+    #[must_use]
+    pub fn leaf_covering(&self, va: GpuVa) -> Option<DecodedLeaf> {
+        let reachable = self.reachable();
+        self.pages
+            .iter()
+            .filter(|(phys, _)| reachable.contains(phys))
+            .flat_map(|(_, p)| p.slots.values())
+            .find_map(|s| match s {
+                Slot::Leaf(l) if l.va.0 <= va.0 && va.0 - l.va.0 < l.size.0 => Some(*l),
+                _ => None,
+            })
+    }
+
+    /// ★★ Every reachable leaf's `(va, bytes)`, ascending — the **coalesced** picture of what
+    /// this address space describes.
+    ///
+    /// ⊘ Coalescing is what makes it printable: a `cuCtxCreate` VAS is thousands of 4 KiB leaves
+    /// in a handful of runs, and a per-leaf dump is a log nobody reads. Adjacent leaves merge
+    /// only when they are **contiguous in VA**; two runs separated by one unmapped page stay two
+    /// runs, because *"is there a hole here"* is the whole question a reader brings to this.
+    #[must_use]
+    pub fn reachable_ranges(&self) -> Vec<(u64, u64)> {
+        let reachable = self.reachable();
+        let mut leaves: Vec<(u64, u64)> = self
+            .pages
+            .iter()
+            .filter(|(phys, _)| reachable.contains(phys))
+            .flat_map(|(_, p)| p.slots.values())
+            .filter_map(|s| match s {
+                Slot::Leaf(l) => Some((l.va.0, l.size.0)),
+                _ => None,
+            })
+            .collect();
+        leaves.sort_unstable();
+        let mut out: Vec<(u64, u64)> = Vec::new();
+        for (va, len) in leaves {
+            match out.last_mut() {
+                Some((s, l)) if *s + *l == va => *l += len,
+                // ⊘ An exact duplicate (the same leaf reported twice) is absorbed rather than
+                // extending the run: it is one mapping, and adding its length would report a
+                // range the guest never described.
+                Some((s, l)) if va >= *s && va + len <= *s + *l => {}
+                _ => out.push((va, len)),
+            }
+        }
+        out
     }
 
     /// ★★ **OBSERVE** — replace what the shadow knows about one page with what a decode of it
@@ -430,6 +574,11 @@ impl ReachShadow {
             // parent — so a stale witness would let the NEXT thing written there bind as if it
             // were a page table we had been watching all along.
             self.witnessed.remove(&phys);
+            // ★ And the sweep's admission goes with it for the SAME reason, not a similar one.
+            // A retired page's bytes are about to be something else; leaving it in `swept`
+            // would let the next thing written there bind as if a root descent had just
+            // reached it, which is the residue hazard this relaxation already pays for once.
+            self.swept.remove(&phys);
             out.retired.push(phys);
         }
         // ★ ONE closure is enough, and the reason is worth stating because "retire, then
@@ -445,7 +594,12 @@ impl ReachShadow {
         let mut desired: BTreeMap<u64, DecodedLeaf> = BTreeMap::new();
         for (phys, p) in &self.pages {
             let live = reachable.contains(phys);
-            let seen = self.witnessed.contains(phys);
+            let written = self.witnessed.contains(phys);
+            // ★★★★★ THE ONE RELAXATION, and it is spelled out here rather than hidden in a
+            // helper so that a reader of the gate sees both admissions at once. See
+            // [`ReachShadow::witness_swept`] for the full argument and the accepted residual.
+            let swept_only = !written && self.swept.contains(phys);
+            let seen = written || swept_only;
             for s in p.slots.values() {
                 match s {
                     Slot::Sparse if live && seen => out.sparse += 1,
@@ -465,6 +619,15 @@ impl ReachShadow {
                         match leaf_disposition(fmt, l) {
                             LeafDisposition::Drop(why) => out.dropped.push((l.va, why)),
                             LeafDisposition::Bind => {
+                                // ★★ Counted BEFORE the insert and against the *page's*
+                                // admission, so it answers "how much of the desired set exists
+                                // only because the gate was relaxed" — the number the owner's
+                                // ruling has to be judged on. ⊘ It is a count of DESIRED
+                                // leaves, not of binds the table accepted; the table's own
+                                // refusals are downstream and are reported there.
+                                if swept_only {
+                                    out.swept_binds += 1;
+                                }
                                 desired.insert(l.va.0, *l);
                             }
                         }

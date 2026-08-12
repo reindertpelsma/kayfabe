@@ -96,8 +96,10 @@ mod trace;
 
 #[doc(inline)]
 pub use ptdecode::{
-    IsolateFb, MAX_PT_META, PT_DECODE_BUDGET, PtDecodeOutcome, PtDecodePlan, PtDecodeResult,
-    PtDecodeTask, commit_pt_decode, plan_pt_decode, pt_meta_of, run_pt_decode,
+    Admit, IsolateFb, MAX_PT_META, PT_DECODE_BUDGET, PT_SWEEP_BUDGET, PtDecodeOutcome,
+    PtDecodePlan, PtDecodeResult, PtDecodeTask, PtSweepPlan, SweepReason, commit_pt_decode,
+    commit_pt_decode_as, commit_pt_sweep, plan_pt_decode, plan_pt_sweep, pt_meta_of,
+    run_pt_decode, run_pt_sweep,
 };
 
 /// The MSI-X vector completions are raised on. Abstract placeholder until the

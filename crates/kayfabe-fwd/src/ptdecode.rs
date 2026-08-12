@@ -166,6 +166,34 @@ impl FbRead for IsolateFb<'_> {
 /// partial capture presented as a complete one is how a mapping silently goes missing.
 pub const PT_DECODE_BUDGET: u32 = 300_000;
 
+/// ★★★★★ Entries the **whole-VAS sweep** may examine — **per address space**, not per run.
+///
+/// # ⊘⊘ THE SAME NUMBER AS [`PT_DECODE_BUDGET`] IS NOT THE SAME BUDGET
+///
+/// The C's `300000` (`C: nvkvm_gpu_emul.c:8759`) bounds **one walk of one VAS from its root**.
+/// [`PT_DECODE_BUDGET`] spends the identical constant across **every task of a whole run**,
+/// where a task is one dirtied page and the run drains a per-doorbell delta. Two different
+/// quantities wearing one number: reusing it for a sweep would divide the C's per-VAS budget by
+/// the number of address spaces and truncate the walk for a reason that has nothing to do with
+/// the walk.
+///
+/// ⇒ This is charged **per task** by [`run_pt_sweep`], which is what makes it the C's number
+/// rather than a coincidence with it.
+///
+/// ## What it buys, in pages
+///
+/// A GA10x directory page is 512 entries, so this is ~585 page-table pages per address space —
+/// and `decode_subtree` charges what a page *contains*, not what it could contain, so a sparse
+/// tree costs less. ⚠ That figure is a **derivation, not a measurement**: how many pages a real
+/// `cuCtxCreate` VAS actually has is what [`PtDecodeOutcome::pages_swept`] exists to report, and
+/// this constant must be re-derived from that number rather than defended by arithmetic.
+///
+/// ★ Exhausting it is LOUD ([`kayfabe_mmu::walker::WalkFault::BudgetExhausted`]) **and sets
+/// [`kayfabe_core::gpu::PtSweepState::truncated`]**, which forces another sweep. The C carries
+/// `m2_gr_pt_trunc` for exactly that reason: a truncated walk that does not force a re-walk
+/// silently loses every mapping past the cut.
+pub const PT_SWEEP_BUDGET: u32 = 300_000;
+
 /// How many page-table pages one `Vas` may remember the level of.
 ///
 /// The metadata is forward-populated from what the guest's own tables point at, so its
@@ -312,6 +340,28 @@ pub struct PtDecodeOutcome {
     /// this is a statement about our **shadow**, and three different things to debug should
     /// not share one field.
     pub reach_faults: Vec<ReachFault>,
+    /// ★★★★★ Leaves desired **only because a sweep admitted their page** — the price of the
+    /// relaxation, as a number. See [`kayfabe_mmu::reach::ReachShadow::witness_swept`].
+    ///
+    /// ⊘ A pass with `bound > 0` and `swept_binds == 0` published nothing the witness rule
+    /// would not have published anyway; a pass with `swept_binds == bound` published nothing
+    /// else. Only this field can tell those apart, and *"did relaxing the gate do anything"* is
+    /// the question the owner's ruling has to be judged on.
+    pub swept_binds: usize,
+    /// Whole-VAS sweeps that **completed** this pass (a root descent that did not exhaust its
+    /// budget).
+    pub sweeps_run: usize,
+    /// Whole-VAS sweeps that hit [`PT_SWEEP_BUDGET`]. Each one has set
+    /// [`kayfabe_core::gpu::PtSweepState::truncated`], so each forces another sweep.
+    ///
+    /// ⚠ **A truncated sweep is not a smaller sweep.** `decode_subtree` returns `Err` for the
+    /// whole task, so a truncated walk contributes **no leaves at all** — it is not a partial
+    /// picture, it is no picture. Reading a non-zero here as *"we got most of it"* is the
+    /// `dlen=0` mistake in a different plane.
+    pub sweeps_truncated: usize,
+    /// Page-table pages a completed sweep visited, summed. ★ The measurement
+    /// [`PT_SWEEP_BUDGET`] must be re-derived from.
+    pub pages_swept: usize,
 }
 
 impl PtDecodeOutcome {
@@ -367,12 +417,165 @@ pub fn plan_pt_decode(proc: &mut Proc) -> PtDecodePlan {
                 vas.pt_meta.get(&page).copied()
             };
             match known {
-                Some(p) => plan.tasks.push(PtDecodeTask { gpu, pdb, page: p }),
+                Some(p) => {
+                    // ★★★★★ **THE C's `m2_gr_vas_dirty`, set at exactly the C's condition**
+                    // (`C: nvkvm_gpu_emul.c:583-591`): *a guest write to any TRACKED page-table
+                    // page* invalidates the sweep's picture of this address space, so the next
+                    // doorbell must re-sweep.
+                    //
+                    // ⊘ "Tracked" is `known.is_some()` and not "any dirty page", and the
+                    // difference is the whole trigger. A page whose level we do not know is
+                    // §12.1(i)'s orphan — nothing points at it yet, so it is not part of the
+                    // picture a sweep drew and cannot have staled it. Widening this to every
+                    // dirty page would arm a sweep on every doorbell forever and the trigger
+                    // would stop being a trigger.
+                    //
+                    // ★★ This is the half that makes the relaxation self-healing: a page that
+                    // was mid-update when the sweep read it was BY DEFINITION being written, so
+                    // it arrives here, so the torn window closes on the next doorbell.
+                    vas.sweep.dirty = true;
+                    plan.tasks.push(PtDecodeTask { gpu, pdb, page: p });
+                }
                 None => plan.deferred.push((gpu, pdb, page)),
             }
         }
     }
     plan
+}
+
+/// Why one address space is being swept. ⊘ Reported, never inferred: *"we swept everything"*
+/// and *"we swept the two that had gone stale"* are different facts about the same log line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SweepReason {
+    /// It has never been swept — the C's *"`chan_vas_n` grew"* case. A fresh address space has
+    /// no picture at all, so there is nothing for a dirty bit to invalidate.
+    NeverSwept,
+    /// Its last sweep hit [`PT_SWEEP_BUDGET`] — the C's `m2_gr_pt_trunc`. ★ Ranked **above**
+    /// `Dirty` because a truncated walk produced no leaves, which is a strictly worse picture
+    /// than a stale one.
+    Truncated,
+    /// The guest wrote a page-table page this address space's sweep is tracking.
+    Dirty,
+}
+
+/// What [`plan_pt_sweep`] decided, under the owner's lock.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PtSweepPlan {
+    /// One **root** task per address space that needs a walk, in `(gpu, pdb)` order.
+    pub tasks: Vec<PtDecodeTask>,
+    /// Why each task is there, positionally aligned with [`Self::tasks`].
+    pub reasons: Vec<SweepReason>,
+    /// Address spaces whose picture is current, so nothing was walked.
+    ///
+    /// ⊘ Counted rather than dropped: *"the sweep ran and skipped every VAS"* and *"the sweep
+    /// did not run"* produce the same absence of tasks, and only this number separates them.
+    pub skipped: usize,
+}
+
+/// ★★★★★ **PLAN THE WHOLE-VAS SWEEP** (owner's lock, rank 1) — the C's `enum_gr_sysmem`
+/// trigger set, ported (`C: nvkvm_gpu_emul.c:583-591`).
+///
+/// Seeds **one task at the address space's own page-directory root**, for every address space
+/// whose picture is not current. The descent from that root is what
+/// [`kayfabe_mmu::reach::ReachShadow::witness_swept`] admits, and the three triggers below are
+/// the other half of that function's safety argument — read it before changing them.
+///
+/// | trigger | the C's | why it cannot be dropped |
+/// |---|---|---|
+/// | never swept | `chan_vas_n` grew | a new address space has no picture to stale |
+/// | truncated | `m2_gr_pt_trunc` | a budget-cut walk produced **no** leaves, not fewer |
+/// | dirty | `m2_gr_vas_dirty` | the self-healing half: a torn read comes back as a write |
+///
+/// ⊘ **Deliberately NOT ported: the C's sparse periodic net.** The C runs a low-rate sweep to
+/// bound *"any missed trigger"*. A periodic sweep here would make a missed trigger unobservable
+/// — the picture would repair itself on a timer and no log would ever show the trigger was
+/// wrong — and this port's whole difficulty has been instruments that hide their own failures.
+/// If a trigger is missed, that must be visible as a wall, not smoothed over.
+pub fn plan_pt_sweep(proc: &mut Proc) -> PtSweepPlan {
+    let mut plan = PtSweepPlan::default();
+    for (&(gpu, pdb), vas) in &mut proc.vases {
+        // ★★ **THE DIRTY TEST IS MADE HERE TOO, AND THAT IS NOT BELT-AND-BRACES.**
+        //
+        // `plan_pt_decode` sets the same bit when it *drains* a tracked page, which makes the
+        // trigger correct only if the decode pass ran first. That ordering holds in the
+        // doorbell path and held nowhere else — a test that called this directly saw a write
+        // to a tracked page produce no sweep, which is the failure mode a production caller
+        // would hit the first time the two passes were reordered. Asking the undrained set the
+        // same question makes the trigger a property of the STATE rather than of the call
+        // order. ⊘ Idempotent: both writers set one bit, and the commit is the only clearer.
+        let root = pdb.0 & !0xfff;
+        if vas
+            .pt_pages
+            .iter()
+            .any(|p| *p == root || vas.pt_meta.contains_key(p))
+        {
+            vas.sweep.dirty = true;
+        }
+        let reason = if vas.sweep.sweeps == 0 {
+            SweepReason::NeverSwept
+        } else if vas.sweep.truncated {
+            SweepReason::Truncated
+        } else if vas.sweep.dirty {
+            SweepReason::Dirty
+        } else {
+            plan.skipped += 1;
+            continue;
+        };
+        // Level 0 is a DECLARED fact — `plan_pt_decode` says the same thing at the same
+        // statement, and for a sweep it is the *only* fact needed to start: everything deeper
+        // is handed its level by the parent that pointed at it.
+        plan.tasks.push(PtDecodeTask {
+            gpu,
+            pdb,
+            page: PtPage {
+                phys: pdb.0 & !0xfff,
+                aperture: kayfabe_arch::Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
+        });
+        plan.reasons.push(reason);
+    }
+    plan
+}
+
+/// ★★★ **EXECUTE THE SWEEP** (no lock) — [`run_pt_decode`] with the budget charged **per
+/// task** instead of across the run.
+///
+/// That one difference is the whole function, and it is not a tuning knob: see
+/// [`PT_SWEEP_BUDGET`] for why sharing [`PT_DECODE_BUDGET`] across address spaces would divide
+/// the C's per-walk bound by a guest-chosen number.
+///
+/// ⚠ It is therefore *not* a global bound on work. `tasks.len() * budget` is, and the task
+/// count is bounded by the address-space count, which is bounded by the proc's own limits.
+#[must_use]
+pub fn run_pt_sweep(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn kayfabe_mmu::walker::FbRead,
+    tasks: &[PtDecodeTask],
+    budget_per_vas: u32,
+) -> Vec<PtDecodeResult> {
+    tasks
+        .iter()
+        .map(|&task| PtDecodeResult {
+            task,
+            decode: decode_subtree(fmt, fb, task.page, budget_per_vas),
+        })
+        .collect()
+}
+
+/// How a commit admits the pages a pass decoded — the ONE axis on which the sweep differs from
+/// the dirty-set drain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Admit {
+    /// The default and the design: a leaf binds iff its page is reachable **and** the guest was
+    /// seen to write it. Residue cannot bind.
+    Witnessed,
+    /// ★★★★★ The relaxation: pages reached by a descent from the address space's own installed
+    /// root are admitted, witnessed or not. **Only [`commit_pt_sweep`] may pass this**, and
+    /// only for results produced by [`run_pt_sweep`] from a root task — see
+    /// [`kayfabe_mmu::reach::ReachShadow::witness_swept`] for the accepted residual.
+    Swept,
 }
 
 /// ★★★ **EXECUTE** (no lock — this is the phase that blocks): decode each task's page and
@@ -423,6 +626,63 @@ pub fn commit_pt_decode(
     proc: &mut Proc,
     results: &[PtDecodeResult],
 ) -> PtDecodeOutcome {
+    commit_pt_decode_as(fmt, proc, results, Admit::Witnessed)
+}
+
+/// ★★★★★ **COMMIT THE SWEEP** — [`commit_pt_decode_as`] with [`Admit::Swept`], plus the
+/// per-address-space bookkeeping that arms the next sweep.
+///
+/// ⚠ `results` must come from [`run_pt_sweep`] over [`plan_pt_sweep`]'s **root** tasks.
+/// Admitting a *dirty-page* task's descent as swept would mark pages the guest merely happens
+/// to point at from a leaf table as root-reachable, which is not the claim
+/// [`kayfabe_mmu::reach::ReachShadow::witness_swept`] is licensed to make.
+pub fn commit_pt_sweep(
+    fmt: &dyn GmmuFmt,
+    proc: &mut Proc,
+    results: &[PtDecodeResult],
+) -> PtDecodeOutcome {
+    // ★ The state update runs BEFORE the admit/settle, because a truncated task contributes no
+    // leaves and must still leave `truncated` set — a bookkeeping step folded into the success
+    // path would arm nothing on exactly the case that needs re-arming.
+    for r in results {
+        let Some(vas) = proc.vases.get_mut(&(r.task.gpu, r.task.pdb)) else {
+            continue;
+        };
+        match &r.decode {
+            Ok(d) => {
+                vas.sweep.sweeps += 1;
+                vas.sweep.truncated = false;
+                // ⊘ Cleared HERE and not at the plan. A dirty bit cleared when the sweep was
+                // *scheduled* would lose every write that landed during the walk — which is
+                // precisely the torn-read window this bit exists to close.
+                vas.sweep.dirty = false;
+                vas.sweep.last_pages = d.visited.len();
+            }
+            Err(_) => {
+                vas.sweep.truncated = true;
+            }
+        }
+    }
+    let mut out = commit_pt_decode_as(fmt, proc, results, Admit::Swept);
+    for r in results {
+        match &r.decode {
+            Ok(d) => {
+                out.sweeps_run += 1;
+                out.pages_swept += d.visited.len();
+            }
+            Err(_) => out.sweeps_truncated += 1,
+        }
+    }
+    out
+}
+
+/// The body of [`commit_pt_decode`], with the admission rule as a parameter. See [`Admit`].
+pub fn commit_pt_decode_as(
+    fmt: &dyn GmmuFmt,
+    proc: &mut Proc,
+    results: &[PtDecodeResult],
+    admit: Admit,
+) -> PtDecodeOutcome {
     let mut out = PtDecodeOutcome::default();
     // Address spaces this pass observed something for, so `settle` runs once each rather
     // than once per decoded page — `reachability_on_transition.md` §4: a closure and a
@@ -472,6 +732,17 @@ pub fn commit_pt_decode(
         }
         // OBSERVE — content in, nothing decided yet.
         for (page, decode) in &d.decodes {
+            // ★★★★★ THE RELAXATION, applied at the only statement that knows the page was
+            // reached BY A DESCENT FROM THIS ADDRESS SPACE'S OWN ROOT — which is the entire
+            // licence `witness_swept` has. Marking pages from a caller that did not walk from
+            // the root would be a different, unlicensed claim.
+            //
+            // ⊘ Taken before `observe`, so a page the shadow REFUSES (capacity) is still not
+            // admitted: a refused page holds no slots, so nothing of it can bind either way,
+            // and the admission is then a note about a page we hold nothing for.
+            if admit == Admit::Swept {
+                vas.reach.witness_swept(page.phys);
+            }
             if let Err(e) = vas.reach.observe(*page, decode) {
                 out.reach_faults.push(e);
             }
@@ -508,6 +779,7 @@ pub fn commit_pt_decode(
         out.unwitnessed += s.unwitnessed;
         out.unreachable += s.unreachable;
         out.sparse += s.sparse;
+        out.swept_binds += s.swept_binds;
         out.dropped.extend(po.dropped);
         out.refusals.extend(po.refusals);
     }

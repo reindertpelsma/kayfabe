@@ -2781,6 +2781,184 @@ impl SharedDevice {
         Some(out)
     }
 
+    /// ★★★★★ **THE WHOLE-VAS SWEEP** — the C's `enum_gr_sysmem` (`C: nvkvm_gpu_emul.c:583-591`)
+    /// on this port's three-phase shape.
+    ///
+    /// Identical in structure to [`SharedDevice::decode_pt_writes_from`] — plan under rank 1,
+    /// execute under no lock, commit under rank 1, publish under rank 0 — and different in
+    /// exactly two places, both of which are the rung:
+    ///
+    /// 1. the plan seeds **one root task per stale address space**
+    ///    (`kayfabe_fwd::plan_pt_sweep`) instead of draining a dirty set;
+    /// 2. the commit admits every page the descent reached
+    ///    (`kayfabe_mmu::reach::ReachShadow::witness_swept`), because a root descent reaches
+    ///    pages nobody was seen to write and the witness gate would otherwise publish **zero**
+    ///    — `[measured, w275]`.
+    ///
+    /// ⊘ **It is not a second address plane and it resolves nothing.** Same walker, same
+    /// aperture-checked byte source, same one authoritative table, same refusal vocabulary; a
+    /// miss is still a fault and the table is still never reverse-resolved.
+    ///
+    /// ⚠ **Read `witness_swept` before calling this.** It relaxes a deliberate correctness gate
+    /// and carries an accepted residual (owner ruling, 2026-08-12), whose bound is the
+    /// dirty-driven re-sweep — half of which lives in `kayfabe_fwd::plan_pt_decode`. A caller
+    /// that runs this sweep without also running the decode pass has the relaxation and not its
+    /// mitigation.
+    ///
+    /// Returns `None` if `pid` is not live.
+    ///
+    /// # Panics
+    /// If a ranked lock is held across the execute phase and the source asserts it.
+    pub fn sweep_pt_tables_from(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+    ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
+        // PLAN — rank 1.
+        let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
+        if plan.tasks.is_empty() {
+            // ⊘ Returned rather than skipped, and with the plan attached: "every address space
+            // was current" is a result, and it is the one a reader would otherwise confuse with
+            // "the sweep did not run".
+            return Some((plan, kayfabe_fwd::PtDecodeOutcome::default()));
+        }
+        // EXECUTE — no lock. ★ The budget is charged PER TASK; see `PT_SWEEP_BUDGET` for why
+        // reusing the decode pass's run-wide budget would divide the C's number by a
+        // guest-chosen quantity.
+        let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
+        // COMMIT — rank 1, re-resolving every target (R5).
+        let mut out = self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_sweep(fmt, p, &results))?;
+        // PUBLISH — rank 0, from nothing, exactly as the decode pass does. A sweep learns far
+        // more pages than a dirty drain, so this is the phase that makes the NEXT guest CE
+        // write into any of them classify as a page-table write.
+        if !out.learned_pages.is_empty() {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let mut by_vas: std::collections::BTreeMap<(GpuId, Pdb), Vec<u64>> =
+                std::collections::BTreeMap::new();
+            for &(gpu, pdb, page) in &out.learned_pages {
+                by_vas.entry((gpu, pdb)).or_default().push(page);
+            }
+            for ((gpu, pdb), pages) in by_vas {
+                let (published, refused) = st.spine.publish_pt_pages(pid, gpu, pdb, pages);
+                out.pages_published += published;
+                out.pages_publish_refused += refused;
+            }
+        }
+        Some((plan, out))
+    }
+
+    /// ★★★ **ARM 2.1's raw material** — every address space's coalesced reachable VA ranges,
+    /// one string per `Vas`.
+    ///
+    /// This is what makes *"is the faulting VA described by the guest?"* answerable **offline,
+    /// from the boot log**, without knowing the address in advance. The wall's VA is ASLR'd and
+    /// arrives from host `dmesg` after the fact, so a probe that had to be told the address up
+    /// front could never be armed in time.
+    ///
+    /// ⚠ `cap` truncates the range list and the caller must print that it did. A truncated list
+    /// read as complete turns *"not in the list"* — the answer arm 2.1 rests on — into a lie.
+    #[must_use]
+    pub fn vas_reachable_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let r = vas.reach.reachable_ranges();
+                    let shown: Vec<String> = r
+                        .iter()
+                        .take(cap)
+                        .map(|(va, len)| format!("0x{va:x}+0x{len:x}"))
+                        .collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} sweeps={} trunc={} runs={} {}{}]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        vas.sweep.sweeps,
+                        u8::from(vas.sweep.truncated),
+                        r.len(),
+                        shown.join(","),
+                        if r.len() > cap {
+                            format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", r.len())
+                        } else {
+                            String::new()
+                        }
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★ **ARM 2.1 — WHAT THE GUEST ITSELF SAYS ABOUT A VIRTUAL ADDRESS**, asked of the
+    /// swept picture of every one of `pid`'s address spaces.
+    ///
+    /// # ⊘ The question this exists to make answerable, and why it can kill a story
+    ///
+    /// The wall's host-side `Xid 31` names a faulting VA. Two readings are consistent with it
+    /// and they demand opposite work:
+    ///
+    /// - **the guest describes that VA and our mirror missed it** ⇒ the sweep is the fix;
+    /// - **the guest never described it** ⇒ mirroring cannot bind what does not exist, and the
+    ///   sweep story is dead.
+    ///
+    /// A bind census cannot separate them: it reports OUR table, and both readings produce the
+    /// same absence in it. This reports the **guest's own tables**, as walked from the guest's
+    /// own installed page-directory root — so an absence here is a statement about the guest.
+    ///
+    /// ⚠ It is only as complete as the sweep that fed the shadow. A `truncated` sweep produced
+    /// **no** leaves, so "absent" from a truncated picture is not evidence of anything; the
+    /// caller must print the sweep's own state beside this. ⊘ And it reads the shadow rather
+    /// than re-walking, deliberately: a second walk is a second reader that can disagree with
+    /// the one the port acted on.
+    #[must_use]
+    pub fn guest_leaf_census(&self, pid: ProcId, va: kayfabe_arch::ids::GpuVa) -> String {
+        let Some(rows) = self.with_proc_mut(pid, |p| {
+            let mut rows: Vec<String> = Vec::new();
+            for (&(gpu, pdb), vas) in &p.vases {
+                let hit = vas.reach.leaf_covering(va);
+                rows.push(format!(
+                    "gpu={} pdb=0x{:x} sweeps={} trunc={} dirty={} pages={} swept_only={} → {}",
+                    gpu.0,
+                    pdb.0,
+                    vas.sweep.sweeps,
+                    u8::from(vas.sweep.truncated),
+                    u8::from(vas.sweep.dirty),
+                    vas.reach.len(),
+                    vas.reach.swept_only_len(),
+                    match hit {
+                        Some(l) => format!(
+                            "LEAF-PRESENT va=0x{:x} size={:?} phys=0x{:x} ap={:?} ro={}",
+                            l.va.0, l.size, l.phys, l.aperture, l.read_only
+                        ),
+                        None => "LEAF-ABSENT (this address space's own tables, as swept, \
+                                 describe no mapping covering it)"
+                            .to_string(),
+                    }
+                ));
+            }
+            rows
+        }) else {
+            return format!("GUEST-LEAF va=0x{:x} → NO SUCH PROC", va.0);
+        };
+        if rows.is_empty() {
+            return format!(
+                "GUEST-LEAF va=0x{:x} proc={} → NO ADDRESS SPACES. ⊘ That is not LEAF-ABSENT: \
+                 nothing was asked.",
+                va.0, pid.0
+            );
+        }
+        format!(
+            "GUEST-LEAF va=0x{:x} proc={} over {} address space(s): {}",
+            va.0,
+            pid.0,
+            rows.len(),
+            rows.join(" | ")
+        )
+    }
+
     /// ★★★★★ **§16.82 — WHY one VA is not bound, asked of the VAS that would have to bind
     /// it, on the same line as the key.**
     ///

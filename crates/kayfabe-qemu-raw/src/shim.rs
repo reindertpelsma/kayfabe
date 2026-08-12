@@ -3707,6 +3707,28 @@ struct SemaPageReader {
     /// Per page-gpa: the last content signature printed. ★ Keyed by the page's guest-physical
     /// address, because that is the identity the pin used and the identity the reader reads.
     seen: std::collections::BTreeMap<u64, u64>,
+    /// ★★★★★ **THE WRITE CENSUS** — per `(page, word index)`, the last value this reader saw.
+    ///
+    /// # ⊘ Why a signature was not enough, and why this is a different question
+    ///
+    /// [`Self::seen`] answers *"did the page change since I last PRINTED"* and is a print gate.
+    /// It cannot answer the question arm 2.2 asks, because a page that is **frozen after
+    /// corruption** and a page that is **frozen after nothing** produce the identical steady
+    /// signature — and a sample taken 70 s in sees only the steady state. Distinguishing them
+    /// needs the **history**: every transition, in order, with its time.
+    ///
+    /// ★★★ And one transition kind is not merely interesting, it is the C's measured disease.
+    /// `how_the_c_passed_the_gr_wall.md` §1: a lagging host CE2 executed stale GPFIFO entries
+    /// ~40 s late and DMA-wrote `1,2` **over the live value `0x1e`**; UVM's 32→64-bit wrap
+    /// detector read the decrease as a wrap, reconstructed `completed > queued`, and wedged the
+    /// channel. **The fix was to delete the second writer.** ⇒ a *decrease* on any of these
+    /// words is the signature of a second writer, and this map exists to name it the instant it
+    /// happens rather than to be inferred from a still frame afterwards.
+    words: std::collections::BTreeMap<(u64, usize), u32>,
+    /// Transitions observed, ever — so *"nothing was written"* is a **count**, not an absence.
+    transitions: u64,
+    /// Transitions in which a word went DOWN. ★★★ Non-zero here is the M5.38 shape.
+    backwards: u64,
 }
 
 #[cfg(feature = "host-isolates")]
@@ -3719,6 +3741,9 @@ impl SemaPageReader {
             printed: 0,
             suppressed: 0,
             seen: std::collections::BTreeMap::new(),
+            words: std::collections::BTreeMap::new(),
+            transitions: 0,
+            backwards: 0,
         }
     }
 
@@ -3795,6 +3820,49 @@ impl SemaPageReader {
                 .filter(|(_, w)| **w != 0)
                 .map(|(i, _)| i)
                 .collect();
+            // ★★★★★ **THE LIVE WRITE CENSUS — RUN ON EVERY SAMPLE, PRINTED ONLY ON CHANGE.**
+            //
+            // ⊘ It is deliberately ABOVE the print gate. The gate suppresses ticks, and a
+            // census that only ran on printed ticks would miss exactly the transient this
+            // exists to catch: a value written and overwritten between two prints is the
+            // *second writer*, and it would leave no trace at all.
+            //
+            // ⚠ It is a SAMPLER, not a watchpoint. It sees a word's value at tick
+            // boundaries, so two writes inside one tick read as one transition, and a write
+            // that is undone within a tick is invisible. ⇒ `transitions=0` bounds *"no
+            // persistent change at this cadence"*, never *"nobody wrote"*. (A DMA write is
+            // invisible to x86 debug registers, so a watchpoint is not the stronger
+            // instrument it looks like — it is a negative control only.)
+            for (i, &w) in words.iter().enumerate() {
+                let prev = self.words.insert((page_gpa, i), w);
+                let Some(p) = prev else { continue };
+                if p == w {
+                    continue;
+                }
+                self.transitions += 1;
+                let down = w < p;
+                if down {
+                    self.backwards += 1;
+                }
+                // Printed unconditionally, and every one of them: a transition is rare by
+                // construction (the steady state is what the heartbeat covers) and the ORDER
+                // of these lines is the artefact. ⊘ No cap — a cap here would silently drop
+                // the tail of exactly the sequence a corruption story is told in.
+                eprintln!(
+                    "    SEMA-WRITE t=+{t}ms gpa=0x{page_gpa:x}+0x{:03x} 0x{p:08x} → \
+                     0x{w:08x}{}{} n={} back={}",
+                    i * 4,
+                    Self::whose((i * 4) as u64, &here),
+                    if down {
+                        " ⚠⚠ BACKWARDS — a DECREASE is the M5.38 second-writer signature: \
+                         UVM reads any decrease as a 2^32 wrap and wedges the channel"
+                    } else {
+                        ""
+                    },
+                    self.transitions,
+                    self.backwards,
+                );
+            }
             let sig = Self::signature(&buf);
             let first = !self.seen.contains_key(&page_gpa);
             let changed = self.seen.get(&page_gpa) != Some(&sig);
@@ -3910,6 +3978,40 @@ impl SemaPageReader {
             self.printed,
             self.suppressed,
             self.seen.len(),
+        );
+        // ★★★★★ **THE WRITE CENSUS'S VERDICT, as three numbers on one line.**
+        //
+        // ⊘ Printed on its own row and always, because the three states it separates are the
+        // whole of arm 2.2 and two of them are absences:
+        //
+        // | reading | what it means |
+        // |---|---|
+        // | `looks=0` | the reader never ran ⇒ **NOT** "nothing was written" |
+        // | `looks>0 transitions=0` | sampled and **frozen from the first look** — a page
+        //   frozen after NOTHING |
+        // | `transitions>0 backwards=0` | somebody wrote, monotonically — one writer, or
+        //   several that never disagreed |
+        // | `backwards>0` | ★★★ a **DECREASE**: the M5.38 second-writer shape, the C's own
+        //   measured disease, and the thing "delete the second writer" fixed |
+        eprintln!(
+            "kayfabe: SEMA-WRITE-CENSUS looks={} words_tracked={} transitions={} \
+             backwards={} ⇒ {}",
+            self.ticks,
+            self.words.len(),
+            self.transitions,
+            self.backwards,
+            match (self.ticks, self.transitions, self.backwards) {
+                (0, _, _) => "⊘ THE READER NEVER RAN — this row is NOT evidence that nothing \
+                              was written",
+                (_, 0, _) =>
+                    "FROZEN FROM THE FIRST LOOK — at this cadence nothing ever changed. ⊘ \
+                     Bounds 'no persistent change', never 'nobody wrote'",
+                (_, _, 0) =>
+                    "WRITTEN, MONOTONICALLY — every transition went up. ⊘ No second-writer \
+                     signature on these words",
+                _ => "★★★ A WORD WENT BACKWARDS — the M5.38 second-writer signature. See the \
+                      SEMA-WRITE rows for which, when, and whose",
+            }
         );
     }
 }
@@ -4343,10 +4445,19 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // decoded it is a page that binds a doorbell too late. See
         // [`Self::witness_executor_fb_pages`] for the census that says why this is 96.8 % of
         // the pages in this boot, and why the disarmed arm is the control.
+        // ★★★★★ **THE SWEEP RUNS HERE, AFTER THE DECODE PASS AND BEFORE EVERY CONSUMER.**
+        //
+        // Two orderings, both load-bearing and both the same argument one plane apart:
+        // - **after** `decode_cpu_pt_writes`, because that pass is what sets the dirty bit the
+        //   sweep re-arms on; running first would answer with a trigger one doorbell stale;
+        // - **before** `forward_ring`, the pins and `SharedDevice::doorbell` below, because a
+        //   mapping published after the ring has been rung is a mapping published after the
+        //   engine has already faulted for it.
         eprintln!(
-            "kayfabe: PT-DECODE token={token:#010x}{}{}",
+            "kayfabe: PT-DECODE token={token:#010x}{}{}{}",
             self.witness_executor_fb_pages(),
-            self.decode_cpu_pt_writes()
+            self.decode_cpu_pt_writes(),
+            self.sweep_cpu_pt_tables()
         );
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
         // to bind it, on the same doorbell and joined by `proc`/`pdb`/`va`.**
@@ -8216,6 +8327,109 @@ impl SharedDoorbell {
             st.pending,
             st.refused,
             requeue_refused,
+        )
+    }
+
+    /// ★★★★★ **THE WHOLE-VAS SWEEP AT THE DOORBELL** — the C's `enum_gr_sysmem`, driven.
+    ///
+    /// # Why this exists beside [`Self::decode_cpu_pt_writes`] rather than replacing it
+    ///
+    /// They are the C's **two** halves and neither is the other's improvement:
+    ///
+    /// - the decode pass drains what the guest was *seen* to write, and is the source of the
+    ///   dirty signal this sweep re-arms on;
+    /// - this sweep walks the address space from its **own installed root**, so it finds
+    ///   mappings whose writes no transport of ours witnessed — `[measured, w265]` the witness
+    ///   covers 3.2 % of the writers.
+    ///
+    /// ⇒ Running the sweep without the decode pass would have the relaxation
+    /// ([`kayfabe_mmu::reach::ReachShadow::witness_swept`]) and not its mitigation. The order
+    /// here — decode first, sweep second — is what makes a write that landed *this* window
+    /// arm the sweep in the *same* doorbell rather than the next one.
+    ///
+    /// # ⊘ What a green line here is NOT
+    ///
+    /// `bound=N` says the address table accepted N mappings. It does **not** say the engine
+    /// can reach them, that the ring advanced, or that a completion landed — those are three
+    /// other rows of this same log. And `swept=N` with `swept_binds=0` means the sweep walked
+    /// and published nothing the witness rule would not have published anyway: the relaxation
+    /// ran and did not matter.
+    ///
+    /// ⊘ Silent when disarmed, so the control's log stays byte-comparable — the same property
+    /// legs 4 and 5 hold.
+    fn sweep_cpu_pt_tables(&self) -> String {
+        if !selected_pt_sweep() {
+            return String::new();
+        }
+        let Some(plane) = self.plane.upgrade() else {
+            return " | PT-SWEEP ⊘ NO PLANE (nothing to read page-table bytes out of)".to_string();
+        };
+        let fmt = kayfabe_chips::Ga10xGmmu::new();
+        let pids = self.device.live_pids();
+        let (mut tasks, mut skipped, mut ran, mut trunc, mut pages) = (0usize, 0usize, 0, 0, 0);
+        let (mut bound, mut swept_binds, mut unbound, mut unwitnessed) = (0usize, 0, 0, 0);
+        let (mut published, mut faults, mut reach_faults, mut refusals) = (0usize, 0, 0, 0);
+        let mut reasons: std::collections::BTreeMap<kayfabe_fwd::SweepReason, usize> =
+            std::collections::BTreeMap::new();
+        let mut first_fault: Option<String> = None;
+        let mut ranges: Vec<String> = Vec::new();
+        for pid in pids {
+            // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
+            // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
+            // `/byBAR2`, so the guest's CPU wrote them into the device's own store — a sweep
+            // reading the isolate's aperture instead would walk a tree nobody wrote.
+            let mut fb = plane.pt_bytes();
+            let Some((plan, out)) = self.device.sweep_pt_tables_from(pid, &fmt, &mut fb) else {
+                continue;
+            };
+            tasks += plan.tasks.len();
+            skipped += plan.skipped;
+            for r in &plan.reasons {
+                *reasons.entry(*r).or_default() += 1;
+            }
+            ran += out.sweeps_run;
+            trunc += out.sweeps_truncated;
+            pages += out.pages_swept;
+            bound += out.bound;
+            swept_binds += out.swept_binds;
+            unbound += out.unbound;
+            unwitnessed += out.unwitnessed;
+            published += out.pages_published;
+            faults += out.faults.len();
+            reach_faults += out.reach_faults.len();
+            refusals += out.refusals.len();
+            if first_fault.is_none() {
+                if let Some(f) = out.faults.first() {
+                    first_fault = Some(format!("{f:?}"));
+                } else if let Some(r) = out.reach_faults.first() {
+                    first_fault = Some(format!("{r:?}"));
+                } else if let Some(r) = out.refusals.first() {
+                    first_fault = Some(format!("{r:?}"));
+                }
+            }
+            // ★★★ ARM 2.1's raw material — WHAT THE GUEST DESCRIBES, coalesced.
+            //
+            // ⊘ Printed only when the sweep for this proc actually walked something, so the
+            // ranges beside a `ran=0` line cannot be read as this doorbell's picture. Capped,
+            // and the cap SAYS SO: a truncated range list read as complete is exactly the
+            // `dlen=0` mistake, and "absent from the list" is the answer arm 2.1 turns on.
+            if out.sweeps_run > 0 {
+                ranges.extend(self.device.vas_reachable_ranges(pid, PT_SWEEP_RANGE_CAP));
+            }
+        }
+        format!(
+            " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
+             pages={pages} reasons={reasons:?} → bound={bound} swept_binds={swept_binds} \
+             unbound={unbound} unwitnessed={unwitnessed} published={published} \
+             faults={faults} reach_faults={reach_faults} refusals={refusals} \
+             first={} | GUEST-DESCRIBES {}",
+            first_fault.as_deref().unwrap_or("NONE"),
+            if ranges.is_empty() {
+                "(no completed sweep this doorbell — ⊘ NOT 'the guest describes nothing')"
+                    .to_string()
+            } else {
+                ranges.join(" ")
+            }
         )
     }
 
@@ -12298,6 +12512,58 @@ fn selected_pt_witness_exec() -> bool {
         Some(v) => {
             pt_witness_exec_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false)
         }
+    }
+}
+
+/// ★★★★★ **The environment variable that arms the WHOLE-VAS SWEEP** — the C's `enum_gr_sysmem`
+/// (`C: nvkvm_gpu_emul.c:583-591`), driven from the doorbell.
+///
+/// # ⊘⊘ It arms a RELAXED CORRECTNESS GATE, not merely an instrument
+///
+/// Every other arm in this file changes what the port *observes* or *supplies*. This one changes
+/// what the port is willing to **bind**: with it on, a leaf binds because a walk from the address
+/// space's own installed page-directory root reached it, rather than because the guest was seen
+/// to write its page. See [`kayfabe_mmu::reach::ReachShadow::witness_swept`] for the argument and
+/// for the residual the owner accepted on 2026-08-12.
+///
+/// ⊘ **Off by default and refusing an unknown value.** With it unset this port binds exactly what
+/// it bound before the sweep existed, so the disarmed boot **is** the negative control — and a
+/// typo must not be able to produce one silently.
+pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
+
+/// How many coalesced VA runs one address space may print. See
+/// [`kayfabe_rt::device::SharedDevice::vas_reachable_ranges`] — exceeding it is announced, never
+/// silent.
+const PT_SWEEP_RANGE_CAP: usize = 48;
+
+/// Whether `value` arms the whole-VAS sweep — the pure half of [`selected_pt_sweep`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// `false`.
+pub fn pt_sweep_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_PT_SWEEP does not name a state: the only values are `off` (the default) \
+             and `on`. It is not defaulted, because the disarmed arm IS this rung's negative \
+             control AND because the armed arm relaxes a correctness gate — a typo that \
+             silently armed it would relax that gate without anyone deciding to.",
+        )),
+    }
+}
+
+/// Whether [`PT_SWEEP_ENV`] arms the whole-VAS sweep.
+///
+/// ⊘ A value naming neither state reads as **disarmed**, which is the safe direction for a flag
+/// that relaxes a gate: an unparseable value must never be able to turn it on.
+#[must_use]
+fn selected_pt_sweep() -> bool {
+    match std::env::var_os(PT_SWEEP_ENV) {
+        None => false,
+        Some(v) => pt_sweep_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
     }
 }
 
