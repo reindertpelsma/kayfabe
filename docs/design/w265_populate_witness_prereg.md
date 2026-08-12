@@ -183,3 +183,51 @@ row as **NO-FILE** rather than as a zero.
 - ⊘ **Whether the miss was *never learned* or *learned and pruned*** — `w264` §5 named this split.
   R4 answers it: `wit=0` with a **non-empty** `wit_sample` would be pruning; `wit_sample=[]` (what
   `w264` shows) is *never learned*. This run does not otherwise probe lifetimes.
+
+---
+
+## 3. ⊘ ADDENDUM — prior art found DURING the boot, BEFORE any number was read
+
+★ Recorded as a separate commit, while `w265_off` was still booting and before `w265_grade.sh`
+had ever been run, so the ordering is auditable against the boot log's own timestamps. It does
+**not** amend a single prediction in §2; it names two things §2 should have said.
+
+### 3.1 ★★★ THIS FLAG HAS A MEASURED FOUR-CORNER SQUARE ALREADY — `execution_plane_increments.md` §16.98.2
+
+At revision `acbb9a3`, `ce_executor=host`, one boot per corner:
+
+| corner | `PT_WITNESS_EXEC` | `RING_VIDMEM` | `RING-VA-UNBOUND` | `PushbufferAperture` | doorbells |
+|---|---|---|---|---|---|
+| A | off | off | **8** | 0 | 183 srv / 8 ref |
+| B | off | on | **8** | 0 | 183 srv / 8 ref |
+| **C** | **on** | off | **0** | **8** | 175 srv / **16 ref** |
+| **D** | **on** | **on** | **0** | **0** | 183 srv / 8 ref |
+
+⇒ **The witness is measured to be the variable that binds a VA** (`RING-VA-UNBOUND` 8 → 0,
+A vs C). That is independent corroboration of §0.3's chain, at a different revision, on this
+hardware.
+
+⚠ **And it names a risk §2 under-weighted.** Corner C shows arming the witness alone can
+*surface a new refusal* (`PushbufferAperture` 0 → 8) — the wall moves rather than falls, and
+doorbells served **drop** 183 → 175 while refusals **double** 8 → 16. ⇒ **R6's "most likely bad
+surprise" is more likely than the .55 I gave it**, and a rise in refusals on `on` is a **wall
+moving one layer**, not a regression, provided R15 (guest alive) holds.
+
+⊘ **I am NOT adding `KAYFABE_RING_VIDMEM` as a third arm.** Corner D says it is what clears
+`PushbufferAperture`, so a reader may expect it — but this run holds **one** variable, and
+`w264`'s clean `ring`→`pin` step is the discipline being kept. If `on` surfaces
+`PushbufferAperture`, the successor is corner D's pair, and it will have been *predicted* here.
+
+### 3.2 ★★★★★ THE TREE DIAGNOSED THIS EXACT CLASS TWO RUNGS BEFORE FALLING INTO IT AGAIN
+
+`execution_plane_increments.md` §16.98.1, written at `w246` about this very flag:
+
+> *"⇒ **a correct default is not a handoff.** A flag that must be armed for a capability to
+> exist needs to be named in the **consumer's** preconditions, not only in the producer's
+> rationale."*
+
+★ That sentence is the `w264` defect, written **two rungs before `w264`**, about **the same
+flag**. It was recorded in the producer's own design doc — and `w263_run.sh` and `w264_run.sh`
+are consumers, which is precisely where it says the naming has to happen and precisely where it
+did not. ⊘ **Recording a lesson in the producer's rationale is the failure mode the lesson
+describes.** This is why §1's durable half puts the assertion in the *harness*, not in a doc.
