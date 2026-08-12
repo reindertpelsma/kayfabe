@@ -55,13 +55,25 @@ row 'R6e PT-DECODE published'       last qemu.log 'published=[0-9]+/[0-9]+'
 # ---- R7..R11 — THE CONSUMER --------------------------------------------------------------
 row 'R7  PB-PIN table MISS'      countre qemu.log '[1-9][0-9]* MISS'
 row 'R7b PB-PIN lines'           count   qemu.log 'PB-PIN token='
-row 'R8  PB-PIN resolved-in-GRAM' countre qemu.log '[1-9][0-9]* page\(s\) asked, [1-9][0-9]* resolved'
-row 'R8b NOT ONE PAGE RESOLVED'  count   qemu.log 'NOT ONE PAGE RESOLVED IN GUEST RAM'
-row 'R9  PB-PIN NOT-IN-GUEST-RAM' countre qemu.log '[1-9][0-9]* NOT-IN-GUEST-RAM'
-row 'R10 PB-PIN runs PINNED'     countre qemu.log '→ (PINNED|ALREADY PINNED)'
+# ⊘⊘ THREE ROWS WERE CONTAMINATED BY LEG 5 AND ARE FIXED HERE — measured in w266's own
+# output. `R8`/`R10`/`R11` were written when `pin_pushbuffer_guest_ram` was the ONLY producer of
+# `TABLE:` / `PINNED` / `placed_as_asked=`, so their regexes were scoped by that fact and not by
+# their text. `pin_completion_guest_ram` prints the same shapes, and the `on` arm read 16/16/20
+# against the control's 8/8/12 — reading as "leg 4 doubled" when leg 4 did not move at all
+# (`R7b PB-PIN token=` is 16 on BOTH arms, which is what exonerates it).
+# ★★★ ADDING A PRODUCER SILENTLY RE-SCOPES EVERY CONSUMER THAT WAS IMPLICITLY SCOPED BY BEING
+# THE ONLY ONE. Every row below is now anchored to `pb run` / `PB-PIN`, so a THIRD pin source
+# cannot repeat this.
+# ⊘ `[^-]TABLE:` and not `TABLE:` — `SEMA-TABLE:` CONTAINS `TABLE:`, so the obvious anchor
+# would have left this row contaminated while looking fixed. The character before the label is
+# a space for leg 4 and a `-` for leg 5.
+row 'R8  PB-PIN resolved-in-GRAM' countre qemu.log '[^-]TABLE: [1-9][0-9]* page\(s\) asked, [1-9][0-9]* resolved'
+row 'R8b NOT ONE PAGE RESOLVED'  countre qemu.log '⊘ NOT ONE PAGE RESOLVED IN GUEST RAM'
+row 'R9  PB-PIN NOT-IN-GUEST-RAM' countre qemu.log 'pb run [0-9]+/[0-9]+.*NOT-IN-GUEST-RAM'
+row 'R10 PB-PIN runs PINNED'     countre qemu.log 'pb run [0-9]+/[0-9]+.*(→ PINNED|ALREADY PINNED)'
 row 'R10b PB-PIN CAPPED'         count   qemu.log 'CAPPED'
 row 'R10c PB-PIN SystemDataPlane' count  qemu.log 'REFUSED SystemDataPlane'
-row 'R11 placed_as_asked=true'   countre qemu.log 'placed_as_asked=true'
+row 'R11 placed_as_asked=true'   countre qemu.log 'pb run [0-9]+/[0-9]+.*placed_as_asked=true'
 row 'R11b placed_as_asked=false' countre qemu.log 'placed_as_asked=false'
 
 # ---- S1..S13 — LEG 5's OWN ROWS, the completion-semaphore pin -----------------------------
