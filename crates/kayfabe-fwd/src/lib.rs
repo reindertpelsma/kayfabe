@@ -6581,11 +6581,24 @@ pub fn apply_pushbuffer(
                     // order in one pushbuffer, not an ordering we impose afterwards.
                     //
                     // ⊘ **`HostCe` only, and that is not a policy choice.** A span running
-                    // on `CeExecutor::Ours` is served by the shell's CPU executor, whose
-                    // completions are `kayfabe_rt::cpu_ce::write_completion`'s and are
-                    // unchanged. Attaching here as well would make TWO writers for one
-                    // payload — the shape `a_second_source_of_truth_beside_a_complete_value`
-                    // names — and the two would disagree the first time one of them refused.
+                    // on `CeExecutor::Ours` is served by the shell's CPU executor, and this
+                    // field is the HOST engine's instruction — attaching it to a CPU-executed
+                    // span would name a writer that is not the one running the work.
+                    //
+                    // ⚠⚠ **AND THE `Ours` ARM HAS NO WRITER AT ALL TODAY — measured, not
+                    // assumed.** `[measured 2026-08-13, `git grep write_completion` over the
+                    // whole workspace]` `kayfabe_rt::cpu_ce::write_completion` — the documented
+                    // `sem_releases` consumer — has **zero call sites**: every hit is its own
+                    // definition or a doc reference. So `out.sem_releases` is populated on this
+                    // path and **dropped**, which is exactly what the control arms measure
+                    // (`semaphore 0x00000000`, every boot). ⊘ An earlier draft of this comment
+                    // said the `Ours` completions were *"`write_completion`'s and are
+                    // unchanged"* — true of the design and **false of the tree**, and left
+                    // standing it would have read as *"the other arm is already handled"*.
+                    // ⇒ There is therefore exactly ONE writer for a guest completion in this
+                    // tree, it is the engine, and it is this field. A second one would be
+                    // `a_second_source_of_truth_beside_a_complete_value`; today there is not
+                    // even a first one on the CPU arm.
                     //
                     // ⊘ And nothing is attached when this launch produced no span of its
                     // own (`spans_from == len()`): a release with no bytes behind it is a
