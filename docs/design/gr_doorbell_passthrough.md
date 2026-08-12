@@ -1,6 +1,7 @@
 # The GR doorbell passthrough route — what it is, and the two things it cannot be
 
-> ### STATUS — 2026-08-11 / **LIVE**. Written as a PRE-REGISTRATION, before any code on this
+> ### STATUS — 2026-08-11, ⊘ AMENDED 2026-08-12 / **LIVE, WITH §0.3 CORRECTED IN PLACE** —
+> read §0.3's correction block before acting on anything in §0.3. Written as a PRE-REGISTRATION, before any code on this
 > rung, and amended in place as the code landed. Supersedes nothing; folds two earlier
 > findings in below (`guest_ring_adoption.md` §4, `gr_execution_boundary.md` §4.1) rather
 > than restating them beside their parents.
@@ -56,6 +57,45 @@ a silent flip, and that whoever reads the boot must already know what §0.3 says
 
 ### 0.3 ★★★★★ THE ONE THAT MATTERS — forwarding the doorbell CANNOT make the host GPU
 ### fetch the guest's ring. Two independent reasons, both in the code, neither is a guess.
+
+> ### ⊘⊘⊘ CORRECTION, 2026-08-12 — **BOTH REASONS BELOW ARE NOW FALSE. DO NOT ACT ON §0.3
+> WITHOUT READING THIS FIRST.** Folded in here, above the text it corrects, because nobody
+> reads forward from a stale paragraph and this one is what keeps `KAYFABE_GR_ROUTE` at
+> `refuse`.
+>
+> The text below was measured on **2026-08-11** against the engine-object birth path
+> (`alloc_channel_at(vas, ty, None)` → `RingSource::Ours(None)`). **Legs A2 and B landed at
+> `w261`/`w262` and moved that path.** `[measured 2026-08-12,
+> `traces/boots/w267/run_w267_on_qemu.log`, all sixteen `GR-BIRTH iso2` lines]`:
+>
+> ```
+> 8 × engine=Ce        adopt=GUEST-RING userd=GUEST-USERD → alloc_channel_over_guest_ring
+> 8 × engine=GrCompute adopt=GUEST-RING userd=GUEST-USERD → alloc_channel_over_guest_ring
+> ```
+>
+> - ⊘ **Reason 1 ("the ring is OURS") is refuted.** `alloc_channel_over_guest_ring` does not
+>   have *"exactly one caller: the `kayfabe-rm-ladder` probe"* — it has **sixteen production
+>   births per boot**, eight of them `GrCompute`, each declaring the guest's own
+>   `gp_fifo_va = 0x200200000`, `entries = 1024`, over a leaf the same boot reports
+>   `joined=YES`.
+> - ⊘ **Reason 2 ("the cursor is OURS") is refuted.** `userd=GUEST-USERD` is RM being handed
+>   the **guest's own** USERD page — the address the guest's own kernel put in
+>   `NV_CHANNEL_ALLOC_PARAMS.userdMem` — so `GP_PUT` is the word the guest itself advances.
+>   The "cursor bridge (G8)" this paragraph says is unbuilt was built as leg B.
+>
+> ⇒ **The conclusion `GP_PUT == GP_GET` forever is no longer derivable from these premises.**
+> It may still be true for other reasons; it is now a **measurement**, not a deduction, and
+> `w268` is the boot that takes it (`GR-CURSOR`, sampled late on the observer thread —
+> `docs/design/w268_the_cursor_and_the_arm_prereg.md`).
+>
+> ★★★ **What survives unamended is the POSTURE, and it is the half worth keeping**: §0.2's
+> ruling that re-opening this route must be *"a deliberate, armed, printed choice with a
+> control arm, not a silent flip"*. `refuse` stays the default.
+>
+> ⚠ **And note what a citation gate would have done here.** Every sentence below carries a
+> file, a function and a measured boot; it is impeccably sourced and it is out of date. ★ *A
+> ruling's DATE is part of the citation* — ask not only *"is this sourced"* but *"does the
+> architecture it was measured against still exist"*.
 
 The host GR channel that the doorbell rings is born on the engine-object path through
 `RmBackend::alloc_channel` → `HostRmBackend::alloc_channel_on` → `alloc_channel_at(vas, ty,

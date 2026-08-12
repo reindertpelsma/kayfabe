@@ -3337,9 +3337,58 @@ struct CeShellState {
     /// nothing beneath it may block — see `kayfabe_rt::completion_watch`'s module docs for
     /// the split and for the three things the observer is structurally unable to do.
     watch: std::sync::Arc<kayfabe_rt::completion_watch::WatchList>,
+    /// ★★★★★ **THE GR CHANNELS WHOSE `GP_GET`/`GP_PUT` THE OBSERVER SAMPLES.** See
+    /// [`GrCursorWatch`] and [`GrCursorReader`].
+    ///
+    /// Written by the vCPU thread (one push per GR channel, at the first declare) and read
+    /// by the observer thread on every tick. ⊘ A leaf mutex holding a `Vec` of plain `Copy`
+    /// facts: the reader **clones it and drops the guard** before touching the plane or
+    /// printing, so nothing blocks beneath it — `gr_dumps`' shape, and the one
+    /// `unranked_locks.rs` classifies as safe.
+    gr_cursors: std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>,
     /// ★★★★★ The observer's reactor thread, once started. See [`Regs::attach_ram`].
     #[cfg(feature = "host-isolates")]
     observer: std::sync::Mutex<Option<ObserverThread>>,
+}
+
+/// ★★★★★ **ONE GR CHANNEL'S CURSOR, LATCHED SO A LATE READER CAN FIND IT** —
+/// the owner's `GP_GET` diagnostic, 2026-08-12.
+///
+/// # ★★★ Why a latch and not a read at the doorbell
+///
+/// The owner's question is *"if the GPU even tried running, `GP_GET` should advance"*, and it
+/// is the right question: it splits the GR wall three ways where every instrument this
+/// campaign has run splits it two ways. But `[measured, w267_on]` **each `GrCompute` channel
+/// is rung exactly once** (`DOORBELL-REFUSED #5…#12`, one per token), so a cursor read taken
+/// on the doorbell path lands **microseconds** after the guest wrote `GP_PUT` — before any
+/// engine could have fetched, on either arm. ⇒ A doorbell-time `GET = 0` is not evidence the
+/// engine never fetched; it is evidence nobody waited.
+///
+/// So the doorbell **latches the identity** and the completion observer — which already ticks
+/// every 250 ms for the whole of `cup2`'s wall — does the **reading**.
+///
+/// # ⊘ No new capability, and that was checked before it was written
+///
+/// [`fb_userd_cursors`] already reads `USERD_GP_GET`/`USERD_GP_PUT` out of the framebuffer
+/// store, already checks the **join** before residency (the correction `w266` paid for), and
+/// already takes a `DeclaredUserd` rather than an engine. `[verified 2026-08-12]` it has no
+/// `GrCompute` caller anywhere: it is reached only through `addressing_probe_facts`, which
+/// runs on the forwarding fall-through and the three CE refusal sites, and
+/// `grep -c "GET=" run_w267_on_qemu.log` is **9** — eight `RING-PROJ` lines, every one `Ce`,
+/// plus the first-refusal summary. ⇒ This rung is a **call site**, not a capability.
+#[derive(Debug, Clone, Copy)]
+struct GrCursorWatch {
+    /// The guest token this channel's doorbell carries — the join key to every other line.
+    token: u64,
+    proc: u32,
+    chan: u32,
+    /// The channel's engine, carried so a reader never has to infer it from the token.
+    engine: &'static str,
+    /// The USERD the **guest's own kernel** declared for this channel
+    /// (`NV_CHANNEL_ALLOC_PARAMS.userdMem`). ⊘ Not ours: after leg B the host channel is born
+    /// over this same page (`GR-BIRTH … userd=GUEST-USERD`), which is precisely why reading it
+    /// answers a question about the **host** engine's progress.
+    userd: kayfabe_core::rmgraph::DeclaredUserd,
 }
 
 /// ★★★★★ **THE FIRST PRODUCTION `Reactor` IN THIS TREE** — the completion observer's loop.
@@ -3409,9 +3458,12 @@ fn observer_loop(
     watch: &std::sync::Arc<kayfabe_rt::completion_watch::WatchList>,
     stop: &std::sync::atomic::AtomicBool,
     mut vmm: kayfabe_vmm_qemu::QemuVmm,
+    plane: &std::sync::Arc<RegPlane>,
+    gr_cursors: &std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>,
 ) {
     use kayfabe_vmm::Vmm as _;
     let mut pages = SemaPageReader::new();
+    let mut cursors = GrCursorReader::new();
     while !stop.load(std::sync::atomic::Ordering::Acquire) {
         // ⊘ ONE wait per iteration, so the sweep below runs between every pair of waits.
         // `run_with` returns `Ok(())` when the budget is spent OR when shutdown was
@@ -3435,6 +3487,11 @@ fn observer_loop(
                 "verdict"
             },
         );
+        // ★★★★★ **THE OWNER'S THREE-WAY DISCRIMINATOR, SAMPLED LATE AND REPEATEDLY.**
+        // See [`GrCursorWatch`]. ⊘ On the same tick as the page dump and beside it, so the
+        // two halves of one question — *"did the engine fetch?"* and *"did it write?"* — are
+        // never read from two different instants.
+        cursors.look(plane, gr_cursors);
         match outcome {
             Ok(()) => {}
             // ★ The F1 refusal is LOUD and stops the loop rather than spinning. It cannot
@@ -3448,6 +3505,7 @@ fn observer_loop(
                 // still holds the only reader of these pages, and the state at the moment it
                 // stopped is evidence nobody else can produce.
                 pages.look(watch, &mut vmm, "reactor-fault");
+                cursors.close("reactor-fault");
                 pages.close();
                 return;
             }
@@ -3458,7 +3516,118 @@ fn observer_loop(
     // *"what was in the page while the guest was spinning"* are the `why=tick` /
     // `why=verdict` ones above, and that is why every dump carries `t=+Nms`.
     pages.look(watch, &mut vmm, "final");
+    cursors.close("final");
     pages.close();
+}
+
+/// ★★★★★ **THE LATE `GP_GET` SAMPLER** — the reading half of [`GrCursorWatch`], and the one
+/// instrument in this tree that can answer the owner's three-way question.
+///
+/// | reading | meaning |
+/// |---|---|
+/// | `PUT > 0`, `GET == 0` | **the engine never fetched this ring.** Delivery or scheduling; the work never started and the zero semaphore is downstream of a cause upstream of it |
+/// | `GET` caught `PUT` | **the work RAN.** A zero semaphore slot is then a *separate*, later failure and the diagnosis changes completely |
+/// | `PUT == 0` | the guest never submitted on this channel — the question moves to the guest side entirely |
+///
+/// # ⊘ Three things it does not do
+///
+/// 1. ⊘ **It never writes.** It holds an `Arc<RegPlane>` and reads eight bytes through
+///    `RegPlane::fb_peek`; there is no write path in this type.
+/// 2. ⊘ **It resolves nothing.** The USERD address comes from the guest's own
+///    `NV_CHANNEL_ALLOC_PARAMS.userdMem`, latched on the vCPU thread by
+///    `SharedDoorbell::latch_gr_cursor`. A second resolution here would be two projections of
+///    one fact.
+/// 3. ⊘ **It reports STATE, never EVENTS.** A cursor that advanced and wrapped between two
+///    samples is one change; a channel that fetched and finished inside one 250 ms tick shows
+///    as a single row. The dump can say *"the cursor is here now"*; it can never say
+///    *"nothing was fetched"*.
+///
+/// ⚠ **Prints on FIRST SIGHT and on CHANGE only.** Eight channels × 700 ticks is 5 600 lines
+/// of an unchanging cursor, which would bury the one row that matters. The teardown line
+/// carries the tick count, so *"it never changed"* and *"it never ran"* stay separable.
+#[cfg(feature = "host-isolates")]
+#[derive(Debug)]
+struct GrCursorReader {
+    started: std::time::Instant,
+    ticks: u64,
+    printed: u64,
+    /// Per `(proc, chan)`: the last line printed, so only changes print.
+    seen: std::collections::BTreeMap<(u32, u32), String>,
+}
+
+#[cfg(feature = "host-isolates")]
+impl GrCursorReader {
+    fn new() -> Self {
+        Self {
+            started: std::time::Instant::now(),
+            ticks: 0,
+            printed: 0,
+            seen: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// One look at every latched GR channel's cursor.
+    fn look(
+        &mut self,
+        plane: &std::sync::Arc<RegPlane>,
+        gr_cursors: &std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>,
+    ) {
+        self.ticks += 1;
+        // ⊘ CLONED under the lock and read outside it. The vCPU thread pushes into this Vec
+        // from the doorbell path, and holding its guard across a plane read — which takes the
+        // plane's own mutex — would nest two unranked locks on two threads in two orders.
+        let watches: Vec<GrCursorWatch> = {
+            let held = gr_cursors.lock().unwrap_or_else(|e| e.into_inner());
+            held.clone()
+        };
+        for w in &watches {
+            let cur = fb_userd_cursors(plane, Some(w.userd));
+            let cur = if cur.is_empty() {
+                // ⊘ `fb_userd_cursors` answers the empty string when the USERD has no
+                // framebuffer address. That is a legal case and it is NOT `GET = 0`; it gets
+                // its own words so a reader can never fold the two together.
+                " ⊘ NO FRAMEBUFFER USERD — this channel's USERD is not in a store this reader \
+                 can serve. NOTHING WAS READ; this is not `GET = 0`"
+                    .to_string()
+            } else {
+                cur
+            };
+            let key = (w.proc, w.chan);
+            if self.seen.get(&key) == Some(&cur) {
+                continue;
+            }
+            let first = !self.seen.contains_key(&key);
+            self.seen.insert(key, cur.clone());
+            self.printed += 1;
+            let t = self.started.elapsed().as_millis();
+            eprintln!(
+                "kayfabe: GR-CURSOR token={:#010x} proc={} chan={} engine={} why={} t=+{t}ms \
+                 tick={}{cur}",
+                w.token,
+                w.proc,
+                w.chan,
+                w.engine,
+                if first { "first" } else { "CHANGED" },
+                self.ticks,
+            );
+        }
+    }
+
+    /// The tally, printed unconditionally when the loop exits. ⊘ Its ABSENCE is the only way
+    /// to tell *"the reader never got here"* from *"the reader saw nothing move"* — the same
+    /// property `SemaPageReader::close` exists for, and the one `w267` §3.2's own assertion
+    /// caught missing.
+    fn close(&self, why: &str) {
+        eprintln!(
+            "kayfabe: GR-CURSOR-READER stopped why={why} ticks={} channels={} rows_printed={} \
+             elapsed={}ms ⊘ a row prints on FIRST SIGHT and on CHANGE only, so \
+             rows_printed == channels means NOT ONE CURSOR EVER MOVED",
+            self.ticks,
+            self.seen.len(),
+            self.printed,
+            self.started.elapsed().as_millis(),
+        );
+    }
 }
 
 /// How many bytes one dumped page is. ⊘ 4 KiB because that is the unit
@@ -4546,10 +4715,97 @@ impl SharedDoorbell {
     /// ⊘ **Every arm that cannot declare SAYS SO with its reason, once.** An absent line
     /// would read as *"the guest declared no completion"*, which is the one thing it must
     /// never be mistaken for.
+    /// Latch this GR channel's USERD so the observer thread can sample its cursor. See
+    /// [`GrCursorWatch`].
+    ///
+    /// ⊘ Prints **once per channel** and says which of the three things happened: latched, no
+    /// USERD declared at all, or a USERD with no framebuffer address. The third is a real and
+    /// legal case (a `Sysmem` USERD lives in guest RAM) and it is named rather than folded
+    /// into silence, because an absent `GR-CURSOR` row must never read as `GET = 0`.
+    fn latch_gr_cursor(&self, token: u64, facts: &kayfabe_rt::device::CeChannelFacts) {
+        let fresh = {
+            let mut held = self.ce.gr_cursors.lock().unwrap_or_else(|e| e.into_inner());
+            if held
+                .iter()
+                .any(|w| w.proc == facts.proc.0 && w.chan == facts.chan.0)
+            {
+                None
+            } else {
+                let Some(userd) = facts.userd else {
+                    // ⊘ Nothing to latch, and it is pushed as no row at all rather than as a
+                    // row with a hole. The line below still prints, once, because a channel
+                    // this instrument cannot see is a fact about the instrument.
+                    drop(held);
+                    self.say_gr_cursor_once(format!(
+                        "kayfabe: GR-CURSOR token={token:#010x} proc={} chan={} engine={} → NOT \
+                         LATCHED: this channel declared no USERD this port could read. ⊘ NOT \
+                         `GET = 0` — nothing was read",
+                        facts.proc.0,
+                        facts.chan.0,
+                        facts.engine_name(),
+                    ));
+                    return;
+                };
+                let w = GrCursorWatch {
+                    token,
+                    proc: facts.proc.0,
+                    chan: facts.chan.0,
+                    engine: facts.engine_name(),
+                    userd,
+                };
+                held.push(w);
+                Some(w)
+            }
+            // ⚠ The guard dies HERE, before anything below allocates, formats or writes to
+            // stderr. `l1_concurrency.md` §3.3 R1, and the shape `gr_dumps` is classified
+            // safe under.
+        };
+        let Some(w) = fresh else { return };
+        // ⊘ The doorbell-instant sample is printed too, and it is NOT the measurement — it is
+        // the `t = 0` row the observer's later rows are read against. A cursor that was
+        // already advanced when the guest rang and a cursor that advanced afterwards are
+        // different findings, and only a first row separates them.
+        let at_doorbell = match self.plane.upgrade() {
+            Some(plane) => fb_userd_cursors(&plane, Some(w.userd)),
+            None => " (no plane)".to_string(),
+        };
+        eprintln!(
+            "kayfabe: GR-CURSOR token={token:#010x} proc={} chan={} engine={} why=doorbell \
+             LATCHED{at_doorbell} ⊘ a `GET` read on THIS line is taken microseconds after the \
+             guest wrote `PUT` and proves nothing; the observer's later rows are the \
+             measurement",
+            w.proc, w.chan, w.engine,
+        );
+    }
+
+    /// One bounded `GR-CURSOR` line for a channel that could not be latched, sharing
+    /// [`GR_PUSHBUFFER_DUMPS_MAX`]'s budget with the other once-per-channel notices.
+    fn say_gr_cursor_once(&self, line: String) {
+        let mut n = self.ce.gr_dumps.lock().unwrap_or_else(|e| e.into_inner());
+        if *n <= GR_PUSHBUFFER_DUMPS_MAX {
+            *n += 1;
+            drop(n);
+            eprintln!("{line}");
+        }
+    }
+
     fn declare_gr_completion(&self, token: u64, facts: &kayfabe_rt::device::CeChannelFacts) {
         // ★★★ FIRST, above every gate: "the observer was reached" is a different fact from
         // "the observer declared something", and a single counter cannot separate them.
         self.ce.watch.attempt();
+        // ★★★★★ **THE OWNER'S `GP_GET` DIAGNOSTIC — LATCHED HERE, READ LATE.** See
+        // [`GrCursorWatch`] for why the read cannot happen on this line: each GR channel is
+        // rung once, so a cursor sampled here is sampled microseconds after the guest wrote
+        // `GP_PUT`, and `GET = 0` at that instant means nothing at all.
+        //
+        // ⊘ Placed ABOVE every gate in this function, deliberately. A channel whose
+        // submission declares no report semaphore returns `Ok(None)` below and would never be
+        // latched — and *"this channel declared no completion"* is not a reason to stop asking
+        // whether its engine ever ran. The three-way discriminator must cover every GR channel
+        // the guest rang, not only the ones that got as far as declaring.
+        //
+        // ⚠ Idempotent by `(proc, chan)`; the guard is dropped before the `eprintln!`.
+        self.latch_gr_cursor(token, facts);
         let head = format!("kayfabe: COMPLETION-DECLARE token={token:#010x} ");
         let say_once = |why: String| {
             let mut n = self.ce.gr_dumps.lock().unwrap_or_else(|e| e.into_inner());
@@ -4749,9 +5005,15 @@ impl SharedDoorbell {
     ///   two calls above `return None` are the same two the refusal arm makes, in the same
     ///   order, precisely so the armed arm stays log-comparable to its control.
     ///   ⇒ The claim that survives is the one that was load-bearing: **nothing executed.**
-    ///   `gr_doorbell_passthrough.md` §0.3 — the host GR channel's ring and its `GP_PUT` are
-    ///   both ours on either arm, so the host engine fetches nothing. **The guest did not
-    ///   move.**
+    ///   ⊘⊘ **CORRECTED 2026-08-12** — the reason given for it here was *"`gr_doorbell_
+    ///   passthrough.md` §0.3: the host GR channel's ring and its `GP_PUT` are both ours on
+    ///   either arm, so the host engine fetches nothing"*, and **both halves of that are now
+    ///   false**: `[measured, w267_on]` all eight `GrCompute` births read
+    ///   `adopt=GUEST-RING userd=GUEST-USERD`. The claim *"nothing executed"* still holds on
+    ///   the `refuse` arm — for the simpler reason that no GR doorbell reaches
+    ///   `SharedDevice::doorbell` at all, so `rm.schedule`/`rm.ring_doorbell` are never
+    ///   called — but it is no longer derivable from the ring or the cursor being ours.
+    ///   `docs/design/w268_the_cursor_and_the_arm_prereg.md` §0.1. **The guest did not move.**
     ///
     /// - ⚠ **And the leaf this join reaches is NOT the ring's.** It is driven off
     ///   `observed.census`, the operand census recovered from the pushbuffer decode — the
@@ -5150,12 +5412,24 @@ impl SharedDoorbell {
         // `kayfabe_rt::shell_disposition`, which is exhaustive over the route and so cannot
         // silently acquire a fourth engine.
         //
-        // ⚠ **THIS RE-OPENS A PATH THAT WAS CLOSED ON EVIDENCE**, and the evidence is the
-        // paragraph below, which stands unamended. Read `GR_ROUTE_ENV` and
-        // `docs/design/gr_doorbell_passthrough.md` §0.2-§0.3 before reading a boot that ran
-        // the armed arm: the host GR channel's ring **and** its `GP_PUT` are both ours, so
-        // the host engine fetches nothing on either arm. The armed arm buys the TRANSPORT —
-        // the first `ring_doorbell` ever issued for a GR host token — and nothing else.
+        // ⚠ **THIS RE-OPENS A PATH THAT WAS CLOSED ON EVIDENCE.** Read `GR_ROUTE_ENV` and
+        // `docs/design/gr_doorbell_passthrough.md` §0.2 before reading a boot that ran the
+        // armed arm.
+        //
+        // ⊘⊘ **CORRECTED 2026-08-12 — the sentence that used to stand here is REFUTED, and it
+        // is the sentence that made the armed arm look pointless.** It read: *"the host GR
+        // channel's ring **and** its `GP_PUT` are both ours, so the host engine fetches
+        // nothing on either arm. The armed arm buys the TRANSPORT and nothing else."* That
+        // was true of the birth path as it stood on 2026-08-11 (`RingSource::Ours(None)`).
+        // **Legs A2 and B moved it.** `[measured 2026-08-12, w267_on, all 16 `GR-BIRTH iso2`
+        // lines]` every birth — **eight of them `engine=GrCompute`** — reads
+        // `adopt=GUEST-RING userd=GUEST-USERD → alloc_channel_over_guest_ring`: the host GR
+        // channel's ring **is** the guest's `0x200200000`, and its `GP_PUT` **is** the word in
+        // the guest's own USERD page.
+        // ⇒ The armed arm may buy more than transport, and whether it does is a MEASUREMENT
+        // (`GR-CURSOR`, `docs/design/w268_the_cursor_and_the_arm_prereg.md`), not a deduction
+        // from either sentence. ★ The *posture* is unamended: `refuse` is still the default
+        // and arming is still a printed choice with a control arm.
         //
         // ⊘ The default is `Refuse` and is byte-identical to every boot before this one.
         //
@@ -6498,6 +6772,151 @@ impl SharedDoorbell {
         ))
     }
 
+    /// ★★★★★ **THE COMPLETION PIN'S SECOND SOURCE — the page THIS channel's own pushbuffer
+    /// names as its release target**, read at this doorbell.
+    ///
+    /// Returns the line to print (**always** — an arm that found nothing and an arm that did
+    /// not run are different facts, and only one of them is about the guest) and the distinct
+    /// 4 KiB page VAs the guest's own `SET_SEMAPHORE_A`/`_B` decoded to.
+    ///
+    /// ⊘ **It resolves nothing and it pins nothing.** The caller unions these pages into the
+    /// same set the declared source produced and puts every one of them through the same
+    /// address-table lookup, so `miss = fault` is unchanged and the second source cannot
+    /// smuggle a page past the authority.
+    ///
+    /// See [`kayfabe_rt::ceutils::observe_ce_release_targets`] for the measurement that made
+    /// this necessary and for why it is not the `cap2b` class.
+    fn ce_release_pages(
+        &self,
+        token: u64,
+        f: &kayfabe_rt::device::CeChannelFacts,
+        page: u64,
+    ) -> (String, std::collections::BTreeSet<u64>) {
+        let head = format!("SEMA-SOURCE-CE token={token:#010x}");
+        let none = std::collections::BTreeSet::new();
+        let (Some(vaspace), Some(ring_va)) = (f.vaspace, f.ring_va) else {
+            return (
+                format!(
+                    "{head} → NOT ASKED: vaspace={:?} ring_va={:?} — there is no ring to read \
+                     this channel's own methods out of. ⊘ Not a miss",
+                    f.vaspace, f.ring_va
+                ),
+                none,
+            );
+        };
+        let Some(plane) = self.plane.upgrade() else {
+            return (
+                format!("{head} → NO PLANE (the register plane is gone)"),
+                none,
+            );
+        };
+        let root = match SharedDoorbell::doorbell_root(
+            &plane,
+            f.client,
+            vaspace,
+            f.vas_pdb.map(|p| p.0),
+        ) {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+            DoorbellRoot::Absent => {
+                return (
+                    format!("{head} → NO ROOT (this channel has no VA space root to walk)"),
+                    none,
+                );
+            }
+            DoorbellRoot::Underivable(p, why) => {
+                return (
+                    format!("{head} → ROOT UNDERIVABLE from pdb 0x{p:x}: {}", why.kind()),
+                    none,
+                );
+            }
+        };
+        let chan = kayfabe_rt::ceutils::CeUtilsChannel {
+            client: f.client,
+            vaspace,
+            ring_va,
+            ring_entries: f.ring_entries,
+        };
+        // ⊘ The channel's OWN cursor and OWN accumulator, both read and NEITHER written back.
+        // `MethodState` is `Copy`, so what `observe_ce_release_targets` mutates is a copy that
+        // dies with the call — an observer that latched state a later execute would see is the
+        // shape `run_submission`'s own docs warn about one crate over.
+        let cursor = *self
+            .ce
+            .cursors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(f.proc.0, f.chan.0))
+            .unwrap_or(&kayfabe_rt::ceutils::GpCursor::default());
+        let state = *self
+            .ce
+            .states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(f.proc.0, f.chan.0))
+            .unwrap_or(&kayfabe_rt::ceutils::MethodState::default());
+        let out = {
+            let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(vmm) = held.as_mut() else {
+                drop(held);
+                return (
+                    format!("{head} → NO MEMORY PLANE (nothing to read the ring out of)"),
+                    none,
+                );
+            };
+            let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+            plane.ce_session_with_root(&root, demand, |ce| {
+                self.device.with_pushbuffer(|pb| {
+                    kayfabe_rt::ceutils::observe_ce_release_targets(
+                        ce, pb, vmm, chan, cursor, state,
+                    )
+                })
+            })
+            // ⚠ Every lock — the memory-plane mutex, the plane session, the rank-0 device
+            // read — is released HERE, before the caller pins anything.
+        };
+        let t = match out {
+            Ok(t) => t,
+            Err(refusal) => {
+                return (
+                    format!(
+                        "{head} → UNREADABLE: {}. ⊘ A statement about this read, NOT about the \
+                         guest's bytes",
+                        refusal.describe()
+                    ),
+                    none,
+                );
+            }
+        };
+        let mut pages: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        for va in &t.vas {
+            pages.insert(va.0 & !(page - 1));
+        }
+        let sample: Vec<String> = t
+            .vas
+            .iter()
+            .take(PUSHBUF_REPORT)
+            .map(|v| format!("0x{:x}", v.0))
+            .collect();
+        (
+            format!(
+                "{head} proc={} chan={} engine={} → methods={} launches={} opaque={} \
+                 release_target(s)={} [{}] ⇒ {} page(s). ⊘ Every address here is the GUEST's \
+                 own `SET_SEMAPHORE_A`/`_B` operand, decoded by the chip's codec at THIS \
+                 doorbell — never a remembered page",
+                f.proc.0,
+                f.chan.0,
+                f.engine_name(),
+                t.methods,
+                t.launches,
+                t.opaque,
+                t.vas.len(),
+                sample.join(","),
+                pages.len(),
+            ),
+            pages,
+        )
+    }
+
     /// ★★★★★ **LEG 5 — PIN THE COMPLETION SEMAPHORE PAGES THE GUEST'S OWN
     /// `SET_REPORT_SEMAPHORE` DECLARED.**
     ///
@@ -6637,12 +7056,69 @@ impl SharedDoorbell {
                 None => String::new(),
             }
         );
+        // ---- 1b. THE SECOND SOURCE — THIS channel's OWN release target ---------------------
+        //
+        // ★★★★★ **THE ORDERING FIX, and the ordering is the whole reason it exists.** Source 1
+        // above is the watch list, which the **GrCompute** doorbells populate; this pass is
+        // triggered by a **Ce** doorbell, and nothing orders those. `[measured 2026-08-12,
+        // w267_on]` four of the eight copy-engine doorbells arrived before any GR channel had
+        // declared, read an empty source, printed `NO PAGE TO PIN`, and their four channels
+        // then took `Xid 31 … ACCESS_TYPE_VIRT_WRITE` at the semaphore page — while the four
+        // that pinned wrote a complete `[payload, 0, ts_lo, ts_hi]` report. The split was 4/4
+        // on that line and on nothing else.
+        //
+        // ⇒ A source that CANNOT be late: a copy-engine channel that rang has already written
+        // its own `SET_SEMAPHORE_A`/`_B` into the pushbuffer this doorbell is about.
+        //
+        // ⊘⊘ **NOT a remembered `0x2_0440f000`.** The brief is right that recalling that
+        // address and reading it out of guest RAM is the `cap2b` class — 378 GSP elements
+        // parsed out of arbitrary guest memory and answered `NV_OK`. Every VA here is decoded
+        // from the guest's own bytes at this doorbell by the **chip's own** codec, and every
+        // page it yields is still asked of the address table below with `miss = fault`.
+        //
+        // ⊘ **NOT a widening of the watch.** These VAs enter the PIN and never `WatchList`.
+        // The copy engine's `SET_SEMAPHORE` is its own completion and the guest does not poll
+        // it; an `OBSERVED` verdict there would mean nothing and read as everything.
+        //
+        // ⚠ Locks: the read takes the memory-plane mutex and one plane session and releases
+        // BOTH before this function pins anything — `pin_guest_ram` runs host ioctls and may
+        // park on the isolate pool, which is exactly what must not happen under either.
+        let (ce_line, ce_pages) = self.ce_release_pages(token, f, page);
+        let mut from_ce = 0usize;
+        // ⊘ Its OWN cap counters, not the declared source's. Those were already formatted into
+        // `source` above, and incrementing them here would report a drop this pass caused
+        // inside a sentence about the other pass — a count attributed to the wrong producer.
+        let mut ce_dropped = 0usize;
+        let mut ce_first_dropped: Option<u64> = None;
+        for pva in &ce_pages {
+            if pages.len() >= PUSHBUF_MAX_PAGES && !pages.contains(pva) {
+                ce_dropped += 1;
+                ce_first_dropped.get_or_insert(*pva);
+            } else if pages.insert(*pva) {
+                from_ce += 1;
+            }
+        }
+        let source = format!(
+            "{source}\n    {ce_line}\n    SEMA-SOURCES: {} page(s) to pin in total, of which \
+             {from_ce} came ONLY from this channel's own pushbuffer. ⊘ A union, never a \
+             fallback: both sources are asked on every doorbell, so a boot can never be read \
+             as \"source 2 worked\" when source 1 was simply early enough{}",
+            pages.len(),
+            match ce_first_dropped {
+                Some(va) => format!(
+                    " | ⚠⚠ CAPPED at {PUSHBUF_MAX_PAGES} pages — {ce_dropped} page(s) the CE \
+                     source named were DROPPED, first va=0x{va:x}. ⊘ INCOMPLETE"
+                ),
+                None => String::new(),
+            }
+        );
         if pages.is_empty() {
             return Some(format!(
                 "{source}\n    ⊘ NO PAGE TO PIN: no completion this proc declared resolved \
-                 into guest RAM at this doorbell. ⚠ On the FIRST doorbells of a boot this is \
-                 an ORDERING fact — the declares happen on the GrCompute channels — and NOT a \
-                 statement that the guest declared nothing"
+                 into guest RAM at this doorbell, AND this channel's own pushbuffer named no \
+                 release target. ⚠ With the second source armed this is NO LONGER an ordering \
+                 fact — it means the copy-engine submission carried no `SET_SEMAPHORE`, or \
+                 could not be read at all; the line above says which"
             ));
         }
         // ---- 2. THE TABLE, one lookup per page, and MISS = FAULT --------------------------
@@ -8655,11 +9131,20 @@ impl Regs {
             )
             .map_err(|e| format!("{e:?}"))?;
             let watch = std::sync::Arc::clone(&self.ce.watch);
+            // ★★★ The plane and the latched GR channels, so this thread can sample
+            // `GP_GET`/`GP_PUT` LATE. See [`GrCursorWatch`] for why a doorbell-time read
+            // cannot answer the question. ⊘ The SAME plane handle the device answers
+            // registers from — cloned, never rebuilt — so the store this reads and the store
+            // the descent reads cannot be two stores.
+            let plane = std::sync::Arc::clone(&self.plane);
+            let gr_cursors = std::sync::Arc::clone(&self.ce.gr_cursors);
             let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             let stop_thread = std::sync::Arc::clone(&stop);
             let join = std::thread::Builder::new()
                 .name("kayfabe-completion-observer".into())
-                .spawn(move || observer_loop(&mut reactor, &watch, &stop_thread, vmm))
+                .spawn(move || {
+                    observer_loop(&mut reactor, &watch, &stop_thread, vmm, &plane, &gr_cursors);
+                })
                 .map_err(|e| format!("{e}"))?;
             Ok(ObserverThread {
                 handle,

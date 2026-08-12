@@ -969,6 +969,124 @@ pub fn observe_declared_completion(
     }))
 }
 
+/// ★★★ What ONE read of a **copy-engine** submission established about where its release
+/// lands. Returned whole rather than as a bare `Vec`, so *"nothing decoded"* and *"a launch
+/// decoded and released nothing"* can never arrive as the same empty list.
+#[derive(Debug, Clone, Default)]
+pub struct CeReleaseTargets {
+    /// Every distinct GPU VA a `LAUNCH_DMA` in this submission will write its payload to, in
+    /// decode order. ⊘ **The guest's own operand**, straight out of the chip codec's
+    /// `SET_SEMAPHORE_A`/`_B` decode — never a remembered address.
+    pub vas: Vec<GpuVa>,
+    /// How many `(header, args)` pairs the read produced. `0` means the pushbuffer was empty
+    /// or unreadable, which is a different fact from *"it carried no release"*.
+    pub methods: usize,
+    /// How many decoded methods were launches at all (`CeLaunchDma` + `CeRelease`).
+    pub launches: usize,
+    /// How many decoded methods the codec did not model. ★ Printed beside `launches`,
+    /// because `methods > 0, launches = 0, opaque = methods` is *"another engine's bytes"*
+    /// while `opaque = 0` is *"we framed the headers wrong"* — opposite bugs, one empty list.
+    pub opaque: usize,
+}
+
+/// ★★★★★ **THE COMPLETION PIN'S SECOND SOURCE — the semaphore VA THIS channel's own
+/// pushbuffer names, read at THIS doorbell.**
+///
+/// # ★★★ Why it exists: an ordering race, measured
+///
+/// `[measured 2026-08-12, w267_on, real GA106]` the completion pin's only source was
+/// [`crate::completion_watch::WatchList::declared_sites`], which the **GrCompute** doorbells
+/// populate, while the pin is triggered by a **Ce** doorbell — and nothing orders those. Four
+/// of eight copy-engine doorbells arrived before any GR channel had declared, printed
+/// `NO PAGE TO PIN`, and their four channels then took `Xid 31 … ACCESS_TYPE_VIRT_WRITE` at
+/// the semaphore page while the four that pinned wrote a complete timestamped report. The
+/// split was 4/4 with no exceptions.
+///
+/// ⇒ The fix is a source that **cannot** be late, because it is in the bytes the doorbell is
+/// about: a copy-engine channel that rings has already written its own
+/// `SET_SEMAPHORE_A`/`_B`/`_PAYLOAD`.
+///
+/// # ⊘⊘ What this is NOT — and it is the one way this rung could go badly wrong
+///
+/// It is **not** a remembered `0x2_0440f000`. An address recalled from a previous boot and
+/// then read out of guest RAM is the `cap2b` class this project keeps as a fixture — 378 GSP
+/// elements parsed out of arbitrary guest memory and answered `NV_OK`. Every VA here comes
+/// from the guest's own method stream, read at this doorbell, decoded by the **chip's own**
+/// codec ([`kayfabe_arch::PushbufferAbi::decode_run`]) rather than by a second parser written
+/// for this call site.
+///
+/// It is also **not** a widening of the completion watch. The caller pins with these VAs; it
+/// never declares them. A `SET_SEMAPHORE` release is the copy engine's own completion and the
+/// guest does not poll it, so an `OBSERVED` verdict on one would mean nothing and read as
+/// everything (`w267` RESULT §5.3).
+///
+/// # ⊘ It advances nothing
+///
+/// Reads only: the cursor is taken by value and never written back, the [`MethodState`] is a
+/// **copy** of the channel's accumulator (the type is `Copy`) so a decode here cannot latch
+/// state a later execute would see, and no memory is written. It is the same read
+/// [`observe_declared_completion`] performs one class over.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] if the ring or the pushbuffer could not be read — the same refusals
+/// [`dump_submission_methods`] reports, from the same read.
+pub fn observe_ce_release_targets(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeReleaseTargets, CeUtilsRefusal> {
+    let look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    // ⊘ A COPY of the channel's accumulator, mutated locally and dropped. See the docs above:
+    // an observer that advanced the shared state would change what a later execute decodes.
+    let mut st = state;
+    let decoded = pb.decode_run(&mut st, &look.methods);
+    Ok(release_targets_of(&decoded, look.methods.len()))
+}
+
+/// The pure half of [`observe_ce_release_targets`] — everything after the read.
+///
+/// ⊘ Extracted so the collection rule can be tested without a `CePlane`, a `Vmm` or a guest:
+/// the read is the part that needs a machine, and it is not the part that has a rule in it.
+#[must_use]
+pub fn release_targets_of(decoded: &[PushMethod], methods: usize) -> CeReleaseTargets {
+    let mut out = CeReleaseTargets {
+        methods,
+        ..CeReleaseTargets::default()
+    };
+    for m in decoded {
+        match m {
+            PushMethod::Opaque => out.opaque += 1,
+            // ⊘ A launch is counted whether or not it names a release. *"The engine was asked
+            // to do something"* and *"it was asked to signal somewhere"* are different facts,
+            // and a caller that saw only the VA list could not tell an empty list caused by
+            // *no launch* from one caused by *a launch with `SEMAPHORE_TYPE = NONE`*.
+            PushMethod::CeLaunchDma { completion, .. } => {
+                out.launches += 1;
+                if let Some(c) = completion
+                    && !out.vas.contains(&c.addr)
+                {
+                    out.vas.push(c.addr);
+                }
+            }
+            PushMethod::CeRelease { completion, .. } => {
+                out.launches += 1;
+                if !out.vas.contains(&completion.addr) {
+                    out.vas.push(completion.addr);
+                }
+            }
+            // ⊘ `SemRelease` is deliberately NOT here. It is the **host-FIFO** semaphore, four
+            // bytes from the engine-class one, and `CeCompletion`'s own docs call that
+            // distinction a trap. Pinning the page a host-FIFO release names would be pinning
+            // a different address for a different reason and calling it the same source.
+            _ => {}
+        }
+    }
+    out
+}
+
 /// ★★★★★ **THE SECOND JOIN SOURCE — resolve ONE stated VA to the leaf that carries it.**
 ///
 /// # ⊘ Why this is not `census_gr_addresses` with a list of one
@@ -1214,4 +1332,123 @@ pub fn dump_submission_methods(
         ));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod release_target_tests {
+    use super::{PushMethod, release_targets_of};
+    use kayfabe_arch::ids::{ClassId, GpuVa};
+    use kayfabe_arch::{CeCompletion, CeSemStructure, CeWork, PhysTarget};
+
+    /// The shape `w267` measured on all eight copy-engine channels, as a decoded run:
+    /// `SET_OBJECT(0xc7b5)` + `SET_SEMAPHORE_A/B/PAYLOAD` + `LAUNCH_DMA = 0x14`, which the
+    /// chip codec turns into exactly one [`PushMethod::CeRelease`].
+    fn release_at(va: u64) -> PushMethod {
+        PushMethod::CeRelease {
+            completion: CeCompletion {
+                addr: GpuVa(va),
+                payload: 1,
+                structure: CeSemStructure::FourWord,
+                payload_bytes: 4,
+            },
+            flush: true,
+        }
+    }
+
+    /// ★★★★★ **THE ROW THE ORDERING FIX RESTS ON.** The pin's second source must recover the
+    /// page from the guest's own release operand — the same `0x2_0440ff70` the four pinned
+    /// channels wrote a timestamped report into, and the same page the four unpinned ones
+    /// took `Xid 31 … VIRT_WRITE` at.
+    #[test]
+    fn a_release_only_submission_names_its_own_semaphore_page() {
+        let got = release_targets_of(
+            &[
+                PushMethod::SetObject {
+                    class: ClassId(0xc7b5),
+                },
+                release_at(0x2_0440_ff70),
+            ],
+            3,
+        );
+        assert_eq!(
+            got.vas,
+            vec![GpuVa(0x2_0440_ff70)],
+            "the guest's own SET_SEMAPHORE_A/B operand is the whole source: {got:?}"
+        );
+        assert_eq!(got.launches, 1, "a release IS a launch: {got:?}");
+        assert_eq!(
+            got.methods, 3,
+            "the read's own count is carried through: {got:?}"
+        );
+    }
+
+    /// ⊘ Eight channels declare eight VAs at a 16-byte stride and they are ONE page. The
+    /// de-duplication that makes that one pin lives in the caller, but this function must not
+    /// hand the same VA out twice — a repeated address would inflate every count read off it.
+    #[test]
+    fn one_address_named_twice_is_one_target() {
+        let got = release_targets_of(&[release_at(0x2_0440_ff70), release_at(0x2_0440_ff70)], 6);
+        assert_eq!(got.vas.len(), 1, "de-duplicated on the VA: {got:?}");
+        assert_eq!(got.launches, 2, "⊘ but BOTH launches are counted: {got:?}");
+    }
+
+    /// ★★★ **A launch that names no release is a launch.** ⊘ Without this the caller could
+    /// not tell an empty VA list caused by *no work at all* from one caused by
+    /// `SEMAPHORE_TYPE = NONE` — and only the first is a statement about the ordering race.
+    #[test]
+    fn a_launch_without_a_release_is_counted_and_names_nothing() {
+        let got = release_targets_of(
+            &[PushMethod::CeLaunchDma {
+                dst: GpuVa(0x1000),
+                src: GpuVa(0x2000),
+                len: 64,
+                dst_is_virtual: true,
+                src_is_virtual: true,
+                dst_target: PhysTarget::LocalFb,
+                src_target: PhysTarget::LocalFb,
+                work: CeWork::Copy,
+                completion: None,
+            }],
+            4,
+        );
+        assert!(got.vas.is_empty(), "nothing to pin: {got:?}");
+        assert_eq!(
+            got.launches, 1,
+            "but the engine WAS asked to do something: {got:?}"
+        );
+    }
+
+    /// ⊘ **The host-FIFO semaphore is NOT this source.** It is four bytes from the
+    /// engine-class one and `CeCompletion`'s own docs call the distinction a trap; pinning
+    /// the page it names would be a different address pinned for a different reason under the
+    /// same label.
+    #[test]
+    fn the_host_fifo_semaphore_is_not_a_release_target() {
+        let got = release_targets_of(
+            &[PushMethod::SemRelease {
+                addr: GpuVa(0x2_0440_f004),
+                payload: 1,
+            }],
+            2,
+        );
+        assert!(
+            got.vas.is_empty(),
+            "SemRelease is the FIFO's, not the engine's: {got:?}"
+        );
+        assert_eq!(got.launches, 0, "and it is not a launch: {got:?}");
+    }
+
+    /// ⊘ The non-vacuity row: a stream the codec modelled nothing in reports `opaque` rather
+    /// than an empty list with no explanation. `methods > 0, launches = 0, opaque = methods`
+    /// is *"another engine's bytes"*; `opaque = 0` would be *"we framed the headers wrong"*.
+    #[test]
+    fn an_unmodelled_stream_says_so_rather_than_looking_empty() {
+        let got = release_targets_of(&[PushMethod::Opaque, PushMethod::Opaque], 2);
+        assert!(got.vas.is_empty());
+        assert_eq!(
+            got.opaque, 2,
+            "the shape of the nothing is reported: {got:?}"
+        );
+        assert_eq!(got.launches, 0);
+    }
 }
