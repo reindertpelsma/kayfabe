@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
+# ★★★ w275 — RE-CAPTURE THE GUEST ARM WITH THE DIVERGENCE RECORD UNTRUNCATED.
+#
+# Identical to `w274b_run.sh` in EVERY device variable — same arming, same build, same
+# workload binary — because the single intended change is in the RECORDER, not the port:
+# `nvdiff_hook.sh` now runs the shim at `NVDIFF_MAXBUF=65536` instead of `8192`.
+#
+# ⚠ WHY THAT MATTERS AND WHY IT IS THE WHOLE RUNG. `[measured, w274b_pin]` at 8192 the
+# recorder truncated **18/18 guest and 25/25 host** `UVM_MAP_EXTERNAL_ALLOCATION` records —
+# `sizeof(PARAMS)` = 9264 (`uvm_sizes.h:30`), so 1072 bytes fell off each one — and that is
+# the exact call the structural divergence at index 360/578 lands on. ⇒ w274 could say WHERE
+# the guest diverges and not WHAT differs. This boot exists to answer the second question.
+#
+# ⊘ The device is deliberately UNCHANGED, so every count below stays directly comparable to
+#   `w271_pin` and `w274_pin`. A device change here would have made the recorder fix
+#   unreadable against its own baseline.
+#
+# ---- inherited header from w274b (the two measurements it was written for) ----
 # w274 — ONE BOOT, TWO MEASUREMENTS, NO DEVICE VARIABLE.
 #
 # The arming is `w271_pin`'s, byte for byte, and nothing in the device changes. That is
@@ -26,11 +43,11 @@
 #
 # ★ START marker and EXIT line so "file exists but has no terminator" is detectable at all
 #   (143 = the JOB was SIGTERMed; 124 = the LAUNCHER's ssh expired while the job ran on).
-PFX=${W274B_TAG_PREFIX:-w274b}
+PFX=${W275_TAG_PREFIX:-w275}
 OUT=/workspace/${PFX}_run.log
 exec >"$OUT" 2>&1
-finish() { echo "=== W274B EXIT rc=$1 at $(date -Is) ==="; exit "$1"; }
-echo "=== W274B START $(date -Is) pid=$$ ==="
+finish() { echo "=== W275 EXIT rc=$1 at $(date -Is) ==="; exit "$1"; }
+echo "=== W275 START $(date -Is) pid=$$ ==="
 
 export PATH=/root/.cargo/bin:$PATH
 REPO=${KAYFABE_REPO:-/workspace/kayfabe_w274}
