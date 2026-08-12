@@ -2843,7 +2843,11 @@ fn every_guest_sema_arm_round_trips_through_its_own_spelling() {
     let mut names: Vec<&str> = GuestSemaArm::ALL.iter().map(|a| a.as_str()).collect();
     names.sort_unstable();
     names.dedup();
-    assert_eq!(names.len(), GuestSemaArm::ALL.len(), "two arms share a name");
+    assert_eq!(
+        names.len(),
+        GuestSemaArm::ALL.len(),
+        "two arms share a name"
+    );
 }
 
 /// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly: a disarmed evidence run
@@ -2923,4 +2927,153 @@ fn the_sema_arm_is_independent_of_the_pushbuf_ring_and_route_arms() {
 fn leg_four_and_leg_five_are_separately_armable() {
     assert!(GuestPushbufArm::Pin.pins() && !GuestSemaArm::Off.pins());
     assert!(!GuestPushbufArm::Off.pins() && GuestSemaArm::Pin.pins());
+}
+
+// ★★★★★ w270 — `KAYFABE_GUEST_OPERAND`, the arm that gives the guest-RAM PIN a FOURTH
+// source: the pages this channel's own `LAUNCH_DMA` OPERANDS name.
+//
+// `[measured, w268_pass / w269_pass / w269b_pass — three consecutive armed boots, real GA106]`
+// the guest's first substantive copy-engine work takes `Xid 31 ENGINE CE2 HUBCLIENT_CE0
+// FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000`, at a page `w268` §3.2 measured appearing
+// **nowhere else in the boot** — and the same submission declares the release target
+// `0x2_0440ff70` that `w269` measured `cuCtxCreate` polling for the value `2`.
+// ⊘ Same primitive as legs 4 and 5; the plane none of the three existing sources can see.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestOperandArm, guest_operand_from};
+
+/// ⊘ **The default must leave every prior boot comparable** — `w269b_pass` in particular,
+/// which is this rung's own control and must be reproducible from an unset variable.
+#[test]
+fn the_default_guest_operand_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_operand_from(None), Ok(GuestOperandArm::Off));
+    assert!(
+        !GuestOperandArm::Off.pins(),
+        "★ the default arm presented the operand pages to the pin"
+    );
+}
+
+/// ★★★★★ THE RUNG: `pin` is the only arm that pins, through one predicate the shim and this
+/// test both read — never through `== Pin` spelled at a call site.
+#[test]
+fn only_the_operand_pin_arm_pins_and_the_predicate_is_the_gate() {
+    assert!(GuestOperandArm::Pin.pins());
+    let pinning: Vec<GuestOperandArm> = GuestOperandArm::ALL
+        .into_iter()
+        .filter(|a| a.pins())
+        .collect();
+    assert_eq!(
+        pinning,
+        vec![GuestOperandArm::Pin],
+        "★ exactly one arm may present the operand pages; a second is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_operand_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestOperandArm::ALL {
+        assert_eq!(
+            guest_operand_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestOperandArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestOperandArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly: a disarmed evidence run
+/// prints **no `OPERAND-PIN` line at all**, which is exactly what a correct control prints.
+#[test]
+fn a_value_that_is_not_a_guest_operand_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Pin",
+        "pins",
+        "operand",
+        "operands",
+        "dst",
+        "sema",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_operand_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-operand arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestOperandArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **FIVE SELECTORS, THIRTY-TWO CELLS.** ⊘ `w270` runs two boots differing in **one**
+/// variable while every leg `w268` measured stays armed on both, and that is only expressible
+/// if this arm is orthogonal to the four already there. ⚠ `w263`'s arms were not, and its own
+/// RESULT §3.1 says what it cost.
+#[test]
+fn the_operand_arm_is_independent_of_the_sema_pushbuf_ring_and_route_arms() {
+    let mut cells = Vec::new();
+    for op in GuestOperandArm::ALL {
+        for sema in GuestSemaArm::ALL {
+            for pb in GuestPushbufArm::ALL {
+                for ring in GuestRingArm::ALL {
+                    for route in GrRouteArm::ALL {
+                        cells.push((
+                            op.pins(),
+                            sema.pins(),
+                            pb.pins(),
+                            ring.adopts_ring(),
+                            route.gr_passthrough(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        32,
+        "★ the five selectors do not span thirty-two cells — one constrains another, and the \
+         operand plane stops being separately measurable from the completion plane"
+    );
+}
+
+/// ★★ **ALL THREE PIN SOURCES MUST BE SEPARATELY ARMABLE.** ⊘ They present different
+/// addresses to one primitive; folding any two into one flag would make the earlier rung's
+/// measured control unreproducible, because the control would have to disarm both.
+#[test]
+fn the_three_pin_sources_are_separately_armable() {
+    assert!(
+        GuestPushbufArm::Pin.pins() && !GuestSemaArm::Off.pins() && !GuestOperandArm::Off.pins()
+    );
+    assert!(
+        !GuestPushbufArm::Off.pins() && GuestSemaArm::Pin.pins() && !GuestOperandArm::Off.pins()
+    );
+    assert!(
+        !GuestPushbufArm::Off.pins() && !GuestSemaArm::Off.pins() && GuestOperandArm::Pin.pins()
+    );
 }

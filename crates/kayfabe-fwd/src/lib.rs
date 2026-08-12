@@ -3151,10 +3151,10 @@ pub fn plan_doorbell(
         route.vchid,
         chan.engine,
         route.token,
-        chan.host_token
-            .map_or_else(|| "NONE-YET(materializes in these verbs)".to_string(), |t| format!(
-                "{t:#x}"
-            )),
+        chan.host_token.map_or_else(
+            || "NONE-YET(materializes in these verbs)".to_string(),
+            |t| format!("{t:#x}")
+        ),
     );
     Ok(Planned {
         plan: DoorbellPlan {

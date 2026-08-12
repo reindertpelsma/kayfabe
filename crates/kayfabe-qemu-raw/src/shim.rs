@@ -3181,6 +3181,14 @@ struct SharedDoorbell {
     /// **fourth** selector rather than a rider on [`GUEST_PUSHBUF_ENV`] so the two arms of this
     /// experiment differ in one variable.
     guest_sema: GuestSemaArm,
+    /// ★★★★★ **w270's arm** — whether the guest-RAM pin is given a **fourth** source: the
+    /// pages this channel's own `LAUNCH_DMA` **operands** name. See [`GUEST_OPERAND_ENV`] and
+    /// [`SharedDoorbell::pin_operand_guest_ram`].
+    ///
+    /// ★ Read ONCE at the composition root and carried, for `gr_route`'s reason exactly, and
+    /// its own **fifth** selector rather than a rider on [`GUEST_SEMA_ENV`] — so `w270`'s two
+    /// arms differ in one variable while every leg `w268` measured stays armed on both.
+    guest_operand: GuestOperandArm,
 }
 
 /// ★★★★★ **§5.12 — a joined framebuffer range, as the device crate's port sees it.**
@@ -4420,6 +4428,26 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::guest_sema`.
         if let Some(line) = self.pin_completion_guest_ram(token, seen.as_ref()) {
+            eprintln!("kayfabe: {line}");
+        }
+        // ★★★★★ **w270 — THE FOURTH SOURCE, AND IT IS HERE FOR LEG 4's REASON, TWO PLANES ON.**
+        //
+        // `[measured, w268_pass / w269_pass / w269b_pass — three consecutive armed boots]` with
+        // legs 4 and 5 armed the host copy engine reaches the guest's first substantive work
+        // and faults `ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000` — a page **no source in this
+        // device has ever named** (`w268` §3.2). A mapping installed after the ring has been
+        // rung is a mapping installed after the engine has already faulted for it, so this
+        // runs **above** `SharedDevice::doorbell` exactly as the two passes before it do.
+        //
+        // ⊘ It returns a `String` and gates nothing — same shape, same opacity property.
+        //
+        // ⚠ **It is NOT order-dependent on any other pass, and that is the point.** Legs 4
+        // and 5 each had a source that could be late (the declares); this one's source is in
+        // the bytes the doorbell is *about*, so `NO OPERAND PAGE TO PIN` can never be an
+        // ordering fact here — the counters on that line say which fact it is instead.
+        //
+        // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::guest_operand`.
+        if let Some(line) = self.pin_operand_guest_ram(token, seen.as_ref()) {
             eprintln!("kayfabe: {line}");
         }
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
@@ -6510,7 +6538,10 @@ impl SharedDoorbell {
             // ⊘ De-duplicated on the pair the guest wrote, not on the page: two entries that
             // name the same bytes are one extent, and two that name different lengths at one
             // address are two facts.
-            if extents.iter().any(|&(_, v, l)| v == d.gpu_va && l == d.len_bytes) {
+            if extents
+                .iter()
+                .any(|&(_, v, l)| v == d.gpu_va && l == d.len_bytes)
+            {
                 continue;
             }
             if extents.len() >= PUSHBUF_MAX_EXTENTS {
@@ -6525,7 +6556,10 @@ impl SharedDoorbell {
         let stride = match extents.as_slice() {
             [_] | [] => "n/a (fewer than two extents)".to_string(),
             rest => {
-                let mut s: Vec<u64> = rest.windows(2).map(|w| w[1].1.wrapping_sub(w[0].1)).collect();
+                let mut s: Vec<u64> = rest
+                    .windows(2)
+                    .map(|w| w[1].1.wrapping_sub(w[0].1))
+                    .collect();
                 s.dedup();
                 if s.len() == 1 {
                     format!("0x{:x} (uniform, OBSERVED — ⊘ never assumed)", s[0])
@@ -7287,6 +7321,455 @@ impl SharedDoorbell {
                  at the guest's own VAs. ⊘ This says NOTHING about whether the guest's WAIT \
                  was satisfied: only `COMPLETION-WATCH … OBSERVED` says that, and only the \
                  engine may write the payload"
+            )
+        } else {
+            format!(
+                " | ⚠ {pinned} fresh + {replayed} replay of {total} run(s), {bytes} fresh \
+                 bytes. ⚠ `PlacementRefused` means the fixed map landed elsewhere and was \
+                 UNWOUND rather than adopted; RM status `0x51` is `NV_ERR_NO_MEMORY` and is \
+                 COLLISION-OR-EXHAUSTION — indistinguishable from the status alone"
+            )
+        };
+        Some(format!(
+            "{table}\n    RUNS: {} contiguous run(s) over {} page(s){verdict}{control}\n    {}",
+            runs.len(),
+            resolved_pages.len(),
+            lines.join("\n    ")
+        ))
+    }
+
+    /// ★★★★★ **THE OPERAND PIN'S ONLY SOURCE — the pages THIS channel's own `LAUNCH_DMA`
+    /// operands name, read at THIS doorbell.**
+    ///
+    /// Returns the line to print (**always** — an arm that found nothing and an arm that did
+    /// not run are different facts) and the distinct 4 KiB page VAs the guest's own
+    /// `OFFSET_OUT_*`/`OFFSET_IN_*` operands decoded to, **expanded over each extent**.
+    ///
+    /// ⚠ **Extent, not base page.** A copy longer than a page faults on its later pages too,
+    /// and pinning only `dst & !0xfff` would produce a green supply row beside a live fault —
+    /// the exact shape `w266` measured one plane over (0 faults *and* 0 completions).
+    ///
+    /// ⊘ It resolves nothing and it pins nothing. The caller puts every page through the same
+    /// address-table lookup the other two passes use, so `miss = fault` is unchanged.
+    ///
+    /// See [`kayfabe_rt::ceutils::observe_ce_operand_targets`] for the three boots that made
+    /// this necessary and for why it is not the `cap2b` class.
+    fn ce_operand_pages(
+        &self,
+        token: u64,
+        f: &kayfabe_rt::device::CeChannelFacts,
+        page: u64,
+    ) -> (String, std::collections::BTreeSet<u64>) {
+        let head = format!("OPERAND-SOURCE-CE token={token:#010x}");
+        let none = std::collections::BTreeSet::new();
+        let (Some(vaspace), Some(ring_va)) = (f.vaspace, f.ring_va) else {
+            return (
+                format!(
+                    "{head} → NOT ASKED: vaspace={:?} ring_va={:?} — there is no ring to read \
+                     this channel's own methods out of. ⊘ Not a miss",
+                    f.vaspace, f.ring_va
+                ),
+                none,
+            );
+        };
+        let Some(plane) = self.plane.upgrade() else {
+            return (
+                format!("{head} → NO PLANE (the register plane is gone)"),
+                none,
+            );
+        };
+        let root = match SharedDoorbell::doorbell_root(
+            &plane,
+            f.client,
+            vaspace,
+            f.vas_pdb.map(|p| p.0),
+        ) {
+            DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+            DoorbellRoot::Absent => {
+                return (
+                    format!("{head} → NO ROOT (this channel has no VA space root to walk)"),
+                    none,
+                );
+            }
+            DoorbellRoot::Underivable(p, why) => {
+                return (
+                    format!("{head} → ROOT UNDERIVABLE from pdb 0x{p:x}: {}", why.kind()),
+                    none,
+                );
+            }
+        };
+        let chan = kayfabe_rt::ceutils::CeUtilsChannel {
+            client: f.client,
+            vaspace,
+            ring_va,
+            ring_entries: f.ring_entries,
+        };
+        // ⊘ The channel's OWN cursor and OWN accumulator, both read and NEITHER written back —
+        // `ce_release_pages`' discipline, for its reasons.
+        let cursor = *self
+            .ce
+            .cursors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(f.proc.0, f.chan.0))
+            .unwrap_or(&kayfabe_rt::ceutils::GpCursor::default());
+        let state = *self
+            .ce
+            .states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(f.proc.0, f.chan.0))
+            .unwrap_or(&kayfabe_rt::ceutils::MethodState::default());
+        let out = {
+            let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(vmm) = held.as_mut() else {
+                drop(held);
+                return (
+                    format!("{head} → NO MEMORY PLANE (nothing to read the ring out of)"),
+                    none,
+                );
+            };
+            let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
+            plane.ce_session_with_root(&root, demand, |ce| {
+                self.device.with_pushbuffer(|pb| {
+                    kayfabe_rt::ceutils::observe_ce_operand_targets(
+                        ce, pb, vmm, chan, cursor, state,
+                    )
+                })
+            })
+            // ⚠ Every lock is released HERE, before the caller pins anything.
+        };
+        let t = match out {
+            Ok(t) => t,
+            Err(refusal) => {
+                return (
+                    format!(
+                        "{head} → UNREADABLE: {}. ⊘ A statement about this read, NOT about the \
+                         guest's bytes",
+                        refusal.describe()
+                    ),
+                    none,
+                );
+            }
+        };
+        let mut pages: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        let mut dropped = 0usize;
+        let mut first_dropped: Option<u64> = None;
+        let mut writes = 0usize;
+        let mut reads = 0usize;
+        for e in &t.extents {
+            if e.write {
+                writes += 1;
+            } else {
+                reads += 1;
+            }
+            // ⚠ THE WHOLE EXTENT, page by page. `saturating_*` throughout: a decoded `len`
+            // is the guest's number and a hostile one must clamp rather than wrap.
+            let first = e.va.0 & !(page - 1);
+            let last = e.va.0.saturating_add(e.len.saturating_sub(1)) & !(page - 1);
+            let mut p = first;
+            loop {
+                if pages.len() >= PUSHBUF_MAX_PAGES && !pages.contains(&p) {
+                    dropped += 1;
+                    first_dropped.get_or_insert(p);
+                } else {
+                    pages.insert(p);
+                }
+                if p >= last {
+                    break;
+                }
+                p = p.saturating_add(page);
+            }
+        }
+        // ⊘ THE SAMPLE IS OF EXTENTS, NOT OF PAGES, and it carries the DIRECTION — the only
+        // thing that can attribute a surviving `Xid`'s ACCESS_TYPE once both classes are
+        // pinned. `w265`: a count cannot see a substitution; these rows are the identity.
+        let sample: Vec<String> = t
+            .extents
+            .iter()
+            .take(PUSHBUF_REPORT)
+            .map(|e| {
+                format!(
+                    "{}@0x{:x}+0x{:x}",
+                    if e.write { "W" } else { "R" },
+                    e.va.0,
+                    e.len
+                )
+            })
+            .collect();
+        (
+            format!(
+                "{head} proc={} chan={} engine={:?} → methods={} launches={} opaque={} \
+                 release_only={} physical={} operand(s)={} ({writes} write, {reads} read){} ⇒ \
+                 {} page(s). ⊘ Every address here is the GUEST's own OFFSET_OUT_*/OFFSET_IN_* \
+                 operand, decoded by the chip's codec at THIS doorbell — never a remembered \
+                 page{}",
+                f.proc.0,
+                f.chan.0,
+                f.engine,
+                t.methods,
+                t.launches,
+                t.opaque,
+                t.release_only,
+                t.physical,
+                t.extents.len(),
+                pushbuffer_sample(&sample, t.extents.len()),
+                pages.len(),
+                match first_dropped {
+                    Some(va) => format!(
+                        " | ⚠⚠ CAPPED at {PUSHBUF_MAX_PAGES} pages — {dropped} DROPPED, first \
+                         va=0x{va:x}. ⊘ INCOMPLETE"
+                    ),
+                    None => String::new(),
+                }
+            ),
+            pages,
+        )
+    }
+
+    /// ★★★★★ **w270 — THE PIN'S FOURTH SOURCE: the pages this channel's own `LAUNCH_DMA`
+    /// operands name.**
+    ///
+    /// # ★★★ Why, in one chain, all of it measured
+    ///
+    /// `w269` read the spinning guest with `ptrace`: on the armed arm `cuCtxCreate` waits on
+    /// **one** item, a copy-engine release semaphore at **`0x2_0440ff70`**, wanting `2` and
+    /// holding `1`. `run_w268_pass_qemu.log:980` shows that address is **chan 8's own declared
+    /// release target**, decoded from the submission `w268` §3.2 identifies as the faulting
+    /// one (`methods=11 launches=3`). And that submission takes `Xid 31 ENGINE CE2
+    /// HUBCLIENT_CE0 FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000` on **three consecutive
+    /// armed boots**, at a page `w268` measured appearing nowhere else in the boot.
+    /// **A submission that faults never reaches its release.**
+    ///
+    /// # ⊘ It is the SAME mechanism, given a fourth source
+    ///
+    /// [`kayfabe_rt::device::SharedDevice::pin_guest_ram`] has placed bytes on a live guest
+    /// three times already (`w265`'s eight pushbuffer runs, `w266`/`w268`'s completion page).
+    /// This adds no primitive: it adds the one plane none of the three sources can see, for a
+    /// structural reason — the ring, the pushbuffers and the release targets are all
+    /// *declarations about the channel*, and a copy destination is an **operand of a method**.
+    ///
+    /// # ⚠ Locks
+    ///
+    /// Identical to [`Self::pin_completion_guest_ram`]'s: the read's plane session and the
+    /// memory-plane mutex are taken and released inside [`Self::ce_operand_pages`], **before**
+    /// any pin, because `pin_guest_ram` runs host ioctls and may park on the isolate pool.
+    #[allow(clippy::too_many_lines)]
+    fn pin_operand_guest_ram(
+        &self,
+        token: u64,
+        facts: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<String> {
+        // ⊘ SILENT when disarmed, for `pin_pushbuffer_guest_ram`'s reason: the control's log
+        // must not contain a line the armed run's does not.
+        if !self.guest_operand.pins() {
+            return None;
+        }
+        let backing = self.guest_ram_backing?;
+        let head = format!(
+            "OPERAND-PIN token={token:#010x} dev={} ino={}",
+            backing.dev, backing.ino
+        );
+        let Some(f) = facts else {
+            return Some(format!(
+                "{head} → NO CHANNEL (the token routed to no channel, so there is no VA space \
+                 to pin INTO)"
+            ));
+        };
+        let Some(pdb) = f.vas_pdb else {
+            return Some(format!(
+                "{head} proc={} chan={} → NO PDB (this channel's VA space did not resolve, so \
+                 there is no address space to pin into; ⊘ not a miss — nothing was asked)",
+                f.proc.0, f.chan.0
+            ));
+        };
+        let who = format!(
+            "{head} proc={} chan={} pdb=0x{:x}",
+            f.proc.0, f.chan.0, pdb.0
+        );
+        let page = Self::RING_PIN_BYTES;
+        let (source, pages) = self.ce_operand_pages(token, f, page);
+        let source = format!("{who}\n    {source}");
+        if pages.is_empty() {
+            return Some(format!(
+                "{source}\n    ⊘ NO OPERAND PAGE TO PIN. ⚠ Read the counters on the line \
+                 above before reading this as an absence: `release_only = launches` means \
+                 this submission only SIGNALS (no copy to address), `physical > 0` means its \
+                 operands are not VAs at all, `opaque = methods` means these are another \
+                 engine's bytes, and all three are different facts from *the decode failed*"
+            ));
+        }
+        // ---- THE TABLE, one lookup per page, and MISS = FAULT -----------------------------
+        let mut resolved_pages: Vec<(u64, u64)> = Vec::new(); // (va, gpa), VA-sorted
+        let mut n_miss = 0usize;
+        let mut n_wrong_aperture = 0usize;
+        let mut misses: Vec<String> = Vec::new();
+        let mut wrong_aperture: Vec<String> = Vec::new();
+        for &pva in &pages {
+            match self
+                .device
+                .resolve(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(pva))
+            {
+                Err(e) => {
+                    n_miss += 1;
+                    if misses.len() < PUSHBUF_REPORT {
+                        misses.push(format!("va=0x{pva:x}:{e:?}"));
+                    }
+                }
+                // ⊘ REFUSED BY NAME, never reinterpreted. An operand that binds in the
+                // framebuffer is a real and served case — that memory is ours already and
+                // needs no descriptor — and calling its `Binding::phys` a guest-physical
+                // address would be the one reinterpretation `pin_ring_guest_ram` refuses.
+                Ok((b, _)) if !b.is_guest_ram() => {
+                    n_wrong_aperture += 1;
+                    if wrong_aperture.len() < PUSHBUF_REPORT {
+                        wrong_aperture.push(format!(
+                            "va=0x{pva:x}:{:?}@0x{:x}",
+                            b.aperture(),
+                            b.phys()
+                        ));
+                    }
+                }
+                Ok((b, off)) => resolved_pages.push((pva, b.phys().saturating_add(off))),
+            }
+        }
+        // ⊘ `OPERAND-TABLE:`, not `TABLE:` — leg 4's and leg 5's passes print the identical
+        // shape in the same log, and a grader's regex cannot tell three identical labels
+        // apart. `w266`'s lesson: adding a producer silently re-scopes every consumer that
+        // was implicitly scoped by being the only one.
+        let table = format!(
+            "{source}\n    OPERAND-TABLE: {} page(s) asked, {} resolved in guest RAM, {n_miss} \
+             MISS{}, {n_wrong_aperture} NOT-IN-GUEST-RAM{}",
+            pages.len(),
+            resolved_pages.len(),
+            pushbuffer_sample(&misses, n_miss),
+            pushbuffer_sample(&wrong_aperture, n_wrong_aperture),
+        );
+        if resolved_pages.is_empty() {
+            return Some(format!(
+                "{table}\n    ⊘ NOT ONE OPERAND PAGE RESOLVED IN GUEST RAM — nothing was asked \
+                 of the hypervisor and nothing was pinned. ⚠ A `MISS` here is a statement \
+                 about the POPULATE side of the address table (`w264`'s finding), and \
+                 `NOT-IN-GUEST-RAM` is a statement that this operand lives in the \
+                 framebuffer — which needs no pin at all. They are opposite readings and the \
+                 counts above separate them"
+            ));
+        }
+        // ---- THE RUNS — contiguous in BOTH spaces, exactly as legs 4 and 5 coalesce -------
+        let runs = pushbuffer_runs(&resolved_pages, page);
+        // ---- the file offsets, from the HYPERVISOR's OWN stated layout -------------------
+        let (layout, control) = {
+            let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(vmm) = held.as_ref() else {
+                drop(held);
+                return Some(format!(
+                    "{table}\n    → NO MEMORY PLANE (between realize and `attach_ram` there \
+                     is no layout to resolve against)"
+                ));
+            };
+            let layout: Vec<_> = runs
+                .iter()
+                .map(|&(va, gpa, len)| (va, gpa, len, vmm.resolve_guest_ram(backing, gpa, len)))
+                .collect();
+            // ★★★ The same DERIVED negative control legs 4 and 5 carry.
+            let top = vmm
+                .stated_guest_ram(backing)
+                .iter()
+                .map(|r| r.gpa_end())
+                .max()
+                .unwrap_or(0);
+            let probe = u64::try_from(top).unwrap_or(u64::MAX).saturating_add(page);
+            let control = (probe, vmm.resolve_guest_ram(backing, probe, page));
+            drop(held);
+            (layout, control)
+        };
+        let control = match control.1 {
+            Err(r) => format!(
+                " | ✅ NEGATIVE CONTROL: gpa=0x{:x} (one page past the top of every stated \
+                 run) REFUSED BY NAME as `{}`",
+                control.0,
+                r.name()
+            ),
+            Ok(bad) => format!(
+                " | ⚠⚠ NEGATIVE CONTROL DID NOT FIRE: gpa=0x{:x} was ANSWERED with file \
+                 offset 0x{:x}. ⊘ Read every line above with that in mind",
+                control.0, bad.file_offset
+            ),
+        };
+        // ---- one grant and one pin PER CONTIGUOUS RUN ------------------------------------
+        let total = layout.len();
+        let mut lines: Vec<String> = Vec::new();
+        let mut pinned = 0usize;
+        let mut replayed = 0usize;
+        let mut bytes = 0u64;
+        for (i, &(rva, rgpa, rlen, ref run)) in layout.iter().enumerate() {
+            let at = format!(
+                "{who} operand run {}/{total} va=0x{rva:x} gpa=0x{rgpa:x} len={rlen}",
+                i + 1
+            );
+            let run = match run {
+                Ok(r) => r,
+                Err(r) => {
+                    lines.push(format!(
+                        "{at} → REFUSED BY NAME `{}` (the hypervisor stated no run covering \
+                         this guest-physical address; ⊘ NOT clamped, NOT assumed identity)",
+                        r.name()
+                    ));
+                    continue;
+                }
+            };
+            // ★ Read-WRITE for BOTH directions, and the reason is not laziness. The engine
+            // faults `ACCESS_TYPE_VIRT_WRITE`, so a destination needs it outright; and a
+            // page can be a source here and a destination in the next submission, so a
+            // read-only grant on the source would have to be *upgraded* later — and
+            // `pin_guest_ram` is idempotent on the VA, so the second call would replay the
+            // first grant rather than widen it. ⊘ The narrower grant is not the safer one;
+            // it is the one that fails at a later ioctl with a status that will not name why.
+            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                run.file_offset,
+                rlen,
+                kayfabe_vmm::Prot::ReadWrite,
+            );
+            match self
+                .device
+                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(rva), grant)
+            {
+                Ok(p) => {
+                    if p.already {
+                        replayed += 1;
+                    } else {
+                        pinned += 1;
+                        bytes += rlen;
+                    }
+                    lines.push(format!(
+                        "{at} → file offset 0x{:x} → {} memory={:#x} host_va=0x{:x} \
+                         placed_as_asked={}",
+                        run.file_offset,
+                        if p.already {
+                            "ALREADY PINNED (idempotent replay)"
+                        } else {
+                            "PINNED"
+                        },
+                        p.memory.raw(),
+                        p.host_va,
+                        p.host_va == rva,
+                    ));
+                }
+                Err(e) => lines.push(format!(
+                    "{at} → file offset 0x{:x} → REFUSED {e:?}",
+                    run.file_offset
+                )),
+            }
+        }
+        let verdict = if pinned + replayed == total {
+            format!(
+                " | ★★★★★ ALL {total} OPERAND RUN(S) PLACED ({pinned} fresh, {replayed} \
+                 idempotent replay), {bytes} fresh bytes — the pages the guest's OWN \
+                 LAUNCH_DMA operands name are now described to host RM and mapped FIXED at \
+                 the guest's own VAs. ⊘ This says NOTHING about whether the submission \
+                 RETIRED: `the operand pages are mapped` and `the release was written` are \
+                 different facts, and only the guest's own polled slot reaching 2 is the \
+                 second"
             )
         } else {
             format!(
@@ -8814,6 +9297,10 @@ impl Regs {
         // ★★★★★ LEG 5's arm — read ONCE, here, and its own variable rather than a rider on
         // leg 4's, so the two arms of this experiment differ in one. See [`GUEST_SEMA_ENV`].
         let guest_sema = selected_guest_sema()?;
+        // ★★★★★ w270's arm — read ONCE, here, and its own variable rather than a rider on
+        // leg 5's, so this rung's two arms differ in one while every leg w268 measured stays
+        // armed on both. See [`GUEST_OPERAND_ENV`].
+        let guest_operand = selected_guest_operand()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -8971,6 +9458,28 @@ impl Regs {
                      facts and only COMPLETION-WATCH ... OBSERVED is the second",
             },
         );
+        // ★★★★★ w270's arm — printed on BOTH arms and for `GUEST-SEMA`'s exact reason: this
+        // pass prints and decides nothing, so a silently disarmed boot is indistinguishable
+        // from an armed one by absence alone. `guest_ram_backing=` is beside it because the
+        // arm is necessary and not sufficient.
+        eprintln!(
+            "kayfabe: GUEST-OPERAND arm={} guest_ram_backing={} ⇒ the pages this channel's own \
+             LAUNCH_DMA operands name are {}",
+            guest_operand.as_str(),
+            guest_ram_backing.is_some(),
+            match guest_operand {
+                GuestOperandArm::Off =>
+                    "NOT presented to the guest-RAM pin (the control — exactly as at \
+                     w269b_pass, where the host GPU faulted Xid 31 CE2 HUBCLIENT_CE0 \
+                     ACCESS_TYPE_VIRT_WRITE at 0x2_04420000, a page no source in this device \
+                     has ever named)",
+                GuestOperandArm::Pin =>
+                    "RESOLVED through the address table and PINNED, one OS_DESCRIPTOR per \
+                     contiguous run, mapped FIXED at the guest's own VA. ⊘ Supply side only: \
+                     `the operand pages are mapped` and `the submission retired` are different \
+                     facts, and only the second can write 2 into 0x2_0440ff70",
+            },
+        );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
         // exactly this reason: two ports need the same registry, and a second
         // `export_directory()` call would be a SECOND selection of "which registry".
@@ -8999,6 +9508,7 @@ impl Regs {
             gr_route,
             guest_pushbuf,
             guest_sema,
+            guest_operand,
         }));
         Ok(Regs {
             plane,
@@ -11329,6 +11839,110 @@ fn selected_guest_sema() -> Result<GuestSemaArm, (Status, &'static str)> {
     }
 }
 
+/// ★★★★★ **w270 — whether the guest-RAM pin is given a FOURTH source: the pages this
+/// channel's own `LAUNCH_DMA` OPERANDS name.**
+///
+/// | value | what it does |
+/// |---|---|
+/// | `off` (default) | today's behaviour, byte for byte. Not one `OPERAND-PIN` line |
+/// | `pin` | ★ every **virtual** `dst`/`src` extent a `CeLaunchDma` in this doorbell's submission names contributes its **pages**; they are de-duplicated, resolved through the address table, refused unless they bind in guest RAM, coalesced into contiguous runs, and pinned FIXED at the guest's own VA |
+///
+/// # ★★★ WHY THIS SOURCE EXISTS, and it is one address hardware named and we never did
+///
+/// `[measured 2026-08-12, w268_pass / w269_pass / w269b_pass — three consecutive armed boots,
+/// real GA106]` the guest's first substantive copy-engine work (chan 8's **second**
+/// submission, `methods=11 launches=3` over two GPFIFO entries) takes
+/// `Xid 31 ENGINE CE2 HUBCLIENT_CE0 FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000`. `w268`
+/// §3.2 measured that page appearing **nowhere else in the boot** — *"no source in this device
+/// has ever named it"*. And `run_w268_pass_qemu.log:980` shows that same submission declaring
+/// `release_target(s)=1 [0x20440ff70]`, which `w269` measured `cuCtxCreate` polling for the
+/// value `2` while it holds `1`. **A submission that faults never reaches its release.**
+///
+/// ⇒ The gap is structural rather than an oversight. The pin's three existing sources are the
+/// channel's **ring** VA, its **GPFIFO entries' pushbuffers** and its **release targets** —
+/// none of them a copy *operand* — and the one census that decodes operands
+/// ([`kayfabe_rt::completion_watch::decode_address_operands`]) refuses every write on a
+/// subchannel not bound to `AMPERE_COMPUTE_B`, so a copy engine's `OFFSET_OUT_*` is invisible
+/// to it **by construction**.
+///
+/// # ⚠ WHAT AN ARMED LINE STILL DOES NOT MEAN
+///
+/// *"The operand pages are mapped"* and *"the submission retired"* are different facts, and
+/// only the second can write `2` into `0x2_0440ff70`. This arm produces the first. ⊘ It also
+/// pins **both** directions, so if the submission does retire this arm **cannot** say whether
+/// the destination or the source was what blocked it — pre-registered as a cost in
+/// `docs/design/w270_the_operand_pin_prereg.md` §1.2, with the `Xid`'s own `ACCESS_TYPE` as
+/// the only attributor left for a *surviving* fault.
+pub const GUEST_OPERAND_ENV: &str = "KAYFABE_GUEST_OPERAND";
+
+/// Which arm of the operand pin a boot is running. See [`GUEST_OPERAND_ENV`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestOperandArm {
+    /// The default and the control: the guest-RAM pin's sources stay the ring VA, the
+    /// pushbuffer pages and the declared/observed completion pages — exactly the configuration
+    /// `w269b_pass` measured, where the host GPU faulted `VIRT_WRITE @ 0x2_04420000`.
+    Off,
+    /// ★ The launches' own virtual operand extents are presented to the pin.
+    Pin,
+}
+
+impl GuestOperandArm {
+    /// Every arm, so a test can quantify rather than restate.
+    pub const ALL: [GuestOperandArm; 2] = [GuestOperandArm::Off, GuestOperandArm::Pin];
+
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GuestOperandArm::Off => "off",
+            GuestOperandArm::Pin => "pin",
+        }
+    }
+
+    /// Whether the launches' operand pages are presented to the guest-RAM pin on this arm.
+    #[must_use]
+    pub fn pins(self) -> bool {
+        self == GuestOperandArm::Pin
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_guest_operand`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`GuestOperandArm::Off`].
+pub fn guest_operand_from(value: Option<&str>) -> Result<GuestOperandArm, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(GuestOperandArm::Off),
+        Some("pin") => Ok(GuestOperandArm::Pin),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_GUEST_OPERAND does not name an arm: the only values are `off` (the \
+             default and the control — the guest-RAM pin's sources stay the ring VA, the \
+             pushbuffer pages and the completion pages, exactly as at w269b_pass, where the \
+             host GPU faulted ACCESS_TYPE_VIRT_WRITE at 0x2_04420000) and `pin` (the virtual \
+             dst/src extents this channel's own LAUNCH_DMA methods name are resolved through \
+             the address table and pinned FIXED at the guest's own VAs). It is not defaulted, \
+             because a typo that silently disarmed the pin would make an evidence run and its \
+             own control indistinguishable — the control's expected result is `no OPERAND-PIN \
+             line was ever printed`, which is exactly what a disarmed evidence run also shows. \
+             ⊘ `on`/`1` are not accepted: this is a two-arm experiment, not a boolean.",
+        )),
+    }
+}
+
+/// Which arm [`GUEST_OPERAND_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_guest_operand() -> Result<GuestOperandArm, (Status, &'static str)> {
+    match std::env::var_os(GUEST_OPERAND_ENV) {
+        None => Ok(GuestOperandArm::Off),
+        Some(v) => guest_operand_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
 /// Which arm [`GUEST_RING_ENV`] names.
 ///
 /// # Errors
@@ -11787,7 +12401,10 @@ mod pushbuffer_pin_tests {
     fn the_w263_shape_is_one_page_and_one_run_per_extent() {
         // `gp[0]@0x200218000=0x202400000+0x20` — the real entry, byte for byte.
         let (pages, dropped, first) = pushbuffer_pages(&[(0, 0x2_0240_0000, 0x20)], PAGE);
-        assert_eq!(pages.iter().copied().collect::<Vec<_>>(), vec![0x2_0240_0000]);
+        assert_eq!(
+            pages.iter().copied().collect::<Vec<_>>(),
+            vec![0x2_0240_0000]
+        );
         assert_eq!(dropped, 0);
         assert_eq!(first, None);
         let runs = pushbuffer_runs(&[(0x2_0240_0000, 0x3d45_f000)], PAGE);
@@ -11835,8 +12452,7 @@ mod pushbuffer_pin_tests {
     /// in the report would not be the number of pages.
     #[test]
     fn two_extents_sharing_a_page_spend_one_slot() {
-        let (pages, dropped, _) =
-            pushbuffer_pages(&[(0, 0x1000, 0x10), (7, 0x1FF0, 0x10)], PAGE);
+        let (pages, dropped, _) = pushbuffer_pages(&[(0, 0x1000, 0x10), (7, 0x1FF0, 0x10)], PAGE);
         assert_eq!(pages.len(), 1);
         assert_eq!(dropped, 0);
     }
