@@ -861,6 +861,34 @@ pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
 /// src/qemu/nvkvm_gpu_emul.c:9622`).
 pub const CE_COPY_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// ★★★★★ **The GPU-VA window `[start, end)` that [`HostRmBackend::probe_guest_reachability`]
+/// DICTATES for its own ring, its control source and its destination.**
+///
+/// ⊘⊘ **It is public because a caller asking that probe about an address inside it is asking
+/// the probe about ITSELF, and the answer looks exactly like a real one.** Measured
+/// 2026-08-12 on `vh`: `--ce-client-fault` asked whether `0x7_0000_0000` was mapped, the
+/// engine retired the read and moved `0x20018000`, and the rung printed `RESOLVED`. Nothing
+/// was mapped there by anyone — except the probe's own channel ring, which the probe places
+/// at exactly that address, by design, for the reason its own doc comment gives.
+///
+/// ⇒ Callers that choose a "surely unmapped" VA must assert it is **outside this window**,
+/// and they can do it at compile time:
+///
+/// ```
+/// use kayfabe_isolate_host::rm::REACH_PROBE_WINDOW;
+/// const UNMAPPED_VA: u64 = 0x9_0000_0000;
+/// const _: () = assert!(
+///     UNMAPPED_VA < REACH_PROBE_WINDOW.0 || UNMAPPED_VA >= REACH_PROBE_WINDOW.1,
+/// );
+/// ```
+///
+/// ★ This is the same class as the 2026-08-10 failure recorded inside the probe — *"a probe
+/// that allocates from the same allocator, in the same space, at the same moment, is not an
+/// independent observer"* — one layer up: there, the probe's own **allocator** produced the
+/// collision; here its own **published constant** did, and the constant was private so no
+/// caller could see it.
+pub const REACH_PROBE_WINDOW: (u64, u64) = (0x0000_0007_0000_0000, 0x0000_0007_0030_0000);
+
 /// The opaque status a copy that **never released its semaphore** reports.
 ///
 /// ★★ The single most important refusal in this file. The copy engine writes this word
@@ -5608,9 +5636,21 @@ impl HostRmBackend {
         /// moment, is not an independent observer. R26 established that a channel ring can
         /// be placed where its caller says, so there is no reason to let RM choose here.
         /// 64 KiB-aligned and three objects apart, well clear of RM's own base.
-        const PROBE_RING_AT: u64 = 0x0000_0007_0000_0000;
-        const CTRL_SRC_AT: GpuVa = GpuVa(0x0000_0007_0010_0000);
-        const DST_AT: GpuVa = GpuVa(0x0000_0007_0020_0000);
+        ///
+        /// ⊘⊘ **CORRECTION 2026-08-12, and it is why [`REACH_PROBE_WINDOW`] now exists.**
+        /// These three addresses were private to this function, so a *caller* asking this
+        /// probe *"is `0x7_0000_0000` mapped?"* was asking about the probe's **own ring**.
+        /// It measured exactly that: the engine retired the read, moved `0x20018000`, and
+        /// the verdict came back `Read` — the instrument reading its own memory, one layer
+        /// up from the 2026-08-10 failure the paragraph above records. The window is public
+        /// now and callers assert against it **at compile time**.
+        const PROBE_RING_AT: u64 = REACH_PROBE_WINDOW.0;
+        const CTRL_SRC_AT: GpuVa = GpuVa(REACH_PROBE_WINDOW.0 + 0x10_0000);
+        const DST_AT: GpuVa = GpuVa(REACH_PROBE_WINDOW.0 + 0x20_0000);
+        const _: () = assert!(
+            DST_AT.0 + BYTES <= REACH_PROBE_WINDOW.1,
+            "every address this probe dictates must lie inside the window it publishes"
+        );
 
         let range = self.narrow(vas)?;
         let ctrl_src = self.conn.alloc_device_local(BYTES)?;

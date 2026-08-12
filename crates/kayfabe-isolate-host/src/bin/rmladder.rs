@@ -2517,8 +2517,24 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
     /// placement the ladder uses (`0x2_0020_0000`, `0x4_1100_0000`) so *"free"* cannot be an
     /// accident of adjacency. 64 KiB — RM's big-page granularity for device-local memory, so
     /// the allocator cannot be asked a finer question than this (measured, `probe_va` docs).
-    const UNMAPPED_VA: u64 = 0x7_0000_0000;
+    ///
+    /// ⊘⊘ **THE FIRST CHOICE WAS `0x7_0000_0000` AND IT WAS THE PROBE'S OWN RING.**
+    /// `[measured 2026-08-12, vh, run `r33_ce_client_fault`]` arm 4 asked whether that address
+    /// was mapped, the engine **retired the read and moved `0x20018000`**, and the arm printed
+    /// `RESOLVED`. Nothing had mapped it — except `probe_guest_reachability`, which places its
+    /// own channel ring there **by design**, in the space it builds. The instrument read
+    /// itself and the answer was indistinguishable from a real one.
+    /// ⇒ The window is published now, and the assert below makes the collision
+    /// **unrepresentable rather than merely avoided** — a comment saying "keep these apart" is
+    /// exactly what was already there, one layer down, and it did not hold.
+    const UNMAPPED_VA: u64 = 0x9_0000_0000;
     const UNMAPPED_LEN: u64 = 0x1_0000;
+    const _: () = assert!(
+        UNMAPPED_VA + UNMAPPED_LEN <= kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0
+            || UNMAPPED_VA >= kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.1,
+        "the address arm 3/arm 4 probe must lie OUTSIDE the window probe_guest_reachability \
+         dictates for its own ring and operands, or both arms measure the instrument"
+    );
 
     println!(
         "info  R33 raw CE client   = GPU {gpu}, euid {} — a copy engine allocated, mapped, \
@@ -2707,6 +2723,18 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                 false
             }
             Ok(fvas) => {
+                // ⊘⊘ NAMED BEFORE THE VERDICT, because the verdict is meaningless without it:
+                // this arm is in a THIRD address space — not arm 1's operand space and not
+                // arms 2/3's control space. It is NOT a cross-check of arm 3, and an earlier
+                // draft of this rung printed one as if it were.
+                println!(
+                    "info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space \
+                     (range {:#010x}) — NOT arm 1's operand space and NOT arms 2/3's control \
+                     space. ⊘ Arms 3 and 4 ask the same question about the same NUMBER in \
+                     DIFFERENT address spaces, so they can disagree without either being \
+                     wrong, and neither corroborates the other",
+                    fvas.raw()
+                );
                 let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA) {
                     Ok(r) => match r.reach {
                         GuestReach::ControlFailed => {
@@ -2737,10 +2765,17 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                         GuestReach::Read { word, outcome } => {
                             println!(
                                 "FAIL  R33 arm 4 RESOLVED  = the engine READ {UNMAPPED_VA:#018x} \
-                                 and moved {word:#010x} (GP_GET {} GP_PUT {}). Something IS \
-                                 mapped there and arm 3 said otherwise — the two instruments \
-                                 disagree and arm 3 is the one to distrust",
-                                outcome.gp_get, outcome.gp_put
+                                 in range {:#010x} and moved {word:#010x} (GP_GET {} GP_PUT \
+                                 {}). Something IS mapped there IN THAT SPACE. ⊘ This does NOT \
+                                 contradict arm 3, which asked about a different address \
+                                 space — the first suspect is THE PROBE'S OWN dictated window \
+                                 {:#018x}..{:#018x} (`rm::REACH_PROBE_WINDOW`), and if the VA \
+                                 is outside it, something else in this space claimed it",
+                                fvas.raw(),
+                                outcome.gp_get,
+                                outcome.gp_put,
+                                kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0,
+                                kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.1
                             );
                             false
                         }
