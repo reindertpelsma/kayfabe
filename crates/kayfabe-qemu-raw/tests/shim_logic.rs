@@ -2790,3 +2790,137 @@ fn the_pushbuf_arm_is_independent_of_the_ring_arm_and_the_route_arm() {
          supply side, the pushbuffer plane and the transport stop being separately measurable"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ LEG 5 — `KAYFABE_GUEST_SEMA`, the arm that gives the guest-RAM PIN a THIRD source:
+// the completion semaphore pages the guest's own `SET_REPORT_SEMAPHORE` declared.
+//
+// `[measured, w265, real GA106]` arming leg 4 moved the host GPU's eight `Xid 31` to
+// `ENGINE CE3 HUBCLIENT_CE1 @ 0x2_0440f000 ACCESS_TYPE_VIRT_WRITE` — one address, and that
+// address is the page holding all eight `COMPLETION-DECLARE` targets (`0x20440ff80 …
+// 0x20440fff0`, all `site=GuestRam`). The engine is executing the guest's methods and cannot
+// write the completion. ⊘ Same mechanism as leg 4, one page, a reader that did not exist.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestSemaArm, guest_sema_from};
+
+/// ⊘ **The default must leave every prior boot comparable.** The pass runs on the doorbell
+/// fall-through and issues host ioctls; a default that armed would change the shape — and the
+/// cost — of every log ever taken, including `w265`'s own control.
+#[test]
+fn the_default_guest_sema_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_sema_from(None), Ok(GuestSemaArm::Off));
+    assert!(
+        !GuestSemaArm::Off.pins(),
+        "★ the default arm presented the completion pages to the pin"
+    );
+}
+
+/// ★★★★★ THE RUNG: `pin` is the only arm that pins, through one predicate the shim and this
+/// test both read — never through `== Pin` spelled at a call site.
+#[test]
+fn only_the_sema_pin_arm_pins_and_the_predicate_is_the_gate() {
+    assert!(GuestSemaArm::Pin.pins());
+    let pinning: Vec<GuestSemaArm> = GuestSemaArm::ALL.into_iter().filter(|a| a.pins()).collect();
+    assert_eq!(
+        pinning,
+        vec![GuestSemaArm::Pin],
+        "★ exactly one arm may present the completion pages; a second is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_sema_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestSemaArm::ALL {
+        assert_eq!(
+            guest_sema_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestSemaArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), GuestSemaArm::ALL.len(), "two arms share a name");
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly: a disarmed evidence run
+/// prints **no `SEMA-PIN` line at all**, which is exactly what a correct control prints.
+/// Absence cannot distinguish them, so the spelling must.
+#[test]
+fn a_value_that_is_not_a_guest_sema_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Pin",
+        "pins",
+        "sema",
+        "semaphore",
+        "ring",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_sema_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-sema arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestSemaArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **FOUR SELECTORS, SIXTEEN CELLS.** ⊘ Nothing in the shim may make one arm imply
+/// another: `w266` runs two boots that differ in **one** variable, and that is only
+/// expressible if leg 5 is orthogonal to the three legs already armed. ⚠ `w263`'s arms did
+/// not have this property and its own RESULT §3.1 says what it cost.
+#[test]
+fn the_sema_arm_is_independent_of_the_pushbuf_ring_and_route_arms() {
+    let mut cells = Vec::new();
+    for sema in GuestSemaArm::ALL {
+        for pb in GuestPushbufArm::ALL {
+            for ring in GuestRingArm::ALL {
+                for route in GrRouteArm::ALL {
+                    cells.push((
+                        sema.pins(),
+                        pb.pins(),
+                        ring.adopts_ring(),
+                        route.gr_passthrough(),
+                    ));
+                }
+            }
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        16,
+        "★ the four selectors do not span sixteen cells — one constrains another, and the \
+         completion plane stops being separately measurable from the pushbuffer plane"
+    );
+}
+
+/// ★★ **AND THE TWO PIN SOURCES MUST NOT SHARE A FLAG.** ⊘ Leg 4 and leg 5 present different
+/// addresses to the same primitive; folding them into one arm would make `w265`'s measured
+/// result (`PB-PIN … PINNED` ×8, `Xid` moved to the semaphore page) unreproducible as a
+/// control, because the control would have to disarm both.
+#[test]
+fn leg_four_and_leg_five_are_separately_armable() {
+    assert!(GuestPushbufArm::Pin.pins() && !GuestSemaArm::Off.pins());
+    assert!(!GuestPushbufArm::Off.pins() && GuestSemaArm::Pin.pins());
+}
