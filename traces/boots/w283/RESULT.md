@@ -1,4 +1,34 @@
-# w283 / RESULT — THE GUEST'S OWN RELEASE, CARRIED TO HARDWARE; AND WHY CRITERION 1 IS A DIFFERENT RUNG
+# w283 / RESULT — HARDWARE WROTE THE GUEST'S OWN SEMAPHORE. TWO OF THREE, AND THE THIRD IS A DIFFERENT SHAPE.
+
+## ★★★★★ THE HEADLINE — `w283c_client`, real GA106, revision `7dbf2f0`
+
+```text
+CE-SUBMIT dst=0x120010000 len=4096 by=HostCe gp_get=1 gp_put=1 sem=0x00000001
+          want=0x00000001 → RETIRED  guest_rel=CARRIED@0x120022000 payload=0x00000001
+HOST_DMESG_XID=0        faulted @ = []
+
+R33 arm 1 COPY = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33,
+                 dst[last] 0xc0fff232 (want 0xc0fff232),
+                 engine semaphore 0x00000001 (declared 0x00000001),   ★ CRITERION 3
+                 GP_GET 0 ... GP_PUT 1                                 ⊘ CRITERION 1
+                 — read back through an INDEPENDENT mapping
+```
+
+| # | criterion, **in the guest** | |
+|---|---|---|
+| 1 | `GP_GET` catches `GP_PUT` | ⊘ **NO** — `0` vs `1`. A different shape; see the LEAD |
+| 2 | the bytes moved | ★ **MET** — 4096 bytes, both ends, read back through an independent mapping |
+| 3 | the semaphore carries the **declared payload** at the **declared address** | ★★★ **MET** — `0x00000001` at the guest's own `0x120022000`, **written by the copy engine**, no CPU store anywhere |
+
+★★★ **Criterion 3 is new, and it is the owner's ruling landing exactly as ruled**: the guest's
+own declared release rides in the same pushbuffer as the copy, behind the copy's own
+`LAUNCH_DMA`, and a real engine writes the guest's literal at the guest's address. ⊘ Nothing was
+forged and nothing was relaxed.
+
+⊘ Criterion 2 is **not** a regression from `w282b` — it is the same green, preserved across a
+mechanism change that broke it once (see the slot section) and was fixed and re-proven.
+
+---
 
 **STATUS: LIVE — 2026-08-13.** Owner ruling of 2026-08-13: *"go with the third shape"* — option 1
 (**hardware writes the semaphore**) **plus** option 2's aside (**`AdoptedGuestUserd` for the CE
@@ -179,13 +209,37 @@ it prints. Fixed.
 
 ---
 
-## THE BAR — where the guest stands
+## ⊘⊘⊘ AND THE CLIENT'S OWN VERDICT WAS OVER-REPORTING — caught before it was believed
 
-| # | criterion | status |
-|---|---|---|
-| 1 | `GP_GET` catches `GP_PUT` (**the guest's**) | ⊘ **NO** — and it is a different rung; see the LEAD |
-| 2 | the bytes moved | ★ **MET at `w282b`** (`dst[0]`/`dst[last]` read back, `by=HostCe`, `RETIRED`, `HOST_DMESG_XID=0`) |
-| 3 | the semaphore carries the declared payload | ◐ the mechanism is **built, tested and shipped**; the boot that proves it is pending the re-run |
+`w283c` returned **`R33_RC=0`** and printed its **★ success** line. **It should not have.**
+
+```text
+★ R33 arm 1 COPY = 4096 bytes moved … engine semaphore 0x00000001 (declared 0x00000001),
+    GP_GET 0 caught GP_PUT 1
+```
+
+**`0` did not catch `1`.** The word *"caught"* is **template text**, printed unconditionally, and
+`CeEvidence::copied()` — the predicate the ★ arm was gated on — checks the bytes and the
+semaphore and **never compares the cursors**. The client's own banner, three lines above, says:
+
+> *"the bar is FOUR facts … the semaphore carries the DECLARED payload at the DECLARED address,
+> **GP_GET reached GP_PUT**, and the VA probe REFUSES where something is mapped"*
+
+⇒ **the verdict implemented three of the four facts its own banner states.**
+
+★ `a_falsifier_that_flags_its_own_good_news` in its purest form: a success line that **contains
+the words of the criterion it is not testing**. Same class as `GCC_CUP2_RC=0` matching an
+unanchored `CUP2_RC` grep. ⊘ And it is invisible exactly where it does not matter — on the
+**native** arm the cursors agree, so the template's *"caught"* is true there — and decisive
+exactly where it does.
+
+**Fixed:** `CeEvidence::met_the_whole_bar()` = `copied() && submit.landed(payload)`, and the FAIL
+arm now names **which** of the four failed (its old text branched on the cursors alone, so it
+described a whole-submission failure even when the bytes had moved and the semaphore had landed —
+the exact state `w283c` reached). ⊘ `copied()` is deliberately unchanged: *"did the bytes move and
+did the engine retire"* is a real, separately useful question; the conjunction belongs at the
+verdict. `w283d` is the re-run with the corrected instrument, and its expected reading is
+**`R33_RC=1` with `★★★ THREE OF FOUR`** — a *more honest* number for a *better* result.
 
 ⚠ **`guest_rel=CARRIED` means EMITTED, not OBSERVED.** The `CE-SUBMIT` line says what we put in
 the pushbuffer; hardware wrote it **iff** that VA resolves in the executor VAS. The only witness
