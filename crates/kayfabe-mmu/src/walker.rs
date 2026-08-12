@@ -786,6 +786,124 @@ pub fn leaf_disposition(fmt: &dyn GmmuFmt, leaf: &DecodedLeaf) -> LeafDispositio
     }
 }
 
+/// ★★★ **HOW the two shapes differ** — the four ways a leaf can overlap a live binding
+/// without being it. Named rather than counted, because the four have different causes.
+///
+/// ⊘ These are shapes, not diagnoses. [`StraddleAgreement`] is the half that says whether
+/// anything is actually *wrong*; this half says only what the geometry is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StraddleShape {
+    /// Same base address, the leaf is **shorter**. A finer page over a coarser binding —
+    /// the small-page half of a dual PDE arriving after the big-page half, or a guest
+    /// splitting a large page.
+    SameStartShorter,
+    /// Same base address, the leaf is **longer**. The coarser page arriving second.
+    SameStartLonger,
+    /// The leaf starts **inside** the live binding and ends inside it. The interior pages
+    /// of a finer tiling over a coarser binding; the bulk case whenever a 64 KiB or 2 MiB
+    /// binding is already down and 4 KiB leaves follow.
+    InsideLarger,
+    /// The leaf starts inside the live binding and runs **past its end**. Neither contains
+    /// the other; this is the shape a *stale* binding of the wrong extent leaves behind,
+    /// and the one that cannot be explained by page-size granularity alone.
+    CrossesEnd,
+}
+
+/// ★★★★★ **DO THE TWO SHAPES AGREE ABOUT THE MEMORY?** — the discriminator that turns a
+/// straddle count into a finding.
+///
+/// A straddle is a *geometry* conflict. It is only a *correctness* conflict if the two
+/// shapes disagree about which byte lives at the leaf's virtual address. That is a
+/// computation, not a judgement: the live binding's own arithmetic already answers it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StraddleAgreement {
+    /// Same aperture, and the live binding resolves the leaf's base VA to **exactly** the
+    /// physical address the leaf names. ⇒ the two are one fact at two granularities. The
+    /// refusal is still correct (the table holds one shape per range) but nothing here
+    /// indicts either source.
+    SameMemory,
+    /// The live binding resolves the leaf's base VA to a **different** physical address, or
+    /// a different aperture. ⇒ two sources genuinely disagree about what backs this VA.
+    /// **This is the row a reader must act on.**
+    Contradicts,
+}
+
+/// ★★★ Both shapes of a [`PopulateRefusal::StraddlesLiveBinding`], verbatim, so the reason
+/// is reconstructible from the refusal alone.
+///
+/// ⊘ Everything here is *recorded*, nothing is decided. [`Straddle::shape`] and
+/// [`Straddle::agreement`] are pure functions of these fields, kept as methods rather than
+/// stored so a row can never carry a classification that disagrees with its own numbers —
+/// the `a_second_source_of_truth_beside_a_complete_value` shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Straddle {
+    /// The leaf's extent.
+    pub size: PageSize,
+    /// ★ The level the leaf was decoded at — which **is** its provenance. On GA10x a
+    /// straddle between level 4 (`PT_BIG`, 64 KiB) and level 5 (`PT_SMALL`, 4 KiB) names
+    /// the two halves of one 16-byte dual PD0 entry, and a straddle between level 3
+    /// (a 2 MiB PD0 leaf) and either of them names a large-page/small-page split. A count
+    /// cannot say which; the level can.
+    pub level: u8,
+    /// What the leaf claims backs its base VA.
+    pub phys: u64,
+    /// The aperture the leaf claims.
+    pub aperture: Aperture,
+    /// Where the live binding starts.
+    pub live_start: u64,
+    /// How long the live binding is.
+    pub live_len: u64,
+    /// What the live binding says backs `live_start`.
+    pub live_phys: u64,
+    /// The live binding's aperture.
+    pub live_aperture: Aperture,
+    /// Whether the live binding is **host-published**. A published straddle cannot be
+    /// reconciled by unbinding — that is [`PopulateRefusal::RepointsPublished`]'s whole
+    /// argument — so the two states want different work and the refusal must carry which.
+    pub live_published: bool,
+}
+
+impl Straddle {
+    /// Which of the four geometries this is. `va` is the leaf's own base address.
+    #[must_use]
+    pub fn shape(&self, va: GpuVa) -> StraddleShape {
+        let end = va.0.saturating_add(self.size.0);
+        let live_end = self.live_start.saturating_add(self.live_len);
+        if va.0 == self.live_start {
+            if self.size.0 < self.live_len {
+                StraddleShape::SameStartShorter
+            } else {
+                StraddleShape::SameStartLonger
+            }
+        } else if end <= live_end {
+            StraddleShape::InsideLarger
+        } else {
+            StraddleShape::CrossesEnd
+        }
+    }
+
+    /// ★★★★★ Whether the live binding already resolves this leaf's base VA to the physical
+    /// address the leaf names.
+    ///
+    /// ⊘ The comparison is at the **leaf's base VA**, offset into the live binding — not
+    /// between the two `phys` fields, which describe different addresses whenever the leaf
+    /// starts inside the binding. Comparing the bases would report `Contradicts` for every
+    /// interior page of a perfectly consistent tiling, which is the `w270` mistake
+    /// (*"keyed on the VA and not the extent"*) inverted.
+    #[must_use]
+    pub fn agreement(&self, va: GpuVa) -> StraddleAgreement {
+        let inside = va.0 >= self.live_start && va.0 - self.live_start < self.live_len;
+        let resolved = self
+            .live_phys
+            .wrapping_add(va.0.wrapping_sub(self.live_start));
+        if inside && self.aperture == self.live_aperture && resolved == self.phys {
+            StraddleAgreement::SameMemory
+        } else {
+            StraddleAgreement::Contradicts
+        }
+    }
+}
+
 /// Why one leaf could not be forward-populated into the table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PopulateRefusal {
@@ -813,9 +931,27 @@ pub enum PopulateRefusal {
     /// The leaf's range overlaps a *differently shaped* live binding — it starts inside
     /// one, or is a different length. Loud, because silently resizing a neighbour is how
     /// the `ALREADY-MAPPED` collision class hides.
+    ///
+    /// ★★★★★ **IT CARRIES BOTH SHAPES, AND THAT IS THE WHOLE POINT** (`w277`). It used to
+    /// carry `va` alone, and `[measured, w276b_on]` **255 of 255** refusals were this kind
+    /// — a histogram with one bucket, over a payload that could not say **what differed**.
+    /// *"A count cannot see a substitution"*, one plane over: `refusals=255
+    /// by_kind={StraddlesLiveBinding: 255}` is consistent with a page-size mismatch, an
+    /// extent mismatch, a stale binding and two sources contradicting each other, and
+    /// **those four want opposite fixes**.
+    ///
+    /// ⚠ Read [`Straddle::agreement`] before reading [`Straddle::shape`]: a straddle whose
+    /// two shapes **agree about the memory** is a granularity restatement of one fact and
+    /// nothing is wrong with the guest; a straddle that **contradicts** is two sources
+    /// disagreeing about what backs a VA, which is the class `w222`'s bad join came from.
+    /// The refusal is correct in both cases — but only one of them is a bug.
     StraddlesLiveBinding {
-        /// The leaf's virtual address.
+        /// The leaf's virtual address. Kept as a named field so every existing reader that
+        /// matches on `{ va }` (and ignores the rest) keeps compiling and keeps meaning
+        /// what it meant.
         va: GpuVa,
+        /// Both shapes, verbatim, plus what they say about the same byte.
+        straddle: Straddle,
     },
     /// ★★★ **An UNBIND of a range that is host-published**
     /// (`reachability_on_transition.md` §6).
@@ -940,10 +1076,25 @@ pub fn populate(
                     }
                 }
             }
-            // Something else lives here, shaped differently.
-            Some(_) => out
-                .refusals
-                .push(PopulateRefusal::StraddlesLiveBinding { va: leaf.va }),
+            // Something else lives here, shaped differently. ★ Record BOTH shapes: the
+            // refusal is the only place the two are ever in scope together, so a payload
+            // that keeps only the VA throws away the entire answer to *"what differs"*.
+            Some((live_start, live_len, have)) => {
+                out.refusals.push(PopulateRefusal::StraddlesLiveBinding {
+                    va: leaf.va,
+                    straddle: Straddle {
+                        size: leaf.size,
+                        level: leaf.level,
+                        phys: leaf.phys,
+                        aperture: leaf.aperture,
+                        live_start,
+                        live_len,
+                        live_phys: have.phys,
+                        live_aperture: have.aperture,
+                        live_published: have.host.is_some(),
+                    },
+                });
+            }
             // Nothing at the start VA — but the range may still run into a neighbour,
             // which `bind` refuses as an overlap. That refusal is the answer; pre-checking
             // it here would be the same question asked twice, in two places that can drift.

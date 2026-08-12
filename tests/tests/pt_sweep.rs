@@ -34,9 +34,7 @@ use kayfabe_isolate::{
     Worker,
 };
 use kayfabe_mmu::walker::WalkFault;
-use kayfabe_mocks::{
-    MOCK_DUAL_LEVEL, MockArch, MockGmmuFmt, MockIsolateFactory, SharedRecorder,
-};
+use kayfabe_mocks::{MOCK_DUAL_LEVEL, MockArch, MockGmmuFmt, MockIsolateFactory, SharedRecorder};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 const GPU: GpuId = GpuId::ZERO;
@@ -152,7 +150,13 @@ fn write_a_whole_unwitnessed_tree(worker: &mut Worker, rec: &SharedRecorder, vas
     let arch = MockArch::new();
     let fmt = arch.mmu();
     write_fabricated(worker, rec, vas, ROOT, &page_at(fmt, 0, &[(0, pde(PD_L1))]));
-    write_fabricated(worker, rec, vas, PD_L1, &page_at(fmt, 1, &[(0, pde(PD_L2))]));
+    write_fabricated(
+        worker,
+        rec,
+        vas,
+        PD_L1,
+        &page_at(fmt, 1, &[(0, pde(PD_L2))]),
+    );
     write_fabricated(
         worker,
         rec,
@@ -376,7 +380,11 @@ fn a_write_to_a_swept_page_re_arms_the_sweep_and_a_quiet_address_space_does_not(
         "★★★★★ the write re-armed the whole-VAS walk"
     );
     assert_eq!(
-        rearmed.tasks.iter().map(|t| t.page.phys).collect::<Vec<_>>(),
+        rearmed
+            .tasks
+            .iter()
+            .map(|t| t.page.phys)
+            .collect::<Vec<_>>(),
         vec![ROOT]
     );
 }
@@ -442,10 +450,7 @@ fn a_truncated_sweep_publishes_nothing_and_re_arms_itself() {
     let mut fb = kayfabe_fwd::IsolateFb::new(&mut worker);
     // A budget that cannot pay for even the root page.
     let results = run_pt_sweep(fmt, &mut fb, &plan.tasks, 1);
-    assert!(matches!(
-        results[0].decode,
-        Err(WalkFault::BudgetExhausted)
-    ));
+    assert!(matches!(results[0].decode, Err(WalkFault::BudgetExhausted)));
     let out = with_gpu(&mut gpu, |g| commit_pt_sweep(fmt, only_proc(g), &results));
     assert_eq!(out.bound, 0);
     assert_eq!(out.swept_binds, 0);
@@ -472,7 +477,11 @@ fn a_truncated_sweep_publishes_nothing_and_re_arms_itself() {
     assert_eq!(out.sweeps_run, 1);
     assert_eq!(out.bound, 1);
     let third = with_gpu(&mut gpu, |g| plan_pt_sweep(only_proc(g)));
-    assert_eq!(third.tasks, vec![], "and the trunc flag is CLEARED, not sticky");
+    assert_eq!(
+        third.tasks,
+        vec![],
+        "and the trunc flag is CLEARED, not sticky"
+    );
 
     // ★★★★★ NOW the trigger stands ALONE. Dirty the address space, truncate the re-sweep, and
     // the next plan must name `Truncated` — with `sweeps > 0`, so `NeverSwept` cannot be what

@@ -362,6 +362,15 @@ pub struct PtDecodeOutcome {
     /// Page-table pages a completed sweep visited, summed. ★ The measurement
     /// [`PT_SWEEP_BUDGET`] must be re-derived from.
     pub pages_swept: usize,
+    /// ★★★★★ **THE THIRD OUTCOME** — leaves that were decoded, reachable, witnessed and
+    /// policy-approved and were then displaced inside the settlement's own desired-set map,
+    /// so they reached neither `bound` nor `refusals`. See
+    /// [`kayfabe_mmu::reach::Settlement::shape_collisions`]; a non-zero here is the answer to
+    /// *"the faulting VA is in no bound list and in no refused list — where did it go"*.
+    pub shape_collisions: Vec<kayfabe_mmu::reach::ShapeCollision>,
+    /// Byte-identical leaves seen twice. Benign, and kept apart from
+    /// [`Self::shape_collisions`] so a duplicate cannot read as a contradiction.
+    pub duplicate_leaves: usize,
 }
 
 impl PtDecodeOutcome {
@@ -780,6 +789,9 @@ pub fn commit_pt_decode_as(
         out.unreachable += s.unreachable;
         out.sparse += s.sparse;
         out.swept_binds += s.swept_binds;
+        out.shape_collisions
+            .extend(s.shape_collisions.iter().copied());
+        out.duplicate_leaves += s.duplicate_leaves;
         out.dropped.extend(po.dropped);
         out.refusals.extend(po.refusals);
     }

@@ -2828,7 +2828,8 @@ impl SharedDevice {
         // guest-chosen quantity.
         let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
         // COMMIT — rank 1, re-resolving every target (R5).
-        let mut out = self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_sweep(fmt, p, &results))?;
+        let mut out =
+            self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_sweep(fmt, p, &results))?;
         // PUBLISH — rank 0, from nothing, exactly as the decode pass does. A sweep learns far
         // more pages than a dirty drain, so this is the phase that makes the NEXT guest CE
         // write into any of them classify as a page-table write.
@@ -2898,6 +2899,75 @@ impl SharedDevice {
                         shown.join(","),
                         if r.len() > cap {
                             format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", r.len())
+                        } else {
+                            String::new()
+                        }
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★★★ **WHAT OUR OWN ADDRESS TABLE HOLDS**, coalesced, one string per `Vas` — the
+    /// counterpart to [`SharedDevice::vas_reachable_ranges`], and the instrument that makes
+    /// the **third outcome** answerable offline.
+    ///
+    /// # ⊘⊘ The gap it closes, stated as the measurement that exposed it
+    ///
+    /// `[measured, w276b_on]` hardware faulted at a VA that the guest's own tables **describe**
+    /// (`GUEST-DESCRIBES` names a run based exactly there) and that appears in **no**
+    /// `refused_vas` list. From those two facts alone there are still three live readings and
+    /// the log could not choose between them:
+    ///
+    /// 1. **it is bound** — the table already holds it, the mirror is right, and the fault is
+    ///    about something other than this VA's mapping (reachability, aperture, the host
+    ///    channel's own VAS);
+    /// 2. **it was refused** — but off the end of a capped refusal list;
+    /// 3. **it was dropped** — decoded and then lost, which is
+    ///    [`kayfabe_mmu::reach::Settlement::shape_collisions`].
+    ///
+    /// A refusal list can never answer (1). Only the table itself can, and *"is this VA in the
+    /// table"* is exactly what a coalesced dump of the table makes joinable against an address
+    /// that is **ASLR'd and only arrives after the hang**. Same design as
+    /// [`SharedDevice::vas_reachable_ranges`]: print unconditionally, join offline, never let
+    /// the device learn the address.
+    ///
+    /// ⚠ `cap` truncates and the caller **must** print that it did — an absent range read as
+    /// *"not bound"* is the `dlen=0` mistake, and this row is the one a story turns on.
+    ///
+    /// ⊘ Coalescing merges only **VA-contiguous** bindings, exactly as the reachable dump does,
+    /// so the two lists are comparable run for run. It deliberately does **not** require the
+    /// physical addresses to be contiguous: the question a reader brings here is *"is there a
+    /// hole"*, and a run that is contiguous in VA and scattered in FB is still not a hole.
+    #[must_use]
+    pub fn vas_table_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let mut runs: Vec<(u64, u64)> = Vec::new();
+                    for (va, len, _b) in vas.table.iter() {
+                        match runs.last_mut() {
+                            Some((s, l)) if *s + *l == va => *l += len,
+                            _ => runs.push((va, len)),
+                        }
+                    }
+                    let shown: Vec<String> = runs
+                        .iter()
+                        .take(cap)
+                        .map(|(va, len)| format!("0x{va:x}+0x{len:x}"))
+                        .collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} rows={} runs={} {}{}]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        vas.table.iter().count(),
+                        runs.len(),
+                        shown.join(","),
+                        if runs.len() > cap {
+                            format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", runs.len())
                         } else {
                             String::new()
                         }

@@ -172,6 +172,36 @@ impl Published {
     }
 }
 
+/// ★★★ **Two decoded leaves at ONE virtual address, with different shapes** — recorded at
+/// the exact statement that discards one of them.
+///
+/// Carries both, and the page each came from, because *"which producer described this VA
+/// twice"* is the only actionable half: on GA10x the expected answer is one dual PD0 slot's
+/// big-page and small-page sub-tables (levels 4 and 5), and anything else is a different bug.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShapeCollision {
+    /// The virtual address both leaves claim.
+    pub va: GpuVa,
+    /// The leaf that **survives** into the desired set (the later insert — this preserves the
+    /// behaviour that was already there, and does **not** assert it is the right one).
+    pub kept: CollidingLeaf,
+    /// The leaf that is **discarded**.
+    pub dropped: CollidingLeaf,
+}
+
+/// One side of a [`ShapeCollision`], reduced to the fields that distinguish it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CollidingLeaf {
+    /// Its extent.
+    pub size: PageSize,
+    /// The level it was decoded at — its provenance, and on GA10x its sub-table.
+    pub level: u8,
+    /// What it says backs `va`.
+    pub phys: u64,
+    /// The page-table page it was read out of.
+    pub from_page: u64,
+}
+
 /// What one [`ReachShadow::settle`] decided.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settlement {
@@ -203,6 +233,32 @@ pub struct Settlement {
     pub dropped: Vec<(GpuVa, DropReason)>,
     /// Slots the guest declared sparse, across every reachable-and-witnessed page.
     pub sparse: usize,
+    /// ★★★★★ **THE THIRD OUTCOME, NAMED** — leaves that were decoded, were reachable, were
+    /// witnessed, passed [`crate::walker::leaf_disposition`] … and then **lost a key
+    /// collision inside this function** and were never proposed to the table at all.
+    ///
+    /// # ⊘⊘ Why this exists, and what it cost to not have it
+    ///
+    /// The desired set is a `BTreeMap` keyed on the leaf's **virtual address alone**. That is
+    /// correct for the diff (the table holds one shape per address) and **silently lossy** for
+    /// the input: a GA10x PD0 slot is a *dual* PDE, so one 2 MiB VA range is described by a
+    /// 64 KiB big-page table **and** a 4 KiB small-page table, and a VA covered by a valid
+    /// entry in both yields **two leaves at the same base address with different sizes**. The
+    /// second `insert` overwrote the first, returned the old value, and the old value was
+    /// dropped on the floor — no counter, no refusal, no log line.
+    ///
+    /// `[measured, w276b_on]` the sweep reported `bound=0 … refusals=255` while hardware
+    /// faulted at an address that was **neither bound nor refused** — three outcomes where the
+    /// instrument could name two. This is the third. It is *recorded rather than fixed*: which
+    /// of two overlapping guest declarations wins is a **hardware precedence** question, and
+    /// making up an answer here would be the silent overwrite again with a comment on it.
+    ///
+    /// ⚠ Same disease as `w270` (*"the key was the VA, not the extent"*) one layer up.
+    pub shape_collisions: Vec<ShapeCollision>,
+    /// Leaves that arrived twice, **byte-identical**. Not a collision: two pages describing
+    /// the same mapping the same way is one fact seen twice, and folding it into
+    /// [`Self::shape_collisions`] would make a benign duplicate read as a contradiction.
+    pub duplicate_leaves: usize,
     /// ★★★★★ Leaves in [`Self::binds`]-or-already-published that are desired **only because a
     /// sweep admitted their page** — i.e. the page was never witnessed being written.
     ///
@@ -591,7 +647,10 @@ impl ReachShadow {
         }
 
         // --- 2. THE DESIRED SET -------------------------------------------------------
-        let mut desired: BTreeMap<u64, DecodedLeaf> = BTreeMap::new();
+        // ★ The value carries the page the leaf was read out of, so a key collision can name
+        // BOTH producers. Without it the displaced side of a collision is anonymous, and
+        // *"which producer described this VA twice"* is the only actionable half.
+        let mut desired: BTreeMap<u64, (DecodedLeaf, u64)> = BTreeMap::new();
         for (phys, p) in &self.pages {
             let live = reachable.contains(phys);
             let written = self.witnessed.contains(phys);
@@ -628,7 +687,38 @@ impl ReachShadow {
                                 if swept_only {
                                     out.swept_binds += 1;
                                 }
-                                desired.insert(l.va.0, *l);
+                                // ★★★★★ THE THIRD OUTCOME, at the statement that creates it.
+                                // `insert` returns what it displaced; the old code threw that
+                                // away, which is how a decoded, reachable, witnessed, policy-
+                                // approved leaf could vanish with no counter naming it. See
+                                // [`Settlement::shape_collisions`].
+                                //
+                                // ⊘ Behaviour is UNCHANGED — the later leaf still wins. The
+                                // only new thing is that the loss is now *stated*. Choosing a
+                                // winner is a hardware-precedence question and inventing one
+                                // here would be the same silent overwrite with a comment on it.
+                                if let Some((prev, prev_page)) = desired.insert(l.va.0, (*l, *phys))
+                                {
+                                    if prev == *l {
+                                        out.duplicate_leaves += 1;
+                                    } else {
+                                        out.shape_collisions.push(ShapeCollision {
+                                            va: l.va,
+                                            kept: CollidingLeaf {
+                                                size: l.size,
+                                                level: l.level,
+                                                phys: l.phys,
+                                                from_page: *phys,
+                                            },
+                                            dropped: CollidingLeaf {
+                                                size: prev.size,
+                                                level: prev.level,
+                                                phys: prev.phys,
+                                                from_page: prev_page,
+                                            },
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -638,7 +728,7 @@ impl ReachShadow {
         }
 
         // --- 3. THE DIFF --------------------------------------------------------------
-        for (&va, l) in &desired {
+        for (&va, (l, _from_page)) in &desired {
             let want = Published::of(l);
             match self.published.get(&va) {
                 Some(&have) if have == want => {}

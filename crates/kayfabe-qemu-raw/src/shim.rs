@@ -4037,7 +4037,8 @@ impl SemaPageReader {
             self.backwards,
             self.decreases_elsewhere,
             match (self.ticks, self.transitions, self.backwards) {
-                (0, _, _) => "⊘ THE READER NEVER RAN — this row is NOT evidence that nothing \
+                (0, _, _) =>
+                    "⊘ THE READER NEVER RAN — this row is NOT evidence that nothing \
                               was written",
                 (_, 0, _) =>
                     "FROZEN FROM THE FIRST LOOK — at this cadence nothing ever changed. ⊘ \
@@ -4046,7 +4047,8 @@ impl SemaPageReader {
                     "NO PAYLOAD WENT BACKWARDS — ⊘ scoped to the DECLARED payload words. A \
                      decrease on a timestamp low word is a 64-bit clock carrying and is \
                      counted in `decreases_elsewhere`, not here",
-                _ => "★★★ A PAYLOAD WENT BACKWARDS — the M5.38 second-writer signature. See \
+                _ =>
+                    "★★★ A PAYLOAD WENT BACKWARDS — the M5.38 second-writer signature. See \
                       the SEMA-WRITE rows for which, when, and whose",
             }
         );
@@ -4318,6 +4320,15 @@ struct PtDecodeTally {
     reach_faults: usize,
     retired: usize,
     pass_vas_gone: usize,
+    /// ★★★★★ **THE THIRD OUTCOME** — leaves the settlement decoded, approved and then
+    /// displaced inside its own desired-set map, so they reached neither `bound` nor
+    /// `refusals`. See [`kayfabe_mmu::reach::Settlement::shape_collisions`].
+    collisions: Vec<kayfabe_mmu::reach::ShapeCollision>,
+    /// Byte-identical leaves seen twice — benign, and kept apart from `collisions` so a
+    /// duplicate cannot read as a contradiction.
+    duplicates: usize,
+    /// Every straddle refusal, whole, so [`straddle_census`] can say what differed.
+    straddles: Vec<kayfabe_mmu::walker::PopulateRefusal>,
     /// The first fault of any kind, whole — see the assignment site for why a count is not
     /// enough.
     first_fault: Option<String>,
@@ -8314,6 +8325,9 @@ impl SharedDoorbell {
                 acc.pass_vas_gone += out.vas_gone;
                 acc.dropped += out.dropped.len();
                 acc.refusals += out.refusals.len();
+                acc.collisions.extend(out.shape_collisions.iter().copied());
+                acc.duplicates += out.duplicate_leaves;
+                acc.straddles.extend(out.refusals.iter().copied());
                 acc.faults += out.faults.len();
                 acc.reach_faults += out.reach_faults.len();
                 acc.retired += out.retired.len();
@@ -8340,7 +8354,7 @@ impl SharedDoorbell {
              requeued={} rounds={rounds} → bound={} unchanged={} repointed={} unbound={} \
              learned={} published={}/{} meta_refused={} unwitnessed={} unreachable={} \
              sparse={} dropped={} refusals={} faults={} reach_faults={} retired={} \
-             pass_vas_gone={} first={} [witness writes={} pending={} refused={}+{}]",
+             pass_vas_gone={} first={}{}{} [witness writes={} pending={} refused={}+{}]",
             pending.len(),
             acc.bound,
             acc.unchanged,
@@ -8360,6 +8374,8 @@ impl SharedDoorbell {
             acc.retired,
             acc.pass_vas_gone,
             acc.first_fault.as_deref().unwrap_or("NONE"),
+            straddle_census(&acc.straddles),
+            collision_census(&acc.collisions, acc.duplicates),
             st.writes,
             st.pending,
             st.refused,
@@ -8429,6 +8445,12 @@ impl SharedDoorbell {
         let mut refusal_kinds: std::collections::BTreeMap<&'static str, usize> =
             std::collections::BTreeMap::new();
         let mut refusal_vas: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        // ★★★★★ THE RUNG'S OWN PAYLOAD. `w276` measured 255 refusals of ONE kind and could say
+        // nothing about what differed between the two shapes; these two accumulate the shapes
+        // themselves and the leaves the settlement dropped without refusing.
+        let mut straddles: Vec<kayfabe_mmu::walker::PopulateRefusal> = Vec::new();
+        let mut collisions: Vec<kayfabe_mmu::reach::ShapeCollision> = Vec::new();
+        let (mut duplicates, mut table_ranges) = (0usize, Vec::<String>::new());
         for pid in pids {
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
@@ -8470,8 +8492,18 @@ impl SharedDoorbell {
             // ★★★★★ **WHICH ADDRESSES THE TABLE REFUSED — by KIND and by VA, not just the
             // first one.**
             //
+            // ⊘⊘ **CORRECTED 2026-08-12 (`w277`), and the correction is why the whole VA list
+            // exists.** The text below used to gloss `GpuVa(8655536128)` as `0x2_0440_0000` —
+            // *"the 2 MiB region containing the completion semaphore"*. That is **arithmetic,
+            // and it is wrong**: `8655536128 = 0x2_03E9_0000`, and `0x2_0440_0000` is
+            // `8661237760`. The refusals are nowhere near the semaphore page; the boot's own
+            // `refused_vas` list opens with `0x203e90000`, which the decimal matches exactly.
+            // ⇒ A rendered address beside a decimal one is a **second source of truth** for a
+            // value that was already complete, and it read as corroboration for eleven rungs.
+            // The list below is the value; the gloss was the copy.
+            //
             // `[measured, w276_on]` the sweep read `refusals=255 first=StraddlesLiveBinding{
-            // va: 0x2_0440_0000 }` while hardware faulted at `0x7461_86e00000` — an address
+            // va: 0x2_03E9_0000 }` while hardware faulted at `0x7461_86e00000` — an address
             // the guest's own tables DO describe (`GUEST-DESCRIBES` names the run
             // `0x746186e00000+0x400000`). ⇒ the decisive question is whether the refusal set
             // CONTAINS THE FAULTING VA, and a count plus one example cannot answer it. A
@@ -8488,6 +8520,9 @@ impl SharedDoorbell {
                     refusal_vas.insert(v);
                 }
             }
+            straddles.extend(out.refusals.iter().copied());
+            collisions.extend(out.shape_collisions.iter().copied());
+            duplicates += out.duplicate_leaves;
             // ★★★ ARM 2.1's raw material — WHAT THE GUEST DESCRIBES, coalesced.
             //
             // ⊘ Printed only when the sweep for this proc actually walked something, so the
@@ -8496,6 +8531,11 @@ impl SharedDoorbell {
             // `dlen=0` mistake, and "absent from the list" is the answer arm 2.1 turns on.
             if out.sweeps_run > 0 {
                 ranges.extend(self.device.vas_reachable_ranges(pid, PT_SWEEP_RANGE_CAP));
+                // ★★★★★ AND WHAT **WE** HOLD, beside what the guest describes. Without this
+                // the offline join over an ASLR'd fault address can say *"described"* and
+                // *"not refused"* and still not say whether the table has it — which is
+                // exactly the state `w276` ended in. See `vas_table_ranges`.
+                table_ranges.extend(self.device.vas_table_ranges(pid, PT_SWEEP_RANGE_CAP));
             }
         }
         format!(
@@ -8505,7 +8545,7 @@ impl SharedDoorbell {
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
              refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} first={} \
-             | GUEST-DESCRIBES {}",
+             |{}|{} | GUEST-DESCRIBES {} | TABLE-DESCRIBES {}",
             refusal_vas
                 .iter()
                 .take(PT_SWEEP_REFUSAL_CAP)
@@ -8522,11 +8562,21 @@ impl SharedDoorbell {
                 String::new()
             },
             first_fault.as_deref().unwrap_or("NONE"),
+            straddle_census(&straddles),
+            collision_census(&collisions, duplicates),
             if ranges.is_empty() {
                 "(no completed sweep this doorbell — ⊘ NOT 'the guest describes nothing')"
                     .to_string()
             } else {
                 ranges.join(" ")
+            },
+            // ⊘ Gated on the SAME condition as the reachable dump, so the two lists are always
+            // about the same doorbell. A table dump printed beside a `ran=0` sweep would be a
+            // true statement joined against a stale picture.
+            if table_ranges.is_empty() {
+                "(no completed sweep this doorbell — ⊘ NOT 'the table holds nothing')".to_string()
+            } else {
+                table_ranges.join(" ")
             }
         )
     }
@@ -12662,6 +12712,155 @@ const PT_SWEEP_RANGE_CAP: usize = 48;
 /// thereby un-refused, and the line says so when it truncates.
 const PT_SWEEP_REFUSAL_CAP: usize = 24;
 
+/// How many DISTINCT straddle signatures one line may list. Small on purpose: the whole
+/// point is that the signature space is tiny (a handful of `(shape, agreement, level, extent)`
+/// combinations), and a line that needs more than this is itself the finding.
+const STRADDLE_SIG_CAP: usize = 12;
+
+/// ★★★★★ **WHAT ACTUALLY DIFFERS, as a histogram over SIGNATURES rather than a count.**
+///
+/// `[measured, w276b_on]` the sweep printed `refusals=255 by_kind={"StraddlesLiveBinding": 255}`
+/// — a histogram with **one bucket**, over a payload that carried only a virtual address. That
+/// number is equally consistent with a page-size mismatch, an extent mismatch, a stale binding,
+/// and two populate sources contradicting each other, and **those four want opposite fixes**.
+/// `a_count_cannot_see_a_substitution`, one plane over.
+///
+/// The signature is `(shape, agreement, leaf level, leaf extent, live extent, live published)`.
+/// Every one of those six is read off the refusal itself, so a row here is reconstructible
+/// without the boot that produced it.
+///
+/// ⚠ **`agreement` is the field to read first.** `SameMemory` means the two shapes describe the
+/// same byte at the same aperture and differ only in granularity — the refusal is still correct
+/// (the table holds one shape per range) but neither source is wrong. `Contradicts` means they
+/// disagree about what backs the address, which is the `w222` class and is a bug in one of them.
+fn straddle_census(refusals: &[kayfabe_mmu::walker::PopulateRefusal]) -> String {
+    use kayfabe_mmu::walker::PopulateRefusal as P;
+    let mut sigs: std::collections::BTreeMap<
+        (
+            kayfabe_mmu::walker::StraddleShape,
+            kayfabe_mmu::walker::StraddleAgreement,
+            u8,
+            u64,
+            u64,
+            bool,
+        ),
+        usize,
+    > = std::collections::BTreeMap::new();
+    let mut first: Option<String> = None;
+    for r in refusals {
+        let P::StraddlesLiveBinding { va, straddle } = r else {
+            continue;
+        };
+        *sigs
+            .entry((
+                straddle.shape(*va),
+                straddle.agreement(*va),
+                straddle.level,
+                straddle.size.0,
+                straddle.live_len,
+                straddle.live_published,
+            ))
+            .or_default() += 1;
+        if first.is_none() {
+            first = Some(format!(
+                "va=0x{:x} size=0x{:x} lvl={} phys=0x{:x}/{:?} \
+                 OVER live=[0x{:x}+0x{:x} phys=0x{:x}/{:?} published={}] {:?}/{:?}",
+                va.0,
+                straddle.size.0,
+                straddle.level,
+                straddle.phys,
+                straddle.aperture,
+                straddle.live_start,
+                straddle.live_len,
+                straddle.live_phys,
+                straddle.live_aperture,
+                straddle.live_published,
+                straddle.shape(*va),
+                straddle.agreement(*va),
+            ));
+        }
+    }
+    if sigs.is_empty() {
+        return " straddles=NONE".to_string();
+    }
+    let total: usize = sigs.values().sum();
+    let contradicting: usize = sigs
+        .iter()
+        .filter(|((_, a, ..), _)| *a == kayfabe_mmu::walker::StraddleAgreement::Contradicts)
+        .map(|(_, n)| *n)
+        .sum();
+    let n_sigs = sigs.len();
+    let shown: Vec<String> = sigs
+        .into_iter()
+        .take(STRADDLE_SIG_CAP)
+        .map(|((shape, agree, level, size, live_len, pubd), n)| {
+            format!(
+                "{shape:?}/{agree:?}/lvl{level}/leaf0x{size:x}/live0x{live_len:x}/pub{}={n}",
+                u8::from(pubd)
+            )
+        })
+        .collect();
+    format!(
+        " straddles={total} contradicting={contradicting} sigs={{{}}}{} first_straddle=[{}]",
+        shown.join(", "),
+        if n_sigs > STRADDLE_SIG_CAP {
+            format!(" ⚠⚠ CAPPED at {STRADDLE_SIG_CAP} of {n_sigs} signatures")
+        } else {
+            String::new()
+        },
+        first.as_deref().unwrap_or("NONE"),
+    )
+}
+
+/// ★★★★★ **THE THIRD OUTCOME, PRINTED** — leaves that reached neither `bound` nor `refusals`
+/// because they lost a key collision inside the settlement's desired-set map.
+///
+/// See [`kayfabe_mmu::reach::Settlement::shape_collisions`] for why the collision exists at all.
+/// Printed as a histogram over `(kept level/size, dropped level/size)` plus one verbatim row,
+/// because *"which two producers described this VA"* is the actionable half and a bare count is
+/// the thing this campaign keeps paying for.
+fn collision_census(
+    collisions: &[kayfabe_mmu::reach::ShapeCollision],
+    duplicates: usize,
+) -> String {
+    if collisions.is_empty() {
+        return format!(" shape_collisions=0 dup_leaves={duplicates}");
+    }
+    let mut sigs: std::collections::BTreeMap<(u8, u64, u8, u64), usize> =
+        std::collections::BTreeMap::new();
+    for c in collisions {
+        *sigs
+            .entry((
+                c.kept.level,
+                c.kept.size.0,
+                c.dropped.level,
+                c.dropped.size.0,
+            ))
+            .or_default() += 1;
+    }
+    let first = collisions[0];
+    let shown: Vec<String> = sigs
+        .into_iter()
+        .take(STRADDLE_SIG_CAP)
+        .map(|((kl, ks, dl, ds), n)| format!("kept-lvl{kl}/0x{ks:x}_over_lvl{dl}/0x{ds:x}={n}"))
+        .collect();
+    format!(
+        " shape_collisions={} dup_leaves={duplicates} by={{{}}} first_collision=[va=0x{:x} \
+         KEPT lvl{}/0x{:x}→0x{:x} from page 0x{:x} | DROPPED lvl{}/0x{:x}→0x{:x} from page 0x{:x}]",
+        collisions.len(),
+        shown.join(", "),
+        first.va.0,
+        first.kept.level,
+        first.kept.size.0,
+        first.kept.phys,
+        first.kept.from_page,
+        first.dropped.level,
+        first.dropped.size.0,
+        first.dropped.phys,
+        first.dropped.from_page,
+    )
+}
+
 /// The refusal's kind as a stable word, and the address it is about.
 ///
 /// ⊘ A `&'static str` rather than `format!("{r:?}")` because the kinds are what a histogram is
@@ -12672,7 +12871,7 @@ fn refusal_kind_va(r: &kayfabe_mmu::walker::PopulateRefusal) -> (&'static str, O
     match r {
         P::Refused { va, .. } => ("Refused", Some(va.0)),
         P::RepointsPublished { va, .. } => ("RepointsPublished", Some(va.0)),
-        P::StraddlesLiveBinding { va } => ("StraddlesLiveBinding", Some(va.0)),
+        P::StraddlesLiveBinding { va, .. } => ("StraddlesLiveBinding", Some(va.0)),
         P::UnbindsPublished { va } => ("UnbindsPublished", Some(va.0)),
         P::UndecidableKind { va, .. } => ("UndecidableKind", Some(va.0)),
     }
