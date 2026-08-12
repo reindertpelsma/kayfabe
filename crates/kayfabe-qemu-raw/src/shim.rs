@@ -9471,13 +9471,14 @@ impl Regs {
                 GuestOperandArm::Off =>
                     "NOT presented to the guest-RAM pin (the control — exactly as at \
                      w269b_pass, where the host GPU faulted Xid 31 CE2 HUBCLIENT_CE0 \
-                     ACCESS_TYPE_VIRT_WRITE at 0x2_04420000, a page no source in this device \
-                     has ever named)",
+                     ACCESS_TYPE_VIRT_WRITE at a page no source in this device has ever \
+                     named). ⊘ THE ADDRESS IS DELIBERATELY NOT SPELLED HERE — see \
+                     `GUEST_OPERAND_ENV`",
                 GuestOperandArm::Pin =>
                     "RESOLVED through the address table and PINNED, one OS_DESCRIPTOR per \
                      contiguous run, mapped FIXED at the guest's own VA. ⊘ Supply side only: \
                      `the operand pages are mapped` and `the submission retired` are different \
-                     facts, and only the second can write 2 into 0x2_0440ff70",
+                     facts, and only the second can advance the slot the guest polls",
             },
         );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
@@ -11865,10 +11866,31 @@ fn selected_guest_sema() -> Result<GuestSemaArm, (Status, &'static str)> {
 /// subchannel not bound to `AMPERE_COMPUTE_B`, so a copy engine's `OFFSET_OUT_*` is invisible
 /// to it **by construction**.
 ///
+/// # ⊘⊘ THE FAULTING ADDRESS IS NOT SPELLED IN ANY STRING THIS CRATE COMPILES — measured
+///
+/// `w270_run.sh` carries a **negative content check**: `strings` on the built binary must
+/// contain **zero** occurrences of the faulting address. `[measured 2026-08-12, the first
+/// launch of `w270_run.sh`]` **it fired and refused to boot, on my own code** — the address
+/// was in **two** printed sentences (this arm's `GUEST-OPERAND arm=` line and
+/// [`guest_operand_from`]'s refusal), both pure prose, neither read by any decision.
+///
+/// ★ The guard is **right to refuse anyway**, and that is the lesson: a `strings` check
+/// cannot tell a literal in a *sentence* from a literal in a *decision*, so the only property
+/// it can actually certify is the stronger and simpler one — **the address is not available
+/// to any decision, because it is not in the binary at all**. ⇒ Prose must not spend it. The
+/// address lives in **doc comments** (which never reach `.rodata`), in the pre-registration,
+/// and in the grader — where naming it is the whole point, because the grader's question is
+/// *"do the guest's declaration and hardware's fault agree?"* and that needs both numbers.
+///
+/// ⚠ ⊘ A weaker guard — one that allowlisted the two prose sites — would have passed, and
+/// would have certified nothing: the next sentence to name the address would have been
+/// allowlisted too, and a **decision** hiding behind one is exactly what the check exists to
+/// prevent.
+///
 /// # ⚠ WHAT AN ARMED LINE STILL DOES NOT MEAN
 ///
 /// *"The operand pages are mapped"* and *"the submission retired"* are different facts, and
-/// only the second can write `2` into `0x2_0440ff70`. This arm produces the first. ⊘ It also
+/// only the second can advance the slot the guest polls. This arm produces the first. ⊘ It also
 /// pins **both** directions, so if the submission does retire this arm **cannot** say whether
 /// the destination or the source was what blocked it — pre-registered as a cost in
 /// `docs/design/w270_the_operand_pin_prereg.md` §1.2, with the `Xid`'s own `ACCESS_TYPE` as
@@ -11920,7 +11942,8 @@ pub fn guest_operand_from(value: Option<&str>) -> Result<GuestOperandArm, (Statu
             "KAYFABE_GUEST_OPERAND does not name an arm: the only values are `off` (the \
              default and the control — the guest-RAM pin's sources stay the ring VA, the \
              pushbuffer pages and the completion pages, exactly as at w269b_pass, where the \
-             host GPU faulted ACCESS_TYPE_VIRT_WRITE at 0x2_04420000) and `pin` (the virtual \
+             host GPU faulted ACCESS_TYPE_VIRT_WRITE at an unpinned operand page) and `pin` \
+             (the virtual \
              dst/src extents this channel's own LAUNCH_DMA methods name are resolved through \
              the address table and pinned FIXED at the guest's own VAs). It is not defaulted, \
              because a typo that silently disarmed the pin would make an evidence run and its \

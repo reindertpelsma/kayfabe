@@ -536,7 +536,7 @@ impl CapabilityTable {
     /// ★ This is the **resolved** set, not a delta — which is the property the old shape
     /// could not offer, because there `all_controls` meant "everything anyone below me
     /// ever added". A census taken here is this boundary's answer and nobody else's.
-    pub(crate) fn all_controls(&'static self) -> impl Iterator<Item = &'static ControlEntry> {
+    pub fn all_controls(&'static self) -> impl Iterator<Item = &'static ControlEntry> {
         self.own_controls
             .iter()
             .flat_map(|b| b.iter())
@@ -544,7 +544,7 @@ impl CapabilityTable {
     }
 
     /// Every permitted class at this boundary — the resolved set.
-    pub fn all_classes(&'static self) -> impl Iterator<Item = &'static ClassEntry> {
+    pub(crate) fn all_classes(&'static self) -> impl Iterator<Item = &'static ClassEntry> {
         self.own_classes
             .iter()
             .flat_map(|b| b.iter())
