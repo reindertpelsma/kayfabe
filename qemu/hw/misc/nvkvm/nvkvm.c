@@ -171,6 +171,32 @@ typedef struct NvkvmRegionSpec {
 #define NVKVM_USERD_GP_PUT 0x8cu
 #define NVKVM_GP_PUT_LIVE  8u
 
+/* ★★★★★ w279 MEASURED — THIS DETECTOR HAS FALSE POSITIVES, AND ITS OWN ARTEFACT NAMED THEM.
+ *
+ * The test above is `page offset == 0x8c && size == 4`, on ANY BAR1 page.  It is exactly as
+ * strong as the assumption that every BAR1 page a guest writes is a USERD, and `w278` broke
+ * that assumption by introducing a workload that CPU-maps its own vidmem data buffers:
+ *
+ *   `[measured 2026-08-12, traces/boots/w278/run_w278b_guest_qemu.log.gz]`
+ *     BAR1 GP_PUT #1 aperture +0x9008c val=0xc0ffee56
+ *     BAR1 GP_PUT #2 aperture +0xa008c val=0x3f0011cc
+ *     BAR1[0] WRITE off=0x90000 val=0xc0ffee33   BAR1[1] WRITE off=0xa0000 val=0x3f0011cc
+ *
+ * Pages +0x90000 and +0xa0000 are the raw CE client's SOURCE and DESTINATION buffers — the
+ * same two magic words it prints as its payload — so the two "advances" on them are the
+ * client's DATA, sixteen dwords into a 4 KiB buffer.  ⇒ Two of the eight lines that boot
+ * printed, and two of the four "distinct USERD page(s)", are not cursors at all.
+ *
+ * ⊘ THE FIX IS A LABEL, NOT A FILTER.  A put pointer indexes a ring, so it is bounded by the
+ * largest GPFIFO this tree has ever seen (4096 entries, the kernel's; the client's is 64).
+ * `0xc0ffee56` cannot be one.  The converse does NOT hold — a small data word is
+ * indistinguishable from a cursor here — so this marks the rows it can PROVE are not cursors
+ * and claims nothing about the rest.  Dropping them silently would delete evidence; leaving
+ * the line's positive claim ("the guest advanced a GPFIFO put pointer") on them is a
+ * measured falsehood.  ⇒ The claim is now conditional, and the count of disproved rows is
+ * reported beside the total so the total can never be read as a cursor count. */
+#define NVKVM_GP_PUT_MAX_ENTRIES 4096u
+
 /* ★★★★★ w262 MEASURED, AND IT IS WHY THIS SECOND INSTRUMENT EXISTS.
  *
  * `[measured 2026-08-12, boots w262_off and w262_ring, GA106 / 580.159.04]` the flat cap above
@@ -312,6 +338,10 @@ struct NvkvmState {
      * the totals: "no fifth page appeared" and "a fifth page appeared and was dropped" are
      * the two readings a full table cannot otherwise be told apart. */
     uint64_t gp_put_pages_dropped;
+    /* ★★★★★ w279 — of `gp_put_writes`, how many carried a value that CANNOT be a put
+     * pointer.  See NVKVM_GP_PUT_MAX_ENTRIES.  ⊘ A lower bound on the false positives and
+     * never an upper one: a data word that happens to be small is unprovable either way. */
+    uint64_t gp_put_implausible;
     uint64_t irq_requests_dropped;
     /* ★★★ #151.  Message-signalled vectors this device actually delivered, and the ones it
      * could not because the guest had not enabled the table.  TWO numbers, because they are
@@ -727,10 +757,19 @@ static uint64_t nvkvm_bar1_read(void *opaque, hwaddr addr, unsigned size)
  * on it — it runs BEFORE kayfabe_shim_regs_write and does not touch `w`. */
 static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, unsigned size)
 {
+    /* ★★★★★ w279 — CAN this value be a put pointer at all?  See NVKVM_GP_PUT_MAX_ENTRIES.
+     * ⊘ Declared before the early return, not beside its first use: this file is built with
+     * QEMU's warning set, where a declaration after a statement is an error. */
+    bool gp_put_possible;
+
     if (size != 4 || (addr & 0xfffu) != NVKVM_USERD_GP_PUT) {
         return;
     }
     s->gp_put_writes++;
+    gp_put_possible = val < (uint64_t)NVKVM_GP_PUT_MAX_ENTRIES;
+    if (!gp_put_possible) {
+        s->gp_put_implausible++;
+    }
     /* ★★★★★ w262 — PER-PAGE FIRST TOUCH, printed live and uncapped in its count. */
     {
         uint64_t page = addr & ~(uint64_t)0xfff;
@@ -748,12 +787,18 @@ static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, u
                 s->gp_put_pages[pi].first_val = val;
                 s->gp_put_pages[pi].writes    = 1;
                 s->gp_put_pages_used++;
-                info_report("nvkvm: BAR1 GP_PUT — FIRST advance on USERD page +0x%" PRIx64
-                            " (val=0x%" PRIx64 "), page %u of at most %u. ⊘ ONE PAGE IS ONE "
-                            "CHANNEL'S USERD, and this line is the instant it first moved — "
-                            "order it against the ENGINE-OBJECT births above. ⚠ WHICH channel "
+                info_report("nvkvm: BAR1 GP_PUT — FIRST advance on page +0x%" PRIx64
+                            " (val=0x%" PRIx64 "), page %u of at most %u.%s ⚠ WHICH channel "
                             "is still not known here: nothing joins a BAR1 offset to a channel.",
-                            page, val, s->gp_put_pages_used, NVKVM_GP_PUT_PAGES);
+                            page, val, s->gp_put_pages_used, NVKVM_GP_PUT_PAGES,
+                            gp_put_possible
+                            ? " ⊘ This page MAY be one channel's USERD, and this line is the"
+                              " instant it first moved — order it against the ENGINE-OBJECT"
+                              " births above."
+                            : " ⊘⊘ NOT A USERD PAGE: the value cannot index any GPFIFO this"
+                              " tree has seen, so this is a 4-byte guest DATA write that"
+                              " landed sixteen dwords into some other BAR1-mapped page."
+                              " ⇒ EXCLUDE this page from any channel count (w279).");
             } else {
                 s->gp_put_pages_dropped++;
             }
@@ -764,12 +809,17 @@ static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, u
     }
     s->gp_put_printed++;
     info_report("nvkvm: BAR1 GP_PUT #%" PRIu64 " aperture +0x%" PRIx64 " val=0x%" PRIx64
-                " — the guest advanced a GPFIFO put pointer in ITS OWN USERD (offset 0x%x). "
+                " — %s (offset 0x%x). "
                 "⊘ WHICH channel is NOT known here: nothing joins a BAR1 offset to a "
                 "channel, so this orders the guest's FIRST cursor advance against the host "
                 "channel births above, never a particular channel's against its own. "
                 "(printed %u of %u; the total is reported at teardown and is not capped)",
-                s->gp_put_writes, addr, val, NVKVM_USERD_GP_PUT,
+                s->gp_put_writes, addr, val,
+                gp_put_possible
+                ? "the guest MAY have advanced a GPFIFO put pointer in a USERD"
+                : "⊘⊘ NOT A PUT POINTER — the value exceeds every GPFIFO size this tree has"
+                  " seen, so this is guest DATA at offset 0x8c of a non-USERD page (w279)",
+                NVKVM_USERD_GP_PUT,
                 s->gp_put_printed, NVKVM_GP_PUT_LIVE);
 }
 
@@ -2117,6 +2167,16 @@ static void nvkvm_report_registers(NvkvmState *s)
                 "the ONLY rows here that may be ordered against anything; this total is "
                 "uncapped and the per-row cap never touches it.",
                 s->gp_put_writes, NVKVM_USERD_GP_PUT, s->gp_put_printed, NVKVM_GP_PUT_LIVE);
+    /* ★★★★★ w279 — beside the total, never folded into it. */
+    info_report("nvkvm: BAR1 GP_PUT: %" PRIu64 " of those %" PRIu64 " carried a value that "
+                "CANNOT be a put pointer (>= %u, the largest GPFIFO this tree has seen) ⇒ "
+                "they are guest DATA at offset 0x%x of a page that is not a USERD. "
+                "⊘ A LOWER BOUND on the false positives and never an upper one: a data word "
+                "that happens to be small is unprovable either way, so the total above is "
+                "an offset census and MUST NOT be read as a cursor count (w279, measured on "
+                "w278b where 2 of 8 were the CE client's own payload magics).",
+                s->gp_put_implausible, s->gp_put_writes, NVKVM_GP_PUT_MAX_ENTRIES,
+                NVKVM_USERD_GP_PUT);
     {
         unsigned pi;
 
