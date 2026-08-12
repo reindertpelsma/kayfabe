@@ -42,8 +42,31 @@ echo "=== BUILD RC=$BRC $(date -Is) ==="
 [ $BRC -eq 0 ] || finish 92
 
 # ★★★ THE STAMP GATE. The bench silently served a binary built from `862c7c2` for weeks.
-STAMP=$(strings /workspace/bench/qemu-build/qemu-system-x86_64 | grep -o 'kayfabe-rev:[0-9a-f]*\(-dirty\)\?' | sort -u)
+#
+# ⊘⊘ MEASURED FALSE POSITIVE, 2026-08-12, and the gate is FIXED HERE — `w263_run.sh` and
+# `w264_run.sh` still carry the defect, so DO NOT COPY THEIR VERSION OF THIS BLOCK.
+#
+#   Their pattern is `grep -o 'kayfabe-rev:[0-9a-f]*\(-dirty\)\?'` — UNBOUNDED `*`. Rust `&str`
+#   literals are length-prefixed, NOT NUL-terminated, so they pack adjacently in `.rodata` and
+#   `strings` cannot separate them. At `24ea98f` the literal following the stamp begins `6…`,
+#   so the greedy class swallowed it and the gate reported:
+#     STAMP: [kayfabe-rev:…113af1446]  WANT: [kayfabe-rev:…113af144]      <= 41 hex vs 40
+#   The build was CORRECT. ★★ The failure is REVISION-DEPENDENT — it fires only when the next
+#   literal happens to start with a hex digit, so `w264` passed by luck — and its message is
+#   INDISTINGUISHABLE from the real staleness it guards against. A gate that is right 15/16 of
+#   the time and lies in the voice of the defect is worse than one that is merely absent.
+#
+# ⇒ Anchor to EXACTLY 40 hex, and assert the extraction itself before comparing, so a future
+#   extraction bug is LOUD rather than arriving disguised as a stale binary.
+STAMP=$(strings /workspace/bench/qemu-build/qemu-system-x86_64 \
+        | grep -oE 'kayfabe-rev:[0-9a-f]{40}(-dirty)?' | sort -u)
 echo "=== STAMP: [$STAMP] WANT: [kayfabe-rev:$HEAD] ==="
+NSTAMP=$(printf '%s\n' "$STAMP" | grep -c .)
+if [ "$NSTAMP" != "1" ]; then
+  echo "=== ★★★ THE EXTRACTION IS THE PROBLEM, NOT THE BINARY: found $NSTAMP stamps, wanted 1."
+  echo "===     ⊘ Do NOT read this as a stale build until the extractor is exonerated. ==="
+  finish 95
+fi
 if [ "$STAMP" != "kayfabe-rev:$HEAD" ]; then
   echo "=== ★★★ STAMP MISMATCH — REFUSING TO BOOT. ==="
   finish 93
