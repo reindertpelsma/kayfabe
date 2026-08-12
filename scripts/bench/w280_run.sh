@@ -17,10 +17,13 @@
 #    descent), so that gate is not on `cup2`'s path at all. Lifting it would vary the device
 #    while measuring the workload. It is reported BY NAME below.
 #
-# THE ONE VARIABLE IS THE WORKLOAD:
+# THE ARMS:
 #   arm            workload                              hook                      RING_VIDMEM
 #   w280_cup2      cup2 (libcuda, cuCtxCreate)           cup2_hook_gdbspin.sh      on
 #   w280_client    kayfabe-rm-ladder --ce-client (53)    r33_hook_ce_client.sh     on
+#   w280_cup2off   cup2 — THE SAME-REVISION CONTROL      cup2_hook_gdbspin.sh      OFF
+# ⊘ `cup2off` was added AFTER the first two ran, and the reason is stated where it is defined:
+#   w277 is three revisions old, so cup2-on-vs-w277 confounds route B with the device delta.
 # ★ The rung's own arm runs FIRST: if the session is cut short, the control is what is missing,
 #   and a control is recoverable where the measurement is not.
 #
@@ -112,11 +115,16 @@ export KAYFABE_GR_ROUTE=passthrough
 export KAYFABE_GUEST_OPERAND=pin
 unset KAYFABE_PT_SWEEP
 
-# ★★★★★ ROUTE B — ON, on BOTH arms. ⊘ It is UNREACHABLE with the witness disarmed
-#     (`plan_gpfifo_ring` returns `RingVaUnbound` BEFORE `VidmemRoute` is computed), and the
-#     witness is `on` above. ⚠ `w246`: route B ENUMERATES a ring; it does not submit work
-#     (`CE-SUBMIT` 0 in all four corners). No line below is the first forwarded work.
-export KAYFABE_RING_VIDMEM=on
+# ★★★★★ ROUTE B — ON for the `cup2`/`client` arms, OFF for the `cup2off` CONTROL.
+# ⊘ It is UNREACHABLE with the witness disarmed (`plan_gpfifo_ring` returns `RingVaUnbound`
+#   BEFORE `VidmemRoute` is computed), and the witness is `on` above. ⚠ `w246`: route B
+#   ENUMERATES a ring; it does not submit work (`CE-SUBMIT` 0 in all four corners). No line
+#   below is the first forwarded work.
+#
+# ★★★ THE `cup2off` ARM EXISTS BECAUSE ATTRIBUTION AGAINST `w277` IS NOT ONE-VARIABLE.
+#     `w277` is three revisions old (w278 + w279 changed the shim), so a difference between
+#     this boot and `w277` could be route B **or** the device delta. `cup2off` is THIS binary
+#     with route B off — the only control that isolates the flag at this revision.
 
 [ -f scripts/bench/guest_spinprobe.c ] || { echo "=== ★★★ MISSING the spin probe source ==="; finish 96; }
 for f in scripts/bench/cup2_hook_gdbspin.sh scripts/bench/r33_hook_ce_client.sh; do
@@ -141,12 +149,14 @@ grade() {
 
   # ---- ARM ASSERTIONS: a mis-armed boot must not be a data point that looks like one --------
   echo "--- ★★★ ARM ASSERTIONS (read out of the DEVICE's own lines):"
-  # ⊘ Matched on the DEVICE's verdict word (`route B ON`), not on the env var's spelling: the
-  #   flag accepts `1` and `on`, and w246d's log says `=1`. A gate keyed on the spelling would
-  #   fail an armed boot.
-  grep -qE 'kayfabe: RING-VIDMEM .*route B ON' "$Q" 2>/dev/null \
-    && echo "    ★ ROUTE-B: PASS (route B ON)" \
-    || { echo "    ★★★ ROUTE-B: FAIL — wanted 'route B ON'. ⊘ THIS BOOT IS VOID for this rung."; \
+  # ⊘ Matched on the DEVICE's verdict word (`route B ON`/`OFF`), not on the env var's spelling:
+  #   the flag accepts `1` and `on`, and w246d's log says `=1`. A gate keyed on the spelling
+  #   would fail an armed boot. ★ And the CONTROL asserts the OPPOSITE — an unarmed control that
+  #   is silently armed is the same defect as an armed run that is silently unarmed.
+  local wantrb='ON'; [ "$kind" = cup2off ] && wantrb='OFF'
+  grep -qE "kayfabe: RING-VIDMEM .*route B $wantrb" "$Q" 2>/dev/null \
+    && echo "    ★ ROUTE-B: PASS (route B $wantrb — this arm wanted $wantrb)" \
+    || { echo "    ★★★ ROUTE-B: FAIL — wanted 'route B $wantrb'. ⊘ THIS BOOT IS VOID for this rung."; \
          grep -o 'RING-VIDMEM.\{0,90\}' "$Q" 2>/dev/null | head -1 | sed 's/^/       saw: /'; }
   for pair in "FB-JOIN arm=shared" "GUEST-RING arm=ring" "GUEST-PUSHBUF arm=pin" \
               "GUEST-SEMA arm=pin" "GR-ROUTE arm=passthrough" "GUEST-OPERAND arm=pin"; do
@@ -163,7 +173,7 @@ grade() {
   echo "      RING-PROJ lines  = [$(grep -c 'RING-PROJ' "$Q" 2>/dev/null)]   ⊘ 0 ⇒ no doorbell descent happened AT ALL"
   echo "      fbRING rows      = [$(grep -c 'fbRING' "$Q" 2>/dev/null)]   ⊘ 0 ⇒ VOID, not 'no join'"
   echo "      DOORBELL-XLATE   = [$(grep -c 'DOORBELL-XLATE' "$Q" 2>/dev/null)]   (w277: 88)"
-  if [ "$kind" = cup2 ]; then
+  if [ "$kind" = cup2 ] || [ "$kind" = cup2off ]; then
     echo "      ★ DID cup2 RUN? (⊘ a zero from a run that did not happen is indistinguishable from a fix)"
     echo "        CUP2_OUT_BYTES = [$(grep -oE 'CUP2_OUT_BYTES=[0-9]+' "$P" 2>/dev/null | tail -1)]  ⊘ absent ⇒ VOID"
     echo "        totalMem lines = [$(grep -c 'totalMem=' "$P" 2>/dev/null)]  (cup2's own last print before cuCtxCreate)"
@@ -259,7 +269,7 @@ PY
   # =========================================================================================
   # ★★★★★ THE VERDICT LINES
   # =========================================================================================
-  if [ "$kind" = cup2 ]; then
+  if [ "$kind" = cup2 ] || [ "$kind" = cup2off ]; then
     # ⊘⊘ ANCHORED. `grep -o 'CUP2_RC=[0-9]*'` ALSO matches `GCC_CUP2_RC=0`, the guest
     #    COMPILER's status, and `[w271_off, measured]` the unanchored form reported CUP2_RC=0 —
     #    THE CAMPAIGN'S HEADLINE SUCCESS VALUE — on an arm that was hanging.
@@ -301,16 +311,18 @@ echo "=== ARMS TO RUN: [$ARMS] $([ "$ARMS" = "cup2 client" ] || echo '⚠ NOT TH
 
 for a in $ARMS; do
   TAG=${PFX}_${a}
-  unset POST_CAPTURE_HOOK KAYFABE_R33_BIN GQ_TIMEOUT
-  if [ "$a" = cup2 ]; then
-    export POST_CAPTURE_HOOK=$REPO/scripts/bench/cup2_hook_gdbspin.sh
-    export GQ_TIMEOUT=420
-  else
-    export POST_CAPTURE_HOOK=$REPO/scripts/bench/r33_hook_ce_client.sh
-    export KAYFABE_R33_BIN=$CLIENT
-    export GQ_TIMEOUT=240
-  fi
-  echo "=== BOOT $TAG START $(date -Is) — workload=$a hook=$POST_CAPTURE_HOOK RING_VIDMEM=[${KAYFABE_RING_VIDMEM}] ==="
+  unset POST_CAPTURE_HOOK KAYFABE_R33_BIN GQ_TIMEOUT KAYFABE_RING_VIDMEM
+  case "$a" in
+    cup2)    export KAYFABE_RING_VIDMEM=on
+             export POST_CAPTURE_HOOK=$REPO/scripts/bench/cup2_hook_gdbspin.sh; export GQ_TIMEOUT=420 ;;
+    cup2off) # ⊘ RING_VIDMEM deliberately UNSET — the control. Everything else identical.
+             export POST_CAPTURE_HOOK=$REPO/scripts/bench/cup2_hook_gdbspin.sh; export GQ_TIMEOUT=420 ;;
+    client)  export KAYFABE_RING_VIDMEM=on
+             export POST_CAPTURE_HOOK=$REPO/scripts/bench/r33_hook_ce_client.sh
+             export KAYFABE_R33_BIN=$CLIENT; export GQ_TIMEOUT=240 ;;
+    *)       echo "=== ★★★ UNKNOWN ARM '$a' ==="; finish 99 ;;
+  esac
+  echo "=== BOOT $TAG START $(date -Is) — workload=$a hook=$POST_CAPTURE_HOOK RING_VIDMEM=[${KAYFABE_RING_VIDMEM:-unset}] ==="
   timeout 1500 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
   echo "=== BOOT $TAG RC=$? $(date -Is) ==="
   echo "=== ★★★★★ GRADE $TAG ($a) ==="
