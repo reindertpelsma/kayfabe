@@ -6,6 +6,16 @@
 > `b734995`); folds nothing, supersedes nothing.
 >
 > Branch `legs-a-and-b`, off `origin/hostgr-passthrough-server` = `b734995`.
+>
+> ⊘⊘ **AMENDED 2026-08-12, and the amendment costs this document its boldest prediction.**
+> The **`ring-and-userd` arm does not exist and cannot be built at this revision** — leg B is
+> blocked on an address with no producer, not on the alloc arm the brief named
+> (`leg_b_userd_adoption_blocker.md`, measured: `AllocFacts::mem_phys` has **zero** production
+> writers, and `tests/tests/rmrpc_bridge.rs:3298` pins it as unbuildable in this direction).
+> ⇒ **Every `ring-and-userd` column below is UNSCORABLE**, including §3.4's bold pair. What
+> survives is the weaker half — `P5 ≥ 1` and `P7 = 0` on the `ring` arm — and a weaker claim
+> is what this rung has. ★ Recorded here, in the superseded text, rather than only in the
+> successor: nobody reads forward from a stale prediction.
 
 ---
 
