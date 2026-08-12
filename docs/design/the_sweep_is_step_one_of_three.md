@@ -83,6 +83,64 @@ page on any boot"*. The strong form needs a boot-time write census with a known-
 promotes items 2 and 3, and leaves the redirect's sweep still unranked by the source that
 analysed the sequence.
 
+## ★★★★★ AND THE PORT IS NOT A DRIVER LOOP — A ROOT-SEEDED SWEEP BINDS **NOTHING** TODAY
+
+Measured off the source at HEAD `ae7de43`. What exists is a **write-driven populate pass**, gated
+on observation at **three independent points**, plus a root-to-leaves walker primitive that is
+currently only ever invoked from *dirty* pages, never from the PDB root.
+
+- **Gate 1 — the plan drains a dirty set, it does not enumerate.** `plan_pt_decode`
+  (`crates/kayfabe-fwd/src/ptdecode.rs:344`) does `std::mem::take(&mut vas.pt_pages)`. The root is
+  special-cased as level 0 (`:359-366`) **only if the root is itself already dirty**. `vas.pt_pages`
+  is fed from exactly two observed-write sites (`crates/kayfabe-rt/src/device.rs:2579` and `:3045`).
+  There is no `mark_dirty_all` and no root seeding anywhere.
+- ★★★ **Gate 2 — the witness rule refuses reachable-but-unwitnessed leaves ON PURPOSE.**
+  `crates/kayfabe-mmu/src/reach.rs:454-462`:
+  ```rust
+  if !seen {
+      // Reachable-but-unwitnessed: a MISS, on purpose. This is the whole
+      // of hole 2's resolution and the reason residue cannot bind.
+      if live { out.unwitnessed += 1; }
+      continue;
+  }
+  ```
+  ⇒ **Seeding `decode_subtree` from the root and calling `apply_settlement` publishes nothing**,
+  because every newly-reached leaf is `!seen`. The port therefore **requires relaxing a deliberate
+  correctness gate** — the one that stops residue binding. That is an adjudication, not a loop.
+- **Gate 3 — reachability is computed over observed pages only** (`reach.rs:413`, `:445`), so a page
+  nobody wrote is not in the shadow and its whole subtree is invisible.
+
+**What is reusable, and it is a lot:** `decode_subtree(fmt, fb, root, budget)`
+(`crates/kayfabe-mmu/src/walker.rs:694`) — whose own doc calls it *"the C's `nvkvm_m2_pt_enum`
+(`C: :8635`), with its silent failure modes made loud"*, explicit stack, `MAX_WALK_DEPTH = 16`;
+`apply_settlement` (`reach.rs:546`, the only sanctioned publish path); `AddressTable::bind/resolve`
+(`crates/kayfabe-mmu/src/lib.rs:853/907`); and `pin_guest_run` (`shim.rs:6153`), the
+growth/fragmentation-correct pin loop with a proven termination argument. The hook site is
+`shim.rs:4344`, already the pre-run populate point, immediately before `pin_ring_guest_ram`.
+
+⚠ **Two sizing traps.** `PT_DECODE_BUDGET = 300_000` (`ptdecode.rs:167`) matches the C's
+`:8759` — but ours is charged against a **per-doorbell dirty delta** and the C's against a
+**whole-VAS walk**; the same number means different things. And all four existing pin sites
+(`pin_ring_/pushbuffer_/completion_/operand_guest_ram`) are **single named VAs** — there is no
+bulk back+map over reachable leaves at all.
+
+⊘ **Stale pointer in the redirect:** `KAYFABE_PT_WITNESS_EXEC` is not at `shim.rs:6117` (that line
+is inside `pin_ring_guest_ram`'s doc comment). Constant `shim.rs:12268`, reader `:12295`, and the
+function it arms is `witness_executor_fb_pages` (`:8079`) — which adds pages to the **witness
+queue**; it does not populate the address table.
+
+## ✔ Two of the redirect's other claims, CONFIRMED against source
+
+- **No host channel-state / error-notifier / RC readback exists.** The only host `control()` in
+  `crates/kayfabe-isolate-host/src/rm.rs` is `TIMER_GET_REGISTER_OFFSET` (`:1571`, `:1584`); no
+  `NV01_EVENT_OS_EVENT`, no `NV2080_CTRL_CMD_FIFO_*` outside the standalone `rmladder` diagnostic
+  (`bin/rmladder.rs:301`, `:318`); `error_notifier` is only ever **decoded from the guest's own
+  alloc params** and never read back from the host. `Xid` appears in doc comments only. ⇒ *"did the
+  host channel run, or did it RC?"* is answered today **only by a human reading `dmesg`.**
+- ⊘ **The `1252` VA-family figure has NO producer in the tree.** It was made by hand from a boot log
+  (`traces/boots/w274/RESULT.md:155-160`); no function buckets VAs by high bits. **It is not
+  reproducible by running anything**, which is worth knowing before it is cited as a baseline.
+
 ## ⇒ Recommendation
 
 **Do not start with the sweep.** The cheapest decisive next step is §6's item 3 —
