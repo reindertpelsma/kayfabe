@@ -7278,6 +7278,100 @@ impl HostRmBackend {
 mod tests {
     use super::*;
 
+    /// ★★★★★ **w283 — THE PUSH MUST FIT THE SLOT, AND THIS IS THE TEST THAT WOULD HAVE
+    /// CAUGHT THE REGRESSION BEFORE A BOOT DID.**
+    ///
+    /// `[measured 2026-08-13, boot `w283_client`]` adding the guest's own release took the
+    /// push from 16 words (64 bytes — **exactly** the old slot) to 22, and every forwarded
+    /// copy refused `BAD_ENCODE` **before submission**, regressing `w282b`'s
+    /// hardware-retired copy to nothing. The length check is a runtime `if` in
+    /// `ce_copy_outcome`; nothing quantified over the encoder's own output.
+    ///
+    /// ⊘ It asserts the relation, not the number: a future method added to either arm fails
+    /// here rather than on a bench, and raising [`PUSHBUFFER_SLOT_BYTES`] is a fix this test
+    /// accepts while a hard-coded `22` would not be.
+    #[test]
+    fn every_push_this_encoder_can_emit_fits_one_pushbuffer_slot() {
+        let base = CePush {
+            class_id: kayfabe_chips::pinned_host_classes().ce_object(),
+            src: 0x1_2000_0000,
+            dst: 0x1_2001_0000,
+            len: 4096,
+            sem_va: 0x2000,
+            payload: 1,
+            guest_release: None,
+        };
+        for (what, p) in [
+            ("no guest release", base),
+            (
+                "WITH the guest's own release",
+                CePush {
+                    guest_release: Some((0x1_2002_2000, 1)),
+                    ..base
+                },
+            ),
+        ] {
+            let words = ce_pushbuffer(p).expect("encodes");
+            let bytes = 4 * words.len() as u64;
+            assert!(
+                bytes <= PUSHBUFFER_SLOT_BYTES,
+                "{what}: the push is {bytes} bytes and a slot is {PUSHBUFFER_SLOT_BYTES}.                  ⊘ This is the w283 regression: `ce_copy_outcome` answers BAD_ENCODE — a                  name that is true of a DIFFERENT cause — and every forwarded copy is                  refused before submission"
+            );
+        }
+    }
+
+    /// ★★★ **The guest's release is the GUEST's numbers, and it RELEASES rather than
+    /// COPIES** — graded on identity, never on length.
+    ///
+    /// ⊘ A test that only counted words would pass on a second `LAUNCH_DMA` that re-ran the
+    /// copy, which is a silent doubling of every transfer, and on one naming *our* semaphore
+    /// twice, which would leave the guest polling forever with every row green.
+    #[test]
+    fn the_guest_release_names_the_guests_address_and_moves_no_bytes() {
+        let ours = 0x2000u64;
+        let theirs = 0x1_2002_2000u64;
+        let p = CePush {
+            class_id: kayfabe_chips::pinned_host_classes().ce_object(),
+            src: 0x1_2000_0000,
+            dst: 0x1_2001_0000,
+            len: 4096,
+            sem_va: ours,
+            payload: 7,
+            guest_release: Some((theirs, 1)),
+        };
+        let w = ce_pushbuffer(p).expect("encodes");
+        let without = ce_pushbuffer(CePush {
+            guest_release: None,
+            ..p
+        })
+        .expect("encodes");
+        // ★ APPENDED, never interleaved: everything the copy needed is byte-identical, so
+        // the release cannot have changed how the bytes move.
+        assert_eq!(w[..without.len()], without[..], "the copy must be untouched");
+        let tail = &w[without.len()..];
+        // The guest's address, split exactly as `SET_SEMAPHORE_A/B` splits it.
+        assert_eq!(tail[1], (theirs >> 32) as u32, "A = bits 48:32");
+        assert_eq!(tail[2], (theirs & 0xFFFF_FFFF) as u32, "B = bits 31:0");
+        assert_eq!(tail[3], 1, "the GUEST's literal payload, not ours");
+        // ⊘ And the launch that carries it moves NO bytes.
+        let flags = *tail.last().expect("a launch");
+        assert_eq!(
+            flags & kayfabe_abi::submit::ce::LAUNCH_TRANSFER_MASK,
+            kayfabe_abi::submit::ce::LAUNCH_TRANSFER_NONE,
+            "a release-only launch must be TRANSFER_NONE — anything else re-runs the copy"
+        );
+        assert_ne!(
+            flags & kayfabe_abi::submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD,
+            0,
+            "it must actually release"
+        );
+        // ⊘ Ours is still there and is still LAST-but-one, so `await_semaphore` covers both.
+        assert!(
+            without.contains(&((ours & 0xFFFF_FFFF) as u32)),
+            "our own semaphore must survive"
+        );
+    }
+
     /// ★★★★★ **THE WITNESS'S WHOLE READING, as a table.**
     ///
     /// ⊘ Four rows for three states, and the fourth is the one that matters: `(false, true)`
