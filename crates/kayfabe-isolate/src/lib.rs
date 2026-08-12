@@ -1942,7 +1942,7 @@ pub struct CeSubCopy {
 /// A struct rather than a `(u64, u32)` for [`CeSubCopy`]'s own reason: an address and a
 /// payload next to each other are exactly the pair that gets swapped, and this one crosses
 /// an IPC boundary where a swap would be a store of an address into the guest's semaphore.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CeGuestRelease {
     /// The GPU VA the guest's own `SET_REPORT_SEMAPHORE`/`SET_SEMAPHORE_A/B` named.
     ///
