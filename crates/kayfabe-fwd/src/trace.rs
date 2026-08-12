@@ -48,6 +48,8 @@ impl Faulted for FwdFault {
             FwdFault::NoHostVas { .. } => FaultTag("FwdFault::NoHostVas"),
             FwdFault::GuestRamNotSysmem { .. } => FaultTag("FwdFault::GuestRamNotSysmem"),
             FwdFault::GuestRamAddressTaken { .. } => FaultTag("FwdFault::GuestRamAddressTaken"),
+            FwdFault::GuestRamPinTooShort { .. } => FaultTag("FwdFault::GuestRamPinTooShort"),
+            FwdFault::GuestRamPinOverlaps(_) => FaultTag("FwdFault::GuestRamPinOverlaps"),
             FwdFault::FbLeafDisagrees { .. } => FaultTag("FwdFault::FbLeafDisagrees"),
             FwdFault::FbLeafGranularity { .. } => FaultTag("FwdFault::FbLeafGranularity"),
             FwdFault::FbLeafExtent { .. } => FaultTag("FwdFault::FbLeafExtent"),

@@ -300,6 +300,73 @@ pub enum FwdFault {
         /// The host GPU VA the existing publication occupies.
         host_va: u64,
     },
+    /// ★★★★★ **A guest-RAM pin was asked for at a base that IS pinned — for FEWER BYTES.**
+    ///
+    /// ⊘⊘ **This refusal exists because its absence was a GREEN VERDICT ON A PARTIAL
+    /// MAPPING.** Until `w271` the idempotence key was the VA alone, so a 64 KiB request at
+    /// a base already described for 32 KiB was answered `already = true` with the 32 KiB
+    /// descriptor's own handle, and the second 32 KiB was **never described to RM**. The
+    /// caller logged `ALREADY PINNED (idempotent replay) … placed_as_asked=true` and read it
+    /// as success. `[measured 2026-08-12, boot `w270_pin`]` the host GPU then faulted at
+    /// exactly the first byte past the described extent — `+0x8000`, to the byte — and that
+    /// fault is the only reason the truncation was ever visible.
+    ///
+    /// ⇒ **The pin's identity is the `(base, extent)` PAIR.** A request that asks for more
+    /// than is described is not a replay of anything; it is a *new* obligation, and it is
+    /// refused **by name, carrying both numbers**, so the caller can describe the remainder.
+    ///
+    /// ★ Why a refusal rather than a silent widening: this crate may not derive a grant.
+    /// `described` and `requested` are the two numbers the **VMM** needs to mint the
+    /// remainder's grant from its own layout, and handing them back is the whole content of
+    /// this variant. See [`GuestRamGrant::originated_by_the_vmm`]'s name.
+    ///
+    /// # ★★★★ AND WHY THE RECORD IS NOT REPLACED — the choice, stated where it was made
+    ///
+    /// [`kayfabe_core::gpu::GuestRamPin`] holds **one** `(host_va, memory, len)`, so a
+    /// growing request forces a choice, and it is a correctness question rather than a style
+    /// one. The two options were:
+    ///
+    /// - **(a) replace the record with a larger run.** ⊘ **Refused, and not on taste.** An
+    ///   `OS_DESCRIPTOR` is built over a page list fixed at creation — RM has no verb to
+    ///   lengthen one — so "replace" means *allocate a second descriptor over a superset of
+    ///   the same guest pages*. Between the new map and the old free, RM holds **two
+    ///   overlapping descriptors over the same pages**, and the fixed map of the larger one
+    ///   lands on a host VA the smaller one still occupies (`0x51 NV_ERR_NO_MEMORY`,
+    ///   collision-or-exhaustion, indistinguishable). Unmapping first opens a window in
+    ///   which a live engine's operand is unmapped. And dropping the map entry is the only
+    ///   record of the pair it named — [a Free can free a NAME, not the object].
+    /// - **(b) keep per-run records and describe only the REMAINDER.** ★ Taken. Two
+    ///   descriptors, over **disjoint** page sets, at **abutting** VAs. No overlap ever
+    ///   exists, nothing is freed, no handle is orphaned, and the guest's addresses resolve
+    ///   throughout because neither existing mapping is disturbed.
+    ///
+    /// ⊘ (b) is also not a new mechanism: a **fragmented** range already becomes several
+    /// pins at several bases, and every caller already loops over runs. Growth reaches that
+    /// same shape from the other direction.
+    ///
+    /// [`GuestRamGrant::originated_by_the_vmm`]: kayfabe_isolate::GuestRamGrant::originated_by_the_vmm
+    GuestRamPinTooShort {
+        /// The base VA, which **is** pinned — for too few bytes.
+        va: GpuVa,
+        /// How many bytes the live pin at `va` actually describes to RM.
+        described: u64,
+        /// How many bytes this request named.
+        requested: u64,
+    },
+    /// ★★★★ **A guest-RAM pin's extent COLLIDES with a pin at a different base.**
+    ///
+    /// The same identity defect as [`FwdFault::GuestRamPinTooShort`], arrived at from the
+    /// other side: nothing is pinned at `va` itself, but `[va, va+requested)` contains — or
+    /// is reached by — a pin that starts elsewhere. Proceeding would build a second
+    /// `OS_DESCRIPTOR` over pages RM has already been given and then ask for a **fixed** GPU
+    /// map at a host VA that is occupied, which RM answers `0x51 NV_ERR_NO_MEMORY` — a
+    /// status that cannot be told apart from genuine exhaustion.
+    ///
+    /// ★ [`GuestRamPinOverlap::free_prefix`] is what makes this actionable rather than
+    /// merely loud: when the collision starts *after* `va` there is a clear prefix the
+    /// caller may describe now, and the rest is reached by continuing past the pin that is
+    /// already there. A `free_prefix` of `0` means no progress is possible at this base.
+    GuestRamPinOverlaps(GuestRamPinOverlap),
     /// ★★★ **The address table and the page-table WALK disagree about this leaf.**
     ///
     /// The second crossing has two sources for one fact: the guest's own page tables,
@@ -1417,6 +1484,26 @@ pub fn publish_backing(
     })
 }
 
+/// ★★★★ What [`FwdFault::GuestRamPinOverlaps`] carries. A struct rather than four inline
+/// fields because the caller acts on the *combination* — `free_prefix` is only meaningful
+/// beside the base it is a prefix of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamPinOverlap {
+    /// The base VA that was asked for.
+    pub va: GpuVa,
+    /// How many bytes the request named.
+    pub requested: u64,
+    /// The base of the pin that is in the way.
+    pub existing_base: u64,
+    /// How many bytes that pin describes.
+    pub existing_len: u64,
+    /// ★ How much of `[va, va+requested)` is clear of it — `existing_base - va` when the
+    /// collision starts inside the request, and **`0`** when the pin in the way starts
+    /// below `va` and reaches into it. ⊘ Zero means *no progress is possible at this base*,
+    /// and a caller that loops on this fault must treat it as terminal or it will spin.
+    pub free_prefix: u64,
+}
+
 /// ★★★★★ **What one guest-RAM pin produced** — [`pin_guest_ram`]'s answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestRamPinned {
@@ -1432,7 +1519,21 @@ pub struct GuestRamPinned {
     /// most: the pin is idempotent and a doorbell repeats, so a caller that could not tell
     /// "pinned now" from "was already pinned" would log a first-time event on every ring
     /// and a reader would conclude the descriptor was being re-created.
+    ///
+    /// ⚠ **`already` is now only ever true for a FULLY COVERED replay.** A request that asks
+    /// for more bytes than the live pin describes is [`FwdFault::GuestRamPinTooShort`], not
+    /// an `already`. Before `w271` it was the latter, and that was a green verdict on a
+    /// partial mapping.
     pub already: bool,
+    /// ★★★★★ **How many bytes are described to RM at [`GuestRamPinned::host_va`] after this
+    /// call** — the extent, reported beside the address so a caller can print *requested*
+    /// and *described* side by side.
+    ///
+    /// ⊘ For a fresh pin this equals the grant's length by construction. For a replay it is
+    /// the **live pin's** length, which is `>=` what was asked (a shorter live pin refuses).
+    /// It is carried explicitly because *"a mismatch should be read, not inferred"* is the
+    /// whole lesson of the boot that produced this field.
+    pub described: u64,
 }
 
 /// The ID-shaped hints [`commit_pin_guest_ram`] re-validates against. Identities only.
@@ -1482,16 +1583,76 @@ pub fn pin_guest_ram(
     })
 }
 
+/// ★★★★ **Is any live guest-RAM pin in the way of `[va, va+len)`?** — the extent key's
+/// second half, asked of a base that is NOT itself pinned.
+///
+/// ⊘ Callers must have already handled the exact-base case; this deliberately ignores a pin
+/// at `va` itself so that the two questions cannot answer each other. Returns the **nearest**
+/// obstruction, so a caller that loops makes progress in the direction it is walking.
+fn overlapping_pin(
+    vas: &kayfabe_core::gpu::Vas,
+    va: GpuVa,
+    len: u64,
+) -> Option<GuestRamPinOverlap> {
+    // ⊘ A zero-length request cannot collide with anything, and treating it as if it could
+    // would refuse an empty grant for a reason that is not true of it.
+    if len == 0 {
+        return None;
+    }
+    let end = va.0.saturating_add(len);
+    // 1. A pin that starts BELOW `va` and reaches into the request. `free_prefix = 0`: there
+    //    is no clear byte at `va` at all, so no caller can make progress here.
+    if let Some((&base, pin)) = vas.guest_ram_pins.range(..va.0).next_back()
+        && base.saturating_add(pin.len) > va.0
+    {
+        return Some(GuestRamPinOverlap {
+            va,
+            requested: len,
+            existing_base: base,
+            existing_len: pin.len,
+            free_prefix: 0,
+        });
+    }
+    // 2. A pin that starts INSIDE the request. Everything below it is clear, and that
+    //    prefix is what the caller may describe now.
+    let (&base, pin) = vas.guest_ram_pins.range(va.0..end).next()?;
+    Some(GuestRamPinOverlap {
+        va,
+        requested: len,
+        existing_base: base,
+        existing_len: pin.len,
+        free_prefix: base - va.0,
+    })
+}
+
 /// PLAN (R1): decide the pin's host work from core state. A pure `&Proc` read.
 ///
 /// ## What it checks, and the one thing it deliberately does NOT
 ///
+/// ★★★★★ **AMENDED 2026-08-12 (`w271`), above the sentence it qualifies.** The paragraph
+/// below said the length is checked against *nothing*, and that was read — including by this
+/// function's own author — as forbidding the comparison `w270`'s wall turned out to need.
+/// ⊘ **It does not, and the distinction is the whole of `w271`.** There are two different
+/// questions and only one of them is an echo:
+///
+/// - *"is this length CORRECT?"* — unanswerable here, exactly as written below. The layout
+///   that produced it is the hypervisor's; the only thing the core could check it against is
+///   the request itself. That reasoning stands, unweakened.
+/// - *"does this request name MORE than the extent WE ALREADY DESCRIBED to RM?"* — an
+///   ordinary question about **our own record of work we performed**. `GuestRamPin::len` is
+///   not guest input and not hypervisor input; it is what a previous call on this path put
+///   there. Comparing against it is no more an echo than comparing against `host_vas` is.
+///
+/// ⇒ The comparison is made, and only that one. `[measured 2026-08-12, boot `w270_pin`]`
+/// its absence let a 64 KiB request replay a 32 KiB descriptor and report success, and the
+/// host GPU faulted at the first undescribed byte.
+///
 /// It checks facts about **this address space**: that the VA resolves at all, that its
 /// binding is sysmem, that nothing is already host-published there, and whether a pin is
-/// already live. ⊘ It does **not** check the grant's offset or length against anything.
-/// There is nothing in the core to check them against — the layout that produced them is
-/// the hypervisor's — and a check invented here would be a check of a request against
-/// itself, which is [an echo is unverifiable by its reply].
+/// already live **and long enough**. ⊘ It does **not** check the grant's offset or length
+/// *for correctness* against anything. There is nothing in the core to check them against —
+/// the layout that produced them is the hypervisor's — and a check invented here would be a
+/// check of a request against itself, which is [an echo is unverifiable by its reply].
 ///
 /// # Errors
 /// [`FwdFault::RetiredProc`], [`FwdFault::SystemDataPlane`], [`FwdFault::UnknownPdb`],
@@ -1522,10 +1683,29 @@ pub fn plan_pin_guest_ram(
     if !proc.isolates.contains_key(&gpu) {
         return Err(missing_isolate(proc, gpu));
     }
-    // ★★★ THE IDEMPOTENCE ARM, and it is FIRST among the address checks on purpose: a
-    // live pin makes every check below true-by-construction, so asking them first would
-    // refuse a replay for a condition the replay itself created.
+    // ★★★★★ THE IDEMPOTENCE ARM, and its key is the `(base, extent)` PAIR.
+    //
+    // It is FIRST among the address checks on purpose: a live pin makes every check below
+    // true-by-construction, so asking them first would refuse a replay for a condition the
+    // replay itself created.
+    //
+    // ⊘⊘ **The extent half of the key is `w271`, and its absence was measurable.** Until
+    // then this arm asked only `get(&va.0)`, so a 64 KiB request at a base described for
+    // 32 KiB replayed the 32 KiB descriptor and the caller printed `ALREADY PINNED …
+    // placed_as_asked=true`. `[measured 2026-08-12, boot `w270_pin`]` the host GPU faulted
+    // at the first byte past the described extent. A green supply row held the wall in
+    // place, and only an `Xid` from an independent authority made it visible.
     if let Some(existing) = vas.guest_ram_pins.get(&va.0).copied() {
+        // ⊘ `<`, not `!=`: a request for FEWER bytes than are described is genuinely
+        // covered. Refusing it would turn every re-derivation that happens to name a
+        // shorter run into a fault, and there is nothing wrong with a shorter ask.
+        if existing.len < grant.len() {
+            return Err(FwdFault::GuestRamPinTooShort {
+                va,
+                described: existing.len,
+                requested: grant.len(),
+            });
+        }
         return Ok(Planned {
             plan: PinGuestRamPlan {
                 proc: pid,
@@ -1540,6 +1720,14 @@ pub fn plan_pin_guest_ram(
             // isolate pool — the same shape an idempotent engine-object re-send takes.
             verbs: None,
         });
+    }
+    // ★★★★ …and the same identity question from the OTHER side: nothing is pinned at `va`,
+    // but something may be pinned INSIDE `[va, va+len)`, or may start below `va` and reach
+    // into it. Both are collisions, and both would otherwise reach RM as a *fixed* map at an
+    // occupied host VA — answered `0x51 NV_ERR_NO_MEMORY`, indistinguishable from real
+    // exhaustion. ⇒ Refused here, where the cause is still legible.
+    if let Some(overlap) = overlapping_pin(vas, va, grant.len()) {
+        return Err(FwdFault::GuestRamPinOverlaps(overlap));
     }
     // ★★★ The guest's own page tables are the authority on what lives at `va`, and this
     // is where their answer is consulted. MISS = FAULT: an unbound VA is refused rather
@@ -1593,6 +1781,11 @@ pub fn commit_pin_guest_ram(
             host_va: existing.host_va,
             memory: existing.memory,
             already: true,
+            // ★ The LIVE pin's extent, not the request's. `plan_pin_guest_ram` has already
+            // refused the case where this would be smaller than what was asked, so a caller
+            // printing `requested` beside this can only ever see `described >= requested`
+            // on a replay — and if it ever sees otherwise, the plan arm has regressed.
+            described: existing.len,
         });
     }
     let Some(VerbReply::GuestRamPinned {
@@ -1660,6 +1853,11 @@ pub fn commit_pin_guest_ram(
     // ★ And the same for the pin itself: a sibling may have pinned this VA in the gap.
     // Refuse rather than overwrite — the map entry is the only record of the objects, so
     // replacing one silently would leak the pair it named.
+    //
+    // ⊘ `retry: true` here, and it is `w271`'s change: the sibling's pin may be SHORTER than
+    // ours, in which case a retry re-plans, meets `GuestRamPinTooShort`, and the caller
+    // describes the remainder. Refusing terminally would leave the same truncation the
+    // extent key exists to close, arrived at through a race instead of through a replay.
     if let Some(theirs) = vas.guest_ram_pins.get(&plan.va.0).copied() {
         return Err(Refusal {
             fault: FwdFault::GuestRamAddressTaken {
@@ -1667,7 +1865,17 @@ pub fn commit_pin_guest_ram(
                 host_va: theirs.host_va,
             },
             orphans: orphans(vas_used, fresh_vas),
-            retry: false,
+            retry: true,
+        });
+    }
+    // ★★ R5's half of the extent key: a sibling may have pinned a range that OVERLAPS ours
+    // in the gap. The plan checked this against state that has since moved, and adopting our
+    // descriptor now would leave two live maps over one set of guest pages.
+    if let Some(overlap) = overlapping_pin(vas, plan.va, plan.grant.len()) {
+        return Err(Refusal {
+            fault: FwdFault::GuestRamPinOverlaps(overlap),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: true,
         });
     }
     if let Some(h) = fresh_vas {
@@ -1686,6 +1894,10 @@ pub fn commit_pin_guest_ram(
         host_va,
         memory,
         already: false,
+        // ⊘ The GRANT's length, which is what was described to RM — not a length this crate
+        // computed. `GuestRamPin::len` above is filled from the same number for the same
+        // reason, and the two must never be allowed to drift apart.
+        described: plan.grant.len(),
     })
 }
 

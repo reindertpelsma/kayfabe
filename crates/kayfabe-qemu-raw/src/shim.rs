@@ -4567,6 +4567,62 @@ enum DoorbellRoot {
     Underivable(u64, kayfabe_device::ceresolve::CeResolve),
 }
 
+/// ★★★★★ **What [`SharedDoorbell::pin_guest_run`] made of one contiguous run** — and the
+/// reason it is a struct rather than a bool is the whole of `w271`.
+///
+/// ⚠⚠ `w270` reported a **partial** mapping with the same word it used for a complete one
+/// (`ALREADY PINNED … placed_as_asked=true`), so the truncation was invisible in our own
+/// instrument and was found by a **hardware fault** instead. ⇒ [`PinnedRun::verdict`] has
+/// three values that never overlap, and [`PinnedRun::requested`] and
+/// [`PinnedRun::described`] are printed **side by side** so a mismatch is read rather than
+/// inferred.
+struct PinnedRun {
+    /// One of three, never shared: `PINNED`, `ALREADY PINNED (… fully covered)`, `GREW …`.
+    verdict: &'static str,
+    /// How many bytes the run asked for.
+    requested: u64,
+    /// How many bytes are described to RM over `[va, va+described)` after this call.
+    described: u64,
+    /// How many of those bytes this call newly described.
+    fresh_bytes: u64,
+    /// The first segment's `OS_DESCRIPTOR` handle — what the old single-pin line printed.
+    memory: u64,
+    /// The first segment's host GPU VA.
+    host_va: u64,
+    /// Whether the first segment landed where it was asked.
+    placed_as_asked: bool,
+    /// ★ Whether the WHOLE requested extent is now described. ⊘ A caller counting placements
+    /// must read this and not `verdict`: a run stopped part-way is not a placement.
+    covered: bool,
+    /// ★★★★★ **Whether this run was a PARTIAL hit that had to be extended.** ⊘ A separate
+    /// bool rather than a substring test on [`PinnedRun::verdict`]: a counter that read the
+    /// prose would silently stop counting the day the prose was reworded, which is how the
+    /// original defect stayed invisible.
+    grew: bool,
+    /// One entry per segment, in address order — empty for the single-segment case is
+    /// deliberately NOT how it works: even one segment records itself, so a reader never has
+    /// to guess whether the absence of detail means "one segment" or "not recorded".
+    segments: Vec<String>,
+}
+
+impl PinnedRun {
+    /// The tail of the log line, after `→ file offset 0x…  → `.
+    fn line(&self) -> String {
+        format!(
+            "{} requested={} described={} fresh={} memory={:#x} host_va=0x{:x} \
+             placed_as_asked={} {}",
+            self.verdict,
+            self.requested,
+            self.described,
+            self.fresh_bytes,
+            self.memory,
+            self.host_va,
+            self.placed_as_asked,
+            self.segments.join(" "),
+        )
+    }
+}
+
 impl SharedDoorbell {
     /// ★★★ **E10e item (c) — SERVE a doorbell on a VAS-less copy-engine channel, on the
     /// CPU, in the shell.** `None` means *"not ours"*, and the forwarding path runs.
@@ -6045,6 +6101,163 @@ impl SharedDoorbell {
     /// the pin — [`kayfabe_rt::device::SharedDevice::pin_guest_ram`] runs host ioctls and
     /// may park on the isolate pool, and holding an unranked mutex across that is the exact
     /// shape the `ring` body's own lock note warns about one screen down.
+    /// ★★★★★ **Pin ONE contiguous run, and DESCRIBE ITS GROWTH** — the primitive all four
+    /// guest-RAM pin sources share, and the one place the `(base, extent)` key is honoured.
+    ///
+    /// # Why this exists at all
+    ///
+    /// `[measured 2026-08-12, boot `w270_pin`]` the operand source asked for **64 KiB** at a
+    /// base already described for **32 KiB**. The core answered `already` — its idempotence
+    /// key was the VA — and the caller printed `ALREADY PINNED (idempotent replay) …
+    /// placed_as_asked=true`. **The second 32 KiB was never described to RM**, and the host
+    /// GPU faulted on the first byte past the described extent, to the byte. ⇒ A green supply
+    /// row held the wall in place, and only an independent authority made it visible.
+    ///
+    /// # The shape, and why the split lives HERE and not in the core
+    ///
+    /// `kayfabe_fwd::plan_pin_guest_ram` now refuses a growing request by name
+    /// ([`kayfabe_fwd::FwdFault::GuestRamPinTooShort`]) and hands back *how much is
+    /// described*. It may not do more: **only the VMM may derive a grant** — the whole
+    /// content of `GuestRamGrant::originated_by_the_vmm`'s name and of `#238`. So the
+    /// remainder's `(file_offset, len)` is computed **here**, from the hypervisor's own
+    /// stated run, and re-entered as an ordinary pin at `va + described`.
+    ///
+    /// ⊘ That is not a new mechanism: a *fragmented* range already becomes several pins at
+    /// several bases. Growth just reaches the same shape from the other direction.
+    ///
+    /// # ⚠ Termination
+    ///
+    /// Every non-terminal arm advances `covered` by a **strictly positive** number
+    /// (`described`, or `free_prefix`), so the walk is bounded by `len`. A zero from either
+    /// is treated as terminal rather than retried — otherwise a malformed answer becomes a
+    /// spin inside a doorbell, and a doorbell holds the guest's vCPU.
+    fn pin_guest_run(
+        &self,
+        pdb: kayfabe_rt::Pdb,
+        va: u64,
+        file_offset: u64,
+        len: u64,
+    ) -> Result<PinnedRun, kayfabe_rt::FwdFault> {
+        let mut out = PinnedRun {
+            verdict: "⊘ NOTHING ASKED",
+            requested: len,
+            described: 0,
+            fresh_bytes: 0,
+            memory: 0,
+            host_va: va,
+            placed_as_asked: false,
+            covered: len == 0,
+            grew: false,
+            segments: Vec::new(),
+        };
+        let mut covered = 0u64;
+        let mut fresh_segments = 0usize;
+        let mut replay_segments = 0usize;
+        while covered < len {
+            let seg_va = va + covered;
+            let seg_len = len - covered;
+            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                file_offset + covered,
+                seg_len,
+                kayfabe_vmm::Prot::ReadWrite,
+            );
+            match self.device.pin_guest_ram(
+                DOORBELL_TARGET_GPU,
+                pdb,
+                kayfabe_rt::GpuVa(seg_va),
+                grant,
+            ) {
+                Ok(p) => {
+                    if p.already {
+                        replay_segments += 1;
+                    } else {
+                        fresh_segments += 1;
+                        out.fresh_bytes += seg_len;
+                    }
+                    out.segments.push(format!(
+                        "[{}@0x{seg_va:x}+{seg_len} described={} memory={:#x} host_va=0x{:x} \
+                         placed_as_asked={}]",
+                        if p.already { "replay" } else { "fresh" },
+                        p.described,
+                        p.memory.raw(),
+                        p.host_va,
+                        p.host_va == seg_va,
+                    ));
+                    if covered == 0 {
+                        out.memory = p.memory.raw();
+                        out.host_va = p.host_va;
+                        out.placed_as_asked = p.host_va == seg_va;
+                    }
+                    // ★ A replay's live pin covers AT LEAST what was asked (a shorter one
+                    // refuses above), and a fresh pin described exactly what was asked. Both
+                    // finish the run.
+                    covered = len;
+                }
+                // ★★★★★ THE GROWTH ARM. The base is described for fewer bytes than asked;
+                // step past what exists and describe the remainder from the same run.
+                Err(kayfabe_rt::FwdFault::GuestRamPinTooShort { described, .. })
+                    if described > 0 && described < seg_len =>
+                {
+                    replay_segments += 1;
+                    out.segments.push(format!(
+                        "[covered@0x{seg_va:x}+{described} (already described; stepping past \
+                         it)]"
+                    ));
+                    covered += described;
+                }
+                // ★★ The overlap arm, from the other side: something is pinned INSIDE this
+                // run. Describe the clear prefix, then re-enter at the obstruction — where
+                // the arm above takes over. `free_prefix == 0` is terminal by construction.
+                Err(kayfabe_rt::FwdFault::GuestRamPinOverlaps(o)) if o.free_prefix > 0 => {
+                    let prefix = o.free_prefix.min(seg_len);
+                    let sub = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                        file_offset + covered,
+                        prefix,
+                        kayfabe_vmm::Prot::ReadWrite,
+                    );
+                    let p = self.device.pin_guest_ram(
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        kayfabe_rt::GpuVa(seg_va),
+                        sub,
+                    )?;
+                    fresh_segments += 1;
+                    out.fresh_bytes += prefix;
+                    out.segments.push(format!(
+                        "[fresh@0x{seg_va:x}+{prefix} (clear prefix below a pin at \
+                         0x{:x}+{}) memory={:#x} placed_as_asked={}]",
+                        o.existing_base,
+                        o.existing_len,
+                        p.memory.raw(),
+                        p.host_va == seg_va,
+                    ));
+                    if covered == 0 {
+                        out.memory = p.memory.raw();
+                        out.host_va = p.host_va;
+                        out.placed_as_asked = p.host_va == seg_va;
+                    }
+                    covered += prefix;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        out.described = covered;
+        out.covered = covered >= len;
+        // ⚠⚠ THREE WORDS, NEVER SHARED. `w270` printed one green word over both "we did the
+        // work" and "it was already complete", and the partial case wore it too. A reader
+        // must be able to see growth without inferring it from two numbers.
+        out.grew = fresh_segments > 0 && replay_segments > 0;
+        out.verdict = match (fresh_segments, replay_segments) {
+            (0, 0) => "⊘ NOTHING ASKED",
+            (_, 0) => "PINNED",
+            (0, _) => "ALREADY PINNED (idempotent replay; fully covered)",
+            _ => {
+                "GREW (partial hit — the base was described SHORT; the remainder is described now)"
+            }
+        };
+        Ok(out)
+    }
+
     fn pin_ring_guest_ram(
         &self,
         token: u64,
@@ -6276,6 +6489,10 @@ impl SharedDoorbell {
         let mut lines: Vec<String> = Vec::new();
         let mut pinned = 0usize;
         let mut bytes_pinned = 0u64;
+        // ★ `w271`: FRESH bytes and DESCRIBED bytes are separate accumulators, because a
+        //   replay adds zero to the first and its whole extent to the second. Folding them
+        //   was how a partial mapping read as a complete one.
+        let mut bytes_described = 0u64;
         let mut wall = false;
         for (i, &(rva, rgpa, rlen, ref run)) in resolved.iter().enumerate() {
             let at = format!(
@@ -6300,30 +6517,19 @@ impl SharedDoorbell {
             // `pin_user_pages`, and pinning for a DMA the device writes needs a writable
             // mapping. ⊘ The narrower grant is not the safer one here; it is the one that
             // fails at the ioctl for a reason the status code will not name.
-            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                run.file_offset,
-                rlen,
-                kayfabe_vmm::Prot::ReadWrite,
-            );
-            match self
-                .device
-                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(rva), grant)
-            {
+            // ⇒ The grant is minted inside `pin_guest_run`, which owns the `(base, extent)`
+            //   key and describes any remainder rather than replaying a short mapping.
+            match self.pin_guest_run(pdb, rva, run.file_offset, rlen) {
                 Ok(p) => {
-                    pinned += 1;
-                    bytes_pinned += rlen;
+                    if p.covered {
+                        pinned += 1;
+                    }
+                    bytes_pinned += p.fresh_bytes;
+                    bytes_described += p.described;
                     lines.push(format!(
-                        "{at} → file offset 0x{:x} → {} memory={:#x} host_va=0x{:x} \
-                         placed_as_asked={}",
+                        "{at} → file offset 0x{:x} → {}",
                         run.file_offset,
-                        if p.already {
-                            "ALREADY PINNED (idempotent replay)"
-                        } else {
-                            "PINNED"
-                        },
-                        p.memory.raw(),
-                        p.host_va,
-                        p.host_va == rva,
+                        p.line()
                     ));
                 }
                 Err(e) => {
@@ -6353,7 +6559,8 @@ impl SharedDoorbell {
         // internal capability, which is `same_class_id_opposite_directions` exactly.
         let verdict = if pinned == total {
             format!(
-                " | ★ ALL {total} RUN(S) PINNED, {bytes_pinned} of {want} bytes — one REAL \
+                " | ★ ALL {total} RUN(S) PLACED, {bytes_described} of {want} bytes \
+                 DESCRIBED ({bytes_pinned} of them freshly, this doorbell) — one REAL \
                  host RM object (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`) per contiguous run now \
                  exists over the guest's own pages, each mapped FIXED at the guest's own VA. \
                  ⊘ Nothing consumes them yet"
@@ -6372,7 +6579,8 @@ impl SharedDoorbell {
             )
         } else {
             format!(
-                " | ⚠ {pinned} of {total} run(s) pinned, {bytes_pinned} of {want} bytes. ⚠ If \
+                " | ⚠ {pinned} of {total} run(s) placed, {bytes_described} of {want} bytes \
+                 described ({bytes_pinned} fresh). ⚠ If \
                  a line below names `PlacementRefused`, that fixed map landed somewhere else \
                  and was UNWOUND rather than adopted. ⚠ If one names an RM status `0x51`, \
                  that is `NV_ERR_NO_MEMORY` and it is COLLISION-OR-EXHAUSTION — the two are \
@@ -6731,6 +6939,7 @@ impl SharedDoorbell {
         let mut lines: Vec<String> = Vec::new();
         let mut pinned = 0usize;
         let mut bytes = 0u64;
+        let mut bytes_described = 0u64;
         for (i, &(rva, rgpa, rlen, ref run)) in layout.iter().enumerate() {
             let at = format!(
                 "{who} pb run {}/{total} va=0x{rva:x} gpa=0x{rgpa:x} len={rlen}",
@@ -6751,30 +6960,23 @@ impl SharedDoorbell {
             // VA it walks with `pin_user_pages`, and a mapping the device may write needs a
             // writable one. ⊘ The narrower grant is not the safer one; it is the one that
             // fails at the ioctl with a status that will not name why.
-            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                run.file_offset,
-                rlen,
-                kayfabe_vmm::Prot::ReadWrite,
-            );
-            match self
-                .device
-                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(rva), grant)
-            {
+            //
+            // ★★★ `w271` — THIS SOURCE IS THE ONE THAT CAN STRUCTURALLY GROW BESIDES THE
+            // OPERAND, and nobody had looked: the runs are derived from the GPFIFO entries
+            // present at THIS doorbell, so entry 0 alone and entries 0+1 give the same base
+            // with a longer length. `pin_guest_run` describes the remainder instead of
+            // replaying the short mapping.
+            match self.pin_guest_run(pdb, rva, run.file_offset, rlen) {
                 Ok(p) => {
-                    pinned += 1;
-                    bytes += rlen;
+                    if p.covered {
+                        pinned += 1;
+                    }
+                    bytes += p.fresh_bytes;
+                    bytes_described += p.described;
                     lines.push(format!(
-                        "{at} → file offset 0x{:x} → {} memory={:#x} host_va=0x{:x} \
-                         placed_as_asked={}",
+                        "{at} → file offset 0x{:x} → {}",
                         run.file_offset,
-                        if p.already {
-                            "ALREADY PINNED (idempotent replay)"
-                        } else {
-                            "PINNED"
-                        },
-                        p.memory.raw(),
-                        p.host_va,
-                        p.host_va == rva,
+                        p.line()
                     ));
                 }
                 Err(e) => lines.push(format!(
@@ -6785,14 +6987,16 @@ impl SharedDoorbell {
         }
         let verdict = if pinned == total {
             format!(
-                " | ★★★★★ ALL {total} PUSHBUFFER RUN(S) PINNED, {bytes} bytes — the pages the \
+                " | ★★★★★ ALL {total} PUSHBUFFER RUN(S) PLACED, {bytes_described} bytes \
+                 described ({bytes} fresh this doorbell) — the pages the \
                  guest's OWN GPFIFO entries name are now described to host RM and mapped FIXED \
                  at the guest's own VAs. ⊘ This says NOTHING about whether the host channel is \
                  bound to a VA space in which those VAs resolve"
             )
         } else {
             format!(
-                " | ⚠ {pinned} of {total} run(s) pinned, {bytes} bytes. ⚠ `PlacementRefused` \
+                " | ⚠ {pinned} of {total} run(s) placed, {bytes_described} bytes described \
+                 ({bytes} fresh). ⚠ `PlacementRefused` \
                  means the fixed map landed elsewhere and was UNWOUND rather than adopted; RM \
                  status `0x51` is `NV_ERR_NO_MEMORY` and is COLLISION-OR-EXHAUSTION — \
                  indistinguishable from the status alone, and neither reads as success"
@@ -7253,7 +7457,9 @@ impl SharedDoorbell {
         let mut lines: Vec<String> = Vec::new();
         let mut pinned = 0usize;
         let mut replayed = 0usize;
+        let mut grew = 0usize;
         let mut bytes = 0u64;
+        let mut bytes_described = 0u64;
         for (i, &(rva, rgpa, rlen, ref run)) in layout.iter().enumerate() {
             let at = format!(
                 "{who} sema run {}/{total} va=0x{rva:x} gpa=0x{rgpa:x} len={rlen}",
@@ -7273,34 +7479,27 @@ impl SharedDoorbell {
             // ★ Read-WRITE, and here that word is the whole rung: the engine is faulting
             // `ACCESS_TYPE_VIRT_WRITE` on this page. A read-only grant would map it and leave
             // the fault exactly where it is, while every supply-side row read green.
-            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                run.file_offset,
-                rlen,
-                kayfabe_vmm::Prot::ReadWrite,
-            );
-            match self
-                .device
-                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(rva), grant)
-            {
+            // ⇒ `w271`: the grant is minted inside `pin_guest_run`, which keys on
+            //   `(base, extent)` and describes a remainder rather than replaying short.
+            match self.pin_guest_run(pdb, rva, run.file_offset, rlen) {
                 Ok(p) => {
-                    if p.already {
-                        replayed += 1;
-                    } else {
-                        pinned += 1;
-                        bytes += rlen;
-                    }
-                    lines.push(format!(
-                        "{at} → file offset 0x{:x} → {} memory={:#x} host_va=0x{:x} \
-                         placed_as_asked={}",
-                        run.file_offset,
-                        if p.already {
-                            "ALREADY PINNED (idempotent replay)"
+                    // ⊘ THREE counters, and `covered` gates all of them: a run stopped
+                    // part-way is not a placement and must not be counted as one.
+                    if p.covered {
+                        if p.grew {
+                            grew += 1;
+                        } else if p.fresh_bytes > 0 {
+                            pinned += 1;
                         } else {
-                            "PINNED"
-                        },
-                        p.memory.raw(),
-                        p.host_va,
-                        p.host_va == rva,
+                            replayed += 1;
+                        }
+                    }
+                    bytes += p.fresh_bytes;
+                    bytes_described += p.described;
+                    lines.push(format!(
+                        "{at} → file offset 0x{:x} → {}",
+                        run.file_offset,
+                        p.line()
                     ));
                 }
                 Err(e) => lines.push(format!(
@@ -7313,10 +7512,11 @@ impl SharedDoorbell {
         // page make the distinction load-bearing: the first doorbell pins, the next seven
         // replay, and a verdict that folded them together would report "1 of 1" on all eight
         // and lose which doorbell actually placed the bytes.
-        let verdict = if pinned + replayed == total {
+        let verdict = if pinned + replayed + grew == total {
             format!(
                 " | ★★★★★ ALL {total} SEMAPHORE RUN(S) PLACED ({pinned} fresh, {replayed} \
-                 idempotent replay), {bytes} fresh bytes — the completion pages the guest's \
+                 idempotent replay, {grew} GREW), {bytes} fresh of {bytes_described} \
+                 described bytes — the completion pages the guest's \
                  OWN SET_REPORT_SEMAPHORE names are now described to host RM and mapped FIXED \
                  at the guest's own VAs. ⊘ This says NOTHING about whether the guest's WAIT \
                  was satisfied: only `COMPLETION-WATCH … OBSERVED` says that, and only the \
@@ -7324,7 +7524,8 @@ impl SharedDoorbell {
             )
         } else {
             format!(
-                " | ⚠ {pinned} fresh + {replayed} replay of {total} run(s), {bytes} fresh \
+                " | ⚠ {pinned} fresh + {replayed} replay + {grew} grew of {total} run(s), \
+                 {bytes} fresh of {bytes_described} described \
                  bytes. ⚠ `PlacementRefused` means the fixed map landed elsewhere and was \
                  UNWOUND rather than adopted; RM status `0x51` is `NV_ERR_NO_MEMORY` and is \
                  COLLISION-OR-EXHAUSTION — indistinguishable from the status alone"
@@ -7701,7 +7902,9 @@ impl SharedDoorbell {
         let mut lines: Vec<String> = Vec::new();
         let mut pinned = 0usize;
         let mut replayed = 0usize;
+        let mut grew = 0usize;
         let mut bytes = 0u64;
+        let mut bytes_described = 0u64;
         for (i, &(rva, rgpa, rlen, ref run)) in layout.iter().enumerate() {
             let at = format!(
                 "{who} operand run {}/{total} va=0x{rva:x} gpa=0x{rgpa:x} len={rlen}",
@@ -7721,38 +7924,31 @@ impl SharedDoorbell {
             // ★ Read-WRITE for BOTH directions, and the reason is not laziness. The engine
             // faults `ACCESS_TYPE_VIRT_WRITE`, so a destination needs it outright; and a
             // page can be a source here and a destination in the next submission, so a
-            // read-only grant on the source would have to be *upgraded* later — and
-            // `pin_guest_ram` is idempotent on the VA, so the second call would replay the
-            // first grant rather than widen it. ⊘ The narrower grant is not the safer one;
-            // it is the one that fails at a later ioctl with a status that will not name why.
-            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                run.file_offset,
-                rlen,
-                kayfabe_vmm::Prot::ReadWrite,
-            );
-            match self
-                .device
-                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(rva), grant)
-            {
+            // read-only grant on the source would have to be *upgraded* later.
+            //
+            // ⊘⊘ **THE SENTENCE THAT USED TO END THIS COMMENT WAS A BUG REPORT NOBODY READ**:
+            // *"`pin_guest_ram` is idempotent on the VA, so the second call would replay the
+            // first grant rather than widen it."* That is exactly the defect `w270` measured
+            // — stated, correctly, in a comment, one rung before it cost a boot. `w271` makes
+            // the sentence false: `pin_guest_run` keys on `(base, extent)` and describes the
+            // remainder. ⇒ [a comment that names an exception is a bug report].
+            match self.pin_guest_run(pdb, rva, run.file_offset, rlen) {
                 Ok(p) => {
-                    if p.already {
-                        replayed += 1;
-                    } else {
-                        pinned += 1;
-                        bytes += rlen;
-                    }
-                    lines.push(format!(
-                        "{at} → file offset 0x{:x} → {} memory={:#x} host_va=0x{:x} \
-                         placed_as_asked={}",
-                        run.file_offset,
-                        if p.already {
-                            "ALREADY PINNED (idempotent replay)"
+                    if p.covered {
+                        if p.grew {
+                            grew += 1;
+                        } else if p.fresh_bytes > 0 {
+                            pinned += 1;
                         } else {
-                            "PINNED"
-                        },
-                        p.memory.raw(),
-                        p.host_va,
-                        p.host_va == rva,
+                            replayed += 1;
+                        }
+                    }
+                    bytes += p.fresh_bytes;
+                    bytes_described += p.described;
+                    lines.push(format!(
+                        "{at} → file offset 0x{:x} → {}",
+                        run.file_offset,
+                        p.line()
                     ));
                 }
                 Err(e) => lines.push(format!(
@@ -7761,10 +7957,11 @@ impl SharedDoorbell {
                 )),
             }
         }
-        let verdict = if pinned + replayed == total {
+        let verdict = if pinned + replayed + grew == total {
             format!(
                 " | ★★★★★ ALL {total} OPERAND RUN(S) PLACED ({pinned} fresh, {replayed} \
-                 idempotent replay), {bytes} fresh bytes — the pages the guest's OWN \
+                 idempotent replay, {grew} GREW), {bytes} fresh of {bytes_described} \
+                 described bytes — the pages the guest's OWN \
                  LAUNCH_DMA operands name are now described to host RM and mapped FIXED at \
                  the guest's own VAs. ⊘ This says NOTHING about whether the submission \
                  RETIRED: `the operand pages are mapped` and `the release was written` are \
@@ -7773,7 +7970,8 @@ impl SharedDoorbell {
             )
         } else {
             format!(
-                " | ⚠ {pinned} fresh + {replayed} replay of {total} run(s), {bytes} fresh \
+                " | ⚠ {pinned} fresh + {replayed} replay + {grew} grew of {total} run(s), \
+                 {bytes} fresh of {bytes_described} described \
                  bytes. ⚠ `PlacementRefused` means the fixed map landed elsewhere and was \
                  UNWOUND rather than adopted; RM status `0x51` is `NV_ERR_NO_MEMORY` and is \
                  COLLISION-OR-EXHAUSTION — indistinguishable from the status alone"
