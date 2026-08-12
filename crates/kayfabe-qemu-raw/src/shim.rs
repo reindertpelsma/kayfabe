@@ -4390,173 +4390,28 @@ impl SharedDoorbell {
             if joined.contains_key(&leaf.va) || refused.contains(&leaf.va) {
                 continue;
             }
-            // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
-            let backed = match self.device.back_fb_leaf(
-                DOORBELL_TARGET_GPU,
+            // ★★★ THE CENSUS SOURCE. The four steps live in `join_one_fb_leaf`, shared
+            // with the RING source (`Regs::adopt_pending_channel_rings`) so the ordering
+            // that makes a join safe exists exactly once.
+            match join_one_fb_leaf(
+                &head,
+                op.name,
+                &self.device,
+                &plane,
+                exports,
+                self.fb_join,
+                isolate,
                 pdb,
-                kayfabe_rt::GpuVa(leaf.va),
-                leaf.len,
-                leaf.phys,
-                kayfabe_rt::FbLeafBacking::Joined,
+                *leaf,
             ) {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!(
-                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ⊘ REFUSED BY \
-                         NAME `{:?}` — ⊘ NOT retried, NOT downgraded to the vidmem chain, \
-                         and nothing was adopted. ⚠ If this is `Rm(NoMemory)` it is status \
-                         0x51, which is collision-or-exhaustion and CANNOT be told apart",
-                        op.name, leaf.va, leaf.len, leaf.phys, e
-                    );
-                    continue;
-                }
-            };
-            joined.insert(leaf.va, (backed.host_va, backed.memory.raw()));
-            let Some(backing) = backed.backing else {
-                // A replay. The view was installed by the call that did the work; a second
-                // descriptor would be a second lifetime for one file.
-                eprintln!(
-                    "{head} {} leaf va=0x{:x} → ALREADY JOINED (idempotent replay; no second \
-                     object, no second descriptor, no second establishment copy)",
-                    op.name, leaf.va
-                );
-                continue;
-            };
-            // ---- 2. ADOPT + MAP. ★★ The ONE property the negative control changes is the
-            // `Backing` variant on the next line; everything either side of it is this same
-            // code. ⊘ Not "a second memfd", which would be a tautology.
-            let Some(fd) = exports.dup(isolate, backing.token) else {
-                eprintln!(
-                    "{head} {} leaf va=0x{:x} → ⚠ THE BACKING CROSSED AND THE VMM COULD NOT \
-                     CLAIM IT: token={} is not in {isolate:?}'s export registry. The host \
-                     object EXISTS and is placed; the guest's view does not. ⊘ RELEASED and \
-                     NOT bound — the row would otherwise declare a join that never happened",
-                    op.name, leaf.va, backing.token
-                );
-                joined.remove(&leaf.va);
-                refused.insert(leaf.va);
-                self.device.release_unadopted_fb_leaf(
-                    DOORBELL_TARGET_GPU,
-                    pdb,
-                    backed.host_va,
-                    backed.memory,
-                );
-                continue;
-            };
-            let region = match kayfabe_linux_raw::MappedRegion::map(
-                match self.fb_join {
-                    FbJoinArm::Shared => kayfabe_linux_raw::Backing::SharedFile {
-                        fd: std::os::fd::AsFd::as_fd(&fd),
-                        offset: backing.offset,
-                    },
-                    FbJoinArm::Private | FbJoinArm::Off => {
-                        kayfabe_linux_raw::Backing::PrivateAnonymous
+                Some(j) => {
+                    joined.insert(leaf.va, (j.host_va, j.memory));
+                    if let Some(len) = j.installed {
+                        live.push((leaf.phys, len));
                     }
-                },
-                backing.len,
-                kayfabe_linux_raw::HostProt::ReadWrite,
-                kayfabe_linux_raw::CachePolicy::WriteBack,
-                kayfabe_linux_raw::HostPageSize::query(),
-            ) {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!(
-                        "{head} {} leaf va=0x{:x} → ⚠ THE VMM'S OWN MAPPING FAILED {e:?} — \
-                         the host object exists and is placed and the guest's view does not. \
-                         ⊘ RELEASED and NOT bound",
-                        op.name, leaf.va
-                    );
-                    joined.remove(&leaf.va);
+                }
+                None => {
                     refused.insert(leaf.va);
-                    self.device.release_unadopted_fb_leaf(
-                        DOORBELL_TARGET_GPU,
-                        pdb,
-                        backed.host_va,
-                        backed.memory,
-                    );
-                    continue;
-                }
-            };
-            // ---- 3. ESTABLISH + INSTALL, in ONE hold of the plane lock.
-            //
-            // ★★★★★ **AND NOTHING IS BOUND UNTIL THIS RETURNS `Ok`.** `fb-join` bound the
-            // row back at step 1, three steps before the guest's window was re-pointed. See
-            // `kayfabe_fwd::adopt_joined_fb_leaf`: the bind is step 4, below, and every path
-            // that does not reach it RELEASES instead.
-            match plane.join_fb(leaf.phys, Box::new(MappedFb(region))) {
-                Ok(est) => {
-                    live.push((leaf.phys, backing.len));
-                    eprintln!(
-                        "{head} {} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → JOINED ({}) \
-                         memory={:#x} host_va=0x{:x} placed_as_asked={} established={} bytes \
-                         over {} page(s), of which {} NON-ZERO — ★ ONE memory: the pages the \
-                         host GR engine walks to are the pages this device's framebuffer \
-                         window now reads and writes. ⚠ The leaf is host SYSMEM, a named \
-                         divergence from the C. ⊘ Nothing executed and no doorbell was routed",
-                        op.name,
-                        leaf.va,
-                        leaf.len,
-                        leaf.phys,
-                        self.fb_join.as_str(),
-                        backed.memory.raw(),
-                        backed.host_va,
-                        backed.host_va == leaf.va,
-                        est.copied,
-                        est.pages,
-                        est.nonzero,
-                    );
-                    if est.copied == 0 {
-                        eprintln!(
-                            "{head}   ⊘ the establishment copy was VACUOUS for this leaf: no \
-                             page of it was resident, so nothing the guest had written came \
-                             across. That is CORRECT (an unwritten leaf is zeros either way) \
-                             and it is NOT evidence that the copy works"
-                        );
-                    }
-                    // ---- 4. BIND, and only now. The address table learns the leaf is host
-                    // memory AFTER the window that reads it points at that memory, so
-                    // `BackingBytes::JoinsGuestWindow` is a fact when it is written down
-                    // rather than a promise. ⊘ A refusal here does NOT unwind the install:
-                    // the join is real and the guest's window is correct either way — what
-                    // is lost is the core's record of it, which the release names.
-                    if let Err(e) = self.device.adopt_joined_fb_leaf(
-                        DOORBELL_TARGET_GPU,
-                        pdb,
-                        kayfabe_rt::FbLeafRange {
-                            va: kayfabe_rt::GpuVa(leaf.va),
-                            len: leaf.len,
-                            phys: leaf.phys,
-                        },
-                        &backed,
-                    ) {
-                        joined.remove(&leaf.va);
-                        refused.insert(leaf.va);
-                        eprintln!(
-                            "{head} {} leaf va=0x{:x} → ⚠ THE VIEW IS INSTALLED AND THE BIND \
-                             REFUSED `{e:?}` — the guest's window and the host object are ONE \
-                             memory and the address table does not say so, so nothing will \
-                             point an engine here. ⊘ The host mapping is released; the \
-                             install stands",
-                            op.name, leaf.va
-                        );
-                    }
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{head} {} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
-                         phys=0x{:x} len={} why=`{}` — this device still serves that range \
-                         from its own pages. ⊘ RELEASED and NOT bound: `fb-join` would have \
-                         left a row here declaring a join that was just refused",
-                        op.name, leaf.va, leaf.phys, e.phys, e.len, e.why
-                    );
-                    joined.remove(&leaf.va);
-                    refused.insert(leaf.va);
-                    self.device.release_unadopted_fb_leaf(
-                        DOORBELL_TARGET_GPU,
-                        pdb,
-                        backed.host_va,
-                        backed.memory,
-                    );
                 }
             }
         }
@@ -6712,6 +6567,202 @@ const RING_PAGE_DUMPS: usize = 4;
 /// range, which is printed beside it.
 const RING_SCAN_REPORT: usize = 4;
 
+/// What joining ONE framebuffer leaf produced, as the two call sites need it.
+///
+/// ⊘ `installed` is `Some(len)` **only** when step 3 returned `Ok` — i.e. when the guest's
+/// framebuffer window actually points at the joined pages. A leaf that reached step 1 and
+/// refused at step 3 has a real host object and a guest view that is still the shell's own
+/// `SparseFb`, which is *two memories* — and rendering that as a join is exactly the row
+/// `fb-join` used to write and `w260` removed.
+#[cfg(feature = "host-isolates")]
+#[derive(Debug, Clone, Copy)]
+struct JoinedLeaf {
+    /// Where RM placed the host object. Compared against the leaf's own VA by the caller.
+    host_va: u64,
+    /// The host memory object — ★ **this is the handle `GuestRing::memory` wants.**
+    memory: u64,
+    /// `Some(len)` once the view is live; see the type doc.
+    installed: Option<u64>,
+}
+
+/// ★★★★★ **JOIN ONE FRAMEBUFFER LEAF — the four steps, in the one order that is safe**, so
+/// that the census source and the ring source cannot come to disagree about what a join is.
+///
+/// ⊘ **Extracted rather than copied.** The ordering below is the whole of `w260`'s safety
+/// argument (join with no plane lock held → adopt+map → establish+install under one hold →
+/// bind, and *nothing is bound until step 3 returns `Ok`*). A second call site that spelled
+/// it again would be a second source of truth for an ordering whose failure mode is silent
+/// (`a_second_source_of_truth_beside_a_complete_value`).
+///
+/// `what` names the SOURCE that presented this leaf — an operand's name, or the channel's
+/// own ring — so a reader of the boot log can tell the two apart without counting lines.
+#[cfg(feature = "host-isolates")]
+#[allow(clippy::too_many_arguments)]
+fn join_one_fb_leaf(
+    head: &str,
+    what: &str,
+    device: &kayfabe_rt::device::SharedDevice,
+    plane: &RegPlane,
+    exports: &kayfabe_isolate_host::isolate::ExportDirectory,
+    fb_join: FbJoinArm,
+    isolate: kayfabe_isolate::IsolateId,
+    pdb: kayfabe_rt::Pdb,
+    leaf: kayfabe_rt::completion_watch::FbLeaf,
+) -> Option<JoinedLeaf> {
+    // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
+    let backed = match device.back_fb_leaf(
+        DOORBELL_TARGET_GPU,
+        pdb,
+        kayfabe_rt::GpuVa(leaf.va),
+        leaf.len,
+        leaf.phys,
+        kayfabe_rt::FbLeafBacking::Joined,
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ⊘ REFUSED BY NAME \
+                 `{e:?}` — ⊘ NOT retried, NOT downgraded to the vidmem chain, and nothing was \
+                 adopted. ⚠ If this is `Rm(NoMemory)` it is status 0x51, which is \
+                 collision-or-exhaustion and CANNOT be told apart",
+                leaf.va, leaf.len, leaf.phys
+            );
+            return None;
+        }
+    };
+    let Some(backing) = backed.backing else {
+        // A replay. The view was installed by the call that did the work; a second
+        // descriptor would be a second lifetime for one file.
+        eprintln!(
+            "{head} {what} leaf va=0x{:x} → ALREADY JOINED (idempotent replay; no second \
+             object, no second descriptor, no second establishment copy) memory={:#x} \
+             host_va=0x{:x}",
+            leaf.va,
+            backed.memory.raw(),
+            backed.host_va,
+        );
+        return Some(JoinedLeaf {
+            host_va: backed.host_va,
+            memory: backed.memory.raw(),
+            installed: None,
+        });
+    };
+    // ---- 2. ADOPT + MAP. ★★ The ONE property the negative control changes is the
+    // `Backing` variant below; everything either side of it is this same code.
+    let Some(fd) = exports.dup(isolate, backing.token) else {
+        eprintln!(
+            "{head} {what} leaf va=0x{:x} → ⚠ THE BACKING CROSSED AND THE VMM COULD NOT CLAIM \
+             IT: token={} is not in {isolate:?}'s export registry. The host object EXISTS and \
+             is placed; the guest's view does not. ⊘ RELEASED and NOT bound — the row would \
+             otherwise declare a join that never happened",
+            leaf.va, backing.token
+        );
+        device.release_unadopted_fb_leaf(DOORBELL_TARGET_GPU, pdb, backed.host_va, backed.memory);
+        return None;
+    };
+    let region = match kayfabe_linux_raw::MappedRegion::map(
+        match fb_join {
+            FbJoinArm::Shared => kayfabe_linux_raw::Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: backing.offset,
+            },
+            FbJoinArm::Private | FbJoinArm::Off => kayfabe_linux_raw::Backing::PrivateAnonymous,
+        },
+        backing.len,
+        kayfabe_linux_raw::HostProt::ReadWrite,
+        kayfabe_linux_raw::CachePolicy::WriteBack,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} → ⚠ THE VMM'S OWN MAPPING FAILED {e:?} — the \
+                 host object exists and is placed and the guest's view does not. ⊘ RELEASED \
+                 and NOT bound",
+                leaf.va
+            );
+            device.release_unadopted_fb_leaf(
+                DOORBELL_TARGET_GPU,
+                pdb,
+                backed.host_va,
+                backed.memory,
+            );
+            return None;
+        }
+    };
+    // ---- 3. ESTABLISH + INSTALL, in ONE hold of the plane lock.
+    //
+    // ★★★★★ **AND NOTHING IS BOUND UNTIL THIS RETURNS `Ok`.**
+    match plane.join_fb(leaf.phys, Box::new(MappedFb(region))) {
+        Ok(est) => {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → JOINED ({}) \
+                 memory={:#x} host_va=0x{:x} placed_as_asked={} established={} bytes over {} \
+                 page(s), of which {} NON-ZERO — ★ ONE memory. ⚠ The leaf is host SYSMEM, a \
+                 named divergence from the C",
+                leaf.va,
+                leaf.len,
+                leaf.phys,
+                fb_join.as_str(),
+                backed.memory.raw(),
+                backed.host_va,
+                backed.host_va == leaf.va,
+                est.copied,
+                est.pages,
+                est.nonzero,
+            );
+            if est.copied == 0 {
+                eprintln!(
+                    "{head}   ⊘ the establishment copy was VACUOUS for this leaf: no page of \
+                     it was resident, so nothing the guest had written came across. That is \
+                     CORRECT (an unwritten leaf is zeros either way) and it is NOT evidence \
+                     that the copy works"
+                );
+            }
+            // ---- 4. BIND, and only now.
+            if let Err(e) = device.adopt_joined_fb_leaf(
+                DOORBELL_TARGET_GPU,
+                pdb,
+                kayfabe_rt::FbLeafRange {
+                    va: kayfabe_rt::GpuVa(leaf.va),
+                    len: leaf.len,
+                    phys: leaf.phys,
+                },
+                &backed,
+            ) {
+                eprintln!(
+                    "{head} {what} leaf va=0x{:x} → ⚠ THE VIEW IS INSTALLED AND THE BIND \
+                     REFUSED `{e:?}` — the guest's window and the host object are ONE memory \
+                     and the address table does not say so, so nothing will point an engine \
+                     here. ⊘ The host mapping is released; the install stands",
+                    leaf.va
+                );
+                return None;
+            }
+            Some(JoinedLeaf {
+                host_va: backed.host_va,
+                memory: backed.memory.raw(),
+                installed: Some(backing.len),
+            })
+        }
+        Err(e) => {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
+                 phys=0x{:x} len={} why=`{}` — this device still serves that range from its \
+                 own pages. ⊘ RELEASED and NOT bound",
+                leaf.va, leaf.phys, e.phys, e.len, e.why
+            );
+            device.release_unadopted_fb_leaf(
+                DOORBELL_TARGET_GPU,
+                pdb,
+                backed.host_va,
+                backed.memory,
+            );
+            None
+        }
+    }
+}
+
 /// The realized register plane — what the C shim holds behind its second opaque handle.
 ///
 /// ⊘ Hand-written [`core::fmt::Debug`] since E2, because `SharedDevice` deliberately has
@@ -6767,6 +6818,20 @@ pub struct Regs {
     /// the hypervisor's stated topology are both in scope, and joining them is what turns an
     /// extent into a layout.
     guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+    /// ★★★★★ **LEG A** — which arm of the guest-ring adoption this boot runs, from the
+    /// composition root's own reading of [`GUEST_RING_ENV`]. Carried, never re-read: an
+    /// arming flag consulted twice is a boot that can change its mind halfway through.
+    guest_ring: GuestRingArm,
+    /// ★★★★★ §5.12 — the join's arm, needed HERE and not only on [`SharedDoorbell`] because
+    /// the ring source runs on the register-write path, before the doorbell port exists for
+    /// this channel. ⊘ The SAME value, cloned from the root — not a second reading.
+    #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
+    fb_join: FbJoinArm,
+    /// ★★★★★ §5.12 — the route from a backing token to a descriptor, for
+    /// [`Regs::adopt_pending_channel_rings`]. Same handle, same reason, as
+    /// [`SharedDoorbell::exports`].
+    #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
+    exports: FbExportDir,
 }
 
 impl core::fmt::Debug for Regs {
@@ -6910,6 +6975,9 @@ impl Regs {
         // ★★★★★ The GR route's arm — read HERE, beside every other plane decision, exactly
         // once, and carried into the doorbell port. See [`GR_ROUTE_ENV`].
         let gr_route = selected_gr_route()?;
+        // ★★★★★ LEG A's arm — read ONCE, here, at the composition root, beside the two
+        // arms it composes with. See [`GUEST_RING_ENV`].
+        let guest_ring = selected_guest_ring()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -6999,6 +7067,39 @@ impl Regs {
                      §0.3)",
             },
         );
+        // ★★★★★ LEG A'S ARMING, PRINTED, on every arm including `off`.
+        //
+        // ⚠ For `FB-JOIN`'s reason and one sharper: `back_census_framebuffer_leaves` has an
+        // EMPTY `#[cfg(not(host-isolates))]` twin, so a build without the feature runs the
+        // whole of leg A as a silent no-op and exits 0. `host_isolates=` is therefore printed
+        // as a **compiled** fact, not as a hope, beside the arm.
+        eprintln!(
+            "kayfabe: GUEST-RING arm={} host_isolates={} ⇒ the channel's own GPFIFO ring is {}",
+            guest_ring.as_str(),
+            cfg!(feature = "host-isolates"),
+            match guest_ring {
+                GuestRingArm::Off =>
+                    "NOT presented to the framebuffer join (the control — the join's only \
+                     source stays the OPERAND census, exactly as at w260)",
+                GuestRingArm::Ring =>
+                    "WALKED to its framebuffer leaf and that leaf is JOINED, at the \
+                     engine-object latch — i.e. BEFORE the host channel that would name it is \
+                     born. ⊘ Supply side only: the host channel still declares OUR ring and \
+                     OUR USERD (legs A2 and B)",
+            },
+        );
+        // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
+        // exactly this reason: two ports need the same registry, and a second
+        // `export_directory()` call would be a SECOND selection of "which registry".
+        // ⊘ The `allow` is the ALIAS's cost, paid where it falls — the same shape
+        // `SharedDoorbell::exports` documents. Without `host-isolates`, `FbExportDir` is
+        // `()`, so this really is a unit binding; scoping the allow to that configuration
+        // keeps a genuinely unit-valued binding in the feature-ON build a hard error.
+        #[cfg_attr(
+            not(feature = "host-isolates"),
+            allow(clippy::let_unit_value, clippy::clone_on_copy)
+        )]
+        let exports_for_regs = exports.clone();
         plane.set_doorbell(Box::new(SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
@@ -7024,6 +7125,9 @@ impl Regs {
             publications,
             ce,
             guest_ram_backing,
+            guest_ring,
+            fb_join,
+            exports: exports_for_regs,
         })
     }
 
@@ -7397,6 +7501,219 @@ impl Regs {
             .value()
     }
 
+    /// ★★★★★ **LEG A1 — JOIN THE CHANNEL'S OWN RING, BEFORE ITS HOST CHANNEL IS BORN.**
+    ///
+    /// # ★★★ The ordering fact this exists to satisfy, and it is read off the code
+    ///
+    /// `HostRmBackend::alloc_channel_in`'s guest-ring arm calls `narrow(g.memory)` — a
+    /// validation that the handle was minted **by this isolate's RM connection**. ⇒ the host
+    /// object over the guest's ring must **exist** before the host channel is born, and the
+    /// host GR channel is born inside `commit_engine_object`, which the drain two lines below
+    /// this call runs. This is therefore the **last instant** at which *"a host channel is
+    /// about to be born for guest channel X"* is knowable and X is still un-born.
+    ///
+    /// ⊘ **This is NOT what `guest_ring_adoption.md` §3.3 refuted.** §3.3 refuted the claim
+    /// that the birth must move so the ring could be **bound** — measured, R31 arm C: a
+    /// `gpFifoOffset` at an address nothing was ever mapped at was **accepted**. Binding may
+    /// be late. Minting may not. The two are different obligations and only one of them was
+    /// discharged.
+    ///
+    /// # ⊘ Why the operand census could never have supplied this
+    ///
+    /// `back_census_framebuffer_leaves` is driven by the addresses the **methods**
+    /// dereference. `[measured 2026-08-11, w260]` it joined framebuffer leaves `0x400000` /
+    /// `0x600000` / `0x800000`; the GR ring's leaf is `0x1000000` and was never presented,
+    /// because **a ring is not an operand of the methods it carries**. And it runs at the
+    /// **doorbell**, behind a successful pushbuffer decode — long after the birth.
+    ///
+    /// # ★★★ OPACITY IS PRESERVED BY CONSTRUCTION, not by a rule
+    ///
+    /// The only thing read here is a **page table**: one VA (`gpFifoOffset`, which the guest
+    /// declared in its own channel alloc) walked to its leaf. ⊘ No GPFIFO entry is read, no
+    /// pushbuffer is fetched, no method is decoded, nothing is classified. Nothing here gates
+    /// whether any work is forwarded: every arm returns `()` and the drain below runs
+    /// identically either way.
+    ///
+    /// # R1
+    ///
+    /// `RegPlane::write` has returned, so this frame holds **no ranked lock**. The walk takes
+    /// the plane's rank-0 mutex for the duration of one resolution and **prints nothing
+    /// inside it**; the join — which is a round trip to another process — runs strictly after
+    /// that guard is dropped.
+    #[cfg(feature = "host-isolates")]
+    fn adopt_pending_channel_rings(&self) {
+        if !self.guest_ring.adopts_ring() {
+            // ⊘ Silent, exactly as `back_census_framebuffer_leaves`' disarmed arm is: the
+            // control's log must not contain a line the armed run's does not, or the two stop
+            // being comparable. The arming itself is on disk, printed once at the root.
+            return;
+        }
+        let pending = self.device.peek_pending_engine_forwards();
+        if pending.is_empty() {
+            // The overwhelmingly common case — this runs on every register write.
+            return;
+        }
+        // ★★★★★ THE POSITIVE SIGNAL, emitted on EVERY armed pass that has anything to do,
+        // **including the ones that join nothing.** ⚠ Without it *"leg A never executed"* and
+        // *"leg A executed and changed nothing"* are identical on every other observable —
+        // the same class as a `dlen=0` oracle row and a zero-byte bench artefact.
+        let head = "kayfabe: GR-RING-JOIN".to_string();
+        let Some(exports) = self.exports.as_ref() else {
+            eprintln!(
+                "{head} arm={} pending={} → ⊘ NOT ARMABLE: this build has no route from a \
+                 backing token to a descriptor (exports_directory=false), so no leaf can be \
+                 claimed. ⊘ Nothing was asked of the host",
+                self.guest_ring.as_str(),
+                pending.len(),
+            );
+            return;
+        };
+        eprintln!(
+            "{head} arm={} host_isolates=yes exports_directory=true fb_join={} pending={} — \
+             the engine-object latch is about to be drained, and every host channel it births \
+             is born HERE. ⊘ Nothing below reads a ring byte",
+            self.guest_ring.as_str(),
+            self.fb_join.as_str(),
+            pending.len(),
+        );
+        for (client, parent, class) in pending {
+            let facts = match self
+                .device
+                .engine_object_channel_facts(client, parent, class)
+            {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!(
+                        "{head} client={:#x} parent={:#x} class={:#06x} → ⊘ NOT ROUTED `{e:?}` \
+                         — this alloc names no channel this port can resolve, so there is no \
+                         ring to adopt. ⊘ Not a miss: the drain refuses it too",
+                        client.0, parent.0, class.0,
+                    );
+                    continue;
+                }
+            };
+            let (Some(ring_va), Some(pdb), Some(vaspace)) =
+                (facts.ring_va, facts.vas_pdb, facts.vaspace)
+            else {
+                eprintln!(
+                    "{head} proc={} chan={} class={:#06x} → ⊘ NOTHING TO ADOPT: ring_va={:?} \
+                     vas_pdb={:?} vaspace={:?}. ⚠ `ring_va = Some(0)` would be a VALUE and not \
+                     a blank — the driver declares `gpFifoOffset = 0` for its golden-context \
+                     channel — so a `None` here is the channel declaring no ring at all",
+                    facts.proc.0,
+                    facts.chan.0,
+                    class.0,
+                    facts.ring_va,
+                    facts.vas_pdb,
+                    facts.vaspace,
+                );
+                continue;
+            };
+            let root = match SharedDoorbell::doorbell_root(
+                &self.plane,
+                facts.client,
+                vaspace,
+                Some(pdb.0),
+            ) {
+                DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+                DoorbellRoot::Absent => {
+                    eprintln!(
+                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ NO ROOT: this channel \
+                         has no VA space root at all, so its ring VA cannot be walked",
+                        facts.proc.0, facts.chan.0,
+                    );
+                    continue;
+                }
+                DoorbellRoot::Underivable(p, why) => {
+                    eprintln!(
+                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ ROOT UNDERIVABLE from \
+                         pdb 0x{p:x}: {}",
+                        facts.proc.0,
+                        facts.chan.0,
+                        why.kind(),
+                    );
+                    continue;
+                }
+            };
+            // ★ The walk, and NOTHING is printed inside the guard (R1).
+            let (site, leaf) = self.plane.ce_session_with_root(
+                &root,
+                kayfabe_device::ceresolve::Demand::from_doorbell(),
+                |ce| kayfabe_rt::ceutils::resolve_leaf_of(ce, ring_va),
+            );
+            let Some(leaf) = leaf else {
+                eprintln!(
+                    "{head} proc={} chan={} ring=0x{ring_va:x} entries={} → ⊘ NOT A \
+                     FRAMEBUFFER LEAF: {site:?}. ⚠ `GuestRam` here is a REAL and SERVED case \
+                     that belongs to the guest-RAM pin, not to this source; `Unresolved` is a \
+                     TIMING fact — the guest had not bound its own ring at the instant its \
+                     engine object was latched — and must NOT be read as `the channel \
+                     declared no ring`",
+                    facts.proc.0, facts.chan.0, facts.ring_entries,
+                );
+                continue;
+            };
+            let isolate = kayfabe_isolate::IsolateId::new(facts.proc.0, DOORBELL_TARGET_GPU);
+            let what = format!(
+                "RING(chan={} entries={} engine={})",
+                facts.chan.0,
+                facts.ring_entries,
+                facts.engine_name(),
+            );
+            match join_one_fb_leaf(
+                &head,
+                &what,
+                &self.device,
+                &self.plane,
+                exports,
+                self.fb_join,
+                isolate,
+                pdb,
+                leaf,
+            ) {
+                Some(j) => eprintln!(
+                    "{head} proc={} chan={} ring=0x{ring_va:x} entries={} → ★★★★★ THE RING'S \
+                     OWN LEAF IS JOINED: memory={:#x} host_va=0x{:x} fb_phys=0x{:x}. ⊘ This is \
+                     the SUPPLY side only — the host channel about to be born still declares \
+                     OUR ring and OUR USERD, so GP_PUT == GP_GET and the engine fetches \
+                     nothing (gr_doorbell_passthrough.md §0.3). Legs A2 and B are what consume \
+                     this",
+                    facts.proc.0, facts.chan.0, facts.ring_entries, j.memory, j.host_va, leaf.phys,
+                ),
+                None => eprintln!(
+                    "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ THE RING'S LEAF WAS NOT \
+                     JOINED; the refusal above names why. Nothing is bound and the drain below \
+                     is unaffected",
+                    facts.proc.0, facts.chan.0,
+                ),
+            }
+        }
+    }
+
+    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT.**
+    ///
+    /// `back_census_framebuffer_leaves`' own `#[cfg(not(host-isolates))]` twin has an empty
+    /// body, and that is exactly the shape that makes *"the experiment never ran"* read as
+    /// *"the experiment ran and changed nothing"* — an archive built without the feature
+    /// prints nothing, exits 0, and every other signal says the boot happened. This one says
+    /// so, **once**, the first time it is asked to do something.
+    #[cfg(not(feature = "host-isolates"))]
+    fn adopt_pending_channel_rings(&self) {
+        if !self.guest_ring.adopts_ring() {
+            return;
+        }
+        static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!(
+                "kayfabe: GR-RING-JOIN arm={} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT ADOPT A \
+                 RING AT ALL. The arm was requested and this build has no isolate plane, so \
+                 leg A is a no-op — ⚠ do NOT grade a boot from this binary as `armed and \
+                 nothing moved`",
+                self.guest_ring.as_str(),
+            );
+        }
+    }
+
     /// Serve one register write.
     ///
     /// ★ Returns the **port's** outcome, not the wire shape. `KayfabeRegWrite` carries a
@@ -7450,6 +7767,12 @@ impl Regs {
         // driver's `bPollingForRpcResponse` assert (`kernel_gsp.c:2345`) fires on an
         // *induced second RPC* while it polls; a drain that emits no event and no reply
         // cannot induce one. That obligation is discharged by construction, not by care.
+        // ★★★★★ **LEG A1 — AND IT MUST BE THE LINE ABOVE THE DRAIN, not below it.**
+        // The drain births the host GR channel (`commit_engine_object`), and
+        // `alloc_channel_in`'s guest-ring arm `narrow()`s the ring's memory handle — so the
+        // object over the guest's ring has to exist BEFORE this next line, or leg A2 has
+        // nothing to name. ⊘ Ordering, not preference.
+        self.adopt_pending_channel_rings();
         report_engine_forward_drain(&self.device);
         out
     }
@@ -8846,6 +9169,93 @@ fn selected_gr_route() -> Result<GrRouteArm, (Status, &'static str)> {
     match std::env::var_os(GR_ROUTE_ENV) {
         None => Ok(GrRouteArm::Refuse),
         Some(v) => gr_route_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// ★★★★★ **LEG A — whether this boot gives the framebuffer join a SECOND SOURCE: the
+/// channel's own GPFIFO ring, joined BEFORE the host channel is born.**
+///
+/// | value | what it does |
+/// |---|---|
+/// | `off` (default) | today's behaviour, byte for byte. Not one `GR-RING-JOIN` line |
+/// | `ring` | ★ the channel's declared `gpFifoOffset` is walked to its framebuffer leaf and that leaf is JOINED, at the engine-object latch — i.e. upstream in time of the host channel's birth |
+///
+/// # ★★★ Why this is a SECOND flag and not a third arm of [`GR_ROUTE_ENV`]
+///
+/// They arm different legs of the same stool and a boot must be able to run either without
+/// the other. `KAYFABE_GR_ROUTE=passthrough` is leg **C** — the doorbell reaches the core.
+/// This is leg **A** — the ring the host channel is born over. ⊘ Folding them into one
+/// selector would make *"the doorbell was routed"* and *"the ring was joined"* one word, and
+/// the whole point of `w260` was that the supply side moving and the execution side moving
+/// are **different events** (`the_join_landed_and_the_wall_did_not_move`).
+///
+/// ⚠ A value that names no arm is **refused**, not defaulted, for [`FB_JOIN_ENV`]'s reason.
+pub const GUEST_RING_ENV: &str = "KAYFABE_GUEST_RING";
+
+/// Which arm of the guest-ring adoption a boot is running. See [`GUEST_RING_ENV`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestRingArm {
+    /// The default and the control: the join's only source is the operand census, exactly
+    /// as at `w260`.
+    Off,
+    /// ★ The channel's own ring is presented to the join, at the engine-object latch.
+    Ring,
+}
+
+impl GuestRingArm {
+    /// Every arm, so a test can quantify rather than restate.
+    pub const ALL: [GuestRingArm; 2] = [GuestRingArm::Off, GuestRingArm::Ring];
+
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GuestRingArm::Off => "off",
+            GuestRingArm::Ring => "ring",
+        }
+    }
+
+    /// Whether the channel's own ring is presented to the join on this arm.
+    #[must_use]
+    pub fn adopts_ring(self) -> bool {
+        self == GuestRingArm::Ring
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_guest_ring`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`GuestRingArm::Off`].
+pub fn guest_ring_from(value: Option<&str>) -> Result<GuestRingArm, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(GuestRingArm::Off),
+        Some("ring") => Ok(GuestRingArm::Ring),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_GUEST_RING does not name an arm: the only values are `off` (the default \
+             and the control — the framebuffer join's only source is the operand census, \
+             exactly as at w260) and `ring` (the channel's own declared gpFifoOffset is \
+             walked to its framebuffer leaf and that leaf is joined, at the engine-object \
+             latch, before the host channel is born). It is not defaulted, because a typo \
+             that silently disarmed the adoption would make an evidence run and its own \
+             control indistinguishable — and the control's expected result is `no GR-RING-JOIN \
+             line was ever printed`, which is precisely what a disarmed evidence run would \
+             also show. ⊘ `on`/`1` are not accepted: this is a two-arm experiment, not a \
+             boolean.",
+        )),
+    }
+}
+
+/// Which arm [`GUEST_RING_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_guest_ring() -> Result<GuestRingArm, (Status, &'static str)> {
+    match std::env::var_os(GUEST_RING_ENV) {
+        None => Ok(GuestRingArm::Off),
+        Some(v) => guest_ring_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 

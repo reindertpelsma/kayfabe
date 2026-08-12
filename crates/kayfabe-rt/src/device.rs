@@ -970,6 +970,33 @@ impl SharedDevice {
         }
     }
 
+    /// ★★★★★ **WHICH CHANNELS ARE ABOUT TO HAVE A HOST CHANNEL BORN FOR THEM** — the latch,
+    /// READ and not taken.
+    ///
+    /// # ⊘ Why a peek exists at all, when a drain is right there
+    ///
+    /// `commit_engine_object` is where a `GrCompute` channel's **host** channel is
+    /// materialized, and `alloc_channel_in`'s guest-ring arm `narrow()`s the ring's memory
+    /// handle — so any object over the guest's ring must be minted **before** the drain, not
+    /// during it and not after. This is the only instant at which *"a host channel is about
+    /// to be born for guest channel X"* is knowable and X is still un-born.
+    ///
+    /// ⊘ **It takes nothing and mutates nothing.** A caller that drained here to inspect the
+    /// entries would have run the forwards it meant to prepare for.
+    ///
+    /// ⚠ Returns `(client, parent, class)` and **not** the params: nothing upstream of the
+    /// forward has any business reading the guest's alloc blob, and a peek that handed it
+    /// out would be an inspection surface wearing a routing name.
+    #[must_use]
+    pub fn peek_pending_engine_forwards(&self) -> Vec<(HClient, HObject, ClassId)> {
+        self.state
+            .read()
+            .pending_engine_forwards
+            .iter()
+            .map(|p| (p.client, p.parent, p.class))
+            .collect()
+    }
+
     /// ★★★ **§16.96 — drain and run whatever [`Self::forward_engine_object_deferring`]
     /// latched** — the pull half, and the mirror of [`Self::materialize_pending`].
     ///
@@ -1941,113 +1968,190 @@ impl SharedDevice {
                 Ok((r.proc, r))
             },
             |spine, proc, route| {
-                let chan = proc
-                    .channels
-                    .get(&route.chan)
-                    .ok_or(FwdFault::UnknownVchid {
-                        gpu: route.gpu,
-                        vchid: route.vchid,
-                    })?;
-                let node = spine
-                    .rmgraph
-                    .node_of_resource(chan.key)
-                    .ok_or(FwdFault::NoVas(route.chan))?;
-                // ★★★ **THE RESOLVED VA SPACE**, off the same `Channel::vas_origin` that
-                // produced `vas_pdb` — see [`CeChannelFacts::vaspace`] for the boot in which
-                // this line's predecessor (`node.facts.h_vaspace`) reported
-                // `vas=NONE-DECLARED` for a channel whose `vas_pdb` was `Some`, and cost
-                // every UVM doorbell its only ring-reading path.
-                //
-                // ⊘ A `vas_origin` that no longer resolves in the graph yields `None` here
-                // rather than a stale handle: the resource died between the projection and
-                // this read, and naming a dead VA space would send `ce_session` looking for
-                // a publication that belongs to whatever inherits the handle value.
-                let vas_node = chan
-                    .vas_origin
-                    .and_then(|k| spine.rmgraph.node_of_resource(k));
-                Ok(CeChannelFacts {
-                    proc: route.proc,
-                    chan: route.chan,
-                    vchid: route.vchid,
-                    // ★★★★★ Off the SAME resolved `Channel` as `vas_pdb` and `engine`
-                    // below — the declared kind, never `route.proc == SYSTEM_PROC`
-                    // recomputed here. See [`CeChannelFacts::kind`].
-                    kind: chan.kind,
-                    // ★★★★ §16.25 — carried off the channel, where the projection put it.
-                    // ⊘ NOT re-derived here: this whole struct exists because a second
-                    // derivation of the VA space disagreed with the first one and lost the
-                    // channel `cuInit` walls on (see [`CeChannelFacts::vaspace`]).
-                    vas_route: chan.vas_route,
-                    // The namespace the VA SPACE lives in — which is the namespace its
-                    // publication was issued in. ⊘ Falls back to the channel's own only
-                    // when nothing resolved, so a refusal still names a client.
-                    // ★★★★ §16.28 — route 4's answer lives in the channel's OWN namespace
-                    // by construction: RM mints the device-default name with
-                    // `serverutilGenResourceHandle(hClient, …)` on the client that owns
-                    // the Device (`ogkm-580: gpu_vaspace.c:4101`). So the existing
-                    // fallback — the channel's own client — is already the right one, and
-                    // there is deliberately no third arm here.
-                    client: vas_node.map_or(node.key.client.0, |v| v.key.client.0),
-                    // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
-                    // zero: a GSP-managed channel that named no VA space and one that named
-                    // handle zero are the same wire byte but different facts, and only the
-                    // first is what `Channel::vas_pdb == None` means.
-                    // ★★★★ **§16.28 — THE FOURTH ROUTE REACHES THE DISPATCH HERE**, and
-                    // it is an `or_else` rather than a second opinion: a channel that
-                    // resolved a live VASpace resource keeps that answer untouched, and
-                    // only a channel for which every declared route missed *and* whose
-                    // parent Device named a default address space gets this one. The two
-                    // can never disagree because they are never both `Some`
-                    // (`project::resolve_channel_vas` returns at most one of them — route
-                    // 4 runs only after routes 1-3 have all produced no node).
-                    //
-                    // ⊘ Nothing is invented: the value is the handle the guest's own RM
-                    // minted, published its page-directory root under, and freed, and it
-                    // is used as the key it is — `ce_session` looks the guest's own
-                    // publication up under `(hClient, hVASpace)`.
-                    vaspace: vas_node
-                        .map(|v| v.key.handle.0)
-                        .or(chan.vas_device_default.map(|h| h.0)),
-                    // ★ Reported SEPARATELY as well as folded above, so a reader can tell
-                    // which of the two produced `vaspace` without inferring it from
-                    // `vas_route` — the §16.16 rule that two projections of one fact are
-                    // printed side by side rather than reconciled in silence.
-                    vaspace_device_default: chan.vas_device_default.map(|h| h.0),
-                    // ★★★★ §16.16 — the DECLARED handle, read straight off this channel's
-                    // own alloc facts. ⊘ Deliberately NOT resolved through the graph and
-                    // NOT reconciled with `vaspace` above: the whole point is that it is
-                    // the other projection, and a value passed through the same resolver
-                    // would be the same projection twice. See
-                    // `CeChannelFacts::vaspace_declared`.
-                    vaspace_declared: node.facts.h_vaspace.map(|h| h.0),
-                    // ★ Off the SAME `node` the ring below is read from — see
-                    // [`CeChannelFacts::chan_key`]. ⊘ NOT `chan.key`: the point is to name
-                    // the object this struct's facts actually came out of, and a key read
-                    // off the channel record rather than off the resolved node would be a
-                    // different statement wearing the same name.
-                    chan_key: (node.key.client.0, node.key.handle.0),
-                    ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
-                    ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
-                    // ★ Off the SAME node the ring came from, so the two declarations can
-                    // never be attributed to different channels.
-                    userd: node.facts.userd,
-                    vas_pdb: chan.vas_pdb,
-                    // ★ Off the SAME proc the channel was routed in, so a bind recorded for
-                    // another proc's slot of the same index can never be read as this
-                    // channel's — the join is `(proc, chan)`, exactly as `ExecPlane` keys
-                    // it. ⊘ Read here rather than joined later for `ce_channel_facts`' own
-                    // stated reason: two projections of one fact can disagree.
-                    bound_engine: proc.exec.bound.get(&route.chan).copied(),
-                    // ★★★★ §16.65 — off the SAME resolved `Channel` as `vas_pdb` two lines
-                    // up, so the engine and the address space can never be attributed to
-                    // different channels. ⊘ Deliberately NOT derived from `bound_engine`
-                    // above: see this field's doc for the measurement that rules that out.
-                    engine: chan.engine,
-                })
+                channel_facts_from(spine, proc, route.proc, route.chan, route.gpu, route.vchid)
             },
         )?
     }
 
+    /// ★★★★★ **THE SAME DECLARED FACTS, ROUTED BY THE ENGINE-OBJECT'S PARENT INSTEAD OF BY
+    /// A DOORBELL TOKEN** — because the channel's ring has to be reachable **before** the
+    /// first doorbell, and a token does not exist yet at that moment.
+    ///
+    /// # ⊘ Why a second entry point and not a second derivation
+    ///
+    /// The body is [`Self::ce_channel_facts`]' body, called — not copied. The two differ in
+    /// exactly one thing, the **route**, and they are deliberately the two routes the tree
+    /// already owns: `route_doorbell` (by `(GpuId, VChid)` off a work-submit token) and
+    /// `route_engine_object_by_parent` (by the parent handle the guest's own alloc named).
+    /// Everything downstream — the resolved VA space, the declared ring, the pdb — is read
+    /// off the one graph node that declared it, exactly once, in `channel_facts_from`.
+    ///
+    /// ★★★ **This is the hop the ordering fact demands.** `GuestRing::memory` is a
+    /// `HostHandle` and `alloc_channel_in`'s guest arm `narrow()`s it, so the host object
+    /// over the guest's ring must EXIST before the host channel is born — and the host
+    /// channel is born on the engine-object path (`commit_engine_object`), upstream in time
+    /// of every doorbell. ⊘ Binding may be late (R31 arm C: an unmapped `gpFifoOffset` was
+    /// **accepted**); minting may not.
+    ///
+    /// # Errors
+    /// Whatever `route_engine_object_by_parent` refuses with — including
+    /// [`FwdFault::NotAnEngine`] for a class that was never an engine object — then
+    /// [`FwdFault::UnknownVchid`] / [`FwdFault::NoVas`] exactly as
+    /// [`Self::ce_channel_facts`].
+    pub fn engine_object_channel_facts(
+        &self,
+        client: HClient,
+        parent: HObject,
+        class: ClassId,
+    ) -> Result<CeChannelFacts, FwdFault> {
+        self.route_act(
+            |spine| {
+                let r = kayfabe_fwd::route_engine_object_by_parent(spine, client, parent, class)?;
+                Ok((r.proc, r))
+            },
+            |spine, proc, route| {
+                channel_facts_from(spine, proc, route.proc, route.chan, route.gpu, route.vchid)
+            },
+        )?
+    }
+}
+
+/// The declared facts of one already-routed channel, read off the **one** graph node that
+/// declared them. Shared by [`SharedDevice::ce_channel_facts`] and
+/// [`SharedDevice::engine_object_channel_facts`] so the two routes can never come to
+/// disagree about what a channel declared (`two_projections_of_one_fact_disagreeing`).
+fn channel_facts_from(
+    spine: &Spine,
+    proc: &Proc,
+    pid: ProcId,
+    cid: ChanId,
+    gpu: GpuId,
+    vchid: VChid,
+) -> Result<CeChannelFacts, FwdFault> {
+    /// The four routing facts both entry points arrive with, named so the body below reads
+    /// identically whichever route produced them.
+    struct Routed {
+        proc: ProcId,
+        chan: ChanId,
+        gpu: GpuId,
+        vchid: VChid,
+    }
+    let route = Routed {
+        proc: pid,
+        chan: cid,
+        gpu,
+        vchid,
+    };
+    {
+        {
+            let chan = proc
+                .channels
+                .get(&route.chan)
+                .ok_or(FwdFault::UnknownVchid {
+                    gpu: route.gpu,
+                    vchid: route.vchid,
+                })?;
+            let node = spine
+                .rmgraph
+                .node_of_resource(chan.key)
+                .ok_or(FwdFault::NoVas(route.chan))?;
+            // ★★★ **THE RESOLVED VA SPACE**, off the same `Channel::vas_origin` that
+            // produced `vas_pdb` — see [`CeChannelFacts::vaspace`] for the boot in which
+            // this line's predecessor (`node.facts.h_vaspace`) reported
+            // `vas=NONE-DECLARED` for a channel whose `vas_pdb` was `Some`, and cost
+            // every UVM doorbell its only ring-reading path.
+            //
+            // ⊘ A `vas_origin` that no longer resolves in the graph yields `None` here
+            // rather than a stale handle: the resource died between the projection and
+            // this read, and naming a dead VA space would send `ce_session` looking for
+            // a publication that belongs to whatever inherits the handle value.
+            let vas_node = chan
+                .vas_origin
+                .and_then(|k| spine.rmgraph.node_of_resource(k));
+            Ok(CeChannelFacts {
+                proc: route.proc,
+                chan: route.chan,
+                vchid: route.vchid,
+                // ★★★★★ Off the SAME resolved `Channel` as `vas_pdb` and `engine`
+                // below — the declared kind, never `route.proc == SYSTEM_PROC`
+                // recomputed here. See [`CeChannelFacts::kind`].
+                kind: chan.kind,
+                // ★★★★ §16.25 — carried off the channel, where the projection put it.
+                // ⊘ NOT re-derived here: this whole struct exists because a second
+                // derivation of the VA space disagreed with the first one and lost the
+                // channel `cuInit` walls on (see [`CeChannelFacts::vaspace`]).
+                vas_route: chan.vas_route,
+                // The namespace the VA SPACE lives in — which is the namespace its
+                // publication was issued in. ⊘ Falls back to the channel's own only
+                // when nothing resolved, so a refusal still names a client.
+                // ★★★★ §16.28 — route 4's answer lives in the channel's OWN namespace
+                // by construction: RM mints the device-default name with
+                // `serverutilGenResourceHandle(hClient, …)` on the client that owns
+                // the Device (`ogkm-580: gpu_vaspace.c:4101`). So the existing
+                // fallback — the channel's own client — is already the right one, and
+                // there is deliberately no third arm here.
+                client: vas_node.map_or(node.key.client.0, |v| v.key.client.0),
+                // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
+                // zero: a GSP-managed channel that named no VA space and one that named
+                // handle zero are the same wire byte but different facts, and only the
+                // first is what `Channel::vas_pdb == None` means.
+                // ★★★★ **§16.28 — THE FOURTH ROUTE REACHES THE DISPATCH HERE**, and
+                // it is an `or_else` rather than a second opinion: a channel that
+                // resolved a live VASpace resource keeps that answer untouched, and
+                // only a channel for which every declared route missed *and* whose
+                // parent Device named a default address space gets this one. The two
+                // can never disagree because they are never both `Some`
+                // (`project::resolve_channel_vas` returns at most one of them — route
+                // 4 runs only after routes 1-3 have all produced no node).
+                //
+                // ⊘ Nothing is invented: the value is the handle the guest's own RM
+                // minted, published its page-directory root under, and freed, and it
+                // is used as the key it is — `ce_session` looks the guest's own
+                // publication up under `(hClient, hVASpace)`.
+                vaspace: vas_node
+                    .map(|v| v.key.handle.0)
+                    .or(chan.vas_device_default.map(|h| h.0)),
+                // ★ Reported SEPARATELY as well as folded above, so a reader can tell
+                // which of the two produced `vaspace` without inferring it from
+                // `vas_route` — the §16.16 rule that two projections of one fact are
+                // printed side by side rather than reconciled in silence.
+                vaspace_device_default: chan.vas_device_default.map(|h| h.0),
+                // ★★★★ §16.16 — the DECLARED handle, read straight off this channel's
+                // own alloc facts. ⊘ Deliberately NOT resolved through the graph and
+                // NOT reconciled with `vaspace` above: the whole point is that it is
+                // the other projection, and a value passed through the same resolver
+                // would be the same projection twice. See
+                // `CeChannelFacts::vaspace_declared`.
+                vaspace_declared: node.facts.h_vaspace.map(|h| h.0),
+                // ★ Off the SAME `node` the ring below is read from — see
+                // [`CeChannelFacts::chan_key`]. ⊘ NOT `chan.key`: the point is to name
+                // the object this struct's facts actually came out of, and a key read
+                // off the channel record rather than off the resolved node would be a
+                // different statement wearing the same name.
+                chan_key: (node.key.client.0, node.key.handle.0),
+                ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
+                ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
+                // ★ Off the SAME node the ring came from, so the two declarations can
+                // never be attributed to different channels.
+                userd: node.facts.userd,
+                vas_pdb: chan.vas_pdb,
+                // ★ Off the SAME proc the channel was routed in, so a bind recorded for
+                // another proc's slot of the same index can never be read as this
+                // channel's — the join is `(proc, chan)`, exactly as `ExecPlane` keys
+                // it. ⊘ Read here rather than joined later for `ce_channel_facts`' own
+                // stated reason: two projections of one fact can disagree.
+                bound_engine: proc.exec.bound.get(&route.chan).copied(),
+                // ★★★★ §16.65 — off the SAME resolved `Channel` as `vas_pdb` two lines
+                // up, so the engine and the address space can never be attributed to
+                // different channels. ⊘ Deliberately NOT derived from `bound_engine`
+                // above: see this field's doc for the measurement that rules that out.
+                engine: chan.engine,
+            })
+        }
+    }
+}
+
+impl SharedDevice {
     /// ★ THE one gated ring path (inherited law 7), route/act split per R4 and
     /// plan/execute/commit per R1.
     ///

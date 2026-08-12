@@ -105,6 +105,13 @@ pub use kayfabe_arch::ids::GpuId;
 /// without taking an edge to `kayfabe-arch`, which its own manifest forbids. ⊘ A newtype
 /// over an integer; it carries no architecture.
 pub use kayfabe_arch::ids::GpuVa;
+/// ★★★★★ **LEG A** — the page-directory-base identity, re-exported for the same single
+/// reason [`HClient`]/[`HObject`] are: the QEMU shim must be able to *name* the address
+/// space a framebuffer leaf is joined into, and its own manifest forbids an edge to
+/// `kayfabe-arch` (*"the shim names no architecture"*). ⊘ A newtype over an integer; it
+/// carries no architecture, and re-exporting it keeps that manifest rule true rather than
+/// negotiating it.
+pub use kayfabe_arch::ids::Pdb;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};

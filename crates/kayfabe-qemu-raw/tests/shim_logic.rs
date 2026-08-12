@@ -2535,3 +2535,127 @@ fn a_value_that_is_not_a_gr_route_arm_refuses_rather_than_defaulting() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ LEG A — `KAYFABE_GUEST_RING`, the arm that gives the framebuffer join a SECOND
+// SOURCE: the channel's own GPFIFO ring, walked and joined at the engine-object latch.
+//
+// ⊘ Why it is a SECOND selector and not a third arm of `KAYFABE_GR_ROUTE`: they arm
+// different legs of the same stool and a boot must be able to run either without the other.
+// `w260` measured the supply side moving while the execution side did not — folding the two
+// into one word would make that measurement unexpressible.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestRingArm, guest_ring_from};
+
+/// ⊘ **The default must leave every prior boot comparable**, and here that is sharper than
+/// for the route: the ring source runs on the REGISTER-WRITE path, which every boot takes
+/// millions of times. A default that armed would change the shape of every log ever taken.
+#[test]
+fn the_default_guest_ring_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_ring_from(None), Ok(GuestRingArm::Off));
+    assert!(
+        !GuestRingArm::Off.adopts_ring(),
+        "★ the default arm presented the channel's ring to the join"
+    );
+}
+
+/// ★★★★★ THE RUNG: `ring` is the only arm that adopts, and it says so through one predicate
+/// that both the shim and this test read — never through `== Ring` spelled at a call site.
+#[test]
+fn only_the_ring_arm_adopts_and_the_predicate_is_the_join() {
+    assert!(GuestRingArm::Ring.adopts_ring());
+    let adopting: Vec<GuestRingArm> = GuestRingArm::ALL
+        .into_iter()
+        .filter(|a| a.adopts_ring())
+        .collect();
+    assert_eq!(
+        adopting,
+        vec![GuestRingArm::Ring],
+        "★ exactly one arm may adopt the guest's ring; a second one is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_ring_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestRingArm::ALL {
+        assert_eq!(
+            guest_ring_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestRingArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestRingArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly.
+///
+/// ★ The stakes are the same as the route's and the failure is quieter: a disarmed evidence
+/// run prints **no `GR-RING-JOIN` line at all**, which is exactly what a correct control
+/// prints. Absence cannot distinguish them, so the spelling must.
+#[test]
+fn a_value_that_is_not_a_guest_ring_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Ring",
+        "rings",
+        "adopt",
+        "guest",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_ring_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-ring arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestRingArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **THE TWO LEGS ARE INDEPENDENT, and that is asserted rather than assumed.**
+///
+/// ⊘ Nothing in the shim may make one arm imply the other. A boot must be able to run
+/// `KAYFABE_GUEST_RING=ring` with `KAYFABE_GR_ROUTE=refuse` (the supply side alone, which is
+/// exactly the `w260` shape) and `passthrough` with `off` (the transport alone, which is
+/// `b734995`'s shape). All four cells are reachable, and the product below is the statement.
+#[test]
+fn the_ring_arm_and_the_route_arm_are_four_independent_cells() {
+    let mut cells = Vec::new();
+    for ring in GuestRingArm::ALL {
+        for route in GrRouteArm::ALL {
+            cells.push((ring.adopts_ring(), route.gr_passthrough()));
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        4,
+        "★ the two selectors do not span four cells — one of them constrains the other, and \
+         the supply side and the transport would stop being separately measurable"
+    );
+}

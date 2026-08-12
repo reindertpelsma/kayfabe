@@ -969,6 +969,67 @@ pub fn observe_declared_completion(
     }))
 }
 
+/// ★★★★★ **THE SECOND JOIN SOURCE — resolve ONE stated VA to the leaf that carries it.**
+///
+/// # ⊘ Why this is not `census_gr_addresses` with a list of one
+///
+/// The census answers *"where do the addresses the METHODS dereference land"*. This answers
+/// *"where does an address the CHANNEL ITSELF declared land"* — the GPFIFO ring being the
+/// only one that matters today. `[measured 2026-08-11, w260]` the census joined framebuffer
+/// leaves `0x400000` / `0x600000` / `0x800000` and **never** the ring's leaf at `0x1000000`,
+/// because **a ring is not an operand of the methods it carries**. No amount of operand
+/// decoding reaches it; it needs a second source, and this is that source's resolver.
+///
+/// # ★★★ It reads NO ring byte, and that is what keeps opacity a property rather than a rule
+///
+/// This is a page-table walk of one address. It does not read the GPFIFO, does not fetch a
+/// pushbuffer, decodes no method and classifies nothing. ⊘ A caller may therefore run it on
+/// a path that must never depend on the guest's bytes being parseable — which is precisely
+/// the path the channel's birth is on.
+///
+/// Returns the [`crate::completion_watch::Site`] always (so a refusal carries the walk's own
+/// name for itself) and the leaf **only** when the address landed in the framebuffer — the
+/// one plane [`crate::FbLeafBacking::Joined`] can join.
+pub fn resolve_leaf_of(
+    ce: &mut CePlane<'_>,
+    va: u64,
+) -> (
+    crate::completion_watch::Site,
+    Option<crate::completion_watch::FbLeaf>,
+) {
+    let mut last = None;
+    match WalkOperands::new(ce, &mut last).resolve_one(va) {
+        Ok((r, _left, leaf)) => match r.residency.plane {
+            // ⊘ A ring in guest RAM is a REAL and served case (`run_w226a_qemu.log` measured
+            // `LEAF@0x420064000 -> SysmemCoherent`), and it is not this source's to join: the
+            // guest-RAM pin owns that plane. Answering `None` here is the honest split, not a
+            // miss — `guest_ring_adoption.md` §4 item 1's *"both planes occur, in one boot
+            // family, and which one a ring is in cannot be inferred from its engine."*
+            CpuPlane::GuestRam => (
+                crate::completion_watch::Site::GuestRam { gpa: r.addr.0 },
+                None,
+            ),
+            CpuPlane::Fb => (
+                crate::completion_watch::Site::Framebuffer {
+                    phys: r.addr.0,
+                    leaf,
+                },
+                Some(leaf),
+            ),
+        },
+        // ⊘ `Unresolved` is a first-class answer ABOUT THE ADDRESS TABLE — here it means
+        // *"the guest has not bound its own ring yet at the instant we asked"*, which is a
+        // TIMING fact and must never be read as *"the channel declared no ring"*.
+        Err(fault) => (
+            crate::completion_watch::Site::Unresolved(match &last {
+                Some((va, r)) => format!("{fault:?} at va=0x{:x}: {}", va.0, r.kind()),
+                None => format!("{fault:?}"),
+            }),
+            None,
+        ),
+    }
+}
+
 /// Resolve each named operand through the walk that is already in flight.
 fn resolve_operands(
     ce: &mut CePlane<'_>,
