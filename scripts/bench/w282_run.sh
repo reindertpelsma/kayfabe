@@ -353,6 +353,13 @@ PY
   echo "    so the discriminator is FACTS not COUNTS: no CE span, no semaphore, no SetObject."
   echo "      FWD-RING spans= values: [$(grep -oE 'spans=[0-9]+' "$Q" 2>/dev/null | sort -u | tr '\n' ' ')]"
   echo "      CE-SUBMIT lines = $(grep -c 'CE-SUBMIT' "$Q" 2>/dev/null)   (w280_client: 0)"
+  echo "    --- ★★★★★ w283: WAS THE GUEST'S OWN RELEASE CARRIED? graded BY ADDRESS."
+  echo "        ⊘ CARRIED means EMITTED into the pushbuffer, NOT observed at the guest's VA."
+  echo "        Only the client's own 'semaphore 0x...' read is the witness for that."
+  echo "        guest_rel=CARRIED = $(grep -c 'guest_rel=CARRIED' "$Q" 2>/dev/null)   guest_rel=NONE = $(grep -c 'guest_rel=NONE' "$Q" 2>/dev/null)"
+  grep -oE 'guest_rel=CARRIED@0x[0-9a-f]+ payload=0x[0-9a-f]+' "$Q" 2>/dev/null | sort -u | sed 's/^/        /' | head -4
+  echo "        ⊘ the guest DECLARED 0x120022000 payload=0x1 — a CARRIED at any OTHER address"
+  echo "          is us naming a semaphore the guest did not, and is a FAILURE not a pass."
   grep -o 'CE-SUBMIT.\{0,200\}' "$Q" 2>/dev/null | sort -u | sed 's/^/      /' | head -5
   echo "    --- ★★★★★ THE RUNG'S FALSIFIER, ON IDENTITY. ⊘ w281's falsifier was over a COUNT"
   echo "        and BOTH HALVES FIRED while the rung failed, because \`by=\` was substituted"
