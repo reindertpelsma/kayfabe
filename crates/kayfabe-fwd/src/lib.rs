@@ -6132,6 +6132,12 @@ pub fn partition_ce(
                     kayfabe_arch::CeWork::Scrub => CeSource::Constant(0),
                     kayfabe_arch::CeWork::Fill { pattern } => CeSource::Constant(pattern),
                 },
+                // ⊘ **`None` here, ALWAYS, and never at this layer.** `partition_ce` splits
+                // ONE launch into sub-copies and cannot know which of them is last — the
+                // caller does, and attaching the release to any but the last would let the
+                // guest's payload land before the guest's bytes. See the `completion` arm in
+                // `parse_pushbuffer_inner`, which is the only writer of this field.
+                guest_release: None,
                 len: take,
                 by,
             },
@@ -6585,12 +6591,20 @@ pub fn apply_pushbuffer(
                     // own (`spans_from == len()`): a release with no bytes behind it is a
                     // `CeRelease`, handled by its own arm, and inventing a carrier for it
                     // here would put the guest's payload on a copy it never asked for.
+                    //
+                    // ⚠ **`u32::try_from`, and a payload that does not fit is NOT attached.**
+                    // `LAUNCH_SEMAPHORE_RELEASE_ONE_WORD` releases ONE 32-bit word, so a
+                    // wider payload is a four-word release this encoding cannot express.
+                    // ⊘ Truncating would write a DIFFERENT value at the address the guest
+                    // polls — a wrong completion, which is worse than none — so it is
+                    // declined, and the guest then waits visibly instead of being lied to.
                     if let Some(last) = out.ce_spans.get_mut(spans_from..).and_then(<[_]>::last_mut)
                         && last.sub.by == CeExecutor::HostCe
+                        && let Ok(payload) = u32::try_from(c.payload)
                     {
                         last.sub.guest_release = Some(kayfabe_isolate::CeGuestRelease {
                             va: c.addr.0,
-                            payload: c.payload,
+                            payload,
                         });
                     }
                 }
