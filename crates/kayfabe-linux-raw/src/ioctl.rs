@@ -60,6 +60,26 @@ pub fn declared_size(request: u64) -> usize {
     ((request >> SIZESHIFT) as usize) & MAX_IOCTL_SIZE
 }
 
+/// `_IOC_NR(request)` — for the NVIDIA frontend, the `NV_ESC_*` number.
+///
+/// ★ It exists for [`crate::census`], which records what the kernel was asked for rather
+/// than what the caller meant. Decoding it there would be re-derived shifts, which is the
+/// thing this module exists to prevent.
+#[must_use]
+pub fn nr_of(request: u64) -> u8 {
+    ((request >> NRSHIFT) & 0xFF) as u8
+}
+
+/// `_IOC_TYPE(request)` — the driver "magic" (`b'F'` for the NVIDIA frontend).
+///
+/// ⊘ Carried beside [`nr_of`] because an `NV_ESC` number is only meaningful under `'F'`:
+/// `nr = 0x2A` under a different magic is a different driver's ioctl entirely, and a census
+/// that dropped the magic would merge them.
+#[must_use]
+pub fn magic_of(request: u64) -> u8 {
+    ((request >> TYPESHIFT) & 0xFF) as u8
+}
+
 fn encode(dir: u32, ty: u8, nr: u8, size: usize) -> Result<u64, RawError> {
     if size > MAX_IOCTL_SIZE {
         return Err(RawError::TooLargeForHost { value: size as u64 });

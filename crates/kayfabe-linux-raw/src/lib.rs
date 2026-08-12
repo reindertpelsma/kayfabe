@@ -269,6 +269,7 @@ compile_error!(
 
 pub mod bounds;
 pub mod cache;
+pub mod census;
 mod chardev_unsafe;
 mod epoll_unsafe;
 pub mod error;

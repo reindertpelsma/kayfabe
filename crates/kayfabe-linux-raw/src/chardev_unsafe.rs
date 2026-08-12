@@ -567,6 +567,19 @@ impl CharDevice {
             Ok(rc)
         };
 
+        // ★★★ THE CENSUS, at the one funnel every RM ioctl in the workspace passes through
+        // (`census` module docs). It runs on BOTH arms — an ioctl the driver refused still
+        // entered the driver, and "how many times did we enter it" is the question. It reads
+        // no pointer and takes no lock across the syscall above.
+        // ⊘ `-1` for a refusal the OS reported no `errno` for: the census must not record it
+        // as `0`, which is this record's word for "served".
+        let errno = match &outcome {
+            Err(RawError::Syscall { errno, .. }) => errno.unwrap_or(-1),
+            Err(_) => -1,
+            Ok(_) => 0,
+        };
+        crate::census::note(request, errno);
+
         // ★ The scrub (module docs). Unconditional, and after BOTH arms: a failed ioctl
         // leaves the caller holding the same buffer, and an address that survives an error
         // path is exactly the one nobody looks at.
