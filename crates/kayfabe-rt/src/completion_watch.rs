@@ -1279,7 +1279,9 @@ mod tests {
                     va,
                 },
                 decl,
-                Site::GuestRam { gpa: 0x59a_0ff0 - u64::from(chan) * 0x10 },
+                Site::GuestRam {
+                    gpa: 0x59a_0ff0 - u64::from(chan) * 0x10,
+                },
                 t0,
             );
         }
@@ -1320,7 +1322,10 @@ mod tests {
             Ok(())
         };
         let v = list.sweep(t0 + OBSERVE_DEADLINE, &mut read);
-        assert!(matches!(v.as_slice(), [Verdict::NotObserved { .. }]), "got {v:?}");
+        assert!(
+            matches!(v.as_slice(), [Verdict::NotObserved { .. }]),
+            "got {v:?}"
+        );
         assert_eq!(list.live(), 0, "the watch has been reported");
         assert_eq!(
             list.declared_sites().len(),

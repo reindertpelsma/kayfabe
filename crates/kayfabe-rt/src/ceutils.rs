@@ -1087,6 +1087,187 @@ pub fn release_targets_of(decoded: &[PushMethod], methods: usize) -> CeReleaseTa
     out
 }
 
+/// ★★★ One address range a `LAUNCH_DMA` will touch, as the guest's own operands stated it.
+///
+/// ⊘ Carried as `(va, len, write)` rather than as a bare page set because the three facts are
+/// read by different decisions: the **extent** decides how many pages a pin must place (a copy
+/// longer than a page faults on its later pages too), and the **direction** is the only thing
+/// that can attribute a surviving `Xid`'s `ACCESS_TYPE` after both classes have been pinned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeOperandExtent {
+    /// The GPU VA the operand names — the guest's own `OFFSET_OUT_*`/`OFFSET_IN_*` pair.
+    pub va: GpuVa,
+    /// How many bytes the engine will touch from `va`, as
+    /// [`kayfabe_arch::PushMethod::CeLaunchDma::len`] states it.
+    pub len: u64,
+    /// `true` for a **destination** (`ACCESS_TYPE_VIRT_WRITE`), `false` for a **source**.
+    pub write: bool,
+}
+
+/// ★★★★★ What ONE read of a copy-engine submission established about the **pages its launches
+/// will dereference** — the plane the release-target source cannot see.
+///
+/// ⊘ Returned whole rather than as a bare `Vec`, for [`CeReleaseTargets`]' reason: *"nothing
+/// decoded"*, *"a launch decoded and named no virtual operand"* and *"every operand was
+/// physical"* are three different facts and must never arrive as the same empty list.
+#[derive(Debug, Clone, Default)]
+pub struct CeOperandTargets {
+    /// Every virtual operand extent, in decode order, destinations first within each launch.
+    pub extents: Vec<CeOperandExtent>,
+    /// How many `(header, args)` pairs the read produced.
+    pub methods: usize,
+    /// How many decoded methods were launches at all (`CeLaunchDma` + `CeRelease`).
+    pub launches: usize,
+    /// How many decoded methods the codec did not model. See [`CeReleaseTargets::opaque`] for
+    /// why this is printed beside `launches` rather than inferred from it.
+    pub opaque: usize,
+    /// ★ How many launches carried **no addressable operand at all** — every
+    /// [`kayfabe_arch::PushMethod::CeRelease`], which is `DATA_TRANSFER_TYPE == NONE`.
+    /// ⊘ `launches > 0, extents = [], release_only = launches` is *"this submission only
+    /// signals"*; `release_only = 0` with an empty list is *"every operand was physical"*.
+    /// Opposite facts, and a pin pass that saw only the list could not tell them apart.
+    pub release_only: usize,
+    /// How many operands were **physical** (`dst_is_virtual`/`src_is_virtual` false) and so
+    /// name no VA this pass may pin. ⚠ Counted rather than dropped silently: a physical
+    /// destination is a real thing the guest can ask for, and it is a different reason for an
+    /// empty list than *"nothing decoded"*.
+    pub physical: usize,
+}
+
+/// The pure half of [`observe_ce_operand_targets`] — everything after the read.
+///
+/// ⊘ Extracted for [`release_targets_of`]'s reason: the read is the part that needs a machine
+/// and it is not the part that has a rule in it.
+///
+/// # ★★★ The rule, and each clause is a refusal
+///
+/// - **Only `CeLaunchDma`.** A [`kayfabe_arch::PushMethod::CeRelease`] moves zero bytes and
+///   has no operands at all (its own docs: it *"never writes `OFFSET_OUT_UPPER`/`_LOWER`"*);
+///   its address is the **release** plane's, already served by [`release_targets_of`], and
+///   folding it in here would pin one page twice under two names.
+/// - **Only VIRTUAL operands.** A physical `dst`/`src` is not a VA and resolving it through a
+///   per-VAS address table would be reinterpreting one number as another — the refusal
+///   `pin_ring_guest_ram` makes by name when a binding lands in the framebuffer.
+/// - **No source for a fill or a scrub.** [`kayfabe_arch::CeWork::Fill`]/`Scrub` have no
+///   source operand at all; the codec sets `src = 0` explicitly and says so, and reporting
+///   that zero as an address to pin would put a page at VA `0` in the census.
+/// - **A zero-length launch names nothing.** `len == 0` touches no byte, so it names no page.
+#[must_use]
+pub fn operand_targets_of(decoded: &[PushMethod], methods: usize) -> CeOperandTargets {
+    let mut out = CeOperandTargets {
+        methods,
+        ..CeOperandTargets::default()
+    };
+    for m in decoded {
+        match m {
+            PushMethod::Opaque => out.opaque += 1,
+            PushMethod::CeRelease { .. } => {
+                out.launches += 1;
+                out.release_only += 1;
+            }
+            PushMethod::CeLaunchDma {
+                dst,
+                src,
+                len,
+                dst_is_virtual,
+                src_is_virtual,
+                work,
+                ..
+            } => {
+                out.launches += 1;
+                if *len == 0 {
+                    continue;
+                }
+                if *dst_is_virtual {
+                    out.extents.push(CeOperandExtent {
+                        va: *dst,
+                        len: *len,
+                        write: true,
+                    });
+                } else {
+                    out.physical += 1;
+                }
+                // ⊘ `CeWork::Copy` is the ONLY kind with a source. See the codec's own
+                // comment at `Ga10xPushbuffer::ce_launch`: a memset's source slots are never
+                // latched, so `src` is a deliberate, documented zero — not an address.
+                if matches!(work, kayfabe_arch::CeWork::Copy) {
+                    if *src_is_virtual {
+                        out.extents.push(CeOperandExtent {
+                            va: *src,
+                            len: *len,
+                            write: false,
+                        });
+                    } else {
+                        out.physical += 1;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// ★★★★★ **THE PIN'S FOURTH SOURCE — the pages THIS channel's own `LAUNCH_DMA` operands
+/// name, read at THIS doorbell.**
+///
+/// # ★★★ Why it exists: one address, named by hardware and by nothing of ours
+///
+/// `[measured 2026-08-12, w268_pass / w269_pass / w269b_pass, three consecutive armed boots,
+/// real GA106]` the guest's first substantive copy-engine work — chan 8's **second**
+/// submission, `methods=11 launches=3` over two GPFIFO entries — takes
+/// `Xid 31 ENGINE CE2 HUBCLIENT_CE0 FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000`, and
+/// `w268` §3.2 measured that **no source in this device has ever named that page**
+/// (`grep -c 4420000` = 0). The same submission's own `SET_SEMAPHORE_A`/`_B` names
+/// `0x2_0440ff70` (`run_w268_pass_qemu.log:980`) — the slot `w269` measured `cuCtxCreate`
+/// polling for the value `2` while it holds `1`. **A submission that faults never reaches its
+/// release.**
+///
+/// ⇒ The gap is structural, not an oversight: the three existing pin sources are the channel's
+/// **ring**, its **GPFIFO entries' pushbuffers** and its **release targets**, and none of them
+/// is a copy *operand*. The one census that decodes operands
+/// ([`crate::completion_watch::decode_address_operands`]) refuses every write on a subchannel
+/// not bound to `AMPERE_COMPUTE_B`, so a copy engine's `OFFSET_OUT_*` is invisible to it **by
+/// construction**.
+///
+/// # ⊘⊘ What this is NOT — the one way this rung could go badly wrong
+///
+/// It is **not** a remembered `0x2_04420000`. That literal appears nowhere in this function,
+/// nowhere in its caller, and nowhere in the pin. Every VA comes from the guest's own method
+/// stream, read at this doorbell, framed by [`kayfabe_abi::submit`] and decoded by the
+/// **chip's own** codec — the `cap2b` discipline [`observe_ce_release_targets`] states at
+/// length and this function inherits whole.
+///
+/// # ⊘ It advances nothing
+///
+/// Reads only, exactly as [`observe_ce_release_targets`]: the cursor is taken by value and
+/// never written back and the [`MethodState`] is a **copy** of the channel's accumulator, so a
+/// decode here cannot latch state a later execute would see.
+///
+/// ⚠ **It performs its OWN read**, and that is deliberate rather than accidental: this pass is
+/// separately armed, so it must be able to run when the release-target pass is not, and a row
+/// that reported numbers taken from another pass's read would be describing a ring at an
+/// instant it did not sample. Both rows print their own `methods=`, so a disagreement between
+/// two reads of one ring is **visible** rather than silently averaged.
+///
+/// # Errors
+/// [`CeUtilsRefusal`] if the ring or the pushbuffer could not be read — the same refusals
+/// [`dump_submission_methods`] reports, from the same read.
+pub fn observe_ce_operand_targets(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeOperandTargets, CeUtilsRefusal> {
+    let look = read_submission_methods(ce, pb, vmm, chan, cursor)?;
+    // ⊘ A COPY of the channel's accumulator, mutated locally and dropped.
+    let mut st = state;
+    let decoded = pb.decode_run(&mut st, &look.methods);
+    Ok(operand_targets_of(&decoded, look.methods.len()))
+}
+
 /// ★★★★★ **THE SECOND JOIN SOURCE — resolve ONE stated VA to the leaf that carries it.**
 ///
 /// # ⊘ Why this is not `census_gr_addresses` with a list of one
@@ -1450,5 +1631,207 @@ mod release_target_tests {
             "the shape of the nothing is reported: {got:?}"
         );
         assert_eq!(got.launches, 0);
+    }
+}
+
+#[cfg(test)]
+mod operand_target_tests {
+    use super::{PushMethod, operand_targets_of};
+    use kayfabe_arch::ids::{ClassId, GpuVa};
+    use kayfabe_arch::{CeCompletion, CeSemStructure, CeWork, PhysTarget};
+
+    /// A copy, with every operand knob a caller can turn.
+    #[allow(clippy::fn_params_excessive_bools)]
+    fn copy(dst: u64, src: u64, len: u64, dstv: bool, srcv: bool, work: CeWork) -> PushMethod {
+        PushMethod::CeLaunchDma {
+            dst: GpuVa(dst),
+            src: GpuVa(src),
+            len,
+            dst_is_virtual: dstv,
+            src_is_virtual: srcv,
+            dst_target: PhysTarget::LocalFb,
+            src_target: PhysTarget::LocalFb,
+            work,
+            completion: None,
+        }
+    }
+
+    /// ★★★★★ **THE ROW THIS RUNG RESTS ON.** A copy names its destination, and the
+    /// destination is the plane the release-target source cannot see. ⊘ The VA here is
+    /// arbitrary and deliberately **not** `0x2_04420000`: the mechanism must not contain the
+    /// address it is meant to discover.
+    #[test]
+    fn a_copy_names_its_destination_and_its_source() {
+        let got = operand_targets_of(
+            &[copy(
+                0x2_1234_5000,
+                0x2_9999_0000,
+                4096,
+                true,
+                true,
+                CeWork::Copy,
+            )],
+            5,
+        );
+        assert_eq!(got.extents.len(), 2, "destination AND source: {got:?}");
+        assert!(
+            got.extents[0].write && got.extents[0].va == GpuVa(0x2_1234_5000),
+            "the destination is first and is the WRITE: {got:?}"
+        );
+        assert!(
+            !got.extents[1].write && got.extents[1].va == GpuVa(0x2_9999_0000),
+            "the source is the READ: {got:?}"
+        );
+        assert_eq!(got.launches, 1);
+        assert_eq!(got.physical, 0);
+    }
+
+    /// ⊘ **A release-only submission names NOTHING here, and says which nothing it is.**
+    /// This is the shape all eight CE channels' FIRST submission has (`w267`/`w268`), and it
+    /// must not produce a phantom operand — its address belongs to `release_targets_of`.
+    #[test]
+    fn a_release_only_submission_names_no_operand_and_says_so() {
+        let got = operand_targets_of(
+            &[
+                PushMethod::SetObject {
+                    class: ClassId(0xc7b5),
+                },
+                PushMethod::CeRelease {
+                    completion: CeCompletion {
+                        addr: GpuVa(0x2_0440_ff70),
+                        payload: 1,
+                        structure: CeSemStructure::FourWord,
+                        payload_bytes: 4,
+                    },
+                    flush: true,
+                },
+            ],
+            3,
+        );
+        assert!(got.extents.is_empty(), "no operands to pin: {got:?}");
+        assert_eq!(got.launches, 1, "a release IS a launch: {got:?}");
+        assert_eq!(
+            got.release_only, 1,
+            "⊘ and the empty list is EXPLAINED, not merely empty: {got:?}"
+        );
+    }
+
+    /// ⚠ **A physical operand is counted, never resolved.** It is not a VA, and asking a
+    /// per-VAS address table about it would be reinterpreting one number as another — the
+    /// exact refusal `pin_ring_guest_ram` makes by name.
+    #[test]
+    fn a_physical_operand_is_counted_and_not_pinned() {
+        let got = operand_targets_of(
+            &[copy(0x100_0000, 0x200_0000, 64, false, false, CeWork::Copy)],
+            4,
+        );
+        assert!(got.extents.is_empty(), "neither operand is a VA: {got:?}");
+        assert_eq!(
+            got.physical, 2,
+            "⊘ and BOTH are counted, so the empty list has a reason: {got:?}"
+        );
+        assert_eq!(got.release_only, 0, "this was not a release: {got:?}");
+    }
+
+    /// ⊘ **A fill has no source operand**, and the codec's `src = 0` is a documented
+    /// placeholder rather than an address. Reporting it would put VA `0` in the pin census.
+    #[test]
+    fn a_fill_names_its_destination_and_never_a_source() {
+        let got = operand_targets_of(
+            &[copy(
+                0x2_0500_0000,
+                0,
+                256,
+                true,
+                true,
+                CeWork::Fill { pattern: 0xdead },
+            )],
+            6,
+        );
+        assert_eq!(got.extents.len(), 1, "destination only: {got:?}");
+        assert!(got.extents[0].write);
+        assert_eq!(got.extents[0].va, GpuVa(0x2_0500_0000));
+        assert_eq!(
+            got.physical, 0,
+            "a fill's absent source is not a PHYSICAL source: {got:?}"
+        );
+    }
+
+    /// ⊘ A zero-length launch touches no byte, so it names no page. ⚠ It is still a launch.
+    #[test]
+    fn a_zero_length_launch_names_no_page() {
+        let got = operand_targets_of(
+            &[copy(
+                0x2_1000_0000,
+                0x2_2000_0000,
+                0,
+                true,
+                true,
+                CeWork::Copy,
+            )],
+            4,
+        );
+        assert!(got.extents.is_empty(), "no bytes, no pages: {got:?}");
+        assert_eq!(got.launches, 1, "but the engine WAS asked: {got:?}");
+    }
+
+    /// ⊘ The host-FIFO semaphore is not an operand either — same trap, one plane over.
+    #[test]
+    fn the_host_fifo_semaphore_is_not_an_operand() {
+        let got = operand_targets_of(
+            &[PushMethod::SemRelease {
+                addr: GpuVa(0x2_0440_f004),
+                payload: 1,
+            }],
+            2,
+        );
+        assert!(got.extents.is_empty());
+        assert_eq!(got.launches, 0);
+        assert_eq!(got.release_only, 0);
+    }
+
+    /// ★★ **The shape this rung EXPECTS on the wire**, as the decoder would hand it over:
+    /// chan 8's second submission, `launches = 3` — one real copy plus two releases — where
+    /// only the copy names a page to pin. ⊘ Asserted as a *shape*, not as an address.
+    #[test]
+    fn the_expected_second_submission_shape_yields_one_copy_and_two_releases() {
+        let rel = |va: u64| PushMethod::CeRelease {
+            completion: CeCompletion {
+                addr: GpuVa(va),
+                payload: 2,
+                structure: CeSemStructure::FourWord,
+                payload_bytes: 4,
+            },
+            flush: true,
+        };
+        let got = operand_targets_of(
+            &[
+                PushMethod::SetObject {
+                    class: ClassId(0xc7b5),
+                },
+                copy(
+                    0x2_0442_0000,
+                    0x2_0441_0000,
+                    0x1000,
+                    true,
+                    true,
+                    CeWork::Copy,
+                ),
+                rel(0x2_0440_ff70),
+                PushMethod::Opaque,
+            ],
+            11,
+        );
+        assert_eq!(got.launches, 2, "one copy + one release: {got:?}");
+        assert_eq!(got.release_only, 1);
+        assert_eq!(got.extents.len(), 2, "the copy's two operands: {got:?}");
+        assert_eq!(
+            got.opaque, 1,
+            "the shape of the nothing is reported: {got:?}"
+        );
+        assert_eq!(
+            got.methods, 11,
+            "the read's own count carries through: {got:?}"
+        );
     }
 }
