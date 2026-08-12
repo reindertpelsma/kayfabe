@@ -1,4 +1,4 @@
-# w269 — ★★★★★ **THE POLLED ADDRESS IS `0x2_0440fff0` ITSELF.** The guest polls the exact slot we write, the arm CONSUMED seven of eight, and the wall moved from *"8 awaiting 1"* to *"1 awaiting 2"*
+# w269 — ★★★★★ **THE GUEST POLLS THE EXACT SLOTS WE WRITE.** Arming CONSUMED seven of eight; the wait moved from *eight GR slots awaiting `1`* to **one CE slot, `0x2_0440ff70`, awaiting `2` and holding `1`** — and the doorbell store is now WITNESSED, 17/17
 
 > ### STATUS — 2026-08-12 / **LIVE — MEASURED.** Four boots on bench `vh`, `NVIDIA GeForce RTX
 > 3060` (GA106), host driver `580.159.04`. **Pass 1** (`w269_refuse`, `w269_pass`) ran the
@@ -17,7 +17,7 @@
 
 The brief proposed *"`launches=3` on a CE channel is consistent with the memcpys — the wall may
 have moved past `cuCtxCreate` into the copies"* and asked which call is the last to print.
-⊘ **`traces/boots/w268/run_w269_{pass,refuse}_probe.log:51-62`, both arms, already said:**
+⊘ **`traces/boots/w268/run_w268_{pass,refuse}_probe.log:51-62`, both arms, already said:**
 
 ```
 ok   cuInit … ok   cuDeviceTotalMem      totalMem=11959 MiB
@@ -91,14 +91,44 @@ timestamps) were **consumed by the guest**. `cuCtxCreate` got past what it was s
 a far more informative negative than *"nothing changed"*, and it is the first time this arm has
 been shown to buy the guest anything at all.
 
-### 1.2 ⊘ WHAT THE `pass` ARM'S SINGLE ITEM POLLS — *(filled from `w269b_pass`; see §6 if absent)*
+### 1.2 ★★★★★ THE `pass` ARM POLLS A **CE** SLOT, WANTS `2`, AND READS `1`
 
-`[w269_pass, pass 1]` `N items = 1`, `KIND=1`, `[0x10] = 2`, wait object **on the stack**
-(`0x7ffe3c98fbf8`) rather than the heap array of eight. `rbx = 0` ⇒ the pause-only spin;
-`ctx[0x40]+0x72b8 = 0` ⇒ the 1-second `MC_SERVICE_INTERRUPTS` leg is live, exactly as `w215`
-disassembled.
-⚠ **I cannot say WHICH of the eight channels the survivor is.** The arms have different ASLR
-bases and different heap layouts, so object addresses are not comparable across arms.
+`[measured, w269b_pass, `run_w269b_pass_probe.log`]`:
+
+```
+N items = 1     item[0] KIND=1  [0x10]=0x2
+    S[0x10] limit  = 0x2
+    S[0x18] cached = 0x1      ★ wanted > cached ⇒ NOT satisfied; it reads
+    POLLED ADDRESS = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
+                     VALUE AT IT = 0x00000001 (1)
+                     SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
+```
+
+⇒ ★★★★★ **THE WALL, NAMED EXACTLY.** Arming the route satisfies all eight **GR** waits, and the
+guest then advances to a **single wait on a COPY-ENGINE release semaphore**: `0x2_0440ff70`,
+**wanting progress `2`, holding `1`**.
+
+★★★ **And `0x2_0440ff70` is not a new address — it is chan 8's own declared CE release target.**
+`w268` §2 recovered it from that channel's own pushbuffer:
+`SEMA-SOURCE-CE token=0x0001000f chan=8 → release_target(s)=1 [0x20440ff70]`.
+⇒ **The CE channel released ONCE (the slot reads 1) and the guest is waiting for it to release a
+SECOND time.**
+
+★★★★ **This re-opens the brief's item 2 on a measured chain rather than a hypothesis** — and by a
+completely different route than the one the brief proposed (which §0.1 killed). `w268` §3.2
+measured that channel's **second** submission as `methods=11 launches=3` over two GPFIFO entries
+— the first substantive CE work of the boot — and it took `Xid 31 ENGINE CE2 HUBCLIENT_CE0
+FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000`, **reproduced identically here** on `w269_pass`.
+A submission that faults never reaches its release. ⇒ *"The guest wants release #2; release #2's
+submission faulted"* is a coherent, same-channel, correctly-ordered chain.
+⊘ **It is NOT proven.** I have not shown the faulting submission is the one that would have
+written `2` into `0x2_0440ff70`; the correlation is by channel and by ordering only.
+
+⊘ `rbx = 0` ⇒ the pause-only spin; `ctx[0x40]+0x72b8 = 0` ⇒ the 1-second
+`MC_SERVICE_INTERRUPTS` leg is live, exactly as `w215` disassembled.
+⚠ **I cannot say WHICH of the eight channels the survivor object is** by address — different ASLR
+and heap layout across arms. The **slot** identifies it (`ff70` = chan 8's target); the pointer
+does not.
 
 ---
 
@@ -127,9 +157,17 @@ DOORBELL-XLATE proc=2 chan=8  vchid=VChid(0xf)  engine=Ce guest_token=0x0001000f
 ⇒ ★★★ **Leg C is real for `Ce`**: a user process's guest token is translated to a *different*
 host token and the 32-bit store into the usermode window executes. The translation is
 non-identity, so this measures the translation and not merely the call.
-⇒ ★★ **Task #243 is CONFIRMED on the shipping arm**: **zero** `GrCompute` doorbells reach
-`plan_doorbell` — as designed, the route refuses them above the verb. `w269b_pass` is what says
-whether arming changes that. *(§6.)*
+### 2.1 ★★★★★ AND ON THE ARMED ARM — task #243 settled in **BOTH** directions
+
+`[measured, w269b_pass]` `DOORBELL-XLATE` **17**, `DOORBELL-VERB` **17**,
+`DOORBELL-STORE … WROTE` **17**, `NOT REACHED` **0** — of which **8 are `engine=GrCompute`,
+`proc=2`, the user process**, and 9 are `Ce`.
+
+⇒ ★★★ **Task #243 (*"user-proc `GrCompute` doorbells never reach it at all"*) is settled in both
+directions and by measurement rather than by reading**: **zero** on the shipping arm (the route
+refuses them above the verb, as designed), **eight** when armed — and all eight **rang**. That is
+the transport half of `w268`'s `GET` catching `PUT`, now witnessed at the store instruction
+instead of inferred from its effect.
 ⊘ **Not proven**: that the store had the intended *effect*. There is no completion to check at
 the store; `GP_GET` and the semaphore are the only downstream evidence, and `w268` already
 carries those.
@@ -146,7 +184,7 @@ carries those.
 | **P4** | snapshot reaches `libcuda+0x22be1f`/`+0x22bedc` | .85 | ★★★ **FIRED** at `+0x22be1f`, every sample, both arms |
 | **P5** | `N` is 1 or 2 | .70 | ⊘ **HALF** — `pass` N=1; `refuse` N=**8**, outside the range |
 | **P6** | a `kind == 3` item is present | .60 | ⊘ **FAILED** — every item is `kind 1` |
-| **P7** | same address, same value, on both arms | .55 | *(§6)* |
+| **P7** | same address, same value, on both arms | .55 | ⊘⊘ **FAILED, and this is the rung's headline** — `refuse` polls eight **GR** slots reading `0`; `pass` polls one **CE** slot reading `1` |
 | **P8** | the address is **NOT** a GR or CE slot offset | .65 | ⊘⊘ **FAILED — it IS `0x20440fff0`** |
 | **P9** | mapping is anon or `/dev/nvidia-uvm` | .55 | ⊘ **FAILED** — `/dev/nvidiactl`, `rw-s` |
 | **P10** | ★ the deliberately-widened low arm: **the address IS a GR slot** | **.15** | ★★★★★ **FIRED** |
@@ -214,19 +252,25 @@ a statement about the probe, not about the page**, and the probe says so in thos
 
 ---
 
-## 6. THE `pass` ARM OF PASS 2, AND THE NEXT RUNG
+## 6. THE NEXT RUNG — and it has a measured address for the first time
 
-★★★ **The one question left open by §1.2**: the `pass` arm's single item awaits **2**. If its
-polled address is `0x20440fff0` and the value there is **1**, then **we write the payload the
-guest's first wait wanted and not the one its second wait wants** — and that is immediately
-actionable. If the value is `2` and it still spins, the wait is not on this word.
-
-1. ★★★★★ **Find what produces the payload `2`.** The guest asked for `1` eight times and got
-   it; it now asks for `2` once. Whatever advances that counter a second time is the wall.
-2. ★★★ **Measure `RcTriggered` and the per-channel event-leaf mask** (`w212` F6: 179
-   completions unvectored, 1 stall vector into a masked leaf). ⚠ **Do not adopt F6 as the
-   cause** — it is an unfixed candidate the moving wall orphaned, which is the shape that has
-   misled this campaign. The two `poll()`ing helper threads are where it would show.
-3. ★★ **Re-run the `DOORBELL-XLATE` census on the armed arm** to settle task #243 in both
-   directions.
-4. ⊘ **Do NOT default the route.** Four boots is not a posture change; `refuse` stays default.
+1. ★★★★★ **`0x2_04420000`, and now on a chain rather than a hunch.** The guest waits for CE
+   release **2** on `0x2_0440ff70`; that channel's **second** submission is the `methods=11
+   launches=3` one; that submission takes `Xid 31 CE2 HUBCLIENT_CE0 FAULT_PTE VIRT_WRITE @
+   0x2_04420000` — **reproduced identically on three consecutive armed boots** (`w268_pass`,
+   `w269_pass`, `w269b_pass`). A faulting submission never releases. ⇒ Find who *names*
+   `0x2_04420000`: the second GPFIFO entry's own methods, decoded from the guest's declaration.
+   ⚠⚠ **Derive the page from what the guest declared, never from the remembered literal** — a
+   remembered address read out of guest RAM is the `cap2b` class, this tree's own
+   guest-reachable-defect fixture.
+2. ★★★ **Prove or break the chain before fixing it.** Two cheap discriminators: (a) does
+   `0x2_0440ff70` ever reach `2` on any boot? (b) is the faulting submission the one carrying
+   the `SET_REPORT_SEMAPHORE` for `ff70`, or a different entry of the same pushbuffer? ⊘ Today
+   the link is correlation by channel and ordering only.
+3. ★★ **Measure `RcTriggered` and the per-channel event-leaf mask** (`w212` F6: 179 completions
+   unvectored, 1 stall vector into a masked leaf). ⚠ **Do not adopt F6 as the cause** — it is an
+   unfixed candidate the moving wall orphaned, which is the shape that has misled this campaign
+   before. ★ The two `poll()`ing helper threads are exactly where it would show, and this rung
+   has now proved the **main** thread is not among them.
+4. ⊘ **Do NOT default the route.** Four boots is not a posture change; `refuse` stays default —
+   though it is now measurably the *worse* configuration for the guest, which is new.

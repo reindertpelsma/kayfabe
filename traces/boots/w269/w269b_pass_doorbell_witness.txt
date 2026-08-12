@@ -1,0 +1,68 @@
+kayfabe: DOORBELL-XLATE proc=2 chan=12 vchid=VChid(0x13) engine=Ce guest_token=0x00020013 host_token=0x20015 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x20015 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00020015 runlist=2 chid=21 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00020015 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=13 vchid=VChid(0x14) engine=Ce guest_token=0x00020014 host_token=0x20016 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x20016 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00020016 runlist=2 chid=22 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00020016 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=14 vchid=VChid(0x15) engine=Ce guest_token=0x00020015 host_token=0x20017 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x20017 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00020017 runlist=2 chid=23 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00020017 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=15 vchid=VChid(0x16) engine=Ce guest_token=0x00020016 host_token=0x20018 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x20018 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00020018 runlist=2 chid=24 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00020018 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=0 vchid=VChid(0x7) engine=GrCompute guest_token=0x00000007 host_token=0x9 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0x9 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000009 runlist=0 chid=9 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000009 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=1 vchid=VChid(0x8) engine=GrCompute guest_token=0x00000008 host_token=0xa schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0xa scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x0000000a runlist=0 chid=10 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x0000000a ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=2 vchid=VChid(0x9) engine=GrCompute guest_token=0x00000009 host_token=0xb schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0xb scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x0000000b runlist=0 chid=11 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x0000000b ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=3 vchid=VChid(0xa) engine=GrCompute guest_token=0x0000000a host_token=0xc schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0xc scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x0000000c runlist=0 chid=12 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x0000000c ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=4 vchid=VChid(0xb) engine=GrCompute guest_token=0x0000000b host_token=0xd schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0xd scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x0000000d runlist=0 chid=13 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x0000000d ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=5 vchid=VChid(0xc) engine=GrCompute guest_token=0x0000000c host_token=0xe schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0xe scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x0000000e runlist=0 chid=14 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x0000000e ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=6 vchid=VChid(0xd) engine=GrCompute guest_token=0x0000000d host_token=0xf schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0xf scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x0000000f runlist=0 chid=15 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x0000000f ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=7 vchid=VChid(0xe) engine=GrCompute guest_token=0x0000000e host_token=0x10 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=GrCompute host_token=0x10 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000010 runlist=0 chid=16 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000010 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=8 vchid=VChid(0xf) engine=Ce guest_token=0x0001000f host_token=0x10011 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x10011 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00010011 runlist=1 chid=17 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00010011 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=9 vchid=VChid(0x10) engine=Ce guest_token=0x00010010 host_token=0x10012 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x10012 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00010012 runlist=1 chid=18 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00010012 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=10 vchid=VChid(0x11) engine=Ce guest_token=0x00010011 host_token=0x10013 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x10013 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #15 host_token=0x00010013 runlist=1 chid=19 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #15 host_token=0x00010013 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=11 vchid=VChid(0x12) engine=Ce guest_token=0x00010012 host_token=0x10014 schedule=true
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x10014 scheduled=true → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #16 host_token=0x00010014 runlist=1 chid=20 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #16 host_token=0x00010014 ★★★ WROTE — the store instruction executed
+kayfabe: DOORBELL-XLATE proc=2 chan=8 vchid=VChid(0xf) engine=Ce guest_token=0x0001000f host_token=0x10011 schedule=false
+kayfabe-isolate: DOORBELL-VERB engine=Ce host_token=0x10011 scheduled=false → calling ring_doorbell
+kayfabe-isolate: DOORBELL-STORE #17 host_token=0x00010011 runlist=1 chid=17 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #17 host_token=0x00010011 ★★★ WROTE — the store instruction executed
