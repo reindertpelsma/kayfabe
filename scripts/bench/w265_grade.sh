@@ -12,10 +12,16 @@ ARMS="off on"
 
 # ⊘ Absence is `NO-FILE`, never 0. A missing log and a log with none of a thing are different
 # facts and only one of them is about the guest — the zero-byte-artefact trap, one instrument over.
-count() { [ -f "$1" ] || { printf 'NO-FILE'; return; }; grep -c -- "$2" "$1" 2>/dev/null || printf '0'; }
+# ⊘ `grep -c` PRINTS 0 and EXITS 1 when nothing matches, so a `|| printf '0'` fallback appends a
+# SECOND zero and every zero row renders as "0\n0". Measured in w265's own output. The exit status
+# is the wrong thing to branch on here: the count is already on stdout.
+count() { [ -f "$1" ] || { printf 'NO-FILE'; return; }; printf '%s' "$(grep -c -- "$2" "$1" 2>/dev/null)"; }
 countre() { [ -f "$1" ] || { printf 'NO-FILE'; return; }; grep -oE -- "$2" "$1" 2>/dev/null | wc -l; }
 first() { [ -f "$1" ] || { printf 'NO-FILE'; return; }; grep -m1 -oE -- "$2" "$1" 2>/dev/null || printf '(none)'; }
 last()  { [ -f "$1" ] || { printf 'NO-FILE'; return; }; grep -oE -- "$2" "$1" 2>/dev/null | tail -1 || printf '(none)'; }
+# ★ DISTINCT, not occurrences — "8 faults" and "8 DIFFERENT faults" are the exact distinction
+# w265 turned on, and `countre` cannot express it.
+uniqre() { [ -f "$1" ] || { printf 'NO-FILE'; return; }; printf '%s' "$(grep -oE -- "$2" "$1" 2>/dev/null | sort -u | wc -l)"; }
 
 printf '%-36s' 'observable'
 for a in $ARMS; do printf '%-26s' "$a"; done; echo
@@ -59,7 +65,18 @@ row 'R11 placed_as_asked=true'   countre qemu.log 'placed_as_asked=true'
 row 'R11b placed_as_asked=false' countre qemu.log 'placed_as_asked=false'
 
 # ---- R12..R18 — THE HARDWARE ANSWER AND THE GUARDS ---------------------------------------
-row 'R12 host Xid'               count   hostdmesg.log 'Xid'
+# ★★★★★ R12 — THE COUNT IS BLIND, AND w265 PROVED IT. `grep -c Xid` read **8 on both arms**
+# while the faults changed engine (`CE3_PBDMA0`→`CE3`), client (`HUBCLIENT_ESC`→`HUBCLIENT_CE1`),
+# address (8 pushbuffer VAs → 1 semaphore page) and DIRECTION (`VIRT_READ`→`VIRT_WRITE`). Five
+# facts, all invisible to a magnitude. ⇒ A COUNT CANNOT SEE A SUBSTITUTION: when a fix is
+# expected to MOVE a wall rather than remove it, the identity is the instrument and the count is
+# not. The count stays — a fault appearing where there were none is still worth a row — but it is
+# NEVER read alone, and the four identity rows below are part of the scorecard, not of the dump.
+row 'R12 host Xid COUNT (⊘ blind)' count  hostdmesg.log 'Xid'
+row 'R12a Xid ENGINE'            first   hostdmesg.log 'ENGINE [A-Z0-9_]+'
+row 'R12b Xid CLIENT'            first   hostdmesg.log 'HUBCLIENT_[A-Z0-9]+'
+row 'R12c Xid DISTINCT ADDRS'    uniqre  hostdmesg.log 'faulted @ 0x[0-9a-f_]+'
+row 'R12d Xid ACCESS TYPE'       first   hostdmesg.log 'ACCESS_TYPE_[A-Z_]+'
 row 'R14 CE-SUBMIT'              count   qemu.log 'CE-SUBMIT'
 row 'R14b RETIRED'               count   qemu.log 'RETIRED'
 row 'R15 RmInitAdapter failed'   count   dmesg.log 'RmInitAdapter failed'
