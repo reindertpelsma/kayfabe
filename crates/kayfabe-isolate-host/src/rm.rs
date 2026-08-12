@@ -891,6 +891,140 @@ pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
 /// advances `GP_GET`, and **reports no error at all**.
 pub const RING_NOT_A_JOINED_WINDOW: u32 = 0x4B4E;
 
+/// ★★★★★ **WHAT THIS BIRTH WAS OFFERED — three states, and the third is the one that costs.**
+///
+/// # Why this type exists
+///
+/// `w261` booted leg A on a real GA106 and its own `RESULT.md` leads with the hole: *nothing
+/// prints that a channel was born with `RingSource::Guest`*. Zero [`RING_NOT_A_JOINED_WINDOW`]
+/// refusals is consistent with **both** `adopt: Some` succeeding **and** `adopt: None` never
+/// being asked, and the boot log cannot tell them apart. ⇒ Whether leg A2 fired at all was
+/// unknown at `00c3e28`.
+///
+/// ⊘ **Two states would not have closed it.** *"Asked and declined"* and *"never asked"* both
+/// arrive at `alloc_channel` as `adopt: None`, and they mean opposite things: the first says
+/// the address table held no joined binding at the channel's ring VA, the second says nothing
+/// on this path ever looked. `no_counter_fired_is_not_no_record_exists`.
+///
+/// # ★★★ THE DISCRIMINATOR IS ALREADY ON THE WIRE — no new field, no second source of truth
+///
+/// `hosting` distinguishes them, and has since §16.106. [`crate::proto::Request::AllocChannel`]
+/// says so in as many words: *"`(class, params)` of the engine object this channel is being
+/// materialized to host, or `None` for a **doorbell materialization**"*. The two production
+/// birth sites in `kayfabe_isolate::VerbPlan` are exactly:
+///
+/// - `VerbPlan::EngineObject` — `hosting: Some(..)`, and `adopt` is `kayfabe_fwd`'s
+///   `adopted_guest_ring(..)`, consulted **unconditionally** on the `channel.is_none()` branch.
+///   ⇒ `None` here means *the armed path ran and produced nothing*.
+/// - `VerbPlan::Doorbell` — a literal `alloc_channel(vas, engine, None, None)`, whose own
+///   comment says a ring adopted there would be adopted *without the leaf having been joined*.
+///   ⇒ `None` here means *nothing was ever asked*.
+///
+/// ⚠ **That is a two-crate invariant and a comment cannot hold it.** It is pinned by a source
+/// census — `the_birth_witness_can_tell_declined_from_never_asked` in
+/// `tests/guest_ring_census.rs` — which fails if either site stops matching this table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthOffer {
+    /// The plan produced the guest's own ring. **This variant is leg A2 firing.**
+    GuestRing,
+    /// An engine-object birth: the armed path was consulted and produced nothing.
+    Declined,
+    /// A doorbell materialization: by construction it offers no ring at all.
+    NotAsked,
+}
+
+impl BirthOffer {
+    /// Read the three states off the two facts the birth already carries.
+    ///
+    /// ⊘ Deliberately total and deliberately free of `self`: it is the whole reading, it is
+    /// unit-testable without an RM connection, and there is exactly one of it.
+    #[must_use]
+    pub fn read(hosting_present: bool, adopted: bool) -> Self {
+        match (hosting_present, adopted) {
+            // ★ Adoption dominates. A ring that was actually adopted is `GuestRing` whatever
+            // else is true; `hosting` only ever splits the `None` case.
+            (_, true) => Self::GuestRing,
+            (true, false) => Self::Declined,
+            (false, false) => Self::NotAsked,
+        }
+    }
+
+    /// The word that goes on the witness line. ⊘ Three distinct words: a boot log is grepped
+    /// for them, and two states sharing a word is `w261`'s hole restated.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::GuestRing => "GUEST-RING",
+            Self::Declined => "DECLINED",
+            Self::NotAsked => "NOT-ASKED",
+        }
+    }
+
+    /// Why this birth is in this state, in the port's own words — printed beside the word so a
+    /// reader never has to already know the table above.
+    #[must_use]
+    pub fn because(self) -> &'static str {
+        match self {
+            Self::GuestRing => {
+                "the address table held a JoinsGuestWindow binding at this channel's declared \
+                 gpFifoOffset"
+            }
+            Self::Declined => {
+                "an engine-object birth, so the armed path WAS consulted — and the address \
+                 table held no joined binding at this channel's ring VA"
+            }
+            Self::NotAsked => {
+                "a doorbell materialization: this birth path offers no ring at all, so nothing \
+                 was consulted"
+            }
+        }
+    }
+}
+
+/// The per-process birth census.
+///
+/// ⊘ **Process-wide statics rather than [`HostRmBackend`] fields, and that is the correct
+/// granularity rather than a shortcut**: an isolate is a **pool**, one backend per worker, so a
+/// per-backend counter would report a fraction of the isolate's births and a reader would have
+/// to sum lines to get a total. One child process is one isolate; these are that isolate's
+/// numbers.
+mod birth_census {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+    static SEEN: AtomicU64 = AtomicU64::new(0);
+    static GUEST_RING: AtomicU64 = AtomicU64::new(0);
+    static DECLINED: AtomicU64 = AtomicU64::new(0);
+    static NOT_ASKED: AtomicU64 = AtomicU64::new(0);
+    static REFUSED: AtomicU64 = AtomicU64::new(0);
+
+    /// `(nth, guest_ring, declined, not_asked, refused)` — the running totals, taken from the
+    /// same call that produced `nth`, so a line's index and its census can never come from two
+    /// different instants.
+    pub(super) fn tally(offer: super::BirthOffer) -> (u64, u64, u64, u64, u64) {
+        let nth = SEEN.fetch_add(1, Relaxed) + 1;
+        let counter = match offer {
+            super::BirthOffer::GuestRing => &GUEST_RING,
+            super::BirthOffer::Declined => &DECLINED,
+            super::BirthOffer::NotAsked => &NOT_ASKED,
+        };
+        counter.fetch_add(1, Relaxed);
+        (
+            nth,
+            GUEST_RING.load(Relaxed),
+            DECLINED.load(Relaxed),
+            NOT_ASKED.load(Relaxed),
+            REFUSED.load(Relaxed),
+        )
+    }
+
+    /// Count a birth that named the guest's ring and was **refused** by the adapter's own
+    /// membership check. ⊘ Counted apart from `GUEST_RING`, because *"RM was told"* and *"we
+    /// refused to tell RM"* are the two facts a reader most needs kept separate.
+    pub(super) fn refuse() -> u64 {
+        REFUSED.fetch_add(1, Relaxed) + 1
+    }
+}
+
 /// Classify a failure from a mapped region: a bounds refusal, or a syscall.
 ///
 /// Deliberately a different function from [`ioctl_error`]. They share the syscall arm and
@@ -3414,14 +3548,38 @@ impl RmBackend for HostRmBackend {
         // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
         // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
         // no engine type is not a channel with a default one, it is a channel on runlist 0.
+        // ★★★★★ **THE BIRTH WITNESS — read BEFORE `hosting` is consumed.** See [`BirthOffer`]
+        // for why two states would not have closed `w261`'s hole, and why the discriminator is
+        // `hosting` rather than a new field.
+        let offer = BirthOffer::read(hosting.is_some(), adopt.is_some());
         let engine_type = declared_channel_engine_type(engine, hosting)
             .or_else(|| engine_type_for(engine))
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
-        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until this
-        // line `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and it
-        // was the R31 diagnostic probe; every host channel a guest ever caused was
+        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
+        // `scripts/bench/boot_capture.sh` redirects to `run_<tag>_qemu.log`. Same reasoning as
+        // `ce_copy`'s `CE-SUBMIT` line: the evidence is a file the boot itself wrote, not a
+        // session transcript nobody can re-read.
+        //
+        // ⊘⊘ **IT PRINTS AND IT DECIDES NOTHING.** No branch below reads `offer`, no refusal is
+        // gated on it, no ring byte is read and no method is decoded. Deleting every line of
+        // this witness would leave the channel RM is asked for byte-identical.
+        let (nth, guest_ring, declined, not_asked, refused) = birth_census::tally(offer);
+        let census = format!(
+            "[births={nth} guest_ring={guest_ring} declined={declined} not_asked={not_asked} \
+             refused={refused}]"
+        );
+        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until
+        // `361fca8` `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and
+        // it was the R31 diagnostic probe; every host channel a guest ever caused was
         // `RingSource::Ours(None)`.
         let Some(ring) = adopt else {
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} → \
+                 RingSource::Ours(None) {census}",
+                vas.raw(),
+                offer.as_str(),
+                offer.because(),
+            );
             return self.alloc_channel_on(vas, engine_type);
         };
         // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
@@ -3431,9 +3589,39 @@ impl RmBackend for HostRmBackend {
             .fb_joins
             .as_ref()
             .is_some_and(|t| t.is_joined_object(raw_memory));
+        // ⊘ The guest's four numbers are printed on the refusal side too — `ce_copy`'s stated
+        // reason, one plane over: a witness that only speaks when the thing succeeded is silent
+        // on exactly the outcome it is run to see.
+        let named = format!(
+            "memory={:#x} ring_va={:#x} gp_fifo_va={:#x} entries={}",
+            ring.memory.raw(),
+            ring.ring_va,
+            ring.gp_fifo_va,
+            ring.gp_fifo_entries,
+        );
         if !joined {
+            let n = birth_census::refuse();
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+                 joined=NO → REFUSED RING_NOT_A_JOINED_WINDOW (this isolate did not mint that \
+                 object by joining a framebuffer leaf; refused={n}) {census}",
+                vas.raw(),
+                offer.as_str(),
+            );
             return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW));
         }
+        // ★★★★★ **THE LINE THAT PROVES LEG A2 FIRED.** Absent on a disarmed run by
+        // construction — `adopted_guest_ring` is `None` when nothing joined the leaf — and
+        // present exactly when a host channel is about to be born over memory this port did not
+        // allocate. ⇒ The `off`/`ring` differential IS this line, against the `DECLINED` line
+        // it replaces.
+        eprintln!(
+            "kayfabe-isolate: GR-BIRTH #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+             joined=YES ⇒ {} → alloc_channel_over_guest_ring {census}",
+            vas.raw(),
+            offer.as_str(),
+            offer.because(),
+        );
         self.alloc_channel_over_guest_ring(
             vas,
             engine_type,
@@ -6549,6 +6737,47 @@ impl HostRmBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★★★★★ **THE WITNESS'S WHOLE READING, as a table.**
+    ///
+    /// ⊘ Four rows for three states, and the fourth is the one that matters: `(false, true)`
+    /// — *"no hosting, but a ring was adopted"* — is a shape no production caller produces,
+    /// and it must read as `GuestRing` rather than as anything cleverer. **A ring that was
+    /// actually adopted is `GuestRing` whatever else is true**; the `hosting` discriminator
+    /// only ever splits the `None` case. Getting that backwards would report a real adoption
+    /// as *"never asked"*, which is precisely the mislabelling this rung exists to remove.
+    #[test]
+    fn the_birth_offer_reads_three_states_and_adoption_dominates() {
+        assert_eq!(BirthOffer::read(true, true), BirthOffer::GuestRing);
+        assert_eq!(BirthOffer::read(false, true), BirthOffer::GuestRing);
+        assert_eq!(BirthOffer::read(true, false), BirthOffer::Declined);
+        assert_eq!(BirthOffer::read(false, false), BirthOffer::NotAsked);
+        // ⊘ The three words are distinct and non-empty: a boot log is grepped for them, and
+        // two states sharing a word is `w261`'s hole restated.
+        let words = [
+            BirthOffer::GuestRing.as_str(),
+            BirthOffer::Declined.as_str(),
+            BirthOffer::NotAsked.as_str(),
+        ];
+        for (i, a) in words.iter().enumerate() {
+            for b in &words[i + 1..] {
+                assert_ne!(a, b, "two birth states print the same word");
+            }
+            assert!(!a.is_empty(), "a birth state prints nothing at all");
+        }
+        // ★ And each carries its own reason, so a reader never has to already know the table.
+        assert!(
+            BirthOffer::Declined.because().contains("WAS consulted"),
+            "`DECLINED` must state that the armed path RAN — that is the entire difference \
+             between it and `NOT-ASKED`, and it is the sentence a boot is graded on"
+        );
+        assert!(
+            BirthOffer::NotAsked
+                .because()
+                .contains("nothing was consulted"),
+            "`NOT-ASKED` must state that nothing was consulted"
+        );
+    }
 
     /// ★★★ R2's gate, over the arm that used to be silent.
     ///
