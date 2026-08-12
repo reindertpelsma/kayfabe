@@ -65,7 +65,7 @@ $G 'cat > /tmp/nvdiff/run.sh' <<'GUESTEOF'
 #!/bin/sh
 rm -f /tmp/nvdiff/out/ce_r1.jsonl /tmp/nvdiff/out/ce_r1.stdout /tmp/nvdiff/run.rc
 echo "STARTED $(date -Is)" > /tmp/nvdiff/run.started
-setsid sh -c 'cd /tmp/nvdiff && NVDIFF_OUT=/tmp/nvdiff/out/ce_r1.jsonl NVDIFF_MAXBUF=8192 \
+setsid sh -c 'cd /tmp/nvdiff && NVDIFF_OUT=/tmp/nvdiff/out/ce_r1.jsonl NVDIFF_MAXBUF=65536 \
      LD_PRELOAD=/tmp/nvdiff/out/nvdiff_shim.so timeout 240 ./out/nvd_prog ce \
      > /tmp/nvdiff/out/ce_r1.stdout 2>&1; echo $? > /tmp/nvdiff/run.rc' \
      </dev/null >/dev/null 2>&1 &
