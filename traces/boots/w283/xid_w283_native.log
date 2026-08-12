@@ -1,0 +1,100 @@
+[xid-watch] tag=w283_native  host=ubuntu  utc=2026-08-12T23:08:15Z
+[xid-watch] command: /workspace/bench/cargo-target-w268/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder --ce-client
+[xid-watch] host_dmesg_lines=1020  (readable — the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3060, 580.159.04
+[xid-watch] xid_before=88
+[xid-watch] --- command output begins ---
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d015c2
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=2169da81a7d25b803e939aada1183d77bf3ebdee
+info  R33 raw CE client   = GPU 0, euid 0 — a copy engine allocated, mapped, submitted and completed through RAW RM IOCTLS ONLY. No libcuda is loaded by this process
+info  R33 the bar is FOUR facts: the bytes moved (read back through a mapping that is not the one written), the semaphore carries the DECLARED payload at the DECLARED address, GP_GET reached GP_PUT, and the VA probe REFUSES where something is mapped. ⊘ `Ok(())` from any call under test is not one of them
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001), GP_GET 1 caught GP_PUT 1 — read back through an INDEPENDENT mapping (its own device node, its own mmap, a kernel-chosen address)
+ok    R33 ADDRESS SPACES  = operands in range 0xcafe0005; the channel's ring, USERD and semaphore in range 0xcafe0009 (two different spaces — the w229 executor split); ring 0x0000000120020000, semaphore 0x0000000120022000. ⊘⊘ EVERY VERDICT BELOW IS SCOPED TO THESE TWO HANDLES and to no other page table — a guest channel's PDB is not asked anything by this rung
+★     R33 arm 2 OCCUPIED  = a fresh object asked for 0x0000000120020000 in range 0xcafe0009 and RM REFUSED it (NoMemory) — the ring really is there, so the probe can detect occupancy and arm 3's answer is a measurement
+★     R33 arm 3 FREE      = 0x0000000900000000 is UNCLAIMED in range 0xcafe0009 — a fresh object took the address and RM reported it back. ⇒ THIS IS THE `is this GPU VA mapped?` PRIMITIVE, with both polarities calibrated on one run and NO DEBUGGER involved
+info  R33 arm 4           = NOT RUN (pass `--ce-client-fault`). It points a real copy engine at an unmapped VA, which provokes `Xid 31 FAULT_PDE` and kills its own channel — opt-in, and it belongs under scripts/bench/host_xid_watch.sh
+★     R33 raw CE client   = a copy engine was allocated, mapped, submitted and COMPLETED with no libcuda in the process, and a GPU VA was probed in both polarities
+=== IOCTL CENSUS (R33 raw CE client, arms 1-3) ===
+  total=53 failed=0 logged=53 dropped=0
+  --- by phase (⊘ the shortfall against `total` is ioctls issued outside any phase):
+                R0-R6 bring-up  7
+                    R7 vaspace  2
+              R33 arm1 ce-copy  28
+           R33 arm2/3 va-probe  7
+                  R33 teardown  9
+                           SUM  53 of 53 accounted
+  --- by request, `_IOC_TYPE`/`_IOC_NR` (the driver's own NV_ESC number):
+      magic 0x46 nr 210 (0xd2) CHECK_VERSION_STR          x1
+      magic 0x46 nr 201 (0xc9) REGISTER_FD                x1
+      magic 0x46 nr  43 (0x2b) RM_ALLOC                   x17
+      magic 0x46 nr  78 (0x4e) RM_MAP_MEMORY              x6
+      magic 0x46 nr  87 (0x57) RM_MAP_MEMORY_DMA          x7
+      magic 0x46 nr  42 (0x2a) RM_CONTROL                 x3
+      magic 0x46 nr  88 (0x58) RM_UNMAP_MEMORY_DMA        x6
+      magic 0x46 nr  41 (0x29) RM_FREE                    x12
+  --- THE SEQUENCE, in order (seq: nr name  size  phase  errno):
+         1: nr 210 CHECK_VERSION_STR          size    72  R0-R6 bring-up         ok
+         2: nr 201 REGISTER_FD                size     4  R0-R6 bring-up         ok
+         3: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         4: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         5: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         6: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         7: nr  78 RM_MAP_MEMORY              size    56  R0-R6 bring-up         ok
+         8: nr  43 RM_ALLOC                   size    32  R7 vaspace             ok
+         9: nr  43 RM_ALLOC                   size    32  R7 vaspace             ok
+        10: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        11: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        12: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        13: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        14: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        15: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        16: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        17: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        18: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        19: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        20: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        21: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        22: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        23: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        24: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        25: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok
+        26: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok
+        27: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        28: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        29: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        30: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok
+        31: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        32: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        33: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        34: nr  41 RM_FREE                    size    16  R33 arm1 ce-copy       ok
+        35: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        36: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        37: nr  41 RM_FREE                    size    16  R33 arm1 ce-copy       ok
+        38: nr  43 RM_ALLOC                   size    32  R33 arm2/3 va-probe    ok
+        39: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm2/3 va-probe    ok
+        40: nr  41 RM_FREE                    size    16  R33 arm2/3 va-probe    ok
+        41: nr  43 RM_ALLOC                   size    32  R33 arm2/3 va-probe    ok
+        42: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm2/3 va-probe    ok
+        43: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm2/3 va-probe    ok
+        44: nr  41 RM_FREE                    size    16  R33 arm2/3 va-probe    ok
+        45: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        46: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 teardown           ok
+        47: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        48: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        49: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        50: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        51: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        52: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        53: nr  41 RM_FREE                    size    16  R33 teardown           ok
+=== END IOCTL CENSUS ===
+done — raw CE client only (ALL ARMS MET)
+[xid-watch] --- command output ends (rc=0) ---
+[xid-watch] xid_after=88
+[xid-watch] ★ HOST Xid CLEAN across the command — 88 before, 88 after, read from a
+[xid-watch]   ring buffer PROVED READABLE in phase 0 (1020 lines). ⊘ That proof is what
+[xid-watch]   separates this line from the same line printed by a blind instrument.
+[xid-watch] evidence: /workspace/bench/xid_w283_native.log

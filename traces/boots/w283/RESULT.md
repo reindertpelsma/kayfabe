@@ -1,18 +1,27 @@
 # w283 / RESULT — HARDWARE WROTE THE GUEST'S OWN SEMAPHORE. TWO OF THREE, AND THE THIRD IS A DIFFERENT SHAPE.
 
-## ★★★★★ THE HEADLINE — `w283c_client`, real GA106, revision `7dbf2f0`
+## ★★★★★ THE HEADLINE — `w283d_client`, real GA106, revision `84fb5e0`
 
 ```text
-CE-SUBMIT dst=0x120010000 len=4096 by=HostCe gp_get=1 gp_put=1 sem=0x00000001
-          want=0x00000001 → RETIRED  guest_rel=CARRIED@0x120022000 payload=0x00000001
-HOST_DMESG_XID=0        faulted @ = []
+CE-SUBMIT dst=0x120010000 len=4096 by=HostCe … sem=0x00000001 want=0x00000001 → RETIRED
+          guest_rel=CARRIED@0x120022000 payload=0x00000001
+HOST_DMESG_XID=0        faulted @ = []        #255 → QUIET
 
-R33 arm 1 COPY = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33,
-                 dst[last] 0xc0fff232 (want 0xc0fff232),
-                 engine semaphore 0x00000001 (declared 0x00000001),   ★ CRITERION 3
-                 GP_GET 0 ... GP_PUT 1                                 ⊘ CRITERION 1
-                 — read back through an INDEPENDENT mapping
+R33 arm 1 COPY = dst[0]    0x3f0011cc -> 0xc0ffee33 (want 0xc0ffee33)   ★ CRITERION 2
+                 dst[last]              0xc0fff232 (want 0xc0fff232)   ★ CRITERION 2
+                 semaphore              0x00000001 (want 0x00000001)   ★★★ CRITERION 3
+                 GP_GET 0   GP_PUT 1                                    ⊘ CRITERION 1
+  — ★★★ THREE OF FOUR: the bytes MOVED and the semaphore carries the DECLARED payload at
+    the DECLARED address — only GP_GET did not reach GP_PUT. ⊘ That cursor is THIS
+    channel's own USERD; a forwarding path that executes the work on a DIFFERENT host
+    channel cannot advance it, and this line is what says so
+R33_RC=1
 ```
+
+★ **The native arm, same binary, minutes earlier, still passes all four**
+(`GP_GET 1 caught GP_PUT 1`) — so the instrument fix below did not break the known-positive,
+and a guest-side failure is still never ambiguous between *"we built it wrong"* and *"the guest
+path is broken"*.
 
 | # | criterion, **in the guest** | |
 |---|---|---|
@@ -238,8 +247,9 @@ arm now names **which** of the four failed (its old text branched on the cursors
 described a whole-submission failure even when the bytes had moved and the semaphore had landed —
 the exact state `w283c` reached). ⊘ `copied()` is deliberately unchanged: *"did the bytes move and
 did the engine retire"* is a real, separately useful question; the conjunction belongs at the
-verdict. `w283d` is the re-run with the corrected instrument, and its expected reading is
-**`R33_RC=1` with `★★★ THREE OF FOUR`** — a *more honest* number for a *better* result.
+verdict. `w283d` is the re-run with the corrected instrument, and it read exactly as pre-stated:
+**`R33_RC=1`** with **`★★★ THREE OF FOUR`** — a *more honest* number for a *better* result,
+and the native arm still `★` on all four.
 
 ⚠ **`guest_rel=CARRIED` means EMITTED, not OBSERVED.** The `CE-SUBMIT` line says what we put in
 the pushbuffer; hardware wrote it **iff** that VA resolves in the executor VAS. The only witness

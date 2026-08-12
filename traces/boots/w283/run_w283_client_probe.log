@@ -1,0 +1,174 @@
+=== boot_capture tag=w283_client at 2026-08-12T23:09:38+00:00 ===
+=== source revision: 2169da81a ===
+=== qemu binary: -rwxr-xr-x 1 root root 87959368 Aug 12 23:08 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:2169da81a7d25b803e939aada1183d77bf3ebdee 
+=== BUILD_REV.txt says (informational, NOT authoritative): kayfabe-rev:5feac9090bc58129c9906e2222f3934ae313a980
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w282/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w282/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Aug 12 23:09:54 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 12 23:09 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 12 23:09 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 12 23:09 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 12 23:09 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 12 23:09 .
+drwxr-xr-x 18 root root   4000 Aug 12 23:09 ..
+cr--------  1 root root 240, 1 Aug 12 23:09 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 12 23:09 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kayfabe_w282/scripts/bench/r33_hook_ce_client.sh at 2026-08-12T23:09:58+00:00 ===
+=== R33 milestone 2 — the raw CE client, in the guest ===
+--- the binary under test (⊘ the native arm must carry the SAME md5):
+    /workspace/bench/cargo-target-w268/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder   2001064 bytes  md5 a10e71f2d765c3f9c9b84141883be37d
+    /workspace/bench/cargo-target-w268/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, BuildID[sha1]=51a23f5a6c0cdda23f46a8d8f49e626ed45b0325, not stripped
+    ★ STATIC — it will run in the guest's userland
+=== guest preconditions (⊘ each is a DIFFERENT failure from 'the client did not work') ===
+GUEST_UNAME=6.8.0-136-generic
+GUEST_NVIDIA_DEVS=[/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 ]
+GUEST_NVRM_LOADED=1
+GUEST_EUID=1000
+=== push the binary into the guest ===
+GUEST_MD5=a10e71f2d765c3f9c9b84141883be37d
+GUEST_EXECUTABLE=yes
+=== run it, under its own deadline, with a START marker and an RC terminator ===
+--- the client's own output, verbatim ---
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00013
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=2169da81a7d25b803e939aada1183d77bf3ebdee
+info  R33 raw CE client   = GPU 0, euid 1000 — a copy engine allocated, mapped, submitted and completed through RAW RM IOCTLS ONLY. No libcuda is loaded by this process
+info  R33 the bar is FOUR facts: the bytes moved (read back through a mapping that is not the one written), the semaphore carries the DECLARED payload at the DECLARED address, GP_GET reached GP_PUT, and the VA probe REFUSES where something is mapped. ⊘ `Ok(())` from any call under test is not one of them
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+FAIL  R33 arm 1 COPY      = dst[0] 0x3f0011cc -> 0x3f0011cc (want 0xc0ffee33), dst[last] 0x3f0011cc (want 0xc0fff232), semaphore 0x00000000 (want 0x00000001), GP_GET 0 GP_PUT 1 — the entry was NEVER fetched: USERD, the doorbell token, or the schedule
+ok    R33 ADDRESS SPACES  = operands in range 0xcafe0005; the channel's ring, USERD and semaphore in range 0xcafe0009 (two different spaces — the w229 executor split); ring 0x0000000120020000, semaphore 0x0000000120022000. ⊘⊘ EVERY VERDICT BELOW IS SCOPED TO THESE TWO HANDLES and to no other page table — a guest channel's PDB is not asked anything by this rung
+★     R33 arm 2 OCCUPIED  = a fresh object asked for 0x0000000120020000 in range 0xcafe0009 and RM REFUSED it (NoMemory) — the ring really is there, so the probe can detect occupancy and arm 3's answer is a measurement
+★     R33 arm 3 FREE      = 0x0000000900000000 is UNCLAIMED in range 0xcafe0009 — a fresh object took the address and RM reported it back. ⇒ THIS IS THE `is this GPU VA mapped?` PRIMITIVE, with both polarities calibrated on one run and NO DEBUGGER involved
+info  R33 arm 4           = NOT RUN (pass `--ce-client-fault`). It points a real copy engine at an unmapped VA, which provokes `Xid 31 FAULT_PDE` and kills its own channel — opt-in, and it belongs under scripts/bench/host_xid_watch.sh
+FAIL  R33 raw CE client   = at least one arm above did not meet its bar
+=== IOCTL CENSUS (R33 raw CE client, arms 1-3) ===
+  total=53 failed=0 logged=53 dropped=0
+  --- by phase (⊘ the shortfall against `total` is ioctls issued outside any phase):
+                R0-R6 bring-up  7
+                    R7 vaspace  2
+              R33 arm1 ce-copy  28
+           R33 arm2/3 va-probe  7
+                  R33 teardown  9
+                           SUM  53 of 53 accounted
+  --- by request, `_IOC_TYPE`/`_IOC_NR` (the driver's own NV_ESC number):
+      magic 0x46 nr 210 (0xd2) CHECK_VERSION_STR          x1
+      magic 0x46 nr 201 (0xc9) REGISTER_FD                x1
+      magic 0x46 nr  43 (0x2b) RM_ALLOC                   x17
+      magic 0x46 nr  78 (0x4e) RM_MAP_MEMORY              x6
+      magic 0x46 nr  87 (0x57) RM_MAP_MEMORY_DMA          x7
+      magic 0x46 nr  42 (0x2a) RM_CONTROL                 x3
+      magic 0x46 nr  88 (0x58) RM_UNMAP_MEMORY_DMA        x6
+      magic 0x46 nr  41 (0x29) RM_FREE                    x12
+  --- THE SEQUENCE, in order (seq: nr name  size  phase  errno):
+         1: nr 210 CHECK_VERSION_STR          size    72  R0-R6 bring-up         ok
+         2: nr 201 REGISTER_FD                size     4  R0-R6 bring-up         ok
+         3: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         4: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         5: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         6: nr  43 RM_ALLOC                   size    32  R0-R6 bring-up         ok
+         7: nr  78 RM_MAP_MEMORY              size    56  R0-R6 bring-up         ok
+         8: nr  43 RM_ALLOC                   size    32  R7 vaspace             ok
+         9: nr  43 RM_ALLOC                   size    32  R7 vaspace             ok
+        10: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        11: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        12: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        13: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        14: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        15: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        16: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        17: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        18: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        19: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        20: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        21: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        22: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm1 ce-copy       ok
+        23: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        24: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        25: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok
+        26: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok
+        27: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        28: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        29: nr  43 RM_ALLOC                   size    32  R33 arm1 ce-copy       ok
+        30: nr  42 RM_CONTROL                 size    32  R33 arm1 ce-copy       ok
+        31: nr  78 RM_MAP_MEMORY              size    56  R33 arm1 ce-copy       ok
+        32: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        33: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        34: nr  41 RM_FREE                    size    16  R33 arm1 ce-copy       ok
+        35: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        36: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm1 ce-copy       ok
+        37: nr  41 RM_FREE                    size    16  R33 arm1 ce-copy       ok
+        38: nr  43 RM_ALLOC                   size    32  R33 arm2/3 va-probe    ok
+        39: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm2/3 va-probe    ok
+        40: nr  41 RM_FREE                    size    16  R33 arm2/3 va-probe    ok
+        41: nr  43 RM_ALLOC                   size    32  R33 arm2/3 va-probe    ok
+        42: nr  87 RM_MAP_MEMORY_DMA          size    64  R33 arm2/3 va-probe    ok
+        43: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 arm2/3 va-probe    ok
+        44: nr  41 RM_FREE                    size    16  R33 arm2/3 va-probe    ok
+        45: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        46: nr  88 RM_UNMAP_MEMORY_DMA        size    48  R33 teardown           ok
+        47: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        48: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        49: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        50: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        51: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        52: nr  41 RM_FREE                    size    16  R33 teardown           ok
+        53: nr  41 RM_FREE                    size    16  R33 teardown           ok
+=== END IOCTL CENSUS ===
+done — raw CE client only (WITH FAILED EVIDENCE)
+R33_RC=1
+--- end of the client's output ---
+=== ★★★★★ THE GRADE (anchored — an unanchored 'R33' matches the info banner) ===
+    R33_VERDICT_LINES=0
+    R33_RC=1
+    IOCTL_CENSUS_  total=53 failed=0
+    --- the first non-★ arm, if any (this is the minimal repro's head):
+      FAIL  R33 arm 1 COPY      = dst[0] 0x3f0011cc -> 0x3f0011cc (want 0xc0ffee33), dst[last] 0x3f0011cc (want 0xc0fff232), semaphore 0x00000000 (want 0x00000001), GP_GET 0 GP_PUT 1 — the entry was NEVER fetched: USERD, the doorbell token, or the schedule
+      FAIL  R33 raw CE client   = at least one arm above did not meet its bar
+    --- the LAST ioctl the client issued (where it died, if it did):
+              51: nr  41 RM_FREE                    size    16  R33 teardown           ok
+              52: nr  41 RM_FREE                    size    16  R33 teardown           ok
+              53: nr  41 RM_FREE                    size    16  R33 teardown           ok
+=== the guest driver's own word across the run ===
+=== R33 milestone 2 hook done ===
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 1021 → 1021) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0
