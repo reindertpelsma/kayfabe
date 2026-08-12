@@ -93,9 +93,23 @@ executed by the same engine in submission order — **there is no ordering of th
 which the payload lands and the bytes did not.** And our own release is still emitted **last**,
 so `await_semaphore` returning means the guest's release has retired too rather than racing it.
 
-★ Attached to the **last span of that launch only**, and **only when it is `HostCe`** — a span on
-`CeExecutor::Ours` keeps `cpu_ce::write_completion` as its writer, because two writers for one
-payload is `a_second_source_of_truth_beside_a_complete_value`.
+★ Attached to the **last span of that launch only**, and **only when it is `HostCe`** — this
+field is the *host engine's* instruction, and putting it on a CPU-executed span would name a
+writer that is not the one running the work.
+
+### ⊘⊘ AND A CORRECTION TO MY OWN COMMENT, made before anyone could rely on it
+
+My first draft justified the `HostCe`-only scoping with *"a span on `CeExecutor::Ours` keeps
+`kayfabe_rt::cpu_ce::write_completion` as its writer, unchanged"*. **True of the design and false
+of the tree.** `[measured 2026-08-13, `git grep write_completion` over the whole workspace]` that
+function — the documented `sem_releases` consumer — has **zero call sites**; every hit is its own
+definition or a doc reference. So `sem_releases` is populated on the forwarding path and
+**dropped**, which is exactly what every control arm measures (`semaphore 0x00000000`, every
+boot, including `w282`'s and `w283`'s).
+
+⇒ **There is exactly ONE writer for a guest completion in this tree, it is the engine, and it is
+this field.** Left standing, that comment would have read as *"the other arm is already
+handled"* — a citation that looks like provenance and resolves to nothing.
 ★ `u32::try_from` on the payload, and a wider one is **declined, never truncated**: a one-word
 release cannot carry it, and writing a *different* value at the address the guest polls is worse
 than writing none.
