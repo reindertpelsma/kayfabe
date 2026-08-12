@@ -138,6 +138,39 @@ typedef struct NvkvmRegionSpec {
  * together so a truncation is visible rather than silent. */
 #define NVKVM_BAR1_LOG 16u
 
+/* ★★★★★ ITEM 2 / w262 — GP_PUT INSIDE USERD, and WHY IT IS PRINTED LIVE.
+ *
+ * `kayfabe_abi::submit::USERD_GP_PUT` is 0x8c.  A guest CPU store of the GPFIFO put pointer
+ * to its own USERD is therefore a 4-byte BAR1 write whose page offset is exactly 0x8c —
+ * `[measured, boot s17_e8fde62 and ~78 boots since]` off=0xa008c, 0xc008c, 0xe008c, 0x10008c.
+ *
+ * ⊘⊘ THOSE ROWS EXIST ALREADY AND CANNOT ANSWER AN ORDERING QUESTION.  nvkvm_bar1_record
+ * STORES them and prints NOTHING; the array is dumped once, from nvkvm_report_audit, at
+ * teardown.  So the timestamp on a `BAR1[2] WRITE off=0xa008c` row is the DUMP's, not the
+ * guest's, and the row sits after every other line in the file.  `[measured 2026-08-12,
+ * traces/boots/w261/run_w261_ring_qemu.log]` the first GR channel birth is at ~05:43:36 and
+ * the BAR1 dump is at 05:46:34 — a fixed 178 s that is the distance to power-down and not a
+ * fact about the guest.  A reader ordering `GP_PUT` against the engine-object alloc off that
+ * file gets the FAVOURABLE answer, on every boot, whatever the truth is.
+ *
+ * ⇒ This prints AT THE INSTANT OF THE STORE, so it carries QEMU's own -msg timestamp and
+ * interleaves with `kayfabe: ENGINE-OBJECT …` in file order.  That is exactly the argument
+ * KayfabeRegWrite::doorbell already makes one aperture over: *"a doorbell is a property of
+ * ONE WRITE … so the shell logs it as it happens, against QEMU's own -msg timestamp … A
+ * per-boot counter cannot be stamped."*
+ *
+ * ⚠ WHAT IT DOES **NOT** SAY, printed on the line itself.  Nothing here joins a BAR1 offset
+ * to a CHANNEL — `kayfabe-mmu`'s gpga.rs forbids reverse-resolution by address in as many
+ * words — so this witnesses *when the guest first advances a cursor at all*, never *which
+ * channel's*.  And the four recorded pairs are attributable, from the driver's own source
+ * (see NvkvmState::bar1_log), to nvidia-uvm's internal_channel_submit_work, whose channels
+ * are NOT the GR channel leg B would adopt.
+ *
+ * ⊘ Bounded prints, UNBOUNDED total: the count is reported at teardown from a counter this
+ * cap never touches, so a printed count can never be mistaken for a total. */
+#define NVKVM_USERD_GP_PUT 0x8cu
+#define NVKVM_GP_PUT_LIVE  8u
+
 struct NvkvmState {
     PCIDevice parent_obj;
 
@@ -241,6 +274,12 @@ struct NvkvmState {
         bool     is_write;
     } bar1_log[NVKVM_BAR1_LOG];
     unsigned bar1_log_used;
+    /* ★★★★★ ITEM 2 / w262 — the GP_PUT-shaped BAR1 writes, counted without a cap, and the
+     * number of them that were printed live.  TWO numbers for the reason NvkvmState's IRQ
+     * pair gives: "we printed none because there were none" and "we printed none because the
+     * cap was already spent" are the same absence in a log otherwise. */
+    uint64_t gp_put_writes;
+    unsigned gp_put_printed;
     uint64_t irq_requests_dropped;
     /* ★★★ #151.  Message-signalled vectors this device actually delivered, and the ones it
      * could not because the guest had not enabled the table.  TWO numbers, because they are
@@ -648,6 +687,32 @@ static uint64_t nvkvm_bar1_read(void *opaque, hwaddr addr, unsigned size)
     return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size);
 }
 
+/* ★★★★★ ITEM 2 / w262 — say it WHEN IT HAPPENS.  See NVKVM_USERD_GP_PUT for why the
+ * teardown dump cannot, and for what this line does and does not claim.
+ *
+ * ⊘ It reads the offset and the value of a write this handler already has in registers, and
+ * prints them.  No ring byte is read, no method is decoded, and nothing downstream branches
+ * on it — it runs BEFORE kayfabe_shim_regs_write and does not touch `w`. */
+static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, unsigned size)
+{
+    if (size != 4 || (addr & 0xfffu) != NVKVM_USERD_GP_PUT) {
+        return;
+    }
+    s->gp_put_writes++;
+    if (s->gp_put_printed >= NVKVM_GP_PUT_LIVE) {
+        return;
+    }
+    s->gp_put_printed++;
+    info_report("nvkvm: BAR1 GP_PUT #%" PRIu64 " aperture +0x%" PRIx64 " val=0x%" PRIx64
+                " — the guest advanced a GPFIFO put pointer in ITS OWN USERD (offset 0x%x). "
+                "⊘ WHICH channel is NOT known here: nothing joins a BAR1 offset to a "
+                "channel, so this orders the guest's FIRST cursor advance against the host "
+                "channel births above, never a particular channel's against its own. "
+                "(printed %u of %u; the total is reported at teardown and is not capped)",
+                s->gp_put_writes, addr, val, NVKVM_USERD_GP_PUT,
+                s->gp_put_printed, NVKVM_GP_PUT_LIVE);
+}
+
 static void nvkvm_bar1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     NvkvmState *s = opaque;
@@ -655,6 +720,7 @@ static void nvkvm_bar1_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
 
     s->trap_writes++;
     nvkvm_bar1_record(s, (uint64_t)addr, val, size, true);
+    nvkvm_bar1_gp_put_live(s, (uint64_t)addr, val, size);
     memset(&w, 0, sizeof(w));
     kayfabe_shim_regs_write(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size, val, &w);
 
@@ -1972,11 +2038,25 @@ static void nvkvm_report_registers(NvkvmState *s)
                         ? " — ⊘ BOUNDED-LOG, later accesses are not shown"
                         : " — complete");
         for (k = 0; k < s->bar1_log_used; k++) {
-            info_report("nvkvm:     BAR1[%" PRIu64 "] %s off=0x%" PRIx64 " size=%u val=0x%" PRIx64,
+            info_report("nvkvm:     BAR1[%" PRIu64 "] %s off=0x%" PRIx64 " size=%u val=0x%" PRIx64
+                        " ⊘ NOT A TIMELINE — this row was RECORDED when it happened and is "
+                        "PRINTED now; its timestamp is this dump's. Order it against nothing.",
                         k, s->bar1_log[k].is_write ? "WRITE" : "read ",
                         s->bar1_log[k].addr, s->bar1_log[k].size, s->bar1_log[k].val);
         }
     }
+    /*
+     * ★★★★★ ITEM 2 / w262 — THE UNCAPPED TOTAL, beside the capped print count.
+     *
+     * ⊘ Printed unconditionally, zero included.  A boot with no GP_PUT store at all and a
+     * boot whose witness was never compiled in are the same absence otherwise — the
+     * `dlen=0` shape, and the reason this block states its own zero.
+     */
+    info_report("nvkvm: BAR1 GP_PUT: %" PRIu64 " write(s) at USERD+0x%x, %u printed LIVE "
+                "(cap %u). ⊘ The live lines above carry the guest's own instants and are "
+                "the ONLY rows here that may be ordered against anything; this total is "
+                "uncapped and the per-row cap never touches it.",
+                s->gp_put_writes, NVKVM_USERD_GP_PUT, s->gp_put_printed, NVKVM_GP_PUT_LIVE);
 
     /*
      * ★★★ #149 — THE TRANSLATED WINDOW.  Printed unconditionally, all-zeros included, for
