@@ -1,8 +1,33 @@
 # A bad application pointer, as a simulated GPU fault (task #111)
 
+> ### ⊘⊘⊘ STATUS — 2026-08-12 / **DESIGN-ONLY AND UNWIRED.** Read this before §9
+>
+> ★★★ **"Not exercised on a live guest" was too kind, and the difference matters.** `w272`
+> (`docs/design/w272_the_announcement_refuted.md`) measured this chain at `416088c`:
+> **`kayfabe_fwd::fault_facts` → `kayfabe_core::fault::verdict` → `kayfabe_rmrpc::
+> rc_triggered_for` → `FaultEmission::deliver` has ZERO non-test callers, end to end** —
+> `fault_facts` has zero callers even in tests. Decisively, the `except_type` the emitter
+> cannot be called without — `ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT` — has **no runtime
+> producer anywhere in the tree**.
+> ⇒ This is **not** *"built but unexercised"*; it is **built, visible, unit-tested, and
+> unreachable**. ★ `the_orphan_gate_asks_visibility_not_reachability`.
+>
+> ⚠ **And the trigger named in §1 is not the fault the campaign is currently taking.** §1's
+> trigger is *our own* ring-gate refusal (`FwdFault::Address(AddressFault::Miss)`) — the case
+> where **we say no**. The live `Xid 31` of `w268`–`w270` is the opposite case: we **admitted,
+> pinned and forwarded**, and the *host* GPU faulted downstream of our gate. That fault is
+> reported to the **host** kernel log against our own isolate process
+> (`name=memfd:kayfabe-i`, host `channel 0x01000011`), and `[measured]` the isolate crates
+> register **no host event and read no host error notifier** — so nothing in this process can
+> learn it happened. **This path has no input for that fault, by design.**
+>
+> ⊘ Do not adopt #111 as a cause of the `cuCtxCreate` hang. It has been adopted-as-cause twice
+> without being measured; `w272` §6 closes task #235 as NOT-ON-PATH.
+
 **Status:** designed and implemented at the *decision + encoding + **notifier-write** +
 transport* layers; **not exercised on a live guest** — see §9, which says exactly what
-that leaves open.
+that leaves open. ⊘ Superseded in scope by the 2026-08-12 block above: the layers below
+are implemented and **not wired to any caller**.
 
 ★ **UPDATE 2026-08-01** (`docs/design/resume_from_fault.md` §S5). Three changes, all of
 them things this note's §8 listed as *not implemented*:
