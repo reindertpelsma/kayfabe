@@ -665,6 +665,74 @@ pub struct AdoptedGuestRing {
     pub gp_fifo_va: u64,
     /// The guest's `gpFifoEntries`.
     pub gp_fifo_entries: u32,
+    /// ★★★★★ **LEG B — the guest's own USERD, when it lives inside THIS ring's joined leaf.**
+    ///
+    /// # ⊘⊘ Why this is NESTED and not a sixth argument to `alloc_channel`
+    ///
+    /// Not economy. **A channel whose USERD is the guest's and whose ring is ours is a state
+    /// that must not be representable.** RM would then fetch GPFIFO entries out of a queue
+    /// nothing writes, indexed by a cursor the guest advances — `GP_PUT` racing ahead of a
+    /// ring that stays empty, no error anywhere. Making leg B a sibling argument would put
+    /// that state one caller mistake away; making it a field of the adoption makes it
+    /// unspellable.
+    ///
+    /// ★ It is also what *"the arming is inherited"* means concretely: this is `Some` only
+    /// when the address table already held a `JoinsGuestWindow` binding **and** the guest's
+    /// resolved USERD address fell inside it. A disarmed build cannot reach the outer
+    /// `Some`, so it cannot reach this one either — no second selector to drift.
+    ///
+    /// `None` = the ring was adopted and the USERD was not. That is a **normal** outcome
+    /// (the params may not carry the descriptor, the USERD may be in guest RAM, or it may be
+    /// in a leaf nothing joined) and it is exactly the pre-leg-B channel.
+    pub userd: Option<AdoptedGuestUserd>,
+}
+
+/// ★★★★★ **LEG B — the guest's own USERD, named as an OFFSET INTO AN OBJECT WE HOLD.**
+///
+/// # The shape, and why it is not an address
+///
+/// The guest's own CPU-RM resolved this channel's USERD to a **framebuffer physical
+/// address** and put it on the wire (`kayfabe_abi::notifier::ChannelUserdMemWire`). That
+/// address is an offset in an **emulated** framebuffer and is meaningless to host RM. What
+/// makes it usable is that it lands inside a leaf we already joined — so the pair below is
+/// *the joined object* plus *the guest's address expressed relative to it*, and no
+/// guest-controlled number ever reaches hardware as an address.
+///
+/// | field | whose number it is |
+/// |---|---|
+/// | [`Self::memory`] | **ours** — the same `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` [`AdoptedGuestRing::memory`] names, minted by `RmBackend::join_fb_leaf` |
+/// | [`Self::offset`] | **derived**: the guest's `userdMem.base` minus the joined leaf's own framebuffer base |
+///
+/// # ⚠ AT CREATION, NEVER AT THE FIRST DOORBELL
+///
+/// `[measured 2026-08-11, R32/w233, real GA106 / 580.159.04]` **RM zeroes all 512 bytes of a
+/// caller-supplied USERD.** Adopting after the guest has advanced its cursor therefore
+/// **wipes the write that caused the doorbell**, returns `NV_OK`, and produces silence rather
+/// than an error. This type only ever reaches `alloc_channel`.
+///
+/// # ⊘ What it costs, and it is not free
+///
+/// `[measured, R31 arm B]` a guest-backed `OS_DESCRIPTOR` **cannot be CPU-mapped**
+/// (`NV_ERR_NOT_SUPPORTED`; the driver's own *"memMap_IMPL: CPU mapping not supported for
+/// addressSpace: 0x1"*). So on a channel carrying this, the isolate has **no CPU view of
+/// USERD at all**: it cannot write `GP_PUT` — which is the point, the guest writes it — and
+/// it cannot read `GP_GET`, which is not. Both accesses are refused **by name**
+/// (`USERD_NOT_OURS`) rather than skipped, because a skipped write and a write to the wrong
+/// place look identical in a log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdoptedGuestUserd {
+    /// The joined host object containing the guest's USERD bytes. ⊘ Always the same object
+    /// as [`AdoptedGuestRing::memory`] on the production path — one leaf, one join — and the
+    /// adapter re-checks it was minted by `join_fb_leaf` exactly as it does for the ring.
+    pub memory: HostHandle,
+    /// Byte offset of this channel's 512-byte USERD slot **within that object**.
+    ///
+    /// ⚠ This lands in `hUserdMemory[0]`'s companion `userdOffset[0]`, whose being **zero**
+    /// has until now been a measured requirement (`C:` M5.47, and an RTX 3090 bite on
+    /// 2026-07-30). ★ Read what that measured: the offset was moved while the *store* stayed
+    /// at +0, so RM read a slot nobody wrote. Here the reader and the writer move together —
+    /// the writer being the guest, through its own BAR1 mapping.
+    pub offset: u64,
 }
 
 /// # The unprivileged host-RM verb surface

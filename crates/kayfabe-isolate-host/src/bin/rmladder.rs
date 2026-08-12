@@ -2512,6 +2512,7 @@ fn guest_ring_channel_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             ring_va: 0,
             gp_fifo_va: 0,
             gp_fifo_entries: 0,
+            userd: None,
         },
     );
     let arm_d = match zero {

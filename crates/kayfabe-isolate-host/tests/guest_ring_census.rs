@@ -217,16 +217,17 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
     );
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        3,
-        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ Three is the ruling \
-         and each one is a different job: the construction in \
-         `alloc_channel_over_guest_ring`, and TWO arms in `alloc_channel_in` — one deciding \
-         provenance (allocate a ring, or do not) and one deciding the layout (our offsets, \
-         or the caller's). ★ They are deliberately not one arm: the first runs before USERD \
-         exists and the second after the mapping, and folding them would put the ring alloc \
-         and the layout decision on the same side of a failure that must unwind between \
-         them. A fourth site means the guest arm is reachable from a path that did not state \
-         it."
+        5,
+        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ FIVE is the ruling \
+         (it was three before leg B) and each one is a different job: the construction in \
+         `alloc_channel_over_guest_ring`, TWO arms in `alloc_channel_in` deciding the RING — \
+         one provenance (allocate, or do not), one layout (our offsets, or the caller's) — \
+         and TWO more deciding the USERD, in the same shape and for the same reason. ★ They \
+         are deliberately not one arm each: the ring arms straddle a failure that must \
+         unwind between them, and the USERD arms are a second axis entirely — a channel can \
+         adopt the guest's ring and keep a USERD of ours, which is what every leg-A boot \
+         before this one did. A sixth site means one of the two guest arms is reachable from \
+         a path that did not state it."
     );
 }
 
@@ -331,20 +332,54 @@ fn the_birth_witness_is_read_by_no_decision() {
          they say."
     );
     // The value is constructed once, tallied once, and rendered. Nothing matches on it.
+    // ★★★ TWO, and the reason is the whole design of the leg-B witness: ONE function applied
+    // to TWO limbs. ⊘ Not two predicates — that is the shape this would be catching. If a
+    // third appears, or if either call stops being `BirthOffer::read`, the two legs can come
+    // to disagree about what `DECLINED` means and the boot log stops being comparable
+    // limb-to-limb.
     assert_eq!(
         body.matches("BirthOffer::read(").count(),
-        1,
-        "`BirthOffer::read` is called more than once in shipped `rm.rs`. One reading, one line."
+        2,
+        "`BirthOffer::read` is called {} times in shipped `rm.rs`, not twice — once for the \
+         ring limb and once for the USERD limb. ONE reading, TWO limbs; a third call is a \
+         third limb nobody declared, and a first is a limb that lost its witness.",
+        body.matches("BirthOffer::read(").count()
     );
-    // ⊘ The value is matched EXACTLY ONCE, and that one match is inside `birth_census::tally`,
-    // choosing which counter to bump. A count is not a decision about the channel.
+    // ⊘ And the second call must be DERIVED FROM THE FIRST'S INPUT, not from a new selector.
+    // `adopt.is_some_and(|a| a.userd.is_some())` is the whole of leg B's arming: it is `Some`
+    // only inside an adoption leg A2 already made, so a disarmed build is `None` on both
+    // limbs by construction. A literal env read or feature flag here would be
+    // `a_second_source_of_truth_beside_a_complete_value`.
+    assert!(
+        body.contains("adopt.is_some_and(|a| a.userd.is_some())"),
+        "leg B's arming is no longer inherited from leg A2's own answer. ⊘ That inheritance \
+         is what makes `userd=DECLINED` on a disarmed build a fact about the code rather \
+         than about a flag — and what makes `(ring = DECLINED, userd = GUEST-USERD)` \
+         unspellable."
+    );
+    // ⊘⊘ **THE PROSE AND THE ASSERTION USED TO DISAGREE, and that is the defect this rung
+    // was warned about by name.** It read *"The value is matched EXACTLY ONCE, and that one
+    // match is inside `birth_census::tally`"* while asserting `matches("match offer") == 1` —
+    // and the ONE occurrence it was counting was `match offer` inside `tally`'s parameter
+    // named `offer`, which leg B renamed to `ring`. The sentence was true; the pattern was
+    // measuring the parameter's *name*.
+    //
+    // ⇒ Assert what the sentence says: nothing outside the counter selection branches on a
+    // witness value. The counter selection itself is matched by name below.
+    for forbidden in ["match offer", "match userd_offer"] {
+        assert!(
+            !body.contains(forbidden),
+            "`{forbidden}` appears in shipped `rm.rs`. ⊘ The witness prints and decides \
+             nothing; a match on it is a branch on an instrument, which would make the armed \
+             and disarmed boots differ BECAUSE they were measured and void the arm comparison."
+        );
+    }
     assert_eq!(
-        body.matches("match offer").count(),
+        body.matches("let counter = match ring {").count(),
         1,
-        "`offer` is matched somewhere other than `birth_census::tally`'s counter selection. \
-         ⊘ The witness prints and decides nothing; a second match is a branch on an \
-         instrument, which would make the armed and disarmed boots differ BECAUSE they were \
-         measured and void the whole arm comparison."
+        "`birth_census::tally`'s counter selection is not where it was. That `match` is the \
+         ONLY read of a witness value in the shipped file, and this gate exists so `the \
+         witness decides nothing` is a checked claim rather than a sentence."
     );
     for forbidden in [
         "if offer ==",
@@ -361,9 +396,33 @@ fn the_birth_witness_is_read_by_no_decision() {
     // ★ And the tally must not be able to *fail* the birth: it returns numbers, never a
     // `Result`, so no instrument can refuse a channel the uninstrumented port would allow.
     assert!(
-        body.contains("fn tally(offer: super::BirthOffer) -> (u64, u64, u64, u64, u64)"),
-        "`birth_census::tally` no longer returns plain counters. An instrument that can \
-         return an error is an instrument that can change the outcome it is measuring."
+        body.contains(") -> (u64, u64, u64, u64, u64, u64) {")
+            && body.contains("pub(super) fn tally("),
+        "`birth_census::tally` no longer returns plain counters (six of them since leg B \
+         added `guest_userd`). An instrument that can return an error is an instrument that \
+         can change the outcome it is measuring."
+    );
+    // ★★★ And leg B's own far-side refusal must exist and be a REFUSAL, never a downgrade.
+    // ⚠ A channel silently given a USERD of ours after being told it would carry the guest's
+    // is `GP_PUT == GP_GET` forever with no error — and it would make an armed run and its
+    // control produce the same channel, which is the failure shape this campaign keeps paying
+    // for.
+    assert!(
+        body.contains("t.is_joined_object(raw_userd)")
+            && body.contains("RmError::Other(USERD_NOT_A_JOINED_WINDOW)"),
+        "leg B's adoption arm no longer re-checks the USERD handle against `FbJoinTable` \
+         membership, or no longer refuses by name. The core's check cannot reach here: the \
+         offer crosses the isolate IPC boundary as two integers."
+    );
+    // ⊘ And the two USERD accessors must refuse BY NAME rather than answering zero. `(0, 0)`
+    // is what a channel that has never run also looks like — the exact ambiguity this rung is
+    // trying to leave, on the one plane it is trying to measure.
+    assert_eq!(
+        body.matches("RmError::Other(USERD_NOT_OURS)").count(),
+        2,
+        "the guest-USERD arm's two refusals (`userd_cursors`' GP_GET read and \
+         `userd_store_u32`'s GP_PUT write) are no longer both by name. A skipped write and a \
+         write to the wrong place look identical in a log."
     );
     // ⊘ The refusal must not be reachable from the witness: it is `fb_joins` membership.
     assert!(

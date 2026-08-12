@@ -108,7 +108,14 @@ pub enum Request {
         /// ⚠ Presence is an explicit byte, never an in-band sentinel: `gp_fifo_va = 0` is a
         /// **value** the driver really declares (its golden-context channel) and must not
         /// read as "no ring".
-        adopt: Option<(u64, u64, u64, u32)>,
+        /// ★★★★★ **LEG B rides INSIDE it** — `(memory, offset)` of the guest's own USERD,
+        /// or `None` when the ring was adopted and the USERD was not.
+        ///
+        /// ⊘ Nested rather than a sibling field for the type's own reason
+        /// ([`kayfabe_isolate::AdoptedGuestRing::userd`]): *"the guest's USERD on a ring of
+        /// ours"* is a state that must not be representable, and a sibling `Option` on the
+        /// wire would make it one decode away.
+        adopt: Option<(u64, u64, u64, u32, Option<(u64, u64)>)>,
     },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
@@ -664,12 +671,23 @@ impl Envelope {
                 }
                 match adopt {
                     None => out.push(0),
-                    Some((memory, ring_va, gp_fifo_va, entries)) => {
+                    Some((memory, ring_va, gp_fifo_va, entries, userd)) => {
                         out.push(1);
                         out.extend_from_slice(&memory.to_le_bytes());
                         out.extend_from_slice(&ring_va.to_le_bytes());
                         out.extend_from_slice(&gp_fifo_va.to_le_bytes());
                         out.extend_from_slice(&entries.to_le_bytes());
+                        // ★★★★★ LEG B, with its OWN presence byte inside the ring's. ⊘ Not
+                        // an in-band sentinel: `offset = 0` is a legal USERD placement (the
+                        // slot at the joined leaf's own base) and must not read as absent.
+                        match userd {
+                            None => out.push(0),
+                            Some((umem, uoff)) => {
+                                out.push(1);
+                                out.extend_from_slice(&umem.to_le_bytes());
+                                out.extend_from_slice(&uoff.to_le_bytes());
+                            }
+                        }
                     }
                 }
             }
@@ -847,6 +865,16 @@ impl Envelope {
                         c.u64("adopt ring_va")?,
                         c.u64("adopt gp_fifo_va")?,
                         c.u32("adopt gp_fifo_entries")?,
+                        match c.u8("channel adopt userd presence")? {
+                            0 => None,
+                            1 => Some((c.u64("adopt userd memory")?, c.u64("adopt userd offset")?)),
+                            tag => {
+                                return Err(ProtoError::UnknownTag {
+                                    what: "channel adopt userd presence",
+                                    tag,
+                                });
+                            }
+                        },
                     )),
                     // ⊘ Refused by name for the presence byte above's reason.
                     tag => {
@@ -1220,7 +1248,13 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
-                adopt: Some((0x5c00_0019, 0x2_0020_0000, 0, 1024)),
+                adopt: Some((
+                    0x5c00_0019,
+                    0x2_0020_0000,
+                    0,
+                    1024,
+                    Some((0x5c00_0019, 0x2000)),
+                )),
             },
             Request::AllocEngineObject {
                 chan: 9,

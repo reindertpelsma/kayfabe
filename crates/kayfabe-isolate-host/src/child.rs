@@ -627,12 +627,19 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 // ★★★★★ LEG A2 — rebuilt on THIS side of the wire, where the adapter that
                 // lowers it runs. ⊘ The handle is re-validated by the adapter as one
                 // `join_fb_leaf` minted; nothing here trusts the four integers.
-                adopt.map(|(memory, ring_va, gp_fifo_va, gp_fifo_entries)| {
+                adopt.map(|(memory, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
                     kayfabe_isolate::AdoptedGuestRing {
                         memory: raw(memory),
                         ring_va,
                         gp_fifo_va,
                         gp_fifo_entries,
+                        // ★★★★★ LEG B — rebuilt here for leg A2's reason, and re-validated
+                        // by the adapter as an object `join_fb_leaf` minted. ⊘ Nothing on
+                        // this side trusts the two integers either.
+                        userd: userd.map(|(memory, offset)| kayfabe_isolate::AdoptedGuestUserd {
+                            memory: raw(memory),
+                            offset,
+                        }),
                     }
                 }),
             ) {

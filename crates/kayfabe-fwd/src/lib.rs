@@ -3673,13 +3673,15 @@ fn adopted_guest_ring(
     // ⚠ `gpFifoOffset = 0` is a VALUE (the driver's golden-context channel declares it) and
     // it survives this path intact: what is `Option` here is whether a ring was declared at
     // all, never whether the number is zero.
-    let ring = spine
-        .rmgraph
-        .node_of_resource(chan.key)?
-        .facts
-        .gp_fifo_ring?;
+    // ⊘ ONE read of the node, and both facts come out of it. Two `node_of_resource` calls
+    // would be two lookups of one object that a future refactor could point at different
+    // revisions — and the ring and the USERD have to be the SAME channel's or the
+    // containment test below is being run against the wrong leaf.
+    let facts = spine.rmgraph.node_of_resource(chan.key)?.facts;
+    let ring = facts.gp_fifo_ring?;
+    let userd = facts.userd;
     let pdb = chan.vas_pdb?;
-    let (start, _len, binding) = proc
+    let (start, len, binding) = proc
         .vases
         .get(&(cgpu, pdb))?
         .table
@@ -3702,7 +3704,84 @@ fn adopted_guest_ring(
         // for why a wrong modulus is not cosmetic.
         gp_fifo_va: ring.va,
         gp_fifo_entries: ring.entries,
+        // ★★★★★ **LEG B**, offered from inside leg A2's own answer so that *"the guest's
+        // USERD on a ring of ours"* is unspellable. See `AdoptedGuestRing::userd`.
+        userd: adopted_guest_userd(&binding, len, host.memory(), userd),
     })
+}
+
+/// Size of one channel's USERD slot on every part this port targets.
+///
+/// `1 << NV_RAMUSERD_BASE_SHIFT` with shift 9 (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:1545-1556`, `dev_ram.h`
+/// (gm107) `:49`), selected by `_GM107` for every non-Tegra chip. ⊘ Named here rather than
+/// taken from the guest's own `userdMem.size` because it is what the **containment** check
+/// must be run against: a guest that declared a short size would otherwise buy itself a
+/// binding whose last bytes are outside the joined leaf.
+const USERD_SLOT_BYTES: u64 = 512;
+
+/// ★★★★★ **LEG B — the guest's own USERD, IF it lies inside the leaf its ring was joined
+/// through.** `None` on every other day, and `None` is every prior boot.
+///
+/// # ★★★ THIS IS A CONTAINMENT TEST, NOT A RESOLUTION — and that is the licence
+///
+/// `kayfabe_mmu`'s `gpga.rs` forbids `fn owner_of(addr)` *"and there never will be"*, and
+/// `docs/design/leg_b_userd_adoption_blocker.md` §2.2 refused the BAR1 route on exactly that
+/// ground. ⊘ **Nothing here asks who owns an address.** The chain is forward the whole way:
+/// the channel names its ring VA, the ring VA names a binding, the binding is a joined object
+/// with a known framebuffer base and length. The only question asked of the guest's number is
+/// *"is it inside the object I am already holding"*. Had the ring's leaf not been joined,
+/// this declines — it does not go looking.
+///
+/// # Where the guest's number comes from, and why three documents said it did not exist
+///
+/// `kayfabe_core::rmgraph::DeclaredUserd::resolved` — the guest's **own kernel** resolves
+/// `hUserdMemory[0]`/`userdOffset[0]` before it RPCs the GSP, because a fake GSP has no
+/// client handle namespace to look a handle up in. See
+/// `kayfabe_abi::notifier::ChannelUserdMemWire` and `docs/design/userd_mem_is_on_the_wire.md`.
+///
+/// # ⊘ The four ways this says no, all of them normal
+///
+/// - the params did not carry the descriptor (`resolved: None`) — *"we could not read it"*;
+/// - the guest put its USERD in **guest RAM** (`UserdMem::Sysmem`) — legal, served by the
+///   guest-RAM pin and by no framebuffer join, and refused here **by name** in the sense that
+///   the `match` has an arm for it rather than a wildcard;
+/// - the descriptor was zero (`UserdMem::Undeclared`) — the guest let RM allocate its USERD;
+/// - the address is outside this leaf. ⚠ `[NOT MEASURED]` how often that last one happens; on
+///   `w262b` the sixteen walling channels' rings and USERDs share one 2 MB leaf, but that is
+///   one workload.
+fn adopted_guest_userd(
+    binding: &kayfabe_mmu::Binding,
+    len: u64,
+    memory: kayfabe_isolate::HostHandle,
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> Option<kayfabe_isolate::AdoptedGuestUserd> {
+    let base = match userd?.resolved? {
+        kayfabe_arch::UserdMem::Framebuffer { base, .. } => base,
+        // ⊘ Arms, not a wildcard. `Sysmem` is a REAL and legal USERD location this rung has
+        // no crossing for, and `Undeclared` is the guest saying it allocated none; folding
+        // either into the `None` above would make two different findings look like a decode
+        // that failed.
+        kayfabe_arch::UserdMem::Sysmem { .. } | kayfabe_arch::UserdMem::Undeclared { .. } => {
+            return None;
+        }
+    };
+    // ⊘ The aperture of the BINDING, checked even though `JoinsGuestWindow` implies it. The
+    // guest's address is a *framebuffer* offset; a binding over anything else would make the
+    // subtraction below arithmetic between two different address spaces — the exact defect
+    // `kayfabe_arch::Aperture`'s own docs name ("vidmem offset X and sysmem offset X are
+    // different bytes on different devices").
+    if binding.aperture() != kayfabe_arch::Aperture::Vidmem {
+        return None;
+    }
+    let offset = base.checked_sub(binding.phys())?;
+    // ★ `checked_add` and `>`, not `>=`: the slot's LAST byte must be inside the leaf. A
+    // USERD whose first 8 bytes are in the joined window and whose `GP_GET` is not would be
+    // accepted by a start-only check and would fetch forever from a page RM zeroed.
+    if offset.checked_add(USERD_SLOT_BYTES)? > len {
+        return None;
+    }
+    Some(kayfabe_isolate::AdoptedGuestUserd { memory, offset })
 }
 
 /// COMMIT (R5) for the Case-1 forward: same route/channel re-resolution as the

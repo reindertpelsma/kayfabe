@@ -568,7 +568,16 @@ impl RmBackend for ProxyRmBackend {
             // runs. See `Request::AllocChannel::hosting`.
             hosting: hosting.map(|h| (h.class.0, h.params.to_vec())),
             // ★★★★★ LEG A2 — same crossing, same reason. See `Request::AllocChannel::adopt`.
-            adopt: adopt.map(|a| (a.memory.raw(), a.ring_va, a.gp_fifo_va, a.gp_fifo_entries)),
+            adopt: adopt.map(|a| {
+                (
+                    a.memory.raw(),
+                    a.ring_va,
+                    a.gp_fifo_va,
+                    a.gp_fifo_entries,
+                    // ★★★★★ LEG B, carried inside leg A2's own tuple.
+                    a.userd.map(|u| (u.memory.raw(), u.offset)),
+                )
+            }),
         })?;
         match self.lift(reply)? {
             Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),

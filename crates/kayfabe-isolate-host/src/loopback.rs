@@ -293,12 +293,17 @@ impl RmBackend for LoopbackRm {
         // reachable through the plane selector, which is what makes a zero in the armed
         // census a **measured** zero (`a_census_zero_needs_a_known_positive`).
         let offer = crate::rm::BirthOffer::read(hosting.is_some(), adopt.is_some());
+        let userd_offer = crate::rm::BirthOffer::read(
+            hosting.is_some(),
+            adopt.is_some_and(|a| a.userd.is_some()),
+        );
         eprintln!(
-            "kayfabe-isolate: GR-BIRTH vas={:#x} adopt={} ⊘ LOOPBACK BACKEND — DISCARDED. \
-             This plane has no RM and no joined leaf. ⚠ This boot's channels are NOT host \
-             channels, so nothing in it measures leg A",
+            "kayfabe-isolate: GR-BIRTH vas={:#x} adopt={} userd={} ⊘ LOOPBACK BACKEND — \
+             DISCARDED. This plane has no RM and no joined leaf. ⚠ This boot's channels are \
+             NOT host channels, so nothing in it measures leg A or leg B",
             vas.raw(),
-            offer.as_str(),
+            offer.as_str(crate::rm::BirthLimb::Ring),
+            userd_offer.as_str(crate::rm::BirthLimb::Userd),
         );
         self.known(vas)?;
         let h = self.verb(false)?;
