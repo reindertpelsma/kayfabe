@@ -1369,6 +1369,14 @@ pub enum RmVerb {
         /// `Worker::execute` could pass `None` on every path and every other assertion in
         /// the suite would still pass. It is the call site, made assertable.
         hosting: Option<(ClassId, Vec<u8>)>,
+        /// ★★★★★ **LEG A2 — the guest's own ring this channel was born over**, or `None`
+        /// for the ordinary birth.
+        ///
+        /// ⊘ Recorded for `hosting`'s reason and it is sharper here: leg A2's entire claim
+        /// is *"a host GR channel was born over memory this port did not allocate"*, and
+        /// without this field a `Worker::execute` that passed `None` on every path would
+        /// leave every other assertion in the suite green.
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
         /// Returned channel handle.
         handle: HostHandle,
         /// Returned host work-submit token.
@@ -3011,6 +3019,7 @@ impl RmBackend for MockRmBackend {
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
         let _client = self.gate(VerbKind::AllocChannel)?;
         self.check(vas)?;
@@ -3025,6 +3034,7 @@ impl RmBackend for MockRmBackend {
             vas,
             engine,
             hosting: hosting.map(|h| (h.class, h.params.to_vec())),
+            adopt,
             handle,
             token,
         });

@@ -869,6 +869,28 @@ pub const RING_NOT_OURS: u32 = 0x4B4C;
 /// `gpFifoOffset = 0` for its golden-context channel. `0x4B4D` is `"KM"`.
 pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
 
+/// ★★★★★ **LEG A2 — the adoption named an object this isolate did NOT mint by joining a
+/// framebuffer leaf.**
+///
+/// # ⊘ Why this refusal exists at all, when the core already checked
+///
+/// `kayfabe_isolate::AdoptedGuestRing` is built in the core from an address-table binding
+/// declaring `BackingBytes::JoinsGuestWindow` — *one memory*. But it crosses the isolate IPC
+/// boundary as **four integers** and is rebuilt in the child, which cannot see the address
+/// table. A private constructor in the core is therefore not an enforcement of anything on
+/// the one path a boot exercises.
+///
+/// ⇒ The adapter re-checks membership of `FbJoinTable::joined_objects` and refuses here.
+/// ⊘ **It is a refusal and not a downgrade**: falling back to allocating a ring of our own
+/// would make an armed evidence run and its own control produce the same channel, which is
+/// the failure shape this whole campaign keeps paying for.
+///
+/// ⚠ The state it forbids is the owner's forbidden #2 — a **blank** host vidmem twin
+/// (`FbLeafBacking::Vidmem`, `w228`) named as though it were the guest's ring. A channel born
+/// over that fetches GPFIFO entries out of a page nothing ever wrote, decodes zeros, never
+/// advances `GP_GET`, and **reports no error at all**.
+pub const RING_NOT_A_JOINED_WINDOW: u32 = 0x4B4E;
+
 /// Classify a failure from a mapped region: a bounds refusal, or a syscall.
 ///
 /// Deliberately a different function from [`ioctl_error`]. They share the syscall arm and
@@ -3387,6 +3409,7 @@ impl RmBackend for HostRmBackend {
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
         // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
@@ -3394,7 +3417,33 @@ impl RmBackend for HostRmBackend {
         let engine_type = declared_channel_engine_type(engine, hosting)
             .or_else(|| engine_type_for(engine))
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
-        self.alloc_channel_on(vas, engine_type)
+        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until this
+        // line `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and it
+        // was the R31 diagnostic probe; every host channel a guest ever caused was
+        // `RingSource::Ours(None)`.
+        let Some(ring) = adopt else {
+            return self.alloc_channel_on(vas, engine_type);
+        };
+        // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
+        // for why the core's own type-level check cannot reach here.
+        let raw_memory = self.narrow(ring.memory)?;
+        let joined = self
+            .fb_joins
+            .as_ref()
+            .is_some_and(|t| t.is_joined_object(raw_memory));
+        if !joined {
+            return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW));
+        }
+        self.alloc_channel_over_guest_ring(
+            vas,
+            engine_type,
+            GuestRing {
+                memory: ring.memory,
+                ring_va: ring.ring_va,
+                gp_fifo_va: ring.gp_fifo_va,
+                gp_fifo_entries: ring.gp_fifo_entries,
+            },
+        )
     }
 
     /// The generic alloc with `parent = chan`, exactly as the port's docs say — the host
@@ -3869,6 +3918,9 @@ impl RmBackend for HostRmBackend {
         // ⊘ Installed LAST, after the chain has succeeded: a table entry for a leaf whose
         // fixed map refused would answer the instrument about memory no engine can reach.
         table.install(phys, len, at.0, region);
+        // ★★★★★ LEG A2 — and on the SAME success path as the install, never earlier: this
+        // set is what a channel birth checks before it may name the object.
+        table.remember_object(desc);
         Ok(FbLeafJoined {
             backing,
             memory: self.stamp(desc),

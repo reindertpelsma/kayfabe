@@ -609,6 +609,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             vas,
             engine,
             hosting,
+            adopt,
         } => match engine_from_code(engine) {
             // An engine code we do not recognise is a refusal, never a default — the GR-1
             // wrong-runlist class.
@@ -622,6 +623,17 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 hosting.as_ref().map(|(class, params)| HostedObject {
                     class: ClassId(*class),
                     params,
+                }),
+                // ★★★★★ LEG A2 — rebuilt on THIS side of the wire, where the adapter that
+                // lowers it runs. ⊘ The handle is re-validated by the adapter as one
+                // `join_fb_leaf` minted; nothing here trusts the four integers.
+                adopt.map(|(memory, ring_va, gp_fifo_va, gp_fifo_entries)| {
+                    kayfabe_isolate::AdoptedGuestRing {
+                        memory: raw(memory),
+                        ring_va,
+                        gp_fifo_va,
+                        gp_fifo_entries,
+                    }
                 }),
             ) {
                 Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),

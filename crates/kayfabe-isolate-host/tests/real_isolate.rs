@@ -421,6 +421,9 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
                 engine: EngineKind::GrCompute,
                 class: kayfabe_arch::ids::ClassId(0xc7c0),
                 params: Vec::new(),
+                // ⊘ `None`: this test is about worker parking, not about leg A2, and a
+                // channel born over an adopted ring would exercise a different alloc path.
+                adopt: None,
             },
         );
 

@@ -559,6 +559,7 @@ impl RmBackend for ProxyRmBackend {
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
         let reply = self.call(Request::AllocChannel {
             vas: vas.raw(),
@@ -566,6 +567,8 @@ impl RmBackend for ProxyRmBackend {
             // ★★★ §16.106 — carried to the CHILD, which is where the adapter that reads it
             // runs. See `Request::AllocChannel::hosting`.
             hosting: hosting.map(|h| (h.class.0, h.params.to_vec())),
+            // ★★★★★ LEG A2 — same crossing, same reason. See `Request::AllocChannel::adopt`.
+            adopt: adopt.map(|a| (a.memory.raw(), a.ring_va, a.gp_fifo_va, a.gp_fifo_entries)),
         })?;
         match self.lift(reply)? {
             Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),

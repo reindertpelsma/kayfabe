@@ -3530,7 +3530,7 @@ pub fn exec_engine_object(
     class: ClassId,
     params: &[u8],
 ) -> Result<EngineObjectForwarded, FwdFault> {
-    let planned = plan_engine_object(proc, route, class, params)?;
+    let planned = plan_engine_object(spine, proc, route, class, params)?;
     let gpu = planned.plan.cgpu;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_engine_object(spine, proc, &planned.plan, reply)
@@ -3569,6 +3569,7 @@ pub struct EngineObjectPlan {
 /// on this channel resolves here, from core state, and emits **no verbs at all** —
 /// the host never sees a duplicate, and the replay never touches the worker pool.
 pub fn plan_engine_object(
+    spine: &Spine,
     proc: &Proc,
     route: &EngineObjectRoute,
     class: ClassId,
@@ -3625,9 +3626,83 @@ pub fn plan_engine_object(
             engine: chan.engine,
             class,
             params: params.to_vec(),
+            // ★★★★★ **LEG A2** — asked for ONLY when this call is the one that will birth
+            // the host channel. ⊘ A channel that already exists was born over whatever it
+            // was born over; re-stating its ring here would be a second opinion about a fact
+            // RM already holds and cannot be told.
+            adopt: if channel.is_none() {
+                adopted_guest_ring(spine, proc, chan, cgpu)
+            } else {
+                None
+            },
         })
     };
     Ok(Planned { plan, verbs })
+}
+
+/// ★★★★★ **LEG A2 — the guest's own ring, IF the supply side already put it where a host
+/// engine can reach it.** `None` on every other day, and `None` is every prior boot.
+///
+/// # ★★★ THE ARMING IS INHERITED, and that is deliberate rather than a shortcut
+///
+/// There is no flag here and there must not be one. This returns `Some` **exactly when** the
+/// address table already holds a binding at the channel's declared `gpFifoOffset` whose host
+/// backing declares [`kayfabe_mmu::BackingBytes::JoinsGuestWindow`] — one memory, the bytes
+/// the guest writes and the bytes the engine reads being the same bytes. That binding is
+/// written by one path only (`adopt_joined_fb_leaf`, after a join that succeeded), and that
+/// path runs only when the shell armed `KAYFABE_GUEST_RING=ring`.
+///
+/// ⇒ With the supply side disarmed this function is `None` **by construction**, so the
+/// default build's behaviour is byte-identical without a second selector that could drift
+/// out of step with the first (`a_second_source_of_truth_beside_a_complete_value`).
+///
+/// # ⊘ THE OWNER INVARIANT — the forbidden state is not reachable from here
+///
+/// [`kayfabe_mmu::BackingBytes::ShadowsGuestMemory`] — `w228`'s **blank** host vidmem twin at
+/// the guest's own VA, *"two memories"* — is refused by the `match` below rather than by a
+/// comment. A channel born over that object fetches GPFIFO entries out of a page nothing ever
+/// wrote, decodes zeros, never advances `GP_GET`, and reports **no error at all**.
+fn adopted_guest_ring(
+    spine: &Spine,
+    proc: &Proc,
+    chan: &kayfabe_core::gpu::Channel,
+    cgpu: GpuId,
+) -> Option<kayfabe_isolate::AdoptedGuestRing> {
+    // ⊘ Off the channel's OWN graph node — the same node `CeChannelFacts::ring_va` reads, so
+    // the two projections of "what ring did this channel declare" cannot disagree.
+    // ⚠ `gpFifoOffset = 0` is a VALUE (the driver's golden-context channel declares it) and
+    // it survives this path intact: what is `Option` here is whether a ring was declared at
+    // all, never whether the number is zero.
+    let ring = spine
+        .rmgraph
+        .node_of_resource(chan.key)?
+        .facts
+        .gp_fifo_ring?;
+    let pdb = chan.vas_pdb?;
+    let (start, _len, binding) = proc
+        .vases
+        .get(&(cgpu, pdb))?
+        .table
+        .binding_at(kayfabe_arch::ids::GpuVa(ring.va))?;
+    let host = binding.host()?;
+    // ★★★ THE ONE ARM. ⊘ Not `binding.host().is_some()` — that asks *"does a host object
+    // exist here"*, and the question that decides correctness is *"does the guest reach these
+    // bytes some other way"*. `[measured 2026-08-11]` `representability_of` made exactly that
+    // mistake and it is why `BackingBytes` exists at all.
+    if host.bytes() != kayfabe_mmu::BackingBytes::JoinsGuestWindow {
+        return None;
+    }
+    Some(kayfabe_isolate::AdoptedGuestRing {
+        memory: host.memory(),
+        // Where the joined object is placed — the leaf's own base, which is what
+        // `adopt_joined_fb_leaf` bound.
+        ring_va: start,
+        // ★★ The GUEST's two numbers, passed through untouched. Neither is derived from
+        // `ring_va` and neither is one of the adapter's constants — see `RingLayout::entries`
+        // for why a wrong modulus is not cosmetic.
+        gp_fifo_va: ring.va,
+        gp_fifo_entries: ring.entries,
+    })
 }
 
 /// COMMIT (R5) for the Case-1 forward: same route/channel re-resolution as the

@@ -1044,9 +1044,14 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
     let route = kayfabe_fwd::route_engine_object(&gpu.spine, GPU, GR, kayfabe_tests::COMPUTE_CLASS)
         .expect("A's GR channel routes");
     assert_eq!(route.proc, a, "the scenario's first proc owns GR");
-    let planned =
-        kayfabe_fwd::plan_engine_object(&gpu.procs[&a], &route, kayfabe_tests::COMPUTE_CLASS, &[])
-            .expect("the re-send plans");
+    let planned = kayfabe_fwd::plan_engine_object(
+        &gpu.spine,
+        &gpu.procs[&a],
+        &route,
+        kayfabe_tests::COMPUTE_CLASS,
+        &[],
+    )
+    .expect("the re-send plans");
     assert!(
         planned.plan.replay.is_some() && planned.verbs.is_none(),
         "the re-send must resolve as a replay, so this test isolates the guard"
@@ -1085,9 +1090,14 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
         .expect("materializes");
     let route = kayfabe_fwd::route_engine_object(&gpu.spine, GPU, GR, kayfabe_tests::COMPUTE_CLASS)
         .expect("routes");
-    let planned =
-        kayfabe_fwd::plan_engine_object(&gpu.procs[&a], &route, kayfabe_tests::COMPUTE_CLASS, &[])
-            .expect("plans");
+    let planned = kayfabe_fwd::plan_engine_object(
+        &gpu.spine,
+        &gpu.procs[&a],
+        &route,
+        kayfabe_tests::COMPUTE_CLASS,
+        &[],
+    )
+    .expect("plans");
     let Gpu { spine, procs, .. } = &mut *gpu;
     let proc = procs.get_mut(&a).expect("live");
     proc.retire().discharge_all(); // ← the world moves inside the lock-free gap

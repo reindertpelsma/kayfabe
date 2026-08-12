@@ -280,6 +280,7 @@ impl RmBackend for LoopbackRm {
         vas: HostHandle,
         _engine: EngineKind,
         _hosting: Option<HostedObject<'_>>,
+        _adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
         self.known(vas)?;
         let h = self.verb(false)?;

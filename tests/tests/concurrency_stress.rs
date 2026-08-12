@@ -240,6 +240,11 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
             token,
             engine: _,
             hosting: _,
+            // ⊘ Destructured with no `..`, so leg A2's new field had to be named here. The
+            // handle inside it IS namespace-relevant — it is the joined window a channel was
+            // born over — and it is owned by the same isolate by construction: the adapter
+            // refuses any object it did not mint by joining (`RING_NOT_A_JOINED_WINDOW`).
+            adopt: _,
         } => {
             own(vas);
             own(handle);

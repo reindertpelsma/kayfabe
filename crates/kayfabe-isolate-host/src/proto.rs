@@ -96,6 +96,19 @@ pub enum Request {
         /// sentinel: `class = 0` with empty params is a legal thing for a guest to send
         /// and must not read as "no object".
         hosting: Option<(u32, Vec<u8>)>,
+        /// ★★★★★ **LEG A2 — [`kayfabe_isolate::AdoptedGuestRing`], across the wire.**
+        ///
+        /// `(memory, ring_va, gp_fifo_va, gp_fifo_entries)`, or `None` for the ordinary
+        /// birth. ⊘ **It has to cross** for `hosting`'s reason, and one sharper: the adapter
+        /// that lowers it to `alloc_channel_over_guest_ring` — and the check that the handle
+        /// is one `join_fb_leaf` minted — both live in the CHILD. A version that widened
+        /// only the trait would compile, pass every in-process test, and be dead on the one
+        /// path a boot exercises.
+        ///
+        /// ⚠ Presence is an explicit byte, never an in-band sentinel: `gp_fifo_va = 0` is a
+        /// **value** the driver really declares (its golden-context channel) and must not
+        /// read as "no ring".
+        adopt: Option<(u64, u64, u64, u32)>,
     },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
@@ -636,6 +649,7 @@ impl Envelope {
                 vas,
                 engine,
                 hosting,
+                adopt,
             } => {
                 out.push(4);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -646,6 +660,16 @@ impl Envelope {
                         out.push(1);
                         out.extend_from_slice(&class.to_le_bytes());
                         put_blob(&mut out, params);
+                    }
+                }
+                match adopt {
+                    None => out.push(0),
+                    Some((memory, ring_va, gp_fifo_va, entries)) => {
+                        out.push(1);
+                        out.extend_from_slice(&memory.to_le_bytes());
+                        out.extend_from_slice(&ring_va.to_le_bytes());
+                        out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                        out.extend_from_slice(&entries.to_le_bytes());
                     }
                 }
             }
@@ -812,6 +836,22 @@ impl Envelope {
                     tag => {
                         return Err(ProtoError::UnknownTag {
                             what: "channel hosting presence",
+                            tag,
+                        });
+                    }
+                },
+                adopt: match c.u8("channel adopt presence")? {
+                    0 => None,
+                    1 => Some((
+                        c.u64("adopt memory")?,
+                        c.u64("adopt ring_va")?,
+                        c.u64("adopt gp_fifo_va")?,
+                        c.u32("adopt gp_fifo_entries")?,
+                    )),
+                    // ⊘ Refused by name for the presence byte above's reason.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel adopt presence",
                             tag,
                         });
                     }
@@ -1158,6 +1198,7 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 hosting: None,
+                adopt: None,
             },
             // ★ §16.106 — BOTH arms of `hosting` are sampled, because the presence byte is
             // the part a one-arm round trip would never exercise.
@@ -1165,6 +1206,21 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
+                adopt: None,
+            },
+            // ★★★★★ LEG A2 — and BOTH arms of `adopt` for the same reason, with the
+            // presence byte exercised beside a `hosting` that is also present, because the
+            // two options are encoded back to back and a length mistake in the first is
+            // only visible when something follows it.
+            //
+            // ⚠ `gp_fifo_va` is **0** here deliberately: it is a VALUE the driver really
+            // declares (its golden-context channel) and a round trip that only ever sampled
+            // non-zero would not catch an encoder that treated zero as absence.
+            Request::AllocChannel {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
+                adopt: Some((0x5c00_0019, 0x2_0020_0000, 0, 1024)),
             },
             Request::AllocEngineObject {
                 chan: 9,

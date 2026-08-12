@@ -616,6 +616,57 @@ pub struct HostedObject<'a> {
     pub params: &'a [u8],
 }
 
+/// ★★★★★ **LEG A2 — THE GUEST'S OWN RING, as the birth path names it.**
+///
+/// Handed to [`RmBackend::alloc_channel`] so a host channel can be born over the GPFIFO the
+/// guest is already pushing into, instead of over a queue of ours that stays empty forever.
+///
+/// # ⊘ Every field is HANDED IN, and the memory is NOT ours
+///
+/// | field | whose number it is |
+/// |---|---|
+/// | [`Self::memory`] | the **joining party's** — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the isolate's own mapping of the guest's framebuffer leaf, already placed FIXED at the leaf's own guest VA (`RmBackend::join_fb_leaf`) |
+/// | [`Self::ring_va`] | where that object is placed — the leaf's base |
+/// | [`Self::gp_fifo_va`] | the **guest's** `gpFifoOffset`, an absolute VA, verbatim off its own channel alloc |
+/// | [`Self::gp_fifo_entries`] | the **guest's** `gpFifoEntries` — the modulus of the ring's wrap arithmetic, never ours |
+///
+/// # ★★★ THE OWNER INVARIANT, AND WHERE IT IS ENFORCED
+///
+/// *No fake framebuffer may ever be mapped to a real GPU VA of an isolate except the
+/// scratchpad.* The guest's ring lives in the **emulated** framebuffer, so this type is
+/// directly in that invariant's path, and it is honoured in exactly one way: the only
+/// object that may appear in [`Self::memory`] is a **joined** window — one memory, the
+/// bytes the guest writes and the bytes the engine reads being the same bytes — never
+/// `FbLeafBacking::Vidmem`'s blank twin.
+///
+/// ⊘ **And it is enforced on the FAR side of the wire, not only at the constructor.** The
+/// core builds this from an address-table binding whose backing declares
+/// `BackingBytes::JoinsGuestWindow`; the adapter then **re-checks that the handle is one it
+/// minted through `join_fb_leaf`** and refuses by name otherwise. A private constructor
+/// alone would be defeated by the IPC crossing — the child rebuilds the struct from four
+/// integers and cannot see the address table — which is `same_flag_opposite_polarity`
+/// waiting to happen.
+///
+/// ⊘ **It does not make the channel runnable.** `GP_PUT` still lives in the USERD *we* hand
+/// RM, and nothing in leg A writes the guest's cursor into that word. Adopting the ring and
+/// adopting the cursor are two legs, and this is the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdoptedGuestRing {
+    /// The joined host object carrying the guest's GPFIFO. Neither allocated nor freed by
+    /// the channel.
+    pub memory: HostHandle,
+    /// Where that object is placed in the channel's address space.
+    pub ring_va: u64,
+    /// The guest's `gpFifoOffset` — an **absolute VA**, not an offset into anything.
+    ///
+    /// ⚠ `0` is a value and not a blank: the driver deliberately declares
+    /// `gpFifoOffset = 0` for its golden-context channel. A caller with no ring to name
+    /// must not synthesise one — it passes `None` and has no `AdoptedGuestRing` at all.
+    pub gp_fifo_va: u64,
+    /// The guest's `gpFifoEntries`.
+    pub gp_fifo_entries: u32,
+}
+
 /// # The unprivileged host-RM verb surface
 ///
 /// The complete vocabulary of host operations the forwarding plane may request.
@@ -710,11 +761,19 @@ pub trait RmBackend: Send + Sync {
     /// decides *which kind of engine*; `hosting` only ever refines an instance the kind
     /// cannot express. An adapter that ignored it entirely would be exactly as correct as
     /// this trait was before — which is the property that keeps this additive.
+    ///
+    /// # ★★★★★ LEG A2 — `adopt`, and an adapter that ignored it would still be correct
+    ///
+    /// `Some(ring)` asks for the channel to be born over the **guest's** GPFIFO
+    /// ([`AdoptedGuestRing`]); `None` is every prior boot's behaviour, byte for byte. ⊘ Like
+    /// `hosting` above, it only ever *refines* — it names memory and geometry the abstract
+    /// verb could not express, and never changes which engine or which address space.
     fn alloc_channel(
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError>;
 
     /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
@@ -1675,6 +1734,13 @@ pub enum VerbPlan {
         class: ClassId,
         /// The ABI-lowered alloc blob.
         params: Vec<u8>,
+        /// ★★★★★ **LEG A2** — the guest's own ring, when the core found one joined at this
+        /// channel's declared `gpFifoOffset`. `None` is every prior boot.
+        ///
+        /// ⊘ Read **only** on the `channel == None` arm: a channel that already exists was
+        /// born over whatever it was born over, and re-declaring its ring here would be a
+        /// second, silent opinion about a fact RM already holds.
+        adopt: Option<AdoptedGuestRing>,
     },
     /// One Case-1 control, payload carried by value in and out.
     Control {
@@ -2630,7 +2696,11 @@ impl Worker {
                         };
                         // ⊘ `None`: a doorbell materialization hosts no object, so
                         // there is no declaration to refine the engine with (§16.106).
-                        match rm.alloc_channel(vas, *engine, None) {
+                        // ⊘ `None` on BOTH refinements. The doorbell path materializes a
+                        // channel with no engine object to read and no ring the core looked
+                        // up — see `plan_doorbell`. A ring adopted here would be adopted
+                        // without the leaf having been joined.
+                        match rm.alloc_channel(vas, *engine, None, None) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
@@ -2664,6 +2734,7 @@ impl Worker {
                 engine,
                 class,
                 params,
+                adopt,
             } => {
                 let (chan, fresh_vas, fresh_chan) = match *channel {
                     Some(c) => (c, None, None),
@@ -2684,6 +2755,10 @@ impl Worker {
                                 class: *class,
                                 params,
                             }),
+                            // ★★★★★ LEG A2 — THE PRODUCTION CALLER. `Some` here is the
+                            // whole rung: it is the only path on which a host channel is
+                            // born over memory this port did not allocate.
+                            *adopt,
                         ) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {

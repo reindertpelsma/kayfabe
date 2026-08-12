@@ -3336,8 +3336,11 @@ impl SharedDevice {
                         let r = kayfabe_fwd::route_engine_object(spine, target_gpu, vchid, class)?;
                         Ok((r.proc, r))
                     },
-                    |_spine, proc, route| {
-                        let planned = kayfabe_fwd::plan_engine_object(proc, &route, class, params)?;
+                    |spine, proc, route| {
+                        // ★★★★★ LEG A2 — the spine is now READ here, for the channel's own
+                        // declared `gpFifoOffset`. See `plan_engine_object`.
+                        let planned =
+                            kayfabe_fwd::plan_engine_object(spine, proc, &route, class, params)?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
@@ -3372,8 +3375,11 @@ impl SharedDevice {
                         )?;
                         Ok((r.proc, r))
                     },
-                    |_spine, proc, route| {
-                        let planned = kayfabe_fwd::plan_engine_object(proc, &route, class, params)?;
+                    |spine, proc, route| {
+                        // ★★★★★ LEG A2 — the spine is now READ here, for the channel's own
+                        // declared `gpFifoOffset`. See `plan_engine_object`.
+                        let planned =
+                            kayfabe_fwd::plan_engine_object(spine, proc, &route, class, params)?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
