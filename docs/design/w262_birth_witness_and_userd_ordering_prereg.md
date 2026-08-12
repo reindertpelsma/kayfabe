@@ -245,3 +245,24 @@ Stated before the run.
 
 ⊘ If the `off` arm prints **no `GR-BIRTH` line at all**, the correct reading is *"the witness did
 not run"*, not *"nothing was born"* — and Q2 exists to force that reading.
+
+---
+
+## 4. ⊘ MEASURED — appended below the line each prediction was registered on
+
+> **See `traces/boots/w262/RESULT.md` for the full scorecard and the three boots.**
+
+**Q3 = 16 on `ring`, 0 on `off`. LEG A2 FIRED**, on the walling client `0xc1d0000c`, over 16
+distinct declared `gp_fifo_va` inside one joined leaf. Q1 `CUP2_RC = 124` on both arms with the
+pre-registered movement of **zero**. Every non-target observable identical across the arms.
+
+**⊘ Q7 MISSED**: registered as *"24, `w261`'s number, exactly"*; measured **25**.
+
+**⊘ Q5 `NOT-ASKED` = 0 on both arms and has no live known-positive** — no doorbell
+materialization occurred.
+
+**Q9 favourable on both arms**, and §3.2's registered caveat is what the result turned out to be
+about: the follow-up boot `w262b_ring` shows all 16 guest-ring births preceding every
+`0x3000`-stride page's first cursor advance — **and** shows the predicate
+`(addr & 0xfff) == 0x8c` producing a **measured false positive** on a ring page
+(`+0x90000, first_val=0xd801`), which is why that remains an indication rather than a proof.

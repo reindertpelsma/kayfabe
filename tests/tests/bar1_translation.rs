@@ -601,6 +601,36 @@ fn the_c_gp_put_witness_watches_the_offset_the_abi_names() {
         );
     }
 
+    // ★★★★★ ⊘⊘ **THE FALSE-POSITIVE CLASS, MEASURED — and the eleven rows above do NOT rule
+    // it out.** `[measured 2026-08-12, boot `w262b_ring`, GA106 / 580.159.04]` the per-page
+    // census recorded a "cursor advance" on page `+0x90000` with **`first_val = 0xd801`**.
+    // `0x90000` is a RING page (`BAR1[0] off=0x90000 val=0x20000000`), and `0xd801` has the
+    // shape of a GPFIFO entry's HIGH dword — compare the measured `0x2801` and `0x6801`. ⇒ a
+    // ring whose 18th entry pair lands at `+0x88 / +0x8c` collides with the predicate.
+    //
+    // ⚠ The eleven `entry_stores` above are the entries the guest happened to write in the
+    // FIRST 16 recorded accesses; they stop at `0x90010`. A gate built only from them reads as
+    // *"the predicate is clean"* and is not — `a_correct_citation_narrowed_by_the_reading`.
+    // This row is the counterexample, so the claim can never be made again from that evidence.
+    let measured_false_positive: u64 = 0x9008c;
+    assert_eq!(
+        measured_false_positive & 0xfff,
+        kayfabe_abi::submit::USERD_GP_PUT,
+        "the measured false positive must still be one, or this record has gone stale"
+    );
+    // ⊘ The only signal that separated it was the VALUE's shape, and a value shape is evidence
+    // and not a discriminator. A page offset alone cannot say USERD from ring, and this
+    // assertion exists so that a future rung claiming otherwise has to delete it first.
+    assert_eq!(
+        (
+            0xd801_u64 & 0xffff,
+            0x2801_u64 & 0xffff,
+            0x6801_u64 & 0xffff
+        ),
+        (0xd801, 0x2801, 0x6801),
+        "the three measured GPFIFO-entry high dwords"
+    );
+
     // ⊘⊘ AND THE LIMIT, asserted rather than only written down. The four measured stores are
     // `0x20000` apart; the walling GR channels' declared USERDs (`userd=h0x5c000014/off0x2000,
     // 0x5000, 0x8000, …`, `w261`) are `0x3000` apart in ONE memory object. Nothing joins a
