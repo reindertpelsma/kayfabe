@@ -351,7 +351,12 @@ impl Vas {
             gpu,
             pdb,
             origin,
-            table: AddressTable::new(),
+            // ★★★★★ CLAIMED, never bare. `AddressTable::owned_by` is what makes the owner's
+            // per-VAS guarantee CHECKED rather than structural-by-convention: a caller handed
+            // the wrong `Vas` is refused by name at both entrances instead of answering
+            // confidently and wrongly. ⊘ `AddressTable::new()` here would be the silent
+            // no-op, and `tests/tests/operand_join_is_per_vas.rs` asserts this call site.
+            table: AddressTable::owned_by(pdb),
             host_vas: None,
             pt_pages: BTreeSet::new(),
             pt_meta: BTreeMap::new(),

@@ -4375,7 +4375,33 @@ impl RmBackend for HostRmBackend {
         let desc = self
             .conn
             .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;
-        let host_va = match self.conn.raw_map_dma(range, desc, len, Some(at.0)) {
+        // ★★★★★ **`map_dma_both`, NOT `raw_map_dma` — w282, and this line is the whole of
+        // it.** `[measured 2026-08-13, boot `w282_client`, real GA106]` leg 7 joined both CE
+        // operand leaves, `placed_as_asked=true`, `host_va == leaf.va`, the establishment
+        // copy brought 4092 and 3072 non-zero bytes across, `#255` went QUIET and the address
+        // table read `HostBacked` at the guest's own VAs — **and the host copy engine still
+        // took `Xid 31 CE0 HUBCLIENT_CE1 FAULT_PTE ACCESS_TYPE_VIRT @ 0x1_20010000`, the
+        // same VA, unmoved.**
+        //
+        // ⊘⊘ Because this line placed the object in **one** address space and the engine
+        // runs in **another**. `ce_copy_outcome`'s own comment states it exactly (`:5333`):
+        //
+        // > *"W229 — the CE channel is built in the isolate's OWN address space, never in
+        // > `vas`. `vas` still names the space the OPERANDS live in, and **`map_dma_both`
+        // > has placed them at the same addresses in both**, which is why `src`/`dst` below
+        // > need no translation."*
+        //
+        // That premise was **true of every other publisher and false of this one.**
+        // `publish_backing` and the guest-RAM pin both go through [`Self::map_dma_both`];
+        // the join went through `raw_map_dma` and mapped the guest-facing range only. The
+        // ring's leaf never exposed it — *we* decode the ring in the VMM and hand `ce_copy`
+        // explicit `src`/`dst`, so nothing the engine dereferences came out of it. An
+        // **operand** is the first joined object a real engine walks for itself.
+        //
+        // ⇒ It is `w229`'s finding one plane over, and the fix is `w229`'s fix: place it
+        // twice, at one address, all-or-nothing. ⚠ `map_dma_both` unwinds the guest-side
+        // mapping itself if the shadow refuses, so the arm below no longer has to.
+        let host_va = match self.map_dma_both(range, desc, len, Some(at.0)) {
             Ok(va) => va,
             Err(e) => {
                 let _ = self.free(self.stamp(desc));
@@ -4386,6 +4412,11 @@ impl RmBackend for HostRmBackend {
         // redundant: this is the only side that can still unwind the descriptor cheaply, and
         // a mapping adopted at the wrong VA is a host engine pointed at whatever else lives
         // there — `PinGuestRam`'s own argument, one plane over.
+        //
+        // ⊘ Kept even though `map_dma_both` already refuses a shadow that landed elsewhere:
+        // that check compares the two spaces to EACH OTHER, and this one compares the pair to
+        // **what the caller asked for**. Two different questions, and `w270` measured the cost
+        // of answering the second with the first.
         if host_va != at.0 {
             let _ = self.conn.raw_unmap_dma(range, host_va);
             let _ = self.free(self.stamp(desc));
