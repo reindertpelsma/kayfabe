@@ -181,7 +181,7 @@ grade() {
   # ★★★★★ **THE RUNG'S OWN FLAG, AND THE CONTROL ASSERTS THE OPPOSITE** — an unarmed control
   # that is silently armed is the same defect as an armed run that is silently unarmed, and it
   # is the ONLY variable between `client` and `clientoff`.
-  local wantoj='join'; [ "$kind" = clientoff ] && wantoj='off'
+  local wantoj='join'; [ "$kind" = clientoff ] && wantoj='assert'
   grep -qE "kayfabe: OPERAND-JOIN arm=$wantoj " "$Q" 2>/dev/null \
     && echo "    ★★★★★ OPERAND-JOIN: PASS (arm=$wantoj — this arm wanted $wantoj)" \
     || { echo "    ★★★★★ OPERAND-JOIN: FAIL — wanted 'arm=$wantoj'. ⊘ THIS BOOT IS VOID for"; \
@@ -334,6 +334,8 @@ PY
   # =========================================================================================
   echo "--- ★★★★★ #255 FAKE-FB-IN-USERSPACE-VAS — clientoff MUST say FIRED, client MUST say QUIET:"
   echo "      lines = $(grep -c '#255 FAKE-FB-IN-USERSPACE-VAS' "$Q" 2>/dev/null)   ⊘ 0 ⇒ the instrument NEVER RAN"
+  echo "      ⊘⊘ A ZERO ON THE CONTROL IS THE INSTRUMENT NOT RUNNING, NOT AN ABSENCE OF THE"
+  echo "         CONDITION — that is exactly what w282_clientoff measured on the two-arm draft."
   echo "      FIRED = $(grep -c '#255 FAKE-FB-IN-USERSPACE-VAS.*FIRED' "$Q" 2>/dev/null)  QUIET = $(grep -c '#255 FAKE-FB-IN-USERSPACE-VAS.*QUIET' "$Q" 2>/dev/null)  NOT-ASKED = $(grep -c '#255 FAKE-FB-IN-USERSPACE-VAS.*NOT ASKED' "$Q" 2>/dev/null)"
   echo "      the build it compiled as (⊘ release REPORTS ONLY — the debug_assert is additive):"
   grep -oE '#255 FAKE-FB-IN-USERSPACE-VAS build=[a-z]+' "$Q" 2>/dev/null | sort -u | sed 's/^/        /'
@@ -442,7 +444,14 @@ for a in $ARMS; do
     clientoff) export KAYFABE_RING_VIDMEM=on
                export KAYFABE_PUSHBUF_VIDMEM=on
                export KAYFABE_PT_SWEEP=on
-               # KAYFABE_OPERAND_JOIN deliberately UNSET.
+               # ★★★ `assert`, NOT unset. ⊘⊘ The first draft used `off`, and w282_clientoff
+               #   MEASURED the defect: with #255 inside the armed path the control printed
+               #   ZERO #255 lines, so the instrument's guaranteed known-positive was
+               #   unreachable and `QUIET` and `never ran` were the same observation.
+               #   `assert` classifies and states #255 and JOINS NOTHING — behaviourally
+               #   identical to `off`, and its expected reading is `#255 ... FIRED`, a
+               #   POSITIVE observation rather than an absence.
+               export KAYFABE_OPERAND_JOIN=assert
                export POST_CAPTURE_HOOK=$REPO/scripts/bench/r33_hook_ce_client.sh
                export KAYFABE_R33_BIN=$CLIENT; export GQ_TIMEOUT=240 ;;
     # ★★★★★ THE OWNER'S ACTUAL QUESTION — *"I am curious if it passes the cup2 boundary"*.
