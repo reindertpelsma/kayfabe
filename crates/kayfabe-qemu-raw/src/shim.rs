@@ -8369,6 +8369,22 @@ impl SharedDoorbell {
         let (mut tasks, mut skipped, mut ran, mut trunc, mut pages) = (0usize, 0usize, 0, 0, 0);
         let (mut bound, mut swept_binds, mut unbound, mut unwitnessed) = (0usize, 0, 0, 0);
         let (mut published, mut faults, mut reach_faults, mut refusals) = (0usize, 0, 0, 0);
+        // ★★★★★ **`unchanged` AND `dropped`, AND THEY ARE THE READING, NOT DECORATION.**
+        //
+        // `[measured, w276_on]` the first armed boot read `bound=0 swept_binds=0 pages=79
+        // refusals=255` — and **that set of numbers has two opposite readings**:
+        //   (a) the sweep found leaves and the table would not take them;
+        //   (b) the sweep found leaves that were **already bound**, so there was nothing to add.
+        // Only `unchanged` separates them, and it was not printed. ⇒ the instrument could see
+        // its own null result and not say which null it was. Same class as every other absence
+        // in this campaign that read as benign.
+        let (mut unchanged, mut dropped, mut repointed) = (0usize, 0, 0);
+        // ★★ And the shadow's own answer to *"was the relaxation even reachable"*: how many
+        // pages are admitted ONLY by the sweep. `swept_binds=0` with `swept_only=0` means the
+        // witness transport already covered every root-reachable page — a statement about the
+        // TRANSPORT. `swept_binds=0` with `swept_only>0` would mean those pages held no
+        // bindable leaves — a statement about the GUEST. Two different findings.
+        let mut swept_only = 0usize;
         let mut reasons: std::collections::BTreeMap<kayfabe_fwd::SweepReason, usize> =
             std::collections::BTreeMap::new();
         let mut first_fault: Option<String> = None;
@@ -8394,6 +8410,10 @@ impl SharedDoorbell {
             swept_binds += out.swept_binds;
             unbound += out.unbound;
             unwitnessed += out.unwitnessed;
+            unchanged += out.unchanged;
+            repointed += out.repointed;
+            dropped += out.dropped.len();
+            swept_only += self.device.vas_swept_only(pid);
             published += out.pages_published;
             faults += out.faults.len();
             reach_faults += out.reach_faults.len();
@@ -8419,10 +8439,11 @@ impl SharedDoorbell {
         }
         format!(
             " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
-             pages={pages} reasons={reasons:?} → bound={bound} swept_binds={swept_binds} \
-             unbound={unbound} unwitnessed={unwitnessed} published={published} \
-             faults={faults} reach_faults={reach_faults} refusals={refusals} \
-             first={} | GUEST-DESCRIBES {}",
+             pages={pages} reasons={reasons:?} → bound={bound} unchanged={unchanged} \
+             repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
+             dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
+             published={published} faults={faults} reach_faults={reach_faults} \
+             refusals={refusals} first={} | GUEST-DESCRIBES {}",
             first_fault.as_deref().unwrap_or("NONE"),
             if ranges.is_empty() {
                 "(no completed sweep this doorbell — ⊘ NOT 'the guest describes nothing')"

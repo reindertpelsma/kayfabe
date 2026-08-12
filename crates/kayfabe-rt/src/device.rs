@@ -2849,6 +2849,22 @@ impl SharedDevice {
         Some((plan, out))
     }
 
+    /// ★★ **How many page-table pages this proc holds that ONLY a sweep admitted**, summed
+    /// over its address spaces.
+    ///
+    /// ⊘ The number that separates two readings of `swept_binds=0`, which look identical:
+    /// *"the witness transport already covered every root-reachable page"* (`0` here — a
+    /// statement about our transport) from *"those pages held no bindable leaves"* (`>0` here
+    /// — a statement about the guest). `[measured, w276_on]` a boot printed `swept_binds=0`
+    /// and could say neither.
+    #[must_use]
+    pub fn vas_swept_only(&self, pid: ProcId) -> usize {
+        self.with_proc_mut(pid, |p| {
+            p.vases.values().map(|v| v.reach.swept_only_len()).sum()
+        })
+        .unwrap_or_default()
+    }
+
     /// ★★★ **ARM 2.1's raw material** — every address space's coalesced reachable VA ranges,
     /// one string per `Vas`.
     ///

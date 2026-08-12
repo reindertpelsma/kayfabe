@@ -291,8 +291,15 @@ PY
 # ★ The ARMED arm runs FIRST, deliberately: if the session is cut short, the rung's own
 #   measurement exists and the control is the one that is missing — which is recoverable, and
 #   the other order is not. ⊘ w271_pin/w274_pin/w275_pin are near-controls at older builds.
-boot ${PFX}_on   shared  ring       pin           on              pin        passthrough  pin           on
-boot ${PFX}_off  shared  ring       pin           on              pin        passthrough  pin           off
+# ⊘ Selectable so a re-run that only needs to re-measure the ARMED arm — e.g. after an
+#   INSTRUMENT fix, which is not a device change — does not spend a second boot re-confirming a
+#   control whose device is byte-identical. ⚠ A run that skips the control must SAY it did;
+#   the line below is what says it.
+ARMS=${W276_ARMS:-"on off"}
+echo "=== ARMS TO RUN: [$ARMS] $([ "$ARMS" = "on off" ] || echo '⚠ NOT THE FULL PAIR — this run has no control of its own; name the boot it borrows one from')"
+for a in $ARMS; do
+  boot ${PFX}_${a} shared ring pin on pin passthrough pin "$a"
+done
 
 echo "=== ARTEFACT SIZES ==="
 ls -l /workspace/bench/run_${PFX}_* 2>/dev/null
