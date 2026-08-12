@@ -24,8 +24,34 @@ The walk works: 4 address spaces, 79 page-table pages, **zero** faults, **zero**
 `bound=0 swept_binds=0`: the relaxation admitted pages and **not one leaf in the desired set
 came from a page the witness had not already seen.**
 
-⇒ **The whole-VAS sweep is not what this port lacks.** On this arm the CPU/BAR2 witness
-transport already covers the entire root-reachable set.
+⇒ **The whole-VAS sweep is not what this port lacks** *in the sense the rung expected*.
+
+⊘⊘ **AND THE CONFIRMING BOOT CORRECTS THAT SENTENCE — READ IT BEFORE QUOTING THE ONE ABOVE.**
+`[measured, w276b_on, build `67025ca`, the same first doorbell]` with `unchanged`, `dropped`
+and the refusal histogram printed:
+
+```
+PT-SWEEP tasks=4 skipped=0 ran=4 truncated=0 pages=79 reasons={NeverSwept: 4}
+  → bound=0 unchanged=0 repointed=0 swept_binds=0 swept_only_pages=1 dropped=0
+    unbound=0 unwitnessed=0 published=0 faults=0 reach_faults=0 refusals=255
+    by_kind={"StraddlesLiveBinding": 255}
+    refused_vas=[0x203e90000,0x203ea0000,…,0x203f00000,0x203fb0000,…,0x203fbc000,…]
+```
+
+Three numbers change the reading:
+
+- **`unchanged=0`** ⇒ the 255 leaves are **not** re-statements of bindings we already held.
+  The sweep genuinely **added 255 mappings to the desired set** that the witness-driven pass
+  had never published — because that pass only ever decodes pages that are **dirty**, so a
+  page witnessed once and never rewritten has its leaves read by **nobody**. The sweep reads
+  them all. ⇒ *"the sweep found nothing"* is **wrong**; it found 255 things.
+- **`by_kind={"StraddlesLiveBinding": 255}`** ⇒ **every single one** was refused by the address
+  table, for one reason: the leaf's range overlaps a **differently-shaped live binding** placed
+  by another populate source. Not a walk failure, not a gate — a **granularity collision**
+  between populate sources.
+- **`swept_only_pages=1`** ⇒ of 79 root-reachable page-table pages, **78 were already
+  witnessed**. The witness transport's coverage of the root-reachable set is ~98.7 %, measured.
+  ⇒ the *relaxation* is near-inert; the *sweep* is not.
 
 ### 2. ★★★★★ THE COMPLETION PLANE AT `0x2_0440_fff0` IS **CLEARED**, at value level, with times
 
@@ -87,7 +113,8 @@ sweep 88 reads `+0x400000`. The dirty-driven re-sweep is tracking the guest live
 | it walks from the guest's own root | 4 root tasks on the first doorbell, `reasons={NeverSwept: 4}` |
 | the dirty trigger **discriminates** | later doorbells: `tasks=2 skipped=2 reasons={Dirty: 2}` — 67×, 15×, 4×, 1× |
 | it never truncates at this scale | `truncated=0` on **all 88** rows |
-| the budget is oversized, measured | max `pages=79` over 4 VASes ⇒ ≈40 448 entries vs `PT_SWEEP_BUDGET = 300_000` **per VAS** — ~7× headroom on the whole run |
+| the budget is oversized, measured | `[w276b_on]` `truncated_total=0 pages_total=4616 max_pages_one_doorbell=79` over 88 doorbells ⇒ the largest single walk is ≈40 448 entries against `PT_SWEEP_BUDGET = 300_000` **per VAS**. ⊘ The C's constant is ~7× larger than this workload needs; it is **not** re-derived downward here, because one workload's address space is not a bound on any other's |
+| ⊘ the fault VA is not in the refusal set either | `[w276b_on]` `0x7e6b_42e00000 in a refused_vas list? 0 row(s)` — it is neither bound nor refused |
 | the walk is clean | `faults=0 reach_faults=0` on every row |
 | the witness gate is no longer the blocker | `unwitnessed=0` on every row (it is a **non-zero** count when the gate bites) |
 | the relaxation is inert **here** | `swept_binds=0` on every row |
@@ -170,9 +197,37 @@ The correspondence, in full:
 - ★ A slot **no declaration names** moves too: `+0xf70 [UNCLAIMED]` goes `1 → 2 → 5`. There
   **is** a second writer on this page — and it is **monotonic**, so it is not the M5.38 shape.
 
-⇒ **`backwards=0` ⇒ the M5.38 second-writer corruption story is refuted on this page for this
-boot.** The page is neither frozen nor corrupted: it is written, in order, and the guest hangs
-anyway.
+⇒ **No payload word ever went backwards, across all three boots** ⇒ the M5.38 second-writer
+corruption story is refuted on this page. The page is neither frozen nor corrupted: it is
+written, in order, and the guest hangs anyway.
+
+### ⊘⊘ AND THE DETECTOR FIRED ONCE — ON ITS OWN FALSE POSITIVE. That is the honest headline.
+
+`[measured, w276b_on]` `BACKWARDS transitions = 1`:
+
+```
++0xf70 0x00000001 → 0x00000002 [UNCLAIMED]  n=19 back=0
++0xf78 0xff109e00 → 0x1dc832e0 [UNCLAIMED]  ⚠⚠ BACKWARDS …   n=20 back=1
++0xf7c 0x18cb1a69 → 0x18cb1a6a [UNCLAIMED]  n=21 back=1
+```
+
+`+0xf78` is a **timestamp low word** and `+0xf7c` its **high word**, and they moved in the
+**same sample**: the low word wrapped and the high word **carried**. That is a 64-bit GPU clock
+advancing — the *same* writer, one tick later — not a second writer.
+
+⇒ **My predicate (`w < p`, un-scoped) turns the normal behaviour of a `FOUR_WORDS` report into
+this campaign's most alarming signature, roughly once every 2³² clock ticks.** An instrument
+that cries its loudest word on a schedule is worse than a quiet one: the *next* real decrease
+would be read as another wrap. `[a-falsifier-that-flags-its-own-good-news]`
+
+★ **Fixed** (`09d4203`, compiles, ⊘ **not re-booted** — stated rather than implied): the
+predicate is now scoped by the attribution the reader already computes, so only a **declared
+payload** slot counts as `backwards`; a decrease anywhere else is counted and printed
+separately as `decreases_elsewhere`, never folded in. ⊘ `[UNCLAIMED]` words are excluded too —
+we cannot say what role they play, and *"we do not know"* must not be spelled *"corruption"*.
+
+⇒ **Re-read the three boots under the corrected predicate: `backwards_on_payload = 0` on all
+three.** The one firing was a clock, and every payload transition in every boot went up.
 
 ⚠ **It is a SAMPLER, not a watchpoint.** Two writes inside one tick read as one transition, and
 a write undone within a tick is invisible. `transitions=0` would have bounded *"no persistent
@@ -243,9 +298,12 @@ It is recorded as a gap in `PREREGISTRATION.md` rather than back-filled as a pre
 - **It does not test the C's ordering** — decode-at-release vs decode-at-doorbell. That is the
   one half of the C's `#13` fix this port does not have, and on a passthrough arm there is no
   interposition point for it.
-- **`LEAF-PRESENT` does not say why nothing backs the address.** The refused-VA join
-  (`67025ca`) is what would say whether `0x7461_86e00000` is in the table's refusal set; see
-  the confirming boot's section below.
+- **`LEAF-PRESENT` does not say why nothing backs the address — and the confirming boot shows
+  it is not the refusals either.** `[measured, w276b_on]` the join reads
+  `0x7e6b_42e00000 in a refused_vas list? 0 row(s)` while the same boot reports
+  `LEAF-PRESENT in a run 0x7e6b42e00000+0x200000`. ⇒ the faulting address is **neither bound
+  nor refused**: the sweep's desired set never contained it. Why it did not is the **next
+  question**, and this rung does not answer it.
 - **One workload, one chip (GA106), one driver (`580.159.04`), one boot per arm.** The write
   census is a sampler; the sweep numbers are one guest's address-space shape.
 - **Nothing here measures doorbell delivery, engine execution, or throughput.**

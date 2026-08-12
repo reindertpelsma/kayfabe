@@ -3727,8 +3727,14 @@ struct SemaPageReader {
     words: std::collections::BTreeMap<(u64, usize), u32>,
     /// Transitions observed, ever — so *"nothing was written"* is a **count**, not an absence.
     transitions: u64,
-    /// Transitions in which a word went DOWN. ★★★ Non-zero here is the M5.38 shape.
+    /// Transitions in which a **payload** word went DOWN. ★★★ Non-zero here is the M5.38 shape.
     backwards: u64,
+    /// ★★ Decreases on a word that is **not** a declared payload — a timestamp low word
+    /// carrying, or a slot no declaration names. Counted **apart** from [`Self::backwards`]
+    /// because they are a different claim: see the predicate's comment for the measurement
+    /// that forced the split. ⊘ Reported, never folded in — a decrease we cannot attribute is
+    /// neither evidence of corruption nor evidence of its absence.
+    decreases_elsewhere: u64,
 }
 
 #[cfg(feature = "host-isolates")]
@@ -3744,6 +3750,7 @@ impl SemaPageReader {
             words: std::collections::BTreeMap::new(),
             transitions: 0,
             backwards: 0,
+            decreases_elsewhere: 0,
         }
     }
 
@@ -3840,9 +3847,33 @@ impl SemaPageReader {
                     continue;
                 }
                 self.transitions += 1;
-                let down = w < p;
+                // ★★★★★ **A DECREASE IS ONLY THE M5.38 SIGNATURE ON A *PAYLOAD* WORD.**
+                //
+                // ⊘⊘ `[measured, w276b_on]` this predicate was `w < p` and it FIRED — on
+                // `+0xf78`, `0xff109e00 → 0x1dc832e0`, while `+0xf7c` went
+                // `0x18cb1a69 → 0x18cb1a6a` in the SAME sample. That is a 64-bit GPU
+                // timestamp **carrying**: the low word wraps and the high word increments.
+                // Not a second writer — the *same* writer, one nanosecond later.
+                //
+                // ⇒ The un-scoped predicate turns the normal behaviour of a `FOUR_WORDS`
+                // report into this campaign's most alarming signature, roughly once per
+                // 2^32 clock ticks. An instrument that cries the loudest word it has, on a
+                // schedule, is worse than one that stays quiet: the next real decrease would
+                // be read as another wrap. `[a-falsifier-that-flags-its-own-good-news]`
+                //
+                // ★ The fix is the attribution this reader ALREADY computes: `whose()`
+                // distinguishes the declared payload slot from `+8`/`+12`, which are the
+                // timestamp the engine writes. Only the payload is monotonic by contract.
+                // ⊘ An `[UNCLAIMED]` word is NOT counted either — we cannot say which role it
+                // plays, and *"we do not know"* must not be spelled *"corruption"*. It is
+                // still PRINTED, with its own tag, so nothing is hidden.
+                let tag = Self::whose((i * 4) as u64, &here);
+                let is_payload = tag.starts_with("[GR-REPORT p");
+                let down = w < p && is_payload;
                 if down {
                     self.backwards += 1;
+                } else if w < p {
+                    self.decreases_elsewhere += 1;
                 }
                 // Printed unconditionally, and every one of them: a transition is rare by
                 // construction (the steady state is what the heartbeat covers) and the ORDER
@@ -3850,17 +3881,21 @@ impl SemaPageReader {
                 // the tail of exactly the sequence a corruption story is told in.
                 eprintln!(
                     "    SEMA-WRITE t=+{t}ms gpa=0x{page_gpa:x}+0x{:03x} 0x{p:08x} → \
-                     0x{w:08x}{}{} n={} back={}",
+                     0x{w:08x}{tag}{} n={} back={} other_dec={}",
                     i * 4,
-                    Self::whose((i * 4) as u64, &here),
                     if down {
-                        " ⚠⚠ BACKWARDS — a DECREASE is the M5.38 second-writer signature: \
-                         UVM reads any decrease as a 2^32 wrap and wedges the channel"
+                        " ⚠⚠ BACKWARDS ON A PAYLOAD — the M5.38 second-writer signature: UVM \
+                         reads any decrease as a 2^32 wrap and wedges the channel"
+                    } else if w < p {
+                        " ⊘ decrease on a NON-payload word (a timestamp low word carrying, or \
+                         an unattributed slot) — NOT the M5.38 signature; see the neighbouring \
+                         +4 word for the carry"
                     } else {
                         ""
                     },
                     self.transitions,
                     self.backwards,
+                    self.decreases_elsewhere,
                 );
             }
             let sig = Self::signature(&buf);
@@ -3995,11 +4030,12 @@ impl SemaPageReader {
         //   measured disease, and the thing "delete the second writer" fixed |
         eprintln!(
             "kayfabe: SEMA-WRITE-CENSUS looks={} words_tracked={} transitions={} \
-             backwards={} ⇒ {}",
+             backwards_on_payload={} decreases_elsewhere={} ⇒ {}",
             self.ticks,
             self.words.len(),
             self.transitions,
             self.backwards,
+            self.decreases_elsewhere,
             match (self.ticks, self.transitions, self.backwards) {
                 (0, _, _) => "⊘ THE READER NEVER RAN — this row is NOT evidence that nothing \
                               was written",
@@ -4007,10 +4043,11 @@ impl SemaPageReader {
                     "FROZEN FROM THE FIRST LOOK — at this cadence nothing ever changed. ⊘ \
                      Bounds 'no persistent change', never 'nobody wrote'",
                 (_, _, 0) =>
-                    "WRITTEN, MONOTONICALLY — every transition went up. ⊘ No second-writer \
-                     signature on these words",
-                _ => "★★★ A WORD WENT BACKWARDS — the M5.38 second-writer signature. See the \
-                      SEMA-WRITE rows for which, when, and whose",
+                    "NO PAYLOAD WENT BACKWARDS — ⊘ scoped to the DECLARED payload words. A \
+                     decrease on a timestamp low word is a 64-bit clock carrying and is \
+                     counted in `decreases_elsewhere`, not here",
+                _ => "★★★ A PAYLOAD WENT BACKWARDS — the M5.38 second-writer signature. See \
+                      the SEMA-WRITE rows for which, when, and whose",
             }
         );
     }
