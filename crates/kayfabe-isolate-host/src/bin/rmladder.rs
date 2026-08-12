@@ -2557,8 +2557,13 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
 
     // --- arm 1: THE COPY ----------------------------------------------------------------
     census::phase("R33 arm1 ce-copy");
+    // ⊘⊘ `met_the_whole_bar()`, NOT `copied()`. See [`CeEvidence::met_the_whole_bar`]: the
+    // ★ arm used to be gated on `copied()`, which checks the bytes and the semaphore and
+    // NEVER compares the cursors — so `w283c` printed a ★ line reading `GP_GET 0 caught
+    // GP_PUT 1` and returned `R33_RC=0`. The banner three lines up says the bar is FOUR
+    // facts; the verdict implemented three.
     let copied = match rm.prove_ce_copy(vas, PATTERN) {
-        Ok(e) if e.copied() => {
+        Ok(e) if e.met_the_whole_bar() => {
             println!(
                 "★     R33 arm 1 COPY      = {} bytes moved: dst[0] {:#010x} -> {:#010x}, \
                  dst[last] {:#010x} (want {:#010x}), engine semaphore {:#010x} (declared \
@@ -2590,11 +2595,31 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                 e.payload,
                 e.submit.gp_get,
                 e.submit.gp_put,
-                if e.submit.gp_get == e.submit.gp_put {
-                    "the entry WAS fetched and the methods did nothing: SET_OBJECT class, \
-                     subchannel, or an operand that does not resolve"
-                } else {
-                    "the entry was NEVER fetched: USERD, the doorbell token, or the schedule"
+                // ★★★★★ **NAME WHICH OF THE FOUR FAILED.** ⊘ The old text branched on the
+                // cursors ALONE and so described a whole-submission failure even when the
+                // bytes had moved and the semaphore had landed — which is precisely the
+                // state `w283c` reached. A diagnosis that is true of one fact and printed
+                // as if it were true of all four is how a partial pass reads as a total
+                // failure, and it is the mirror of the ★ line's own defect.
+                match (e.copied(), e.cursor_caught_up()) {
+                    (true, false) =>
+                        "★★★ THREE OF FOUR: the bytes MOVED and the semaphore carries the \
+                         DECLARED payload at the DECLARED address — only GP_GET did not \
+                         reach GP_PUT. ⊘ That cursor is THIS channel's own USERD; a \
+                         forwarding path that executes the work on a DIFFERENT host channel \
+                         cannot advance it, and this line is what says so",
+                    (false, true) =>
+                        "the entry WAS fetched and the methods did nothing: SET_OBJECT \
+                         class, subchannel, or an operand that does not resolve",
+                    (false, false) =>
+                        "the entry was NEVER fetched: USERD, the doorbell token, or the \
+                         schedule",
+                    // Unreachable — `met_the_whole_bar()` is exactly this conjunction, so
+                    // the ★ arm took it. Named rather than `unreachable!()`: a client that
+                    // panics on a guest-reachable state is a DoS we hand the guest.
+                    (true, true) =>
+                        "⊘ ALL FOUR HELD AND THIS ARM STILL RAN — the verdict predicate and \
+                         this diagnosis disagree, which is an instrument bug, not a result",
                 }
             );
             false

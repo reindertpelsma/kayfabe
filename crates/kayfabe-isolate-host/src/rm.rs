@@ -3377,6 +3377,42 @@ impl CeEvidence {
             && self.after_last == self.expect_after_last
             && self.submit.semaphore == self.payload
     }
+
+    /// ★★★★★ **THE WHOLE BAR THE CLIENT'S OWN BANNER STATES — all FOUR facts, including the
+    /// one [`CeEvidence::copied`] does not check.**
+    ///
+    /// # ⊘⊘ THE DEFECT THIS EXISTS TO FIX, measured on my own instrument
+    ///
+    /// `[measured 2026-08-13, boot `w283c_client`, real GA106]` the client printed its **★
+    /// success** line — *"4096 bytes moved … engine semaphore 0x00000001 (declared
+    /// 0x00000001), **GP_GET 0 caught GP_PUT 1**"* — and returned **`R33_RC=0`**. Read the
+    /// numbers: `0` did not catch `1`. The word *"caught"* is **template text**, printed
+    /// unconditionally, and [`CeEvidence::copied`] — the predicate the ★ arm is gated on —
+    /// checks the bytes and the semaphore and **never compares the cursors**.
+    ///
+    /// ⇒ The client's banner says *"the bar is FOUR facts … **GP_GET reached GP_PUT** …"* and
+    /// its verdict implemented **three**. On the native arm the two cursors agree, so the
+    /// gap is invisible exactly where it does not matter and decisive exactly where it does:
+    /// in the guest, whose channel our forwarding path never runs.
+    ///
+    /// ★ This is `a_falsifier_that_flags_its_own_good_news` in its purest form — a success
+    /// line that CONTAINS the words of the criterion it is not testing. It is the same class
+    /// as `GCC_CUP2_RC=0` matching an unanchored `CUP2_RC` grep, one plane over.
+    ///
+    /// ⊘ [`CeEvidence::copied`] is deliberately left alone: it answers *"did the bytes move
+    /// and did the engine retire"*, which is a real and separately useful question. The
+    /// conjunction belongs at the verdict, not inside a narrower predicate.
+    #[must_use]
+    pub fn met_the_whole_bar(&self) -> bool {
+        self.copied() && self.submit.landed(self.payload)
+    }
+
+    /// Whether the guest's own `GP_GET` reached its own `GP_PUT` — the fourth fact, named
+    /// on its own so a report can say **which** of the four failed.
+    #[must_use]
+    pub fn cursor_caught_up(&self) -> bool {
+        self.submit.gp_get == self.submit.gp_put
+    }
 }
 
 impl SubmitOutcome {
