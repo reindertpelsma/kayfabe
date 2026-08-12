@@ -5882,6 +5882,23 @@ impl SharedDoorbell {
         let page = Self::RING_PIN_BYTES;
         let (pages, dropped_pages, first_dropped_page) = pushbuffer_pages(&extents, page);
         let mut resolved_pages: Vec<(u64, u64)> = Vec::new(); // (va, gpa), VA-sorted
+        // ★★★★★ **THE COUNT AND THE SAMPLE ARE SEPARATE VARIABLES, and that is a FIX to my
+        // own first draft rather than a style.**
+        //
+        // ⊘ The first draft printed `wrong_aperture.len()` as the *count* of wrong-aperture
+        // pages and derived the MISS count by subtracting it — but that `Vec` is capped at
+        // [`PUSHBUF_REPORT`] entries for the *sample*. With five wrong-aperture pages it
+        // would have printed `4 NOT-IN-GUEST-RAM` and inflated `MISS` by one, and both
+        // numbers would have looked like measurements. **A truncated sample used as a count
+        // is the `scan=64/1024 … nonzero=NONE` defect exactly** — which is the regression
+        // [`ring_scan_sentence`] was extracted from this same file to fix.
+        //
+        // ⚠ Caught before any output was read, by asking what the line would print against a
+        // population the code allows rather than against the one this workload produces —
+        // where `pages.len() == 1` per doorbell makes the cap unreachable and the bug
+        // **invisible to every green log**.
+        let mut n_miss = 0usize;
+        let mut n_wrong_aperture = 0usize;
         let mut misses: Vec<String> = Vec::new();
         let mut wrong_aperture: Vec<String> = Vec::new();
         for &pva in &pages {
@@ -5890,6 +5907,7 @@ impl SharedDoorbell {
                 .resolve(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(pva))
             {
                 Err(e) => {
+                    n_miss += 1;
                     if misses.len() < PUSHBUF_REPORT {
                         misses.push(format!("va=0x{pva:x}:{e:?}"));
                     }
@@ -5899,6 +5917,7 @@ impl SharedDoorbell {
                 // ⊘ A vidmem binding here would hand the hypervisor's layout a FRAMEBUFFER
                 // address and pin the guest-RAM page that happens to share the number.
                 Ok((b, _)) if !b.is_guest_ram() => {
+                    n_wrong_aperture += 1;
                     if wrong_aperture.len() < PUSHBUF_REPORT {
                         wrong_aperture.push(format!(
                             "va=0x{pva:x}:{:?}@0x{:x}",
@@ -5911,22 +5930,12 @@ impl SharedDoorbell {
             }
         }
         let table = format!(
-            "{scan}\n    TABLE: {} page(s) asked, {} resolved in guest RAM, {} MISS{}, {} \
-             NOT-IN-GUEST-RAM{}{}",
+            "{scan}\n    TABLE: {} page(s) asked, {} resolved in guest RAM, {n_miss} MISS{}, \
+             {n_wrong_aperture} NOT-IN-GUEST-RAM{}{}",
             pages.len(),
             resolved_pages.len(),
-            pages.len() - resolved_pages.len() - wrong_aperture.len(),
-            if misses.is_empty() {
-                String::new()
-            } else {
-                format!(" [{}]", misses.join(" "))
-            },
-            wrong_aperture.len(),
-            if wrong_aperture.is_empty() {
-                String::new()
-            } else {
-                format!(" [{}]", wrong_aperture.join(" "))
-            },
+            pushbuffer_sample(&misses, n_miss),
+            pushbuffer_sample(&wrong_aperture, n_wrong_aperture),
             match first_dropped_page {
                 Some(va) => format!(
                     " | ⚠⚠ CAPPED at {PUSHBUF_MAX_PAGES} pages — {dropped_pages} DROPPED, \
@@ -7079,6 +7088,29 @@ fn pushbuffer_pages(
         }
     }
     (pages, dropped, first_dropped)
+}
+
+/// ★★★★★ **Render a bounded SAMPLE beside its own true COUNT, and say which it is.**
+///
+/// ⊘ `v` is capped at [`PUSHBUF_REPORT`]; `n` is the real number. When they differ the
+/// rendering says **`SAMPLE of n`** and how many are not shown — because `[a b c d]` printed
+/// beside `9 MISS` reads as a list of the nine, and a reader who takes it for one will
+/// conclude the other five addresses do not exist.
+///
+/// ★ This exists because my own first draft of
+/// [`SharedDoorbell::pin_pushbuffer_guest_ram`] used `wrong_aperture.len()` — the
+/// **sample's** length — as the count, and derived the MISS count by subtracting it. Both
+/// numbers would have been wrong the moment a fifth page refused, and both would have looked
+/// like measurements. It is the same defect [`ring_scan_sentence`] was extracted from this
+/// same file to fix, one instrument later.
+fn pushbuffer_sample(v: &[String], n: usize) -> String {
+    if v.is_empty() {
+        String::new()
+    } else if n > v.len() {
+        format!(" [{} … +{} more, SAMPLE of {n}]", v.join(" "), n - v.len())
+    } else {
+        format!(" [{}]", v.join(" "))
+    }
 }
 
 /// ★★★ **Coalesce VA-sorted `(va, gpa)` pages into runs contiguous in BOTH spaces.**
@@ -10338,9 +10370,40 @@ fn fb_userd_cursors(
 /// green log distinguishes from the one-run case. `a_census_zero_needs_a_known_positive`.
 #[cfg(test)]
 mod pushbuffer_pin_tests {
-    use super::{PUSHBUF_MAX_PAGES, pushbuffer_pages, pushbuffer_runs};
+    use super::{PUSHBUF_MAX_PAGES, pushbuffer_pages, pushbuffer_runs, pushbuffer_sample};
 
     const PAGE: u64 = 4096;
+
+    /// ★★★★★ **A TRUNCATED SAMPLE MUST NEVER RENDER AS A COMPLETE LIST** — the defect in my
+    /// own first draft, caught before any output was read.
+    ///
+    /// ⚠ `pages.len() == 1` per doorbell in the only measured workload, so the sample cap is
+    /// unreachable on a boot and this bug is **invisible to every green log**. That is
+    /// precisely why it needs a test rather than a run.
+    #[test]
+    fn a_truncated_sample_says_it_is_a_sample_and_names_how_many_are_missing() {
+        let four: Vec<String> = (0..4).map(|i| format!("va=0x{i:x}")).collect();
+        // n == len ⇒ a complete list, rendered plainly.
+        let whole = pushbuffer_sample(&four, 4);
+        assert!(whole.contains("va=0x0"), "{whole}");
+        assert!(
+            !whole.contains("SAMPLE"),
+            "★ a COMPLETE list must not be labelled a sample: {whole}"
+        );
+        // n > len ⇒ it must SAY so, and say how many are not shown.
+        let part = pushbuffer_sample(&four, 9);
+        assert!(
+            part.contains("SAMPLE of 9"),
+            "★ nine refusals rendered as four with no warning: {part}"
+        );
+        assert!(
+            part.contains("+5 more"),
+            "★ the shortfall is not named: {part}"
+        );
+        // ⊘ Empty renders as nothing at all — never as an empty pair of brackets, which
+        // reads as "we looked and found none" when nothing was looked at.
+        assert_eq!(pushbuffer_sample(&[], 0), "");
+    }
 
     /// ★★★ **The measured shape.** `w263`'s eight channels each name ONE extent, 32 bytes
     /// long, at a 2 MiB-aligned VA. One page each, one run each, no cap, no drops.
