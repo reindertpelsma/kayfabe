@@ -109,7 +109,8 @@ pub use kayfabe_trace::{FaultTag, Faulted};
 /// seam, so a shell plugging into it should not have to name a third crate to do so.
 pub use fbwin::{
     ALREADY_JOINED, Bar0Window, ESTABLISH_FAILED, FB_WRITER_KINDS, FbJoinInstalled, FbJoined,
-    FbPageOrigin, FbRefused, FbStore, FbWriter, NO_JOIN_SUPPORT, RefusingFb, SparseFb,
+    FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter, NO_JOIN_SUPPORT, RefusingFb,
+    SparseFb,
 };
 
 /// ★★★ **E2** — the usermode doorbell port, re-exported: [`RegPlane::set_doorbell`]'s

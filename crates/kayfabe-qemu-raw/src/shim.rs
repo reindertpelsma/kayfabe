@@ -1134,11 +1134,14 @@ fn fb_level_dump(plane: &kayfabe_device::plane::RegPlane, label: &str, phys: u64
     // ever wrote, so *"never written"* and *"written with zeros"* produce the identical
     // line. Residency separates them, and ⊘ `res?` — the store cannot say — is a third
     // answer that must not read as either.
-    let res = match plane.fb_is_resident(phys) {
-        None => "res?",
-        Some(true) => "resY",
-        Some(false) => "resN-NEVER-WRITTEN",
-    };
+    //
+    // ⊘⊘ **And a FOURTH: `JOINED-one-memory`.** `[measured 2026-08-12, boot `w278b_guest`]`
+    // this row printed `nz4/4096 resN-NEVER-WRITTEN` about the SAME PAGE, in one line — the
+    // four bytes being the guest's own GPFIFO entry, served correctly by a join whose
+    // install had removed the local page the residency question reads. A row that
+    // contradicts itself was read as the wall for a whole rung. `fb_page_standing` checks
+    // the join first so the contradiction is unrepresentable.
+    let res = plane.fb_page_standing(phys).tag();
     // ★★★★ §16.16 — WHO CREATED THIS PAGE, beside whether it exists. `resY` says a write
     // landed; it does not say through which aperture, and *that* is what names a write
     // path. ⊘ Absent (`by-` printed as `by?`) is its own answer and must not read as
@@ -4214,11 +4217,23 @@ impl kayfabe_fwd::FbSource for PlaneFbSource {
 
     fn page_written(&self, phys: u64) -> Option<bool> {
         let p = self.plane.upgrade()?;
-        // ★★★ RESIDENCY, not bytes. `page_writer` answers `Some` only for a page the store
-        // has a first-writer record for; `None` from the store means nothing ever wrote it.
-        // ⊘ The store CAN answer, so this returns `Some(..)` either way — the `None` arm
-        // above is reserved for "there is no store to ask", which is a different fact.
-        Some(kayfabe_mmu::walker::FbRead::page_writer(&p.pt_bytes(), phys).is_some())
+        // ★★★ RESIDENCY, not bytes — and ★★★★★ **THE JOIN FIRST**, which this did not do.
+        //
+        // ⊘⊘ **THE DEFECT THIS LINE HAD, measured `[2026-08-12, boot `w278b_guest`]`.** It
+        // read `page_writer(...).is_some()` and returned `Some(false)` whenever the store
+        // held no first-writer row. `SparseFb::install_join` **deletes those rows** for a
+        // joined range — that deletion is correct, it is what makes the leaf one memory —
+        // so every joined page answered *"never written"*. The raw CE client's GPFIFO ring
+        // sat in exactly such a leaf (`GR-RING-JOIN … leaf va=0x120020000 fb_phys=0x40000
+        // → JOINED (shared)`, ring page `0x41000`), its CPU stores through
+        // `NV_ESC_RM_MAP_MEMORY` DID land, `FbStore::read` served them back byte-correct —
+        // and this method refused the doorbell with `FwdFault::RingFbNeverWritten` anyway.
+        //
+        // ⇒ A joined page is `None` = **unmeasured**, and `fetch_ring_bytes` refuses only on
+        // `Some(false)`. ⚠ The guard is genuinely weaker there and must be: a zero-filled
+        // joined page is indistinguishable from a quiet ring, and this store cannot tell.
+        // Answering `Some(false)` to keep a guard alive is inventing a fact about the guest.
+        p.fb_page_standing(phys).written()
     }
 }
 
@@ -13177,19 +13192,18 @@ fn fb_userd_cursors(
             // the favourable-looking direction for a wrong conclusion. `FbStore::read` gets
             // this right (the join is checked first there too); `is_resident` was never
             // widened to match, and no caller had asked it about a joined address before.
-            let joined = plane
-                .joined_fb_ranges()
-                .into_iter()
-                .any(|(phys, len)| at >= phys && at - phys < len);
-            let res = if joined {
-                "JOINED-one-memory"
-            } else {
-                match plane.fb_is_resident(at) {
-                    None => "res?",
-                    Some(true) => "resY",
-                    Some(false) => "resN-NEVER-WRITTEN",
-                }
-            };
+            //
+            // ⊘⊘ **CORRECTED 2026-08-12 (w279): the last clause was FALSE WHEN WRITTEN, and
+            // that is what it cost.** Two other callers were already asking `is_resident`
+            // about joined addresses — `fb_dump_row` above, and `PlaneFbSource::page_written`
+            // on the FORWARDING path. The join check landed here, as a local `if`, and did
+            // not travel; on boot `w278b_guest` the same blindness printed
+            // `fbRING@0x41000 nz4/4096 resN-NEVER-WRITTEN` and **refused a doorbell** with
+            // `FwdFault::RingFbNeverWritten`. ⇒ The check now lives in
+            // `RegPlane::fb_page_standing` and `fb_is_resident` is GONE from the plane, so a
+            // fourth caller cannot re-acquire the defect. ★ A correction implemented at ONE
+            // call site is not a correction; it is a local escape from a shared defect.
+            let res = plane.fb_page_standing(at).tag();
             format!(
                 " fbuserd@0x{at:x} GET={} PUT={} {res}",
                 u32::from_le_bytes([w[0], w[1], w[2], w[3]]),

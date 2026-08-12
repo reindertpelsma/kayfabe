@@ -1972,11 +1972,37 @@ impl RegPlane {
         s.fb.residency()
     }
 
-    /// Whether the framebuffer holds a page for `phys` — [`None`] when it cannot say.
+    /// ★★★★★ **Where the page at `phys` stands — THE JOIN CHECKED FIRST.**
+    ///
+    /// ⊘⊘ This replaces `fb_is_resident`, which was **removed rather than kept beside it**:
+    /// a join-blind residency question reachable from the plane is a question that will be
+    /// asked again. `[measured 2026-08-12, boot `w278b_guest`]` all three of its callers —
+    /// two dump rows and the forwarding plane's `page_written` — got the wrong answer for a
+    /// joined page, and one of them refused a doorbell over it. See
+    /// [`crate::fbwin::FbPageStanding`] for the artefact line.
+    ///
+    /// ⊘ The store's own [`crate::fbwin::FbStore::is_resident`] is unchanged and still means
+    /// *"does this store hold a page"*.
     #[must_use]
-    pub fn fb_is_resident(&self, phys: u64) -> Option<bool> {
+    pub fn fb_page_standing(&self, phys: u64) -> crate::fbwin::FbPageStanding {
+        use crate::fbwin::FbPageStanding;
         let s = self.state.lock();
-        s.fb.is_resident(phys)
+        // ★★★ THE JOIN, FIRST — for the same reason `FbStore::read` and `write_tagged`
+        // check it first: after `install_join` this store's own page for the range is gone
+        // by design, so every question answered from `pages` is answered about memory that
+        // was deliberately given away.
+        if s.fb
+            .joined_ranges()
+            .into_iter()
+            .any(|(phys0, len)| phys >= phys0 && phys - phys0 < len)
+        {
+            return FbPageStanding::JoinedOneMemory;
+        }
+        match s.fb.is_resident(phys) {
+            None => FbPageStanding::Unknown,
+            Some(true) => FbPageStanding::Resident,
+            Some(false) => FbPageStanding::NeverWritten,
+        }
     }
 
     /// ★★★★ **Every resident framebuffer frame, ascending** — [`None`] when the store
