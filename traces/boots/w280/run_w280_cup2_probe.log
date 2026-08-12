@@ -1,0 +1,314 @@
+=== boot_capture tag=w280_cup2 at 2026-08-12T20:12:47+00:00 ===
+=== source revision: 0b58dd32 ===
+=== qemu binary: -rwxr-xr-x 1 root root 87920472 Aug 12 20:12 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:0b58dd321ff8857a9e3c2b930d845ac8bca6fce7 
+=== BUILD_REV.txt says (informational, NOT authoritative): kayfabe-rev:5feac9090bc58129c9906e2222f3934ae313a980
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w280/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w280/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Aug 12 20:13:02 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Aug 12 20:13 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Aug 12 20:13 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Aug 12 20:12 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Aug 12 20:12 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Aug 12 20:13 .
+drwxr-xr-x 18 root root   4000 Aug 12 20:13 ..
+cr--------  1 root root 240, 1 Aug 12 20:13 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Aug 12 20:13 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /workspace/kayfabe_w280/scripts/bench/cup2_hook_gdbspin.sh at 2026-08-12T20:13:07+00:00 ===
+=== sources (md5 — a run cannot silently be a different copy) ===
+    /workspace/bench/cup2.c                                     27 lines  md5 d9f82375ebd54de500aeb7f85ef71efc
+    /workspace/kayfabe_w280/scripts/bench/guest_spinprobe.c    697 lines  md5 a6fb9b735e47203e35e457b666166295
+=== push + build in the guest ===
+GCC_CUP2_RC=0
+GCC_PROBE_RC=0
+=== is gdb available? (a cross-check, never the primary instrument) ===
+    gdb = no
+=== launch cup2 DETACHED under its own 180 s timeout (rc stays comparable to w232..w268) ===
+LAUNCHED pid=1762
+=== waiting for cup2 to reach cuCtxCreate (its last print is `totalMem=`) ===
+    reached-cuCtxCreate = yes after ~15s
+--- cup2 output so far ---
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+=== ★★★★★ SPIN PROBE, PASS 1 of 2 ===
+pid=1762 state=Rl
+--- per-thread ps (R = userspace spin; S/D = blocked in the kernel) ---
+    TID STAT %CPU WCHAN                  COMMAND
+   1762 Rl   98.8 -                      cup2
+   1763 Sl    0.0 do_poll.constprop.0    cuda00001400006
+   1979 Sl    0.1 do_poll.constprop.0    cup2
+--- /proc/<tid>/syscall ("running" = userspace, i.e. NOT a blocking syscall) ---
+    1762: running
+    1763: 7 0x57b38ce0e950 0x3 0xffffffff 0x57b38ce3ccc0 0x0 0x7 0x799ff4bfed40 0x799ff4d1b5fd
+    1979: 7 0x57b38cf84570 0x5 0x64 0x0 0x0 0x0 0x799fe8dddd40 0x799ff4d1b5fd
+=== guest_spinprobe pid=1762 maps=100 budget=6000 steps ===
+--- libcuda mapping: 0x799ff5000000-0x799ffabd4000 (RIP offsets below are relative to this)
+--- want offsets: libcuda+0x22be1f libcuda+0x22bedc
+--- 3 thread(s); ★ orig_rax >= 0 with state S/D means a BLOCKING SYSCALL, and the whole memory-poll reading below would be VOID ---
+    tid 1762   state=R  orig_rax=228    RIP=0x7ffffdfcdbb2  [vdso]+0xbb2  <r-xp [vdso]>
+    tid 1762   RSP=0x7ffffdea8970 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0
+    tid 1763   state=S  orig_rax=7      RIP=0x799ff4d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
+    tid 1763   RSP=0x799ff4bfed40 r12=0x0 r13=0x4 r15=0x57b38ce0c9c0
+    tid 1979   state=S  orig_rax=7      RIP=0x799ff4d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
+    tid 1979   RSP=0x799fe8dddd40 r12=0x0 r13=0xc r15=0x57b38ce33510
+★★ NO THREAD'S RIP WAS INSIDE libcuda. ⊘ Do not read that as 'not spinning' — it may be in the vDSO leg of the same loop. Falling back to tid 1762.
+--- single-stepping tid 1762, budget 6000 ---
+--- steps actually taken = 6000 (of a 6000 budget) ---
+--- RIP HISTOGRAM: 512 distinct buckets stored (cap 512); ★ 316 hits fell OUTSIDE the cap and are NOT represented below ---
+        64  0x799ff521f6a0  libcuda.so.580.159.04+0x21f6a0  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6a3  libcuda.so.580.159.04+0x21f6a3  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6a6  libcuda.so.580.159.04+0x21f6a6  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6aa  libcuda.so.580.159.04+0x21f6aa  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6ae  libcuda.so.580.159.04+0x21f6ae  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6b2  libcuda.so.580.159.04+0x21f6b2  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6ba  libcuda.so.580.159.04+0x21f6ba  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6bd  libcuda.so.580.159.04+0x21f6bd  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460820  libcuda.so.580.159.04+0x460820  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460821  libcuda.so.580.159.04+0x460821  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460824  libcuda.so.580.159.04+0x460824  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460826  libcuda.so.580.159.04+0x460826  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460828  libcuda.so.580.159.04+0x460828  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546082c  libcuda.so.580.159.04+0x46082c  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546082e  libcuda.so.580.159.04+0x46082e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460831  libcuda.so.580.159.04+0x460831  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460833  libcuda.so.580.159.04+0x460833  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460834  libcuda.so.580.159.04+0x460834  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460838  libcuda.so.580.159.04+0x460838  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546083b  libcuda.so.580.159.04+0x46083b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546083e  libcuda.so.580.159.04+0x46083e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460844  libcuda.so.580.159.04+0x460844  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460848  libcuda.so.580.159.04+0x460848  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546084b  libcuda.so.580.159.04+0x46084b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+    ⊘ 488 further distinct buckets NOT shown (they are stored, just not printed)
+=== ★★★★★ SNAPSHOT at RIP=0x799ff522be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+    rdi=0x7ffffdea89fc rsi=0x7ffffdea8ab0 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0 rbx=0x0
+    ⊘ rbx==0 selects the pause-only spin; non-zero selects sched_yield+pause.
+    --- WAIT OBJECT 0x7ffffdea8ab0 ---
+    N items = 2   array = 0x7ffffdea8ad8   (stride 40)
+    item[0] @0x7ffffdea8ad8  KIND=1  [0x08]=0x799ff409f010 [0x10]=0x5 [0x18]=0x799ff5f98a63 [0x20]=0x0
+      handler f9e320 — nested wait 4029e0(S=0x799ff40a8420, wanted=0x5)
+        S[0x10] limit    = 0x5   (wanted is within the limit)
+        S[0x18] cached   = 0x2   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
+        S[0x20] desc     = 0x57b38ce1c310
+        POLLED ADDRESS     = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
+                             VALUE AT IT = 0x00000002 (2)
+                             SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
+        chain            : item[0x08]=0x799ff409f010 +0x9410 -> S +0x20 -> 0x57b38ce1c310 +0x10 -> 0x20440fff0
+    item[1] @0x7ffffdea8b00  KIND=1  [0x08]=0x799ffac71010 [0x10]=0x45 [0x18]=0x500 [0x20]=0x799ff4e03ac0
+      handler f9e320 — nested wait 4029e0(S=0x799ffac7a420, wanted=0x45)
+        S[0x10] limit    = 0x45   (wanted is within the limit)
+        S[0x18] cached   = 0x5   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
+        S[0x20] desc     = 0x57b38ce49c60
+        POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
+                             VALUE AT IT = 0x00000005 (5)
+                             SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
+        chain            : item[0x08]=0x799ffac71010 +0x9410 -> S +0x20 -> 0x57b38ce49c60 +0x10 -> 0x20440ff70
+    ctx[0x40]+0x72b8 = 0x00000000  (non-zero => spin WITHOUT even the 1 s deadline check)
+=== guest_spinprobe DONE (detached; the target continues) ===
+SPINPROBE_RC=0
+=== the mappings the polled address must be joined against ===
+200000000-200200000 ---p 00000000 00:00 0 
+200200000-200400000 rw-s 00000000 00:05 628                              /dev/nvidia0
+200400000-203400000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+203400000-204400000 ---p 00000000 00:00 0 
+204400000-204600000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+204600000-204800000 rw-s 00000000 00:05 626                              /dev/nvidiactl
+204800000-204a00000 rw-s 204800000 00:05 635                             /dev/nvidia-uvm
+204a00000-300200000 ---p 00000000 00:00 0 
+10000000000-10004000000 ---p 00000000 00:00 0 
+57b357065000-57b357066000 r--p 00000000 fd:01 86443                      /tmp/cup2
+57b357066000-57b357067000 r-xp 00001000 fd:01 86443                      /tmp/cup2
+57b357067000-57b357068000 r--p 00002000 fd:01 86443                      /tmp/cup2
+57b357068000-57b357069000 r--p 00002000 fd:01 86443                      /tmp/cup2
+57b357069000-57b35706a000 rw-p 00003000 fd:01 86443                      /tmp/cup2
+57b38cdfa000-57b38d0f6000 rw-p 00000000 00:00 0                          [heap]
+799fe0000000-799fe0400000 ---p 00000000 00:00 0 
+799fe0400000-799fe0600000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe0600000-799fe0800000 rw-s 00000000 00:01 34                         /dev/zero (deleted)
+799fe0800000-799fe0a00000 rw-s 00000000 00:01 2079                       /dev/zero (deleted)
+799fe0a00000-799fe1000000 ---p 00000000 00:00 0 
+799fe1000000-799fe1200000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe1200000-799fe2000000 ---p 00000000 00:00 0 
+799fe2ddf000-799fe2de0000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de0000-799fe2de1000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de1000-799fe2de2000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de2000-799fe2de3000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de3000-799fe2de4000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de4000-799fe2de5000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de5000-799fe2de6000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de6000-799fe2de7000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de7000-799fe2de8000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de8000-799fe2de9000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2de9000-799fe2dea000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2dea000-799fe2deb000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2deb000-799fe2dec000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2dec000-799fe2ded000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2ded000-799fe2dee000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2dee000-799fe2def000 rw-s 00000000 00:05 626                        /dev/nvidiactl
+799fe2def000-799fe4000000 ---p 00000000 00:00 0 
+799fe4000000-799fe4021000 rw-p 00000000 00:00 0 
+=== ⊘ gdb NOT PRESENT in the guest — cross-check skipped, C probe stands alone ===
+=== sleeping 20 s before pass 2 (⊘ the question is whether the value MOVES) ===
+=== ★★★★★ SPIN PROBE, PASS 2 of 2 ===
+pid=1762 state=Rl
+--- per-thread ps (R = userspace spin; S/D = blocked in the kernel) ---
+    TID STAT %CPU WCHAN                  COMMAND
+   1762 Rl   98.6 -                      cup2
+   1763 Sl    0.0 do_poll.constprop.0    cuda00001400006
+   1979 Sl    0.1 do_poll.constprop.0    cup2
+--- /proc/<tid>/syscall ("running" = userspace, i.e. NOT a blocking syscall) ---
+    1762: running
+    1763: 219 0x57b38ce0e950 0x3 0xffffffff 0x57b38ce3ccc0 0x0 0x7 0x799ff4bfed40 0x799ff4d1b5fd
+    1979: 7 0x57b38cf84570 0x5 0x64 0x0 0x0 0x0 0x799fe8dddd40 0x799ff4d1b5fd
+=== guest_spinprobe pid=1762 maps=100 budget=6000 steps ===
+--- libcuda mapping: 0x799ff5000000-0x799ffabd4000 (RIP offsets below are relative to this)
+--- want offsets: libcuda+0x22be1f libcuda+0x22bedc
+--- 3 thread(s); ★ orig_rax >= 0 with state S/D means a BLOCKING SYSCALL, and the whole memory-poll reading below would be VOID ---
+    tid 1762   state=R  orig_rax=228    RIP=0x7ffffdfcdbb2  [vdso]+0xbb2  <r-xp [vdso]>
+    tid 1762   RSP=0x7ffffdea8970 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0
+    tid 1763   state=S  orig_rax=219    RIP=0x799ff4d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
+    tid 1763   RSP=0x799ff4bfed40 r12=0x0 r13=0x4 r15=0x57b38ce0c9c0
+    tid 1979   state=S  orig_rax=7      RIP=0x799ff4d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
+    tid 1979   RSP=0x799fe8dddd40 r12=0x0 r13=0xc r15=0x57b38ce33510
+★★ NO THREAD'S RIP WAS INSIDE libcuda. ⊘ Do not read that as 'not spinning' — it may be in the vDSO leg of the same loop. Falling back to tid 1762.
+--- single-stepping tid 1762, budget 6000 ---
+--- steps actually taken = 6000 (of a 6000 budget) ---
+--- RIP HISTOGRAM: 512 distinct buckets stored (cap 512); ★ 316 hits fell OUTSIDE the cap and are NOT represented below ---
+        64  0x799ff521f6a0  libcuda.so.580.159.04+0x21f6a0  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6a3  libcuda.so.580.159.04+0x21f6a3  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6a6  libcuda.so.580.159.04+0x21f6a6  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6aa  libcuda.so.580.159.04+0x21f6aa  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6ae  libcuda.so.580.159.04+0x21f6ae  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6b2  libcuda.so.580.159.04+0x21f6b2  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6ba  libcuda.so.580.159.04+0x21f6ba  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff521f6bd  libcuda.so.580.159.04+0x21f6bd  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460820  libcuda.so.580.159.04+0x460820  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460821  libcuda.so.580.159.04+0x460821  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460824  libcuda.so.580.159.04+0x460824  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460826  libcuda.so.580.159.04+0x460826  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460828  libcuda.so.580.159.04+0x460828  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546082c  libcuda.so.580.159.04+0x46082c  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546082e  libcuda.so.580.159.04+0x46082e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460831  libcuda.so.580.159.04+0x460831  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460833  libcuda.so.580.159.04+0x460833  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460834  libcuda.so.580.159.04+0x460834  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460838  libcuda.so.580.159.04+0x460838  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546083b  libcuda.so.580.159.04+0x46083b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546083e  libcuda.so.580.159.04+0x46083e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460844  libcuda.so.580.159.04+0x460844  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff5460848  libcuda.so.580.159.04+0x460848  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        64  0x799ff546084b  libcuda.so.580.159.04+0x46084b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+    ⊘ 488 further distinct buckets NOT shown (they are stored, just not printed)
+=== ★★★★★ SNAPSHOT at RIP=0x799ff522be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+    rdi=0x7ffffdea89fc rsi=0x7ffffdea8ab0 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0 rbx=0x0
+    ⊘ rbx==0 selects the pause-only spin; non-zero selects sched_yield+pause.
+    --- WAIT OBJECT 0x7ffffdea8ab0 ---
+    N items = 2   array = 0x7ffffdea8ad8   (stride 40)
+    item[0] @0x7ffffdea8ad8  KIND=1  [0x08]=0x799ff409f010 [0x10]=0x5 [0x18]=0x799ff5f98a63 [0x20]=0x0
+      handler f9e320 — nested wait 4029e0(S=0x799ff40a8420, wanted=0x5)
+        S[0x10] limit    = 0x5   (wanted is within the limit)
+        S[0x18] cached   = 0x2   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
+        S[0x20] desc     = 0x57b38ce1c310
+        POLLED ADDRESS     = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
+                             VALUE AT IT = 0x00000002 (2)
+                             SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
+        chain            : item[0x08]=0x799ff409f010 +0x9410 -> S +0x20 -> 0x57b38ce1c310 +0x10 -> 0x20440fff0
+    item[1] @0x7ffffdea8b00  KIND=1  [0x08]=0x799ffac71010 [0x10]=0x45 [0x18]=0x500 [0x20]=0x799ff4e03ac0
+      handler f9e320 — nested wait 4029e0(S=0x799ffac7a420, wanted=0x45)
+        S[0x10] limit    = 0x45   (wanted is within the limit)
+        S[0x18] cached   = 0x5   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
+        S[0x20] desc     = 0x57b38ce49c60
+        POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
+                             VALUE AT IT = 0x00000005 (5)
+                             SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
+        chain            : item[0x08]=0x799ffac71010 +0x9410 -> S +0x20 -> 0x57b38ce49c60 +0x10 -> 0x20440ff70
+    ctx[0x40]+0x72b8 = 0x00000000  (non-zero => spin WITHOUT even the 1 s deadline check)
+=== guest_spinprobe DONE (detached; the target continues) ===
+SPINPROBE_RC=0
+=== waiting for cup2's own timeout so CUP2_RC stays comparable to w232..w268 ===
+--- cup2 FINAL output ---
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=11959 MiB
+CUP2_OUT_BYTES=330
+CUP2_RC=124
+[  235.981993] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.982509] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.984482] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.985288] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.987175] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.987690] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.989594] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.990472] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.992455] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.993153] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.994932] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.995428] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.997293] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  235.997958] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  235.999885] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, RES_GET_CLIENT_HANDLE(pKernelChannel), RES_GET_HANDLE(pKernelChannel), NVA06F_CTRL_CMD_STOP_CHANNEL, &stopChannelParams, sizeof(stopChannelParams)) @ nv_gpu_ops.c:10957
+[  236.000418] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, retainedChannel->session->handle, retainedChannel->rmSubDevice->subDeviceHandle, NV2080_CTRL_CMD_GPU_EVICT_CTX, &params, sizeof(params)) @ nv_gpu_ops.c:10977
+[  236.316412] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[  236.317680] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[  236.319132] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  237.397102] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00014; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+[  237.397110] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+[  237.397218] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+[  237.397287] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+[  237.398855] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[  238.442562] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+=== w269 gdbspin hook DONE ===
+HOOK_RC=0
+=== HOST dmesg delta for this boot (watermark 1009 → 1010) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=1
