@@ -33,6 +33,15 @@ DIRT=$(git status --porcelain --untracked-files=no)
 export CARGO_TARGET_DIR=/workspace/bench/cargo-target-w290
 export KAYFABE_SHIM_FEATURES=host-isolates
 CLIENT=$CARGO_TARGET_DIR/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
+# ★★★ DELETE THE CLIENT FIRST TOO: no build => no file => no run. `[ -x ]` alone would have
+# happily run a STALE binary from another rung's target dir, and the whole question here is
+# what THIS build does. ⊘ `w291r33bare` exited 95 on the first attempt for exactly this
+# reason — the musl client had only ever been built under `cargo-target-w289`.
+rm -f "$CLIENT"
+echo "=== BUILD CLIENT $(date -Is) ==="
+cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder
+CRC=$?; echo "=== CLIENT BUILD RC=$CRC ==="
+[ $CRC -eq 0 ] || finish 94
 [ -x "$CLIENT" ] || finish 95
 echo "=== CLIENT $(md5sum "$CLIENT" | cut -d' ' -f1) ==="
 
