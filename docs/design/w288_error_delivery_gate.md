@@ -1,5 +1,70 @@
 # The error-delivery rung — the emitter is BUILT AND ORPHANED, and the attribution probe carries no identity
 
+> ## ⊘⊘⊘ SUPERSEDED IN ITS CONCLUSION — 2026-08-13, later the same day (w288n). READ THIS FIRST.
+>
+> **Everything below is correct about the tree it was written against, and its RECOMMENDATION is
+> now dead.** The owner re-aimed the design and three of this doc's load-bearing findings
+> dissolve — not because they were wrong, but because they were answers about **us as the
+> writer**, and we are no longer the writer.
+>
+> ### ★★★★★ THE NEW DESIGN — one page, one writer, no intermediary
+> Build a **host RM memory object over the GUEST'S OWN notifier pages**
+> (`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over guest RAM, the treatment the ring already gets) and
+> pass **that** as `hObjectError` on the host channel. **The host RM/GSP then writes the guest's
+> actual notifier memory.** The guest's UVM poll reads what the host wrote.
+>
+> ### ⊘ WHAT THAT DELETES FROM THIS DOC
+> - ⊘ **§2's attribution stop condition is VOID.** The host RM already knows which channel
+>   faulted and writes *that channel's* registered notifier — which **is** that guest channel's
+>   page. No polling, no destructive `GET_MMU_FAULT_INFO`, no candidate set, no owner ruling.
+>   Everything §2 escalated was an artefact of us mediating.
+> - ⊘ **§2b's process crossing is VOID.** Nothing crosses. The RC-event consumer
+>   (`ALLOC_OS_EVENT` / `EVENT_SET_NOTIFICATION` / `GET_EVENT_DATA` / the blocking `poll()`
+>   waiter) is **not needed at all**.
+> - ⊘ **§1's "wire `FaultEmission`" is VOID.** Leave it orphaned. We are not the writer.
+> - **§5's TSG finding survives and shrinks**: RM writing every channel in the group is *what
+>   real hardware does*, so the guest sees natively-correct behaviour. Keep the singleton-TSG
+>   assertion as a check on our own allocation, not as a correctness gate.
+>
+> ### ⊘⊘ AND THIS DOC'S CHECK-1 WAS NOT UNCHECKED — IT WAS ALREADY ANSWERED, BY MEASUREMENT
+> §5's table records check 1 (*does the notifier WRITE require `NV01_CONTEXT_DMA`?*) as
+> **NOT CHECKED**. It was already answered **NO**, twice, and this lane could not see either:
+> 1. **By measurement.** `2a9d2e1` on `origin/w287-raw-clients` — a real GA106, `580.159.04` —
+>    wired `hObjectError` to an `NV01_MEMORY_LOCAL_USER` (**a `Memory` handle, not a ctxdma**)
+>    and the notifier **FIRED**: `status 0xffff, info32 0x1f, info16 0x0001`, against a
+>    same-run quiet control. ⊘ **That commit was not an ancestor of this branch** — the merge
+>    that fixes it is the parent of this block.
+> 2. **By source.** `kchannelGetNotifierInfo` (`ogkm-580: kernel_channel.c:2016-2088`) resolves
+>    a `Memory` handle and, when the memdesc is **not `ADDR_VIRTUAL`**, takes the `else` at
+>    `:2074-2078` — `*pNotifierType = ERROR_NOTIFIER_TYPE_MEMORY; return NV_OK`. **No CPU
+>    mapping, no `KernelVAddr` check, no ctxdma.**
+>
+> ### ★★★★★ AND THE RUNG BRIEF'S OWN "SETTLED" CITATION IS MIS-SCOPED — IT INVERTS THE ANSWER
+> The brief states as settled: *"The CPU writes it, never hardware — `kchannelGetNotifierInfo`
+> resolves the GPU VA only to obtain a CPU kernel mapping and **fails without one**
+> (`:2066-2071`)."*
+> ⊘ **`:2066-2071` is strictly INSIDE the `ADDR_VIRTUAL` (GPUVA) branch.** It is
+> `if (!pDmaMappingInfo->KernelVAddr[subdeviceInstance]) return NV_ERR_INVALID_STATE;`. A
+> **SYSMEM** `Memory` object never enters that branch.
+> ⇒ Read as a general requirement it would **kill the new design**, because
+> `[measured, R31 arm B]` a guest-backed `OS_DESCRIPTOR` **cannot be CPU-mapped**
+> (`NV_ERR_NOT_SUPPORTED`, *"memMap_IMPL: CPU mapping not supported for addressSpace: 0x1"*,
+> `kayfabe-isolate/src/lib.rs:715`). **Correctly scoped, the objection dissolves: we never need
+> a CPU mapping of it.** ⚠ Same class this tree has already paid for — *a correct citation
+> narrowed by the reading* — and here the narrowing runs the other way, making a live design
+> look impossible.
+>
+> ### ★★★ WHAT THE HOST ACTUALLY SENDS, AND WHY THE DESIGN WORKS
+> On a GSP client, CPU-RM does not write the notifier — it **RPCs the physical base to the
+> GSP** (`kernel_channel.c:549-568`):
+> `errorNotifierMem.base = memdescGetPhysAddr(pErrContextMemDesc, AT_GPU, 0) + offset`, plus
+> `size`, `addressSpace`, `cacheAttrib`. ⇒ For an `OS_DESCRIPTOR` over the guest's page that
+> base **is the host-physical address of the guest's own notifier page**, and the GSP writes
+> there. No copy, no translation, no emission path.
+>
+> **STATUS of the text below: HISTORICAL.** Accurate as of `642471f`; its §§1, 2, 2b, 2c
+> recommendations are retired.
+
 **STATUS: LIVE — 2026-08-13 (w288 gate).** Read-only. No code, no boot. Answers the two gates the
 rung brief put ahead of construction, and reaches the brief's own **stop condition** on the
 second.
