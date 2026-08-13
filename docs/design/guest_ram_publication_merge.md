@@ -162,3 +162,68 @@ address space on the doorbell path — which is very likely a real blocker and i
 measured**. ⊘ The cheap next measurement, if wanted, is to pin a **bounded** number of rows
 behind the existing arm and measure the true per-row rate for guest RAM rather than
 extrapolating leg 8's framebuffer rate.
+
+---
+
+## ★★★★★ THE DRAIN'S RESULT — boot `w290pdrain` @ `bbd6ab6c`, real GA106, 2026-08-14
+
+**Arm `KAYFABE_VAS_PUBLISH=drain`, stamp gate PASS, guest up in 39 s. Relaxations carried and
+labelled: `KAYFABE_PT_SWEEP=on`, `KAYFABE_OPERAND_JOIN=join`, `KAYFABE_FB_JOIN=shared`.**
+
+| | `both` (control, `40f42eb`) | **`drain`** |
+|---|---|---|
+| `host_rows` | 16 900 of 18 269 (92.5 %) | ★ **18 271 of 18 277 (99.97 %)** |
+| residual, by kind | 1075 guest_ram + 6 not_granular | ★ **`guest_ram=0`; residual = the 6 `not_granular` rows, ALONE** |
+| `refused` | 0 | 0 |
+| `MERGE-AGREES` | false (0 emissions) | ★ **true**, `pins=18 228` beside `host_rows=18 271` |
+| `Repoints` / `Unbinds` | 0 / 0 | 0 / 0 — ⚠ the freeze STILL did not bite, at 18 271 rows |
+| **Xid** | 1 — `CE2 HUBCLIENT_CE0 FAULT_PTE VIRT_WRITE @ 0x73b1_83700000` | ★★★★★ **0. Host dmesg delta for the whole boot: 0 lines, 0 NVRM, 0 Xid** |
+| `cuCtxCreate` | 719 `unspecified launch failure` | **801 `operation not supported`** |
+| `^CUP2_RC=` | 1 | **1** (unchanged, pre-registered) |
+
+### The cost, MEASURED on the doorbell path — not extrapolated
+
+187 doorbells, target `proc=2 pdb=0x201000` on **every one** of them. Seven drains, then empty:
+
+| doorbell | asked | pinned | `DRAIN_MS` | complete |
+|---|---|---|---|---|
+| 1 | 13 311 | 12 988 | **3000** | ⚠ **false — WALL BUDGET HIT** |
+| 2 | 1536 | 1536 | 378 | true |
+| 3 | 1331 | 1331 | 302 | true |
+| 4 | 1024 | 1024 | 329 | true |
+| 5–6 | 512 | 512 | 155 / 145 | true |
+| 7 | 323 | 323 | 66 | true |
+| **8–187** | **0** | **0** | **0** | **true** |
+
+⇒ **One 3.0 s stall, six sub-400 ms follow-ups, then 180 consecutive doorbells at 0 ms.**
+Total ≈ **4.4 s once**, amortised over the boot, `refused=0` across 18 226 pins.
+★ The brief predicted *0.30–0.36 s for 1075 rows*. That per-row rate was right (≈ 230 µs); the
+**population** was 17× larger than the residual, because a drain at the FIRST doorbell meets the
+whole table rather than the tail nobody got to. ⊘ The 3 s bound fired exactly once and said
+`complete=false` — it did not silently truncate.
+
+### ⊘⊘ AND THE WALL MOVED OFF THE FAULT PLANE ENTIRELY — a five-arm ladder, one boot each
+
+| arm | Xid | `cuCtxCreate` |
+|---|---|---|
+| `assert` (control) | 1 | 999 `unknown error` |
+| `publish` | 1 | 999 |
+| `pinrate` | 1 | 999 |
+| `both` | 1 | 719 `unspecified launch failure` |
+| **`drain`** | ★ **0** | **801 `operation not supported`** |
+
+The guest's own kernel log is **identical in kind** across `both` and `drain` (same 34 lines at
+`RmInitAdapter`, same 16/12/4 teardown assertions after cup2). ⇒ **801 is reported to `libcuda`
+through an ioctl's IN-BAND status and produces no `dmesg` line at all** — which is the
+`failed=0` trap stated as a positive: `ioctl(2)` returns 0 while RM's status sits inside the
+parameter struct.
+
+⇒ ★★★★★ **The new wall is a CONTROL-PLANE refusal we emit, not a hardware fault.** `0x56
+NV_ERR_NOT_SUPPORTED` is this port's forgiven status, and the live oracle's ruling applies
+directly: hardware returns non-OK **exactly once in 613 records**, so *every other* `0x56` we
+emit is a divergence. ⊘ **Which control it is, is NOT named by this boot** and must not be
+guessed — it needs the in-band reader (`IoctlRecord`) or `nvdiff`, and that is the next rung.
+
+⊘ **I cannot yet ORDER 719 against 801 in the call sequence.** What is measured is that the
+drain arm ran **187 doorbells to `both`'s 174** and published 18 271 rows to `both`'s 16 900, so
+it did strictly more work before failing; that is evidence and not proof of "further along".
