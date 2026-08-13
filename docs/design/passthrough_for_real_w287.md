@@ -38,6 +38,56 @@ existence is the only guarantee available and "no build ⇒ no file ⇒ no run" 
 
 ---
 
+## 0b. ⊘⊘⊘ THE RING AND THE SEMAPHORE ARE **ALREADY REAL-BACKED** — and my own boot proves it
+
+The 2026-08-13 directive reads my §3a census as *"ring → emulated FB, must become real;
+semaphore → emulated FB, must become real"*. **That reading of the table is wrong, and the
+evidence against it is in the same boot.**
+
+**(1) They are one object, one leaf, one join.** The client's channel:
+
+```text
+adopt=GUEST-RING ring_va=0x120020000 gp_fifo_va=0x120021000 userd=GUEST-USERD joined=YES
+LEAF@0x120020000->0x40000/Vidmem/sz0x10000        ⇒ covers VA 0x120020000 .. 0x120030000
+```
+
+The semaphore VA is `0x120022000` — that is `ring_va + SEMAPHORE_OFFSET (0x2000)`, **inside that
+leaf**. Ring, GPFIFO, semaphore and USERD are all tenants of the **one** ring object, and
+`GUEST-RING arm=ring` states the mechanism: *"the channel's own GPFIFO ring is WALKED to its
+framebuffer leaf and that leaf is JOINED, at the engine-object latch — i.e. BEFORE the host
+channel that would name it is born."* A joined leaf is an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`
+over a host memfd, mapped FIXED at the guest's own VA. ⇒ **Real host memory, already.**
+
+**(2) `Vidmem@0x40000` is not a claim about the backing.** That string is emitted from the
+`n_wrong_aperture` counter, printed as `NOT-IN-GUEST-RAM`. It classifies the **guest's DECLARED
+aperture** — *"this page is FB-declared, so the guest-RAM pin path cannot serve it"* — and says
+**nothing** about which host object backs the VA. Reading it as *"the backing is fake"* is
+reading a classification of the guest's declaration as a statement about our mapping.
+
+**(3) ★★★★★ AND THE DECISIVE PROOF IS HARDWARE'S OWN.** `gp_fifo_va = 0x120021000` is inside
+that leaf. **The GPU host unit fetched the GPFIFO entry from it and advanced `GP_GET` 0 → 1.**
+An emulated-framebuffer page the engine cannot reach **cannot be fetched from**. ⇒ The leaf is
+hardware-reachable, therefore real-backed, therefore the ring and the semaphore are **not fake
+for this guest userspace channel**. The owner's bar is already met on both rows.
+
+### ⊘ The aperture hazard the directive names is UNREPRESENTABLE on this path
+
+The warning is *"a vidmem-declaring PTE over sysmem backing sends the engine looking in the
+wrong aperture and fails silently."* Checked rather than assumed: **we never declare an
+aperture.** `raw_map_dma` passes `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` (only when placing at a
+fixed VA) and `flags2: 0` — **no aperture field at all**. RM derives the aperture from the
+**memdesc of the object being mapped**, and that object is an
+`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — **sysmem by its class name**. ⇒ There is no code path on
+which we could declare vidmem over sysmem backing; the mismatch cannot be constructed here.
+★ And it is corroborated empirically by (3): a wrong aperture would have failed the fetch
+silently, and the fetch succeeded.
+
+⇒ **Nothing to build for this directive.** This is the twenty-ninth-consecutive-lane shape:
+the rung's stated work is already done, and the census row that looked like a defect was a
+label being read as a backing.
+
+---
+
 ## 1. ★★★★★ THE HEADLINE — HARDWARE ADVANCED THE GUEST'S OWN USERD CURSOR
 
 This is the sentence the campaign has been unable to write, stated as the blocker one rung ago:
@@ -259,7 +309,15 @@ zero"** — the `dlen=0` class, refused.
    **operands** do not resolve at all (`Miss` — nothing to promote). Promotion is necessary for
    the first and **insufficient for the second**.
 3. **Resolve the kind gate** onto `internalFlags[1:0]` so the suppression is keyed on the
-   owner's stated discriminator rather than on the anchor.
+   owner's stated discriminator rather than on the anchor. ★ **Located this rung, and the fix
+   site is exact:** the field is **already decoded** —
+   `kayfabe-abi/src/notifier.rs:171/184` pins `internal_flags` at offset **244** for
+   `580.159.04` and `:249` reads it — but **only bits `[3:2]`** are consumed, for
+   `ErrorNotifierType`. Bits **`[1:0]` are never plumbed into `ChannelFacts`**, so
+   `ProcBoundary::channel_kind` (`kayfabe-core/src/project.rs:311`) falls back to
+   `anchor == SYSTEM_ANCHOR`, which asks *"whose namespace allocated it"* — a **proxy**, not
+   the discriminator. ⇒ The work is carrying two already-decoded bits into the projection, not
+   new tracking. It is the likely cause of `SEMA-SOURCE-CE = 1` where the cut should give `0`.
 
 ⊘ **None of these is "add tracking".** If promotion turns out to need a lock or a replay — i.e.
 to happen outside a guest-blocking ioctl — that is the escalation the owner named, and it should
