@@ -3111,6 +3111,7 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     assert_eq!(vas_publish_from(Some("off")), Ok(VasPublishArm::Off));
     assert_eq!(vas_publish_from(Some("assert")), Ok(VasPublishArm::Assert));
     assert_eq!(vas_publish_from(Some("publish")), Ok(VasPublishArm::Publish));
+    assert_eq!(vas_publish_from(Some("pinrate")), Ok(VasPublishArm::PinRate));
     for bad in ["on", "1", "true", "yes", "", "Publish"] {
         assert!(
             vas_publish_from(Some(bad)).is_err(),
@@ -3122,4 +3123,10 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     assert!(!VasPublishArm::Off.observes() && !VasPublishArm::Off.publishes());
     assert!(VasPublishArm::Assert.observes() && !VasPublishArm::Assert.publishes());
     assert!(VasPublishArm::Publish.observes() && VasPublishArm::Publish.publishes());
+    // ★★★ w291: `pinrate` OBSERVES but does NOT publish — it measures a different chain over
+    // a different population. ⊘ If `publishes()` ever returned true for it, one line's
+    // `published=` would count two mechanisms and the count could not see the substitution.
+    assert!(VasPublishArm::PinRate.observes() && !VasPublishArm::PinRate.publishes());
+    assert!(VasPublishArm::PinRate.measures_pin_rate());
+    assert!(!VasPublishArm::Publish.measures_pin_rate() && !VasPublishArm::Off.measures_pin_rate());
 }

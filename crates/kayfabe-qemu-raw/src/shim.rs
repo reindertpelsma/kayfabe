@@ -8924,6 +8924,12 @@ impl SharedDoorbell {
                 ));
             }
         };
+        // ★★★★★ w291 — THE BOUNDED PIN-RATE MEASUREMENT. Runs INSTEAD of the publication
+        // pass, never beside it: they touch disjoint populations through different chains,
+        // and one line reporting both would be the count that cannot see a substitution.
+        if self.vas_publish.measures_pin_rate() {
+            return Some(self.measure_guest_ram_pin_rate(&head));
+        }
         let started = std::time::Instant::now();
         let (mut published, mut refused, mut budget_hit) = (0usize, 0usize, false);
         let mut rows: Vec<String> = Vec::new();
@@ -9030,6 +9036,154 @@ impl SharedDoorbell {
             rows.len(),
             rows.join(" "),
         ))
+    }
+
+    /// ★★★★★ **w291 — THE BOUNDED GUEST-RAM PIN-RATE MEASUREMENT.**
+    ///
+    /// # ⊘ WHAT IT REPLACES, SAID PLAINLY
+    ///
+    /// `guest_ram_publication_merge.md` costed option (2a) at **"~49 s per VAS"**. That
+    /// number was an **EXTRAPOLATION**: leg 8's *framebuffer* rate (34 joins in 101 ms,
+    /// ~3 ms each) multiplied by 16 328 guest-RAM rows. A framebuffer join and a guest-RAM
+    /// pin are **different chains** — the join mints memory, copies the establishment bytes
+    /// and re-points the guest's window; the pin describes pages the guest already owns — so
+    /// the extrapolation had no right to speak for it. This measures the real thing.
+    ///
+    /// # What it does, and what it deliberately does not
+    ///
+    /// Pins up to [`VAS_PINRATE_ROWS`] guest-RAM rows of every non-system proc's `Vas`
+    /// through the **existing** `pin_guest_ram` verb, timing each. ⊘ It writes **nothing**
+    /// into `Binding::host`, adds no representation, touches no refcount, and puts no pointer
+    /// between the two records. The pins land in `Vas::guest_ram_pins`, where that verb has
+    /// always put them. **This is the measurement, not the merge.**
+    ///
+    /// ★★ **`degrade` is what lets a bounded sample speak about 16 328 rows.** It reports the
+    /// mean of the last quarter against the mean of the first quarter. Flat (≈1.0) means the
+    /// per-row cost is a constant and the bounded number extrapolates honestly; rising means
+    /// it does not, and **that** is the finding rather than the headline rate.
+    #[cfg(feature = "host-isolates")]
+    fn measure_guest_ram_pin_rate(&self, head: &str) -> String {
+        let Some(backing) = self.guest_ram_backing else {
+            return format!(
+                "{head} → ⊘ NO GUEST-RAM BACKING (no hypervisor layout to resolve a GPA \
+                 against). ⊘ Nothing was asked of the host — this is UNMEASURED, not 0 ms"
+            );
+        };
+        let mut rows: Vec<String> = Vec::new();
+        let (mut total_pins, mut total_us, mut refused) = (0usize, 0u128, 0usize);
+        let mut degrade = String::from("n/a");
+        for pid in self.device.live_pids() {
+            // ⊘ Same §12.26 guard the publication pass carries, and for the same reason:
+            // `plan_pin_guest_ram` refuses `SYSTEM_PROC` too, so attempting proc 0 would
+            // print hundreds of refusals that read exactly like RM exhaustion.
+            if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC {
+                continue;
+            }
+            for (gpu, pdb) in self.device.vas_keys(pid) {
+                if gpu != DOORBELL_TARGET_GPU {
+                    continue;
+                }
+                let candidates = self
+                    .device
+                    .vas_guest_ram_rows(pid, gpu, pdb, VAS_PINRATE_ROWS);
+                if candidates.is_empty() {
+                    continue;
+                }
+                let mut each_us: Vec<u128> = Vec::new();
+                let mut named: Vec<String> = Vec::new();
+                for (va, gpa, len) in &candidates {
+                    // The file offset comes from the HYPERVISOR's own stated layout, exactly
+                    // as legs 4-6 derive it. ⊘ A row the VMM will not resolve is NOT a pin
+                    // failure and is not timed — it never reached the verb.
+                    let resolved = {
+                        let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                        held.as_ref()
+                            .map(|vmm| vmm.resolve_guest_ram(backing, *gpa, *len))
+                    };
+                    let Some(Ok(run)) = resolved else {
+                        named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
+                        continue;
+                    };
+                    let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                        run.file_offset,
+                        *len,
+                        kayfabe_vmm::Prot::ReadWrite,
+                    );
+                    let t0 = std::time::Instant::now();
+                    let r = self.device.pin_guest_ram(
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        kayfabe_rt::GpuVa(*va),
+                        grant,
+                    );
+                    let us = t0.elapsed().as_micros();
+                    match r {
+                        Ok(p) => {
+                            each_us.push(us);
+                            total_pins += 1;
+                            total_us += us;
+                            if named.len() < 4 {
+                                named.push(format!(
+                                    "[va=0x{va:x}+0x{len:x} gpa=0x{gpa:x} host_va=0x{:x} \
+                                     placed_as_asked={} {}{us}us]",
+                                    p.host_va,
+                                    p.host_va == *va,
+                                    if p.already { "replay " } else { "fresh " },
+                                ));
+                            }
+                        }
+                        // ⊘ REFUSED BY NAME, never a tally: `0x51 NV_ERR_NO_MEMORY` is
+                        // collision-or-exhaustion and cannot be told apart, so the name is
+                        // the only thing that distinguishes "we asked twice" from "the host
+                        // is full".
+                        Err(e) => {
+                            refused += 1;
+                            if named.len() < 8 {
+                                named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
+                            }
+                        }
+                    }
+                }
+                // ★★ FLAT OR DEGRADING — the property that decides whether 256 rows may
+                // speak for 16 328.
+                if each_us.len() >= 8 {
+                    let q = each_us.len() / 4;
+                    let first: u128 = each_us[..q].iter().sum::<u128>() / q as u128;
+                    let last: u128 = each_us[each_us.len() - q..].iter().sum::<u128>() / q as u128;
+                    degrade = format!("first_q={first}us last_q={last}us");
+                }
+                rows.push(format!(
+                    "[proc={} pdb=0x{:x} asked={} pinned={} refused={} {}]",
+                    pid.0,
+                    pdb.0,
+                    candidates.len(),
+                    each_us.len(),
+                    refused,
+                    named.join(" "),
+                ));
+            }
+        }
+        let per_row = if total_pins == 0 {
+            "⊘ NO ROW WAS PINNED — the per-row rate is UNMEASURED, not 0".to_string()
+        } else {
+            let us = total_us / total_pins as u128;
+            format!(
+                "{us} us/row ⇒ 16328 rows would cost {} ms IF FLAT",
+                us * 16328 / 1000
+            )
+        };
+        format!(
+            "{head} PINRATE(w291, ⊘ MEASUREMENT NOT MERGE — nothing written to Binding::host) \
+             → pinned={total_pins} refused={refused} in {} ms, per_row={per_row}, \
+             degrade[{degrade}] over {} VAS row(s) {}",
+            total_us / 1000,
+            rows.len(),
+            if rows.is_empty() {
+                "⊘ NO CANDIDATE ROW IN ANY NON-SYSTEM VAS — UNMEASURED, not zero".to_string()
+            } else {
+                rows.join(" ")
+            },
+        )
     }
 
     /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `join_operand_fb_leaves`' twin's
@@ -13928,6 +14082,21 @@ pub enum VasPublishArm {
     /// `join_one_fb_leaf` — the identical four-step chain that moved 4096 correct bytes on
     /// the `w289` CE arm.
     Publish,
+    /// ★★★★★ **w291 — THE BOUNDED PIN-RATE MEASUREMENT, AND IT IS NOT THE MERGE.**
+    ///
+    /// `guest_ram_publication_merge.md` reported option (2a) — one host object per row —
+    /// as costing *"~49 s per VAS"*. ⊘ **That was an EXTRAPOLATION of leg 8's FRAMEBUFFER
+    /// rate (34 pins in 101 ms) onto 16 328 guest-RAM rows, and a framebuffer join and a
+    /// guest-RAM pin are different chains.** This arm replaces the extrapolation with a
+    /// measurement: pin [`VAS_PINRATE_ROWS`] guest-RAM rows through the **existing**
+    /// `pin_guest_ram` verb and report the true per-row rate, and whether it is flat or
+    /// degrades with count.
+    ///
+    /// ⊘⊘ **It writes NOTHING into `Binding::host`, adds no representation, and does not
+    /// touch `HostBacking`.** The pins land in `Vas::guest_ram_pins`, exactly where that
+    /// verb has always put them. If the rate is cheap, (2a) needs no ruling at all and
+    /// (2b)/(2c) are moot; if it is dear, the owner rules on a number instead of a guess.
+    PinRate,
 }
 
 impl VasPublishArm {
@@ -13938,6 +14107,7 @@ impl VasPublishArm {
             VasPublishArm::Off => "off",
             VasPublishArm::Assert => "assert",
             VasPublishArm::Publish => "publish",
+            VasPublishArm::PinRate => "pinrate",
         }
     }
 
@@ -13947,10 +14117,20 @@ impl VasPublishArm {
         self != VasPublishArm::Off
     }
 
-    /// Whether a qualifying row is actually published.
+    /// Whether a qualifying **framebuffer** row is actually published.
+    ///
+    /// ⊘ `PinRate` is deliberately **not** included: it measures a different chain over a
+    /// different population, and folding the two would make one line's `published=` count
+    /// two mechanisms. Same reason `joined` is counted apart from `bound` one plane over.
     #[must_use]
     pub fn publishes(self) -> bool {
         self == VasPublishArm::Publish
+    }
+
+    /// Whether the bounded guest-RAM pin-rate measurement runs.
+    #[must_use]
+    pub fn measures_pin_rate(self) -> bool {
+        self == VasPublishArm::PinRate
     }
 }
 
@@ -13964,6 +14144,7 @@ pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &
         None | Some("off") => Ok(VasPublishArm::Off),
         Some("assert") => Ok(VasPublishArm::Assert),
         Some("publish") => Ok(VasPublishArm::Publish),
+        Some("pinrate") => Ok(VasPublishArm::PinRate),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_VAS_PUBLISH does not name an arm: the only values are `off` (silent, \
@@ -13973,7 +14154,9 @@ pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &
              qualifying row goes through the same four-step join the CE operand arm uses). It \
              is not defaulted, because a typo that silently disarmed the publication would \
              make an evidence run and its own control indistinguishable. ⊘ `on`/`1` are not \
-             accepted: this is a three-arm experiment, not a boolean.",
+             accepted: this is a multi-arm experiment, not a boolean. `pinrate` is the w291 \
+             bounded guest-RAM pin-rate MEASUREMENT — it publishes no framebuffer row, writes \
+             nothing into `Binding::host`, and is not the merge.",
         )),
     }
 }
@@ -14136,6 +14319,15 @@ pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
 /// bind on any picture this campaign has measured. It exists so a guest that grows its tables
 /// without bound cannot turn one doorbell into an unbounded host round trip.
 const VAS_PUBLISH_LEAF_BUDGET: usize = 4096;
+
+/// ★★★ **How many guest-RAM rows the `pinrate` MEASUREMENT pins.** Bounded on purpose: this
+/// is a rate measurement, not the build. A few hundred rows is enough to say whether the
+/// per-row cost is flat or degrades, and small enough that a dear rate costs one doorbell
+/// rather than the boot.
+///
+/// ⊘ The number is reported beside the rate, so a reader never has to know it to read the
+/// line — and `degrade` below is what makes a *bounded* sample able to speak about 16 328.
+const VAS_PINRATE_ROWS: usize = 256;
 
 /// ★★★ **The wall-clock budget for one doorbell's publication**, and it is the honest half of
 /// the cap above: a count bounds how many leaves are *tried*, only a clock bounds how long

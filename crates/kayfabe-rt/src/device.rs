@@ -3302,6 +3302,47 @@ impl SharedDevice {
         .unwrap_or_default()
     }
 
+    /// ★★★ **w291 — the GUEST-RAM rows a bounded pin-rate measurement would take**, as
+    /// `(va, gpa, len)`, oldest-first and capped.
+    ///
+    /// ⊘ A **measurement input, not the merge.** It selects rows whose binding is guest RAM,
+    /// is not already covered by a live pin, and carries a non-zero length. Nothing here
+    /// writes `Binding::host` and nothing changes the table — the caller pins through the
+    /// existing `pin_guest_ram` verb, whose existing record is `Vas::guest_ram_pins`.
+    ///
+    /// ⚠ `Binding::phys` for a guest-RAM row **is a guest-physical address** (that field's own
+    /// doc), which is what the VMM's `resolve_guest_ram` needs. It is returned rather than
+    /// re-derived so the caller cannot resolve a different address than the one classified.
+    #[must_use]
+    pub fn vas_guest_ram_rows(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+        pdb: Pdb,
+        cap: usize,
+    ) -> Vec<(u64, u64, u64)> {
+        self.with_proc_mut(pid, |p| {
+            let Some(vas) = p.vases.get(&(gpu, pdb)) else {
+                return Vec::new();
+            };
+            vas.table
+                .iter()
+                .filter(|(va, len, b)| {
+                    *len > 0
+                        && b.host().is_none()
+                        && b.is_guest_ram()
+                        && !vas
+                            .guest_ram_pins
+                            .iter()
+                            .any(|(pva, pin)| *pva <= *va && *va + *len <= pva + pin.len)
+                })
+                .take(cap)
+                .map(|(va, len, b)| (va, b.phys(), len))
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
     /// Every `(gpu, pdb)` this proc holds a `Vas` for — the keys
     /// [`SharedDevice::vas_publish_census`] and the publication pass iterate.
     ///
