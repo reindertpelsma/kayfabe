@@ -588,3 +588,80 @@ rather than deciding it.
 ⊘ One unexplained row, recorded not chased: a `pdb=0x0` VAS also gained `rows=2 runs=1
 0x120000000+0x20000` under the sweep. A PDB of zero is not a page-directory base; it should be
 accounted for before anyone builds on these numbers.
+
+---
+
+# ADDENDUM 5 — THE OWNER'S QUESTION: **ALL 82 PASS ON BOTH ARMS. NOTHING IS SILENTLY REFUSED.**
+
+> *"but since you have the 82 ioctls, do they all pass on host, and at which point does it crash?"*
+
+## 22. THE INSTRUMENT HAD TO BE BUILT FIRST — `failed=0` COULD NOT ANSWER THIS
+
+The census recorded **only the syscall `errno`**. RM writes its refusal **into the parameter
+struct** while `ioctl(2)` returns `0`. ⇒ every prior *"N ioctls, 0 failed"* — including w278's
+*"the guest fails with every ioctl served"* — **was reading a field that cannot see a refusal.**
+
+`IoctlRecord` now retains a 72-byte reply prefix; the ABI-owning consumer decodes the status per
+escape from `kayfabe-abi`'s own `ct_assert`ed offsets (`NVOS00@12 NVOS21@28 NVOS54@28 NVOS02@40
+NVOS33@40 NVOS47@40 NVOS46@56`). Four states, never a bool: `Ok / Refused(status) /
+NoStatusField / Truncated` — a truncated snapshot never decodes to `Ok`.
+
+★ Captured **after** the indirect-pointer scrub, so a host pointer cannot be retained in a log.
+
+## 23. ★★★★★ THE MANDATORY KNOWN-POSITIVE FIRED ON BOTH ARMS
+
+An `RM_CONTROL` carrying a command that does not exist, issued **before any row it will judge**:
+
+```
+★ R33 IN-BAND CAL = KNOWN-POSITIVE FIRED — cmd 0x20800ffe returned `errno == 0` from the
+  syscall AND a non-zero RM status in the parameter struct ([Refused(86)])   ← 0x56
+```
+
+⇒ The reader **can** see a silent refusal. Without this, *"no divergence"* is exactly what a
+blind reader prints — the `GET_PTE_INFO` lesson, one week, twice.
+
+## 24. THE RESULT — **NO DIVERGENCE**
+
+| | native | guest |
+|---|---|---|
+| total / failed | `87 / 0` | `83 / 0` |
+| **in-band refusals** | **2** | **2** |
+| by identity | `[8] RM_CONTROL 0x56` (the calibration) · `[38] RM_MAP_MEMORY_DMA 0x51` | **identical — same indices, same statuses** |
+
+★★★ **Indices 1..64 are IDENTICAL on both arms in `(nr, name, size, errno, RM-STATUS)`.** The
+only in-band refusals are the **two the program deliberately provokes**: the calibration itself,
+and arm 2's `OCCUPIED` probe (`0x51` = `NV_ERR_NO_MEMORY`, which *is* arm 2's pass condition).
+
+⊘ **`failed=0` vs 2 refusals is the census's own blind spot, measured for the first time.**
+
+## 25. WHERE IT ACTUALLY DIVERGES — **INDEX 65, AND IT IS OUR OWN BRANCH**
+
+```
+[64] NAT nr 78 RM_MAP_MEMORY  ok  RM ok   |  GST nr 78 RM_MAP_MEMORY  ok  RM ok
+[65] NAT nr 78 RM_MAP_MEMORY  ok  RM ok   |  GST nr 41 RM_FREE        ok  RM ok   <<<
+```
+
+The guest starts **tearing down** where native continues. That is `probe_guest_reachability`'s
+`ControlFailed` early return — the program taking a different branch **because the control copy
+did not land**. ⇒ **a consequence of the wall, not a cause**, and the sequence-length difference
+(87 vs 83) is entirely this.
+
+## 26. ⇒ **OUTCOME B. THE PUBLICATION STORY SURVIVES, WITH A MEASURED FLOOR UNDER IT**
+
+★★★ **Arm 1's ioctls all lie inside the identical `1..64` prefix, and every one was served — by
+RM's own status field, on both arms.** Arm 1's copy still fails in the guest.
+
+⇒ **The failure is not caused by any refused, missing, extra or reordered ioctl. It happens
+after every ioctl has succeeded — at the doorbell**, where the host CE faults at
+`0x1_20000000`. The RM control plane is **not** where the guest and host differ.
+
+⊘ The assumption the coordinator flagged is now **removed rather than confirmed by hope**: the
+arms *are* ioctl-equivalent, and the `NOT-IN-GUEST-RAM [Vidmem]` finding is not a symptom of a
+silently-refused call.
+
+⚠ Scope: this says the **ioctls** agree. It says nothing about the GSP RPCs underneath them —
+a guest ioctl is served by our emulated GSP, and RM answering `NV_OK` to the guest is not the
+same as our having done the work. That is the next unmeasured layer, and it is **not** claimed
+here.
+
+**Vidmem publication remains STOPPED pending the owner's ruling.**
