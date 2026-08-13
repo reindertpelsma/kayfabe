@@ -577,6 +577,25 @@ struct ChannelRings {
 /// - `HostChannelKind`'s write set is *"does this channel carry one guest process's
 ///   work"* — decided in the core, one hop from the guest's own `NV01_ROOT` declaration.
 ///
+/// ⊘⊘⊘ **CORRECTED 2026-08-13 (w284) — THE PARAGRAPH BELOW IS STALE, AND IT COST A RUNG.**
+/// It was true at `361fca8` and is false at HEAD. `alloc_channel_over_guest_ring` now has
+/// **four** call sites, and one of them is [`HostRmBackend::alloc_channel`] itself
+/// (`:4018`) — i.e. **the core-reachable verb DOES lower to [`RingOwner::HandedIn`]**, for
+/// any engine, whenever the ring's leaf is joined. `[measured, `traces/boots/w283`,
+/// `w263`–`w269`]` **88 `engine=Ce` births** read
+/// `adopt=GUEST-RING → alloc_channel_over_guest_ring` on real GA106, and on the guest
+/// driver's own channels leg B fires with them (`userd=GUEST-USERD`,
+/// `userd_offset=0x1a000`).
+/// ⇒ The `w284` brief reasoned from the sentence below that *"the gap is one core-reachable
+/// verb that lowers to `HandedIn` for CE"*. **There is no such gap.** See
+/// `docs/design/ce_passthrough_is_already_built.md` for what the real blocker is (the raw
+/// CE client's USERD lands one byte past the end of its own ring's leaf).
+/// ⚠ The claim below about *"the two disagree today, on every channel that exists"* is
+/// therefore also false: on an adopted channel `RingOwner::HandedIn` and
+/// `HostChannelKind::Shadow` now agree. The enum still earns its keep for the reason the
+/// last paragraph gives — it answers the free-and-unmap question — but **not** for the
+/// census reason stated here.
+///
 /// `[measured 2026-08-11, `git grep` from every consuming crate]` **the two disagree
 /// today, on every channel that exists.** [`RmBackend::alloc_channel`] — the only channel
 /// verb the core can reach — lowers unconditionally to `RingSource::Ours(None)`, so every

@@ -10542,8 +10542,15 @@ impl Regs {
                 GuestRingArm::Ring =>
                     "WALKED to its framebuffer leaf and that leaf is JOINED, at the \
                      engine-object latch — i.e. BEFORE the host channel that would name it is \
-                     born. ⊘ Supply side only: the host channel still declares OUR ring and \
-                     OUR USERD (legs A2 and B)",
+                     born. ⊘⊘ CORRECTED 2026-08-13 (w284): this banner used to end `the host \
+                     channel still declares OUR ring and OUR USERD`, and that is FALSE since \
+                     legs A2/B landed — read the `GR-BIRTH` lines below, not this sentence. \
+                     A joined leaf is CONSUMED at the birth: `adopt=GUEST-RING` means the host \
+                     channel declares the GUEST's ring, and `userd=GUEST-USERD` means its \
+                     GP_PUT is the word in the guest's own USERD page. ⊘ What is still only \
+                     supply is the CONVERSE: a leaf joined here does not mean any birth \
+                     consumed it — `adopt=DECLINED` beside `joined=YES` is a real and \
+                     measured row (w283d: the USERD one byte past the leaf's end)",
             },
         );
         // ★★★★★ LEG 4'S ARMING, PRINTED, on every arm including `off`.
@@ -12658,6 +12665,21 @@ pub const FB_JOIN_ENV: &str = "KAYFABE_FB_JOIN";
 /// |---|---|
 /// | `refuse` (default) | today's behaviour, byte for byte: `Route::NotACopyEngineChannel` |
 /// | `passthrough` | ★ the doorbell is handed to `kayfabe_rt::device::SharedDevice::doorbell` |
+///
+/// # ⊘⊘⊘ CORRECTED 2026-08-13 (w284) — THE "TRANSPORT, NOT EXECUTION" CLAIM BELOW IS REFUTED
+///
+/// The paragraph below says the host GR channel's ring **and** its `GP_PUT` are both ours,
+/// *"so the engine fetches nothing on either arm"*. **Legs A2 and B moved that**, and the
+/// refutation has been recorded at `shim.rs:5745` since 2026-08-12 — but it was never
+/// propagated **here**, into the doc a reader of the flag hits first, and a `w284` brief was
+/// written from the stale half.
+/// `[measured, w267_on, all 16 `GR-BIRTH iso2` lines]` every birth — eight `engine=GrCompute`
+/// and eight `engine=Ce` — reads `adopt=GUEST-RING userd=GUEST-USERD →
+/// alloc_channel_over_guest_ring`: the host channel's ring **is** the guest's, and its
+/// `GP_PUT` **is** the word in the guest's own USERD page. `[w263]` `GET=1 PUT=1` on the
+/// armed arm against `GET=0 PUT=1` on the control, at the same address in the same boot pair.
+/// ⇒ Read the paragraph below as the *reason this flag was introduced*, not as a description
+/// of what the armed arm does today. See `docs/design/ce_passthrough_is_already_built.md`.
 ///
 /// # ⚠ Why this is armed and not simply switched on
 ///
