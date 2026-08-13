@@ -1,6 +1,34 @@
 # Publishing the guest-RAM half — ⊘ STOP AND REPORT: two coupled design choices
 
-**STATUS: DESIGN-ONLY, 2026-08-13 (w291 step 2). NOT BUILT.** Written because the brief said
+> # ★★★★★ ANSWERED 2026-08-13, SAME DAY, BY MEASUREMENT — **CHOICE 2 IS DISSOLVED, NOT RULED.**
+> **(2a) — one host object per row — WINS on every axis, and needs no owner ruling.**
+> Boot `w290ppinrate` @ `6d157c92`, real GA106, arm `KAYFABE_VAS_PUBLISH=pinrate`:
+>
+> | | value |
+> |---|---|
+> | rows pinned per pass | **256** (bounded, as briefed) |
+> | wall per pass | **55–66 ms** |
+> | **per-row rate** | **216–318 µs, mean ≈ 240 µs** |
+> | flat or degrading? | ★ **FLAT** — `first_q` vs `last_q` over 8 readings: 349/253, 218/201, 276/210, 256/218, 212/262, 249/250, 192/270, 298/232. `last_q` is **lower in 5 of 8**; the spread is noise, not growth |
+> | refused | **0**, across **88** emissions ⇒ on the order of **20 000 pins in one boot** |
+> | `UNRESOLVED-BY-VMM` | **0** |
+> | placement | `placed_as_asked=true`, `host_va == va`, on every sampled row |
+>
+> ⊘⊘ **THE ~49 s FIGURE BELOW WAS AN EXTRAPOLATION AND IT WAS WRONG BY AN ORDER OF
+> MAGNITUDE.** It multiplied leg 8's **framebuffer** join rate (34 joins / 101 ms ≈ 3 ms each)
+> by 16 328 rows. A framebuffer join mints memory, copies establishment bytes and re-points the
+> guest's window; a guest-RAM pin describes pages the guest already owns. **Measured, 16 328
+> rows costs ≈ 3.5–5.2 s if flat — and it measures flat.**
+> ⇒ **(2b) refcounting `HostBacking` and (2c) a pointer between records are both MOOT.** (2a)
+> preserves the invariant that makes double-free unrepresentable, adds no representation, and
+> needs nothing from the owner. ⚠ Cost is still **seconds per address space** and it sits on
+> the doorbell path, so it wants amortising across doorbells — an **optimization problem on a
+> working design**, which is the outcome that was pre-registered as a success.
+> ⊘ **STILL NOT BUILT.** This was the measurement, not the merge: nothing was written to
+> `Binding::host`, no refcount was touched, no pointer was added. **CHOICE 1 remains open** and
+> is written up below.
+
+**STATUS: DESIGN-ONLY, 2026-08-13 (w291 step 2). NOT BUILT. Choice 2 ANSWERED above.** Written because the brief said
 *"if it forces a design choice, STOP AND REPORT — do not pick one silently."* It forces two,
 and they are coupled. Nothing here has been implemented.
 
