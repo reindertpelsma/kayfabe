@@ -228,3 +228,108 @@ not to build a half-oracle, and the pointwise version needs one boot to be worth
 
 **Disclosed and untouched:** `--all-targets`, `fmt` and three census tests were red at `727a112`
 before this rung. Not touched.
+
+---
+
+# ADDENDUM — the coordinator's two follow-ups, and what they produced
+
+## 6. ⊘ PRIORITY 1 IS REFUTED: `GET_PTE_INFO` IS TEST-ONLY AND A RELEASE DRIVER REFUSES IT
+
+`[measured 2026-08-13, vh, real GA106 580.159.04]` `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` answered
+
+```
+Other(126) = NV_ERR_TEST_ONLY_CODE_NOT_ENABLED (0x7E)
+```
+
+for **every** address — including the ring, which arm 2 had just proved occupied.
+
+★★★★★ **THE IN-RUN CALIBRATION IS WHAT CAUGHT IT.** Without it the arm would have printed six
+`ABSENT` rows and they would have read as *"we found the missing mappings"* — the single most
+dangerous false positive available on this rung. Instead it printed `FAIL CALIBRATION` and
+refused to treat its own rows as measurements. **The guard was built one commit before it
+fired.**
+
+Explained from source **after** the measurement:
+`flags 0x100008` (`g_device_nvoc.c:733-745`) ∧ `RMCTRL_FLAGS_RM_TEST_ONLY_CODE = 0x00100000`
+(`inc/kernel/rmapi/control.h:323`) ∧ refused unless `PDB_PROP_SYS_ENABLE_RM_TEST_ONLY_CODE`
+(`src/kernel/rmapi/control.c:855-861`).
+
+★ **Two things the flags settle for free**, both of which the brief asked to be resolved rather
+than assumed:
+- Neither `GET_PTE_INFO` nor `GET_PDE_INFO` sets `ROUTE_TO_PHYSICAL` (`0x40`), so
+  `NVOC_EXPORTED_METHOD_DISABLED_BY_FLAG` is false for both ⇒ **the bound implementation IS the
+  `.c` one reads.** The standing nvoc-HAL trap is closed for this family, in both directions.
+- `0x8` = `RMCTRL_FLAGS_NON_PRIVILEGED` — an independent confirmation of the "no privilege
+  check" reading I had taken from the function body alone.
+
+## 7. ⊘ ARM 6 IS BUILT AND IS **NOT YET AN ORACLE** — stated plainly
+
+Swapped to `GET_PDE_INFO` (`0x801809`, flags `0x10008`, **not** test-only). Two further failures,
+both caught by the same calibration:
+
+| attempt | result | cause |
+|---|---|---|
+| v2 | `Other(51)` on every address | `NV_ERR_INVALID_OBJECT_HANDLE` (**`0x33`** — 51 *decimal*; ⚠ `0x51` *hex* is `NV_ERR_NO_MEMORY`, a different code, and that hex/decimal slip is the banked `status: 56` trap). I passed the `NV01_MEMORY_VIRTUAL` **range** as `hVASpace`. **One `Vas` is TWO host objects** and `alloc_vaspace` returns the range; the `FERMI_VASPACE_A` is its companion. ⊘ `alloc_vaspace_raw`'s own R7b comment records paying for **the mirror image of this**, with the same status. |
+| v3 | ring ⇒ `PDE PRESENT`; **all four others ⇒ `Other(19270)`** | `19270 = 0x4B46 = NOT_ON_THIS_RUNG` — **our own sentinel again**, not RM's answer. Unexplained. |
+
+⊘⊘ **AND THE ONE "PRESENT" IS NOT TRUSTWORTHY EITHER.** It reports `pageSize 0x20000000` — **512
+MiB** — which is the *whole-FB alias* shape the C's own decoder singles out and refuses to back
+(`nvkvm_gpu_emul.c`: *"512 MiB leaf (FB alias): never back"*). A calibration positive that may be
+an alias artefact is not a calibration.
+
+⇒ **Arm 6 answers nothing about the two faulting addresses this rung.** Recorded as built,
+wired, and **uncalibrated** — not as a result. ★ The value delivered is the **guard**: three
+different failure modes on three consecutive runs, and not one of them produced a false finding.
+
+## 8. ★★★★★ THE C's SOURCE LIST — SETTLED FROM THE C's SOURCE, AND OUR TWO DOCS DISAGREED
+
+`CLAUDE.md` said the C was **PDB-derived only** (doorbell PT sweep + observed CE write);
+`mode2_address_table.md` said one of the two co-equal sources is a **bind-time RPC/ioctl
+binding**. **`mode2_address_table.md` is right.** There is a **third source and it is an RPC
+capture**:
+
+- `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` (`0x2080012b`) snooped in flight —
+  `nvkvm_snoop_promote_ctx` (`src/qemu/nvkvm_gpu_emul.c:2446-2472`);
+- its `{gpuPhysAddr, gpuVirtAddr, size, physAttr}` entries folded into a side table by
+  `nvkvm_record_va_map` (`:2417-2440`);
+- and that table is what `nvkvm_chan_translate` **consults FIRST** (`:305-309`);
+- backed by `nvkvm_m2_back_and_map` (`:3902`).
+
+⇒ **THREE sources.** Correction folded into `CLAUDE.md` **above the text it corrects**
+(nvidia-gpu-passthrough `67b7ed3`).
+
+### ★★★★★ AND THE LINE THAT MATTERS FOR THE FIX
+
+The C rounds **every** promote-derived mapping **up to 64 KiB** before mapping it
+(`nvkvm_gpu_emul.c:7920`). This port binds at the **declared length** — there is no rounding
+anywhere in `crates/kayfabe-core/src/promote.rs`.
+
+That is precisely what produces w277's `0x8600`-long, non-page-aligned rows and the **sub-page
+hole** w277 recorded and left open: *"2 560 bytes our own `resolve` answers `Miss` for inside a
+page the guest has mapped"*, held that way by the `CrossesEnd` refusal.
+
+⇒ **The C could not have that hole. We have it by construction.** ⚠ **Not measured against a
+fault** — a mechanism with both sides cited, and the first thing to test on the 82-ioctl CE
+reproduction.
+
+⊘ One more semantic to match: the C treats `st == 0x51` (`NV_ERR_NO_MEMORY`) on a **FIXED** map
+as **success** — *"the VA is ALREADY mapped in the host VASpace"* (`:7935-7938`). A port that
+reads that as failure refuses exactly the ctx buffers the host RM already placed.
+
+## 9. THE TWO SILENT BUGS, CLOSED
+
+- **`scripts/bench/w288n_notifier_run.sh` had `finish 0` above its "SHARPENED BAR" join ⇒ that
+  section had never executed on any run**, while the runner exited 0 and the log ended tidily.
+  Moved below. ⇒ It is why `w288nc1` needed an ad-hoc `crit1` script: the join it wanted was
+  right there, unreachable. What it produces when it runs is §3 of this document.
+- **arm 4's `ControlFailed` line now prints the control's own operand addresses** — the arm that
+  actually fired in the guest, printing every field except the one the host log names.
+
+## 10. ⊘ WHAT I DID NOT DO
+
+`cap3` mining. It is `traces/mode2_c_reference/cap3_matmul_forwarding.rec.zst` and it is
+committed, so the question *"does it record address-table population at all?"* is answerable
+without a boot — but the answer now matters less than it did: the population **mechanism** has
+been settled from the C's source directly, which is stronger evidence than a trace and is not
+subject to cap3's stated non-hermeticity (`pci_dma_map` is uninstrumented). ⚠ What cap3 could
+still add is **which VAs** the promote path actually carried on the green run. Named, not done.
