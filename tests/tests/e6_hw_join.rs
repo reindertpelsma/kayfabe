@@ -482,8 +482,8 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
         // green. ⚠ A red gate nobody owns becomes a gate nobody reads.
         // ★ The VAs the probe actually mapped, not placeholders: these are what the fixture
         // asked `map_gpu_va` for, so a future failure prints the addresses it was about.
-        src_va: PROBE_SRC_VA,
-        dst_va: PROBE_DST_VA,
+        src_va: PROBE_SRC_VA.0,
+        dst_va: PROBE_DST_VA.0,
     };
     assert!(
         evidence.copied(),
