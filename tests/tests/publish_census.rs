@@ -99,7 +99,9 @@ fn every_gate_has_a_row_that_trips_it_and_the_buckets_sum() {
             range(0x8010_0000, 0x1000, Aperture::Vidmem),
             // ⊘ Vidmem, a whole granule long, but MISALIGNED in VA.
             range(0x8020_1000, GRANULE, Aperture::Vidmem),
-            // ⊘ Not Vidmem — no framebuffer to join.
+            // ⊘⊘ NOT VIDMEM — and it lands in `guest_ram`, NOT in `not_vidmem`. See the
+            // assertion below: this row is the known-positive for w289 §43's finding, not
+            // for the aperture gate.
             range(0x8030_0000, GRANULE, Aperture::SysmemCoherent),
         ],
     );
@@ -125,7 +127,27 @@ fn every_gate_has_a_row_that_trips_it_and_the_buckets_sum() {
         "weighted by SIZE too: a count of 4 KiB rows and a count of 64 KiB rows are not \
          comparable quantities: {c:?}"
     );
-    assert_eq!(c.not_vidmem, 1, "{c:?}");
+    // ★★★★★ **THE BUCKET THAT CANNOT FIRE, PINNED AS AN INVARIANT RATHER THAN LEFT DEAD.**
+    //
+    // The `SysmemCoherent` row above is classified `guest_ram`, not `not_vidmem` — and that
+    // is w289 §43 restated by the type system: `Binding::declared_by_guest` maps every
+    // non-`Vidmem` aperture a guest may declare onto a guest-RAM kind, and REFUSES
+    // `Aperture::Peer` outright (`RegionKindFault::PeerHasNoKind`). So a guest-declared row
+    // is `Vidmem` or it is guest RAM; there is no third option, and `not_vidmem` is
+    // **unreachable from this population**.
+    //
+    // ⊘ The bucket is kept because `plan_back_fb_leaf`'s aperture gate (`FbLeafDisagrees`)
+    // is real and a future non-guest-declared populate source could reach it. ⚠ But it is
+    // asserted ZERO here so the census can never be read as *"the aperture gate is what is
+    // refusing our rows"* — it is not, and a reader chasing that would be chasing a bucket
+    // nothing can put anything in. **A dead bucket that nobody pins reads as a measured
+    // zero.**
+    assert_eq!(
+        (c.guest_ram, c.not_vidmem),
+        (1, 0),
+        "the non-Vidmem row is GUEST RAM; `not_vidmem` is unreachable from guest-declared \
+         rows and must not be mistaken for the gate that is refusing us: {c:?}"
+    );
     assert_eq!(c.already_host, 0, "{c:?}");
 }
 

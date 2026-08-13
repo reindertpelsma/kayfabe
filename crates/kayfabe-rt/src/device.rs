@@ -2233,6 +2233,14 @@ pub struct PublishCensus {
     /// establishment over them is the `0x51` collision that cannot be told from exhaustion.
     pub guest_ram: usize,
     /// Rows whose aperture is not `Vidmem` — no framebuffer to join (`FbLeafDisagrees`).
+    ///
+    /// ⊘⊘ **UNREACHABLE FROM GUEST-DECLARED ROWS, AND THAT IS PINNED, NOT ASSUMED.**
+    /// `Binding::declared_by_guest` maps every non-`Vidmem` aperture a guest may declare
+    /// onto a guest-RAM kind and refuses `Aperture::Peer` outright, so such a row is caught
+    /// by [`Self::guest_ram`] one arm earlier. The bucket is kept because the gate it names
+    /// is real and another populate source could reach it — but it is asserted **zero** by
+    /// `tests/tests/publish_census.rs`, because a dead bucket nobody pins reads as a
+    /// measured zero and would send a reader chasing the wrong gate.
     pub not_vidmem: usize,
     /// ★★★ Rows RM's 64 KiB fixed-placement granularity cannot cover exactly
     /// (`FbLeafGranularity`). **This is the number that decides the rung**: it is how much
