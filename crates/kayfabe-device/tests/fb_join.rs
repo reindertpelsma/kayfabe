@@ -377,7 +377,9 @@ fn the_plane_reports_a_joined_page_as_one_memory_and_never_as_unwritten() {
         .expect("a joined range takes the write");
 
     let mut back = [0u8; 8];
-    plane.fb_peek(AT + 0x1000, &mut back).expect("and serves it");
+    plane
+        .fb_peek(AT + 0x1000, &mut back)
+        .expect("and serves it");
     assert_eq!(
         back, entry,
         "★ the bytes are LIVE — without this the arms below could be satisfied by a store \

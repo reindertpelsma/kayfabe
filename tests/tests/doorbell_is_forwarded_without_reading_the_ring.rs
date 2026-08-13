@@ -296,7 +296,13 @@ fn a_gr_doorbell_is_forwarded_although_its_ring_can_not_be_read() {
         );
     });
 
-    let out = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(GR_VCHID), &[]);
+    let out = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(GR_VCHID),
+        &[],
+        None,
+    );
 
     // ★★★★★ THE CLAIM. Whatever the outer call answered, the host backend was asked to
     // ring — i.e. the SERVE decision did not consult the ring.
@@ -346,7 +352,7 @@ fn the_ring_gate_is_vacuous_on_an_empty_working_set_and_live_on_a_non_empty_one(
     let token = MockArch::token_for(GR_VCHID);
 
     // 2a — the production shape. No VA is offered, so the gate has nothing to refuse.
-    dev.doorbell(None, GPU, token, &[]).expect(
+    dev.doorbell(None, GPU, token, &[], None).expect(
         "★ 2a: an EMPTY working set must plan — the gate is vacuous, by having \
                  nothing to quantify over, and NOT by having been removed",
     );
@@ -354,7 +360,7 @@ fn the_ring_gate_is_vacuous_on_an_empty_working_set_and_live_on_a_non_empty_one(
     // 2b — the same channel, one unpublished VA offered. The gate must refuse it. ⊘ This
     // is the arm that makes 2a mean something: without it, `plan_doorbell` returning `Ok`
     // on `&[]` is equally consistent with the gate not existing.
-    let refused = dev.doorbell(None, GPU, token, &[UNPUBLISHED_VA]);
+    let refused = dev.doorbell(None, GPU, token, &[UNPUBLISHED_VA], None);
     let err = refused.expect_err(
         "★★ 2b: a working set naming a VA this guest never published must be REFUSED. If \
          this planned, the #14 ring-gate is not live and 2a's green means nothing.",

@@ -181,6 +181,29 @@ pub enum ForwardAdmission {
     },
 }
 
+/// ★★★★★ **w288 — the VMM's answer to *"where are THIS latched forward's channel's error
+/// notifier pages?"***, keyed by the same triple the latch carries.
+///
+/// ⊘ It is a **grant** and not a guest-physical address, because a GPA is a number this
+/// crate could be tempted to re-derive a file offset from, and re-deriving it is the `-m 8G`
+/// bug `kayfabe_vmm_qemu::layout` exists to refuse. The VMM resolved it against its own
+/// stated layout, refused by name if it could not, and what crosses is the result.
+///
+/// ⊘ The key is the alloc's identity, not the channel's: at the moment the caller builds
+/// this, the host channel does not exist yet — that is the whole point of building it before
+/// the drain rather than after.
+#[derive(Debug, Clone, Copy)]
+pub struct EngineNotifierGrant {
+    /// The latched alloc's owning `hClient`.
+    pub client: HClient,
+    /// The latched alloc's `hParent` — the guest channel the object is allocated on.
+    pub parent: HObject,
+    /// The latched alloc's class.
+    pub class: ClassId,
+    /// The guest's own notifier pages, as the VMM derived them.
+    pub grant: kayfabe_isolate::GuestRamGrant,
+}
+
 /// ★★★ **§16.96 — one latched forward, RUN.** What
 /// [`SharedDevice::run_pending_engine_forwards`] reports per request.
 ///
@@ -1016,20 +1039,46 @@ impl SharedDevice {
     /// caller can report outcomes it never saw the requests for. A refusal is a row like
     /// any other: this drain never swallows one, because the census of what the host said
     /// is the only reason the forward is observable at all.
+    ///
+    /// # ★★★★★ w288 — `err_notifier_grants`, and why the VMM hands them to the DRAIN
+    ///
+    /// Each entry names *"for the channel this `(client, parent, class)` alloc lands on, the
+    /// guest's own error-notifier pages, as a slice of the guest-RAM block"*. Only the VMM
+    /// may derive a [`kayfabe_isolate::GuestRamGrant`], so it cannot be computed in here or
+    /// anywhere below; the caller resolves the channel's declared notifier GPA through its
+    /// **own** stated layout and passes the result down.
+    ///
+    /// ⊘ Matched by key, and an entry with no match is simply not applied. A latch whose
+    /// channel the caller could not resolve gets `None` — a channel born **without** a
+    /// notifier, which is exactly the pre-w288 behaviour and never a silent substitution of
+    /// somebody else's pages. ⚠ Positional matching was deliberately not used: the latch can
+    /// grow between a caller's peek and this drain, and a positional scheme would then apply
+    /// each grant to the *wrong* channel — the one failure mode worse than applying none.
     #[must_use]
-    pub fn run_pending_engine_forwards(&self) -> Vec<EngineForwardRun> {
+    pub fn run_pending_engine_forwards(
+        &self,
+        err_notifier_grants: &[EngineNotifierGrant],
+    ) -> Vec<EngineForwardRun> {
         let batch = {
             let mut g = self.state.write();
             core::mem::take(&mut g.pending_engine_forwards)
         };
         batch
             .into_iter()
-            .map(|p| EngineForwardRun {
-                client: p.client,
-                parent: p.parent,
-                class: p.class,
-                params_len: p.params.len(),
-                out: self.forward_engine_object_by_parent(p.client, p.parent, p.class, &p.params),
+            .map(|p| {
+                let grant = err_notifier_grants
+                    .iter()
+                    .find(|g| g.client == p.client && g.parent == p.parent && g.class == p.class)
+                    .map(|g| g.grant);
+                EngineForwardRun {
+                    client: p.client,
+                    parent: p.parent,
+                    class: p.class,
+                    params_len: p.params.len(),
+                    out: self.forward_engine_object_by_parent(
+                        p.client, p.parent, p.class, &p.params, grant,
+                    ),
+                }
             })
             .collect()
     }
@@ -2080,6 +2129,11 @@ fn channel_facts_from(
                 // below — the declared kind, never `route.proc == SYSTEM_PROC`
                 // recomputed here. See [`CeChannelFacts::kind`].
                 kind: chan.kind,
+                // ★★★★★ w288 — off the SAME resolved `Channel` as `kind` above. ⊘ NOT
+                // re-derived from the graph node's alloc facts: this struct exists because a
+                // second derivation of one fact disagreed with the first
+                // (`two_projections_of_one_fact_disagreeing`).
+                error_notifier: chan.error_notifier,
                 // ★★★★ §16.25 — carried off the channel, where the projection put it.
                 // ⊘ NOT re-derived here: this whole struct exists because a second
                 // derivation of the VA space disagreed with the first one and lost the
@@ -2210,7 +2264,8 @@ impl SharedDevice {
     /// [`FwdFault::PushbufferAperture`] — the same shape as *"route B is unreachable with
     /// the witness disarmed"*. Both must be on; each is asserted separately in a boot's log.
     pub fn set_pushbuffer_vidmem(&self, on: bool) {
-        self.pb_vidmem.store(on, std::sync::atomic::Ordering::Relaxed);
+        self.pb_vidmem
+            .store(on, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Whether the pushbuffer's vidmem route is armed. ⊘ Read per parse rather than cached,
@@ -2227,6 +2282,7 @@ impl SharedDevice {
         target_gpu: GpuId,
         token: u64,
         working_set: &[GpuVa],
+        err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<DoorbellOutcome, FwdFault> {
         let out = self.verb_op(
             || {
@@ -2236,7 +2292,16 @@ impl SharedDevice {
                         Ok((r.proc, r))
                     },
                     |_spine, proc, route| {
-                        let planned = kayfabe_fwd::plan_doorbell(proc, &route, working_set)?;
+                        // ★★★★★ **w288 — THE VMM'S GRANT, PASSED THROUGH.** Nothing in this
+                        // crate derives it and nothing here checks it: only the VMM may mint
+                        // a `GuestRamGrant`, and `plan_doorbell` still gates it on the
+                        // channel's own declaration.
+                        let planned = kayfabe_fwd::plan_doorbell(
+                            proc,
+                            &route,
+                            working_set,
+                            err_notifier_grant,
+                        )?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
@@ -3667,6 +3732,7 @@ impl SharedDevice {
         vchid: VChid,
         class: ClassId,
         params: &[u8],
+        err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<EngineObjectForwarded, FwdFault> {
         self.verb_op(
             || {
@@ -3678,8 +3744,15 @@ impl SharedDevice {
                     |spine, proc, route| {
                         // ★★★★★ LEG A2 — the spine is now READ here, for the channel's own
                         // declared `gpFifoOffset`. See `plan_engine_object`.
-                        let planned =
-                            kayfabe_fwd::plan_engine_object(spine, proc, &route, class, params)?;
+                        let planned = kayfabe_fwd::plan_engine_object(
+                            spine,
+                            proc,
+                            &route,
+                            class,
+                            params,
+                            // ★★★★★ w288 — the VMM's grant, passed through untouched.
+                            err_notifier_grant,
+                        )?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
@@ -3704,6 +3777,7 @@ impl SharedDevice {
         parent: HObject,
         class: ClassId,
         params: &[u8],
+        err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<EngineObjectForwarded, FwdFault> {
         self.verb_op(
             || {
@@ -3717,8 +3791,15 @@ impl SharedDevice {
                     |spine, proc, route| {
                         // ★★★★★ LEG A2 — the spine is now READ here, for the channel's own
                         // declared `gpFifoOffset`. See `plan_engine_object`.
-                        let planned =
-                            kayfabe_fwd::plan_engine_object(spine, proc, &route, class, params)?;
+                        let planned = kayfabe_fwd::plan_engine_object(
+                            spine,
+                            proc,
+                            &route,
+                            class,
+                            params,
+                            // ★★★★★ w288 — the VMM's grant, passed through untouched.
+                            err_notifier_grant,
+                        )?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
@@ -4278,6 +4359,21 @@ pub struct CeChannelFacts {
     /// and this tree has paid for that shape more than once
     /// (`two_projections_of_one_fact_disagreeing`; and for this exact axis, 12 boots).
     pub kind: kayfabe_core::channel_kind::GuestChannelKind,
+    /// ★★★★★ **w288 — WHERE THIS CHANNEL ASKED TO BE TOLD ABOUT ITS OWN DEATH**, carried
+    /// off the same resolved [`kayfabe_core::gpu::Channel`] as [`Self::kind`] and
+    /// [`Self::vas_pdb`], so the notifier and the address space can never be attributed to
+    /// different channels.
+    ///
+    /// The three states are the guest's, not ours, and they are kept apart because they lead
+    /// a reader to different files: `Sysmem { gpa }` is servable (an
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` can be built over those pages), `Unreachable` is a
+    /// gap in **us**, and `None` is the guest waiving error reporting altogether. ⊘ Folding
+    /// the last two together is the collapse `kayfabe_arch::fault::ErrorNotifier`'s own docs
+    /// refuse.
+    ///
+    /// ⊘ Reported, never resolved: turning the GPA into a file offset is the **VMM's** job
+    /// and its alone (`kayfabe_isolate::GuestRamGrant::originated_by_the_vmm`).
+    pub error_notifier: Option<kayfabe_arch::fault::ErrorNotifier>,
     /// ★★★★ **§16.25 — which of the three declared-fact routes resolved (or failed to
     /// resolve) this channel's VA space, and what each route that ran actually hit.**
     ///

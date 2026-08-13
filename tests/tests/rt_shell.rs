@@ -277,14 +277,20 @@ fn run_script(mode: LockMode) -> (Vec<String>, RtSnapshot) {
     let mut gr_chans: Vec<ChanId> = Vec::new();
     for (i, &pid) in pids.iter().enumerate() {
         let out = device
-            .doorbell(None, gpu_of(i), MockArch::token_for(gr_vchid(i)), &vas)
+            .doorbell(
+                None,
+                gpu_of(i),
+                MockArch::token_for(gr_vchid(i)),
+                &vas,
+                None,
+            )
             .expect("GR doorbell routes and gates");
         assert_eq!(out.proc, pid, "doorbell demuxed to the wrong proc");
         gr_chans.push(out.chan);
         log.push(format!("doorbell-gr[{i}] {out:?}"));
         log.push(format!(
             "doorbell-ce[{i}] {:?}",
-            device.doorbell(None, gpu_of(i), MockArch::token_for(ce_vchid(i)), &[])
+            device.doorbell(None, gpu_of(i), MockArch::token_for(ce_vchid(i)), &[], None)
         ));
     }
 
@@ -366,7 +372,7 @@ fn run_script(mode: LockMode) -> (Vec<String>, RtSnapshot) {
     ));
     log.push(format!(
         "doorbell-after-retire {:?}",
-        device.doorbell(None, gpu_of(2), MockArch::token_for(gr_vchid(2)), &[])
+        device.doorbell(None, gpu_of(2), MockArch::token_for(gr_vchid(2)), &[], None)
     ));
     tx.send(CoreEvent::SourceSignal(sources[2]));
     for eff in ex.drain_all() {
@@ -497,7 +503,7 @@ fn spine_ops_acquire_no_proc_lock_via_get_mut() {
     // phases back into one is holding the proc lock across a host verb.
     let dev_mid = lock::acquisitions(LockRank::Device);
     device
-        .doorbell(None, gpu_of(0), MockArch::token_for(gr_vchid(0)), &[])
+        .doorbell(None, gpu_of(0), MockArch::token_for(gr_vchid(0)), &[], None)
         .expect("doorbell");
     assert_eq!(
         lock::acquisitions(LockRank::Proc) - proc_before,
@@ -766,7 +772,13 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
                                         ce_vchid(i)
                                     };
                                     let out = device
-                                        .doorbell(None, gpu_of(i), MockArch::token_for(vchid), &[])
+                                        .doorbell(
+                                            None,
+                                            gpu_of(i),
+                                            MockArch::token_for(vchid),
+                                            &[],
+                                            None,
+                                        )
                                         .expect("doorbell routes");
                                     assert_eq!(out.proc, pids[i], "wrong-proc demux");
                                 }

@@ -539,6 +539,7 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
         Some((owned, 0x1234)),
         kayfabe_arch::ids::EngineKind::Ce,
         true,
+        None,
     )
     .expect("an empty working set passes the #14 gate — nothing is claimed");
     assert_eq!(

@@ -281,6 +281,12 @@ impl RmBackend for LoopbackRm {
         _engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
         adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        // ★★★★★ **w288 — DISCARDED, AND THE DISCARD IS ON DISK**, exactly as `adopt`'s is
+        // one line up and for the identical reason: this backend has no RM, so there is no
+        // `hObjectError` for a memory object to be named in. ⊘ The name is `_`-free in the
+        // log below so a boot whose plane selector picked the loopback cannot read as a boot
+        // that built a notifier — `a_census_zero_needs_a_known_positive`.
+        err_notifier: Option<HostHandle>,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★★★★★ **A SILENT DISCARD, MADE LOUD.** This arm took `_adopt` and dropped it. A boot
         // whose plane selector picked the loopback therefore produced a channel born over
@@ -298,12 +304,14 @@ impl RmBackend for LoopbackRm {
             adopt.is_some_and(|a| a.userd.is_some()),
         );
         eprintln!(
-            "kayfabe-isolate: GR-BIRTH vas={:#x} adopt={} userd={} ⊘ LOOPBACK BACKEND — \
-             DISCARDED. This plane has no RM and no joined leaf. ⚠ This boot's channels are \
-             NOT host channels, so nothing in it measures leg A or leg B",
+            "kayfabe-isolate: GR-BIRTH vas={:#x} adopt={} userd={} err_notifier={} ⊘ LOOPBACK \
+             BACKEND — DISCARDED. This plane has no RM and no joined leaf. ⚠ This boot's \
+             channels are NOT host channels, so nothing in it measures leg A, leg B or the \
+             w288 error notifier",
             vas.raw(),
             offer.as_str(crate::rm::BirthLimb::Ring),
             userd_offer.as_str(crate::rm::BirthLimb::Userd),
+            err_notifier.map_or_else(|| "NONE".to_string(), |h| format!("{:#x}", h.raw())),
         );
         self.known(vas)?;
         let h = self.verb(false)?;

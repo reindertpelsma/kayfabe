@@ -292,7 +292,7 @@ fn a_gr_doorbell_rings_the_host_token_the_engine_object_path_already_minted() {
 
     // ---- (2) The engine-object forward — the path that materializes 8 GR channels per
     //          boot on real hardware, upstream in time of any doorbell.
-    dev.forward_engine_object_by_parent(CLIENT, CHAN, mc::COMPUTE, &[])
+    dev.forward_engine_object_by_parent(CLIENT, CHAN, mc::COMPUTE, &[], None)
         .expect("the Case-1 engine-object forward lands on a GR channel");
 
     let minted = dev
@@ -328,7 +328,7 @@ fn a_gr_doorbell_rings_the_host_token_the_engine_object_path_already_minted() {
     );
 
     let out = dev
-        .doorbell(Some(&mut vmm), GPU, guest_token, &[])
+        .doorbell(Some(&mut vmm), GPU, guest_token, &[], None)
         .expect("a GR doorbell on a materialized channel is served");
 
     assert_eq!(
@@ -393,7 +393,7 @@ fn the_same_translation_serves_a_ce_channel_and_is_not_keyed_on_the_engine() {
 
     let guest_token = MockArch::token_for(GR_VCHID);
     let out = dev
-        .doorbell(Some(&mut vmm), GPU, guest_token, &[])
+        .doorbell(Some(&mut vmm), GPU, guest_token, &[], None)
         .expect("a CE doorbell is served");
 
     assert_eq!(

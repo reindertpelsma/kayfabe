@@ -3228,12 +3228,41 @@ pub fn exec_doorbell(
     proc: &mut Proc,
     route: &DoorbellRoute,
     working_set: &[GpuVa],
+    err_notifier_grant: Option<GuestRamGrant>,
 ) -> Result<DoorbellOutcome, FwdFault> {
-    let planned = plan_doorbell(proc, route, working_set)?;
+    let planned = plan_doorbell(proc, route, working_set, err_notifier_grant)?;
     let gpu = planned.plan.cgpu;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_doorbell(spine, proc, &planned.plan, reply)
     })
+}
+
+/// ★★★★★ **w288 — MAY THIS CHANNEL'S HOST TWIN BE GIVEN AN ERROR NOTIFIER, and over which
+/// pages?** One authority, two callers ([`plan_doorbell`] and [`plan_engine_object`]), so the
+/// two chains that birth a host channel can never come to disagree about it.
+///
+/// The grant is the VMM's; what this adds is the **guest's own declaration** as the gate.
+/// A channel that declared no notifier waived error reporting, and attaching one anyway
+/// would put an RM writer on pages the guest never nominated. The three states are kept
+/// apart deliberately:
+///
+/// - `Some(ErrorNotifier::Sysmem { .. })` — the guest named guest RAM, which is the one place
+///   an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` can be built over. Served.
+/// - `Some(ErrorNotifier::Unreachable)` — the guest asked to be told and named somewhere this
+///   port has no write port for. ⊘ Refused, and it is a **gap in us**, not a waiver; it is
+///   kept distinct from the case below for exactly that reason
+///   (`kayfabe_arch::fault::ErrorNotifier::Unreachable`'s own docs).
+/// - `None` — the guest waived it. Served as `None`, which is every pre-w288 boot.
+///
+/// ⊘ **The GPA is never read here.** The caller has already turned it into a
+/// [`GuestRamGrant`] through the hypervisor's own stated layout; re-deriving anything from
+/// `Sysmem { gpa }` in this crate would be the second derivation that `plan_pin_guest_ram`'s
+/// `grant` parameter exists to make impossible.
+fn err_notifier_grant_for(chan: &Channel, grant: Option<GuestRamGrant>) -> Option<GuestRamGrant> {
+    match chan.error_notifier {
+        Some(kayfabe_arch::fault::ErrorNotifier::Sysmem { .. }) => grant,
+        Some(kayfabe_arch::fault::ErrorNotifier::Unreachable) | None => None,
+    }
 }
 
 /// The ID-shaped hints [`commit_doorbell`] re-validates against (R5).
@@ -3266,10 +3295,23 @@ pub struct DoorbellPlan {
 /// derived from.
 ///
 /// A pure `&Proc` read; nothing is mutated until the commit.
+///
+/// ## ★★★★★ w288 — `err_notifier_grant`, and why it arrives from OUTSIDE
+///
+/// It is the VMM's own derivation of where the guest's error-notifier pages live in the
+/// guest-RAM block, exactly as [`plan_pin_guest_ram`] takes its `grant`: a
+/// [`GuestRamGrant`] can only be minted by `GuestRamGrant::originated_by_the_vmm`, so this
+/// crate deliberately **cannot compute one** — computing a file offset here is the `-m 8G`
+/// bug `kayfabe_vmm_qemu::layout` exists to refuse.
+///
+/// ⊘ It is still gated on the channel's own declaration ([`err_notifier_grant_for`]): a
+/// grant for a channel that declared no reachable notifier is dropped rather than honoured,
+/// so a caller cannot attach one to a channel the guest never asked to be told about.
 pub fn plan_doorbell(
     proc: &Proc,
     route: &DoorbellRoute,
     working_set: &[GpuVa],
+    err_notifier_grant: Option<GuestRamGrant>,
 ) -> Result<Planned<DoorbellPlan>, FwdFault> {
     let pid = route.proc;
     let cid = route.chan;
@@ -3333,34 +3375,50 @@ pub fn plan_doorbell(
         Some(g) => g,
         None => &no_vas,
     };
-    let verbs =
-        VerbPlan::gated_doorbell(gate, working_set, host_vas, channel, chan.engine, schedule)
-            // ★ Re-derive the EXACT fault from the offending VA, which is the division of
-            // labour `RingWorkingSet`'s doc specifies: the seam carries a bare bool, this
-            // crate owns the vocabulary. `ring_admits` is the same authority the gate just
-            // ran, so the re-derivation cannot disagree with the refusal it is naming.
-            //
-            // ⊘ CORRECTED 2026-08-11 (integration): this comment used to say *"there are
-            // three answers, not two — a `ShadowsGuestMemory` backing is
-            // `BackingNotGuestVisible`, not a `Miss`"*. There are **two**. Ruling 3 made a
-            // shadowing backing unbindable, so `ring_admits` now yields only `Miss` and
-            // `FwdFault::BackingNotGuestVisible` no longer exists — see `ring_admits`.
-            //
-            // ★ The re-derivation is kept even though every arm currently answers `Miss`:
-            // it is the SHAPE that matters. The bare-bool collapse at the seam is lossy by
-            // construction, so the day the authority grows a second refusal this site
-            // carries it without being touched. Asking the authority is never wrong;
-            // hardcoding `Miss` here would be right today and silently wrong later.
-            .map_err(|kayfabe_isolate::UngatedVa(va)| {
-                match (vas, chan.vas_pdb) {
-                    (Some(v), Some(pdb)) => ring_admits(&v.table, pdb, va)
-                        // ⊘ Total, not `unwrap_err`: the gate refused this VA, so the
-                        // authority refuses it too — but a panic is not the way to say so.
-                        .err()
-                        .unwrap_or(FwdFault::Address(AddressFault::Miss { pdb, va })),
-                    _ => FwdFault::NoVas(cid),
-                }
-            })?;
+    // ★★★★★ **w288 — the notifier rides the SAME lazy-materialization arm the ring does.**
+    // `channel.is_none()` is *"this doorbell is the one that births the host channel"*, and
+    // `hObjectError` is a birth parameter: naming it for a channel that already exists would
+    // be a second, silent opinion about a fact RM already holds and cannot be told.
+    let err_notifier = if channel.is_none() {
+        err_notifier_grant_for(chan, err_notifier_grant)
+    } else {
+        None
+    };
+    let verbs = VerbPlan::gated_doorbell(
+        gate,
+        working_set,
+        host_vas,
+        channel,
+        chan.engine,
+        schedule,
+        err_notifier,
+    )
+    // ★ Re-derive the EXACT fault from the offending VA, which is the division of
+    // labour `RingWorkingSet`'s doc specifies: the seam carries a bare bool, this
+    // crate owns the vocabulary. `ring_admits` is the same authority the gate just
+    // ran, so the re-derivation cannot disagree with the refusal it is naming.
+    //
+    // ⊘ CORRECTED 2026-08-11 (integration): this comment used to say *"there are
+    // three answers, not two — a `ShadowsGuestMemory` backing is
+    // `BackingNotGuestVisible`, not a `Miss`"*. There are **two**. Ruling 3 made a
+    // shadowing backing unbindable, so `ring_admits` now yields only `Miss` and
+    // `FwdFault::BackingNotGuestVisible` no longer exists — see `ring_admits`.
+    //
+    // ★ The re-derivation is kept even though every arm currently answers `Miss`:
+    // it is the SHAPE that matters. The bare-bool collapse at the seam is lossy by
+    // construction, so the day the authority grows a second refusal this site
+    // carries it without being touched. Asking the authority is never wrong;
+    // hardcoding `Miss` here would be right today and silently wrong later.
+    .map_err(|kayfabe_isolate::UngatedVa(va)| {
+        match (vas, chan.vas_pdb) {
+            (Some(v), Some(pdb)) => ring_admits(&v.table, pdb, va)
+                // ⊘ Total, not `unwrap_err`: the gate refused this VA, so the
+                // authority refuses it too — but a panic is not the way to say so.
+                .err()
+                .unwrap_or(FwdFault::Address(AddressFault::Miss { pdb, va })),
+            _ => FwdFault::NoVas(cid),
+        }
+    })?;
 
     // ★★★★★ THE TRANSLATION WITNESS (owner directive, 2026-08-12). The store witness in
     // `RmConnection::doorbell` proves the write instruction executes; it cannot say WHAT was
@@ -3562,7 +3620,12 @@ pub fn handle_doorbell(
     let proc = procs
         .get_mut(&route.proc)
         .ok_or(FwdFault::RetiredProc(route.proc))?;
-    exec_doorbell(spine, proc, &route, working_set)
+    // ★★★★★ **w288 — `None`, and it is STRUCTURAL rather than a default.** This entry point
+    // takes a `&mut Gpu` and nothing else: there is no VMM in scope, and only the VMM may
+    // derive a `GuestRamGrant` (`GuestRamGrant::originated_by_the_vmm`). ⊘ So a notifier is
+    // not *omitted* here — it is **underivable** here, and the production path that can
+    // derive one is `SharedDevice::doorbell`, which takes it as an argument.
+    exec_doorbell(spine, proc, &route, working_set, None)
 }
 
 /// Post any composable completion batch for target `gpu_target` and raise the SWGEN0
@@ -3792,7 +3855,10 @@ pub fn exec_engine_object(
     class: ClassId,
     params: &[u8],
 ) -> Result<EngineObjectForwarded, FwdFault> {
-    let planned = plan_engine_object(spine, proc, route, class, params)?;
+    // ★★★★★ **w288 — `None` for `handle_doorbell`'s reason**: this signature carries no VMM,
+    // so no grant can exist at this seam. `SharedDevice::forward_engine_object_by_parent` is
+    // the production path that has one.
+    let planned = plan_engine_object(spine, proc, route, class, params, None)?;
     let gpu = planned.plan.cgpu;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_engine_object(spine, proc, &planned.plan, reply)
@@ -3830,12 +3896,19 @@ pub struct EngineObjectPlan {
 /// **Idempotent under replay** (§2.2): a re-sent alloc for a class already forwarded
 /// on this channel resolves here, from core state, and emits **no verbs at all** —
 /// the host never sees a duplicate, and the replay never touches the worker pool.
+///
+/// ## ★★★★★ w288 — `err_notifier_grant`
+///
+/// [`plan_doorbell`]'s parameter, on the chain that births most host channels: the
+/// engine-object forward runs upstream in time of every doorbell. Same rule, same gate
+/// ([`err_notifier_grant_for`]), same reason it cannot be derived here.
 pub fn plan_engine_object(
     spine: &Spine,
     proc: &Proc,
     route: &EngineObjectRoute,
     class: ClassId,
     params: &[u8],
+    err_notifier_grant: Option<GuestRamGrant>,
 ) -> Result<Planned<EngineObjectPlan>, FwdFault> {
     let pid = route.proc;
     let cid = route.chan;
@@ -3894,6 +3967,15 @@ pub fn plan_engine_object(
             // RM already holds and cannot be told.
             adopt: if channel.is_none() {
                 adopted_guest_ring(spine, proc, chan, cgpu)
+            } else {
+                None
+            },
+            // ★★★★★ **w288 — asked for on exactly the arm `adopt` is asked for on**, and for
+            // the identical reason: `hObjectError` is a birth parameter, and a channel that
+            // already exists carries whatever it was born with. Re-stating it here would be
+            // a second opinion about a fact RM already holds and cannot be told.
+            err_notifier: if channel.is_none() {
+                err_notifier_grant_for(chan, err_notifier_grant)
             } else {
                 None
             },

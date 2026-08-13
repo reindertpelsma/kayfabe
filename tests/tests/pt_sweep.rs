@@ -104,6 +104,7 @@ fn write_fabricated(
                 src: CeSource::Address(STAGE),
                 len: bytes.len() as u64,
                 by: CeExecutor::Ours,
+                guest_release: None,
             }],
         })
         .expect("an unrepresentable copy is ours to perform");

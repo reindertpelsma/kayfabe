@@ -272,7 +272,7 @@ fn progress_under_pending_verb_intra_proc() {
                 .publish_backing(GPU, PDB, GpuVa(VA.0 + 0x10_0000), 0x1000)
                 .expect("B publishes while A's verb is pending");
             let rung = b_device
-                .doorbell(None, GPU, MockArch::token_for(CE), &[])
+                .doorbell(None, GPU, MockArch::token_for(CE), &[], None)
                 .expect("B rings while A's verb is pending");
             // The poll path needs no worker at all (§3.5 guarantee 3).
             b_device.completion_poll(GPU, pid, Instant(1));
@@ -463,7 +463,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     let held = hold(&rec, pid, 0, VerbKind::AllocChannel);
 
     let d = Arc::clone(&device);
-    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[]));
+    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[], None));
     held.wait_until_pending();
 
     // ← the guest tears the channel down while the alloc is in flight
@@ -486,7 +486,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     );
     // Mutation-free: the channel is gone, and its vChid routes nowhere.
     assert_eq!(
-        device.doorbell(None, GPU, MockArch::token_for(GR), &[]),
+        device.doorbell(None, GPU, MockArch::token_for(GR), &[], None),
         Err(FwdFault::UnknownVchid {
             gpu: GPU,
             vchid: GR
@@ -550,7 +550,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
     let held = hold(&rec, pid, 0, VerbKind::AllocChannel);
 
     let d = Arc::clone(&device);
-    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[]));
+    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[], None));
     held.wait_until_pending();
 
     // ← free + re-alloc at the SAME vChid: routing resolves, to a new identity.
@@ -591,7 +591,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
     );
     // The NEW channel is untouched — no host channel was written into it.
     let fresh = device
-        .doorbell(None, GPU, MockArch::token_for(GR), &[])
+        .doorbell(None, GPU, MockArch::token_for(GR), &[], None)
         .expect("the re-allocated channel routes and materializes cleanly");
     assert_eq!(fresh.proc, pid);
     assert!(
@@ -853,7 +853,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
         // of later refreshes, which is what `out_of_band_retire_must_not_resurrect_the
         // _isolate` (l1_mean.rs) pins from the other end.
         assert_eq!(
-            device.doorbell(None, GPU, MockArch::token_for(GR), &[]),
+            device.doorbell(None, GPU, MockArch::token_for(GR), &[], None),
             Err(condemned),
             "({mode:?}) and its channels are condemned with it"
         );
@@ -892,7 +892,7 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
             .expect("({mode:?}) the other proc is unaffected");
         assert_eq!(
             device
-                .doorbell(None, GPU, MockArch::token_for(GR2), &[])
+                .doorbell(None, GPU, MockArch::token_for(GR2), &[], None)
                 .expect("bystander rings")
                 .proc,
             bystander
@@ -971,7 +971,7 @@ fn idempotent_replay_emits_no_verbs_and_takes_no_worker() {
     let (device, pids, rec) = device_with(1, 1, LockMode::Sharded); // pool of ONE
     let pid = pids[0];
     let first = device
-        .forward_engine_object(GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[])
+        .forward_engine_object(GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[], None)
         .expect("first forward allocs");
     assert!(!first.reused);
 
@@ -983,7 +983,7 @@ fn idempotent_replay_emits_no_verbs_and_takes_no_worker() {
     held.wait_until_pending();
 
     let replay = device
-        .forward_engine_object(GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[])
+        .forward_engine_object(GPU, GR, kayfabe_tests::COMPUTE_CLASS, &[], None)
         .expect("the replay resolves from core state with the pool saturated");
     assert!(replay.reused, "a re-send is idempotent");
     assert_eq!(replay.host_object, first.host_object, "the ORIGINAL object");
@@ -1050,6 +1050,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
         &route,
         kayfabe_tests::COMPUTE_CLASS,
         &[],
+        None,
     )
     .expect("the re-send plans");
     assert!(
@@ -1096,6 +1097,7 @@ fn commit_engine_object_proc_guard_refuses_on_either_term_alone() {
         &route,
         kayfabe_tests::COMPUTE_CLASS,
         &[],
+        None,
     )
     .expect("plans");
     let Gpu { spine, procs, .. } = &mut *gpu;
@@ -1373,7 +1375,8 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
     let route = kayfabe_fwd::route_doorbell(&gpu.spine, GPU, MockArch::token_for(GR))
         .expect("A's GR channel routes");
     assert_eq!(route.proc, a);
-    let planned = kayfabe_fwd::plan_doorbell(&gpu.procs[&a], &route, &[]).expect("A plans a ring");
+    let planned =
+        kayfabe_fwd::plan_doorbell(&gpu.procs[&a], &route, &[], None).expect("A plans a ring");
     let reply = || {
         Some(kayfabe_isolate::VerbReply::Doorbell {
             host_vas: None,
@@ -1627,6 +1630,7 @@ fn an_ungated_working_set_cannot_become_a_ring_plan() {
         a_chan,
         kayfabe_arch::ids::EngineKind::Ce,
         true,
+        None,
     )
     .expect("A published this VA into its own host VAS, so A's ring is gateable");
     // Non-vacuity: the thing that came back is really a ring plan, not some other
@@ -1650,6 +1654,7 @@ fn an_ungated_working_set_cannot_become_a_ring_plan() {
             a_chan,
             kayfabe_arch::ids::EngineKind::Ce,
             true,
+            None,
         ),
         Err(kayfabe_isolate::UngatedVa(VA)),
         "★ #14: proc B never published this VA into ITS OWN host VAS, so the byte-identical \
@@ -1681,6 +1686,7 @@ fn an_ungated_working_set_cannot_become_a_ring_plan() {
                 a_chan,
                 kayfabe_arch::ids::EngineKind::Ce,
                 false,
+                None,
             ),
             Err(kayfabe_isolate::UngatedVa(expect)),
             "the gate names the FIRST unpublished VA of {set:?}"
@@ -1705,6 +1711,7 @@ fn an_ungated_working_set_cannot_become_a_ring_plan() {
             a_chan,
             kayfabe_arch::ids::EngineKind::Ce,
             false,
+            None,
         )
         .map(|p| kayfabe_trace::VerbTag::of(&p)),
         Ok(kayfabe_trace::VerbTag::Doorbell),

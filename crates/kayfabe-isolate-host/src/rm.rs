@@ -1110,6 +1110,29 @@ pub const USERD_NOT_A_JOINED_WINDOW: u32 = 0x4B56;
 /// advances `GP_GET`, and **reports no error at all**.
 pub const RING_NOT_A_JOINED_WINDOW: u32 = 0x4B4E;
 
+/// ★★★★★ **w288 — THE CHANNEL GROUP THIS BIRTH IS ABOUT CONTAINS SOMETHING ELSE.**
+///
+/// # ⊘ Why an invariant about OUR OWN allocation has to be asserted rather than commented
+///
+/// The MMU-fault handler does **not** notify the faulting channel. It hardcodes
+/// `RC_NOTIFIER_SCOPE_TSG` (`ogkm-580: kern_gmmu_gv100.c:2124-2131`), and
+/// `krcErrorSetNotifier_IMPL` widens `pChanList` to the **whole group** and loops writing
+/// EACH member's notifier (`ogkm-580: kernel_rc_notification.c:270-289`). So if two host
+/// channels ever shared a `KEPLER_CHANNEL_GROUP_A`, one fault would write BOTH notifiers —
+/// and because each notifier is an `OS_DESCRIPTOR` over a *different guest channel's* pages,
+/// the guest would be told that a channel which never faulted had been RC-killed.
+///
+/// ⚠ That false positive is shaped **exactly like a pass**: a notifier with a non-zero
+/// `status` is the thing this whole rung exists to produce, and nothing downstream can tell
+/// a notification caused by the channel's own fault from one caused by its neighbour's.
+///
+/// ⇒ [`HostRmBackend::alloc_channel_in`] mints a **fresh group per channel**, so the
+/// invariant is a property of code in this file — which is precisely why it is asserted and
+/// not trusted. Grouping channels is what a TSG is *for*; the day someone reuses one, the
+/// only thing standing between that edit and a silently wrong measurement is this refusal.
+/// `0x4B4F` is `"KO"`.
+pub const TSG_NOT_SINGLETON: u32 = 0x4B4F;
+
 /// ★★★★★ **WHAT THIS BIRTH WAS OFFERED — three states, and the third is the one that costs.**
 ///
 /// # Why this type exists
@@ -1135,9 +1158,12 @@ pub const RING_NOT_A_JOINED_WINDOW: u32 = 0x4B4E;
 /// - `VerbPlan::EngineObject` — `hosting: Some(..)`, and `adopt` is `kayfabe_fwd`'s
 ///   `adopted_guest_ring(..)`, consulted **unconditionally** on the `channel.is_none()` branch.
 ///   ⇒ `None` here means *the armed path ran and produced nothing*.
-/// - `VerbPlan::Doorbell` — a literal `alloc_channel(vas, engine, None, None)`, whose own
-///   comment says a ring adopted there would be adopted *without the leaf having been joined*.
-///   ⇒ `None` here means *nothing was ever asked*.
+/// - `VerbPlan::Doorbell` — a literal `alloc_channel(vas, engine, None, None, ..)` for those
+///   two arguments, whose own comment says a ring adopted there would be adopted *without the
+///   leaf having been joined*. ⇒ `None` here means *nothing was ever asked*.
+///   ⊘ **The trailing `..` is w288's error notifier and it is NOT part of the
+///   discriminator.** It is the fifth argument and may be `Some` on either site; this witness
+///   reads arguments three and four and nothing else.
 ///
 /// ⚠ **That is a two-crate invariant and a comment cannot hold it.** It is pinned by a source
 /// census — `the_birth_witness_can_tell_declined_from_never_asked` in
@@ -1843,6 +1869,28 @@ impl RmConnection {
             .copied()
     }
 
+    /// ★★★★★ **w288 — how many objects this connection has parented to `parent`.**
+    ///
+    /// The one query behind [`TSG_NOT_SINGLETON`]. It reads the table this file already
+    /// keeps for `NV_ESC_RM_FREE`'s `hObjectParent`, so it is a statement about **our own**
+    /// allocations and nothing else — it cannot see objects a different connection made, and
+    /// it does not need to: a `KEPLER_CHANNEL_GROUP_A` this connection just minted is not
+    /// nameable by anyone else.
+    ///
+    /// ⊘ A count and not a `bool`: *"the group has two channels"* and *"the group has
+    /// seventeen"* are the same refusal but not the same log line, and the refusal that
+    /// prints only a name cannot say how far the invariant drifted.
+    fn children_of(&self, parent: u32) -> usize {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .parents
+            .values()
+            .filter(|&&p| p == parent)
+            .count()
+    }
+
     fn pair(&self, object: u32, companion: u32) {
         let _leaf = leafwitness::Held::enter();
         self.objects
@@ -2494,9 +2542,8 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
         | ce::LAUNCH_DST_VIRTUAL;
     // ★ A release-only launch: same semaphore/flush semantics, `TRANSFER_TYPE_NONE`, and
     // no pitch/line flags because there is no transfer for them to describe.
-    let release_only_flags = ce::LAUNCH_TRANSFER_NONE
-        | ce::LAUNCH_FLUSH_ENABLE
-        | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD;
+    let release_only_flags =
+        ce::LAUNCH_TRANSFER_NONE | ce::LAUNCH_FLUSH_ENABLE | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD;
     let sub = CE_SUBCHANNEL;
     let mut out = vec![
         method_header_inc(sub, SET_OBJECT, 1).ok_or_else(bad)?,
@@ -4034,6 +4081,7 @@ impl RmBackend for HostRmBackend {
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
         adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
         // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
@@ -4089,7 +4137,15 @@ impl RmBackend for HostRmBackend {
                 offer.as_str(BirthLimb::Ring),
                 offer.because(BirthLimb::Ring),
             );
-            return self.alloc_channel_on(vas, engine_type);
+            // ★★★★★ **w288 — TWO ARMS, NOT AN `unwrap_or(0)`.** `None` reaches
+            // `alloc_channel_at(.., None)` and is every pre-w288 boot byte for byte; `Some`
+            // goes through the verb that NAMES the notifier, so a reader of this file can
+            // see which of the two a channel was born on without decoding a handle value.
+            // ⊘ Zero is a legal-looking handle and must never be the carrier of "absent".
+            return match err_notifier {
+                None => self.alloc_channel_on(vas, engine_type),
+                Some(n) => self.alloc_channel_at_with_error_notifier(vas, engine_type, None, n),
+            };
         };
         // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
         // for why the core's own type-level check cannot reach here.
@@ -4171,17 +4227,25 @@ impl RmBackend for HostRmBackend {
             offer.as_str(BirthLimb::Ring),
             offer.because(BirthLimb::Ring),
         );
-        self.alloc_channel_over_guest_ring(
-            vas,
-            engine_type,
-            GuestRing {
-                memory: ring.memory,
-                ring_va: ring.ring_va,
-                gp_fifo_va: ring.gp_fifo_va,
-                gp_fifo_entries: ring.gp_fifo_entries,
-                userd: adopted_userd,
-            },
-        )
+        let guest_ring = GuestRing {
+            memory: ring.memory,
+            ring_va: ring.ring_va,
+            gp_fifo_va: ring.gp_fifo_va,
+            gp_fifo_entries: ring.gp_fifo_entries,
+            userd: adopted_userd,
+        };
+        // ★★★★★ **w288 — the `Ours` arm's two arms, on the guest-ring limb.** Same reason:
+        // the verb that carries a notifier is a different name from the one that does not,
+        // so which was used is readable here rather than inferable from a handle value.
+        match err_notifier {
+            None => self.alloc_channel_over_guest_ring(vas, engine_type, guest_ring),
+            Some(n) => self.alloc_channel_over_guest_ring_with_error_notifier(
+                vas,
+                engine_type,
+                guest_ring,
+                n,
+            ),
+        }
     }
 
     /// The generic alloc with `parent = chan`, exactly as the port's docs say — the host
@@ -4998,7 +5062,45 @@ impl HostRmBackend {
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
         let notifier = self.narrow(notifier)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at), Some(notifier))
+        self.alloc_channel_in(
+            range,
+            engine_type,
+            RingSource::Ours(ring_at),
+            Some(notifier),
+        )
+    }
+
+    /// ★★★★★ **w288 — [`Self::alloc_channel_over_guest_ring`] with an ERROR NOTIFIER**, and
+    /// this is the combination a guest submission actually reaches.
+    ///
+    /// The two refinements are orthogonal and both are the guest's: the ring is the guest's
+    /// memory, and `notifier` is expected to be an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over
+    /// the guest's own notifier pages ([`RmBackend::describe_guest_ram`]). What that buys is
+    /// the thing no other verb in this file can give: when the host RC path kills this
+    /// channel, RM/GSP writes `NvNotification` into the very bytes the guest's driver polls
+    /// (`ogkm-580: kernel_channel.c:549-568` sends `errorNotifierMem.base =
+    /// memdescGetPhysAddr(…)` to the GSP, and for this descriptor that base IS the guest's
+    /// page).
+    ///
+    /// ⊘ **Do not attempt to read it back from this side.** `[measured, R31 arm B]` a
+    /// guest-backed `OS_DESCRIPTOR` cannot be CPU-mapped at all, so
+    /// [`Self::read_error_notifier`] is not merely unnecessary here — it is a call that
+    /// fails, and a caller that swallows the failure measures nothing while appearing to
+    /// verify. The reader of these bytes is the guest.
+    ///
+    /// # Errors
+    /// As [`Self::alloc_channel_over_guest_ring`], plus [`RmError::BadHandle`] if `notifier`
+    /// was not minted by this connection.
+    pub fn alloc_channel_over_guest_ring_with_error_notifier(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring: GuestRing,
+        notifier: HostHandle,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        let notifier = self.narrow(notifier)?;
+        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), Some(notifier))
     }
 
     /// ★★★★★ **Read the channel's error notifier — the guest-observable error path, as data.**
@@ -5415,6 +5517,29 @@ impl HostRmBackend {
                 return Err(e);
             }
         };
+        // ★★★★★ **w288 — THE SINGLETON-TSG INVARIANT, HALF ONE: the group is FRESH.**
+        //
+        // See [`TSG_NOT_SINGLETON`] for what a shared group costs — one MMU fault writing
+        // every member's notifier, i.e. a guest told that a channel which never faulted was
+        // RC-killed, in exactly the shape a pass has.
+        //
+        // ⊘ This is a check on OUR OWN allocation and it is meant to be: the handle came out
+        // of `mint` one line up, so anything already parented to it means the handle space
+        // wrapped or a caller re-used a group — both of which make every later notifier
+        // reading unfalsifiable. ⚠ Refused BY NAME rather than asserted with a `debug_assert`,
+        // because a release build must not be the build in which the invariant stops holding.
+        let already = self.conn.children_of(tsg);
+        if already != 0 {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED TSG_NOT_SINGLETON tsg={tsg:#x} \
+                 children={already} (a freshly minted KEPLER_CHANNEL_GROUP_A already has \
+                 members; RC notification is TSG-SCOPED, so this group's fault would write \
+                 every member's error notifier — ogkm-580 kern_gmmu_gv100.c:2124-2131 over \
+                 kernel_rc_notification.c:270-289)"
+            );
+            unwind(self, &[ours, owned_userd, &[tsg]].concat());
+            return Err(RmError::Other(TSG_NOT_SINGLETON));
+        }
 
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = ChannelAllocParams {
@@ -5483,6 +5608,25 @@ impl HostRmBackend {
                 return Err(e);
             }
         };
+        // ★★★★★ **THE SINGLETON-TSG INVARIANT, HALF TWO: EXACTLY ONE, and it is this one.**
+        //
+        // Half one said the group was empty when we minted it; this says this function put
+        // exactly one channel in it. ⊘ The two are not the same statement and neither implies
+        // the other — a group that was fresh could still be joined below, and a group that
+        // holds one channel could hold somebody else's. Together they are the whole of
+        // [`TSG_NOT_SINGLETON`]'s premise, which is why both are here rather than one being
+        // trusted to cover the other.
+        let members = self.conn.children_of(tsg);
+        if members != 1 {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED TSG_NOT_SINGLETON tsg={tsg:#x} \
+                 chan={chan:#x} members={members} (expected exactly 1; see \
+                 TSG_NOT_SINGLETON — a fault on ANY member writes EVERY member's error \
+                 notifier, and each notifier here names a DIFFERENT guest channel's pages)"
+            );
+            unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
+            return Err(RmError::Other(TSG_NOT_SINGLETON));
+        }
 
         // ★★ BIND, on the GROUP, and it must come before the token control.
         let mut bind = [0u8; BIND_PARAMS_SIZE];
@@ -5650,10 +5794,7 @@ impl HostRmBackend {
                 // `(region, base)` FIRST, then read both words at `base + offset`, so the two
                 // layouts differ in one place instead of in every accessor.
                 let (userd, base) = match r.userd_in_ring {
-                    Some(off) => (
-                        r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?,
-                        off,
-                    ),
+                    Some(off) => (r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, off),
                     None => (r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, 0),
                 };
                 let get = userd
@@ -6106,10 +6247,7 @@ impl HostRmBackend {
                 // the party that advances that cursor is the guest and a second writer is two
                 // parties disagreeing about one index.
                 let (userd, base) = match r.userd_in_ring {
-                    Some(off) => (
-                        r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?,
-                        off,
-                    ),
+                    Some(off) => (r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, off),
                     None => (r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, 0),
                 };
                 userd
@@ -7914,7 +8052,11 @@ mod tests {
         .expect("encodes");
         // ★ APPENDED, never interleaved: everything the copy needed is byte-identical, so
         // the release cannot have changed how the bytes move.
-        assert_eq!(w[..without.len()], without[..], "the copy must be untouched");
+        assert_eq!(
+            w[..without.len()],
+            without[..],
+            "the copy must be untouched"
+        );
         let tail = &w[without.len()..];
         // The guest's address, split exactly as `SET_SEMAPHORE_A/B` splits it.
         assert_eq!(tail[1], (theirs >> 32) as u32, "A = bits 48:32");

@@ -311,6 +311,7 @@ fn planned_adoption(
         &route,
         kayfabe_tests::COMPUTE_CLASS,
         &[],
+        None,
     )
     .expect("the engine object plans");
     match planned.verbs.expect("a first alloc emits verbs") {
@@ -409,6 +410,7 @@ fn a_channel_that_already_exists_is_not_re_declared() {
         &route,
         kayfabe_mocks::mock_classes::GRAPHICS,
         &[],
+        None,
     )
     .expect("the second alloc plans");
     match planned.verbs {

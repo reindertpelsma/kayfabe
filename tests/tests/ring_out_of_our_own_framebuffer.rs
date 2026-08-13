@@ -458,7 +458,13 @@ fn wired(fb: Option<Arc<dyn kayfabe_fwd::FbSource>>) -> (Arc<SharedDevice>, Mock
 #[test]
 fn a_device_with_no_fb_source_refuses_the_vidmem_ring() {
     let (dev, mut vmm) = wired(None);
-    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    let got = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    );
     assert!(
         matches!(
             got,
@@ -481,7 +487,13 @@ fn a_device_with_no_fb_source_refuses_the_vidmem_ring() {
 #[test]
 fn a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote() {
     let (dev, mut vmm) = wired(Some(Arc::new(SharedFb::default())));
-    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    let got = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    );
     assert!(
         matches!(got, Err(FwdFault::RingFbNeverWritten { .. })),
         "★★★★★ FORBIDDEN #2 must be refused THROUGH THE WIRING. A device that consults its \
@@ -501,7 +513,13 @@ fn a_wired_device_with_a_written_page_reads_the_ring() {
         &[0x00, 0x00, 0xc0, 0x02, 0x00, 0x00, 0x00, 0x00],
     );
     let (dev, mut vmm) = wired(Some(Arc::new(fb)));
-    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    let got = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    );
     assert!(
         !matches!(
             got,

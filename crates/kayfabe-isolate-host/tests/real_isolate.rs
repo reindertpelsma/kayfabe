@@ -154,6 +154,9 @@ fn every_verb_shape_survives_the_round_trip() {
         None,
         EngineKind::Ce,
         true,
+        // ⊘ `None`: this fixture has no guest and therefore no guest-RAM grant to mint. A
+        // channel born here carries `hObjectError = 0`, which is the pre-w288 shape.
+        None,
     )
     .expect("the gate passes an all-published working set");
     match w.execute(&plan).expect("doorbell") {
@@ -424,6 +427,9 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
                 // ⊘ `None`: this test is about worker parking, not about leg A2, and a
                 // channel born over an adopted ring would exercise a different alloc path.
                 adopt: None,
+                // ⊘ `None` for the same reason, one field over: a notifier would exercise
+                // the guest-RAM plane, which this fixture does not arm.
+                err_notifier: None,
             },
         );
 

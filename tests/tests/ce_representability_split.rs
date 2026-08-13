@@ -622,6 +622,7 @@ fn a_request_straddling_the_boundary_is_byte_identical_to_the_same_request_issue
                                 },
                                 len,
                                 by,
+                                guest_release: None,
                             },
                             dst_kind: Representability::HostBacked,
                             src_kind: matches!(work, CeWork::Copy)
@@ -715,6 +716,7 @@ fn randomly_generated_layouts_preserve_the_bytes_across_the_split() {
                 },
                 len,
                 by: CeExecutor::Ours,
+                guest_release: None,
             },
             dst_kind: Representability::Fabricated,
             src_kind: matches!(work, CeWork::Copy).then_some(Representability::Fabricated),

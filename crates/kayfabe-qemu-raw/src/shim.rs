@@ -2831,6 +2831,133 @@ fn report_engine_forward(
     );
 }
 
+/// ★★★★★ **w288 — HOW MANY BYTES OF THE GUEST'S NOTIFIER THE HOST DESCRIPTOR COVERS.**
+///
+/// One page. The record itself is 16 bytes (`kayfabe_abi::notifier::NOTIFICATION_SIZE`) and
+/// the guest declares no size that reaches this seam —
+/// [`kayfabe_rt::ErrorNotifier::Sysmem`] carries an address and nothing else — so a
+/// page is the smallest thing that can be *mapped* rather than the smallest thing that is
+/// *written*. ⊘ Not a guess about the guest's allocation: an `mmap` of the guest-RAM `memfd`
+/// is page-granular whatever we ask for, so anything smaller would be the same mapping with
+/// a more confident-looking number on it.
+const ERROR_NOTIFIER_GRANT_BYTES: u64 = 0x1000;
+
+/// ★★★★★ **w288 — THE GUEST'S OWN ERROR-NOTIFIER PAGES, RESOLVED INTO A GRANT.**
+///
+/// The one place in this shim that turns *"the guest declared its notifier at this GPA"*
+/// into *"here is the slice of the guest-RAM block the isolate may build an
+/// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over"*. It is here, and can only be here, because
+/// **only the VMM may derive a grant** (`kayfabe_isolate::GuestRamGrant::originated_by_the_vmm`)
+/// — the file offset comes from the hypervisor's own stated layout and from nowhere else.
+///
+/// ⊘ **Every refusal is BY NAME and every one of them yields `None`**, which is a channel
+/// born with no notifier — the pre-w288 behaviour exactly, and never a clamp, never a
+/// nearby page, never an assumed identity mapping.
+///
+/// ⊘ **Silent when the guest-RAM crossing is not armed** (`backing == None`), for the reason
+/// every other pin pass in this file is silent on its disarmed arm: a control's log must not
+/// contain a line the armed run's does not, or the two stop being comparable.
+///
+/// # ⚠ There is deliberately NO host-side read-back of what this builds
+///
+/// `[measured, R31 arm B]` a guest-backed `OS_DESCRIPTOR` **cannot be CPU-mapped**
+/// (`NV_ERR_NOT_SUPPORTED`, *"memMap_IMPL: CPU mapping not supported for addressSpace:
+/// 0x1"*). A read here would fail, and a caller that swallowed the failure would measure
+/// nothing while looking like verification. The reader of these bytes is the **guest**.
+fn err_notifier_grant(
+    ce: &CeShellState,
+    backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+    notifier: Option<kayfabe_rt::ErrorNotifier>,
+    who: &str,
+) -> Option<kayfabe_isolate::GuestRamGrant> {
+    let backing = backing?;
+    let head = format!(
+        "kayfabe: ERROR-NOTIFIER {who} dev={} ino={}",
+        backing.dev, backing.ino
+    );
+    // ★★★ THE GUEST'S OWN DECLARATION IS THE GATE, and its three states are three lines.
+    // ⊘ `Unreachable` and `None` are NOT folded: the first is a gap in **us** (the guest
+    // asked to be told and named somewhere this port has no write port for) and the second
+    // is the guest waiving error reporting. They send a reader to different files.
+    let gpa = match notifier {
+        Some(kayfabe_rt::ErrorNotifier::Sysmem { gpa }) => gpa,
+        Some(kayfabe_rt::ErrorNotifier::Unreachable) => {
+            eprintln!(
+                "{head} → ⊘ ERROR-NOTIFIER REFUSED NotifierUnreachable (the channel DID declare \
+                 a notifier and it is not in guest RAM, so no OS_DESCRIPTOR can be built over \
+                 it. ⚠ This is a gap in US, not a guest that waived error reporting)"
+            );
+            return None;
+        }
+        None => {
+            eprintln!(
+                "{head} → ⊘ NONE DECLARED (this channel named no error notifier at all; the \
+                 host channel is born with hObjectError = 0, which is every pre-w288 boot)"
+            );
+            return None;
+        }
+    };
+    // ⚠⚠ **PAGE ALIGNMENT IS A REFUSAL, NOT A ROUNDING.** The grant becomes an `mmap` of the
+    // guest-RAM `memfd` at this offset, and `mmap` requires a page-aligned offset — so an
+    // unaligned GPA cannot be honoured. ⊘ Aligning DOWN would be worse than refusing: the
+    // descriptor's base is what RM hands the GSP as `errorNotifierMem.base`
+    // (`ogkm-580: kernel_channel.c:549-568`), so a page-aligned base would put the GSP's
+    // 16-byte write at the top of the page instead of at the address the guest declared —
+    // a write that lands, reports success, and is read by nobody.
+    if !gpa.is_multiple_of(ERROR_NOTIFIER_GRANT_BYTES) {
+        eprintln!(
+            "{head} gpa=0x{gpa:x} → ⊘ ERROR-NOTIFIER REFUSED NotifierGpaMisaligned (a grant is \
+             an mmap offset and must be a multiple of 0x{:x}; aligning down would move the \
+             GSP's write off the address the guest declared)",
+            ERROR_NOTIFIER_GRANT_BYTES,
+        );
+        return None;
+    }
+    // ⊘ The plane lock is held across the layout read and NOTHING else — no host verb, no
+    // print — for `pin_completion_guest_ram`'s stated reason.
+    let resolved = {
+        let held = ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+        held.as_ref()
+            .map(|vmm| vmm.resolve_guest_ram(backing, gpa, ERROR_NOTIFIER_GRANT_BYTES))
+    };
+    match resolved {
+        None => {
+            eprintln!(
+                "{head} gpa=0x{gpa:x} → ⊘ ERROR-NOTIFIER REFUSED NoMemoryPlane (between \
+                 `realize` and `attach_ram` there is no stated layout to resolve against)"
+            );
+            None
+        }
+        Some(Err(e)) => {
+            eprintln!(
+                "{head} gpa=0x{gpa:x} len=0x{:x} → ⊘ ERROR-NOTIFIER REFUSED {} ⊘ {e:?} (the \
+                 hypervisor's own stated layout does not describe this range; nothing is \
+                 clamped and no nearby page is substituted)",
+                ERROR_NOTIFIER_GRANT_BYTES,
+                e.name(),
+            );
+            None
+        }
+        Some(Ok(run)) => {
+            eprintln!(
+                "{head} gpa=0x{gpa:x} file_offset=0x{:x} len=0x{:x} → GRANTED ReadWrite (the GSP \
+                 WRITES these pages: ogkm-580 kernel_channel.c:549-568 sends \
+                 errorNotifierMem.base = memdescGetPhysAddr(..), and for a descriptor over guest \
+                 pages that base IS the guest's page)",
+                run.file_offset, run.len,
+            );
+            Some(kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                run.file_offset,
+                run.len,
+                // ★★★ **ReadWrite, and it is the GSP that needs it.** A read-only grant would
+                // map the pages read-only IN THE ISOLATE, and the `OS_DESCRIPTOR` built over
+                // that mapping is what RM pins for its own writer.
+                kayfabe_vmm::Prot::ReadWrite,
+            ))
+        }
+    }
+}
+
 /// ★★ **§16.96 — the drain's own budget, and it is a fraction of the guest's.**
 ///
 /// The verb runs inside the vCPU's MMIO trap, so its duration is time the guest spends
@@ -2850,9 +2977,16 @@ const ENGINE_FWD_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_s
 /// Called from `Regs::write` after `RegPlane::write` has returned. Separate from the
 /// `ObjectModel` impl on purpose: that impl runs under the plane's rank-0 mutex and may only
 /// *admit*; this runs with no lock and is the only place a forward's real outcome exists.
-fn report_engine_forward_drain(device: &kayfabe_rt::device::SharedDevice) {
+///
+/// ★★★★★ **w288 — `err_notifier_grants` is the VMM's half**, derived by
+/// [`Regs::pending_err_notifier_grants`] before this call and applied by key inside the
+/// drain. ⊘ Passed through untouched: this function reports, it does not decide.
+fn report_engine_forward_drain(
+    device: &kayfabe_rt::device::SharedDevice,
+    err_notifier_grants: &[kayfabe_rt::device::EngineNotifierGrant],
+) {
     let t0 = Instant::now();
-    let runs = device.run_pending_engine_forwards();
+    let runs = device.run_pending_engine_forwards(err_notifier_grants);
     if runs.is_empty() {
         // ⊘ The overwhelmingly common case, and it must cost nothing beyond the one rank-1
         // acquisition `run_pending_engine_forwards` already paid — the same cost
@@ -4704,9 +4838,29 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // ⊘ `None` when the memory plane is not attached — between realize and
         // `attach_ram` there is no guest memory to read a ring out of, and refusing the
         // doorbell for that would refuse traffic that is served today.
+        // ★★★★★ **w288 — THE ERROR NOTIFIER, DERIVED BEFORE THE PLANE LOCK IS TAKEN.**
+        //
+        // ⊘ It has to be: `err_notifier_grant` takes `self.ce.vmm` itself for the layout
+        // read, and the mutex two lines below is the same one. Deriving it inside that guard
+        // would deadlock on a plain `std::sync::Mutex`.
+        //
+        // ⊘ It is read off the `seen` facts this doorbell already resolved — NOT a second
+        // `ce_channel_facts` call. Two resolutions of one fact can disagree, and this file
+        // has already paid for that shape once (`SharedDoorbell::ring`'s own note).
+        //
+        // ⚠ Consumed only when this doorbell is the one that BIRTHS the host channel;
+        // `plan_doorbell` drops it otherwise, because `hObjectError` is a birth parameter.
+        let err_notifier = err_notifier_grant(
+            &self.ce,
+            self.guest_ram_backing,
+            seen.as_ref().and_then(|f| f.error_notifier),
+            &format!("doorbell token={token:#010x}"),
+        );
         let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
         let port = held.as_mut().map(|v| v as &mut dyn kayfabe_vmm::Vmm);
-        let rung = self.device.doorbell(port, DOORBELL_TARGET_GPU, token, &[]);
+        let rung = self
+            .device
+            .doorbell(port, DOORBELL_TARGET_GPU, token, &[], err_notifier);
         drop(held);
         match rung {
             Ok(o) => kayfabe_device::DoorbellReport::Served {
@@ -8551,10 +8705,17 @@ impl SharedDoorbell {
                 Ok((b, _)) => match b.host_va() {
                     Some(hva) => now_host_backed.push(format!(
                         "va=0x{pva:x}→host_va=0x{hva:x}{}",
-                        if hva == pva { "" } else { " ⚠ NOT-AT-THE-GUEST'S-OWN-VA" }
+                        if hva == pva {
+                            ""
+                        } else {
+                            " ⚠ NOT-AT-THE-GUEST'S-OWN-VA"
+                        }
                     )),
-                    None => still_fabricated
-                        .push(format!("va=0x{pva:x}:{:?}@0x{:x}", b.aperture(), b.phys())),
+                    None => still_fabricated.push(format!(
+                        "va=0x{pva:x}:{:?}@0x{:x}",
+                        b.aperture(),
+                        b.phys()
+                    )),
                 },
                 Err(_) => {}
             }
@@ -8663,10 +8824,7 @@ impl SharedDoorbell {
         // than `assert!` so the shape cannot be mistaken for a production check by a reader,
         // and the same sentence is already printed either way — so the release build is
         // distinguishable from a positive signal, which is the trap this shape exists to avoid.
-        debug_assert!(
-            still_fabricated.is_empty() || !userspace,
-            "{line}"
-        );
+        debug_assert!(still_fabricated.is_empty() || !userspace, "{line}");
         line
     }
 
@@ -10442,7 +10600,11 @@ impl Regs {
              reachable={})",
             PUSHBUF_VIDMEM_ENV,
             std::env::var(PUSHBUF_VIDMEM_ENV).unwrap_or_else(|_| "<unset>".to_string()),
-            if pushbuf_vidmem { "ON" } else { "OFF (default)" },
+            if pushbuf_vidmem {
+                "ON"
+            } else {
+                "OFF (default)"
+            },
             if ring_vidmem { "ON" } else { "OFF" },
             pushbuf_vidmem,
             pushbuf_vidmem && ring_vidmem,
@@ -11118,6 +11280,74 @@ impl Regs {
     /// the plane's rank-0 mutex for the duration of one resolution and **prints nothing
     /// inside it**; the join — which is a round trip to another process — runs strictly after
     /// that guard is dropped.
+    /// ★★★★★ **w288 — WHERE EACH ABOUT-TO-BE-BORN HOST CHANNEL'S ERROR NOTIFIER LIVES.**
+    ///
+    /// One entry per latched engine-object forward whose channel declared a notifier in
+    /// guest RAM that this hypervisor's own stated layout can describe. The drain applies
+    /// them by key; a latch with no entry gets a channel with **no** notifier, which is the
+    /// pre-w288 behaviour and never somebody else's pages.
+    ///
+    /// # ⊘ Why HERE, at the peek, and not inside the drain
+    ///
+    /// Two reasons, and both are structural. **(1)** Only the VMM may derive a
+    /// [`kayfabe_isolate::GuestRamGrant`] — the file offset comes from *this* object's stated
+    /// layout, and nothing below this crate can compute one. **(2)** This is the last instant
+    /// at which *"a host channel is about to be born for guest channel X"* is knowable and X
+    /// is still un-born, which is [`Regs::adopt_pending_channel_rings`]' own ordering
+    /// argument: `hObjectError` is a **birth** parameter, so an object minted after the drain
+    /// could never reach the channel that needs it.
+    ///
+    /// ⊘ **Takes nothing and mutates nothing.** A caller that drained here to inspect the
+    /// entries would have run the forwards it meant to prepare for.
+    ///
+    /// # R1
+    ///
+    /// `RegPlane::write` has returned, so this frame holds no ranked lock.
+    /// `engine_object_channel_facts` is a routed **read** — no host verb, no ioctl — and the
+    /// plane's rank-0 mutex is taken and released inside `err_notifier_grant`, around one
+    /// layout resolution and nothing else.
+    fn pending_err_notifier_grants(&self) -> Vec<kayfabe_rt::device::EngineNotifierGrant> {
+        // ⊘ Silent and free when the crossing is not armed, for `err_notifier_grant`'s
+        // reason: a control's log must not contain a line the armed run's does not.
+        if self.guest_ram_backing.is_none() {
+            return Vec::new();
+        }
+        let pending = self.device.peek_pending_engine_forwards();
+        if pending.is_empty() {
+            // The overwhelmingly common case — this runs on every register write.
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for (client, parent, class) in pending {
+            // ⊘ A latch this port cannot route is NOT a miss and is NOT reported here: the
+            // drain refuses it too, and by its own name. Printing a second refusal for one
+            // cause is how one defect comes to read as two.
+            let Ok(facts) = self
+                .device
+                .engine_object_channel_facts(client, parent, class)
+            else {
+                continue;
+            };
+            if let Some(grant) = err_notifier_grant(
+                &self.ce,
+                self.guest_ram_backing,
+                facts.error_notifier,
+                &format!(
+                    "latch client={:#x} parent={:#x} class={:#06x} proc={} chan={}",
+                    client.0, parent.0, class.0, facts.proc.0, facts.chan.0
+                ),
+            ) {
+                out.push(kayfabe_rt::device::EngineNotifierGrant {
+                    client,
+                    parent,
+                    class,
+                    grant,
+                });
+            }
+        }
+        out
+    }
+
     #[cfg(feature = "host-isolates")]
     fn adopt_pending_channel_rings(&self) {
         if !self.guest_ring.adopts_ring() {
@@ -11351,7 +11581,12 @@ impl Regs {
         // object over the guest's ring has to exist BEFORE this next line, or leg A2 has
         // nothing to name. ⊘ Ordering, not preference.
         self.adopt_pending_channel_rings();
-        report_engine_forward_drain(&self.device);
+        // ★★★★★ **w288 — AND IT MUST ALSO BE THE LINE ABOVE THE DRAIN**, for leg A1's exact
+        // reason one field over: the drain births the host channel, and `hObjectError` is a
+        // birth parameter. See [`Regs::pending_err_notifier_grants`]. ⊘ Ordering, not
+        // preference.
+        let err_notifier_grants = self.pending_err_notifier_grants();
+        report_engine_forward_drain(&self.device, &err_notifier_grants);
         out
     }
 

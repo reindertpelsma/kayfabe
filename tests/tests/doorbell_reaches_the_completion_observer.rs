@@ -295,7 +295,13 @@ fn a_guest_doorbell_reaches_the_host_completion_observer() {
     );
 
     let out = dev
-        .doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
+        .doorbell(
+            Some(&mut vmm),
+            GPU,
+            MockArch::token_for(CE_VCHID),
+            &[],
+            None,
+        )
         .expect("the doorbell routes and is served");
     assert_eq!(out.chan, _cid);
 
@@ -339,16 +345,28 @@ fn a_second_doorbell_over_an_unchanged_ring_forwards_nothing() {
     let (gpu, mut vmm, rec, _pid, _cid) = guest();
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
-    dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
-        .expect("the first doorbell is served");
+    dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    )
+    .expect("the first doorbell is served");
     assert_eq!(
         copies(&rec).len(),
         1,
         "★ non-vacuity: the first one forwarded"
     );
 
-    dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
-        .expect("a doorbell over a ring with no new entries is still served");
+    dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    )
+    .expect("a doorbell over a ring with no new entries is still served");
 
     let seen = copies(&rec);
     assert_eq!(
@@ -380,7 +398,13 @@ fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
         .insert(VerbKind::CeCopy, RmError::Other(CE_NEVER_RETIRED));
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
-    let got = dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[]);
+    let got = dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    );
 
     assert!(
         got.is_err(),
@@ -446,8 +470,14 @@ fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
 
     // ★ And the doorbell over it: SERVED, with nothing forwarded.
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
-    dev.doorbell(Some(&mut vmm), GPU, MockArch::token_for(CE_VCHID), &[])
-        .expect("a doorbell whose ring this port cannot read is still served at this rung");
+    dev.doorbell(
+        Some(&mut vmm),
+        GPU,
+        MockArch::token_for(CE_VCHID),
+        &[],
+        None,
+    )
+    .expect("a doorbell whose ring this port cannot read is still served at this rung");
     assert!(
         copies(&rec).is_empty(),
         "★ the second story, whole: the port reports the doorbell SERVED and the only \

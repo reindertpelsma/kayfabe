@@ -217,7 +217,9 @@ impl Device for DoorbellDevice {
             return;
         }
         // ★ The whole point: a guest store, arriving at the core's own gated ring path.
-        match self.dev.doorbell(Some(vmm), l.gpu, l.token, &[]) {
+        // ⊘ `None`: this fixture drives the device directly and mints no guest-RAM grant,
+        // so its channels are born with `hObjectError = 0` — the pre-w288 shape.
+        match self.dev.doorbell(Some(vmm), l.gpu, l.token, &[], None) {
             Ok(_) => self.rang.fetch_add(1, Ordering::SeqCst),
             // A token that names nothing is the core's MISS = FAULT answer, not an error
             // to surface into the guest: a real doorbell write has no return value.

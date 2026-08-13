@@ -560,6 +560,7 @@ impl RmBackend for ProxyRmBackend {
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
         adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
     ) -> Result<(HostHandle, u64), RmError> {
         let reply = self.call(Request::AllocChannel {
             vas: vas.raw(),
@@ -578,6 +579,10 @@ impl RmBackend for ProxyRmBackend {
                     a.userd.map(|u| (u.memory.raw(), u.offset)),
                 )
             }),
+            // ★★★★★ w288 — same crossing, same reason: the adapter that writes the handle
+            // into `hObjectError` runs in the CHILD. See `Request::AllocChannel::err_notifier`
+            // for why the wire carries a presence byte rather than handle zero.
+            err_notifier: err_notifier.map(|h| h.raw()),
         })?;
         match self.lift(reply)? {
             Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),

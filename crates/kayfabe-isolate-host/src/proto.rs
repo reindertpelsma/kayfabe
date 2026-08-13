@@ -116,6 +116,20 @@ pub enum Request {
         /// ours"* is a state that must not be representable, and a sibling `Option` on the
         /// wire would make it one decode away.
         adopt: Option<(u64, u64, u64, u32, Option<(u64, u64)>)>,
+        /// ★★★★★ **w288 — the channel's ERROR NOTIFIER, across the wire**: the raw host
+        /// handle of the memory object `hObjectError` must name, or `None` for a channel
+        /// born with no notifier at all.
+        ///
+        /// ⊘⊘ **It has to cross** for `hosting`'s and `adopt`'s reason: the adapter that
+        /// puts the handle into `NV_CHANNELGPFIFO_ALLOCATION_PARAMETERS` runs in the CHILD.
+        /// A version that widened only the trait would compile, pass every in-process test,
+        /// and be dead on the one path a boot exercises (`isolate_plane=real`).
+        ///
+        /// ⚠ **Presence is an explicit byte, never an in-band sentinel.** Handle `0` is
+        /// exactly what RM reads as *"no notifier"*, so a sentinel encoding would make
+        /// *"the caller asked for none"* and *"the caller named object zero"* the same
+        /// bytes — and the second is the shape of a bug we would then be unable to see.
+        err_notifier: Option<u64>,
     },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
@@ -669,6 +683,7 @@ impl Envelope {
                 engine,
                 hosting,
                 adopt,
+                err_notifier,
             } => {
                 out.push(4);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -700,6 +715,16 @@ impl Envelope {
                                 out.extend_from_slice(&uoff.to_le_bytes());
                             }
                         }
+                    }
+                }
+                // ★★★★★ w288 — its OWN presence byte, encoded LAST so the two options above
+                // keep their existing offsets. ⊘ Not an in-band sentinel: see the field's doc
+                // for why handle zero cannot be the carrier of absence.
+                match err_notifier {
+                    None => out.push(0),
+                    Some(memory) => {
+                        out.push(1);
+                        out.extend_from_slice(&memory.to_le_bytes());
                     }
                 }
             }
@@ -898,6 +923,21 @@ impl Envelope {
                     tag => {
                         return Err(ProtoError::UnknownTag {
                             what: "channel adopt presence",
+                            tag,
+                        });
+                    }
+                },
+                err_notifier: match c.u8("channel err_notifier presence")? {
+                    0 => None,
+                    1 => Some(c.u64("channel err_notifier memory")?),
+                    // ⊘ Refused by name, never defaulted to `None`. A byte we do not
+                    // understand means the two sides disagree about the frame; defaulting
+                    // would decode the REST of the message at the wrong offset AND would
+                    // silently produce a channel with no notifier, which is the one outcome
+                    // indistinguishable from a channel that simply did not fault.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel err_notifier presence",
                             tag,
                         });
                     }
@@ -1248,6 +1288,7 @@ mod tests {
                 engine: engine_code(EngineKind::Ce),
                 hosting: None,
                 adopt: None,
+                err_notifier: None,
             },
             // ★ §16.106 — BOTH arms of `hosting` are sampled, because the presence byte is
             // the part a one-arm round trip would never exercise.
@@ -1256,6 +1297,11 @@ mod tests {
                 engine: engine_code(EngineKind::Ce),
                 hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
                 adopt: None,
+                // ★★★★★ w288 — BOTH arms of `err_notifier` are sampled too, and this is the
+                // `Some` one. ⚠ Its value is deliberately **0**: handle zero is exactly what
+                // RM reads as "no notifier", so a round trip that only ever sampled a
+                // non-zero handle would not catch an encoder that treated zero as absence.
+                err_notifier: Some(0),
             },
             // ★★★★★ LEG A2 — and BOTH arms of `adopt` for the same reason, with the
             // presence byte exercised beside a `hosting` that is also present, because the
@@ -1276,6 +1322,7 @@ mod tests {
                     1024,
                     Some((0x5c00_0019, 0x2000)),
                 )),
+                err_notifier: Some(0x5c00_0021),
             },
             Request::AllocEngineObject {
                 chan: 9,

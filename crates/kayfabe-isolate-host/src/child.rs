@@ -610,6 +610,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             engine,
             hosting,
             adopt,
+            err_notifier,
         } => match engine_from_code(engine) {
             // An engine code we do not recognise is a refusal, never a default — the GR-1
             // wrong-runlist class.
@@ -642,6 +643,13 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                         }),
                     }
                 }),
+                // ★★★★★ w288 — rebuilt on THIS side of the wire, where the adapter that puts
+                // it in `hObjectError` runs. ⊘ `map`, never `unwrap_or(0)`: the presence byte
+                // already carried the distinction across, and collapsing it here would throw
+                // away the one thing the byte exists for. The handle is re-validated by the
+                // adapter's own `narrow` as one this connection minted; nothing here trusts
+                // the integer.
+                err_notifier.map(raw),
             ) {
                 Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),
                 Err(e) => failed(e),

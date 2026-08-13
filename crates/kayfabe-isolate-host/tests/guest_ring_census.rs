@@ -215,19 +215,30 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
         body.contains("RmError::Other(RING_NOT_A_JOINED_WINDOW)"),
         "`alloc_channel`'s adoption arm no longer refuses a non-joined object by name."
     );
+    // ⊘⊘ **CORRECTED 2026-08-13 (w288) — THE RULING IS NOW SIX, AND THE SIXTH IS A SECOND
+    // CONSTRUCTION, NOT A SECOND DECISION.** `alloc_channel_over_guest_ring_with_error_notifier`
+    // is `alloc_channel_over_guest_ring`'s body with `Some(notifier)` in place of `None`, so it
+    // builds its own `RingSource::Guest(ring)`. ⚠ That is exactly the shape this row exists to
+    // catch — *"a host channel born over guest memory from a path that did not state it"* — so
+    // it is worth saying why it is admitted: the new verb states it in its NAME, takes the same
+    // `GuestRing` by value, and is reachable only from `alloc_channel`'s adoption arm, on the
+    // far side of the `RING_NOT_A_JOINED_WINDOW` membership check asserted directly above.
+    // ⊘ The number moved because a **verb** was added, never because an arm became reachable
+    // from somewhere new: the decision count in `alloc_channel_in` is unchanged at four.
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        5,
-        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ FIVE is the ruling \
-         (it was three before leg B) and each one is a different job: the construction in \
-         `alloc_channel_over_guest_ring`, TWO arms in `alloc_channel_in` deciding the RING — \
-         one provenance (allocate, or do not), one layout (our offsets, or the caller's) — \
-         and TWO more deciding the USERD, in the same shape and for the same reason. ★ They \
-         are deliberately not one arm each: the ring arms straddle a failure that must \
-         unwind between them, and the USERD arms are a second axis entirely — a channel can \
-         adopt the guest's ring and keep a USERD of ours, which is what every leg-A boot \
-         before this one did. A sixth site means one of the two guest arms is reachable from \
-         a path that did not state it."
+        6,
+        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ SIX is the ruling \
+         (three before leg B, five before w288) and each one is a different job: TWO \
+         constructions — `alloc_channel_over_guest_ring` and its \
+         `_with_error_notifier` twin — TWO arms in `alloc_channel_in` deciding the RING — one \
+         provenance (allocate, or do not), one layout (our offsets, or the caller's) — and TWO \
+         more deciding the USERD, in the same shape and for the same reason. ★ They are \
+         deliberately not one arm each: the ring arms straddle a failure that must unwind \
+         between them, and the USERD arms are a second axis entirely — a channel can adopt the \
+         guest's ring and keep a USERD of ours, which is what every leg-A boot before this one \
+         did. A seventh site means one of the two guest arms is reachable from a path that did \
+         not state it."
     );
 }
 
@@ -262,24 +273,45 @@ fn sibling_body(crate_name: &str, rel: &str) -> String {
 /// - `VerbPlan::EngineObject` births pass `Some(HostedObject { .. })` **and** consult
 ///   `kayfabe_fwd::adopted_guest_ring` unconditionally on the `channel.is_none()` branch ⇒
 ///   `hosting = Some, adopt = None` really does mean *asked, and it produced nothing*.
-/// - `VerbPlan::Doorbell` births pass a literal `None, None` ⇒ *nothing was asked*.
+/// - `VerbPlan::Doorbell` births pass a literal `None, None` for those two ⇒ *nothing was
+///   asked*.
 ///
 /// ⊘ If either changes, this fails and the witness's `because()` text stops being a claim
 /// nobody checked. `refuse_by_name_means_the_name_is_true`.
+///
+/// ## ⊘⊘ CORRECTED 2026-08-13 (w288) — THE ASSERTION WAS A ONE-LINE STRING, AND THE CALL IS
+/// ## NOW FIVE ARGUMENTS LONG
+///
+/// This test used to match the literal `"rm.alloc_channel(vas, *engine, None, None)"`. w288
+/// gave `RmBackend::alloc_channel` a fifth argument — the error notifier — so `rustfmt`
+/// broke the call across lines and the single-line pattern matched **zero** times. ⚠ The
+/// invariant it was protecting is unchanged and is still exactly what matters: the doorbell
+/// birth must offer **`None` for `hosting` and `None` for `adopt`**, because that literal
+/// pair is the entire evidence for the witness's `NOT-ASKED` state.
+///
+/// ⇒ The pattern is matched against the source with **whitespace collapsed**, so it survives
+/// the next reformat. ★ It is deliberately still a *literal argument list* rather than a
+/// regex over "some `None`s": the discriminator is WHICH two arguments are `None`, and a
+/// looser pattern would keep passing on the day one of them becomes something else — which
+/// is the whole failure mode this tripwire exists for.
 #[test]
 fn the_birth_witness_can_tell_declined_from_never_asked() {
     let isolate = sibling_body("kayfabe-isolate", "src/lib.rs");
+    // ⊘ Collapsed, not stripped: the argument SEPARATORS have to survive or the pattern stops
+    // saying anything about order. See the ⊘⊘ correction above for why this is not the raw
+    // source text any more.
+    let flat = isolate.split_whitespace().collect::<Vec<_>>().join(" ");
     assert_eq!(
-        isolate
-            .matches("rm.alloc_channel(vas, *engine, None, None)")
+        flat.matches("rm.alloc_channel( vas, *engine, None, None,")
             .count(),
         1,
         "The doorbell materialization no longer births its channel with a LITERAL `None, \
-         None`. That literal is the entire evidence for the witness's `NOT-ASKED` state: it \
-         is what makes `hosting = None` mean *this birth path offers no ring at all* rather \
-         than *this birth happened to have none*. If the doorbell path grew a `hosting` or an \
-         `adopt`, `BirthOffer::read` is now mislabelling births and its `because()` text is \
-         false on a real boot."
+         None` for `hosting` and `adopt`. That pair is the entire evidence for the witness's \
+         `NOT-ASKED` state: it is what makes `hosting = None` mean *this birth path offers no \
+         ring at all* rather than *this birth happened to have none*. If the doorbell path \
+         grew a `hosting` or an `adopt`, `BirthOffer::read` is now mislabelling births and its \
+         `because()` text is false on a real boot. ⚠ If it merely got REFORMATTED, fix the \
+         pattern — and say so, as w288 did."
     );
     // ⊘ And the OTHER site must keep passing `hosting`, or `Some/None` stops discriminating.
     assert!(

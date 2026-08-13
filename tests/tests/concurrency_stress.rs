@@ -245,6 +245,12 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
             // born over — and it is owned by the same isolate by construction: the adapter
             // refuses any object it did not mint by joining (`RING_NOT_A_JOINED_WINDOW`).
             adopt: _,
+            // ⊘ Destructured with no `..` for leg A2's reason, so w288's field had to be
+            // named here too. The handle inside it is namespace-relevant — it is the
+            // `OS_DESCRIPTOR` over the guest's own notifier pages — and it is owned by the
+            // same isolate by construction: `describe_guest_ram` mints it on the very
+            // backend the channel is then born on.
+            err_notifier: _,
         } => {
             own(vas);
             own(handle);

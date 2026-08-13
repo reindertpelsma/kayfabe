@@ -1377,6 +1377,16 @@ pub enum RmVerb {
         /// without this field a `Worker::execute` that passed `None` on every path would
         /// leave every other assertion in the suite green.
         adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        /// ★★★★★ **w288 — the memory object this channel's `hObjectError` names**, or
+        /// `None` for a channel born with no error notifier at all.
+        ///
+        /// ⊘ Recorded for `adopt`'s reason, and it is sharper again: the whole claim of w288
+        /// is *"the host channel's notifier is an object over the GUEST'S OWN pages"*, and
+        /// the only in-process evidence that the parameter was ever non-`None` is this field.
+        /// Without it a `Worker::execute` that passed `None` on every path would leave every
+        /// other assertion in the suite green — and the guest-side readback that WOULD have
+        /// caught it needs a boot.
+        err_notifier: Option<HostHandle>,
         /// Returned channel handle.
         handle: HostHandle,
         /// Returned host work-submit token.
@@ -3020,9 +3030,19 @@ impl RmBackend for MockRmBackend {
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
         adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
     ) -> Result<(HostHandle, u64), RmError> {
         let _client = self.gate(VerbKind::AllocChannel)?;
         self.check(vas)?;
+        // ★★★★★ **w288 — the notifier is CHECKED, not merely recorded.** It is a handle this
+        // fixture is being asked to name on a channel, so it goes through the same
+        // foreign-handle gate every other handle argument does. ⊘ A mock that accepted a
+        // handle it never minted would be greener than the real backend, whose `narrow`
+        // refuses it — and a fixture that is easier to satisfy than production is how a
+        // wrong call site stays green.
+        if let Some(n) = err_notifier {
+            self.check(n)?;
+        }
         let handle = self.mint();
         let token = {
             let mut ns = self.ns.lock().expect("ns");
@@ -3035,6 +3055,7 @@ impl RmBackend for MockRmBackend {
             engine,
             hosting: hosting.map(|h| (h.class, h.params.to_vec())),
             adopt,
+            err_notifier,
             handle,
             token,
         });

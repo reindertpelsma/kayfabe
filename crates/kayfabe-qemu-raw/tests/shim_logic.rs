@@ -2481,10 +2481,7 @@ fn ring_content_is_forwardable_exactly_where_the_cpu_ce_executor_owns_the_route(
     // graded was measuring the wrong mechanism.
     for engine in kayfabe_arch::ids::EngineKind::ALL {
         assert!(
-            !kayfabe_rt::device::ring_content_is_forwardable(
-                engine,
-                GuestChannelKind::Passthrough
-            ),
+            !kayfabe_rt::device::ring_content_is_forwardable(engine, GuestChannelKind::Passthrough),
             "★★★ {engine:?}: a PASSTHROUGH channel's ring is the GUEST's. `ce_copy` drives a \
              channel and adoption means the guest drives it — both cannot hold, and w283d \
              measured one CE doorbell doing both on two different host channels."

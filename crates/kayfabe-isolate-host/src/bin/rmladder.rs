@@ -2842,57 +2842,57 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                             ),
                         }
                         match r.reach {
-                        GuestReach::ControlFailed => {
-                            println!(
-                                "??    R33 arm 4 control   = the POSITIVE CONTROL did not land \
+                            GuestReach::ControlFailed => {
+                                println!(
+                                    "??    R33 arm 4 control   = the POSITIVE CONTROL did not land \
                                  (sem {:#010x}, GP_GET {} GP_PUT {}, moved {:#010x} want \
                                  {:#010x}) — the fault probe was never issued, so this run says \
                                  NOTHING about whether the address resolves",
-                                r.control.semaphore,
-                                r.control.gp_get,
-                                r.control.gp_put,
-                                r.control_read,
-                                r.control_want
-                            );
-                            false
-                        }
-                        GuestReach::NotResolved(o) => {
-                            println!(
-                                "★     R33 arm 4 FAULTED   = a copy engine pointed at \
+                                    r.control.semaphore,
+                                    r.control.gp_get,
+                                    r.control.gp_put,
+                                    r.control_read,
+                                    r.control_want
+                                );
+                                false
+                            }
+                            GuestReach::NotResolved(o) => {
+                                println!(
+                                    "★     R33 arm 4 FAULTED   = a copy engine pointed at \
                                  {UNMAPPED_VA:#018x} did NOT retire (sem {:#010x}, GP_GET {} \
                                  GP_PUT {}) while its positive control on the SAME channel did \
                                  — hardware agrees the VA is unmapped. ⚠ Expect one `Xid 31 \
                                  FAULT_PDE`; that is the control FIRING, not a bug",
-                                o.semaphore, o.gp_get, o.gp_put
-                            );
-                            true
-                        }
-                        GuestReach::Read { word, outcome } => {
-                            println!(
-                                "FAIL  R33 arm 4 RESOLVED  = the engine READ {UNMAPPED_VA:#018x} \
+                                    o.semaphore, o.gp_get, o.gp_put
+                                );
+                                true
+                            }
+                            GuestReach::Read { word, outcome } => {
+                                println!(
+                                    "FAIL  R33 arm 4 RESOLVED  = the engine READ {UNMAPPED_VA:#018x} \
                                  in range {:#010x} and moved {word:#010x} (GP_GET {} GP_PUT \
                                  {}). Something IS mapped there IN THAT SPACE. ⊘ This does NOT \
                                  contradict arm 3, which asked about a different address \
                                  space — the first suspect is THE PROBE'S OWN dictated window \
                                  {:#018x}..{:#018x} (`rm::REACH_PROBE_WINDOW`), and if the VA \
                                  is outside it, something else in this space claimed it",
-                                fvas.raw(),
-                                outcome.gp_get,
-                                outcome.gp_put,
-                                kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0,
-                                kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.1
-                            );
-                            false
-                        }
-                        GuestReach::Ambiguous { word, outcome } => {
-                            println!(
-                                "??    R33 arm 4 ambiguous = the destination changed to \
+                                    fvas.raw(),
+                                    outcome.gp_get,
+                                    outcome.gp_put,
+                                    kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0,
+                                    kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.1
+                                );
+                                false
+                            }
+                            GuestReach::Ambiguous { word, outcome } => {
+                                println!(
+                                    "??    R33 arm 4 ambiguous = the destination changed to \
                                  {word:#010x} and the engine did not release (sem {:#010x}, \
                                  GP_GET {} GP_PUT {}). Neither arm is claimed",
-                                outcome.semaphore, outcome.gp_get, outcome.gp_put
-                            );
-                            false
-                        }
+                                    outcome.semaphore, outcome.gp_get, outcome.gp_put
+                                );
+                                false
+                            }
                         }
                     }
                     Err(e) => {
@@ -4059,7 +4059,9 @@ fn main() -> std::process::ExitCode {
                 break;
             }
         };
-        match rm.alloc_channel(vas, engine, None, None) {
+        // ⊘ `None` on the notifier: this ladder rung is about which runlist an engine type
+        // lands on. `alloc_channel_at_with_error_notifier` is the diagnostic that names one.
+        match rm.alloc_channel(vas, engine, None, None, None) {
             Ok((chan, token)) => {
                 println!(
                     "ok    R13.{n} channel      = {:#010x}, engine {engine:?}, \
@@ -4097,6 +4099,9 @@ fn main() -> std::process::ExitCode {
         channels.first().map_or(vas, |c| c.1),
         EngineKind::Other,
         None,
+        None,
+        // ⊘ `None`: the refusal under test happens before any object is allocated, so a
+        // notifier here would name an object nothing ever reaches.
         None,
     ) {
         Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::NOT_ON_THIS_RUNG => {
@@ -4317,6 +4322,9 @@ fn main() -> std::process::ExitCode {
                 None,
                 EngineKind::Ce,
                 true,
+                // ⊘ `None`: this rung asks whether the gate admits an EMPTY working set.
+                // A guest-RAM grant would need a guest, and this driver has none.
+                None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
                 Ok(plan) => match w.execute(&plan) {

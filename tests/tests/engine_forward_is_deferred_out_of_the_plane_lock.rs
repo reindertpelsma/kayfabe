@@ -165,7 +165,7 @@ fn the_lock_free_drain_runs_what_was_latched() {
         0,
         "★ the drain's precondition, asserted rather than assumed"
     );
-    let runs = dev.run_pending_engine_forwards();
+    let runs = dev.run_pending_engine_forwards(&[]);
     assert_eq!(runs.len(), 1, "★ one request in, one row out");
     let forwarded = runs[0]
         .out
@@ -202,8 +202,8 @@ fn the_lock_free_drain_runs_what_was_latched() {
 #[test]
 fn draining_an_empty_latch_is_a_no_op() {
     let (dev, rec) = armed_device();
-    assert!(dev.run_pending_engine_forwards().is_empty());
-    assert!(dev.run_pending_engine_forwards().is_empty());
+    assert!(dev.run_pending_engine_forwards(&[]).is_empty());
+    assert!(dev.run_pending_engine_forwards(&[]).is_empty());
     assert!(
         host_engine_objects(&rec).is_empty(),
         "★ an empty drain must not conjure a host engine object"
@@ -239,7 +239,7 @@ fn a_non_engine_class_is_refused_at_the_gate_and_never_latched() {
     drop(_held);
 
     assert!(
-        dev.run_pending_engine_forwards().is_empty(),
+        dev.run_pending_engine_forwards(&[]).is_empty(),
         "★★ the gate must consume no slot: five non-engine allocs latched NOTHING"
     );
     assert!(host_engine_objects(&rec).is_empty());
@@ -293,7 +293,7 @@ fn the_latch_refuses_by_name_at_its_bound() {
          service"
     );
     assert_eq!(
-        dev.run_pending_engine_forwards().len(),
+        dev.run_pending_engine_forwards(&[]).len(),
         bound,
         "★ the drain runs exactly what was admitted — the three refusals are not in it"
     );

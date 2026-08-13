@@ -83,6 +83,15 @@ pub use device::{EngineForwardRun, ForwardAdmission, MAX_PENDING_ENGINE_FORWARDS
 /// a `!=` against one variant — which is why `HostGr` and `Unserved` shared a bucket they do
 /// not belong in.
 pub use device::{ShellDisposition, shell_disposition};
+/// ★★★★★ **w288** — where a guest channel asked to be told about its own death, re-exported
+/// for [`Pdb`]'s single reason: the QEMU shim is the **only** party that may turn the GPA in
+/// `Sysmem { gpa }` into a `kayfabe_isolate::GuestRamGrant`, and its own manifest forbids an
+/// edge to `kayfabe-arch` (*"the shim names no architecture"*).
+///
+/// ⊘ A three-state enum over an address; it carries no architecture. And the three states
+/// must survive the crossing intact — `Unreachable` is a gap in **us** and `None` is the
+/// guest waiving error reporting, which lead a reader to different files.
+pub use kayfabe_arch::fault::ErrorNotifier;
 /// ★★★★★ §16.80 — the class id and the two Case-1 engine-object types, re-exported for
 /// the same reason and under the same rule: `SharedDevice::forward_engine_object_by_parent`
 /// takes and returns them, and the QEMU shim implements `ObjectModel` over it. A
