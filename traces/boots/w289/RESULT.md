@@ -864,3 +864,73 @@ attributable.
 ⊘ **`Crit1State` and the in-band ioctl reader both run on every arm**, so a vacuous pass has two
 independent named exits to fall through. ⚠ **`failed=0` is not "nothing refused"** — the in-band
 verdict is printed beside it.
+
+---
+
+# ADDENDUM 9 — ★★★★★ **THE COPY CROSSES IN THE GUEST** (relaxed arm) — and the control proves it is the relaxations
+
+> ⚠⚠ **THIS IS A RELAXED-ARM RESULT AND IT IS NOT THE MILESTONE.** Two off-by-default
+> relaxations were on. It says *"no further discovery on this path"*, not *"it works"*.
+
+Boots `w289j` (RELAXED) and `w289c` (CONTROL), **one binary**, `rev 277f03f`, back to back.
+
+## 38. THE BAR — ALL FOUR FACTS, IN THE GUEST
+
+```
+RELAXED:
+★ R33 arm 1 COPY = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33,
+    dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001),
+    GP_GET 1 caught GP_PUT 1 — read back through an INDEPENDENT mapping
+
+CONTROL (same binary, both relaxations off):
+FAIL R33 arm 1 COPY = dst[0] 0x3f0011cc -> 0x3f0011cc (want 0xc0ffee33), … semaphore 0x00000000
+    (want 0x00000001), GP_GET 1 GP_PUT 1 — the entry WAS fetched and the methods did nothing
+```
+
+★ **`met_the_whole_bar()`, not `copied()`** — bytes moved, **the LAST word correct** (so not a
+truncated copy), the **semaphore carrying the DECLARED payload at the DECLARED address**, and
+**`GP_GET` caught `GP_PUT`**. Read back through a mapping that is not the one written.
+
+⇒ **The guest's raw CE client moved device memory end-to-end for the first time**, with no
+libcuda in the process.
+
+## 39. THE DELTA IS ATTRIBUTABLE, AND THE FAULT IS GONE BY IDENTITY
+
+| | RELAXED | CONTROL |
+|---|---|---|
+| arming in force | `OPERAND-JOIN arm=join`, `PT-SWEEP ran=3` | `OPERAND-JOIN arm=off`, no sweep |
+| arm 1 COPY | **★ all four facts** | FAIL, semaphore `0x0` |
+| host `Xid` count | **1** | **2** |
+| `Xid` addresses | `0x7_00100000` only | `0x1_20000000` **and** `0x7_00100000` |
+
+★★★ **`0x1_20000000` — the fault this whole rung has chased across five boots — IS GONE**, and
+the arm that removes it is named. The surviving `0x7_00100000` is **arm 4's own control operand**,
+in the **third** VAS arm 4 allocates; the join fired on token `0x3` (arm 1's channel) and arm 4's
+channel is a different token. ⊘ Same defect, different channel — not a new wall.
+
+## 40. ⊘ WHAT STILL DOES NOT PASS, AND WHY — no vacuous green
+
+- **`R33_RC=1`** and `FAIL R33 raw CE client` — because **arm 4** still fails (its operands were
+  not joined) and **arm 6** still fails calibration. The client's own verdict is honest.
+- **`CRIT1 STATE = CONTROL-NEVER-LANDED`** on **both** arms ⇒ **criterion 1's address half is
+  still UNMET**, and every VA-identity number is still vacuous **by name**. The blocker is now
+  precisely located: arm 4's control operands at `0x7_001…` are the un-joined ones.
+- **In-band verdict: 2 refused on both arms**, the same two deliberate ones. **No ioctl diverged.**
+- ⊘ The `arm 5 NOTIFIER` firing is still attributable to the **control's** failure, not to a
+  deliberate fault — `?? arm 5 CONTROL` says so on the same run.
+
+## 41. ⇒ THE READING, STATED AS THE OWNER ASKED
+
+**It crosses.** ⇒ On the CE data plane there is **no further discovery** between the doorbell and
+a completed, semaphore-signalled copy: ring fetch, method decode, operand resolution, engine
+execution, completion write and cursor advance all work **once the operand is reachable and the
+table is complete.** What remains on this path is **hardening a known-working path** — turning
+the two relaxations into the real fixes:
+
+1. the **bootstrap gap** (attribute page-table pages from the VAS root, not only from the witness
+   set) so `PT_SWEEP` is not needed;
+2. the **operand join** applied to every CE channel's operands rather than the one token, and
+   armed by policy rather than by env var.
+
+⊘ **Neither is written here.** ⚠ And the relaxed green must not be quoted without both
+relaxations named beside it.
