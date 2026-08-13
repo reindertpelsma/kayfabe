@@ -3147,6 +3147,27 @@ pub struct GuestReachProbe {
 /// back to vidmem": a run whose notifier aperture depended on what RM happened to accept
 /// would be a run that cannot say which experiment it performed
 /// (`a_fallback_keyed_on_our_own_ignorance`). The caller states it and the report prints it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifierAperture {
+    /// `NV01_MEMORY_SYSTEM` — the faithful shape, and the only one a GUEST-side run can have
+    /// served, because it is the only one this port's `ErrorNotifier` vocabulary can name.
+    Sysmem,
+    /// `NV01_MEMORY_LOCAL_USER` — the arm w287's native known-positive was measured on.
+    Vidmem,
+}
+
+impl NotifierAperture {
+    /// The arm's name, for a report. ⊘ Printed on every run, including the ones that measure
+    /// nothing: the whole hazard is a run that is silent because of this choice.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NotifierAperture::Sysmem => "SYSMEM (NV01_MEMORY_SYSTEM)",
+            NotifierAperture::Vidmem => "VIDMEM (NV01_MEMORY_LOCAL_USER)",
+        }
+    }
+}
+
 /// ★★★★★ **WHICH `/dev/nvidia*` NODE A CPU MAPPING IS REGISTERED AGAINST — and it is the
 /// BACKING that decides, not the caller's taste.**
 ///
@@ -3199,27 +3220,6 @@ impl MapNode {
         match aperture {
             NotifierAperture::Sysmem => MapNode::Ctl,
             NotifierAperture::Vidmem => MapNode::Gpu,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NotifierAperture {
-    /// `NV01_MEMORY_SYSTEM` — the faithful shape, and the only one a GUEST-side run can have
-    /// served, because it is the only one this port's `ErrorNotifier` vocabulary can name.
-    Sysmem,
-    /// `NV01_MEMORY_LOCAL_USER` — the arm w287's native known-positive was measured on.
-    Vidmem,
-}
-
-impl NotifierAperture {
-    /// The arm's name, for a report. ⊘ Printed on every run, including the ones that measure
-    /// nothing: the whole hazard is a run that is silent because of this choice.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            NotifierAperture::Sysmem => "SYSMEM (NV01_MEMORY_SYSTEM)",
-            NotifierAperture::Vidmem => "VIDMEM (NV01_MEMORY_LOCAL_USER)",
         }
     }
 }

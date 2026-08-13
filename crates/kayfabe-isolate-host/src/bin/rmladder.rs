@@ -2377,9 +2377,15 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
         true
     } else {
         // ⊘ `Vidmem`, NAMED: this is R30's NATIVE arm, and the vidmem notifier is the one
-        // w287's known-positive was measured on (`[measured 2026-08-13, vh2]` a sysmem
-        // notifier was refused natively in both flag settings tried). ⊘ Not a default —
-        // see `NotifierAperture`, which refuses to make either arm a fallback.
+        // w287's known-positive was measured on. ⊘ Not a default — see `NotifierAperture`,
+        // which refuses to make either arm a fallback.
+        //
+        // ⊘⊘ **SUPERSEDED 2026-08-13 (w289):** the parenthesis here used to add *"a sysmem
+        // notifier was refused natively in both flag settings tried"*, as if that justified
+        // the choice. It does not any more — both refusals were ours (`_NO_MAP` at the
+        // allocation, the control node at the map; see `rm::MapNode`). The `Vidmem` choice
+        // stands on w287's known-positive alone, which is a **weaker** warrant than it read
+        // as, and R30 is free to move to `Sysmem` once this rung has measured it.
         match rm.probe_guest_reachability(
             vas,
             p.sem_va,
