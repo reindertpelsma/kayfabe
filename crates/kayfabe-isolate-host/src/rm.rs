@@ -1403,7 +1403,7 @@ impl RmConnection {
     ///    which selects the same BAR0 register window every earlier usermode class gives
     ///    unconditionally (`ogkm-580:
     ///    src/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`).
-    /// 3. ★★ **[`CachePolicy::Uncached`], not write-combining.** This is a BAR0
+    /// 3. ★★ **[`CachePolicy::WriteBack`], not write-combining.** This is a BAR0
     ///    *register* range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch and
     ///    calls `nv_encode_caching(…, NV_MEMORY_UNCACHED, NV_MEMORY_TYPE_REGISTERS)`
     ///    unconditionally (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`); the
@@ -1423,7 +1423,7 @@ impl RmConnection {
         let want = self.mint();
         let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, &mut [])?;
         self.remember(object, self.subdevice);
-        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::Uncached)?;
+        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
         Ok(UsermodeWindow {
             _object: object,
             _node: node,
@@ -1626,7 +1626,7 @@ impl RmConnection {
         register_len: u64,
         mmap_len: u64,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
-        self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::Uncached)
+        self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::WriteBack)
     }
 
     /// Read the PTIMER pair out of a region produced by [`Self::alloc_timer_object`] +
@@ -2918,6 +2918,17 @@ pub struct GuestReachProbe {
     /// ⊘ Deliberately a control that already succeeds on this channel at creation, so a
     /// failure could only be the RC state and never an unsupported command.
     pub post_fault_ioctl: Result<(), RmError>,
+    /// ★★★★★ **THE NEGATIVE CONTROL, ON THE SAME SIXTEEN BYTES, IN THE SAME RUN.**
+    ///
+    /// The notifier read **after the positive control retired and before the fault probe was
+    /// issued** — i.e. on a channel that is alive and has just done real work.
+    ///
+    /// ⊘⊘ Without it, `status == 0xffff` after the fault is only *"the word we hoped for was
+    /// there"*. The page is zeroed before the channel is told about it, which excludes a
+    /// dirty allocation — but not a notifier RM wrote at channel *creation*, nor one written
+    /// by the control submission. This field excludes both, and it does so without a second
+    /// run, a second channel or a second revision to compare against.
+    pub notifier_before: Option<ErrorNotifierRead>,
 }
 
 /// What one submission produced — the whole evidence bar for rung 3, as data.
@@ -4948,7 +4959,7 @@ impl HostRmBackend {
         // a producer's bytes through one is how a stale line reads as "quiet".
         let (node, view) = self
             .conn
-            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::Uncached)?;
+            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::WriteBack)?;
         let lo = view
             .load_u32(HostOffset::new(base))
             .map_err(|e| region_error(&e))?;
@@ -4973,6 +4984,95 @@ impl HostRmBackend {
         })
     }
 
+    /// ⊘⊘⊘ **NOT USED — KEPT AS THE RECORD OF TWO MEASUREMENTS THAT COST A RUN EACH.**
+    ///
+    /// The notifier this rung actually uses is [`RmConnection::alloc_device_local`]
+    /// (`NV01_MEMORY_LOCAL_USER`), which `kchannelGetNotifierInfo` accepts as
+    /// `ERROR_NOTIFIER_TYPE_MEMORY` exactly as it accepts `NV01_MEMORY_SYSTEM`
+    /// (`ogkm-580: kernel_channel.c:2016`, `:2080` — the handle is resolved by
+    /// `memGetByHandle`, which is class-agnostic), and which this tree already CPU-maps
+    /// every run. ⚠ It is a **deviation from the shape a real driver uses**: the
+    /// `[w287 census, 63/63]` aperture of every real `errorNotifierMem` is SYSMEM. Recorded
+    /// here rather than left for a reader to notice.
+    ///
+    /// **Why the sysmem route is not simply better:** the two flag settings measured are
+    /// *both* unusable, in opposite ways.
+    /// - `[measured 2026-08-13, vh2, rev f7a74bc]` with [`NVOS02_FLAGS_MAPPING_NO_MAP`] (what
+    ///   [`RmBackend::alloc_sysmem`] sets) the allocation succeeds and the later CPU map is
+    ///   refused `NV_ERR_INVALID_ARGUMENT` — `Other(31)`, **with the ioctl census reading
+    ///   `failed=0`**, because RM reports its status *inside* the parameter struct while
+    ///   `ioctl(2)` returns 0. ⊘ That flag's own doc says it *"stops the frontend building an
+    ///   `mmap` context around the descriptor"*: correct for the isolate, which maps GPU-side
+    ///   only, and fatal for a notifier whose entire purpose is to be read by this CPU.
+    /// - `[measured 2026-08-13, vh2]` **dropping** the flag moves the refusal EARLIER, onto
+    ///   the allocation itself: `NV_ESC_RM_ALLOC_MEMORY` (nr 39) answers **`errno 22`
+    ///   (`EINVAL`)** in the frontend — `Other(0x80000016)`, and this time the census DOES
+    ///   count it (`failed=1`). A mappable sysmem allocation needs the `fd` half of
+    ///   [`Nvos02ParametersWithFd`] filled in, which is a different rung.
+    ///
+    /// ★ Note the pair: the SAME defect class reported once invisibly to the census and once
+    /// visibly, purely because of which layer refused. `failed=0` is not `nothing refused`.
+    ///
+    /// ★★★★★ **The error-notifier page: sysmem, and CPU-MAPPABLE — which
+    /// [`RmBackend::alloc_sysmem`] deliberately is not.**
+    ///
+    /// ⊘⊘ **This is not `alloc_sysmem` with a different comment, and the difference cost a
+    /// run.** `[measured 2026-08-13, vh2, rev f7a74bc]` the first draft called `alloc_sysmem`
+    /// and the probe died with `Other(31)` — `NV_ERR_INVALID_ARGUMENT`, **with the ioctl
+    /// census reading `failed=0`**, because RM reports its status *inside* the parameter
+    /// struct while `ioctl(2)` returns 0. `alloc_sysmem` sets
+    /// [`NVOS02_FLAGS_MAPPING_NO_MAP`], whose own doc says it *"stops the frontend building
+    /// an `mmap` context around the descriptor"* — so the object is correct for the isolate,
+    /// which maps GPU-side only, and **unusable for a notifier, whose entire purpose is to be
+    /// read by this CPU**.
+    ///
+    /// ★ `COHERENCY_CACHED` because the producer is the GPU/GSP over snooped PCIe and the
+    /// consumer is this core; and `NV01_MEMORY_SYSTEM` because the `[w287 census, 63/63]`
+    /// aperture of every real `errorNotifierMem` is **SYSMEM** — against `userdMem`, FBMEM
+    /// `68/68` on the same census. NVIDIA's own raw pusher does exactly this
+    /// (`ogkm-580: src/common/unix/nvidia-push/src/nvidia-push-init.c:1116-1160`).
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    #[allow(dead_code)]
+    fn alloc_notifier_mem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let want = self.conn.mint();
+        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            h_root: self.conn.client.raw(),
+            h_object_parent: self.conn.device,
+            h_object_new: want,
+            h_class: NV01_MEMORY_SYSTEM,
+            // ⊘ The MAPPING field is left at its zero value on purpose — `_DEFAULT`, not an
+            // omission, exactly as `_LOCATION_PCI` is zero. See `NVOS02_FLAGS_LOCATION_PCI`.
+            flags: NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_COHERENCY_CACHED,
+            p_memory: 0,
+            pad1: 0,
+            limit: len - 1,
+            status: 0,
+            fd: -1,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        // `NV_ACTUAL_DEVICE_ONLY`, as `alloc_sysmem` records at length.
+        self.conn
+            .gpu
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.conn.remember(out.h_object_new, self.conn.device);
+        Ok(self.stamp(out.h_object_new))
+    }
+
     /// Zero the notifier page before a channel is told about it.
     ///
     /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly
@@ -4985,7 +5085,7 @@ impl HostRmBackend {
         let raw = self.narrow(notifier)?;
         let (node, view) = self
             .conn
-            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::Uncached)?;
+            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::WriteBack)?;
         for off in (0..NOTIFIER_BYTES).step_by(4) {
             view.store_u32(HostOffset::new(off), 0)
                 .map_err(|e| region_error(&e))?;
@@ -6060,7 +6160,11 @@ impl HostRmBackend {
         // whatever the allocator handed us. `NV01_MEMORY_SYSTEM` is not documented to arrive
         // zeroed, and *"it was already `0xffff`"* is exactly the false positive that would
         // make this whole client report success without a driver ever writing anything.
-        let notifier_h = match self.alloc_sysmem(NOTIFIER_BYTES) {
+        let notifier_h = match self
+            .conn
+            .alloc_device_local(NOTIFIER_BYTES)
+            .map(|h| self.stamp(h))
+        {
             Ok(h) => h,
             Err(e) => {
                 let _ = self.free(self.stamp(dst));
@@ -6173,8 +6277,15 @@ impl HostRmBackend {
                     // ⊘ NOT MEASURED on this path — no fault was provoked, so there is no
                     // "after" for an ioctl to be after. `NOT_ON_THIS_RUNG`, by name.
                     post_fault_ioctl: Err(RmError::Other(NOT_ON_THIS_RUNG)),
+                    // ⊘ The control did not land, so there is no "alive and working" instant
+                    // for a negative control to be taken at.
+                    notifier_before: None,
                 });
             }
+
+            // ★★★ THE NEGATIVE CONTROL — read here, between a submission that WORKED and one
+            // that will fault. Nothing between this read and the next one but the fault.
+            let notifier_before = self.read_error_notifier(notifier_h).ok();
 
             let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
             let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
@@ -6218,6 +6329,7 @@ impl HostRmBackend {
                 reach,
                 notifier,
                 post_fault_ioctl,
+                notifier_before,
             })
         };
         let out = go();

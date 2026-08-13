@@ -2776,6 +2776,32 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                         // measurement**, and it is printed with the reason it is ambiguous
                         // attached. `status == 0` is what an unwired notifier, a refused
                         // handle and a channel that never faulted all read as.
+                        // ★★★★★ THE CONTROL, PRINTED FIRST — a fired notifier means nothing
+                        // until the same bytes have been shown quiet while the channel was
+                        // alive and working.
+                        match r.notifier_before {
+                            Some(b) if !b.fired() => println!(
+                                "★     R33 arm 5 CONTROL   = the SAME 16 bytes read QUIET \
+                                 (status {:#06x} info32 {:#010x}) AFTER the positive control \
+                                 retired and BEFORE the fault was issued. ⇒ anything below is \
+                                 a CHANGE on one channel in one run, not a value that was \
+                                 always there",
+                                b.status, b.except_type
+                            ),
+                            Some(b) => println!(
+                                "FAIL  R33 arm 5 CONTROL   = the notifier ALREADY read \
+                                 status {:#06x} info32 {:#010x} before the fault was issued — \
+                                 the channel was killed by something this rung did not \
+                                 provoke, and the reading below is NOT attributable to the \
+                                 deliberate fault",
+                                b.status, b.except_type
+                            ),
+                            None => println!(
+                                "??    R33 arm 5 CONTROL   = the pre-fault read did not \
+                                 happen, so a fired notifier below cannot be attributed to \
+                                 the fault rather than to channel creation"
+                            ),
+                        }
                         match r.notifier {
                             Some(n) if n.fired() => println!(
                                 "★     R33 arm 5 NOTIFIER  = PLANE A FIRED — the driver wrote \
