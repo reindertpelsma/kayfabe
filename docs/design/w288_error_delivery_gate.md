@@ -122,6 +122,66 @@ consistent with a cheap fault-info read; it says **nothing** about GSP routing o
 
 ---
 
+## 2a. ⊘ THE RESEARCH DOC EXISTS — IN THE **C** REPO — AND IT CORROBORATES §1–§2
+
+`w288-ogkm-authored-user-visible-structures` @ `c896ed4` is on the origin of
+**`/workspace/nvidia-gpu-passthrough`**, not kayfabe:
+`docs/reference/ogkm_authored_guest_userspace_structures.md`. Its §10.1 gives the consume
+sequence end to end, and its §10.2 states the same gap I reached independently: *"we get the Xid
+but **not which channel**, and we are woken by other tenants' RC errors too."*
+
+## 2b. ★★★ STEP 1 IS **100 % UNBUILT AT THE IOCTL LAYER** — and it needs an IPC crossing the brief does not mention
+
+Measured over `kayfabe-linux-raw` and `rm.rs`: **zero** occurrences of `ALLOC_OS_EVENT`,
+`GET_EVENT_DATA`, `EVENT_SET_NOTIFICATION`, or `NV01_EVENT_OS_EVENT`. The only hits anywhere are
+the two **census label strings** in `rmladder.rs` (`0x52 => "RM_GET_EVENT_DATA"`,
+`206 => "ALLOC_OS_EVENT"`), which are a decoder's names for numbers, not a client.
+
+What wiring actually requires, from §10.1:
+
+1. `NV_ESC_ALLOC_OS_EVENT` and `NV_ESC_RM_GET_EVENT_DATA` (`0x52`) bindings + their param
+   structs — new to `kayfabe-linux-raw`.
+2. `NV01_EVENT_OS_EVENT` (`0x79`) allocated on an `NV20_SUBDEVICE_0`.
+3. `NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION(event=37, action=REPEAT)`.
+4. An event fd and a `poll()` loop — i.e. a **blocking waiter**, which is a lifecycle this
+   backend does not currently have.
+5. ⚠ **A PROCESS CROSSING.** The RC event arrives in the **isolate host**, which holds the host
+   `/dev/nvidia*` fds. `FaultEmission::deliver(ram, fsm)` needs **`GuestRam` and the `GspFsm`**,
+   which live in the **VMM/shim**. Those are different processes. ⇒ Wiring is not "call
+   `deliver()` from the event handler"; it is a new isolate→VMM message carrying the fault, on
+   the IPC that already exists for descriptors.
+
+⇒ The rung is *"wire it, don't rewrite it"* for step 2, and a genuine multi-crate build for
+step 1. I am not starting it inside this task's remaining budget, because a **half-wired
+delivery path that boots is exactly the artefact this campaign refuses**: it would produce a
+`CUP2_RC` that cannot distinguish *"the hypothesis is wrong"* from *"our emitter never fired"*,
+and the rung's whole value is that the refutation be clean.
+
+## 2c. ⚠ A CORRECTION TO THE UNBLOCK'S REASONING — "one channel" is true of the CLIENT, not of the GPU
+
+> *"The raw faulting client has ONE channel. Attribution is trivial there — there is no candidate
+> set to poll."*
+
+True of the client; **not** of the fault source. The RC event is **GPU-scoped**
+(`gpuNotifySubDeviceEvent_IMPL` *"iterates all subdevice back-references and never consults
+`pKernelChannel`"*), and `[measured, w287 boot 2]` the same boot carried **six** `GR-BIRTH`
+channels — the guest driver's own, plus the client's. ⇒ On an RC event we learn *a* fault
+happened **on this GPU**, and the client's channel is one of several that could have produced it.
+
+★ For `--ce-client-fault` this is a **caveat, not a blocker**: the client provokes the fault
+deliberately, so it is the overwhelmingly likely source, and the arm is still worth running.
+⊘ But it is **not** trivial in the sense of *"nothing else could have faulted"*, and the
+falsifier must be stated up front: **if we deliver on any RC event, a fault from the guest
+driver's own channel writes the client's notifier — a false positive that looks exactly like a
+pass.** Under the standing ruling that is the wrong-channel case, at GPU scope.
+
+⚠ And §10.2 closes the obvious escape: the **channel-scoped** event fires *"only if
+`hObjectError` resolves as a `NV01_CONTEXT_DMA`; a `Memory` handle silently never fires it"* —
+and w286's census measured **all 32 USER channels as `TYPE_MEMORY`**. ⇒ For a guest *userspace*
+client, the per-channel correlation event **cannot fire as things stand**.
+
+---
+
 ## 3. WHAT I DID NOT DO, AND WHY
 
 - **Did not build the probe arm.** The gate it exists to answer is answered by the struct
