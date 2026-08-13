@@ -5597,7 +5597,27 @@ impl HostRmBackend {
         va: u64,
     ) -> Result<(Option<kayfabe_abi::submit::DmaPdeInfoBlock>, u64), RmError> {
         use kayfabe_abi::submit::{DmaGetPdeInfoParams, NV0080_CTRL_CMD_DMA_GET_PDE_INFO};
+        // ⊘⊘⊘ **THE `hVASpace` IS THE COMPANION, NOT THE RANGE — AND THE MIRROR OF THIS
+        // MISTAKE IS ALREADY DOCUMENTED IN THIS FILE.**
+        //
+        // `[measured 2026-08-13, vh]` passing `narrow(vas)` here returned
+        // `Other(51)` = `NV_ERR_INVALID_OBJECT_HANDLE` (`0x33`) for EVERY address — the same
+        // status, from the opposite confusion, as `alloc_vaspace_raw`'s R7b comment records:
+        // *"`NV_ESC_RM_MAP_MEMORY_DMA`'s `hDma` does NOT name an address space — it names an
+        // `NV01_MEMORY_VIRTUAL` RANGE within one. Handing it the `FERMI_VASPACE_A` handle is
+        // refused with `NV_ERR_INVALID_OBJECT_HANDLE` (0x33)"*.
+        //
+        // ⇒ **One `Vas` is TWO host objects.** `alloc_vaspace` returns the RANGE (what the map
+        // verb needs) and keeps the `FERMI_VASPACE_A` as its companion. This control wants the
+        // **space**, so the range is exactly as wrong here as the space was there.
+        // ⚠ `companion_of` returning `None` is refused by name rather than falling back to the
+        // range: a fallback would ask a well-formed question about the wrong object and get a
+        // well-formed answer.
         let range = self.narrow(vas)?;
+        let space = self
+            .conn
+            .companion_of(range)
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         let mut buf = [0u8; DmaGetPdeInfoParams::SIZE];
         DmaGetPdeInfoParams {
             gpu_addr: va,
@@ -5609,7 +5629,7 @@ impl HostRmBackend {
             pte_blocks: [kayfabe_abi::submit::DmaPdeInfoBlock::default();
                 DmaGetPdeInfoParams::PTE_BLOCKS],
             pdb_addr: 0,
-            h_vaspace: range,
+            h_vaspace: space,
         }
         .encode_into(&mut buf)
         .map_err(|_| RmError::Other(BAD_ENCODE))?;
