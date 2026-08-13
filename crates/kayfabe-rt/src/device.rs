@@ -2259,8 +2259,10 @@ impl SharedDevice {
         // already has eight paths to `Ok(())`. A ninth, whose meaning is *"this was never
         // this function's kind of work"*, belongs at the call site where the alternative is
         // visible, not inside the thing being skipped.
+        // ★★★★★ **w287 — AND THE KIND.** `out.kind` is carried off the same `chan` as
+        // `out.engine`; a `Passthrough` channel's ring is the guest's and is never read here.
         if let Some(vmm) = vmm
-            && ring_content_is_forwardable(out.engine)
+            && ring_content_is_forwardable(out.engine, out.kind)
         {
             self.forward_ring(vmm, out.proc, out.chan)?;
         }
@@ -4592,9 +4594,31 @@ pub fn shell_disposition(route: DoorbellRoute, gr_passthrough: bool) -> ShellDis
 /// ⊘ **Not solved by passing `vmm: None` from the shim.** That parameter's own doc names
 /// that move: *"a caller that holds a port and passes `None` silently forwards nothing."*
 /// The decision belongs to the engine, by name, here.
+/// # ★★★★★ w287 — AND THE KIND, because the two dispositions are MUTUALLY EXCLUSIVE
+///
+/// This used to take `engine` alone, which made the predicate *"is this CE"*, full stop. That
+/// is not enough to decide the question it is actually asked, and `[measured 2026-08-13,
+/// w283d, real GA106]` says so: one CE doorbell rang the **adopted** channel (`host_token=0x6`)
+/// and then also decoded that channel's guest ring and ran `ce_copy` on `host_token=0x7`.
+///
+/// ⊘ **`ce_copy` DRIVES a channel; adoption means the GUEST drives it.** We cannot both write
+/// the ring and let the guest own it, and we cannot both ring the doorbell and expect hardware
+/// to advance a cursor we are also advancing. On a [`GuestChannelKind::Passthrough`] channel
+/// the engine fetches the guest's pushbuffer **directly** and this codec must not run — not as
+/// an optimisation, but because running it is the fallback that has made every green run
+/// unable to distinguish *"passthrough worked"* from *"the decode-and-re-emit caught it"*.
+///
+/// ⇒ The owner's ruling, as a total function: `KERNEL` → emulate (our scratchpad ring, our
+/// codec); `USER`/`ADMIN` → passthrough (their ring, untouched). [`GuestChannelKind`] is
+/// exactly that axis, resolved once per proc boundary and **carried**, never re-derived.
 #[must_use]
-pub fn ring_content_is_forwardable(engine: EngineKind) -> bool {
+pub fn ring_content_is_forwardable(
+    engine: EngineKind,
+    kind: kayfabe_core::channel_kind::GuestChannelKind,
+) -> bool {
+    use kayfabe_core::channel_kind::GuestChannelKind;
     matches!(route_of_engine(engine), DoorbellRoute::CpuCe)
+        && matches!(kind, GuestChannelKind::Emulated)
 }
 
 impl CeChannelFacts {

@@ -2460,9 +2460,13 @@ fn the_arming_opens_hostgr_and_only_hostgr() {
 /// cannot slip in on the wrong side of it.
 #[test]
 fn ring_content_is_forwardable_exactly_where_the_cpu_ce_executor_owns_the_route() {
+    use kayfabe_core::channel_kind::GuestChannelKind;
+    // ★★★★★ **w287 — the route half of the rule is now scoped to `Emulated`.** Quantified
+    // over BOTH kinds so the engine axis and the kind axis are each checked, rather than one
+    // being fixed at a value that happens to make the other pass.
     for engine in kayfabe_arch::ids::EngineKind::ALL {
         assert_eq!(
-            kayfabe_rt::device::ring_content_is_forwardable(engine),
+            kayfabe_rt::device::ring_content_is_forwardable(engine, GuestChannelKind::Emulated),
             kayfabe_rt::device::route_of_engine(engine) == DoorbellRoute::CpuCe,
             "★ {engine:?} disagrees between the content-forward predicate and the route \
              classifier. Two tables for one question is §16.64's defect, and this one is \
@@ -2470,12 +2474,30 @@ fn ring_content_is_forwardable_exactly_where_the_cpu_ce_executor_owns_the_route(
              be reported `Refused` after its host channel was rung."
         );
     }
+    // ★★★★★ **THE CUT ITSELF, as a test: no engine forwards ring CONTENT on a passthrough
+    // channel.** This is the fallback the owner asked to have removed — the decode-and-re-emit
+    // path that sat beside every green run and made *"passthrough worked"* and *"the fallback
+    // caught it"* indistinguishable. If this loop ever goes green-by-exception, the rung it
+    // graded was measuring the wrong mechanism.
+    for engine in kayfabe_arch::ids::EngineKind::ALL {
+        assert!(
+            !kayfabe_rt::device::ring_content_is_forwardable(
+                engine,
+                GuestChannelKind::Passthrough
+            ),
+            "★★★ {engine:?}: a PASSTHROUGH channel's ring is the GUEST's. `ce_copy` drives a \
+             channel and adoption means the guest drives it — both cannot hold, and w283d \
+             measured one CE doorbell doing both on two different host channels."
+        );
+    }
     // Non-vacuity: the predicate is not constant in either direction.
     assert!(kayfabe_rt::device::ring_content_is_forwardable(
-        kayfabe_arch::ids::EngineKind::Ce
+        kayfabe_arch::ids::EngineKind::Ce,
+        GuestChannelKind::Emulated
     ));
     assert!(!kayfabe_rt::device::ring_content_is_forwardable(
-        kayfabe_arch::ids::EngineKind::GrCompute
+        kayfabe_arch::ids::EngineKind::GrCompute,
+        GuestChannelKind::Emulated
     ));
 }
 

@@ -2981,6 +2981,24 @@ pub struct DoorbellOutcome {
     /// engine that decided which host runlist this channel lives on rode the *plan*
     /// (`VerbPlan::Doorbell::engine`) and was consumed by `alloc_channel` long before here.
     pub engine: EngineKind,
+    /// ★★★★★ **w287 — WHAT THIS CHANNEL IS TO THE GUEST**, carried for exactly
+    /// [`Self::engine`]'s reason and off the same `chan` binding, so the kind, the engine and
+    /// the host token can never be attributed to different channels.
+    ///
+    /// # ⊘⊘ Why the content forward needs it: the two dispositions were NOT mutually exclusive
+    ///
+    /// `[measured 2026-08-13, w283d, real GA106]` a single CE doorbell did **both** halves of a
+    /// fork that cannot both be true: it rang the **adopted, guest-ring** channel
+    /// (`host_token=0x6`) and then read that same guest ring, decoded it, and ran `ce_copy` on
+    /// a **different** host channel (`host_token=0x7`). ⇒ The green rows and the red row came
+    /// from two different host channels in one boot, and no verdict could say which mechanism
+    /// it was grading.
+    ///
+    /// ★★★ `ce_copy` **drives** a channel — we write the ring, we ring the doorbell. An
+    /// adopted channel means **the guest drives it** — the guest writes `GP_PUT`, hardware
+    /// writes `GP_GET`. Both cannot hold, so the decision is made once, by name, on a declared
+    /// fact rather than on an engine number that cannot see the difference.
+    pub kind: kayfabe_core::channel_kind::GuestChannelKind,
 }
 
 /// Check every VA in `working_set` is **ring-admissible** in `table` — the #14 gate
@@ -3486,12 +3504,16 @@ pub fn commit_doorbell(
     // ★ Off the SAME `chan` binding as `host_token` one line up — see the field's doc for
     // why the outcome carries this rather than the caller resolving it again.
     let engine = chan.engine;
+    // ★ Same binding, same line of sight — see the field's doc for why this is carried and
+    // never re-derived from `plan.proc` against a reserved constant.
+    let kind = chan.kind;
     Ok(DoorbellOutcome {
         proc: plan.proc,
         chan: plan.chan,
         host_token,
         scheduled_now: scheduled,
         engine,
+        kind,
     })
 }
 

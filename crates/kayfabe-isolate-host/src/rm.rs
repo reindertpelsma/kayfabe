@@ -540,6 +540,16 @@ struct ChannelRings {
     /// than in a file of its own. Nothing had ever adjudicated that USERD must be ours; the
     /// ring rung needed *a* USERD and ours was the only one available.
     ///
+    /// ★★★★★ **w287 — `Some(offset)` iff USERD lives inside THIS channel's ring object**
+    /// ([`UserdOwner::InRing`]), naming where in [`ChannelRings::ring`] the cursor words are.
+    ///
+    /// ⊘ It exists to keep two different `userd: None` states from colliding. `None` +
+    /// `userd_in_ring: None` = *"the guest's USERD, unmappable, refuse by name"*. `None` +
+    /// `Some(off)` = *"ours, mapped, reachable through the ring at `off`"*. Without the
+    /// second field the accessors would answer [`USERD_NOT_OURS`] for a USERD that is wholly
+    /// ours — a refusal whose **name is false of its cause**, which is the failure class this
+    /// tree has paid for more than any other.
+    userd_in_ring: Option<u64>,
     /// ★★★ `None` for a channel over a guest USERD, and it is the same shape as
     /// [`ChannelRings::ring`]'s: not an omission we get away with, a mapping that **cannot
     /// be made**. `[measured, R31 arm B]` `NV_ESC_RM_MAP_MEMORY` against an
@@ -686,6 +696,32 @@ const GPFIFO_OFFSET: u64 = 0x1000;
 /// the isolate's own submissions, not the guest's.
 const GPFIFO_ENTRIES: u32 = 64;
 
+/// ★★★★★ **w287 — WHERE USERD LIVES INSIDE OUR OWN RING OBJECT, and it is the whole of the
+/// blocker w284 measured.**
+///
+/// `[measured 2026-08-13, w283/w283c/w283d, three boots, byte-identical]` the raw CE client's
+/// ring landed at fb `0x40000` len `0x10000` and its USERD at fb `0x50000` — **the first byte
+/// past the end of its own ring's joined leaf**. `adopted_guest_userd`'s containment test
+/// (`kayfabe-fwd/src/lib.rs:4021`, `offset + 512 > len`) therefore DECLINED, leg B never fired,
+/// and the host channel carried a USERD of ours that hardware's `GP_GET` could never be read
+/// out of. The test was right; the **layout** was wrong.
+///
+/// ⊘ And the wrong layout was **our instrument's**, not the architecture's: two
+/// `alloc_device_local(RING_OBJECT_BYTES)` calls make two objects and therefore two leaves.
+/// The guest **driver** does the opposite — one object, USERD at `+0x1a000`
+/// (`[measured, w267]`, `userd_memory == ring memory`) — which is exactly why leg B fires on
+/// the driver's channels and declined on ours. ⇒ Putting USERD inside the ring object does not
+/// add a mechanism; it makes this client **representative of the workload it stands in for**.
+///
+/// ★★ **512-ALIGNED, AND WE VALIDATE IT BECAUSE RM DOES NOT.** RM shifts the *resolved
+/// physical* address right by 9 (`kernel_channel_gv100.c:208`) and does **no** alignment check,
+/// so a misaligned `userdOffset` is **silently truncated** to a different address. `0x3000` is
+/// `512 × 24`. See [`USERD_OFFSET_MISALIGNED`] for the refusal that makes a bad value loud.
+const USERD_OFFSET_IN_RING: u64 = 0x3000;
+
+/// The granularity RM's `>> 9` imposes on a USERD offset. See [`USERD_OFFSET_MISALIGNED`].
+const USERD_ALIGNMENT: u64 = 512;
+
 /// Offset of the pushbuffer within the ring object — the methods hardware fetches.
 ///
 /// The layout below is the C's proven one, offset for offset
@@ -803,6 +839,21 @@ enum UserdOwner {
     /// A joined framebuffer window handed in — the guest's own USERD bytes. ⚠ Not ours to
     /// free, not ours to unmap, and **not CPU-mappable at all** (`[measured, R31 arm B]`).
     HandedIn,
+    /// ★★★★★ **w287 — USERD lives INSIDE this channel's own ring object, at
+    /// [`USERD_OFFSET_IN_RING`].** One object, one leaf, exactly the shape the guest driver
+    /// uses (`userd_memory == ring memory`, `userd_offset=0x1a000`, `[measured, w267]`).
+    ///
+    /// ⊘ **It is a THIRD arm and not a flavour of `Ours` on purpose**, and the reason is a
+    /// double free. `ChannelParts::userd` now *aliases* `ChannelParts::ring`, so a teardown
+    /// that reads this as `Ours` frees one handle twice — and a double free in a teardown path
+    /// surfaces anywhere but at the call. Making the alias its own arm means the compiler
+    /// asks the question at every `match`, which is what actually found the three sites
+    /// below rather than a comment asking the reader to remember.
+    ///
+    /// ⇒ Frees nothing (the ring's owner frees the object), maps nothing (the ring's CPU map
+    /// already covers these bytes), and its accessors reach the words through
+    /// [`ChannelRings::userd_in_ring`].
+    InRing,
 }
 
 /// Where a channel's GPFIFO comes from — the one degree of freedom
@@ -1006,6 +1057,23 @@ pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
 ///
 /// `0x4B55` is `"KU"`.
 pub const USERD_NOT_OURS: u32 = 0x4B55;
+
+/// ★★★ **A `userdOffset` that is not 512-byte aligned — refused BY NAME, because RM will not
+/// refuse it and the corruption is silent.**
+///
+/// `[source: kernel_channel_gv100.c:208]` RM resolves USERD to a physical address and shifts it
+/// **right by 9** to build the runlist entry's pointer. It performs **no alignment validation
+/// whatsoever**. ⇒ A misaligned offset is not rejected — it is **truncated**, and the channel is
+/// then pointed at a *different* 512-byte slot than the one its owner believes it declared.
+/// Hardware then writes `GP_GET` somewhere nobody is reading and the symptom is
+/// *"the cursor never moved"*, i.e. indistinguishable from the wall this rung exists to remove.
+///
+/// ⊘ This is the [`derive-what-you-cannot-query`] shape inverted: the validation RM omits is
+/// the validation we must supply, and the reason to spell it as a named refusal rather than an
+/// `assert!` is that the offset can arrive from the guest.
+///
+/// `0x4B56` is `"KV"`.
+pub const USERD_OFFSET_MISALIGNED: u32 = 0x4B56;
 
 /// ★★★★★ **LEG B — the adopted USERD named an object this isolate did NOT mint by joining a
 /// framebuffer leaf.** The twin of [`RING_NOT_A_JOINED_WINDOW`], and it exists for the
@@ -4172,6 +4240,13 @@ impl RmBackend for HostRmBackend {
             match parts.userd_owner {
                 UserdOwner::Ours => keep(self.free_one(parts.userd)),
                 UserdOwner::HandedIn => {}
+                // ★★★★★ **w287 — FREE NOTHING, and this arm is the reason the enum gained a
+                // third variant.** `parts.userd` *is* `parts.ring` here. The `RingOwner` match
+                // immediately above has already freed it (or deliberately not, if the ring is
+                // the guest's); freeing it again here is a double free of a live handle, and
+                // its symptom would appear at whatever unrelated allocation next reuses the
+                // slot rather than at this line.
+                UserdOwner::InRing => {}
             }
             return first;
         }
@@ -4892,7 +4967,19 @@ impl HostRmBackend {
         // only here, because on this arm the party that writes the cursor is the same party
         // the offset came from.
         let (userd, userd_owner, userd_offset) = match ring {
-            RingSource::Ours(_) | RingSource::Guest(GuestRing { userd: None, .. }) => {
+            // ★★★★★ **w287 — OUR OWN RING CARRIES ITS OWN USERD.** No second
+            // `alloc_device_local`, therefore no second framebuffer leaf, therefore
+            // `adopted_guest_userd`'s containment test can succeed when this channel is the
+            // one a guest declares to us. See [`USERD_OFFSET_IN_RING`] for the three boots
+            // that measured the old layout failing that test by one byte of extent.
+            RingSource::Ours(_) => (ring_obj, UserdOwner::InRing, USERD_OFFSET_IN_RING),
+            // ⊘ **NOT folded into the arm above, and the distinction is load-bearing.** Here
+            // `ring_obj` is the GUEST's object, handed in over the guest's own pages. Placing
+            // our USERD at an offset inside it would put our cursor in memory the guest owns
+            // and did not offer for that purpose — `ShadowsGuestMemory` wearing a
+            // convenience's clothes. This arm keeps a USERD of ours, and the `GP_GET` it
+            // cannot see is the honest cost of leg A firing without leg B.
+            RingSource::Guest(GuestRing { userd: None, .. }) => {
                 match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
                     Ok(h) => (h, UserdOwner::Ours, 0),
                     Err(e) => {
@@ -4909,6 +4996,33 @@ impl HostRmBackend {
                 }
             },
         };
+
+        // ★★★★★ **THE ALIGNMENT RM DOES NOT CHECK — checked here, on EVERY arm.**
+        //
+        // `[source: kernel_channel_gv100.c:208]` RM shifts the *resolved physical* USERD
+        // address `>> 9` into the runlist entry and validates nothing. A misaligned offset is
+        // therefore **silently truncated** to a different 512-byte slot: hardware writes
+        // `GP_GET` to an address nobody reads, and the symptom — *"the cursor never moved"* —
+        // is character-for-character the wall this rung exists to remove. ⇒ A wrong value here
+        // would be diagnosed as the bug we are hunting, which is why it is refused by a name
+        // that is TRUE of it rather than folded into a generic encode error.
+        //
+        // ⚠ Deliberately **after** the match and over all three arms, not inside the `Ours`
+        // arm where the constant is: on the `HandedIn` arm the offset is the **guest's**, and
+        // guest-supplied is exactly the input that must not be trusted to be aligned.
+        // ⊘ **And the unwind list is computed from the OWNER, not from `userd`.** On the
+        // `InRing` arm `userd` IS `ring_obj`; `&[ours, &[userd]].concat()` would hand the same
+        // handle to `free_one` twice on the way out of this very check — the double free this
+        // rung split `UserdOwner` to make unrepresentable, reintroduced by the error path that
+        // nobody runs. It is spelled once, here, and reused below.
+        let owned_userd: &[u32] = match userd_owner {
+            UserdOwner::Ours => &[userd],
+            UserdOwner::HandedIn | UserdOwner::InRing => &[],
+        };
+        if !userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+            unwind(self, &[ours, owned_userd].concat());
+            return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+        }
 
         // The ring must be resolvable by hardware before a channel may name it.
         //
@@ -4931,7 +5045,7 @@ impl HostRmBackend {
                 ) {
                     Ok(va) => va,
                     Err(e) => {
-                        unwind(self, &[ours, &[userd]].concat());
+                        unwind(self, &[ours, owned_userd].concat());
                         return Err(e);
                     }
                 };
@@ -4950,7 +5064,7 @@ impl HostRmBackend {
                     && va != want.0
                 {
                     let _ = self.conn.raw_unmap_dma(range, va);
-                    unwind(self, &[ours, &[userd]].concat());
+                    unwind(self, &[ours, owned_userd].concat());
                     return Err(RmError::PlacementRefused {
                         want: want.0,
                         got: va,
@@ -4999,7 +5113,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut tsg_params);
         if encoded.is_err() {
-            unwind(self, &[ours, &[userd]].concat());
+            unwind(self, &[ours, owned_userd].concat());
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
@@ -5012,7 +5126,7 @@ impl HostRmBackend {
                 h
             }
             Err(e) => {
-                unwind(self, &[ours, &[userd]].concat());
+                unwind(self, &[ours, owned_userd].concat());
                 return Err(e);
             }
         };
@@ -5060,7 +5174,7 @@ impl HostRmBackend {
         }
         .encode_into(&mut chan_params);
         if encoded.is_err() {
-            unwind(self, &[ours, &[userd, tsg]].concat());
+            unwind(self, &[ours, owned_userd, &[tsg]].concat());
             return Err(RmError::Other(NOT_ON_THIS_RUNG));
         }
         let want = self.conn.mint();
@@ -5075,7 +5189,7 @@ impl HostRmBackend {
                 h
             }
             Err(e) => {
-                unwind(self, &[ours, &[userd, tsg]].concat());
+                unwind(self, &[ours, owned_userd, &[tsg]].concat());
                 return Err(e);
             }
         };
@@ -5084,7 +5198,7 @@ impl HostRmBackend {
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
         if let Err(e) = self.conn.raw_control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
-            unwind(self, &[ours, &[userd, tsg, chan]].concat());
+            unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
             return Err(e);
         }
 
@@ -5094,7 +5208,7 @@ impl HostRmBackend {
             NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
             &mut token,
         ) {
-            unwind(self, &[ours, &[userd, tsg, chan]].concat());
+            unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
             return Err(e);
         }
         let token = u32::from_le_bytes(token);
@@ -5147,6 +5261,23 @@ impl HostRmBackend {
                 CachePolicy::WriteCombining,
             )),
             UserdOwner::HandedIn => None,
+            // ★★★★★ **w287 — MAP NOTHING, because the ring's map already covers these bytes.**
+            // ⊘ `None` here does NOT mean "refused" the way the `HandedIn` arm's does. The two
+            // are distinguished by [`ChannelRings::userd_in_ring`], which is `Some(offset)`
+            // only on this arm — without it the accessors would answer `USERD_NOT_OURS` for a
+            // USERD that is entirely ours and entirely readable, which is a refusal whose name
+            // is false of its cause (the shape `PUSHBUFFER_SLOT_BYTES` was just paid for).
+            //
+            // ⚠ Mapping the same object a second time would also have worked and is NOT what
+            // this does: one mapping means one set of bytes, so a reader of the ring and a
+            // reader of the cursor cannot disagree about what is in the object.
+            UserdOwner::InRing => None,
+        };
+        // Derived from the OWNER, so the two `userd: None` states stay distinguishable. See
+        // [`ChannelRings::userd_in_ring`].
+        let userd_in_ring = match userd_owner {
+            UserdOwner::InRing => Some(userd_offset),
+            UserdOwner::Ours | UserdOwner::HandedIn => None,
         };
         let rings = match (ring_view, userd_view) {
             (Some(Ok((ring_node, ring_map))), Some(Ok((userd_node, userd_map)))) => ChannelRings {
@@ -5154,24 +5285,28 @@ impl HostRmBackend {
                 ring: Some(ring_map),
                 _userd_node: Some(userd_node),
                 userd: Some(userd_map),
+                userd_in_ring,
             },
             (None, Some(Ok((userd_node, userd_map)))) => ChannelRings {
                 _ring_node: None,
                 ring: None,
                 _userd_node: Some(userd_node),
                 userd: Some(userd_map),
+                userd_in_ring,
             },
             (Some(Ok((ring_node, ring_map))), None) => ChannelRings {
                 _ring_node: Some(ring_node),
                 ring: Some(ring_map),
                 _userd_node: None,
                 userd: None,
+                userd_in_ring,
             },
             (None, None) => ChannelRings {
                 _ring_node: None,
                 ring: None,
                 _userd_node: None,
                 userd: None,
+                userd_in_ring,
             },
             (a, b) => {
                 let a = a.and_then(Result::err);
@@ -5180,7 +5315,7 @@ impl HostRmBackend {
                 // torn down here rather than handed back as a channel that silently is not
                 // one. The first error is the one reported.
                 let e = a.or(b).unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
-                unwind(self, &[ours, &[userd, tsg, chan]].concat());
+                unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
                 return Err(e);
             }
         };
@@ -5221,12 +5356,21 @@ impl HostRmBackend {
                 // this cannot answer. ⊘ It refuses by NAME rather than returning `(0, 0)`,
                 // which is what a channel that has never run also looks like — the exact
                 // ambiguity `USERD_NOT_OURS` exists to remove.
-                let userd = r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?;
+                // ★★★★★ **w287 — the cursor may live inside the ring's own map.** Resolve to
+                // `(region, base)` FIRST, then read both words at `base + offset`, so the two
+                // layouts differ in one place instead of in every accessor.
+                let (userd, base) = match r.userd_in_ring {
+                    Some(off) => (
+                        r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?,
+                        off,
+                    ),
+                    None => (r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, 0),
+                };
                 let get = userd
-                    .load_u32(HostOffset::new(USERD_GP_GET))
+                    .load_u32(HostOffset::new(base + USERD_GP_GET))
                     .map_err(|e| region_error(&e))?;
                 let put = userd
-                    .load_u32(HostOffset::new(USERD_GP_PUT))
+                    .load_u32(HostOffset::new(base + USERD_GP_PUT))
                     .map_err(|e| region_error(&e))?;
                 Ok((get, put))
             })
@@ -5666,10 +5810,20 @@ impl HostRmBackend {
         let raw = self.narrow(chan)?;
         self.conn
             .with_rings(raw, |r| {
-                r.userd
-                    .as_ref()
-                    .ok_or(RmError::Other(USERD_NOT_OURS))?
-                    .store_u32(HostOffset::new(offset), value)
+                // ★★★★★ **w287 — same resolution as [`Self::userd_cursors`].** ⊘ The
+                // [`UserdOwner::HandedIn`] refusal above is UNCHANGED and is still the whole of
+                // leg B: when the USERD is the guest's, this call must fail by name, because
+                // the party that advances that cursor is the guest and a second writer is two
+                // parties disagreeing about one index.
+                let (userd, base) = match r.userd_in_ring {
+                    Some(off) => (
+                        r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?,
+                        off,
+                    ),
+                    None => (r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, 0),
+                };
+                userd
+                    .store_u32(HostOffset::new(base + offset), value)
                     .map_err(|e| region_error(&e))
             })
             .unwrap_or(Err(RmError::BadHandle(chan)))
@@ -7648,6 +7802,38 @@ mod tests {
         assert!(
             GPFIFO_ENTRIES.is_power_of_two(),
             "RM requires a power of two"
+        );
+    }
+
+    /// ★★★★★ **w287 — USERD now shares the ring object, so the geometry has a fourth
+    /// tenant.** Every one of these was true by inspection when it was written; the test
+    /// exists because *"0x3000 is obviously free"* is exactly the sentence that stops being
+    /// true when someone grows the pushbuffer area.
+    #[test]
+    fn userd_fits_inside_the_ring_object_without_touching_the_other_three_regions() {
+        // The 512-byte slot RM's `>> 9` addresses, and the alignment RM does NOT validate.
+        assert!(
+            USERD_OFFSET_IN_RING.is_multiple_of(USERD_ALIGNMENT),
+            "RM truncates a misaligned userdOffset silently (kernel_channel_gv100.c:208)"
+        );
+        assert!(USERD_OFFSET_IN_RING + USERD_ALIGNMENT <= RING_OBJECT_BYTES);
+        // ⊘ Above the semaphore, not merely different from it.
+        assert!(
+            USERD_OFFSET_IN_RING >= SEMAPHORE_OFFSET + 8,
+            "USERD must not overlap the semaphore the copy releases into"
+        );
+        // And clear of the pushbuffer slots and the GPFIFO that indexes them.
+        assert!(PUSHBUFFER_OFFSET + PUSHBUFFER_SLOTS * PUSHBUFFER_SLOT_BYTES <= GPFIFO_OFFSET);
+        assert!(
+            GPFIFO_OFFSET + u64::from(GPFIFO_ENTRIES) * 8 <= USERD_OFFSET_IN_RING,
+            "the GPFIFO must end before USERD begins"
+        );
+        // ★ The containment test on the consuming side — `kayfabe-fwd`'s
+        // `adopted_guest_userd`, `offset + 512 > len` — must ACCEPT this layout. This is the
+        // whole point of the rung, asserted as arithmetic rather than hoped for in a boot.
+        assert!(
+            USERD_OFFSET_IN_RING + 512 <= RING_OBJECT_BYTES,
+            "a USERD our own client declares must pass adopted_guest_userd's containment test"
         );
     }
 
