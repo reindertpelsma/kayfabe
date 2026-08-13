@@ -112,6 +112,19 @@ if offset.checked_add(USERD_SLOT_BYTES)? > len {         // 0x10000 + 0x200 > 0x
 ⇒ **The USERD misses the ring's leaf by exactly one byte of extent.** It is the *first byte
 past the end*. The test is correct; the USERD simply lives in a different object.
 
+★ **Reproduced on identity, not on one sample.** All three `w283` client boots that carry a
+descent line print the *same two numbers*, byte for byte:
+
+```text
+w283_client   userd=h0xcafe000b/off0x0/phys=fb:0x50000/0x200   LEAF@0x120020000->0x40000/Vidmem/sz0x10000
+w283c_client  userd=h0xcafe000b/off0x0/phys=fb:0x50000/0x200   LEAF@0x120020000->0x40000/Vidmem/sz0x10000
+w283d_client  userd=h0xcafe000b/off0x0/phys=fb:0x50000/0x200   LEAF@0x120020000->0x40000/Vidmem/sz0x10000
+```
+
+(`w283b_client` carries none — its run died at the 64-byte slot overflow, before the descent.)
+⊘ This is deterministic, which per `deterministic_failure_indicts_the_test` is itself the
+signal that the cause is a fixed layout and not a race.
+
 ★★★ **And that is a property of OUR OWN INSTRUMENT, not of the architecture.** The raw CE
 client is `kayfabe-rm-ladder --ce-client`, and its channel is built by
 `HostRmBackend::alloc_channel_in` (`rm.rs:4876`), which allocates USERD as a **second,
@@ -238,3 +251,21 @@ suppressing it first strictly regresses criteria 2 and 3 with nothing to replace
 
 ⚠ This is the fourth rung in a row redirected by a doc comment that stopped being true and did
 not say so. Three of the four above are **in the file the reader is told to read first**.
+
+---
+
+## 6. Provenance of every number above
+
+| claim | artefact opened |
+|---|---|
+| the CE birth over the guest's ring, the CE doorbell store | `traces/boots/w283/run_w283d_client_qemu.log.gz` |
+| USERD `fb:0x50000/0x200` and leaf `0x40000/sz0x10000` | the same, plus `run_w283_client_*` and `run_w283c_client_*` — three boots, identical |
+| 88 `engine=Ce adopt=GUEST-RING` | cross-tab over `traces/boots/w263..w269/*.log` |
+| leg B firing on the driver's channels | `traces/boots/w267/run_w267_on_qemu.log` |
+| every code line cited | the tree at `b3dc717` |
+
+⊘ **No boot was run for this rung, and none is claimed.** The finding is a re-reading of
+committed artefacts plus the code at HEAD; it is recorded as such rather than dressed as a
+measurement. `cargo check -p kayfabe-isolate-host -p kayfabe-qemu-raw
+--features kayfabe-qemu-raw/host-isolates` on `vh` at `b3dc717` returns **0** — the folded
+corrections are doc/string changes and the tree still builds.
