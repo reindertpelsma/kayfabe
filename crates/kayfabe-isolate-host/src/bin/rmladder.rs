@@ -2580,7 +2580,8 @@ fn ce_client(
     // NEVER compares the cursors — so `w283c` printed a ★ line reading `GP_GET 0 caught
     // GP_PUT 1` and returned `R33_RC=0`. The banner three lines up says the bar is FOUR
     // facts; the verdict implemented three.
-    let copied = match rm.prove_ce_copy(vas, PATTERN) {
+    let ce1 = rm.prove_ce_copy(vas, PATTERN);
+    let copied = match &ce1 {
         Ok(e) if e.met_the_whole_bar() => {
             println!(
                 "★     R33 arm 1 COPY      = {} bytes moved: dst[0] {:#010x} -> {:#010x}, \
@@ -2595,7 +2596,7 @@ fn ce_client(
                 e.submit.semaphore,
                 e.payload,
                 e.submit.gp_get,
-                e.submit.gp_put
+                e.submit.gp_put,
             );
             true
         }
@@ -2647,6 +2648,23 @@ fn ce_client(
             false
         }
     };
+
+    // ★★★★★ **THE JOIN LINE — printed on EVERY arm, pass or fail.**
+    //
+    // ⊘ `w288nc1` carried a host `Xid 31 … CE0 HUBCLIENT_CE1 faulted @ 0x1_20000000 …
+    // FAULT_PTE ACCESS_TYPE_VIRT_READ` in the same boot as this client, and the `RESULT` could
+    // only record it as unattributable — because the client never printed an address for
+    // anything arm 1 touched. One greppable line with both operands fixes that permanently and
+    // costs a run nothing. ⚠ Deliberately OUTSIDE the pass/fail match: a diagnostic that
+    // prints only on the arm you expected is absent exactly when it matters.
+    if let Ok(e) = &ce1 {
+        println!(
+            "info  R33 arm 1 OPERANDS  = src {:#018x} dst {:#018x} ({} bytes each, \
+             device-local, in the operand space). ⇒ A HOST `Xid` naming either of these \
+             addresses IS THIS SUBMISSION; one naming neither belongs to a different channel",
+            e.src_va, e.dst_va, e.bytes
+        );
+    }
 
     // --- the address spaces, NAMED, before any probe is read ----------------------------
     census::phase("R33 arm2/3 va-probe");
@@ -3141,7 +3159,7 @@ fn nv_esc_name(magic: u8, nr: u8) -> &'static str {
 /// # ★★ Two predictions, made from SOURCE before the run, so the result can refute them
 ///
 /// - **Arm B** (`NV_ESC_RM_MAP_MEMORY` on the guest-backed ring) — expected **refused**.
-///   Expected line: `status_check(out.status)` inside `RmConnection::map_cpu_windowed`,
+///   Expected line: `status_check(out.status)` inside `RmConnection::map_cpu_windowed_on`,
 ///   i.e. the driver answering the escape.
 /// - **Arm C** (the same channel alloc with `gpFifoOffset` at an address nothing was ever
 ///   mapped at) — ⚠ expected **ACCEPTED**, and that is a refutation of the brief this rung

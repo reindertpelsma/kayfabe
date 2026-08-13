@@ -380,7 +380,7 @@ pub struct RmConnection {
     /// table, and the handle table must not be held across it. Two locks, each held for one
     /// kind of thing, is the R3 lock-rank discipline rather than a convenience.
     rings: Mutex<BTreeMap<u32, ChannelRings>>,
-    /// ★★★ How many times [`RmConnection::map_cpu_windowed`] has been entered — the
+    /// ★★★ How many times [`RmConnection::map_cpu_windowed_on`] has been entered — the
     /// instrument for [`HostRmBackend::cpu_map_calls`].
     ///
     /// ⊘ Counted at the **entry** of the one function that issues `NV_ESC_RM_MAP_MEMORY`,
@@ -1710,17 +1710,26 @@ impl RmConnection {
     /// a free-running counter would read one value forever, which is this task's failure
     /// arriving through the cache instead of through a trap.
     ///
-    /// See [`Self::map_cpu_windowed`] for why the two lengths are separate.
+    /// See [`Self::map_cpu_windowed_on`] for why the two lengths are separate.
+    ///
+    /// ⊘ [`MapNode::Gpu`]: this maps a BAR0 register range, which is by definition inside
+    /// the device's own apertures.
     ///
     /// # Errors
-    /// As [`Self::map_cpu_windowed`].
+    /// As [`Self::map_cpu_windowed_on`].
     pub fn map_object_uncached(
         &self,
         object: u32,
         register_len: u64,
         mmap_len: u64,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
-        self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::WriteBack)
+        self.map_cpu_windowed_on(
+            MapNode::Gpu,
+            object,
+            register_len,
+            mmap_len,
+            CachePolicy::WriteBack,
+        )
     }
 
     /// Read the PTIMER pair out of a region produced by [`Self::alloc_timer_object`] +
@@ -2177,7 +2186,13 @@ impl RmConnection {
     ///    node's state for an address inside a BAR and the control node's for system memory
     ///    (`ogkm-580: .../osapi.c:2270-2279`); `nv_get_file_private` then refuses a
     ///    descriptor of the other kind (`ogkm-580: kernel-open/nvidia/nv-usermap.c:45-47`).
-    ///    Everything mapped here is device-local, so it is always the per-GPU node.
+    ///    ⊘⊘ **THIS LINE USED TO READ *"everything mapped here is device-local, so it is
+    ///    always the per-GPU node"*, AND THAT SENTENCE WAS THE BUG.** It was true when it
+    ///    was written and stopped being true the moment `alloc_notifier_mem` allocated an
+    ///    `NV01_MEMORY_SYSTEM` object; nothing in the type system noticed, because the node
+    ///    was hardcoded three lines into the body. The kind is a **parameter** now — see
+    ///    [`MapNode`] — precisely so a sysmem caller cannot inherit a device-local
+    ///    assumption by default.
     /// 3. **A fresh node per mapping.** The context is one-shot: a second registration on a
     ///    descriptor that already has one is `NV_ERR_STATE_IN_USE`
     ///    (`ogkm-580: kernel-open/nvidia/nv-usermap.c:53-57`). Reusing `self.gpu` would work
@@ -2196,7 +2211,22 @@ impl RmConnection {
         len: u64,
         cache: CachePolicy,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
-        self.map_cpu_windowed(h_memory, len, len, cache)
+        self.map_cpu_windowed_on(MapNode::Gpu, h_memory, len, len, cache)
+    }
+
+    /// [`Self::map_cpu`] for an object whose backing decides the node — see [`MapNode`].
+    ///
+    /// ⊘ A separate entry point rather than a default argument, because the whole defect
+    /// this fixes was a *default* that was correct for every caller that existed and wrong
+    /// for the first one that did not.
+    fn map_cpu_on(
+        &self,
+        node: MapNode,
+        h_memory: u32,
+        len: u64,
+        cache: CachePolicy,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu_windowed_on(node, h_memory, len, len, cache)
     }
 
     /// [`Self::map_cpu`] with the **ioctl length and the `mmap` length given separately**.
@@ -2221,8 +2251,9 @@ impl RmConnection {
     /// ⚠ Every pre-existing caller passes the same value twice and is unchanged by this:
     /// their objects are already page multiples. This exists for the one object whose size
     /// is not.
-    fn map_cpu_windowed(
+    fn map_cpu_windowed_on(
         &self,
+        which: MapNode,
         h_memory: u32,
         register_len: u64,
         mmap_len: u64,
@@ -2233,9 +2264,21 @@ impl RmConnection {
         self.cpu_maps
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let len = register_len;
-        let name = CString::new(format!("nvidia{}", self.gpu_index))
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        let node = CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?;
+        // ⊘ A FRESH node either way — see fact 3 above. `self.ctl` is the connection's
+        // long-lived control descriptor and already carries RM state; registering a
+        // one-shot mmap context on it would work once and then answer
+        // `NV_ERR_STATE_IN_USE`, so the `Ctl` arm opens its own `nvidiactl` rather than
+        // borrowing that one.
+        let node = match which {
+            MapNode::Gpu => {
+                let name = CString::new(format!("nvidia{}", self.gpu_index))
+                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?
+            }
+            MapNode::Ctl => {
+                CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?
+            }
+        };
 
         let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
         Nvos33ParametersWithFd {
@@ -3089,15 +3132,77 @@ pub struct GuestReachProbe {
 ///   A guest-side run on the vidmem arm therefore tests nothing, silently.
 /// - [`Self::Vidmem`] (`NV01_MEMORY_LOCAL_USER`, [`RmConnection::alloc_device_local`]) is the
 ///   arm the w287 known-positive was measured on, natively, on a real GA106.
-///   ⚠ `[measured 2026-08-13, vh2, rev f7a74bc]`, recorded on `alloc_notifier_mem` itself:
-///   **on the host**, a `NV01_MEMORY_SYSTEM` notifier was refused in both flag settings that
-///   were tried — `NV_ERR_INVALID_ARGUMENT` at the CPU map with `NVOS02_FLAGS_MAPPING_NO_MAP`,
-///   and `EINVAL` at the allocation without it. So the sysmem arm may not survive natively.
+///   ⊘⊘ **CORRECTED 2026-08-13 (w289) — THE SENTENCE THAT STOOD HERE, *"the sysmem arm may
+///   not survive natively"*, IS WITHDRAWN.** `[measured 2026-08-13, vh2, rev f7a74bc]`
+///   recorded that a `NV01_MEMORY_SYSTEM` notifier was refused **in both flag settings that
+///   were tried** — `NV_ERR_INVALID_ARGUMENT` at the CPU map with
+///   `NVOS02_FLAGS_MAPPING_NO_MAP`, and `EINVAL` at the allocation without it. Both readings
+///   are correct and **both refusals are ours**: the allocation needed `_NO_MAP` (it was
+///   asking RM to build an mmap context around `fd: -1`) and the map needed the **control**
+///   node ([`MapNode`]). Toggling one flag swapped which end refused, so the sweep could
+///   never see the second defect. Full derivation, with the driver's own line numbers, on
+///   [`HostRmBackend::alloc_notifier_mem`].
 ///
 /// ⇒ **Two arms, both named, neither a fallback.** There is deliberately no "try sysmem, fall
 /// back to vidmem": a run whose notifier aperture depended on what RM happened to accept
 /// would be a run that cannot say which experiment it performed
 /// (`a_fallback_keyed_on_our_own_ignorance`). The caller states it and the report prints it.
+/// ★★★★★ **WHICH `/dev/nvidia*` NODE A CPU MAPPING IS REGISTERED AGAINST — and it is the
+/// BACKING that decides, not the caller's taste.**
+///
+/// `NV_ESC_RM_MAP_MEMORY` carries a **descriptor number** as well as parameters, and RM
+/// stores the resulting one-shot mmap context on *that file*. Which file is legal is fixed
+/// by the driver, in two steps:
+///
+/// 1. `RmCreateMmapContextLocked` picks the `nv_state_t` the context belongs to: the
+///    per-GPU state if the address lies inside that GPU's BARs, and otherwise
+///    **`nv_get_ctl_state()`** — *"validate this as a system memory mapping and associate
+///    it with the control device"* (`ogkm-580:
+///    src/nvidia/arch/nvalloc/unix/src/osapi.c:2266-2289`).
+/// 2. `nv_add_mapping_context_to_file` then calls
+///    `nv_get_file_private(fd, NV_IS_CTL_DEVICE(nv), &priv)`
+///    (`ogkm-580: kernel-open/nvidia/nv-usermap.c:45`), and that helper **refuses a
+///    descriptor of the wrong minor**: with `ctl` set it requires
+///    `NV_MINOR_DEVICE_NUMBER_CONTROL_DEVICE` and nothing else
+///    (`ogkm-580: kernel-open/nvidia/nv.c:4102-4106`).
+///
+/// ⇒ A system-memory object mapped through a `/dev/nvidia<N>` descriptor is refused with
+/// `NV_ERR_INVALID_ARGUMENT`, **at the map, after the allocation already succeeded**.
+///
+/// ## ⊘⊘ THIS IS THE SECOND HALF OF THE `w288nc1` FAILURE, AND IT WAS ALREADY WRITTEN DOWN
+///
+/// [`NotifierAperture`]'s own docs recorded `[measured 2026-08-13, vh2, rev f7a74bc]` that a
+/// sysmem notifier was refused *"in both flag settings that were tried —
+/// `NV_ERR_INVALID_ARGUMENT` at the CPU map with `NVOS02_FLAGS_MAPPING_NO_MAP`, and `EINVAL`
+/// at the allocation without it"*, and concluded **"the sysmem arm may not survive
+/// natively"**. Both observations were right and the conclusion was wrong: they are two
+/// different defects of ours, one at each end, and the second is this one. ⚠ A measurement
+/// that tries two settings of the flag a hypothesis names can only ever indict the flag —
+/// it cannot see that the *other* call in the pair is also wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapNode {
+    /// `/dev/nvidia<N>` — for anything inside the GPU's own BARs: device-local memory,
+    /// register windows, USERD, a framebuffer object.
+    Gpu,
+    /// `/dev/nvidiactl` — for **system memory**, which RM associates with the control
+    /// device regardless of which device allocated it.
+    Ctl,
+}
+
+impl MapNode {
+    /// The node a [`NotifierAperture`]'s backing must be mapped through.
+    ///
+    /// ★ Derived, never chosen: the whole class of bug above is a call site picking a node
+    /// independently of the allocation it is mapping.
+    #[must_use]
+    pub const fn for_notifier(aperture: NotifierAperture) -> Self {
+        match aperture {
+            NotifierAperture::Sysmem => MapNode::Ctl,
+            NotifierAperture::Vidmem => MapNode::Gpu,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotifierAperture {
     /// `NV01_MEMORY_SYSTEM` — the faithful shape, and the only one a GUEST-side run can have
@@ -3162,6 +3267,19 @@ pub struct CeEvidence {
     pub submit: SubmitOutcome,
     /// The payload the engine was told to release.
     pub payload: u32,
+    /// ★★★★★ **THE SOURCE OPERAND'S GPU VA — the field that makes a host `Xid` JOINABLE.**
+    ///
+    /// ⊘⊘ Added 2026-08-13 (w289) because its absence cost an attribution. `w288nc1`'s guest
+    /// run printed *"the entry WAS fetched and the methods did nothing"* and the host `dmesg`
+    /// for the same boot carried one `Xid 31 … CE0 HUBCLIENT_CE1 faulted @ 0x1_20000000 …
+    /// FAULT_PTE ACCESS_TYPE_VIRT_READ`. Those are the same event — but nothing in the
+    /// client's output named an address, so the `RESULT` could only record the `Xid` as
+    /// unattributable. **A diagnostic that prints every field except the one the other side
+    /// prints cannot be joined to it**, and a join is the whole of criterion 1.
+    pub src_va: u64,
+    /// The destination operand's GPU VA. Same reason as [`Self::src_va`]; printed even when
+    /// the fault is on the source, because *which of the two* is itself the finding.
+    pub dst_va: u64,
 }
 
 /// The first word of a whole-buffer compare that did not match.
@@ -3599,7 +3717,7 @@ pub struct GuestRingEvidence {
     pub channel: Result<u64, RmError>,
     /// The layout the connection recorded for the channel it built, if it built one.
     pub declared: Option<(u64, u32)>,
-    /// [`RmConnection::map_cpu_windowed`] entries before and after the channel alloc.
+    /// [`RmConnection::map_cpu_windowed_on`] entries before and after the channel alloc.
     /// ★ The measurement behind *"no CPU map is attempted on a guest-backed ring"*: the
     /// difference must be exactly **1** — USERD, which is ours.
     pub cpu_maps: (u64, u64),
@@ -5198,6 +5316,7 @@ impl HostRmBackend {
     pub fn read_error_notifier(
         &mut self,
         notifier: HostHandle,
+        aperture: NotifierAperture,
     ) -> Result<ErrorNotifierRead, RmError> {
         use kayfabe_abi::notifier::{
             NOTIFICATION_SIZE, NOTIFICATION_STATUS_OFF, NOTIFICATION_TYPE_ERROR_INDEX,
@@ -5207,9 +5326,12 @@ impl HostRmBackend {
         // ⊘ `UnCached`, not write-combining. The writer is RM (or, on a GSP part, the GSP)
         // and the reader is this CPU: a WC mapping is for stores we then fence, and reading
         // a producer's bytes through one is how a stale line reads as "quiet".
-        let (node, view) = self
-            .conn
-            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::WriteBack)?;
+        let (node, view) = self.conn.map_cpu_on(
+            MapNode::for_notifier(aperture),
+            raw,
+            NOTIFIER_BYTES,
+            CachePolicy::WriteBack,
+        )?;
         let lo = view
             .load_u32(HostOffset::new(base))
             .map_err(|e| region_error(&e))?;
@@ -5253,36 +5375,47 @@ impl HostRmBackend {
     /// `[w287 census, 63/63]` aperture of every real `errorNotifierMem` is SYSMEM. Recorded
     /// here rather than left for a reader to notice.
     ///
-    /// **Why the sysmem route is not simply better:** the two flag settings measured are
-    /// *both* unusable, in opposite ways.
-    /// - `[measured 2026-08-13, vh2, rev f7a74bc]` with [`NVOS02_FLAGS_MAPPING_NO_MAP`] (what
-    ///   [`RmBackend::alloc_sysmem`] sets) the allocation succeeds and the later CPU map is
-    ///   refused `NV_ERR_INVALID_ARGUMENT` — `Other(31)`, **with the ioctl census reading
-    ///   `failed=0`**, because RM reports its status *inside* the parameter struct while
-    ///   `ioctl(2)` returns 0. ⊘ That flag's own doc says it *"stops the frontend building an
-    ///   `mmap` context around the descriptor"*: correct for the isolate, which maps GPU-side
-    ///   only, and fatal for a notifier whose entire purpose is to be read by this CPU.
-    /// - `[measured 2026-08-13, vh2]` **dropping** the flag moves the refusal EARLIER, onto
-    ///   the allocation itself: `NV_ESC_RM_ALLOC_MEMORY` (nr 39) answers **`errno 22`
-    ///   (`EINVAL`)** in the frontend — `Other(0x80000016)`, and this time the census DOES
-    ///   count it (`failed=1`). A mappable sysmem allocation needs the `fd` half of
-    ///   [`Nvos02ParametersWithFd`] filled in, which is a different rung.
+    /// # ★★★★★ CORRECTED 2026-08-13 (w289) — **BOTH REFUSALS BELOW WERE OURS, AND NEITHER
+    /// # INDICTS THE SYSMEM ARM.** Read this before the two bullets it qualifies.
     ///
-    /// ★ Note the pair: the SAME defect class reported once invisibly to the census and once
-    /// visibly, purely because of which layer refused. `failed=0` is not `nothing refused`.
+    /// The text that stood here concluded *"the two flag settings measured are **both**
+    /// unusable"*, and [`NotifierAperture`] carried that forward as *"the sysmem arm may not
+    /// survive natively"*. **Both observations were right; the conclusion was wrong.** They
+    /// are two independent defects of ours, one at each end of the same object, and toggling
+    /// the one flag merely swapped which end refused:
     ///
-    /// ★★★★★ **The error-notifier page: sysmem, and CPU-MAPPABLE — which
-    /// [`RmBackend::alloc_sysmem`] deliberately is not.**
+    /// - **Without `_NO_MAP`** — the ALLOCATION is refused, `errno 22`. Real, and the cause is
+    ///   not the aperture: for `NV01_MEMORY_SYSTEM` with `_ALLOC != _NONE` and
+    ///   `_MAPPING != _NO_MAP`, `RmIoctl` builds an mmap context there and then, around
+    ///   **`pApi->fd`** (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:341-359`) — and
+    ///   we pass `fd: -1`. ⇒ the request asked RM to map onto a descriptor we never gave it.
+    /// - **With `_NO_MAP`** — the allocation succeeds and the CPU MAP is refused,
+    ///   `NV_ERR_INVALID_ARGUMENT`. Also real, also not the aperture: a system-memory mapping
+    ///   is associated with the **control device** (`ogkm-580: .../osapi.c:2266-2289`), so
+    ///   `nv_get_file_private(fd, ctl = NV_TRUE)` requires a `/dev/nvidiactl` descriptor
+    ///   (`ogkm-580: kernel-open/nvidia/nv.c:4102-4106`) and [`RmConnection::map_cpu`] was
+    ///   handing it `/dev/nvidia<N>`. ⇒ see [`MapNode`].
     ///
-    /// ⊘⊘ **This is not `alloc_sysmem` with a different comment, and the difference cost a
-    /// run.** `[measured 2026-08-13, vh2, rev f7a74bc]` the first draft called `alloc_sysmem`
-    /// and the probe died with `Other(31)` — `NV_ERR_INVALID_ARGUMENT`, **with the ioctl
-    /// census reading `failed=0`**, because RM reports its status *inside* the parameter
-    /// struct while `ioctl(2)` returns 0. `alloc_sysmem` sets
-    /// [`NVOS02_FLAGS_MAPPING_NO_MAP`], whose own doc says it *"stops the frontend building
-    /// an `mmap` context around the descriptor"* — so the object is correct for the isolate,
-    /// which maps GPU-side only, and **unusable for a notifier, whose entire purpose is to be
-    /// read by this CPU**.
+    /// ★★★ **THE INSTRUMENT LESSON, and it is the expensive half.** The experiment varied
+    /// **the flag the hypothesis named**, and nothing else. Two settings, two refusals, and a
+    /// verdict about the *aperture* — which was never the variable. A sweep over one suspect
+    /// can only indict that suspect or exonerate it; it cannot see that the **other** call in
+    /// the pair is independently wrong, so it reports *"neither setting works"* where the true
+    /// state was *"I have not found the variable yet"*.
+    ///
+    /// ⊘ Kept because the pair is instructive: the `_NO_MAP` refusal arrived with the ioctl
+    /// census reading **`failed=0`** (RM reports status *inside* the parameter struct while
+    /// `ioctl(2)` returns 0) and the no-flag refusal arrived as **`failed=1`**. One defect
+    /// class, once invisible to the census and once visible, purely by which layer refused.
+    ///
+    /// ⊘ And the claim that `_NO_MAP` is *"unusable for a notifier, whose entire purpose is
+    /// to be read by this CPU"* is **false**: the flag suppresses only the *implicit,
+    /// allocation-time* mapping context. An explicit `NV_ESC_RM_MAP_MEMORY` afterwards builds
+    /// its own (`ogkm-580: .../escape.c:527-534`), which is exactly what
+    /// [`Self::zero_notifier`] and [`Self::read_error_notifier`] issue.
+    ///
+    /// ★★★★★ **The error-notifier page: `NV01_MEMORY_SYSTEM`, `_NO_MAP`, and CPU-mapped
+    /// through the CONTROL node.**
     ///
     /// ★ `COHERENCY_CACHED` because the producer is the GPU/GSP over snooped PCIe and the
     /// consumer is this core; and `NV01_MEMORY_SYSTEM` because the `[w287 census, 63/63]`
@@ -5303,11 +5436,32 @@ impl HostRmBackend {
             h_object_parent: self.conn.device,
             h_object_new: want,
             h_class: NV01_MEMORY_SYSTEM,
-            // ⊘ The MAPPING field is left at its zero value on purpose — `_DEFAULT`, not an
-            // omission, exactly as `_LOCATION_PCI` is zero. See `NVOS02_FLAGS_LOCATION_PCI`.
+            // ★★★★★ **`_MAPPING_NO_MAP`, AND ITS ABSENCE IS EXACTLY WHAT `w288nc1`
+            // MEASURED.** The comment that stood here said the `_MAPPING` field was *"left
+            // at its zero value on purpose — `_DEFAULT`, not an omission"*. It WAS an
+            // omission, and it is the whole of `Other(0x8000_0016)`:
+            //
+            //   `RmIoctl`'s `NV_ESC_RM_ALLOC_MEMORY` arm, for `hClass == NV01_MEMORY_SYSTEM`
+            //   with `_ALLOC != _NONE` **and `_MAPPING != _NO_MAP`**, immediately calls
+            //   `rm_create_mmap_context(..., pApi->fd)`
+            //   (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:341-359`)
+            //     -> `nv_add_mapping_context_to_file(..., fd)`
+            //     -> `nv_get_file_private(fd, ...)` returns NULL for our `fd: -1` below
+            //        (`ogkm-580: kernel-open/nvidia/nv-usermap.c:44-46`)
+            //     -> `NV_ERR_INVALID_ARGUMENT` -> the frontend's `-EINVAL` -> errno 22
+            //     -> `ioctl_error` tags it `Other(0x8000_0000 | 22)` = `2147483670`.
+            //
+            // ⇒ The request asked RM to build a CPU mapping context **on a descriptor we
+            // never supplied**. `_NO_MAP` says the caller will map it later, by name, which
+            // is exactly what `zero_notifier` / `read_error_notifier` do — and it is what
+            // the sibling `alloc_sysmem` has always asked for (see its `flags`).
+            //
+            // ⚠ `fd: -1` below is consistent now rather than merely unread: with `_NO_MAP`
+            // set, nothing in the driver looks at it.
             flags: NVOS02_FLAGS_LOCATION_PCI
                 | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
-                | NVOS02_FLAGS_COHERENCY_CACHED,
+                | NVOS02_FLAGS_COHERENCY_CACHED
+                | NVOS02_FLAGS_MAPPING_NO_MAP,
             p_memory: 0,
             pad1: 0,
             limit: len - 1,
@@ -5375,11 +5529,18 @@ impl HostRmBackend {
     ///
     /// # Errors
     /// [`RmError::BadHandle`], or whatever the CPU mapping refused.
-    fn zero_notifier(&mut self, notifier: HostHandle) -> Result<(), RmError> {
+    fn zero_notifier(
+        &mut self,
+        notifier: HostHandle,
+        aperture: NotifierAperture,
+    ) -> Result<(), RmError> {
         let raw = self.narrow(notifier)?;
-        let (node, view) = self
-            .conn
-            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::WriteBack)?;
+        let (node, view) = self.conn.map_cpu_on(
+            MapNode::for_notifier(aperture),
+            raw,
+            NOTIFIER_BYTES,
+            CachePolicy::WriteBack,
+        )?;
         for off in (0..NOTIFIER_BYTES).step_by(4) {
             view.store_u32(HostOffset::new(off), 0)
                 .map_err(|e| region_error(&e))?;
@@ -6597,7 +6758,7 @@ impl HostRmBackend {
                 return Err(e);
             }
         };
-        if let Err(e) = self.zero_notifier(notifier_h) {
+        if let Err(e) = self.zero_notifier(notifier_h, notifier_aperture) {
             let _ = self.free(notifier_h);
             let _ = self.free(self.stamp(dst));
             let _ = self.free(self.stamp(ctrl_src));
@@ -6698,7 +6859,7 @@ impl HostRmBackend {
                     // ⊘ Read even here. A notifier that fired while the CONTROL was still
                     // failing means the channel died before the probe was ever issued, and
                     // that is a different story than the one this rung set out to tell.
-                    notifier: self.read_error_notifier(notifier_h).ok(),
+                    notifier: self.read_error_notifier(notifier_h, notifier_aperture).ok(),
                     // ⊘ NOT MEASURED on this path — no fault was provoked, so there is no
                     // "after" for an ioctl to be after. `NOT_ON_THIS_RUNG`, by name.
                     post_fault_ioctl: Err(RmError::Other(NOT_ON_THIS_RUNG)),
@@ -6717,7 +6878,7 @@ impl HostRmBackend {
 
             // ★★★ THE NEGATIVE CONTROL — read here, between a submission that WORKED and one
             // that will fault. Nothing between this read and the next one but the fault.
-            let notifier_before = self.read_error_notifier(notifier_h).ok();
+            let notifier_before = self.read_error_notifier(notifier_h, notifier_aperture).ok();
 
             let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
             let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
@@ -6746,7 +6907,7 @@ impl HostRmBackend {
             // ★★★ READ AFTER the probe's wait has already expired, so RM has had the same
             // window to react that the semaphore poll gave the engine. ⊘ A notifier read
             // before the wait would measure our own impatience.
-            let notifier = self.read_error_notifier(notifier_h).ok();
+            let notifier = self.read_error_notifier(notifier_h, notifier_aperture).ok();
             // ★★★★★ **w288 TIER 2 — PLANE D: WHERE.** The notifier says *this channel died,
             // Xid 31, GRAPHICS*; it has no address field. This is the only control that
             // carries one, and it is asked here — **once**, after the wait has expired, on
@@ -7003,6 +7164,8 @@ impl HostRmBackend {
                 bytes: BYTES,
                 submit,
                 payload,
+                src_va,
+                dst_va,
             })
         };
         let out = go();
@@ -7327,7 +7490,7 @@ impl HostRmBackend {
         };
 
         // 5 — arm B, the mapping control. ★ Which line this is expected to execute:
-        // `RmConnection::map_cpu_windowed`'s `status_check(out.status)` — i.e. the driver
+        // `RmConnection::map_cpu_windowed_on`'s `status_check(out.status)` — i.e. the driver
         // answering the escape, not a bounds check of ours. An `Ok` here is dropped
         // immediately and reported as a finding.
         let cpu_map_of_guest_ring =
@@ -8662,6 +8825,8 @@ mod tests {
             bytes: 4096,
             submit: landed,
             payload: 3,
+            src_va: 0x1_2000_0000,
+            dst_va: 0x1_2001_0000,
         };
         assert!(good.copied());
         assert!(
