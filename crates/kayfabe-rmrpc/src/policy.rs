@@ -1788,6 +1788,24 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // the two-half structure of `intr.c:186-280` — the early `return status` at `:225` skips
     // `intrServiceStallList_HAL` at `:278` entirely.
     kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
+    // ★★★★★ **w292 — THE FOUR INPUT-ONLY CONTROLS, ADDED AS A GROUP AND BY OWNER RULING**
+    // (2026-08-14, *"no objection, feel free to do it"*).
+    //
+    // `[measured, traces/nvdiff_w292]` on a real GA106 `cuCtxCreate` dies at
+    // `0x83de0309`, the last control to fail before the `RM_FREE` unwind. All four were
+    // **admitted by `capability.rs` and served by nothing** — the gap this list is the
+    // second half of. Their identities, sizes and authorities live in ONE place,
+    // `kayfabe_abi::submit::INPUT_ONLY_CONTROLS`, so this list cannot drift from the
+    // reason for its own contents.
+    //
+    // ⊘ Named individually here rather than splatted from the table, because
+    // `OBJECT_CONTROLS` is a `const` a test quantifies over and a reader greps: an id that
+    // appears only behind a helper is an id nobody can find. The lockstep between the two
+    // is asserted by `the_w292_input_only_controls_are_claimed_and_decided`.
+    0x2081_0108,
+    0x83de_0309,
+    0xa06c_0103,
+    0xa06c_0105,
 ];
 
 impl ObjectPolicy {
@@ -2031,8 +2049,71 @@ impl ObjectPolicy {
             kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO => {
                 self.respond_get_mmu_fault_info(cmd, &req)
             }
+            // ★★★★★ w292 — the input-only group, dispatched by TABLE LOOKUP rather than by
+            // four arms, so an id can never be claimed above and undecided here.
+            other if kayfabe_abi::submit::input_only_control(other).is_some() => {
+                self.respond_input_only(cmd, &req)
+            }
             _ => None,
         }
+    }
+
+    /// ★★★★★ **w292 — the input-only controls: ACK with the guest's OWN BYTES.**
+    ///
+    /// # Why this is an echo and why that is not a shrug
+    ///
+    /// `[measured, ../nvidia-gpu-passthrough/traces/host_reference_ga106/ctx_r1.jsonl.zst]`
+    /// a **real GA106** leaves the parameter block of all four of these **byte-identical
+    /// across the call** (`ppost == ppre`). They carry no `[OUT]` field. ⇒ Returning the
+    /// guest's own bytes is not *"we did not model the reply"*; it is **the reply real
+    /// hardware gives**, and there is no other body it could have.
+    ///
+    /// ⊘ That is what keeps this clear of the `#203` defect — a control answered `NV_OK`
+    /// with a short or wrong-shaped body, which fails **silently** because `libcuda` reads
+    /// a field we zero-filled. Here there is no field to get wrong.
+    ///
+    /// # ⊘ The size is CHECKED, not trusted
+    ///
+    /// The guest's declared `paramsSize` must equal the size measured on real hardware, or
+    /// the control is refused by name with [`kayfabe_abi::submit::INPUT_ONLY_REFUSED_STATUS`]
+    /// — deliberately **not** `0x56`, so *"we refused the shape"* stays distinguishable
+    /// from *"we never heard of it"*. `rpc_params_are_serialized` is refused for the same
+    /// reason every other arm refuses it: the offsets below assume the flat layout.
+    ///
+    /// # ⚠ What this does NOT do, said out loud
+    ///
+    /// It records **nothing**. These four change no state this port models: `0x83de0309`
+    /// is an RM-internal event filter whose default is already more permissive than the
+    /// value the guest asks for; `SET_TIMESLICE` and `PREEMPT` are scheduler hints to a
+    /// runlist we do not schedule. ⇒ *"the observable consequence of our doing nothing is
+    /// a TRUE statement about this device"* — the same eligibility rule
+    /// `kayfabe_device::inert` states for whole functions, applied to four controls.
+    /// ⊘ If any of them ever needs to change device state, it must leave this table; a row
+    /// here is a claim that the ack is complete, not a parking space.
+    fn respond_input_only(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        let row = kayfabe_abi::submit::input_only_control(req.cmd)?;
+        let refuse = || {
+            Some(Reply {
+                rpc_result: kayfabe_abi::submit::INPUT_ONLY_REFUSED_STATUS,
+                body: Vec::new(),
+            })
+        };
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != row.params_size
+            || cmd.payload.len() < req.params_at + row.params_size
+        {
+            return refuse();
+        }
+        // ★ The guest's own payload, unchanged. Nothing is read to build this reply, so it
+        // cannot carry state belonging to another context, another client, or the host.
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body: cmd.payload.clone(),
+        })
     }
 
     /// ★★★★★ **§16.75 — the `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` arm** (`0x20801702`):

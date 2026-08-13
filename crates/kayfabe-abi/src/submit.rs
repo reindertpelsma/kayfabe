@@ -4440,6 +4440,102 @@ impl DmaGetPdeInfoParams {
     }
 }
 
+
+/// ★★★★★ **w292 — THE INPUT-ONLY CONTROLS, AND THE AUTHORITY FOR EACH.**
+///
+/// # The seam this closes, stated as the defect rather than as a feature
+///
+/// `[measured 2026-08-13, traces/nvdiff_w292]` `cuCtxCreate` on a real GA106 dies at
+/// `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK`. The id was **on the capability allowlist and
+/// absent from `ObjectPolicy::OBJECT_CONTROLS`** — this tree's own named class,
+/// *"ADMITTED and SERVED are different gates"*, which falls silently to the
+/// `UnservicedLedger` as `NV_ERR_NOT_SUPPORTED`. Four ids sat in that gap on the
+/// `cuCtxCreate` path.
+///
+/// ⊘ **This is a TABLE, not four `match` arms, and that is the point.** The gap was never
+/// invisible (`admitted_is_served.rs` refuted that); it was **unargued**. A row here forces
+/// an id to carry its authority and its measured parameter size, so a future addition
+/// cannot be a one-line `=> ack()` with nobody's name on it.
+///
+/// # ⊘⊘ WHY AN ECHO IS CORRECT HERE **BY CONSTRUCTION**, AND NOT BY ASSUMPTION
+///
+/// Every row was checked against the native GA106 reference capture
+/// (`../nvidia-gpu-passthrough/traces/host_reference_ga106/ctx_r1.jsonl.zst`) **on both
+/// sides of the call**: `ppost == ppre` for all four ⇒ **real RM writes NOTHING into these
+/// parameter blocks.** They are pure input. ⇒ Replying with the guest's own bytes cannot
+/// be a wrong body, which is the `#203` defect (`numEntries` zero-filled by an empty reply)
+/// made impossible rather than avoided.
+///
+/// ⇒ ★ **And the security question answers itself the same way:** a reply that is the
+/// caller's own bytes carries nothing belonging to another context, another client, or the
+/// host. Nothing is read to build it.
+pub struct InputOnlyControl {
+    /// The RM control command id.
+    pub cmd: u32,
+    /// Its name, for the log and for a reader who meets the id in a census.
+    pub name: &'static str,
+    /// `paramsSize` in bytes, as **measured on a real GA106**, not as read off a header.
+    /// A guest that declares anything else is refused rather than accommodated.
+    pub params_size: usize,
+    /// Who says serving it is right. ⊘ Never empty — an id with no authority does not
+    /// belong in this table.
+    pub authority: &'static str,
+}
+
+/// The rows. ⊘ `0x2080200a` (`PERF_BOOST`) is **deliberately absent**: `[measured]` it
+/// appears **zero** times in our QEMU log, so its `0x56` is produced inside the guest's own
+/// `nvidia.ko` and is not ours to serve. `0x2080012f` (`GPU_QUERY_ECC_STATUS`) is likewise
+/// absent: a **real GA106 also refuses it** `0x56`, so our refusal AGREES with hardware and
+/// changing it would be the divergence.
+pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
+    InputOnlyControl {
+        cmd: 0x2081_0108,
+        name: "NV2081_BINAPI (0x20810108)",
+        params_size: 992,
+        authority: "C cap3_matmul_forwarding SERVED NV_OK psize=992 dlen=992 COMPLETE (the \
+                    GREEN run); native GA106 NV_OK @77",
+    },
+    InputOnlyControl {
+        cmd: 0x83de_0309,
+        name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
+        params_size: 4,
+        authority: "C cap3 SERVED NV_OK psize=4 dlen=4 COMPLETE; native GA106 NV_OK @425. \
+                    ★ THE ONE THAT ENDS cuCtxCreate. ogkm: RM-internal event filter, no \
+                    hardware write, default when never called is _ALL (more permissive \
+                    than the 0x3a the guest asks for)",
+    },
+    InputOnlyControl {
+        cmd: 0xa06c_0103,
+        name: "NVA06C_CTRL_CMD_SET_TIMESLICE",
+        params_size: 8,
+        authority: "C cap3 SERVED NV_OK psize=8 dlen=8 COMPLETE; native GA106 NV_OK @427",
+    },
+    InputOnlyControl {
+        cmd: 0xa06c_0105,
+        name: "NVA06C_CTRL_CMD_PREEMPT",
+        params_size: 8,
+        // ⚠ SAY WHICH AUTHORITY, AND SAY WHERE THE C IS SILENT. An oracle that does not
+        // contain a row is not an oracle that refused it.
+        authority: "⚠ NATIVE GA106 ONLY (NV_OK @457). ⊘ The C is SILENT here — 0xa06c0105 \
+                    appears ZERO times in cap3, because cup8's path differs from \
+                    nvd_prog's. That is an ABSENCE OF EVIDENCE, not evidence of refusal",
+    },
+];
+
+/// The row for `cmd`, if this port serves it as an input-only ack.
+#[must_use]
+pub fn input_only_control(cmd: u32) -> Option<&'static InputOnlyControl> {
+    INPUT_ONLY_CONTROLS.iter().find(|r| r.cmd == cmd)
+}
+
+/// What an input-only control is refused with when the guest's own declared `paramsSize`
+/// does not match the measured one.
+///
+/// ⊘ `NV_ERR_INVALID_PARAM_STRUCT` and deliberately **not** `0x56`: `0x56` is what we
+/// emitted when we did not serve the id at all, and reusing it would make *"we refused the
+/// shape"* and *"we never heard of it"* the same observation.
+pub const INPUT_ONLY_REFUSED_STATUS: u32 = 0x47;
+
 #[cfg(test)]
 mod dma_pde_info_tests {
     use super::{DmaGetPdeInfoParams, DmaPdeInfoBlock};

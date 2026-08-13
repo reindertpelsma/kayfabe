@@ -231,6 +231,23 @@ static GRADUATED: &[u32] = &[
     // `ogkm-580: rpc.c:11085-11090` copies the reply's params over the caller's struct
     // whenever `paramsSize != 0`, and it is 4 here.
     0x2080_1702,
+    // ★★★★★ **w292 — THE FOUR INPUT-ONLY CONTROLS, and `0x83de0309` is the one that ended
+    // `cuCtxCreate`.** Answered by `kayfabe_rmrpc::ObjectPolicy::respond_input_only` since
+    // w292, by owner ruling (2026-08-14).
+    //
+    // ⊘ "Served" here means **`NV_OK` with the guest's OWN BYTES echoed**, and that is the
+    // whole reply real hardware gives: `[measured, host_reference_ga106/ctx_r1]` a real
+    // GA106 leaves all four parameter blocks byte-identical across the call
+    // (`ppost == ppre`). They carry no `[OUT]` field, so there is no body to get wrong —
+    // the `#203` zero-fill defect is impossible here rather than merely avoided.
+    //
+    // ⚠ Each row's authority is recorded beside it in
+    // `kayfabe_abi::submit::INPUT_ONLY_CONTROLS`, including the one where the C oracle is
+    // **silent rather than negative** (`0xa06c0105` appears zero times in `cap3`).
+    0x2081_0108,
+    0x83de_0309,
+    0xa06c_0103,
+    0xa06c_0105,
 ];
 
 static LEDGER: &[u32] = &[
@@ -279,14 +296,11 @@ static LEDGER: &[u32] = &[
     // (`ogkm-580: ctrl/ctrl83de/ctrl83dedebug.h:225`, `class/cl83de.h:33`) — libcuda arming
     // SM exception reporting on `0x5c000072`. Forgiven: the object is freed 18 records
     // later and `cup2` continues past it.
-    0x83de_0309,
     // `NVA06C_CTRL_CMD_SET_TIMESLICE` and `NVA06C_CTRL_CMD_PREEMPT`, both on the TSG. ★
     // Both arrive **after** teardown has begun (records 344 and 352, inside the `FREE`
     // burst), so neither is a wall: they are RM tearing the group down. ⊘ Recorded anyway —
     // an id whose position in the stream is the whole of its meaning is exactly the kind
     // this list must not let pass silently.
-    0xa06c_0103,
-    0xa06c_0105,
     0x2080_1357,
     0x2080_2068,
     0x2080_2a0f,
@@ -298,7 +312,6 @@ static LEDGER: &[u32] = &[
     0x2080_a618,
     // ★ `NV2081_BINAPI` — the §14.26 "phantom". Admitted by the `BinApiRule` rather than by
     // a table row, which is the admission class this file's module doc says it cannot sweep.
-    0x2081_0108,
     0x2081_0110,
     0x208f_1105,
     0x402c_0101,
@@ -542,6 +555,12 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         "0x20802a02", // InitTablePolicy
         "0x20803601", // InitTablePolicy
         "0x20803801", // InitTablePolicy
+        // ★★★★★ **w292 — THE INPUT-ONLY GROUP, `ObjectPolicy::respond_input_only`.**
+        // `0x83de0309` is the one that ended `cuCtxCreate` (`traces/nvdiff_w292`); the other
+        // two here are its neighbours in the same gap. ⊘ `0x2081_0108` does NOT appear in
+        // this list because it is admitted by a RULE rather than by a named row, and this
+        // list quantifies over `all_controls()`.
+        "0x83de0309",
         // ★★★★★ **w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, `ObjectPolicy`.**
         // ADDED, and adding is the direction this list welcomes: it is the ONLY control that
         // carries a fault's ADDRESS, so *"the guest observed THE SAME FAULT, by identity"* is
@@ -549,7 +568,10 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         // and never by synthesis — see `ObjectPolicy::respond_get_mmu_fault_info`.
         "0x906f0106",
         "0x90f10106", // the gvaspace PDE publication — InitTablePolicy
-        "0xa06c0101", // ★★★★ NVA06C_CTRL_CMD_GPFIFO_SCHEDULE — ObjectPolicy, §16.56
+        "0xa06c0101",
+        // ★★★★★ w292 — `SET_TIMESLICE` and `PREEMPT`, the other two input-only rows.
+        "0xa06c0103",
+        "0xa06c0105", // ★★★★ NVA06C_CTRL_CMD_GPFIFO_SCHEDULE — ObjectPolicy, §16.56
         "0xa06f0103", // NVA06F_CTRL_CMD_GPFIFO_SCHEDULE — ObjectPolicy, #177
         "0xa06f0104", // NVA06F_CTRL_CMD_BIND — ObjectPolicy, E9/§13.6
     ];
@@ -654,4 +676,75 @@ fn the_probe_can_both_answer_and_decline() {
         !is_served(0xdead_0000),
         "the probe answers a command nobody claims — it cannot detect a gap",
     );
+}
+
+/// ★★★★★ **w292 — THE FOUR INPUT-ONLY CONTROLS ARE CLAIMED, DECIDED, AND ADMITTED.**
+///
+/// The gap this closes is the one `traces/nvdiff_w292` measured ending `cuCtxCreate`:
+/// `0x83de0309` was **admitted by the capability table and served by nothing**, so it fell
+/// to the unserviced ledger as `0x56`. Three assertions, because three different things
+/// had to be true at once and any one of them alone would have been a fix that did not
+/// fire:
+///
+/// 1. every row of `INPUT_ONLY_CONTROLS` is **claimed** by `OBJECT_CONTROLS` — else the
+///    dispatch never runs and the ledger answers;
+/// 2. every row is **permitted** by the capability table — else the bridge refuses it one
+///    layer up and the answer is still `0x56`, which is exactly the trap of fixing one
+///    gate and reporting the wall as closed;
+/// 3. every row carries a **non-empty authority** — a served id with nobody's name on it
+///    is the shape this file exists to prevent.
+#[test]
+fn the_w292_input_only_controls_are_claimed_and_decided() {
+    use kayfabe_abi::submit::INPUT_ONLY_CONTROLS;
+    assert!(!INPUT_ONLY_CONTROLS.is_empty(), "the table must not be empty");
+    for row in INPUT_ONLY_CONTROLS {
+        assert!(
+            kayfabe_rmrpc::OBJECT_CONTROLS.contains(&row.cmd),
+            "0x{:08x} {} is in INPUT_ONLY_CONTROLS but NOT claimed by OBJECT_CONTROLS — it \
+             would fall to the unserviced ledger as 0x56, which is the exact defect w292 \
+             measured",
+            row.cmd,
+            row.name
+        );
+        assert!(
+            row.params_size > 0,
+            "0x{:08x} {} has no measured params size",
+            row.cmd,
+            row.name
+        );
+        assert!(
+            !row.authority.trim().is_empty(),
+            "0x{:08x} {} is served with NO STATED AUTHORITY",
+            row.cmd,
+            row.name
+        );
+        assert_eq!(
+            kayfabe_abi::submit::input_only_control(row.cmd).map(|r| r.cmd),
+            Some(row.cmd),
+            "0x{:08x} is not findable through its own lookup",
+            row.cmd
+        );
+    }
+}
+
+/// ⊘ **The two ids w292 deliberately did NOT serve, asserted so a later lane cannot add
+/// them without meeting the reason.**
+///
+/// - `0x2080200a` `PERF_BOOST` — `[measured]` **zero** occurrences in our QEMU log. Its
+///   `0x56` is produced inside the guest's own `nvidia.ko`; it never reaches us, so
+///   "serving" it would be building an answer for traffic that does not exist.
+/// - `0x2080012f` `GPU_QUERY_ECC_STATUS` — a **real GA106 also refuses it** `0x56`
+///   (`traces/host_reference_ga106`, the ONE non-OK in 608 records). Our refusal AGREES
+///   with hardware; changing it would be the divergence.
+#[test]
+fn the_two_ids_w292_left_alone_are_not_in_the_input_only_table() {
+    for (cmd, why) in [
+        (0x2080_200au32, "PERF_BOOST never reaches us — the guest's own nvidia.ko refuses it"),
+        (0x2080_012fu32, "a real GA106 also refuses it; our refusal AGREES with hardware"),
+    ] {
+        assert!(
+            kayfabe_abi::submit::input_only_control(cmd).is_none(),
+            "0x{cmd:08x} must NOT be served: {why}"
+        );
+    }
 }

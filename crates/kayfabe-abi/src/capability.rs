@@ -274,6 +274,38 @@ pub enum DeniedBecause {
     /// `:2207-2211`). An emitter that ignored that flag would kill a context a debugger
     /// explicitly asked it to preserve. Denying the control means the flag can never be
     /// set, which closes the sub-case instead of leaving it to be remembered.
+    ///
+    /// # ⊘⊘⊘ CORRECTED 2026-08-14 (w292) — **THE PREMISE IS RIGHT AND THE CONCLUSION WAS
+    /// # WRONG FOR `0x83de0309`, WHICH HAS BEEN REMOVED FROM THIS DENIAL BY OWNER RULING.**
+    ///
+    /// *"This port does not implement SM debugger trapping"* is true. It does not follow
+    /// that every `NV83DE` control must be refused, because **the controls in this class
+    /// are not one tier.** Read from `ogkm-580.159.04` rather than from the names:
+    ///
+    /// - `0x83de0309` `SET_EXCEPTION_MASK` programs **no hardware**. It is a 4-byte
+    ///   `NvU32` event **filter inside RM** — *"depending on the value of the
+    ///   exceptionMask, some events may not be raised"*
+    ///   (`src/common/sdk/nvidia/inc/ctrl/ctrl83de/ctrl83dedebug.h:158-161`, params struct
+    ///   `:229-231`). It writes no SM register and does not enable SM debug mode — that is
+    ///   `0x83de0301/0302`.
+    /// - ★★★ **The default when it is NEVER CALLED is `_ALL`** (`:171-172`, `:213-215`) —
+    ///   the **most** permissive value. ⇒ **Refusing it leaves the guest strictly MORE
+    ///   permissive than serving it does.** `[measured, traces/nvdiff_w292]` libcuda asks
+    ///   for `0x0000003a`, which **excludes `_FATAL` (bit 0)** — the one bit with a
+    ///   documented GPU-global side effect (deferred RC recovery, `:188-195`). So the
+    ///   guest is explicitly asking for **less** than it already has.
+    /// - The RC-deferral side effect is created by **allocating the `GT200_DEBUGGER`
+    ///   object**, not by this control — and that alloc already returns `NV_OK` to our
+    ///   guest today (`traces/nvdiff_w292`, i=366).
+    ///
+    /// ⊘ **The other rows stay denied, and `0x83de030c` is a DIFFERENT TIER, not a
+    /// neighbour.** `READ_ALL_SM_ERROR_STATES` returns raw SM error registers — faulting
+    /// warp PCs and ESR addresses — for *"the currently resident GR context"*, with
+    /// correctness of attribution **delegated to the client** (`:325-327`), and its
+    /// `hTargetChannel` is never read or validated anywhere in the open kernel driver.
+    /// ⇒ **Serving `0x83de0309` neither implies nor requires serving `0x83de030c`**: they
+    /// are independent exported-method entries with different flags and no code path in
+    /// which one consults the other. That question was asked and is answered **no**.
     SmDebuggerTrapping,
     /// ★★ A **fault-reporting mechanism this port does not implement**, refused rather
     /// than succeeded.
@@ -767,6 +799,13 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x503c0102, name: "NV503C_CTRL_CMD_REGISTER_VA_SPACE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x503c0104, name: "NV503C_CTRL_CMD_REGISTER_VIDMEM", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x503c0105, name: "NV503C_CTRL_CMD_UNREGISTER_VIDMEM", origin: Origin::Nvproxy },
+    // ★★★★★ **w292 — RESTORED TO THE ALLOWLIST BY OWNER RULING** (2026-08-14, *"no
+    // objection, feel free to do it"*), after `traces/nvdiff_w292` measured it ending
+    // `cuCtxCreate`. It was moved to `DENIED_CONTROLS` on the premise that this port does
+    // not implement SM debugger trapping; the premise is right and the conclusion was
+    // wrong, because **this control programs no hardware at all** — see
+    // `DeniedBecause::SmDebuggerTrapping`'s w292 correction for the ogkm citations.
+    ControlEntry { cmd: 0x83de0309, name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0101, name: "NV906F_CTRL_GET_CLASS_ENGINEID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0102, name: "NV906F_CTRL_CMD_RESET_CHANNEL", origin: Origin::Nvproxy },
     // ★★★★★ **w288 TIER 2 — the ONLY control that carries a fault's ADDRESS.** The error
@@ -1360,6 +1399,10 @@ pub static RULE_COVERED_C_ROWS: &[u32] = &[
 ///
 /// ★★★ **Three rows are an exception and really do narrow the surface**, and they are
 /// called out here because the sentence above used to be unqualified and was true:
+/// ⊘ **w292: `0x83de0309` HAS SINCE GONE BACK** (owner ruling 2026-08-14) — it is served,
+/// and the sentence below is now true of `0x83de030c` and `0x83de0310` only. See
+/// [`DeniedBecause::SmDebuggerTrapping`]'s w292 correction for why the three are not one
+/// tier.
 /// `0x83de0309`, `0x83de030c` and `0x83de0310` were on the **allowlist** (ported from
 /// nvproxy, which permits them because gVisor forwards to a real GPU that implements
 /// them). This port does not implement SM debugger trapping at all
@@ -1406,11 +1449,11 @@ pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
         name: "NV83DE_CTRL_CMD_DEBUG_SET_MODE_MMU_DEBUG",
         why: DeniedBecause::SmDebuggerTrapping,
     },
-    DeniedEntry {
-        id: 0x83de_0309,
-        name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
-        why: DeniedBecause::SmDebuggerTrapping,
-    },
+    // ⊘⊘ `0x83de_0309` WAS HERE AND IS NOT ANY MORE — w292, owner-ruled. It is back on the
+    // allowlist above and served by `ObjectPolicy`. Kept as a comment rather than deleted
+    // because *"a ruling's DATE and its ARCHITECTURE are both part of the citation"*: the
+    // denial was correct on what was known then, and the thing that changed is that we
+    // read the driver instead of the name.
     DeniedEntry {
         id: 0x83de_030c,
         name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES",
@@ -2009,18 +2052,23 @@ mod tests {
         // resolved set by construction. A change that moved only SOME of these numbers
         // would mean a shared row had stopped being shared, which is why they are pinned
         // per boundary rather than as one total.
+        // ★★★★★ **+1 to EVERY boundary's control count on 2026-08-14 (w292)**:
+        // `0x83de0309` moved out of `DENIED_CONTROLS` and back onto the SHARED allowlist, so
+        // every boundary gains exactly one. ⊘ That the deltas are uniform is the check — a
+        // row that landed in one boundary's own block would move ONE of these numbers, and
+        // this list would say which.
         let want: &[ResolvedExpectation] = &[
             (
                 "550.54.04",
                 (550, 54, 4),
-                156,
+                157,
                 77,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                157,
+                158,
                 77,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
@@ -2030,14 +2078,14 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                156,
+                157,
                 77,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                157,
+                158,
                 85,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2047,7 +2095,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                159,
+                160,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2059,7 +2107,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                160,
+                161,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2072,7 +2120,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                160,
+                161,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2085,7 +2133,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                160,
+                161,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2529,12 +2577,19 @@ mod tests {
         // evidence the row went into the shared base rather than into one boundary by
         // accident. ⊘ It is version-invariant: `ctrl906f.h`'s params struct is identical
         // across the tags this table spans.
-        assert_eq!(bench().all_controls().count(), 160, "controls");
+        // ★★★★★ **+1 on 2026-08-14 (w292): `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK`
+        // (`0x83de0309`), RESTORED from `DENIED_CONTROLS` by owner ruling.** SHARED, so
+        // this number and every boundary's below move **together** — the evidence the row
+        // went into the shared base and not into one boundary by accident. ⊘ And
+        // `all_denied_controls()` drops 14 → 13 in the same commit for the same one row:
+        // the two counters move in OPPOSITE directions, which is what says it MOVED
+        // rather than that a second copy was added.
+        assert_eq!(bench().all_controls().count(), 161, "controls");
         assert_eq!(at(550, 54, 4).all_classes().count(), 77, "classes at 550");
         assert_eq!(at(560, 28, 3).all_classes().count(), 85, "classes at 560");
         assert_eq!(at(570, 86, 15).all_classes().count(), 91, "classes at 570");
         assert_eq!(bench().all_classes().count(), 93, "classes at 580");
-        assert_eq!(bench().all_denied_controls().count(), 13, "denied controls");
+        assert_eq!(bench().all_denied_controls().count(), 12, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 4, "denied classes");
     }
 
@@ -2550,7 +2605,11 @@ mod tests {
         // boundary nvproxy gates.
         assert_eq!(n(Origin::Mode2Rpc), 7);
         assert_eq!(n(Origin::Empirical), 5);
-        assert_eq!(n(Origin::Nvproxy), 148);
+        // ★ 148 → 149 on 2026-08-14 (w292): `0x83de0309` came back to the allowlist with
+        // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because
+        // it forwards to a real GPU — and w292 measured that our own refusal, not the
+        // hardware's, is what ended `cuCtxCreate`.
+        assert_eq!(n(Origin::Nvproxy), 149);
         assert_eq!(
             bench()
                 .all_classes()
