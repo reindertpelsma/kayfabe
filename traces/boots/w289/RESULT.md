@@ -816,3 +816,51 @@ VOID.
   here: it is a concurrency change in the data plane's locking, and this rung stops at reporting.
 - **Q2 (does the client spin on the semaphore in the guest?) is NOT done** — it needs the named
   waited-vs-never-waited exits, and the boot that would have measured it aborted.
+
+---
+
+# ADDENDUM 8 — ⚠⚠ **THE DELIBERATELY-RELAXED DIAGNOSTIC ARM** (owner-authorised)
+
+> ⊘⊘⊘ **NOTHING IN THIS SECTION IS A SHIPPING CONFIGURATION OR A MILESTONE.** It is an
+> instrument whose only purpose is to find out **whether anything else is broken beyond the two
+> named layers.** A green here is *"no further discovery"*, not *"it works"*.
+
+## 35. THE RELAXATIONS, NAMED
+
+| # | relaxation | why it is not a default |
+|---|---|---|
+| 1 | `KAYFABE_PT_SWEEP=on` | measured to clear the table (`rows=1→3`, operand `MISS` 2+2→0+0). Off by default; the bootstrap gap it papers over is the real fix. |
+| 2 | `KAYFABE_OPERAND_JOIN=join` | `w282`'s arm. Joins an emulated-FB CE operand leaf to a real shared host object at the identical VA. Off by default. |
+
+⊘ **Q1 is answered by measurement, and it is the second case:** the operands are
+`Vidmem@…/**FakeFramebuffer**` (`w289j` `OPERAND-JOIN-TABLE`) — the raw backing **is** fabricated.
+**But no promotion path was written**: the "simplest thing that makes it reachable" already
+exists as `join`, and `w289j` showed it establishing both operands at
+`host_va == leaf.va` (`placed_as_asked=true`) with content carried.
+★ **Known-positive for the backing query:** the same classifier reports the **ring** as
+`JOINED`/reachable, and hardware independently proved the ring real by advancing `GP_GET`.
+
+## 36. ⊘ AND A THIRD THING HAD TO BE FIXED FIRST — it was not optional
+
+`w289j` **aborted the VMM** (`R1: munmap while holding rank(s) [0]`, non-unwinding panic on the
+guest's own MMIO path). Fixed at `18f9f02` — `install_join` hands the region back so `join_fb`
+unmaps **after** releasing the lock. ⚠ Guest-reachable, so this is a real defect, not a
+workaround; it is the only thing outside the two relaxations that this rung changed.
+
+## 37. PRE-REGISTERED, BEFORE THE RUN
+
+Two boots, **one binary**, `RELAXED` vs `CONTROL` (both relaxations off) so the delta is
+attributable.
+
+**Raw client (82 ioctls):** does the copy complete — bytes moved, semaphore == declared payload,
+`GP_GET` caught `GP_PUT`? ⚠ Read `met_the_whole_bar()`, never `copied()`.
+
+| outcome | reading |
+|---|---|
+| **crosses** | everything remaining is **hardening a known-working path**; re-tighten the relaxations one at a time against a green target. ⊘ Report it as a RELAXED green, naming both relaxations, never as the milestone. |
+| **does not cross** | **there is a further wall and we know it tonight.** Name it by identity — Xid, address, engine, access type. Worth as much as a pass. |
+| CONTROL also crosses | the delta is not the relaxations; **the run is void for attribution** and the binary/arming is the suspect. |
+
+⊘ **`Crit1State` and the in-band ioctl reader both run on every arm**, so a vacuous pass has two
+independent named exits to fall through. ⚠ **`failed=0` is not "nothing refused"** — the in-band
+verdict is printed beside it.
