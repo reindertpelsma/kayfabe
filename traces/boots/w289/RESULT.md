@@ -934,3 +934,33 @@ the two relaxations into the real fixes:
 
 ⊘ **Neither is written here.** ⚠ And the relaxed green must not be quoted without both
 relaxations named beside it.
+
+---
+
+# ADDENDUM 10 — ⊘ **CUP2 WAS NOT RUN THIS RUNG. Saying so before running it.**
+
+The brief pre-registered `CUP2_RC` and it is **the owner's goal metric**. My report carried no
+number **because no cup2 boot happened on this rung** — every boot was the 82-ioctl raw CE
+client. ⊘ It was **not run and omitted**; it was **not run at all**.
+
+⇒ *"It crosses"* in §38-41 means **the CE data plane crossed**. It says **nothing** about cup2,
+and must not be read as saying anything about it.
+
+## 42. PRE-REGISTERED, BEFORE THE BOOT
+
+Same two relaxations (`KAYFABE_PT_SWEEP=on`, `KAYFABE_OPERAND_JOIN=join`), same carried arming,
+`cup2_hook_gdbspin.sh`. Baseline **`CUP2_RC=1`** (`rev aea02a52`; it was **124** before the
+notifier work turned the harness timeout into cup2's own exit code).
+
+| outcome | reading |
+|---|---|
+| **`CUP2_RC=0`** *and* the matmul verifies (`bad=0`) | cup2 crosses **on the relaxed arm**. ⊘ Still not the milestone — both relaxations named beside it, always. |
+| **`CUP2_RC` moves off 1** (e.g. to 124, or a new code) | the wall **moved**; report the new last print and the new fault identity. A different failure is a result. |
+| **`CUP2_RC=1` unchanged** | the CE fix does **not** reach cup2's path ⇒ **a further wall exists beyond the CE plane**, and the hardening list is premature. ★ This is the outcome that most changes what to do next. |
+| no `CUP2_RC` line at all | **the measurement did not happen** — printed explicitly as *"NOT 0"*, never inferred. |
+
+⊘ **The last print is captured either way** (`ok|FAIL|cu*|totalMem|bad=|maxerr` tail), so *"where
+it got to"* is answerable without a second boot. ⚠ `^CUP2_RC=` anchored **with** the unanchored
+contrast printed beside it, and `GCC_CUP2_RC` counted separately — unanchored has printed
+`[CUP2_RC=0 CUP2_RC=1]` on two consecutive rungs and would report the headline success value on
+a failing arm.
