@@ -8943,7 +8943,22 @@ impl SharedDoorbell {
                     .vas_publish_census(pid, gpu, pdb, VAS_PUBLISH_LEAF_BUDGET);
                 let mut done = 0usize;
                 let mut failed = 0usize;
-                if self.vas_publish.publishes() {
+                // ⊘⊘ **THE SYSTEM PROC CAN NEVER HOLD A PUBLICATION, AND THAT IS §12.26 —
+                // SO IT IS NOT ATTEMPTED, NOT ATTEMPTED-AND-REFUSED.**
+                //
+                // `plan_back_fb_leaf` refuses `Gpu::SYSTEM_PROC` by name before any host verb
+                // exists (`kayfabe-fwd/src/lib.rs:2318-2323`): the system proc's work is
+                // forged precisely so it holds no host state whose reclaim has no defined
+                // point, and a framebuffer object is host state.
+                //
+                // ⚠ `[measured, boot w290cup2]` proc 0 holds **6787 rows** across two VASes.
+                // Handing them to the verb would issue 6787 doomed round trips and report
+                // them as `refused=6787` — which reads exactly like RM exhaustion and is
+                // nothing of the kind. ⇒ The refusal is stated HERE, once, as a property of
+                // the proc, and the census still prints so the rows are visible rather than
+                // absent.
+                let system = pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC;
+                if self.vas_publish.publishes() && !system {
                     if let Some(exports) = exports {
                         let isolate = kayfabe_isolate::IsolateId::new(pid.0, gpu);
                         for &(va, len, phys) in &c.candidates {
@@ -8975,11 +8990,17 @@ impl SharedDoorbell {
                 // census whose buckets did not sum could report a comfortable zero for a class
                 // it never reached, so `sum_ok` is a value and not a comment.
                 rows.push(format!(
-                    "[proc={} pdb=0x{:x} total={} already_host={} guest_ram={} not_vidmem={} \
-                     not_granular={}({} bytes) candidates={}({} bytes, capped={}) \
-                     published={done} refused={failed} sum_ok={}]",
+                    "[proc={} pdb=0x{:x}{} total={} already_host={} guest_ram={} \
+                     not_vidmem={} not_granular={}({} bytes) candidates={}({} bytes, \
+                     capped={}) published={done} refused={failed} sum_ok={}]",
                     pid.0,
                     pdb.0,
+                    if system {
+                        " ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; \
+                         candidates below are REAL and UNPUBLISHABLE, not refused)"
+                    } else {
+                        ""
+                    },
                     c.total,
                     c.already_host,
                     c.guest_ram,
