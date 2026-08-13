@@ -26,8 +26,8 @@
 set -uo pipefail
 ARM="${1:-}"
 case "$ARM" in
-  assert|publish|pinrate) ;;
-  *) echo "usage: $0 assert|publish|pinrate" >&2; exit 64 ;;
+  assert|publish|pinrate|both) ;;
+  *) echo "usage: $0 assert|publish|pinrate|both" >&2; exit 64 ;;
 esac
 TAG=w290p${ARM}
 OUT=/workspace/${TAG}.log
