@@ -31,19 +31,34 @@ finish() { echo "=== W287 EXIT rc=$1 at $(date -Is) ==="; exit "$1"; }
 echo "=== W287 START $(date -Is) pid=$$ ==="
 
 export PATH=/root/.cargo/bin:$PATH
-REPO=${KAYFABE_REPO:-/workspace/kayfabe_w287}
+# ⚠⚠ **LANE-PRIVATE, and this is not tidiness.** `[measured 2026-08-13]` two lanes both used
+# `/workspace/kayfabe_w287` on `vh`; one `rm -rf`'d and re-cloned it mid-rung under the other,
+# and **a stale binary silently ran as a result** — the banked "bench served a binary built
+# from a revision nobody chose" trap, live. The directory name now carries the lane, not just
+# the rung number.
+REPO=${KAYFABE_REPO:-/workspace/kayfabe_w287pt}
 cd "$REPO" || finish 90
 HEAD=$(git rev-parse HEAD)
 echo "=== HEAD=$HEAD ==="
 DIRT=$(git status --porcelain --untracked-files=no)
 [ -z "$DIRT" ] || { echo "=== ★ TREE IS DIRTY ==="; echo "$DIRT"; finish 91; }
 
-export CARGO_TARGET_DIR=/workspace/bench/cargo-target-w268
+export CARGO_TARGET_DIR=/workspace/bench/cargo-target-w287pt
 export KAYFABE_SHIM_FEATURES=host-isolates
 
 # ★★★ THE CLIENT IS BUILT FIRST, and STATIC. A dynamic binary that fails to load in the
 #     guest reports as "no GPU", which is a different finding wearing this one's clothes.
-echo "=== BUILD the static client $(date -Is) ==="
+CLIENT=${CARGO_TARGET_DIR:-$REPO/target}/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
+
+# ★★★★★ **DELETE IT FIRST, so a STALE binary is UNREPRESENTABLE rather than merely
+# unlikely.** ⊘ The rm-ladder carries **no** `kayfabe-rev:` stamp (measured: `strings | grep
+# -c kayfabe-rev` = 0), so the QEMU shim's stamp gate has no equivalent here and the revision
+# CANNOT be asserted out of the artefact. The reachable guarantee is therefore about
+# EXISTENCE, not identity: if the build does not produce a file, there is no file to run.
+# ⇒ This is the one line that makes "the bench silently served a binary built from a
+# revision nobody chose" impossible for this artefact, and it is cheaper than a stamp.
+rm -f "$CLIENT"
+echo "=== BUILD the static client $(date -Is) (target dir: $CARGO_TARGET_DIR) ==="
 cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder
 CRC=$?
 echo "=== CLIENT BUILD RC=$CRC ==="
@@ -56,7 +71,6 @@ echo "=== CLIENT BUILD RC=$CRC ==="
 # md5 line printed EMPTY, the boot ran to completion and the grade block printed `R33_RC=[]`.
 # ★ Every one of those reads as a result. **A missing binary must be fatal HERE**, not a
 # blank in a verdict eight steps later — the whole `zero-bytes-is-not-not-yet` class.
-CLIENT=${CARGO_TARGET_DIR:-$REPO/target}/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
 [ -x "$CLIENT" ] || { echo "=== ★★★ NO CLIENT BINARY AT $CLIENT — every arm below would be VOID ==="; finish 97; }
 [ -s "$CLIENT" ] || { echo "=== ★★★ CLIENT BINARY IS ZERO BYTES ==="; finish 97; }
 file "$CLIENT"
@@ -251,6 +265,14 @@ echo "      running — so a ZERO here is 'the instrument did not run', NOT 'the
 echo "      absent'. It needs its own input; that is named as open, not scored as a pass."
 echo "      #255/ShadowsGuestMemory lines = [$(grep -cE '#255|ShadowsGuestMemory' "$Q" 2>/dev/null)]"
 echo "      Fabricated/emulated-FB operands = [$(grep -cE 'Fabricated' "$Q" 2>/dev/null)]"
+
+echo "--- ⊘⊘ AND A CENSUS CAVEAT THAT WOULD OTHERWISE READ AS GOOD NEWS: 'failed=0' IS NOT"
+echo "    'nothing was refused'. RM reports status INSIDE the parameter struct while"
+echo "    ioctl(2) returns 0. Measured both polarities in one rung: with"
+echo "    NVOS02_FLAGS_MAPPING_NO_MAP a CPU map was refused NV_ERR_INVALID_ARGUMENT and the"
+echo "    census still read failed=0; without it, NV_ESC_RM_ALLOC_MEMORY refused EINVAL and"
+echo "    the census DID count it. ⇒ Same refusal, once invisible, once visible, purely by"
+echo "    which layer said no. Grade the arms by IDENTITY above, never by this number."
 
 echo "--- named refusals this rung can produce (0x4B56 = USERD_OFFSET_MISALIGNED):"
 echo "      USERD_OFFSET_MISALIGNED = [$(grep -c '4B56\|19286\|USERD_OFFSET_MISALIGNED' "$Q" 2>/dev/null)]"
