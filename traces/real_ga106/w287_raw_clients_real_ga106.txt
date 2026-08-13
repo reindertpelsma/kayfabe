@@ -1,0 +1,70 @@
+# w287 RAW CLIENTS on real GA106 — Thu Aug 13 12:32:16 UTC 2026
+# host: ubuntu, NVIDIA GeForce RTX 3060, 580.159.04
+# REV_UNDER_TEST=f7a74bceb393c110a9127cab0686f13dd799b5fe + w287 raw-client patch
+# binary md5: 27ea9b0a870a6159252ea64641245275
+#
+# ★★★★★ THE HEADLINE — TWO RAW RM CLIENTS, NO libcuda IN EITHER PROCESS.
+#
+#   CLIENT 1 (--ce-client)        53 ioctls, 0 failed, host Xid delta 0.
+#     GP_GET 1 CAUGHT GP_PUT 1 — the pass criterion the mandate names. That cursor lives in
+#     USERD and only HARDWARE writes it: `grep gp_get` over this whole crate finds
+#     comparisons and doc text and NOT ONE STORE, and `met_the_whole_bar()` is
+#     `copied() && semaphore == DECLARED payload && gp_get == gp_put`. ⇒ The test CANNOT
+#     pass on a ring we re-emitted ourselves.
+#
+#   CLIENT 2 (--ce-client-fault)  91 ioctls, 0 failed, host Xid delta +1.
+#     ★★★ THE GUEST-OBSERVABLE ERROR PATH, MEASURED, IN THREE PLANES:
+#       A  ERROR NOTIFIER  FIRED.  status 0xffff, info32 0x1f, info16 0x0001.
+#                          0xffff = the RC sentinel; 0x1f = 31 = the number a host log
+#                          prints as Xid 31. Read by the CLIENT, out of its OWN memory.
+#       C  NEXT IOCTL      SILENT. GET_WORK_SUBMIT_TOKEN on the DEAD channel -> NV_OK.
+#       ⊘  ABSENCE         all a client had before this rung: a semaphore that stayed 0.
+#
+#     ⊘⊘ AND THE CONTROL IS ON THE SAME SIXTEEN BYTES IN THE SAME RUN: read QUIET
+#     (0x0000 / 0x00000000) after the positive control retired and BEFORE the fault was
+#     issued, then 0xffff after. The page is also zeroed before the channel is told about
+#     it. So "0xffff was already there" and "RM wrote it at channel creation" are both
+#     excluded without a second run or a second revision.
+#
+#     ⚠ hObjectError is named on the CHANNEL ONLY, never on the TSG. A channel's
+#     hObjectError == 0 INHERITS the group's (ogkm-580: kernel_channel.c:509-518), so
+#     naming both would make "the channel's field is the one RM honoured" unfalsifiable.
+#
+
+=== CLIENT 1 — --ce-client (no fault) ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d085b7
+ok    R6 hSubdevice      = 0xcafe0002
+info  R33 raw CE client   = GPU 0, euid 0 — a copy engine allocated, mapped, submitted and completed through RAW RM IOCTLS ONLY. No libcuda is loaded by this process
+info  R33 the bar is FOUR facts: the bytes moved (read back through a mapping that is not the one written), the semaphore carries the DECLARED payload at the DECLARED address, GP_GET reached GP_PUT, and the VA probe REFUSES where something is mapped. ⊘ `Ok(())` from any call under test is not one of them
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001), GP_GET 1 caught GP_PUT 1 — read back through an INDEPENDENT mapping (its own device node, its own mmap, a kernel-chosen address)
+ok    R33 ADDRESS SPACES  = operands in range 0xcafe0005; the channel's ring, USERD and semaphore in range 0xcafe0009 (two different spaces — the w229 executor split); ring 0x0000000120020000, semaphore 0x0000000120022000. ⊘⊘ EVERY VERDICT BELOW IS SCOPED TO THESE TWO HANDLES and to no other page table — a guest channel's PDB is not asked anything by this rung
+★     R33 arm 2 OCCUPIED  = a fresh object asked for 0x0000000120020000 in range 0xcafe0009 and RM REFUSED it (NoMemory) — the ring really is there, so the probe can detect occupancy and arm 3's answer is a measurement
+★     R33 arm 3 FREE      = 0x0000000900000000 is UNCLAIMED in range 0xcafe0009 — a fresh object took the address and RM reported it back. ⇒ THIS IS THE `is this GPU VA mapped?` PRIMITIVE, with both polarities calibrated on one run and NO DEBUGGER involved
+info  R33 arm 4           = NOT RUN (pass `--ce-client-fault`). It points a real copy engine at an unmapped VA, which provokes `Xid 31 FAULT_PDE` and kills its own channel — opt-in, and it belongs under scripts/bench/host_xid_watch.sh
+★     R33 raw CE client   = a copy engine was allocated, mapped, submitted and COMPLETED with no libcuda in the process, and a GPU VA was probed in both polarities
+  total=53 failed=0 logged=53 dropped=0
+CLIENT1_RC=0
+HOST_XID_DELTA=4->4
+
+=== CLIENT 2 — --ce-client-fault ===
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d085c1
+ok    R6 hSubdevice      = 0xcafe0002
+info  R33 raw CE client   = GPU 0, euid 0 — a copy engine allocated, mapped, submitted and completed through RAW RM IOCTLS ONLY. No libcuda is loaded by this process
+info  R33 the bar is FOUR facts: the bytes moved (read back through a mapping that is not the one written), the semaphore carries the DECLARED payload at the DECLARED address, GP_GET reached GP_PUT, and the VA probe REFUSES where something is mapped. ⊘ `Ok(())` from any call under test is not one of them
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001), GP_GET 1 caught GP_PUT 1 — read back through an INDEPENDENT mapping (its own device node, its own mmap, a kernel-chosen address)
+ok    R33 ADDRESS SPACES  = operands in range 0xcafe0005; the channel's ring, USERD and semaphore in range 0xcafe0009 (two different spaces — the w229 executor split); ring 0x0000000120020000, semaphore 0x0000000120022000. ⊘⊘ EVERY VERDICT BELOW IS SCOPED TO THESE TWO HANDLES and to no other page table — a guest channel's PDB is not asked anything by this rung
+★     R33 arm 2 OCCUPIED  = a fresh object asked for 0x0000000120020000 in range 0xcafe0009 and RM REFUSED it (NoMemory) — the ring really is there, so the probe can detect occupancy and arm 3's answer is a measurement
+★     R33 arm 3 FREE      = 0x0000000900000000 is UNCLAIMED in range 0xcafe0009 — a fresh object took the address and RM reported it back. ⇒ THIS IS THE `is this GPU VA mapped?` PRIMITIVE, with both polarities calibrated on one run and NO DEBUGGER involved
+info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space (range 0xcafe0012) — NOT arm 1's operand space and NOT arms 2/3's control space. ⊘ Arms 3 and 4 ask the same question about the same NUMBER in DIFFERENT address spaces, so they can disagree without either being wrong, and neither corroborates the other
+★     R33 arm 5 CONTROL   = the SAME 16 bytes read QUIET (status 0x0000 info32 0x00000000) AFTER the positive control retired and BEFORE the fault was issued. ⇒ anything below is a CHANGE on one channel in one run, not a value that was always there
+★     R33 arm 5 NOTIFIER  = PLANE A FIRED — the driver wrote this process's OWN memory: status 0xffff, info32 0x0000001f (`ROBUST_CHANNEL_*`, the number a host log prints as `Xid`), info16 engine 0x0001, timestamp 0x72b7e7a018cb5d5f. ⇒ THIS is how a raw client learns IN-PROCESS that its channel was killed: it POLLS 16 bytes, no host log and no debugger
+⊘     R33 arm 5 IOCTL     = PLANE C SILENT — `GET_WORK_SUBMIT_TOKEN` on the FAULTED channel returned `NV_OK`. ⇒ THE IOCTL PLANE CARRIES NOTHING: a client that polls only return codes cannot learn it was killed, which is why plane A is not optional
+★     R33 arm 4 FAULTED   = a copy engine pointed at 0x0000000900000000 did NOT retire (sem 0x00000000, GP_GET 2 GP_PUT 2) while its positive control on the SAME channel did — hardware agrees the VA is unmapped. ⚠ Expect one `Xid 31 FAULT_PDE`; that is the control FIRING, not a bug
+★     R33 raw CE client   = a copy engine was allocated, mapped, submitted and COMPLETED with no libcuda in the process, and a GPU VA was probed in both polarities
+  total=91 failed=0 logged=91 dropped=0
+CLIENT2_RC=0
+HOST_XID_DELTA=4->5
+HOST_XID_LAST: [256574.467981] NVRM: Xid (PCI:0000:00:07): 31, pid=1086784, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x9_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+W287_DONE

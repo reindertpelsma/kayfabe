@@ -2761,7 +2761,87 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                     fvas.raw()
                 );
                 let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA) {
-                    Ok(r) => match r.reach {
+                    Ok(r) => {
+                        // ★★★★★ **THE MANDATE'S SECOND CLIENT — HOW THE PROGRAM ITSELF
+                        // LEARNS, printed BEFORE the verdict it qualifies.**
+                        //
+                        // Three planes, each reported separately and never collapsed:
+                        //   A  the ERROR NOTIFIER  — RM writes `NvNotification` into memory
+                        //                            this process allocated and can read.
+                        //   C  the NEXT IOCTL      — asked explicitly on the dead channel.
+                        //   ⊘  ABSENCE             — the semaphore that never released, which
+                        //                            is all a client had before w287.
+                        //
+                        // ⊘⊘ **A QUIET NOTIFIER IS NOT A PASS AND NOT A BUG — it is a
+                        // measurement**, and it is printed with the reason it is ambiguous
+                        // attached. `status == 0` is what an unwired notifier, a refused
+                        // handle and a channel that never faulted all read as.
+                        // ★★★★★ THE CONTROL, PRINTED FIRST — a fired notifier means nothing
+                        // until the same bytes have been shown quiet while the channel was
+                        // alive and working.
+                        match r.notifier_before {
+                            Some(b) if !b.fired() => println!(
+                                "★     R33 arm 5 CONTROL   = the SAME 16 bytes read QUIET \
+                                 (status {:#06x} info32 {:#010x}) AFTER the positive control \
+                                 retired and BEFORE the fault was issued. ⇒ anything below is \
+                                 a CHANGE on one channel in one run, not a value that was \
+                                 always there",
+                                b.status, b.except_type
+                            ),
+                            Some(b) => println!(
+                                "FAIL  R33 arm 5 CONTROL   = the notifier ALREADY read \
+                                 status {:#06x} info32 {:#010x} before the fault was issued — \
+                                 the channel was killed by something this rung did not \
+                                 provoke, and the reading below is NOT attributable to the \
+                                 deliberate fault",
+                                b.status, b.except_type
+                            ),
+                            None => println!(
+                                "??    R33 arm 5 CONTROL   = the pre-fault read did not \
+                                 happen, so a fired notifier below cannot be attributed to \
+                                 the fault rather than to channel creation"
+                            ),
+                        }
+                        match r.notifier {
+                            Some(n) if n.fired() => println!(
+                                "★     R33 arm 5 NOTIFIER  = PLANE A FIRED — the driver wrote \
+                                 this process's OWN memory: status {:#06x}, info32 \
+                                 {:#010x} (`ROBUST_CHANNEL_*`, the number a host log prints \
+                                 as `Xid`), info16 engine {:#06x}, timestamp {:#018x}. ⇒ THIS \
+                                 is how a raw client learns IN-PROCESS that its channel was \
+                                 killed: it POLLS 16 bytes, no host log and no debugger",
+                                n.status, n.except_type, n.engine_type, n.timestamp
+                            ),
+                            Some(n) => println!(
+                                "⊘     R33 arm 5 NOTIFIER  = PLANE A QUIET — status {:#06x} \
+                                 info32 {:#010x}. ⊘ The page was ZEROED before the channel \
+                                 was told about it, so this is not a stale read; but a quiet \
+                                 notifier cannot distinguish `hObjectError` refused, RM not \
+                                 writing, and the channel not having been RC-killed. NOT a \
+                                 pass and NOT a refutation",
+                                n.status, n.except_type
+                            ),
+                            None => println!(
+                                "FAIL  R33 arm 5 NOTIFIER  = the notifier could not be read \
+                                 at all — plane A is UNMEASURED this run, which is a \
+                                 different thing from measuring it quiet"
+                            ),
+                        }
+                        match &r.post_fault_ioctl {
+                            Ok(()) => println!(
+                                "⊘     R33 arm 5 IOCTL     = PLANE C SILENT — \
+                                 `GET_WORK_SUBMIT_TOKEN` on the FAULTED channel returned \
+                                 `NV_OK`. ⇒ THE IOCTL PLANE CARRIES NOTHING: a client that \
+                                 polls only return codes cannot learn it was killed, which \
+                                 is why plane A is not optional"
+                            ),
+                            Err(e) => println!(
+                                "★     R33 arm 5 IOCTL     = PLANE C SPEAKS — the next ioctl \
+                                 on the faulted channel refused with {e:?}. A second, \
+                                 independent guest-observable path"
+                            ),
+                        }
+                        match r.reach {
                         GuestReach::ControlFailed => {
                             println!(
                                 "??    R33 arm 4 control   = the POSITIVE CONTROL did not land \
@@ -2813,7 +2893,8 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                             );
                             false
                         }
-                    },
+                        }
+                    }
                     Err(e) => {
                         println!(
                             "FAIL  R33 arm 4           = the probe could not be built: {e:?} (an \

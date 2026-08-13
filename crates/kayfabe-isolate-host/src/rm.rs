@@ -1471,7 +1471,7 @@ impl RmConnection {
     ///    which selects the same BAR0 register window every earlier usermode class gives
     ///    unconditionally (`ogkm-580:
     ///    src/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`).
-    /// 3. ★★ **[`CachePolicy::Uncached`], not write-combining.** This is a BAR0
+    /// 3. ★★ **[`CachePolicy::WriteBack`], not write-combining.** This is a BAR0
     ///    *register* range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch and
     ///    calls `nv_encode_caching(…, NV_MEMORY_UNCACHED, NV_MEMORY_TYPE_REGISTERS)`
     ///    unconditionally (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`); the
@@ -1491,7 +1491,7 @@ impl RmConnection {
         let want = self.mint();
         let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, &mut [])?;
         self.remember(object, self.subdevice);
-        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::Uncached)?;
+        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
         Ok(UsermodeWindow {
             _object: object,
             _node: node,
@@ -1694,7 +1694,7 @@ impl RmConnection {
         register_len: u64,
         mmap_len: u64,
     ) -> Result<(CharDevice, VolatileRegion), RmError> {
-        self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::Uncached)
+        self.map_cpu_windowed(object, register_len, mmap_len, CachePolicy::WriteBack)
     }
 
     /// Read the PTIMER pair out of a region produced by [`Self::alloc_timer_object`] +
@@ -2916,6 +2916,48 @@ pub enum GuestReach {
     },
 }
 
+/// How many bytes of notifier this rung allocates and maps.
+///
+/// One page, for one 16-byte record. ⊘ Not sized to the record: RM's own notifier objects are
+/// page-granular and a sub-page `NV01_MEMORY_SYSTEM` is a different question than the one this
+/// rung is asking.
+const NOTIFIER_BYTES: u64 = 0x1000;
+
+/// ★★★★★ **What a raw client READS OUT OF ITS OWN ADDRESS SPACE after its channel died.**
+///
+/// The decoded `NvNotification` at
+/// [`kayfabe_abi::notifier::NOTIFICATION_TYPE_ERROR_INDEX`]. This is the answer to *"how does
+/// the guest learn?"* in field terms, and every field is the driver's, not ours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorNotifierRead {
+    /// `status` — [`kayfabe_abi::notifier::NOTIFIER_STATUS_RC`] (`0xffff`) once RM has
+    /// written it. ⊘ **Zero is the "nothing happened" value**, and it is also what an
+    /// unwired, unaccepted or never-written notifier reads as. See
+    /// [`HostRmBackend::read_error_notifier`].
+    pub status: u16,
+    /// `info32` — the `ROBUST_CHANNEL_*` exception type. For an MMU fault this is
+    /// [`kayfabe_abi::generated::rpc::ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT`] (`0x1f`) — the
+    /// same number a host kernel log prints as **`Xid 31`**.
+    pub except_type: u32,
+    /// `info16` — the `nv2080EngineType` the RC event routes on.
+    pub engine_type: u16,
+    /// `timeStamp`, both halves. Nothing grades on it; it is carried so a quiet notifier and
+    /// a stale one stay distinguishable by inspection.
+    pub timestamp: u64,
+}
+
+impl ErrorNotifierRead {
+    /// Did the driver actually write a robust-channel error here?
+    ///
+    /// ★ Keyed on `status`, which is the field RM writes **last**
+    /// (`kernel_rc_notification.c`, and [`kayfabe_abi::notifier::ErrorNotification::PUBLISH_SPLIT`]
+    /// encodes that order): a reader that keyed on `info32` could see a half-published record.
+    #[must_use]
+    pub fn fired(&self) -> bool {
+        self.status != 0
+    }
+}
+
 /// [`HostRmBackend::probe_guest_reachability`]'s full report — the control and the probe,
 /// never the probe alone.
 #[derive(Debug)]
@@ -2928,6 +2970,33 @@ pub struct GuestReachProbe {
     pub control_want: u32,
     /// The probe's verdict.
     pub reach: GuestReach,
+    /// ★★★★★ **w287 — WHAT THE CLIENT WAS TOLD, IN ITS OWN PROCESS.**
+    ///
+    /// `None` means the notifier could not be built or RM refused the handle — which is a
+    /// *finding*, and deliberately not folded into a quiet `ErrorNotifierRead`, because a
+    /// zeroed record and an absent one are the same bytes and opposite conclusions.
+    pub notifier: Option<ErrorNotifierRead>,
+    /// ★★★★★ **w287 — PLANE C: does the NEXT IOCTL fail?**
+    ///
+    /// One `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` issued on the channel **after** the
+    /// fault, on the dead channel, and recorded whatever it answered. `Ok(())` here is the
+    /// finding, not a formality: it says the ioctl plane carries **nothing**, so a client
+    /// that polls only return codes cannot learn it was killed.
+    ///
+    /// ⊘ Deliberately a control that already succeeds on this channel at creation, so a
+    /// failure could only be the RC state and never an unsupported command.
+    pub post_fault_ioctl: Result<(), RmError>,
+    /// ★★★★★ **THE NEGATIVE CONTROL, ON THE SAME SIXTEEN BYTES, IN THE SAME RUN.**
+    ///
+    /// The notifier read **after the positive control retired and before the fault probe was
+    /// issued** — i.e. on a channel that is alive and has just done real work.
+    ///
+    /// ⊘⊘ Without it, `status == 0xffff` after the fault is only *"the word we hoped for was
+    /// there"*. The page is zeroed before the channel is told about it, which excludes a
+    /// dirty allocation — but not a notifier RM wrote at channel *creation*, nor one written
+    /// by the control submission. This field excludes both, and it does so without a second
+    /// run, a second channel or a second revision to compare against.
+    pub notifier_before: Option<ErrorNotifierRead>,
 }
 
 /// What one submission produced — the whole evidence bar for rung 3, as data.
@@ -4855,7 +4924,7 @@ impl HostRmBackend {
         ring_at: Option<GpuVa>,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at))
+        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at), None)
     }
 
     /// ★★★★★ **W230 — a host channel over the GUEST'S ring**: the same body, with the
@@ -4886,7 +4955,7 @@ impl HostRmBackend {
         ring: GuestRing,
     ) -> Result<(HostHandle, u64), RmError> {
         let range = self.narrow(vas)?;
-        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring))
+        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), None)
     }
 
     /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
@@ -4905,15 +4974,224 @@ impl HostRmBackend {
         vas: ExecutorVas,
         engine_type: u32,
     ) -> Result<(HostHandle, u64), RmError> {
-        self.alloc_channel_in(vas.range, engine_type, RingSource::Ours(None))
+        self.alloc_channel_in(vas.range, engine_type, RingSource::Ours(None), None)
+    }
+
+    /// ★★★★★ **w287 — [`Self::alloc_channel_at`] with an ERROR NOTIFIER on the channel.**
+    ///
+    /// The one verb in this file that lets a client be **told** its channel died, instead of
+    /// inferring it from a semaphore that never moved.
+    ///
+    /// `notifier` names a memory object — [`RmBackend::alloc_sysmem`] is what this rung uses —
+    /// which RM writes one 16-byte `NvNotification` into when the channel is robust-channel
+    /// killed. Read it back with [`Self::read_error_notifier`].
+    ///
+    /// # Errors
+    /// As [`Self::alloc_channel_at`], plus [`RmError::BadHandle`] if `notifier` was not minted
+    /// by this connection.
+    pub fn alloc_channel_at_with_error_notifier(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring_at: Option<GpuVa>,
+        notifier: HostHandle,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        let notifier = self.narrow(notifier)?;
+        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at), Some(notifier))
+    }
+
+    /// ★★★★★ **Read the channel's error notifier — the guest-observable error path, as data.**
+    ///
+    /// The record is `NvNotification`: `timeStamp` (8), `info32` (4), `info16` (2),
+    /// `status` (2), and the index this rung reads is
+    /// [`kayfabe_abi::notifier::NOTIFICATION_TYPE_ERROR_INDEX`].
+    ///
+    /// ## ⊘ `status == 0` IS THE "NOTHING HAPPENED" VALUE, and that is a trap with a name
+    ///
+    /// A zeroed page decodes as a well-formed *"no error"*. So a caller that never wired
+    /// `hObjectError`, a caller whose notifier RM never accepted, and a caller whose channel
+    /// simply did not fault **all read identically**. ⇒ This rung's arm 5 runs its
+    /// [`GuestReach::NotResolved`] positive control *first* and reports the notifier
+    /// **against** it, so *"the notifier stayed quiet"* can be graded as a finding rather
+    /// than read as a pass. Same class as the `dlen=0` oracle rows: an empty artefact reads
+    /// as benign.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection did not mint, or whatever the CPU
+    /// mapping refused.
+    pub fn read_error_notifier(
+        &mut self,
+        notifier: HostHandle,
+    ) -> Result<ErrorNotifierRead, RmError> {
+        use kayfabe_abi::notifier::{
+            NOTIFICATION_SIZE, NOTIFICATION_STATUS_OFF, NOTIFICATION_TYPE_ERROR_INDEX,
+        };
+        let raw = self.narrow(notifier)?;
+        let base = NOTIFICATION_TYPE_ERROR_INDEX * NOTIFICATION_SIZE as u64;
+        // ⊘ `UnCached`, not write-combining. The writer is RM (or, on a GSP part, the GSP)
+        // and the reader is this CPU: a WC mapping is for stores we then fence, and reading
+        // a producer's bytes through one is how a stale line reads as "quiet".
+        let (node, view) = self
+            .conn
+            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::WriteBack)?;
+        let lo = view
+            .load_u32(HostOffset::new(base))
+            .map_err(|e| region_error(&e))?;
+        let hi = view
+            .load_u32(HostOffset::new(base + 4))
+            .map_err(|e| region_error(&e))?;
+        let except_type = view
+            .load_u32(HostOffset::new(base + 8))
+            .map_err(|e| region_error(&e))?;
+        // `info16` and `status` are two half-words in one dword; split here rather than
+        // asking the region for a `u16` it does not offer.
+        let tail = view
+            .load_u32(HostOffset::new(base + NOTIFICATION_STATUS_OFF as u64 - 2))
+            .map_err(|e| region_error(&e))?;
+        drop(view);
+        drop(node);
+        Ok(ErrorNotifierRead {
+            timestamp: u64::from(lo) | (u64::from(hi) << 32),
+            except_type,
+            engine_type: (tail & 0xFFFF) as u16,
+            status: (tail >> 16) as u16,
+        })
+    }
+
+    /// ⊘⊘⊘ **NOT USED — KEPT AS THE RECORD OF TWO MEASUREMENTS THAT COST A RUN EACH.**
+    ///
+    /// The notifier this rung actually uses is [`RmConnection::alloc_device_local`]
+    /// (`NV01_MEMORY_LOCAL_USER`), which `kchannelGetNotifierInfo` accepts as
+    /// `ERROR_NOTIFIER_TYPE_MEMORY` exactly as it accepts `NV01_MEMORY_SYSTEM`
+    /// (`ogkm-580: kernel_channel.c:2016`, `:2080` — the handle is resolved by
+    /// `memGetByHandle`, which is class-agnostic), and which this tree already CPU-maps
+    /// every run. ⚠ It is a **deviation from the shape a real driver uses**: the
+    /// `[w287 census, 63/63]` aperture of every real `errorNotifierMem` is SYSMEM. Recorded
+    /// here rather than left for a reader to notice.
+    ///
+    /// **Why the sysmem route is not simply better:** the two flag settings measured are
+    /// *both* unusable, in opposite ways.
+    /// - `[measured 2026-08-13, vh2, rev f7a74bc]` with [`NVOS02_FLAGS_MAPPING_NO_MAP`] (what
+    ///   [`RmBackend::alloc_sysmem`] sets) the allocation succeeds and the later CPU map is
+    ///   refused `NV_ERR_INVALID_ARGUMENT` — `Other(31)`, **with the ioctl census reading
+    ///   `failed=0`**, because RM reports its status *inside* the parameter struct while
+    ///   `ioctl(2)` returns 0. ⊘ That flag's own doc says it *"stops the frontend building an
+    ///   `mmap` context around the descriptor"*: correct for the isolate, which maps GPU-side
+    ///   only, and fatal for a notifier whose entire purpose is to be read by this CPU.
+    /// - `[measured 2026-08-13, vh2]` **dropping** the flag moves the refusal EARLIER, onto
+    ///   the allocation itself: `NV_ESC_RM_ALLOC_MEMORY` (nr 39) answers **`errno 22`
+    ///   (`EINVAL`)** in the frontend — `Other(0x80000016)`, and this time the census DOES
+    ///   count it (`failed=1`). A mappable sysmem allocation needs the `fd` half of
+    ///   [`Nvos02ParametersWithFd`] filled in, which is a different rung.
+    ///
+    /// ★ Note the pair: the SAME defect class reported once invisibly to the census and once
+    /// visibly, purely because of which layer refused. `failed=0` is not `nothing refused`.
+    ///
+    /// ★★★★★ **The error-notifier page: sysmem, and CPU-MAPPABLE — which
+    /// [`RmBackend::alloc_sysmem`] deliberately is not.**
+    ///
+    /// ⊘⊘ **This is not `alloc_sysmem` with a different comment, and the difference cost a
+    /// run.** `[measured 2026-08-13, vh2, rev f7a74bc]` the first draft called `alloc_sysmem`
+    /// and the probe died with `Other(31)` — `NV_ERR_INVALID_ARGUMENT`, **with the ioctl
+    /// census reading `failed=0`**, because RM reports its status *inside* the parameter
+    /// struct while `ioctl(2)` returns 0. `alloc_sysmem` sets
+    /// [`NVOS02_FLAGS_MAPPING_NO_MAP`], whose own doc says it *"stops the frontend building
+    /// an `mmap` context around the descriptor"* — so the object is correct for the isolate,
+    /// which maps GPU-side only, and **unusable for a notifier, whose entire purpose is to be
+    /// read by this CPU**.
+    ///
+    /// ★ `COHERENCY_CACHED` because the producer is the GPU/GSP over snooped PCIe and the
+    /// consumer is this core; and `NV01_MEMORY_SYSTEM` because the `[w287 census, 63/63]`
+    /// aperture of every real `errorNotifierMem` is **SYSMEM** — against `userdMem`, FBMEM
+    /// `68/68` on the same census. NVIDIA's own raw pusher does exactly this
+    /// (`ogkm-580: src/common/unix/nvidia-push/src/nvidia-push-init.c:1116-1160`).
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    #[allow(dead_code)]
+    fn alloc_notifier_mem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let want = self.conn.mint();
+        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            h_root: self.conn.client.raw(),
+            h_object_parent: self.conn.device,
+            h_object_new: want,
+            h_class: NV01_MEMORY_SYSTEM,
+            // ⊘ The MAPPING field is left at its zero value on purpose — `_DEFAULT`, not an
+            // omission, exactly as `_LOCATION_PCI` is zero. See `NVOS02_FLAGS_LOCATION_PCI`.
+            flags: NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_COHERENCY_CACHED,
+            p_memory: 0,
+            pad1: 0,
+            limit: len - 1,
+            status: 0,
+            fd: -1,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        // `NV_ACTUAL_DEVICE_ONLY`, as `alloc_sysmem` records at length.
+        self.conn
+            .gpu
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.conn.remember(out.h_object_new, self.conn.device);
+        Ok(self.stamp(out.h_object_new))
+    }
+
+    /// Zero the notifier page before a channel is told about it.
+    ///
+    /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly
+    /// allocated page is indistinguishable from RM having written it, and this rung's entire
+    /// claim is that a *driver* wrote that word.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`], or whatever the CPU mapping refused.
+    fn zero_notifier(&mut self, notifier: HostHandle) -> Result<(), RmError> {
+        let raw = self.narrow(notifier)?;
+        let (node, view) = self
+            .conn
+            .map_cpu(raw, NOTIFIER_BYTES, CachePolicy::WriteBack)?;
+        for off in (0..NOTIFIER_BYTES).step_by(4) {
+            view.store_u32(HostOffset::new(off), 0)
+                .map_err(|e| region_error(&e))?;
+        }
+        drop(view);
+        drop(node);
+        release_fence();
+        Ok(())
     }
 
     /// The body all of the above share, over a raw `NV01_MEMORY_VIRTUAL` range.
+    ///
+    /// ## ★★★ `err_notifier` — the channel's ERROR NOTIFIER, and why it is a parameter
+    ///
+    /// `None` reproduces every caller's behaviour before w287 exactly: `hObjectError = 0`
+    /// on both the group and the channel. `Some(h)` names a memory object RM writes one
+    /// `NvNotification` into when this channel is robust-channel killed.
+    ///
+    /// ⊘⊘ **Without it a client learns a fault only by ABSENCE.** `[measured 2026-08-13, vh,
+    /// real GA106 / 580.159.04, rev 996ad42]` `--ce-client-fault` provoked a real
+    /// `Xid 31 … CE0 HUBCLIENT_CE1 faulted @ 0x9_00000000 FAULT_PDE` in the **host** ring
+    /// buffer while the client's own census read **85 ioctls, 0 failed**: every call returned
+    /// `NV_OK`, and the only in-process signal was a semaphore that stayed `0`. *"The engine
+    /// faulted"* and *"we encoded the methods wrongly"* are the same observation to a client
+    /// with no notifier, and they call for opposite next moves.
     fn alloc_channel_in(
         &mut self,
         range: u32,
         engine_type: u32,
         ring: RingSource,
+        err_notifier: Option<u32>,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
@@ -5092,6 +5370,13 @@ impl HostRmBackend {
 
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         let encoded = NvChannelGroupAllocationParameters {
+            // ⊘⊘ **ZERO ON PURPOSE EVEN WHEN `err_notifier` IS `Some`, and the asymmetry is
+            // the measurement.** A channel's `hObjectError == 0` does NOT mean *"no
+            // notifier"*: it **inherits the group's**
+            // (`ogkm-580: kernel_channel.c:509-518`). So naming the notifier on BOTH would
+            // make *"the channel's field is the one RM honoured"* unfalsifiable — the run
+            // would be green whichever field did the work. Naming it on the CHANNEL ONLY
+            // means a notifier that fires proves the channel's own field was read.
             h_object_error: 0,
             h_object_ecc_error: 0,
             // ★★ Explicit, never zero, and it is the **VASpace object** — measured. A
@@ -5133,7 +5418,12 @@ impl HostRmBackend {
 
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = ChannelAllocParams {
-            h_object_error: 0,
+            // ★★★★★ **w287 — THE GUEST-OBSERVABLE ERROR PATH, and it is one field.**
+            // `0` is every pre-w287 caller, unchanged. `Some(h)` hands RM a memory object to
+            // write one `NvNotification` into when this channel is RC-killed, which is what
+            // turns *"the semaphore never moved"* into *"the driver told me: status
+            // `0xffff`, `info32 = ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT`"*.
+            h_object_error: err_notifier.unwrap_or(0),
             // ★★★ **G2 + G3 — the two numbers that used to be constants.** For an
             // `Ours` ring `layout` still computes exactly `ring_va + GPFIFO_OFFSET` and
             // `GPFIFO_ENTRIES`, bit for bit; for a `Guest` ring they are the guest's own
@@ -6013,6 +6303,35 @@ impl HostRmBackend {
                 return Err(e);
             }
         };
+        // ★★★★★ **w287 — THE ERROR NOTIFIER, in SYSMEM and CPU-readable.**
+        //
+        // ⊘ **SYSMEM, not device-local, and it is measured rather than chosen.** `[w287
+        // census, 63/63 channels]` every `errorNotifierMem` a real driver declares carries
+        // aperture **SYSMEM** — against `userdMem`, which is FBMEM `68/68` on the same
+        // census. A notifier in vidmem is not the shape RM's writer expects.
+        //
+        // ★ Zeroed before the channel exists, so `status != 0` after the fault cannot be
+        // whatever the allocator handed us. `NV01_MEMORY_SYSTEM` is not documented to arrive
+        // zeroed, and *"it was already `0xffff`"* is exactly the false positive that would
+        // make this whole client report success without a driver ever writing anything.
+        let notifier_h = match self
+            .conn
+            .alloc_device_local(NOTIFIER_BYTES)
+            .map(|h| self.stamp(h))
+        {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(dst));
+                let _ = self.free(self.stamp(ctrl_src));
+                return Err(e);
+            }
+        };
+        if let Err(e) = self.zero_notifier(notifier_h) {
+            let _ = self.free(notifier_h);
+            let _ = self.free(self.stamp(dst));
+            let _ = self.free(self.stamp(ctrl_src));
+            return Err(e);
+        }
 
         let mut mapped: Vec<u64> = Vec::new();
         let mut chan: Option<HostHandle> = None;
@@ -6067,8 +6386,16 @@ impl HostRmBackend {
             // ★ THE STAND-IN FOR A GUEST CHANNEL. `alloc_channel_on` over the `Vas`'s own
             // range is exactly what `plan_doorbell` reaches for a guest submission, engine
             // and all — the point of the rung is that this channel is ORDINARY.
-            let (c, token) =
-                self.alloc_channel_at(vas, ENGINE_TYPE_COPY0, Some(GpuVa(PROBE_RING_AT)))?;
+            //
+            // ★★★★★ **w287 — WITH AN ERROR NOTIFIER, which is the whole of the second
+            // client.** The channel is otherwise the same one w278..w283 measured; the only
+            // new thing RM is told is where to write when it kills this channel.
+            let (c, token) = self.alloc_channel_at_with_error_notifier(
+                vas,
+                ENGINE_TYPE_COPY0,
+                Some(GpuVa(PROBE_RING_AT)),
+                notifier_h,
+            )?;
             chan = Some(c);
             let mut params = [0u8; CeAllocParams::SIZE];
             CeAllocParams {
@@ -6097,8 +6424,22 @@ impl HostRmBackend {
                     control_read,
                     control_want: CONTROL_WORD,
                     reach: GuestReach::ControlFailed,
+                    // ⊘ Read even here. A notifier that fired while the CONTROL was still
+                    // failing means the channel died before the probe was ever issued, and
+                    // that is a different story than the one this rung set out to tell.
+                    notifier: self.read_error_notifier(notifier_h).ok(),
+                    // ⊘ NOT MEASURED on this path — no fault was provoked, so there is no
+                    // "after" for an ioctl to be after. `NOT_ON_THIS_RUNG`, by name.
+                    post_fault_ioctl: Err(RmError::Other(NOT_ON_THIS_RUNG)),
+                    // ⊘ The control did not land, so there is no "alive and working" instant
+                    // for a negative control to be taken at.
+                    notifier_before: None,
                 });
             }
+
+            // ★★★ THE NEGATIVE CONTROL — read here, between a submission that WORKED and one
+            // that will fault. Nothing between this read and the next one but the fault.
+            let notifier_before = self.read_error_notifier(notifier_h).ok();
 
             let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
             let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
@@ -6124,11 +6465,25 @@ impl HostRmBackend {
             } else {
                 GuestReach::NotResolved(probe)
             };
+            // ★★★ READ AFTER the probe's wait has already expired, so RM has had the same
+            // window to react that the semaphore poll gave the engine. ⊘ A notifier read
+            // before the wait would measure our own impatience.
+            let notifier = self.read_error_notifier(notifier_h).ok();
+            // Plane C, asked explicitly rather than inferred from the teardown's incidentals.
+            let mut tok = [0u8; WORK_SUBMIT_TOKEN_PARAMS_SIZE];
+            let post_fault_ioctl = self.conn.raw_control(
+                self.narrow(c)?,
+                NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+                &mut tok,
+            );
             Ok(GuestReachProbe {
                 control,
                 control_read,
                 control_want: CONTROL_WORD,
                 reach,
+                notifier,
+                post_fault_ioctl,
+                notifier_before,
             })
         };
         let out = go();
@@ -6140,6 +6495,9 @@ impl HostRmBackend {
         }
         let _ = self.free(self.stamp(dst));
         let _ = self.free(self.stamp(ctrl_src));
+        // ⊘ Freed AFTER `out` has already been built — the record was decoded above, so a
+        // caller reads bytes this function owned, never a mapping it has to keep alive.
+        let _ = self.free(notifier_h);
         out
     }
 
