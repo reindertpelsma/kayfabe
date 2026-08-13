@@ -5577,6 +5577,50 @@ impl HostRmBackend {
         Ok(out.mapped())
     }
 
+    /// ★★ **The PDE-level sibling of [`Self::pte_info`] — and the only one a PRODUCTION driver
+    /// will answer.**
+    ///
+    /// `NV0080_CTRL_CMD_DMA_GET_PDE_INFO`. See
+    /// [`kayfabe_abi::submit::NV0080_CTRL_CMD_DMA_GET_PDE_INFO`] for the measurement that
+    /// forced this to exist (`GET_PTE_INFO` answers `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED` on a
+    /// release driver) and for **the weaker question it answers**: whether a page TABLE covers
+    /// the VA, never whether the leaf PTE is valid.
+    ///
+    /// ⚠ `Ok(None)` here is structurally a `FAULT_PDE`; our fault is `FAULT_PTE`, so a
+    /// `Some(..)` is **consistent with the fault** and localises the miss to the leaf.
+    ///
+    /// # Errors
+    /// As [`Self::pte_info`].
+    pub fn pde_info(
+        &mut self,
+        vas: HostHandle,
+        va: u64,
+    ) -> Result<(Option<kayfabe_abi::submit::DmaPdeInfoBlock>, u64), RmError> {
+        use kayfabe_abi::submit::{DmaGetPdeInfoParams, NV0080_CTRL_CMD_DMA_GET_PDE_INFO};
+        let range = self.narrow(vas)?;
+        let mut buf = [0u8; DmaGetPdeInfoParams::SIZE];
+        DmaGetPdeInfoParams {
+            gpu_addr: va,
+            pde_virt_addr: 0,
+            pde_entry_size: 0,
+            pde_addr_space: 0,
+            pde_size: 0,
+            sub_device_id: 0,
+            pte_blocks: [kayfabe_abi::submit::DmaPdeInfoBlock::default();
+                DmaGetPdeInfoParams::PTE_BLOCKS],
+            pdb_addr: 0,
+            h_vaspace: range,
+        }
+        .encode_into(&mut buf)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.conn
+            .raw_control(self.conn.device, NV0080_CTRL_CMD_DMA_GET_PDE_INFO, &mut buf)?;
+        let out = DmaGetPdeInfoParams::decode(&buf).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        // ★ `pdbAddr` returned alongside: it names WHICH tree answered, so the caller can
+        // check the reply against the VAS it believes it asked about rather than trust it.
+        Ok((out.page_table(), out.pdb_addr))
+    }
+
     /// Zero the notifier page before a channel is told about it.
     ///
     /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly

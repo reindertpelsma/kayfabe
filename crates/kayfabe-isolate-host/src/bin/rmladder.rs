@@ -2802,19 +2802,26 @@ fn ce_client(
                    space: kayfabe_isolate::HostHandle,
                    va: u64|
          -> Option<bool> {
-            match rm.pte_info(space, va) {
-                Ok(Some(b)) => {
+            // ⊘⊘ **PDE, NOT PTE, AND THE NAME MATTERS.** `GET_PTE_INFO` is
+            // `RMCTRL_FLAGS_RM_TEST_ONLY_CODE` and answers `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED`
+            // on a release driver — measured, then explained from source. This is the sibling
+            // that is callable, and it reports whether a page TABLE covers the VA. Our fault
+            // is `FAULT_PTE`, so PRESENT here is CONSISTENT WITH THE FAULT.
+            match rm.pde_info(space, va) {
+                Ok((Some(b), pdb)) => {
                     println!(
-                        "      R33 arm 6 {label:<14} {va:#018x} = PRESENT (pageSize {:#x}, \
-                         kind {:#x}, aperture {:#x}, pteFlags {:#010x})",
-                        b.page_size, b.kind, b.aperture(), b.pte_flags
+                        "      R33 arm 6 {label:<14} {va:#018x} = PDE PRESENT (pageSize {:#x}, \
+                         ptePhysAddr {:#x}, addrSpace {:#x}, pdeFlags {:#010x}, pdbAddr \
+                         {pdb:#x}) ⊘ a page TABLE covers this VA; says NOTHING about the leaf",
+                        b.page_size, b.pte_phys_addr, b.pte_addr_space, b.pde_flags
                     );
                     Some(true)
                 }
-                Ok(None) => {
+                Ok((None, pdb)) => {
                     println!(
-                        "      R33 arm 6 {label:<14} {va:#018x} = ABSENT — RM holds NO valid \
-                         PTE at any page size. ⊘ This is what `FAULT_PTE` says hardware found"
+                        "      R33 arm 6 {label:<14} {va:#018x} = PDE ABSENT (pdbAddr \
+                         {pdb:#x}) — RM's descent found NO page table. ⊘ That is structurally \
+                         a `FAULT_PDE`, and our operands fault `FAULT_PTE`"
                     );
                     Some(false)
                 }
@@ -2828,7 +2835,7 @@ fn ce_client(
             }
         };
         println!(
-            "info  R33 arm 6 PTE-INFO  = NV0080_CTRL_CMD_DMA_GET_PTE_INFO (0x801801) against \
+            "info  R33 arm 6 PDE-INFO  = NV0080_CTRL_CMD_DMA_GET_PDE_INFO (0x801809) against \
              RM's OWN VA space objects. ⊘ It reports what RM BELIEVES it mapped (populate \
              source 1), NOT what hardware can resolve — never report a valid PTE here as \
              `hardware can reach it`"

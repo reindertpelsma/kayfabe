@@ -4242,3 +4242,245 @@ mod dma_pte_info_tests {
         assert!(DmaGetPteInfoParams::decode(&[0u8; DmaGetPteInfoParams::SIZE - 1]).is_err());
     }
 }
+
+/// ★★★★★ **`NV0080_CTRL_CMD_DMA_GET_PDE_INFO` — the sibling that is NOT test-only.**
+///
+/// `0x801809`, on the **device**. `ogkm-580: ctrl0080dma.h:370-445`.
+///
+/// # ⊘⊘ WHY THIS EXISTS: [`NV0080_CTRL_CMD_DMA_GET_PTE_INFO`] IS DISABLED IN PRODUCTION
+///
+/// `[measured 2026-08-13, vh, real GA106 580.159.04]` `GET_PTE_INFO` answers
+/// **`Other(126)` = `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED`** (`0x7E`,
+/// `ogkm-580: kernel-open/common/inc/nvstatuscodes.h:155`) for **every** address, including a
+/// known-mapped one. Explained from source afterwards, not guessed:
+///
+/// - `GET_PTE_INFO`'s nvoc flags are **`0x100008`** (`ogkm-580: g_device_nvoc.c:733-745`);
+/// - `RMCTRL_FLAGS_RM_TEST_ONLY_CODE` is **`0x00100000`** (`ogkm-580: inc/kernel/rmapi/control.h:323`);
+/// - `serverControlLookupLockFlags`' preamble refuses any control carrying that flag unless
+///   `PDB_PROP_SYS_ENABLE_RM_TEST_ONLY_CODE` is set (`ogkm-580: src/kernel/rmapi/control.c:855-861`),
+///   which a release driver does not set.
+///
+/// ⇒ **The PTE-level oracle cannot be had on a production driver.** `GET_PDE_INFO` carries
+/// **`0x10008`** — `NON_PRIVILEGED | GSP_PLUGIN_FOR_VGPU_GSP`, **without** the test-only bit —
+/// so it is callable.
+///
+/// ★ Both are direct `_IMPL`s and neither sets `RMCTRL_FLAGS_ROUTE_TO_PHYSICAL` (`0x40`), so
+/// `NVOC_EXPORTED_METHOD_DISABLED_BY_FLAG` is false for both and **the bound implementation is
+/// the `.c` one reads**. The standing nvoc-HAL trap is resolved for this family, in both
+/// directions.
+///
+/// # ⚠ IT ANSWERS A WEAKER QUESTION, AND THE DIFFERENCE IS EXACTLY OUR FAULT
+///
+/// This reports the **page directory entry** covering `gpuAddr` — whether a page *table*
+/// exists for that VA, its physical address, geometry and aperture. It does **not** report
+/// whether the leaf **PTE** is valid.
+///
+/// ⊘ Our fault is `FAULT_PTE`, which means the descent **reached** the page table and found no
+/// valid entry. So a `PRESENT` answer here is **consistent with the fault, not evidence
+/// against it** — it corroborates that the directory chain exists and localises the miss to
+/// the leaf. **Never report a present PDE as "the VA is mapped".**
+pub const NV0080_CTRL_CMD_DMA_GET_PDE_INFO: u32 = 0x0080_1809;
+
+/// One block of [`DmaGetPdeInfoParams`] — 32 bytes. `ogkm-580: ctrl0080dma.h:447-455`.
+///
+/// ⚠ **Not the same shape as [`DmaPteInfoBlock`]** despite the similar name: the fields differ
+/// and `pageSize` is a `NvU32` here and a `NvU64` there.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DmaPdeInfoBlock {
+    /// `NvU64 ptePhysAddr` @ +0 — the physical address of the **page table**.
+    pub pte_phys_addr: u64,
+    /// `NvU32 pteCacheAttrib` @ +8.
+    pub pte_cache_attrib: u32,
+    /// `NvU32 pteEntrySize` @ +12.
+    pub pte_entry_size: u32,
+    /// `NvU32 pageSize` @ +16. ⊘ **`0` means this block is not valid** — the header says so
+    /// (`:394-395`), exactly as for the PTE form.
+    pub page_size: u32,
+    /// `NvU32 pteAddrSpace` @ +20 — `_PTE_ADDR_SPACE_*`.
+    pub pte_addr_space: u32,
+    /// `NvU32 pdeVASpaceSize` @ +24.
+    pub pde_vaspace_size: u32,
+    /// `NvU32 pdeFlags` @ +28.
+    pub pde_flags: u32,
+}
+
+impl DmaPdeInfoBlock {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV0080_CTRL_DMA_PDE_INFO_PTE_BLOCK";
+    /// `sizeof`.
+    pub const SIZE: usize = 32;
+
+    /// Whether this block was filled in — see [`Self::page_size`].
+    #[must_use]
+    pub const fn describes_a_page_table(self) -> bool {
+        self.page_size != 0
+    }
+}
+
+/// `NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS` — `ogkm-580: ctrl0080dma.h:456-467`.
+///
+/// ⊘ Offsets from the compiler against the SDK's declarations, not counted by eye.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DmaGetPdeInfoParams {
+    /// `NvU64 gpuAddr` @ +0 — **[IN]**.
+    pub gpu_addr: u64,
+    /// `NvU64 pdeVirtAddr` @ +8 — **[OUT]**.
+    pub pde_virt_addr: u64,
+    /// `NvU32 pdeEntrySize` @ +16 — **[OUT]**.
+    pub pde_entry_size: u32,
+    /// `NvU32 pdeAddrSpace` @ +20 — **[OUT]**.
+    pub pde_addr_space: u32,
+    /// `NvU32 pdeSize` @ +24 — **[OUT]**, the fractional page-table size.
+    pub pde_size: u32,
+    /// `NvU32 subDeviceId` @ +28.
+    pub sub_device_id: u32,
+    /// `pteBlocks[5]` @ +32 — **[OUT]**.
+    pub pte_blocks: [DmaPdeInfoBlock; DmaGetPdeInfoParams::PTE_BLOCKS],
+    /// `NvU64 pdbAddr` @ +192 — **[OUT]** the page-directory base this descent used.
+    ///
+    /// ★★ Worth printing on its own: it says **which page-table tree** answered, so a reply
+    /// can be checked against the VAS the caller believes it named rather than trusted.
+    pub pdb_addr: u64,
+    /// `NvHandle hVASpace` @ +200 — **[IN]**, the join key. See [`DmaGetPteInfoParams::h_vaspace`].
+    pub h_vaspace: u32,
+}
+
+impl DmaGetPdeInfoParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV0080_CTRL_DMA_GET_PDE_INFO_PARAMS";
+    /// `NV0080_CTRL_DMA_PDE_INFO_PTE_BLOCKS`.
+    pub const PTE_BLOCKS: usize = 5;
+    /// Byte offset of `pteBlocks[]`.
+    pub const PTE_BLOCKS_AT: usize = 32;
+    /// Byte offset of `pdbAddr`.
+    pub const PDB_ADDR_AT: usize = 192;
+    /// Byte offset of `hVASpace`.
+    pub const H_VASPACE_AT: usize = 200;
+    /// `sizeof`.
+    pub const SIZE: usize = 208;
+
+    /// Encode the **[IN]** halves, zeroing the rest.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] if `out` is smaller than [`Self::SIZE`].
+    pub fn encode_into(&self, out: &mut [u8]) -> Result<(), AbiError> {
+        if out.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: out.len(),
+            });
+        }
+        out[..Self::SIZE].fill(0);
+        out[0..8].copy_from_slice(&self.gpu_addr.to_le_bytes());
+        out[28..32].copy_from_slice(&self.sub_device_id.to_le_bytes());
+        out[Self::H_VASPACE_AT..Self::H_VASPACE_AT + 4]
+            .copy_from_slice(&self.h_vaspace.to_le_bytes());
+        Ok(())
+    }
+
+    /// Decode a reply.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] — refused, never zero-extended.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        let u32_at = |off: usize| {
+            u32::from_le_bytes([bytes[off], bytes[off + 1], bytes[off + 2], bytes[off + 3]])
+        };
+        let u64_at = |off: usize| {
+            let mut w = [0u8; 8];
+            w.copy_from_slice(&bytes[off..off + 8]);
+            u64::from_le_bytes(w)
+        };
+        let mut pte_blocks = [DmaPdeInfoBlock::default(); Self::PTE_BLOCKS];
+        for (i, blk) in pte_blocks.iter_mut().enumerate() {
+            let b = Self::PTE_BLOCKS_AT + i * DmaPdeInfoBlock::SIZE;
+            *blk = DmaPdeInfoBlock {
+                pte_phys_addr: u64_at(b),
+                pte_cache_attrib: u32_at(b + 8),
+                pte_entry_size: u32_at(b + 12),
+                page_size: u32_at(b + 16),
+                pte_addr_space: u32_at(b + 20),
+                pde_vaspace_size: u32_at(b + 24),
+                pde_flags: u32_at(b + 28),
+            };
+        }
+        Ok(Self {
+            gpu_addr: u64_at(0),
+            pde_virt_addr: u64_at(8),
+            pde_entry_size: u32_at(16),
+            pde_addr_space: u32_at(20),
+            pde_size: u32_at(24),
+            sub_device_id: u32_at(28),
+            pte_blocks,
+            pdb_addr: u64_at(Self::PDB_ADDR_AT),
+            h_vaspace: u32_at(Self::H_VASPACE_AT),
+        })
+    }
+
+    /// The first block that describes a page table.
+    ///
+    /// ⊘ `None` is *"RM's descent found no page table for this VA"*, i.e. structurally a
+    /// `FAULT_PDE`. It is **not** *"the call failed"* — that is an `Err` at the caller.
+    #[must_use]
+    pub fn page_table(&self) -> Option<DmaPdeInfoBlock> {
+        self.pte_blocks
+            .iter()
+            .copied()
+            .find(|b| b.describes_a_page_table())
+    }
+}
+
+#[cfg(test)]
+mod dma_pde_info_tests {
+    use super::{DmaGetPdeInfoParams, DmaPdeInfoBlock};
+
+    /// The offsets, against what the compiler produced from the SDK's declarations.
+    #[test]
+    fn the_layout_matches_what_the_compiler_says() {
+        assert_eq!(DmaPdeInfoBlock::SIZE, 32);
+        assert_eq!(DmaGetPdeInfoParams::PTE_BLOCKS_AT, 32);
+        assert_eq!(DmaGetPdeInfoParams::PDB_ADDR_AT, 192);
+        assert_eq!(DmaGetPdeInfoParams::H_VASPACE_AT, 200);
+        assert_eq!(DmaGetPdeInfoParams::SIZE, 208);
+    }
+
+    /// The join key must land where RM reads it, and the [OUT] area must be ours to zero.
+    #[test]
+    fn encode_places_the_join_key_and_the_address() {
+        let mut buf = [0xEEu8; DmaGetPdeInfoParams::SIZE];
+        DmaGetPdeInfoParams {
+            gpu_addr: 0x0000_0001_2000_0000,
+            pde_virt_addr: 0,
+            pde_entry_size: 0,
+            pde_addr_space: 0,
+            pde_size: 0,
+            sub_device_id: 0,
+            pte_blocks: [DmaPdeInfoBlock::default(); DmaGetPdeInfoParams::PTE_BLOCKS],
+            pdb_addr: 0,
+            h_vaspace: 0xCAFE_0009,
+        }
+        .encode_into(&mut buf)
+        .expect("encode");
+        assert_eq!(&buf[0..8], &0x0000_0001_2000_0000u64.to_le_bytes());
+        assert_eq!(&buf[200..204], &0xCAFE_0009u32.to_le_bytes());
+        assert!(buf[32..192].iter().all(|&b| b == 0));
+    }
+
+    /// A zeroed reply must not decode as "a page table is there".
+    #[test]
+    fn an_unfilled_block_is_not_a_page_table() {
+        let p = DmaGetPdeInfoParams::decode(&[0u8; DmaGetPdeInfoParams::SIZE]).expect("decode");
+        assert!(p.page_table().is_none());
+        assert!(DmaGetPdeInfoParams::decode(&[0u8; DmaGetPdeInfoParams::SIZE - 1]).is_err());
+    }
+}
