@@ -2293,6 +2293,37 @@ impl ObjectPolicy {
     /// or GfxP gets [`kayfabe_core::gpu::CtxswPreemptionFault::PreemptionNotImplemented`],
     /// which is a sentence this port can defend.
     ///
+    /// # ⊘⊘⊘ CORRECTED 2026-08-14 (w292) — **THE DIVERGENCE BELOW WAS OUR OWN REFUSAL,
+    /// # ONE CONTROL UPSTREAM. OURS NOW ASKS FOR `COMPUTE_CILP` TOO.**
+    ///
+    /// The block below records *"`2` (`COMPUTE_CILP`) in the C against `0` (`COMPUTE_WFI`)
+    /// in ours"* as a fact about our payload. `[measured 2026-08-14, boots
+    /// `nvdiff_w292/drain_r1` vs the serve arm at `0221095`]` **it was a fact about our
+    /// REFUSALS**, and it moved the moment one of them was lifted:
+    ///
+    /// | | `flags` | `hChannel` | `gfxp` | `cilpPreemptMode` |
+    /// |---|---|---|---|---|
+    /// | ours, before serving `0x83de0309` | `1` | `0x5c000012` | `0` | **`0` WFI** |
+    /// | ours, after | `1` | `0x5c000012` | `0` | ★ **`2` CILP** |
+    /// | **native GA106** | `1` | `0x5c000016` | `0` | **`2` CILP** |
+    ///
+    /// ⇒ Every word now matches a real GA106 except the channel handle. The guest asked for
+    /// WFI **because we had refused `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK`**, whose mask
+    /// `0x3a` includes `_CILP` (`0x10`); with the mask served, libcuda asks for the mode the
+    /// hardware path asks for.
+    ///
+    /// ★★★ **So the lesson below survives and its example does not.** *"A green C oracle is
+    /// evidence about the C's payload, never about ours"* is still right, and diffing the
+    /// **request** rather than the reply is still what caught it. But the specific
+    /// divergence it was built on is **gone**, and a reader who meets that table must not
+    /// conclude our guest asks for WFI — it does not, and has not since `0221095`.
+    ///
+    /// ⚠ **AND THIS ARM IS NOW THE WALL.** With `cilpPreemptMode = 2` the classifier refuses
+    /// by name (`PreemptionNotImplemented`), so `0x20801210` returns `0x56` where it
+    /// returned `NV_OK` one rung ago. That is **not a regression**: the same code met a
+    /// different request. ⊘ It is a live design question — *"answer honestly and block, or
+    /// promise preemption we do not have"* — and it belongs to the owner, not to this arm.
+    ///
     /// # ⊘⊘⊘ Why the C artifact is NOT the oracle here — it answered a different request
     ///
     /// `[measured 2026-08-10, cap3_matmul_forwarding #453716/#453717 vs boot s46 record 331]`.

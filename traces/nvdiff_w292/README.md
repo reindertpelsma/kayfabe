@@ -87,3 +87,62 @@ denial (`DeniedBecause::SmDebuggerTrapping` — *"this port does not implement S
 trapping at all, so permitting the controls was a promise it could not keep"*). Our log
 records it reaching the **unserviced ledger**; which of the two paths emitted the `0x56` is
 **not measured here**. Both are ours and both produce `NV_ERR_NOT_SUPPORTED`.
+
+---
+
+## ★★★★★ w292 STEP 2 — THE FOUR ARE SERVED. Boot `w290pdrain` @ `0221095`, real GA106
+
+`serve_r1.jsonl.zst` is the capture. Same instrument, same arm, one variable: the four
+controls are now answered by `ObjectPolicy::respond_input_only`.
+
+### Pass criterion 1 — served, with bodies that match the reference
+
+| cmd | before (`bbd6ab6`) | **after (`0221095`)** | native GA106 |
+|---|---|---|---|
+| `0x20810108` | `0x56` | ★ **`0x00`** | `0x00` |
+| `0x83de0309` | `0x56` | ★ **`0x00`** | `0x00` |
+| `0xa06c0103` | `0x56` | ★ **`0x00`** | `0x00` |
+| `0xa06c0105` | `0x56` | ★ **`0x00`** | `0x00` |
+
+**`unserviced fn 76 cmd 0x…` for all four = 0** in the boot's own QEMU log. The seam is
+closed, measured on our side as well as the guest's.
+
+### Pass criterion 2 — `^CUP2_RC=` ANCHORED = **1**
+
+Baseline 1. Loose anchor `1`; unanchored `[CUP2_RC=0 CUP2_RC=1]` (the `0` is `GCC_CUP2_RC=0`).
+⊘ **Does not cross — seventh necessary-not-sufficient.** `Xid = 0`, `host_rows = 18 295 of
+18 309`, the drain still completes.
+
+### Pass criterion 3 — is `nvd_prog`'s `801` gone? **NO — and it is now a DIFFERENT control**
+
+572 records (was 565). The refusal set changed by identity:
+
+| | before | after |
+|---|---|---|
+| `0x83de0309` | `0x56` **← the wall** | served |
+| `0xa06c0103` / `0xa06c0105` / `0x20810108` | `0x56` | served |
+| **`0x20801210`** `GR_SET_CTXSW_PREEMPTION_MODE` | `NV_OK` | ⚠ **`0x56` @391 — THE NEW WALL** |
+| **`0x00801909`** `NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL` | ⊘ never issued | ⚠ **`0x56` @412** (`psize=1`; native serves `NV_OK` twice) |
+
+### ★★★★★ AND THE NEW WALL IS OUR OWN §16.59 CLASSIFIER — WITH ITS PREMISE OVERTURNED
+
+`NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS` is
+`flags@0, hChannel@4, gfxpPreemptMode@8, cilpPreemptMode@12`
+(`ogkm-580: ctrl2080gr.h:822-828`), and `COMPUTE_CILP = 2` (`:846`).
+
+| | `flags` | `hChannel` | `gfxp` | `cilpPreemptMode` |
+|---|---|---|---|---|
+| ours, before | `1` | `0x5c000012` | `0` | **`0` WFI** |
+| ours, after | `1` | `0x5c000012` | `0` | ★ **`2` CILP** |
+| **native GA106** | `1` | `0x5c000016` | `0` | **`2` CILP** |
+
+⇒ **Every word now matches a real GA106 except the channel handle.** §16.59 records
+*"`2` (`COMPUTE_CILP`) in the C against `0` (`COMPUTE_WFI`) in ours"* as a fact about our
+payload; `[measured]` it was a fact about **our refusals**, one control upstream. The guest
+asked for WFI *because we refused the exception mask*, whose `0x3a` includes `_CILP` (`0x10`).
+⊘ `0x20801210` returning `0x56` is therefore **not a regression** — the same classifier met a
+different request, and it now refuses `PreemptionNotImplemented` honestly. Whether to answer
+honestly and block, or promise preemption we do not have, is an **owner** question.
+
+⊘ `0x2080200a` still `0x56` @95 — unchanged and still not ours. `0x2080012f` still `0x56` @50 —
+unchanged and still AGREEING with hardware.
