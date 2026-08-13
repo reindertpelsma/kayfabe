@@ -5521,6 +5521,62 @@ impl HostRmBackend {
         MmuFaultInfoParams::decode(&params).map_err(|_| RmError::Other(BAD_ENCODE))
     }
 
+    /// ★★★★★ **ASK RM WHETHER `va` IS MAPPED IN `vas` — the pointwise, join-keyed oracle.**
+    ///
+    /// `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` on the **device**, naming the VA space explicitly.
+    /// See [`kayfabe_abi::submit::DmaGetPteInfoParams`] for why this id is safe to call
+    /// (direct `_IMPL`, no HAL variance, no privilege check, RM control plane only) and for
+    /// **the blind spot that makes it useful**: it reports what RM believes it mapped, i.e.
+    /// **populate source (1) alone**.
+    ///
+    /// # ⊘⊘ THREE ANSWERS, AND THEY ARE NOT TWO
+    ///
+    /// | return | means |
+    /// |---|---|
+    /// | `Ok(Some(block))` | RM holds a **valid** PTE at this VA, at `block.page_size` |
+    /// | `Ok(None)` | RM holds **no valid PTE** — which is what `FAULT_PTE` says hardware found |
+    /// | `Err(..)` | **the question was not asked**: RM refused the control, or the reply did not decode |
+    ///
+    /// ⚠ **`Ok(None)` and `Err` must never be collapsed into "absent".** *"RM says nothing is
+    /// there"* and *"we could not ask"* are the difference between a finding and a broken
+    /// instrument, and an instrument that reports absence for everything reads as a discovery.
+    /// That is why this returns a nested `Result<Option<_>>` rather than a `bool`.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection did not mint, whatever RM refused,
+    /// or [`RmError::Other`] carrying [`BAD_ENCODE`] if the reply did not decode.
+    pub fn pte_info(
+        &mut self,
+        vas: HostHandle,
+        va: u64,
+    ) -> Result<Option<kayfabe_abi::submit::DmaPteInfoBlock>, RmError> {
+        use kayfabe_abi::submit::{DmaGetPteInfoParams, NV0080_CTRL_CMD_DMA_GET_PTE_INFO};
+        let range = self.narrow(vas)?;
+        let mut buf = [0u8; DmaGetPteInfoParams::SIZE];
+        DmaGetPteInfoParams {
+            gpu_addr: va,
+            sub_device_id: 0,
+            // ⊘ Never skipped — see the field's docs: an answer that depends on whether
+            // something else touched the space first is not an oracle.
+            skip_vaspace_init: 0,
+            pte_blocks: [kayfabe_abi::submit::DmaPteInfoBlock::default();
+                DmaGetPteInfoParams::PTE_BLOCKS],
+            // ★★ The join key. NOT zero: zero means "the device's implicit VA space", which
+            // is a DIFFERENT space from the one the caller is asking about, and the reply
+            // would be a well-formed answer to a question nobody asked.
+            h_vaspace: range,
+        }
+        .encode_into(&mut buf)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        // ⊘ On the DEVICE, not the subdevice and not the VA space object: the control is
+        // exported by `Device` (`ogkm-580: g_device_nvoc.c:733-745`), and the VA space is
+        // named by the parameter rather than by the receiver.
+        self.conn
+            .raw_control(self.conn.device, NV0080_CTRL_CMD_DMA_GET_PTE_INFO, &mut buf)?;
+        let out = DmaGetPteInfoParams::decode(&buf).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        Ok(out.mapped())
+    }
+
     /// Zero the notifier page before a channel is told about it.
     ///
     /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly

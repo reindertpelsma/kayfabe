@@ -142,7 +142,21 @@ echo "      R33_RC = [$(grep -oE '^R33_RC=[0-9]+' "$P2" 2>/dev/null | tail -1)]"
 echo "--- the ioctl census (⚠ failed=0 is NOT 'nothing refused' — RM puts status IN the struct):"
 grep -E '^  total=[0-9]+ failed=' "$P2" 2>/dev/null | sed 's/^/      /'
 
-finish 0
+# ⊘⊘⊘ **`finish 0` STOOD HERE, AND EVERYTHING BELOW IT HAD NEVER EXECUTED.**
+#
+# `[found by reading, 2026-08-13, w289]` The "SHARPENED BAR" section below — the fault-identity
+# join that is this runner's entire headline — sat **after an unconditional exit**. It has never
+# produced a line, on any run, and nothing said so: the runner exited 0, the log ended tidily,
+# and the join's absence read exactly like a join that found nothing.
+#
+# ⚠ **This is the campaign's `A FEATURE GATE WITH A SILENT NO-OP SIBLING` class, in a harness:**
+# *"never ran"* and *"ran and printed nothing"* are indistinguishable by default. It is also why
+# `w288nc1` needed an ad-hoc `crit1` script — the join it wanted was right here, unreachable.
+#
+# ⇒ The exit is moved BELOW the section it was hiding. What the section produces when it runs is
+# recorded in `traces/boots/w289/RESULT.md` §3: on `w289g` it yields the host's five `Xid` fields
+# against the guest's `info32`/`info16`/`status`, and — crucially — `PLANE D UNMEASURED = 2`,
+# which is the fact that had been invisible.
 
 # =========================================================================================
 # ★★★★★ THE SHARPENED BAR — FAULT IDENTITY, HOST vs GUEST, IN THE SAME RUN.
@@ -169,3 +183,5 @@ echo "    Xid code : host [$(echo "$HOSTXID" | grep -oE '\): [0-9]+,' | grep -oE
 echo "    address  : host [$(echo "$HOSTXID" | grep -oE 'faulted @ 0x[0-9a-f_]+')] vs guest reported [$(grep -oE 'reported 0x[0-9a-f]+' "$P2" 2>/dev/null | tail -1)]"
 echo "    ★ VA-IDENTITY assertion (guest asked vs reported): [$(grep -c 'VA-IDENTITY BROKEN' "$P2" 2>/dev/null)] BROKEN line(s) — MUST be 0"
 echo "    ⊘ PLANE D UNMEASURED lines = [$(grep -c 'PLANE D UNMEASURED' "$P2" 2>/dev/null)] — a relay that never answered is NOT a pass"
+
+finish 0

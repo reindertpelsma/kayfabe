@@ -3965,3 +3965,280 @@ mod tests {
         );
     }
 }
+
+/// ★★★★★ **`NV0080_CTRL_CMD_DMA_GET_PTE_INFO` — ASK RM WHETHER A VA IS MAPPED, AND TO WHAT.**
+///
+/// `0x801801`, issued on the **device** (`NV01_DEVICE_0`).
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h:415-445`.
+///
+/// # Why this id and not a probe
+///
+/// Every "is this VA mapped?" instrument this tree has asks the question **by trying to put
+/// something there** (`HostRmBackend::probe_va`) — which perturbs the space, cannot report
+/// *what* is mapped, and answers about the allocator rather than the page tables. This one
+/// asks RM directly, takes the **`hVASpace` as a parameter**, and returns the PTE's own
+/// `pageSize`/`kind`/`pteFlags` — including `FLAGS_VALID` at bit 0.
+///
+/// # ★★★ THE THREE FACTS THAT MAKE IT SAFE TO CALL — resolved, not assumed
+///
+/// 1. **It is `deviceCtrlCmdDmaGetPteInfo_IMPL`, a direct `_IMPL` and not a `_DISPATCH`**
+///    (`ogkm-580: src/nvidia/generated/g_device_nvoc.c:733-745`). ⇒ the repo's standing trap
+///    — *"the `.c` you read is not the code that runs, nvoc HAL dispatch decides"* — **does
+///    not apply here**: there is exactly one implementation and it is the one bound.
+/// 2. **No privilege check.** `deviceCtrlCmdDmaUpdatePde2_IMPL`, the very next function in the
+///    same file, gates on `pCallContext->secInfo.privLevel < RS_PRIV_LEVEL_KERNEL`
+///    (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:315-318`); this one has no such arm
+///    (`:266-292`). ⇒ our unprivileged host client may call it.
+/// 3. **It is a READ on the RM control plane** — the owner's place (2). It maps nothing,
+///    invalidates nothing, and is not in any data path.
+///
+/// # ⊘⊘ ITS BLIND SPOT IS THE INSTRUMENT — state it before reading any answer
+///
+/// It resolves through `vaspaceGetPteInfo` against RM's own `OBJVASPACE`
+/// (`ogkm-580: dma.c:281-285`), so it reports **what RM believes it mapped**. On this port's
+/// own model (`docs/design/mode2_address_table.md`) that is **populate source (1) — bind-time
+/// RPC/ioctl bindings — and nothing else.** It is structurally blind to source (2), the
+/// observed copy-engine page-table write.
+///
+/// ⇒ **That blindness is the point.** A VA the guest describes and this control cannot see is
+/// a VA that *was supposed to arrive through the other source*, and the answer names which
+/// source failed to fire. A test that could see both would not be able to tell them apart.
+///
+/// ⚠ **Not "the hardware page tables".** Do not report a `VALID` PTE here as *"hardware can
+/// resolve it"*; report it as *"RM's VAS object holds a valid PTE"*. The two have diverged
+/// before and separating them is the whole reason this campaign has a fault to chase.
+///
+/// ⚠ `NVA080_CTRL_CMD_VGPU_GET_CONFIG_PARAMS_VGPU_DEV_CAPS_GET_PDE_INFO_CTRL_DISABLED`
+/// (`ogkm-580: ctrla080.h:348`) exists, so this family is disable-able under vGPU. Not our
+/// configuration — recorded so a later reader who finds it absent does not call it a bug.
+pub const NV0080_CTRL_CMD_DMA_GET_PTE_INFO: u32 = 0x0080_1801;
+
+/// One page-size-specific PTE block of [`DmaGetPteInfoParams`] — 32 bytes.
+///
+/// `NV0080_CTRL_DMA_PTE_INFO_PTE_BLOCK`, `ogkm-580: ctrl0080dma.h:89-95`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DmaPteInfoBlock {
+    /// `NvU64 pageSize` @ +0. ⊘ **`0` means THIS BLOCK IS NOT VALID** — the header says so in
+    /// as many words (*"If pageSize == 0, then this PTE block is not valid"*, `:398-399`).
+    /// It is the block's own presence bit and is checked before anything else is read.
+    pub page_size: u64,
+    /// `NvU64 pteEntrySize` @ +8.
+    pub pte_entry_size: u64,
+    /// `NvU32 comptagLine` @ +16.
+    pub comptag_line: u32,
+    /// `NvU32 kind` @ +20.
+    pub kind: u32,
+    /// `NvU32 pteFlags` @ +24 — the `NV0080_CTRL_DMA_PTE_INFO_PARAMS_FLAGS_*` bitfield.
+    /// Bit 0 is `_VALID`; bits 6:3 are `_APERTURE`.
+    pub pte_flags: u32,
+    // +28: four bytes of tail padding; the block is 8-aligned and 32 bytes.
+}
+
+impl DmaPteInfoBlock {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV0080_CTRL_DMA_PTE_INFO_PTE_BLOCK";
+    /// `sizeof`, padding included.
+    pub const SIZE: usize = 32;
+
+    /// `FLAGS_VALID` (`0:0`) — RM holds a **valid** PTE for the queried VA at this page size.
+    ///
+    /// ⊘ Read together with [`Self::describes_a_page`]: a block that was never filled in has
+    /// `pte_flags == 0`, which decodes as `VALID_FALSE`, so *"invalid"* and *"unwritten"* are
+    /// the same bits. `page_size != 0` is what separates them.
+    #[must_use]
+    pub const fn valid(self) -> bool {
+        self.pte_flags & 0x1 != 0
+    }
+
+    /// Whether this block was filled in at all — see [`DmaPteInfoBlock::page_size`].
+    #[must_use]
+    pub const fn describes_a_page(self) -> bool {
+        self.page_size != 0
+    }
+
+    /// `FLAGS_APERTURE` (`6:3`).
+    #[must_use]
+    pub const fn aperture(self) -> u32 {
+        (self.pte_flags >> 3) & 0xF
+    }
+}
+
+/// `NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS` — `ogkm-580: ctrl0080dma.h:435-445`.
+///
+/// ⊘ **The layout is derived from the compiler, not from counting bytes by eye.** The
+/// `NV_DECLARE_ALIGNED(..., 8)` on `pteBlocks` pushes it to +16 rather than +13, which is
+/// exactly the class of mistake `Nvos02ParametersWithFd::fd` records paying for. The offsets
+/// asserted below were produced by compiling the SDK's own declarations.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DmaGetPteInfoParams {
+    /// `NvU64 gpuAddr` @ +0 — **[IN]** the GPU virtual address being asked about.
+    pub gpu_addr: u64,
+    /// `NvU32 subDeviceId` @ +8.
+    pub sub_device_id: u32,
+    /// `NvU8 skipVASpaceInit` @ +12.
+    ///
+    /// ⊘ **Left `0`, deliberately.** Skipping the VA-space init would make the answer depend
+    /// on whether something else had already touched the space this run — a probe whose
+    /// result varies with call order is not an oracle.
+    pub skip_vaspace_init: u8,
+    // +13: three bytes of padding before the 8-aligned `pteBlocks`.
+    /// `pteBlocks[5]` @ **+16** — **[OUT]**, one per page size the chip supports.
+    pub pte_blocks: [DmaPteInfoBlock; DmaGetPteInfoParams::PTE_BLOCKS],
+    /// `NvHandle hVASpace` @ **+176** — **[IN]** the VA space to ask about.
+    ///
+    /// ★★ **The join key, and the whole reason this control is usable as a differential.**
+    /// `0` means *"the device's implicit VA space"*; naming a handle asks about **exactly the
+    /// space we ourselves created**, so an address compared across two runs is an address in
+    /// one address space rather than two coincidentally-equal numbers.
+    pub h_vaspace: u32,
+    // +180: four bytes of tail padding; the struct is 184 bytes.
+}
+
+impl DmaGetPteInfoParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV0080_CTRL_DMA_GET_PTE_INFO_PARAMS";
+    /// `NV0080_CTRL_DMA_GET_PTE_INFO_PTE_BLOCKS`.
+    pub const PTE_BLOCKS: usize = 5;
+    /// Byte offset of the 8-aligned `pteBlocks[]`. ⚠ **16, not 13.**
+    pub const PTE_BLOCKS_AT: usize = 16;
+    /// Byte offset of `hVASpace`.
+    pub const H_VASPACE_AT: usize = Self::PTE_BLOCKS_AT + Self::PTE_BLOCKS * DmaPteInfoBlock::SIZE;
+    /// `sizeof`, tail padding included.
+    pub const SIZE: usize = 184;
+
+    /// Encode the **[IN]** halves into `out`, zeroing the rest.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] if `out` is smaller than [`Self::SIZE`].
+    pub fn encode_into(&self, out: &mut [u8]) -> Result<(), AbiError> {
+        if out.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: out.len(),
+            });
+        }
+        out[..Self::SIZE].fill(0);
+        out[0..8].copy_from_slice(&self.gpu_addr.to_le_bytes());
+        out[8..12].copy_from_slice(&self.sub_device_id.to_le_bytes());
+        out[12] = self.skip_vaspace_init;
+        out[Self::H_VASPACE_AT..Self::H_VASPACE_AT + 4]
+            .copy_from_slice(&self.h_vaspace.to_le_bytes());
+        Ok(())
+    }
+
+    /// Decode a reply.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] — refused, never zero-extended. ⊘ A short buffer decoded to
+    /// zeros is a well-formed *"no block describes a page"*, i.e. this port's own answer to
+    /// the question, manufactured out of a missing reply.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        let u32_at = |off: usize| {
+            u32::from_le_bytes([bytes[off], bytes[off + 1], bytes[off + 2], bytes[off + 3]])
+        };
+        let u64_at = |off: usize| {
+            let mut w = [0u8; 8];
+            w.copy_from_slice(&bytes[off..off + 8]);
+            u64::from_le_bytes(w)
+        };
+        let mut pte_blocks = [DmaPteInfoBlock::default(); Self::PTE_BLOCKS];
+        for (i, blk) in pte_blocks.iter_mut().enumerate() {
+            let b = Self::PTE_BLOCKS_AT + i * DmaPteInfoBlock::SIZE;
+            *blk = DmaPteInfoBlock {
+                page_size: u64_at(b),
+                pte_entry_size: u64_at(b + 8),
+                comptag_line: u32_at(b + 16),
+                kind: u32_at(b + 20),
+                pte_flags: u32_at(b + 24),
+            };
+        }
+        Ok(Self {
+            gpu_addr: u64_at(0),
+            sub_device_id: u32_at(8),
+            skip_vaspace_init: bytes[12],
+            pte_blocks,
+            h_vaspace: u32_at(Self::H_VASPACE_AT),
+        })
+    }
+
+    /// The first block that both [`DmaPteInfoBlock::describes_a_page`] and is
+    /// [`DmaPteInfoBlock::valid`].
+    ///
+    /// ⊘ `None` is *"RM holds no valid PTE for this VA at any page size"* — which is what a
+    /// `FAULT_PTE` means the hardware found. It is **not** *"the call failed"*: that is an
+    /// `Err` from the caller, and the two must never collapse.
+    #[must_use]
+    pub fn mapped(&self) -> Option<DmaPteInfoBlock> {
+        self.pte_blocks
+            .iter()
+            .copied()
+            .find(|b| b.describes_a_page() && b.valid())
+    }
+}
+
+#[cfg(test)]
+mod dma_pte_info_tests {
+    use super::{DmaGetPteInfoParams, DmaPteInfoBlock};
+
+    /// ★★ The offsets, against the numbers the compiler produced from the SDK's own
+    /// declarations. ⚠ `pteBlocks` at **16** is the one a hand count gets wrong.
+    #[test]
+    fn the_layout_matches_what_the_compiler_says() {
+        assert_eq!(DmaPteInfoBlock::SIZE, 32);
+        assert_eq!(DmaGetPteInfoParams::PTE_BLOCKS_AT, 16);
+        assert_eq!(DmaGetPteInfoParams::H_VASPACE_AT, 176);
+        assert_eq!(DmaGetPteInfoParams::SIZE, 184);
+    }
+
+    /// The two [IN] fields must land where RM reads them, and nothing else may be set.
+    #[test]
+    fn encode_places_the_join_key_and_the_address() {
+        let mut buf = [0xEEu8; DmaGetPteInfoParams::SIZE];
+        DmaGetPteInfoParams {
+            gpu_addr: 0x0000_0001_2000_0000,
+            sub_device_id: 0,
+            skip_vaspace_init: 0,
+            pte_blocks: [DmaPteInfoBlock::default(); DmaGetPteInfoParams::PTE_BLOCKS],
+            h_vaspace: 0xCAFE_0005,
+        }
+        .encode_into(&mut buf)
+        .expect("encode");
+        assert_eq!(&buf[0..8], &0x0000_0001_2000_0000u64.to_le_bytes());
+        assert_eq!(&buf[176..180], &0xCAFE_0005u32.to_le_bytes());
+        assert!(buf[16..176].iter().all(|&b| b == 0), "the [OUT] area is ours to zero");
+    }
+
+    /// ⊘⊘ **`pageSize == 0` outranks `VALID`.** An unwritten block is all zeros, which reads
+    /// as `VALID_FALSE` — so "invalid" and "never filled in" are the same bits, and only
+    /// `pageSize` separates them. A block claiming VALID with no page size is malformed and
+    /// must not be reported as a mapping.
+    #[test]
+    fn a_block_with_no_page_size_is_never_a_mapping() {
+        let mut p = DmaGetPteInfoParams::decode(&[0u8; DmaGetPteInfoParams::SIZE]).expect("decode");
+        assert!(p.mapped().is_none(), "all-zero must not decode as mapped");
+        p.pte_blocks[0].pte_flags = 0x1;
+        assert!(
+            p.mapped().is_none(),
+            "VALID with pageSize == 0 is an unfilled block, not a 0-byte page"
+        );
+        p.pte_blocks[0].page_size = 0x1000;
+        assert_eq!(p.mapped().map(|b| b.page_size), Some(0x1000));
+    }
+
+    /// A short reply is refused, never zero-extended — zeros here decode to this port's own
+    /// answer ("nothing is mapped"), manufactured out of a missing reply.
+    #[test]
+    fn a_short_reply_is_refused_rather_than_zero_extended() {
+        assert!(DmaGetPteInfoParams::decode(&[0u8; DmaGetPteInfoParams::SIZE - 1]).is_err());
+    }
+}

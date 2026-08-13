@@ -2772,6 +2772,104 @@ fn ce_client(
         }
     };
 
+    // ★★★★★ **ARM 6 — ASK RM ITSELF WHICH OF THESE VAs IT HOLDS A PTE FOR.**
+    //
+    // ⊘⊘ **THE INSTRUMENT IS CALIBRATED IN-RUN, BOTH POLARITIES, BEFORE ANY VERDICT.** An
+    // oracle that answers "absent" for everything reads as a discovery, and this campaign has
+    // paid for that shape more than once. So the first two questions have KNOWN answers:
+    //   - the channel's own RING (`ring_va`) — arm 2 just watched RM REFUSE a placement there,
+    //     so something IS mapped: this MUST come back present. If it does not, arm 6 measured
+    //     nothing this run and says so instead of reporting the rest.
+    //   - `UNMAPPED_VA` — arm 3 just watched RM hand that address out as FREE, so nothing is
+    //     mapped: this MUST come back absent.
+    // Only then are the two addresses under test read.
+    //
+    // ★★ **WHY THIS IS THE DIFFERENTIAL AND `probe_va` IS NOT.** `probe_va` asks the
+    // ALLOCATOR ("may I have this address?"); this asks the PAGE TABLES ("do you hold a PTE?")
+    // — and it takes the VA space as a parameter, so the guest arm and the native arm ask
+    // about THE SAME NUMBER IN THE SAME NAMED SPACE. That is a join key, not an alignment
+    // guess.
+    //
+    // ⚠ And see `DmaGetPteInfoParams`: this sees populate source (1) — bind-time RPC/ioctl
+    // bindings — and is BLIND to the observed CE page-table write. A miss therefore does not
+    // say "unmapped"; it says "not mapped BY THIS SOURCE", which is the fork the whole
+    // question turns on.
+    census::phase("R33 arm6 pte-info");
+    if let Some(p) = placement {
+        // ⊘ Three named states, never one boolean — `Err` is "the question was not asked".
+        let say = |rm: &mut HostRmBackend,
+                   label: &str,
+                   space: kayfabe_isolate::HostHandle,
+                   va: u64|
+         -> Option<bool> {
+            match rm.pte_info(space, va) {
+                Ok(Some(b)) => {
+                    println!(
+                        "      R33 arm 6 {label:<14} {va:#018x} = PRESENT (pageSize {:#x}, \
+                         kind {:#x}, aperture {:#x}, pteFlags {:#010x})",
+                        b.page_size, b.kind, b.aperture(), b.pte_flags
+                    );
+                    Some(true)
+                }
+                Ok(None) => {
+                    println!(
+                        "      R33 arm 6 {label:<14} {va:#018x} = ABSENT — RM holds NO valid \
+                         PTE at any page size. ⊘ This is what `FAULT_PTE` says hardware found"
+                    );
+                    Some(false)
+                }
+                Err(e) => {
+                    println!(
+                        "      R33 arm 6 {label:<14} {va:#018x} = ⊘ NOT ASKED ({e:?}) — the \
+                         control refused or the reply did not decode. NOT the same as ABSENT"
+                    );
+                    None
+                }
+            }
+        };
+        println!(
+            "info  R33 arm 6 PTE-INFO  = NV0080_CTRL_CMD_DMA_GET_PTE_INFO (0x801801) against \
+             RM's OWN VA space objects. ⊘ It reports what RM BELIEVES it mapped (populate \
+             source 1), NOT what hardware can resolve — never report a valid PTE here as \
+             `hardware can reach it`"
+        );
+        // --- the calibration, printed first ------------------------------------------------
+        let pos = say(rm, "CAL+ ring", vas, p.ring_va);
+        let neg = say(rm, "CAL- free", vas, UNMAPPED_VA);
+        let calibrated = pos == Some(true) && neg == Some(false);
+        if calibrated {
+            println!(
+                "★     R33 arm 6 CALIBRATED = the SAME call answers PRESENT at the ring \
+                 (which arm 2 proved occupied) and ABSENT at {UNMAPPED_VA:#018x} (which arm 3 \
+                 proved free). ⇒ both polarities are reachable and the rows below are \
+                 measurements"
+            );
+        } else {
+            println!(
+                "FAIL  R33 arm 6 CALIBRATION = ring -> {pos:?} (want Some(true)), free -> \
+                 {neg:?} (want Some(false)). ⊘⊘ THE ROWS BELOW ARE NOT MEASUREMENTS THIS RUN. \
+                 An oracle that cannot show both polarities cannot distinguish `nothing is \
+                 mapped` from `I cannot see mappings`"
+            );
+        }
+        // --- the addresses under test ------------------------------------------------------
+        // ★ The operands the host CE faulted on, by exact address. `w289g` measured
+        //   `Xid 31 ... faulted @ 0x1_20000000 ... FAULT_PTE ACCESS_TYPE_VIRT_READ` and
+        //   `@ 0x7_00100000`; both are printed by this program, so these rows are the same
+        //   numbers the host log names.
+        if let Ok(e) = &ce1 {
+            let _ = say(rm, "arm1 src", vas, e.src_va);
+            let _ = say(rm, "arm1 dst", vas, e.dst_va);
+        }
+        let _ = say(rm, "probe ctrlsrc", vas, kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0 + 0x10_0000);
+        let _ = say(rm, "probe ring", vas, kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0);
+    } else {
+        println!(
+            "info  R33 arm 6 PTE-INFO  = NOT MEASURED — no CE channel is recorded over this \
+             `Vas`, so there is no calibrated ring address to anchor the instrument on"
+        );
+    }
+
     // --- arm 4 (opt-in): ask HARDWARE, not RM's allocator --------------------------------
     let arm4 = if !want_fault {
         println!(
@@ -2951,12 +3049,19 @@ fn ce_client(
                                     "??    R33 arm 4 control   = the POSITIVE CONTROL did not land \
                                  (sem {:#010x}, GP_GET {} GP_PUT {}, moved {:#010x} want \
                                  {:#010x}) — the fault probe was never issued, so this run says \
-                                 NOTHING about whether the address resolves",
+                                 NOTHING about whether {UNMAPPED_VA:#018x} resolves. \
+                                 ⊘ THE CONTROL'S OWN OPERANDS: src {:#018x} dst {:#018x}, ring \
+                                 {:#018x} — a HOST `Xid` naming ANY of these is THIS FAILURE, \
+                                 and `w288nc1` wrote one up as unattributable for want of \
+                                 exactly this line",
                                     r.control.semaphore,
                                     r.control.gp_get,
                                     r.control.gp_put,
                                     r.control_read,
-                                    r.control_want
+                                    r.control_want,
+                                    kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0 + 0x10_0000,
+                                    kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0 + 0x20_0000,
+                                    kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0
                                 );
                                 false
                             }
