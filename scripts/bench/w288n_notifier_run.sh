@@ -56,13 +56,13 @@ echo "=== STAMP=$STAMP HEAD=$HEAD ==="
 # =========================================================================================
 echo "=== ★ NATIVE ARM A — NO deliberate fault. EXPECT: notifier QUIET. ==="
 XID0=$(dmesg 2>/dev/null | grep -c Xid)
-timeout 300 "$CLIENT" --ce-client 2>&1 | tail -30
+timeout 300 "$CLIENT" --ce-client --notifier-vidmem 2>&1 | tail -30
 echo "NATIVE_NOFAULT_RC=$?"
 XID1=$(dmesg 2>/dev/null | grep -c Xid)
 echo "NATIVE_NOFAULT_XID_DELTA=$XID0->$XID1  (⊘ MUST be unchanged)"
 
 echo "=== ★ NATIVE ARM B — WITH the deliberate fault. EXPECT: notifier status 0xffff. ==="
-timeout 300 "$CLIENT" --ce-client-fault 2>&1 | tail -40
+timeout 300 "$CLIENT" --ce-client-fault --notifier-vidmem 2>&1 | tail -40
 echo "NATIVE_FAULT_RC=$?"
 XID2=$(dmesg 2>/dev/null | grep -c Xid)
 echo "NATIVE_FAULT_XID_DELTA=$XID1->$XID2  (expect +1 — the control FIRING, not a bug)"
