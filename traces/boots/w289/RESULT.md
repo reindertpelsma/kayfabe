@@ -513,3 +513,78 @@ result, and the second is arguably the more useful one because of the harness it
 ⊘ **And note what this does NOT explain:** the native arm passes with no sweep at all, because
 natively there is no emulated address table in the path — the host RM owns the VAS directly. The
 native control brackets the guest path; it does not share this mechanism.
+
+---
+
+# ADDENDUM 4 — **THE PRE-REGISTERED TEST CONFIRMS THE BOOTSTRAP GAP, AND THE FAULT DOES NOT MOVE**
+
+Boot `w289s` @ `8b8b8a3`, one variable: `KAYFABE_PT_SWEEP=on`. Everything else carried.
+
+## 19. THE SWEEP RAN, AND IT BOUND EVERY MISSING ROW
+
+```
+PT-SWEEP tasks=3 skipped=0 ran=3 truncated=0 pages=43      ← the arm REPORTS ITS OWN EXECUTION
+```
+
+| VAS | sweep OFF (`w289g`) | sweep ON (`w289s`) |
+|---|---|---|
+| `pdb=0x6000` (arm 1) | `rows=1 runs=1  0x120020000+0x10000` | **`rows=3 runs=1  0x120000000+0x30000`** |
+| `pdb=0x4000` (arm 4) | `rows=1 runs=1  0x700000000+0x10000` | **`rows=3 runs=3  0x700000000+0x10000, 0x700100000+0x10000, 0x700200000+0x10000`** |
+| operand MISS count | **2 + 2** | **0 + 0** |
+
+★★★★★ **`MISS` went 2 → 0 on both channels, and the arm-1 VAS coalesced into ONE contiguous run
+covering all three 64 KiB objects.** The pre-registered *"operands bind"* branch is the one that
+happened.
+
+⇒ **THE BOOTSTRAP GAP IS CONFIRMED.** `pt_page_owner` seeded only from declared roots + prior
+decodes cannot attribute a BAR2-written page whose parent was never decoded; the root-seeded
+sweep can, and does — 3/3 on both address spaces.
+
+⊘ **AND IT SCOPES `w276`.** *"The sweep is aimed right and binds ZERO"* is **not** a property of
+the sweep: here it binds everything that was missing. w276's zero belongs to its own VAS and
+workload, and this 82-ioctl repro is a far cheaper harness for re-asking it.
+
+## 20. ⊘⊘⊘ **AND THE FAULT IS BYTE-FOR-BYTE UNCHANGED**
+
+```
+w289g (sweep off):  Xid 31 … faulted @ 0x1_20000000 … FAULT_PTE ACCESS_TYPE_VIRT_READ
+                    Xid 31 … faulted @ 0x7_00100000 … FAULT_PTE ACCESS_TYPE_VIRT_READ
+w289s (sweep on ):  Xid 31 … faulted @ 0x1_20000000 … FAULT_PTE ACCESS_TYPE_VIRT_READ
+                    Xid 31 … faulted @ 0x7_00100000 … FAULT_PTE ACCESS_TYPE_VIRT_READ
+Xid count: 2 vs 2.  arm 1 COPY: FAIL on both.  CRIT1 STATE: CONTROL-NEVER-LANDED on both.
+```
+
+⇒ **COMPLETING OUR TABLE CHANGED NOTHING THE HARDWARE CAN SEE.** ★ That is the sharpest thing
+this rung measured: **our address table is our own bookkeeping, and a row in it does not
+establish a host-side mapping.** A fix that only fills the table is a fix that changes no Xid.
+
+⚠ **This is a `NECESSARY-BUT-NOT-SUFFICIENT` result and must be reported as one** — the same
+shape as w260's join. The gap was real, closing it was right, and the wall is one layer deeper.
+
+## 21. ★★★ THE NEXT LAYER, NAMED BY THE INSTRUMENT ITSELF
+
+With the rows present, the operand line changes its refusal:
+
+```
+OPERAND-TABLE: 2 asked, 0 resolved in guest RAM, 0 MISS, 2 NOT-IN-GUEST-RAM
+               [va=0x120000000:Vidmem@0x10000  va=0x120010000:Vidmem@0x20000]
+```
+
+⇒ The operands **are bound, and their aperture is `Vidmem`** — the client allocated them with
+`alloc_device_local`. The pin path publishes **guest RAM** and **refuses Vidmem by name**
+(`shim.rs`: *"an operand that binds in the framebuffer is a real and served case … calling its
+`Binding::phys` a guest-physical address would be the one reinterpretation `pin_ring_guest_ram`
+refuses"*).
+
+⇒ **Nothing was ever published into the host VAS for these VAs, which is exactly why the host CE
+faults at them.** ★ And it explains the native control cleanly: natively the host RM owns that
+VA space directly, so no publication step exists to be skipped.
+
+⊘ **Not yet established:** whether publishing a Vidmem-aperture operand is the right fix or
+whether these operands should not be forwarded at all. That is a design question for the owner's
+four places — it would put us in the operand path — and this rung **stops here and reports**
+rather than deciding it.
+
+⊘ One unexplained row, recorded not chased: a `pdb=0x0` VAS also gained `rows=2 runs=1
+0x120000000+0x20000` under the sweep. A PDB of zero is not a page-directory base; it should be
+accounted for before anyone builds on these numbers.
