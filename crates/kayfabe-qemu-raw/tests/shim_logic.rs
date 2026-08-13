@@ -3096,3 +3096,30 @@ fn the_three_pin_sources_are_separately_armable() {
         !GuestPushbufArm::Off.pins() && !GuestSemaArm::Off.pins() && GuestOperandArm::Pin.pins()
     );
 }
+
+/// ★★★ **w290's publication arm is three-valued and NEVER defaulted.**
+///
+/// A typo that silently disarmed the publication would make an evidence run and its own
+/// control indistinguishable — the reason every arm in this shim refuses an unknown value
+/// instead of falling back. ⊘ `on`/`1` are deliberately rejected: this is a three-arm
+/// experiment, and a boolean cannot express the `assert` control that censuses without
+/// issuing a host verb.
+#[test]
+fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
+    use kayfabe_qemu_raw::shim::{VasPublishArm, vas_publish_from};
+    assert_eq!(vas_publish_from(None), Ok(VasPublishArm::Off));
+    assert_eq!(vas_publish_from(Some("off")), Ok(VasPublishArm::Off));
+    assert_eq!(vas_publish_from(Some("assert")), Ok(VasPublishArm::Assert));
+    assert_eq!(vas_publish_from(Some("publish")), Ok(VasPublishArm::Publish));
+    for bad in ["on", "1", "true", "yes", "", "Publish"] {
+        assert!(
+            vas_publish_from(Some(bad)).is_err(),
+            "⊘ `{bad}` must be REFUSED, not silently disarmed"
+        );
+    }
+    // ★ The two predicates are DIFFERENT questions, and `assert` is the row that proves it:
+    // the census runs and no host verb is issued.
+    assert!(!VasPublishArm::Off.observes() && !VasPublishArm::Off.publishes());
+    assert!(VasPublishArm::Assert.observes() && !VasPublishArm::Assert.publishes());
+    assert!(VasPublishArm::Publish.observes() && VasPublishArm::Publish.publishes());
+}
