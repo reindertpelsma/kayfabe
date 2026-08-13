@@ -1,6 +1,9 @@
 # Channel alloc forwardability — what RM honours, what it derives, and what a verbatim forward may not touch
 
-**STATUS: LIVE (2026-08-13).** Read-only source study, no boot, no build. Ground truth is
+**STATUS: LIVE (2026-08-13).** §0–§5 are the read-only source study. **§7 (2026-08-13, w286) is
+the CENSUS that closes §6 items 1–3 against committed captures** — read §7's lead before acting on
+§3.5 or §6, because it retires the "no handle to translate" case as unobserved and **inverts §6's
+item-2 premise**. Read-only source study, no boot, no build. Ground truth is
 `research_clones/ogkm-580.159.04/` (the bench driver version) in the `nvidia-gpu-passthrough`
 tree; kayfabe citations are marked with the revision they were read at, because
 `origin/master` (`e758778`) is materially behind the in-flight lane branch
@@ -487,6 +490,20 @@ discriminator as well as the more precise one.**
 
 ## §6 What I could not determine, and what would determine it
 
+> ### ★★★ MEASURED 2026-08-13 (w286) — items 1, 2 and 3 are ANSWERED. Read §7 first.
+> **1 → ANSWERED, and the answer is "universal":** `hUserdMemory[0] != 0` on **68 of 68** channel
+> allocs across all five committed C captures, and `userd=h0x0/off…` appears **0** times in **144**
+> USERD projections in our own boot logs. §3.5's no-handle case **has never been observed**.
+> **2 → ANSWERED, and it is a KNOWN-POSITIVE, not a plausible zero:** `internalFlags[1:0]` is
+> populated and *discriminating* — KERNEL **36**, USER **32**, and the whole dword takes **four**
+> distinct values whose every sub-field varies independently and legally. Ruling 1 is **buildable
+> as stated**.
+> **3 → ANSWERED, negative:** `flags[5:5] == 1` occurs on **exactly** the 36 KERNEL channels and
+> **zero** USER channels. No forged bit in this corpus — which bounds libcuda's behaviour and
+> **does not** weaken §0.2, because §0.2 is about what a *hostile* guest userspace *can* do.
+> ⊘ **Item 2's own premise ("some earlier RM alloc we served") is REFUTED** — see §7.3. Items 4, 5
+> and 6 stand unmeasured.
+
 1. **What fraction of guest userspace channels name their own USERD** (`hUserdMemory[0] != 0`).
    This decides whether §3.5's no-handle case is an edge or the norm, and therefore whether
    "translate the handle" is a complete story. ⇒ **Determined by:** a census over an existing
@@ -516,6 +533,236 @@ discriminator as well as the more precise one.**
    becomes live.
 6. **The isolate's own re-keying on the guest's `hClient`.** Not audited — out of scope of Q1/Q2
    and it needs its own pass over `kayfabe-isolate` / `kayfabe-isolate-host`.
+
+---
+
+## §7 THE CENSUS — 68 channel allocs off our own wire (w286, 2026-08-13)
+
+**No boot, no build.** Everything below was decoded out of captures already committed to
+`nvidia-gpu-passthrough/traces/`. Decoder + raw rows:
+`scripts/mode2_diag/rpc_channel_census.py` (this commit), run against the five
+`traces/mode2_c_reference/*.rec.zst` captures.
+
+### ★★★ 7.0 LEAD — four things that contradict the brief that commissioned this rung
+
+**⊘ 7.0.1 — Q1's gap does not exist in any committed capture. `hUserdMemory[0] == 0` occurs 0
+times in 68.** It is not rare, it is **unobserved**. Every channel — RM's own CeUtils scrubbers,
+UVM's copy channels, and all 32 of libcuda's — names its own USERD object. §3.5's
+"nothing to translate" case is a **source-reachable path with no measured instance**.
+
+**⊘⊘ 7.0.2 — Q2's premise is REFUTED. "If the guest kernel allocated that USERD, it allocated it
+through us" is FALSE on the GSP wire.** Memory objects **never reach the GSP as an alloc**. The
+handle is unresolvable *for every channel, including the 68 that do supply one* — see §7.3 for the
+control that makes this a measurement rather than a failed lookup. ⇒ Q1 is neither "a blocker" nor
+"a lookup"; **the handle is not a recoverable key at all, and it does not need to be**, because the
+descriptor beside it is complete.
+
+**⊘ 7.0.3 — the nvdiff corpora carry NOTHING for this question, and they fail in the shape the
+brief warned about.** `1317` `NV_ESC_RM_ALLOC` ioctls across `traces/host_reference_ga106/`,
+`traces/guest_mode2_vh2/`, `traces/nvdiff_w274/`, `traces/nvdiff_w275/` — **0 of them carry a
+single parameter byte** (`psize == 0`, `pgot == 0`, `ppre == ""` on every one). Cause, opened:
+libcuda passes a valid `pAllocParms` but leaves `NVOS64_PARAMETERS.paramsSize == 0`, because RM
+derives the size from `hClass`; the shim's rule *"read `paramsSize` bytes at `pAllocParms`"*
+(`tests/mode2/nvdiff/nvdiff_shim.c:168-178`) therefore reads zero.
+⚠ **This is the brief's own trap, live:** an empty `ppre` decodes to `hUserdMemory[0] = 0`, i.e. it
+would have reported Q1's gap as **universal** — the exact inverse of the truth. Verbatim row,
+`traces/host_reference_ga106/ctx_r1.jsonl.zst` record `i=161`, `hClass=0xc56f`:
+`pAllocParms@16 = 0x7ffcad257e80`, `paramsSize@32 = 0`, `pptr=0x7ffcad257e80`, `psize=0`.
+⊘ **And the same emptiness, from a second and better-shaped instrument:** the three
+**real-hardware** GSP RPC ring dumps carry 48 channel-alloc records that each declare
+`paramsSize = 368` and each stop at `cap_len = 112` — **zero param bytes, on real silicon, on
+three chips** (§7.1.1). Two independent oracles, both silent, both silent in a way that decodes to
+"the field is zero".
+
+**⊘ 7.0.4 — half the channel-alloc records in the C traces are OUR OWN REPLY, and they are
+all-zero.** Every `GSP_RM_ALLOC` appears twice: once as a `GuestRead` (kind 3 — the guest's request,
+which we read) and once as a `GuestWrite` (kind 4 — our scrubbed reply, which we write). The 68
+replies carry `internalFlags == 0` and `hUserdMemory[0] == 0` **in all 68 cases**. Censusing the
+raw stream without splitting on direction yields exactly **50 % `PRIVILEGE=USER`** and **50 %
+`hUserdMemory[0]==0`** — two plausible, wrong, mutually reinforcing numbers, produced entirely by
+counting our own silence. ⚠ *A count cannot see a substitution*; here the substitution is
+**direction**.
+
+### 7.1 Corpora — what was opened, and what carried nothing
+
+| corpus | what it is | verdict |
+|---|---|---|
+| `traces/mode2_c_reference/cap1_coldboot_hermetic.rec.zst` | hermetic cold boot, no CUDA | **4** channel allocs — ★ the Q3 known-positive |
+| `…/cap1b_coldboot_hermetic_d6.rec.zst` | same, GSP-D6 continuation | **4** |
+| `…/cap2_stalequeue_negative.rec.zst` | stale-queue chain | **28** |
+| `…/cap2b_stalequeue_nofn47.rec.zst` | the guest-reachable defect fixture | **4** |
+| `…/cap3_matmul_forwarding.rec.zst` | `cuCtxCreate` → `cup8` matmul, `bad=0` | **28** |
+| **total** | | **68 requests + 68 replies** |
+| `traces/host_reference_ga106/`, `guest_mode2_vh2/`, `nvdiff_w274/`, `nvdiff_w275/` | nvdiff ioctl differential | ⊘ **NOTHING** — 1317 `RM_ALLOC`, 0 params (§7.0.3) |
+| `nvkvm-rs traces/boots/**` + `traces/guest_boots/**` (443 logs) | our own qemu/serial/dmesg logs | **partial** — 144 `userd=h…/off…` projections, **0** with a zero handle; ⊘ carry **no** `internalFlags` (`grep -c 'internal[_ ]flags' → 0` over all 443) |
+| `traces/{rpctrace_ga106,ga102,ad102}_boot1.bin` | ★ **real-hardware GSP RPC ring dumps**, 580.159.04, three chips | ⊘ **NOTHING, and it misses by one byte** — see §7.1.1 |
+| `nvidia-gpu-passthrough traces/real_ga106/` | — | empty directory |
+
+#### ⊘⊘ 7.1.1 — the corpus that SHOULD have answered this, and stops exactly at the payload
+
+`traces/rpctrace_ga106_boot1.bin`, `ga102_boot1.bin`, `ad102_boot1.bin` are the best-shaped oracle
+we own for this question: **real, unvirtualised hardware**, driver `580.159.04`, the guest kernel
+module recording its own GSP msgq elements — no emulator between the driver and the tape, and on
+**three different chips**. Each carries **16 channel-alloc records** (8 request/reply pairs;
+`0xC56F` ×12, `0xC36F` ×4 per trace).
+
+**Every one of them declares `paramsSize = 368` and carries `cap_len = 112`.**
+`112 = 48` (`GSP_MSG_QUEUE_ELEMENT` header) `+ 32` (`rpc_message_header_v`) `+ 32`
+(`rpc_gsp_rm_alloc_v03_00`). ⇒ **param bytes available: 0, on all 48 records across all three
+traces.** The recorder's cap lands on the exact byte where `NV_CHANNEL_ALLOC_PARAMS` begins.
+
+⚠ **This is the `dlen=0` lesson in a new instrument.** Nothing about these files looks short: they
+are ~1.2 MB each, `n_dropped=0`, `n_rx_failed=0`, `wrapped=false`, and `decode_rpctrace.py` — which
+is explicitly *"a refuser first"* and has **no `--force`** — accepts all three without complaint,
+because a capped payload is not a *hole* in its sense and every declared invariant holds. The
+truncation is visible only by comparing `cap_len` against the alloc's own `paramsSize`, which
+nothing does.
+⇒ ★ **Cheap, high-value follow-up:** raise the recorder's payload cap to ≥ `112 + 368 = 480` and
+re-capture one boot. That would make the *real-hardware* answer to Q1/Q3/Q4 directly measurable on
+three chips, instead of inferring it from an emulated wire. ⊘ And `decode_rpctrace.py` should
+**refuse, or at minimum flag, `cap_len < rpc_len`-implied-payload** — an instrument whose whole
+stated purpose is making `dlen=0` impossible to read past currently reproduces it.
+
+★ The `.rec` captures are the **only** corpus that carries `NV_CHANNEL_ALLOC_PARAMS`. That is not
+incidental: they record the GSP RPC, and the GSP RPC is the *only* transport on which the guest
+kernel's post-adjudication view of a channel exists at all.
+
+**Decode provenance.** RPC framing from `ogkm-580: g_rpc-message-header.h:41-52` (32-byte header:
+`header_version, signature, length, function, rpc_result, rpc_result_private, sequence, u`),
+signature `0x43505256` (`inc/kernel/vgpu/rpc_headers.h:61`), `GSP_RM_ALLOC = 103`
+(`inc/kernel/vgpu/rpc_global_enums.h:113`), body `rpc_gsp_rm_alloc_v03_00`
+(`g_rpc-structures.h:1491-1502`). Field offsets are kayfabe's own
+(`crates/kayfabe-abi/src/submit.rs:259-270`, `notifier.rs:182-184`), i.e. **the census reads the
+wire with the same map production does**.
+⚠ **Instrument known-positive, run first:** the scan finds **356 / 336 / 1122** RPC signatures in
+cap1 / cap2b / cap3 with a sane function histogram (`GSP_RM_CONTROL 76`, `FREE 10`,
+`GSP_RM_ALLOC 103`, `DUP_OBJECT 21`, `UNLOADING_GUEST_DRIVER 47`, …) and **441** distinct
+`(hClient, hObject)` allocations. A zero here would have been the *"decisive grep over zero files"*
+failure; it is not zero.
+
+### 7.2 Q1 + Q3 + Q4 — the table
+
+All 68 rows, `class ∈ {AMPERE_CHANNEL_GPFIFO_A 0xC56F ×64, VOLTA_CHANNEL_GPFIFO_A 0xC36F ×4}`.
+
+| measure | result |
+|---|---|
+| **`hUserdMemory[0] == 0`** | **0 / 68 (0.0 %)** — and 0/32 among the USER rows, 0/36 among KERNEL |
+| **`internalFlags[1:0]`** | **KERNEL 36 · USER 32 · ADMIN 0** |
+| `internalFlags` distinct values | `0x1a` ×15, `0x16` ×5, `0x9a` ×16, `0x1c` ×32 |
+| `flags[5:5]` (`PRIVILEGED_CHANNEL`) | `1` ×36, `0` ×32 |
+| `flags[5:5]==1 && PRIVILEGE==USER` (forged bit) | **0** |
+| `flags[5:5]==0 && PRIVILEGE==KERNEL` | **0** |
+| `internalFlags[7]` `UVM_OWNED` | `1` ×16 — **all 16 are `PRIVILEGE==KERNEL`**; violations of the `UVM_OWNED ⇒ KERNEL` invariant (`kernel_channel.c:298-303`): **0** |
+| `internalFlags[6]` `GSP_OWNED` | `0` ×68 |
+| `flags[21:8]` (the guest's ChID demand, §0.4) | **non-zero on 68 / 68** — the strip is always live, never a corner case |
+| `userdMem.addressSpace` | `NV_ADDR_FBMEM = 2` ×68 (`ogkm-580: inc/kernel/vgpu/rm_plugin_shared_code.h:67`) |
+| `userdMem.size` | `512` ×68 — matches `NV_RAMUSERD_CHAN_SIZE` (§3.3) on every row |
+| `userdOffset[0] % 512` | `0` ×68 — §3.3's unchecked-alignment hazard is not being exercised today |
+| distinct USERD backing objects (`userdMem.base − userdOffset[0]`) | **13** across the five captures |
+
+**⇒ Q3 is answered by a known-positive, not by an absence.** `cap1` is a **hermetic cold boot with
+no CUDA process at all** — its only four channels are RM's own, and all four read
+`PRIVILEGE = KERNEL (2)`. `USER == 0` is therefore *not* what an unpopulated field would look like
+here: an unpopulated field would have made cap1 read USER. And the field is not merely non-zero, it
+is **discriminating**: within one capture (cap3) it separates 12 kernel channels from 16 libcuda
+ones, and the neighbouring bits `[3:2]`/`[7]` vary independently and legally across the same rows.
+⇒ **Ruling 1 is buildable exactly as stated, at zero new wire cost** — `notifier.rs:248` already
+reads this dword and discards `[1:0]`.
+
+**⇒ Q4 is answered: NO. `ADMIN` appears 0 times in 68.** The owner's cut never routes an emulated
+case to passthrough *in this corpus*. Cross-tabulated against what we independently believe:
+
+| `internalFlags[1:0]` | membership rule (`NV0000.processID == 0xFFFF_FFFF`, §5) | `NV2080_ENGINE_TYPE` | `UVM_OWNED` | n |
+|---|---|---|---|---|
+| KERNEL | KERNEL-CLIENT | `1` = `_GRAPHICS` | 0 | 10 |
+| KERNEL | KERNEL-CLIENT | `11` = `_COPY2` | 0 | 10 |
+| KERNEL | KERNEL-CLIENT | `9` = `_COPY0` | **1** | 4 |
+| KERNEL | KERNEL-CLIENT | `10` = `_COPY1` | **1** | 4 |
+| KERNEL | KERNEL-CLIENT | `11` = `_COPY2` | **1** | 4 |
+| KERNEL | KERNEL-CLIENT | `12` = `_COPY3` | **1** | 4 |
+| USER | **user pid** (1225 / 1302 / 1342 / 1358 …) | `0` = `_NULL`, inherited from the TSG | 0 | 32 |
+
+Mnemonics from `ogkm-580: src/common/sdk/nvidia/inc/class/cl2080_notification.h:282,291`
+(`_GRAPHICS = 1`, `_COPY0 = 9`); `subDeviceId == 0` and `hUserdMemory[1..7]`/`userdOffset[1..7]`
+are zero on **68/68** (single-subdevice bench).
+
+★★★ **The two discriminators agree on 68 / 68 rows.** Every `KERNEL` channel belongs to a client
+whose `NV01_ROOT` declared `processID == 0xFFFF_FFFF`; every `USER` channel belongs to a client
+that declared a real pid. §5's *"a disagreement is a real signal worth a named refusal"* is
+therefore a refusal with a **measured zero rate** — which is exactly the condition under which it
+is cheap to add and worth adding.
+⊘ **But the agreement is not redundancy.** The membership rule is a property of the *namespace*,
+decided once at client-root time; `internalFlags[1:0]` is a property of the *channel* and arrives
+on the channel's own RPC. The corpus contains no kernel client that allocates on a user proc's
+behalf (§16.44's case), so it cannot distinguish the two rules — it can only show they have not yet
+diverged.
+
+### ★★★ 7.3 Q2 — the handle is unrecoverable, and that is the GOOD news
+
+The brief's hypothesis: *"if the guest kernel allocated that USERD, it allocated it through us."*
+**Measured false.** Built the object table from every `GSP_RM_ALLOC` **request** in all five
+captures — **441 `(hClient, hObject)` pairs** — and resolved each channel's handle fields against
+it, in the alloc's own client namespace:
+
+| field | zero | **resolvable** | **unresolvable** |
+|---|---|---|---|
+| `hParent` | 0 | **68** | 0 |
+| `hVASpace` | 58 | **10** | 0 |
+| `hContextShare` | 52 | **16** | 0 |
+| `hObjectError` | 5 | 0 | **63** |
+| `hUserdMemory[0]` | 0 | 0 | **68** |
+
+★ **That is the control the answer needs.** The table resolves `hParent` 68/68, `hVASpace` 10/10
+and `hContextShare` 16/16 — so it is not broken, and "unresolvable" is a fact about the wire, not
+about the lookup. The two fields that miss are exactly the two §0.1/§1 already identified as
+**dead on the receive side**, and they miss for one reason: **memory objects are allocated by the
+guest's CPU-RM and never sent to the GSP.** `NV01_MEMORY_*` classes appear in the
+fn-103 stream only as `0x70` ×1 / `0x79` ×7 / `0x7E` ×3 (11 allocs in cap3); the USERD-bearing objects
+(`0x9`, `0xbaba0049`, `0x31415910`, `0xcaf000xx`, `0x5c000014`) appear **never**, under any client,
+including via `DUP_OBJECT` (fn 21, 25 requests in cap3).
+
+⇒ **This is not a hole; it is why the header says what it says.** `alloc_channel.h:307-310`:
+> *"handle to UserD memory object for channel, **ignored if `hUserdMemory[0]=0`**"*
+…and `kernel_channel.c:2294-2298` explains the asymmetry: the GSP *cannot* resolve a client handle,
+which is precisely why RM translates for it and sends the **descriptor**. A GSP that could look the
+handle up would make §0.1's `if` pointless.
+
+⇒ **What we CAN recover is better than a handle, and it is already on the wire.** All 68
+`userdMem` descriptors are complete, and all 68 name **`NV_ADDR_FBMEM`** — the guest's framebuffer,
+which *we* back. The address is directly usable: for the 16 libcuda channels sharing object
+`0x5c000014`, `userdMem.base` is exactly `object_base + userdOffset[0]` at a 12 KiB stride
+(`0x4202000, 0x4205000, … 0x422f000` against `0x2000, 0x5000, … 0x2f000`), and our own boot logs
+already read those pages (`fbRING[p0]@… resY byBAR1#167`, `traces/boots/w260/run_w260_off_qemu.log`).
+
+⇒ **Verdict for the design: Q1 is neither a blocker nor a lookup — it is a case with no measured
+instance, and its fallback is already built** (`rm.rs:4890-4900`, the `GuestRing { userd: None }`
+arm at `b0d6de7`). The forward still needs a **host** USERD object regardless, because a guest GPGA
+is not a host RM handle; the census removes the worry that we might have *nothing to work from*, not
+the work of minting the host side.
+
+### 7.4 What this rung could NOT determine
+
+1. **Whether a *hostile* guest sets `flags[5:5]`.** §7.2 measures **stock** libcuda/UVM/RM on one
+   workload family (`cup2`/`cup8`). A forged bit is a thing a modified guest does on purpose; a
+   corpus of well-behaved guests cannot bound it. ⇒ §0.2's ruling stands on the *source*, and the
+   zero here must never be cited as "the bit is safe".
+2. **Whether `ADMIN` is reachable at all on Linux.** 0/68 is consistent both with "RM never emits
+   it here" and with "our workloads never provoke it". `kernel_channel.c:284-287` grants it on
+   `rmclientIsAdmin() || hypervisorCheckForObjectAccess()` — a **root-owned** CUDA process is the
+   obvious untested arm. ⇒ **Determined by:** re-running `cup2` as root under an existing capture
+   and re-running this census; ~one boot, no code change. Until then the owner's `ADMIN → passthrough`
+   arm is **unexercised**, not wrong.
+3. **Whether a kernel client ever allocates a channel on a user proc's behalf** — the case that
+   would separate `internalFlags[1:0]` from §5's membership rule. Not in this corpus (68/68 agree).
+4. **Anything about multi-subdevice.** `hUserdMemory[1..7]`/`userdOffset[1..7]` were decoded but
+   are uniformly zero here (single-subdevice bench). A multi-GPU guest is unmeasured.
+5. **The 610 offsets.** Every row above is 580; `notifier.rs:190-192` shifts `internalFlags` to
+   +252 for 610 and nothing in this corpus exercises it.
+6. ★ **Everything above is measured on an EMULATED wire.** The 68 rows come from the C artifact's
+   fake GSP; the *guest driver* is stock and the *values* are the guest kernel's own, so the census
+   is sound — but it has never been confirmed against a real GSP's msgq. ⇒ **Determined by:**
+   §7.1.1's one-line recorder change (payload cap 112 → ≥480) plus one boot on `vh`. That is the
+   single highest-value follow-up this rung found and it needs no design decision.
 
 ---
 
