@@ -201,3 +201,66 @@ on `580.159.04`, read at `:249`) but **only bits `[3:2]`**, for `ErrorNotifierTy
 owner's ruled discriminator. Carrying two already-decoded bits into the projection is the whole
 job; it is not new tracking, and it is the likely cause of w287's `SEMA-SOURCE-CE = 1` where the
 passthrough cut should have given `0`.
+
+---
+
+## 5. ★★★ CHECK 4 (the one most likely to kill it) — ANSWERED. **IT SURVIVES, ON AN INVARIANT NOTHING ASSERTS.**
+
+> *"Does a fault on channel A ever write channel B's notifier (e.g. TSG-wide or engine-wide RC)?"*
+
+**YES — for exactly the fault class this rung chases.** The MMU-fault handler hardcodes TSG
+scope (`kern_gmmu_gv100.c:2124-2131`):
+
+```c
+// Update the per-channel error notifier before performing the RC
+rmStatus = krcErrorSetNotifier(pGpu, GPU_GET_KERNEL_RC(pGpu), pKernelChannel,
+    ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT, rmEngineType,
+    RC_NOTIFIER_SCOPE_TSG);          // ← not RC_NOTIFIER_SCOPE_CHANNEL (= 0), which exists
+```
+
+and `krcErrorSetNotifier_IMPL` (`kernel_rc_notification.c:270-289`) widens on that scope:
+
+```c
+if (scope == RC_NOTIFIER_SCOPE_TSG && kfifoIsSubcontextSupported(pKernelFifo) &&
+    !pGpu->getProperty(pGpu, PDB_PROP_GPU_IS_VIRTUALIZATION_MODE_HOST_VGPU))
+    pChanList = pKernelChannel->pKernelChannelGroupApi->pKernelChannelGroup->pChanList;
+else  { …single-element list containing only pKernelChannel… }
+
+for (pChanNode = pChanList->pHead; pChanNode; pChanNode = pChanNode->pNext)   // writes EACH
+```
+
+⇒ One MMU fault writes the error notifier of **every channel in the faulting channel's TSG**.
+*"Whichever of our pages was written names the channel"* is **false in general.**
+
+### ★★ Why it survives anyway — and why that is now load-bearing
+
+`HostRmBackend::alloc_channel_in` allocates a **fresh `CHANNEL_GROUP` per channel**
+(`rm.rs:5120-5122`, `raw_alloc(self.conn.device, …, CHANNEL_GROUP, …)`). Every host channel we
+create is therefore **alone in its own TSG**, so the TSG channel list has exactly one member and
+**TSG scope collapses to channel scope**. Attribution *is* structural — **because of a property
+of our allocator, not a property of RM.**
+
+⊘⊘ **That invariant is currently true by construction and is asserted NOWHERE.** It is also
+exactly what a real driver stops doing: TSGs exist to group channels, and any future work that
+puts two host channels in one group — subchannels, multi-engine contexts, a TSG reused for
+cheapness — makes one fault write **both** notifiers. The guest then sees an RC on a channel
+that never faulted: **a false positive shaped exactly like a pass**, and the wrong-channel case
+the standing ruling forbids.
+
+⇒ **Proceed, with a gate, not a comment:** the per-channel notifier design must be accompanied by
+an assertion that the host channel's TSG contains exactly that channel, refused **by name** if
+not. That is a check on our own allocation, not new tracking of the guest.
+
+⚠ Two conditions gate the widening and neither rescues us in general: `kfifoIsSubcontextSupported`
+(unverified for GA106 — but if it is *false* the `else` branch is taken and scope is per-channel
+anyway, so the design is safe in both settings **only while our TSGs are singletons**), and
+`PDB_PROP_GPU_IS_VIRTUALIZATION_MODE_HOST_VGPU`, which we are not.
+
+### Status of the other three checks
+
+| check | state |
+|---|---|
+| 1. does the notifier **write** need `NV01_CONTEXT_DMA`? | ⊘ **NOT CHECKED.** The `CONTEXT_DMA` requirement is established for the correlation **event** only. Must be resolved with the HAL rule before building. |
+| 2. host RM writes a per-channel notifier we supply | ★ partly — `krcErrorSetNotifier_IMPL` demonstrably walks a channel list and writes per channel; the exact store and any error-class variation still to be cited. |
+| 3. cost | one notifier page per host channel. `[measured, w287 boot 2]` six channels in a `cup2`-class boot ⇒ six pages. **Not prohibitive.** |
+| 4. group scope | ★ **ANSWERED ABOVE — survives on the singleton-TSG invariant.** |
