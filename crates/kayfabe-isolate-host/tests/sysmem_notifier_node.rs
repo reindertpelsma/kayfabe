@@ -98,10 +98,7 @@ fn a_sysmem_notifier_is_mapped_through_the_control_node() {
 #[test]
 fn both_notifier_readers_choose_their_node() {
     let s = src("src/rm.rs");
-    for sig in [
-        "pub fn read_error_notifier(",
-        "fn zero_notifier(",
-    ] {
+    for sig in ["pub fn read_error_notifier(", "fn zero_notifier("] {
         let body = fn_body(&s, sig);
         assert!(
             body.contains("MapNode::for_notifier"),
